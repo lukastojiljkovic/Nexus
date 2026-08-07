@@ -200,9 +200,20 @@ body {
   flex-direction: column;
   gap: var(--nx-space-1);
 }
+/* The category name IS the separator. A hairline above the group as well would
+   be saying the same thing twice, which is how a rail starts to look busy. */
 .app__nav-group + .app__nav-group {
-  padding-top: var(--nx-space-2);
-  border-top: 1px solid var(--nx-border);
+  margin-top: var(--nx-space-4);
+}
+.app__nav-group-label {
+  margin: 0;
+  padding: 0 var(--nx-space-2) var(--nx-space-1);
+  font-size: var(--nx-font-size-label);
+  font-weight: var(--nx-font-weight-semibold);
+  line-height: var(--nx-font-leading-snug);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-muted);
 }
 
 /* The profile avatar (SET-001). One circle, two diameters — `md` above the
@@ -407,14 +418,15 @@ body {
 .onb__title {
   margin: 0;
   font-size: var(--nx-font-size-display);
+  line-height: var(--nx-font-leading-tight);
   font-weight: var(--nx-font-weight-semibold);
-  letter-spacing: var(--nx-font-tracking-normal);
+  letter-spacing: var(--nx-font-tracking-tight);
 }
 .onb__desc {
   margin: 0;
   color: var(--nx-text-muted);
   font-size: var(--nx-font-size-body-sm);
-  line-height: 1.5;
+  line-height: var(--nx-font-leading-normal);
 }
 /* Label-above-options, mirroring the nx-textfield label rhythm. */
 .onb__theme {
@@ -574,8 +586,9 @@ body {
 .auth__title {
   margin: 0;
   font-size: var(--nx-font-size-display);
+  line-height: var(--nx-font-leading-tight);
   font-weight: var(--nx-font-weight-semibold);
-  letter-spacing: var(--nx-font-tracking-normal);
+  letter-spacing: var(--nx-font-tracking-tight);
 }
 /* The picker row's two trailing actions („Preimenuj" + „Obriši"): the row's
    trailing slot is a bare inline-flex, so the gap between them belongs here. */
@@ -589,7 +602,7 @@ body {
   margin: 0;
   color: var(--nx-text-muted);
   font-size: var(--nx-font-size-body-sm);
-  line-height: 1.5;
+  line-height: var(--nx-font-leading-normal);
 }
 /* Same recipe as .note__save-error, scoped to the auth channel. */
 .auth__error {
@@ -614,7 +627,7 @@ body {
   border-radius: var(--nx-radius-md);
   font-family: var(--nx-font-family-mono);
   font-size: var(--nx-font-size-body-sm);
-  line-height: 1.6;
+  line-height: var(--nx-font-leading-loose);
   white-space: pre-wrap;
   word-break: break-all;
   -webkit-user-select: all;
@@ -2103,6 +2116,7 @@ button.tasks__cal-chip:active {
 }
 .cal__month-label {
   font-size: var(--nx-font-size-title);
+  line-height: var(--nx-font-leading-tight);
   font-weight: var(--nx-font-weight-semibold);
 }
 .cal__month-nav-actions {
@@ -3226,8 +3240,9 @@ button.cal__grid-event--dragging {
 .dash__hello {
   margin: 0;
   font-size: var(--nx-font-size-display);
+  line-height: var(--nx-font-leading-tight);
   font-weight: var(--nx-font-weight-semibold);
-  letter-spacing: var(--nx-font-tracking-normal);
+  letter-spacing: var(--nx-font-tracking-tight);
 }
 
 /* Named dashboards (DASH-008 / ADR-055): the board switcher beside the
@@ -3638,8 +3653,9 @@ button.cal__grid-event--dragging {
 .study__title {
   margin: 0;
   font-size: var(--nx-font-size-h1);
+  line-height: var(--nx-font-leading-tight);
   font-weight: var(--nx-font-weight-semibold);
-  letter-spacing: var(--nx-font-tracking-normal);
+  letter-spacing: var(--nx-font-tracking-tight);
 }
 
 /* Subject form (create + edit) — one wrapping row; the name field takes the slack. */
@@ -3784,6 +3800,7 @@ button.cal__grid-event--dragging {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: var(--nx-font-size-title);
+  line-height: var(--nx-font-leading-tight);
   font-weight: var(--nx-font-weight-semibold);
 }
 .study__subject-semester {
@@ -4238,6 +4255,7 @@ button.cal__grid-event--dragging {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: var(--nx-font-size-title);
+  line-height: var(--nx-font-leading-tight);
   font-weight: var(--nx-font-weight-semibold);
 }
 .study__plan-actions {
@@ -4546,6 +4564,7 @@ button.cal__grid-event--dragging {
 }
 .study__focus-elapsed {
   font-size: var(--nx-font-size-h1);
+  line-height: var(--nx-font-leading-tight);
   font-weight: var(--nx-font-weight-semibold);
   font-variant-numeric: tabular-nums;
   color: var(--nx-accent-strong);
@@ -4713,6 +4732,7 @@ button.cal__grid-event--dragging {
 }
 .study__deck-view-name {
   font-size: var(--nx-font-size-h1);
+  line-height: var(--nx-font-leading-tight);
   font-weight: var(--nx-font-weight-semibold);
 }
 .study__deck-view-subject {
@@ -4793,7 +4813,7 @@ button.cal__grid-event--dragging {
   min-height: 72px;
   resize: vertical;
   font-family: inherit;
-  line-height: 1.5;
+  line-height: var(--nx-font-leading-normal);
 }
 .study__math-preview {
   padding: var(--nx-space-2) var(--nx-space-3);
@@ -4917,6 +4937,7 @@ button.cal__grid-event--dragging {
   box-shadow: var(--nx-shadow);
   text-align: center;
   font-size: var(--nx-font-size-title);
+  line-height: var(--nx-font-leading-normal);
 }
 /* Which špil the card in front of you belongs to (ADR-047), shown only when a
    session actually spans more than one. Quiet and above the question — it is
@@ -5046,6 +5067,7 @@ button.cal__grid-event--dragging {
 }
 .review__complete-title {
   font-size: var(--nx-font-size-title);
+  line-height: var(--nx-font-leading-tight);
   font-weight: var(--nx-font-weight-semibold);
   margin: 0;
 }
@@ -5213,7 +5235,7 @@ button.cal__grid-event--dragging {
   margin: 0;
   color: var(--nx-text-muted);
   font-size: var(--nx-font-size-body-sm);
-  line-height: 1.4;
+  line-height: var(--nx-font-leading-snug);
 }
 .ntf__row-meta {
   display: flex;
@@ -5336,8 +5358,9 @@ button.cal__grid-event--dragging {
 .set__title {
   margin: 0;
   font-size: var(--nx-font-size-h1);
+  line-height: var(--nx-font-leading-tight);
   font-weight: var(--nx-font-weight-semibold);
-  letter-spacing: var(--nx-font-tracking-normal);
+  letter-spacing: var(--nx-font-tracking-tight);
 }
 /* Section cards reuse nx-card's surface; this only spaces their innards. */
 .set__section {
@@ -5919,7 +5942,7 @@ button.cal__grid-event--dragging {
   color: var(--nx-text-muted);
   font-family: var(--nx-font-family-mono);
   font-size: var(--nx-font-size-caption);
-  line-height: 1.5;
+  line-height: var(--nx-font-leading-normal);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -5935,7 +5958,7 @@ button.cal__grid-event--dragging {
   resize: vertical;
   font-family: var(--nx-font-family-mono);
   font-size: var(--nx-font-size-caption);
-  line-height: 1.5;
+  line-height: var(--nx-font-leading-normal);
 }
 /* The deck choice for kartice — „Postojeći špil / Novi špil" and whichever
    form follows. The `.set__apkg-subject` column's recipe, at the same width,
@@ -6114,7 +6137,7 @@ button.cal__grid-event--dragging {
   color: var(--nx-text-muted);
   font-family: var(--nx-font-family-mono);
   font-size: var(--nx-font-size-caption);
-  line-height: 1.5;
+  line-height: var(--nx-font-leading-normal);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -6822,10 +6845,7 @@ button.cal__grid-event--dragging {
 .note__menu-caption {
   padding: 2px 10px 6px;
   font-size: var(--nx-font-size-caption);
-  /* A literal, like every other line-height in this file: packages/tokens ships
-     no line-height scale, so an --nx-line-height token here would resolve to
-     nothing and silently inherit. */
-  line-height: 1.4;
+  line-height: var(--nx-font-leading-snug);
   color: var(--nx-text-muted);
 }
 
@@ -7258,7 +7278,7 @@ button.cal__grid-event--dragging {
   outline: none;
   white-space: pre-wrap;
   min-height: 60vh;
-  line-height: 1.6;
+  line-height: var(--nx-font-leading-loose);
   font-size: var(--nx-font-size-body);
   color: var(--nx-text);
   caret-color: var(--nx-text);
@@ -7277,8 +7297,8 @@ button.cal__grid-event--dragging {
 .note__editor .ProseMirror h3 {
   margin: 0;
   font-weight: var(--nx-font-weight-semibold);
-  line-height: 1.3;
-  letter-spacing: var(--nx-font-tracking-normal);
+  line-height: var(--nx-font-leading-tight);
+  letter-spacing: var(--nx-font-tracking-tight);
 }
 .note__editor .ProseMirror h1 {
   font-size: var(--nx-font-size-display);
@@ -7344,7 +7364,7 @@ button.cal__grid-event--dragging {
   margin: 0;
   font-family: var(--nx-font-family-mono);
   font-size: var(--nx-font-size-body-sm);
-  line-height: 1.5;
+  line-height: var(--nx-font-leading-normal);
   background: var(--nx-surface-alt);
   padding: var(--nx-space-3);
   border-radius: var(--nx-radius-md);
@@ -8051,6 +8071,8 @@ button.cal__grid-event--dragging {
 .searchpage__title {
   margin: 0;
   font-size: var(--nx-font-size-title);
+  letter-spacing: var(--nx-font-tracking-tight);
+  line-height: var(--nx-font-leading-tight);
   font-weight: var(--nx-font-weight-semibold);
   color: var(--nx-text);
 }
@@ -8430,6 +8452,7 @@ button.cal__grid-event--dragging {
 .ntf__appetite-title {
   margin: 0;
   font-size: var(--nx-font-size-title);
+  line-height: var(--nx-font-leading-tight);
   font-weight: var(--nx-font-weight-semibold);
   color: var(--nx-text);
 }
@@ -8809,8 +8832,9 @@ button.cal__grid-event--dragging {
 .priv__title {
   margin: 0;
   font-size: var(--nx-font-size-h1);
+  line-height: var(--nx-font-leading-tight);
   font-weight: var(--nx-font-weight-semibold);
-  letter-spacing: var(--nx-font-tracking-normal);
+  letter-spacing: var(--nx-font-tracking-tight);
 }
 .priv__search {
   flex: 1;
@@ -8953,6 +8977,7 @@ button.cal__grid-event--dragging {
 }
 .fin__total {
   font-size: var(--nx-font-size-title);
+  line-height: var(--nx-font-leading-tight);
   font-weight: var(--nx-font-weight-semibold);
   font-variant-numeric: tabular-nums;
   color: var(--nx-text);
@@ -9421,6 +9446,7 @@ button.cal__grid-event--dragging {
 }
 .fin__report-month {
   font-size: var(--nx-font-size-title);
+  line-height: var(--nx-font-leading-tight);
   font-weight: var(--nx-font-weight-semibold);
   color: var(--nx-text);
   min-width: 9ch;
@@ -9716,6 +9742,8 @@ button.cal__grid-event--dragging {
 .doc__title {
   margin: 0;
   font-size: var(--nx-font-size-title);
+  letter-spacing: var(--nx-font-tracking-tight);
+  line-height: var(--nx-font-leading-tight);
   font-weight: var(--nx-font-weight-semibold);
   color: var(--nx-text);
 }
@@ -10271,6 +10299,7 @@ button.cal__grid-event--dragging {
 }
 .hab__stat-value {
   font-size: var(--nx-font-size-title);
+  line-height: var(--nx-font-leading-tight);
   font-weight: var(--nx-font-weight-semibold);
   font-variant-numeric: tabular-nums;
   color: var(--nx-text);
@@ -10489,6 +10518,7 @@ button.cal__grid-event--dragging {
    that had stopped. */
 .foc__clock--idle {
   font-size: var(--nx-font-size-h1);
+  line-height: var(--nx-font-leading-tight);
   color: var(--nx-text-muted);
 }
 .foc__now-what {
@@ -10560,6 +10590,7 @@ button.cal__grid-event--dragging {
 }
 .foc__total-value {
   font-size: var(--nx-font-size-title);
+  line-height: var(--nx-font-leading-tight);
   font-weight: var(--nx-font-weight-semibold);
   font-variant-numeric: tabular-nums;
   color: var(--nx-text);
@@ -10708,6 +10739,7 @@ button.cal__grid-event--dragging {
 .fit__day-name {
   flex: 1;
   font-size: var(--nx-font-size-title);
+  line-height: var(--nx-font-leading-tight);
   font-weight: var(--nx-font-weight-semibold);
 }
 .fit__day-name::first-letter {
@@ -11203,6 +11235,7 @@ button.cal__grid-event--dragging {
 .tool__surface-title {
   margin: 0;
   font-size: var(--nx-font-size-title);
+  line-height: var(--nx-font-leading-tight);
   font-weight: var(--nx-font-weight-semibold);
 }
 .tool__body {
@@ -11289,6 +11322,8 @@ button.cal__grid-event--dragging {
 }
 .tool__figure-value {
   font-size: var(--nx-font-size-display);
+  letter-spacing: var(--nx-font-tracking-tight);
+  line-height: var(--nx-font-leading-tight);
   font-weight: var(--nx-font-weight-semibold);
   font-variant-numeric: tabular-nums;
 }
@@ -11299,6 +11334,7 @@ button.cal__grid-event--dragging {
 .tool__figure-inline {
   margin: 0;
   font-size: var(--nx-font-size-title);
+  line-height: var(--nx-font-leading-tight);
   font-weight: var(--nx-font-weight-semibold);
   font-variant-numeric: tabular-nums;
 }

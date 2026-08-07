@@ -91,17 +91,24 @@
   },
   "font": {
     "family": {
-      "ui": "\"Space Grotesk\", Bahnschrift, \"Segoe UI\", system-ui, sans-serif",
-      "mono": "\"JetBrains Mono\", Consolas, \"Courier New\", monospace"
+      "ui": "\"Segoe UI Variable Text\", \"Segoe UI\", Inter, -apple-system, BlinkMacSystemFont, system-ui, \"Noto Sans\", sans-serif",
+      "display": "\"Segoe UI Variable Display\", \"Segoe UI\", Inter, -apple-system, BlinkMacSystemFont, system-ui, \"Noto Sans\", sans-serif",
+      "mono": "\"JetBrains Mono\", \"Cascadia Mono\", Consolas, \"SF Mono\", \"Courier New\", monospace"
     },
     "size": {
-      "caption": "10.5px",
+      "caption": "11px",
       "label": "11px",
-      "bodySm": "12.5px",
-      "body": "13.5px",
-      "title": "15px",
-      "h1": "19px",
-      "display": "23px"
+      "bodySm": "13px",
+      "body": "15px",
+      "title": "18px",
+      "h1": "24px",
+      "display": "32px"
+    },
+    "leading": {
+      "tight": "1.15",
+      "snug": "1.35",
+      "normal": "1.55",
+      "loose": "1.7"
     },
     "weight": {
       "regular": "400",
@@ -110,6 +117,7 @@
       "bold": "700"
     },
     "tracking": {
+      "tight": "-0.012em",
       "normal": "0.01em",
       "label": "0.12em",
       "wide": "0.2em"

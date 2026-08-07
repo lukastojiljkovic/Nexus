@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { formatChord, matchesChord, moduleNavPosition, resolveEnabled } from "@nexus/core";
 import type { CanvasRef } from "@nexus/core";
-import { Button, EmptyState, NavItem } from "@nexus/ui";
+import { Button, EmptyState, Icon, NavItem, type IconName } from "@nexus/ui";
 import type { ThemeName } from "@nexus/tokens";
 import type {
   AppInfo,
@@ -129,6 +129,35 @@ function reportActiveProfile(profileId: string): void {
 /** Sidebar/page display name for a module id; falls back to the id. Exported for `searchCommands.ts`'s "Idi na: <modul>" labels, so they are never re-spelled. */
 export function moduleName(id: string): string {
   return strings.modules[id] ?? id;
+}
+
+/**
+ * Which drawn icon a module wears in the rail. Deliberately a lookup and not a
+ * field on the manifest: `@nexus/core` must not learn about a renderer's icon
+ * set, and a module the set does not cover renders its name alone rather than
+ * a placeholder box.
+ */
+const MODULE_ICONS: Record<string, IconName> = {
+  dashboard: "dashboard",
+  tasks: "tasks",
+  calendar: "calendar",
+  settings: "settings",
+  notes: "notes",
+  priv: "priv",
+  files: "files",
+  study: "study",
+  finance: "finance",
+  habits: "habits",
+  fitness: "fitness",
+  tools: "tools",
+  focus: "focus",
+  canvas: "canvas",
+};
+
+/** The rail's icon for a module, or nothing at all if the set does not cover it. */
+function moduleIcon(id: string): ReactNode {
+  const name = MODULE_ICONS[id];
+  return name == null ? null : <Icon name={name} size={16} />;
 }
 
 export function App() {
@@ -1069,11 +1098,25 @@ export function App() {
             in `app.css` for the measurement. */}
         <nav className="app__sidebar" aria-label={strings.app.navLabel}>
           <div className="app__nav-scroll">
-            {[...registry.byCategory()].map(([category, members]) => {
+            {[...registry.byCategory()].map(([category, members], index) => {
               const visible = members.filter((manifest) => enabledIds.has(manifest.id));
               if (visible.length === 0) return null;
+              // The manifests have always carried the grouping — the nav had
+              // been rendering the groups and discarding their names, so
+              // fourteen modules read as one flat list (STATUS §5 C item 13).
+              // A category with no name of its own falls back to the registry
+              // key rather than rendering an empty strip.
+              const headingId = `app-nav-category-${index}`;
               return (
-                <div key={category} className="app__nav-group">
+                <div
+                  key={category}
+                  className="app__nav-group"
+                  role="group"
+                  aria-labelledby={headingId}
+                >
+                  <h2 id={headingId} className="app__nav-group-label">
+                    {strings.app.navCategories[category] ?? category}
+                  </h2>
                   {visible.map((manifest) => (
                     <NavItem
                       key={manifest.id}
@@ -1084,6 +1127,7 @@ export function App() {
                         setActiveId(manifest.id);
                       }}
                     >
+                      {moduleIcon(manifest.id)}
                       {moduleName(manifest.id)}
                     </NavItem>
                   ))}
@@ -1121,6 +1165,7 @@ export function App() {
                   setActiveId(SEARCH_PAGE_ID);
                 }}
               >
+                <Icon name="search" size={16} />
                 {strings.search.navLabel}
               </NavItem>
               <NotificationCenter profileId={activeProfile.id} onNavigate={setActiveId} />

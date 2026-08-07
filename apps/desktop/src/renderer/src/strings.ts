@@ -42,6 +42,21 @@ export const strings = {
   app: {
     brand: "Nexus",
     navLabel: "Glavna navigacija",
+    /**
+     * The registry's own category names, translated. The manifests have always
+     * carried the grouping and the sidebar rendered the groups — it simply
+     * threw the NAMES away, so fourteen modules read as one undifferentiated
+     * list (STATUS §5 C item 13). Keys are `ModuleCategory` from `@nexus/core`;
+     * a category with no enabled member never renders, so an unused one costs
+     * nothing. One word each, because this is a 220px rail.
+     */
+    navCategories: {
+      "Core experience": "Osnovno",
+      "Content & knowledge": "Sadržaj",
+      "Life hubs": "Život",
+      "Professional & utilities": "Rad",
+      "Growth & platform": "Rast",
+    } as Record<string, string>,
     themeToggle: "Promeni temu",
     themeDan: "Dan",
     themeNoc: "Noć",

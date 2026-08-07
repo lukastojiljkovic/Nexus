@@ -33,12 +33,66 @@
 }
 
 /* --- Base ------------------------------------------------------------ */
+/* The base leading is stated here and nowhere else. Until 2026-08-07 the app
+   set no `line-height` at all, so every line box in it was Chromium's `normal`
+   — a value that depends on the FONT's own metrics, which is to say the app's
+   vertical rhythm changed with whichever family the OS happened to resolve.
+   `snug` is the UI reading value; prose overrides to `normal`, headings to
+   `tight`, and icon-sized glyph buttons keep their explicit `line-height: 1`. */
 .nx-app {
   font-family: var(--nx-font-family-ui);
   font-size: var(--nx-font-size-body);
+  line-height: var(--nx-font-leading-snug);
   color: var(--nx-text);
   background: var(--nx-bg);
   -webkit-font-smoothing: antialiased;
+}
+
+/* --- Icon ------------------------------------------------------------- */
+/* The set itself is in Icon.tsx; this is only how one sits in a line of text. */
+.nx-icon {
+  flex: none;
+  display: block;
+}
+
+/* --- PageHeader ------------------------------------------------------- */
+/* One page title treatment for the whole app. See PageHeader.tsx. */
+.nx-page-header {
+  flex: none;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nx-space-4);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.nx-page-header__text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  min-width: 0;
+}
+.nx-page-header__title {
+  margin: 0;
+  font-family: var(--nx-font-family-display);
+  font-size: var(--nx-font-size-h1);
+  font-weight: var(--nx-font-weight-semibold);
+  line-height: var(--nx-font-leading-tight);
+  letter-spacing: var(--nx-font-tracking-tight);
+  color: var(--nx-text);
+}
+.nx-page-header__subtitle {
+  margin: 0;
+  max-width: var(--nx-layout-prose);
+  font-size: var(--nx-font-size-body-sm);
+  line-height: var(--nx-font-leading-snug);
+  color: var(--nx-text-muted);
+}
+.nx-page-header__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
 }
 
 /* --- Button ----------------------------------------------------------- */
@@ -186,12 +240,37 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: var(--nx-space-2);
   padding: 6px 12px;
   border-radius: var(--nx-radius-md);
   color: var(--nx-text);
   text-decoration: none;
-  font-size: var(--nx-font-size-body);
+  /* The rail is furniture, not reading matter: it takes the dense size, and
+     the page it opens takes the reading one. Before the scale was re-spaced
+     (2026-08-07) those two were 1px apart and the distinction could not be
+     made at all. */
+  font-size: var(--nx-font-size-body-sm);
   transition: background var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.nx-nav-item__label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* The icon follows the row: quiet by default, the accent when the row is the
+   one you are on. It never becomes the selection indicator — that stays
+   typographic plus the ✦ glyph, per the design direction. */
+.nx-nav-item .nx-icon {
+  color: var(--nx-text-muted);
+  transition: color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.nx-nav-item:hover .nx-icon,
+.nx-nav-item--active .nx-icon {
+  color: var(--nx-accent);
 }
 .nx-nav-item:hover:not(.nx-nav-item--active) {
   background: var(--nx-surface-alt);
@@ -259,13 +338,15 @@
 .nx-empty__title {
   font-size: var(--nx-font-size-title);
   font-weight: var(--nx-font-weight-semibold);
+  line-height: var(--nx-font-leading-tight);
+  letter-spacing: var(--nx-font-tracking-tight);
   color: var(--nx-text);
 }
 .nx-empty__desc {
   font-size: var(--nx-font-size-body-sm);
   color: var(--nx-text-muted);
   max-width: 34ch;
-  line-height: 1.5;
+  line-height: var(--nx-font-leading-normal);
 }
 .nx-empty__action {
   margin-top: var(--nx-space-2);

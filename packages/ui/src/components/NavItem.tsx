@@ -19,7 +19,7 @@ export function NavItem({ active, badge, children, className, ...rest }: NavItem
       aria-current={active ? "page" : undefined}
       {...rest}
     >
-      <span>{children}</span>
+      <span className="nx-nav-item__label">{children}</span>
       {badge != null && !active && <span className="nx-nav-item__badge">{badge}</span>}
     </a>
   );

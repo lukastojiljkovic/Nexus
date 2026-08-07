@@ -5,6 +5,8 @@ export { Card, type CardProps } from "./components/Card.js";
 export { NavItem, type NavItemProps } from "./components/NavItem.js";
 export { TextField, type TextFieldProps } from "./components/TextField.js";
 export { EmptyState, type EmptyStateProps } from "./components/EmptyState.js";
+export { PageHeader, type PageHeaderProps } from "./components/PageHeader.js";
+export { Icon, type IconName, type IconProps } from "./components/Icon.js";
 export { ListRow, type ListRowProps } from "./components/ListRow.js";
 export {
   KanbanColumn,
