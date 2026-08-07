@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { EmptyState } from "@nexus/ui";
 import * as Y from "yjs";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { StarterKit } from "@tiptap/starter-kit";
@@ -133,7 +134,7 @@ export function PrivVersionHistory({
     return <p className="app__muted">{strings.app.loading}</p>;
   }
   if (versions.length === 0) {
-    return <p className="note__history-empty">{s.empty}</p>;
+    return <EmptyState variant="inline" title={s.empty} />;
   }
 
   return (

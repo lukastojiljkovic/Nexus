@@ -1,4 +1,5 @@
 import { Node, mergeAttributes } from "@tiptap/core";
+import { EmptyState } from "@nexus/ui";
 import type { Editor } from "@tiptap/core";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { NodeViewWrapper, ReactNodeViewRenderer, useEditorState } from "@tiptap/react";
@@ -105,7 +106,7 @@ function TableOfContentsView({ editor }: NodeViewProps) {
     <NodeViewWrapper as="nav" className="note__toc" aria-label={strings.notes.tocTitle}>
       <div className="note__toc-title">{strings.notes.tocTitle}</div>
       {entries.length === 0 ? (
-        <p className="note__toc-empty">{strings.notes.tocEmpty}</p>
+        <EmptyState variant="inline" title={strings.notes.tocEmpty} />
       ) : (
         entries.map((entry, index) => (
           <button

@@ -355,6 +355,23 @@ body {
   color: var(--nx-text-muted);
   font-size: var(--nx-font-size-body-sm);
 }
+/**
+ * A Settings sub-section's explanatory paragraph. `.app__muted`'s treatment
+ * plus the one thing it must not have: a measure.
+ *
+ * `f1fa51a` gave the Settings CARDS a measure and this level kept none, because
+ * these paragraphs render through the SHARED `.app__muted`, which App,
+ * StudyPage, PrivPage, FinCsvImport, noteTemplatePane, attachmentPreview and
+ * moduleSettingsPanels also use — almost always for a short status or loading
+ * line that a 68ch cap would do nothing for. Capping the shared class would
+ * have been a blast radius nobody asked for; a description class adopted where
+ * a description actually is costs nothing anywhere else.
+ */
+.app__description {
+  max-width: var(--nx-layout-prose);
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
 
 /* Restore undo banner (IMEX slice 3d): sits at the top of the main column on
    every page, since a restore replaces the whole profile and the offer to take
@@ -3797,12 +3814,6 @@ button.cal__grid-event--dragging {
   display: flex;
   flex-direction: column;
 }
-.study__exams-empty {
-  margin: 0;
-  padding: var(--nx-space-2) 0;
-  color: var(--nx-text-muted);
-  font-size: var(--nx-font-size-body-sm);
-}
 .study__exam-item {
   display: flex;
   flex-direction: column;
@@ -3895,12 +3906,6 @@ button.cal__grid-event--dragging {
   color: var(--nx-text-muted);
   font-weight: var(--nx-font-weight-semibold);
 }
-.study__decks-empty {
-  margin: 0;
-  padding: var(--nx-space-2) 0;
-  color: var(--nx-text-muted);
-  font-size: var(--nx-font-size-body-sm);
-}
 .study__deck-name {
   font-weight: var(--nx-font-weight-medium);
 }
@@ -3947,13 +3952,6 @@ button.cal__grid-event--dragging {
   letter-spacing: var(--nx-font-tracking-label);
   color: var(--nx-text-muted);
   font-weight: var(--nx-font-weight-semibold);
-}
-.study__materials-empty,
-.study__linked-empty {
-  margin: 0;
-  padding: var(--nx-space-2) 0;
-  color: var(--nx-text-muted);
-  font-size: var(--nx-font-size-body-sm);
 }
 /* Same recipe as .tasks__attachment-error, scoped to these panels' channels. */
 .study__material-error,
@@ -4162,12 +4160,6 @@ button.cal__grid-event--dragging {
   color: var(--nx-text-muted);
   font-weight: var(--nx-font-weight-semibold);
 }
-.study__plans-empty {
-  margin: 0;
-  padding: var(--nx-space-2) 0;
-  color: var(--nx-text-muted);
-  font-size: var(--nx-font-size-body-sm);
-}
 .study__today {
   background: var(--nx-surface);
   border: 1px solid var(--nx-border);
@@ -4182,12 +4174,6 @@ button.cal__grid-event--dragging {
   letter-spacing: var(--nx-font-tracking-label);
   color: var(--nx-text-muted);
   font-weight: var(--nx-font-weight-semibold);
-}
-.study__today-empty {
-  margin: 0;
-  padding: var(--nx-space-1) 0;
-  color: var(--nx-text-muted);
-  font-size: var(--nx-font-size-body-sm);
 }
 .study__today-list {
   display: flex;
@@ -4392,8 +4378,7 @@ button.cal__grid-event--dragging {
   color: var(--nx-text-muted);
   font-weight: var(--nx-font-weight-semibold);
 }
-.study__topics-hint,
-.study__topics-empty {
+.study__topics-hint {
   margin: 0;
   font-size: var(--nx-font-size-caption);
   color: var(--nx-text-muted);
@@ -4502,11 +4487,6 @@ button.cal__grid-event--dragging {
   color: var(--nx-text-muted);
   font-weight: var(--nx-font-weight-semibold);
 }
-.study__focus-empty {
-  margin: 0;
-  color: var(--nx-text-muted);
-  font-size: var(--nx-font-size-body-sm);
-}
 .study__focus-idle {
   display: flex;
   align-items: center;
@@ -4566,11 +4546,6 @@ button.cal__grid-event--dragging {
   letter-spacing: var(--nx-font-tracking-label);
   color: var(--nx-text-muted);
   font-weight: var(--nx-font-weight-semibold);
-}
-.study__stats-empty {
-  margin: 0;
-  color: var(--nx-text-muted);
-  font-size: var(--nx-font-size-body-sm);
 }
 .study__stats-line {
   margin: 0;
@@ -4642,12 +4617,6 @@ button.cal__grid-event--dragging {
   letter-spacing: var(--nx-font-tracking-label);
   color: var(--nx-text-muted);
   font-weight: var(--nx-font-weight-semibold);
-}
-.study__focus-sessions-empty {
-  margin: 0;
-  padding: var(--nx-space-1) 0;
-  color: var(--nx-text-muted);
-  font-size: var(--nx-font-size-body-sm);
 }
 .study__focus-sessions-list {
   display: flex;
@@ -7171,13 +7140,6 @@ button.cal__grid-event--dragging {
   border-radius: var(--nx-radius-md);
   font-size: var(--nx-font-size-body-sm);
 }
-.note__history-empty {
-  max-width: var(--note-measure);
-  margin: 0 auto;
-  padding: var(--nx-space-4) var(--nx-space-2);
-  color: var(--nx-text-muted);
-  font-size: var(--nx-font-size-body-sm);
-}
 
 /* Šabloni (NOTE-009b / ADR-016): the in-pane template picker that replaces
    canvas + Prilozi + backlinks while `mode === "templates"` — the same grid
@@ -7740,11 +7702,6 @@ button.cal__grid-event--dragging {
   font-weight: var(--nx-font-weight-semibold);
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--nx-text-muted);
-}
-.note__toc-empty {
-  margin: 0;
-  font-size: var(--nx-font-size-body-sm);
   color: var(--nx-text-muted);
 }
 .note__toc-item {

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { EmptyState } from "@nexus/ui";
 import * as Y from "yjs";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { StarterKit } from "@tiptap/starter-kit";
@@ -107,7 +108,7 @@ export function NoteVersionHistory({
     );
   }
   if (versions.length === 0) {
-    return <p className="note__history-empty">{strings.notes.historyEmpty}</p>;
+    return <EmptyState variant="inline" title={strings.notes.historyEmpty} />;
   }
 
   return (

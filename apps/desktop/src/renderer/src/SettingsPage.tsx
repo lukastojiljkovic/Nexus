@@ -689,7 +689,7 @@ function BackupSection({ profileId }: BackupSectionProps) {
 
   return (
     <>
-      <p className="app__muted">{s.description}</p>
+      <p className="app__description">{s.description}</p>
       <button
         type="button"
         className="set__disclosure"
@@ -747,11 +747,11 @@ function BackupSection({ profileId }: BackupSectionProps) {
             />
           </div>
           <p className="set__section-caption">{s.passphraseHint}</p>
-          <p className="app__muted">{s.encryptedNotice}</p>
+          <p className="app__description">{s.encryptedNotice}</p>
         </>
       ) : (
         <>
-          <p className="app__muted">{s.plaintextNotice}</p>
+          <p className="app__description">{s.plaintextNotice}</p>
           <Checkbox
             checked={plaintextConfirmed}
             onChange={(event) => setPlaintextConfirmed(event.target.checked)}
@@ -898,7 +898,7 @@ function AutoBackupSection({ profileId, hits }: AutoBackupSectionProps) {
   return (
     <div className="set__restore-block">
       <h3 className={labelClass("set__module-group-title", hits.has("backup-auto"))}>{s.title}</h3>
-      <p className="app__muted">{s.description}</p>
+      <p className="app__description">{s.description}</p>
 
       <Checkbox
         checked={settings.enabled}
@@ -1073,7 +1073,7 @@ function SearchHistorySection({ profileId, hits }: SearchHistorySectionProps) {
       <h3 className={labelClass("set__module-group-title", hits.has("privacy-search-history"))}>
         {s.title}
       </h3>
-      <p className="app__muted">{s.caption}</p>
+      <p className="app__description">{s.caption}</p>
       <Button
         size="sm"
         disabled={clearing || count === null || count === 0}
@@ -1132,7 +1132,7 @@ function CalendarExportSection({ profileId, hits }: CalendarExportSectionProps) 
   return (
     <div className="set__restore-block">
       <h3 className={labelClass("set__module-group-title", hits.has("backup-calendar"))}>{s.title}</h3>
-      <p className="app__muted">{s.description}</p>
+      <p className="app__description">{s.description}</p>
       <Button size="sm" disabled={running} onClick={() => void runExport()}>
         {s.button}
       </Button>
@@ -1366,7 +1366,7 @@ function RestoreSection({ profileId, hits }: RestoreSectionProps) {
   return (
     <div className="set__restore-block">
       <h3 className={labelClass("set__module-group-title", hits.has("backup-restore"))}>{s.title}</h3>
-      <p className="app__muted">{s.description}</p>
+      <p className="app__description">{s.description}</p>
 
       {!previewing && state.phase !== "applied" && (
         <Button
@@ -1808,7 +1808,7 @@ function ImportSection({ profileId, hits }: ImportSectionProps) {
   return (
     <div className="set__import-block">
       <h3 className={labelClass("set__module-group-title", hits.has("backup-import"))}>{s.title}</h3>
-      <p className="app__muted">{s.description}</p>
+      <p className="app__description">{s.description}</p>
 
       {!previewing && state.phase !== "applied" && (
         <Button
@@ -2195,7 +2195,7 @@ function IcsImportSection({ profileId, hits }: IcsImportSectionProps) {
   return (
     <div className="set__import-block">
       <h3 className={labelClass("set__module-group-title", hits.has("backup-ics"))}>{s.title}</h3>
-      <p className="app__muted">{s.description}</p>
+      <p className="app__description">{s.description}</p>
 
       {!previewing && state.phase !== "applied" && (
         <Button
@@ -2570,7 +2570,7 @@ function ApkgImportSection({ profileId, hits }: ApkgImportSectionProps) {
   return (
     <div className="set__import-block">
       <h3 className={labelClass("set__module-group-title", hits.has("backup-apkg"))}>{s.title}</h3>
-      <p className="app__muted">{s.description}</p>
+      <p className="app__description">{s.description}</p>
 
       {state.phase !== "applied" && (
         <div className="set__apkg-subject">
@@ -3174,7 +3174,7 @@ function CsvImportSection({ profileId, hits }: CsvImportSectionProps) {
   return (
     <div className="set__import-block">
       <h3 className={labelClass("set__module-group-title", hits.has("backup-csv"))}>{s.title}</h3>
-      <p className="app__muted">{s.description}</p>
+      <p className="app__description">{s.description}</p>
 
       {!planned && state.phase !== "applied" && (
         <Button
@@ -3674,7 +3674,7 @@ function LlmImportSection({ profileId, hits }: LlmImportSectionProps) {
   return (
     <div className="set__import-block">
       <h3 className={labelClass("set__module-group-title", hits.has("backup-llm"))}>{s.title}</h3>
-      <p className="app__muted">{s.description}</p>
+      <p className="app__description">{s.description}</p>
 
       <p className="set__section-caption">{s.kindLabel}</p>
       <div className="set__segmented" role="group" aria-label={s.kindLabel}>
@@ -4045,7 +4045,7 @@ function MarkdownImportSection({ profileId, hits }: MarkdownImportSectionProps) 
       <h3 className={labelClass("set__module-group-title", hits.has("backup-markdown"))}>
         {s.title}
       </h3>
-      <p className="app__muted">{s.description}</p>
+      <p className="app__description">{s.description}</p>
 
       <p className="set__section-caption">{s.folderLabel}</p>
       <select
@@ -4588,7 +4588,7 @@ function LicencesSection() {
 
   return (
     <>
-      <p className="app__muted">{s.caption}</p>
+      <p className="app__description">{s.caption}</p>
       {failed && (
         <p className="set__section-caption" role="alert">
           {s.loadError}

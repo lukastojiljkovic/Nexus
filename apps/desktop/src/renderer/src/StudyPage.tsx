@@ -2655,7 +2655,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
           </p>
         )}
         {rows.length === 0 ? (
-          <p className="study__materials-empty">{copy.empty}</p>
+          <EmptyState variant="inline" title={copy.empty} />
         ) : (
           rows.map((material) => {
             // „Pregledaj" is offered only where the stored mime (plus the
@@ -2802,7 +2802,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
           </p>
         )}
         {rows.length === 0 ? (
-          <p className="study__linked-empty">{copy.empty}</p>
+          <EmptyState variant="inline" title={copy.empty} />
         ) : (
           <div className="study__linked-list">
             {rows.map((note) => (
@@ -3126,7 +3126,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
 
                   <div className="study__exams">
                     {subjectExams.length === 0 ? (
-                      <p className="study__exams-empty">{strings.study.noExams}</p>
+                      <EmptyState variant="inline" title={strings.study.noExams} />
                     ) : (
                       subjectExams.map((exam) => {
                         const days = daysUntilExam(exam.examDate);
@@ -3251,7 +3251,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                       )}
                     </div>
                     {subjectDecks.length === 0 ? (
-                      <p className="study__decks-empty">{strings.study.noDecks}</p>
+                      <EmptyState variant="inline" title={strings.study.noDecks} />
                     ) : (
                       subjectDecks.map((deck) => {
                         const counts = countsFor(deck.id);
@@ -3403,7 +3403,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
             <div className="study__today">
               <h3 className="study__today-heading">{strings.study.todayTitle}</h3>
               {todayEntries.length === 0 ? (
-                <p className="study__today-empty">{strings.study.todayEmpty}</p>
+                <EmptyState variant="inline" title={strings.study.todayEmpty} />
               ) : (
                 <div className="study__today-list">
                   {todayEntries.map(({ block, exam, subject }) => {
@@ -3460,7 +3460,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
             </div>
 
             {planEntries.length === 0 ? (
-              <p className="study__plans-empty">{strings.study.plansEmpty}</p>
+              <EmptyState variant="inline" title={strings.study.plansEmpty} />
             ) : (
               planEntries.map(({ plan, exam, subject }) => {
                 const blocks = blocksByPlan[plan.id] ?? [];
@@ -3716,7 +3716,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                     ) : (
                       <>
                         {formTopics.length === 0 ? (
-                          <p className="study__topics-empty">{strings.study.topics.empty}</p>
+                          <EmptyState variant="inline" title={strings.study.topics.empty} />
                         ) : (
                           formTopics.map((topic, index) => (
                             <div key={topic.id} className="study__topic-row">
@@ -3937,7 +3937,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                 {strings.study.newPlan}
               </Button>
             ) : (
-              <p className="study__plans-empty">{strings.study.noPlannableExams}</p>
+              <EmptyState variant="inline" title={strings.study.noPlannableExams} />
             )}
           </div>
 
@@ -3985,7 +3985,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                   )}
                 </div>
               ) : activeSubjects.length === 0 ? (
-                <p className="study__focus-empty">{strings.study.focusNoSubjects}</p>
+                <EmptyState variant="inline" title={strings.study.focusNoSubjects} />
               ) : (
                 <div className="study__focus-idle">
                   <select
@@ -4033,7 +4033,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
             <div className="study__stats-section">
               <h3 className="study__stats-subheading">{strings.study.statsRecentTitle}</h3>
               {statsAllZero ? (
-                <p className="study__stats-empty">{strings.study.statsEmpty}</p>
+                <EmptyState variant="inline" title={strings.study.statsEmpty} />
               ) : (
                 <>
                   {subjectMinutesRows.length > 0 && (
@@ -4102,7 +4102,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
             <div className="study__focus-sessions">
               <h3 className="study__focus-sessions-heading">{strings.study.focusSessionsTitle}</h3>
               {focusSessionEntries.length === 0 ? (
-                <p className="study__focus-sessions-empty">{strings.study.focusSessionsEmpty}</p>
+                <EmptyState variant="inline" title={strings.study.focusSessionsEmpty} />
               ) : (
                 <div className="study__focus-sessions-list">
                   {focusSessionEntries.map(({ session, subject }) => (
