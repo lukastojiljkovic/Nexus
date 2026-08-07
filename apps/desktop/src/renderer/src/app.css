@@ -5288,10 +5288,24 @@ button.cal__grid-event--dragging {
   gap: var(--nx-space-5);
 }
 /* Section cards reuse nx-card's surface; this only spaces their innards. */
+/* A settings card is a column of GROUPS, not of items.
+   The uniform 12px gap this carried put a label exactly as far from its own
+   control as from the next unrelated block, so „Izgled" read as one
+   undifferentiated ten-item stack instead of five preferences. Proximity is the
+   only thing that says which label belongs to which control, and no amount of
+   type or colour substitutes for it — which is why STATUS §5 C item 16 recorded
+   this as needing MARKUP rather than a value change. `set__field` is that
+   markup: tight inside a pair, and this gap is what separates the pairs. */
 .set__section {
   display: flex;
   flex-direction: column;
-  gap: var(--nx-space-3);
+  gap: var(--nx-space-5);
+}
+/** One preference: its caption and the control that answers it, bound together. */
+.set__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
 }
 .set__section .nx-card__title {
   margin-bottom: 0;

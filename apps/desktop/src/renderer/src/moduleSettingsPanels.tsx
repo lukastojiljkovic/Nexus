@@ -125,7 +125,7 @@ function TasksSettingsPanel({ hits }: SettingsPanelProps) {
   );
 
   return (
-    <>
+    <div className="set__field">
       <p
         className={labelClass(
           "set__section-caption",
@@ -151,7 +151,7 @@ function TasksSettingsPanel({ hits }: SettingsPanelProps) {
         ))}
       </div>
       <p className="set__section-caption">{s.blockedInTodayCaption}</p>
-    </>
+    </div>
   );
 }
 
@@ -167,6 +167,7 @@ function NotesSettingsPanel({ hits }: SettingsPanelProps) {
 
   return (
     <>
+      <div className="set__field">
       <p className={labelClass("set__section-caption", hits.has(settingsEntryId("notes", "width")))}>
         {s.widthLabel}
       </p>
@@ -185,6 +186,7 @@ function NotesSettingsPanel({ hits }: SettingsPanelProps) {
             {s.widthNames[width] ?? width}
           </Button>
         ))}
+      </div>
       </div>
       <div className="set__module-row">
         <div className="set__module-info">
@@ -313,6 +315,7 @@ function DashboardSettingsPanel({ profileId, hits }: SettingsPanelProps) {
           „pozadina" opened the right section and then emphasised nothing in it.
           `moduleSettings.test.ts` pins declaration↔renderer pairing per PANEL,
           which is why it stayed green. */}
+      <div className="set__field">
       <p className={labelClass("set__section-caption", hits.has(settingsEntryId("dashboard", "background")))}>
         {s.caption}
       </p>
@@ -331,6 +334,7 @@ function DashboardSettingsPanel({ profileId, hits }: SettingsPanelProps) {
             </Button>
           )}
         </div>
+      </div>
       </div>
 
       {backgroundHash !== null && (

@@ -913,6 +913,7 @@ function AutoBackupSection({ profileId, hits }: AutoBackupSectionProps) {
       </Checkbox>
       {!configured && <p className="set__section-caption">{s.enableHint}</p>}
 
+      <div className="set__field">
       <p className="set__section-caption">{s.cadenceLabel}</p>
       <div className="set__segmented" role="group" aria-label={s.cadenceLabel}>
         {BACKUP_CADENCES.map((option) => (
@@ -932,7 +933,9 @@ function AutoBackupSection({ profileId, hits }: AutoBackupSectionProps) {
           </Button>
         ))}
       </div>
+      </div>
 
+      <div className="set__field">
       <p className="set__section-caption">{s.folderLabel}</p>
       <Button size="sm" disabled={busy} onClick={() => void mutate(() => window.nexus.pickBackupFolder(profileId))}>
         {s.folderPick}
@@ -944,7 +947,9 @@ function AutoBackupSection({ profileId, hits }: AutoBackupSectionProps) {
       ) : (
         <p className="app__muted">{s.folderNone}</p>
       )}
+      </div>
 
+      <div className="set__field">
       <p className="set__section-caption">{s.keepLastLabel}</p>
       <select
         className="set__select"
@@ -967,7 +972,9 @@ function AutoBackupSection({ profileId, hits }: AutoBackupSectionProps) {
         ))}
       </select>
       <p className="set__section-caption">{s.keepLastHint}</p>
+      </div>
 
+      <div className="set__field">
       <p className="set__section-caption">{s.passphraseTitle}</p>
       <div className="set__security-form">
         <TextField
@@ -989,6 +996,7 @@ function AutoBackupSection({ profileId, hits }: AutoBackupSectionProps) {
         {settings.passphraseSet ? s.passphraseChange : s.passphraseSave}
       </Button>
       {settings.passphraseSet && <p className="set__section-caption">{s.passphraseStatusSet}</p>}
+      </div>
 
       <Button size="sm" disabled={busy || !configured} onClick={() => void mutate(() => window.nexus.runBackupNow(profileId))}>
         {s.runNow}
@@ -4860,6 +4868,7 @@ export function SettingsPage({
       </Card>
 
       <Card title={strings.settings.sectionTitle.appearance} className={sectionClass(sections.has("appearance"))}>
+        <div className="set__field">
         <p className={labelClass("set__section-caption", hits.has("appearance-theme"))}>
           {a.themeLabel}
         </p>
@@ -4876,6 +4885,8 @@ export function SettingsPage({
             </Button>
           ))}
         </div>
+        </div>
+        <div className="set__field">
         <p className={labelClass("set__section-caption", hits.has("appearance-accent"))}>
           {a.accentLabel} — {a.accentNames[accent] ?? accent}
         </p>
@@ -4900,8 +4911,10 @@ export function SettingsPage({
             );
           })}
         </div>
+        </div>
         {/* PRD 04 §5. The calendar reads this on mount, so a change here shows
             the next time that page is opened — page switching remounts it. */}
+        <div className="set__field">
         <p className={labelClass("set__section-caption", hits.has("appearance-week-start"))}>
           {a.weekStartLabel}
         </p>
@@ -4921,10 +4934,12 @@ export function SettingsPage({
             </Button>
           ))}
         </div>
+        </div>
         {/* CAL §5, beside the week start: both say how this machine reads a
             calendar. Selects rather than segmented rows — four spans and two
             clocks with example times in them are longer labels than a row of
             chips can carry without wrapping (the auto-lock precedent). */}
+        <div className="set__field">
         <p className={labelClass("set__section-caption", hits.has("calendar-event-duration"))}>
           {a.eventDurationLabel}
         </p>
@@ -4944,6 +4959,8 @@ export function SettingsPage({
             </option>
           ))}
         </select>
+        </div>
+        <div className="set__field">
         <p className={labelClass("set__section-caption", hits.has("calendar-clock"))}>
           {a.clockLabel}
         </p>
@@ -4964,6 +4981,7 @@ export function SettingsPage({
           ))}
         </select>
         <p className="set__section-caption">{a.clockHint}</p>
+        </div>
         <ResetLink
           onClick={() =>
             setResetting({ id: "appearance", title: strings.settings.sectionTitle.appearance })
