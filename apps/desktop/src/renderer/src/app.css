@@ -11135,15 +11135,25 @@ button.cal__grid-event--dragging {
   flex-direction: column;
 }
 
-/* The routine editor: one line per exercise, its three targets and the moves. */
+/* The routine editor: one line per exercise, its metric-driven targets
+   (`SET_FIELDS` — a plank draws one, a weighted lift with a target load draws
+   up to five) and the moves. Flex rather than a fixed grid: how many target
+   fields a line draws depends on its exercise's metric, so a rigid column
+   count would either waste columns for a plank or crowd them for a lift with
+   a load target, and would misalign every row's own action buttons whenever
+   it draws fewer fields than the widest metric does. Wrapping keeps every
+   field a fixed, readable width at any window size instead of shrinking to
+   fit or overflowing at the app's minimum. */
 .fit__item-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) repeat(3, 88px) auto auto auto;
+  display: flex;
+  flex-wrap: wrap;
   align-items: end;
   gap: var(--nx-space-2);
   align-self: stretch;
 }
 .fit__item-name {
+  flex: 1 1 160px;
+  min-width: 0;
   font-size: var(--nx-font-size-body-sm);
   padding-bottom: 6px;
 }
@@ -11151,12 +11161,15 @@ button.cal__grid-event--dragging {
   color: var(--nx-text-muted);
 }
 .fit__target-field {
-  max-width: 88px;
+  flex: 0 0 88px;
 }
-@media (max-width: 900px) {
-  .fit__item-row {
-    grid-template-columns: minmax(0, 1fr);
-  }
+/* Kept together and pushed to the row's own end (`margin-left: auto`) rather
+   than left to fall wherever the last target field happens to wrap to. */
+.fit__item-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  margin-left: auto;
 }
 
 /* The muscle pickers. Twenty toggles twice over, so they wrap and stay small —

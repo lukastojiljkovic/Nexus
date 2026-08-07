@@ -448,6 +448,27 @@ function validatePositiveIntOrNull(value: number | null | undefined, field: stri
 }
 
 /**
+ * Two decimals, and NOT a stylistic choice — it is what keeps a stored target
+ * expressible in the form that edits it.
+ *
+ * The renderer's numeric fields parse through `parseAmountInput`, which accepts
+ * at most two fraction digits. Nothing the form writes can exceed that, but an
+ * ARCHIVE IMPORT can: the interchange reader accepts any finite REAL. A routine
+ * carrying `45.567` would then open for editing, fail to parse on the way back,
+ * and refuse to save — blocking a save the user made for some entirely
+ * unrelated reason, on a value they never typed.
+ *
+ * Normalising here, at the single writer, makes „every stored target can be
+ * typed back in" true by construction rather than by every caller remembering.
+ * Rounding rather than refusing, because an otherwise-valid archive must still
+ * import — and 0.01 kg, 0.01 s and 0.01 m are all far below any precision a
+ * training log means.
+ */
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+/**
  * A measured quantity, not a count — seconds and metres are REAL in both
  * `fit_routine_items` and `fit_workout_sets`, because a 45.5-second hold is a
  * real prescription. `Number.isFinite` rather than a bare `typeof`: NaN and
@@ -459,10 +480,17 @@ function validatePositiveFiniteOrNull(
   field: string,
 ): number | null {
   if (value === undefined || value === null) return null;
-  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
     throw new FitRoutineValidationError(`"${field}" must be null or a positive number.`);
   }
-  return value;
+  // Rounded BEFORE the bound check, deliberately. The other order lets 0.001
+  // pass `> 0`, become 0, and then die on the column's own CHECK as a raw SQL
+  // error instead of this class — a refusal with no field name in it.
+  const rounded = round2(value);
+  if (rounded <= 0) {
+    throw new FitRoutineValidationError(`"${field}" must be null or a positive number.`);
+  }
+  return rounded;
 }
 
 /** Same, but zero is legal — a bodyweight target is 0 kg of added load. */
@@ -474,7 +502,7 @@ function validateNonNegativeFiniteOrNull(
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
     throw new FitRoutineValidationError(`"${field}" must be null or a number of at least zero.`);
   }
-  return value;
+  return round2(value);
 }
 
 /**

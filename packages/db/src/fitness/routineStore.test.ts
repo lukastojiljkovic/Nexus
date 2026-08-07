@@ -247,6 +247,45 @@ describe("FitRoutineStore — the non-rep targets", () => {
     ).toThrow(FitRoutineValidationError);
   });
 
+  it("normalises a target to two decimals, so the form can always type it back", () => {
+    // The editor's numeric fields parse at most two fraction digits. Nothing
+    // the form writes exceeds that — but an ARCHIVE IMPORT can, and a routine
+    // carrying 45.567 would open for editing and then refuse to save, blocking
+    // a save the user made for an entirely unrelated reason.
+    const routines = store();
+    const created = routines.create(
+      {
+        name: "Import",
+        items: [
+          {
+            exerciseRef: "user:a",
+            label: "A",
+            targetSeconds: 45.567,
+            targetWeightKg: 32.499,
+            targetDistanceM: 40.001,
+          },
+        ],
+      },
+      NOW,
+    );
+    expect(routines.get(created.id)?.items[0]).toMatchObject({
+      targetSeconds: 45.57,
+      targetWeightKg: 32.5,
+      targetDistanceM: 40,
+    });
+  });
+
+  it("refuses a target that is positive only before rounding", () => {
+    // 0.001 rounds to 0, which the column's own CHECK would reject as a raw
+    // SQL error naming no field. It has to fail as a validation error instead.
+    expect(() =>
+      store().create(
+        { name: "X", items: [{ exerciseRef: "user:1", label: "L", targetSeconds: 0.001 }] },
+        NOW,
+      ),
+    ).toThrow(FitRoutineValidationError);
+  });
+
   it("refuses NaN and Infinity, which SQLite would take without complaint", () => {
     for (const value of [Number.NaN, Number.POSITIVE_INFINITY]) {
       expect(() =>

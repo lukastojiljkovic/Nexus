@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { Button, Chip, EmptyState, ListRow, Select, TextField } from "@nexus/ui";
 import {
@@ -10,6 +10,7 @@ import {
 import {
   MAX_FIT_EXERCISE_NAME_LENGTH,
   MAX_FIT_EXERCISE_NOTES_LENGTH,
+  MAX_FIT_REST_SECONDS,
   MAX_FIT_ROUTINE_ITEMS,
   MAX_FIT_ROUTINE_NAME_LENGTH,
   MAX_FIT_ROUTINE_NOTES_LENGTH,
@@ -23,9 +24,9 @@ import type {
   MovementPattern,
   MuscleGroup,
 } from "../../shared/ipc.js";
-import { parseAmountInput } from "./fitDay.js";
+import { gramsInputValue, parseAmountInput } from "./fitDay.js";
 import { FitExercisePicker } from "./FitExercisePicker.js";
-import { movedByOne } from "./fitWorkout.js";
+import { movedByOne, SET_FIELDS } from "./fitWorkout.js";
 import { fitTrainingError, targetText } from "./fitWorkoutCopy.js";
 import { strings } from "./strings.js";
 
@@ -62,7 +63,17 @@ type Editing = null | { mode: "new" } | { mode: "edit"; id: string };
 /** The one pending undo, and which list it belongs to. */
 type PendingUndo = null | { kind: "routine"; id: string } | { kind: "exercise"; id: string };
 
-/** One routine line while it is being edited — the targets are text until they parse. */
+/**
+ * One routine line while it is being edited — the targets are text until they
+ * parse.
+ *
+ * `seconds` / `weightKg` / `distanceM` are held here **regardless of whether
+ * the metric draws them**: `SET_FIELDS[metric]` decides which of the four
+ * migration-061 targets the form shows for this line, never which of them
+ * the draft is allowed to remember. A line whose exercise no longer resolves
+ * (`metric: null`) draws none of them at all, and still has to hand back
+ * whatever was already stored — see `submitRoutine`.
+ */
 interface ItemDraft {
   exerciseRef: string;
   label: string;
@@ -71,6 +82,10 @@ interface ItemDraft {
   sets: string;
   repsMin: string;
   repsMax: string;
+  seconds: string;
+  weightKg: string;
+  distanceM: string;
+  restSeconds: string;
 }
 
 export interface FitRoutinesProps {
@@ -141,20 +156,35 @@ export function FitRoutines({ profileId, routines, exercises, onChanged }: FitRo
         sets: item.targetSets === null ? "" : String(item.targetSets),
         repsMin: item.targetRepsMin === null ? "" : String(item.targetRepsMin),
         repsMax: item.targetRepsMax === null ? "" : String(item.targetRepsMax),
+        // Seeded even for a field this line's metric will not draw — a
+        // routine holds targets „Rutine" itself never rendered a control for
+        // (an exercise correction that changed metric, an unresolved
+        // reference), and `submitRoutine` sends every one of these straight
+        // back unless the user actually edits it.
+        seconds: item.targetSeconds === null ? "" : gramsInputValue(item.targetSeconds),
+        weightKg: item.targetWeightKg === null ? "" : gramsInputValue(item.targetWeightKg),
+        distanceM: item.targetDistanceM === null ? "" : gramsInputValue(item.targetDistanceM),
+        restSeconds: item.restSeconds === null ? "" : String(item.restSeconds),
       })),
     );
     setFormError(null);
     setEditing({ mode: "edit", id: routine.id });
   }
 
-  /** A target: a whole number, or `null` for „no target" — which is different from a target of zero. */
-  function readTarget(text: string): number | null | "invalid" {
+  /**
+   * A target quantity, parsed and checked against its own bound — or `null`
+   * for „no target", which a bound of zero (rest, a bodyweight load) has to
+   * stay distinguishable from. One reader for all seven fields; only the
+   * bound changes between them.
+   */
+  function readAmount(text: string, isValid: (value: number) => boolean): number | null | "invalid" {
     const raw = text.trim();
     if (raw === "") return null;
     const value = parseAmountInput(raw);
-    if (value === null || !Number.isInteger(value) || value <= 0) return "invalid";
+    if (value === null || !isValid(value)) return "invalid";
     return value;
   }
+  const wholePositive = (value: number): boolean => Number.isInteger(value) && value > 0;
 
   async function submitRoutine(event: FormEvent): Promise<void> {
     event.preventDefault();
@@ -173,11 +203,26 @@ export function FitRoutines({ profileId, routines, exercises, onChanged }: FitRo
 
     const payload: FitRoutineItemInput[] = [];
     for (const item of items) {
-      const sets = readTarget(item.sets);
-      const repsMin = readTarget(item.repsMin);
-      const repsMax = readTarget(item.repsMax);
-      if (sets === "invalid" || repsMin === "invalid" || repsMax === "invalid") {
+      const sets = readAmount(item.sets, wholePositive);
+      const repsMin = readAmount(item.repsMin, wholePositive);
+      const repsMax = readAmount(item.repsMax, wholePositive);
+      const restSeconds = readAmount(
+        item.restSeconds,
+        (value) => Number.isInteger(value) && value >= 0 && value <= MAX_FIT_REST_SECONDS,
+      );
+      if (sets === "invalid" || repsMin === "invalid" || repsMax === "invalid" || restSeconds === "invalid") {
         setFormError(s.set.invalidWhole);
+        return;
+      }
+      // The three targets migration 061 added as REAL columns, not whole
+      // ones — a hold can be „45,5 s" the same way a food's grams can, so
+      // these are checked against their own bound rather than reused off
+      // `wholePositive`.
+      const seconds = readAmount(item.seconds, (value) => value > 0);
+      const weightKg = readAmount(item.weightKg, (value) => value >= 0);
+      const distanceM = readAmount(item.distanceM, (value) => value > 0);
+      if (seconds === "invalid" || weightKg === "invalid" || distanceM === "invalid") {
+        setFormError(s.set.invalidNumber);
         return;
       }
       // The store refuses a range that runs backwards, and `errors.ts` says
@@ -195,6 +240,17 @@ export function FitRoutines({ profileId, routines, exercises, onChanged }: FitRo
         targetSets: sets,
         targetRepsMin: repsMin,
         targetRepsMax: repsMax,
+        // Sent back even when this line drew no control for one of them (a
+        // metric whose `SET_FIELDS` does not name it, or `metric: null` for
+        // an unresolved reference, which draws none of the four at all).
+        // Items are replaced WHOLESALE on save (`FitRoutineSaveRequest`), so
+        // a target this form never rendered still has to round-trip exactly
+        // as it arrived, or the next unrelated save on this routine would
+        // silently erase it.
+        targetSeconds: seconds,
+        targetWeightKg: weightKg,
+        targetDistanceM: distanceM,
+        restSeconds,
       });
     }
 
@@ -335,6 +391,101 @@ export function FitRoutines({ profileId, routines, exercises, onChanged }: FitRo
     );
   }
 
+  /**
+   * The targets `SET_FIELDS[metric]` names for this line, in that table's own
+   * order — the routine editor's half of „one table, two readers", the log
+   * form's `SetFields` (`FitTraining.tsx`) being the other. `null` for a line
+   * with no metric: there is no `SET_FIELDS` entry for an unresolved
+   * reference, so nothing is drawn — `submitRoutine` still sends back
+   * whatever the item already had.
+   *
+   * `weight` and `assist` both write `item.weightKg`, exactly as they both
+   * write `targetWeightKg` on the wire: the surface asks for a magnitude
+   * either way and the READING draws the minus (`targetText`), never the
+   * input, the same split `FitTraining.tsx`'s own `SetFields` makes.
+   */
+  function renderItemTargetFields(item: ItemDraft, index: number): ReactNode {
+    if (item.metric === null) return null;
+    const patch = (fields: Partial<ItemDraft>) => setItems(patchItem(items, index, fields));
+    return (
+      <>
+        {SET_FIELDS[item.metric].map((field) => {
+          switch (field) {
+            case "reps":
+              return (
+                <Fragment key="reps">
+                  <TextField
+                    value={item.repsMin}
+                    inputMode="numeric"
+                    aria-label={s.routines.repsMinLabel}
+                    placeholder={s.routines.repsMinLabel}
+                    className="fit__target-field"
+                    onChange={(event) => patch({ repsMin: event.target.value })}
+                  />
+                  <TextField
+                    value={item.repsMax}
+                    inputMode="numeric"
+                    aria-label={s.routines.repsMaxLabel}
+                    placeholder={s.routines.repsMaxLabel}
+                    className="fit__target-field"
+                    onChange={(event) => patch({ repsMax: event.target.value })}
+                  />
+                </Fragment>
+              );
+            case "weight":
+              return (
+                <TextField
+                  key="weight"
+                  value={item.weightKg}
+                  inputMode="decimal"
+                  aria-label={s.routines.targetWeightLabel}
+                  placeholder={s.routines.targetWeightLabel}
+                  className="fit__target-field"
+                  onChange={(event) => patch({ weightKg: event.target.value })}
+                />
+              );
+            case "assist":
+              return (
+                <TextField
+                  key="assist"
+                  value={item.weightKg}
+                  inputMode="decimal"
+                  aria-label={s.routines.targetAssistLabel}
+                  placeholder={s.routines.targetAssistLabel}
+                  className="fit__target-field"
+                  onChange={(event) => patch({ weightKg: event.target.value })}
+                />
+              );
+            case "seconds":
+              return (
+                <TextField
+                  key="seconds"
+                  value={item.seconds}
+                  inputMode="decimal"
+                  aria-label={s.routines.targetSecondsLabel}
+                  placeholder={s.routines.targetSecondsLabel}
+                  className="fit__target-field"
+                  onChange={(event) => patch({ seconds: event.target.value })}
+                />
+              );
+            case "distance":
+              return (
+                <TextField
+                  key="distance"
+                  value={item.distanceM}
+                  inputMode="decimal"
+                  aria-label={s.routines.targetDistanceLabel}
+                  placeholder={s.routines.targetDistanceLabel}
+                  className="fit__target-field"
+                  onChange={(event) => patch({ distanceM: event.target.value })}
+                />
+              );
+          }
+        })}
+      </>
+    );
+  }
+
   function renderRoutineForm(current: Exclude<Editing, null>): ReactNode {
     return (
       <form className="fit__form" onSubmit={(event) => void submitRoutine(event)}>
@@ -375,57 +526,51 @@ export function FitRoutines({ profileId, routines, exercises, onChanged }: FitRo
               onChange={(event) => setItems(patchItem(items, index, { sets: event.target.value }))}
             />
             <TextField
-              value={item.repsMin}
+              value={item.restSeconds}
               inputMode="numeric"
-              aria-label={s.routines.repsMinLabel}
-              placeholder={s.routines.repsMinLabel}
+              aria-label={s.routines.restSecondsLabel}
+              placeholder={s.routines.restSecondsLabel}
+              title={s.routines.restSecondsHint}
               className="fit__target-field"
               onChange={(event) =>
-                setItems(patchItem(items, index, { repsMin: event.target.value }))
+                setItems(patchItem(items, index, { restSeconds: event.target.value }))
               }
             />
-            <TextField
-              value={item.repsMax}
-              inputMode="numeric"
-              aria-label={s.routines.repsMaxLabel}
-              placeholder={s.routines.repsMaxLabel}
-              className="fit__target-field"
-              onChange={(event) =>
-                setItems(patchItem(items, index, { repsMax: event.target.value }))
-              }
-            />
-            <Button
-              type="button"
-              size="sm"
-              className="fit__row-action"
-              disabled={index === 0}
-              aria-label={`${s.routines.moveUp}: ${item.label}`}
-              title={s.routines.moveUp}
-              onClick={() => setItems(movedByOne(items, index, -1))}
-            >
-              ↑
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              className="fit__row-action"
-              disabled={index === items.length - 1}
-              aria-label={`${s.routines.moveDown}: ${item.label}`}
-              title={s.routines.moveDown}
-              onClick={() => setItems(movedByOne(items, index, 1))}
-            >
-              ↓
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              className="fit__row-action fit__row-delete"
-              aria-label={`${s.routines.removeItem}: ${item.label}`}
-              title={s.routines.removeItem}
-              onClick={() => setItems(items.filter((_, at) => at !== index))}
-            >
-              ×
-            </Button>
+            {renderItemTargetFields(item, index)}
+            <span className="fit__item-actions">
+              <Button
+                type="button"
+                size="sm"
+                className="fit__row-action"
+                disabled={index === 0}
+                aria-label={`${s.routines.moveUp}: ${item.label}`}
+                title={s.routines.moveUp}
+                onClick={() => setItems(movedByOne(items, index, -1))}
+              >
+                ↑
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="fit__row-action"
+                disabled={index === items.length - 1}
+                aria-label={`${s.routines.moveDown}: ${item.label}`}
+                title={s.routines.moveDown}
+                onClick={() => setItems(movedByOne(items, index, 1))}
+              >
+                ↓
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="fit__row-action fit__row-delete"
+                aria-label={`${s.routines.removeItem}: ${item.label}`}
+                title={s.routines.removeItem}
+                onClick={() => setItems(items.filter((_, at) => at !== index))}
+              >
+                ×
+              </Button>
+            </span>
           </div>
         ))}
         <span className="fit__field-hint">{s.routines.targetHint}</span>
@@ -444,6 +589,10 @@ export function FitRoutines({ profileId, routines, exercises, onChanged }: FitRo
                   sets: "",
                   repsMin: "",
                   repsMax: "",
+                  seconds: "",
+                  weightKg: "",
+                  distanceM: "",
+                  restSeconds: "",
                 },
               ]);
               setPickerOpen(false);
@@ -680,6 +829,10 @@ export function FitRoutines({ profileId, routines, exercises, onChanged }: FitRo
                               sets: item.targetSets,
                               repsMin: item.targetRepsMin,
                               repsMax: item.targetRepsMax,
+                              seconds: item.targetSeconds,
+                              weightKg: item.targetWeightKg,
+                              distanceM: item.targetDistanceM,
+                              metric: item.metric,
                             });
                             return target === "" ? item.label : `${item.label} ${target}`;
                           })

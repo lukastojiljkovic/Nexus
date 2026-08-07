@@ -75,6 +75,72 @@ describe("targetText", () => {
     expect(targetText({ sets: null, repsMin: null, repsMax: null })).toBe("");
     expect(targetText(null)).toBe("");
   });
+
+  it("reads a hold as its seconds rather than as nothing, given the metric", () => {
+    // The whole point of migration 061: a plank has no reps at all, and
+    // without a metric to read `SET_FIELDS` by the line used to say only
+    // „3 serije" — true, but not what a plank needs.
+    expect(
+      targetText({ sets: 3, repsMin: null, repsMax: null, seconds: 45, metric: "time" }),
+    ).toBe("3 × 45 s");
+    expect(
+      targetText({ sets: null, repsMin: null, repsMax: null, seconds: 45, metric: "time" }),
+    ).toBe("45 s");
+  });
+
+  it("joins a load and a hold with a dot, exactly as the logged set would", () => {
+    expect(
+      targetText({
+        sets: 3,
+        repsMin: null,
+        repsMax: null,
+        seconds: 40,
+        weightKg: 32,
+        metric: "weight_time",
+      }),
+    ).toBe("3 × 32 kg · 40 s");
+    expect(
+      targetText({
+        sets: 3,
+        repsMin: null,
+        repsMax: null,
+        seconds: 95,
+        distanceM: 400,
+        metric: "distance_time",
+      }),
+    ).toBe("3 × 400 m · 95 s");
+  });
+
+  it("signs a target load exactly as a logged one would", () => {
+    expect(
+      targetText({ sets: 3, repsMin: 8, repsMax: 12, weightKg: 60, metric: "weight_reps" }),
+    ).toBe("3 × 60 kg × 8–12");
+    expect(
+      targetText({ sets: 3, repsMin: 8, repsMax: 12, weightKg: 20, metric: "weighted_reps" }),
+    ).toBe("3 × +20 kg × 8–12");
+    expect(
+      targetText({ sets: 3, repsMin: 8, repsMax: 12, weightKg: 15, metric: "assisted_reps" }),
+    ).toBe("3 × −15 kg × 8–12");
+  });
+
+  it("keeps a zero weight target, which is a real bodyweight prescription", () => {
+    expect(
+      targetText({ sets: 3, repsMin: 8, repsMax: 12, weightKg: 0, metric: "weight_reps" }),
+    ).toBe("3 × 0 kg × 8–12");
+  });
+
+  it("falls back to sets-and-reps when a resolved metric names no other target", () => {
+    expect(targetText({ sets: 3, repsMin: 8, repsMax: 12, metric: "reps" })).toBe("3 × 8–12");
+  });
+
+  it("draws only sets for an unresolved reference, ignoring targets it has no metric to place", () => {
+    // `metric: null` is exactly what an item with no live exercise carries —
+    // there is no `SET_FIELDS` entry to read, so the line falls back to the
+    // metric-less reading rather than guessing.
+    expect(
+      targetText({ sets: 3, repsMin: null, repsMax: null, seconds: 45, metric: null }),
+    ).toBe("3 serije");
+  });
 });
 
 describe("setCountText", () => {

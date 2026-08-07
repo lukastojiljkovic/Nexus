@@ -4070,6 +4070,21 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         targetSetsLabel: "Serije",
         repsMinLabel: "Ponavljanja od",
         repsMaxLabel: "Ponavljanja do",
+        /**
+         * Migration 061's four targets — drawn only for the fields the
+         * line's metric actually names (`SET_FIELDS`), same as one set of it
+         * would be logged. `targetWeightLabel` and `targetAssistLabel` are
+         * two captions over the one stored column, for the same reason the
+         * log form gives them two: added load and taken-away assistance are
+         * opposite facts about the same lift.
+         */
+        targetWeightLabel: "Težina (kg)",
+        targetAssistLabel: "Pomoć (kg)",
+        targetSecondsLabel: "Trajanje (s)",
+        targetDistanceLabel: "Razdaljina (m)",
+        restSecondsLabel: "Odmor (s)",
+        /** On the rest field itself — the one target where empty and zero mean two different things and both are real answers. */
+        restSecondsHint: "0 znači bez odmora, pravo u sledeću seriju. Prazno znači podrazumevani odmor treninga.",
         targetHint: "Ciljevi nisu obavezni — prazno polje znači da cilja nema.",
         save: "Sačuvaj rutinu",
         cancel: "Otkaži",

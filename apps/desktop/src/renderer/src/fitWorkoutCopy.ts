@@ -1,5 +1,5 @@
-import type { FitWorkoutSet } from "../../shared/ipc.js";
-import { SET_FIELDS, type SessionExercise, type SetField } from "./fitWorkout.js";
+import type { ExerciseMetric, FitWorkoutSet } from "../../shared/ipc.js";
+import { SET_FIELDS, type SetField } from "./fitWorkout.js";
 import { countUnit, strings } from "./strings.js";
 
 /**
@@ -106,14 +106,72 @@ export function setText(set: FitWorkoutSet): string {
 }
 
 /**
- * A routine line's target: „3 × 8–12", „3 serije", „8–12".
+ * Everything a routine line might prescribe, however much of it a given
+ * caller actually knows. `SessionExercise["target"]` — sets and a rep range,
+ * nothing else — is the narrow case this widens: „Rutine"'s own summary
+ * passes every migration-061 target alongside the metric that says which of
+ * them apply, so `targetText` can serve both without becoming two functions
+ * that could read the same line two different ways.
+ */
+export interface RoutineLineTarget {
+  readonly sets: number | null;
+  readonly repsMin: number | null;
+  readonly repsMax: number | null;
+  readonly seconds?: number | null;
+  readonly weightKg?: number | null;
+  readonly distanceM?: number | null;
+  /** Absent, or `null` for an unresolved reference, reads as sets-and-reps only — there is no `SET_FIELDS` entry to look up. */
+  readonly metric?: ExerciseMetric | null;
+}
+
+/**
+ * One target field's text, in the same units and with the same sign a LOGGED
+ * set of it would print (`fieldText`) — a target and what will one day match
+ * it have to read as the same quantity. Never called for `reps`: a target
+ * range is two numbers, not the one this returns, and `targetText` keeps that
+ * formatting to itself.
+ */
+function targetFieldText(
+  field: Exclude<SetField, "reps">,
+  target: RoutineLineTarget,
+  metric: ExerciseMetric,
+): string | null {
+  const s = strings.fitness.training.set;
+  switch (field) {
+    case "weight":
+      if (target.weightKg == null) return null;
+      return metric === "weighted_reps"
+        ? `${s.addedPrefix}${figureText(target.weightKg)} ${s.unitKg}`
+        : `${figureText(target.weightKg)} ${s.unitKg}`;
+    case "assist":
+      return target.weightKg == null
+        ? null
+        : `${s.assistPrefix}${figureText(target.weightKg)} ${s.unitKg}`;
+    case "seconds":
+      return target.seconds == null ? null : `${figureText(target.seconds)} ${s.unitSeconds}`;
+    case "distance":
+      return target.distanceM == null ? null : `${figureText(target.distanceM)} ${s.unitMeters}`;
+  }
+}
+
+/**
+ * A routine line's target: „3 × 8–12", „3 serije", „8–12", „3 × 45 s",
+ * „3 × 60 kg × 8–12".
  *
  * Every half is independently optional, because every one of them is a real
  * prescription on its own — „bench, koliko serija treba" and „raspon 8–12, ne
  * brojim serije" are both things people write down. An absent half is simply not
  * drawn; nothing here invents a bound the user did not set.
+ *
+ * Without a `metric` the reading is sets-and-reps only, exactly as before —
+ * `SessionExercise["target"]` never carries one. WITH one, every field
+ * `SET_FIELDS[metric]` names joins the reading, in that table's own order and
+ * with its own separator (`×` where a rep count is one of the fields, `·`
+ * where the fields are independent facts) — `setText`'s own rule for a
+ * LOGGED set, so a plank's routine line and a plank's logged set agree on how
+ * a hold is written, and a plank reads as its hold rather than as nothing.
  */
-export function targetText(target: SessionExercise["target"]): string {
+export function targetText(target: RoutineLineTarget | null): string {
   if (target === null) return "";
   const t = strings.fitness.training.target;
   const reps =
@@ -124,10 +182,21 @@ export function targetText(target: SessionExercise["target"]): string {
         : target.repsMax !== null
           ? `≤${String(target.repsMax)}`
           : "";
-  if (target.sets === null) return reps;
-  // With a rep range the sets read as a multiplier („3 × 8–12"); alone they need
-  // their noun, because a bare „3" beside an exercise says nothing.
-  return reps === "" ? setCountText(target.sets) : `${String(target.sets)} × ${reps}`;
+
+  const metric = target.metric ?? null;
+  const measure =
+    metric === null
+      ? reps
+      : SET_FIELDS[metric]
+          .map((field) => (field === "reps" ? reps : targetFieldText(field, target, metric)))
+          .filter((text): text is string => text !== null && text !== "")
+          .join(SET_FIELDS[metric].includes("reps") ? ` ${strings.fitness.training.set.times} ` : " · ");
+
+  if (target.sets === null) return measure;
+  // With a measure the sets read as a multiplier („3 × 8–12", „3 × 45 s");
+  // alone they need their noun, because a bare „3" beside an exercise says
+  // nothing.
+  return measure === "" ? setCountText(target.sets) : `${String(target.sets)} × ${measure}`;
 }
 
 /**
