@@ -10,7 +10,8 @@ type DatabaseHandle = Database.Database;
 
 const MAX_ROUTINE_REF_LENGTH = 200;
 const MAX_ROUTINE_LABEL_LENGTH = 80;
-const MAX_WORKOUT_NOTES_LENGTH = 500;
+/** What a session's own note may hold. Exported because `shared/ipc.ts` mirrors it, and a mirror of a private number is a number that drifts. */
+export const MAX_FIT_WORKOUT_NOTES_LENGTH = 500;
 const MAX_SET_LABEL_LENGTH = 80;
 
 /** How many refs `lastPerformed` will resolve in one call — a picker warming up a session, not a bulk export. */
@@ -643,9 +644,9 @@ function validateRoutineLabel(value: string): string {
 }
 
 function validateNotes(value: string): string {
-  if (typeof value !== "string" || value.length > MAX_WORKOUT_NOTES_LENGTH) {
+  if (typeof value !== "string" || value.length > MAX_FIT_WORKOUT_NOTES_LENGTH) {
     throw new FitWorkoutValidationError(
-      `"notes" must be a string of at most ${MAX_WORKOUT_NOTES_LENGTH} characters.`,
+      `"notes" must be a string of at most ${MAX_FIT_WORKOUT_NOTES_LENGTH} characters.`,
     );
   }
   return value;

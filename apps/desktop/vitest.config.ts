@@ -18,7 +18,22 @@ import { defineConfig } from "vitest/config";
  *   React components, the TipTap/ProseMirror extensions and the `reveal.ts`
  *   hook are deliberately NOT covered here: they need a real document and a
  *   React renderer, and a DOM library would be the only way to provide one.
+ * - `src/shared` — the IPC contract itself. Added 2026-08-07, and its absence
+ *   until then was a trap of exactly the kind this repo has been finding all
+ *   week: a test file written under `src/shared` would have been collected by
+ *   nothing and reported nothing, which is indistinguishable from passing.
+ *   `ipcCoverage.test.ts` is the first thing that lives there.
+ *
+ * An include list is a promise about where tests may be written. Anything not
+ * named here is a directory whose tests do not run — so a new root gets added
+ * the day something is written in it, never afterwards.
  */
 export default defineConfig({
-  test: { include: ["src/main/**/*.test.ts", "src/renderer/src/**/*.test.ts"] },
+  test: {
+    include: [
+      "src/main/**/*.test.ts",
+      "src/renderer/src/**/*.test.ts",
+      "src/shared/**/*.test.ts",
+    ],
+  },
 });

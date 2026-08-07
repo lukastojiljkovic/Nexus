@@ -14,34 +14,50 @@ import { app, BrowserWindow, dialog, ipcMain, Notification, protocol, session } 
 import type { IpcMainInvokeEvent, OpenDialogOptions } from "electron";
 import { autoUpdater } from "electron-updater";
 import {
+  ACTIVITY_LEVELS,
   applySearchOperators,
   ARCHIVE_MODULE_IDS,
+  BODY_SEXES,
   buildSearchSnippet,
   buildSearchTagFacets,
+  catalogueExercise,
   catalogueFood,
   chordAccelerator,
   countSearchKinds,
+  dayKeyToUtcMs,
+  EXERCISE_CATALOGUE,
+  EXERCISE_EQUIPMENT,
+  EXERCISE_METRICS,
+  exerciseRefText,
+  FOCUS_PHASE_KINDS,
   foldSearchTag,
-  foodRefText,
   FOOD_CATALOGUE,
   FOOD_CATEGORIES,
-  normalizeChordKey,
-  dayKeyToUtcMs,
-  FOCUS_PHASE_KINDS,
-  isValidDayKey,
-  MAX_CANVAS_SCENE_LENGTH,
-  parseCanvasScene,
-  parseFoodRef,
-  searchFoods,
-  phaseProgress,
-  MAX_ARCHIVE_PASSPHRASE_LENGTH,
+  foodRefText,
   isInlineImageMime,
+  isValidDayKey,
+  MAX_ARCHIVE_PASSPHRASE_LENGTH,
+  MAX_CANVAS_SCENE_LENGTH,
+  MAX_CIRCUMFERENCE_CM,
+  MAX_EXERCISE_REF_LENGTH,
+  MAX_HEIGHT_CM,
+  MAX_WEIGHT_KG,
+  MOVEMENT_PATTERNS,
+  MUSCLE_GROUPS,
+  normalizeChordKey,
   openPrivBlob,
+  parseCanvasScene,
+  parseExerciseRef,
+  parseFoodRef,
   parseSearchQuery,
+  phaseProgress,
   rankSearchResults,
   resolveDueRange,
   resolveEnabled,
+  searchExercises,
+  searchFoods,
   serializeWidgetConfig,
+  SET_KINDS,
   shiftDayKey,
   sniffMime,
   toFtsMatchExpression,
@@ -52,6 +68,10 @@ import {
   validateWidgetConfig,
 } from "@nexus/core";
 import type {
+  BodyMeasurement,
+  BodyProfile,
+  ExerciseEntry,
+  ExerciseMetric,
   FocusOutcome,
   FocusPhaseKind,
   FoodCategory,
@@ -59,6 +79,9 @@ import type {
   FoodMacros,
   FoodServing,
   HabitSchedule,
+  MuscleGroup,
+  MuscleReading,
+  SetKind,
   TaskViewConfig,
 } from "@nexus/core";
 import type {
@@ -83,63 +106,128 @@ import {
   type BlobKeys,
 } from "@nexus/core/auth";
 import {
+  type AttachmentIndexFilter,
   AttachmentIndexStore,
   BackupSettingsStore,
   CalendarOverlayStore,
   CalendarSettingsStore,
+  type CanvasBoard,
+  type CanvasBoardWithScene,
+  type CanvasRefCard,
   CanvasStore,
-  MAX_CANVAS_BOARD_NAME_LENGTH,
+  type Card,
   CARD_RATINGS,
+  type CardRating,
   CardStore,
+  type CreateCardInput,
+  type CreateDeckInput,
+  type CreateDocumentInput,
+  type CreateEventInput,
+  type CreateExamInput,
+  type CreateFinAccountInput,
+  type CreateFinRecurringInput,
+  type CreateFinTransactionInput,
+  type CreateFitExerciseInput,
+  type CreateFitFoodInput,
+  type CreateHabitInput,
+  type CreatePersonInput,
+  type CreatePlanInput,
+  type CreateSubjectInput,
+  type CreateTaskInput,
   DashboardSetStore,
   DashboardSettingsStore,
   DashboardWidgetStore,
   DatabaseLockedError,
+  type Deck,
+  type DeckCounts,
   DeckStore,
+  type DeleteListMode,
   DOCUMENT_TYPES,
+  type DocumentRenewal,
   DocumentStore,
+  type DocumentType,
+  type DueQueueOptions,
+  type EffectiveExamTopic,
   encryptDatabaseInPlace,
+  type Event,
   EventStore,
+  type EventTemplate,
   EventTemplateStore,
+  type Exam,
   EXAM_TYPES,
   ExamStore,
+  type ExamType,
   FIN_ACCOUNT_KINDS,
   FIN_CATEGORY_KINDS,
+  type FinAccount,
+  type FinAccountBalance,
+  type FinAccountKind,
   FinAccountStore,
+  type FinBudget,
+  type FinCategory,
+  type FinCategoryKind,
+  type FinCategorySpend,
   FinCategoryStore,
+  type FinCurrencyTotal,
+  type FinPeriod,
+  type FinRecurring,
   FinRecurringStore,
+  type FinRenewalWindow,
+  type FinTransaction,
   FinTransactionStore,
+  type FinUpcomingRenewal,
+  FitBodyProfileStore,
+  FitExerciseStore,
+  type FitFood,
   FitFoodStore,
+  type FitMealItem,
   FitMealStore,
+  FitMeasurementStore,
+  FitRoutineStore,
+  type FitTargetGoals,
+  type FitTargets,
   FitTargetStore,
-  isCurrencyCode,
-  isMinorUnits,
+  FitWorkoutStore,
+  type FocusSession,
   FocusStore,
   ForeignImportStore,
+  type Habit,
+  type HabitDayRange,
+  type HabitEntry,
   HabitStore,
+  isCurrencyCode,
+  isMinorUnits,
   isPlaintextDatabase,
-  MAX_FOCUS_CYCLE_INDEX,
-  MAX_FOCUS_LABEL_LENGTH,
-  MAX_FOCUS_PLANNED_MINUTES,
+  type LinkedNote,
+  MAX_BACKUP_KEEP_LAST,
+  MAX_CANVAS_BOARD_NAME_LENGTH,
+  MAX_EVENT_REMINDER_MINUTES,
+  MAX_EVENT_REMINDERS,
+  MAX_FIT_EXERCISE_NAME_LENGTH,
+  MAX_FIT_EXERCISE_NOTES_LENGTH,
   MAX_FIT_FOOD_NAME_LENGTH,
   MAX_FIT_FOOD_NOTES_LENGTH,
   MAX_FIT_FOOD_QUERY_LENGTH,
   MAX_FIT_FOOD_RESULTS,
   MAX_FIT_FOOD_SERVINGS,
+  MAX_FIT_LAST_PERFORMED_REFS,
   MAX_FIT_NUTRIENT,
+  MAX_FIT_ROUTINE_ITEMS,
+  MAX_FIT_ROUTINE_NAME_LENGTH,
+  MAX_FIT_ROUTINE_NOTES_LENGTH,
   MAX_FIT_SERVING_GRAMS,
   MAX_FIT_SERVING_LABEL_LENGTH,
   MAX_FIT_TARGET,
-  MAX_MEAL_ITEM_GRAMS,
-  MEAL_SLOTS,
+  MAX_FOCUS_CYCLE_INDEX,
+  MAX_FOCUS_LABEL_LENGTH,
+  MAX_FOCUS_PLANNED_MINUTES,
   MAX_HABIT_COUNT,
-  MAX_EVENT_REMINDERS,
-  MAX_EVENT_REMINDER_MINUTES,
+  MAX_MEAL_ITEM_GRAMS,
   MAX_NOTE_ATTACHMENT_BYTES,
   MAX_NOTE_LINKS,
   MAX_NOTE_TEMPLATE_BYTES,
-  MAX_BACKUP_KEEP_LAST,
   MAX_NOTE_UPDATE_BYTES,
+  MAX_PRIV_AUTO_LOCK_MINUTES,
   MAX_QUEUE_DECK_IDS,
   MAX_SEARCH_BROWSE_LIMIT,
   MAX_SEARCH_LIMIT,
@@ -147,164 +235,113 @@ import {
   MAX_TASK_ATTACHMENT_BYTES,
   MAX_TASK_BULK_IDS,
   MAX_TASK_LIST_NAME_LENGTH,
-  MAX_TASK_REMINDERS,
   MAX_TASK_REMINDER_DAYS,
+  MAX_TASK_REMINDERS,
   MAX_TASK_TEMPLATE_DUE_OFFSET_DAYS,
-  MAX_PRIV_AUTO_LOCK_MINUTES,
+  MEAL_SLOTS,
+  type MealSlot,
   MIN_BACKUP_KEEP_LAST,
   MIN_PRIV_AUTO_LOCK_MINUTES,
+  type NexusDatabase,
   NOTE_FOLDER_COLORS,
   NOTE_FOLDER_VIEWS,
+  type NoteAttachment,
   NoteAttachmentNotFoundError,
   NoteAttachmentStore,
-  NotificationStore,
+  type NoteCategory,
+  type NoteFolder,
+  type NoteFolderColor,
+  type NoteFolderView,
+  type NoteMeta,
   NoteOrgStore,
   NoteStore,
+  type NoteTag,
+  type NoteTagLink,
+  type NoteTemplate,
   NoteTemplateStore,
+  type NotificationRecord,
+  type NotificationSettings,
+  NotificationStore,
   openDatabase,
   PeopleStore,
+  type Person,
   PERSON_KINDS,
+  type PersonKind,
+  type PlanHealth,
   PlanStore,
-  TopicStore,
+  type PreviewIntervals,
   PrivateNoteStore,
   PrivateSettingsStore,
   PROFILE_KINDS,
   ProfileStore,
   rebuildSearchIndex,
   RestoreStore,
+  type ScopeCutProposal,
   SearchHistoryStore,
   SearchStore,
+  type SetFinBudgetInput,
+  SNOOZE_PRESETS,
   SqliteFlagStore,
   StatsStore,
   STUDY_BLOCK_STATUSES,
-  StudySettingsStore,
-  SUBJECT_COLORS,
-  SubjectAttachmentNotFoundError,
-  SubjectAttachmentStore,
-  SubjectNoteLinkStore,
-  SubjectStore,
-  TaskAttachmentNotFoundError,
-  TaskAttachmentStore,
-  TaskDependencyStore,
-  TaskListStore,
-  TaskNotFoundError,
-  TaskStore,
-  TaskTagStore,
-  TaskTemplateStore,
-  SNOOZE_PRESETS,
-  TASK_LIST_VIEWS,
-  TASK_PRIORITIES,
-  TASK_STATUSES,
-  TOGGLEABLE_NOTIFICATION_SOURCES,
-  uuidv7,
-  type Card,
-  type AttachmentIndexFilter,
-  type CardRating,
-  type CreateCardInput,
-  type CreateDeckInput,
-  type CreateDocumentInput,
-  type CreateEventInput,
-  type CreateExamInput,
-  type CreatePersonInput,
-  type CreatePlanInput,
-  type CreateSubjectInput,
-  type CreateTaskInput,
-  type Deck,
-  type DeckCounts,
-  type DeleteListMode,
-  type DocumentRenewal,
-  type DocumentType,
-  type DueQueueOptions,
-  type Event,
-  type EventTemplate,
-  type Exam,
-  type ExamType,
-  type CreateFinAccountInput,
-  type CreateFinRecurringInput,
-  type CreateFinTransactionInput,
-  type FinAccount,
-  type FinAccountBalance,
-  type FinAccountKind,
-  type FinBudget,
-  type FinCategory,
-  type FinCategoryKind,
-  type FinCategorySpend,
-  type FinCurrencyTotal,
-  type FinPeriod,
-  type FinRecurring,
-  type FinRenewalWindow,
-  type FinTransaction,
-  type FinUpcomingRenewal,
-  type SetFinBudgetInput,
-  type UpdateFinAccountFields,
-  type UpdateFinRecurringFields,
-  type UpdateFinTransactionFields,
-  type CreateHabitInput,
-  type CanvasBoard,
-  type CanvasBoardWithScene,
-  type CanvasRefCard,
-  type Habit,
-  type HabitDayRange,
-  type HabitEntry,
-  type UpdateHabitFields,
-  type CreateFitFoodInput,
-  type FitFood,
-  type FitMealItem,
-  type FitTargetGoals,
-  type FitTargets,
-  type MealSlot,
-  type UpdateFitFoodFields,
-  type FocusSession,
-  type LinkedNote,
-  type NexusDatabase,
-  type NotificationRecord,
-  type NotificationSettings,
-  type NoteAttachment,
-  type NoteCategory,
-  type NoteFolder,
-  type NoteFolderColor,
-  type NoteFolderView,
-  type NoteMeta,
-  type NoteTag,
-  type NoteTagLink,
-  type NoteTemplate,
-  type Person,
-  type PersonKind,
-  type EffectiveExamTopic,
-  type PlanHealth,
-  type PreviewIntervals,
-  type ScopeCutProposal,
   type StudyBlock,
   type StudyBlockStatus,
   type StudyBlockWithExam,
   type StudyPlan,
+  StudySettingsStore,
   type Subject,
+  SUBJECT_COLORS,
   type SubjectAttachment,
+  SubjectAttachmentNotFoundError,
+  SubjectAttachmentStore,
   type SubjectColor,
+  SubjectNoteLinkStore,
+  SubjectStore,
   type Task,
+  TASK_LIST_VIEWS,
+  TASK_PRIORITIES,
+  TASK_STATUSES,
   type TaskAttachment,
   type TaskAttachmentCount,
+  TaskAttachmentNotFoundError,
+  TaskAttachmentStore,
+  type TaskDependencyLink,
+  TaskDependencyStore,
   type TaskList,
+  TaskListStore,
   type TaskListView,
+  TaskNotFoundError,
   type TaskPriority,
   type TaskSection,
   type TaskStatus,
-  type TaskDependencyLink,
+  TaskStore,
   type TaskTag,
   type TaskTagLink,
+  TaskTagStore,
   type TaskTemplate,
   type TaskTemplatePayload,
+  TaskTemplateStore,
+  TOGGLEABLE_NOTIFICATION_SOURCES,
+  TopicStore,
   type TrackedDocument,
   type UpdateCardFields,
   type UpdateDeckFields,
   type UpdateDocumentFields,
   type UpdateEventFields,
   type UpdateExamFields,
+  type UpdateFinAccountFields,
+  type UpdateFinRecurringFields,
+  type UpdateFinTransactionFields,
+  type UpdateFitExerciseFields,
+  type UpdateFitFoodFields,
+  type UpdateFitSetFields,
+  type UpdateHabitFields,
   type UpdateNotificationSettingsInput,
   type UpdatePersonFields,
   type UpdatePlanFields,
   type UpdateSubjectFields,
   type UpdateTaskFields,
+  uuidv7,
 } from "@nexus/db";
 import {
   blobStorePaths,
@@ -461,60 +498,26 @@ import {
   type ImportDeps,
 } from "./restore.js";
 import {
-  APKG_IMPORT_MAX_SUBJECT_NAME_LENGTH,
-  BACKUP_CADENCES,
-  CARD_KINDS,
-  CARD_TEXT_MAX_LENGTH,
-  CSV_IMPORT_COLUMN_ROLES,
-  CSV_IMPORT_MAX_COLUMNS,
-  CSV_IMPORT_MAX_LIST_NAME_LENGTH,
-  FIN_CSV_IMPORT_COLUMN_ROLES,
-  FIN_CSV_IMPORT_SIGN_CONVENTIONS,
-  DASHBOARD_SET_NAME_MAX_LENGTH,
-  DOC_MIME_FAMILIES,
-  DOC_TEXT_PREVIEW_MAX_BYTES,
-  IMPORT_DUPLICATE_TYPES,
-  IpcChannel,
-  LLM_IMPORT_KINDS,
-  LLM_IMPORT_MAX_ANSWER_LENGTH,
-  LLM_IMPORT_MAX_DECK_NAME_LENGTH,
-  MAX_BACKGROUND_BYTES,
-  MAX_BACKGROUND_DIM,
-  MAX_PROFILE_PICTURE_BYTES,
-  MAX_NEW_PER_DAY,
-  MAX_REVIEWS_PER_DAY,
-  MAX_TARGET_RETENTION,
-  MIN_TARGET_RETENTION,
-  MAX_EVENT_TEMPLATE_NAME_LENGTH,
-  MAX_TASK_TAG_NAME_LENGTH,
-  MAX_TASK_TEMPLATE_NAME_LENGTH,
-  NOTE_CARD_DISPOSITIONS,
-  NOTE_CARD_KEY_MAX_LENGTH,
-  NOTE_CARDS_MAX_COUNT,
-  PRIV_ATTACHMENT_MAX_BYTES,
-  PRIV_ATTACHMENTS_MAX_COUNT,
-  PRIV_PLAINTEXT_MAX_BYTES,
-  PRIV_STATE_MAX_BYTES,
-  PRIV_TITLE_MAX_BYTES,
-  SEARCH_PAGE_MAX_RESULTS,
-  SEARCH_QUERY_MAX_BYTES,
-  SEARCH_RESULT_MAX_LIMIT,
   type AccountSummary,
+  APKG_IMPORT_MAX_SUBJECT_NAME_LENGTH,
   type ApkgImportApplyResult,
   type ApkgImportPickResult,
   type ApkgImportPreviewResult,
   type ApkgImportSubjectChoice,
-  type IcsImportApplyResult,
-  type IcsImportPickResult,
-  type IcsImportPreviewResult,
   type AppInfo,
-  type CardKind,
   type AuthResult,
   type AuthStatus,
+  BACKUP_CADENCES,
   type BackupCadence,
   type BackupSettingsView,
   type CalendarOverlayEvent,
   type CalendarSettings,
+  CARD_KINDS,
+  CARD_TEXT_MAX_LENGTH,
+  type CardKind,
+  CSV_IMPORT_COLUMN_ROLES,
+  CSV_IMPORT_MAX_COLUMNS,
+  CSV_IMPORT_MAX_LIST_NAME_LENGTH,
   type CsvImportApplyResult,
   type CsvImportColumnRole,
   type CsvImportDelimiter,
@@ -522,47 +525,87 @@ import {
   type CsvImportMapResult,
   type CsvImportPickResult,
   type CsvImportPreviewResult,
+  DASHBOARD_SET_NAME_MAX_LENGTH,
+  type DashboardPickResult,
+  type DashboardSetsCreated,
+  type DashboardSetsState,
+  type DashboardSettings,
+  type DashboardWidgetInstance,
+  type DashboardWidgetSize,
+  DOC_MIME_FAMILIES,
+  DOC_TEXT_PREVIEW_MAX_BYTES,
+  type DocAttachmentList,
+  type DocAttachmentModule,
+  type DocMimeFamily,
+  type DocTextContent,
+  type ExportResult,
+  FIN_CSV_IMPORT_COLUMN_ROLES,
+  FIN_CSV_IMPORT_SIGN_CONVENTIONS,
   type FinCsvImportApplyResult,
   type FinCsvImportColumnRole,
   type FinCsvImportMapResult,
   type FinCsvImportPreviewResult,
   type FinCsvImportSignConvention,
-  type DashboardPickResult,
-  type DashboardSettings,
-  type DocAttachmentList,
-  type DocAttachmentModule,
-  type DocMimeFamily,
-  type DocTextContent,
-  type DashboardSetsCreated,
-  type DashboardSetsState,
-  type ReviewQueue,
-  type StudySettings,
-  type DashboardWidgetInstance,
-  type DashboardWidgetSize,
-  type ExportResult,
+  type FitBodyProfile,
   type FitDay,
+  type FitExercise,
+  type FitExerciseOption,
   type FitFoodOption,
+  type FitLastPerformed,
+  type FitMeasurement,
+  type FitRoutine,
+  type FitWorkout,
+  type FitWorkoutSet,
   type FlagState,
   type GlobalShortcutChord,
   type GlobalShortcutResult,
   type IcsExportResult,
+  type IcsImportApplyResult,
+  type IcsImportPickResult,
+  type IcsImportPreviewResult,
+  IMPORT_DUPLICATE_TYPES,
   type ImportApplyResult,
   type ImportDuplicateChoices,
   type ImportDuplicateType,
   type ImportPickResult,
   type ImportPreviewResult,
+  IpcChannel,
+  LLM_IMPORT_KINDS,
+  LLM_IMPORT_MAX_ANSWER_LENGTH,
+  LLM_IMPORT_MAX_DECK_NAME_LENGTH,
   type LlmImportApplyResult,
   type LlmImportDeckChoice,
   type LlmImportKind,
   type LlmImportPreviewResult,
   type MarkdownImportResult,
   type MarkdownImportSource,
+  MAX_BACKGROUND_BYTES,
+  MAX_BACKGROUND_DIM,
+  MAX_EVENT_TEMPLATE_NAME_LENGTH,
+  MAX_FIT_EXERCISE_QUERY_LENGTH,
+  MAX_FIT_EXERCISE_RESULTS,
+  MAX_FIT_WORKOUT_NOTES_LENGTH,
+  MAX_NEW_PER_DAY,
+  MAX_PROFILE_PICTURE_BYTES,
+  MAX_REVIEWS_PER_DAY,
+  MAX_TARGET_RETENTION,
+  MAX_TASK_TAG_NAME_LENGTH,
+  MAX_TASK_TEMPLATE_NAME_LENGTH,
+  MIN_TARGET_RETENTION,
+  NOTE_CARD_DISPOSITIONS,
+  NOTE_CARD_KEY_MAX_LENGTH,
+  NOTE_CARDS_MAX_COUNT,
   type NoteCardDisposition,
   type NoteCardSpec,
   type NoteChecklistTasksResult,
   type NoteDocPayload,
   type NoteDuplicateResult,
   type NoteVersionMeta,
+  PRIV_ATTACHMENT_MAX_BYTES,
+  PRIV_ATTACHMENTS_MAX_COUNT,
+  PRIV_PLAINTEXT_MAX_BYTES,
+  PRIV_STATE_MAX_BYTES,
+  PRIV_TITLE_MAX_BYTES,
   type PrivAttachmentPickResult,
   type PrivAttachmentRef,
   type PrivMoveInResult,
@@ -582,18 +625,23 @@ import {
   type RestorePreviewResult,
   type RestoreStatus,
   type RestoreUndoResult,
+  type ReviewQueue,
   type RunningFocusSession,
   type SaveAttachmentResult,
+  SEARCH_PAGE_MAX_RESULTS,
+  SEARCH_QUERY_MAX_BYTES,
+  SEARCH_RESULT_MAX_LIMIT,
   type SearchHistoryEntry,
   type SearchPageResult,
   type SearchResult,
   type SnoozePreset,
+  type StudySettings,
   type StudyStats,
   type SubjectAttachmentsAddResult,
-  type TopicMoveDirection,
   type SubjectStudyLog,
   type TaskAttachmentsAddResult,
   type TaskListsSnapshot,
+  type TopicMoveDirection,
 } from "../shared/ipc.js";
 import { businessProfileFlags, createModuleRegistry } from "../shared/modules.js";
 
@@ -3439,6 +3487,319 @@ function asFitGrams(value: unknown, field: string): number {
   return grams;
 }
 
+// --- Trening i telo (FIT slice b, migration 060) -----------------------------
+//
+// The module's security boundary is `resolveLoggedExercise`, and it is the same
+// boundary `resolveLoggedFood` draws one table over. A logged set stores its
+// `metric` and its muscle list as a SNAPSHOT, because a later edit to the
+// exercise must not re-interpret what was already lifted (migration 060) — and
+// a snapshot is only a snapshot if the TRUSTED side takes it. A wire that let
+// the renderer declare a set's metric could log a plank as `weight_reps`, and
+// every tonnage and hard-set total downstream would absorb it in silence.
+
+/** A day a training surface named. Unlike a meal, a session may be back-dated freely, and unlike a meal it is still never in the future. */
+function asFitTrainingDay(value: unknown, field: string): string {
+  return asFitDay(value, field);
+}
+
+/** One of the four set kinds. Closed here AND in the schema, because volume reads are scoped by it. */
+function asFitSetKind(value: unknown, field: string): SetKind {
+  if (typeof value !== "string" || !(SET_KINDS as readonly string[]).includes(value)) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must be one of ${SET_KINDS.join(", ")}.`,
+    );
+  }
+  return value as SetKind;
+}
+
+/** A nullable non-negative measurement on a set. `undefined` and `null` both mean "not recorded" and both arrive as null. */
+function asFitSetNumber(value: unknown, field: string, max: number): number | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > max) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must be null or a finite number between 0 and ${max}.`,
+    );
+  }
+  return value;
+}
+
+/** Reps in reserve: a whole number 0–5, or absent. */
+function asFitRir(value: unknown, field: string): number | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > 5) {
+    throw new Error(`Invalid IPC payload: "${field}" must be null or a whole number 0–5.`);
+  }
+  return value;
+}
+
+/** A nullable whole count on a set — reps are counted, never measured. */
+function asFitSetCount(value: unknown, field: string, max: number): number | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > max) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must be null or a whole number between 0 and ${max}.`,
+    );
+  }
+  return value;
+}
+
+/**
+ * Turns the reference the renderer sent into the label, the metric and the
+ * muscle list the set (or routine item) will be stamped with. **The module's
+ * security boundary** — see the block comment above.
+ *
+ * `catalogue:<slug>` is looked up in the app's own shipped data; a slug this
+ * build no longer ships is refused rather than logged as a name with no meaning.
+ * `user:<uuid>` goes through the exercise store, which answers only for a LIVE
+ * exercise in THIS profile — so a soft-deleted exercise cannot be logged afresh,
+ * while every set already logged with it stays exactly as it was.
+ */
+function resolveLoggedExercise(
+  profileId: string,
+  reference: unknown,
+): { exerciseRef: string; label: string; metric: ExerciseMetric; primaryMuscles: MuscleGroup[] } {
+  if (typeof reference !== "string") {
+    throw new Error(`Invalid IPC payload: "exerciseRef" must be a string.`);
+  }
+  const parsed = parseExerciseRef(reference);
+  if (parsed === null) {
+    throw new Error(
+      `Invalid IPC payload: "exerciseRef" must be "catalogue:<slug>" or "user:<id>".`,
+    );
+  }
+  if (parsed.kind === "catalogue") {
+    const entry = catalogueExercise(parsed.id);
+    if (entry === undefined) {
+      throw new Error(`Invalid IPC payload: "exerciseRef" names no exercise this build ships.`);
+    }
+    return {
+      exerciseRef: reference,
+      label: entry.name,
+      metric: entry.metric,
+      primaryMuscles: [...entry.primaryMuscles],
+    };
+  }
+  const own = fitExerciseStore(profileId).get(parsed.id);
+  return {
+    exerciseRef: reference,
+    label: own.name,
+    metric: own.metric,
+    primaryMuscles: own.primaryMuscles,
+  };
+}
+
+/** One catalogue exercise as the picker reads it. `catalogue: true` is what tells a surface there is no row here to edit. */
+function catalogueExerciseOption(entry: ExerciseEntry): FitExerciseOption {
+  return {
+    ref: exerciseRefText({ kind: "catalogue", id: entry.id }),
+    name: entry.name,
+    nameEn: entry.nameEn,
+    primaryMuscles: [...entry.primaryMuscles],
+    secondaryMuscles: [...entry.secondaryMuscles],
+    equipment: entry.equipment,
+    pattern: entry.pattern,
+    unilateral: entry.unilateral,
+    metric: entry.metric,
+    catalogue: true,
+  };
+}
+
+/** One of the profile's own exercises as the picker reads it. */
+function userExerciseOption(entry: FitExercise): FitExerciseOption {
+  return {
+    ref: exerciseRefText({ kind: "user", id: entry.id }),
+    name: entry.name,
+    nameEn: entry.nameEn,
+    primaryMuscles: entry.primaryMuscles,
+    secondaryMuscles: entry.secondaryMuscles,
+    equipment: entry.equipment,
+    pattern: entry.pattern,
+    unilateral: entry.unilateral,
+    metric: entry.metric,
+    catalogue: false,
+  };
+}
+
+/**
+ * A new exercise, every field validated on its own and the object built up
+ * explicitly rather than assembled loosely and asserted into shape.
+ *
+ * The distinction matters at this boundary specifically: `as unknown as T` on a
+ * payload from an untrusted renderer means the compiler has stopped checking
+ * exactly where the checking is the point. The store re-validates all of it
+ * anyway, but a cast here would hide a field that stopped being read at all.
+ */
+function asNewFitExercise(value: unknown): CreateFitExerciseInput {
+  const body = asRecord(value);
+  const base: CreateFitExerciseInput = {
+    name: asCappedChars(body.name, "name", MAX_FIT_EXERCISE_NAME_LENGTH),
+    primaryMuscles: asMuscleGroups(body.primaryMuscles, "primaryMuscles"),
+    equipment: asClosedMember(body.equipment, "equipment", EXERCISE_EQUIPMENT),
+    pattern: asClosedMember(body.pattern, "pattern", MOVEMENT_PATTERNS),
+    metric: asClosedMember(body.metric, "metric", EXERCISE_METRICS),
+  };
+  return { ...base, ...asFitExerciseOptionals(body) };
+}
+
+/** A partial patch. An omitted key stays omitted — `exactOptionalPropertyTypes` is on, so „absent" and „present and undefined" are not the same thing here. */
+function asFitExerciseChanges(value: unknown): UpdateFitExerciseFields {
+  const body = asRecord(value);
+  const changes: UpdateFitExerciseFields = { ...asFitExerciseOptionals(body) };
+  if (body.name !== undefined) {
+    changes.name = asCappedChars(body.name, "name", MAX_FIT_EXERCISE_NAME_LENGTH);
+  }
+  if (body.primaryMuscles !== undefined) {
+    changes.primaryMuscles = asMuscleGroups(body.primaryMuscles, "primaryMuscles");
+  }
+  if (body.equipment !== undefined) {
+    changes.equipment = asClosedMember(body.equipment, "equipment", EXERCISE_EQUIPMENT);
+  }
+  if (body.pattern !== undefined) {
+    changes.pattern = asClosedMember(body.pattern, "pattern", MOVEMENT_PATTERNS);
+  }
+  if (body.metric !== undefined) {
+    changes.metric = asClosedMember(body.metric, "metric", EXERCISE_METRICS);
+  }
+  return changes;
+}
+
+/** The four fields that are optional on BOTH a create and a patch, read once for both. */
+function asFitExerciseOptionals(body: Record<string, unknown>): {
+  nameEn?: string;
+  secondaryMuscles?: MuscleGroup[];
+  unilateral?: boolean;
+  notes?: string;
+} {
+  const out: { nameEn?: string; secondaryMuscles?: MuscleGroup[]; unilateral?: boolean; notes?: string } = {};
+  if (body.nameEn !== undefined) {
+    out.nameEn = asCappedChars(body.nameEn, "nameEn", MAX_FIT_EXERCISE_NAME_LENGTH);
+  }
+  if (body.secondaryMuscles !== undefined) {
+    out.secondaryMuscles = asMuscleGroups(body.secondaryMuscles, "secondaryMuscles");
+  }
+  if (body.unilateral !== undefined) out.unilateral = asBoolean(body.unilateral, "unilateral");
+  if (body.notes !== undefined) {
+    out.notes = asCappedChars(body.notes, "notes", MAX_FIT_EXERCISE_NOTES_LENGTH);
+  }
+  return out;
+}
+
+/** A member of one of `@nexus/core`'s closed vocabularies, named in the error so a caller can see which list it missed. */
+function asClosedMember<T extends string>(
+  value: unknown,
+  field: string,
+  members: readonly T[],
+): T {
+  if (typeof value !== "string" || !(members as readonly string[]).includes(value)) {
+    throw new Error(`Invalid IPC payload: "${field}" must be one of ${members.join(", ")}.`);
+  }
+  return value as T;
+}
+
+/** A list of known muscle groups — at most one per group, and never longer than the vocabulary itself. */
+function asMuscleGroups(value: unknown, field: string): MuscleGroup[] {
+  if (!Array.isArray(value) || value.length > MUSCLE_GROUPS.length) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must be an array of at most ${MUSCLE_GROUPS.length} muscle groups.`,
+    );
+  }
+  return value.map((entry, index) => asClosedMember(entry, `${field}[${index}]`, MUSCLE_GROUPS));
+}
+
+/** The routine lines as the renderer sends them: a reference and its targets, never a label. */
+function asFitRoutineItemInputs(value: unknown): { exerciseRef: string; targetSets: number | null; targetRepsMin: number | null; targetRepsMax: number | null }[] {
+  if (!Array.isArray(value) || value.length > MAX_FIT_ROUTINE_ITEMS) {
+    throw new Error(
+      `Invalid IPC payload: "items" must be an array of at most ${MAX_FIT_ROUTINE_ITEMS} entries.`,
+    );
+  }
+  return value.map((entry, index) => {
+    const item = asRecord(entry);
+    return {
+      exerciseRef: asNonEmptyString(item.exerciseRef, `items[${index}].exerciseRef`),
+      targetSets: asFitSetCount(item.targetSets, `items[${index}].targetSets`, 99),
+      targetRepsMin: asFitSetCount(item.targetRepsMin, `items[${index}].targetRepsMin`, 999),
+      targetRepsMax: asFitSetCount(item.targetRepsMax, `items[${index}].targetRepsMax`, 999),
+    };
+  });
+}
+
+/** One day's body reading. `weightKg` is the only required number — it is what makes the row an observation. */
+function asFitMeasurementInput(value: unknown): BodyMeasurement {
+  const body = asRecord(value);
+  const circumferences = body.circumferences === undefined ? {} : asRecord(body.circumferences);
+  const site = (key: string): number | null =>
+    asFitSetNumber(circumferences[key], `circumferences.${key}`, MAX_CIRCUMFERENCE_CM);
+  return {
+    day: asFitTrainingDay(body.day, "day"),
+    weightKg: asFitAmount(body.weightKg, "weightKg", MAX_WEIGHT_KG),
+    bodyFatPercent: asFitSetNumber(body.bodyFatPercent, "bodyFatPercent", 100),
+    muscle: asFitMuscleReading(body.muscle),
+    waterPercent: asFitSetNumber(body.waterPercent, "waterPercent", 100),
+    circumferences: {
+      neck: site("neck"),
+      chest: site("chest"),
+      upperArm: site("upperArm"),
+      waist: site("waist"),
+      hip: site("hip"),
+      thigh: site("thigh"),
+    },
+  };
+}
+
+/** A scale's muscle figure, in the unit the scale printed. Both halves or neither — the schema says the same thing with a table CHECK. */
+function asFitMuscleReading(value: unknown): MuscleReading | null {
+  if (value === undefined || value === null) return null;
+  const body = asRecord(value);
+  const unit = asClosedMember(body.unit, "muscle.unit", ["percent", "kg"] as const);
+  const amount = asFitAmount(body.value, "muscle.value", unit === "percent" ? 100 : MAX_WEIGHT_KG);
+  return unit === "percent" ? { unit: "percent", value: amount } : { unit: "kg", value: amount };
+}
+
+/**
+ * The routine body both `fit:routine-create` and `fit:routine-update` send, with
+ * every reference resolved to the label main found for it.
+ *
+ * One reader for both, because the two channels differ only in whether an `id`
+ * accompanies the body — and two readers would be two places for the resolve
+ * boundary to be forgotten in.
+ */
+function readFitRoutineBody(payload: unknown): {
+  profileId: string;
+  name: string;
+  notes: string;
+  items: { exerciseRef: string; label: string; targetSets: number | null; targetRepsMin: number | null; targetRepsMax: number | null }[];
+} {
+  const body = asRecord(payload);
+  const profileId = asNonEmptyString(body.profileId, "profileId");
+  return {
+    profileId,
+    name: asCappedChars(body.name, "name", MAX_FIT_ROUTINE_NAME_LENGTH),
+    notes:
+      body.notes === undefined
+        ? ""
+        : asCappedChars(body.notes, "notes", MAX_FIT_ROUTINE_NOTES_LENGTH),
+    items: asFitRoutineItemInputs(body.items).map((item) => ({
+      ...item,
+      label: resolveLoggedExercise(profileId, item.exerciseRef).label,
+    })),
+  };
+}
+
+/** The four facts about a person. `sex` is null when not given, and null survives this boundary rather than becoming a guess. */
+function asFitBodyProfileInput(value: unknown): BodyProfile {
+  const body = asRecord(value);
+  return {
+    sex:
+      body.sex === undefined || body.sex === null
+        ? null
+        : asClosedMember(body.sex, "sex", BODY_SEXES),
+    birthDate: asBareDate(body.birthDate, "birthDate"),
+    heightCm: asFitAmount(body.heightCm, "heightCm", MAX_HEIGHT_CM),
+    activity: asClosedMember(body.activity, "activity", ACTIVITY_LEVELS),
+  };
+}
+
 /** The catalogue's own closed list of shelves, checked against it rather than respelled. */
 function asFoodCategory(value: unknown, field: string): FoodCategory {
   for (const category of FOOD_CATEGORIES) {
@@ -4139,6 +4500,29 @@ function fitMealStore(profileId: string): FitMealStore {
 
 function fitTargetStore(profileId: string): FitTargetStore {
   return new FitTargetStore(requireDb().raw, profileId);
+}
+
+// FIT training and body (migration 060). Five more stores, and still no store
+// for the exercise catalogue: it ships as JSON inside `@nexus/core` exactly as
+// the food catalogue does, so nothing here reads or writes it.
+function fitExerciseStore(profileId: string): FitExerciseStore {
+  return new FitExerciseStore(requireDb().raw, profileId);
+}
+
+function fitRoutineStore(profileId: string): FitRoutineStore {
+  return new FitRoutineStore(requireDb().raw, profileId);
+}
+
+function fitWorkoutStore(profileId: string): FitWorkoutStore {
+  return new FitWorkoutStore(requireDb().raw, profileId);
+}
+
+function fitMeasurementStore(profileId: string): FitMeasurementStore {
+  return new FitMeasurementStore(requireDb().raw, profileId);
+}
+
+function fitBodyProfileStore(profileId: string): FitBodyProfileStore {
+  return new FitBodyProfileStore(requireDb().raw, profileId);
 }
 
 // CANV (migration 059). One store over one table — a board IS its drawing, so
@@ -8948,6 +9332,329 @@ function registerIpc(): void {
     const profileId = asNonEmptyString(body.profileId, "profileId");
     return fitTargetStore(profileId).save(
       asFitTargetGoals(body.goals),
+      new Date().toISOString(),
+    );
+  });
+
+  // Trening i telo (FIT slice b, migration 060). SEC-EL-02 throughout: trusted
+  // sender, `asRecord`, one `as*` per field, and the store re-validates every
+  // bit of it because a store is never the place that assumes its caller did.
+  // `now` is main's clock on every write.
+  //
+  // The one thing to keep in view while reading these: NOTHING here lets a
+  // caller supply a set's `label`, `metric` or muscle list. Every one of those
+  // comes out of `resolveLoggedExercise`, on the trusted side, from the
+  // reference the caller named. See that function for what it is defending.
+  ipcMain.handle(IpcChannel.fitExerciseSearch, (event, payload): FitExerciseOption[] => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const query = asCappedChars(body.query, "query", MAX_FIT_EXERCISE_QUERY_LENGTH);
+    const limit = Math.min(asPositiveInteger(body.limit, "limit"), MAX_FIT_EXERCISE_RESULTS);
+
+    // One pool, one ranking. Two lists merged by the renderer would be a second
+    // definition of "best match" — `fit:food-search`'s own reason.
+    type Candidate =
+      | { id: string; name: string; nameEn: string; catalogue: ExerciseEntry }
+      | { id: string; name: string; nameEn: string; own: FitExercise };
+    const pool: Candidate[] = [
+      ...EXERCISE_CATALOGUE.map((entry) => ({
+        id: exerciseRefText({ kind: "catalogue", id: entry.id }),
+        name: entry.name,
+        nameEn: entry.nameEn,
+        catalogue: entry,
+      })),
+      ...fitExerciseStore(profileId)
+        .list()
+        .map((entry) => ({
+          id: exerciseRefText({ kind: "user", id: entry.id }),
+          name: entry.name,
+          nameEn: entry.nameEn,
+          own: entry,
+        })),
+    ];
+    return searchExercises(pool, query, limit).map((hit) =>
+      "catalogue" in hit ? catalogueExerciseOption(hit.catalogue) : userExerciseOption(hit.own),
+    );
+  });
+
+  ipcMain.handle(IpcChannel.fitExercisesList, (event, payload): FitExercise[] => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return fitExerciseStore(profileId).list();
+  });
+
+  ipcMain.handle(IpcChannel.fitExerciseCreate, (event, payload): FitExercise => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    return fitExerciseStore(profileId).create(
+      asNewFitExercise(body.exercise),
+      new Date().toISOString(),
+    );
+  });
+
+  ipcMain.handle(IpcChannel.fitExerciseUpdate, (event, payload): FitExercise => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    return fitExerciseStore(profileId).update(
+      id,
+      asFitExerciseChanges(body.changes),
+      new Date().toISOString(),
+    );
+  });
+
+  ipcMain.handle(IpcChannel.fitExerciseDelete, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    fitExerciseStore(profileId).remove(asNonEmptyString(body.id, "id"), new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.fitExerciseRestore, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    fitExerciseStore(profileId).restore(asNonEmptyString(body.id, "id"), new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.fitRoutinesList, (event, payload): FitRoutine[] => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return fitRoutineStore(profileId).list();
+  });
+
+  // Create and rewrite share one body-reader: both send the routine WHOLE, and
+  // main resolves every reference to write the label itself — a routine whose
+  // label was the caller's claim could name one exercise and point at another.
+  ipcMain.handle(IpcChannel.fitRoutineCreate, (event, payload): FitRoutine => {
+    assertTrustedSender(event);
+    const { profileId, name, notes, items } = readFitRoutineBody(payload);
+    return fitRoutineStore(profileId).create({ name, notes, items }, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.fitRoutineUpdate, (event, payload): FitRoutine => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const id = asNonEmptyString(body.id, "id");
+    const { profileId, name, notes, items } = readFitRoutineBody(payload);
+    return fitRoutineStore(profileId).update(id, { name, notes, items }, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.fitRoutineDelete, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    fitRoutineStore(profileId).remove(asNonEmptyString(body.id, "id"), new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.fitRoutineRestore, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    fitRoutineStore(profileId).restore(asNonEmptyString(body.id, "id"), new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.fitWorkoutOpen, (event, payload): FitWorkout | null => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return fitWorkoutStore(profileId).open();
+  });
+
+  ipcMain.handle(IpcChannel.fitWorkoutStart, (event, payload): FitWorkout => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const day = asFitTrainingDay(body.day, "day");
+    const notes =
+      body.notes === undefined
+        ? ""
+        : asCappedChars(body.notes, "notes", MAX_FIT_WORKOUT_NOTES_LENGTH);
+    // The routine's NAME is main's, taken now, from the routine it actually
+    // found. A session started from a routine that is later renamed still says
+    // what it was started from.
+    if (body.routineRef === undefined || body.routineRef === null) {
+      return fitWorkoutStore(profileId).start({ day, notes }, new Date().toISOString());
+    }
+    const routine = fitRoutineStore(profileId).get(asNonEmptyString(body.routineRef, "routineRef"));
+    return fitWorkoutStore(profileId).start(
+      { day, routineRef: routine.id, routineLabel: routine.name, notes },
+      new Date().toISOString(),
+    );
+  });
+
+  ipcMain.handle(IpcChannel.fitWorkoutGet, (event, payload): FitWorkout => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    return fitWorkoutStore(profileId).get(asNonEmptyString(body.id, "id"));
+  });
+
+  ipcMain.handle(IpcChannel.fitWorkoutFinish, (event, payload): FitWorkout => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    return fitWorkoutStore(profileId).finish(
+      asNonEmptyString(body.id, "id"),
+      new Date().toISOString(),
+    );
+  });
+
+  ipcMain.handle(IpcChannel.fitWorkoutReopen, (event, payload): FitWorkout => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    return fitWorkoutStore(profileId).reopen(
+      asNonEmptyString(body.id, "id"),
+      new Date().toISOString(),
+    );
+  });
+
+  ipcMain.handle(IpcChannel.fitWorkoutUpdate, (event, payload): FitWorkout => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    const changes: { day?: string; notes?: string } = {};
+    if (body.day !== undefined) changes.day = asFitTrainingDay(body.day, "day");
+    if (body.notes !== undefined) {
+      changes.notes = asCappedChars(body.notes, "notes", MAX_FIT_WORKOUT_NOTES_LENGTH);
+    }
+    return fitWorkoutStore(profileId).updateWorkout(id, changes, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.fitWorkoutDelete, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    fitWorkoutStore(profileId).remove(asNonEmptyString(body.id, "id"), new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.fitWorkoutRestore, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    fitWorkoutStore(profileId).restore(asNonEmptyString(body.id, "id"), new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.fitWorkoutsRange, (event, payload): FitWorkout[] => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    return fitWorkoutStore(profileId).listRange(
+      asBareDate(body.from, "from"),
+      asBareDate(body.to, "to"),
+    );
+  });
+
+  // The resolve-then-snapshot boundary. The renderer names an exercise and
+  // gives the numbers; main looks the exercise up and stamps the label, the
+  // metric and the muscles it found.
+  ipcMain.handle(IpcChannel.fitSetLog, (event, payload): FitWorkoutSet => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const workoutId = asNonEmptyString(body.workoutId, "workoutId");
+    const resolved = resolveLoggedExercise(profileId, body.exerciseRef);
+    return fitWorkoutStore(profileId).logSet(
+      workoutId,
+      {
+        ...resolved,
+        kind: asFitSetKind(body.kind, "kind"),
+        weightKg: asFitSetNumber(body.weightKg, "weightKg", MAX_WEIGHT_KG),
+        reps: asFitSetCount(body.reps, "reps", 9999),
+        seconds: asFitSetNumber(body.seconds, "seconds", 86_400),
+        distanceM: asFitSetNumber(body.distanceM, "distanceM", 1_000_000),
+        rir: asFitRir(body.rir, "rir"),
+      },
+      new Date().toISOString(),
+    );
+  });
+
+  ipcMain.handle(IpcChannel.fitSetUpdate, (event, payload): FitWorkoutSet => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asNonEmptyString(body.id, "id");
+    // Only the numbers and the kind. The snapshot is not on this wire at all,
+    // so no payload can reach it.
+    const changes: UpdateFitSetFields = {};
+    if (body.kind !== undefined) changes.kind = asFitSetKind(body.kind, "kind");
+    if (body.weightKg !== undefined) {
+      changes.weightKg = asFitSetNumber(body.weightKg, "weightKg", MAX_WEIGHT_KG);
+    }
+    if (body.reps !== undefined) changes.reps = asFitSetCount(body.reps, "reps", 9999);
+    if (body.seconds !== undefined) {
+      changes.seconds = asFitSetNumber(body.seconds, "seconds", 86_400);
+    }
+    if (body.distanceM !== undefined) {
+      changes.distanceM = asFitSetNumber(body.distanceM, "distanceM", 1_000_000);
+    }
+    if (body.rir !== undefined) changes.rir = asFitRir(body.rir, "rir");
+    return fitWorkoutStore(profileId).updateSet(id, changes, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.fitSetRemove, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    fitWorkoutStore(profileId).removeSet(asNonEmptyString(body.id, "id"));
+  });
+
+  ipcMain.handle(IpcChannel.fitLastPerformed, (event, payload): FitLastPerformed[] => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const refs = asStringArray(
+      body.exerciseRefs,
+      "exerciseRefs",
+      MAX_FIT_LAST_PERFORMED_REFS,
+      MAX_EXERCISE_REF_LENGTH,
+    );
+    return fitWorkoutStore(profileId).lastPerformed(refs);
+  });
+
+  ipcMain.handle(IpcChannel.fitMeasurements, (event, payload): FitMeasurement[] => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    return fitMeasurementStore(profileId).listRange(
+      asBareDate(body.from, "from"),
+      asBareDate(body.to, "to"),
+    );
+  });
+
+  ipcMain.handle(IpcChannel.fitMeasurementSave, (event, payload): FitMeasurement => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    return fitMeasurementStore(profileId).save(
+      asFitMeasurementInput(body.measurement),
+      new Date().toISOString(),
+    );
+  });
+
+  ipcMain.handle(IpcChannel.fitMeasurementRemove, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    fitMeasurementStore(profileId).remove(asBareDate(body.day, "day"));
+  });
+
+  ipcMain.handle(IpcChannel.fitBodyProfile, (event, payload): FitBodyProfile | null => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return fitBodyProfileStore(profileId).get();
+  });
+
+  ipcMain.handle(IpcChannel.fitBodyProfileSave, (event, payload): FitBodyProfile => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    return fitBodyProfileStore(profileId).save(
+      asFitBodyProfileInput(body.profile),
       new Date().toISOString(),
     );
   });

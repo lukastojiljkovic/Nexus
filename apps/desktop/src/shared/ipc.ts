@@ -31,13 +31,22 @@
 // switches on, so a redeclared copy could drift into naming a kind neither of
 // them answers.
 import type {
+  ActivityLevel,
+  BodyCircumferences,
+  BodySex,
   CanvasRefKind,
+  ExerciseEquipment,
+  ExerciseMetric,
   FocusOutcome,
   FocusPhaseKind,
   FoodCategory,
   FoodMacros,
   FoodServing,
   FoodSource,
+  MovementPattern,
+  MuscleGroup,
+  MuscleReading,
+  SetKind,
   TaskViewConfig,
 } from "@nexus/core";
 
@@ -440,6 +449,72 @@ export const IpcChannel = {
   // reads identically in JSON on this wire — see the store's own doc.
   fitTargets: "fit:targets",
   fitTargetsSave: "fit:targets-save",
+  // Trening (FIT slice b, migration 060). One channel per store operation, the
+  // rule everything above follows — and one of them carries the same power
+  // `fit:item-add` does, for the same reason.
+  //
+  // **`fit:set-log` takes a REFERENCE and never a metric or a muscle list.**
+  // Main resolves the exercise — `catalogue:<slug>` against the list that ships
+  // in `@nexus/core`, `user:<uuid>` against this profile's own `fit_exercises`
+  // — and stamps `label`, `metric` and the muscles from what it found. A wire
+  // that let the renderer name an exercise AND declare its metric could log a
+  // plank as `weight_reps`, and every volume total downstream would absorb it
+  // without complaint. The snapshot exists precisely so that a later edit
+  // cannot re-interpret a logged set (migration 060), and it is only a snapshot
+  // if the trusted side is the one taking it. `fit:routine-*` writes an item's
+  // label the same way, from the same resolve.
+  //
+  // The search is ONE channel over BOTH sources, exactly as `fit:food-search`
+  // is: the picker draws a single ranked list, and two calls merged by the
+  // renderer would be a second definition of "best match".
+  fitExerciseSearch: "fit:exercise-search",
+  // The profile's OWN exercises. The catalogue is not a table and has no CRUD
+  // anywhere on this wire, because there is no row to touch.
+  fitExercisesList: "fit:exercises-list",
+  fitExerciseCreate: "fit:exercise-create",
+  fitExerciseUpdate: "fit:exercise-update",
+  fitExerciseDelete: "fit:exercise-delete",
+  fitExerciseRestore: "fit:exercise-restore",
+  // A routine is a SHAPE of a session and holds nothing about when (ADR-081
+  // §6). Items are written WHOLE — see `FitRoutineSaveRequest` for why a patch
+  // API cannot exist across a JSON wire.
+  fitRoutinesList: "fit:routines-list",
+  fitRoutineCreate: "fit:routine-create",
+  fitRoutineUpdate: "fit:routine-update",
+  fitRoutineDelete: "fit:routine-delete",
+  fitRoutineRestore: "fit:routine-restore",
+  // The session. `fit:workout-open` answers the ONE unfinished session or null,
+  // which is what the page opens on; the schema allows no second one.
+  fitWorkoutOpen: "fit:workout-open",
+  fitWorkoutStart: "fit:workout-start",
+  fitWorkoutGet: "fit:workout-get",
+  fitWorkoutFinish: "fit:workout-finish",
+  fitWorkoutReopen: "fit:workout-reopen",
+  fitWorkoutUpdate: "fit:workout-update",
+  fitWorkoutDelete: "fit:workout-delete",
+  fitWorkoutRestore: "fit:workout-restore",
+  // One channel for a day and a range alike: a day is a range of one, and two
+  // channels would be two places for the same `deleted_at IS NULL` scope.
+  fitWorkoutsRange: "fit:workouts-range",
+  fitSetLog: "fit:set-log",
+  fitSetUpdate: "fit:set-update",
+  fitSetRemove: "fit:set-remove",
+  // "What did I do last time?" for a whole list of exercises in ONE call
+  // (ADR-081 §6). Deliberately not per exercise: starting a routine asks about
+  // every movement in it at once, and an N+1 is the obvious wrong shape for the
+  // read the module exists for.
+  fitLastPerformed: "fit:last-performed",
+  // Merenja. A range read rather than a "latest" one: the trend IS the number
+  // the page shows (a 7-day moving average, ADR-081 §8), so a single most-recent
+  // row could not answer any question the surface asks.
+  fitMeasurements: "fit:measurements",
+  fitMeasurementSave: "fit:measurement-save",
+  fitMeasurementRemove: "fit:measurement-remove",
+  // Facts about a person rather than observations, and null while never set —
+  // never a default-shaped guess, which is what lets the energy estimate say
+  // which tier produced it.
+  fitBodyProfile: "fit:body-profile",
+  fitBodyProfileSave: "fit:body-profile-save",
   // Table (CANV slice a, migration 059). One channel per store operation, on the
   // `fin-*:*`/`habits:*` rule, and here it does real work: `canvas:save-scene`
   // fires every few seconds while somebody draws, so it must not be able to
@@ -5010,6 +5085,399 @@ export interface FitTargetsSaveRequest {
   goals: FitTargetGoals;
 }
 
+// --- Trening i telo (FIT slice b, migration 060) -----------------------------
+//
+// Every shape below mirrors `@nexus/db`'s training stores, redeclared here so
+// the renderer never imports them — the rule this whole file follows. The
+// closed vocabularies are the exception and are imported from `@nexus/core`
+// (see the import at the top of this file): `metric` decides how a set's four
+// numbers are READ and `kind` decides whether it counts toward volume, so a
+// redeclared copy drifting by one member would be a set nothing downstream
+// knows what to do with.
+//
+// **The catalogue is not a table, again.** `FitExerciseOption` is what a merged
+// search answers with — a shipped entry and one of the profile's own, side by
+// side, told apart only by `ref` and the `catalogue` flag. There is no
+// create/update/delete for a catalogue exercise anywhere on this wire.
+
+/** Mirrors `MAX_FIT_EXERCISE_NAME_LENGTH` in `@nexus/db`; the store stays authoritative. */
+export const MAX_FIT_EXERCISE_NAME_LENGTH = 80;
+/** Mirrors `MAX_FIT_EXERCISE_NOTES_LENGTH`. */
+export const MAX_FIT_EXERCISE_NOTES_LENGTH = 500;
+/** Mirrors `MAX_FIT_ROUTINE_NAME_LENGTH`. */
+export const MAX_FIT_ROUTINE_NAME_LENGTH = 80;
+/** Mirrors `MAX_FIT_ROUTINE_NOTES_LENGTH`. */
+export const MAX_FIT_ROUTINE_NOTES_LENGTH = 500;
+/** Mirrors `MAX_FIT_ROUTINE_ITEMS` — past this a routine stops being a shape somebody reads off and starts being a spreadsheet. */
+export const MAX_FIT_ROUTINE_ITEMS = 60;
+/** Mirrors `MAX_FIT_WORKOUT_NOTES_LENGTH` in `@nexus/db` — CHARACTERS, and the same 500 the store enforces. A wire looser than its store turns a clean refusal into a confusing one. */
+export const MAX_FIT_WORKOUT_NOTES_LENGTH = 500;
+/** How many exercises one "what did I do last time" call may ask about. Mirrors `MAX_FIT_LAST_PERFORMED_REFS`. */
+export const MAX_FIT_LAST_PERFORMED_REFS = 200;
+/** A picker's box, not a document — `MAX_FIT_FOOD_QUERY_LENGTH`'s bound for the exercise picker. */
+export const MAX_FIT_EXERCISE_QUERY_LENGTH = 100;
+/** How many exercises one search answers with, catalogue and user entries together. */
+export const MAX_FIT_EXERCISE_RESULTS = 50;
+
+/**
+ * The closed vocabularies a training surface needs, re-exported so a page reads
+ * the whole training vocabulary off this one contract rather than reaching into
+ * `@nexus/core` itself.
+ */
+export type {
+  ActivityLevel,
+  BodyCircumferences,
+  BodySex,
+  ExerciseEquipment,
+  ExerciseMetric,
+  MovementPattern,
+  MuscleGroup,
+  MuscleReading,
+  SetKind,
+};
+
+/**
+ * One exercise a picker may offer — a catalogue entry or one of the profile's
+ * own, in one shape, told apart by `ref` and by `catalogue`.
+ *
+ * `ref` is `catalogue:<slug>` or `user:<uuid>` and is the ONLY thing the
+ * renderer ever sends back to log a set of this exercise: main resolves it and
+ * stamps the snapshot, so the fields below are both what the user was shown and
+ * what gets recorded, without the renderer being trusted with either.
+ *
+ * `catalogue` is what a surface reads to decide whether "Izmeni" may be offered
+ * at all — there is no row behind a catalogue entry to edit.
+ */
+export interface FitExerciseOption {
+  ref: string;
+  name: string;
+  /** "RDL", "hip thrust" — searched, never displayed. Empty for a user's own accessory movement. */
+  nameEn: string;
+  primaryMuscles: MuscleGroup[];
+  secondaryMuscles: MuscleGroup[];
+  equipment: ExerciseEquipment;
+  pattern: MovementPattern;
+  unilateral: boolean;
+  metric: ExerciseMetric;
+  catalogue: boolean;
+}
+
+/** One of the profile's own exercises, as the "Moje vežbe" list reads it. */
+export interface FitExercise {
+  id: string;
+  profileId: string;
+  name: string;
+  nameEn: string;
+  primaryMuscles: MuscleGroup[];
+  secondaryMuscles: MuscleGroup[];
+  equipment: ExerciseEquipment;
+  pattern: MovementPattern;
+  unilateral: boolean;
+  metric: ExerciseMetric;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** What "Nova vežba" sends. `metric` is the field that carries the module (ADR-081 §3), so it is required rather than defaulted. */
+export interface NewFitExerciseFields {
+  name: string;
+  nameEn?: string;
+  primaryMuscles: MuscleGroup[];
+  secondaryMuscles?: MuscleGroup[];
+  equipment: ExerciseEquipment;
+  pattern: MovementPattern;
+  unilateral?: boolean;
+  metric: ExerciseMetric;
+  notes?: string;
+}
+
+/** A partial patch of one of the profile's own exercises; an omitted key is left untouched. */
+export type FitExerciseFieldChanges = Partial<NewFitExerciseFields>;
+
+/** One line of a routine. Every target is nullable: "bench, as many sets as it takes" is a real prescription, and `null` is "no target" rather than a target of zero. */
+export interface FitRoutineItem {
+  id: string;
+  exerciseRef: string;
+  label: string;
+  targetSets: number | null;
+  targetRepsMin: number | null;
+  targetRepsMax: number | null;
+}
+
+export interface FitRoutine {
+  id: string;
+  profileId: string;
+  name: string;
+  notes: string;
+  items: FitRoutineItem[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * One line as the renderer SENDS it: a reference and its targets, and no label.
+ * Main resolves the reference and writes the label from what it found, exactly
+ * as `fit:set-log` does — a routine whose label was the caller's claim could
+ * name one exercise and point at another.
+ */
+export interface FitRoutineItemInput {
+  exerciseRef: string;
+  targetSets?: number | null;
+  targetRepsMin?: number | null;
+  targetRepsMax?: number | null;
+}
+
+/**
+ * Creates or rewrites a routine. **Items are sent WHOLE, every time**, and
+ * their order IS their position.
+ *
+ * A patch API would need a third value meaning "leave this list alone",
+ * distinct from an empty array meaning "remove every item" — and across a JSON
+ * wire `undefined` and "absent" are the same byte, so the day somebody sent a
+ * partial object the routine would silently lose its exercises. The store makes
+ * the same argument about its own `save` (`FitTargetStore`), one layer down.
+ */
+export interface FitRoutineSaveRequest {
+  profileId: string;
+  /** Absent for a create; present for a rewrite of an existing routine. */
+  id?: string;
+  name: string;
+  notes?: string;
+  items: FitRoutineItemInput[];
+}
+
+export interface FitRoutineIdRequest {
+  profileId: string;
+  id: string;
+}
+
+/**
+ * One logged set. `metric` and `primaryMuscles` are the SNAPSHOT main took when
+ * the set was logged, not the exercise's current values — a set re-interpreted
+ * by a later edit would be arithmetic performed on a different lift.
+ */
+export interface FitWorkoutSet {
+  id: string;
+  workoutId: string;
+  position: number;
+  exerciseRef: string;
+  label: string;
+  metric: ExerciseMetric;
+  primaryMuscles: MuscleGroup[];
+  kind: SetKind;
+  /** For `assisted_reps` this is the assistance SUBTRACTED — a magnitude, and still non-negative. */
+  weightKg: number | null;
+  reps: number | null;
+  seconds: number | null;
+  distanceM: number | null;
+  /** Reps in reserve, 0–5, or null. RIR rather than RPE: it is the question a person can actually answer. */
+  rir: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** One session, with its sets in position order. `endedAt` is null exactly while the session is the open one. */
+export interface FitWorkout {
+  id: string;
+  profileId: string;
+  day: string;
+  startedAt: string;
+  endedAt: string | null;
+  routineRef: string | null;
+  /** The routine's name AT THE TIME, or empty for an ad-hoc session. */
+  routineLabel: string;
+  notes: string;
+  sets: FitWorkoutSet[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Opens a session. Refuses when one is already open — the schema's own UNIQUE
+ * partial index, which exists because every set is logged into "the current
+ * workout" and a second open session would make that phrase ambiguous.
+ */
+export interface FitWorkoutStartRequest {
+  profileId: string;
+  day: string;
+  /** The routine it starts from, or null for an ad-hoc session. Main resolves it and writes the label. */
+  routineRef?: string | null;
+  notes?: string;
+}
+
+export interface FitWorkoutIdRequest {
+  profileId: string;
+  id: string;
+}
+
+/** Corrects the session's own day or notes — never its sets, which have their own three channels. */
+export interface FitWorkoutUpdateRequest {
+  profileId: string;
+  id: string;
+  day?: string;
+  notes?: string;
+}
+
+/** A day is a range of one; the page asks for a week or a month the same way. */
+export interface FitWorkoutsRangeRequest {
+  profileId: string;
+  from: string;
+  to: string;
+}
+
+/**
+ * Logs one set. Carries the REFERENCE and the numbers, and deliberately neither
+ * the label, the metric nor the muscles: main resolves the reference and stamps
+ * all three. See the channel block for why that boundary is the module's rather
+ * than a courtesy.
+ */
+export interface FitSetLogRequest {
+  profileId: string;
+  workoutId: string;
+  exerciseRef: string;
+  kind: SetKind;
+  weightKg?: number | null;
+  reps?: number | null;
+  seconds?: number | null;
+  distanceM?: number | null;
+  rir?: number | null;
+}
+
+/** Corrects one set's numbers or its kind. Never its exercise, label, metric or muscles — swapping those would be logging a different lift while keeping this row's identity. */
+export interface FitSetUpdateRequest {
+  profileId: string;
+  id: string;
+  kind?: SetKind;
+  weightKg?: number | null;
+  reps?: number | null;
+  seconds?: number | null;
+  distanceM?: number | null;
+  rir?: number | null;
+}
+
+/** A HARD delete: an unlogged set is a typo rather than history, and the remaining positions close the gap. */
+export interface FitSetRemoveRequest {
+  profileId: string;
+  id: string;
+}
+
+/** The last FINISHED session that logged one exercise, and every set of it. A session in progress is not "last time". */
+export interface FitLastPerformed {
+  exerciseRef: string;
+  day: string;
+  workoutId: string;
+  sets: FitWorkoutSet[];
+}
+
+/** Asks about a whole list in one call — starting a routine asks about every movement in it at once. */
+export interface FitLastPerformedRequest {
+  profileId: string;
+  exerciseRefs: string[];
+}
+
+/**
+ * One day's reading. Only the weight makes the row an observation; the rest are
+ * what a smart scale hands over in the same step, each independently null
+ * because a bathroom scale gives one of them and a caliper gives another.
+ *
+ * `muscle` keeps the UNIT the device printed. Normalising kilograms into a
+ * percentage at entry would store a number the app computed while making it
+ * look like one the scale measured.
+ */
+export interface FitMeasurement {
+  day: string;
+  weightKg: number;
+  bodyFatPercent: number | null;
+  muscle: MuscleReading | null;
+  waterPercent: number | null;
+  circumferences: BodyCircumferences;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A range read, ascending. The trend IS the number the page shows (a 7-day moving average), so a single most-recent row could not answer it. */
+export interface FitMeasurementsRequest {
+  profileId: string;
+  from: string;
+  to: string;
+}
+
+/** Upserts one day's reading — one row per (profile, day), stated by the schema's primary key. */
+export interface FitMeasurementSaveRequest {
+  profileId: string;
+  measurement: {
+    day: string;
+    weightKg: number;
+    bodyFatPercent?: number | null;
+    muscle?: MuscleReading | null;
+    waterPercent?: number | null;
+    circumferences?: Partial<BodyCircumferences>;
+  };
+}
+
+/** A HARD delete: a mis-typed weigh-in is corrected or removed, and a soft-deleted reading would sit in the file looking like it might still count. */
+export interface FitMeasurementRemoveRequest {
+  profileId: string;
+  day: string;
+}
+
+/**
+ * Facts about a person rather than observations. `sex` is null when not given —
+ * never "unknown, assume male" — and its absence is what closes the
+ * Mifflin–St Jeor tier and makes the surface say so.
+ */
+export interface FitBodyProfile {
+  sex: BodySex | null;
+  /** Age is DERIVED from this. Storing "30" once means being wrong from the next birthday onward, silently, inside a BMR nobody re-checks. */
+  birthDate: string;
+  heightCm: number;
+  activity: ActivityLevel;
+}
+
+export interface FitBodyProfileRequest {
+  profileId: string;
+}
+
+export interface FitBodyProfileSaveRequest {
+  profileId: string;
+  profile: FitBodyProfile;
+}
+
+/** A picker query over both sources at once. A blank query answers nothing rather than everything. */
+export interface FitExerciseSearchRequest {
+  profileId: string;
+  query: string;
+  limit: number;
+}
+
+export interface FitExercisesListRequest {
+  profileId: string;
+}
+
+export interface FitExerciseCreateRequest {
+  profileId: string;
+  exercise: NewFitExerciseFields;
+}
+
+export interface FitExerciseUpdateRequest {
+  profileId: string;
+  id: string;
+  changes: FitExerciseFieldChanges;
+}
+
+/**
+ * Soft-deletes one of the profile's own exercises. Everything already LOGGED
+ * with it is untouched and stays readable — `exercise_ref` is text with no
+ * foreign key, and the set's own label, metric and muscle snapshot are what
+ * make it legible. Deleting an exercise is a statement about the exercise list,
+ * never about what was lifted.
+ */
+export interface FitExerciseIdRequest {
+  profileId: string;
+  id: string;
+}
+
 // --- Tabla (CANV slice a, migration 059) -------------------------------------
 //
 // Every shape below mirrors `@nexus/db`'s canvas store, redeclared here so the
@@ -7874,6 +8342,107 @@ export interface NexusApi {
   fitTargets(profileId: string): Promise<FitTargets>;
   /** Writes all four at once; `null` clears one, and `0` is a goal of zero rather than none. */
   fitSaveTargets(profileId: string, goals: FitTargetGoals): Promise<FitTargets>;
+  /**
+   * One ranked list of exercises over BOTH sources — the catalogue that ships
+   * in the app and this profile's own. A blank query answers an empty list
+   * rather than everything: a picker with an empty box has nothing to rank.
+   * Both names are matched, because the lifting world writes "RDL".
+   */
+  fitSearchExercises(profileId: string, query: string, limit: number): Promise<FitExerciseOption[]>;
+  /** This profile's own exercises, sr-Latn alphabetical. The catalogue is not in here — it is not a table. */
+  fitExercises(profileId: string): Promise<FitExercise[]>;
+  fitCreateExercise(profileId: string, exercise: NewFitExerciseFields): Promise<FitExercise>;
+  /** Editing an exercise changes what you LOG from now on; every set already logged keeps the metric and muscles it was logged with. */
+  fitUpdateExercise(
+    profileId: string,
+    id: string,
+    changes: FitExerciseFieldChanges,
+  ): Promise<FitExercise>;
+  fitDeleteExercise(profileId: string, id: string): Promise<void>;
+  fitRestoreExercise(profileId: string, id: string): Promise<void>;
+  /** This profile's routines, each with its items in order. A routine is a shape, never a schedule. */
+  fitRoutines(profileId: string): Promise<FitRoutine[]>;
+  /**
+   * Creates a routine, or rewrites one whole. Items are sent every time and
+   * their ORDER is their position; main resolves each reference and writes the
+   * label, so a routine cannot name one exercise and point at another.
+   */
+  fitSaveRoutine(
+    profileId: string,
+    routine: { id?: string; name: string; notes?: string; items: FitRoutineItemInput[] },
+  ): Promise<FitRoutine>;
+  fitDeleteRoutine(profileId: string, id: string): Promise<void>;
+  fitRestoreRoutine(profileId: string, id: string): Promise<void>;
+  /** The one unfinished session, or null. What the "Trening" page opens on. */
+  fitOpenWorkout(profileId: string): Promise<FitWorkout | null>;
+  /** Opens a session. Refuses when one is already open — the schema allows exactly one. */
+  fitStartWorkout(
+    profileId: string,
+    day: string,
+    routineRef?: string | null,
+    notes?: string,
+  ): Promise<FitWorkout>;
+  fitWorkout(profileId: string, id: string): Promise<FitWorkout>;
+  fitFinishWorkout(profileId: string, id: string): Promise<FitWorkout>;
+  /** Reopens a finished session for a correction. Refuses while another is open. */
+  fitReopenWorkout(profileId: string, id: string): Promise<FitWorkout>;
+  fitUpdateWorkout(
+    profileId: string,
+    id: string,
+    changes: { day?: string; notes?: string },
+  ): Promise<FitWorkout>;
+  fitDeleteWorkout(profileId: string, id: string): Promise<void>;
+  /** Undo of that delete. Refuses when it would resurrect a SECOND open session. */
+  fitRestoreWorkout(profileId: string, id: string): Promise<void>;
+  /** Every session in a day range, ascending. A day is a range of one. */
+  fitWorkouts(profileId: string, from: string, to: string): Promise<FitWorkout[]>;
+  /**
+   * Logs one set. The caller names the exercise by REFERENCE and gives the
+   * numbers; main resolves it and stamps the label, the metric and the muscles
+   * — a renderer able to declare a set's metric could log a plank as
+   * `weight_reps` and every volume total would absorb it.
+   */
+  fitLogSet(
+    profileId: string,
+    workoutId: string,
+    set: {
+      exerciseRef: string;
+      kind: SetKind;
+      weightKg?: number | null;
+      reps?: number | null;
+      seconds?: number | null;
+      distanceM?: number | null;
+      rir?: number | null;
+    },
+  ): Promise<FitWorkoutSet>;
+  /** Corrects the numbers or the kind. The snapshot is never touched. */
+  fitUpdateSet(
+    profileId: string,
+    id: string,
+    changes: {
+      kind?: SetKind;
+      weightKg?: number | null;
+      reps?: number | null;
+      seconds?: number | null;
+      distanceM?: number | null;
+      rir?: number | null;
+    },
+  ): Promise<FitWorkoutSet>;
+  /** A hard delete; the remaining positions close the gap. */
+  fitRemoveSet(profileId: string, id: string): Promise<void>;
+  /** "What did I do last time?" for a whole list at once — one call, never one per exercise. */
+  fitLastPerformed(profileId: string, exerciseRefs: string[]): Promise<FitLastPerformed[]>;
+  /** Every reading in a day range, ascending. The trend is computed from the range, never from two raw weigh-ins. */
+  fitMeasurements(profileId: string, from: string, to: string): Promise<FitMeasurement[]>;
+  /** Upserts one day's reading. */
+  fitSaveMeasurement(
+    profileId: string,
+    measurement: FitMeasurementSaveRequest["measurement"],
+  ): Promise<FitMeasurement>;
+  fitRemoveMeasurement(profileId: string, day: string): Promise<void>;
+  /** The body profile, or null while it has never been set — never a default-shaped guess. */
+  fitBodyProfile(profileId: string): Promise<FitBodyProfile | null>;
+  fitSaveBodyProfile(profileId: string, profile: FitBodyProfile): Promise<FitBodyProfile>;
   /** This profile's boards, sr-Latn alphabetical and WITHOUT their drawings — the cheap read the board strip is built from. */
   listCanvasBoards(profileId: string): Promise<CanvasBoard[]>;
   /** One board AND its whole drawing. The one call on this surface that carries a scene back. */

@@ -583,6 +583,63 @@ const api: NexusApi = {
   fitTargets: (profileId) => ipcRenderer.invoke(IpcChannel.fitTargets, { profileId }),
   fitSaveTargets: (profileId, goals) =>
     ipcRenderer.invoke(IpcChannel.fitTargetsSave, { profileId, goals }),
+  // Trening i telo (FIT slice b, migration 060). One method per channel, no
+  // passthrough — and `fitLogSet`/`fitSaveRoutine` deliberately forward only
+  // what the caller may decide: main resolves every `exerciseRef` and stamps
+  // the label, the metric and the muscle list itself.
+  fitSearchExercises: (profileId, query, limit) =>
+    ipcRenderer.invoke(IpcChannel.fitExerciseSearch, { profileId, query, limit }),
+  fitExercises: (profileId) => ipcRenderer.invoke(IpcChannel.fitExercisesList, { profileId }),
+  fitCreateExercise: (profileId, exercise) =>
+    ipcRenderer.invoke(IpcChannel.fitExerciseCreate, { profileId, exercise }),
+  fitUpdateExercise: (profileId, id, changes) =>
+    ipcRenderer.invoke(IpcChannel.fitExerciseUpdate, { profileId, id, changes }),
+  fitDeleteExercise: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.fitExerciseDelete, { profileId, id }),
+  fitRestoreExercise: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.fitExerciseRestore, { profileId, id }),
+  fitRoutines: (profileId) => ipcRenderer.invoke(IpcChannel.fitRoutinesList, { profileId }),
+  fitSaveRoutine: (profileId, routine) =>
+    ipcRenderer.invoke(
+      routine.id === undefined ? IpcChannel.fitRoutineCreate : IpcChannel.fitRoutineUpdate,
+      { profileId, ...routine },
+    ),
+  fitDeleteRoutine: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.fitRoutineDelete, { profileId, id }),
+  fitRestoreRoutine: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.fitRoutineRestore, { profileId, id }),
+  fitOpenWorkout: (profileId) => ipcRenderer.invoke(IpcChannel.fitWorkoutOpen, { profileId }),
+  fitStartWorkout: (profileId, day, routineRef, notes) =>
+    ipcRenderer.invoke(IpcChannel.fitWorkoutStart, { profileId, day, routineRef, notes }),
+  fitWorkout: (profileId, id) => ipcRenderer.invoke(IpcChannel.fitWorkoutGet, { profileId, id }),
+  fitFinishWorkout: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.fitWorkoutFinish, { profileId, id }),
+  fitReopenWorkout: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.fitWorkoutReopen, { profileId, id }),
+  fitUpdateWorkout: (profileId, id, changes) =>
+    ipcRenderer.invoke(IpcChannel.fitWorkoutUpdate, { profileId, id, ...changes }),
+  fitDeleteWorkout: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.fitWorkoutDelete, { profileId, id }),
+  fitRestoreWorkout: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.fitWorkoutRestore, { profileId, id }),
+  fitWorkouts: (profileId, from, to) =>
+    ipcRenderer.invoke(IpcChannel.fitWorkoutsRange, { profileId, from, to }),
+  fitLogSet: (profileId, workoutId, set) =>
+    ipcRenderer.invoke(IpcChannel.fitSetLog, { profileId, workoutId, ...set }),
+  fitUpdateSet: (profileId, id, changes) =>
+    ipcRenderer.invoke(IpcChannel.fitSetUpdate, { profileId, id, ...changes }),
+  fitRemoveSet: (profileId, id) => ipcRenderer.invoke(IpcChannel.fitSetRemove, { profileId, id }),
+  fitLastPerformed: (profileId, exerciseRefs) =>
+    ipcRenderer.invoke(IpcChannel.fitLastPerformed, { profileId, exerciseRefs }),
+  fitMeasurements: (profileId, from, to) =>
+    ipcRenderer.invoke(IpcChannel.fitMeasurements, { profileId, from, to }),
+  fitSaveMeasurement: (profileId, measurement) =>
+    ipcRenderer.invoke(IpcChannel.fitMeasurementSave, { profileId, measurement }),
+  fitRemoveMeasurement: (profileId, day) =>
+    ipcRenderer.invoke(IpcChannel.fitMeasurementRemove, { profileId, day }),
+  fitBodyProfile: (profileId) => ipcRenderer.invoke(IpcChannel.fitBodyProfile, { profileId }),
+  fitSaveBodyProfile: (profileId, profile) =>
+    ipcRenderer.invoke(IpcChannel.fitBodyProfileSave, { profileId, profile }),
   listCanvasBoards: (profileId) => ipcRenderer.invoke(IpcChannel.canvasList, { profileId }),
   openCanvasBoard: (profileId, id) => ipcRenderer.invoke(IpcChannel.canvasOpen, { profileId, id }),
   // `scene` is passed through as given, `undefined` included — an absent scene is

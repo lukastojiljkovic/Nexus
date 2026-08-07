@@ -590,6 +590,7 @@ export type {
 export {
   FitWorkoutStore,
   MAX_FIT_LAST_PERFORMED_REFS,
+  MAX_FIT_WORKOUT_NOTES_LENGTH,
 } from "./fitness/workoutStore.js";
 export type {
   FitLastPerformed,
