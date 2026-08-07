@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Button, Checkbox } from "@nexus/ui";
+import { Button, Checkbox, Select } from "@nexus/ui";
 import {
   FIN_CSV_IMPORT_COLUMN_ROLES,
   FIN_CSV_IMPORT_SIGN_CONVENTIONS,
@@ -177,19 +177,20 @@ function FinCsvMappingDialog({
 
         <div className="csv-map__body">
           <div className="csv-map__toggles">
-            <label className="csv-map__toggle">
-              <span className="set__section-caption">{s.delimiterLabel}</span>
-              <select
-                className="set__select"
-                value={preview.delimiter}
-                aria-label={s.delimiterLabel}
-                disabled={busy}
-                onChange={(event) => onDelimiterChange(event.target.value === ";" ? ";" : ",")}
-              >
-                <option value=",">{s.delimiterComma}</option>
-                <option value=";">{s.delimiterSemicolon}</option>
-              </select>
-            </label>
+            {/* Labelled ONCE. This block used to wrap the select in a `<label>`,
+                put the name in a caption span inside it, AND repeat the same
+                string as an `aria-label` — three declarations of one name, two
+                of which could drift from the third. */}
+            <Select
+              label={s.delimiterLabel}
+              className="set__select"
+              value={preview.delimiter}
+              disabled={busy}
+              onChange={(event) => onDelimiterChange(event.target.value === ";" ? ";" : ",")}
+            >
+              <option value=",">{s.delimiterComma}</option>
+              <option value=";">{s.delimiterSemicolon}</option>
+            </Select>
             <Checkbox
               checked={preview.hasHeader}
               disabled={busy}
