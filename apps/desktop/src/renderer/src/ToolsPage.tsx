@@ -1,5 +1,5 @@
 import { TOOL_CATEGORIES, type ToolRegistration } from "@nexus/core";
-import { PageHeader, TextField } from "@nexus/ui";
+import { Button, PageHeader, TextField } from "@nexus/ui";
 import { useMemo, useState } from "react";
 
 import { createModuleRegistry } from "../../shared/modules.js";
@@ -119,7 +119,19 @@ export function ToolsPage({ enabledModules }: ToolsPageProps) {
               </div>
             );
           })}
-          {visible.length === 0 && <p className="tool__note">{s.noMatches}</p>}
+          {/* „Says what to do, and does not scold" is what this line's own
+              comment in `strings.ts` promises, and for as long as it has existed
+              there was nothing to do: the way back is to clear a search field
+              the empty list has just pushed out of sight. `clearSearch` was
+              written for this control and rendered nowhere. */}
+          {visible.length === 0 && (
+            <div className="tool__empty">
+              <p className="tool__note">{s.noMatches}</p>
+              <Button size="sm" className="tool__clear" onClick={() => setQuery("")}>
+                {s.clearSearch}
+              </Button>
+            </div>
+          )}
         </nav>
 
         <section className="tool__surface">

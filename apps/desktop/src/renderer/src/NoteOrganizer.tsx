@@ -53,6 +53,22 @@ export const NOTE_ORGANIZER_PANE_ID = "note-organizer";
 /** sr-Latn collation — plain "sr" mis-tailors Latin š/č/ć. */
 const collator = new Intl.Collator(["sr-Latn", "sr"]);
 
+/**
+ * Every id in one subtree, the node itself included — precisely the destinations
+ * a move must not offer. `NoteOrgStore.moveFolder` refuses a self-move and a
+ * descendant move anyway, but a menu that lists a destination and then fails is
+ * a menu that lied: the refusal belongs where the choice is made.
+ */
+function subtreeIds(node: FolderNode): Set<string> {
+  const ids = new Set<string>();
+  const walk = (current: FolderNode): void => {
+    ids.add(current.id);
+    current.children.forEach(walk);
+  };
+  walk(node);
+  return ids;
+}
+
 /** Turns the flat folder list into a name-sorted tree keyed by `parentId`. */
 function buildTree(folders: NoteFolder[]): FolderNode[] {
   const byParent = new Map<string | null, NoteFolder[]>();
@@ -236,6 +252,24 @@ export function NoteOrganizer({
    */
   function toggleCapture(id: string, isCurrent: boolean): void {
     void run(() => window.nexus.setNoteFolderCaptureDefault(profileId, isCurrent ? null : id));
+  }
+
+  /**
+   * Re-parents a folder (NOTE / `note-folders:move`). The channel, the handler,
+   * the store method and its four tests all shipped with the folder tree and
+   * **no surface ever called them**, so nesting was decided once, at creation:
+   * a folder filed in the wrong place could only be deleted and rebuilt, and
+   * deleting it promotes its children to the grandparent, which flattens the
+   * subtree the user was trying to keep.
+   *
+   * A menu rather than a drag, unlike TASK's answer to the same problem. The
+   * note row two panes over already moves a note by exactly this shape — a
+   * „Premesti u fasciklu" heading over „Bez fascikle" and the flat folder list —
+   * so a folder is moved by the affordance the user has already learned in this
+   * module, and by one that a keyboard can reach.
+   */
+  function move(id: string, newParentId: string | null): void {
+    void run(() => window.nexus.moveNoteFolder(profileId, id, newParentId));
   }
 
   function remove(id: string): void {
@@ -623,6 +657,51 @@ export function NoteOrganizer({
                     >
                       {strings.notes.newSubfolder}
                     </button>
+                    {/* „Premesti u" — the note row's own move menu, one axis
+                        up. The destinations exclude this folder and everything
+                        under it (`subtreeIds`), and „Na vrh" is left out when
+                        the folder is already there, so every line offered is a
+                        line that will work. */}
+                    {(() => {
+                      const forbidden = subtreeIds(node);
+                      const destinations = folders
+                        .filter((candidate) => !forbidden.has(candidate.id) && candidate.id !== node.parentId)
+                        .sort((a, b) => collator.compare(a.name, b.name));
+                      if (destinations.length === 0 && node.parentId === null) return null;
+                      return (
+                        <>
+                          <div className="note__menu-sep" role="separator" />
+                          <span className="note__menu-label">{strings.notes.moveFolderTo}</span>
+                          {node.parentId !== null && (
+                            <button
+                              className="note__menu-item"
+                              role="menuitem"
+                              type="button"
+                              onClick={() => {
+                                move(node.id, null);
+                                close();
+                              }}
+                            >
+                              {strings.notes.folderToRoot}
+                            </button>
+                          )}
+                          {destinations.map((destination) => (
+                            <button
+                              key={destination.id}
+                              className="note__menu-item"
+                              role="menuitem"
+                              type="button"
+                              onClick={() => {
+                                move(node.id, destination.id);
+                                close();
+                              }}
+                            >
+                              {destination.name}
+                            </button>
+                          ))}
+                        </>
+                      );
+                    })()}
                     <div className="note__menu-sep" role="separator" />
                     <button
                       className="note__menu-item"

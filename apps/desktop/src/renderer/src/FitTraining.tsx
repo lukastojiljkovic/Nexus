@@ -650,6 +650,17 @@ function SessionPanel({ profileId, workout, routine, onChanged, onDiscard }: Ses
         <p className="fit__note">{s.session.empty}</p>
       ) : (
         <div className="fit__exercises">
+          {/* Removing a set is permanent, and until now the app did not say so
+              anywhere. The sentence was written for exactly this spot — its own
+              comment in `strings.ts` reads „Said where removing is possible" —
+              and then no component rendered it, which left the one irreversible
+              action in this panel as the only unlabelled one. It is a note and
+              not a confirmation on purpose: the position ADR-081 takes is that
+              a removed set was a TYPO and not history, so the affordance stays
+              cheap and merely stops being silent about what it costs.
+              Deleting a whole session, one level up, is undoable and says so
+              through the „Vrati" bar instead. */}
+          <p className="fit__note">{s.set.removeNote}</p>
           {exercises.map((exercise) => (
             <ExerciseCard
               key={exercise.ref}

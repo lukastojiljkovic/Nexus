@@ -61,10 +61,33 @@ import { countUnit, strings } from "./strings.js";
  * goal is the same failure as converting money at a rate the app cannot verify.
  */
 
-/** How far back the trend is read. */
-const TREND_RANGES = [90, 365] as const;
+/**
+ * How far back the trend is read. `"all"` is not a number of days because there
+ * is no honest number to pick: the whole history is however long this profile
+ * has been weighing itself, and a body-weight arc is the one figure here that
+ * only means something over years. The copy table has carried „Sve" since the
+ * section was written and no control offered it, which is how a preference the
+ * product wrote down goes unbuilt.
+ */
+const TREND_RANGES = [90, 365, "all"] as const;
 
 type TrendRange = (typeof TREND_RANGES)[number];
+
+/**
+ * The `from` date a range asks for. „Sve" uses the store's own floor rather than
+ * an invented one — `1970-01-01` is before any day key this app can hold, and
+ * the query is a bounded range scan on an indexed column either way.
+ */
+function trendFrom(today: string, range: TrendRange): string {
+  return range === "all" ? "1970-01-01" : windowStart(today, range);
+}
+
+/** The button's own label — one place, so the control and the copy table cannot drift again. */
+function trendRangeLabel(range: TrendRange, s: (typeof strings.fitness.measure)["trend"]): string {
+  if (range === 90) return s.range90;
+  if (range === 365) return s.range365;
+  return s.rangeAll;
+}
 
 /** The window the trend change is quoted over — a month, which is long enough that water weight cannot dominate it. */
 const CHANGE_WINDOW_DAYS = 30;
@@ -159,7 +182,7 @@ export function FitMeasurements({ profileId }: FitMeasurementsProps) {
   const [goal, setGoal] = useState<WeightGoal>("maintain");
   const [rate, setRate] = useState("");
 
-  const from = windowStart(today, range);
+  const from = trendFrom(today, range);
 
   useEffect(() => {
     let active = true;
@@ -420,7 +443,7 @@ export function FitMeasurements({ profileId }: FitMeasurementsProps) {
               aria-pressed={range === option}
               onClick={() => setRange(option)}
             >
-              {option === 90 ? s.trend.range90 : s.trend.range365}
+              {trendRangeLabel(option, s.trend)}
             </Button>
           ))}
         </div>
@@ -453,7 +476,12 @@ export function FitMeasurements({ profileId }: FitMeasurementsProps) {
               )}
             </div>
             {trendNow === null ? (
-              <p className="fit__note">{s.trend.noTrend}</p>
+              // Two empty states in one section, and until now only one of them
+              // had a title: „Još nema merenja" (nothing logged at all) got the
+              // full `EmptyState`, while „there are readings but not two days of
+              // them" was a bare grey line. `noTrendTitle` was written for this
+              // and rendered nowhere.
+              <EmptyState variant="inline" title={s.trend.noTrendTitle} description={s.trend.noTrend} />
             ) : (
               <TrendChart points={points} label={s.trend.chartLabel} />
             )}

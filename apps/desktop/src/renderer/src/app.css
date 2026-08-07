@@ -11540,6 +11540,17 @@ button.cal__grid-event--dragging {
   border: 1px solid var(--nx-border);
   border-radius: var(--nx-radius-md);
 }
+/* Names what the column of figures IS, for the one tool whose row labels are
+   taken by which package each row is. The caption treatment the rest of the app
+   uses for exactly this job. */
+.tool__results-heading {
+  margin-bottom: var(--nx-space-1);
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--nx-text-muted);
+}
 .tool__result-row {
   display: flex;
   align-items: baseline;
@@ -11574,6 +11585,24 @@ button.cal__grid-event--dragging {
   max-width: 64ch;
   font-size: var(--nx-font-size-caption);
   color: var(--nx-text-muted);
+}
+/* „Nijedna alatka ne odgovara pretrazi." plus the way out of it. The button is
+   left-aligned under the line rather than beside it, because the line wraps and
+   a trailing control would move with it. */
+.tool__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nx-space-2);
+}
+.tool__clear.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.tool__clear.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
 }
 .tool__error {
   margin: 0;

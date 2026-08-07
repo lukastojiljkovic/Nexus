@@ -469,6 +469,12 @@ function UnitPriceTool() {
       </Button>
       {ranked !== null ? (
         <div className="tool__results">
+          {/* The other two tools name the VALUE in each row's own label
+              („Osnovica", „Mesečna rata"). This one cannot: its labels are
+              taken by which package a row is, so the figures were printed with
+              nothing saying what they are. `unitPriceLabel` was written for
+              this heading and rendered nowhere. */}
+          <div className="tool__results-heading">{s.unitPrice.unitPriceLabel}</div>
           {ranked.map((row) => (
             <ResultRow
               key={row.id}

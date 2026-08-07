@@ -307,7 +307,15 @@ function DashboardSettingsPanel({ profileId, hits }: SettingsPanelProps) {
 
   return (
     <>
-      <p className="set__section-caption">{s.caption}</p>
+      {/* SET-014 highlights the control a search matched, and this one was the
+          single declared control that took no highlight — its own sibling `dim`
+          below does, and so do the sixteen others across these panels. Searching
+          „pozadina" opened the right section and then emphasised nothing in it.
+          `moduleSettings.test.ts` pins declaration↔renderer pairing per PANEL,
+          which is why it stayed green. */}
+      <p className={labelClass("set__section-caption", hits.has(settingsEntryId("dashboard", "background")))}>
+        {s.caption}
+      </p>
 
       <div className="set__dash-row">
         {backgroundHash !== null && (

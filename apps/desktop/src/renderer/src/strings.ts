@@ -921,8 +921,11 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       delete: "Obriši oznaku",
       /** The rail chip's own „⋯“ menu (rename/delete one tag). */
       menuLabel: "Radnje nad oznakom",
-      /** The per-task „⋯“ menu that attaches/detaches this task's tags. */
-      taskMenuLabel: "Oznake zadatka",
+      // „Oznake zadatka" named a per-task „⋯" menu that no longer exists: tag
+      // attachment was folded into the generic row menu, which announces itself
+      // as `rowMenuLabel` and holds the tag checkboxes inside it. The key
+      // outlived the menu and its own comment kept describing it, which is how
+      // a copy table starts documenting an app that is not there.
       filterLabel: "Filter po oznakama",
       clearFilter: "Poništi",
       actionError: "Radnja nad oznakom nije uspela. Pokušaj ponovo.",
@@ -1193,6 +1196,10 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     newSubfolder: "Nova podfascikla",
     renameFolder: "Preimenuj",
     recolorFolder: "Promeni boju",
+    /** Heading over the folder's own move menu — the note row's „Premesti u fasciklu", one axis up. */
+    moveFolderTo: "Premesti u",
+    /** Out of every folder, to the top of the tree — a folder's „Bez fascikle". */
+    folderToRoot: "Na vrh",
     deleteFolder: "Obriši fasciklu",
     noColor: "Bez boje",
     folderNamePlaceholder: "Naziv fascikle",
@@ -3131,7 +3138,11 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       labelLabel: "Naziv faze",
       labelPlaceholder: "Pisanje izveštaja",
       labelHint: "Ostaje upisan uz fazu i kada zadatka više ne bude.",
-      minutesLabel: "Minuta",
+      // A „Minuta" label lived here for a field this panel does not have and
+      // should not: a phase's length is the Pomodoro shape, and that is the
+      // settings quartet („Rad (minuta)" and its three siblings), not something
+      // retyped before every phase. Deleted rather than given a control,
+      // because the control would be a second place to say one number.
     },
     /** Today's phases, and the week behind them. */
     today: {

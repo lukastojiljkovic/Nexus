@@ -2341,7 +2341,15 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                       <span className="study__card-actions">
                         <Chip variant={cardStateVariant(card.state)}>{cardStateLabel(card.state)}</Chip>
                         {card.state !== 0 && (
-                          <span className="study__card-due">{formatCardDue(card.due)}</span>
+                          // A bare date in a chip row says nothing about which
+                          // date it is. Named the way SearchPage names its own
+                          // date column — a tooltip, because the row is dense
+                          // and a visible label here would cost more than it
+                          // explains. `cardDueLabel` was written for this and
+                          // rendered nowhere.
+                          <span className="study__card-due" title={strings.study.cardDueLabel}>
+                            {formatCardDue(card.due)}
+                          </span>
                         )}
                         {card.sourceNoteId !== null ? (
                           cardSourceControl(card.sourceNoteId)
