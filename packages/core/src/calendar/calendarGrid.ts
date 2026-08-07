@@ -176,10 +176,28 @@ export function monthGridDays(monthKey: MonthKey, firstDayOfWeek: WeekStart): Mo
   });
 }
 
-export function weekDayKeys(dayKey: DayKey, firstDayOfWeek: WeekStart): DayKey[] {
+/**
+ * The day the week containing `dayKey` OPENS on, under a given first-day
+ * preference.
+ *
+ * Four surfaces had grown their own copy of these three lines — this file's own
+ * `weekDayKeys`, HABIT's `weekStartKey`, NOTE's rhythm grid, and TASK's weekly
+ * flow — which is the shape of a rule with no home rather than four unrelated
+ * needs. It lives here because `WeekStart` does, and because every one of those
+ * callers already depends on this module for the day-key arithmetic underneath
+ * it.
+ *
+ * All UTC, like every bare day key in this house: stepping a local-time date
+ * across a spring-forward boundary lands on the same calendar day twice.
+ */
+export function weekOpeningDayKey(dayKey: DayKey, firstDayOfWeek: WeekStart): DayKey {
   const ms = dayKeyToUtcMs(dayKey);
   const offset = (new Date(ms).getUTCDay() - firstDayOfWeek + 7) % 7;
-  const startMs = ms - offset * MS_PER_DAY;
+  return utcMsToDayKey(ms - offset * MS_PER_DAY);
+}
+
+export function weekDayKeys(dayKey: DayKey, firstDayOfWeek: WeekStart): DayKey[] {
+  const startMs = dayKeyToUtcMs(weekOpeningDayKey(dayKey, firstDayOfWeek));
   return Array.from({ length: 7 }, (_, i) => utcMsToDayKey(startMs + i * MS_PER_DAY));
 }
 

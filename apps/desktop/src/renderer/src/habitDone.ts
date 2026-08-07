@@ -1,4 +1,4 @@
-import { countsAsDone } from "@nexus/core";
+import { countsAsDone, weekOpeningDayKey } from "@nexus/core";
 import type { WeekStart } from "@nexus/core";
 
 import type { Habit, HabitEntry } from "../../shared/ipc.js";
@@ -87,11 +87,18 @@ function isoWeekday(ms: number): number {
   return ((new Date(ms).getUTCDay() + 6) % DAYS_PER_WEEK) + 1;
 }
 
-/** The UTC midnight the containing week opens on, under the DEVICE's first-day preference (`WeekStart` is in `getUTCDay()` terms: 1 = Monday, 0 = Sunday). */
+/**
+ * The UTC midnight the containing week opens on, under the DEVICE's first-day
+ * preference (`WeekStart` is in `getUTCDay()` terms: 1 = Monday, 0 = Sunday).
+ *
+ * The arithmetic moved to `@nexus/core`'s `weekOpeningDayKey` once a fourth
+ * surface had grown its own copy of it. Kept as a named re-export rather than
+ * removed, exactly as `countsAsDone` was: the module's callers read „koja
+ * nedelja" from HABIT's own vocabulary, and there is still exactly one
+ * definition of it in the build.
+ */
 export function weekStartKey(day: string, weekStart: WeekStart): string {
-  const ms = utcDayMs(day);
-  const offset = (new Date(ms).getUTCDay() - weekStart + DAYS_PER_WEEK) % DAYS_PER_WEEK;
-  return dayKey(ms - offset * MS_PER_DAY);
+  return weekOpeningDayKey(day, weekStart);
 }
 
 /** The bare day key `days` after `day` (negative shifts back). */

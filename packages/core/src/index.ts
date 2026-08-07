@@ -820,6 +820,7 @@ export {
   shiftDayKey,
   shiftMonthKey,
   weekDayKeys,
+  weekOpeningDayKey,
 } from "./calendar/calendarGrid.js";
 export type {
   DayKey,

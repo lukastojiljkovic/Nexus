@@ -12,6 +12,7 @@ import {
   shiftDayKey,
   shiftMonthKey,
   weekDayKeys,
+  weekOpeningDayKey,
   type SpanItem,
   type TimedItem,
 } from "./calendarGrid.js";
@@ -64,6 +65,46 @@ describe("monthGridDays", () => {
     expect(() => monthGridDays("2026-13", 1)).toThrow(TypeError);
     expect(() => monthGridDays("2026-8", 1)).toThrow(TypeError);
     expect(() => monthGridDays("2026-08-01", 1)).toThrow(TypeError);
+  });
+});
+
+describe("weekOpeningDayKey", () => {
+  it("answers the day itself when the week opens on it", () => {
+    // 2026-08-03 is a Monday.
+    expect(weekOpeningDayKey("2026-08-03", 1)).toBe("2026-08-03");
+    // 2026-08-02 is a Sunday.
+    expect(weekOpeningDayKey("2026-08-02", 0)).toBe("2026-08-02");
+  });
+
+  it("reads the same day into two different weeks under the two preferences", () => {
+    // The whole reason the preference is a parameter: a Sunday belongs to the
+    // week ENDING on it under a Monday-first calendar and to the week STARTING
+    // on it under a Sunday-first one, and a figure that guessed would be a week
+    // out for half the world.
+    expect(weekOpeningDayKey("2026-08-02", 1)).toBe("2026-07-27");
+    expect(weekOpeningDayKey("2026-08-02", 0)).toBe("2026-08-02");
+  });
+
+  it("crosses a month and a year boundary", () => {
+    expect(weekOpeningDayKey("2026-08-01", 1)).toBe("2026-07-27");
+    // 2026-01-01 is a Thursday.
+    expect(weekOpeningDayKey("2026-01-01", 1)).toBe("2025-12-29");
+  });
+
+  it("survives a spring-forward day, because the arithmetic is UTC", () => {
+    // 2026-03-29 is the European DST switch; a local-time step lands on the
+    // same calendar day twice and silently loses one.
+    expect(weekOpeningDayKey("2026-03-29", 1)).toBe("2026-03-23");
+  });
+
+  it("is exactly the first day `weekDayKeys` lays out, at both preferences", () => {
+    // The two must never drift: `weekDayKeys` is built on this function
+    // precisely so there is one definition, and this pins that.
+    for (const day of ["2026-08-02", "2026-01-01", "2026-03-29", "2026-12-31"]) {
+      for (const start of [0, 1] as const) {
+        expect(weekOpeningDayKey(day, start)).toBe(weekDayKeys(day, start)[0]);
+      }
+    }
   });
 });
 
