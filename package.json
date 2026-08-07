@@ -12,7 +12,7 @@
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint && eslint scripts",
-    "test": "turbo run test && vitest run",
+    "test": "turbo run test && vitest run --config vitest.scripts.config.mjs",
     "check:colours": "node scripts/check-colours.mjs"
   },
   "devDependencies": {
