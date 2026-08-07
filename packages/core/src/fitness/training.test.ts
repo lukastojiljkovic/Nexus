@@ -12,6 +12,7 @@ import {
   movingAverage,
   sessionTonnage,
   setTonnage,
+  trendChange,
   workingSets,
 } from "./training.js";
 import type { LoggedSet } from "./training.js";
@@ -308,5 +309,55 @@ describe("movingAverage", () => {
     expect(() => movingAverage([], 2.5, 1)).toThrow(RangeError);
     expect(() => movingAverage([], 7, 0)).toThrow(RangeError);
     expect(() => movingAverage([], 7, Number.NaN)).toThrow(RangeError);
+  });
+});
+
+describe("trendChange", () => {
+  const reading = (day: string, value: number) => ({ day, value });
+
+  /** Seven consecutive days at a steady weight, then seven at another — two clean trend blocks. */
+  function series(start: string, values: readonly number[]) {
+    const base = Date.parse(`${start}T00:00:00Z`);
+    return values.map((value, index) =>
+      reading(new Date(base + index * 86_400_000).toISOString().slice(0, 10), value),
+    );
+  }
+
+  it("compares two AVERAGES rather than two readings", () => {
+    // A series that drifts down 200 g a day, with a 2 kg spike on the last day.
+    // The raw comparison would report a GAIN; the trend reports the loss.
+    const values = [82, 81.8, 81.6, 81.4, 81.2, 81, 80.8, 80.6, 80.4, 80.2, 80, 79.8, 79.6, 81.6];
+    const points = movingAverage(series("2026-07-01", values), 7, 2);
+    const change = trendChange(points, 7);
+    expect(change).not.toBeNull();
+    expect(change?.delta).toBeLessThan(0);
+    expect(change?.days).toBe(7);
+  });
+
+  it("reaches back only as far as the series goes, and says how far that was", () => {
+    const points = movingAverage(series("2026-07-01", [80, 80.2, 80.4, 80.6]), 7, 2);
+    // The FIRST day carries no average at all (one reading is not a trend), so
+    // four days of readings give three trend points spanning two days. A
+    // thirty-day question is answered with the two days that exist, and `days`
+    // says so rather than letting a caller label it a month.
+    expect(trendChange(points, 30)?.days).toBe(2);
+  });
+
+  it("refuses a series with fewer than two trend values", () => {
+    expect(trendChange(movingAverage([reading("2026-07-01", 80)], 7, 2), 7)).toBeNull();
+    expect(trendChange([], 7)).toBeNull();
+  });
+
+  it("refuses when both ends land on the same day", () => {
+    // Two readings on ONE day collapse to a single point (`movingAverage`), so
+    // there is nothing to measure a change across.
+    const points = movingAverage([reading("2026-07-01", 80), reading("2026-07-01", 81)], 7, 1);
+    expect(points).toHaveLength(1);
+    expect(trendChange(points, 7)).toBeNull();
+  });
+
+  it("throws on a window that is not a whole number of at least one day", () => {
+    expect(() => trendChange([], 0)).toThrow(RangeError);
+    expect(() => trendChange([], 1.5)).toThrow(RangeError);
   });
 });

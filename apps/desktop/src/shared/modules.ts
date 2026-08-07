@@ -701,6 +701,18 @@ const FITNESS_WIDGETS: WidgetContract[] = [
     sizes: ["S", "M"],
     deepLink: "fitness",
   },
+  // FIT slice d's card: this week's sessions, and the routine that has gone
+  // longest without being done (ADR-081 §9). NOT „the next scheduled routine" —
+  // a routine is a shape and holds nothing about when (§6) — so the card reports
+  // the FACT („poslednji put 24. jul") and lets the reader draw the conclusion.
+  // Same `configFields`-free reasoning as the card above: there is no list here
+  // to cap and no window to narrow.
+  {
+    id: "trening",
+    title: "dashboard.fitnessTraining.title",
+    sizes: ["S", "M"],
+    deepLink: "fitness",
+  },
 ];
 
 /**

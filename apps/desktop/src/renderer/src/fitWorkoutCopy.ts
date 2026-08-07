@@ -21,14 +21,21 @@ import { countUnit, strings } from "./strings.js";
 export const REST_PRESETS = [60, 90, 120, 180] as const;
 
 /**
- * One number as text — at most one decimal, the Serbian comma, and no grouping.
- * Loads land on halves and quarters and nothing finer; a rep count is whole
- * anyway, so one formatter serves both.
+ * One number as text — at most one decimal, Serbian, grouped. Loads land on
+ * halves and quarters and nothing finer, a rep count is whole anyway, and a body
+ * weight is read off a scale to a tenth: one formatter serves all of them, which
+ * is why „Merenja" reads its figures through this file too rather than minting a
+ * second `Intl.NumberFormat` that would drift.
  */
 const numberFormat = new Intl.NumberFormat("sr-Latn", {
   minimumFractionDigits: 0,
   maximumFractionDigits: 1,
 });
+
+/** Any FIT figure as text. The one place a number in this module becomes something a person reads. */
+export function figureText(value: number): string {
+  return numberFormat.format(value);
+}
 
 /** A recorded quantity, or the em dash that says it was not recorded. Never a zero standing in for absent. */
 function figure(value: number | null): string {

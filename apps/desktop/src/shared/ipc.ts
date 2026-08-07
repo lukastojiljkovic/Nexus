@@ -444,6 +444,17 @@ export const IpcChannel = {
   fitFoodUpdate: "fit:food-update",
   fitFoodDelete: "fit:food-delete",
   fitFoodRestore: "fit:food-restore",
+  // One TOTAL per day across a span — what „Merenja"'s measured-expenditure tier
+  // reads (ADR-081 §8a). A separate channel from `fit:day` and not a loop over
+  // it: tier 1 needs at least fourteen days of intake to say anything at all, and
+  // fourteen round trips carrying every logged item to add up four numbers per
+  // day would be the N+1 `fit:last-performed` already exists to avoid.
+  //
+  // Days with nothing logged are ABSENT rather than zero, which is the store's
+  // own rule and load-bearing here: „nisam jeo" and „nisam upisao" are different
+  // facts, and the tier's 80 % coverage refusal is built on exactly that
+  // difference.
+  fitDayTotalsRange: "fit:day-totals-range",
   // The four daily goals, read and written whole (`FitTargetStore.save`): with
   // `null` already spoken for as „no goal", a patch would need a third value that
   // reads identically in JSON on this wire — see the store's own doc.
@@ -4981,6 +4992,27 @@ export interface FitDay {
 }
 
 /**
+ * One day's total, for the range read the energy tiers stand on.
+ *
+ * A day with nothing logged is simply NOT in the answer — the store's own rule,
+ * and the one this read depends on most: „nisam jeo" and „nisam upisao" are
+ * different facts, the store knows only the second, and tier 1's 80 % coverage
+ * refusal is built on being able to tell them apart. A zero row here would make
+ * a fortnight of forgetting look like a fortnight of fasting.
+ */
+export interface FitDayTotals {
+  day: string;
+  totals: FoodMacros;
+}
+
+/** An inclusive span of local days. The store caps how wide it may be. */
+export interface FitDayTotalsRangeRequest {
+  profileId: string;
+  from: string;
+  to: string;
+}
+
+/**
  * The profile's daily goals. Every one is independently nullable and NULL means
  * „no goal" — never zero: „nisam postavio cilj kalorija" and „moj cilj je nula"
  * are different claims, and the schema, the store and this wire all keep them
@@ -8419,6 +8451,8 @@ export interface NexusApi {
   fitUpdateFood(profileId: string, id: string, changes: FitFoodFieldChanges): Promise<FitFood>;
   fitDeleteFood(profileId: string, id: string): Promise<void>;
   fitRestoreFood(profileId: string, id: string): Promise<void>;
+  /** One total per day across an inclusive span, oldest first. A day with nothing logged is ABSENT, never a zero. */
+  fitDayTotals(profileId: string, from: string, to: string): Promise<FitDayTotals[]>;
   /** The four daily goals — four nulls while nothing has been set, which is the ordinary case. */
   fitTargets(profileId: string): Promise<FitTargets>;
   /** Writes all four at once; `null` clears one, and `0` is a goal of zero rather than none. */

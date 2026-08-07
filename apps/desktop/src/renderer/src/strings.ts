@@ -447,6 +447,29 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       overGoal: "Preko cilja",
     },
     /**
+     * FIT slice d's card: this week's training, and the routine that has gone
+     * longest without being done.
+     *
+     * **It is not „the next routine on the plan", because there is no plan.** A
+     * routine is a SHAPE and holds nothing about when (ADR-081 §6), so the card
+     * states the fact it actually knows — when that routine was last done — and
+     * lets the reader draw the conclusion. Calling it „na redu" would be the
+     * dashboard inventing a schedule the module deliberately does not have.
+     */
+    fitnessTraining: {
+      title: "Trening",
+      empty: "Ove nedelje još nema treninga",
+      weekLabel: "Ove nedelje",
+      /** A session in progress outranks the count — it is the one thing on this card that is happening. */
+      openLabel: "U toku",
+      openTitle: "Trening u toku",
+      sessionUnitOne: "trening",
+      sessionUnitFew: "treninga",
+      sessionUnitMany: "treninga",
+      lastDoneLabel: "Poslednji put",
+      neverDone: "Još nijednom",
+    },
+    /**
      * A single widget's own boundary (ADR-045 section 4): each card loads and
      * fails alone, so this copy is per-card and deliberately says nothing about
      * the page — the four cards beside it are fine.
@@ -3553,6 +3576,176 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       label: "Odeljak",
       nutrition: "Ishrana",
       training: "Trening",
+      measurements: "Merenja",
+    },
+    /**
+     * „Merenja" (FIT slice d, ADR-081 §8 and §8a). The module's most dangerous
+     * surface, because every number on it is one an app is tempted to invent —
+     * and three rules keep it honest.
+     *
+     * **The scale is noisy and the page says so.** Body weight swings a kilo or
+     * two a day on water and gut contents. The number and the line are both a
+     * 7-day moving average; the raw readings are drawn behind it so nothing is
+     * hidden; and a change is only called a change when the AVERAGES differ,
+     * never yesterday against today.
+     *
+     * **Nexus computes no body-fat percentage.** The tape and skinfold formulas
+     * carry ±4 percentage points, which is more than a year of real change. The
+     * field takes what the user's own caliper or scale reported, and says so.
+     *
+     * **Every expenditure figure names the tier that produced it and what would
+     * reach the tier above.** That sentence IS the feature: a number with
+     * nothing beside it gets a digit of trust it never earned.
+     */
+    measure: {
+      loadErrorTitle: "Merenja nisu učitana",
+      loadError: "Učitavanje merenja nije uspelo. Zatvori i ponovo otvori stranicu.",
+      actionError: "Radnja nije uspela. Pokušaj ponovo.",
+      /** Facts about a person rather than observations — they change rarely and are entered once. */
+      profile: {
+        heading: "Podaci o telu",
+        caption:
+          "Pol, datum rođenja, visina i nivo aktivnosti. Koriste se samo za procenu potrošnje i menjaju se retko.",
+        sexLabel: "Pol",
+        /** „Nije uneto" is a real state, not a default — its absence is what closes the Mifflin–St Jeor tier, and the page says that where it matters. */
+        sexNone: "Nije uneto",
+        sexMale: "Muško",
+        sexFemale: "Žensko",
+        birthLabel: "Datum rođenja",
+        /** Said where the field is: the age is derived, so it can never go stale. */
+        birthHint: "Godine se računaju iz datuma, pa ne zastarevaju.",
+        heightLabel: "Visina (cm)",
+        activityLabel: "Nivo aktivnosti",
+        activity: {
+          sedentary: "Sedeći način života",
+          light: "Lako aktivan",
+          moderate: "Umereno aktivan",
+          active: "Aktivan",
+          "very-active": "Vrlo aktivan",
+        },
+        /** ADR-081 §8a says this out loud because a user who does not know it will trust the wrong digit. */
+        activityHint:
+          "Faktori aktivnosti su najgrublji deo celog računa — vrednosti iz literature se dosta razlikuju.",
+        save: "Sačuvaj podatke",
+        saved: "Podaci o telu su sačuvani.",
+        emptyTitle: "Podaci o telu još nisu uneti",
+        emptyDescription: "Bez njih ne može da se proceni dnevna potrošnja.",
+        invalidHeight: "Upiši visinu u centimetrima.",
+        invalidBirth: "Upiši datum rođenja.",
+      },
+      /** One day's reading. Only the weight makes the row an observation. */
+      entry: {
+        heading: "Novo merenje",
+        dayLabel: "Dan",
+        weightLabel: "Težina (kg)",
+        bodyFatLabel: "Procenat masti (%)",
+        muscleLabel: "Mišići",
+        muscleUnitLabel: "Jedinica",
+        muscleUnitPercent: "%",
+        muscleUnitKg: "kg",
+        /** The unit travels with the number — converting at entry would store a figure the app computed while dressing it as one the scale measured. */
+        muscleHint: "Upiši jedinicu koju je vaga pokazala — Nexus je ne pretvara u drugu.",
+        waterLabel: "Voda (%)",
+        circumferencesLabel: "Obimi (cm)",
+        site: {
+          neck: "Vrat",
+          chest: "Grudi",
+          upperArm: "Nadlaktica",
+          waist: "Struk",
+          hip: "Kukovi",
+          thigh: "Butina",
+        },
+        save: "Sačuvaj merenje",
+        remove: "Obriši merenje",
+        /** Said once, where the fields are. */
+        hint: "Obavezna je samo težina. Nexus ne računa procenat masti — upiši ono što ti je vaga ili kaliper pokazao.",
+        invalidWeight: "Upiši težinu u kilogramima.",
+        invalidNumber: "Upiši broj.",
+        /** Editing a day that already has a reading overwrites it, which is what a correction is. */
+        overwrites: "Za taj dan već postoji merenje — čuvanje ga menja.",
+      },
+      /** The trend, and the sentence that explains why it is a trend at all. */
+      trend: {
+        heading: "Težina",
+        caption:
+          "Linija je prosek od sedam dana, tačke su pojedinačna merenja. Težina varira kilogram-dva dnevno na vodi i hrani, pa se promena čita sa proseka — nikad juče prema danas.",
+        currentLabel: "Trend sada",
+        changeLabel: "Promena",
+        unitKg: "kg",
+        /** „−0,6 kg za 23 dana" — the actual span, never the one that was asked for. */
+        overPrefix: "za",
+        dayUnitOne: "dan",
+        dayUnitFew: "dana",
+        dayUnitMany: "dana",
+        rangeLabel: "Period",
+        range90: "90 dana",
+        range365: "Godina",
+        rangeAll: "Sve",
+        noTrendTitle: "Trenda još nema",
+        noTrend: "Trend se crta iz bar dva dana merenja.",
+        emptyTitle: "Još nema merenja",
+        emptyDescription: "Upiši prvo merenje i trend će se pojaviti ovde.",
+        chartLabel: "Kretanje težine",
+      },
+      /** Shown ONLY while there is no body-fat reading, and labelled for what it is. */
+      bmi: {
+        label: "BMI",
+        caveat:
+          "Populaciona mera za probir — mišićavu osobu čita kao gojaznu. Prikazuje se samo dok nema izmerenog procenta masti.",
+      },
+      /** Three tiers, and the app always says which one produced the number. */
+      energy: {
+        heading: "Dnevna potrošnja",
+        unit: "kcal",
+        method: {
+          measured: "Izračunato iz tvojih podataka",
+          "katch-mcardle": "Katch–McArdle, po izmerenom procentu masti",
+          "mifflin-st-jeor": "Mifflin–St Jeor, populaciona formula",
+        },
+        noneTitle: "Potrošnja se još ne može proceniti",
+        noneDescription: "Unesi podatke o telu i bar jedno merenje.",
+        /** The sentence ADR-081 §8a calls „the feature": what it would take to reach the tier above. */
+        nextLabel: "Za precizniju procenu",
+        missing: {
+          profile: "unesi podatke o telu",
+          sex: "unesi pol",
+          measurement: "upiši bar jedno merenje",
+          "body-fat": "izmeri procenat masti",
+          history: "beleži obroke i težinu",
+          "window-days": "beleži duže",
+          "intake-coverage": "beleži obroke češće",
+          "trend-readings": "meri se češće",
+          "plausible-result": "podaci još ne daju smislen broj",
+        },
+        /** What an estimate RESTS ON, said beside it — the same posture a `stated` food's basis takes. */
+        assumption: {
+          "population-equation": "jednačina je izvedena iz drugih ljudi, ne iz tebe",
+          "sex-term-proxies-composition": "član za pol stoji umesto sastava tela",
+          "activity-multiplier": "pomnoženo faktorom aktivnosti",
+          "energy-density": "korišćeno 7.700 kcal po kilogramu telesne mase",
+          "unlogged-days-imputed": "za dane bez upisa uzet je prosek upisanih",
+        },
+        workingLabel: "Račun",
+        workingIntake: "Prosečan unos",
+        workingDelta: "Promena trend-težine",
+        workingDays: "Razmak između trendova",
+        workingCoverage: "Dana sa upisanim obrocima",
+        windowNote: "Računa se iz poslednjih 14 dana.",
+      },
+      /** A suggestion, offered and never applied — the same rule FIN's exchange rate follows. */
+      suggest: {
+        heading: "Predlog dnevnog cilja",
+        goalLabel: "Cilj",
+        goal: { lose: "Smršati", maintain: "Održati", gain: "Dobiti" },
+        rateLabel: "Nedeljno (kg)",
+        /** No default rate anywhere: „pola kile nedeljno" is a recommendation, and this app makes none. */
+        rateHint: "Nexus ne predlaže tempo — upiši koliko nedeljno želiš, pa ćemo izračunati unos.",
+        resultLabel: "Predloženi unos",
+        adopt: "Postavi kao cilj kalorija",
+        adopted: "Cilj kalorija je postavljen.",
+        note: "Predlog postaje cilj tek kad ga sam postaviš. Ostala tri cilja se ne diraju.",
+        invalidRate: "Upiši koliko kilograma nedeljno.",
+      },
     },
     /**
      * „Trening" (FIT slice c). Two rules run through every line, and they are the
@@ -3811,6 +4004,52 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         invalidName: "Vežba treba naziv.",
         needsPrimary: "Izaberi bar jedan glavni mišić.",
         actionError: "Radnja nije uspela. Pokušaj ponovo.",
+      },
+      /**
+       * „Napredak" (FIT slice d, ADR-081 §5). Two figures that are never
+       * conflated and a set of records that only exist where their question
+       * does.
+       *
+       * **„Tvrde serije po mišiću" and „tonaža" are separate on purpose.** Hard
+       * sets per muscle group is what current training science uses for
+       * hypertrophy and what a person can act on; tonnage means something for
+       * the strength lifts and nothing for a plank or a run. An app that shows
+       * one number called „obim" is hiding which of the two it picked.
+       */
+      progress: {
+        heading: "Napredak",
+        caption:
+          "Računa se iz upisanih serija — ništa se ne čuva posebno, pa se ne može razmimoići sa dnevnikom. Zagrevanje se nigde ne broji.",
+        rangeLabel: "Period",
+        range90: "90 dana",
+        range365: "Godina",
+        emptyTitle: "Još nema šta da se računa",
+        emptyDescription: "Upiši prvi trening i napredak će se pojaviti ovde.",
+        /** Weekly volume — the figure a week is actually balanced against. */
+        volumeHeading: "Nedeljni obim",
+        weekLabel: "Nedelja",
+        setsLabel: "Tvrde serije",
+        tonnageLabel: "Tonaža",
+        daysLabel: "Dana",
+        muscleHeading: "Tvrde serije po mišiću",
+        /** Said where the per-muscle counts are: the snapshot carries primaries, and that is the right vocabulary rather than a limitation. */
+        muscleNote:
+          "Serija se broji glavnim mišićima vežbe. Pomoćni se ne broje — jedan potisak sa klupe bi inače bio i grudi i tricepsi i ramena.",
+        /** Personal records, derived on read. A stored PR row and a set table can disagree, and only one of them is the truth. */
+        recordsHeading: "Lični rekordi",
+        record: {
+          heaviest: "Najteža serija",
+          bestOneRm: "Procenjeni 1RM",
+          mostReps: "Najviše ponavljanja",
+          longestHold: "Najduže držanje",
+          leastAssistance: "Najmanja pomoć",
+        },
+        /** The estimate is published WITH its formula named and refused above ten reps — see `estimateOneRepMax`. */
+        oneRmNote:
+          "Procena 1RM se računa po Epli formuli i samo iz serija do deset ponavljanja — iznad toga objavljene formule prestaju da opisuju isti pokret.",
+        /** No calorie burn anywhere, said out loud rather than left as a suspicious gap. */
+        noBurnNote:
+          "Nexus ne prikazuje potrošene kalorije na treningu: bez pulsa i merenja to bi bio broj sa greškom većom od obroka koji bi trebalo da pokrije.",
       },
       /** One ranked list over the catalogue and the profile's own — one channel, one definition of „best match". */
       picker: {

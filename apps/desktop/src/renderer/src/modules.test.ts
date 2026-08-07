@@ -283,7 +283,8 @@ describe("createModuleRegistry", () => {
     // with no body to match and nothing a query would find that the page does
     // not already show.
     expect(fitness?.searchIndexers).toBeUndefined();
-    expect(registry.widgetsOf("fitness").map((widget) => widget.id)).toEqual(["danas"]);
+    // Two cards from slice d on: the day's calories, and the week's training.
+    expect(registry.widgetsOf("fitness").map((widget) => widget.id)).toEqual(["danas", "trening"]);
     // Four goals, and no fifth: `fit_targets` holds exactly these (migration
     // 058), so a control for fibre would edit a column that does not exist.
     expect(fitness?.settings?.controls.map((control) => control.key)).toEqual([
@@ -294,16 +295,20 @@ describe("createModuleRegistry", () => {
     ]);
   });
 
-  it("gives the fitness card no config either, and keeps it out of the default layout", () => {
+  it("gives neither fitness card any config, and keeps both out of the default layout", () => {
     const registry = createModuleRegistry();
-    const [danas] = registry.widgetsOf("fitness");
-    // „Fokus"'s reasoning exactly: every knob narrows a LIST, and this card
-    // draws one figure and at most one track.
-    expect(danas?.configFields).toBeUndefined();
-    expect(danas?.sizes).toEqual(["S", "M"]);
-    expect(danas?.deepLink).toBe("fitness");
-    // Gallery-only, like every card added after the original five (DASH-003).
-    expect(DEFAULT_DASHBOARD_LAYOUT.map((entry) => entry.widgetId)).not.toContain("fitness:danas");
+    for (const card of registry.widgetsOf("fitness")) {
+      // „Fokus"'s reasoning exactly: every knob narrows a LIST, and neither of
+      // these draws one — the first is a figure and a track, the second is two
+      // facts about the week.
+      expect(card.configFields, card.id).toBeUndefined();
+      expect(card.sizes, card.id).toEqual(["S", "M"]);
+      expect(card.deepLink, card.id).toBe("fitness");
+      // Gallery-only, like every card added after the original five (DASH-003).
+      expect(DEFAULT_DASHBOARD_LAYOUT.map((entry) => entry.widgetId)).not.toContain(
+        `fitness:${card.id}`,
+      );
+    }
   });
 });
 

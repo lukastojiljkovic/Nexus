@@ -1,10 +1,11 @@
 import { sessionTonnage } from "@nexus/core";
-import type { LoggedSet, TonnageTotal } from "@nexus/core";
+import type { LoggedSet, ProgressSet, TonnageTotal } from "@nexus/core";
 import type {
   ExerciseMetric,
   FitExerciseOption,
   FitLastPerformed,
   FitRoutine,
+  FitWorkout,
   FitWorkoutSet,
 } from "../../shared/ipc.js";
 
@@ -112,6 +113,40 @@ export function toLoggedSet(set: FitWorkoutSet): LoggedSet {
 /** A session's tonnage WITH its coverage — `@nexus/core`'s, never re-derived here. */
 export function workoutTonnage(sets: readonly FitWorkoutSet[]): TonnageTotal {
   return sessionTonnage(sets.map((set) => toLoggedSet(set)));
+}
+
+/**
+ * Every set of every session, flattened and stamped with the DAY of the session
+ * it belongs to — the shape `@nexus/core`'s progression arithmetic reads.
+ *
+ * The day comes from the WORKOUT and never from the set: a set has no day of its
+ * own (migration 060), and a session back-dated to last Tuesday moves all of its
+ * sets with it, which is the whole point of being able to back-date one.
+ *
+ * Unfinished sessions are dropped. „Napredak" is about training that happened;
+ * a session still open is one in the middle of happening, and letting it into a
+ * weekly total would make this week's figure climb while somebody is still in
+ * the gym and then be compared against completed weeks.
+ */
+export function progressSets(workouts: readonly FitWorkout[]): ProgressSet[] {
+  const out: ProgressSet[] = [];
+  for (const workout of workouts) {
+    if (workout.endedAt === null) continue;
+    for (const set of workout.sets) {
+      out.push({
+        exerciseRef: set.exerciseRef,
+        label: set.label,
+        day: workout.day,
+        kind: set.kind,
+        metric: set.metric,
+        primaryMuscles: set.primaryMuscles,
+        weightKg: set.weightKg,
+        reps: set.reps,
+        seconds: set.seconds,
+      });
+    }
+  }
+  return out;
 }
 
 /**

@@ -11132,6 +11132,95 @@ button.cal__grid-event--dragging {
   font-size: var(--nx-font-size-body-sm);
 }
 
+/* --- Napredak i Merenja (FIT slice d) ---------------------------------------
+   Two surfaces whose whole job is to say what a number IS, so every figure sits
+   under its own label and every caveat gets a line rather than a tooltip. */
+
+/* One week of volume: the Monday, then its figures. */
+.fit__weeks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  align-self: stretch;
+}
+.fit__week {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nx-space-3);
+  font-size: var(--nx-font-size-body-sm);
+}
+.fit__week-day {
+  min-width: 10ch;
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.fit__week-figure {
+  font-variant-numeric: tabular-nums;
+}
+
+/* One exercise's records. */
+.fit__records {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  align-self: stretch;
+}
+.fit__record {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  padding: var(--nx-space-3);
+  background: var(--nx-surface-alt);
+  border-radius: var(--nx-radius-md);
+}
+.fit__record-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: baseline;
+  gap: var(--nx-space-3);
+  font-size: var(--nx-font-size-body-sm);
+}
+.fit__record-label {
+  color: var(--nx-text-muted);
+}
+.fit__record-value {
+  font-weight: var(--nx-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+.fit__record-day {
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* What a weaker tier is still waiting for, and the working behind the best one. */
+.fit__gaps,
+.fit__working {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  align-self: stretch;
+}
+
+/* The weight trend: the 7-day line, and the readings it was drawn from. The
+   dots are MUTED and the line is not — the line is the honest read, the dots are
+   the evidence behind it, and the hierarchy says which is which. */
+.fit__chart {
+  display: block;
+  align-self: stretch;
+  overflow: visible;
+}
+.fit__chart-dot {
+  fill: var(--nx-text-muted);
+  opacity: 0.45;
+}
+.fit__chart-line {
+  stroke: var(--nx-accent);
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 /* „Ishrana danas" on the dashboard: the figure, the goal under it, and the same
    track the page draws — one bar grammar, never a second one for a card. */
 .dash__fit {

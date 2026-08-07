@@ -17,6 +17,7 @@ import type {
 import { localTodayKey } from "./examDates.js";
 import { parseAmountInput, gramsInputValue } from "./fitDay.js";
 import { FitExercisePicker } from "./FitExercisePicker.js";
+import { FitProgress } from "./FitProgress.js";
 import { FitRoutines } from "./FitRoutines.js";
 import {
   elapsedMinutes,
@@ -317,6 +318,8 @@ export function FitTraining({ profileId }: FitTrainingProps) {
           </div>
         )}
       </section>
+
+      <FitProgress profileId={profileId} />
 
       <FitRoutines
         profileId={profileId}

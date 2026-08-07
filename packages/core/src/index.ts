@@ -239,6 +239,7 @@ export {
   sessionTonnage,
   SET_KINDS,
   setTonnage,
+  trendChange,
   workingSets,
 } from "./fitness/training.js";
 export type {
@@ -248,8 +249,22 @@ export type {
   OneRepMaxFormula,
   SetKind,
   TonnageTotal,
+  TrendChange,
   TrendPoint,
 } from "./fitness/training.js";
+// What a training log adds up to over weeks (ADR-081 §5), and — as everywhere
+// in FIT — what it refuses to add up: nothing is stored, warm-ups are never
+// volume, and a record only exists where its question does. „The heaviest
+// assisted pull-up" is the one figure this module will not print, because there
+// a bigger number is LESS work. `progress.ts`'s header carries the reasoning.
+export { exerciseRecords, mondayOf, oneRepMaxTrend, weeklyVolume } from "./fitness/progress.js";
+export type {
+  ExerciseRecords,
+  OneRepMaxPoint,
+  ProgressSet,
+  RecordAt,
+  WeekVolume,
+} from "./fitness/progress.js";
 export {
   catalogueExercise,
   catalogueFood,

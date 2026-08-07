@@ -5,6 +5,7 @@ import {
   computeStreak,
   countsAsDone,
   matchesSmartList,
+  mondayOf,
   parseWidgetConfig,
   phaseProgress,
   widgetChoice,
@@ -46,7 +47,7 @@ import {
 import { habitPeriodPhrase } from "./habitFormat.js";
 import { formatMoney } from "./money.js";
 import { formatNotificationWhen } from "./notificationFormat.js";
-import { dayUnit, strings } from "./strings.js";
+import { countUnit, dayUnit, strings } from "./strings.js";
 import { readStoredWeekStart, toWeekStart } from "./weekStart.js";
 
 /** The widest window „Predstojeće naplate" ever fetches — its largest horizon option. */
@@ -1116,6 +1117,100 @@ function FitnessTodayWidget({ profileId, onOpenModule }: DashboardWidgetBodyProp
   );
 }
 
+/**
+ * „Trening" (FIT slice d) — this week's sessions, and the routine that has gone
+ * longest without being done.
+ *
+ * **It reports a fact and never a plan.** A routine holds nothing about when
+ * (ADR-081 §6), so the second row says when that routine was last done rather
+ * than announcing it as „next": the card cannot know what somebody intends to
+ * train tomorrow, and inventing a schedule here would contradict the module one
+ * level down.
+ *
+ * A session in PROGRESS outranks the count, because it is the only thing on this
+ * card that is happening rather than having happened.
+ *
+ * Read-only, like every card but „Navike danas": starting a session takes a day,
+ * a routine and — from the first set on — a form, which is the page's job.
+ */
+function FitnessTrainingWidget({ profileId, onOpenModule }: DashboardWidgetBodyProps) {
+  const load = useCallback(async () => {
+    const today = localTodayKey();
+    // The week's own Monday, from `@nexus/core` — the same boundary „Napredak"
+    // groups by, so a card and a page can never disagree about which week it is.
+    const weekStart = mondayOf(today) ?? today;
+    const [open, thisWeek, routines, everySession] = await Promise.all([
+      window.nexus.fitOpenWorkout(profileId),
+      window.nexus.fitWorkouts(profileId, weekStart, today),
+      window.nexus.fitRoutines(profileId),
+      // A year is the widest window „poslednji put" can honestly answer from; a
+      // routine untouched for longer reads as „Još nijednom", which is the more
+      // useful statement anyway.
+      window.nexus.fitWorkouts(profileId, shiftDayKey(today, -365), today),
+    ]);
+    return { open, thisWeek, routines, everySession };
+  }, [profileId]);
+  const { state, retry } = useWidgetData(load);
+  const s = strings.dashboard.fitnessTraining;
+
+  return (
+    <WidgetData state={state} retry={retry}>
+      {({ open, thisWeek, routines, everySession }) => {
+        const done = thisWeek.filter((workout) => workout.endedAt !== null).length;
+        // The routine each session started from, with the latest day it was used
+        // — one pass, so the „least recently" answer is a lookup rather than a
+        // scan per routine.
+        const lastUsed = new Map<string, string>();
+        for (const workout of everySession) {
+          if (workout.routineRef === null || workout.endedAt === null) continue;
+          const current = lastUsed.get(workout.routineRef);
+          if (current === undefined || workout.day > current) {
+            lastUsed.set(workout.routineRef, workout.day);
+          }
+        }
+        // Never done sorts first — it is the strongest form of „longest without".
+        const stalest = [...routines].sort((left, right) =>
+          (lastUsed.get(left.id) ?? "").localeCompare(lastUsed.get(right.id) ?? ""),
+        )[0];
+
+        if (open === null && done === 0 && stalest === undefined) {
+          return <p className="dash__empty">{s.empty}</p>;
+        }
+        return (
+          <div className="dash__list">
+            <DashRow
+              onClick={() => onOpenModule("fitness")}
+              leading={
+                <span className="dash__time dash__time--tag">
+                  {open === null ? s.weekLabel : s.openLabel}
+                </span>
+              }
+            >
+              <span className="dash__row-title">
+                {open !== null
+                  ? s.openTitle
+                  : `${String(done)} ${countUnit(done, s.sessionUnitOne, s.sessionUnitFew, s.sessionUnitMany)}`}
+              </span>
+            </DashRow>
+            {stalest !== undefined && (
+              <DashRow onClick={() => onOpenModule("fitness")}>
+                <span className="dash__fit">
+                  <span className="dash__row-title">{stalest.name}</span>
+                  <span className="dash__fit-goal">
+                    {lastUsed.has(stalest.id)
+                      ? `${s.lastDoneLabel}: ${lastUsed.get(stalest.id) ?? ""}`
+                      : s.neverDone}
+                  </span>
+                </span>
+              </DashRow>
+            )}
+          </div>
+        );
+      }}
+    </WidgetData>
+  );
+}
+
 // --- The registry-driven map (ADR-045 section 3) ----------------------------
 
 /** How the page draws one placement: the body, and whether it draws at all. */
@@ -1159,4 +1254,5 @@ export const DASHBOARD_WIDGETS: Record<string, DashboardWidgetRenderer> = {
   "habits:danas": { Body: HabitsTodayWidget, visible: (enabled) => enabled.has("habits") },
   "focus:fokus": { Body: FocusWidget, visible: (enabled) => enabled.has("focus") },
   "fitness:danas": { Body: FitnessTodayWidget, visible: (enabled) => enabled.has("fitness") },
+  "fitness:trening": { Body: FitnessTrainingWidget, visible: (enabled) => enabled.has("fitness") },
 };

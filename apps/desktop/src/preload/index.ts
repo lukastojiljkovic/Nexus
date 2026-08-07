@@ -580,6 +580,8 @@ const api: NexusApi = {
   fitDeleteFood: (profileId, id) => ipcRenderer.invoke(IpcChannel.fitFoodDelete, { profileId, id }),
   fitRestoreFood: (profileId, id) =>
     ipcRenderer.invoke(IpcChannel.fitFoodRestore, { profileId, id }),
+  fitDayTotals: (profileId, from, to) =>
+    ipcRenderer.invoke(IpcChannel.fitDayTotalsRange, { profileId, from, to }),
   fitTargets: (profileId) => ipcRenderer.invoke(IpcChannel.fitTargets, { profileId }),
   fitSaveTargets: (profileId, goals) =>
     ipcRenderer.invoke(IpcChannel.fitTargetsSave, { profileId, goals }),

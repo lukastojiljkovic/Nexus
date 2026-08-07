@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Button, PageHeader } from "@nexus/ui";
+import { FitMeasurements } from "./FitMeasurements.js";
 import { FitNutrition } from "./FitNutrition.js";
 import { FitTraining } from "./FitTraining.js";
 import { moduleName } from "./moduleName.js";
@@ -32,7 +33,7 @@ import { strings } from "./strings.js";
  */
 
 /** The page's two halves, in the order the switch draws them. */
-const FIT_SECTIONS = ["nutrition", "training"] as const;
+const FIT_SECTIONS = ["nutrition", "training", "measurements"] as const;
 
 type FitSection = (typeof FIT_SECTIONS)[number];
 
@@ -58,15 +59,17 @@ export function FitnessPage({ profileId }: FitnessPageProps) {
             aria-pressed={section === option}
             onClick={() => setSection(option)}
           >
-            {option === "nutrition" ? s.nutrition : s.training}
+            {option === "nutrition" ? s.nutrition : option === "training" ? s.training : s.measurements}
           </Button>
         ))}
       </div>
 
       {section === "nutrition" ? (
         <FitNutrition profileId={profileId} />
-      ) : (
+      ) : section === "training" ? (
         <FitTraining profileId={profileId} />
+      ) : (
+        <FitMeasurements profileId={profileId} />
       )}
     </div>
   );

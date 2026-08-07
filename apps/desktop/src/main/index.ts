@@ -552,6 +552,7 @@ import {
   type FinCsvImportSignConvention,
   type FitBodyProfile,
   type FitDay,
+  type FitDayTotals,
   type FitExercise,
   type FitExerciseOption,
   type FitFoodOption,
@@ -9484,6 +9485,20 @@ function registerIpc(): void {
     const profileId = asNonEmptyString(body.profileId, "profileId");
     const id = asNonEmptyString(body.id, "id");
     fitFoodStore(profileId).restore(id, new Date().toISOString());
+  });
+
+  // One total per day, straight off the store's own range read — which is where
+  // the „a day with nothing logged is ABSENT" rule lives, and this handler adds
+  // nothing to it. The store caps the span; a screen asking for a decade of
+  // totals is a screen with a bug.
+  ipcMain.handle(IpcChannel.fitDayTotalsRange, (event, payload): FitDayTotals[] => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    return fitMealStore(profileId).rangeTotals({
+      from: asFitDay(body.from, "from"),
+      to: asFitDay(body.to, "to"),
+    });
   });
 
   ipcMain.handle(IpcChannel.fitTargets, (event, payload): FitTargets => {

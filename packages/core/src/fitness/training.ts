@@ -368,6 +368,64 @@ export function movingAverage(
   return points;
 }
 
+/**
+ * A change between two TREND values — never between two raw readings, which is
+ * ADR-081 §8's whole point: body weight swings a kilogram or two a day on water
+ * and food alone, so „yesterday against today" is the most common false
+ * statement a fitness app makes.
+ *
+ * `days` is the ACTUAL distance between the two points, which may be shorter
+ * than the window asked for when the series does not go back that far. Reporting
+ * it is what lets a surface say „−0,6 kg za 23 dana" instead of labelling a
+ * three-week change as a month's.
+ */
+export interface TrendChange {
+  readonly from: TrendPoint;
+  readonly to: TrendPoint;
+  /** `to.average − from.average`. Signed; the unit is whatever the series was in. */
+  readonly delta: number;
+  readonly days: number;
+}
+
+/**
+ * How much the trend moved over roughly `overDays`, or `null` when there is no
+ * honest answer.
+ *
+ * The later end is the most recent point that HAS an average; the earlier end is
+ * the most recent point at least `overDays` before it, or — when the series does
+ * not reach that far — the earliest point with an average, with `days` saying how
+ * far it actually reached.
+ *
+ * `null` when fewer than two points carry an average (a series with one trend
+ * value has not moved, it has merely started) or when both ends land on the same
+ * day (a "change" over zero days is a difference between a number and itself).
+ * A caller must handle that rather than print a zero, because „nije se
+ * promenilo" and „još ne znamo" are different statements.
+ */
+export function trendChange(
+  points: readonly TrendPoint[],
+  overDays: number,
+): TrendChange | null {
+  if (!Number.isInteger(overDays) || overDays < 1) {
+    throw new RangeError(`"overDays" must be a whole number of at least 1 (got ${String(overDays)}).`);
+  }
+  const trended = points.filter((point) => point.average !== null);
+  const to = trended.at(-1);
+  const first = trended[0];
+  if (to === undefined || first === undefined || trended.length < 2) return null;
+
+  const cutoff = utcDayMs(to.day) - overDays * MS_PER_DAY;
+  let from = first;
+  for (const point of trended) {
+    if (utcDayMs(point.day) <= cutoff) from = point;
+  }
+  const days = Math.round((utcDayMs(to.day) - utcDayMs(from.day)) / MS_PER_DAY);
+  if (days <= 0) return null;
+  // Both averages are non-null by the filter above; the assertions are the
+  // narrowing TypeScript cannot do through `filter`.
+  return { from, to, delta: (to.average ?? 0) - (from.average ?? 0), days };
+}
+
 /** UTC midnight for a bare "YYYY-MM-DD" — mirrors `studyStats.ts`'s `utcDayMs`. */
 function utcDayMs(dateKey: string): number {
   const [year, month, day] = dateKey.split("-");
