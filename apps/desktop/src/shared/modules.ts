@@ -144,6 +144,11 @@ const STUDY_WIDGETS: WidgetContract[] = [
     sizes: ["S", "M", "L"],
     deepLink: "study",
     configFields: [
+      // The card has always capped its rows at five — a literal in its render
+      // that this contract never declared, so „Podesi…" could offer the horizon
+      // and not the cap. `finance:naplate` pairs exactly these two knobs; the
+      // exams card had one of them by accident rather than by decision.
+      ROW_CAP,
       {
         kind: "choice",
         key: "horizon",

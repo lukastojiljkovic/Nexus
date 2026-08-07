@@ -566,7 +566,10 @@ describe("the per-widget configuration declarations (DASH-004 / ADR-059)", () =>
     expect(shape("calendar:danas")).toEqual(["count:count"]);
     expect(shape("calendar:isticanja")).toEqual(["choice:horizon"]);
     expect(shape("notes:nedavno")).toEqual(["count:count"]);
-    expect(shape("study:ispiti")).toEqual(["choice:horizon"]);
+    // Both knobs, the way `finance:naplate` pairs them. The cap was a literal
+    // `.slice(0, 5)` in the card's render that this contract never declared, so
+    // „Podesi…" could offer the horizon and not the number of rows.
+    expect(shape("study:ispiti")).toEqual(["count:count", "choice:horizon"]);
     // „Učenje" declares NOTHING — the affordance appears only where a choice exists.
     expect(contractOf("study:ucenje").configFields).toBeUndefined();
   });
@@ -586,8 +589,13 @@ describe("the per-widget configuration declarations (DASH-004 / ADR-059)", () =>
     // „Isticanja" ships on each document's own reminder ladder, not a window.
     expect(parseWidgetConfig(contractOf("calendar:isticanja"), null)).toEqual({ horizon: "prag" });
     expect(parseWidgetConfig(contractOf("notes:nedavno"), null)).toEqual({ count: 5 });
-    // „Ispiti" ships showing every upcoming exam.
-    expect(parseWidgetConfig(contractOf("study:ispiti"), null)).toEqual({ horizon: "svi" });
+    // „Ispiti" ships showing every upcoming exam, five rows of it — the default
+    // is the literal the card used to carry, so an unconfigured card is
+    // pixel-identical to what it rendered before the knob existed.
+    expect(parseWidgetConfig(contractOf("study:ispiti"), null)).toEqual({
+      count: 5,
+      horizon: "svi",
+    });
   });
 
   it("keeps every declaration well-formed: slug keys and ids, sane ranges, defaults inside their domains", () => {

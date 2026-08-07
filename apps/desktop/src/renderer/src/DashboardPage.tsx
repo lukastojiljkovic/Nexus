@@ -19,6 +19,7 @@ import { buildCalendarItems, type CalendarSource } from "./calendarItems.js";
 import { localMinutesOfDay, readStoredClock } from "./calendarPrefs.js";
 import { lookupString, moveNeighbours, type LayoutNeighbours } from "./dashboardLayout.js";
 import { dayStripLine } from "./dashboardStrip.js";
+import { buildTaskListTree, flattenTaskListTree } from "./taskListTree.js";
 import { DASHBOARD_WIDGETS, type DashboardWidgetBodyProps } from "./dashboardWidgets.js";
 import { localTodayKey } from "./examDates.js";
 import { NotePopover } from "./notePopover.js";
@@ -378,15 +379,21 @@ function WidgetConfigForm({ profileId, contract, config, onApply, onBack }: Widg
                   {check(selection.length === 0)}
                   {s.allLists}
                 </button>
-                {taskLists.map((list) => {
+                {/* The rail's own order and indent, through the rail's own
+                    helper. A flat run of names was ambiguous the moment two
+                    lists under different parents shared one — and the store's
+                    `ORDER BY parent_id, position, id` is not a reading order:
+                    a child sorts by its parent's id, not under its parent. */}
+                {flattenTaskListTree(buildTaskListTree(taskLists)).map(({ list, depth }) => {
                   const on = selected.has(list.id);
                   return (
                     <button
                       key={list.id}
-                      className="note__menu-item note__menu-item--check"
+                      className="note__menu-item note__menu-item--check dash__config-list-row"
                       role="menuitemcheckbox"
                       type="button"
                       aria-checked={on}
+                      style={{ "--task-depth": depth } as CSSProperties}
                       onClick={() =>
                         apply(
                           field.key,

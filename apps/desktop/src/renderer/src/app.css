@@ -6841,6 +6841,13 @@ button.cal__grid-event--dragging {
   align-items: center;
   gap: var(--nx-space-2);
 }
+/* The dashboard's list picker draws the task rail's tree, so it indents the way
+   the rail does — `--task-depth` and nothing else: no rails, no glow. Its own
+   class rather than a base rule on `--check`, which twenty other menus use flat
+   and would all have shifted. */
+.dash__config-list-row {
+  padding-left: calc(var(--nx-space-3) * var(--task-depth, 0));
+}
 .note__menu-check {
   flex: none;
   width: 1em;

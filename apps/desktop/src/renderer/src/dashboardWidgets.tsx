@@ -667,7 +667,7 @@ function ExamsWidget({ profileId, contract, config, onOpenModule }: DashboardWid
           )
           .filter((entry) => horizon === null || entry.days <= horizon)
           .sort((a, b) => a.days - b.days || a.exam.id.localeCompare(b.exam.id))
-          .slice(0, 5);
+          .slice(0, widgetCount(cfg, "count"));
         if (upcoming.length === 0) {
           return <EmptyState variant="inline" title={strings.study.dashboardEmpty} />;
         }
