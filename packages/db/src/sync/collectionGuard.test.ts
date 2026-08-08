@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SYNC_MAP, classify, parentFields } from "@nexus/sync";
+import { COLLECTION_DERIVED, SYNC_MAP, classify, fieldColumns, parentFields } from "@nexus/sync";
 import { openDatabase, RESTORE_WIPE_TABLES } from "../index.js";
 import type { NexusDatabase } from "../index.js";
 
@@ -172,6 +172,40 @@ describe("the sync map against the real schema", () => {
     // A row that is nothing but a pair of ids has no identity of its own to
     // merge, and syncing it as an object is how orphans are made.
     expect(jointish).toEqual([]);
+  });
+
+  it("subtracts only columns that are really there — a stale exclusion silently syncs the column", () => {
+    for (const [table, derived] of Object.entries(COLLECTION_DERIVED)) {
+      const present = new Set(columns(table).map((column) => column.name));
+      const ghosts = Object.keys(derived).filter((column) => !present.has(column));
+      // A derived entry naming a column that no longer exists is worse than
+      // useless: the column it MEANT to exclude has been renamed, and is now
+      // travelling as an ordinary field with nothing saying it should not.
+      expect({ table, ghosts }).toEqual({ table, ghosts: [] });
+    }
+  });
+
+  it("keeps the universal exclusions honest against every collection that has them", () => {
+    for (const entry of SYNC_MAP) {
+      if (entry.kind !== "collection") continue;
+      const present = new Set(columns(entry.table).map((column) => column.name));
+      const fields = fieldColumns(entry, [...present]);
+      // Whatever else changes, these three never travel: the profile is decided
+      // by the key that opened the row, `updated_at` is a shadow of the merge
+      // itself, and `deleted_at` is a shadow of the tombstone field.
+      for (const forbidden of ["profile_id", "updated_at", "deleted_at"]) {
+        expect({ table: entry.table, forbidden, sent: fields.includes(forbidden) }).toEqual({
+          table: entry.table,
+          forbidden,
+          sent: false,
+        });
+      }
+      // And a collection with nothing left to say is a classification mistake.
+      expect({ table: entry.table, empty: fields.length === 0 }).toEqual({
+        table: entry.table,
+        empty: false,
+      });
+    }
   });
 
   it("leaves every device-local and sealed table out, which is how they stay off the wire", () => {

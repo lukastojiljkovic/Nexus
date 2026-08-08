@@ -13,3 +13,12 @@ export type {
   SyncClassification,
   SyncCollection,
 } from "./collections.js";
+
+export {
+  COLLECTION_DERIVED,
+  fieldColumns,
+  projectRow,
+  sweepRow,
+  UNIVERSAL_DERIVED,
+} from "./projection.js";
+export type { SweepInput } from "./projection.js";
