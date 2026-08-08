@@ -170,7 +170,14 @@ export function NotificationCenter({ profileId, onNavigate }: NotificationCenter
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
-        <span>{s.bellLabel}</span>
+        {/* The bell itself. Every other row in this rail leads with its mark,
+            and this one led with nothing — which is why the foot read as a
+            different, plainer list than the modules above it rather than as
+            the same list continued. */}
+        <span className="ntf__bell-label">
+          <Icon name="bell" size={16} />
+          {s.bellLabel}
+        </span>
         {countLabel != null && <span className="ntf__bell-count">{countLabel}</span>}
       </Button>
 

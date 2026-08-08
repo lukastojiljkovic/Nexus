@@ -38,6 +38,21 @@ export interface SearchCommandsContext {
   enabledModuleIds: readonly string[];
   /** The shell's own id -> Serbian display name lookup (`App.tsx`'s `moduleName`), reused rather than re-spelled here. */
   moduleName: (id: string) => string;
+  /**
+   * The Alt+N chord that reaches this module, already formatted — or null past
+   * the ninth sidebar row, which is as far as `moduleNavPosition` goes.
+   *
+   * Handed in rather than derived here, and that is the whole point: these
+   * commands are built from `enabledModuleIds`, which is REGISTRATION order,
+   * while Alt+N reaches the Nth row of the SIDEBAR, which is category order.
+   * The two are equal for today's module set by accident, and a palette that
+   * derived the digit from its own list would print a shortcut that goes
+   * somewhere else the moment a module is added.
+   *
+   * A palette that shows the binding beside the command teaches its own
+   * shortcuts; one that only runs them teaches nothing.
+   */
+  moduleChord: (id: string) => string | null;
   onNavigate: (moduleId: string) => void;
   /** Runs a quick-create command: switches to that module and asks it to start a fresh entity (PRD 08 SRCH-003). */
   onCreate: (moduleId: CreatableModuleId) => void;
@@ -112,12 +127,19 @@ function formatRebuildDone(count: number): string {
  */
 export function buildSearchCommands(context: SearchCommandsContext): SearchCommand[] {
   const c = strings.search.commands;
-  const commands: SearchCommand[] = context.enabledModuleIds.map((moduleId) => ({
-    id: `goto-${moduleId}`,
-    label: `${c.goToPrefix}${context.moduleName(moduleId)}`,
-    keywords: [],
-    run: () => context.onNavigate(moduleId),
-  }));
+  const commands: SearchCommand[] = context.enabledModuleIds.map((moduleId) => {
+    const chord = context.moduleChord(moduleId);
+    return {
+      id: `goto-${moduleId}`,
+      label: `${c.goToPrefix}${context.moduleName(moduleId)}`,
+      keywords: [],
+      // `...(x ? {k:v} : {})` rather than `hint: chord ?? undefined`:
+      // `exactOptionalPropertyTypes` is on, so an optional field may be absent
+      // but may not be present-and-undefined.
+      ...(chord === null ? {} : { hint: chord }),
+      run: () => context.onNavigate(moduleId),
+    };
+  });
 
   for (const entry of creatable()) {
     if (!context.enabledModuleIds.includes(entry.moduleId)) continue;

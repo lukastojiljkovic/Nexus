@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { buildNoteUpdate, parseMarkdownNote } from "@nexus/core";
 import type { FlagState, ModuleRegistry } from "@nexus/core";
-import { Button, Card, Checkbox, Chip, TextField } from "@nexus/ui";
+import { Button, Card, Checkbox, Chip, StarField, TextField } from "@nexus/ui";
 import type { ThemeName } from "@nexus/tokens";
 import type { ProfileKind } from "../../shared/ipc.js";
 import { LOCKED_MODULE_IDS } from "../../shared/modules.js";
@@ -273,6 +273,10 @@ export function Onboarding({
 
   return (
     <div className="onb">
+      {/* The second screen a person ever sees, on the same ground as the
+          first (`AuthGate`). The sky is permitted here by `StarField`'s own
+          rule — a fixed, centred grid that never scrolls. */}
+      <StarField />
       <Card className="onb__card">
         <form className="onb__form" onSubmit={submit}>
           <span className="onb__brand" aria-hidden="true">✦</span>

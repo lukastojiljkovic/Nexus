@@ -13,6 +13,7 @@ import type {
   SearchResult,
 } from "../../shared/ipc.js";
 import { AuthGate } from "./AuthGate.js";
+import { TitleBar } from "./TitleBar.js";
 import { Onboarding } from "./Onboarding.js";
 import { ProfileSwitchDialog } from "./ProfileSwitchDialog.js";
 import { NotePopover } from "./notePopover.js";
@@ -986,6 +987,31 @@ export function App() {
         profileId: activeProfile?.id ?? "",
         enabledModuleIds: resolveEnabled(registry, flags),
         moduleName,
+        // The Alt+N binding for a module, or null past the ninth.
+        //
+        // It has to be computed HERE and cannot be worked out inside the
+        // palette, because the two orders differ: the commands are built from
+        // `resolveEnabled`, which is REGISTRATION order, while Alt+N reaches
+        // the Nth row of the SIDEBAR, which is category order
+        // (`visibleModuleIds`). They are equal for today's module set purely by
+        // accident, and a palette that printed a chord derived from the wrong
+        // one would be teaching a shortcut that does something else.
+        //
+        // Formatted through `formatChord`, the way every other chord in the
+        // shell is (ADR-040), so „Alt+3" here is spelled exactly as the
+        // shortcuts reference spells it. Alt+N is NOT a remappable action — it
+        // is `moduleNavPosition`'s fixed rule, which is why the chord is built
+        // literally rather than read out of `shortcuts`.
+        moduleChord: (moduleId) => {
+          const position = visibleModuleIds.indexOf(moduleId);
+          if (position < 0 || position > 8) return null;
+          return formatChord({
+            ctrl: false,
+            alt: true,
+            shift: false,
+            key: String(position + 1),
+          });
+        },
         onNavigate: setActiveId,
         onCreate: createInModule,
         // ADR-049: the five TASK views ride the same intent mechanism as a
@@ -1010,39 +1036,45 @@ export function App() {
   const effectiveId =
     enabledIds.has(activeId) || activeId === SEARCH_PAGE_ID ? activeId : "dashboard";
 
-  if (failed) {
+  /**
+   * Every state of the shell, inside the same window frame.
+   *
+   * The five returns below used to be five bare `.nx-app` roots. With the OS
+   * frame gone (`frame: false`) that would have meant five states with no drag
+   * region and no close button: the app would have been unmovable while it was
+   * loading, and unclosable while it was locked — the exact screens a person is
+   * most likely to want to move or dismiss. The strip therefore belongs to the
+   * WINDOW, above every branch, rather than to the unlocked shell.
+   */
+  function inWindow(children: ReactNode, centered = false): ReactNode {
     return (
-      <div className="nx-app app app--center">
-        <EmptyState
-          title={strings.app.loadErrorTitle}
-          description={strings.app.loadErrorDescription}
-        />
+      <div className="nx-app app">
+        <TitleBar surface={null} theme={theme} onToggleTheme={toggleTheme} />
+        <div className={`app__stage${centered ? " app__stage--center" : ""}`}>{children}</div>
       </div>
+    );
+  }
+
+  if (failed) {
+    return inWindow(
+      <EmptyState
+        title={strings.app.loadErrorTitle}
+        description={strings.app.loadErrorDescription}
+      />,
+      true,
     );
   }
 
   if (!authStatus) {
-    return (
-      <div className="nx-app app app--center">
-        <p className="app__muted">{strings.app.loading}</p>
-      </div>
-    );
+    return inWindow(<p className="app__muted">{strings.app.loading}</p>, true);
   }
 
   if (authStatus.state !== "unlocked") {
-    return (
-      <div className="nx-app app">
-        <AuthGate status={authStatus} onUnlocked={() => void handleUnlocked()} />
-      </div>
-    );
+    return inWindow(<AuthGate status={authStatus} onUnlocked={() => void handleUnlocked()} />);
   }
 
   if (!profiles) {
-    return (
-      <div className="nx-app app app--center">
-        <p className="app__muted">{strings.app.loading}</p>
-      </div>
-    );
+    return inWindow(<p className="app__muted">{strings.app.loading}</p>, true);
   }
 
   // ONB gates the shell on the ACTIVE profile's empty name — the deliberate
@@ -1059,8 +1091,8 @@ export function App() {
   if (activeProfile && (activeProfile.name.trim() === "" || rerunOnboarding)) {
     const rerun = activeProfile.name.trim() !== "";
     const onboardingProfile = activeProfile;
-    return (
-      <div className="nx-app app">
+    return inWindow(
+      <>
         <Onboarding
           key={onboardingProfile.id}
           profileId={onboardingProfile.id}
@@ -1082,7 +1114,7 @@ export function App() {
             setRerunOnboarding(false);
           }}
         />
-      </div>
+      </>,
     );
   }
 
@@ -1115,15 +1147,13 @@ export function App() {
     // A language switch is a rare, deliberate act; losing an open dialog to it
     // is a smaller cost than a shell that is half translated.
     <div className="nx-app app" key={localeEpoch}>
-      <header className="app__topbar nx-horizon">
-        <div className="app__brand">
-          <span className="app__brand-mark" aria-hidden="true">✦</span>
-          <span className="app__brand-name">{strings.app.brand}</span>
-        </div>
-        <Button size="sm" onClick={toggleTheme} aria-label={strings.app.themeToggle}>
-          {theme === "noc" ? strings.app.themeDan : strings.app.themeNoc}
-        </Button>
-      </header>
+      <TitleBar
+        // The one thing an OS title bar always said and this one keeps saying:
+        // where you are. The search page is not a module, so it names itself.
+        surface={effectiveId === SEARCH_PAGE_ID ? strings.search.navLabel : moduleName(effectiveId)}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+      />
 
       <div className="app__body">
         {/* Two regions, not one column. The module list scrolls; the foot below
@@ -1163,6 +1193,11 @@ export function App() {
                     <NavItem
                       key={manifest.id}
                       href="#"
+                      // The screenshot sweep's landing hook (`main/shots/`).
+                      // A stable id rather than the visible label, because the
+                      // label is Serbian today and a `--shots` run must keep
+                      // working in whatever language the shell is serving.
+                      data-module-id={manifest.id}
                       active={manifest.id === effectiveId}
                       onClick={(event) => {
                         event.preventDefault();
@@ -1179,21 +1214,6 @@ export function App() {
           </div>
           {activeProfile && (
             <div className="app__sidebar-foot">
-              {/* SET-001: the one place in the shell that says WHOSE data this
-                  is. It sits directly above the two actions that leave the
-                  profile („Promeni nalog“, „Zaključaj“), which is where a reader
-                  looks for it, and it is a statement rather than a control —
-                  clicking a name that only names itself would be a promise of a
-                  menu this app does not have. The name is `title`d because a
-                  220px sidebar truncates a long one. */}
-              <div className="app__profile-row" title={activeProfile.name}>
-                <ProfileAvatar
-                  name={activeProfile.name}
-                  pictureHash={activeProfile.pictureHash}
-                  size="sm"
-                />
-                <span className="app__profile-name">{activeProfile.name}</span>
-              </div>
               {/* Navigates to the full page (ADR-039 §1); the badge stays as
                   the hint for Ctrl+K, which still opens the palette. */}
               <NavItem
@@ -1211,19 +1231,43 @@ export function App() {
                 {strings.search.navLabel}
               </NavItem>
               <NotificationCenter profileId={activeProfile.id} onNavigate={setActiveId} />
-              {/* ADR-058 §2: the PROFILE switcher — which of the account's
-                  profiles the shell is standing in. A different axis from
-                  „Promeni nalog“ below, which switches ACCOUNTS (lock +
-                  picker); the copy keeps the words apart — this row says
-                  „profil“, that one „nalog“. Every switch INTO another profile
+              {/* SET-001 and ADR-058 §2, in ONE row rather than two.
+                  This is the PROFILE switcher — which of the account's profiles
+                  the shell is standing in. A different axis from „Promeni
+                  nalog“ below, which switches ACCOUNTS (lock + picker); the
+                  copy keeps the words apart. Every switch INTO another profile
                   passes the passcode gate (AUTH-024); there is deliberately no
                   row that switches without it. With a single profile the row
                   still names where you are, and its one extra offer is the
-                  business profile v1 allows. */}
+                  business profile v1 allows.
+
+                  It used to be two rows: a statement of whose data this is
+                  („D  Demo") and, immediately beneath it, an offer to switch
+                  („Profil: Demo") — the same name twice, in two different row
+                  shapes, neither matching the module rows above them. The
+                  statement was deliberately not a control back when there was
+                  no menu behind it; there was one directly below by then, which
+                  is what made the separation redundant rather than principled.
+                  So the avatar and the name ARE the switcher: one row, one
+                  name, and it clears the 24px target floor the old trigger
+                  missed on every frame of the sweep (21px). */}
               <NotePopover
                 label={strings.profiles.switcherLabel}
                 triggerClassName="app__profile-switch"
-                triggerContent={`${strings.profiles.rowPrefix} ${profileDisplayName(activeProfile)}`}
+                triggerContent={
+                  <>
+                    <ProfileAvatar
+                      name={activeProfile.name}
+                      pictureHash={activeProfile.pictureHash}
+                      size="sm"
+                    />
+                    {/* `title`d because a 220px rail truncates a long name. */}
+                    <span className="app__profile-name" title={activeProfile.name}>
+                      {profileDisplayName(activeProfile)}
+                    </span>
+                    <Icon name="chevronDown" size={14} className="app__profile-caret" />
+                  </>
+                }
               >
                 {(close) => (
                   <>
@@ -1293,6 +1337,7 @@ export function App() {
                     void handleLock();
                   }}
                 >
+                  <Icon name="unlock" size={16} />
                   {strings.auth.switchAction}
                 </NavItem>
               )}
@@ -1303,6 +1348,7 @@ export function App() {
                   void handleLock();
                 }}
               >
+                <Icon name="lock" size={16} />
                 {strings.auth.lockAction}
               </NavItem>
             </div>

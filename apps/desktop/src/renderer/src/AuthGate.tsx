@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Dispatch, FormEvent, SetStateAction } from "react";
-import { Button, Card, Checkbox, ListRow, TextField } from "@nexus/ui";
+import { Button, Card, Checkbox, ListRow, StarField, TextField } from "@nexus/ui";
 import { MAX_ACCOUNT_LABEL_LENGTH, PASSCODE_MIN_LENGTH } from "../../shared/ipc.js";
 import type { AccountSummary, AuthErrorReason, AuthStatus } from "../../shared/ipc.js";
 import { strings } from "./strings.js";
@@ -706,7 +706,17 @@ export function AuthGate({ status: initialStatus, onUnlocked }: AuthGateProps) {
   }
 
   return (
-    <div className="auth">
+    // `--sky` is what says „this is the full-window screen". The bare `.auth`
+    // shell is reused nested inside the private section's gate, on a page that
+    // scrolls, where a sky would travel with the content.
+    <div className="auth auth--sky">
+      {/* The first screen anyone ever sees, and until now the only large
+          surface in the product that showed none of it. The sky is allowed
+          here by `StarField`'s own rule — it may sit on surfaces that do not
+          scroll, and this one is a fixed, centred grid. `enabled` is left at
+          its default because the lock screen has no theme state of its own;
+          Dan resolves the material to `none` and paints paper instead. */}
+      <StarField />
       <Card className="auth__card">
         <div className="auth__shell">
           <span className="auth__brand" aria-hidden="true">

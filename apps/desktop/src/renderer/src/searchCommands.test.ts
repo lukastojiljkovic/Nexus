@@ -64,6 +64,16 @@ function makeContext(enabledModuleIds: readonly string[] = ALL_MODULES): {
     profileId: "profile-1",
     enabledModuleIds,
     moduleName: (id) => MODULE_NAMES[id] ?? id,
+    // Deliberately a DIFFERENT order from `enabledModuleIds`, because in the
+    // shell they genuinely are two orders — the commands come from
+    // registration order and Alt+N reaches the Nth SIDEBAR row. A stub that
+    // reused the same list would make a palette deriving the digit from its
+    // own order look correct here and be wrong in the app.
+    moduleChord: (id) => {
+      const sidebarOrder: readonly string[] = [...ALL_MODULES].reverse();
+      const position = sidebarOrder.indexOf(id);
+      return position < 0 || position > 8 ? null : `Alt+${String(position + 1)}`;
+    },
     onNavigate: (moduleId) => recorder.navigated.push(moduleId),
     onCreate: (moduleId) => recorder.created.push(moduleId),
     onOpenSmartList: (listId) => recorder.smartLists.push(listId),
