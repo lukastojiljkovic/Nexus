@@ -515,22 +515,15 @@
   background: var(--nx-surface-alt);
   color: var(--nx-text);
 }
-/* Native select matched to the textfield input (tokens only, no custom arrow;
-   mirrors .documents__select). */
-.tasks__select {
-  font: inherit;
-  font-size: var(--nx-font-size-body-sm);
-  color: var(--nx-text);
-  background: var(--nx-surface);
-  border: 1px solid var(--nx-border);
-  border-radius: var(--nx-radius-md);
-  padding: 7px 13px;
-  transition: border-color var(--nx-motion-fast) var(--nx-motion-ease);
-}
-.tasks__select:focus-visible {
-  outline: 2px solid var(--nx-accent);
-  outline-offset: 2px;
-}
+/* The box is NOT restated here — see `.set__select` in settings.css for the
+   full reasoning; this was the third of the three sites carrying the same
+   defect. The `padding: 7px 13px` overrode the right-hand reservation
+   `Select`'s control makes for its drawn chevron, so the arrow painted over the
+   chosen option's text on four controls. The comment it carried („mirrors
+   .documents__select") pointed at a selector that no longer exists, which is
+   how the copy outlived the thing it was copied from.
+   Raw selects are styled by `.nx-app select:not(.nx-select__control)` and
+   component ones by `.nx-select__control`, both in packages/ui. */
 /* Edit-mode cancel: a quiet ghost beside the primary submit (text feel). */
 .tasks__cancel.nx-button {
   background: transparent;

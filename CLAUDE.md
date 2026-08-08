@@ -11,19 +11,46 @@ and [docs/SPECIFICATION.md](docs/SPECIFICATION.md). For *where we are*:
 [docs/STATUS.md](docs/STATUS.md). For a plain-language explanation:
 [docs/OVERVIEW.md](docs/OVERVIEW.md).
 
-## Current focus (2026-07 — binding until the founder changes it)
+## Current focus (2026-08-08 — the founder changed it; supersedes 2026-07)
 
-- **Desktop app only.** Build and polish the Electron + React desktop app. The
-  web app comes later from the *same* codebase (Electron/React) — track that it
-  stays web-portable, but do **not** build web hosting, a public site, a backend,
-  cloud accounts, or sync right now. First we make the product and see how it
-  looks; then it goes to the web.
-- Everything cloud-related for functionality is **out of scope for now**: no
-  backend (Go/Spring), no PowerSync, no server sessions, no cloud storage. Local,
-  on-device only. Local PIN/keystore accounts, offline-first, on-disk SQLite.
-- The architecture ADRs that describe cloud/sync/backend
-  ([docs/architecture/](docs/architecture/)) remain the long-term design, but they
-  are **future work**, not current work. Do not implement them now.
+The desktop app reached **1.0.0**. The founder has opened the next phase:
+*„resi sve sto je ostalo… da bude clean slate potpuno, i onda da pripremis back
+i front za sajt… supabase za backend… da se pripremi sync desktop app i webapp,
+da bude ful usluga."*
+
+1. **Clean slate first.** Everything recorded as unfinished gets finished, and
+   any defect met on the way gets fixed, before web work is called done.
+2. **Web app + backend are now IN scope.** Frontend from the *same* React
+   codebase on **Cloudflare Workers with static assets** — deliberately **not**
+   GitHub Pages, which cannot set HTTP response headers and therefore cannot
+   send a CSP or `frame-ancestors`; a page that decrypts user data in a browser
+   without a CSP has had its primary defence removed. Workers rather than
+   Cloudflare Pages because Cloudflare's own docs now say new projects should
+   start on Workers — Pages stays supported but gets no further investment —
+   and `_headers`/`_redirects` work identically on both. Backend is **Supabase**.
+3. **Sync, end-to-end encrypted.** The server holds ciphertext. Metadata in the
+   clear is accepted; content never is.
+4. **On the desktop, cloud is OFF BY DEFAULT and switchable off entirely.** A
+   user who never turns it on must be in exactly the product 1.0.0 is: no
+   network calls at all. This is a structural guarantee, not a promise — the
+   local-only path must not be *able* to reach the network.
+5. **Pairing is by code.** The web account issues a code, the user types it into
+   the desktop, and the two link. **The code must never be a bearer token for
+   the data key** — it authorises one run of a key-confirmed exchange, inside
+   which an ephemeral X25519 handshake carries the wrapped key, and both screens
+   show a short confirmation number the user compares.
+
+**The three keys, so nobody re-derives this later.** The local data key `DK`
+(exists, unchanged — SQLCipher, wrapped by passcode+DPAPI and by the Recovery
+Kit) stays exactly as it is. A **new** master sync key `MK` is minted when sync
+is first enabled and is wrapped *twice*: under the local `DK` on the desktop,
+and under a key derived from the web password on the server. Per-profile content
+keys hang off `MK`. Nothing about local at-rest protection changes, and the web
+password never becomes the root of the local file.
+
+The pre-existing cloud/sync ADRs in [docs/architecture/](docs/architecture/)
+describe a different backend (Go/PowerSync) and are now **superseded on the
+choice of backend**; whatever in them is about the data model still applies.
 
 ## How we work together
 

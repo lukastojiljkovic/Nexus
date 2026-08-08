@@ -15,8 +15,10 @@ import { strings } from "./strings.js";
  * 40 px that state what this program is.
  *
  * **The mark is the app menu**, and that is where everything the OS menu bar
- * used to hold now lives (founder, 2026-08-08). Removing the native frame
- * removed the native menu with it, and „Prikaz"/„Prozor" are not offers any
+ * used to hold now lives (founder, 2026-08-08). `frame: false` removed the menu
+ * BAR; it did not remove the MENU — its accelerators stayed live until main
+ * called `Menu.setApplicationMenu(null)`, which this file previously claimed
+ * had happened. „Prikaz"/„Prozor" are not offers any
  * other surface in this app makes: page zoom and full screen belong to the
  * window, and the window is what this strip is. The shell's own commands —
  * search, settings, lock — ride in the same panel as `commands`, because a

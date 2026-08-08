@@ -10,9 +10,10 @@ import {
   writeFile as writeFileAsync,
 } from "node:fs/promises";
 import { basename, join } from "node:path";
-import { app, BrowserWindow, dialog, ipcMain, Notification, protocol, session } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, protocol, session } from "electron";
 import type { IpcMainInvokeEvent, OpenDialogOptions } from "electron";
-import { autoUpdater } from "electron-updater";
+// `electron-updater` is deliberately NOT imported — see the disarmed
+// auto-update section below for the three conditions that must hold first.
 import {
   ACTIVITY_LEVELS,
   applySearchOperators,
@@ -11955,29 +11956,43 @@ async function runDemoSeed(): Promise<void> {
   );
 }
 
-// --- Auto-update (SEC-EL-07) -------------------------------------------------
+// --- Auto-update (SEC-EL-07) — DISARMED, deliberately ------------------------
 //
-// The feed URL is baked into the packaged build from electron-builder.yml's
-// `publish` config (GitHub provider) — never runtime-configurable, so nothing
-// here can be pointed at an arbitrary update source. The `nexus-releases` feed
-// repo does not exist yet (founder decision pending), so every failure mode
-// (offline, no feed, 404) is expected right now and must stay completely
-// benign: logged, never thrown, never surfaced to the renderer. Both the
-// promise rejection and the "error" event are handled — electron-updater emits
-// the latter for some failure paths, and an unhandled EventEmitter "error"
-// would otherwise crash the process.
-function checkForUpdates(): void {
-  autoUpdater.on("error", (error: Error) => {
-    console.error(`Auto-update check failed (benign, no update feed yet): ${error.message}`);
-  });
-  autoUpdater.checkForUpdatesAndNotify().catch((error: unknown) => {
-    console.error(
-      `Auto-update check failed (benign, no update feed yet): ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-    );
-  });
-}
+// **This is off, and it must stay off until the three conditions below are all
+// true.** It was armed, and that was a live remote-code-execution hole in a
+// shipped build rather than a future concern:
+//
+//   - `checkForUpdatesAndNotify()` runs with electron-updater's own defaults,
+//     and those defaults are `autoDownload: true` and
+//     `autoInstallOnAppQuit: true`. Nobody clicks anything: the installer is
+//     fetched during the session and executed at the next quit.
+//   - `electron-builder.yml` carries no signing configuration at all, so the
+//     build is unsigned and the generated `app-update.yml` has no
+//     `publisherName`. electron-updater's Windows signature check compares the
+//     downloaded installer's Authenticode publisher against that field — and
+//     when the field is absent the check RETURNS AS THOUGH IT PASSED. It is a
+//     documented no-op, not a weak check.
+//
+// So the only thing standing between an attacker and native code on the user's
+// machine was that the feed repository does not exist yet. That is an accident
+// of scheduling, not a control. And the payoff grows the day sync ships: native
+// code on the device reaches `DK`, the DPAPI device secret, and — once cloud is
+// enabled — `MK`, every profile content key, and the stored refresh token,
+// which keeps working after the machine is wiped.
+//
+// Before this may be re-armed, ALL THREE:
+//   1. the build is Authenticode-signed and `win.publisherName` is set, so the
+//      check stops being a no-op;
+//   2. `autoDownload: false` and `autoInstallOnAppQuit: false`, with an
+//      `update-available` handler that asks the user;
+//   3. a detached Ed25519 signature over `latest.yml`, verified against a
+//      public key COMPILED INTO THE BINARY, before `quitAndInstall`. Signing
+//      alone defends TLS and the GitHub account; it does not defend a stolen
+//      release token. The pinned key is what survives that.
+//
+// Until then the app never reaches for a feed, which is also why `autoUpdater`
+// is no longer imported: an unused import of an update client is the next
+// person's invitation to call it.
 
 function shutdown(code: number): void {
   stopNotificationScheduler();
@@ -11995,6 +12010,35 @@ function shutdown(code: number): void {
 // --- Lifecycle --------------------------------------------------------------
 
 app.whenReady().then(async () => {
+  // SEC-EL: kill Electron's stock application menu, and answer no to every web
+  // permission.
+  //
+  // `frame: false` removed the menu BAR from the screen; it did not remove the
+  // MENU. Its accelerators stayed registered, so a shipped commercial build
+  // still answered Ctrl+R, Ctrl+Shift+R and Ctrl+Shift+I — reload, force
+  // reload, and DevTools on a window holding the user's decrypted life. The
+  // drawn strip's own comment asserted the opposite as settled fact, which is
+  // the part that kept anyone from re-checking: a false claim in a comment is
+  // worse than the omission it hides.
+  //
+  // Clipboard shortcuts survive this on Windows. The Cut/Copy/Paste menu ROLES
+  // are only load-bearing on macOS; Chromium handles the chords natively for
+  // editable content everywhere else, and this app is Windows-only (DPAPI, the
+  // Windows credential vault, Segoe UI Variable).
+  Menu.setApplicationMenu(null);
+
+  // The one rung of the Electron hardening set that had neither code nor a
+  // stated reason. Nexus asks the web platform for nothing — notifications are
+  // raised by `Notification` in MAIN, not by the renderer's Notification API,
+  // and there is no camera, microphone, geolocation, MIDI or clipboard-read
+  // path anywhere in the product. So both handlers deny unconditionally rather
+  // than switching on a permission name: an allowlist with no entries is a
+  // list somebody eventually adds to, and a flat refusal is a decision.
+  session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => {
+    callback(false);
+  });
+  session.defaultSession.setPermissionCheckHandler(() => false);
+
   // Never the developer's real `%APPDATA%\Nexus` — a nested, disposable
   // directory, one per harness. Wiped up front (Electron only auto-creates the
   // DEFAULT userData path, not one redirected here, and a leftover
@@ -12119,7 +12163,11 @@ app.whenReady().then(async () => {
     mainWindow = createWindow();
 
     // Never in dev, never during the smoke run — only a real packaged install.
-    if (app.isPackaged && !isAutomatedRun) checkForUpdates();
+    // No update check. See the disarmed auto-update section: the check ran
+    // with auto-download and auto-install-on-quit at their defaults against an
+    // unsigned build whose signature verification is a no-op. It comes back
+    // only with signing, an explicit prompt, and a pinned-key signature over
+    // the feed manifest.
 
     if (isSmoke) {
       mainWindow.webContents.once("did-finish-load", () => {

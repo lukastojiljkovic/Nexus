@@ -615,15 +615,17 @@
   font-size: var(--nx-font-size-caption);
   color: var(--nx-text-muted);
 }
-.fit__select {
-  padding: 6px 10px;
-  background: var(--nx-surface);
-  color: var(--nx-text);
-  border: 1px solid var(--nx-border);
-  border-radius: var(--nx-radius-sm);
-  font-family: inherit;
-  font-size: var(--nx-font-size-body-sm);
-}
+/* The box is NOT restated here — see `.set__select` in settings.css, which was
+   the first of the three sites to be fixed and carries the full reasoning.
+   Short version: `Select`'s control reserves its right-hand padding for the
+   drawn chevron, and a `padding: 6px 10px` from a page stylesheet at equal
+   specificity took that reservation away, so the arrow sat on top of the chosen
+   option's text — on nine controls in this module. The radius was wrong too:
+   `radius-sm` where every other control in the product is `radius-md`.
+   Everything the box needs is already said once, in the right place: raw
+   selects by `.nx-app select:not(.nx-select__control)`, component ones by
+   `.nx-select__control`. Nothing is left for this page to say, so the rule is
+   gone rather than emptied. */
 /* The seven per-100 g fields. A grid rather than a column: they are read
    together, off one label in the hand. */
 .fit__macro-grid {
