@@ -7,7 +7,12 @@ import {
   CLOZE_MASK,
   clozeNumbers,
   findClozeRuns,
+  FIRST_RANK,
   foldSearchText,
+  isRank,
+  rankAfter,
+  rankBetween,
+  rankForInteger,
   renderClozeCard,
 } from "@nexus/core";
 import { CardStore, MIGRATIONS, NexusDatabase, openDatabase, runMigrations } from "../index.js";
@@ -22,8 +27,8 @@ import { CardStore, MIGRATIONS, NexusDatabase, openDatabase, runMigrations } fro
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 61 (FIT training, then the routine targets it could not express), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(61);
+  it("is at version 62 (every hand-orderable scope ranks instead of counting), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(62);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -2209,13 +2214,13 @@ describe("migration 022 — task lists", () => {
       name: string;
       isInbox: number;
       defaultView: string;
-      position: number;
+      rank: string;
     }> = {},
   ) =>
     db.raw
       .prepare(
         `INSERT INTO task_lists
-           (id, profile_id, parent_id, name, is_inbox, default_view, position, created_at, updated_at)
+           (id, profile_id, parent_id, name, is_inbox, default_view, rank, created_at, updated_at)
          VALUES (?, 'p1', ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
@@ -2224,7 +2229,7 @@ describe("migration 022 — task lists", () => {
         overrides.name ?? "Lista",
         overrides.isInbox ?? 0,
         overrides.defaultView ?? "list",
-        overrides.position ?? 1024,
+        overrides.rank ?? FIRST_RANK,
         now(),
         now(),
       );
@@ -2249,19 +2254,23 @@ describe("migration 022 — task lists", () => {
     expect(tableNames(db)).toContain("task_lists");
     expect(tableNames(db)).toContain("task_sections");
     expect(columnNames(db.raw, "tasks")).toEqual(
-      expect.arrayContaining(["list_id", "section_id", "position"]),
+      expect.arrayContaining(["list_id", "section_id", "rank"]),
     );
     expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
     db.close();
   });
 
-  it("defaults position to 0 and leaves list_id/section_id null for a raw insert — TaskStore is the gate", () => {
+  it("defaults rank to a VALID rank and leaves list_id/section_id null for a raw insert — TaskStore is the gate", () => {
     const db = openDatabase({ path: join(dir, "task-defaults.db") });
     insertProfile(db, "p1");
     seedTask(db.raw, "t1", "p1", now());
-    expect(
-      db.raw.prepare("SELECT list_id, section_id, position FROM tasks WHERE id = ?").get("t1"),
-    ).toEqual({ list_id: null, section_id: null, position: 0 });
+    // Migration 062 could not add a CHECK (SQLite cannot, on an existing table),
+    // so the DEFAULT carries the guarantee instead: a raw insert that forgets the
+    // column produces a row at the TOP of its scope, never one whose sort key is
+    // unrepresentable. `isRank` at the store boundary is what enforces the rest.
+    const row = db.raw.prepare("SELECT list_id, section_id, rank FROM tasks WHERE id = ?").get("t1");
+    expect(row).toEqual({ list_id: null, section_id: null, rank: FIRST_RANK });
+    expect(isRank((row as { rank: string }).rank)).toBe(true);
     db.close();
   });
 
@@ -2275,10 +2284,14 @@ describe("migration 022 — task lists", () => {
     db.close();
   });
 
-  it("accepts a negative position — a sort key is not a count, and prepending walks below zero", () => {
-    const db = openDatabase({ path: join(dir, "negative-position.db") });
+  it("accepts a rank below the first one — a sort key is not a count, and prepending walks below zero", () => {
+    const db = openDatabase({ path: join(dir, "below-first-rank.db") });
     insertProfile(db, "p1");
-    expect(() => insertList(db, { id: "tl1", position: -2048 })).not.toThrow();
+    // The rank space is symmetric around `i0`; what used to be a negative integer
+    // is now simply a rank that sorts before it, spelled without a sign.
+    const below = rankForInteger(-2048);
+    expect(below < FIRST_RANK).toBe(true);
+    expect(() => insertList(db, { id: "tl1", rank: below })).not.toThrow();
     db.close();
   });
 
@@ -2304,10 +2317,10 @@ describe("migration 022 — task lists", () => {
     insertList(db, { id: "tl1" });
     db.raw
       .prepare(
-        `INSERT INTO task_sections (id, list_id, name, position, created_at, updated_at)
+        `INSERT INTO task_sections (id, list_id, name, rank, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?)`,
       )
-      .run("ts1", "tl1", "Danas", 1024, now(), now());
+      .run("ts1", "tl1", "Danas", FIRST_RANK, now(), now());
     // A task placed INSIDE that section: the profile's delete reaches `tasks`
     // and `task_lists` directly and `task_sections` only through the latter, so
     // this is the shape that would trip on the order the cascades run in.
@@ -2324,13 +2337,15 @@ describe("migration 022 — task lists", () => {
     db.close();
   });
 
-  it("backfills one Inbox per existing profile and files every task into it, gap-spaced in created_at order", () => {
+  it("backfills one Inbox per existing profile and files every task into it, ranked in created_at order", () => {
     const path = join(dir, "upgrade-022.db");
     const before = openAtVersion(path, 21);
     seedProfile(before, "p1");
     seedProfile(before, "p2");
     // Deliberately inserted out of order, so the backfill's `created_at, id`
-    // sort is what the positions below prove — not the insertion order.
+    // sort is what the ranks below prove — not the insertion order. Migration 062
+    // then re-ranks what 022 gap-spaced, preserving exactly that order, which is
+    // the property this assertion now covers end to end.
     seedTask(before, "t2", "p1", "2026-01-02T00:00:00.000Z");
     seedTask(before, "t1", "p1", "2026-01-01T00:00:00.000Z");
     seedTask(before, "t3", "p1", "2026-01-03T00:00:00.000Z");
@@ -2347,7 +2362,7 @@ describe("migration 022 — task lists", () => {
 
     const inboxes = db.raw
       .prepare(
-        `SELECT id, profile_id, name, is_inbox, default_view, position, created_at, updated_at, deleted_at
+        `SELECT id, profile_id, name, is_inbox, default_view, rank, created_at, updated_at, deleted_at
          FROM task_lists ORDER BY profile_id`,
       )
       .all() as {
@@ -2356,7 +2371,7 @@ describe("migration 022 — task lists", () => {
       name: string;
       is_inbox: number;
       default_view: string;
-      position: number;
+      rank: string;
       created_at: string;
       updated_at: string;
       deleted_at: string | null;
@@ -2367,9 +2382,15 @@ describe("migration 022 — task lists", () => {
         name: inbox.name,
         is_inbox: inbox.is_inbox,
         default_view: inbox.default_view,
-        position: inbox.position,
+        rank: inbox.rank,
         deleted_at: inbox.deleted_at,
-      }).toEqual({ name: "Inbox", is_inbox: 1, default_view: "list", position: 0, deleted_at: null });
+      }).toEqual({
+        name: "Inbox",
+        is_inbox: 1,
+        default_view: "list",
+        rank: FIRST_RANK,
+        deleted_at: null,
+      });
     }
     // One JS clock read for the whole migration.
     expect(new Set(inboxes.map((row) => `${row.created_at}|${row.updated_at}`)).size).toBe(1);
@@ -2380,14 +2401,17 @@ describe("migration 022 — task lists", () => {
 
     expect(
       db.raw
-        .prepare("SELECT id, list_id, section_id, position FROM tasks ORDER BY profile_id, position")
+        .prepare("SELECT id, list_id, section_id, rank FROM tasks ORDER BY profile_id, rank")
         .all(),
     ).toEqual([
-      { id: "t1", list_id: p1Inbox, section_id: null, position: 1024 },
-      { id: "t2", list_id: p1Inbox, section_id: null, position: 2048 },
-      { id: "t3", list_id: p1Inbox, section_id: null, position: 3072 },
-      { id: "t5", list_id: p1Inbox, section_id: null, position: 4096 },
-      { id: "t4", list_id: p2Inbox, section_id: null, position: 1024 },
+      // One scope per (profile, list, section), each re-ranked from its own
+      // start — so p2's single task holds the same rank as p1's first, and the
+      // two never meet.
+      { id: "t1", list_id: p1Inbox, section_id: null, rank: "i0" },
+      { id: "t2", list_id: p1Inbox, section_id: null, rank: "i1" },
+      { id: "t3", list_id: p1Inbox, section_id: null, rank: "i2" },
+      { id: "t5", list_id: p1Inbox, section_id: null, rank: "i3" },
+      { id: "t4", list_id: p2Inbox, section_id: null, rank: "i0" },
     ]);
     db.close();
   });
@@ -3345,16 +3369,16 @@ describe("migration 032 — dashboard widgets", () => {
     profileId: string,
     widgetId: string,
     size: string,
-    position: number,
+    rank: string,
     config: string | null = null,
   ) =>
     db.raw
       .prepare(
         `INSERT INTO dashboard_widgets
-           (profile_id, instance_id, widget_id, size, position, config, created_at, updated_at)
+           (profile_id, instance_id, widget_id, size, rank, config, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(profileId, instanceId, widgetId, size, position, config, now(), now());
+      .run(profileId, instanceId, widgetId, size, rank, config, now(), now());
 
   it("creates the dashboard_widgets table and stamps the latest user_version on a fresh database", () => {
     const db = openDatabase({ path: join(dir, "fresh.db") });
@@ -3363,14 +3387,14 @@ describe("migration 032 — dashboard widgets", () => {
     db.close();
   });
 
-  it("creates the dashboard_widgets_profile_position index", () => {
+  it("creates the dashboard_widgets_profile_rank index", () => {
     const db = openDatabase({ path: join(dir, "index.db") });
     const indexes = (
       db.raw
         .prepare("SELECT name FROM sqlite_master WHERE type = 'index'")
         .all() as { name: string }[]
     ).map((row) => row.name);
-    expect(indexes).toContain("dashboard_widgets_profile_position");
+    expect(indexes).toContain("dashboard_widgets_profile_rank");
     db.close();
   });
 
@@ -3378,22 +3402,22 @@ describe("migration 032 — dashboard widgets", () => {
     const db = openDatabase({ path: join(dir, "check-size.db") });
     insertProfile(db, "p1");
     // an unlisted preset -> rejected by the CHECK.
-    expect(() => insertWidget(db, "w1", "p1", "calendar:danas", "XL", 1024)).toThrow();
+    expect(() => insertWidget(db, "w1", "p1", "calendar:danas", "XL", rankForInteger(1024))).toThrow();
     // each enumerated preset is accepted.
-    expect(() => insertWidget(db, "w2", "p1", "calendar:danas", "S", 1024)).not.toThrow();
-    expect(() => insertWidget(db, "w3", "p1", "calendar:danas", "M", 2048)).not.toThrow();
-    expect(() => insertWidget(db, "w4", "p1", "calendar:danas", "L", 3072)).not.toThrow();
+    expect(() => insertWidget(db, "w2", "p1", "calendar:danas", "S", rankForInteger(1024))).not.toThrow();
+    expect(() => insertWidget(db, "w3", "p1", "calendar:danas", "M", rankForInteger(2048))).not.toThrow();
+    expect(() => insertWidget(db, "w4", "p1", "calendar:danas", "L", rankForInteger(3072))).not.toThrow();
     db.close();
   });
 
   it("enforces instance_id as the primary key while allowing the same widget twice", () => {
     const db = openDatabase({ path: join(dir, "unique-instance.db") });
     insertProfile(db, "p1");
-    insertWidget(db, "w1", "p1", "calendar:danas", "M", 1024);
+    insertWidget(db, "w1", "p1", "calendar:danas", "M", rankForInteger(1024));
     // The same PLACEMENT id collides...
-    expect(() => insertWidget(db, "w1", "p1", "study:ispiti", "M", 2048)).toThrow();
+    expect(() => insertWidget(db, "w1", "p1", "study:ispiti", "M", rankForInteger(2048))).toThrow();
     // ...while the same widget placed a second time is a layout, not a mistake.
-    expect(() => insertWidget(db, "w2", "p1", "calendar:danas", "L", 2048)).not.toThrow();
+    expect(() => insertWidget(db, "w2", "p1", "calendar:danas", "L", rankForInteger(2048))).not.toThrow();
     db.close();
   });
 
@@ -3403,21 +3427,23 @@ describe("migration 032 — dashboard widgets", () => {
     // A layout is the user's: a widget whose module this build does not carry
     // keeps its row rather than vanishing from the table (migration 028's
     // argument for `default_template_id`).
-    expect(() => insertWidget(db, "w1", "p1", "finance:budzet", "M", 1024)).not.toThrow();
+    expect(() => insertWidget(db, "w1", "p1", "finance:budzet", "M", rankForInteger(1024))).not.toThrow();
     db.close();
   });
 
-  it("accepts a negative position — a sort key is relative, never a count", () => {
-    const db = openDatabase({ path: join(dir, "negative-position.db") });
+  it("accepts a rank below the first one — a sort key is relative, never a count", () => {
+    const db = openDatabase({ path: join(dir, "below-first-rank.db") });
     insertProfile(db, "p1");
-    expect(() => insertWidget(db, "w1", "p1", "calendar:danas", "M", -1024)).not.toThrow();
+    expect(() =>
+      insertWidget(db, "w1", "p1", "calendar:danas", "M", rankForInteger(-1024)),
+    ).not.toThrow();
     db.close();
   });
 
   it("cascades widget deletion when the owning profile is removed", () => {
     const db = openDatabase({ path: join(dir, "cascade-profile.db") });
     insertProfile(db, "p1");
-    insertWidget(db, "w1", "p1", "calendar:danas", "M", 1024);
+    insertWidget(db, "w1", "p1", "calendar:danas", "M", rankForInteger(1024));
 
     db.raw.prepare("DELETE FROM profiles WHERE id = ?").run("p1");
     expect(
@@ -4097,6 +4123,28 @@ describe("migration 038 — the four task views", () => {
     profileId: string,
     parentId: string | null,
     defaultView = "list",
+    rank = FIRST_RANK,
+  ) =>
+    raw
+      .prepare(
+        `INSERT INTO task_lists
+           (id, profile_id, parent_id, name, is_inbox, default_view, rank, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?)`,
+      )
+      .run(id, profileId, parentId, `Lista ${id}`, defaultView, rank, now(), now());
+
+  /**
+   * `seedList`'s twin for a handle still held at 37, where the ordering column is
+   * migration 022's integer `position` — migration 062 renames it to `rank` and
+   * re-ranks it, which is precisely what the rebuild test below has to carry
+   * across. One helper could not serve both: the column does not exist in both.
+   */
+  const seedLegacyList = (
+    raw: Handle,
+    id: string,
+    profileId: string,
+    parentId: string | null,
+    defaultView = "list",
     position = 1024,
   ) =>
     raw
@@ -4151,8 +4199,8 @@ describe("migration 038 — the four task views", () => {
   /** A 037 database holding the whole shape the rebuild has to carry: nested lists, headings, and tasks filed into both. */
   function seedTaskWorld(raw: Handle): void {
     seedProfile(raw, "p1");
-    seedList(raw, "tl1", "p1", null, "kanban", 1024);
-    seedList(raw, "tl2", "p1", "tl1", "list", 2048);
+    seedLegacyList(raw, "tl1", "p1", null, "kanban", 1024);
+    seedLegacyList(raw, "tl2", "p1", "tl1", "list", 2048);
     seedSection(raw, "ts1", "tl1", 1024);
     seedSection(raw, "ts2", "tl1", 2048);
     seedSection(raw, "ts3", "tl2", 1024);
@@ -4211,12 +4259,15 @@ describe("migration 038 — the four task views", () => {
     expect(
       db.raw
         .prepare(
-          "SELECT id, parent_id, default_view, view_config, position FROM task_lists ORDER BY id",
+          "SELECT id, parent_id, default_view, view_config, rank FROM task_lists ORDER BY id",
         )
         .all(),
     ).toEqual([
-      { id: "tl1", parent_id: null, default_view: "kanban", view_config: null, position: 1024 },
-      { id: "tl2", parent_id: "tl1", default_view: "list", view_config: null, position: 2048 },
+      // Both hold the FIRST rank and that is correct: a list's ordering scope is
+      // (profile, parent), so the root list and the child of `tl1` are in two
+      // different scopes and 062 re-ranked each from its own start.
+      { id: "tl1", parent_id: null, default_view: "kanban", view_config: null, rank: "i0" },
+      { id: "tl2", parent_id: "tl1", default_view: "list", view_config: null, rank: "i0" },
     ]);
     // The cascade the drop fires would have emptied this table outright.
     expect(db.raw.prepare("SELECT id, list_id FROM task_sections ORDER BY id").all()).toEqual([
@@ -4748,8 +4799,8 @@ describe("migration 043 — named dashboards (DASH-008 / ADR-055)", () => {
   const insertSet = (db: NexusDatabase, id: string, profileId: string, name = "Fakultet") =>
     db.raw
       .prepare(
-        `INSERT INTO dashboard_sets (id, profile_id, name, position, created_at, updated_at)
-         VALUES (?, ?, ?, 1024, ?, ?)`,
+        `INSERT INTO dashboard_sets (id, profile_id, name, rank, created_at, updated_at)
+         VALUES (?, ?, ?, 'i0', ?, ?)`,
       )
       .run(id, profileId, name, now(), now());
 
@@ -4757,23 +4808,25 @@ describe("migration 043 — named dashboards (DASH-008 / ADR-055)", () => {
     db.raw
       .prepare(
         `INSERT INTO dashboard_widgets
-           (profile_id, instance_id, widget_id, size, position, set_id, config, created_at, updated_at)
-         VALUES (?, ?, 'calendar:danas', 'M', 1024, ?, NULL, ?, ?)`,
+           (profile_id, instance_id, widget_id, size, rank, set_id, config, created_at, updated_at)
+         VALUES (?, ?, 'calendar:danas', 'M', 'i0', ?, NULL, ?, ?)`,
       )
       .run(profileId, id, setId, now(), now());
 
   it("creates the dashboard_sets table, its index, and stamps the latest user_version", () => {
     const db = openDatabase({ path: join(dir, "fresh.db") });
     expect(tableNames(db)).toContain("dashboard_sets");
+    // `rank` sits last because migration 062 appended it and then dropped
+    // `position` from the middle — the column order is the migration's history.
     expect(columnNames(db, "dashboard_sets")).toEqual([
-      "id", "profile_id", "name", "position", "created_at", "updated_at",
+      "id", "profile_id", "name", "created_at", "updated_at", "rank",
     ]);
     const indexes = (
       db.raw
         .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'dashboard_sets'")
         .all() as { name: string }[]
     ).map((row) => row.name);
-    expect(indexes).toContain("dashboard_sets_profile_position");
+    expect(indexes).toContain("dashboard_sets_profile_rank");
     expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
     db.close();
   });
@@ -8471,6 +8524,245 @@ describe("migration 060 — FIT training and body", () => {
     expect(tableNames(db)).toContain("fit_workout_sets");
     expect(db.raw.prepare("SELECT kcal, protein_g FROM fit_targets WHERE profile_id = 'p1'").get())
       .toEqual({ kcal: 2600, protein_g: 180 });
+    db.close();
+  });
+});
+
+describe("migration 062 — every hand-orderable scope ranks instead of counting", () => {
+  type Handle = Database.Database;
+  const T = "2026-08-08T10:00:00.000Z";
+
+  /** The five converted scopes: a row a user can point at, drag, and reorder. */
+  const RANKED_TABLES = [
+    "tasks",
+    "task_lists",
+    "task_sections",
+    "dashboard_sets",
+    "dashboard_widgets",
+  ] as const;
+
+  function columns(raw: Handle, table: string): { name: string; type: string; dflt: unknown }[] {
+    return (
+      raw.prepare(`PRAGMA table_info(${table})`).all() as {
+        name: string;
+        type: string;
+        dflt_value: unknown;
+      }[]
+    ).map((row) => ({ name: row.name, type: row.type, dflt: row.dflt_value }));
+  }
+
+  /** A connection held at exactly `version`, set up the way `openDatabase` sets one up. */
+  function openAtVersion(path: string, version: number): Handle {
+    const raw = new Database(path);
+    raw.pragma("journal_mode = WAL");
+    raw.pragma("foreign_keys = ON");
+    raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
+      typeof value === "string" ? foldSearchText(value) : null,
+    );
+    runMigrations(
+      raw,
+      MIGRATIONS.filter((migration) => migration.version <= version),
+    );
+    return raw;
+  }
+
+  it("gives all five scopes a TEXT rank and takes the integer position away", () => {
+    const db = openDatabase({ path: join(dir, "062-shape.db") });
+    for (const table of RANKED_TABLES) {
+      const names = columns(db.raw, table).map((column) => column.name);
+      expect({ table, hasRank: names.includes("rank") }).toEqual({ table, hasRank: true });
+      expect({ table, hasPosition: names.includes("position") }).toEqual({
+        table,
+        hasPosition: false,
+      });
+    }
+    db.close();
+  });
+
+  it("defaults rank to a rank that is actually valid, because no CHECK could be added", () => {
+    const db = openDatabase({ path: join(dir, "062-default.db") });
+    for (const table of RANKED_TABLES) {
+      const rank = columns(db.raw, table).find((column) => column.name === "rank");
+      expect({ table, type: rank?.type }).toEqual({ table, type: "TEXT" });
+      // SQLite reports a string default with its quotes. The point of the value
+      // is that a raw insert which forgets the column lands at the TOP of its
+      // scope rather than holding a sort key nothing can compare.
+      expect({ table, dflt: rank?.dflt }).toEqual({ table, dflt: `'${FIRST_RANK}'` });
+    }
+    expect(isRank(FIRST_RANK)).toBe(true);
+    db.close();
+  });
+
+  it("leaves the two child-array positions alone — they are a field of their parent", () => {
+    const db = openDatabase({ path: join(dir, "062-fit.db") });
+    for (const table of ["fit_routine_items", "fit_workout_sets"]) {
+      const names = columns(db.raw, table).map((column) => column.name);
+      expect({ table, hasPosition: names.includes("position") }).toEqual({
+        table,
+        hasPosition: true,
+      });
+      expect({ table, hasRank: names.includes("rank") }).toEqual({ table, hasRank: false });
+    }
+    db.close();
+  });
+
+  it("re-cuts both dashboard indexes onto rank", () => {
+    const db = openDatabase({ path: join(dir, "062-indexes.db") });
+    const indexes = (
+      db.raw.prepare("SELECT name FROM sqlite_master WHERE type = 'index'").all() as {
+        name: string;
+      }[]
+    ).map((row) => row.name);
+    expect(indexes).toContain("dashboard_sets_profile_rank");
+    expect(indexes).toContain("dashboard_widgets_profile_rank");
+    expect(indexes).not.toContain("dashboard_sets_profile_position");
+    expect(indexes).not.toContain("dashboard_widgets_profile_position");
+    db.close();
+  });
+
+  it("carries a v61 database's order across, scope by scope, soft-deleted rows included", () => {
+    const path = join(dir, "062-upgrade.db");
+    const before = openAtVersion(path, 61);
+    before
+      .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES ('p1', 'personal', 'P', ?)")
+      .run(T);
+    const insertList = before.prepare(
+      `INSERT INTO task_lists
+         (id, profile_id, parent_id, name, is_inbox, default_view, position, created_at, updated_at)
+       VALUES (?, 'p1', ?, ?, 0, 'list', ?, ?, ?)`,
+    );
+    // Two roots and one nested list — two DIFFERENT ordering scopes, which is the
+    // thing a single global re-rank would silently flatten into one.
+    insertList.run("l1", null, "Prva", 4096, T, T);
+    insertList.run("l2", null, "Druga", 1024, T, T);
+    insertList.run("l3", "l1", "Podlista", 9999, T, T);
+
+    const insertTask = before.prepare(
+      `INSERT INTO tasks
+         (id, profile_id, title, status, priority, created_at, updated_at, completed_at,
+          reminder_offsets, list_id, section_id, position, deleted_at)
+       VALUES (?, 'p1', ?, 'todo', 'none', ?, ?, NULL, '[]', ?, NULL, ?, ?)`,
+    );
+    // Deliberately inserted out of position order, and one of them soft-deleted:
+    // a restored task must land back where it was, so the re-rank has to cover it.
+    insertTask.run("t3", "Treci", T, T, "l1", 3072, null);
+    insertTask.run("t1", "Prvi", T, T, "l1", 1024, null);
+    insertTask.run("t2", "Drugi", T, T, "l1", 2048, T);
+    insertTask.run("t4", "Cetvrti", T, T, "l2", 512, null);
+    expect(before.pragma("user_version", { simple: true })).toBe(61);
+    before.close();
+
+    const db = openDatabase({ path });
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+
+    expect(
+      db.raw.prepare("SELECT id, rank FROM tasks WHERE list_id = 'l1' ORDER BY rank").all(),
+    ).toEqual([
+      { id: "t1", rank: "i0" },
+      { id: "t2", rank: "i1" },
+      { id: "t3", rank: "i2" },
+    ]);
+    // A scope of its own, re-ranked from its own start rather than continuing l1's.
+    expect(db.raw.prepare("SELECT id, rank FROM tasks WHERE list_id = 'l2'").all()).toEqual([
+      { id: "t4", rank: "i0" },
+    ]);
+    // Lists: (profile, parent) is the scope, so the two roots share one and the
+    // nested list has its own — `l3`'s absurd 9999 buys it nothing there.
+    expect(db.raw.prepare("SELECT id, rank FROM task_lists ORDER BY rank, id").all()).toEqual([
+      { id: "l2", rank: "i0" },
+      { id: "l3", rank: "i0" },
+      { id: "l1", rank: "i1" },
+    ]);
+    db.close();
+  });
+
+  it("re-ranks a scope whose positions were all zero — migration 022's own back-fill", () => {
+    const path = join(dir, "062-degenerate.db");
+    const before = openAtVersion(path, 61);
+    before
+      .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES ('p1', 'personal', 'P', ?)")
+      .run(T);
+    before
+      .prepare(
+        `INSERT INTO task_lists
+           (id, profile_id, parent_id, name, is_inbox, default_view, position, created_at, updated_at)
+         VALUES ('l1', 'p1', NULL, 'Inbox', 1, 'list', 0, ?, ?)`,
+      )
+      .run(T, T);
+    const insertTask = before.prepare(
+      `INSERT INTO tasks
+         (id, profile_id, title, status, priority, created_at, updated_at, completed_at,
+          reminder_offsets, list_id, section_id, position, deleted_at)
+       VALUES (?, 'p1', ?, 'todo', 'none', ?, ?, NULL, '[]', 'l1', NULL, 0, NULL)`,
+    );
+    // Every position 0 — the corpus migration 022 back-filled, which had no
+    // tiebreak at all. The only order left is `created_at, id`, which is exactly
+    // what 062 falls through to.
+    insertTask.run("tb", "B", "2026-01-02T00:00:00.000Z", T);
+    insertTask.run("ta", "A", "2026-01-01T00:00:00.000Z", T);
+    insertTask.run("tc", "C", "2026-01-03T00:00:00.000Z", T);
+    before.close();
+
+    const db = openDatabase({ path });
+    expect(db.raw.prepare("SELECT id FROM tasks ORDER BY rank").all()).toEqual([
+      { id: "ta" },
+      { id: "tb" },
+      { id: "tc" },
+    ]);
+    // Distinct, which the zeros were not: the scope now HAS an order to merge.
+    const ranks = (db.raw.prepare("SELECT rank FROM tasks").all() as { rank: string }[]).map(
+      (row) => row.rank,
+    );
+    expect(new Set(ranks).size).toBe(ranks.length);
+    db.close();
+  });
+
+  it("sorts in SQLite exactly as JavaScript sorts — the claim the whole scheme rests on", () => {
+    const db = openDatabase({ path: join(dir, "062-collation.db") });
+    insertProfile(db, "p1");
+    db.raw
+      .prepare(
+        `INSERT INTO task_lists
+           (id, profile_id, parent_id, name, is_inbox, default_view, rank, created_at, updated_at)
+         VALUES ('l1', 'p1', NULL, 'Lista', 0, 'list', ?, ?, ?)`,
+      )
+      .run(FIRST_RANK, T, T);
+
+    // A spread wide enough to cross every boundary the encoding has: both halves
+    // of the integer space, several magnitudes, and a fraction between two
+    // adjacent integers.
+    const ranks = [
+      rankForInteger(-100_000),
+      rankForInteger(-1024),
+      rankForInteger(-1),
+      FIRST_RANK,
+      rankBetween(FIRST_RANK, rankAfter(FIRST_RANK)) as string,
+      rankAfter(FIRST_RANK),
+      rankForInteger(35),
+      rankForInteger(36),
+      rankForInteger(1331),
+      rankForInteger(1332),
+      rankForInteger(100_000),
+    ];
+    const insert = db.raw.prepare(
+      `INSERT INTO tasks
+         (id, profile_id, title, status, priority, created_at, updated_at, completed_at,
+          reminder_offsets, list_id, section_id, rank, deleted_at)
+       VALUES (?, 'p1', 'T', 'todo', 'none', ?, ?, NULL, '[]', 'l1', NULL, ?, NULL)`,
+    );
+    // Inserted scrambled, so the read below proves the COLUMN's order and never
+    // the insertion order or the rowid.
+    for (const index of [5, 0, 9, 2, 7, 1, 10, 4, 8, 3, 6]) {
+      insert.run(`t${String(index)}`, T, T, ranks[index] as string);
+    }
+
+    const fromSqlite = (
+      db.raw.prepare("SELECT rank FROM tasks ORDER BY rank").all() as { rank: string }[]
+    ).map((row) => row.rank);
+    expect(fromSqlite).toEqual([...ranks].sort());
+    // And that shared order is the order they were built in, so the two engines
+    // are not agreeing with each other about something wrong.
+    expect([...ranks].sort()).toEqual(ranks);
     db.close();
   });
 });

@@ -559,6 +559,18 @@ export { centerSquareCrop, PROFILE_PICTURE_SIZE } from "./files/squareCrop.js";
 export type { CropRect } from "./files/squareCrop.js";
 
 export {
+  FIRST_RANK,
+  isRank,
+  MAX_RANK_SEQUENCE,
+  normalizeRank,
+  RANK_ALPHABET,
+  rankAfter,
+  rankBetween,
+  rankForInteger,
+  rankSequence,
+} from "./order/rank.js";
+
+export {
   ARCHIVE_MODULE_IDS,
   ARCHIVE_PROFILE_KINDS,
   base64ToBytes,

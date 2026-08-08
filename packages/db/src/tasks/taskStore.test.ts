@@ -3,12 +3,12 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { RecurrenceRule } from "@nexus/core";
+import { FIRST_RANK, isRank } from "@nexus/core";
 import {
   MAX_TASK_BULK_IDS,
   MAX_TASK_REMINDERS,
   MAX_TASK_REMINDER_DAYS,
   NexusDatabase,
-  TASK_ORDER_GAP,
   TaskListStore,
   TaskNotFoundError,
   TaskStore,
@@ -56,6 +56,13 @@ function inboxOf(profileId: string): string {
   const inbox = new TaskListStore(db.raw, profileId).listActive().find((list) => list.isInbox);
   if (!inbox) throw new Error("Test setup: profile has no Inbox.");
   return inbox.id;
+}
+
+/** Every rank in `ranks` is strictly ascending by plain string comparison — `rankBetween`'s whole promise. */
+function expectRanksAscending(ranks: readonly string[]): void {
+  for (let index = 1; index < ranks.length; index += 1) {
+    expect(ranks[index - 1]! < ranks[index]!).toBe(true);
+  }
 }
 
 describe("TaskStore", () => {
@@ -628,8 +635,9 @@ describe("TaskStore — lists, sections and ordering (TASK-004 / ADR-029)", () =
 
     expect(first.listId).toBe(inboxId);
     expect(first.sectionId).toBeNull();
-    expect(first.position).toBe(TASK_ORDER_GAP);
-    expect(second.position).toBe(2 * TASK_ORDER_GAP);
+    // A fresh scope opens at the first rank; a second append walks it forward one.
+    expect(first.rank).toBe(FIRST_RANK);
+    expect(second.rank).toBe("i1");
     expect(tasks.listActive().map((task) => task.id)).toEqual([first.id, second.id]);
   });
 
@@ -640,7 +648,7 @@ describe("TaskStore — lists, sections and ordering (TASK-004 / ADR-029)", () =
     const inboxSection = lists.createSection(inboxId, "Danas", NOW);
 
     const placed = tasks.create({ title: "U sekciji", listId: work.id, sectionId: doing.id });
-    expect(placed).toMatchObject({ listId: work.id, sectionId: doing.id, position: TASK_ORDER_GAP });
+    expect(placed).toMatchObject({ listId: work.id, sectionId: doing.id, rank: FIRST_RANK });
 
     expect(() =>
       tasks.create({ title: "Pogrešna sekcija", listId: work.id, sectionId: inboxSection.id }),
@@ -669,7 +677,7 @@ describe("TaskStore — lists, sections and ordering (TASK-004 / ADR-029)", () =
 
     const child = tasks.create({ title: "Dete", parentId: parent.id, listId: uuidv7() });
     expect(child).toMatchObject({ listId: work.id, sectionId: doing.id });
-    expect(child.position).toBe(parent.position + TASK_ORDER_GAP);
+    expect(parent.rank < child.rank).toBe(true);
   });
 
   it("throws when the profile has no Inbox at all — seeding and migration 022 both guarantee one", () => {
@@ -723,9 +731,10 @@ describe("TaskStore — lists, sections and ordering (TASK-004 / ADR-029)", () =
       }
       // The bystander stayed exactly where it was.
       expect(byId.get(bystander.id)?.listId).toBe(inboxId);
-      // And the subtree is spaced apart in the target list, parent first.
-      const positions = [parent.id, child.id, grandchild.id].map((id) => byId.get(id)?.position ?? 0);
-      expect(positions).toEqual([TASK_ORDER_GAP, 2 * TASK_ORDER_GAP, 3 * TASK_ORDER_GAP]);
+      // And the subtree is spaced apart in the target list's fresh scope, parent
+      // first — each row one rank-step after the last, exactly rankAfter's walk.
+      const ranks = [parent.id, child.id, grandchild.id].map((id) => byId.get(id)?.rank ?? "");
+      expect(ranks).toEqual([FIRST_RANK, "i1", "i2"]);
     });
 
     it("leaves a soft-deleted subtask behind rather than resurrecting it into the new list", () => {
@@ -769,7 +778,7 @@ describe("TaskStore — lists, sections and ordering (TASK-004 / ADR-029)", () =
       const child = tasks.create({ title: "dete", parentId: created.id });
 
       const moved = tasks.moveToSection(created.id, section.id, NOW);
-      expect(moved).toMatchObject({ listId: inboxId, sectionId: section.id, position: TASK_ORDER_GAP });
+      expect(moved).toMatchObject({ listId: inboxId, sectionId: section.id, rank: FIRST_RANK });
       // Only the task itself: sections are a within-list grouping, and the UI
       // renders a subtask under its parent whichever heading it carries.
       expect(tasks.listActive().find((task) => task.id === child.id)?.sectionId).toBeNull();
@@ -814,36 +823,41 @@ describe("TaskStore — lists, sections and ordering (TASK-004 / ADR-029)", () =
       expect(() => tasks.reorder(a.id, b.id, b.id, NOW)).toThrow(TaskValidationError);
     });
 
-    it("renumbers the scope once and retries when the gap between two neighbours runs out", () => {
-      const { tasks, profileId } = scope();
-      const a = tasks.create({ title: "A" });
-      const b = tasks.create({ title: "B" });
-      const filler = tasks.create({ title: "Filler" });
+    it(
+      "never needs to renumber — reordering into the same shrinking gap 200 times running " +
+        "always finds room and leaves the scope strictly ordered (migration 062 deleted the " +
+        "renumber path outright: a rank has no gap to exhaust, so there is no wedged-tight state " +
+        "left for repeated inserts at the same spot to converge on that this would fail against)",
+      () => {
+        const { tasks, profileId } = scope();
+        const lo = tasks.create({ title: "Lo" });
+        const hi = tasks.create({ title: "Hi" });
 
-      // Wedge A and B one apart by hand — exactly the state repeated inserts at
-      // the same spot converge on, reached here in one step.
-      db.raw.prepare("UPDATE tasks SET position = ? WHERE id = ?").run(100, a.id);
-      db.raw.prepare("UPDATE tasks SET position = ? WHERE id = ?").run(101, b.id);
-      db.raw.prepare("UPDATE tasks SET position = ? WHERE id = ?").run(102, filler.id);
+        let beforeId = lo.id;
+        for (let round = 0; round < 200; round += 1) {
+          // Appended past `hi` for now; `reorder` immediately relocates it into
+          // the tightening gap against `hi`, which is the interesting part.
+          const row = tasks.create({ title: `Row ${round}` });
+          tasks.reorder(row.id, beforeId, hi.id, NOW);
+          beforeId = row.id;
+        }
 
-      const moved = tasks.reorder(filler.id, a.id, b.id, NOW);
+        const active = tasks.listActive();
+        expect(active).toHaveLength(202); // Lo, 200 rows, Hi
+        expectRanksAscending(active.map((task) => task.rank));
+        expect(active[0]?.title).toBe("Lo");
+        expect(active[active.length - 1]?.title).toBe("Hi");
+        expect(active[active.length - 2]?.title).toBe("Row 199"); // last-placed sits right before Hi
 
-      // The whole scope was re-spaced at gap steps, and the moved row landed in
-      // the middle of the room that made.
-      const positions = new Map(tasks.listActive().map((task) => [task.title, task.position]));
-      expect(positions.get("A")).toBe(TASK_ORDER_GAP);
-      expect(positions.get("B")).toBe(2 * TASK_ORDER_GAP);
-      expect(moved.position).toBe(TASK_ORDER_GAP + TASK_ORDER_GAP / 2);
-      expect(tasks.listActive().map((task) => task.title)).toEqual(["A", "Filler", "B"]);
+        // No renumber pass exists any more to have touched a row outside the gap.
+        const count = db.raw
+          .prepare("SELECT count(*) AS n FROM tasks WHERE profile_id = ?")
+          .get(profileId) as { n: number };
+        expect(count.n).toBe(202);
+      },
+    );
 
-      // The renumber left every other scope alone.
-      const inboxCount = db.raw
-        .prepare("SELECT count(*) AS n FROM tasks WHERE profile_id = ?")
-        .get(profileId) as { n: number };
-      expect(inboxCount.n).toBe(3);
-    });
-
-    it("refuses neighbours given the wrong way round, even after a renumber", () => {
+    it("refuses neighbours given the wrong way round", () => {
       const { tasks } = scope();
       const a = tasks.create({ title: "A" });
       const b = tasks.create({ title: "B" });
@@ -853,6 +867,46 @@ describe("TaskStore — lists, sections and ordering (TASK-004 / ADR-029)", () =
       expect(() => tasks.reorder(c.id, b.id, a.id, NOW)).toThrow(TaskValidationError);
     });
   });
+
+  it(
+    "agrees with SQLite's own ORDER BY — the property migration 062 exists to guarantee: build a " +
+      "scope through a mix of appends, prepends and between-neighbour inserts, and the sequence " +
+      "the store's ordered query returns must be exactly the same rows sorted in JavaScript by " +
+      "their raw `rank` string, with no collation or parsing on either side",
+    () => {
+      const { tasks } = scope();
+
+      // 20 ordinary appends.
+      for (let index = 0; index < 20; index += 1) {
+        tasks.create({ title: `Append ${index}` });
+      }
+      // 15 prepends: each lands ahead of whatever currently sits first, so the
+      // prepended rows end up reverse-ordered at the very head of the scope.
+      for (let index = 0; index < 15; index += 1) {
+        const created = tasks.create({ title: `Prepend ${index}` });
+        const firstId = tasks.listActive()[0]!.id;
+        tasks.reorder(created.id, null, firstId, NOW);
+      }
+      // 15 inserts between two neighbours picked from the current middle of the
+      // scope, so ordinary between-neighbour splits are exercised too.
+      for (let index = 0; index < 15; index += 1) {
+        const created = tasks.create({ title: `Insert ${index}` });
+        const rest = tasks.listActive().filter((task) => task.id !== created.id);
+        const mid = Math.floor(rest.length / 2);
+        tasks.reorder(created.id, rest[mid - 1]!.id, rest[mid]!.id, NOW);
+      }
+
+      const ordered = tasks.listActive();
+      expect(ordered).toHaveLength(50);
+      for (const task of ordered) expect(isRank(task.rank)).toBe(true);
+
+      // The same 50 rows, sorted independently in JavaScript by nothing but the
+      // `rank` string SQLite's `ORDER BY` already used. If the two collations
+      // ever disagreed, this is where it would show.
+      const sortedInJs = [...ordered].sort((a, b) => (a.rank < b.rank ? -1 : a.rank > b.rank ? 1 : 0));
+      expect(ordered.map((task) => task.id)).toEqual(sortedInJs.map((task) => task.id));
+    },
+  );
 
   describe("restore", () => {
     it("puts a task whose list was deleted back into the Inbox body, subtree and all", () => {
@@ -869,11 +923,9 @@ describe("TaskStore — lists, sections and ordering (TASK-004 / ADR-029)", () =
       // The child first: its list is gone, so it lands in the Inbox body even
       // though the parent it belongs to is still deleted.
       tasks.restore(child.id);
-      expect(tasks.listActive().find((task) => task.id === child.id)).toMatchObject({
-        listId: inboxId,
-        sectionId: null,
-        position: anchor.position + TASK_ORDER_GAP,
-      });
+      const restoredChild = tasks.listActive().find((task) => task.id === child.id);
+      expect(restoredChild).toMatchObject({ listId: inboxId, sectionId: null });
+      expect(anchor.rank < (restoredChild?.rank ?? "")).toBe(true); // appended behind `anchor`
 
       // Then the parent: its own list is gone too, and the live subtree (itself
       // plus the child already restored above) travels with it in order.
@@ -881,7 +933,7 @@ describe("TaskStore — lists, sections and ordering (TASK-004 / ADR-029)", () =
       const byId = new Map(tasks.listActive().map((task) => [task.id, task]));
       expect(byId.get(parent.id)).toMatchObject({ listId: inboxId, sectionId: null });
       expect(byId.get(child.id)).toMatchObject({ listId: inboxId, sectionId: null });
-      expect(byId.get(child.id)?.position).toBeGreaterThan(byId.get(parent.id)?.position ?? 0);
+      expect((byId.get(parent.id)?.rank ?? "") < (byId.get(child.id)?.rank ?? "")).toBe(true);
       expect(tasks.listActive().map((task) => task.id)).toEqual([
         anchor.id,
         parent.id,
@@ -897,7 +949,7 @@ describe("TaskStore — lists, sections and ordering (TASK-004 / ADR-029)", () =
       const placement = {
         listId: created.listId,
         sectionId: created.sectionId,
-        position: created.position,
+        rank: created.rank,
       };
 
       tasks.softDelete(created.id);
@@ -934,7 +986,7 @@ describe("TaskStore — lists, sections and ordering (TASK-004 / ADR-029)", () =
     const placement = {
       listId: created.listId,
       sectionId: created.sectionId,
-      position: created.position,
+      rank: created.rank,
     };
 
     expect(tasks.update(created.id, { title: "Preimenovano" })).toMatchObject(placement);

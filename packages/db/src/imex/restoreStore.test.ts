@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { renderClozeCard } from "@nexus/core";
+import { FIRST_RANK, rankBetween, rankSequence, renderClozeCard } from "@nexus/core";
 import type {
   ExportEvent,
   ExportNote,
@@ -62,7 +62,6 @@ import {
   SubjectAttachmentStore,
   SubjectNoteLinkStore,
   SubjectStore,
-  TASK_ORDER_GAP,
   TaskAttachmentStore,
   TaskDependencyStore,
   TaskListStore,
@@ -960,7 +959,7 @@ function freshArchiveData(): ProfileData {
     taskLists: [
       {
         id: listId, profileId: "ignored", parentId: null, name: "Inbox", isInbox: true,
-        defaultView: "list", viewConfig: null, position: 1024, ...timestamps,
+        defaultView: "list", viewConfig: null, rank: FIRST_RANK, ...timestamps,
       },
     ],
     tasks: [
@@ -968,7 +967,7 @@ function freshArchiveData(): ProfileData {
         id: uuidv7(), profileId: "ignored", parentId: null, title: "Fresh task", description: null,
         status: "todo", priority: "none", done: false, dueDate: null, startDate: null,
         completedAt: null, recurrence: null, reminderOffsets: [],
-        listId, sectionId: null, position: 1024, ...timestamps,
+        listId, sectionId: null, rank: FIRST_RANK, ...timestamps,
       },
     ],
     subjects: [
@@ -1623,7 +1622,9 @@ describe("RestoreStore", () => {
       // catches it (see the era-default test at the bottom of this file).
       listId: null,
       sectionId: null,
-      position: 0,
+      // Disregarded by the restore for a listless task — it re-ranks the
+      // fallback Inbox's tasks itself — so any valid rank does here.
+      rank: FIRST_RANK,
     };
     const child: ExportTask = { id: childId, profileId: "ignored", parentId, title: "Child", ...base };
     const parent: ExportTask = { id: parentId, profileId: "ignored", parentId: null, title: "Parent", ...base };
@@ -1778,7 +1779,7 @@ describe("RestoreStore", () => {
       reminderOffsets: [],
       listId: null,
       sectionId: null,
-      position: 0,
+      rank: FIRST_RANK,
     };
 
     const data: ProfileData = { ...emptyProfileData(), notes: [note], tasks: [task] };
@@ -2083,7 +2084,7 @@ describe("RestoreStore", () => {
     const listId = uuidv7();
     const list: TaskList = {
       id: listId, profileId: "ignored", parentId: null, name: "Inbox", isInbox: true,
-      defaultView: "list", viewConfig: null, position: 1024, ...timestamps,
+      defaultView: "list", viewConfig: null, rank: FIRST_RANK, ...timestamps,
     };
     const task: ExportTask = {
       id: uuidv7(), profileId: "ignored", parentId: null, title: "Prvog u mesecu", description: null,
@@ -2091,7 +2092,7 @@ describe("RestoreStore", () => {
       completedAt: null,
       recurrence: { freq: { kind: "monthly-date", interval: 1, day: 1 }, end: { kind: "count", total: 12 } },
       reminderOffsets: [7, 0], // deliberately unsorted, like the event's below
-      listId, sectionId: null, position: 1024,
+      listId, sectionId: null, rank: FIRST_RANK,
       ...timestamps,
     };
     const event: ExportEvent = {
@@ -2129,16 +2130,17 @@ describe("RestoreStore", () => {
     ]);
   });
 
-  it("restores a task's list, section and position verbatim (TASK-004 / ADR-029)", () => {
+  it("restores a task's list, section and rank verbatim (TASK-004 / ADR-029)", () => {
     const profileB = createProfile(db, "placement");
     const timestamps = { createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" };
     const inboxId = uuidv7();
     const workId = uuidv7();
     const sectionId = uuidv7();
+    const [inboxRank, workRank] = rankSequence(2) as [string, string];
     const taskLists: TaskList[] = [
       {
         id: inboxId, profileId: "ignored", parentId: null, name: "Inbox", isInbox: true,
-        defaultView: "list", viewConfig: null, position: 1024, ...timestamps,
+        defaultView: "list", viewConfig: null, rank: inboxRank, ...timestamps,
       },
       // Carrying what it remembers about its views (ADR-050): a restore that
       // dropped it would put the list back opening on the wrong shape.
@@ -2149,19 +2151,22 @@ describe("RestoreStore", () => {
           kanban: { groupBy: "section" },
           cards: { sort: { field: "title", direction: "desc" } },
         },
-        position: 2048, ...timestamps,
+        rank: workRank, ...timestamps,
       },
     ];
     const taskSections: TaskSection[] = [
-      { id: sectionId, listId: workId, name: "U toku", position: 1024, ...timestamps },
+      { id: sectionId, listId: workId, name: "U toku", rank: FIRST_RANK, ...timestamps },
     ];
+    // Below FIRST_RANK on purpose — the rank analogue of the old negative
+    // `position`: prepending walks below "i0", and a restore that normalized it
+    // would silently re-order the user's list. `rankBetween(null, FIRST_RANK)`
+    // is never null (FIRST_RANK is never the bottom of the integer space).
+    const belowFirst = rankBetween(null, FIRST_RANK) as string;
     const task: ExportTask = {
       id: uuidv7(), profileId: "ignored", parentId: null, title: "U sekciji", description: null,
       status: "todo", priority: "none", done: false, dueDate: null, startDate: null,
       completedAt: null, recurrence: null, reminderOffsets: [],
-      // Negative on purpose: prepending walks below zero, and a restore that
-      // normalized it would silently re-order the user's list.
-      listId: workId, sectionId, position: -1024, ...timestamps,
+      listId: workId, sectionId, rank: belowFirst, ...timestamps,
     };
 
     new RestoreStore(db.raw, profileB).replaceProfileData(
@@ -2230,21 +2235,22 @@ describe("RestoreStore", () => {
     const taskLists: TaskList[] = [
       {
         id: listId, profileId: "ignored", parentId: null, name: "Inbox", isInbox: true,
-        defaultView: "list", viewConfig: null, position: 1024, ...timestamps,
+        defaultView: "list", viewConfig: null, rank: FIRST_RANK, ...timestamps,
       },
     ];
     const taskTags: TaskTag[] = [
       { id: uuidv7(), profileId: "ignored", name: "posao", createdAt: timestamps.createdAt },
       { id: uuidv7(), profileId: "ignored", name: "kasnije", createdAt: timestamps.createdAt },
     ];
-    const task = (title: string): ExportTask => ({
+    const [firstRank, secondRank] = rankSequence(2) as [string, string];
+    const task = (title: string, rank: string): ExportTask => ({
       id: uuidv7(), profileId: "ignored", parentId: null, title, description: null,
       status: "todo", priority: "none", done: false, dueDate: null, startDate: null,
       completedAt: null, recurrence: null, reminderOffsets: [],
-      listId, sectionId: null, position: 1024, ...timestamps,
+      listId, sectionId: null, rank, ...timestamps,
     });
-    const first = task("Prvi");
-    const second = task("Drugi");
+    const first = task("Prvi", firstRank);
+    const second = task("Drugi", secondRank);
     // One task under two tags and one tag over two tasks — the two shapes a
     // many-to-many has to survive, plus a tag attached to nothing at all.
     const taskTagLinks = [
@@ -2301,18 +2307,19 @@ describe("RestoreStore", () => {
     const taskLists: TaskList[] = [
       {
         id: listId, profileId: "ignored", parentId: null, name: "Inbox", isInbox: true,
-        defaultView: "list", viewConfig: null, position: 1024, ...timestamps,
+        defaultView: "list", viewConfig: null, rank: FIRST_RANK, ...timestamps,
       },
     ];
-    const task = (title: string): ExportTask => ({
+    const [firstRank, secondRank, thirdRank] = rankSequence(3) as [string, string, string];
+    const task = (title: string, rank: string): ExportTask => ({
       id: uuidv7(), profileId: "ignored", parentId: null, title, description: null,
       status: "todo", priority: "none", done: false, dueDate: null, startDate: null,
       completedAt: null, recurrence: null, reminderOffsets: [],
-      listId, sectionId: null, position: 1024, ...timestamps,
+      listId, sectionId: null, rank, ...timestamps,
     });
-    const first = task("Prvi");
-    const second = task("Drugi");
-    const third = task("Treći");
+    const first = task("Prvi", firstRank);
+    const second = task("Drugi", secondRank);
+    const third = task("Treći", thirdRank);
     // A fan-out and a chain in one graph: the two shapes a dependency set has to
     // survive, and enough of a graph that a restore reversing an edge would show.
     const taskDependencies = [
@@ -2361,16 +2368,18 @@ describe("RestoreStore", () => {
     ).toBe(0);
   });
 
-  it("maps an older archive's list-less tasks into a freshly minted Inbox, gap-spaced in the archive's own order", () => {
+  it("maps an older archive's list-less tasks into a freshly minted Inbox, ranked consecutively in the archive's own order", () => {
     const profileB = createProfile(db, "era-default");
     const timestamps = { createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" };
     // What `parseImportArchive` hands back for a pre-1.3.0 archive: no lists at
-    // all, and every task defaulted to null/null/0 (`ArchiveEra`).
+    // all, and every task era-defaulted to listId/sectionId null and the first
+    // rank (`ArchiveEra`) — the reader gave every such task the SAME starting
+    // rank, since it had no scope to place them within.
     const legacyTask = (title: string): ExportTask => ({
       id: uuidv7(), profileId: "ignored", parentId: null, title, description: null,
       status: "todo", priority: "none", done: false, dueDate: null, startDate: null,
       completedAt: null, recurrence: null, reminderOffsets: [],
-      listId: null, sectionId: null, position: 0, ...timestamps,
+      listId: null, sectionId: null, rank: FIRST_RANK, ...timestamps,
     });
     const tasks = [legacyTask("Prvi"), legacyTask("Drugi"), legacyTask("Treći")];
 
@@ -2386,11 +2395,15 @@ describe("RestoreStore", () => {
     const restored = new TaskStore(db.raw, profileB).listActive();
     expect(restored.map((row) => row.title)).toEqual(["Prvi", "Drugi", "Treći"]);
     expect(restored.map((row) => row.listId)).toEqual([lists[0]?.id, lists[0]?.id, lists[0]?.id]);
-    expect(restored.map((row) => row.position)).toEqual([
-      TASK_ORDER_GAP,
-      2 * TASK_ORDER_GAP,
-      3 * TASK_ORDER_GAP,
-    ]);
+    // The guarantee is the ORDER, not the spelling: the loop that files these
+    // into the fallback Inbox re-ranks them one `rankAfter` at a time, so the
+    // archive's own row order comes back as strictly ascending, distinct ranks
+    // — never the identical `FIRST_RANK` every one of them carried in the file.
+    const ranks = restored.map((row) => row.rank);
+    expect(new Set(ranks).size).toBe(ranks.length);
+    for (let index = 1; index < ranks.length; index += 1) {
+      expect(ranks[index - 1]! < ranks[index]!).toBe(true);
+    }
     // The minted Inbox is a row this restore wrote, so it is counted as one:
     // three tasks + that Inbox + the settings rows every restore writes (the
     // `ntf_settings` row, plus one disabled row per source `emptySettings`
@@ -2405,14 +2418,14 @@ describe("RestoreStore", () => {
     const taskLists: TaskList[] = [
       {
         id: inboxId, profileId: "ignored", parentId: null, name: "Prijemno", isInbox: true,
-        defaultView: "list", viewConfig: null, position: 1024, ...timestamps,
+        defaultView: "list", viewConfig: null, rank: FIRST_RANK, ...timestamps,
       },
     ];
     const task: ExportTask = {
       id: uuidv7(), profileId: "ignored", parentId: null, title: "Bez liste", description: null,
       status: "todo", priority: "none", done: false, dueDate: null, startDate: null,
       completedAt: null, recurrence: null, reminderOffsets: [],
-      listId: null, sectionId: null, position: 0, ...timestamps,
+      listId: null, sectionId: null, rank: FIRST_RANK, ...timestamps,
     };
 
     new RestoreStore(db.raw, profileB).replaceProfileData(
@@ -2423,10 +2436,58 @@ describe("RestoreStore", () => {
     const lists = new TaskListStore(db.raw, profileB).listActive();
     expect(lists.map((row) => row.id)).toEqual([inboxId]);
     expect(lists[0]?.name).toBe("Prijemno"); // the archive's row, not a fresh one
+    // The sole task in a freshly-touched fallback scope: `rankAfter(null)` is
+    // exactly `FIRST_RANK`, so the value is pinned rather than merely ordered.
     expect(new TaskStore(db.raw, profileB).listActive()[0]).toMatchObject({
       listId: inboxId,
-      position: TASK_ORDER_GAP,
+      rank: FIRST_RANK,
     });
+  });
+
+  // Migration 062's whole reason for existing (see `@nexus/core`'s `rank.ts`):
+  // a scope's ranks are distinct and the scope's own ordered read sorts by them
+  // alone — never by the archive's array order. The archive below is built with
+  // its rows in a SCRAMBLED array order relative to their ranks, so this proves
+  // ordering comes from the `rank` column the restore wrote, not from a lucky
+  // array order the archive happened to carry.
+  it("restores five siblings with distinct ranks that the store's own ordered read returns strictly ascending", () => {
+    const profileB = createProfile(db, "rank-invariant");
+    const timestamps = { createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" };
+    const listId = uuidv7();
+    const taskLists: TaskList[] = [
+      {
+        id: listId, profileId: "ignored", parentId: null, name: "Inbox", isInbox: true,
+        defaultView: "list", viewConfig: null, rank: FIRST_RANK, ...timestamps,
+      },
+    ];
+    const names = ["Prvi", "Drugi", "Treći", "Četvrti", "Peti"];
+    const ranks = rankSequence(names.length);
+    const task = (index: number): ExportTask => ({
+      id: uuidv7(), profileId: "ignored", parentId: null, title: names[index] as string,
+      description: null, status: "todo", priority: "none", done: false, dueDate: null,
+      startDate: null, completedAt: null, recurrence: null, reminderOffsets: [],
+      listId, sectionId: null, rank: ranks[index] as string, ...timestamps,
+    });
+    // Array order 2, 4, 0, 3, 1 — nothing here matches rank order.
+    const tasks = [task(2), task(4), task(0), task(3), task(1)];
+
+    new RestoreStore(db.raw, profileB).replaceProfileData(
+      {
+        profileName: "Rank invariant", profilePicture: null, settings: emptySettings(),
+        data: { ...emptyProfileData(), taskLists, tasks }, derived: new Map(),
+      },
+      NOW,
+    );
+
+    const restored = new TaskStore(db.raw, profileB).listActive();
+    // Ascending rank order, exactly `names` — not the archive's array order.
+    expect(restored.map((row) => row.title)).toEqual(names);
+    const restoredRanks = restored.map((row) => row.rank);
+    // No two live siblings in this (list, section) scope share a rank.
+    expect(new Set(restoredRanks).size).toBe(restoredRanks.length);
+    for (let index = 1; index < restoredRanks.length; index += 1) {
+      expect(restoredRanks[index - 1]! < restoredRanks[index]!).toBe(true);
+    }
   });
 
   it("throws RestoreValidationError when a note has a non-null snapshot but no matching entry in derived (R9)", () => {

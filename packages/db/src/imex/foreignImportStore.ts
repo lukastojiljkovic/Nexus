@@ -110,12 +110,12 @@ export class ForeignImportStore {
   ) {
     this.insertTaskList = db.prepare(
       `INSERT INTO task_lists
-         (id, profile_id, parent_id, name, is_inbox, default_view, view_config, position,
+         (id, profile_id, parent_id, name, is_inbox, default_view, view_config, rank,
           created_at, updated_at, deleted_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.insertTaskSection = db.prepare(
-      `INSERT INTO task_sections (id, list_id, name, position, created_at, updated_at)
+      `INSERT INTO task_sections (id, list_id, name, rank, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?)`,
     );
     this.insertTaskTag = db.prepare(
@@ -125,7 +125,7 @@ export class ForeignImportStore {
       `INSERT INTO tasks
          (id, profile_id, parent_id, title, description, status, priority,
           due_date, start_date, created_at, updated_at, completed_at, recurrence,
-          reminder_offsets, list_id, section_id, position, deleted_at)
+          reminder_offsets, list_id, section_id, rank, deleted_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.insertTaskTagLink = db.prepare(
@@ -398,12 +398,12 @@ export class ForeignImportStore {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     this.insertDashboardSet = db.prepare(
-      `INSERT INTO dashboard_sets (id, profile_id, name, position, created_at, updated_at)
+      `INSERT INTO dashboard_sets (id, profile_id, name, rank, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?)`,
     );
     this.insertDashboardWidget = db.prepare(
       `INSERT INTO dashboard_widgets
-         (profile_id, instance_id, widget_id, size, set_id, position, config, created_at, updated_at)
+         (profile_id, instance_id, widget_id, size, set_id, rank, config, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
   }
@@ -447,14 +447,14 @@ export class ForeignImportStore {
         this.insertTaskList.run(
           list.id, this.profileId, list.parentId, list.name, list.isInbox ? 1 : 0,
           list.defaultView, viewConfigText(list.viewConfig),
-          list.position, list.createdAt, list.updatedAt,
+          list.rank, list.createdAt, list.updatedAt,
         );
         written += 1;
       }
 
       for (const section of planned.taskSections) {
         this.insertTaskSection.run(
-          section.id, section.listId, section.name, section.position,
+          section.id, section.listId, section.name, section.rank,
           section.createdAt, section.updatedAt,
         );
         written += 1;
@@ -481,7 +481,7 @@ export class ForeignImportStore {
           task.id, this.profileId, task.parentId, task.title, task.description,
           task.status, task.priority, task.dueDate, task.startDate,
           task.createdAt, task.updatedAt, task.completedAt, recurrenceText(task.recurrence),
-          offsetsText(task.reminderOffsets), task.listId, task.sectionId, task.position,
+          offsetsText(task.reminderOffsets), task.listId, task.sectionId, task.rank,
         );
         written += 1;
       }
@@ -804,14 +804,14 @@ export class ForeignImportStore {
       // `planForeignImport`, not here.
       for (const set of planned.dashboardSets) {
         this.insertDashboardSet.run(
-          set.id, this.profileId, set.name, set.position, set.createdAt, set.updatedAt,
+          set.id, this.profileId, set.name, set.rank, set.createdAt, set.updatedAt,
         );
         written += 1;
       }
       for (const widget of planned.dashboardWidgets) {
         this.insertDashboardWidget.run(
           this.profileId, widget.instanceId, widget.widgetId, widget.size,
-          widget.setId ?? null, widget.position, widget.config,
+          widget.setId ?? null, widget.rank, widget.config,
           widget.createdAt, widget.updatedAt,
         );
         written += 1;

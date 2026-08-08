@@ -8,6 +8,7 @@ import {
   type ImportArchiveInput,
   type ImportMode,
 } from "./importArchive.js";
+import { FIRST_RANK, isRank, rankForInteger, rankSequence } from "../order/rank.js";
 
 /** The test's own sha256 hex — mirrors the shape `main` injects, kept out of `@nexus/core`. */
 function sha256(content: string): string {
@@ -127,6 +128,16 @@ function emptyExportInput(): ExportArchiveInput {
 
 /** Every collection non-empty, every cross-reference resolved, two attachments sharing one hash, a two-deep folder nest, notes with and without a snapshot. The round trip's fixture. */
 function richProfileData(): ProfileData {
+  // Two rows sharing a scope get consecutive ranks rather than hand-picked
+  // strings, on migration 062's own terms — these mirror the ascending
+  // integer positions (1024, 2048, [3072]) this fixture carried before.
+  const listRanks = rankSequence(2);
+  const listRank1 = listRanks[0]!;
+  const listRank2 = listRanks[1]!;
+  const widgetRanks = rankSequence(3);
+  const widgetRank1 = widgetRanks[0]!;
+  const widgetRank2 = widgetRanks[1]!;
+  const widgetRank3 = widgetRanks[2]!;
   return {
     tasks: [
       // Recurring (ADR-024), and reminded (ADR-028): the rule, the ladder and
@@ -140,23 +151,24 @@ function richProfileData(): ProfileData {
         completedAt: null,
         recurrence: { freq: { kind: "monthly-date", interval: 1, day: 1 }, end: { kind: "count", total: 12 } },
         reminderOffsets: [0, 3],
-        listId: "list-work", sectionId: "section-doing", position: 1024,
+        listId: "list-work", sectionId: "section-doing", rank: FIRST_RANK,
       },
       {
         id: "task-child", profileId: "profile1", parentId: "task-parent", title: "Podzadatak",
         description: "Opis", status: "done", priority: "high", done: true, dueDate: null,
         startDate: "2026-07-05", createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-02T00:00:00.000Z",
         completedAt: "2026-07-02T00:00:00.000Z", recurrence: null, reminderOffsets: [],
-        // A negative position: prepending walks below zero, so the round trip
-        // has to carry one verbatim.
-        listId: "list-inbox", sectionId: null, position: -1024,
+        // A rank with a negative integer part — the rank space's mirror of
+        // what used to be a position walked below zero by prepending — so the
+        // round trip has to carry one verbatim.
+        listId: "list-inbox", sectionId: null, rank: "hz",
       },
     ],
     // A nested list under the Inbox, so the parent chain travels too.
     taskLists: [
       {
         id: "list-inbox", profileId: "profile1", parentId: null, name: "Inbox", isInbox: true,
-        defaultView: "list", viewConfig: null, position: 1024, createdAt: "2026-07-01T00:00:00.000Z",
+        defaultView: "list", viewConfig: null, rank: listRank1, createdAt: "2026-07-01T00:00:00.000Z",
         updatedAt: "2026-07-01T00:00:00.000Z",
       },
       // And carrying what it remembers about its views (ADR-050): every one of
@@ -171,13 +183,13 @@ function richProfileData(): ProfileData {
           cards: { sort: { field: "title", direction: "desc" } },
           calendar: { filters: { priority: "high" } },
         },
-        position: 2048, createdAt: "2026-07-01T00:00:00.000Z",
+        rank: listRank2, createdAt: "2026-07-01T00:00:00.000Z",
         updatedAt: "2026-07-01T00:00:00.000Z",
       },
     ],
     taskSections: [
       {
-        id: "section-doing", listId: "list-work", name: "U toku", position: 1024,
+        id: "section-doing", listId: "list-work", name: "U toku", rank: FIRST_RANK,
         createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
       },
     ],
@@ -546,7 +558,7 @@ function richProfileData(): ProfileData {
     // row, a widget filed into it AND widgets on the default (null) board.
     dashboardSets: [
       {
-        id: "dset-1", profileId: "profile1", name: "Fakultet", position: 1024,
+        id: "dset-1", profileId: "profile1", name: "Fakultet", rank: FIRST_RANK,
         createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
       },
     ],
@@ -557,19 +569,19 @@ function richProfileData(): ProfileData {
     dashboardWidgets: [
       {
         instanceId: "dw-1", profileId: "profile1", widgetId: "calendar:danas", size: "L",
-        position: 1024, config: null,
+        rank: widgetRank1, config: null,
         createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-02T00:00:00.000Z",
         setId: null,
       },
       {
         instanceId: "dw-2", profileId: "profile1", widgetId: "study:ispiti", size: "S",
-        position: 2048, config: '{"limit":3}',
+        rank: widgetRank2, config: '{"limit":3}',
         createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
         setId: null,
       },
       {
         instanceId: "dw-3", profileId: "profile1", widgetId: "calendar:danas", size: "S",
-        position: 3072, config: null,
+        rank: widgetRank3, config: null,
         createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
         setId: "dset-1",
       },
@@ -1008,7 +1020,7 @@ function emptyInputWith(files: Map<string, string>, extra: Partial<ImportArchive
 /** The list `VALID_TASK` lives in — a task at this build's era must always name one, so the two travel together (see `tasksFile`). */
 const VALID_TASK_LIST = {
   type: "task-list", id: "tl1", profileId: "profile1", parentId: null, name: "Inbox",
-  isInbox: true, defaultView: "list", position: 1024,
+  isInbox: true, defaultView: "list", rank: FIRST_RANK,
   createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
 };
 
@@ -1016,7 +1028,7 @@ const VALID_TASK = {
   type: "task", id: "t1", profileId: "profile1", parentId: null, title: "A", description: null,
   status: "todo", priority: "none", done: false, dueDate: null, startDate: null,
   createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z", completedAt: null,
-  recurrence: null, reminderOffsets: [], listId: "tl1", sectionId: null, position: 1024,
+  recurrence: null, reminderOffsets: [], listId: "tl1", sectionId: null, rank: FIRST_RANK,
 };
 
 /**
@@ -1253,12 +1265,12 @@ describe("parseImportArchive — one test per problem code", () => {
     expect(result.data).toBeNull();
   });
 
-  // `1.39.0`: the nearest minor strictly ahead of this build's `1.38.0`.
+  // `1.40.0`: the nearest minor strictly ahead of this build's `1.39.0`.
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.39.0" });
+    const files = baseFiles({ schemaVersion: "1.40.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.39.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.40.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -1434,7 +1446,7 @@ describe("parseImportArchive — one test per problem code", () => {
 
 describe("parseImportArchive — task lists and sections (TASK-004 / ADR-029)", () => {
   const VALID_SECTION = {
-    type: "task-section", id: "ts1", listId: "tl1", name: "U toku", position: 1024,
+    type: "task-section", id: "ts1", listId: "tl1", name: "U toku", rank: FIRST_RANK,
     createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
   };
 
@@ -1448,34 +1460,35 @@ describe("parseImportArchive — task lists and sections (TASK-004 / ADR-029)", 
   it("round-trips a nested list, a section and a task placed in it", () => {
     const child = {
       ...VALID_TASK_LIST, id: "tl2", parentId: "tl1", name: "Posao", isInbox: false,
-      defaultView: "kanban", position: 2048,
+      defaultView: "kanban", rank: "i1",
     };
     const section = { ...VALID_SECTION, listId: "tl2" };
-    const task = { ...VALID_TASK, listId: "tl2", sectionId: "ts1", position: -1024 };
+    const task = { ...VALID_TASK, listId: "tl2", sectionId: "ts1", rank: "hz" };
 
     const result = parseTasksFile([VALID_TASK_LIST, child, section, task]);
     expect(result.problems).toEqual([]);
     expect(result.data?.taskLists).toEqual([
       {
         id: "tl1", profileId: "profile1", parentId: null, name: "Inbox", isInbox: true,
-        defaultView: "list", viewConfig: null, position: 1024, createdAt: "2026-07-01T00:00:00.000Z",
+        defaultView: "list", viewConfig: null, rank: FIRST_RANK, createdAt: "2026-07-01T00:00:00.000Z",
         updatedAt: "2026-07-01T00:00:00.000Z",
       },
       {
         id: "tl2", profileId: "profile1", parentId: "tl1", name: "Posao", isInbox: false,
-        defaultView: "kanban", viewConfig: null, position: 2048, createdAt: "2026-07-01T00:00:00.000Z",
+        defaultView: "kanban", viewConfig: null, rank: "i1", createdAt: "2026-07-01T00:00:00.000Z",
         updatedAt: "2026-07-01T00:00:00.000Z",
       },
     ]);
     expect(result.data?.taskSections).toEqual([
       {
-        id: "ts1", listId: "tl2", name: "U toku", position: 1024,
+        id: "ts1", listId: "tl2", name: "U toku", rank: FIRST_RANK,
         createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
       },
     ]);
-    // A negative position is a legitimate sort key (prepending walks below
-    // zero), so it survives verbatim rather than being clamped.
-    expect(result.data?.tasks[0]).toMatchObject({ listId: "tl2", sectionId: "ts1", position: -1024 });
+    // A rank with a negative integer part is a legitimate sort key (the rank
+    // space's mirror of a prepend walking a position below zero), so it
+    // survives verbatim rather than being clamped.
+    expect(result.data?.tasks[0]).toMatchObject({ listId: "tl2", sectionId: "ts1", rank: "hz" });
   });
 
   it("round-trips a list's view config, and reads its absence as no preferences", () => {
@@ -1520,8 +1533,11 @@ describe("parseImportArchive — task lists and sections (TASK-004 / ADR-029)", 
     { name: "a view config hiding a column the grouping has not got", row: { viewConfig: { kanban: { groupBy: "priority", hiddenColumns: ["todo"] } } }, detail: "viewConfig" },
     { name: "a view config hiding every column of the board", row: { viewConfig: { kanban: { hiddenColumns: ["todo", "doing", "done"] } } }, detail: "viewConfig" },
     { name: "a non-boolean isInbox", row: { isInbox: 1 }, detail: "isInbox" },
-    { name: "a fractional position", row: { position: 1.5 }, detail: "position" },
-    { name: "no position at all", row: { position: undefined }, detail: "position" },
+    // At this era the key is `rank`, not `position` — see the dedicated
+    // `writesOrderRanks` era tests below for the full catalogue of malformed
+    // shapes; these two just keep this table's own coverage current.
+    { name: "a rank that is not a string", row: { rank: 1024 }, detail: "rank" },
+    { name: "no rank at all", row: { rank: undefined }, detail: "rank" },
     { name: "a missing timestamp", row: { updatedAt: undefined }, detail: "updatedAt" },
   ];
 
@@ -1538,7 +1554,7 @@ describe("parseImportArchive — task lists and sections (TASK-004 / ADR-029)", 
   const BAD_SECTIONS: { name: string; row: Record<string, unknown>; detail: string }[] = [
     { name: "an empty name", row: { name: "" }, detail: "name" },
     { name: "no list to belong to", row: { listId: undefined }, detail: "listId" },
-    { name: "a fractional position", row: { position: 0.5 }, detail: "position" },
+    { name: "a rank that is not a string", row: { rank: 1024 }, detail: "rank" },
   ];
 
   for (const { name, row, detail } of BAD_SECTIONS) {
@@ -1582,7 +1598,7 @@ describe("parseImportArchive — task lists and sections (TASK-004 / ADR-029)", 
   // The reference no foreign key can express: the section exists, but under a
   // different list, so the task would land under a heading nothing renders.
   it("refuses a task whose section belongs to another list", () => {
-    const otherList = { ...VALID_TASK_LIST, id: "tl2", isInbox: false, position: 2048 };
+    const otherList = { ...VALID_TASK_LIST, id: "tl2", isInbox: false, rank: "i1" };
     const section = { ...VALID_SECTION, listId: "tl2" };
     const task = { ...VALID_TASK, listId: "tl1", sectionId: "ts1" };
 
@@ -1628,14 +1644,17 @@ describe("parseImportArchive — task lists and sections (TASK-004 / ADR-029)", 
   const {
     listId: _listId,
     sectionId: _sectionId,
-    position: _position,
+    rank: _rank,
     ...TASK_WITHOUT_PLACEMENT
   } = VALID_TASK;
 
   it("defaults a 1.2.0 archive's task placement, so it restores into the Inbox", () => {
     const result = parseAtVersion("1.2.0", [TASK_WITHOUT_PLACEMENT]);
     expect(result.problems).toEqual([]);
-    expect(result.data?.tasks[0]).toMatchObject({ listId: null, sectionId: null, position: 0 });
+    // Below 1.3 a task has no scope to be ordered within at all (neither
+    // `position` nor `rank`), so it gets `FIRST_RANK` rather than a value
+    // `orderRank` ever computes — `RestoreStore` re-ranks these in row order.
+    expect(result.data?.tasks[0]).toMatchObject({ listId: null, sectionId: null, rank: FIRST_RANK });
   });
 
   it("refuses that same row at 1.3.0, naming the field the bump made required", () => {
@@ -1676,6 +1695,117 @@ describe("parseImportArchive — task lists and sections (TASK-004 / ADR-029)", 
     });
     expect(result.data).toBeNull();
   });
+
+  // --- Order ranks vs positions (migration 062, `writesOrderRanks`) -------
+  //
+  // Like `writesClozeNumbers`, this flag is about a value CHANGING MEANING
+  // rather than merely appearing: the key is present in every era, but below
+  // `1.39.0` it is `position`, a sparse integer, and at `1.39.0` and above it
+  // is `rank`, a fractional string — `rankForInteger` is the exact, row-local
+  // translation between the two. The pre-`1.3.0` case, where a task carries
+  // NEITHER key and gets `FIRST_RANK`, is already proved above by the 1.2.0
+  // and (in "older eras") the 1.0.0 tests; these cover the two sides
+  // `orderRank` itself switches on.
+
+  it("restores a pre-1.39.0 archive's list order intact from its sparse positions", () => {
+    const lists = [1024, 2048, 3072].map((position, index) => ({
+      ...VALID_TASK_LIST, id: `tl-order${index}`, isInbox: false, position,
+    }));
+    const result = parseAtVersion("1.38.0", lists);
+    expect(result.problems).toEqual([]);
+    const ranks = (result.data?.taskLists ?? []).map((list) => list.rank);
+    expect(ranks).toHaveLength(3);
+    for (const rank of ranks) expect(isRank(rank)).toBe(true);
+    for (let i = 1; i < ranks.length; i += 1) expect(ranks[i - 1]! < ranks[i]!).toBe(true);
+  });
+
+  // Prepending used to walk the sparse integer sort key below zero — exactly
+  // the case `rankForInteger` exists to carry over losslessly.
+  it("keeps a pre-1.39.0 archive's order intact across negative and zero positions", () => {
+    const lists = [-2048, -1024, 0, 1024].map((position, index) => ({
+      ...VALID_TASK_LIST, id: `tl-neg${index}`, isInbox: false, position,
+    }));
+    const result = parseAtVersion("1.38.0", lists);
+    expect(result.problems).toEqual([]);
+    const ranks = (result.data?.taskLists ?? []).map((list) => list.rank);
+    expect(ranks).toHaveLength(4);
+    for (const rank of ranks) expect(isRank(rank)).toBe(true);
+    for (let i = 1; i < ranks.length; i += 1) expect(ranks[i - 1]! < ranks[i]!).toBe(true);
+  });
+
+  it("converts each of the five ranked row types' position to EXACTLY rankForInteger of it", () => {
+    const T = "2026-07-01T00:00:00.000Z";
+    const list = { ...VALID_TASK_LIST, id: "tl-conv", position: 1024 };
+    const section = { ...VALID_SECTION, id: "sec-conv", listId: "tl-conv", position: -16 };
+    const task = { ...VALID_TASK, id: "t-conv", listId: "tl-conv", sectionId: null, position: 500 };
+    const set = {
+      type: "dashboard-set", id: "set-conv", profileId: "profile1", name: "Konverzija",
+      position: -1, createdAt: T, updatedAt: T,
+    };
+    const widget = {
+      type: "dashboard-widget", instanceId: "dw-conv", profileId: "profile1",
+      widgetId: "calendar:danas", size: "M", position: 42, config: null,
+      createdAt: T, updatedAt: T, setId: null,
+    };
+
+    const result = parseImportArchive(
+      emptyInputWith(
+        baseFiles({
+          schemaVersion: "1.38.0",
+          fileContents: {
+            "data/tasks.ndjson": ndjson([list, section, task]),
+            "data/dashboard.ndjson": ndjson([set, widget]),
+          },
+        }),
+      ),
+    );
+
+    expect(result.problems).toEqual([]);
+    expect(result.data?.taskLists[0]?.rank).toBe(rankForInteger(1024));
+    expect(result.data?.taskSections[0]?.rank).toBe(rankForInteger(-16));
+    expect(result.data?.tasks[0]?.rank).toBe(rankForInteger(500));
+    expect(result.data?.dashboardSets[0]?.rank).toBe(rankForInteger(-1));
+    expect(result.data?.dashboardWidgets[0]?.rank).toBe(rankForInteger(42));
+  });
+
+  it("takes a 1.39.0+ archive's rank verbatim", () => {
+    const result = parseTasksFile([{ ...VALID_TASK_LIST, rank: "i0i" }]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.taskLists[0]?.rank).toBe("i0i");
+  });
+
+  it("does not read a position key at 1.39.0 and above — a row carrying one but no rank is invalid", () => {
+    const { rank: _rank, ...withoutRank } = VALID_TASK_LIST;
+    const result = parseTasksFile([{ ...withoutRank, position: 1024 }]);
+    expect(result.problems).toContainEqual({
+      severity: "error", code: "invalid-record", path: "data/tasks.ndjson", line: 1, detail: "rank",
+    });
+    expect(result.data).toBeNull();
+  });
+
+  const BAD_RANKS: { name: string; rank: unknown }[] = [
+    { name: "uppercase digits", rank: "I0" },
+    { name: "the empty string", rank: "" },
+    { name: "an integer part cut short", rank: "i" },
+    { name: "a number, not a string", rank: 1024 },
+    { name: "a trailing zero in the fraction — the non-canonical spelling", rank: "i00" },
+    // Looks at first like `normalizeRank`'s territory (a valid-but-uncanonical
+    // fraction that would fold down to `"i0i"`), but it is not: its fraction
+    // is `"i0"`, which itself ends in a trailing zero — `"i00"`'s own shape,
+    // one level in. `orderRank` gates on `isRank` BEFORE it ever calls
+    // `normalizeRank`, so this is refused outright, never silently folded.
+    { name: '"i0i0" — its fraction also ends in a trailing zero', rank: "i0i0" },
+  ];
+
+  for (const { name, rank } of BAD_RANKS) {
+    it(`refuses a malformed rank in the new era: ${name}`, () => {
+      const result = parseTasksFile([{ ...VALID_TASK_LIST, rank }]);
+      expect(result.problems).toContainEqual({
+        severity: "error", code: "invalid-record", path: "data/tasks.ndjson", line: 1, detail: "rank",
+      });
+      expect(result.data).toBeNull();
+    });
+  }
 });
 
 describe("parseImportArchive — task tags (migration 023)", () => {
@@ -2461,7 +2591,7 @@ describe("parseImportArchive — dashboard widgets (migration 032 / ADR-045)", (
 
   const VALID_WIDGET = {
     type: "dashboard-widget", instanceId: "dw1", profileId: "profile1",
-    widgetId: "calendar:danas", size: "M", position: 1024, config: null,
+    widgetId: "calendar:danas", size: "M", rank: FIRST_RANK, config: null,
     createdAt: T, updatedAt: T,
   };
 
@@ -2477,7 +2607,7 @@ describe("parseImportArchive — dashboard widgets (migration 032 / ADR-045)", (
     expect(result.data?.dashboardWidgets).toEqual([
       {
         instanceId: "dw1", profileId: "profile1", widgetId: "calendar:danas", size: "M",
-        position: 1024, config: null, createdAt: T, updatedAt: T, setId: null,
+        rank: FIRST_RANK, config: null, createdAt: T, updatedAt: T, setId: null,
       },
     ]);
   });
@@ -2496,14 +2626,15 @@ describe("parseImportArchive — dashboard widgets (migration 032 / ADR-045)", (
     }
   });
 
-  // A position is a sort key relative to its scope, never a count — a prepend
-  // legitimately walks below zero (`positionBetween`).
-  it("accepts a negative position and refuses a fractional one", () => {
-    expect(parseWidgetFile([{ ...VALID_WIDGET, position: -2048 }]).problems).toEqual([]);
-    const result = parseWidgetFile([{ ...VALID_WIDGET, position: 1024.5 }]);
+  // A rank is a sort key relative to its scope, never a count — one with a
+  // negative integer part (the rank space's mirror of a prepend walking a
+  // position below zero) is exactly as legitimate as any other.
+  it("accepts a rank with a negative integer part and refuses a malformed one", () => {
+    expect(parseWidgetFile([{ ...VALID_WIDGET, rank: "hz" }]).problems).toEqual([]);
+    const result = parseWidgetFile([{ ...VALID_WIDGET, rank: "I0" }]);
     expect(result.problems).toContainEqual({
       severity: "error", code: "invalid-record", path: "data/dashboard.ndjson", line: 1,
-      detail: "position",
+      detail: "rank",
     });
   });
 
@@ -2543,7 +2674,7 @@ describe("parseImportArchive — dashboard widgets (migration 032 / ADR-045)", (
     { name: "an empty instance id", row: { instanceId: "" }, detail: "instanceId" },
     { name: "no profile", row: { profileId: undefined }, detail: "profileId" },
     { name: "no widget id", row: { widgetId: undefined }, detail: "widgetId" },
-    { name: "no position", row: { position: undefined }, detail: "position" },
+    { name: "no rank at all", row: { rank: undefined }, detail: "rank" },
     { name: "no created_at", row: { createdAt: undefined }, detail: "createdAt" },
     { name: "a malformed updated_at", row: { updatedAt: "juče" }, detail: "updatedAt" },
   ];
@@ -2562,7 +2693,7 @@ describe("parseImportArchive — dashboard widgets (migration 032 / ADR-045)", (
   // KEY) — the same widget twice is a layout, two rows sharing an id is not.
   it("accepts the same widget placed twice and refuses two rows sharing an instance id", () => {
     expect(
-      parseWidgetFile([VALID_WIDGET, { ...VALID_WIDGET, instanceId: "dw2", position: 2048 }])
+      parseWidgetFile([VALID_WIDGET, { ...VALID_WIDGET, instanceId: "dw2", rank: "i1" }])
         .problems,
     ).toEqual([]);
 
@@ -2590,11 +2721,11 @@ describe("parseImportArchive — dashboard sets (migration 043 / ADR-055)", () =
 
   const VALID_SET = {
     type: "dashboard-set", id: "set1", profileId: "profile1", name: "Fakultet",
-    position: 1024, createdAt: T, updatedAt: T,
+    rank: FIRST_RANK, createdAt: T, updatedAt: T,
   };
   const WIDGET_IN_SET = {
     type: "dashboard-widget", instanceId: "dw1", profileId: "profile1",
-    widgetId: "calendar:danas", size: "M", position: 1024, config: null,
+    widgetId: "calendar:danas", size: "M", rank: FIRST_RANK, config: null,
     createdAt: T, updatedAt: T, setId: "set1",
   };
 
@@ -2611,14 +2742,14 @@ describe("parseImportArchive — dashboard sets (migration 043 / ADR-055)", () =
     expect(result.problems).toEqual([]);
     expect(result.data?.dashboardSets).toEqual([
       {
-        id: "set1", profileId: "profile1", name: "Fakultet", position: 1024,
+        id: "set1", profileId: "profile1", name: "Fakultet", rank: FIRST_RANK,
         createdAt: T, updatedAt: T,
       },
     ]);
     expect(result.data?.dashboardWidgets).toEqual([
       {
         instanceId: "dw1", profileId: "profile1", widgetId: "calendar:danas", size: "M",
-        position: 1024, config: null, createdAt: T, updatedAt: T, setId: "set1",
+        rank: FIRST_RANK, config: null, createdAt: T, updatedAt: T, setId: "set1",
       },
     ]);
   });
@@ -2704,7 +2835,7 @@ describe("parseImportArchive — dashboard sets (migration 043 / ADR-055)", () =
     { name: "no name", row: { name: undefined }, detail: "name" },
     { name: "a whitespace-only name", row: { name: "   " }, detail: "name" },
     { name: "an over-100-character name", row: { name: "x".repeat(101) }, detail: "name" },
-    { name: "a fractional position", row: { position: 1024.5 }, detail: "position" },
+    { name: "a rank that is not a string", row: { rank: 1024 }, detail: "rank" },
     { name: "no created_at", row: { createdAt: undefined }, detail: "createdAt" },
     { name: "a malformed updated_at", row: { updatedAt: "juče" }, detail: "updatedAt" },
   ];
@@ -2977,7 +3108,7 @@ describe("parseImportArchive — older eras (fields added after the first releas
       reminderOffsets: _reminderOffsets,
       listId: _listId,
       sectionId: _sectionId,
-      position: _position,
+      rank: _rank,
       ...rest
     } = VALID_TASK;
     return { ...rest, ...overrides };
@@ -3024,10 +3155,12 @@ describe("parseImportArchive — older eras (fields added after the first releas
       recurrence: null,
       reminderOffsets: [],
       // TASK-004: no list to point at, which is exactly what `RestoreStore`
-      // reads as "put this task in the target profile's Inbox".
+      // reads as "put this task in the target profile's Inbox". And with no
+      // scope to be ordered within, `orderRank` never runs at all — the row
+      // gets `FIRST_RANK` rather than a value it computes (`writesOrderRanks`).
       listId: null,
       sectionId: null,
-      position: 0,
+      rank: FIRST_RANK,
     });
     expect(result.data?.events[0]).toMatchObject({
       recurrence: null,
@@ -3057,8 +3190,14 @@ describe("parseImportArchive — older eras (fields added after the first releas
   it("lets a 1.1.0 archive omit only what the 1.2.0 bump added", () => {
     const { reminderOffsets: _ladder, ...taskWithoutLadder } = VALID_TASK;
     // The list travels with it: `listId` is PRESENT on this row, and leniency
-    // never weakens a present value — its reference check included.
-    const accepted = parseAt("1.1.0", [VALID_TASK_LIST, taskWithoutLadder]);
+    // never weakens a present value — its reference check included. Below
+    // `1.39.0` the ordering key both rows carry is `position`, not `rank` —
+    // carrying `rank` here too is harmless (`orderRank` ignores it below
+    // `writesOrderRanks`), but a value it DOES read must be present.
+    const accepted = parseAt("1.1.0", [
+      { ...VALID_TASK_LIST, position: 1024 },
+      { ...taskWithoutLadder, position: 1024 },
+    ]);
     expect(accepted.problems).toEqual([]);
     expect(accepted.data?.tasks[0]?.reminderOffsets).toEqual([]);
 
@@ -4286,7 +4425,7 @@ describe("parseImportArchive — FIT training & body (ADR-081 slice b / 1.37.0)"
     });
 
     it("reads a 1.37.0 routine item — which carries none of the four targets — as stating none of them", () => {
-      // The backward-compatibility promise of interchange 1.38.0, and the one
+      // The backward-compatibility promise of interchange 1.39.0, and the one
       // that would fail SILENTLY without a test: every archive written before
       // migration 061 omits these properties entirely, so they arrive as
       // `undefined` rather than `null`. A validator that only special-cases
@@ -4501,8 +4640,8 @@ describe("parseImportArchive — note categories (NOTE-002 / 1.27.0)", () => {
 });
 
 describe("parseImportArchive — schema version", () => {
-  it("is 1.38.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.38.0");
+  it("is 1.39.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.39.0");
   });
 
   it("is exactly what buildExportArchive stamps into its own manifest", () => {
@@ -4692,11 +4831,11 @@ describe("parseImportArchive — schema version", () => {
     expect(result.manifest?.profile.kind).toBe("personal");
   });
 
-  // `1.39.0`: the nearest minor strictly ahead of this build's `1.38.0`.
+  // `1.40.0`: the nearest minor strictly ahead of this build's `1.39.0`.
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.39.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.40.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.39.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.40.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -5364,7 +5503,7 @@ describe("parseImportArchive — import mode: drops cascade along references", (
   it("a dropped list leaves its tasks in the Inbox rule's null placement", () => {
     const list = { ...VALID_TASK_LIST, id: "tl-bad", isInbox: false, name: "Posao", defaultView: "gantt" };
     const section = {
-      type: "task-section", id: "sec1", listId: "tl-bad", name: "U toku", position: 1024,
+      type: "task-section", id: "sec1", listId: "tl-bad", name: "U toku", rank: FIRST_RANK,
       createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
     };
     const task = { ...VALID_TASK, id: "t9", listId: "tl-bad", sectionId: "sec1" };
@@ -5495,7 +5634,7 @@ describe("parseImportArchive — import mode: drops cascade along references", (
   it("a task pointing at a section of some OTHER list falls to the list body", () => {
     const other = { ...VALID_TASK_LIST, id: "tl2", isInbox: false, name: "Drugi" };
     const section = {
-      type: "task-section", id: "sec1", listId: "tl2", name: "U toku", position: 1024,
+      type: "task-section", id: "sec1", listId: "tl2", name: "U toku", rank: FIRST_RANK,
       createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
     };
     const task = { ...VALID_TASK, listId: "tl1", sectionId: "sec1" };

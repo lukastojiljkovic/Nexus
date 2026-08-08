@@ -1,14 +1,16 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import {
+  FIRST_RANK,
   isValidDayKey,
   nextOccurrenceDate,
+  rankAfter,
   serializeRecurrenceRule,
   validateRecurrenceRule,
 } from "@nexus/core";
 import type { RecurrenceRule } from "@nexus/core";
 import { TaskNotFoundError, TaskValidationError } from "../errors.js";
 import { uuidv7 } from "../ids.js";
-import { TASK_ORDER_GAP, placeBetween } from "./taskListStore.js";
+import { placeBetween } from "./taskListStore.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -90,8 +92,8 @@ export interface Task {
   listId: string;
   /** The section (a heading inside `listId`) this task sits under, or null for the list body. */
   sectionId: string | null;
-  /** Sparse sort key within this task's (list, section) scope — see `TaskListStore.positionBetween`. */
-  position: number;
+  /** Fractional sort key within this task's (list, section) scope — see `@nexus/core`'s `rankBetween`. */
+  rank: string;
 }
 
 /** Fields accepted when creating a task; only `title` is required (TASK-001). */
@@ -144,25 +146,25 @@ interface TaskRow {
   reminder_offsets: string;
   list_id: string | null;
   section_id: string | null;
-  position: number;
+  rank: string;
 }
 
 const COLUMNS =
   "id, profile_id, parent_id, title, description, status, priority, " +
   "due_date, start_date, created_at, updated_at, completed_at, recurrence, reminder_offsets, " +
-  "list_id, section_id, position";
+  "list_id, section_id, rank";
 
 /**
  * The one total order every task read uses (TASK-004): list, then the list BODY
  * before its sections (`section_id IS NOT NULL` is 0 for the body), then each
- * scope by its own sparse `position`. `created_at, id` break the remaining ties,
- * because equal positions inside one scope are legal — a promoted subtree keeps
- * its relative order rather than forcing a table-wide reshuffle. Sections
- * themselves are ordered by `task_sections.position`, which a task row cannot
- * see; the UI reads that order from `TaskListStore.listSections` and groups
- * these rows under it.
+ * scope by its own fractional `rank`. `created_at, id` break the remaining ties,
+ * because equal ranks inside one scope are legal — a restore can land a row on
+ * a rank a live sibling already holds, and a promoted subtree keeps its relative
+ * order rather than forcing a table-wide reshuffle. Sections themselves are
+ * ordered by `task_sections.rank`, which a task row cannot see; the UI reads that
+ * order from `TaskListStore.listSections` and groups these rows under it.
  */
-const TASK_ORDER = "list_id, section_id IS NOT NULL, section_id, position, created_at, id";
+const TASK_ORDER = "list_id, section_id IS NOT NULL, section_id, rank, created_at, id";
 
 /** Accepts ISO-8601 date ('2026-07-08') or date-time, optionally zoned (PRD §7). */
 const ISO_8601 =
@@ -198,12 +200,10 @@ export class TaskStore {
   private readonly selectInbox: Database.Statement;
   private readonly selectActiveList: Database.Statement;
   private readonly selectSectionOfList: Database.Statement;
-  private readonly selectSiblingPosition: Database.Statement;
-  private readonly selectMaxPosition: Database.Statement;
-  private readonly selectScopeIds: Database.Statement;
+  private readonly selectSiblingRank: Database.Statement;
+  private readonly selectMaxRank: Database.Statement;
   private readonly selectLiveSubtreeIds: Database.Statement;
   private readonly updatePlacement: Database.Statement;
-  private readonly updatePosition: Database.Statement;
 
   constructor(
     private readonly db: DatabaseHandle,
@@ -213,7 +213,7 @@ export class TaskStore {
       `INSERT INTO tasks
          (id, profile_id, parent_id, title, description, status, priority,
           due_date, start_date, created_at, updated_at, completed_at, recurrence,
-          reminder_offsets, list_id, section_id, position, deleted_at)
+          reminder_offsets, list_id, section_id, rank, deleted_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.selectActive = db.prepare(
@@ -255,7 +255,7 @@ export class TaskStore {
     this.selectInbox = db.prepare(
       `SELECT id FROM task_lists
        WHERE profile_id = ? AND is_inbox = 1 AND deleted_at IS NULL
-       ORDER BY position, id LIMIT 1`,
+       ORDER BY rank, id LIMIT 1`,
     );
     this.selectActiveList = db.prepare(
       `SELECT id FROM task_lists WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
@@ -264,22 +264,16 @@ export class TaskStore {
       `SELECT s.id FROM task_sections s JOIN task_lists l ON l.id = s.list_id
        WHERE s.id = ? AND s.list_id = ? AND l.profile_id = ?`,
     );
-    this.selectSiblingPosition = db.prepare(
-      `SELECT position FROM tasks
+    this.selectSiblingRank = db.prepare(
+      `SELECT rank FROM tasks
        WHERE id = ? AND profile_id = ? AND deleted_at IS NULL
          AND list_id = ? AND section_id IS ?`,
     );
-    // Position bookkeeping (the scope maximum, a renumber) deliberately spans
-    // soft-deleted rows too, so restoring a task puts it back where it was
-    // rather than on top of a live one.
-    this.selectMaxPosition = db.prepare(
-      `SELECT max(position) AS maxPosition FROM tasks
+    // The scope maximum deliberately spans soft-deleted rows too, so restoring a
+    // task puts it back where it was rather than on top of a live one.
+    this.selectMaxRank = db.prepare(
+      `SELECT max(rank) AS maxRank FROM tasks
        WHERE profile_id = ? AND list_id = ? AND section_id IS ?`,
-    );
-    this.selectScopeIds = db.prepare(
-      `SELECT id FROM tasks
-       WHERE profile_id = ? AND list_id = ? AND section_id IS ?
-       ORDER BY position, created_at, id`,
     );
     // `UNION` (never `UNION ALL`) so a hand-corrupted parent chain ends the
     // walk instead of running forever.
@@ -292,16 +286,11 @@ export class TaskStore {
        )
        SELECT t.id FROM tasks t
        WHERE t.id IN (SELECT tid FROM subtree) AND t.profile_id = ? AND t.deleted_at IS NULL
-       ORDER BY t.position, t.created_at, t.id`,
+       ORDER BY t.rank, t.created_at, t.id`,
     );
     this.updatePlacement = db.prepare(
-      `UPDATE tasks SET list_id = ?, section_id = ?, position = ?, updated_at = ?
+      `UPDATE tasks SET list_id = ?, section_id = ?, rank = ?, updated_at = ?
        WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
-    );
-    // A renumber re-spaces rows the user did not touch, so it leaves their
-    // `updated_at` alone (`NoteOrgStore`'s promoted-notes reasoning).
-    this.updatePosition = db.prepare(
-      `UPDATE tasks SET position = ? WHERE id = ? AND profile_id = ?`,
     );
   }
 
@@ -352,21 +341,21 @@ export class TaskStore {
       parent !== null
         ? { listId: parent.listId, sectionId: parent.sectionId }
         : this.resolveScope(input.listId, input.sectionId);
-    const position = this.appendPosition(listId, sectionId);
+    const rank = this.appendRank(listId, sectionId);
     const completedAt = status === "done" ? now : null;
     const id = uuidv7();
 
     this.insert.run(
       id, this.profileId, parent?.id ?? null, title, description, status, priority,
       dueDate, startDate, now, now, completedAt, serializeRecurrence(recurrence),
-      JSON.stringify(reminderOffsets), listId, sectionId, position,
+      JSON.stringify(reminderOffsets), listId, sectionId, rank,
     );
 
     return {
       id, profileId: this.profileId, parentId: parent?.id ?? null, title, description, status,
       priority, done: status === "done", dueDate, startDate,
       createdAt: now, updatedAt: now, completedAt, recurrence, reminderOffsets,
-      listId, sectionId, position,
+      listId, sectionId, rank,
     };
   }
 
@@ -390,14 +379,14 @@ export class TaskStore {
       const ids = (this.selectLiveSubtreeIds.all(id, this.profileId) as { id: string }[]).map(
         (row) => row.id,
       );
-      let position = this.appendPosition(listId, null);
-      let movedPosition = position;
+      let rank = this.scopeMaxRank(listId, null);
+      let movedRank = FIRST_RANK;
       for (const taskId of ids) {
-        this.updatePlacement.run(listId, null, position, validNow, taskId, this.profileId);
-        if (taskId === id) movedPosition = position;
-        position += TASK_ORDER_GAP;
+        rank = rankAfter(rank);
+        this.updatePlacement.run(listId, null, rank, validNow, taskId, this.profileId);
+        if (taskId === id) movedRank = rank;
       }
-      return { ...current, listId, sectionId: null, position: movedPosition, updatedAt: validNow };
+      return { ...current, listId, sectionId: null, rank: movedRank, updatedAt: validNow };
     })();
   }
 
@@ -412,11 +401,11 @@ export class TaskStore {
     const validNow = validateDateTime(now);
     if (sectionId !== null) this.requireSectionOfList(sectionId, current.listId);
 
-    const position = this.appendPosition(current.listId, sectionId);
+    const rank = this.appendRank(current.listId, sectionId);
     this.updatePlacement.run(
-      current.listId, sectionId, position, validNow, id, this.profileId,
+      current.listId, sectionId, rank, validNow, id, this.profileId,
     );
-    return { ...current, sectionId, position, updatedAt: validNow };
+    return { ...current, sectionId, rank, updatedAt: validNow };
   }
 
   /**
@@ -432,42 +421,34 @@ export class TaskStore {
       throw new TaskValidationError("A task cannot be ordered against itself.");
     }
 
-    // One transaction, because a renumber and the move it made room for are one
-    // edit: half of them is a scope re-spaced for a row that never arrived.
+    // Still one transaction: the neighbour reads and the write that depends on
+    // them are one edit, and a concurrent move must not slip between them.
     return this.db.transaction((): Task => {
-      const position = placeBetween(
+      const rank = placeBetween(
         (siblingId) => {
-          const row = this.selectSiblingPosition.get(
+          const row = this.selectSiblingRank.get(
             siblingId, this.profileId, current.listId, current.sectionId,
-          ) as { position: number } | undefined;
+          ) as { rank: string } | undefined;
           if (!row) {
             throw new TaskValidationError(
               `No active task "${siblingId}" to order against in this scope.`,
             );
           }
-          return row.position;
-        },
-        () => {
-          const ids = this.selectScopeIds.all(
-            this.profileId, current.listId, current.sectionId,
-          ) as { id: string }[];
-          ids.forEach((row, index) => {
-            this.updatePosition.run((index + 1) * TASK_ORDER_GAP, row.id, this.profileId);
-          });
+          return row.rank;
         },
         beforeId,
         afterId,
       );
-      if (position === null) {
+      if (rank === null) {
         throw new TaskValidationError(
           '"beforeId" and "afterId" do not describe a gap in this scope.',
         );
       }
 
       this.updatePlacement.run(
-        current.listId, current.sectionId, position, validNow, id, this.profileId,
+        current.listId, current.sectionId, rank, validNow, id, this.profileId,
       );
-      return { ...current, position, updatedAt: validNow };
+      return { ...current, rank, updatedAt: validNow };
     })();
   }
 
@@ -853,12 +834,17 @@ export class TaskStore {
     }
   }
 
-  /** The end of one (list, section) scope — every insert and every move appends there. */
-  private appendPosition(listId: string, sectionId: string | null): number {
-    const row = this.selectMaxPosition.get(this.profileId, listId, sectionId) as {
-      maxPosition: number | null;
+  /** The highest rank in one (list, section) scope, or null when the scope is empty. */
+  private scopeMaxRank(listId: string, sectionId: string | null): string | null {
+    const row = this.selectMaxRank.get(this.profileId, listId, sectionId) as {
+      maxRank: string | null;
     };
-    return row.maxPosition === null ? TASK_ORDER_GAP : row.maxPosition + TASK_ORDER_GAP;
+    return row.maxRank;
+  }
+
+  /** The end of one (list, section) scope — every insert and every move appends there. */
+  private appendRank(listId: string, sectionId: string | null): string {
+    return rankAfter(this.scopeMaxRank(listId, sectionId));
   }
 }
 
@@ -881,7 +867,7 @@ function toTask(row: TaskRow): Task {
     reminderOffsets: parseStoredOffsets(row.reminder_offsets, row.id),
     listId: requireStoredListId(row.list_id, row.id),
     sectionId: row.section_id,
-    position: row.position,
+    rank: row.rank,
   };
 }
 

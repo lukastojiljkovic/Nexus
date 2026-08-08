@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import * as Y from "yjs";
+import { FIRST_RANK, rankAfter, rankBetween, rankSequence } from "../order/rank.js";
 import {
   ARCHIVE_MODULE_IDS,
   buildExportArchive,
@@ -101,7 +102,7 @@ function emptyInput(): ExportArchiveInput {
 
 /** The list and placement every task row below carries (TASK-004) — spelled once so a task fixture states only what its own test is about. */
 const LIST_ID = "tl1";
-const PLACED = { listId: LIST_ID, sectionId: null, position: 1024 } as const;
+const PLACED = { listId: LIST_ID, sectionId: null, rank: FIRST_RANK } as const;
 
 /** A minimal `ExportTaskList` row — the Inbox unless a test says otherwise. */
 function taskListRow(overrides: {
@@ -110,7 +111,7 @@ function taskListRow(overrides: {
   parentId?: string | null;
   isInbox?: boolean;
   defaultView?: string;
-  position?: number;
+  rank?: string;
 }): ExportTaskList {
   return {
     id: overrides.id,
@@ -119,7 +120,7 @@ function taskListRow(overrides: {
     name: overrides.name,
     isInbox: overrides.isInbox ?? true,
     defaultView: overrides.defaultView ?? "list",
-    position: overrides.position ?? 1024,
+    rank: overrides.rank ?? FIRST_RANK,
     createdAt: "2026-07-01T00:00:00.000Z",
     updatedAt: "2026-07-01T00:00:00.000Z",
   };
@@ -287,7 +288,7 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as Record<string, unknown>;
 
-      expect(manifest.schemaVersion).toBe("1.38.0");
+      expect(manifest.schemaVersion).toBe("1.39.0");
       expect(manifest.appVersion).toBe("0.1.0");
       expect(manifest.createdAt).toBe("2026-07-11T10:00:00.000Z");
       // `picture: null` is written out loud rather than omitted: the manifest is
@@ -461,7 +462,7 @@ describe("buildExportArchive", () => {
           reminderOffsets: [],
           listId: LIST_ID,
           sectionId: null,
-          position: 1024,
+          rank: FIRST_RANK,
         },
       ]);
       expect(Object.keys(rows[0] as object)[0]).toBe("type");
@@ -471,16 +472,18 @@ describe("buildExportArchive", () => {
 
     it("writes lists and sections ahead of the tasks that reference them, and counts all three into byModule.tasks (TASK-004)", () => {
       const input = emptyInput();
+      // One step below the first rank — a prepend, spelled without a minus sign.
+      const belowFirstRank = rankBetween(null, FIRST_RANK) as string;
       input.data.taskLists = [
         taskListRow({ id: LIST_ID, name: "Inbox" }),
-        taskListRow({ id: "tl2", name: "Posao", isInbox: false, defaultView: "kanban", position: 2048 }),
+        taskListRow({ id: "tl2", name: "Posao", isInbox: false, defaultView: "kanban", rank: rankAfter(FIRST_RANK) }),
       ];
       input.data.taskSections = [
         {
           id: "ts1",
           listId: "tl2",
           name: "U toku",
-          position: 1024,
+          rank: FIRST_RANK,
           createdAt: "2026-07-01T00:00:00.000Z",
           updatedAt: "2026-07-01T00:00:00.000Z",
         },
@@ -491,7 +494,7 @@ describe("buildExportArchive", () => {
           status: "todo", priority: "none", done: false, dueDate: null, startDate: null,
           createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z",
           completedAt: null, recurrence: null, reminderOffsets: [],
-          listId: "tl2", sectionId: "ts1", position: -1024,
+          listId: "tl2", sectionId: "ts1", rank: belowFirstRank,
         },
       ];
 
@@ -499,6 +502,7 @@ describe("buildExportArchive", () => {
       const rows = parseNdjson(archive.files.get("data/tasks.ndjson") ?? "") as Array<{
         type: string;
         id: string;
+        rank?: string;
       }>;
       expect(rows.map((row) => row.type)).toEqual([
         "task-list",
@@ -514,7 +518,7 @@ describe("buildExportArchive", () => {
         name: "Inbox",
         isInbox: true,
         defaultView: "list",
-        position: 1024,
+        rank: FIRST_RANK,
         createdAt: "2026-07-01T00:00:00.000Z",
         updatedAt: "2026-07-01T00:00:00.000Z",
       });
@@ -523,13 +527,18 @@ describe("buildExportArchive", () => {
         id: "ts1",
         listId: "tl2",
         name: "U toku",
-        position: 1024,
+        rank: FIRST_RANK,
         createdAt: "2026-07-01T00:00:00.000Z",
         updatedAt: "2026-07-01T00:00:00.000Z",
       });
-      // A negative position is legitimate — prepending walks below zero — so it
-      // travels verbatim rather than being normalized on the way out.
-      expect(rows[3]).toMatchObject({ listId: "tl2", sectionId: "ts1", position: -1024 });
+      // A rank has no sign to spell "prepend" with, but the space still has a
+      // below-zero half: `belowFirstRank` sorts under FIRST_RANK the same way
+      // -1024 used to sort under 0, and it travels verbatim rather than being
+      // renormalized on the way out.
+      expect(rows[3]).toMatchObject({ listId: "tl2", sectionId: "ts1", rank: belowFirstRank });
+      const taskRank = rows[3]?.rank;
+      if (taskRank === undefined) throw new Error("expected the prepended task's rank");
+      expect(taskRank < FIRST_RANK).toBe(true);
       expect(archive.byModule.tasks).toBe(4);
       expect(archive.totalRecords).toBe(4);
     });
@@ -1054,15 +1063,16 @@ describe("buildExportArchive", () => {
      */
     function populatedData(): ProfileData {
       const t = "2026-01-01T00:00:00.000Z";
+      const [taskRank1, taskRank2] = rankSequence(2) as [string, string];
       return {
         tasks: [
-          { id: "t1", profileId: "p1", parentId: null, title: "T", description: null, status: "todo", priority: "none", done: false, dueDate: null, startDate: null, createdAt: t, updatedAt: t, completedAt: null, recurrence: null, reminderOffsets: [], listId: "tl1", sectionId: "ts1", position: 1024 },
-          { id: "t2", profileId: "p1", parentId: null, title: "T2", description: null, status: "todo", priority: "none", done: false, dueDate: null, startDate: null, createdAt: t, updatedAt: t, completedAt: null, recurrence: null, reminderOffsets: [], listId: "tl1", sectionId: "ts1", position: 2048 },
+          { id: "t1", profileId: "p1", parentId: null, title: "T", description: null, status: "todo", priority: "none", done: false, dueDate: null, startDate: null, createdAt: t, updatedAt: t, completedAt: null, recurrence: null, reminderOffsets: [], listId: "tl1", sectionId: "ts1", rank: taskRank1 },
+          { id: "t2", profileId: "p1", parentId: null, title: "T2", description: null, status: "todo", priority: "none", done: false, dueDate: null, startDate: null, createdAt: t, updatedAt: t, completedAt: null, recurrence: null, reminderOffsets: [], listId: "tl1", sectionId: "ts1", rank: taskRank2 },
         ],
         taskLists: [
-          { id: "tl1", profileId: "p1", parentId: null, name: "Inbox", isInbox: true, defaultView: "list", position: 1024, createdAt: t, updatedAt: t },
+          { id: "tl1", profileId: "p1", parentId: null, name: "Inbox", isInbox: true, defaultView: "list", rank: FIRST_RANK, createdAt: t, updatedAt: t },
         ],
-        taskSections: [{ id: "ts1", listId: "tl1", name: "Danas", position: 1024, createdAt: t, updatedAt: t }],
+        taskSections: [{ id: "ts1", listId: "tl1", name: "Danas", rank: FIRST_RANK, createdAt: t, updatedAt: t }],
         taskTags: [{ id: "ttag1", profileId: "p1", name: "posao", createdAt: t }],
         taskTagLinks: [{ taskId: "t1", tagId: "ttag1" }],
         taskAttachments: [
@@ -1167,12 +1177,12 @@ describe("buildExportArchive", () => {
           },
         ],
         dashboardSets: [
-          { id: "set1", profileId: "p1", name: "Fakultet", position: 1024, createdAt: t, updatedAt: t },
+          { id: "set1", profileId: "p1", name: "Fakultet", rank: FIRST_RANK, createdAt: t, updatedAt: t },
         ],
         dashboardWidgets: [
           {
             instanceId: "dw1", profileId: "p1", widgetId: "calendar:danas", size: "M",
-            position: 1024, config: null, createdAt: t, updatedAt: t, setId: "set1",
+            rank: FIRST_RANK, config: null, createdAt: t, updatedAt: t, setId: "set1",
           },
         ],
         // TWO accounts rather than one, because a transfer names both sides —
@@ -1502,6 +1512,7 @@ describe("buildExportArchive", () => {
     it("writes the layout after the settings row, one type-discriminated line each", () => {
       const input = emptyInput();
       const t = "2026-07-31T09:00:00.000Z";
+      const [widgetRank1, widgetRank2] = rankSequence(2) as [string, string];
       input.data.dashboardSettings = [
         {
           profileId: "profile1", backgroundHash: null, backgroundMime: null,
@@ -1511,11 +1522,11 @@ describe("buildExportArchive", () => {
       input.data.dashboardWidgets = [
         {
           instanceId: "dw1", profileId: "profile1", widgetId: "calendar:danas", size: "M",
-          position: 1024, config: null, createdAt: t, updatedAt: t,
+          rank: widgetRank1, config: null, createdAt: t, updatedAt: t,
         },
         {
           instanceId: "dw2", profileId: "profile1", widgetId: "study:ispiti", size: "L",
-          position: 2048, config: '{"limit":3}', createdAt: t, updatedAt: t,
+          rank: widgetRank2, config: '{"limit":3}', createdAt: t, updatedAt: t,
         },
       ];
       const archive = buildExportArchive(input);
@@ -1527,12 +1538,12 @@ describe("buildExportArchive", () => {
         },
         {
           type: "dashboard-widget", instanceId: "dw1", profileId: "profile1",
-          widgetId: "calendar:danas", size: "M", position: 1024, config: null,
+          widgetId: "calendar:danas", size: "M", rank: widgetRank1, config: null,
           createdAt: t, updatedAt: t,
         },
         {
           type: "dashboard-widget", instanceId: "dw2", profileId: "profile1",
-          widgetId: "study:ispiti", size: "L", position: 2048, config: '{"limit":3}',
+          widgetId: "study:ispiti", size: "L", rank: widgetRank2, config: '{"limit":3}',
           createdAt: t, updatedAt: t,
         },
       ]);
@@ -1561,12 +1572,12 @@ describe("buildExportArchive", () => {
         },
       ];
       input.data.dashboardSets = [
-        { id: "set1", profileId: "profile1", name: "Fakultet", position: 1024, createdAt: t, updatedAt: t },
+        { id: "set1", profileId: "profile1", name: "Fakultet", rank: FIRST_RANK, createdAt: t, updatedAt: t },
       ];
       input.data.dashboardWidgets = [
         {
           instanceId: "dw1", profileId: "profile1", widgetId: "calendar:danas", size: "M",
-          position: 1024, config: null, createdAt: t, updatedAt: t, setId: "set1",
+          rank: FIRST_RANK, config: null, createdAt: t, updatedAt: t, setId: "set1",
         },
       ];
       const archive = buildExportArchive(input);
@@ -1578,11 +1589,11 @@ describe("buildExportArchive", () => {
         },
         {
           type: "dashboard-set", id: "set1", profileId: "profile1", name: "Fakultet",
-          position: 1024, createdAt: t, updatedAt: t,
+          rank: FIRST_RANK, createdAt: t, updatedAt: t,
         },
         {
           type: "dashboard-widget", instanceId: "dw1", profileId: "profile1",
-          widgetId: "calendar:danas", size: "M", position: 1024, config: null,
+          widgetId: "calendar:danas", size: "M", rank: FIRST_RANK, config: null,
           createdAt: t, updatedAt: t, setId: "set1",
         },
       ]);
@@ -2165,10 +2176,10 @@ function everyModuleInput(): ExportArchiveInput {
     { profileId: "profile1", backgroundHash: BACKGROUND_BLOB, backgroundMime: "image/png", backgroundSizeBytes: 40, backgroundDim: 40, activeSetId: "set1" },
   ];
   input.data.dashboardSets = [
-    { id: "set1", profileId: "profile1", name: "Fakultet", position: 1024, createdAt: at, updatedAt: at },
+    { id: "set1", profileId: "profile1", name: "Fakultet", rank: FIRST_RANK, createdAt: at, updatedAt: at },
   ];
   input.data.dashboardWidgets = [
-    { instanceId: "w1", profileId: "profile1", widgetId: "tasks:danas", size: "M", position: 1024, config: null, createdAt: at, updatedAt: at, setId: "set1" },
+    { instanceId: "w1", profileId: "profile1", widgetId: "tasks:danas", size: "M", rank: FIRST_RANK, config: null, createdAt: at, updatedAt: at, setId: "set1" },
   ];
   return input;
 }

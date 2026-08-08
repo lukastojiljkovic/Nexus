@@ -61,6 +61,19 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * older reader handed a newer archive is therefore no worse off for its
  * presence, which is precisely what a version bump would otherwise be claiming.
  *
+ * `1.39.0` renames the ordering key of `task`, `task-list`, `task-section`,
+ * `dashboard-set` and `dashboard-widget` from `position` to `rank`, and changes
+ * what its value IS: a sparse integer becomes a fractional rank string
+ * (migration 062, `@nexus/core`'s `rankBetween`). Not additive, which is why the
+ * reader gets an era flag rather than a default — `ArchiveEra.writesOrderRanks`.
+ * An archive written by 1.38.0 or earlier carries the integer, and
+ * `rankForInteger` converts it EXACTLY and row-locally on the way in, because a
+ * rank's integer part is itself a signed base-36 number: `rankForInteger(n) <
+ * rankForInteger(m)` precisely when `n < m`. So an old backup restores its order
+ * byte for byte rather than approximately. `fit-routine-item` and
+ * `fit-workout-set` keep their integer `position` deliberately — it indexes a
+ * parent's array rather than ordering a scope the user drags in (ADR-082 §2).
+ *
  * `1.38.0` adds four targets to `fit-routine-item` (migration 061):
  * `targetSeconds`, `targetWeightKg`, `targetDistanceM` and `restSeconds`. A
  * PURELY ADDITIVE change, hence the minor bump — `1.37.0` shipped a routine
@@ -522,7 +535,7 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * ADR-037), `1.5.0`-`1.7.0` task attachments, task templates and the NOTE
  * folder preferences (each landing on its own lane), `1.4.0` the
  * `task-tag`/`task-tag-link` types (migration 023), `1.3.0` the
- * `task-list`/`task-section` types and the `listId`/`sectionId`/`position` a
+ * `task-list`/`task-section` types and the `listId`/`sectionId`/`rank` a
  * task carries into them (TASK-004 / ADR-029), `1.2.0` a task's
  * `reminderOffsets` (ADR-028) and `1.1.0` the `person` record type (CAL-007 /
  * ADR-026). Additive, so a MINOR bump by the same honesty each of those made
@@ -541,7 +554,7 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * pins them equal.
  *
  */
-const SCHEMA_VERSION = "1.38.0";
+const SCHEMA_VERSION = "1.39.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 
@@ -567,7 +580,15 @@ export interface ExportTaskList {
    * string here would be a second encoding nobody can read in the file.
    */
   viewConfig?: TaskViewConfig | null;
-  position: number;
+  /**
+   * Where this row sits in its scope: a fractional rank, compared as a plain
+   * string (`@nexus/core`'s `rankBetween`). Never an index — it is not
+   * contiguous and nothing counts it. An archive written before `1.39.0`
+   * carries a sparse INTEGER `position` here instead, which the reader
+   * converts row-locally and losslessly through `rankForInteger`
+   * (`ArchiveEra.writesOrderRanks`).
+   */
+  rank: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -577,7 +598,15 @@ export interface ExportTaskSection {
   id: string;
   listId: string;
   name: string;
-  position: number;
+  /**
+   * Where this row sits in its scope: a fractional rank, compared as a plain
+   * string (`@nexus/core`'s `rankBetween`). Never an index — it is not
+   * contiguous and nothing counts it. An archive written before `1.39.0`
+   * carries a sparse INTEGER `position` here instead, which the reader
+   * converts row-locally and losslessly through `rankForInteger`
+   * (`ArchiveEra.writesOrderRanks`).
+   */
+  rank: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -732,8 +761,16 @@ export interface ExportTask {
   listId: string | null;
   /** The section of `listId` this task sits under, or null for the list body. Era-defaults to null. */
   sectionId: string | null;
-  /** Sparse sort key within the task's (list, section) scope; may be negative. Era-defaults to 0, which a restore then re-spaces. */
-  position: number;
+  /**
+   * Where the task sits in its (list, section) scope: a fractional rank,
+   * compared as a plain string. An archive written before `1.39.0` carries a
+   * sparse INTEGER `position` here, converted on the way in by
+   * `rankForInteger`; one written before `1.3.0` carries neither, and
+   * era-defaults to the first rank — which a restore then re-spaces in the
+   * archive's own row order, because a task from before lists existed has no
+   * scope to be ordered within.
+   */
+  rank: string;
 }
 
 export interface ExportEvent {
@@ -1354,8 +1391,13 @@ export interface ExportDashboardSet {
   id: string;
   profileId: string;
   name: string;
-  /** Sparse sort key among the profile's boards; may be negative. */
-  position: number;
+  /**
+   * Where this board sits among the profile's boards: a fractional rank,
+   * compared as a plain string. An archive written before `1.39.0` carries a
+   * sparse INTEGER `position` here, converted on the way in by
+   * `rankForInteger`.
+   */
+  rank: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -1370,8 +1412,8 @@ export interface ExportDashboardSet {
  * migration 028's argument). It is carried across unchanged by every path here,
  * including a foreign import, precisely because it does not name a row.
  *
- * `position` is the sparse sort key, not an index: it may be negative, it is
- * never assumed contiguous, and the ORDER it expresses is the layout. `config`
+ * `rank` is a fractional sort key, not an index: it is never assumed
+ * contiguous, and the ORDER it expresses is the layout. `config`
  * is per-widget JSON text, opaque — no widget publishes a config schema yet, so
  * the reader checks only that a non-null value parses as JSON at all.
  */
@@ -1380,7 +1422,15 @@ export interface ExportDashboardWidget {
   profileId: string;
   widgetId: string;
   size: string;
-  position: number;
+  /**
+   * Where this row sits in its scope: a fractional rank, compared as a plain
+   * string (`@nexus/core`'s `rankBetween`). Never an index — it is not
+   * contiguous and nothing counts it. An archive written before `1.39.0`
+   * carries a sparse INTEGER `position` here instead, which the reader
+   * converts row-locally and losslessly through `rankForInteger`
+   * (`ArchiveEra.writesOrderRanks`).
+   */
+  rank: string;
   config: string | null;
   createdAt: string;
   updatedAt: string;

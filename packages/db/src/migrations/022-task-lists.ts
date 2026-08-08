@@ -33,6 +33,12 @@ import type { Migration } from "./migrations.js";
  * break the tie on `id`), which is what lets a promoted subtree keep its
  * relative order without a table-wide reshuffle.
  *
+ * **Superseded by migration 062**, which replaced this column with a
+ * fractional `rank` TEXT: an integer gap can run out, and the whole-scope
+ * renumber that recovered from it is a mass UPDATE that a two-device merge
+ * cannot tell apart from an intentional reordering. Everything above is
+ * what this migration DID; none of it is the shape on disk today.
+ *
  * **The Inbox backfill.** Every profile that already exists gains one, here, so
  * no session ever opens a profile without the list `TaskStore.create` defaults
  * to. New profiles get theirs from `TaskListStore.ensureInbox` at creation time

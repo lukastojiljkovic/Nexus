@@ -421,12 +421,14 @@ describe("translateCsvTasks", () => {
     expect(data.tasks[0]).toMatchObject({ title: "Zadatak", description: "Detalji, sa zarezom" });
   });
 
-  it("plans every non-task collection empty and spaces positions sparsely", () => {
+  it("plans every non-task collection empty and ranks tasks in ascending, distinct order", () => {
     const { data } = translateCsvTasks(ROWS, ROLES, target());
     expect(data.events).toEqual([]);
     expect(data.notes).toEqual([]);
     expect(data.decks).toEqual([]);
-    expect(data.tasks.map((task) => task.position)).toEqual([1024, 2048, 3072]);
+    const ranks = data.tasks.map((task) => task.rank);
+    expect(ranks).toEqual([...ranks].sort());
+    expect(new Set(ranks).size).toBe(ranks.length);
   });
 
   it("refuses a mapping without a title column — the caller's bug, not a row's", () => {

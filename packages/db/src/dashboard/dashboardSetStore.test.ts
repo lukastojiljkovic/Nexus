@@ -9,7 +9,6 @@ import {
   DashboardWidgetStore,
   NexusDatabase,
   openDatabase,
-  TASK_ORDER_GAP,
 } from "../index.js";
 
 let dir: string;
@@ -51,13 +50,12 @@ describe("DashboardSetStore.create / list", () => {
     expect(store.list()).toEqual([]);
   });
 
-  it("creates sets at gap-1024 positions, in creation order", () => {
+  it("creates sets at increasing ranks, in creation order", () => {
     const { store, profileId } = storeFor("a");
     const first = store.create("Fakultet", NOW);
     const second = store.create("Posao", NOW);
     expect(first.profileId).toBe(profileId);
-    expect(first.position).toBe(TASK_ORDER_GAP);
-    expect(second.position).toBe(TASK_ORDER_GAP * 2);
+    expect(first.rank < second.rank).toBe(true);
     expect(names(store)).toEqual(["Fakultet", "Posao"]);
     expect(first.createdAt).toBe(NOW);
     expect(first.updatedAt).toBe(NOW);
@@ -182,17 +180,27 @@ describe("DashboardSetStore.reorder", () => {
     expect(after.map((set) => set.name)).toEqual(["C", "A", "B"]);
   });
 
-  it("renumbers the scope when the gap between two neighbours has run out", () => {
+  it("places 200 boards between the same two neighbours without ever running out of room", () => {
+    // The fractional-rank replacement for "the gap ran out and the scope was
+    // renumbered": a rank always has room between two neighbours (@nexus/core's
+    // `rankBetween`), so 200 inserts squeezed into the SAME narrowing gap next
+    // to A must all succeed, and the scope must still come back in exactly the
+    // order they were placed.
     const { store } = storeFor("a");
     const a = store.create("A", NOW);
-    const b = store.create("B", NOW);
-    // Exhaust the gap between A and B by hand.
-    db.raw
-      .prepare("UPDATE dashboard_sets SET position = ? WHERE id = ?")
-      .run(a.position + 1, b.id);
-    const c = store.create("C", NOW);
-    const after = store.reorder(c.id, a.id, b.id, LATER);
-    expect(after.map((set) => set.name)).toEqual(["A", "C", "B"]);
+    let boundary = store.create("B", NOW);
+    for (let round = 0; round < 200; round += 1) {
+      const inserted = store.create(`Mid-${round}`, NOW);
+      store.reorder(inserted.id, a.id, boundary.id, NOW);
+      boundary = inserted;
+    }
+    const order = names(store);
+    expect(order).toHaveLength(202);
+    expect(order[0]).toBe("A");
+    expect(order[order.length - 1]).toBe("B");
+    // Each round landed strictly between A and the previous round's board, so
+    // the 200 middle boards come back in reverse insertion order.
+    expect(order.slice(1, -1)).toEqual(Array.from({ length: 200 }, (_, i) => `Mid-${199 - i}`));
   });
 
   it("refuses a pair that describes no gap, and a set ordered against itself", () => {

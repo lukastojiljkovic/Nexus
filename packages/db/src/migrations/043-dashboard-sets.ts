@@ -42,6 +42,12 @@ import type { Migration } from "./migrations.js";
  * named „Fakultet“ are the user's own affair, exactly as two identical chores
  * are two chores (migration 027).
  *
+ * **Superseded by migration 062**, which replaced this column with a
+ * fractional `rank` TEXT: an integer gap can run out, and the whole-scope
+ * renumber that recovered from it is a mass UPDATE that a two-device merge
+ * cannot tell apart from an intentional reordering. Everything above is
+ * what this migration DID; none of it is the shape on disk today.
+ *
  * `dashboard_sets_profile_position` covers the only read there is — one
  * profile's boards in order — mirroring `dashboard_widgets_profile_position`
  * one table over.

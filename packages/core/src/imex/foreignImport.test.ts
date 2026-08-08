@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as Y from "yjs";
 
 import { extractNoteLinkTargets } from "../notes/noteLinks.js";
+import { FIRST_RANK, rankSequence } from "../order/rank.js";
 import {
   countProfileModules,
   type ArchiveProfilePicture,
@@ -86,22 +87,23 @@ function emptyProfileData(): ProfileData {
  * attachment image, and a version of that note.
  */
 function foreignProfileData(): ProfileData {
+  const [listRank1, listRank2] = rankSequence(2) as [string, string];
   return {
     ...emptyProfileData(),
     taskLists: [
-      { id: "src-inbox", profileId: "src", parentId: null, name: "Inbox", isInbox: true, defaultView: "list", position: 1024, createdAt: T0, updatedAt: T0 },
-      { id: "src-work", profileId: "src", parentId: "src-inbox", name: "Posao", isInbox: false, defaultView: "kanban", position: 2048, createdAt: T0, updatedAt: T0 },
+      { id: "src-inbox", profileId: "src", parentId: null, name: "Inbox", isInbox: true, defaultView: "list", rank: listRank1, createdAt: T0, updatedAt: T0 },
+      { id: "src-work", profileId: "src", parentId: "src-inbox", name: "Posao", isInbox: false, defaultView: "kanban", rank: listRank2, createdAt: T0, updatedAt: T0 },
     ],
     taskSections: [
-      { id: "src-sec", listId: "src-work", name: "U toku", position: 1024, createdAt: T0, updatedAt: T0 },
+      { id: "src-sec", listId: "src-work", name: "U toku", rank: FIRST_RANK, createdAt: T0, updatedAt: T0 },
     ],
     taskTags: [
       { id: "src-ttag-a", profileId: "src", name: "hitno", createdAt: T0 },
       { id: "src-ttag-b", profileId: "src", name: "kasnije", createdAt: T0 },
     ],
     tasks: [
-      { id: "src-t1", profileId: "src", parentId: null, title: "Roditelj", description: null, status: "todo", priority: "none", done: false, dueDate: null, startDate: null, createdAt: T0, updatedAt: T0, completedAt: null, recurrence: null, reminderOffsets: [], listId: "src-work", sectionId: "src-sec", position: 1024 },
-      { id: "src-t2", profileId: "src", parentId: "src-t1", title: "Dete", description: null, status: "todo", priority: "high", done: false, dueDate: null, startDate: null, createdAt: T0, updatedAt: T0, completedAt: null, recurrence: null, reminderOffsets: [], listId: "src-inbox", sectionId: null, position: 2048 },
+      { id: "src-t1", profileId: "src", parentId: null, title: "Roditelj", description: null, status: "todo", priority: "none", done: false, dueDate: null, startDate: null, createdAt: T0, updatedAt: T0, completedAt: null, recurrence: null, reminderOffsets: [], listId: "src-work", sectionId: "src-sec", rank: FIRST_RANK },
+      { id: "src-t2", profileId: "src", parentId: "src-t1", title: "Dete", description: null, status: "todo", priority: "high", done: false, dueDate: null, startDate: null, createdAt: T0, updatedAt: T0, completedAt: null, recurrence: null, reminderOffsets: [], listId: "src-inbox", sectionId: null, rank: FIRST_RANK },
     ],
     taskTagLinks: [
       { taskId: "src-t1", tagId: "src-ttag-a" },
@@ -415,8 +417,8 @@ describe("planForeignImport — tags merge by name onto the target's", () => {
   it("remaps a link onto the target's tag id", () => {
     const source: ProfileData = {
       ...emptyProfileData(),
-      taskLists: [{ id: "src-inbox", profileId: "src", parentId: null, name: "Inbox", isInbox: true, defaultView: "list", position: 1024, createdAt: T0, updatedAt: T0 }],
-      tasks: [{ id: "src-t", profileId: "src", parentId: null, title: "A", description: null, status: "todo", priority: "none", done: false, dueDate: null, startDate: null, createdAt: T0, updatedAt: T0, completedAt: null, recurrence: null, reminderOffsets: [], listId: "src-inbox", sectionId: null, position: 0 }],
+      taskLists: [{ id: "src-inbox", profileId: "src", parentId: null, name: "Inbox", isInbox: true, defaultView: "list", rank: FIRST_RANK, createdAt: T0, updatedAt: T0 }],
+      tasks: [{ id: "src-t", profileId: "src", parentId: null, title: "A", description: null, status: "todo", priority: "none", done: false, dueDate: null, startDate: null, createdAt: T0, updatedAt: T0, completedAt: null, recurrence: null, reminderOffsets: [], listId: "src-inbox", sectionId: null, rank: FIRST_RANK }],
       taskTags: [{ id: "src-tag", profileId: "src", name: "hitno", createdAt: T0 }],
       taskTagLinks: [{ taskId: "src-t", tagId: "src-tag" }],
     };
@@ -467,8 +469,8 @@ describe("planForeignImport — tags merge by name onto the target's", () => {
   it("dedupes two links that collapse onto the same (task, tag) pair", () => {
     const source: ProfileData = {
       ...emptyProfileData(),
-      taskLists: [{ id: "src-inbox", profileId: "src", parentId: null, name: "Inbox", isInbox: true, defaultView: "list", position: 1024, createdAt: T0, updatedAt: T0 }],
-      tasks: [{ id: "src-t", profileId: "src", parentId: null, title: "A", description: null, status: "todo", priority: "none", done: false, dueDate: null, startDate: null, createdAt: T0, updatedAt: T0, completedAt: null, recurrence: null, reminderOffsets: [], listId: "src-inbox", sectionId: null, position: 0 }],
+      taskLists: [{ id: "src-inbox", profileId: "src", parentId: null, name: "Inbox", isInbox: true, defaultView: "list", rank: FIRST_RANK, createdAt: T0, updatedAt: T0 }],
+      tasks: [{ id: "src-t", profileId: "src", parentId: null, title: "A", description: null, status: "todo", priority: "none", done: false, dueDate: null, startDate: null, createdAt: T0, updatedAt: T0, completedAt: null, recurrence: null, reminderOffsets: [], listId: "src-inbox", sectionId: null, rank: FIRST_RANK }],
       taskTags: [
         { id: "src-a", profileId: "src", name: "hitno", createdAt: T0 },
         { id: "src-b", profileId: "src", name: "hitno", createdAt: T0 },
@@ -579,11 +581,12 @@ describe("planForeignImport — tags merge by name onto the target's", () => {
   });
 
   it("never merges anything but tags — two lists named „Posao\" coexist", () => {
+    const [listRank1, listRank2] = rankSequence(2) as [string, string];
     const source: ProfileData = {
       ...emptyProfileData(),
       taskLists: [
-        { id: "src-inbox", profileId: "src", parentId: null, name: "Inbox", isInbox: true, defaultView: "list", position: 1024, createdAt: T0, updatedAt: T0 },
-        { id: "src-work", profileId: "src", parentId: null, name: "Posao", isInbox: false, defaultView: "list", position: 2048, createdAt: T0, updatedAt: T0 },
+        { id: "src-inbox", profileId: "src", parentId: null, name: "Inbox", isInbox: true, defaultView: "list", rank: listRank1, createdAt: T0, updatedAt: T0 },
+        { id: "src-work", profileId: "src", parentId: null, name: "Posao", isInbox: false, defaultView: "list", rank: listRank2, createdAt: T0, updatedAt: T0 },
       ],
     };
 
@@ -607,7 +610,7 @@ describe("planForeignImport — singletons collapse", () => {
   it("reads an era-defaulted null listId as the target's Inbox", () => {
     const source: ProfileData = {
       ...emptyProfileData(),
-      tasks: [{ id: "src-t", profileId: "src", parentId: null, title: "Stari", description: null, status: "todo", priority: "none", done: false, dueDate: null, startDate: null, createdAt: T0, updatedAt: T0, completedAt: null, recurrence: null, reminderOffsets: [], listId: null, sectionId: null, position: 0 }],
+      tasks: [{ id: "src-t", profileId: "src", parentId: null, title: "Stari", description: null, status: "todo", priority: "none", done: false, dueDate: null, startDate: null, createdAt: T0, updatedAt: T0, completedAt: null, recurrence: null, reminderOffsets: [], listId: null, sectionId: null, rank: FIRST_RANK }],
     };
 
     const { data } = plan(source);
@@ -617,8 +620,8 @@ describe("planForeignImport — singletons collapse", () => {
   it("keeps a section of the source's Inbox, hanging it off the target's", () => {
     const source: ProfileData = {
       ...emptyProfileData(),
-      taskLists: [{ id: "src-inbox", profileId: "src", parentId: null, name: "Inbox", isInbox: true, defaultView: "list", position: 1024, createdAt: T0, updatedAt: T0 }],
-      taskSections: [{ id: "src-sec", listId: "src-inbox", name: "Danas", position: 1024, createdAt: T0, updatedAt: T0 }],
+      taskLists: [{ id: "src-inbox", profileId: "src", parentId: null, name: "Inbox", isInbox: true, defaultView: "list", rank: FIRST_RANK, createdAt: T0, updatedAt: T0 }],
+      taskSections: [{ id: "src-sec", listId: "src-inbox", name: "Danas", rank: FIRST_RANK, createdAt: T0, updatedAt: T0 }],
     };
 
     const { data } = plan(source);
@@ -1025,16 +1028,17 @@ describe("planForeignImport — task attachments, templates, dependencies, dashb
   // above is — an import must never rearrange their tabla.
   it("never imports the dashboard layout and says so", () => {
     const t = "2026-07-01T00:00:00.000Z";
+    const [widgetRank1, widgetRank2] = rankSequence(2) as [string, string];
     const data = {
       ...withTaskExtras(),
       dashboardWidgets: [
         {
           instanceId: "src-dw1", profileId: "src", widgetId: "calendar:danas", size: "L",
-          position: 1024, config: '{"limit":3}', createdAt: t, updatedAt: t,
+          rank: widgetRank1, config: '{"limit":3}', createdAt: t, updatedAt: t,
         },
         {
           instanceId: "src-dw2", profileId: "src", widgetId: "finance:budzet", size: "S",
-          position: 2048, config: null, createdAt: t, updatedAt: t,
+          rank: widgetRank2, config: null, createdAt: t, updatedAt: t,
         },
       ],
     };
@@ -1059,16 +1063,17 @@ describe("planForeignImport — task attachments, templates, dependencies, dashb
   // would attribute set rows to the widget type, which is a report that lies.
   it("never imports dashboard sets and says so on their own skip line", () => {
     const t = "2026-07-01T00:00:00.000Z";
+    const [setRank1, setRank2] = rankSequence(2) as [string, string];
     const data = {
       ...withTaskExtras(),
       dashboardSets: [
-        { id: "src-set1", profileId: "src", name: "Fakultet", position: 1024, createdAt: t, updatedAt: t },
-        { id: "src-set2", profileId: "src", name: "Posao", position: 2048, createdAt: t, updatedAt: t },
+        { id: "src-set1", profileId: "src", name: "Fakultet", rank: setRank1, createdAt: t, updatedAt: t },
+        { id: "src-set2", profileId: "src", name: "Posao", rank: setRank2, createdAt: t, updatedAt: t },
       ],
       dashboardWidgets: [
         {
           instanceId: "src-dw1", profileId: "src", widgetId: "calendar:danas", size: "L",
-          position: 1024, config: null, createdAt: t, updatedAt: t, setId: "src-set1",
+          rank: FIRST_RANK, config: null, createdAt: t, updatedAt: t, setId: "src-set1",
         },
       ],
     };

@@ -1,11 +1,12 @@
 import type Database from "better-sqlite3-multiple-ciphers";
+import { rankAfter, rankSequence } from "@nexus/core";
 import {
   DashboardSetNotFoundError,
   DashboardWidgetNotFoundError,
   DashboardWidgetValidationError,
 } from "../errors.js";
 import { uuidv7 } from "../ids.js";
-import { placeBetween, TASK_ORDER_GAP } from "../tasks/taskListStore.js";
+import { placeBetween } from "../tasks/taskListStore.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -55,8 +56,8 @@ export const DEFAULT_DASHBOARD_LAYOUT: readonly {
 
 /**
  * One entry of a resolved layout, in the order it is drawn. Deliberately WITHOUT
- * `position` and without timestamps: the array's own order IS the position
- * (ADR-045 section 1), and the entries of a default arrangement have no row and
+ * `rank` and without timestamps: the array's own order IS the rank (ADR-045
+ * section 1), and the entries of a default arrangement have no row and
  * therefore no honest moment to report. `listAll` is what carries the full rows,
  * for the exporter.
  */
@@ -79,8 +80,12 @@ export interface DashboardWidget extends DashboardWidgetInstance {
   profileId: string;
   /** The named board this placement belongs to (ADR-055), or null for the default one. */
   setId: string | null;
-  /** Sparse sort key within the board's layout; may be negative. */
-  position: number;
+  /**
+   * Fractional sort key within the board's layout (`@nexus/core`'s `rankBetween`
+   * order). Stored and compared as TEXT under SQLite's default BINARY collation,
+   * which is exactly rank order — see the constructor's `ORDER BY` clauses.
+   */
+  rank: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -91,14 +96,14 @@ interface WidgetRow {
   widget_id: string;
   size: DashboardWidgetSize;
   set_id: string | null;
-  position: number;
+  rank: string;
   config: string | null;
   created_at: string;
   updated_at: string;
 }
 
 const WIDGET_COLUMNS =
-  "profile_id, instance_id, widget_id, size, set_id, position, config, created_at, updated_at";
+  "profile_id, instance_id, widget_id, size, set_id, rank, config, created_at, updated_at";
 
 /**
  * The instance id a DEFAULT arrangement's entry is handed out under, and the
@@ -165,65 +170,65 @@ function defaultInstanceId(profileId: string, setId: string | null, widgetId: st
  * toggled on again. What the store DOES check is the id's shape, so a value that
  * could never name a widget at all is refused at the door.
  *
- * **Ordering** is the sparse `position` idiom of `taskListStore` — same
- * arithmetic, same helpers, one scope per (profile, board) — read and written
- * through `placeBetween`. Two copies of "where does this row go" could only
- * ever drift apart, so there is one.
+ * **Ordering** is the fractional `rank` idiom of `taskListStore` — the same
+ * `@nexus/core` arithmetic (`placeBetween`/`rankAfter`/`rankSequence`), one
+ * scope per (profile, board). SQLite's `max()` and `ORDER BY` over this TEXT
+ * column use BINARY comparison, which is exactly rank order by construction —
+ * that is the whole reason ranks are comparable strings rather than integers.
+ * There is no renumber: a rank always has room between two neighbours, so a
+ * move writes exactly the row that moved (migration 062). Two copies of
+ * "where does this row go" could only ever drift apart, so there is one.
  */
 export class DashboardWidgetStore {
   private readonly selectLayout: Database.Statement;
   private readonly selectAll: Database.Statement;
   private readonly countWidgets: Database.Statement;
-  private readonly selectMaxPosition: Database.Statement;
-  private readonly selectPosition: Database.Statement;
-  private readonly selectScopeIds: Database.Statement;
+  private readonly selectMaxRank: Database.Statement;
+  private readonly selectRank: Database.Statement;
   private readonly selectSetId: Database.Statement;
   private readonly insertWidget: Database.Statement;
   private readonly updateSize: Database.Statement;
   private readonly updateConfig: Database.Statement;
   private readonly updatePlacement: Database.Statement;
-  private readonly updatePosition: Database.Statement;
   private readonly deleteWidget: Database.Statement;
 
   constructor(
     private readonly db: DatabaseHandle,
     private readonly profileId: string,
   ) {
-    // `instance_id` breaks a position tie, so the order is total even for rows
-    // a hand-made archive gave the same sort key. `set_id IS ?` rather than
+    // `instance_id` breaks a rank tie, so the order is total even for rows a
+    // hand-made archive gave the same sort key. `set_id IS ?` rather than
     // `= ?`, because NULL — the default board — is a value this scope must be
     // able to bind.
     this.selectLayout = db.prepare(
       `SELECT ${WIDGET_COLUMNS} FROM dashboard_widgets
-       WHERE profile_id = ? AND set_id IS ? ORDER BY position, instance_id`,
+       WHERE profile_id = ? AND set_id IS ? ORDER BY rank, instance_id`,
     );
     // The whole profile, boards and all, for the exporter — ordered by board
     // first so one archive lists each board's rows together, in layout order.
     this.selectAll = db.prepare(
       `SELECT ${WIDGET_COLUMNS} FROM dashboard_widgets
-       WHERE profile_id = ? ORDER BY set_id, position, instance_id`,
+       WHERE profile_id = ? ORDER BY set_id, rank, instance_id`,
     );
     this.countWidgets = db.prepare(
       `SELECT count(*) AS n FROM dashboard_widgets WHERE profile_id = ? AND set_id IS ?`,
     );
-    this.selectMaxPosition = db.prepare(
-      `SELECT max(position) AS maxPosition FROM dashboard_widgets
+    // BINARY `max()` over a rank column IS rank order — the same reason the
+    // `ORDER BY` clauses above need no collation of their own.
+    this.selectMaxRank = db.prepare(
+      `SELECT max(rank) AS maxRank FROM dashboard_widgets
        WHERE profile_id = ? AND set_id IS ?`,
     );
-    this.selectPosition = db.prepare(
-      `SELECT position FROM dashboard_widgets
+    this.selectRank = db.prepare(
+      `SELECT rank FROM dashboard_widgets
        WHERE instance_id = ? AND profile_id = ? AND set_id IS ?`,
-    );
-    this.selectScopeIds = db.prepare(
-      `SELECT instance_id FROM dashboard_widgets
-       WHERE profile_id = ? AND set_id IS ? ORDER BY position, instance_id`,
     );
     this.selectSetId = db.prepare(
       `SELECT id FROM dashboard_sets WHERE id = ? AND profile_id = ?`,
     );
     this.insertWidget = db.prepare(
       `INSERT INTO dashboard_widgets
-         (profile_id, instance_id, widget_id, size, set_id, position, config, created_at, updated_at)
+         (profile_id, instance_id, widget_id, size, set_id, rank, config, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     this.updateSize = db.prepare(
@@ -235,13 +240,7 @@ export class DashboardWidgetStore {
        WHERE instance_id = ? AND profile_id = ? AND set_id IS ?`,
     );
     this.updatePlacement = db.prepare(
-      `UPDATE dashboard_widgets SET position = ?, updated_at = ?
-       WHERE instance_id = ? AND profile_id = ? AND set_id IS ?`,
-    );
-    // A renumber re-spaces placements the user did not touch, so it deliberately
-    // leaves their `updated_at` alone — `TaskListStore`'s rule, verbatim.
-    this.updatePosition = db.prepare(
-      `UPDATE dashboard_widgets SET position = ?
+      `UPDATE dashboard_widgets SET rank = ?, updated_at = ?
        WHERE instance_id = ? AND profile_id = ? AND set_id IS ?`,
     );
     this.deleteWidget = db.prepare(
@@ -289,14 +288,14 @@ export class DashboardWidgetStore {
     return this.db.transaction((): DashboardWidgetInstance[] => {
       const scope = this.requireSetScope(setId);
       this.materializeDefault(scope, validNow);
-      const position = nextPosition(this.maxPosition(scope));
+      const rank = rankAfter(this.maxRank(scope));
       this.insertWidget.run(
         this.profileId,
         uuidv7(),
         validWidgetId,
         validSize,
         scope,
-        position,
+        rank,
         null,
         validNow,
         validNow,
@@ -321,7 +320,7 @@ export class DashboardWidgetStore {
     })();
   }
 
-  /** Changes one placement's size preset, leaving its position alone. */
+  /** Changes one placement's size preset, leaving its rank alone. */
   setSize(
     setId: string | null,
     instanceId: string,
@@ -384,15 +383,15 @@ export class DashboardWidgetStore {
       throw new DashboardWidgetValidationError("A widget cannot be ordered against itself.");
     }
 
-    // One transaction, because a materialization, a renumber and the move they
-    // made room for are one edit: half of them is a layout re-spaced for a
-    // placement that never arrived.
+    // One transaction, because a materialization and the move it makes room
+    // for are one edit: a failed move must never leave a board freshly
+    // materialized for a placement that was never actually reordered.
     return this.db.transaction((): DashboardWidgetInstance[] => {
       const scope = this.requireSetScope(setId);
       this.materializeDefault(scope, validNow);
       this.requirePlacement(scope, instanceId);
-      const position = this.placeInLayout(scope, beforeId, afterId);
-      this.updatePlacement.run(position, validNow, instanceId, this.profileId, scope);
+      const rank = this.placeInLayout(scope, beforeId, afterId);
+      this.updatePlacement.run(rank, validNow, instanceId, this.profileId, scope);
       return this.listLayout(scope);
     })();
   }
@@ -420,67 +419,65 @@ export class DashboardWidgetStore {
    * Writes `DEFAULT_DASHBOARD_LAYOUT` out as real rows when — and only when —
    * this board has none. Every mutation calls it first, so an edit always
    * lands on a complete layout rather than on the one entry it touched.
+   * Ranked with `rankSequence`, not a run of `rankAfter` calls: this IS a
+   * fresh scope getting its first layout in one shot — precisely the case
+   * `rankSequence` exists for — rather than a scope built up by successive
+   * appends, which would only coincidentally land on the same ranks.
    */
   private materializeDefault(setId: string | null, now: string): void {
     if (this.count(setId) > 0) return;
-    let position = 0;
-    for (const entry of DEFAULT_DASHBOARD_LAYOUT) {
-      position += TASK_ORDER_GAP;
+    const ranks = rankSequence(DEFAULT_DASHBOARD_LAYOUT.length);
+    DEFAULT_DASHBOARD_LAYOUT.forEach((entry, index) => {
       this.insertWidget.run(
         this.profileId,
         defaultInstanceId(this.profileId, setId, entry.widgetId),
         entry.widgetId,
         entry.size,
         setId,
-        position,
+        ranks[index]!,
         null,
         now,
         now,
       );
-    }
+    });
   }
 
-  /** The position a placement takes between two of its own board's neighbours, renumbering once if the gap has run out. */
+  /**
+   * The rank a placement takes between two of its own board's neighbours.
+   * `placeBetween` always finds room — fractional ranks have no gap to run
+   * out of — so `null` back means only that the pair itself is not a gap (the
+   * same row twice, or given the wrong way round), which this store reports
+   * as its own validation error rather than a bug.
+   */
   private placeInLayout(
     setId: string | null,
     beforeId: string | null,
     afterId: string | null,
-  ): number {
-    const position = placeBetween(
+  ): string {
+    const rank = placeBetween(
       (siblingId) => this.requirePlacement(setId, siblingId),
-      () => {
-        const ids = this.selectScopeIds.all(this.profileId, setId) as { instance_id: string }[];
-        ids.forEach((row, index) => {
-          this.updatePosition.run(
-            (index + 1) * TASK_ORDER_GAP,
-            row.instance_id,
-            this.profileId,
-            setId,
-          );
-        });
-      },
       beforeId,
       afterId,
     );
-    if (position === null) {
+    if (rank === null) {
       throw new DashboardWidgetValidationError(
         '"beforeId" and "afterId" do not describe a gap in this layout.',
       );
     }
-    return position;
+    return rank;
   }
 
-  /** Reads a placement's position in this profile's board or throws — the gate every instance reference goes through. */
-  private requirePlacement(setId: string | null, instanceId: string): number {
-    const row = this.selectPosition.get(instanceId, this.profileId, setId) as
-      | { position: number }
+  /** Reads a placement's rank in this profile's board or throws — the gate every instance reference goes through. */
+  private requirePlacement(setId: string | null, instanceId: string): string {
+    const row = this.selectRank.get(instanceId, this.profileId, setId) as
+      | { rank: string }
       | undefined;
     if (!row) {
       throw new DashboardWidgetNotFoundError(
         `No dashboard widget "${instanceId}" in this profile's set.`,
       );
     }
-    return row.position;
+    return row.rank;
   }
 
   private selectRows(setId: string | null): WidgetRow[] {
@@ -491,16 +488,9 @@ export class DashboardWidgetStore {
     return (this.countWidgets.get(this.profileId, setId) as { n: number }).n;
   }
 
-  private maxPosition(setId: string | null): number | null {
-    return (
-      this.selectMaxPosition.get(this.profileId, setId) as { maxPosition: number | null }
-    ).maxPosition;
+  private maxRank(setId: string | null): string | null {
+    return (this.selectMaxRank.get(this.profileId, setId) as { maxRank: string | null }).maxRank;
   }
-}
-
-/** The end of a layout whose current maximum is `max` (null when empty) — always has room, so no null check is needed downstream. */
-function nextPosition(max: number | null): number {
-  return max === null ? TASK_ORDER_GAP : max + TASK_ORDER_GAP;
 }
 
 function toInstance(row: WidgetRow): DashboardWidgetInstance {
@@ -517,7 +507,7 @@ function toWidget(row: WidgetRow): DashboardWidget {
     ...toInstance(row),
     profileId: row.profile_id,
     setId: row.set_id,
-    position: row.position,
+    rank: row.rank,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

@@ -11,9 +11,10 @@
 /**
  * The two placements a moved widget lands BETWEEN — the pair
  * `dashboard:widgets-move` takes, either end null at an end of the layout.
- * Same shape, and the same reasoning, as `TaskListStore`'s move pair: positions
- * are sparse sort keys, so "one place up" is a statement about neighbours and
- * not arithmetic on an index.
+ * Same shape, and the same reasoning, as `TaskListStore`'s move pair: a row's
+ * order is a fractional rank, so "one place up" is a statement about neighbours
+ * and not arithmetic on an index. Nothing here ever sees a rank — naming the two
+ * neighbours is the whole message, and the store derives the rest.
  */
 export interface LayoutNeighbours {
   beforeId: string | null;

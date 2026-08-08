@@ -1,3 +1,4 @@
+import { rankAfter } from "../order/rank.js";
 import { foldSearchText } from "../search/searchText.js";
 import type {
   ExportTask,
@@ -494,14 +495,6 @@ export interface CsvTranslation {
   report: CsvTranslateReport;
 }
 
-/**
- * The sparse sort-key step imported rows are spaced by — `TASK_ORDER_GAP` in
- * `@nexus/db`'s `taskListStore.ts`, spelled here for `llmPrompts.ts`'s stated
- * reason: `@nexus/core` does not depend on `@nexus/db`, and one integer is not
- * worth inverting that.
- */
-const TASK_ORDER_GAP = 1024;
-
 /** The `defaultView` a NEW list is created with — `TaskListStore.create`'s own default, so an imported list opens exactly as a hand-made one does. */
 const NEW_LIST_VIEW = "list";
 
@@ -562,6 +555,12 @@ export function translateCsvTasks(
   const drops: CsvRowDrop[] = [];
   let blankRows = 0;
   let listCellsDropped = 0;
+  // Both scopes are appended to one row at a time as rows are read — a section
+  // the first time its name is seen, a task on every surviving row — so each
+  // gets its own running rank rather than a precomputed `rankSequence`, which
+  // would need the final count known up front.
+  let sectionRank: string | null = null;
+  let taskRank: string | null = null;
 
   rows.forEach((row, index) => {
     const rowNumber = index + 1;
@@ -596,11 +595,12 @@ export function translateCsvTasks(
       } else {
         sectionId = `csv:section:${sections.length}`;
         sectionIdByName.set(sectionName, sectionId);
+        sectionRank = rankAfter(sectionRank);
         sections.push({
           id: sectionId,
           listId: CSV_LIST_SOURCE_ID,
           name: sectionName,
-          position: (sections.length + 1) * TASK_ORDER_GAP,
+          rank: sectionRank,
           createdAt: target.now,
           updatedAt: target.now,
         });
@@ -609,6 +609,7 @@ export function translateCsvTasks(
 
     const description = cellOf(row, "description").trim();
     const taskId = `csv:task:${rowNumber}`;
+    taskRank = rankAfter(taskRank);
     tasks.push({
       id: taskId,
       profileId: target.profileId,
@@ -632,7 +633,7 @@ export function translateCsvTasks(
       reminderOffsets: [],
       listId: CSV_LIST_SOURCE_ID,
       sectionId,
-      position: tasks.length * TASK_ORDER_GAP + TASK_ORDER_GAP,
+      rank: taskRank,
     });
 
     for (const name of splitCsvTags(cellOf(row, "tags"))) {
@@ -667,7 +668,10 @@ export function translateCsvTasks(
         isInbox: false,
         defaultView: NEW_LIST_VIEW,
         viewConfig: null,
-        position: TASK_ORDER_GAP,
+        // The only row in its scope (this import creates at most one list), so
+        // `rankAfter(null)` is exactly `FIRST_RANK` — the same "nothing there
+        // yet" case `rankBetween`'s own doc comment names.
+        rank: rankAfter(null),
         createdAt: target.now,
         updatedAt: target.now,
       },

@@ -1,8 +1,9 @@
 import type Database from "better-sqlite3-multiple-ciphers";
+import { rankAfter } from "@nexus/core";
 import type { ArchiveProfilePicture, ExportSettings, ProfileData } from "@nexus/core";
 import { RestoreValidationError } from "../errors.js";
 import { TOGGLEABLE_NOTIFICATION_SOURCES } from "../notify/notificationStore.js";
-import { TASK_ORDER_GAP, TaskListStore } from "../tasks/taskListStore.js";
+import { TaskListStore } from "../tasks/taskListStore.js";
 import {
   canvasSceneText,
   exdatesText,
@@ -370,12 +371,12 @@ export class RestoreStore {
 
     this.insertTaskList = db.prepare(
       `INSERT INTO task_lists
-         (id, profile_id, parent_id, name, is_inbox, default_view, view_config, position,
+         (id, profile_id, parent_id, name, is_inbox, default_view, view_config, rank,
           created_at, updated_at, deleted_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.insertTaskSection = db.prepare(
-      `INSERT INTO task_sections (id, list_id, name, position, created_at, updated_at)
+      `INSERT INTO task_sections (id, list_id, name, rank, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?)`,
     );
     this.insertTaskTag = db.prepare(
@@ -592,7 +593,7 @@ export class RestoreStore {
       `INSERT INTO tasks
          (id, profile_id, parent_id, title, description, status, priority,
           due_date, start_date, created_at, updated_at, completed_at, recurrence,
-          reminder_offsets, list_id, section_id, position, deleted_at)
+          reminder_offsets, list_id, section_id, rank, deleted_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.insertEvent = db.prepare(
@@ -711,12 +712,12 @@ export class RestoreStore {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     this.insertDashboardSet = db.prepare(
-      `INSERT INTO dashboard_sets (id, profile_id, name, position, created_at, updated_at)
+      `INSERT INTO dashboard_sets (id, profile_id, name, rank, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?)`,
     );
     this.insertDashboardWidget = db.prepare(
       `INSERT INTO dashboard_widgets
-         (profile_id, instance_id, widget_id, size, set_id, position, config, created_at, updated_at)
+         (profile_id, instance_id, widget_id, size, set_id, rank, config, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     // The private tables' CONDITIONAL wipe (ADR-057 §6) — deliberately NOT in
@@ -774,7 +775,7 @@ export class RestoreStore {
         this.insertTaskList.run(
           list.id, this.profileId, list.parentId, list.name, list.isInbox ? 1 : 0,
           list.defaultView, viewConfigText(list.viewConfig),
-          list.position, list.createdAt, list.updatedAt,
+          list.rank, list.createdAt, list.updatedAt,
         );
         written += 1;
       }
@@ -794,7 +795,7 @@ export class RestoreStore {
 
       for (const section of input.data.taskSections) {
         this.insertTaskSection.run(
-          section.id, section.listId, section.name, section.position,
+          section.id, section.listId, section.name, section.rank,
           section.createdAt, section.updatedAt,
         );
         written += 1;
@@ -958,15 +959,17 @@ export class RestoreStore {
       // ADR-029 (`ArchiveEra.writesTaskLists`), so there is no list to
       // reproduce: it goes to the target profile's Inbox — created here if the
       // archive carried no lists at all, which is precisely the case an
-      // era-defaulted archive always is — and gets a gap-spaced position in the
-      // archive's own row order, so the list reads as it did before lists
-      // existed. Resolved once, lazily, so an archive that names its lists never
-      // mints an Inbox it does not need.
+      // era-defaulted archive always is — and is re-ranked in the archive's own
+      // row order, so the list reads as it did before lists existed. The reader
+      // gave every such task the SAME first rank (it had no scope to be ordered
+      // within), so keeping them apart is this loop's job, not the reader's.
+      // Resolved once, lazily, so an archive that names its lists never mints an
+      // Inbox it does not need.
       let fallbackListId: string | null = null;
-      let fallbackPosition = 0;
+      let fallbackRank: string | null = null;
       for (const task of input.data.tasks) {
         let listId = task.listId;
-        let position = task.position;
+        let rank = task.rank;
         if (listId === null) {
           if (fallbackListId === null) {
             // Always found, never minted: the unconditional `ensureInbox` after
@@ -974,14 +977,14 @@ export class RestoreStore {
             fallbackListId = this.taskLists.ensureInbox(now).id;
           }
           listId = fallbackListId;
-          fallbackPosition += TASK_ORDER_GAP;
-          position = fallbackPosition;
+          fallbackRank = rankAfter(fallbackRank);
+          rank = fallbackRank;
         }
         this.insertTask.run(
           task.id, this.profileId, task.parentId, task.title, task.description,
           task.status, task.priority, task.dueDate, task.startDate,
           task.createdAt, task.updatedAt, task.completedAt, recurrenceText(task.recurrence),
-          offsetsText(task.reminderOffsets), listId, task.sectionId, position,
+          offsetsText(task.reminderOffsets), listId, task.sectionId, rank,
         );
         written += 1;
       }
@@ -1268,7 +1271,7 @@ export class RestoreStore {
           set.id,
           this.profileId,
           set.name,
-          set.position,
+          set.rank,
           set.createdAt,
           set.updatedAt,
         );
@@ -1288,7 +1291,7 @@ export class RestoreStore {
           widget.widgetId,
           widget.size,
           widget.setId ?? null,
-          widget.position,
+          widget.rank,
           widget.config,
           widget.createdAt,
           widget.updatedAt,

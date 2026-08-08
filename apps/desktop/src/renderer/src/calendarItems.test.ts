@@ -87,7 +87,7 @@ function makeTask(fields: Partial<Task> & Pick<Task, "id">): Task {
     reminderOffsets: [],
     listId: "list-1",
     sectionId: null,
-    position: 0,
+    rank: "i0",
     ...fields,
   };
 }

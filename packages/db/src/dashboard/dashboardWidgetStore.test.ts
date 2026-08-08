@@ -82,7 +82,7 @@ describe("DashboardWidgetStore.listLayout", () => {
     }
   });
 
-  it("returns the stored rows, in position order, once the profile has any", () => {
+  it("returns the stored rows, in rank order, once the profile has any", () => {
     const { store } = storeFor("a");
     store.setSize(null, store.listLayout(null)[0]!.instanceId, "L", NOW);
     expect(widgetIds(store)).toEqual(DEFAULT_WIDGET_IDS);
@@ -132,7 +132,7 @@ describe("DashboardWidgetStore.listAll", () => {
     expect(store.listAll()).toEqual([]);
   });
 
-  it("returns full rows, in position order, once the default has been materialized", () => {
+  it("returns full rows, in rank order, once the default has been materialized", () => {
     const { store, profileId } = storeFor("a");
     store.add(null, "finance:budzet", "S", NOW);
     const rows = store.listAll();
@@ -140,7 +140,7 @@ describe("DashboardWidgetStore.listAll", () => {
     expect(rows.every((row) => row.profileId === profileId)).toBe(true);
     expect(rows[0]?.createdAt).toBe(NOW);
     expect(rows[0]?.updatedAt).toBe(NOW);
-    expect(rows.map((row) => row.position)).toEqual([...rows.map((row) => row.position)].sort((a, b) => a - b));
+    expect(rows.map((row) => row.rank)).toEqual([...rows.map((row) => row.rank)].sort());
   });
 });
 
@@ -399,25 +399,26 @@ describe("DashboardWidgetStore.move", () => {
     expect(widgetIds(store).at(-1)).toBe(DEFAULT_WIDGET_IDS[2]);
   });
 
-  it("renumbers the scope and still lands the move when the gap has run out", () => {
+  it("keeps landing the move into the same slot across 200 repeats — fractional ranks never run out", () => {
     const { store } = storeFor("a");
     // Each pass drops a fresh widget into the SAME slot — right after the first
-    // entry — halving the remaining room every time. Ten passes exhaust a 1024
-    // gap; the ones after that are what force the renumber-and-retry inside
-    // `placeBetween`.
-    for (let index = 0; index < 12; index += 1) {
+    // entry — which is exactly the case that used to halve the remaining room
+    // every time and eventually exhaust an integer gap. A fractional rank
+    // (migration 062) always has room strictly between two neighbours, so this
+    // needs no renumber and cannot fail no matter how many times it repeats.
+    for (let index = 0; index < 200; index += 1) {
       const added = store.add(null, `finance:w${index}`, "S", NOW);
       const layout = store.listLayout(null);
       store.move(null, added.at(-1)!.instanceId, layout[0]!.instanceId, layout[1]!.instanceId, NOW);
     }
     const ids = widgetIds(store);
     expect(ids[0]).toBe(DEFAULT_WIDGET_IDS[0]);
-    expect(ids[1]).toBe("finance:w11");
+    expect(ids[1]).toBe("finance:w199");
     expect(ids.at(-1)).toBe(DEFAULT_WIDGET_IDS.at(-1));
-    // Every placement keeps a position of its own: had the retry failed, two
-    // rows would share one and only the instance-id tie-break would order them.
-    const positions = store.listAll().map((row) => row.position);
-    expect(new Set(positions).size).toBe(positions.length);
+    // Every placement keeps a rank of its own: had two placements collided on
+    // one rank, only the instance-id tie-break would still order them.
+    const ranks = store.listAll().map((row) => row.rank);
+    expect(new Set(ranks).size).toBe(ranks.length);
   });
 
   it("refuses to order a placement against itself", () => {

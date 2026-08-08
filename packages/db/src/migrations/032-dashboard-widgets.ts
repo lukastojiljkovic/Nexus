@@ -32,6 +32,12 @@ import type { Migration } from "./migrations.js";
  * `DashboardWidgetStore` breaks a tie by `instance_id` so the order is total
  * whatever the column holds.
  *
+ * **Superseded by migration 062**, which replaced this column with a
+ * fractional `rank` TEXT: an integer gap can run out, and the whole-scope
+ * renumber that recovered from it is a mass UPDATE that a two-device merge
+ * cannot tell apart from an intentional reordering. Everything above is
+ * what this migration DID; none of it is the shape on disk today.
+ *
  * `config` is per-widget JSON, nullable, and OPAQUE to this table: no widget
  * publishes a config schema yet (`WidgetContract.configSchema` is optional), so
  * nothing here — and nothing in the store — interprets it. What the interchange

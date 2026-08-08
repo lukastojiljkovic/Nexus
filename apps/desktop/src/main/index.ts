@@ -4448,7 +4448,7 @@ function taskTemplateDueOffset(dueDate: string | null, today: string): number | 
  * Reads one task of `profileId` and everything a template captures WITH it: its
  * direct live subtasks, in the order the list draws them, and the names of the
  * tags it carries. `listActive()` is already scoped, ordered
- * (list/section/position) and free of soft-deleted rows, so the two derivations
+ * (list/section/rank) and free of soft-deleted rows, so the two derivations
  * below need nothing beyond a filter — and a deleted subtask is left out for
  * the same reason a recurring advance does not reopen one.
  */

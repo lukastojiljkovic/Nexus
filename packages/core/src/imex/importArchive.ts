@@ -27,6 +27,7 @@ import { MAX_CANVAS_SCENE_LENGTH, validateCanvasScene } from "../canvas/canvasSc
 import type { CanvasScene } from "../canvas/canvasScene.js";
 import { validateHabitSchedule } from "../habits/habitSchedule.js";
 import type { HabitSchedule } from "../habits/habitSchedule.js";
+import { FIRST_RANK, isRank, normalizeRank, rankForInteger } from "../order/rank.js";
 import { validateRecurrenceRule } from "../recurrence/recurrence.js";
 import type { RecurrenceRule } from "../recurrence/recurrence.js";
 import { renderClozeCard } from "../study/clozeText.js";
@@ -626,7 +627,7 @@ export interface ImportArchiveResult {
  * shipped would be speculative machinery with nothing to exercise it.
  *
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.38.0";
+export const INTERCHANGE_SCHEMA_VERSION = "1.39.0";
 
 // --- Archive era: what a declared version guarantees its rows CARRY ---------
 //
@@ -696,6 +697,20 @@ interface ArchiveEra {
    * verbatim, labels and all.
    */
   writesClozeNumbers: boolean;
+  /**
+   * Ordering as a fractional `rank` rather than a sparse integer `position`
+   * (migration 062) — the meaning that arrived AT the `1.39.0` bump, on
+   * `writesClozeNumbers`' terms rather than `writesTaskLists`': the field is
+   * present in both eras and what changes is its NAME and what its value is.
+   * Below `1.39.0` a task, list, section, board or widget carries
+   * `position`, an integer of any sign, and it is converted here by
+   * `rankForInteger` — which is exact and row-local, because a rank's
+   * integer part IS a signed base-36 number and `rankForInteger(n) <
+   * rankForInteger(m)` exactly when `n < m`. So an old archive's order comes
+   * back byte for byte, without the reader ever having to see the rest of the
+   * scope. At `1.39.0` and above the key is `rank` and holds one verbatim.
+   */
+  writesOrderRanks: boolean;
 }
 
 /**
@@ -713,6 +728,7 @@ function eraOf(schemaVersion: string): ArchiveEra {
       writesTaskLists: true,
       writesNoteFolderPrefs: true,
       writesClozeNumbers: true,
+      writesOrderRanks: true,
     };
   }
   return {
@@ -721,6 +737,7 @@ function eraOf(schemaVersion: string): ArchiveEra {
     writesTaskLists: version.minor >= 3,
     writesNoteFolderPrefs: version.minor >= 7,
     writesClozeNumbers: version.minor >= 26,
+    writesOrderRanks: version.minor >= 39,
   };
 }
 
@@ -1521,14 +1538,14 @@ function parseTask(raw: Record<string, unknown>, era: ArchiveEra): ExportTask {
     (value) => nullableNonEmptyStr(value, "sectionId"),
     null,
   );
-  // `int`, not `nonNegativeInt`: a position is a relative sort key, and
-  // prepending walks it below zero (`TaskListStore.positionBetween`).
-  const position = eraDefault(
-    raw.position,
-    era.writesTaskLists,
-    (value) => int(value, "position"),
-    0,
-  );
+  // Three eras meet on this one field. Before 1.3 a task had no scope at all,
+  // so there is nothing to order it by and `RestoreStore` re-ranks it in the
+  // archive's own row order; from 1.3 it carried a sparse integer; from 1.39 a
+  // rank. `orderRank` reads the last two, and this guard covers the first.
+  const rank =
+    era.writesTaskLists || raw.rank !== undefined || raw.position !== undefined
+      ? orderRank(raw, era)
+      : FIRST_RANK;
   // A section is a heading INSIDE a list, so one without the other is a row the
   // store could not have written. Which list it belongs to is checked in the
   // reference pass, where the sections are known.
@@ -1536,11 +1553,31 @@ function parseTask(raw: Record<string, unknown>, era: ArchiveEra): ExportTask {
   return {
     id, profileId, parentId, title, description, status, priority, done,
     dueDate, startDate, createdAt, updatedAt, completedAt, recurrence, reminderOffsets,
-    listId, sectionId, position,
+    listId, sectionId, rank,
   };
 }
 
-function parseTaskList(raw: Record<string, unknown>): ExportTaskList {
+/**
+ * The ordering key of one row, from whichever of the two spellings its era used.
+ *
+ * A PRESENT `rank` is validated strictly — `isRank` is the same gate the stores
+ * apply, and an archive is a file a person can edit, so a sort key this build
+ * cannot compare must not reach a column that has no CHECK to catch it.
+ * `normalizeRank` then folds a fraction's trailing zeros away, because two
+ * spellings of one value would make equality and ordering disagree.
+ */
+function orderRank(raw: Record<string, unknown>, era: ArchiveEra): string {
+  if (!era.writesOrderRanks) {
+    // `int`, not `nonNegativeInt`: a sparse position was a relative sort key,
+    // and prepending walked it below zero.
+    return rankForInteger(int(raw.position, "position"));
+  }
+  const value = raw.rank;
+  if (!isRank(value)) throw new InvalidFieldError("rank");
+  return normalizeRank(value);
+}
+
+function parseTaskList(raw: Record<string, unknown>, era: ArchiveEra): ExportTaskList {
   const id = nonEmptyStr(raw.id, "id");
   const profileId = nonEmptyStr(raw.profileId, "profileId");
   const parentId = nullableNonEmptyStr(raw.parentId, "parentId");
@@ -1559,24 +1596,24 @@ function parseTaskList(raw: Record<string, unknown>): ExportTaskList {
   if (viewConfig === null && raw.viewConfig !== undefined && raw.viewConfig !== null) {
     throw new InvalidFieldError("viewConfig");
   }
-  const position = int(raw.position, "position");
+  const rank = orderRank(raw, era);
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
   const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
   return {
     id, profileId, parentId, name, isInbox, defaultView,
     viewConfig: viewConfig === null || isEmptyTaskViewConfig(viewConfig) ? null : viewConfig,
-    position, createdAt, updatedAt,
+    rank, createdAt, updatedAt,
   };
 }
 
-function parseTaskSection(raw: Record<string, unknown>): ExportTaskSection {
+function parseTaskSection(raw: Record<string, unknown>, era: ArchiveEra): ExportTaskSection {
   const id = nonEmptyStr(raw.id, "id");
   const listId = nonEmptyStr(raw.listId, "listId");
   const name = nonEmptyStr(raw.name, "name");
-  const position = int(raw.position, "position");
+  const rank = orderRank(raw, era);
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
   const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
-  return { id, listId, name, position, createdAt, updatedAt };
+  return { id, listId, name, rank, createdAt, updatedAt };
 }
 
 /** `parseNoteTag`'s twin, and deliberately identical: migration 023's `task_tags` is migration 011's `note_tags` with tasks on the other end of the join. */
@@ -2484,14 +2521,14 @@ function parseDashboardSettings(raw: Record<string, unknown>): ExportDashboardSe
  * text could reach that column having passed nobody's writer. The DEFAULT
  * board never appears here: it is not a row (see `ExportDashboardSet`).
  */
-function parseDashboardSet(raw: Record<string, unknown>): ExportDashboardSet {
+function parseDashboardSet(raw: Record<string, unknown>, era: ArchiveEra): ExportDashboardSet {
   const id = nonEmptyStr(raw.id, "id");
   const profileId = nonEmptyStr(raw.profileId, "profileId");
   const name = trimmedNonEmptyStr(raw.name, "name", MAX_DASHBOARD_SET_NAME_LENGTH);
-  const position = int(raw.position, "position");
+  const rank = orderRank(raw, era);
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
   const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
-  return { id, profileId, name, position, createdAt, updatedAt };
+  return { id, profileId, name, rank, createdAt, updatedAt };
 }
 
 /**
@@ -2512,16 +2549,19 @@ function parseDashboardSet(raw: Record<string, unknown>): ExportDashboardSet {
  *   could reach that column having passed nobody's writer, and a column
  *   documented as JSON must not start holding something else.
  *
- * `position` is an integer of any sign: a sparse sort key, never a count, and a
- * prepend legitimately walks below zero.
+ * `rank` is a fractional sort key, never a count — `orderRank` reads it, and
+ * converts an older archive's integer `position` into one.
  */
-function parseDashboardWidget(raw: Record<string, unknown>): ExportDashboardWidget {
+function parseDashboardWidget(
+  raw: Record<string, unknown>,
+  era: ArchiveEra,
+): ExportDashboardWidget {
   const instanceId = nonEmptyStr(raw.instanceId, "instanceId");
   const profileId = nonEmptyStr(raw.profileId, "profileId");
   const widgetId = nonEmptyStr(raw.widgetId, "widgetId");
   if (!WIDGET_ID_PATTERN.test(widgetId)) throw new InvalidFieldError("widgetId");
   const size = enumStr(raw.size, "size", DASHBOARD_WIDGET_SIZES);
-  const position = int(raw.position, "position");
+  const rank = orderRank(raw, era);
   const config = raw.config === null ? null : jsonText(raw.config, "config");
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
   const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
@@ -2529,7 +2569,7 @@ function parseDashboardWidget(raw: Record<string, unknown>): ExportDashboardWidg
   // no era flag — see `parseDashboardSettings`' `activeSetId`, its exact twin.
   const setId =
     raw.setId === undefined || raw.setId === null ? null : nonEmptyStr(raw.setId, "setId");
-  return { instanceId, profileId, widgetId, size, position, config, createdAt, updatedAt, setId };
+  return { instanceId, profileId, widgetId, size, rank, config, createdAt, updatedAt, setId };
 }
 
 /** Metadata only — `snapshot` is attached afterward from `input.ydocs`, and is REQUIRED (rule 7), unlike a note's. */
@@ -3627,12 +3667,12 @@ function dispatchRecord(
       return;
     }
     case "task-list": {
-      const row = parseTaskList(raw);
+      const row = parseTaskList(raw, era);
       pushRow(collections.taskLists, row.id, row, type, path, line, ctx);
       return;
     }
     case "task-section": {
-      const row = parseTaskSection(raw);
+      const row = parseTaskSection(raw, era);
       pushRow(collections.taskSections, row.id, row, type, path, line, ctx);
       return;
     }
@@ -3845,12 +3885,12 @@ function dispatchRecord(
     // KEY) — the same widget legitimately appears twice in one layout, so
     // keying on `widgetId` would call a deliberate arrangement a duplicate.
     case "dashboard-widget": {
-      const row = parseDashboardWidget(raw);
+      const row = parseDashboardWidget(raw, era);
       pushRow(collections.dashboardWidgets, row.instanceId, row, type, path, line, ctx);
       return;
     }
     case "dashboard-set": {
-      const row = parseDashboardSet(raw);
+      const row = parseDashboardSet(raw, era);
       pushRow(collections.dashboardSets, row.id, row, type, path, line, ctx);
       return;
     }

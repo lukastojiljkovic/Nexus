@@ -603,7 +603,7 @@ export type CsvFinanceTranslation =
       formats: CsvFinanceFormats;
     };
 
-/** `MAX_FIN_PAYEE_LENGTH` / `MAX_FIN_NOTE_LENGTH` from `@nexus/db`'s transaction store, spelled here for `TASK_ORDER_GAP`'s stated reason: `@nexus/core` does not depend on `@nexus/db`, and two integers are not worth inverting that. */
+/** `MAX_FIN_PAYEE_LENGTH` / `MAX_FIN_NOTE_LENGTH` from `@nexus/db`'s transaction store, spelled here rather than imported for the reason every such constant is: `@nexus/core` does not depend on `@nexus/db`, and two integers are not worth inverting that. */
 const MAX_PAYEE_LENGTH = 120;
 const MAX_NOTE_LENGTH = 500;
 

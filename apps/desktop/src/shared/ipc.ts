@@ -1194,8 +1194,12 @@ export interface Task {
   listId: string;
   /** The section (a heading inside `listId`) this task sits under, or null for the list body. */
   sectionId: string | null;
-  /** Sparse sort key within this task's (list, section) scope — the list view's display order. */
-  position: number;
+  /**
+   * Where this task sits in its (list, section) scope: a fractional rank,
+   * compared as a plain string. Never an index and never a count — the display
+   * order is what it expresses, and a move rewrites exactly the row that moved.
+   */
+  rank: string;
 }
 
 /** Fields for a new task; only `title` is required (TASK-001). The main process revalidates each. */
@@ -1301,7 +1305,8 @@ export interface TaskList {
    * import is type-only, so preload and main link nothing new.
    */
   viewConfig: TaskViewConfig | null;
-  position: number;
+  /** Where this list sits among its siblings: a fractional rank, compared as a plain string. */
+  rank: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -1311,7 +1316,8 @@ export interface TaskSection {
   id: string;
   listId: string;
   name: string;
-  position: number;
+  /** Where this heading sits in its list: a fractional rank, compared as a plain string. */
+  rank: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -1325,9 +1331,9 @@ export type DeleteListMode = "move-to-inbox" | "delete-tasks";
  * render sections for a list that the same render no longer shows.
  */
 export interface TaskListsSnapshot {
-  /** Root lists first, then each parent's children, every scope in its own position order. */
+  /** Root lists first, then each parent's children, every scope in its own rank order. */
   lists: TaskList[];
-  /** Grouped by list in that same order, each list's sections in position order. */
+  /** Grouped by list in that same order, each list's sections in rank order. */
   sections: TaskSection[];
 }
 

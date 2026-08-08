@@ -1,3 +1,4 @@
+import { rankSequence } from "../order/rank.js";
 import { clozeNumbers, findClozeRuns, renderClozeCard } from "../study/clozeText.js";
 import { freshCardScheduling } from "./ankiTranslate.js";
 import type { ExportCard, ExportDeck, ExportEvent, ExportTask, ProfileData } from "./exportArchive.js";
@@ -115,17 +116,14 @@ const TASK_PRIORITIES = ["none", "low", "medium", "high"] as const;
 type TaskPriority = (typeof TASK_PRIORITIES)[number];
 
 /**
- * The sparse sort-key step imported tasks are spaced by. Mirrors
- * `TASK_ORDER_GAP` in `@nexus/db`'s `tasks/taskListStore.ts`: spelled rather
- * than imported for `freshCardScheduling`'s reason — `@nexus/core` does not
- * depend on `@nexus/db`, and one integer is not worth inverting that.
- *
  * Imported tasks land in the target's own default list beside whatever is
- * already there, and their positions interleave with it by number. That is the
- * foreign import's established behaviour for every positioned row (see
- * `planForeignImport`'s note on dashboard placements), not a special case.
+ * already there, and their ranks sort in among it by ordinary string
+ * comparison — a freshly minted rank is simply one more row in the same
+ * scope, with no arithmetic of its own to reconcile against what the target
+ * profile already has. That is the foreign import's established behaviour for
+ * every ranked row (see `planForeignImport`'s note on dashboard placements),
+ * not a special case.
  */
-const TASK_ORDER_GAP = 1024;
 
 // --- The records --------------------------------------------------------------
 
@@ -1117,7 +1115,12 @@ export function translateLlmRecords(
   let seededIds: ReadonlyMap<string, string> = new Map();
 
   switch (parsed.kind) {
-    case "tasks":
+    case "tasks": {
+      // The whole batch is laid out in one pass — every accepted record
+      // becomes exactly one task, no row is skipped after this point — so a
+      // precomputed `rankSequence` is the right tool, one rank per index,
+      // rather than a running `rankAfter` threaded through the loop.
+      const ranks = rankSequence(parsed.records.length);
       parsed.records.forEach((record, index) => {
         tasks.push({
           id: `llm:task:${index}`,
@@ -1141,10 +1144,11 @@ export function translateLlmRecords(
           reminderOffsets: [],
           listId: null,
           sectionId: null,
-          position: (index + 1) * TASK_ORDER_GAP,
+          rank: ranks[index] as string,
         });
       });
       break;
+    }
     case "events":
       parsed.records.forEach((record, index) => {
         events.push({

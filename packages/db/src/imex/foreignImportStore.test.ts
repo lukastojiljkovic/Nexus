@@ -6,6 +6,7 @@ import {
   documentDuplicateKey,
   eventDuplicateKey,
   finBudgetKey,
+  FIRST_RANK,
   personDuplicateKey,
   planForeignImport,
 } from "@nexus/core";
@@ -470,7 +471,7 @@ function makeTask(overrides: Partial<ExportTask> & { id: string; listId: string 
     recurrence: null,
     reminderOffsets: [],
     sectionId: null,
-    position: 0,
+    rank: FIRST_RANK,
     ...overrides,
   };
 }
@@ -482,7 +483,7 @@ function makeList(overrides: Partial<ExportTaskList> & { id: string }): ExportTa
     name: "Lista",
     isInbox: false,
     defaultView: "list",
-    position: 0,
+    rank: FIRST_RANK,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
     ...overrides,
@@ -1008,7 +1009,7 @@ describe("ForeignImportStore", () => {
         dashboardWidgets: [
           {
             instanceId: "dw-imported", profileId: "ignored", widgetId: "finance:budzet",
-            size: "S", position: 4096, config: '{"a":1}', createdAt: t, updatedAt: t,
+            size: "S", rank: FIRST_RANK, config: '{"a":1}', createdAt: t, updatedAt: t,
           },
         ],
       };
@@ -1019,7 +1020,7 @@ describe("ForeignImportStore", () => {
       expect(new DashboardWidgetStore(db.raw, target).listAll()).toEqual([
         {
           instanceId: "dw-imported", profileId: target, widgetId: "finance:budzet",
-          size: "S", position: 4096, config: '{"a":1}', createdAt: t, updatedAt: t,
+          size: "S", rank: FIRST_RANK, config: '{"a":1}', createdAt: t, updatedAt: t,
           setId: null,
         },
       ]);
@@ -1033,12 +1034,12 @@ describe("ForeignImportStore", () => {
       const planned: ProfileData = {
         ...emptyProfileData(),
         dashboardSets: [
-          { id: "dset-imported", profileId: "ignored", name: "Tabla", position: 1024, createdAt: t, updatedAt: t },
+          { id: "dset-imported", profileId: "ignored", name: "Tabla", rank: FIRST_RANK, createdAt: t, updatedAt: t },
         ],
         dashboardWidgets: [
           {
             instanceId: "dw-in-set", profileId: "ignored", widgetId: "finance:budzet",
-            size: "S", position: 1024, config: null, createdAt: t, updatedAt: t, setId: "dset-imported",
+            size: "S", rank: FIRST_RANK, config: null, createdAt: t, updatedAt: t, setId: "dset-imported",
           },
         ],
       };
@@ -1047,7 +1048,7 @@ describe("ForeignImportStore", () => {
 
       expect(written).toBe(2);
       expect(new DashboardSetStore(db.raw, target).list()).toEqual([
-        { id: "dset-imported", profileId: target, name: "Tabla", position: 1024, createdAt: t, updatedAt: t },
+        { id: "dset-imported", profileId: target, name: "Tabla", rank: FIRST_RANK, createdAt: t, updatedAt: t },
       ]);
       expect(new DashboardWidgetStore(db.raw, target).listAll().map((row) => row.setId)).toEqual([
         "dset-imported",

@@ -537,7 +537,9 @@ describe("translateLlmRecords", () => {
       createdAt: NOW,
       updatedAt: NOW,
     });
-    expect(data.tasks[0]?.position).toBeLessThan(data.tasks[1]?.position ?? 0);
+    const ranks = data.tasks.map((task) => task.rank);
+    expect(ranks).toEqual([...ranks].sort());
+    expect(new Set(ranks).size).toBe(ranks.length);
   });
 
   it("plans events with their own instants and no category", () => {

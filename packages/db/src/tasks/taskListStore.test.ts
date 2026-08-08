@@ -3,10 +3,10 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { TaskViewConfig } from "@nexus/core";
+import { FIRST_RANK, isRank } from "@nexus/core";
 import {
   MAX_TASK_LIST_NAME_LENGTH,
   NexusDatabase,
-  TASK_ORDER_GAP,
   TaskListNotFoundError,
   TaskListStore,
   TaskListValidationError,
@@ -14,7 +14,6 @@ import {
   TaskStore,
   openDatabase,
   placeBetween,
-  positionBetween,
   uuidv7,
 } from "../index.js";
 
@@ -53,6 +52,13 @@ function names(lists: TaskListStore): string[] {
   return lists.listActive().map((list) => list.name);
 }
 
+/** Every rank in `ranks` is strictly ascending by plain string comparison — `rankBetween`'s whole promise. */
+function expectRanksAscending(ranks: readonly string[]): void {
+  for (let index = 1; index < ranks.length; index += 1) {
+    expect(ranks[index - 1]! < ranks[index]!).toBe(true);
+  }
+}
+
 /** The raw column, so a test can tell "stored `{}`" from "stored nothing". */
 function storedViewConfig(listId: string): string | null {
   const row = db.raw.prepare("SELECT view_config FROM task_lists WHERE id = ?").get(listId) as
@@ -61,68 +67,69 @@ function storedViewConfig(listId: string): string | null {
   return row?.view_config ?? null;
 }
 
-describe("positionBetween", () => {
-  it("steps a whole gap at either end and takes the midpoint between neighbours", () => {
-    expect(positionBetween(null, null)).toBe(TASK_ORDER_GAP);
-    expect(positionBetween(5000, null)).toBe(5000 + TASK_ORDER_GAP);
-    expect(positionBetween(null, 5000)).toBe(5000 - TASK_ORDER_GAP);
-    expect(positionBetween(1024, 2048)).toBe(1536);
-  });
-
-  it("walks below zero when prepending — a position is a sort key, never a count", () => {
-    expect(positionBetween(null, 0)).toBe(-TASK_ORDER_GAP);
-    expect(positionBetween(-2048, -1024)).toBe(-1536);
-  });
-
-  it("returns null exactly when the neighbours are less than two apart", () => {
-    expect(positionBetween(10, 12)).toBe(11);
-    expect(positionBetween(10, 11)).toBeNull();
-    expect(positionBetween(10, 10)).toBeNull();
-    // Given the wrong way round, there is no gap either.
-    expect(positionBetween(20, 10)).toBeNull();
-  });
-});
-
 describe("placeBetween", () => {
-  it("renumbers once and retries, and gives up when the neighbours describe no gap at all", () => {
-    const positions = new Map<string, number>([
-      ["a", 10],
-      ["b", 11],
+  it("places a row between two live neighbours, reading their ranks through rankOf", () => {
+    const ranksById = new Map<string, string>([
+      ["a", "i0"],
+      ["b", "i1"],
     ]);
-    let renumbers = 0;
-    const renumber = (): void => {
-      renumbers += 1;
-      positions.set("a", TASK_ORDER_GAP);
-      positions.set("b", 2 * TASK_ORDER_GAP);
-    };
-    const positionOf = (id: string): number => {
-      const found = positions.get(id);
+    const rankOf = (id: string): string => {
+      const found = ranksById.get(id);
       if (found === undefined) throw new Error(`no ${id}`);
       return found;
     };
 
-    expect(placeBetween(positionOf, renumber, "a", "b")).toBe(1536);
-    expect(renumbers).toBe(1);
+    const placed = placeBetween(rankOf, "a", "b");
+    expect(placed).not.toBeNull();
+    expect(isRank(placed as string)).toBe(true);
+    expect(rankOf("a") < (placed as string)).toBe(true);
+    expect((placed as string) < rankOf("b")).toBe(true);
 
-    // The same row twice describes no gap, and a renumber cannot make one.
-    renumbers = 0;
-    expect(placeBetween(positionOf, renumber, "a", "a")).toBeNull();
-    expect(renumbers).toBe(1);
+    // The same row twice describes no gap at all — no `rankOf` lookup can change that.
+    expect(placeBetween(rankOf, "a", "a")).toBeNull();
   });
 
-  it("never renumbers when there is already room", () => {
-    let renumbers = 0;
-    const placed = placeBetween(
-      () => 0,
-      () => {
-        renumbers += 1;
-      },
-      null,
-      null,
-    );
-    expect(placed).toBe(TASK_ORDER_GAP);
-    expect(renumbers).toBe(0);
+  it("opens an empty scope at the first rank without ever consulting rankOf", () => {
+    const rankOf = (id: string): string => {
+      throw new Error(`rankOf must not be called for a null neighbour (got "${id}")`);
+    };
+    expect(placeBetween(rankOf, null, null)).toBe(FIRST_RANK);
   });
+
+  it(
+    "never runs out of room — placing between the same two neighbours 200 times running, each " +
+      "time promoting the row just placed into the tightening gap, always succeeds and always " +
+      "leaves the scope strictly ordered (migration 062: a rank has no gap to exhaust, so unlike " +
+      "the sparse integer this replaced, placeBetween itself never needs a renumber-and-retry path)",
+    () => {
+      const ranksById = new Map<string, string>([
+        ["lo", "i0"],
+        ["hi", "i1"],
+      ]);
+      const rankOf = (id: string): string => {
+        const found = ranksById.get(id);
+        if (found === undefined) throw new Error(`no ${id}`);
+        return found;
+      };
+
+      let beforeId = "lo";
+      const placedIds: string[] = [];
+      for (let round = 0; round < 200; round += 1) {
+        const rank = placeBetween(rankOf, beforeId, "hi");
+        expect(rank).not.toBeNull();
+        const id = `row-${round}`;
+        ranksById.set(id, rank as string);
+        placedIds.push(id);
+        beforeId = id; // the tightest possible next gap: right up against "hi"
+      }
+
+      const ranks = placedIds.map((id) => rankOf(id));
+      for (const rank of ranks) expect(isRank(rank)).toBe(true);
+      expectRanksAscending(ranks);
+      expect(rankOf("lo") < ranks[0]!).toBe(true);
+      expect(ranks[ranks.length - 1]! < rankOf("hi")).toBe(true);
+    },
+  );
 });
 
 describe("TaskListStore — the Inbox", () => {
@@ -184,9 +191,11 @@ describe("TaskListStore — lists", () => {
     const home = lists.createList({ name: "Kuća" }, NOW);
     const sub = lists.createList({ name: "Podlista", parentId: work.id }, NOW);
 
-    expect(work.position).toBe(2 * TASK_ORDER_GAP); // the Inbox took the first slot
-    expect(home.position).toBe(3 * TASK_ORDER_GAP);
-    expect(sub.position).toBe(TASK_ORDER_GAP); // its own scope starts fresh
+    // The Inbox took the root scope's first rank; each further root append walks
+    // the integer part forward by one, exactly what rankAfter promises.
+    expect(work.rank).toBe("i1");
+    expect(home.rank).toBe("i2");
+    expect(sub.rank).toBe(FIRST_RANK); // its own (parentId) scope starts fresh
     expect(sub.parentId).toBe(work.id);
     expect(lists.listActive().map((list) => list.id)).toEqual([inboxId, work.id, home.id, sub.id]);
   });
@@ -375,7 +384,9 @@ describe("TaskListStore — lists", () => {
       // ...and then into A as its only child.
       lists.moveList(c.id, a.id, null, null, LATER);
       const moved = lists.listActive().find((list) => list.id === c.id);
-      expect(moved).toMatchObject({ parentId: a.id, position: TASK_ORDER_GAP, updatedAt: LATER });
+      // A's scope had no children yet, so C — its only one — opens it at the
+      // first rank, same as any other fresh scope.
+      expect(moved).toMatchObject({ parentId: a.id, rank: FIRST_RANK, updatedAt: LATER });
       expect(names(lists)).toEqual(["Inbox", "A", "B", "C"]);
       expect(lists.listActive()[0]?.id).toBe(inboxId);
     });
@@ -410,27 +421,34 @@ describe("TaskListStore — lists", () => {
       expect(() => lists.moveList(b.id, null, a.id, a.id, NOW)).toThrow(TaskListValidationError);
     });
 
-    it("renumbers the scope once when the gap between two neighbours runs out", () => {
-      const { lists } = scope();
-      const a = lists.createList({ name: "A" }, NOW);
-      const b = lists.createList({ name: "B" }, NOW);
-      const c = lists.createList({ name: "C" }, NOW);
-      // Wedged one apart at the end of the scope — exactly the state repeated
-      // inserts at the same spot converge on, reached here in one step.
-      db.raw.prepare("UPDATE task_lists SET position = ? WHERE id = ?").run(5000, a.id);
-      db.raw.prepare("UPDATE task_lists SET position = ? WHERE id = ?").run(5001, b.id);
+    it(
+      "never needs to renumber — moving into the same shrinking gap 200 times running always " +
+        "finds room and leaves the whole scope strictly ordered (migration 062 deleted the " +
+        "renumber path outright: a rank has no gap to exhaust, so there is no state a repeated " +
+        "insert at the same spot can converge on that this move would fail against)",
+      () => {
+        const { lists } = scope();
+        const lo = lists.createList({ name: "Lo" }, NOW);
+        const hi = lists.createList({ name: "Hi" }, NOW);
 
-      lists.moveList(c.id, null, a.id, b.id, LATER);
+        let beforeId = lo.id;
+        for (let round = 0; round < 200; round += 1) {
+          // Created at the scope's END for now; `moveList` immediately relocates
+          // it into the tightening gap against `hi`, which is the interesting part.
+          const row = lists.createList({ name: `Row ${round}` }, NOW);
+          lists.moveList(row.id, null, beforeId, hi.id, LATER);
+          beforeId = row.id;
+        }
 
-      const positions = new Map(lists.listActive().map((list) => [list.name, list.position]));
-      // The WHOLE scope is re-spaced at gap steps in its own order (Inbox, C, A,
-      // B), and C then lands in the room that made between A and B.
-      expect(positions.get("Inbox")).toBe(TASK_ORDER_GAP);
-      expect(positions.get("A")).toBe(3 * TASK_ORDER_GAP);
-      expect(positions.get("B")).toBe(4 * TASK_ORDER_GAP);
-      expect(positions.get("C")).toBe(3 * TASK_ORDER_GAP + TASK_ORDER_GAP / 2);
-      expect(names(lists)).toEqual(["Inbox", "A", "C", "B"]);
-    });
+        const active = lists.listActive();
+        expect(active).toHaveLength(203); // Inbox, Lo, 200 rows, Hi
+        expectRanksAscending(active.map((list) => list.rank));
+        expect(active[0]?.name).toBe("Inbox");
+        expect(active[1]?.name).toBe("Lo");
+        expect(active[active.length - 1]?.name).toBe("Hi");
+        expect(active[active.length - 2]?.name).toBe("Row 199"); // last-placed sits right before Hi
+      },
+    );
   });
 });
 
@@ -442,8 +460,8 @@ describe("TaskListStore — sections", () => {
     const c = lists.createSection(inboxId, "C", NOW);
 
     expect(lists.listSections(inboxId).map((section) => section.name)).toEqual(["A", "B", "C"]);
-    expect(a.position).toBe(TASK_ORDER_GAP);
-    expect(c.position).toBe(3 * TASK_ORDER_GAP);
+    expect(a.rank).toBe(FIRST_RANK);
+    expect(c.rank).toBe("i2");
 
     lists.renameSection(b.id, "  Bravo  ", LATER);
     lists.moveSection(c.id, null, a.id, LATER);
@@ -487,11 +505,12 @@ describe("TaskListStore — sections", () => {
     const listed = tasks.listActive();
     expect(listed.map((task) => task.title)).toEqual(["U telu", "Prvi", "Drugi"]);
     for (const task of listed) expect(task.sectionId).toBeNull();
-    expect(listed.map((task) => task.position)).toEqual([
-      body.position,
-      body.position + TASK_ORDER_GAP,
-      body.position + 2 * TASK_ORDER_GAP,
-    ]);
+    // The promoted rows landed strictly after `body` (unmoved, still leading),
+    // one rank-step apart in the order they were promoted — the same property
+    // the title-order assertion above pins down, restated in terms of the
+    // column the store actually orders by.
+    expect(listed[0]?.rank).toBe(body.rank);
+    expectRanksAscending(listed.map((task) => task.rank));
     // The promotion is a real move of those rows, so they carry its stamp.
     expect(listed.filter((task) => task.updatedAt === LATER).map((task) => task.title)).toEqual([
       "Prvi",
@@ -544,11 +563,10 @@ describe("TaskListStore — deleteList", () => {
         sectionId: null,
       });
     }
-    expect(listed.map((task) => task.position)).toEqual([
-      existing.position,
-      existing.position + TASK_ORDER_GAP,
-      existing.position + 2 * TASK_ORDER_GAP,
-    ]);
+    // Appended one rank-step apart behind `existing` (unmoved, still leading) —
+    // the same order the title assertion above already pins down.
+    expect(listed[0]?.rank).toBe(existing.rank);
+    expectRanksAscending(listed.map((task) => task.rank));
     expect(inBody.listId).toBe(work.id); // the pre-delete rows are unchanged values
     expect(inSection.sectionId).toBe(section.id);
 
@@ -609,7 +627,7 @@ describe("TaskListStore — deleteList", () => {
     expect(byId.get(inBody.id)).toMatchObject({ listId: work.id, sectionId: null });
     expect(byId.get(inSection.id)).toMatchObject({ listId: work.id, sectionId: null });
     expect(
-      (byId.get(inBody.id)?.position ?? 0) < (byId.get(inSection.id)?.position ?? 0),
+      (byId.get(inBody.id)?.rank ?? "") < (byId.get(inSection.id)?.rank ?? ""),
     ).toBe(true);
     // A task that was in the Inbox all along is not one of the list's, whatever
     // the rest of the Inbox now holds.
@@ -713,7 +731,7 @@ describe("TaskListStore — deleteList", () => {
         b: root.id,
       });
       // Appended at the end of the target scope, keeping their relative order.
-      expect((byId.get(leafA.id)?.position ?? 0) < (byId.get(leafB.id)?.position ?? 0)).toBe(true);
+      expect((byId.get(leafA.id)?.rank ?? "") < (byId.get(leafB.id)?.rank ?? "")).toBe(true);
     }
   });
 

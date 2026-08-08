@@ -197,9 +197,7 @@ export {
   TaskListStore,
   MAX_TASK_LIST_NAME_LENGTH,
   TASK_LIST_VIEWS,
-  TASK_ORDER_GAP,
   placeBetween,
-  positionBetween,
 } from "./tasks/taskListStore.js";
 export type {
   CreateTaskListInput,
