@@ -55,7 +55,22 @@ overrides:
   # by construction, so an override is the only mechanism there is. Both land
   # on 3.3.16 — the newest 3.x, already in this tree via vite's own toolchain —
   # and 4.x leaves the tree entirely. Retires when Excalidraw stops pinning.
-  nanoid: ^3.3.16
+  #
+  # 2026-08-08 — RAISED to 3.3.17 for a SECOND, unrelated advisory:
+  # GHSA-2v37-7h3g-55p8, an unbounded loop when a custom generator is called
+  # with size zero. The old `^3.3.16` would have admitted the patch by ordinary
+  # caret resolution, but the lockfile had already settled on 3.3.16 and a
+  # range that still matches is never re-resolved — which is the quiet way an
+  # override goes stale while still looking correct.
+  nanoid: ^3.3.17
+  # GHSA-55q2-fjhq-7xh7 — removing an IN_PLACE hook leaves the detached
+  # subtree executable, i.e. XSS. SHIPPED, through excalidraw >
+  # mermaid-to-excalidraw > mermaid > dompurify, which is precisely the path
+  # that sanitises mermaid's generated SVG before the renderer paints it — so
+  # this is the sanitiser between untrusted diagram source and our own window,
+  # and it is the one advisory in this list I would not ship past. Retires when
+  # mermaid's own range reaches 3.4.13.
+  dompurify: ^3.4.13
   # GHSA-r5fr-rjxr-66jc / -f23m-r3pf-42rh / -xxjr-mmjv-4gpg — prototype
   # pollution in `_.unset`/`_.omit` via array paths. SHIPPED, through
   # excalidraw > mermaid-to-excalidraw > @mermaid-js/parser > langium >
