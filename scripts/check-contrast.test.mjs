@@ -82,10 +82,18 @@ describe("the live palette", () => {
     for (const theme of ["dan", "noc"]) {
       const { failures, checked } = auditTheme(theme);
       expect(failures).toEqual([]);
-      // 15 palette-wide pairs + 6 per accent × 8 accents. Pinned as a number
-      // so that narrowing the walk — the way this gate would rot — fails here
+      // 27 palette-wide pairs + 6 per accent × 8 accents. Pinned as a number so
+      // that narrowing the walk — the way this gate would rot — fails here
       // rather than passing quietly with less coverage.
-      expect(checked).toBe(63);
+      //
+      // It went 15 → 27 with the 2026-08-08 ramp, in four steps, and each is
+      // the point of the pin: `surfaceRaised` and `surfaceSunken` as new
+      // grounds (+4); `textSubtle` on the three grounds, because the tier
+      // demoted out of `textMuted` is still set as text (+3); `textFaint` on
+      // two grounds at the 3:1 NON-TEXT floor, because it is a mark and holding
+      // it to the body floor would delete the tier (+2); and the three hairline
+      // pairs, which are checked as a BAND rather than a floor (+3).
+      expect(checked).toBe(75);
     }
   });
 });

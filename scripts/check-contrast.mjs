@@ -48,6 +48,18 @@ const TOKENS = join(HERE, "..", "packages", "tokens", "tokens");
 export const AA_BODY = 4.5;
 
 /**
+ * WCAG AA floor for a NON-TEXT mark — an icon, a rule, a chart gridline, the
+ * page-header sigil watermark. `textFaint` is the only role held to this rather
+ * than to `AA_BODY`, and the distinction is deliberate rather than a discount:
+ * it is the tier that exists so a mark can be present without competing with
+ * prose, and holding it to the body floor would make it the same colour as
+ * `textSubtle`, i.e. would delete the tier. It is a build failure to set text
+ * in it; nothing here can prove that, so it is stated in the token's own
+ * comment and in `styles.css` where the utility lives.
+ */
+export const AA_NON_TEXT = 3;
+
+/**
  * sRGB channel to linear light. The 0.03928 knee and the 2.4 exponent are
  * WCAG 2.x's own definition, not sRGB's slightly different one — the gate has
  * to agree with the checkers an auditor would run, not with the colour theory.
@@ -99,14 +111,62 @@ const TEXT_ON_GROUND = [
   ["text", "bg", "body text on the page"],
   ["text", "surface", "body text on a card"],
   ["text", "surfaceAlt", "body text on a raised row"],
+  ["text", "surfaceRaised", "body text in a popover or menu"],
+  ["text", "surfaceSunken", "body text in an input well"],
   ["textMuted", "bg", "captions on the page"],
   ["textMuted", "surface", "captions on a card"],
   ["textMuted", "surfaceAlt", "captions on a raised row"],
+  // The two surfaces the 2026-08-08 ramp added. A surface token no pair reads
+  // is exactly the hole this gate was written for — `paper.600` was legible on
+  // every ground anybody had thought to check, and illegible on the one nobody
+  // had. Every new ground is enrolled here in the same commit that adds it.
+  ["textMuted", "surfaceRaised", "captions in a popover or menu"],
+  ["textMuted", "surfaceSunken", "placeholder text in an input well"],
+  // The tier the 2026-08-08 ramp inserted. `textMuted` used to BE this value
+  // and sat at APCA Lc 43 on Noć's card — below the readable-body floor — which
+  // is why a sixty-row list read as „shouting or whispering, nothing between".
+  // `textSubtle` now holds the old value and is enrolled here in its own right,
+  // because a tier demoted from body to tertiary is still set as text.
+  ["textSubtle", "bg", "tertiary labels on the page"],
+  ["textSubtle", "surface", "tertiary labels on a card"],
+  ["textSubtle", "surfaceAlt", "tertiary labels on a raised row"],
   ["data", "bg", "figures on the page"],
   ["data", "surface", "figures on a card"],
   ["danger", "bg", "destructive text on the page"],
   ["danger", "surface", "destructive text on a card"],
   ["success", "surface", "confirmation text on a card"],
+];
+
+/**
+ * Marks, not prose — held to `AA_NON_TEXT` (3:1). Two roles qualify: the faint
+ * ink tier (page-header sigil watermark, chart gridlines, disabled marks), and
+ * the borders, which are the app's whole elevation model on a dark ground and
+ * are therefore worth proving visible rather than assuming so.
+ */
+const NON_TEXT = [
+  ["textFaint", "bg", "a faint mark on the page"],
+  ["textFaint", "surface", "a faint mark on a card"],
+];
+
+/**
+ * Hairlines are checked as a BAND, not against a floor.
+ *
+ * WCAG 1.4.11's 3:1 applies to boundaries an interactive control depends on
+ * being identified by — an input's outline — not to a separator between a card
+ * and the page. Holding a hairline to 3:1 produces a drawn box; the app then
+ * reads as a wireframe, which is the failure this whole pass exists to undo.
+ *
+ * But the opposite failure is equally real and was shipping: Dan's card edge
+ * sat at 1.36 against the page, below the ratio at which an edge reads as
+ * deliberate at all, so a card was indistinguishable from the ground it sat on.
+ * So the invariant is a corridor. The floor says „an edge must be visible"; the
+ * ceiling says „an edge must not be a wall".
+ */
+const HAIRLINE_BAND = { min: 1.2, max: 2.4 };
+const HAIRLINES = [
+  ["border", "surface", "a card's own edge"],
+  ["border", "bg", "an edge against the page"],
+  ["borderStrong", "surface", "an emphasised edge on a card"],
 ];
 
 /** Chips paint a tint behind their own hue. */
@@ -140,19 +200,40 @@ const ACCENT_ROLES = [
 export function auditPalette(themeName, semantic, accents = {}) {
   const failures = [];
   let checked = 0;
-  const check = (fgRole, bgRole, why, palette) => {
+  const check = (fgRole, bgRole, why, palette, floor = AA_BODY) => {
     const fg = palette[fgRole];
     const bg = palette[bgRole];
     if (fg === undefined || bg === undefined) return;
     checked += 1;
     const ratio = contrast(fg, bg);
-    if (ratio < AA_BODY) {
-      failures.push({ theme: themeName, fgRole, fg, bgRole, bg, why, ratio });
+    if (ratio < floor) {
+      failures.push({ theme: themeName, fgRole, fg, bgRole, bg, why, ratio, floor });
     }
   };
 
   for (const [fg, bg, why] of TEXT_ON_GROUND) check(fg, bg, why, semantic);
   for (const [fg, bg, why] of TINTED) check(fg, bg, why, semantic);
+  for (const [fg, bg, why] of NON_TEXT) check(fg, bg, why, semantic, AA_NON_TEXT);
+
+  for (const [lineRole, groundRole, why] of HAIRLINES) {
+    const line = semantic[lineRole];
+    const ground = semantic[groundRole];
+    if (line === undefined || ground === undefined) continue;
+    checked += 1;
+    const ratio = contrast(line, ground);
+    if (ratio < HAIRLINE_BAND.min || ratio > HAIRLINE_BAND.max) {
+      failures.push({
+        theme: themeName,
+        fgRole: lineRole,
+        fg: line,
+        bgRole: groundRole,
+        bg: ground,
+        why: `${why} — a hairline must sit between ${HAIRLINE_BAND.min}:1 and ${HAIRLINE_BAND.max}:1`,
+        ratio,
+        floor: HAIRLINE_BAND.min,
+      });
+    }
+  }
 
   // `.nx-button--primary` paints the accent and writes the page background on
   // top of it — the one inverted pair in the product.
