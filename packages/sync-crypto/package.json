@@ -1,0 +1,20 @@
+{
+  "name": "@nexus/sync-crypto",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Nexus sync cryptographic core: web-password KDF split, key-committing key wrapping, row AEAD, the device-pairing handshake, the hybrid logical clock and field-level LWW merge. Zero runtime dependencies — every primitive arrives through an injected CryptoPort. No React, DOM, or Node APIs.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0",
+    "vitest": "^3.2.0"
+  }
+}
