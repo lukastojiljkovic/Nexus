@@ -20,7 +20,7 @@ import {
   replaceNoteContent,
   xmlTextContent,
 } from "@nexus/core";
-import { EmptyState, LoadingState, SaveIndicator, type SaveStatus } from "@nexus/ui";
+import { EmptyState, LoadingState, SaveIndicator, Select, type SaveStatus } from "@nexus/ui";
 import {
   NOTE_ATTACHMENT_MAX_BYTES,
   NOTE_CARDS_MAX_COUNT,
@@ -823,9 +823,14 @@ export function NoteEditor({
                   {decks.length === 0 ? (
                     <span>{strings.notes.cardsNoDecks}</span>
                   ) : (
-                    <select
-                      className="note__cards-select"
-                      aria-label={strings.notes.cardsDeckSelectLabel}
+                    // `inline`: this select lives in a one-line status bar
+                    // beside the "already mapped to X" / "not mapped" text —
+                    // the same bar it used to announce itself into by
+                    // `aria-label` alone, with nothing on screen saying what
+                    // the control was for.
+                    <Select
+                      layout="inline"
+                      label={strings.notes.cardsDeckSelectLabel}
                       value=""
                       onChange={(event) => {
                         const deckId = event.target.value;
@@ -850,7 +855,7 @@ export function NoteEditor({
                           </optgroup>
                         );
                       })}
-                    </select>
+                    </Select>
                   )}
                   {/* An accidental "Promeni špil" must have a way back — without
                       this the bar can only be left by picking a deck. */}

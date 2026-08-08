@@ -211,10 +211,20 @@ function FinCsvMappingDialog({
                     {s.samplesLabel} {samples.length > 0 ? samples.join(" · ") : "—"}
                   </span>
                 </div>
-                <select
+                {/* `inline`: the column's own name and samples sit to the left
+                    in the same row (`.csv-map__column` is a fixed-lane row by
+                    design, "fifteen rows must read as one table, not fifteen
+                    forms" — see that rule's own comment) — a stacked label
+                    would turn every row into a two-line card. The label is
+                    still just `roleLabel` rather than `roleLabel: name`
+                    (the old `aria-label`'s text): the column name is already
+                    on screen immediately to its left, so repeating it here
+                    would be the same word said twice in one row. */}
+                <Select
+                  layout="inline"
                   className="set__select"
+                  label={s.roleLabel}
                   value={roles[index] ?? "ignore"}
-                  aria-label={`${s.roleLabel}: ${name}`}
                   disabled={busy}
                   onChange={(event) => {
                     const role = FIN_CSV_IMPORT_COLUMN_ROLES.find(
@@ -228,7 +238,7 @@ function FinCsvMappingDialog({
                       {s.roles[role]}
                     </option>
                   ))}
-                </select>
+                </Select>
               </div>
             );
           })}
@@ -236,11 +246,14 @@ function FinCsvMappingDialog({
           {!ready.amount && <p className="set__section-caption">{s.amountRequired}</p>}
 
           <div className="csv-map__list">
-            <p className="set__section-caption">{s.accountLabel}</p>
-            <select
+            {/* Labelled ONCE — same fix as the delimiter select above: the
+                caption used to stand as its own `<p>` AND be repeated as an
+                invisible `aria-label`. `Select` renders the one string as
+                both. */}
+            <Select
               className="set__select"
+              label={s.accountLabel}
               value={accountId}
-              aria-label={s.accountLabel}
               disabled={busy}
               onChange={(event) => onAccountChange(event.target.value)}
             >
@@ -249,17 +262,16 @@ function FinCsvMappingDialog({
                   {account.name} · {account.currency}
                 </option>
               ))}
-            </select>
+            </Select>
             <p className="set__section-caption">{s.accountHint}</p>
           </div>
 
           {signed && (
             <div className="csv-map__list">
-              <p className="set__section-caption">{s.signLabel}</p>
-              <select
+              <Select
                 className="set__select"
+                label={s.signLabel}
                 value={signConvention}
-                aria-label={s.signLabel}
                 disabled={busy}
                 onChange={(event) => {
                   const convention = FIN_CSV_IMPORT_SIGN_CONVENTIONS.find(
@@ -273,7 +285,7 @@ function FinCsvMappingDialog({
                     {s.signs[convention]}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
           )}
 

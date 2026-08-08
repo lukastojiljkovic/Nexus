@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { scaleLinear } from "@nexus/core";
 
-import { fitLabel, laneRow, spanExtent } from "./SpanLanes.js";
+import { fitLabel, laneRow, ruleLabelPlacement, spanExtent } from "./SpanLanes.js";
 
 describe("fitLabel", () => {
   it("leaves a label that fits exactly as it is", () => {
@@ -112,5 +112,48 @@ describe("spanExtent", () => {
     const { x, width } = spanExtent(1, 31, xScale, 320);
     expect(x).toBeCloseTo(84, 12);
     expect(x + width).toBeCloseTo(320, 12);
+  });
+});
+
+describe("ruleLabelPlacement", () => {
+  it("sits to the right of the rule while there is room", () => {
+    // 320-wide box, rule a third across, a four-character label: 4 * 6.5 = 26px
+    // needed and 213 available, so nothing has to move.
+    expect(ruleLabelPlacement(100, "sada", 320)).toEqual({ x: 103, anchor: "start" });
+  });
+
+  it("flips to the left when the rule is at the right edge", () => {
+    // „sada" on FOKUS's „Trake pažnje" — the rule is AT the end of the axis
+    // whenever the last logged phase is the most recent thing that happened,
+    // which is the normal case, and the label ran 112.5px outside the svg.
+    expect(ruleLabelPlacement(320, "sada", 320)).toEqual({ x: 317, anchor: "end" });
+  });
+
+  it("flips as soon as the label would not fit whole, not once it has left", () => {
+    // 300 + 3 + 26 = 329 > 320. The old code only looked wrong once the text
+    // was already outside; the boundary is where it stops FITTING.
+    expect(ruleLabelPlacement(300, "sada", 320).anchor).toBe("end");
+    expect(ruleLabelPlacement(290, "sada", 320).anchor).toBe("start");
+  });
+
+  it("keeps a rule near the LEFT edge on the right-hand side, where the room is", () => {
+    // Worth pinning because it is the case the flip must not overreact to: at
+    // x = 2 in a 320 box there is 315px of room to the right, so flipping would
+    // push the label off the left edge to solve a problem that is not there.
+    expect(ruleLabelPlacement(2, "sada", 320)).toEqual({ x: 5, anchor: "start" });
+  });
+
+  it("does not leave by the other edge when the box is too small for either side", () => {
+    // A 20px box cannot hold a 26px label anywhere. The clamp is what keeps the
+    // failure symmetrical — the label starts at the left edge instead of at
+    // x = -1, so what is lost is the tail rather than the first letters.
+    const placed = ruleLabelPlacement(2, "sada", 20);
+    expect(placed.anchor).toBe("end");
+    expect(placed.x).toBe(26);
+  });
+
+  it("gives a longer label more room before it flips", () => {
+    expect(ruleLabelPlacement(250, "rok", 320).anchor).toBe("start");
+    expect(ruleLabelPlacement(250, "krajnji rok", 320).anchor).toBe("end");
   });
 });

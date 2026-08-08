@@ -140,6 +140,43 @@ export function spanExtent(
   return { x, width: Math.max(1, x2 - x), open: to === "open" };
 }
 
+/**
+ * Which side of the reference rule its label sits on.
+ *
+ * The label used to be drawn three pixels to the RIGHT of the rule,
+ * unconditionally. That is correct until the rule is near the right edge — and
+ * for the one rule this chart is actually used with, „sada" on FOKUS's „Trake
+ * pažnje", the rule is AT the right edge whenever the last logged phase is the
+ * most recent thing that happened, which is the normal case. The label then ran
+ * 112.5px outside the `<svg>`, where the root element's own clip cut it in
+ * half: the sweep found it on four surfaces.
+ *
+ * The same class `SeriesPlot`'s tick gutter and `ColumnPlot`'s end labels were
+ * fixed for, and closed the same way — flip to the side there is room on rather
+ * than hope.
+ *
+ * The width estimate is a character count, for `SeriesPlot`'s reason: this
+ * component is drawn from data with no DOM to measure in. `nx-chart-rule__label`
+ * is caption-size UI text, where ~6.5px per character is generous for the mixed
+ * case a label like „sada" or „rok" is written in.
+ */
+const RULE_LABEL_CHAR_W = 6.5;
+const RULE_LABEL_GAP = 3;
+
+export function ruleLabelPlacement(
+  ruleX: number,
+  label: string,
+  width: number,
+): { x: number; anchor: "start" | "end" } {
+  const needed = label.length * RULE_LABEL_CHAR_W;
+  if (ruleX + RULE_LABEL_GAP + needed <= width) {
+    return { x: ruleX + RULE_LABEL_GAP, anchor: "start" };
+  }
+  // Clamped as well as flipped: a rule at x = 2 has no room on either side, and
+  // an `end`-anchored label at x = -1 would leave by the other edge instead.
+  return { x: Math.max(needed, ruleX - RULE_LABEL_GAP), anchor: "end" };
+}
+
 export function SpanLanes({
   title,
   description,
@@ -224,18 +261,37 @@ export function SpanLanes({
           </g>
         );
       })}
-      {rule !== undefined && (
-        <g aria-hidden="true">
-          <line className="nx-chart-rule" x1={xScale(rule.at)} x2={xScale(rule.at)} y1={0} y2={height} />
-          <text
-            className={`nx-chart-rule__label nx-chart-rule__label--${rule.tone}`}
-            x={xScale(rule.at) + 3}
-            y={10}
-          >
-            {rule.label}
-          </text>
-        </g>
-      )}
+      {rule !== undefined &&
+        (() => {
+          // CLAMPED INTO THE PLOT, and that is the actual defect — the label
+          // placement below was only following it out.
+          //
+          // `domain` is the caller's, and „sada" is routinely OUTSIDE it: FOKUS
+          // draws today's logged phases, so the moment the last phase ends,
+          // now is later than anything on the axis. `scaleLinear` extrapolates
+          // rather than refusing, so the rule was drawn past `width` — 112px
+          // outside the `<svg>` on four surfaces — taking its label with it.
+          //
+          // Clamping says „at or beyond this edge", which is the honest reading
+          // of a marker that has run off the end, and is what every calendar
+          // does with a now-line on a day already finished. Omitting the rule
+          // instead would remove the one thing a reader looks for first.
+          const ruleX = Math.min(width, Math.max(LEFT_MARGIN, xScale(rule.at)));
+          const placed = ruleLabelPlacement(ruleX, rule.label, width);
+          return (
+            <g aria-hidden="true">
+              <line className="nx-chart-rule" x1={ruleX} x2={ruleX} y1={0} y2={height} />
+              <text
+                className={`nx-chart-rule__label nx-chart-rule__label--${rule.tone}`}
+                x={placed.x}
+                y={10}
+                textAnchor={placed.anchor}
+              >
+                {rule.label}
+              </text>
+            </g>
+          );
+        })()}
     </ChartFrame>
   );
 

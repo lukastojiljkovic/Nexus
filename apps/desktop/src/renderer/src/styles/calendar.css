@@ -985,7 +985,21 @@ button.cal__grid-event--foreign {
 .cal__foreign-mark {
   flex: none;
   margin-right: 2px;
-  font-size: var(--nx-font-size-caption);
+  /* THE MARK IS A 14px INLINE `<svg>`, NOT A GLYPH, and that is the whole of
+     the defect this rule closes.
+     A replaced inline element sits with its BOTTOM ON THE BASELINE, so the line
+     box has to hold all fourteen of its pixels above the baseline plus the
+     font's own descent below it — about 18px inside a 30-minute block whose
+     content box is 22. The sweep measured the result as nine pixels of the
+     title clipped, on two surfaces, and it survived four rounds because the
+     first attempt pinned `line-height` here: line-height governs the strut, and
+     a replaced element's height is not the strut. `inline-flex` takes the svg
+     out of baseline alignment entirely, and `vertical-align: middle` centres
+     the mark on the text's x-height, which is where an icon beside a word
+     belongs anyway. */
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
   line-height: 1;
 }
 

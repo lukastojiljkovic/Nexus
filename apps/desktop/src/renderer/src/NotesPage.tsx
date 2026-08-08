@@ -230,10 +230,10 @@ type NoteFields = { [K in keyof NoteMeta]: NoteMeta[K] };
  */
 const NOTE_SCHEMA: CollectionSchema = {
   fields: [
-    { key: "title", type: "text", titleKey: "notes.field.title" },
-    { key: "pinned", type: "boolean", titleKey: "notes.field.pinned" },
-    { key: "createdAt", type: "date", titleKey: "notes.field.createdAt" },
-    { key: "updatedAt", type: "date", titleKey: "notes.field.updatedAt" },
+    { key: "title", type: "text" },
+    { key: "pinned", type: "boolean" },
+    { key: "createdAt", type: "date" },
+    { key: "updatedAt", type: "date" },
   ],
 };
 

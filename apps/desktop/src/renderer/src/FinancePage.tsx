@@ -178,11 +178,11 @@ type FinTransactionFields = { [K in keyof FinTransaction]: FinTransaction[K] };
  */
 const FIN_SCHEMA: CollectionSchema = {
   fields: [
-    { key: "date", type: "date", titleKey: "finance.field.date" },
-    { key: "amount", type: "number", titleKey: "finance.field.amount" },
-    { key: "payee", type: "text", titleKey: "finance.field.payee" },
-    { key: "accountId", type: "text", titleKey: "finance.field.account" },
-    { key: "categoryId", type: "text", titleKey: "finance.field.category" },
+    { key: "date", type: "date" },
+    { key: "amount", type: "number" },
+    { key: "payee", type: "text" },
+    { key: "accountId", type: "text" },
+    { key: "categoryId", type: "text" },
   ],
 };
 

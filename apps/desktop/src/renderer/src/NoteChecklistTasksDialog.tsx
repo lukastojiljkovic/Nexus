@@ -1,6 +1,6 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { createPortal } from "react-dom";
-import { Button } from "@nexus/ui";
+import { Button, Select } from "@nexus/ui";
 import type { TaskList } from "../../shared/ipc.js";
 import { countUnit, strings } from "./strings.js";
 import { useFocusTrap } from "./useFocusTrap.js";
@@ -43,14 +43,13 @@ export function NoteChecklistTasksDialog({
   // practice: every profile has an Inbox).
   const [failed, setFailed] = useState(false);
   const [listId, setListId] = useState("");
-  const selectRef = useRef<HTMLSelectElement>(null);
   const titleId = useId();
   const questionId = useId();
 
   // The trap's own default initial focus (the first tabbable descendant) is
   // wrong here while `lists` is still loading — the list picker does not
-  // exist yet, so it would land on „Otkaži". The dedicated effect below,
-  // unchanged, re-focuses the picker itself the moment it mounts; the trap
+  // exist yet, so it would land on „Otkaži". The picker's own `autoFocus`
+  // below takes it back the moment the picker actually mounts; the trap
   // still owns cycling Tab within the panel and returning focus on close.
   const panelRef = useFocusTrap<HTMLDivElement>({ open: true });
 
@@ -78,14 +77,6 @@ export function NoteChecklistTasksDialog({
       active = false;
     };
   }, [profileId]);
-
-  // Focus lands on the picker, not on „Pretvori“: the list is what there is to
-  // answer here, and it is answerable from the keyboard without Enter already
-  // meaning "and convert into whatever was preselected". Keyed on `lists`, which
-  // is set exactly once — changing the selection must not re-grab focus.
-  useEffect(() => {
-    selectRef.current?.focus();
-  }, [lists]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -124,10 +115,17 @@ export function NoteChecklistTasksDialog({
         ) : lists.length === 0 ? (
           <p className="recur-dialog__question">{s.noLists}</p>
         ) : (
-          <select
-            ref={selectRef}
-            className="note__cards-select"
-            aria-label={s.listLabel}
+          // Focus lands here, not on „Pretvori“: the list is what there is to
+          // answer, and it is answerable from the keyboard without Enter
+          // already meaning "and convert into whatever was preselected".
+          // `Select` renders its own `<label>` rather than accepting a ref, so
+          // the native `autoFocus` attribute does what the old
+          // `selectRef`-plus-effect pair did — React calls `.focus()` on
+          // mount, and this element mounts exactly once, the moment `lists`
+          // resolves to a non-empty list.
+          <Select
+            autoFocus
+            label={s.listLabel}
             value={listId}
             onChange={(event) => setListId(event.target.value)}
           >
@@ -136,7 +134,7 @@ export function NoteChecklistTasksDialog({
                 {list.name}
               </option>
             ))}
-          </select>
+          </Select>
         )}
         <div className="recur-dialog__actions note__checklist-actions">
           <Button className="recur-dialog__cancel" onClick={onCancel}>

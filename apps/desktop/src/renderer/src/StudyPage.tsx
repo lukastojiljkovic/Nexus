@@ -22,6 +22,7 @@ import {
   ListRow,
   PageHeader,
   ProportionBar,
+  Select,
   StatBand,
   TextField,
 } from "@nexus/ui";
@@ -2720,10 +2721,14 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                   </p>
                 )}
                 {editingCardId != null && (
-                  <select
-                    className="study__select"
+                  // Stacked, not inline: this is the last field of a vertical
+                  // form (the textareas above it all wear a placeholder), so a
+                  // label above the control costs nothing and finally says what
+                  // the control is for — an `aria-label` here announced
+                  // "Špil" to a screen reader and nothing to anyone looking.
+                  <Select
+                    label={strings.study.deckSelectLabel}
                     value={cardDeckId}
-                    aria-label={strings.study.deckSelectLabel}
                     onChange={(event: ChangeEvent<HTMLSelectElement>) => setCardDeckId(event.target.value)}
                   >
                     {deckOptions.map((option) => (
@@ -2731,7 +2736,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                         {option.name}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 )}
                 <div className="study__card-form-actions">
                   <Button
@@ -3372,10 +3377,13 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                       className="study__exam-form"
                       onSubmit={(e) => void submitExamForm(e, subject.id)}
                     >
-                      <select
-                        className="study__select"
+                      {/* `inline`: this is a one-line controls row (the date and
+                          scope fields beside it stay this wide too), and a
+                          stacked label would double the row's height. */}
+                      <Select
+                        layout="inline"
+                        label={strings.study.examTypeLabel}
                         value={examType}
-                        aria-label={strings.study.examTypeLabel}
                         onChange={(event: ChangeEvent<HTMLSelectElement>) =>
                           setExamType(event.target.value as ExamType)
                         }
@@ -3385,7 +3393,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                             {strings.study.examType[type]}
                           </option>
                         ))}
-                      </select>
+                      </Select>
                       <TextField
                         type="date"
                         value={examDate}
@@ -3869,10 +3877,12 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                       : ""}
                   </span>
                 ) : (
-                  <select
-                    className="study__select"
+                  // `inline`: the same one-line controls row as the exam form
+                  // above — start date and minutes sit beside it at this height.
+                  <Select
+                    layout="inline"
+                    label={strings.study.planExamLabel}
                     value={planExamId}
-                    aria-label={strings.study.planExamLabel}
                     onChange={(event: ChangeEvent<HTMLSelectElement>) =>
                       setPlanExamId(event.target.value)
                     }
@@ -3883,7 +3893,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                         {formatExamDate(exam.examDate)}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 )}
                 <TextField
                   type="date"
@@ -3969,10 +3979,15 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                                   }
                                 }}
                               />
-                              <select
-                                className="study__select study__topic-confidence"
+                              {/* `inline`: one topic row already carries a rank
+                                  number, a name field and a second select — a
+                                  stacked label on either would double the
+                                  row's height for every topic in the list. */}
+                              <Select
+                                layout="inline"
+                                className="study__topic-confidence"
+                                label={strings.study.topics.confidenceLabel}
                                 value={topic.confidence === null ? "" : String(topic.confidence)}
-                                aria-label={strings.study.topics.confidenceLabel}
                                 onChange={(event) =>
                                   void mutateTopics(topic.examId, () =>
                                     window.nexus.setExamTopicConfidence(
@@ -3997,7 +4012,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                                     {step}
                                   </option>
                                 ))}
-                              </select>
+                              </Select>
                               {topic.confidence === null &&
                                 topic.effectiveConfidence !== null && (
                                   <span className="study__topic-derived">
@@ -4005,10 +4020,13 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                                     {topic.effectiveConfidence}
                                   </span>
                                 )}
-                              <select
-                                className="study__select study__topic-deck"
+                              {/* `inline`, same reasoning as the confidence
+                                  select two fields back. */}
+                              <Select
+                                layout="inline"
+                                className="study__topic-deck"
+                                label={strings.study.topics.deckLabel}
                                 value={topic.deckId ?? ""}
-                                aria-label={strings.study.topics.deckLabel}
                                 onChange={(event) =>
                                   void mutateTopics(topic.examId, () =>
                                     window.nexus.setExamTopicDeck(
@@ -4037,7 +4055,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                                       : ""}
                                   </option>
                                 ))}
-                              </select>
+                              </Select>
                               {/* A link whose deck was deleted after it was
                                   made: the store derives nothing from it, so
                                   the „izvedeno" hint above is absent — this
@@ -4225,10 +4243,12 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                 <EmptyState variant="inline" title={strings.study.focusNoSubjects} />
               ) : (
                 <div className="study__focus-idle">
-                  <select
-                    className="study__select"
+                  {/* `inline`: the „Pokreni fokus" button sits right beside it
+                      on the same line. */}
+                  <Select
+                    layout="inline"
+                    label={strings.study.focusSubjectLabel}
                     value={resolvedFocusSubjectId}
-                    aria-label={strings.study.focusSubjectLabel}
                     onChange={(event: ChangeEvent<HTMLSelectElement>) =>
                       setFocusSubjectId(event.target.value)
                     }
@@ -4238,7 +4258,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                         {subject.name}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                   <Button
                     size="sm"
                     variant="primary"

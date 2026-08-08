@@ -128,15 +128,22 @@ type TaskFields = { [K in keyof Task]: Task[K] };
  * the original five with ADR-050: they are what the calendar spans a bar
  * between, and what „Počinje“/„Završen“ sort by.
  */
+// `titleKey` used to be required here (and on every field below); it was
+// removed because it was a required property nothing ever read — the engine
+// filters, sorts and groups by `key`/`type` alone — and every one of its
+// sixteen supplied values across the app pointed at a `strings` path
+// (`tasks.field.*`, `notes.field.*`, `finance.field.*`) that does not exist.
+// It looked like working i18n wiring; it was dead weight that could drift
+// forever because nothing validated it.
 const TASK_SCHEMA: CollectionSchema = {
   fields: [
-    { key: "title", type: "text", titleKey: "tasks.field.title" },
-    { key: "status", type: "select", titleKey: "tasks.field.status", options: TASK_STATUSES },
-    { key: "priority", type: "select", titleKey: "tasks.field.priority", options: TASK_PRIORITIES },
-    { key: "dueDate", type: "date", titleKey: "tasks.field.dueDate" },
-    { key: "startDate", type: "date", titleKey: "tasks.field.startDate" },
-    { key: "completedAt", type: "date", titleKey: "tasks.field.completedAt" },
-    { key: "done", type: "boolean", titleKey: "tasks.field.done" },
+    { key: "title", type: "text" },
+    { key: "status", type: "select", options: TASK_STATUSES },
+    { key: "priority", type: "select", options: TASK_PRIORITIES },
+    { key: "dueDate", type: "date" },
+    { key: "startDate", type: "date" },
+    { key: "completedAt", type: "date" },
+    { key: "done", type: "boolean" },
   ],
 };
 
@@ -4096,7 +4103,6 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                 ? {
                     key: "priority",
                     type: "select",
-                    titleKey: field.titleKey,
                     options: KANBAN_PRIORITY_COLUMNS,
                   }
                 : field,
@@ -4108,7 +4114,6 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
               {
                 key: "sectionId",
                 type: "select",
-                titleKey: "tasks.field.section",
                 options: listSections.map((section) => section.id),
               },
             ],
@@ -4580,10 +4585,10 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                   aria-label={strings.tasks.startDateLabel}
                   onChange={(event) => setStartDate(event.target.value)}
                 />
-                <select
+                <Select
                   className="tasks__select"
+                  label={strings.tasks.priorityLabel}
                   value={priority}
-                  aria-label={strings.tasks.priorityLabel}
                   onChange={(event) => setPriority(asPriority(event.target.value))}
                 >
                   {TASK_PRIORITIES.map((option) => (
@@ -4591,7 +4596,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                       {strings.tasks.priority[option]}
                     </option>
                   ))}
-                </select>
+                </Select>
                 {/* Sekcija (TASK-004) — only where there is a heading to pick: a
                     select whose one option is "Bez sekcije" says nothing, and a
                     task of the selected list can only carry a heading of that same
@@ -4599,10 +4604,10 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                     It is also the way BACK to the list body, which the drag (whose
                     targets are the headings) deliberately does not offer. */}
                 {listSections.length > 0 && (
-                  <select
+                  <Select
                     className="tasks__select"
+                    label={strings.tasks.lists.sectionLabel}
                     value={formSectionId ?? ""}
-                    aria-label={strings.tasks.lists.sectionLabel}
                     onChange={(event) =>
                       setFormSectionId(event.target.value.length === 0 ? null : event.target.value)
                     }
@@ -4613,7 +4618,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                         {section.name}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 )}
                 {/* Keyed by the record being edited: switching tasks re-derives
                     whether the rule reads as a preset or as Prilagođeno. */}
