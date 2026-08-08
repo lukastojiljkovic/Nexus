@@ -4,6 +4,7 @@ import { basename, dirname, extname, join } from "node:path";
 import type { BrowserWindow, OpenDialogOptions } from "electron";
 import { dialog, protocol, shell } from "electron";
 import { blobStorageName, decryptBlob, encryptBlob, type BlobKeys } from "@nexus/core/auth";
+import { extensionForMime, sniffMime } from "@nexus/core";
 import type { SaveAttachmentResult } from "../shared/ipc.js";
 
 /**
@@ -212,6 +213,45 @@ export function sanitizeFileName(name: string): string {
 }
 
 /**
+ * The name the temp copy gets: the display name's BASE, plus the extension the
+ * SNIFFED BYTES earn. The renderer's extension is discarded, always.
+ *
+ * WHY THE OLD SHAPE WAS A REMOTE-CODE-EXECUTION PATH. `openExternally` ends in
+ * `shell.openPath`, which on Windows is ShellExecute — the OS picks what to run
+ * from the extension and from nothing else. The name it was given came from
+ * `sanitizeFileName(attachment.fileName)`, and `fileName` is a renderer-supplied
+ * display string validated only as „a non-empty string" (SEC-EL-02 treats it as
+ * untrusted, and it is), while `sanitizeFileName` explicitly PRESERVES the final
+ * extension. So a renderer with a scripting foothold attaches arbitrary bytes as
+ * `Ugovor.pdf.exe`, the user clicks „otvori", and native code runs outside the
+ * `sandbox: true` renderer — nullifying the control the whole Electron design
+ * leans on hardest.
+ *
+ * The bytes are already decrypted and in hand when this is called, so the type
+ * comes from `sniffMime` rather than from any stored column: not forgeable, and
+ * not stale either, which a `mime` written at upload time could be.
+ *
+ * AN UNRECOGNISED TYPE YIELDS NO EXTENSION AT ALL, and that is the design.
+ * `sniffMime` knows seven types; everything else is `application/octet-stream`,
+ * and an extensionless file makes Windows show its „open with" chooser. A human
+ * then decides what opens bytes this product could not identify, which is the
+ * correct authority for that decision.
+ *
+ * The base keeps its own dots — `arhiva.tar` sniffed as zip becomes
+ * `arhiva.tar.zip` — because truncating at the first dot would rename files the
+ * user recognises. What matters is only that the LAST extension is ours.
+ */
+export function safeOpenName(displayName: string, mime: string): string {
+  const sanitized = sanitizeFileName(displayName);
+  const claimed = extname(sanitized);
+  const base = claimed.length === 0 ? sanitized : sanitized.slice(0, -claimed.length);
+  const trimmed = base.trim();
+  // A name that was nothing but an extension (`.exe`) leaves an empty base.
+  const stem = trimmed.length === 0 ? FALLBACK_FILE_NAME : trimmed;
+  return `${stem.slice(0, MAX_SANITIZED_NAME_LENGTH)}${extensionForMime(mime)}`;
+}
+
+/**
  * Decrypts an attachment's blob into a main-owned temp file (never the
  * renderer's own path) and opens it with the OS's default handler for its
  * type. `tempDir` is `<userData>/tmp-open`, passed by the caller so this
@@ -219,6 +259,9 @@ export function sanitizeFileName(name: string): string {
  * behind is an unavoidable cost of handing a real file to the OS shell —
  * `index.ts` is responsible for wiping `tempDir` on lock and at startup so it
  * never outlives the session that made it.
+ *
+ * The temp file's NAME comes from `safeOpenName`, never from the renderer's
+ * extension — see its comment for the execution path that closes.
  */
 export async function openExternally(
   paths: BlobStorePaths,
@@ -232,7 +275,7 @@ export async function openExternally(
   }
 
   await mkdir(tempDir, { recursive: true });
-  const destPath = join(tempDir, sanitizeFileName(attachment.fileName));
+  const destPath = join(tempDir, safeOpenName(attachment.fileName, sniffMime(bytes)));
   await writeFile(destPath, bytes);
 
   const failure = await shell.openPath(destPath);

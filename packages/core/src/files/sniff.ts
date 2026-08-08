@@ -139,6 +139,52 @@ export function sniffMime(bytes: Uint8Array): string {
   return "application/octet-stream";
 }
 
+/**
+ * The file extension the sniffed type earns, or `""` when it earns none.
+ *
+ * WHAT THIS IS FOR, because it is not cosmetic. `openExternally` hands a real
+ * file to `shell.openPath`, which on Windows is ShellExecute — the OS decides
+ * what to run from the EXTENSION and nothing else. The name that extension came
+ * from was, until this existed, the display name the renderer supplied, and
+ * `sanitizeFileName` explicitly preserves a final extension. So a renderer with
+ * a scripting foothold could attach bytes under the name `Ugovor.pdf.exe` and
+ * have them executed as native code, outside the `sandbox: true` renderer — the
+ * one control the whole Electron design leans on hardest.
+ *
+ * Deriving it from the sniffed type instead closes that, because the caller
+ * sniffs bytes it has already decrypted and the renderer has no say in what
+ * they are.
+ *
+ * `""` FOR EVERYTHING UNRECOGNISED IS THE POINT, not a gap. An extensionless
+ * file makes Windows show its „open with" chooser, which puts a human in front
+ * of the decision — exactly the right outcome for bytes this product cannot
+ * identify. Guessing an extension there would be inventing the very claim the
+ * sniffer refused to make.
+ *
+ * `.jpg` rather than `.jpeg` because that is what Windows registers by default;
+ * both open the same handler, and the shorter one is what a user expects to see.
+ */
+export function extensionForMime(mime: string): string {
+  switch (mime) {
+    case "image/png":
+      return ".png";
+    case "image/jpeg":
+      return ".jpg";
+    case "image/gif":
+      return ".gif";
+    case "image/webp":
+      return ".webp";
+    case "application/pdf":
+      return ".pdf";
+    case "application/zip":
+      return ".zip";
+    case "text/plain":
+      return ".txt";
+    default:
+      return "";
+  }
+}
+
 /** The inline-preview allowlist (ADR-014): raster images Chromium decodes safely in its sandboxed renderer. */
 export function isInlineImageMime(mime: string): boolean {
   return (INLINE_IMAGE_MIMES as readonly string[]).includes(mime);

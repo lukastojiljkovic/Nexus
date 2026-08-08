@@ -547,6 +547,7 @@ export type {
 } from "./imex/csvFinance.js";
 
 export {
+  extensionForMime,
   isInlineImageMime,
   isPreviewableMime,
   MIME_FAMILIES,
