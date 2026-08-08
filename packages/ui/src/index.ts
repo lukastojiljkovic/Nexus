@@ -8,7 +8,12 @@ export { Select, type SelectProps } from "./components/Select.js";
 export { EmptyState, type EmptyStateProps } from "./components/EmptyState.js";
 export { LoadingState, type LoadingStateProps } from "./components/LoadingState.js";
 export { PageHeader, type PageHeaderProps } from "./components/PageHeader.js";
-export { StatBand, type Stat, type StatBandProps } from "./components/StatBand.js";
+export {
+  StatBand,
+  type Stat,
+  type StatBandProps,
+  type StatGroup,
+} from "./components/StatBand.js";
 export { Icon, ICON_NAMES, type IconName, type IconProps } from "./components/Icon.js";
 export {
   SaveIndicator,

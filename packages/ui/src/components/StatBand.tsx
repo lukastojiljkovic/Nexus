@@ -42,32 +42,87 @@ export interface Stat {
   note?: string;
   /** Tints the figure. `neutral` (the default) is right unless the number itself is good or bad news. */
   tone?: "neutral" | "data" | "danger" | "accent";
+  /**
+   * `lead` (the default) or `flow` — one tier smaller.
+   *
+   * Not decoration: inside a group, „stanje" is the figure and the two flows
+   * are what moved it. Drawn at the same size, three equal numbers make a
+   * reader work out which one they came for. There are exactly two tiers on
+   * purpose; a third would be a font-size prop wearing a name.
+   */
+  size?: "lead" | "flow";
 }
 
-export interface StatBandProps {
-  /** Three to five. Two is a sentence; six is a table with the labels on top. */
+/**
+ * Figures that share a unit, with the unit said ONCE above them.
+ *
+ * This is what a per-currency total is: „RSD — stanje, prihod, rashod", then
+ * „EUR — …". Without it every figure has to carry its own currency and the
+ * band becomes six labelled numbers instead of two answers. Finansije had
+ * written its own band for exactly this reason and matched the chrome by hand;
+ * the group is what the shared component was missing, and this is it.
+ */
+export interface StatGroup {
+  /** What the figures under it share. One or two words — a currency code, a period. */
+  label: string;
   stats: readonly Stat[];
+}
+
+type StatBandBase = {
   /** An optional graphic — a sparkline, a small chart — occupying the band's right end. */
   aside?: ReactNode;
+  /** One line under the band saying what the figures are OF — the window, the scope, the caveat. */
+  caption?: string;
   className?: string;
+};
+
+/**
+ * Flat or grouped, never both — a union rather than two optional props, so
+ * „supply exactly one" is checked by the compiler instead of asserted in a
+ * comment nobody reads at the call site.
+ */
+export type StatBandProps = StatBandBase &
+  (
+    | {
+        /** Three to five. Two is a sentence; six is a table with the labels on top. */
+        stats: readonly Stat[];
+        groups?: never;
+      }
+    | { groups: readonly StatGroup[]; stats?: never }
+  );
+
+function Figure({ stat }: { stat: Stat }) {
+  return (
+    <div className={`nx-stat${stat.size === "flow" ? " nx-stat--flow" : ""}`}>
+      <div className="nx-stat__label">{stat.label}</div>
+      <div className={`nx-stat__value nx-stat__value--${stat.tone ?? "neutral"}`}>
+        {stat.value}
+        {stat.unit != null && <span className="nx-stat__unit">{stat.unit}</span>}
+      </div>
+      {stat.note != null && <div className="nx-stat__note">{stat.note}</div>}
+    </div>
+  );
 }
 
-export function StatBand({ stats, aside, className }: StatBandProps) {
+export function StatBand({ stats, groups, aside, caption, className }: StatBandProps) {
   return (
     <div className={className == null ? "nx-stat-band" : `nx-stat-band ${className}`}>
       <div className="nx-stat-band__stats">
-        {stats.map((stat) => (
-          <div className="nx-stat" key={stat.label}>
-            <div className="nx-stat__label">{stat.label}</div>
-            <div className={`nx-stat__value nx-stat__value--${stat.tone ?? "neutral"}`}>
-              {stat.value}
-              {stat.unit != null && <span className="nx-stat__unit">{stat.unit}</span>}
-            </div>
-            {stat.note != null && <div className="nx-stat__note">{stat.note}</div>}
-          </div>
-        ))}
+        {groups === undefined
+          ? stats.map((stat) => <Figure key={stat.label} stat={stat} />)
+          : groups.map((group) => (
+              <div className="nx-stat-group" key={group.label}>
+                <div className="nx-stat-group__label">{group.label}</div>
+                <div className="nx-stat-group__figures">
+                  {group.stats.map((stat) => (
+                    <Figure key={stat.label} stat={stat} />
+                  ))}
+                </div>
+              </div>
+            ))}
       </div>
       {aside != null && <div className="nx-stat-band__aside">{aside}</div>}
+      {caption != null && <p className="nx-stat-band__caption">{caption}</p>}
     </div>
   );
 }

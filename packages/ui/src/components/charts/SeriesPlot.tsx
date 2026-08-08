@@ -62,9 +62,43 @@ export interface SeriesPlotProps {
 }
 
 const PAD_Y = 6;
-const TICK_MARGIN = 30;
 const DOT_R = 3;
 const MAX_DOTS = 60;
+
+/**
+ * The gutter the y-axis tick labels are written in, and why it is DERIVED
+ * rather than the fixed 30 it used to be.
+ *
+ * A tick is right-anchored at `leftMargin - TICK_GAP`, so a label wider than
+ * the gutter runs off the left edge of the `<svg>` — where the root element's
+ * own `overflow: hidden` cuts it in half. That is not hypothetical: FIN draws
+ * money, „120.000" at caption size is about forty pixels wide, and the sweep
+ * measured it escaping the plot by 10.4px on four surfaces.
+ *
+ * There is no way to measure text without a DOM, and this component is drawn
+ * from data alone. What CAN be measured is the string: the tick face is
+ * `font-variant-numeric: tabular-nums` at caption size, so every digit is the
+ * same width and the estimate below is exact for digits and generous for the
+ * separators and the minus sign that are the only other characters a formatter
+ * emits. The cap keeps a pathological formatter from eating the plot it is
+ * supposed to label.
+ */
+const TICK_CHAR_W = 7.2;
+const TICK_GAP = 6;
+const TICK_MARGIN_MIN = 30;
+const TICK_MARGIN_MAX = 96;
+
+/**
+ * Half a tick label's line box, in user units.
+ *
+ * The labels are `dominantBaseline="middle"`, so the topmost and bottommost
+ * ticks — which sit at `PAD_Y` and `height - PAD_Y` — each hang half a line
+ * outside the box at a `PAD_Y` of 6. The bottom one landed on top of
+ * `.nx-chart__caption`, which is how the sweep found it. Clamping the LABEL
+ * rather than growing `PAD_Y` keeps the plot's own geometry exactly where it
+ * was: the tick moves by three pixels and the data does not move at all.
+ */
+const TICK_HALF_LINE = 9;
 
 function isPoint(p: Point | null): p is Point {
   return p !== null;
@@ -116,14 +150,20 @@ export function SeriesPlot({
   width = 320,
   height = 160,
 }: SeriesPlotProps) {
-  const leftMargin = compact ? 0 : TICK_MARGIN;
-
   const allY = series.flatMap((s) => s.points.filter(isPoint).map((p) => p.y));
   if (rule !== undefined) allY.push(rule.value);
   const dataExtent = extent(allY) ?? [0, 1];
   const yDomain = y?.domain ?? dataExtent;
   const yTicks = compact ? [] : niceTicks(yDomain[0], yDomain[1], Math.min(5, y?.ticks ?? 5));
   const format = y?.format ?? ((n: number) => String(n));
+
+  // The gutter is sized to the labels that will actually be written in it —
+  // see `TICK_CHAR_W`. Computed before the scales, because the plot begins
+  // where the gutter ends.
+  const widestTick = yTicks.reduce((widest, tick) => Math.max(widest, format(tick).length), 0);
+  const leftMargin = compact
+    ? 0
+    : Math.min(TICK_MARGIN_MAX, Math.max(TICK_MARGIN_MIN, widestTick * TICK_CHAR_W + TICK_GAP * 2));
 
   const xScale = scaleLinear(x.domain, [leftMargin, width]);
   const yScale = scaleLinear(yDomain, [height - PAD_Y, PAD_Y]);
@@ -143,8 +183,11 @@ export function SeriesPlot({
           <text
             key={t}
             className="nx-seriesplot__tick"
-            x={leftMargin - 6}
-            y={yScale(t)}
+            x={leftMargin - TICK_GAP}
+            // Clamped inside the box — see `TICK_HALF_LINE`. The extreme ticks
+            // are the only two this can move, and it moves them by three
+            // pixels rather than letting them hang out of the drawing.
+            y={Math.min(height - TICK_HALF_LINE, Math.max(TICK_HALF_LINE, yScale(t)))}
             textAnchor="end"
             dominantBaseline="middle"
           >
@@ -241,7 +284,14 @@ export function SeriesPlot({
           <text
             className={`nx-chart-rule__label nx-chart-rule__label--${rule.tone}`}
             x={width}
-            y={yScale(rule.value) - 3}
+            // Above the rule normally, below it when the rule is high enough
+            // that „above" would be outside the drawing. A reference label
+            // clipped by the top edge names nothing.
+            y={
+              yScale(rule.value) - 3 < TICK_HALF_LINE
+                ? yScale(rule.value) + TICK_HALF_LINE + 3
+                : yScale(rule.value) - 3
+            }
             textAnchor="end"
           >
             {rule.label}

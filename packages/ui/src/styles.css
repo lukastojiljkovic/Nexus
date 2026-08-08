@@ -156,6 +156,31 @@ samp {
   text-align: right;
 }
 
+/* --- Eyebrow ----------------------------------------------------------
+   The app's one way of naming a GROUP of rows: small, uppercase, tracked out,
+   tertiary ink. Not a heading — a heading is content and this is a label on
+   the layout, which is exactly why it sits a tier below body ink and never
+   takes the accent.
+
+   It was written out by hand in eleven places across six stylesheets before
+   this rule existed (`.tasks__rail-heading`, `.tool__group-title`,
+   `.tool__results-heading`, `.study__col-legend`, `.set__section-caption`,
+   the app's own nav-group label, …), each an independent copy of the same
+   five declarations — DC-02, and the exact shape that drifts: two of the
+   eleven had already lost the tracking, and one had reached for
+   `--nx-text-muted`, which is body-adjacent ink on a label.
+
+   Adopted with the class, never by copying the block again: a surface that
+   wants a variant adds a modifier of its own beside `.nx-eyebrow`, so the
+   shared half stays shared. */
+.nx-eyebrow {
+  font-size: var(--nx-font-size-label);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-subtle);
+}
+
 /* --- Visually hidden ---------------------------------------------------
    The other half of „hoist a repeated unit out of the rows".
    Putting „RSD" or „min" once in a column header instead of on sixty rows is
@@ -536,6 +561,46 @@ samp {
   color: var(--nx-text-subtle);
   max-width: 28ch;
 }
+/* One tier down — see `Stat.size`. The figure it sits beside is the answer; a
+   flow is what moved it. */
+.nx-stat--flow .nx-stat__value {
+  font-size: var(--nx-font-size-title);
+}
+/* A group is a unit said once over the figures that share it: „RSD" above
+   stanje/prihod/rashod. The label is `--nx-text`, not `--nx-text-subtle`, and
+   that is what tells it apart from the figure labels underneath at the same
+   size — this is a heading over three figures, they are captions under one
+   each. */
+.nx-stat-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  min-width: 0;
+}
+.nx-stat-group__label {
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text);
+  white-space: nowrap;
+}
+.nx-stat-group__figures {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nx-space-3) var(--nx-space-6);
+  min-width: 0;
+}
+/* The band's own caption spans it rather than sitting beside the figures, so
+   it reads as a statement about all of them. */
+.nx-stat-band__caption {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+  line-height: var(--nx-font-leading-snug);
+  color: var(--nx-text-subtle);
+}
 .nx-button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
@@ -605,6 +670,59 @@ samp {
 .nx-checkbox--done .nx-checkbox__label {
   color: var(--nx-text-muted);
   text-decoration: line-through;
+}
+
+/* --- Radio ------------------------------------------------------------- */
+/* `.nx-checkbox`'s twin, and it exists for the same measurement: a native
+   `input[type=radio]` renders at 13×13, which is the smallest control the app
+   ships and the last one still under the 24px pointer floor — the screenshot
+   sweep reported it on every frame of the private section's setup form.
+   `appearance: none` is what makes the fix possible at all: a REPLACED element
+   draws no pseudo-elements, so the transparent `::before` that grows the hit
+   area only works once the control is drawn by us rather than by the platform.
+   That is why the dot below is CSS and not `accent-color`.
+   The painted circle stays 15px, exactly as the checkbox's box does — a radio
+   drawn at 24 would dominate the two-line row it labels. */
+.nx-radio {
+  appearance: none;
+  position: relative;
+  flex: none;
+  margin: 0;
+  width: 15px;
+  height: 15px;
+  border: 1.5px solid var(--nx-text-muted);
+  border-radius: 50%;
+  display: grid;
+  place-content: center;
+  cursor: inherit;
+  transition: border-color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.nx-radio:checked {
+  border-color: var(--nx-accent);
+}
+.nx-radio:checked::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--nx-accent);
+}
+.nx-radio::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 24px;
+  height: 24px;
+  transform: translate(-50%, -50%);
+}
+.nx-radio:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+.nx-radio:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 /* --- Chip -------------------------------------------------------------- */

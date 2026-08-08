@@ -191,11 +191,31 @@ export function ColumnPlot({
                 />
               );
             })}
+            {/* Centred over its own band, EXCEPT at the two ends.
+                A centred label is only safe while half of it fits inside the
+                band's own half — and at twelve weekly slots on a 720 box a
+                band is 60 units wide while „31.12." is nearly 40, so the first
+                and last labels reached past the edges of the drawing and were
+                cut in half by the `<svg>`'s own clip. Anchoring those two to
+                the edge they sit against costs a couple of pixels of centring
+                on two labels and guarantees the whole axis is readable. */}
             <text
               className="nx-columnplot__label"
-              x={i * bandStep + bandStep / 2}
+              x={
+                slots.length > 1 && i === 0
+                  ? 0
+                  : slots.length > 1 && i === slots.length - 1
+                    ? width
+                    : i * bandStep + bandStep / 2
+              }
               y={height - 4}
-              textAnchor="middle"
+              textAnchor={
+                slots.length > 1 && i === 0
+                  ? "start"
+                  : slots.length > 1 && i === slots.length - 1
+                    ? "end"
+                    : "middle"
+              }
             >
               {slot.label}
             </text>
