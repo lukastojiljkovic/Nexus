@@ -1149,3 +1149,89 @@ describe("TaskStore — batch operations (ADR-038)", () => {
     });
   });
 });
+
+describe("TaskStore — the caller's clock", () => {
+  /** An instant well outside any plausible wall clock, so a leaked `new Date()` cannot pass by accident. */
+  const AT = "2021-03-04T08:15:00.000Z";
+  const LATER = "2021-05-06T17:30:00.000Z";
+  const WALL = "2026-07-06T10:00:00.000Z";
+
+  it("stamps a created task with the caller's instant rather than the wall clock", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(WALL));
+    const tasks = store();
+
+    const created = tasks.create({ title: "Uvezeno pre pet godina" }, AT);
+    expect(created.createdAt).toBe(AT);
+    expect(created.updatedAt).toBe(AT);
+    expect(created.completedAt).toBeNull();
+    // Through the column too, not only in the returned object.
+    expect(tasks.listActive()[0]).toEqual(created);
+  });
+
+  it("stamps a task created already done with that same instant as its completion", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(WALL));
+    const tasks = store();
+
+    const created = tasks.create({ title: "Odavno završeno", status: "done" }, AT);
+    expect(created.completedAt).toBe(AT);
+    expect(created.createdAt).toBe(AT);
+    expect(tasks.listActive()[0]?.completedAt).toBe(AT);
+  });
+
+  it("falls back to the wall clock when no instant is supplied — every call site that predates this", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(WALL));
+    const tasks = store();
+
+    const created = tasks.create({ title: "Sada", status: "done" });
+    expect(created.createdAt).toBe(WALL);
+    expect(created.updatedAt).toBe(WALL);
+    expect(created.completedAt).toBe(WALL);
+    expect(tasks.setDone(created.id, false).updatedAt).toBe(WALL);
+  });
+
+  it("checks a task off at the caller's instant, and reopens it at another, leaving created_at alone", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(WALL));
+    const tasks = store();
+    const created = tasks.create({ title: "x" }, AT);
+
+    const done = tasks.setDone(created.id, true, LATER);
+    expect(done.completedAt).toBe(LATER);
+    expect(done.updatedAt).toBe(LATER);
+    expect(done.createdAt).toBe(AT);
+
+    const reopened = tasks.setDone(created.id, false, "2021-05-07T09:00:00.000Z");
+    expect(reopened.completedAt).toBeNull();
+    expect(reopened.updatedAt).toBe("2021-05-07T09:00:00.000Z");
+    expect(tasks.listActive()[0]).toEqual(reopened);
+  });
+
+  it("carries the caller's instant through completeOccurrence for a task with no rule", () => {
+    const tasks = store();
+    const created = tasks.create({ title: "Jednokratno", dueDate: "2026-07-10" }, AT);
+
+    // The delegation to `setDone` used to drop `now` on the floor and re-read
+    // the wall clock, so the one-off branch stamped a different moment than the
+    // rule-exhausted branch beside it.
+    expect(tasks.completeOccurrence(created.id, LATER).completedAt).toBe(LATER);
+  });
+
+  it("refuses an instant that is not an ISO-8601 date-time, and writes nothing", () => {
+    const tasks = store();
+    const bad = ["danas", "2021-03-04", "", "2021-03-04 08:15", "2021-03-04T08"];
+    for (const value of bad) {
+      expect(() => tasks.create({ title: "x" }, value)).toThrow(TaskValidationError);
+    }
+    expect(tasks.listActive()).toHaveLength(0);
+
+    const created = tasks.create({ title: "x" }, AT);
+    for (const value of bad) {
+      expect(() => tasks.setDone(created.id, true, value)).toThrow(TaskValidationError);
+    }
+    // The refused check-off left the row exactly as it was.
+    expect(tasks.listActive()[0]).toEqual(created);
+  });
+});

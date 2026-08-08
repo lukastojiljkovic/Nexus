@@ -169,10 +169,13 @@ const ISO_8601 =
   /^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}(:\d{2})?(\.\d{1,3})?(Z|[+-]\d{2}:\d{2})?)?$/;
 
 /**
- * A full ISO-8601 date-time — the `now` the TASK-004 placement mutators take
- * (the `NoteStore`/`TaskListStore` idiom, so one structural edit stamps one
- * moment across every row it touches). The older methods above predate that
- * idiom and read the wall clock themselves.
+ * A full ISO-8601 date-time — the shape of every instant a caller hands this
+ * store (the `NoteStore`/`TaskListStore` idiom, so one edit stamps one moment
+ * across every row it touches). The TASK-004 placement mutators require one;
+ * `create`, `setDone` and the delete/restore pair take it optionally and fall
+ * back to the wall clock, so the call sites written before clock injection keep
+ * working while a caller REPLAYING history — an importer, a restore, the demo
+ * seeder — can say when a task was really created and really finished.
  */
 const ISO_8601_DATETIME =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(\.\d{1,3})?(Z|[+-]\d{2}:\d{2})?$/;
@@ -318,8 +321,23 @@ export class TaskStore {
    * UI could ever show honestly. Otherwise `listId` decides, defaulting to the
    * profile's Inbox. The row is appended at the end of whichever scope it lands
    * in.
+   *
+   * `at` is the moment the task came into being: its `createdAt`, its
+   * `updatedAt`, and — for a row created already `done` — its `completedAt`. It
+   * defaults to the wall clock, which is what a person typing a task into the
+   * app means. A caller replaying history passes the real instant instead:
+   * without it every imported or restored task is stamped with the moment of
+   * the import, so a five-year backlog reads as created today and the module's
+   * created-vs-completed chart draws one bar. `EventStore` and `PeopleStore`
+   * take the caller's clock the same way, positionally after the input; here it
+   * is optional (no existing call site changes) and named `at`, which is the
+   * name this file already gives an optional clock — see `softDelete`,
+   * `restore` and `writeFields`.
    */
-  create(input: CreateTaskInput): Task {
+  create(input: CreateTaskInput, at: string = new Date().toISOString()): Task {
+    // First, ahead of every other check: a caller whose clock is malformed is
+    // refused before this store has read a single row on its behalf.
+    const now = validateDateTime(at);
     const title = validateTitle(input.title);
     const status = validateStatus(input.status ?? "todo");
     const priority = validatePriority(input.priority ?? "none");
@@ -335,7 +353,6 @@ export class TaskStore {
         ? { listId: parent.listId, sectionId: parent.sectionId }
         : this.resolveScope(input.listId, input.sectionId);
     const position = this.appendPosition(listId, sectionId);
-    const now = new Date().toISOString();
     const completedAt = status === "done" ? now : null;
     const id = uuidv7();
 
@@ -503,18 +520,25 @@ export class TaskStore {
    * recurrence, so failing loudly is what stops one of them from silently
    * ending a series the user only meant to tick off for today. Reopening
    * (`false`) is never ambiguous and stays available.
+   *
+   * `at` is when the check-off happened — the completion stamp itself, and the
+   * `updatedAt` beside it — and defaults to the wall clock, `create`'s rule for
+   * the same reason. It is the second half of a task's history: a caller that
+   * knows when a task was created but not when it was finished can only place
+   * it on one axis of the created-vs-completed chart.
    */
-  setDone(id: string, done: boolean): Task {
+  setDone(id: string, done: boolean, at: string = new Date().toISOString()): Task {
     const current = this.requireActive(id);
     if (done && current.recurrence !== null) {
       throw new TaskValidationError(
         `Task "${id}" recurs; complete this occurrence with completeOccurrence instead.`,
       );
     }
-    return this.writeFields(current, {
-      ...ownFields(current),
-      status: done ? "done" : "todo",
-    });
+    return this.writeFields(
+      current,
+      { ...ownFields(current), status: done ? "done" : "todo" },
+      at,
+    );
   }
 
   /**
@@ -544,7 +568,11 @@ export class TaskStore {
   completeOccurrence(id: string, now: string): Task {
     const current = this.requireActive(id);
     const rule = current.recurrence;
-    if (rule === null) return this.setDone(id, true);
+    // `now` travels into the delegation: the one-off branch has to stamp the
+    // same moment the rule-exhausted branch below it does, or "complete this
+    // occurrence" would mean two different instants depending on a rule the
+    // caller cannot see from here.
+    if (rule === null) return this.setDone(id, true, now);
 
     // Every write path upholds rule-implies-due-date; re-read as a value here
     // because the type cannot say so, and because a hand-edited row must not
@@ -738,21 +766,25 @@ export class TaskStore {
    * patch that clears the date of a recurring or reminded task is caught just as
    * a patch that adds a rule or a ladder to a dateless one is.
    *
-   * `at` defaults to the wall clock; `completeOccurrence` passes its caller's
-   * `now` so a parent and its subtasks carry one stamp.
+   * `at` defaults to the wall clock; `setDone` and `completeOccurrence` pass
+   * their caller's own instant, so a parent and its subtasks carry one stamp.
+   * It is validated HERE rather than in each of the three callers, because this
+   * is the one place all of them write through — an instant the regex refuses
+   * must never reach the column, whichever method it arrived by.
    */
   private writeFields(
     current: Task,
     next: Required<UpdateTaskFields>,
     at: string = new Date().toISOString(),
   ): Task {
+    const now = validateDateTime(at);
     assertDueDateAnchors(next.recurrence, next.reminderOffsets, next.dueDate);
-    const completedAt = next.status === "done" ? (current.completedAt ?? at) : null;
+    const completedAt = next.status === "done" ? (current.completedAt ?? now) : null;
 
     this.updateFields.run(
       next.title, next.description, next.status, next.priority,
       next.dueDate, next.startDate, serializeRecurrence(next.recurrence),
-      JSON.stringify(next.reminderOffsets), completedAt, at,
+      JSON.stringify(next.reminderOffsets), completedAt, now,
       current.id, this.profileId,
     );
 
@@ -761,7 +793,7 @@ export class TaskStore {
       ...next,
       done: next.status === "done",
       completedAt,
-      updatedAt: at,
+      updatedAt: now,
     };
   }
 
