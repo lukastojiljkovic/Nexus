@@ -120,12 +120,16 @@
 .priv__choice-row:hover {
   background: var(--nx-surface-alt);
 }
-/* The native control keeps its own size; `margin-top` sits it on the first
-   line of the name beside it rather than on the whole two-line block. */
-.priv__choice-row input {
-  flex: none;
+/* The control itself is `.nx-radio` (packages/ui) — the shared recipe, adopted
+   rather than restated. What was here was `accent-color` on a NATIVE radio,
+   which renders at 13×13: the smallest control in the product and the last one
+   under the 24px pointer floor, reported on every frame of the sweep. A page
+   cannot fix that with `accent-color`; the shared component fixes it once by
+   drawing the control itself and growing the hit area behind it.
+   All that is left here is where the control sits: `margin-top` puts it on the
+   first line of the name beside it rather than on the whole two-line block. */
+.priv__choice-row .nx-radio {
   margin-top: 3px;
-  accent-color: var(--nx-accent);
 }
 .priv__choice-text {
   display: flex;

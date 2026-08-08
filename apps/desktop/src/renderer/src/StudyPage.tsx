@@ -2338,7 +2338,24 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
   const subjectMinutesRows = statsRecent
     ? joinSubjectMinutes(statsRecent.subjectMinutes, subjectsById, strings.study.statsOtherSubject)
     : [];
-  const maxSubjectMinutes = Math.max(1, ...subjectMinutesRows.map((row) => row.minutes));
+  /**
+   * The denominator every subject bar is drawn against: the WEEK'S TOTAL, not
+   * the largest subject (founder, 2026-08-08 — „nmz, kako ti misliš da treba").
+   *
+   * Scaling to the largest subject guarantees one full bar every week, whatever
+   * the week actually was: seven hours on Analiza and twenty minutes on
+   * Statistika drew the same full track as three hours and two hours fifty. The
+   * strip then answers „which subject was biggest", which the ORDER already
+   * answers, and cannot answer „how was the week split", which is the only
+   * question a part-of-whole strip exists for.
+   *
+   * `Math.max(1, …)` keeps the divisor off zero; the rows are only rendered
+   * when at least one is non-zero, so this floor is a guard rather than a case.
+   */
+  const totalSubjectMinutes = Math.max(
+    1,
+    subjectMinutesRows.reduce((sum, row) => sum + row.minutes, 0),
+  );
   const statsAllZero =
     subjectMinutesRows.length === 0 &&
     (statsRecent?.reviews.total ?? 0) === 0 &&
@@ -4266,10 +4283,11 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                           the same quantity wore a different colour at different
                           lengths, and a muted row was the fill at 50% opacity
                           rather than the neutral tone the app already has.
-                          The arithmetic is untouched: the fraction is still each
-                          subject's minutes over the largest subject's, so no
-                          figure on this page changes. `describedAs` is new — the
-                          hand-rolled row read out as three unlabelled spans. */}
+                          The fraction is each subject's minutes over the
+                          WEEK'S TOTAL — see `totalSubjectMinutes` for why that
+                          replaced „over the largest subject". `describedAs` is
+                          new; the hand-rolled row read out as three unlabelled
+                          spans. */}
                       {subjectMinutesRows.map((row) => (
                         <ProportionBar
                           key={row.id}
@@ -4278,7 +4296,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                           segments={[
                             {
                               key: "minutes",
-                              fraction: row.minutes / maxSubjectMinutes,
+                              fraction: row.minutes / totalSubjectMinutes,
                               tone: row.muted ? "neutral" : "data",
                               label: row.label,
                             },

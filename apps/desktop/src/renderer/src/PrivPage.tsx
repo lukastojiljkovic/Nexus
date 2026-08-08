@@ -260,6 +260,7 @@ function PrivSetup({ profileId, onStatusChange }: PrivSetupProps) {
                   <legend className="auth__note">{s.credentialLabel}</legend>
                   <label className={choiceRowClass(!useAccountPasscode)}>
                     <input
+                      className="nx-radio"
                       type="radio"
                       name="priv-credential"
                       checked={!useAccountPasscode}
@@ -272,6 +273,7 @@ function PrivSetup({ profileId, onStatusChange }: PrivSetupProps) {
                   </label>
                   <label className={choiceRowClass(useAccountPasscode)}>
                     <input
+                      className="nx-radio"
                       type="radio"
                       name="priv-credential"
                       checked={useAccountPasscode}
@@ -318,6 +320,7 @@ function PrivSetup({ profileId, onStatusChange }: PrivSetupProps) {
                   <legend className="auth__note">{s.kitLabel}</legend>
                   <label className={choiceRowClass(regenerateKit)}>
                     <input
+                      className="nx-radio"
                       type="radio"
                       name="priv-kit"
                       checked={regenerateKit}
@@ -330,6 +333,7 @@ function PrivSetup({ profileId, onStatusChange }: PrivSetupProps) {
                   </label>
                   <label className={choiceRowClass(!regenerateKit)}>
                     <input
+                      className="nx-radio"
                       type="radio"
                       name="priv-kit"
                       checked={!regenerateKit}

@@ -592,7 +592,25 @@
      overlay's origin, the week-number gutter's baseline — so raising it moves
      the whole cell in step and there is no second number to keep in sync. */
   --cal-daynum-h: 24px;
-  --cal-bar-h: 20px;
+  /* 27, not 20 (founder, 2026-08-08). A bar in the month grid is a BUTTON — it
+     opens the event — and at the old lane height it painted 17px, which is the
+     one control in the app that never cleared the 24px pointer floor. The bar
+     is `--cal-bar-h - 3px`, so 27 puts the target at exactly 24 with 3px of air
+     between lanes.
+     The cost is real and was accepted: a cell with three lanes is 21px taller
+     than it was, so a dense month is a taller grid. It is paid once here rather
+     than at three call sites, because `TaskMonthGrid` and the week view's
+     all-day band read this same variable — a bar has to look and behave
+     identically wherever it is drawn. */
+  --cal-bar-h: 27px;
+  /* `flex: none` is load-bearing, and its absence was a defect.
+     This grid is a flex item of `.cal__month`, which scrolls. `overflow:
+     hidden` (here for the rounded corners) sets this element's automatic
+     minimum size to ZERO, so the default `flex-shrink: 1` let it be squeezed to
+     whatever height was left and quietly clip the difference — 809px of a
+     six-week month with the week-number gutter on, at the 900px window. The
+     grid is not the thing that gives up height; the page is. */
+  flex: none;
   display: flex;
   flex-direction: column;
   border: 1px solid var(--nx-border);
@@ -812,6 +830,7 @@ button.cal__month-chip {
 
 button.cal__month-more {
   display: block;
+  position: relative;
   width: 100%;
   font: inherit;
   font-size: var(--nx-font-size-caption);
@@ -821,6 +840,21 @@ button.cal__month-more {
   background: transparent;
   color: var(--nx-text-muted);
   cursor: pointer;
+}
+/* „+4 još" is a 17px line of text and a 24px target — `.nx-checkbox`'s recipe,
+   for its reason. It cannot simply be made 24px tall: it sits at the foot of a
+   month cell whose height is already the sum of its lanes, and seven pixels
+   per cell is a taller month grid for a control most cells do not have. The
+   PAINTED box stays a line of text; the thing a pointer hits is 24 high and
+   the full width of the cell. */
+.cal__month-more::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 24px;
+  transform: translateY(-50%);
 }
 .cal__month-more:hover {
   color: var(--nx-text);
@@ -940,10 +974,19 @@ button.cal__grid-event--foreign {
   border: 1px dashed var(--nx-border);
   color: var(--nx-text-muted);
 }
-/* The ⇄ origin glyph (typographic, like the ↻ series marker). */
+/* The ⇄ origin glyph (typographic, like the ↻ series marker).
+   Its line box is PINNED, and that is not cosmetic: „⇄" is outside the UI
+   face's coverage, so it renders from a fallback whose metrics are taller than
+   the caption size the row was measured for. An inline box taller than the
+   block's own strut raises the whole line, which is how a one-line 30-minute
+   event came out nine pixels taller than the 24px block holding it — the last
+   finding standing in a 408-frame sweep. A marker never decides a row's
+   height. */
 .cal__foreign-mark {
   flex: none;
   margin-right: 2px;
+  font-size: var(--nx-font-size-caption);
+  line-height: 1;
 }
 
 /* Clickable but never draggable (CAL-007): a birthday is not something you
@@ -1113,8 +1156,17 @@ button.cal__mini-day {
    identical whether it is drawn here or in the month grid; --cal-hour-h and
    --cal-gutter-w are new to this component. */
 .cal__grid {
-  --cal-bar-h: 20px;
-  --cal-hour-h: 44px;
+  /* The same lane height the month grid sets, for the reason stated there: an
+     all-day bar is the same control and has to clear the same floor. */
+  --cal-bar-h: 27px;
+  /* 48, not 44. An event block's HEIGHT IS ITS DURATION — that is the whole
+     claim a time grid makes — so a half-hour meeting cannot be given a taller
+     box without the box lying about the meeting. The only honest way to put
+     one over the 24px pointer floor is to change the SCALE, and 48px an hour
+     puts a thirty-minute event at exactly 24. A quarter-hour event is 12px and
+     still under the floor; that is a real limit of a proportional grid and is
+     recorded rather than papered over. */
+  --cal-hour-h: 48px;
   /* A WHOLE DAY, derived — never restated. Every box in the hour grid is a
      multiple of `--cal-hour-h`: a row is one, an event block is
      `minutes / 60` of one, and the stack the rows live in is twenty-four of
@@ -1230,9 +1282,23 @@ button.cal__grid-header--today {
 /* All-day band: day-granular/multi-day items, drawn with the month grid's own
    .cal__month-bar* classes (see CalendarTimeGrid) so the two views agree
    pixel-for-pixel. Grows with its lane count — this band never collapses. */
+/* CAPPED AT THREE LANES, and it scrolls past that.
+   The band was unbounded: it is `flex: none`, so it took whatever height its
+   lane count asked for, and a week carrying nine all-day items — four exams, a
+   scholarship deadline, two blocks — asked for 243px inside a grid whose whole
+   floor is 220. The hour grid was then squeezed to nothing and `.cal__grid`'s
+   `overflow: hidden` swallowed the remainder: the sweep measured 138px of week
+   view simply gone, with the timed events unreachable behind the band.
+   Three is the convention every calendar uses for the same reason — beyond
+   three the band stops being a strip and starts being the view. The rest is
+   reachable rather than hidden, which is the whole difference between a cap
+   and a clip. */
 .cal__grid-band-row {
   flex: none;
   display: flex;
+  max-height: calc(var(--cal-bar-h) * 3);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border-bottom: 1px solid var(--nx-border);
 }
 .cal__grid-band {

@@ -11,6 +11,7 @@ import {
   PageHeader,
   ProportionBar,
   Select,
+  StatBand,
   TextField,
 } from "@nexus/ui";
 import { applyFilters, isValidDayKey, monthKeyOf, shiftMonthKey } from "@nexus/core";
@@ -1300,72 +1301,59 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
     a.currency < b.currency ? -1 : a.currency > b.currency ? 1 : 0,
   );
 
-  /** One figure of the band: an 11px uppercase label over a large tabular number, and nothing else. */
-  function renderFigure(label: string, value: string, tone: "" | "in" | "out"): ReactNode {
-    return (
-      <span className={tone === "" ? "fin__figure" : "fin__figure fin__figure--flow"}>
-        <span className="fin__figure-label">{label}</span>
-        <span
-          className={
-            tone === "" ? "fin__figure-value" : `fin__figure-value fin__figure-value--${tone}`
-          }
-        >
-          {value}
-        </span>
-      </span>
-    );
-  }
-
+  /**
+   * The band, through the shared `StatBand`.
+   *
+   * It used to be `.fin__band` — a hand-written twin, here because this page
+   * needs PER-CURRENCY groups and the shared component modelled a flat list.
+   * The chrome had been matched by hand, which kept the app looking like one
+   * product but left two objects to keep in step. `StatBand` understands groups
+   * now (`StatGroup`), so this page supplies figures and nothing else.
+   *
+   * The two flow figures belong to the LEDGER: they are about the rows on
+   * screen, and there are no rows on screen on the other two halves. `size:
+   * "flow"` is what keeps them a tier under the balance they moved — the same
+   * hierarchy the hand-written band drew, now stated once in the component.
+   */
   function renderBand(): ReactNode {
     if (bandGroups.length === 0) {
-      return (
-        <div className="fin__band nx-hairline">
-          <p className="fin__caption">{s.totals.none}</p>
-        </div>
-      );
+      return <StatBand stats={[]} caption={s.totals.none} />;
     }
     return (
-      <div className="fin__band nx-hairline">
-        <div className="fin__band-groups">
-          {bandGroups.map((group) => (
-            <div key={group.currency} className="fin__band-group">
-              {/* The unit, said ONCE for the three figures under it — which is
-                  what lets every one of them be a bare number. */}
-              <span className="fin__band-currency">{group.currency}</span>
-              <div className="fin__band-figures">
-                {renderFigure(
-                  s.totals.heading,
-                  group.balance === null
-                    ? s.totals.noBalance
-                    : formatMoneyPlain(group.balance, group.currency),
-                  "",
-                )}
-                {/* The two flow figures belong to the LEDGER: they are about the
-                    rows on screen, and there are no rows on screen on the other
-                    two halves. The module's own words for them, so „Prihod"
-                    means the same thing here and in the month report. */}
-                {page === "ledger" && (
-                  <>
-                    {renderFigure(
-                      s.report.income,
-                      formatMoneyPlain(group.income, group.currency),
-                      "in",
-                    )}
-                    {renderFigure(
-                      s.report.expense,
-                      formatMoneyPlain(group.outflow, group.currency),
-                      "out",
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-        <p className="fin__caption">
-          {page === "ledger" ? s.totals.captionLedger : s.totals.caption}
-        </p>
-      </div>
+      <StatBand
+        caption={page === "ledger" ? s.totals.captionLedger : s.totals.caption}
+        groups={bandGroups.map((group) => ({
+          label: group.currency,
+          stats: [
+            {
+              label: s.totals.heading,
+              value:
+                group.balance === null
+                  ? s.totals.noBalance
+                  : formatMoneyPlain(group.balance, group.currency),
+            },
+            // Jade for money arriving, muted ink for money leaving. The
+            // direction is already stated by the label over each figure, so
+            // the hue is the second encoding and never the only one — and an
+            // ordinary month of spending is not painted as a warning.
+            ...(page === "ledger"
+              ? ([
+                  {
+                    label: s.report.income,
+                    value: formatMoneyPlain(group.income, group.currency),
+                    tone: "data" as const,
+                    size: "flow" as const,
+                  },
+                  {
+                    label: s.report.expense,
+                    value: formatMoneyPlain(group.outflow, group.currency),
+                    size: "flow" as const,
+                  },
+                ] as const)
+              : []),
+          ],
+        }))}
+      />
     );
   }
 
@@ -1555,21 +1543,27 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
     const hasAnyBudget = section.lines.some((line) => line.budget !== null);
     return (
       <section key={section.currency} className="fin__report-section" aria-label={section.currency}>
-        <div className="fin__report-head">
-          <span className="fin__band-currency">{section.currency}</span>
-          <div className="fin__band-figures">
-            {renderFigure(
-              s.report.income,
-              formatMoneyPlain(section.income, section.currency),
-              "in",
-            )}
-            {renderFigure(
-              s.report.expense,
-              formatMoneyPlain(section.expense, section.currency),
-              "out",
-            )}
-          </div>
-        </div>
+        <StatBand
+          className="fin__report-head"
+          groups={[
+            {
+              label: section.currency,
+              stats: [
+                {
+                  label: s.report.income,
+                  value: formatMoneyPlain(section.income, section.currency),
+                  tone: "data",
+                  size: "flow",
+                },
+                {
+                  label: s.report.expense,
+                  value: formatMoneyPlain(section.expense, section.currency),
+                  size: "flow",
+                },
+              ],
+            },
+          ]}
+        />
         <FinBalanceFlow
           currency={section.currency}
           monthKey={monthKey}
