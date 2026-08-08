@@ -112,7 +112,12 @@ and [docs/SPECIFICATION.md](docs/SPECIFICATION.md). For *where we are*:
   typographic (gold text + weight) + the ✦ brand glyph. Drop targets = accent
   border + soft background, never a glow.
 - Two themes: **Dan** (light, warm paper + bronze) and **Noć** (dark, vesper
-  blue-black + star-gold, Space Grotesk). Discipline of Linear, not its aesthetic.
+  blue-black + star-gold). Discipline of Linear, not its aesthetic.
+- **Type is the system stack** — Segoe UI Variable on Windows, through the
+  `--nx-font-family-*` tokens. This line used to name Space Grotesk as Noć's
+  display face; nothing ever shipped it, so the rule was describing a font the
+  app did not have. Founder, 2026-08-08: „ma ok je font" — no webfont, and no
+  claim of one.
 - All user-facing copy is **Serbian**, centralized in `strings.ts` (i18n comes
   later as a mechanical extraction). Never fabricate data, stats, or copy.
 
