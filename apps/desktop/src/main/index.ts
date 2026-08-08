@@ -660,10 +660,53 @@ import {
   type TaskAttachmentsAddResult,
   type TaskListsSnapshot,
   type TopicMoveDirection,
+  type WindowState,
 } from "../shared/ipc.js";
 import { businessProfileFlags, createModuleRegistry } from "../shared/modules.js";
+import { DEMO_PROFILE_NAME, seedDemoProfile } from "./demo/index.js";
+import { runShots } from "./shots/index.js";
 
 const isSmoke = process.argv.includes("--smoke");
+
+/**
+ * `--shots`: photograph every surface, in both themes, at three window sizes,
+ * and report what the page's own geometry says is wrong with it (`shots/`).
+ *
+ * A development mode, never reachable from a packaged install: like `--smoke`
+ * it redirects `userData` into a disposable subdirectory, creates its own
+ * throwaway account, and exits when it is done.
+ */
+const isShots = process.argv.includes("--shots");
+
+/**
+ * `--demo`: add a fully populated account to THIS device and exit, so the whole
+ * product can be looked at without typing several hundred rows by hand.
+ *
+ * Unlike the two modes above this one writes into the real `%APPDATA%\Nexus` —
+ * that is the point, since the account has to still be there when the app is
+ * opened normally afterwards. It is strictly additive: accounts are separate
+ * directories with separate key chains (ADR-044), so seeding one cannot reach
+ * another's data.
+ */
+const isDemo = process.argv.includes("--demo");
+
+/** The label and passcode `--demo` creates its account with. Printed on exit, because an account nobody can unlock is not a demo. */
+const DEMO_ACCOUNT_LABEL = "Demo";
+const DEMO_PASSCODE = "demo-nexus-2026";
+
+/**
+ * True for every launch that is a harness rather than a person.
+ *
+ * Five things in this process are switched off for such a run — the
+ * notification scheduler, the security-notice ledger, the profile-switch
+ * rescheduling, the OS-wide hotkey claim, and the update check — and each of
+ * them used to test `isSmoke` directly. The rule they were all reaching for
+ * was never "the smoke run" but "nobody is sitting in front of this", so it is
+ * written once here: a second harness would otherwise have had to remember all
+ * five, and a toast firing into a screenshot sweep would corrupt the very
+ * frames it exists to produce.
+ */
+const isAutomatedRun = isSmoke || isShots || isDemo;
 
 /** Fixed passcode the smoke run creates its own throwaway account with (ADR-018) — satisfies `validatePasscode` (8+ chars, letter and digit) and is never used for anything but the smoke harness's own disposable `userData/smoke` directory. */
 const SMOKE_PASSCODE = "smoke-passcode-1";
@@ -5226,9 +5269,9 @@ function notificationSchedulerDeps(): NotificationSchedulerDeps {
   };
 }
 
-/** Starts everything that only makes sense once the database is open. Never during the smoke run — a scheduled check firing mid-smoke would make its deterministic exit flaky, the same reason `app.whenReady` used to skip it. */
+/** Starts everything that only makes sense once the database is open. Never during an automated run — a scheduled check firing mid-sweep would make its deterministic exit flaky, the same reason `app.whenReady` used to skip it. */
 function startUnlockedServices(): void {
-  if (isSmoke) return;
+  if (isAutomatedRun) return;
   startNotificationScheduler(notificationSchedulerDeps());
 
   // The one-time note-healing sweep (see `notes.ts`'s doc comment).
@@ -5388,7 +5431,7 @@ function securityNotificationDeps(): SecurityNotificationDeps {
  * flakier for no gain.
  */
 function recordSecurityNotice(notice: SecurityNotice): void {
-  if (isSmoke) return;
+  if (isAutomatedRun) return;
   pendingSecurityNotices.push(notice);
   flushSecurityNotices();
 }
@@ -6465,8 +6508,8 @@ function registerIpc(): void {
       profileId === resolveActiveProfileId(listProfiles(database), activeProfileId);
     activeProfileId = profileId;
     if (alreadyServed) return;
-    // Never during the smoke run — the scheduler never runs there at all.
-    if (!isSmoke) startNotificationScheduler(notificationSchedulerDeps());
+    // Never during an automated run — the scheduler never runs there at all.
+    if (!isAutomatedRun) startNotificationScheduler(notificationSchedulerDeps());
   });
 
   ipcMain.handle(IpcChannel.profilesRename, (event, payload): void => {
@@ -10879,10 +10922,44 @@ function registerIpc(): void {
     // box there is no window manager to claim it from. Answered `ok` so the
     // renderer under smoke renders its normal state — the same "not during the
     // smoke run" rule the notification scheduler already follows.
-    if (isSmoke) return { ok: true };
+    if (isAutomatedRun) return { ok: true };
     const accelerator = chordAccelerator(chord);
     if (accelerator === null) return { ok: false };
     return { ok: setGlobalCaptureAccelerator(accelerator, fireGlobalCapture) };
+  });
+
+  // --- The drawn window frame ------------------------------------------------
+  //
+  // Every one of these acts on the window that SENT it, never on a window named
+  // in a payload — there is no payload. `assertTrustedSender` already refuses a
+  // sender that is not one of ours; resolving the target from that same sender
+  // is what makes „which window“ unforgeable rather than merely validated.
+  ipcMain.handle(IpcChannel.windowMinimize, (event): void => {
+    assertTrustedSender(event);
+    senderWindow(event)?.minimize();
+  });
+
+  ipcMain.handle(IpcChannel.windowToggleMaximize, (event): WindowState => {
+    assertTrustedSender(event);
+    const win = senderWindow(event);
+    if (win === null) return { maximized: false, focused: false };
+    if (win.isMaximized()) win.unmaximize();
+    else win.maximize();
+    return windowStateOf(win);
+  });
+
+  ipcMain.handle(IpcChannel.windowClose, (event): void => {
+    assertTrustedSender(event);
+    // `close()`, never `destroy()`: the window's own `close` handler is what
+    // seals the private section's pending captures on the way out (ADR-057).
+    // A drawn close button that skipped it would lose data an OS one kept.
+    senderWindow(event)?.close();
+  });
+
+  ipcMain.handle(IpcChannel.windowState, (event): WindowState => {
+    assertTrustedSender(event);
+    const win = senderWindow(event);
+    return win === null ? { maximized: false, focused: false } : windowStateOf(win);
   });
 
   ipcMain.handle(IpcChannel.appInfo, (event): AppInfo => {
@@ -10918,14 +10995,61 @@ function fireGlobalCapture(): void {
 
 // --- Window (hardened) ------------------------------------------------------
 
+/** The window a renderer request came from. Null only if it was torn down mid-flight. */
+function senderWindow(event: IpcMainInvokeEvent): BrowserWindow | null {
+  return BrowserWindow.fromWebContents(event.sender);
+}
+
+function windowStateOf(win: BrowserWindow): WindowState {
+  return { maximized: win.isMaximized(), focused: win.isFocused() };
+}
+
+/**
+ * Keeps a drawn title strip in step with the window under it.
+ *
+ * Six events, not two: maximise and unmaximise are the obvious pair, but a
+ * window also leaves the maximised state by being restored from minimised or
+ * by leaving full screen, and a strip that only listened to the pair would draw
+ * the restore glyph on a window that is no longer maximised. Focus is here for
+ * the reason `WindowState.focused` exists at all — an OS frame dims itself and
+ * a drawn one has to be told to.
+ */
+function pushWindowState(win: BrowserWindow): void {
+  const send = (): void => {
+    if (win.isDestroyed()) return;
+    win.webContents.send(IpcChannel.windowStateChanged, windowStateOf(win));
+  };
+  // Listed one by one rather than looped: `BrowserWindow.on` is a set of
+  // per-event overloads, so a union of names has no single signature to match.
+  win.on("maximize", send);
+  win.on("unmaximize", send);
+  win.on("restore", send);
+  win.on("enter-full-screen", send);
+  win.on("leave-full-screen", send);
+  win.on("focus", send);
+  win.on("blur", send);
+}
+
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1120,
     height: 720,
+    // Nexus draws its own title strip (`TitleBar.tsx`). The OS frame is not a
+    // neutral container: it is a strip of another product's design language
+    // across the top of this one, in the one place a person looks first.
+    //
+    // What is given up is Windows 11's Snap Layouts flyout, which only appears
+    // on hover over an OS-drawn maximise button. Drag-to-edge snapping, Win+
+    // arrow, and double-click-to-maximise all still work, because they are
+    // driven by the drag region (`-webkit-app-region`) rather than the frame.
+    frame: false,
     // A floor, so the pinned sidebar foot is structurally guaranteed to fit.
-    // These are OUTER dimensions — `useContentSize` is not set — and a Windows
-    // frame costs ~39 px, which is how a 720-high window ends up with a 681 px
-    // viewport. The sidebar's own content measures ~677 px.
+    // These are OUTER dimensions — `useContentSize` is not set. They used to
+    // lose ~39 px to the Windows frame, which is how a 720-high window ended up
+    // with a 681 px viewport; with `frame: false` the outer and inner heights
+    // are the same, and the drawn strip takes its share back out of the
+    // document instead. The floor is unchanged on purpose: the strip costs
+    // about what the frame did, so the space below it has not moved.
     minWidth: 900,
     minHeight: 600,
     // No `backgroundColor` here on purpose. It would have to be a literal
@@ -10945,6 +11069,7 @@ function createWindow(): BrowserWindow {
   });
 
   win.once("ready-to-show", () => win.show());
+  pushWindowState(win);
 
   // PRIV's minimize hook (ADR-057 §5): a minimized window with an open private
   // section is exactly the walked-away-from screen `lock_on_minimize` exists
@@ -11685,6 +11810,58 @@ async function runSmoke(win: BrowserWindow): Promise<void> {
   await runSmokeDocPreviewRehearsal();
 }
 
+// --- `--shots` and `--demo` --------------------------------------------------
+
+/** Where the sweep writes. Beside the app source in dev, which is the only place `--shots` ever runs. */
+function shotsOutputDir(): string {
+  return join(app.getAppPath(), "shots");
+}
+
+/**
+ * The screenshot sweep's own throwaway account, and the demo profile inside it.
+ *
+ * Runs before `createWindow` for exactly the reason `runSmokeAuthSetup` does:
+ * the renderer's first paint calls a data channel, so the database has to be
+ * open — and, here, already full. Photographing the app while it seeds would
+ * produce a sweep of loading states.
+ */
+async function runShotsAuthSetup(): Promise<void> {
+  const created = await handleAuthCreate(DEMO_ACCOUNT_LABEL, DEMO_PASSCODE);
+  if (!created.ok) throw new Error(`shots account creation failed: ${created.reason}`);
+  fillDemoProfile();
+}
+
+/** Names the just-created account's first-run profile and fills it. Shared by both harnesses so they cannot drift apart. */
+function fillDemoProfile(): void {
+  const database = requireDb();
+  const profile = listProfiles(database)[0];
+  if (profile === undefined) throw new Error("expected a first-run profile to seed");
+  renameProfile(database, profile.id, DEMO_PROFILE_NAME);
+  seedDemoProfile(database.raw, profile.id, Date.now());
+}
+
+/**
+ * `--demo`: put a full account on this device and say how to open it.
+ *
+ * Additive by construction. If the device has no account yet this is the first
+ * one; if it already has some, `handleAuthCreateAdditional` adds another and
+ * selects it, which is the same path the account picker's „Dodaj nalog“ takes.
+ * Neither branch can reach an existing account's data — separate directory,
+ * separate key chain (ADR-044).
+ */
+async function runDemoSeed(): Promise<void> {
+  const existing = readRegistry(userDataDir()).accounts.length;
+  const created =
+    existing === 0
+      ? await handleAuthCreate(DEMO_ACCOUNT_LABEL, DEMO_PASSCODE)
+      : await handleAuthCreateAdditional(DEMO_ACCOUNT_LABEL, DEMO_PASSCODE);
+  if (!created.ok) throw new Error(`demo account creation failed: ${created.reason}`);
+  fillDemoProfile();
+  process.stdout.write(
+    `DEMO OK — nalog „${DEMO_ACCOUNT_LABEL}“, lozinka „${DEMO_PASSCODE}“, profil „${DEMO_PROFILE_NAME}“\n`,
+  );
+}
+
 // --- Auto-update (SEC-EL-07) -------------------------------------------------
 //
 // The feed URL is baked into the packaged build from electron-builder.yml's
@@ -11725,17 +11902,23 @@ function shutdown(code: number): void {
 // --- Lifecycle --------------------------------------------------------------
 
 app.whenReady().then(async () => {
-  if (isSmoke) {
-    // Never the developer's real `%APPDATA%\Nexus` — a nested, disposable
-    // directory. Wiped up front (Electron only auto-creates the DEFAULT
-    // userData path, not one redirected here, and a leftover keychain.json
-    // from a previous run would make the very first smoke assertion below
-    // false on the second run onward) then recreated, since nothing else
-    // will create it before the first file write into it.
-    const smokeUserDataPath = join(app.getPath("userData"), "smoke");
-    rmSync(smokeUserDataPath, { recursive: true, force: true });
-    mkdirSync(smokeUserDataPath, { recursive: true });
-    app.setPath("userData", smokeUserDataPath);
+  // Never the developer's real `%APPDATA%\Nexus` — a nested, disposable
+  // directory, one per harness. Wiped up front (Electron only auto-creates the
+  // DEFAULT userData path, not one redirected here, and a leftover
+  // keychain.json from a previous run would make the very first smoke
+  // assertion below false on the second run onward) then recreated, since
+  // nothing else will create it before the first file write into it.
+  //
+  // `--demo` is deliberately absent: its whole purpose is an account that is
+  // still there after the process exits, so it writes where a real launch
+  // reads. It stays safe by being additive — a new account is a new directory
+  // with its own key chain (ADR-044).
+  const sandboxDir = isSmoke ? "smoke" : isShots ? "shots" : null;
+  if (sandboxDir !== null) {
+    const sandboxUserDataPath = join(app.getPath("userData"), sandboxDir);
+    rmSync(sandboxUserDataPath, { recursive: true, force: true });
+    mkdirSync(sandboxUserDataPath, { recursive: true });
+    app.setPath("userData", sandboxUserDataPath);
   }
 
   try {
@@ -11830,10 +12013,20 @@ app.whenReady().then(async () => {
       await runSmokeAuthSetup();
     }
 
+    // `--demo` never opens a window at all: it writes an account and stops, so
+    // that the app opened normally afterwards finds it in the picker.
+    if (isDemo) {
+      await runDemoSeed();
+      shutdown(0);
+      return;
+    }
+
+    if (isShots) await runShotsAuthSetup();
+
     mainWindow = createWindow();
 
     // Never in dev, never during the smoke run — only a real packaged install.
-    if (app.isPackaged && !isSmoke) checkForUpdates();
+    if (app.isPackaged && !isAutomatedRun) checkForUpdates();
 
     if (isSmoke) {
       mainWindow.webContents.once("did-finish-load", () => {
@@ -11850,6 +12043,25 @@ app.whenReady().then(async () => {
           });
       });
     }
+
+    if (isShots) {
+      mainWindow.webContents.once("did-finish-load", () => {
+        void runShots(mainWindow!, shotsOutputDir())
+          .then((frames) => {
+            const findings = frames.reduce((total, frame) => total + frame.findings.length, 0);
+            process.stdout.write(
+              `SHOTS OK — ${frames.length} frames, ${findings} findings → ${shotsOutputDir()}\n`,
+            );
+            shutdown(0);
+          })
+          .catch((error: unknown) => {
+            process.stderr.write(
+              `SHOTS FAIL: ${error instanceof Error ? error.message : String(error)}\n`,
+            );
+            shutdown(1);
+          });
+      });
+    }
   } catch (error) {
     process.stderr.write(
       `Startup failed: ${error instanceof Error ? error.message : String(error)}\n`,
@@ -11858,7 +12070,7 @@ app.whenReady().then(async () => {
   }
 
   app.on("activate", () => {
-    if (!isSmoke && BrowserWindow.getAllWindows().length === 0) {
+    if (!isAutomatedRun && BrowserWindow.getAllWindows().length === 0) {
       mainWindow = createWindow();
     }
   });

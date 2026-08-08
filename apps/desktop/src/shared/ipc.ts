@@ -786,6 +786,18 @@ export const IpcChannel = {
   // and main answers whether the system let it have the combination.
   shortcutsSetGlobal: "shortcuts:set-global",
   shortcutsGlobalCapture: "shortcuts:global-capture",
+  // The window's own frame (`frame: false`). Nexus draws its title strip
+  // itself, so the three things the OS frame used to do have to cross IPC.
+  //
+  // None of them carries a window id, deliberately. Each acts on the window
+  // that SENT the request, resolved from `event.sender` — so a renderer cannot
+  // name a window it does not own, and the PDF preview windows (ADR-064) get
+  // the same three controls for free rather than a second set of channels.
+  windowMinimize: "window:minimize",
+  windowToggleMaximize: "window:toggle-maximize",
+  windowClose: "window:close",
+  windowState: "window:state",
+  windowStateChanged: "window:state-changed",
   appInfo: "app:info",
 } as const;
 
@@ -7657,6 +7669,22 @@ export interface GlobalShortcutResult {
   ok: boolean;
 }
 
+/**
+ * What the drawn title strip has to know about the window it is drawn on.
+ *
+ * `maximized` decides which of the two shapes the middle control is (restore
+ * or maximize) — the one piece of window state a custom frame cannot infer,
+ * since the renderer has no window object of its own to ask.
+ *
+ * `focused` exists because an OS frame dims itself when the window loses focus,
+ * and a drawn one that does not looks like it is still the front window when it
+ * is not. That is a real misread on a multi-window desktop, not a flourish.
+ */
+export interface WindowState {
+  maximized: boolean;
+  focused: boolean;
+}
+
 /** Runtime and environment facts, proving the main-process path end to end. */
 export interface AppInfo {
   name: string;
@@ -8960,5 +8988,15 @@ export interface NexusApi {
    * Never pushed to a locked session. Returns an unsubscribe function.
    */
   onGlobalCapture(listener: () => void): () => void;
+  /** Minimises the calling window. */
+  windowMinimize(): Promise<void>;
+  /** Maximises the calling window, or restores it if it already is, and answers with the state it ended in. */
+  windowToggleMaximize(): Promise<WindowState>;
+  /** Closes the calling window — the same path the OS close button took, so the private section's closing capture still runs (ADR-057). */
+  windowClose(): Promise<void>;
+  /** The window's state right now. Read once on mount; every change after that arrives through `onWindowStateChanged`. */
+  windowState(): Promise<WindowState>;
+  /** Subscribes to maximise/restore/focus changes for the calling window. Returns an unsubscribe function. */
+  onWindowStateChanged(listener: (state: WindowState) => void): () => void;
   appInfo(): Promise<AppInfo>;
 }

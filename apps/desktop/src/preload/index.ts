@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import { IpcChannel, type NexusApi } from "../shared/ipc.js";
+import { IpcChannel, type NexusApi, type WindowState } from "../shared/ipc.js";
 
 /**
  * The renderer's only bridge to the main process (SEC-EL-02). Each method wraps
@@ -789,6 +789,18 @@ const api: NexusApi = {
     const handler = (): void => listener();
     ipcRenderer.on(IpcChannel.shortcutsGlobalCapture, handler);
     return () => ipcRenderer.removeListener(IpcChannel.shortcutsGlobalCapture, handler);
+  },
+  windowMinimize: () => ipcRenderer.invoke(IpcChannel.windowMinimize),
+  windowToggleMaximize: () => ipcRenderer.invoke(IpcChannel.windowToggleMaximize),
+  windowClose: () => ipcRenderer.invoke(IpcChannel.windowClose),
+  windowState: () => ipcRenderer.invoke(IpcChannel.windowState),
+  onWindowStateChanged: (listener) => {
+    // Unlike `onGlobalCapture` this event carries a payload, so the handler is
+    // typed at the boundary rather than dropped: the renderer re-validates it
+    // (`useWindowState`) exactly as every store re-validates what main sends.
+    const handler = (_event: unknown, state: WindowState): void => listener(state);
+    ipcRenderer.on(IpcChannel.windowStateChanged, handler);
+    return () => ipcRenderer.removeListener(IpcChannel.windowStateChanged, handler);
   },
   appInfo: () => ipcRenderer.invoke(IpcChannel.appInfo),
 };
