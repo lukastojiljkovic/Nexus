@@ -1,0 +1,75 @@
+{
+  // Cloudflare WORKERS with static assets — deliberately not Pages. Cloudflare's
+  // own guidance is that new projects start on Workers now that Workers serves
+  // static assets: Pages keeps working, but every optimisation and feature from
+  // here on lands on Workers. Starting on the deprecated-in-practice half of the
+  // platform would mean migrating this app before it has shipped once.
+  //
+  // There is NO `$schema` key. The editor schema ships inside the `wrangler`
+  // package, and this repository deliberately does not depend on it: wrangler
+  // pulls the workerd runtime binary (~100 MB) into every `pnpm install`,
+  // including CI's, in exchange for a deploy CI does not perform. Deploys run
+  // `pnpm dlx wrangler deploy` instead (README.md), and `test/headers.test.ts`
+  // asserts the shape this file must have — which is the part a JSON schema
+  // would not have checked anyway.
+  "name": "nexus-web",
+
+  // Fixed at the date this configuration was written, and only ever moved
+  // deliberately. It is what pins runtime behaviour across Workers releases; a
+  // date that drifts forward on its own would mean the platform could change
+  // under a deployed app between two identical deploys.
+  "compatibility_date": "2026-08-08",
+
+  // NOT PUBLISHED ON A HOSTNAME NOBODY HARDENED. Both of these default to
+  // TRUE — `workers_dev` on its own, and `preview_urls` to whatever
+  // `workers_dev` is — so leaving them out is a decision, not an omission: the
+  // first `wrangler deploy` would put the entire app on
+  // `nexus-web.<account>.workers.dev`, an origin the founder does not own and
+  // cannot set a certificate or DNS policy on, and mint a per-version preview
+  // URL beside it.
+  //
+  // The preview URLs are the worse half, and the reason this is stated in the
+  // product's source rather than left to a dashboard toggle after the fact.
+  // They are stable and pinned to one VERSION, so every build ever deployed
+  // stays reachable at its own permanent address. For a product whose whole
+  // security model is „the client is the only party we trust", that is a
+  // downgrade attack hosted by the vendor: send a victim the preview URL of the
+  // build from before a crypto fix and it runs, on the real account, against
+  // the real data. Turning it off afterwards does not retract the URLs already
+  // minted.
+  //
+  // With both false and no `routes` here, a deploy uploads the Worker and
+  // attaches it to nothing. Reachability is then exactly the custom domain a
+  // human attaches in the dashboard (README, step 3) — which is the intent the
+  // README already described and this makes true.
+  "workers_dev": false,
+  "preview_urls": false,
+
+  // No `main`. This app is assets and nothing else — there is no server-side
+  // logic to write, because the server is assumed hostile and holds ciphertext
+  // only (the sync engine talks to Supabase directly from the browser). The
+  // absence is the security property, not an omission: a Worker script would be
+  // code running on Cloudflare's side of the trust boundary, able to answer a
+  // request without the headers `public/_headers` attaches.
+  "assets": {
+    // Vite's build output, and the ROOT OF THE ASSET DIRECTORY is exactly where
+    // Cloudflare reads `_headers` from. `public/_headers` gets here by Vite's
+    // copy of `publicDir`, which is why `test/headers.test.ts` asserts all three
+    // settings together: a policy file one directory away from this path is a
+    // policy that silently does not exist.
+    "directory": "./dist",
+
+    // Client-side routing. An unmatched path serves `index.html` with a 200, so
+    // a deep link into the app (`/beleske/…`) opens the app rather than a 404 —
+    // and, once the router exists, so does a refresh on any page.
+    "not_found_handling": "single-page-application"
+
+    // No `binding`: a binding exists so Worker code can fetch assets, and there
+    // is no Worker code. No `run_worker_first`, for the same reason.
+  }
+
+  // No `routes` and no `workers_dev` here either. Which hostname this is served
+  // on is a per-environment fact that belongs to the Cloudflare dashboard and to
+  // whoever owns the domain — see README.md, „What a human must do". Committing
+  // one would put one deployment's identity into the product's source.
+}

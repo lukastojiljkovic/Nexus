@@ -1,0 +1,66 @@
+# Nexus web — the response headers Cloudflare attaches to every asset.
+#
+# This file is the whole security posture of the web surface, and it is not
+# code: nothing imports it, nothing typechecks it, and a rule Cloudflare cannot
+# parse is IGNORED rather than rejected. `test/headers.test.ts` is therefore the
+# gate — it parses this file the way Cloudflare does and asserts every directive
+# by name. Change a line here and change it there, in the same commit, or the
+# suite says so.
+#
+# Cloudflare's grammar, from its own parser, and the four ways to get it wrong
+# silently. INDENTATION IS NOT ONE OF THEM: `parseHeaders` trims every line
+# before it looks at it, so the tabs below are for a human and carry no meaning.
+# What decides is the content of the line:
+#   - a line is a PATH if it starts with `/` or holds `://` before its first
+#     space. That is the sharp one, because it is a property of a header's
+#     VALUE: `Report-To:{"url":"https://…"}` — a URL with no space in front of
+#     it — reads as a path, fails URL validation, and then EVERY REMAINING
+#     HEADER IN THIS BLOCK IS SKIPPED. Nothing fails; the site serves unarmed.
+#   - otherwise a line with a colon is one header, `name: value`;
+#   - `! Name` (with the space) DELETES a header. Two characters in front of a
+#     name below turn that protection off while leaving it here to be read;
+#   - a line over 2,000 characters is DROPPED. The policy line below is 346 and
+#     a CSP only ever grows, so this is a live limit, not a theoretical one.
+# `test/headers.test.ts` asserts all four, against fixtures that prove it can.
+#
+# Header values cannot be wrapped, so the policy line below breaks this repo's
+# ~100-column rule by construction. It is the one place that is allowed to.
+
+/*
+	Content-Security-Policy: default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' blob: data:; font-src 'self'; connect-src https://PROJECT.supabase.co wss://PROJECT.supabase.co; worker-src 'self' blob:; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; upgrade-insecure-requests
+	Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+	X-Content-Type-Options: nosniff
+	X-Frame-Options: DENY
+	Referrer-Policy: no-referrer
+	Permissions-Policy: camera=(), microphone=(), geolocation=(), usb=(), payment=()
+	Cross-Origin-Opener-Policy: same-origin
+	Cross-Origin-Resource-Policy: same-origin
+
+# --- Notes on the four decisions in that policy that are not obvious ---------
+#
+# `'wasm-unsafe-eval'` IS THERE FOR ARGON2ID, and for nothing else. The web
+# password KDF runs as WebAssembly, and instantiating a WASM module counts as
+# evaluating code, so `script-src 'self'` alone would stop the login before it
+# started. This is the NARROW keyword on purpose: it permits WebAssembly
+# compilation and nothing more, whereas `'unsafe-eval'` would additionally hand
+# back `eval`, `new Function` and string-bodied timers — the entire class this
+# policy exists to remove. IT MUST NOT WIDEN TO THAT. If a future dependency
+# demands `'unsafe-eval'`, the answer is a different dependency; the suite
+# refuses the widening so the decision cannot be made by accident.
+#
+# `PROJECT` STAYS A PLACEHOLDER HERE. The real Supabase project ref is written
+# into `dist/_headers` at build time from NEXUS_SUPABASE_PROJECT_REF (see
+# `build/headers.ts`), because this file describes the product and a project ref
+# describes one deployment of it.
+#
+# `connect-src` DOES NOT LIST `'self'`, and that is deliberate rather than an
+# omission. The app is static assets; it fetches its own origin for scripts,
+# styles and images, and those are governed by their own directives. The only
+# thing it opens a socket to is Supabase. Adding `'self'` would buy nothing and
+# would quietly authorise a future endpoint on this origin that nobody reviewed.
+#
+# `frame-ancestors 'none'` AND `X-Frame-Options: DENY` say the same thing twice.
+# That is not redundancy to clean up: `frame-ancestors` is the modern rule and
+# the one browsers honour, `X-Frame-Options` is what a corporate proxy or an
+# older embedded webview still understands. Removing either narrows who is
+# protected.

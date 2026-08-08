@@ -1,0 +1,143 @@
+/* Web shell chrome only — component styling lives in @nexus/ui, and every
+   value here is a --nx-* token. Raw colour literals are forbidden outside
+   @nexus/tokens and `pnpm check:colours` walks this directory. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/* The CANVAS background, declared on `body` for the same reason the desktop
+   shell declares it there: `.web` paints `--nx-bg` on a full-height element,
+   which leaves every pixel OUTSIDE it — an overscroll bounce, a stray document
+   scroll, the moment between two layouts — on the browser's base colour, which
+   is white. Per CSS Backgrounds 2.11.2 the canvas takes its background from the
+   root element and, failing that, from `body`, so declaring it here makes
+   „white never appears" true by construction rather than true while nothing
+   overflows. On a phone that bounce is not an edge case, it is the scroll. */
+body {
+  margin: 0;
+  background: var(--nx-bg);
+}
+
+.web {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+/* --- The top strip ---------------------------------------------------- */
+/* A plain header, deliberately NOT the desktop's drawn title bar. That one
+   exists because Electron hides the OS frame and the app has to draw its own
+   minimise/maximise/close; a browser tab already has all three, and redrawing
+   them here would be an app pretending to be a window. */
+.web__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-4);
+  padding: var(--nx-space-3) var(--nx-space-5);
+  background: var(--nx-surface);
+  border-bottom: 1px solid var(--nx-border-subtle);
+}
+
+.web__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  font-family: var(--nx-font-family-display);
+  font-size: var(--nx-font-size-title);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-tight);
+  color: var(--nx-accent-strong);
+}
+
+/* --- Rail and page ---------------------------------------------------- */
+.web__body {
+  display: grid;
+  grid-template-columns: var(--nx-layout-rail) 1fr;
+  flex: 1;
+  min-height: 0;
+}
+
+.web__rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  padding: var(--nx-space-4) var(--nx-space-3);
+  background: var(--nx-surface);
+  border-right: 1px solid var(--nx-border-subtle);
+  overflow-y: auto;
+}
+
+.web__main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-5);
+  padding: var(--nx-space-6);
+  /* `min-width: 0` is not decoration: a grid track is `auto`-sized by default,
+     so a long unbreakable string inside this column would widen the track and
+     push the rail off-screen instead of scrolling within itself. */
+  min-width: 0;
+  overflow-y: auto;
+}
+
+.web__prose {
+  margin: 0;
+  max-width: var(--nx-layout-measure);
+  color: var(--nx-text-muted);
+  line-height: var(--nx-font-leading-normal);
+}
+
+.web__actions {
+  display: flex;
+  gap: var(--nx-space-2);
+  margin-top: var(--nx-space-4);
+}
+
+.web__answer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  margin: var(--nx-space-4) 0 0;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+}
+
+/* --- Narrow ----------------------------------------------------------- */
+/* The rail is full width or it is not there (founder, DC-06). Below this width
+   there is no room for a column beside the page, so it becomes a full-width
+   strip ABOVE it rather than a squeezed column — a half-width rail with
+   ellipsised labels is the shape that rule exists to forbid. */
+@media (max-width: 900px) {
+  .web__body {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+
+  .web__rail {
+    flex-direction: row;
+    overflow-x: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--nx-border-subtle);
+  }
+
+  /* Rows in a row-direction rail must keep their own width; without this each
+     one shrinks to share the strip and every label ellipsises at once. */
+  .web__rail .nx-nav-item {
+    flex: 0 0 auto;
+  }
+
+  .web__main {
+    padding: var(--nx-space-4);
+  }
+}

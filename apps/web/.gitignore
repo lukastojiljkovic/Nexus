@@ -1,0 +1,15 @@
+# Wrangler's local state — the dev-session cache and the uploaded-asset
+# manifest. Regenerated on every run, never a source artefact.
+#
+# `dist/` needs no entry: the repository root already ignores it everywhere.
+.wrangler/
+
+# The one place a real Supabase project ref may sit on a developer's machine
+# (see README.md). It is a build input, not a secret, but it is still an
+# environment fact about one deployment and has no business in the repository —
+# `public/_headers` keeps the PROJECT placeholder, always.
+#
+# The root .gitignore already covers `.env` and `.env.*`; this restates it here
+# so the rule is visible in the directory it protects.
+.env
+.env.*

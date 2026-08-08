@@ -1,0 +1,10 @@
+# Supabase CLI working state — link metadata, pulled schemas, container state.
+# `.temp/` in particular holds the project ref and pooler URLs of whatever
+# project was last linked, which is exactly the kind of thing that should never
+# be committed from a machine that has linked to production.
+.branches/
+.temp/
+
+# Edge Function secrets. The example file next to it is committed; these are not.
+functions/.env
+functions/.env.local

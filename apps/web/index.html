@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="sr" data-theme="noc">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nexus</title>
+    <!-- No Content-Security-Policy meta tag here, deliberately: this app's
+         policy is a real header (public/_headers), and a meta copy would drop
+         frame-ancestors silently while only ever narrowing what the header
+         allows. Reasoning in vite.config.ts. `data-theme` is the FIRST paint's
+         theme; src/main.tsx resolves the stored preference before React runs. -->
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

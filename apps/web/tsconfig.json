@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    // Browser source only — deliberately NOT "node". The build helpers and the
+    // gate suites read the filesystem and live under tsconfig.node.json; a
+    // single config carrying both type sets would let a page reach for
+    // `process` or `node:fs` and still typecheck, and the failure would only
+    // appear in a browser. Same split, and same reason, as apps/desktop's
+    // tsconfig.web.json vs tsconfig.node.json.
+    "types": ["vite/client"]
+  },
+  "include": ["src"]
+}

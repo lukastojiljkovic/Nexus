@@ -1,0 +1,12 @@
+{
+  "name": "@nexus/supabase",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Nexus sync server: schema, the RLS wall, and the checks that prove it stands.",
+  "scripts": {
+    "check": "node scripts/check-rls-wall.mjs",
+    "test": "node --test \"tests/static/*.test.mjs\"",
+    "test:db": "supabase test db"
+  }
+}
