@@ -43,7 +43,15 @@ export interface RadialCycleProps {
    * reached that hour yet.
    */
   absent?: readonly number[];
-  /** 320 (card) or 720 (panel). The ring is always square — never stretched. */
+  /**
+   * 320 (a dashboard card) or 720 (a page panel). The ring is always square —
+   * never stretched.
+   *
+   * Deliberately NOT offered at the 1180 reading measure the other primitives
+   * gained: a dial is square, so a third size would be a 1180×1180 object, and
+   * nothing in this app has a screen tall enough for one. A ring that needs
+   * more presence gets it from where it sits on the page, not from its radius.
+   */
   size?: 320 | 720;
 }
 

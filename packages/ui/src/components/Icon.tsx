@@ -116,7 +116,14 @@ export type IconName =
   | "home"
   | "external"
   | "sun"
-  | "moon";
+  | "moon"
+  // The drawn window frame. Deliberately the OS's own vocabulary rather than
+  // an invention: a rule, a square and a square-behind-a-square are what every
+  // desktop has meant by minimise / maximise / restore for thirty years, and a
+  // title bar is the last place in a product to be original about meaning.
+  | "windowMinimize"
+  | "windowMaximize"
+  | "windowRestore";
 
 const SHAPES: Record<IconName, ReactNode> = {
   // Three panes, uneven on purpose: a board someone arranged, not a 2×2 grid.
@@ -265,6 +272,17 @@ const SHAPES: Record<IconName, ReactNode> = {
     <>
       <path d="m6.2 6.2 11.6 11.6" />
       <path d="M17.8 6.2 6.2 17.8" />
+    </>
+  ),
+  // The three window glyphs are drawn tighter than the house 3…21 box on
+  // purpose: they are rendered at 14 px beside a 12 px label, and a shape that
+  // fills its box at that size reads as a button rather than as a control mark.
+  windowMinimize: <path d="M6.4 12h11.2" />,
+  windowMaximize: <rect x="6.4" y="6.4" width="11.2" height="11.2" rx="1.6" />,
+  windowRestore: (
+    <>
+      <rect x="5.6" y="9.2" width="9.2" height="9.2" rx="1.6" />
+      <path d="M9.2 5.6h6.2a3 3 0 0 1 3 3v6.2" />
     </>
   ),
   chevronDown: <path d="m6.4 9.4 5.6 5.6 5.6-5.6" />,

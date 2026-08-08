@@ -1,5 +1,6 @@
 import { useId } from "react";
 import type { SelectHTMLAttributes } from "react";
+import { Icon } from "./Icon.js";
 
 /**
  * A `<select>` that cannot ship without a visible label.
@@ -46,9 +47,18 @@ export function Select({ label, layout = "stacked", id, className, children, ...
       <label className="nx-select__label" htmlFor={selectId}>
         {label}
       </label>
-      <select id={selectId} className={control} {...rest}>
-        {children}
-      </select>
+      {/* The chevron is a real `Icon` laid over the control rather than the
+          browser's own arrow: `appearance: none` takes the native one away so
+          the closed control stops rendering as a Windows widget, and this puts
+          the app's own shape back in its place. `aria-hidden` and
+          `pointer-events: none` keep it decorative — the accessible control is
+          still the `<select>`, and clicking the chevron still opens it. */}
+      <span className="nx-select__field">
+        <select id={selectId} className={control} {...rest}>
+          {children}
+        </select>
+        <Icon name="chevronDown" size={15} className="nx-select__chevron" />
+      </span>
     </div>
   );
 }

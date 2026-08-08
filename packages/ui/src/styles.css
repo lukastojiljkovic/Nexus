@@ -43,9 +43,158 @@
   font-family: var(--nx-font-family-ui);
   font-size: var(--nx-font-size-body);
   line-height: var(--nx-font-leading-snug);
+  /* Tracking is a function of SIZE, not a free-standing choice, and it was not
+     wired to one: four tracking tokens existed and nothing bound them to
+     anything, so the whole app ran at the browser's default 0. Negative
+     tracking on running text and progressively more of it as type grows is the
+     most reliable single difference between type that has been set and type
+     that has been typed. The headings override this with their own value; only
+     uppercase labels go positive (`tracking-label`), because small caps need
+     the opposite correction. */
+  letter-spacing: var(--nx-font-tracking-body);
   color: var(--nx-text);
   background: var(--nx-bg);
   -webkit-font-smoothing: antialiased;
+}
+
+/* Monospace is exempt from the body tracking above. A monospaced face is drawn
+   on a fixed advance width by definition, and negative tracking breaks the one
+   property it exists for — a Recovery Kit code or a hash stops lining up under
+   itself. `letter-spacing: normal` rather than `0`, so the face's own metrics
+   decide, which is the same reason the tracking is stated by size everywhere
+   else. */
+code,
+kbd,
+pre,
+samp {
+  letter-spacing: normal;
+}
+
+/* --- Hairlines --------------------------------------------------------
+   A 1px CSS border is TWO device pixels at the 150–200% scaling most Windows
+   laptops ship at, and a doubled line is a good part of why an interface reads
+   as „drawn" rather than „printed". Chromium has honoured sub-pixel borders
+   since v56, so on a high-DPI display the app asks for half a pixel and gets
+   exactly one.
+
+   Applied to the elements that ARE the app's structure — the card edge, the
+   row divider, the rail edges — rather than offered as an opt-in class, so it
+   cannot be adopted in three places and forgotten in thirty. */
+@media (min-resolution: 2dppx) {
+  .nx-card,
+  .nx-list-row,
+  .nx-kanban-col,
+  .nx-kanban-card,
+  .nx-cards-view__card,
+  .nx-textfield__input,
+  .nx-select__control,
+  .nx-stat-band,
+  .nx-hairline {
+    border-width: 0.5px;
+  }
+}
+
+/* --- Scrollbars -------------------------------------------------------
+   The single loudest „this is a web page in a window" tell the app had. Every
+   scrollable pane — the sidebar, both list rails, every page — was painting
+   Windows' own scrollbar: a 17px light-grey track with stepper arrows, sitting
+   inside a blue-black interface.
+
+   Overlay-style rather than reserved-gutter: the thumb is drawn on the content
+   edge and the track is transparent, so nothing shifts when a pane becomes
+   scrollable. `scrollbar-gutter` is deliberately NOT set — reserving 12px in
+   every pane costs more than the reflow it prevents, and the panes here have
+   stable content heights.
+
+   The thumb only appears on hover over the scrolling element. A permanently
+   visible thumb on fourteen panes is fourteen vertical lines competing with the
+   content; a thumb that appears when the pointer is in the pane is how every
+   desktop-class app behaves. */
+.nx-app ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.nx-app ::-webkit-scrollbar-track,
+.nx-app ::-webkit-scrollbar-corner {
+  background: transparent;
+}
+.nx-app ::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: var(--nx-radius-round);
+  /* `background-clip: padding-box` is what makes the transparent border read as
+     padding: the thumb paints 4px wide inside a 10px track instead of filling
+     it. Without it the border paints too and the thumb is a 10px slab. */
+  background-clip: padding-box;
+  background-color: transparent;
+  transition: background-color var(--nx-motion-base) var(--nx-motion-ease);
+}
+.nx-app *:hover::-webkit-scrollbar-thumb,
+.nx-app *:focus-within::-webkit-scrollbar-thumb {
+  background-color: var(--nx-border-strong);
+}
+.nx-app ::-webkit-scrollbar-thumb:hover {
+  background-color: var(--nx-text-faint);
+}
+/* Chromium draws the stepper buttons whenever the scrollbar is styled at all;
+   they are not part of any modern desktop scrollbar and have to be sized away
+   explicitly. */
+.nx-app ::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* --- Numerals ---------------------------------------------------------
+   Every column of digits in the product: amounts, weights, reps, intervals,
+   streaks, counts, times. Proportional figures make a column of numbers wobble
+   1–3px per row, which reads as sloppiness without a reader being able to name
+   it. Serbian sets `1.234.567,89` — period thousands, comma decimal — so with
+   tabular figures and right alignment the commas align by construction rather
+   than by anyone measuring. */
+.nx-num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* --- Visually hidden ---------------------------------------------------
+   The other half of „hoist a repeated unit out of the rows".
+   Putting „RSD" or „min" once in a column header instead of on sixty rows is
+   right for the eye and wrong for a screen reader, which reads a row on its own
+   and then hears a bare number. This is what lets a row carry the unit for
+   listening while the column carries it for looking.
+
+   The `clip-path` + 1px box recipe rather than `display: none` or
+   `visibility: hidden`, both of which remove the text from the accessibility
+   tree — which is the opposite of the point. `white-space: nowrap` stops a
+   1px-wide box wrapping its content into a tall invisible column that some
+   screen readers then read letter by letter. */
+.nx-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* --- Reading measure ---------------------------------------------------
+   `--nx-layout-measure` (1180px) exists so a row's label and its value are
+   never a thousand pixels apart: past roughly that width the eye stops being
+   able to connect the two ends of a row, and a maximised window turns a list
+   into two unrelated columns.
+
+   OPT-IN, deliberately, rather than applied to every page from the shell. Two
+   surfaces genuinely want every pixel they are given — the calendar's week grid
+   divides its width into seven columns, and the canvas is a viewport onto an
+   infinite board — and capping those would be a defect rather than a
+   refinement. So a page that reads as ROWS asks for this, and a page that reads
+   as a FIELD does not. */
+.nx-measure {
+  width: 100%;
+  max-width: var(--nx-layout-measure);
 }
 
 /* --- Segmented option -------------------------------------------------- */
@@ -132,6 +281,7 @@
 /* --- PageHeader ------------------------------------------------------- */
 /* One page title treatment for the whole app. See PageHeader.tsx. */
 .nx-page-header {
+  position: relative;
   flex: none;
   display: flex;
   align-items: flex-start;
@@ -139,6 +289,34 @@
   gap: var(--nx-space-4);
   flex-wrap: wrap;
   min-width: 0;
+  /* Room for the mark to be a MARK. The first attempt bled a 132px sigil off
+     the corner of a 50px-tall header, and the sweep caught what that actually
+     produced: a 26px slice of a rounded shape, hanging 2px outside the window.
+     A partial glyph reads as a rendering fault, not as identity. So the header
+     is given the height the mark needs and the mark is sized to fit it whole —
+     which also gives the title itself the air a page opening was short of. */
+  min-height: 72px;
+}
+/* The module's mark, at the largest of its four scales. It is a GROUND, not a
+   figure: `text-faint` is the tier held to the 3:1 non-text floor rather than
+   the 4.5:1 body one, and 0.13 on top of that puts it below anything a reader
+   will look at directly. `z-index: 0` against the header's own
+   `position: relative` places it behind the text without creating a stacking
+   context that would trap the actions' popovers. */
+.nx-page-header__sigil {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 0;
+  line-height: 0;
+  color: var(--nx-text-faint);
+  opacity: 0.13;
+  pointer-events: none;
+}
+.nx-page-header__text,
+.nx-page-header__actions {
+  position: relative;
+  z-index: 1;
 }
 .nx-page-header__text {
   display: flex;
@@ -146,13 +324,15 @@
   gap: var(--nx-space-1);
   min-width: 0;
 }
+/* `tracking-h1`, not `tracking-tight`: tracking is a function of size, and
+   -0.012em is the value for 18–20px. At 24px it reads loose. */
 .nx-page-header__title {
   margin: 0;
   font-family: var(--nx-font-family-display);
   font-size: var(--nx-font-size-h1);
   font-weight: var(--nx-font-weight-semibold);
   line-height: var(--nx-font-leading-tight);
-  letter-spacing: var(--nx-font-tracking-tight);
+  letter-spacing: var(--nx-font-tracking-h1);
   color: var(--nx-text);
 }
 .nx-page-header__subtitle {
@@ -162,23 +342,34 @@
   line-height: var(--nx-font-leading-snug);
   color: var(--nx-text-muted);
 }
+/* `margin-left: auto` so that when the header wraps — a long title, a narrow
+   window — the actions stay on the trailing edge instead of jumping to the left
+   margin under the title. `justify-content: space-between` on the header only
+   separates them while both fit on one line. */
 .nx-page-header__actions {
   display: flex;
   align-items: center;
   gap: var(--nx-space-2);
   flex-wrap: wrap;
+  margin-left: auto;
 }
 
 /* --- Button ----------------------------------------------------------- */
 .nx-button {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: var(--nx-space-2);
   font: inherit;
   font-size: var(--nx-font-size-body-sm);
   font-weight: var(--nx-font-weight-medium);
   border-radius: var(--nx-radius-md);
   padding: 7px 14px;
+  /* The pointer-target floor, stated once for every button in the product.
+     Padding alone does not guarantee it: a `--sm` button holding a single 14px
+     icon computed to 20px tall, and the sweep found that shape on 240 of 348
+     frames. A `min-height` cannot be undone by a shorter child. */
+  min-height: 30px;
   cursor: pointer;
   border: 1px solid transparent;
   transition: background var(--nx-motion-fast) var(--nx-motion-ease),
@@ -197,8 +388,13 @@
    It is decoration and carries no meaning on its own — the button already
    changes background on hover and shows a focus ring — so nothing is lost when
    Windows High Contrast strips shadows away. */
+/* The one piece of motion on a button: it gives under the pointer. 100ms and
+   3% — small enough that nobody notices it happening and everybody notices when
+   it is missing. `transform` only, so it composites and cannot cost a layout;
+   the blanket reduced-motion rule collapses it to 1ms with everything else. */
 .nx-button:active:not(:disabled) {
   box-shadow: var(--nx-material-bite);
+  transform: scale(0.97);
 }
 .nx-button--primary {
   background: var(--nx-accent);
@@ -220,12 +416,125 @@
   border-color: var(--nx-danger);
   color: var(--nx-danger);
 }
+/* Reads as a line of text and behaves as a control. No border, no fill at rest,
+   the secondary ink tier — but it keeps the button's own 30px floor, which is
+   the whole reason it exists: every hand-rolled version of this on the pages
+   set `padding: 0` and came out as tall as its own line box, under the pointer
+   floor. The negative inline margin is what lets it still sit flush with the
+   prose beside it while carrying that height. */
+.nx-button--quiet {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 4px 6px;
+  margin-inline: -6px;
+  font-weight: var(--nx-font-weight-regular);
+}
+.nx-button--quiet:hover:not(:disabled) {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
 .nx-button--danger:hover {
   background: var(--nx-danger-soft);
 }
 .nx-button--sm {
   padding: 4px 10px;
   font-size: var(--nx-font-size-label);
+  min-height: 24px;
+}
+
+/* --- StatBand ---------------------------------------------------------
+   Summary before detail. The label is the quietest thing in the band and the
+   figure is the loudest, which is the inverse of how these pages had been
+   drawing their own totals — an 11px caps label over a 24px tabular number,
+   rather than two lines of body text of equal weight.
+
+   No card, no border of its own: it is separated from the list beneath it by a
+   single hairline. A band inside a box would be a second object competing with
+   the content it exists to summarise. */
+.nx-stat-band {
+  /* `align-self: stretch` for the reason `.nx-chart-group` declares it: inside
+     any `align-items: flex-start` column — which most page sections are — this
+     element would otherwise shrink to the width of its figures, and its closing
+     hairline would stop a third of the way across the page. A rule that ends
+     early reads as a rendering fault, not as a divider. */
+  align-self: stretch;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nx-space-6);
+  flex-wrap: wrap;
+  padding-bottom: var(--nx-space-4);
+  border-bottom: 1px solid var(--nx-border-subtle);
+}
+.nx-stat-band__stats {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nx-space-8);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+/* `flex: none` so a graphic keeps its own drawn size rather than being squashed
+   into the figures' leftovers — but `min-width: 0` and a ceiling, so a wide
+   aside in a narrow window wraps under the figures instead of pushing the band
+   off the page. Without the ceiling the overflow is merely absent at the widths
+   anyone happened to check. */
+.nx-stat-band__aside {
+  flex: none;
+  min-width: 0;
+  max-width: 100%;
+}
+.nx-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.nx-stat__label {
+  font-size: var(--nx-font-size-label);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-subtle);
+  white-space: nowrap;
+}
+.nx-stat__value {
+  display: flex;
+  align-items: baseline;
+  gap: var(--nx-space-1);
+  font-family: var(--nx-font-family-display);
+  font-size: var(--nx-font-size-h1);
+  font-weight: var(--nx-font-weight-semibold);
+  line-height: var(--nx-font-leading-tight);
+  letter-spacing: var(--nx-font-tracking-h1);
+  /* The whole point of a band of figures is that they line up. */
+  font-variant-numeric: tabular-nums;
+  color: var(--nx-text);
+}
+.nx-stat__value--data {
+  color: var(--nx-data);
+}
+.nx-stat__value--danger {
+  color: var(--nx-danger);
+}
+.nx-stat__value--accent {
+  color: var(--nx-accent-strong);
+}
+/* The unit rides at the figure's baseline at caption size, so „RSD" or „min"
+   never has to be repeated on the sixty rows below. */
+.nx-stat__unit {
+  font-family: var(--nx-font-family-ui);
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-medium);
+  letter-spacing: var(--nx-font-tracking-body);
+  color: var(--nx-text-subtle);
+}
+/* Where a figure admits to being a lower bound rather than a total. */
+.nx-stat__note {
+  font-size: var(--nx-font-size-caption);
+  line-height: var(--nx-font-leading-snug);
+  color: var(--nx-text-subtle);
+  max-width: 28ch;
 }
 .nx-button:disabled {
   opacity: 0.45;
@@ -240,8 +549,16 @@
   cursor: pointer;
   font-size: var(--nx-font-size-body);
 }
+/* The PAINTED box stays 15px — a checkbox drawn at 24 would dominate every row
+   it sits in — but the thing a pointer has to hit is 24×24. The two are
+   different measurements and were the same number, which is why every list row
+   in the product had a sub-floor target at its head. `position: relative` plus
+   a transparent `::before` grows the hit area without moving a single pixel of
+   layout. Stated on the component, because every page has one of these and a
+   page-scoped fix is a fix in one of fifteen places. */
 .nx-checkbox input {
   appearance: none;
+  position: relative;
   margin: 0;
   width: 15px;
   height: 15px;
@@ -264,6 +581,15 @@
   border-width: 0 1.5px 1.5px 0;
   transform: rotate(45deg) translate(-1px, -1px);
 }
+.nx-checkbox input::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 24px;
+  height: 24px;
+  transform: translate(-50%, -50%);
+}
 .nx-checkbox input:focus-visible {
   outline: 2px solid var(--nx-accent);
   outline-offset: 2px;
@@ -282,6 +608,11 @@
 }
 
 /* --- Chip -------------------------------------------------------------- */
+/* A chip is a TERTIARY mark, and the ink ramp's new middle tier is what made
+   that sayable. `--nx-text-muted` is now the tier secondary CONTENT is set in —
+   a date, a description — and chips reading at it meant three chips on a row
+   competed with the row's own title. `--nx-text-subtle` puts them back where
+   they belong: present, countable, quiet. */
 .nx-chip {
   display: inline-block;
   font-size: var(--nx-font-size-label);
@@ -289,7 +620,7 @@
   border-radius: var(--nx-radius-md);
   font-variant-numeric: tabular-nums;
   background: var(--nx-surface-alt);
-  color: var(--nx-text-muted);
+  color: var(--nx-text-subtle);
 }
 .nx-chip--data {
   background: var(--nx-data-soft);
@@ -311,18 +642,36 @@
    wireframe. Dan's raised value is deliberately tiny (a 2px warm shadow at 5%):
    paper does not float, it sits, and the lift only has to be enough to say
    „this is a thing on the page" rather than „this is a panel in the air". */
+/* --- Card -------------------------------------------------------------
+   Elevation is modelled differently in the two themes, because the physics
+   are different and pretending otherwise is what made both of them read flat.
+
+   On NOĆ a black shadow on an L*17 canvas is invisible where it is subtle and
+   a smear where it is not. Depth there comes from the surface VALUE plus a 1px
+   inset top highlight — light catching the top edge of a raised plane, which is
+   what `materialEdge` was already in the token set for and was barely used.
+
+   On DAN the opposite holds: `surface` and `bg` are 2.6 L* apart, which no
+   border can rescue on its own, so a light card genuinely needs the shadow. It
+   had `shadow: none`, which is why a Dan card was indistinguishable from the
+   page it sat on. */
 .nx-card {
   background: var(--nx-surface);
   border: 1px solid var(--nx-border);
   border-radius: var(--nx-radius-lg);
   padding: var(--nx-space-4);
-  box-shadow: var(--nx-elevation-raised);
+  box-shadow: var(--nx-elevation-raised), inset 0 1px 0 var(--nx-material-edge);
 }
+/* The card's own label. `text-subtle`, not `text-muted`: after the ink ramp
+   gained its missing middle tier, `text-muted` is the tier SECONDARY CONTENT is
+   set in — a date, a description, an amount's unit. An uppercase 11px eyebrow
+   is tertiary, and reading it at the secondary weight made every card shout its
+   own name louder than the first row of its content. */
 .nx-card__title {
   font-size: var(--nx-font-size-caption);
   text-transform: uppercase;
   letter-spacing: var(--nx-font-tracking-label);
-  color: var(--nx-text-muted);
+  color: var(--nx-text-subtle);
   font-weight: var(--nx-font-weight-semibold);
   margin-bottom: var(--nx-space-3);
 }
@@ -395,16 +744,27 @@
   color: var(--nx-text-muted);
   font-weight: var(--nx-font-weight-medium);
 }
+/* A field is a WELL — something recessed you write into — and it had been
+   painting the same value as the card around it, so on both themes an input
+   was a rectangle of border and nothing else. `--nx-surface-sunken` is the
+   step below the card on the ramp, which is the whole reason that token
+   exists. The floor height is the pointer-target one every control in the
+   product now clears. */
 .nx-textfield__input {
   font: inherit;
   font-size: var(--nx-font-size-body-sm);
   color: var(--nx-text);
-  background: var(--nx-surface);
+  background: var(--nx-surface-sunken);
   border: 1px solid var(--nx-border);
   border-radius: var(--nx-radius-md);
   padding: 7px 13px;
+  min-height: 30px;
   width: 100%;
-  transition: border-color var(--nx-motion-fast) var(--nx-motion-ease);
+  transition: border-color var(--nx-motion-fast) var(--nx-motion-ease),
+    background var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.nx-textfield__input:hover:not(:disabled) {
+  border-color: var(--nx-border-strong);
 }
 .nx-textfield__input::placeholder {
   color: var(--nx-text-muted);
@@ -447,6 +807,34 @@
   text-transform: uppercase;
   white-space: nowrap;
 }
+/* The closed control is drawn; the open list stays the operating system's.
+   That split is deliberate rather than a compromise. A hand-built listbox has
+   to re-implement keyboard navigation, type-ahead, the screen-reader contract
+   and the „does it open upward near the bottom of the screen" question — 74
+   controls' worth of risk — to replace a surface that is on screen for under a
+   second. The CLOSED control is what is on screen the rest of the time, and it
+   was rendering as a raw Windows widget: a grey slab with the OS chevron,
+   inside a blue-black interface. That part is now ours.
+
+   A `<select>` cannot host a pseudo-element and a `background-image` data URI
+   cannot see `currentColor`, so the chevron is a real `Icon` laid over the
+   control by `.nx-select__field`, with `pointer-events: none` so the whole
+   width still opens the list. That is also what keeps it on the app's own icon
+   set — one shape, one stroke weight, one place to change it — instead of a
+   second copy of a chevron encoded in a string. */
+.nx-select__field {
+  position: relative;
+  display: flex;
+  min-width: 0;
+}
+.nx-select__chevron {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+  color: var(--nx-text-subtle);
+  pointer-events: none;
+}
 .nx-select__control {
   font: inherit;
   font-size: var(--nx-font-size-body-sm);
@@ -454,8 +842,108 @@
   background: var(--nx-surface);
   border: 1px solid var(--nx-border);
   border-radius: var(--nx-radius-md);
+  padding: 7px 32px 7px 13px;
+  width: 100%;
+  min-width: 0;
+  appearance: none;
+  cursor: pointer;
+  transition: border-color var(--nx-motion-fast) var(--nx-motion-ease),
+    background-color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.nx-select__control:hover:not(:disabled) {
+  border-color: var(--nx-border-strong);
+  background: var(--nx-surface-alt);
+}
+/* The open list is the operating system's surface, and Chromium paints it from
+   the page's `color-scheme` rather than from this element — declaring the
+   option colours here is what stops a light dropdown opening out of a dark
+   control on a Windows set to the light system theme. */
+.nx-select__control option {
+  background: var(--nx-surface);
+  color: var(--nx-text);
+}
+
+/* Raw `<select>` elements the app still writes by hand, outside the component.
+   Deliberately WITHOUT `appearance: none`: with the native arrow suppressed and
+   no drawn one to replace it, a bare select would read as a text field that
+   silently does nothing — a worse defect than the one being fixed. This takes
+   away the grey Windows slab and leaves the arrow; the remaining call sites
+   move to `Select` and get the drawn chevron with them. */
+.nx-app select:not(.nx-select__control) {
+  font: inherit;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  /* The SAME box as `.nx-textfield__input`, to the pixel. These two sit beside
+     each other in every filter row in the product, and at `6px 10px` against
+     `7px 13px` every such row was two pixels ragged — the kind of difference
+     nobody can name and everybody sees. */
   padding: 7px 13px;
-  transition: border-color var(--nx-motion-fast) var(--nx-motion-ease);
+  min-height: 30px;
+}
+/* Neither bare selector drew a focus ring, so a keyboard user tabbing through
+   a filter row lost the caret entirely. Stated here rather than in the four
+   module stylesheets that each contain one of these. */
+.nx-app select:not(.nx-select__control):focus-visible,
+.nx-app input[type="date"]:focus-visible,
+.nx-app input[type="time"]:focus-visible,
+.nx-app input[type="datetime-local"]:focus-visible,
+.nx-app input[type="month"]:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+
+/* --- Date and time inputs ---------------------------------------------
+   Chromium's `<input type="date">` renders as an OS-styled well with a blue
+   focus fill, a segmented `dd-----yyyy` placeholder and a colour-fixed calendar
+   glyph. Every one of those is styleable through the shadow parts below, and
+   none of them was styled — which is why the finance filter row read as an
+   unfinished form. */
+.nx-app input[type="date"],
+.nx-app input[type="time"],
+.nx-app input[type="datetime-local"],
+.nx-app input[type="month"] {
+  font: inherit;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+  background: var(--nx-surface-sunken);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  /* `.nx-textfield__input`'s box exactly — see the note on the bare select. */
+  padding: 7px 13px;
+  min-height: 30px;
+  font-variant-numeric: tabular-nums;
+}
+.nx-app input[type="date"]::-webkit-datetime-edit,
+.nx-app input[type="time"]::-webkit-datetime-edit,
+.nx-app input[type="datetime-local"]::-webkit-datetime-edit,
+.nx-app input[type="month"]::-webkit-datetime-edit {
+  color: var(--nx-text);
+}
+/* An unfilled field's segments. Without this they inherit the OS placeholder
+   grey, which on Noć is nearly the same value as the field itself. */
+.nx-app input[type="date"]::-webkit-datetime-edit-text,
+.nx-app input[type="date"]::-webkit-datetime-edit-day-field:not([aria-valuenow]),
+.nx-app input[type="date"]::-webkit-datetime-edit-month-field:not([aria-valuenow]),
+.nx-app input[type="date"]::-webkit-datetime-edit-year-field:not([aria-valuenow]) {
+  color: var(--nx-text-subtle);
+}
+/* The picker button. `filter: invert()` is the only lever Chromium offers over
+   this glyph's colour, so it is applied in the dark theme alone — where the
+   glyph ships black on a blue-black field and is otherwise invisible. */
+.nx-app input::-webkit-calendar-picker-indicator {
+  opacity: 0.55;
+  cursor: pointer;
+  transition: opacity var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.nx-app input::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+[data-theme="noc"] .nx-app input::-webkit-calendar-picker-indicator,
+.nx-app[data-theme="noc"] input::-webkit-calendar-picker-indicator {
+  filter: invert(1);
 }
 .nx-select__control:focus-visible {
   outline: 2px solid var(--nx-accent);
@@ -474,6 +962,19 @@
   text-align: center;
   gap: var(--nx-space-2);
   padding: var(--nx-space-8) var(--nx-space-6);
+}
+/* The module's mark at the third of its four scales. `text-faint` is the tier
+   that exists for marks rather than prose — see `check-contrast.mjs`, which
+   holds it to the 3:1 non-text floor and not the 4.5:1 body one. */
+.nx-empty__sigil {
+  color: var(--nx-text-faint);
+  margin-bottom: var(--nx-space-2);
+}
+/* Inline, the mark rides in the line rather than above it. */
+.nx-empty__sigil--inline {
+  display: inline-flex;
+  vertical-align: -2px;
+  margin: 0 var(--nx-space-1) 0 0;
 }
 .nx-empty__title {
   font-size: var(--nx-font-size-title);
@@ -504,12 +1005,31 @@
 }
 
 /* --- ListRow (generic dense row; future task/agenda row) --------------- */
+/* --- ListRow ----------------------------------------------------------
+   The app's most-repeated element: fourteen modules draw their content as runs
+   of these, and a sixty-row list inherits whatever this rule says sixty times.
+
+   Two changes, both aimed at the founder's „not scannable":
+
+   `min-height` rather than padding alone. A row whose height came only from its
+   content was 26px when it held one line of text and 40px when a chip pushed it
+   taller, so a list of mixed rows had no rhythm at all — and the eye reads
+   rhythm long before it reads any row. 36px is the floor: it clears a 24px
+   pointer target with air to spare and still shows sixteen rows in the shipped
+   window.
+
+   The divider drops to `--nx-border-subtle`. A full-strength hairline under
+   every one of sixty rows is sixty horizontal lines, and the result reads as a
+   spreadsheet rather than as a list — the separator ends up louder than the
+   content it separates. Subtle keeps the row boundary legible for the case
+   where two rows genuinely run together, without drawing a grid. */
 .nx-list-row {
   display: flex;
   align-items: center;
   gap: var(--nx-space-2);
-  padding: 7px 0;
-  border-bottom: 1px solid var(--nx-border);
+  min-height: 36px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--nx-border-subtle);
 }
 .nx-list-row:last-child {
   border-bottom: none;
@@ -529,9 +1049,15 @@
 }
 
 /* --- Kanban (column recessed on --nx-bg; card raised on --nx-surface) --- */
+/* A board column is a WELL and its cards are what is raised out of it — which
+   is the arrangement everyone already reads a board as. It had been painting
+   `--nx-bg`, the same value as the page behind it, so a column was a rectangle
+   of border and nothing else and the cards inside it sat on the page rather
+   than in a column. `--nx-surface-sunken` is the step below the card on the
+   ramp; that is the whole reason the token exists. */
 .nx-kanban-col {
-  background: var(--nx-bg);
-  border: 1px solid var(--nx-border);
+  background: var(--nx-surface-sunken);
+  border: 1px solid var(--nx-border-subtle);
   border-radius: var(--nx-radius-lg);
   padding: var(--nx-space-2);
 }
@@ -560,6 +1086,7 @@
   border-radius: var(--nx-radius-md);
   padding: 8px 10px;
   font-size: var(--nx-font-size-body-sm);
+  box-shadow: var(--nx-elevation-raised);
 }
 .nx-kanban-card + .nx-kanban-card {
   margin-top: 6px;
@@ -575,8 +1102,18 @@
   display: flex;
   flex-direction: column;
 }
+/* A row that answers the pointer says so under it. A background tint and
+   nothing else: no glow, no coloured left bar, no size change — a hover that
+   moves the row is a hover that moves everything below it. The tint is bled
+   into the row's own gutter with a negative inset so it reads as a band across
+   the list rather than as a box around the text. */
 .nx-list-view__item--clickable {
   cursor: pointer;
+  border-radius: var(--nx-radius-sm);
+  transition: background var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.nx-list-view__item--clickable:hover {
+  background: var(--nx-surface-alt);
 }
 /* Row separators live on the wrapper level so :last-child math survives it. */
 .nx-list-view__item > .nx-list-row {

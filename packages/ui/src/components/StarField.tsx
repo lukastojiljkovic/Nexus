@@ -66,14 +66,26 @@ export function StarField({ enabled = true, className, density }: StarFieldProps
       const bright = styles.getPropertyValue("--nx-accent").trim();
       if (faint === "" || bright === "") return;
 
-      // Centre the crop, so the same region of sky shows regardless of which
-      // edge the element grew from.
-      const offsetX = (SKY_WORLD.width - width) / 2;
-      const offsetY = (SKY_WORLD.height - height) / 2;
+      // The world is FITTED to the element's height and then cropped
+      // horizontally about its centre — it is not cropped on both axes at 1:1.
+      //
+      // That distinction is the whole difference between a sky and a scatter of
+      // dust. A 1:1 crop hands a 220×600 sidebar 1.6% of a 3840×2160 world,
+      // which at the field's density is about fourteen points: too few to read
+      // as anything, and individually conspicuous enough to look like dead
+      // pixels — which is exactly how it was rendering. Fitting the height
+      // instead shows roughly a fifth of the world in the same rail, and keeps
+      // the apparent density constant at every window height, which a 1:1 crop
+      // also failed to do.
+      //
+      // The radius is deliberately NOT scaled. A star is a point of light; at
+      // this scale factor scaling it would render sub-pixel and grey out.
+      const scale = height / SKY_WORLD.height;
+      const offsetX = (SKY_WORLD.width * scale - width) / 2;
 
       for (const star of stars) {
-        const x = star.x - offsetX;
-        const y = star.y - offsetY;
+        const x = star.x * scale - offsetX;
+        const y = star.y * scale;
         if (x < -2 || y < -2 || x > width + 2 || y > height + 2) continue;
         ctx.globalAlpha = 0.12 + star.brightness * 0.65;
         ctx.fillStyle = star.brightness > 0.62 ? bright : faint;

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Icon, type IconName } from "./Icon.js";
 
 /**
  * „There is nothing here" — in the TWO shapes that sentence actually takes.
@@ -26,20 +27,52 @@ export interface EmptyStateProps {
   action?: ReactNode;
   /** `page` when the whole surface is empty (the default), `inline` when one list inside it is. */
   variant?: "page" | "inline";
+  /**
+   * The module's mark, at 48px above the title — the same mark the page header
+   * watermarks and the sidebar lists, at a third scale.
+   *
+   * It is the mark and not an illustration deliberately. An illustration that
+   * does not explain the moment is decoration, and a drawn scene in an empty
+   * state is the most reliable way to make a product look like a template. A
+   * page's own sigil says WHICH surface is empty, which is the one thing the
+   * reader needs and the title alone repeats.
+   */
+  sigil?: IconName;
 }
 
-export function EmptyState({ title, description, action, variant = "page" }: EmptyStateProps) {
+export function EmptyState({
+  title,
+  description,
+  action,
+  variant = "page",
+  sigil,
+}: EmptyStateProps) {
   if (variant === "inline") {
     // One line, and the description folded onto it — an inline empty that grew a
     // second paragraph would be a page empty wearing the wrong class.
+    //
+    // The mark comes at 14px here rather than 48. An inline empty sits inside a
+    // populated card whose caption has already named the module; at page size
+    // the mark would be the loudest thing on a card that is reporting an
+    // absence. At 14 it reads as the line's own bullet, which is what it is.
     return (
       <p className="nx-empty nx-empty--inline">
+        {sigil != null && (
+          <span className="nx-empty__sigil nx-empty__sigil--inline" aria-hidden="true">
+            <Icon name={sigil} size={14} />
+          </span>
+        )}
         {description == null ? title : `${title} ${description}`}
       </p>
     );
   }
   return (
     <div className="nx-empty">
+      {sigil != null && (
+        <span className="nx-empty__sigil" aria-hidden="true">
+          <Icon name={sigil} size={48} />
+        </span>
+      )}
       <div className="nx-empty__title">{title}</div>
       {description != null && <p className="nx-empty__desc">{description}</p>}
       {action != null && <div className="nx-empty__action">{action}</div>}

@@ -37,13 +37,51 @@ export interface SpanLanesProps {
   lanes: readonly SpanLanesLane[];
   /** The one allowed reference line — "now", a deadline, a cutover. */
   rule?: { at: number; label: string; tone: ChartTone };
-  /** 320 (card) or 720 (panel). */
-  width?: 320 | 720;
+  /**
+   * 320 (a dashboard card), 720 (a page panel), or 1180 (the full reading
+   * measure, `--nx-layout-measure`).
+   *
+   * A closed set rather than a number, and it stays closed: three widths mean
+   * the whole product's figures line up with each other and with the text
+   * beside them, while an open number means every surface picks its own and
+   * nothing ever agrees. 1180 was added when „Trake pažnje" and „Rokovi" ended
+   * up drawn at 720 inside a 1180 pane — a figure floating in the middle of the
+   * column it belongs to, which is the maroon-in-whitespace failure at the
+   * scale of one chart.
+   */
+  width?: 320 | 720 | 1180;
   /** Row height per lane, px. The house size is 26. */
   laneHeight?: number;
 }
 
 const LEFT_MARGIN = 84;
+
+/**
+ * How many glyphs fit in `LEFT_MARGIN` at the caption size, and the component's
+ * own answer to what happens past it.
+ *
+ * SVG `<text>` does not wrap, does not ellipsise, and — because `.nx-chart__svg`
+ * is `overflow: visible` so marks may sit outside the plot — does not even clip.
+ * A lane called „Zdravstvena knjižica" therefore painted straight across the
+ * bars and off the right edge of the figure, which is what the sweep found on
+ * the documents deadline chart.
+ *
+ * The truncation lives HERE rather than at the call site because every caller
+ * would otherwise reinvent it, and the first one already had: `DocDeadlines`
+ * had grown a private `fitLaneLabel` before this existed. The component owns
+ * `LEFT_MARGIN`, so the component owns what fits in it.
+ *
+ * `Array.from` rather than `slice`, so a label is never cut through the middle
+ * of a surrogate pair; and the untruncated string stays reachable as a `<title>`
+ * on the same element, which is the only honest way to shorten text — the
+ * reader is told there is more, and can get it.
+ */
+const LABEL_GLYPHS = 14;
+
+function fitLabel(label: string): string {
+  const glyphs = Array.from(label);
+  return glyphs.length <= LABEL_GLYPHS ? label : `${glyphs.slice(0, LABEL_GLYPHS - 1).join("")}…`;
+}
 const TRACK_H = 10;
 // Lane rows are never shrunk to fit — past this many, the frame scrolls
 // instead. A row squeezed below its readable height is worse than a
@@ -84,7 +122,11 @@ export function SpanLanes({
         return (
           <g key={lane.key}>
             <text className="nx-spanlanes__label" x={4} y={rowY + laneHeight / 2} dominantBaseline="middle">
-              {lane.label}
+              {/* The full name, for anything that hovers or reads the figure —
+                  a shortened label with no way back to the whole one is the
+                  clipped-text defect wearing an ellipsis. */}
+              <title>{lane.label}</title>
+              {fitLabel(lane.label)}
             </text>
             {lane.spans.map((span, si) => {
               const x1 = xScale(span.from);

@@ -62,8 +62,19 @@ export interface ColumnPlotProps {
   rule?: { value: number; label: string; tone: ChartTone };
   /** Caller-supplied ceiling for the value axis. Computed from the data when omitted. */
   max?: number;
-  /** 320 (card) or 720 (panel). */
-  width?: 320 | 720;
+  /**
+   * 320 (a dashboard card), 720 (a page panel), or 1180 (the full reading
+   * measure, `--nx-layout-measure`).
+   *
+   * A closed set rather than a number, and it stays closed: three widths mean
+   * the whole product's figures line up with each other and with the text
+   * beside them, while an open number means every surface picks its own and
+   * nothing ever agrees. 1180 was added when „Trake pažnje" and „Rokovi" ended
+   * up drawn at 720 inside a 1180 pane — a figure floating in the middle of the
+   * column it belongs to, which is the maroon-in-whitespace failure at the
+   * scale of one chart.
+   */
+  width?: 320 | 720 | 1180;
   height?: number;
 }
 
