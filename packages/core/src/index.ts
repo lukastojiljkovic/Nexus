@@ -205,6 +205,7 @@ export {
   EXERCISE_EQUIPMENT,
   EXERCISE_METRICS,
   exerciseRefText,
+  exercisesForMuscle,
   MAX_EXERCISE_REF_LENGTH,
   MOVEMENT_PATTERNS,
   MUSCLE_GROUPS,
@@ -220,6 +221,7 @@ export type {
   ExerciseProblemCode,
   ExerciseRef,
   MovementPattern,
+  MuscleExercises,
   MuscleGroup,
 } from "./fitness/exercise.js";
 // The training arithmetic and, more to the point, its refusals: no estimated

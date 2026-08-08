@@ -480,6 +480,57 @@ export function searchExercises<T extends { readonly id: string; readonly name: 
   return hits.slice(0, cap).map((hit) => hit.entry);
 }
 
+/**
+ * What one muscle group is trained BY, split the way the catalogue itself
+ * splits it.
+ *
+ * The two lists are never merged. „Šta pogađa grudi" has two honest answers —
+ * the movements chest is the POINT of, and the movements it happens to assist
+ * — and a single ranked list would put the close-grip bench press among the
+ * chest exercises on the strength of a secondary billing. That is the same
+ * distinction `weeklyVolume` already enforces when it counts only primary
+ * muscles: a set bills what it was for.
+ *
+ * Order inside each list is sr-Latn alphabetical, and the input order breaks
+ * ties — `Array.prototype.sort` is stable, and two entries with the same name
+ * are a catalogue defect rather than something to invent an order for.
+ */
+export interface MuscleExercises<T> {
+  readonly primary: readonly T[];
+  readonly secondary: readonly T[];
+}
+
+/**
+ * Every exercise in `entries` that trains `muscle`, primary and secondary kept
+ * apart (`MuscleExercises`).
+ *
+ * Generic over the entry, exactly as `searchExercises` is, so the shipped
+ * catalogue's `ExerciseEntry` and the merged shape a surface builds from the
+ * catalogue plus a profile's own rows both go through one function. Neither
+ * caller has to know which of them a given row came from — which is the whole
+ * point, because a user's own accessory movement belongs in this list beside
+ * the shipped ones.
+ */
+export function exercisesForMuscle<
+  T extends {
+    readonly name: string;
+    readonly primaryMuscles: readonly MuscleGroup[];
+    readonly secondaryMuscles: readonly MuscleGroup[];
+  },
+>(entries: readonly T[], muscle: MuscleGroup): MuscleExercises<T> {
+  const primary: T[] = [];
+  const secondary: T[] = [];
+  for (const entry of entries) {
+    // Primary wins outright. `validateExerciseEntry` refuses an entry that
+    // lists the same muscle on both sides, so this only matters for a merged
+    // pool whose user rows were written before that gate existed.
+    if (entry.primaryMuscles.includes(muscle)) primary.push(entry);
+    else if (entry.secondaryMuscles.includes(muscle)) secondary.push(entry);
+  }
+  const byName = (a: T, b: T): number => EXERCISE_COLLATOR.compare(a.name, b.name);
+  return { primary: primary.sort(byName), secondary: secondary.sort(byName) };
+}
+
 /** Serbian prefix < Serbian substring < English prefix < English substring; `null` for no match at all. */
 function exerciseMatchRank(name: string, nameEn: string, needle: string): number | null {
   const sr = foldSearchText(name);

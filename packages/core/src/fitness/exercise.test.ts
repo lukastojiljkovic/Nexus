@@ -3,6 +3,7 @@ import {
   EXERCISE_EQUIPMENT,
   EXERCISE_METRICS,
   exerciseRefText,
+  exercisesForMuscle,
   MAX_EXERCISE_REF_LENGTH,
   MOVEMENT_PATTERNS,
   MUSCLE_GROUPS,
@@ -11,6 +12,7 @@ import {
   validateExerciseEntry,
 } from "./exercise.js";
 import type { ExerciseEntry } from "./exercise.js";
+import { EXERCISE_CATALOGUE } from "./catalogue.js";
 
 /** „Potisak sa klupe" — the one entry every test below starts from. */
 const BENCH: ExerciseEntry = {
@@ -236,5 +238,83 @@ describe("searchExercises", () => {
   it("ignores an empty English name rather than matching everything against it", () => {
     expect(searchExercises(pool, "", 10)).toEqual([]);
     expect(searchExercises(pool, "squat", 10)).toEqual([]);
+  });
+});
+
+describe("exercisesForMuscle", () => {
+  const pool = [
+    {
+      name: "Potisak sa klupe",
+      primaryMuscles: ["grudi"] as const,
+      secondaryMuscles: ["triceps", "prednja-ramena"] as const,
+    },
+    {
+      name: "Propadanja",
+      primaryMuscles: ["grudi"] as const,
+      secondaryMuscles: ["triceps"] as const,
+    },
+    {
+      name: "Francuski potisak",
+      primaryMuscles: ["triceps"] as const,
+      secondaryMuscles: [] as const,
+    },
+    {
+      name: "Čučanj",
+      primaryMuscles: ["kvadriceps"] as const,
+      secondaryMuscles: ["gluteusi"] as const,
+    },
+  ];
+
+  it("keeps what an exercise is FOR apart from what it also works", () => {
+    // One ranked list would put the close-grip bench among the triceps
+    // exercises on the strength of a secondary billing.
+    const result = exercisesForMuscle(pool, "triceps");
+    expect(result.primary.map((entry) => entry.name)).toEqual(["Francuski potisak"]);
+    expect(result.secondary.map((entry) => entry.name)).toEqual(["Potisak sa klupe", "Propadanja"]);
+  });
+
+  it("sorts each list sr-Latn, which a plain compare would get wrong at C/Ć/Č", () => {
+    const collated = exercisesForMuscle(
+      [
+        { name: "Čučanj", primaryMuscles: ["kvadriceps"] as const, secondaryMuscles: [] as const },
+        { name: "Cable krosover", primaryMuscles: ["kvadriceps"] as const, secondaryMuscles: [] as const },
+        { name: "Ćuškanje sanki", primaryMuscles: ["kvadriceps"] as const, secondaryMuscles: [] as const },
+      ],
+      "kvadriceps",
+    );
+    // The Serbian Latin alphabet runs … C, Č, Ć, D … — so „Čučanj" precedes
+    // „Ćuškanje", which is precisely the order a plain `localeCompare` on "sr"
+    // (or on the default locale) gets wrong.
+    expect(collated.primary.map((entry) => entry.name)).toEqual([
+      "Cable krosover",
+      "Čučanj",
+      "Ćuškanje sanki",
+    ]);
+  });
+
+  it("bills an entry to primary when it somehow claims both", () => {
+    // `validateExerciseEntry` refuses this, so it can only reach here from a
+    // user row written before that gate existed — and „what it is for" is the
+    // honest of the two answers.
+    const both = [
+      { name: "Sporna", primaryMuscles: ["grudi"] as const, secondaryMuscles: ["grudi"] as const },
+    ];
+    const result = exercisesForMuscle(both, "grudi");
+    expect(result.primary).toHaveLength(1);
+    expect(result.secondary).toHaveLength(0);
+  });
+
+  it("answers two empty lists for a muscle nothing in the pool trains", () => {
+    expect(exercisesForMuscle(pool, "listovi")).toEqual({ primary: [], secondary: [] });
+  });
+
+  it("finds something for every muscle group in the shipped catalogue", () => {
+    // A group with no primary exercise anywhere is a hole in the catalogue, and
+    // it would show up in the app as a muscle you can select and learn nothing
+    // from. Checked against the vocabulary rather than a copy of it.
+    const empty = MUSCLE_GROUPS.filter(
+      (muscle) => exercisesForMuscle(EXERCISE_CATALOGUE, muscle).primary.length === 0,
+    );
+    expect(empty).toEqual([]);
   });
 });
