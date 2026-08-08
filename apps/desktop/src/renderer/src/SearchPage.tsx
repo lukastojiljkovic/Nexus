@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { parseSearchQuery } from "@nexus/core";
-import { Button, Chip, EmptyState, Icon, PageHeader } from "@nexus/ui";
+import { Button, EmptyState, Icon, PageHeader } from "@nexus/ui";
 import type { SearchHistoryEntry, SearchPageResult, SearchResult } from "../../shared/ipc.js";
 import {
   SEARCH_DEBOUNCE_MS,
@@ -186,7 +186,17 @@ export function SearchPage({
       });
   }
 
-  function renderRow(result: SearchResult): ReactNode {
+  /**
+   * One result, in the same three levels the palette draws — where it lives,
+   * what matched, the line it matched in — because the two surfaces are one
+   * instrument at two sizes and a row that reads differently here would say
+   * otherwise.
+   *
+   * `showKind` follows the palette's rule exactly: the kind is stated on the
+   * row only where no group heading above it already states it, which on this
+   * page means browse mode and the flat single-kind list.
+   */
+  function renderRow(result: SearchResult, showKind: boolean): ReactNode {
     return (
       <button
         key={`${result.kind}-${result.entityId}`}
@@ -198,8 +208,12 @@ export function SearchPage({
         }}
       >
         <span className="searchpage__row-main">
-          <Chip className="searchpage__row-kind">{strings.search.kindSingular[result.kind]}</Chip>
           <span className="searchpage__row-text">
+            {showKind && (
+              <span className="searchpage__row-kind">
+                {strings.search.kindSingular[result.kind]}
+              </span>
+            )}
             <span className="searchpage__row-title">
               {renderHighlighted(result.title, result.titleRanges)}
             </span>
@@ -236,6 +250,7 @@ export function SearchPage({
     <section className="searchpage">
       <PageHeader
         title={strings.search.page.title}
+        sigil="search"
         subtitle={`${paletteChordLabel} ${strings.search.page.shortcutHint}`}
       />
       <input
@@ -368,6 +383,7 @@ export function SearchPage({
       ) : data.hits.length === 0 ? (
         !isBrowsing && (
           <EmptyState
+            sigil="search"
             title={strings.search.page.emptyTitle}
             description={strings.search.page.emptyDescription}
           />
@@ -379,13 +395,16 @@ export function SearchPage({
               {isBrowsing && (
                 <div className="searchpage__group-heading">{strings.search.page.browseHeading}</div>
               )}
-              {shown.map((result) => renderRow(result))}
+              {/* Flat means the query narrowed to ONE kind, and the pressed
+                  chip above already says which — so only the mixed browse list
+                  carries the kind on its rows. */}
+              {shown.map((result) => renderRow(result, isBrowsing))}
             </div>
           ) : (
             groups.map(([kind, list]) => (
               <div className="searchpage__group" key={kind}>
                 <div className="searchpage__group-heading">{strings.search.kindPlural[kind]}</div>
-                {list.map((result) => renderRow(result))}
+                {list.map((result) => renderRow(result, false))}
               </div>
             ))
           )}

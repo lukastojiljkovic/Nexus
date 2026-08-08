@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
-import { Button, Chip, EmptyState, Icon, ListRow, LoadingState, TextField } from "@nexus/ui";
+import { Button, Chip, EmptyState, Icon, ListRow, LoadingState, Select, TextField } from "@nexus/ui";
 import type {
   DocumentFieldChanges,
   DocumentRenewal,
@@ -301,10 +301,10 @@ export function DocumentsPanel({
   return (
     <div className="documents">
       <form className="documents__form" onSubmit={submitForm}>
-        <select
-          className="documents__select"
+        <Select
+          label={strings.documents.typeLabel}
+          layout="inline"
           value={docType}
-          aria-label={strings.documents.typeLabel}
           onChange={(event: ChangeEvent<HTMLSelectElement>) =>
             setDocType(event.target.value as DocumentType)
           }
@@ -314,7 +314,7 @@ export function DocumentsPanel({
               {strings.documents.type[type]}
             </option>
           ))}
-        </select>
+        </Select>
         <input
           ref={labelRef}
           className="nx-textfield__input documents__label-input"

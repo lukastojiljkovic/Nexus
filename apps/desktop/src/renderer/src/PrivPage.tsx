@@ -1,9 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Dispatch, FormEvent, SetStateAction } from "react";
 import * as Y from "yjs";
-import { Button, Card, Checkbox, EmptyState, PageHeader, TextField } from "@nexus/ui";
+import {
+  Button,
+  Card,
+  Checkbox,
+  EmptyState,
+  Icon,
+  LoadingState,
+  PageHeader,
+  TextField,
+} from "@nexus/ui";
 import type { PrivNoteListEntry, PrivStatus } from "../../shared/ipc.js";
 import { formatCountdown, passcodeMeetsPolicy, RecoveryKitPanel } from "./AuthGate.js";
+import { NotePopover } from "./notePopover.js";
 import { PrivNoteEditor } from "./PrivNoteEditor.js";
 import { TypedConfirmDialog } from "./TypedConfirmDialog.js";
 import { strings } from "./strings.js";
@@ -45,6 +55,35 @@ function displayTitle(entry: PrivNoteListEntry): string {
   return title.length > 0 ? title : strings.notes.untitled;
 }
 
+/**
+ * A setup choice row's class, with the chosen one marked.
+ *
+ * The radio dot alone was carrying the whole answer: two stacked options in the
+ * same grey, on the screen that decides how the most sensitive data in the app
+ * is locked. The chosen one now reads typographically — accent name plus weight,
+ * the app's one way of saying „this one" — and the row keeps a quiet surface
+ * tint under the pointer. No fill, no border, no glow.
+ */
+function choiceRowClass(chosen: boolean): string {
+  return chosen ? "priv__choice-row priv__choice-row--on" : "priv__choice-row";
+}
+
+/**
+ * The mark both PRIV gates lead with — the section's own, not the app's ✦.
+ *
+ * The lock screen is the screen a person meets when this section is sealed, and
+ * the one thing it must say before its title is WHICH door this is. „Nexus" is
+ * something they already know; that this is the private section is the fact
+ * that makes the field below it make sense.
+ */
+function PrivGateMark() {
+  return (
+    <span className="priv__gate-mark" aria-hidden="true">
+      <Icon name="priv" size={32} />
+    </span>
+  );
+}
+
 export interface PrivPageProps {
   profileId: string;
 }
@@ -83,14 +122,21 @@ export function PrivPage({ profileId }: PrivPageProps) {
   if (failed) {
     return (
       <div className="priv priv--center">
-        <EmptyState title={strings.modules.priv ?? "Privatno"} description={strings.priv.section.loadError} />
+        {/* `moduleName` rather than a hand-written fallback: the section's name
+            is the sidebar's, and an inline „Privatno" here was a second copy of
+            it that a locale switch would have left behind. */}
+        <EmptyState title={moduleName("priv")} description={strings.priv.section.loadError} />
       </div>
     );
   }
   if (status === null) {
     return (
       <div className="priv priv--center">
-        <p className="app__muted">{strings.app.loading}</p>
+        {/* The skeleton needs a width of its own here: `.priv--center` centres
+            its one child, so a stretch-width skeleton would size to its own
+            (zero) content and draw nothing at all. `.priv__loading` gives it the
+            gate card's width, which is also the shape this load resolves into. */}
+        <LoadingState className="priv__loading" label={strings.app.loading} rows={3} />
       </div>
     );
   }
@@ -198,9 +244,7 @@ function PrivSetup({ profileId, onStatusChange }: PrivSetupProps) {
       <div className="auth priv__gate">
         <Card className="auth__card">
           <div className="auth__shell">
-            <span className="auth__brand" aria-hidden="true">
-              ✦
-            </span>
+            <PrivGateMark />
             {pendingKit !== null ? (
               <RecoveryKitPanel
                 code={pendingKit.code}
@@ -214,28 +258,28 @@ function PrivSetup({ profileId, onStatusChange }: PrivSetupProps) {
 
                 <fieldset className="priv__choice" role="radiogroup" aria-label={s.credentialLabel}>
                   <legend className="auth__note">{s.credentialLabel}</legend>
-                  <label className="priv__choice-row">
+                  <label className={choiceRowClass(!useAccountPasscode)}>
                     <input
                       type="radio"
                       name="priv-credential"
                       checked={!useAccountPasscode}
                       onChange={() => setUseAccountPasscode(false)}
                     />
-                    <span>
-                      {s.useSeparate}
-                      <span className="auth__note">{s.useSeparateNote}</span>
+                    <span className="priv__choice-text">
+                      <span className="priv__choice-name">{s.useSeparate}</span>
+                      <span className="priv__choice-note">{s.useSeparateNote}</span>
                     </span>
                   </label>
-                  <label className="priv__choice-row">
+                  <label className={choiceRowClass(useAccountPasscode)}>
                     <input
                       type="radio"
                       name="priv-credential"
                       checked={useAccountPasscode}
                       onChange={() => setUseAccountPasscode(true)}
                     />
-                    <span>
-                      {s.useAccountPasscode}
-                      <span className="auth__note">{s.useAccountPasscodeNote}</span>
+                    <span className="priv__choice-text">
+                      <span className="priv__choice-name">{s.useAccountPasscode}</span>
+                      <span className="priv__choice-note">{s.useAccountPasscodeNote}</span>
                     </span>
                   </label>
                 </fieldset>
@@ -272,28 +316,28 @@ function PrivSetup({ profileId, onStatusChange }: PrivSetupProps) {
 
                 <fieldset className="priv__choice" role="radiogroup" aria-label={s.kitLabel}>
                   <legend className="auth__note">{s.kitLabel}</legend>
-                  <label className="priv__choice-row">
+                  <label className={choiceRowClass(regenerateKit)}>
                     <input
                       type="radio"
                       name="priv-kit"
                       checked={regenerateKit}
                       onChange={() => setRegenerateKit(true)}
                     />
-                    <span>
-                      {s.kitRegenerate}
-                      <span className="auth__note">{s.kitRegenerateNote}</span>
+                    <span className="priv__choice-text">
+                      <span className="priv__choice-name">{s.kitRegenerate}</span>
+                      <span className="priv__choice-note">{s.kitRegenerateNote}</span>
                     </span>
                   </label>
-                  <label className="priv__choice-row">
+                  <label className={choiceRowClass(!regenerateKit)}>
                     <input
                       type="radio"
                       name="priv-kit"
                       checked={!regenerateKit}
                       onChange={() => setRegenerateKit(false)}
                     />
-                    <span>
-                      {s.kitOptOut}
-                      <span className="auth__note">{s.kitOptOutNote}</span>
+                    <span className="priv__choice-text">
+                      <span className="priv__choice-name">{s.kitOptOut}</span>
+                      <span className="priv__choice-note">{s.kitOptOutNote}</span>
                     </span>
                   </label>
                 </fieldset>
@@ -387,9 +431,7 @@ function PrivLockScreen({ profileId, status, onStatusChange }: PrivLockScreenPro
       <div className="auth priv__gate">
         <Card className="auth__card">
           <div className="auth__shell">
-            <span className="auth__brand" aria-hidden="true">
-              ✦
-            </span>
+            <PrivGateMark />
             <form className="auth__form" onSubmit={(event) => void submit(event)}>
               <h1 className="auth__title">{s.title}</h1>
               <p className="auth__note">{account ? s.descriptionAccount : s.description}</p>
@@ -624,6 +666,7 @@ function PrivSection({ profileId, onStatusChange, onRecheck }: PrivSectionProps)
     <div className="priv" onCopy={onSectionCopy}>
       <PageHeader
         title={moduleName("priv")}
+        sigil="priv"
         actions={
           <>
             <TextField
@@ -641,11 +684,22 @@ function PrivSection({ profileId, onStatusChange, onRecheck }: PrivSectionProps)
         }
       />
 
-      {/* Every other module got a signature graphic in this pass; this one deliberately
-          did not (see the string's own comment), and says so rather than leaving a
-          gap someone reads as an oversight. Only meaningful once inside, so it lives
-          here rather than on the setup or lock screen. */}
-      <p className="app__muted">{strings.priv.noChartNote}</p>
+      {/* Every other module got a signature graphic in this pass; this one
+          deliberately did not (see the string's own comment), and says so rather
+          than leaving a gap someone reads as an oversight. Only meaningful once
+          inside, so it lives here rather than on the setup or lock screen.
+
+          It is set as a STATED PRINCIPLE — measured, with the section's own mark
+          beside it — rather than as `.app__muted`, which is the class the app
+          uses for „učitavanje…". A sentence about why a whole class of picture
+          does not exist is not a status line, and dressed as one it reads like
+          an apology for a missing feature. The sentence itself is untouched. */}
+      <p className="priv__no-chart">
+        <span className="priv__no-chart-mark" aria-hidden="true">
+          <Icon name="priv" size={18} />
+        </span>
+        {strings.priv.noChartNote}
+      </p>
 
       {clipboardArmed && (
         <div className="priv__clipboard" role="status">
@@ -664,13 +718,25 @@ function PrivSection({ profileId, onStatusChange, onRecheck }: PrivSectionProps)
           {listError ? (
             <EmptyState title={s.emptyTitle} description={s.loadError} />
           ) : visible === null ? (
-            <p className="app__muted">{strings.app.loading}</p>
+            <LoadingState label={strings.app.loading} rows={6} />
           ) : visible.length === 0 ? (
-            <EmptyState
-              title={s.emptyTitle}
-              description={searchIds === null ? s.emptyDescription : s.searchEmpty}
-            />
+            // The section being empty and a query matching nothing are different
+            // states and get different shapes: the mark says „this section holds
+            // nothing", a quiet line says „that search found nothing". The inline
+            // shape folds title and description onto one line, so the search case
+            // passes its sentence AS the title rather than behind „Nema privatnih
+            // beležaka", which would not even be true — they are there, the query
+            // missed them.
+            searchIds === null ? (
+              <EmptyState sigil="priv" title={s.emptyTitle} description={s.emptyDescription} />
+            ) : (
+              <EmptyState variant="inline" title={s.searchEmpty} />
+            )
           ) : (
+            // Deliberately UNGROUPED, unlike the NOTE list. Grouping this one by
+            // date would draw the shape of when the private notes are written
+            // across the pane — the very picture `noChartNote` explains the
+            // absence of, arrived at through the list instead of through a chart.
             <ul className="note__list">
               {visible.map((entry) => (
                 <li key={entry.id} className="note__item-row">
@@ -679,7 +745,9 @@ function PrivSection({ profileId, onStatusChange, onRecheck }: PrivSectionProps)
                     // click could only show an error — delete is its one action.
                     <span className="note__item priv__item--dead">
                       <span className="note__item-title">{s.unreadable}</span>
-                      <span className="note__item-date">{formatNoteDate(entry.updatedAt)}</span>
+                      <span className="note__item-meta">
+                        <span className="note__item-date">{formatNoteDate(entry.updatedAt)}</span>
+                      </span>
                     </span>
                   ) : (
                     <button
@@ -691,33 +759,48 @@ function PrivSection({ profileId, onStatusChange, onRecheck }: PrivSectionProps)
                       onClick={() => setSelectedId(entry.id)}
                     >
                       <span className="note__item-title">{displayTitle(entry)}</span>
-                      <span className="note__item-date">{formatNoteDate(entry.updatedAt)}</span>
+                      <span className="note__item-meta">
+                        <span className="note__item-date">{formatNoteDate(entry.updatedAt)}</span>
+                      </span>
                     </button>
                   )}
-                  <span className="priv__row-actions">
-                    {!entry.unreadable && (
-                      <button
-                        type="button"
-                        className="note__attach"
-                        onClick={() => {
-                          setDialogError(null);
-                          setPendingMoveOut(entry);
-                        }}
-                      >
-                        {s.moveOut}
-                      </button>
+                  {/* The NOTE row's own „⋯", not two 11px text buttons hanging
+                      off the end of every row. `section.noteMenuLabel` had been
+                      written for exactly this and never used — the two note
+                      surfaces are meant to be one shape, and „premesti"/„obriši"
+                      spelled out on fifty rows is the opposite of that. */}
+                  <NotePopover label={s.noteMenuLabel} triggerClassName="note__row-menu">
+                    {(close) => (
+                      <>
+                        {!entry.unreadable && (
+                          <button
+                            className="note__menu-item"
+                            role="menuitem"
+                            type="button"
+                            onClick={() => {
+                              setDialogError(null);
+                              setPendingMoveOut(entry);
+                              close();
+                            }}
+                          >
+                            {s.moveOut}
+                          </button>
+                        )}
+                        <button
+                          className="note__menu-item note__menu-item--danger"
+                          role="menuitem"
+                          type="button"
+                          onClick={() => {
+                            setDialogError(null);
+                            setPendingDelete(entry);
+                            close();
+                          }}
+                        >
+                          {s.deleteLabel}
+                        </button>
+                      </>
                     )}
-                    <button
-                      type="button"
-                      className="note__attach priv__delete"
-                      onClick={() => {
-                        setDialogError(null);
-                        setPendingDelete(entry);
-                      }}
-                    >
-                      {s.deleteLabel}
-                    </button>
-                  </span>
+                  </NotePopover>
                 </li>
               ))}
             </ul>
@@ -735,7 +818,11 @@ function PrivSection({ profileId, onStatusChange, onRecheck }: PrivSectionProps)
             />
           ) : (
             <div className="note__editor-empty">
-              <EmptyState title={s.noSelectionTitle} description={s.noSelectionDescription} />
+              <EmptyState
+                sigil="priv"
+                title={s.noSelectionTitle}
+                description={s.noSelectionDescription}
+              />
             </div>
           )}
         </div>

@@ -639,6 +639,7 @@ export function CalendarTimeGrid({
                         key={col.id}
                         type="button"
                         className="cal__grid-event cal__grid-event--foreign"
+                        title={item.foreign.title}
                         style={style}
                         onClick={(event) => {
                           event.stopPropagation();
@@ -663,6 +664,7 @@ export function CalendarTimeGrid({
                       className={
                         isGhost ? "cal__grid-event cal__grid-event--dragging" : "cal__grid-event"
                       }
+                      title={item.event.title}
                       style={style}
                       onPointerDown={(event) => beginDrag(event, item, col, dayIndex)}
                       onPointerMove={updateDrag}

@@ -3,7 +3,17 @@ import type { ComponentType, CSSProperties, DragEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { parseWidgetConfig, widgetChoice, widgetCount, widgetTaskLists } from "@nexus/core";
 import type { ModuleRegistry, WidgetContract } from "@nexus/core";
-import { Button, Card, EmptyState, Icon, LoadingState, TextField } from "@nexus/ui";
+import {
+  Button,
+  Card,
+  EmptyState,
+  Icon,
+  LoadingState,
+  PageHeader,
+  StatBand,
+  TextField,
+} from "@nexus/ui";
+import type { IconName, Stat } from "@nexus/ui";
 import { DASHBOARD_SET_NAME_MAX_LENGTH, DASHBOARD_WIDGET_SPANS } from "../../shared/ipc.js";
 import type {
   DashboardSetsState,
@@ -12,13 +22,16 @@ import type {
   DashboardWidgetInstance,
   DashboardWidgetSize,
   Event,
+  FocusSession,
   RunningFocusSession,
+  Task,
   TaskList,
 } from "../../shared/ipc.js";
 import { buildCalendarItems, type CalendarSource } from "./calendarItems.js";
 import { localMinutesOfDay, readStoredClock } from "./calendarPrefs.js";
 import { lookupString, moveNeighbours, type LayoutNeighbours } from "./dashboardLayout.js";
 import { dayStripLine } from "./dashboardStrip.js";
+import { dashboardSummary } from "./dashboardSummary.js";
 import { buildTaskListTree, flattenTaskListTree } from "./taskListTree.js";
 import { DASHBOARD_WIDGETS, type DashboardWidgetBodyProps } from "./dashboardWidgets.js";
 import { localTodayKey } from "./examDates.js";
@@ -45,6 +58,51 @@ const STRIP_SOURCES: ReadonlySet<CalendarSource> = new Set<CalendarSource>(["eve
 
 /** How often the header re-reads the clock — the strip's whole refresh (DASH-009). */
 const STRIP_TICK_MS = 60_000;
+
+/**
+ * The module mark drawn beside a card's caption, keyed by the module half of a
+ * placement's `moduleId:widgetId`.
+ *
+ * Nine cards that differ only in an eleven-pixel uppercase caption are a wall of
+ * text. The mark is the one thing on a card a reader finds without reading, and
+ * it is the SAME glyph the sidebar lists that module under and the page header
+ * watermarks — so „which module is this" is answered by recognition rather than
+ * by reading, at no cost in new drawing.
+ *
+ * A module this map does not name draws no mark rather than a wrong one: this
+ * is the RENDERER's list of what it can draw, exactly as `DASHBOARD_WIDGETS` is,
+ * and a widget from a module added later must degrade to a plain caption rather
+ * than to somebody else's identity.
+ */
+const MODULE_SIGILS: Readonly<Record<string, IconName>> = {
+  calendar: "calendar",
+  tasks: "tasks",
+  notes: "notes",
+  study: "study",
+  focus: "focus",
+  finance: "finance",
+  habits: "habits",
+  fitness: "fitness",
+  files: "files",
+  canvas: "canvas",
+  priv: "priv",
+  tools: "tools",
+};
+
+/**
+ * The three size presets over the TWELVE-column grid the board switches to past
+ * 1440px (`dashboard.css`), beside `DASHBOARD_WIDGET_SPANS`' six-column
+ * reading.
+ *
+ * A preset is a FRACTION of the row, and six columns can only express those
+ * fractions at one card width: at 1600px „Srednja" was a 700-pixel card holding
+ * a 34-pixel row, which is not a medium card. Twelve columns give the same
+ * three fractions a tighter reading — a quarter, a third, the whole — so three
+ * medium cards share a row on a wide window and every card's height variance
+ * falls with its width. Both custom properties are set on every card and CSS
+ * picks which one is in force, so nothing here measures a window.
+ */
+const DASHBOARD_WIDGET_SPANS_WIDE: Record<DashboardWidgetSize, number> = { S: 3, M: 4, L: 12 };
 
 /** The Serbian name of a widget, from the strings KEY its contract publishes. */
 function widgetTitle(contract: WidgetContract): string {
@@ -673,9 +731,17 @@ export function DashboardPage({
   // header — the salutation, the date line — rides the same tick and is now
   // correct across noon and midnight for free.
   const [now, setNow] = useState(() => new Date());
-  const [strip, setStrip] = useState<{
+  // Everything the HEADER is drawn from — the day strip's events and running
+  // phase (DASH-009), and since the summary band the two lists its figures are
+  // counted from. One state and one effect, because they are one read: they all
+  // describe today and they all become stale at the same instant.
+  const [header, setHeader] = useState<{
     events: readonly Event[];
     focus: RunningFocusSession | null;
+    /** Null when TASK is off — which is why a switched-off module draws no figure at all. */
+    tasks: readonly Task[] | null;
+    /** Null when neither owning module is on, for the same reason. */
+    focusSessions: readonly FocusSession[] | null;
   } | null>(null);
 
   useEffect(() => {
@@ -707,38 +773,51 @@ export function DashboardPage({
   // Pomodoro from somebody who switched „Učenje" off — which is exactly the
   // profile most likely to be running one.
   const focusOn = enabledModules.has("study") || enabledModules.has("focus");
+  const tasksOn = enabledModules.has("tasks");
 
-  // Read ONCE per profile, not on the tick: the events do not change while the
-  // page is open, and the running phase can only be started from „Fokus" or
-  // „Učenje" — either of which means leaving this page and coming back to it.
-  // What the tick recomputes is the READING of that data: which event is still
-  // ahead, how long the phase has run.
+  // Today's day key comes off the SAME reading the header is drawn against, so
+  // the two can never disagree for a minute across midnight. Derived above the
+  // read below because it is one of that read's dependencies: it changes value
+  // exactly once a day, which is precisely when the figures counted from it
+  // stop being about today.
+  const todayKey = localTodayKey(now);
+
+  // Read ONCE per profile and day, not on the tick: none of this changes while
+  // the page is open — the events do not, and a phase or a task can only be
+  // started from a module page, which means leaving this one and coming back to
+  // it. What the tick recomputes is the READING of that data: which event is
+  // still ahead, how long the phase has run.
   //
-  // The strip does NOT ride the „Danas" card's fetch: the page holds no widget
-  // data at all (ADR-045 section 4), and reaching into a card's read to feed
-  // the header is precisely the coupling that boundary exists to prevent. The
-  // price is one extra `listEvents` per open, a local SQLite call away.
+  // The header does NOT ride a card's fetch: the page holds no widget data at
+  // all (ADR-045 section 4), and reaching into a card's read to feed the header
+  // is precisely the coupling that boundary exists to prevent. The price is a
+  // handful of extra reads per open, each a local SQLite call away — and every
+  // one of them is gated on its module, so a profile with TASK off pays nothing
+  // and, more importantly, is shown no figure rather than a zero.
   //
   // Decoration-adjacent, like the background above: a failure here renders
   // NOTHING and never a message. The header must not grow a red line because a
-  // caption could not be drawn.
+  // caption or a count could not be drawn — the nine cards below each report
+  // their own failure, and they are what the page is for.
   useEffect(() => {
     let active = true;
     void (async () => {
       try {
-        const [events, focus] = await Promise.all([
+        const [events, focus, tasks, focusSessions] = await Promise.all([
           calendarOn ? window.nexus.listEvents(profileId) : [],
           focusOn ? window.nexus.focusStatus(profileId) : null,
+          tasksOn ? window.nexus.listTasks(profileId) : null,
+          focusOn ? window.nexus.listFocusRange(profileId, todayKey, todayKey) : null,
         ]);
-        if (active) setStrip({ events, focus });
+        if (active) setHeader({ events, focus, tasks, focusSessions });
       } catch (error) {
-        console.error("Nexus: failed to load the dashboard day strip:", error);
+        console.error("Nexus: failed to load the dashboard header:", error);
       }
     })();
     return () => {
       active = false;
     };
-  }, [profileId, calendarOn, focusOn]);
+  }, [profileId, calendarOn, focusOn, tasksOn, todayKey]);
 
   useEffect(() => {
     let active = true;
@@ -1001,21 +1080,18 @@ export function DashboardPage({
     month: "long",
   }).format(now);
 
-  // Today's day key comes off the SAME reading the strip is drawn against, so
-  // the two can never disagree for a minute across midnight.
-  const todayKey = localTodayKey(now);
   // Merged once per read, not once per tick: expanding the recurring masters is
   // the only real work here, and it depends on the events and the day — never
   // on the minute. What the tick then costs is one pass over the result.
   const stripItems = useMemo(
     () =>
-      strip === null
+      header === null
         ? []
         : buildCalendarItems(
             // `overlay` stays empty by design: the cross-profile read is the
             // calendar grid's alone (CAL-005) — the dashboard never shows it.
             {
-              events: strip.events,
+              events: header.events,
               tasks: [],
               exams: [],
               blocks: [],
@@ -1027,10 +1103,10 @@ export function DashboardPage({
             STRIP_SOURCES,
             { from: todayKey, to: todayKey },
           ),
-    [strip, todayKey],
+    [header, todayKey],
   );
   const stripLine =
-    strip === null
+    header === null
       ? null
       : dayStripLine({
           items: stripItems,
@@ -1040,8 +1116,59 @@ export function DashboardPage({
           // CAL §5: the strip is pure, so the device preference is read HERE
           // and handed in — the same clock „Danas“ below draws its rows on.
           clock: readStoredClock(),
-          focus: strip.focus,
+          focus: header.focus,
         });
+  // The date and — when there is one — what is next, as ONE subtitle line under
+  // the greeting, joined by the house separator. Two stacked muted lines under a
+  // heading is two secondary levels where the type scale allows one.
+  const headerLine = stripLine === null ? dateLine : `${dateLine} · ${stripLine}`;
+
+  // The summary band: „kako stojim?" answered before „šta mi je na spisku?".
+  //
+  // Every figure is COUNTED, from rows this page itself read, through the owning
+  // module's own predicate — nothing here is estimated and nothing is a
+  // projection. A figure whose module is off is `null` all the way from the
+  // read to here and is simply not pushed, because „0 događaja danas" is a claim
+  // about an empty calendar and a calendar that is not installed has made none.
+  // `header === null` is the read still being in flight, and it has to answer
+  // `null` too: `stripItems` is an empty array until the events land, and a
+  // figure that reads „0" for the first moments of every open would be the band
+  // stating something it does not yet know. The other three are already null
+  // while loading, for free.
+  const counts = dashboardSummary({
+    items: header !== null && calendarOn ? stripItems : null,
+    todayKey,
+    tasks: header?.tasks ?? null,
+    focusSessions: header?.focusSessions ?? null,
+  });
+  const sm = strings.dashboard.summary;
+  const summaryStats: Stat[] = [];
+  if (counts.eventsToday !== null) {
+    summaryStats.push({ label: sm.eventsToday, value: String(counts.eventsToday) });
+  }
+  if (counts.tasksToday !== null) {
+    summaryStats.push({ label: sm.tasksToday, value: String(counts.tasksToday) });
+  }
+  if (counts.tasksLate !== null) {
+    summaryStats.push({
+      label: sm.tasksLate,
+      value: String(counts.tasksLate),
+      // Tinted only when the number is actually bad news. A „Kasni: 0" in
+      // garnet would be the band shouting about the one thing that went right.
+      ...(counts.tasksLate > 0 ? { tone: "danger" as const } : {}),
+    });
+  }
+  if (counts.focusMinutes !== null) {
+    summaryStats.push({
+      label: sm.focus,
+      value: String(counts.focusMinutes),
+      unit: sm.focusUnit,
+      // The figure counts SESSIONS, and a phase becomes a session when it is
+      // stopped — so while one runs the total is a lower bound, and says so.
+      // Drawn only then: a permanent caveat is one nobody reads.
+      ...(header?.focus != null ? { note: sm.focusRunningNote } : {}),
+    });
+  }
 
   // Two layers behind the content when a background is set (ADR-041 section 5):
   // the image itself, cover/centered, and a scrim whose fill IS the theme's own
@@ -1079,15 +1206,27 @@ export function DashboardPage({
           <div className="dash__scrim" style={{ opacity: background.dim / 100 }} aria-hidden="true" />
         </>
       )}
-      <div className="dash__topbar">
-        <header className="dash__greeting">
-          <div className="dash__hello-row">
-            <h1 className="dash__hello">{greeting(profileName, now.getHours())}</h1>
-            {/* The board switcher (DASH-008 / ADR-055): the active board's name
-                as quiet text beside the greeting, the house popover behind it.
-                The active entry is typographic — gold + weight — never a pill,
-                never a glow. While a name is being typed, the line IS the
-                switcher's spot, the tasks-rail idiom. */}
+      {/* The house page header, the same one the other fourteen pages open with
+          (`PageHeader`). This surface used to have a header of its own: a 32px
+          greeting with the board switcher sitting on its baseline as loose text,
+          and the date and the day strip stacked as two separate muted lines
+          under it. That is four type sizes and a control that did not look like
+          one, on the first screen anybody sees — so it is the shared component
+          now, and the dashboard's own copy is only what goes IN it: whose day it
+          is, what day it is, and what is next. */}
+      <PageHeader
+        className="dash__header"
+        title={greeting(profileName, now.getHours())}
+        subtitle={headerLine}
+        sigil="dashboard"
+        actions={
+          <>
+            {/* The board switcher (DASH-008 / ADR-055). It reads as a CONTROL —
+                a mark, the active board's name, a chevron, at the height of the
+                button beside it — because that is what it is; the popover behind
+                it keeps the typographic active entry (gold + weight), never a
+                pill and never a glow. While a name is being typed, the control's
+                spot IS the name line, the tasks-rail idiom. */}
             {setsLoaded &&
               (setEditor !== null ? (
                 <form
@@ -1127,7 +1266,15 @@ export function DashboardPage({
                   <NotePopover
                     label={strings.dashboard.sets.switcherLabel}
                     triggerClassName="dash__set-switcher"
-                    triggerContent={activeSet?.name ?? strings.dashboard.sets.defaultName}
+                    triggerContent={
+                      <>
+                        <Icon name="dashboard" size={14} />
+                        <span className="dash__set-name">
+                          {activeSet?.name ?? strings.dashboard.sets.defaultName}
+                        </span>
+                        <Icon name="chevronDown" size={12} />
+                      </>
+                    }
                   >
                     {(close) => (
                       <>
@@ -1232,30 +1379,28 @@ export function DashboardPage({
                   )}
                 </>
               ))}
-          </div>
-          <p className="dash__date">{dateLine}</p>
-          {/* Nothing to say ⇒ no element at all (DASH-009). A caption that
-              persists to announce its own emptiness is an empty state, and the
-              strip is not one. */}
-          {stripLine !== null && <p className="dash__strip">{stripLine}</p>}
-        </header>
-        <div className="dash__tools">
-          {editing ? (
-            <>
-              <Button size="sm" onClick={() => setGalleryOpen(true)}>
-                {s.edit.add}
+            {editing ? (
+              <>
+                <Button size="sm" onClick={() => setGalleryOpen(true)}>
+                  {s.edit.add}
+                </Button>
+                <Button size="sm" onClick={leaveEdit}>
+                  {s.edit.done}
+                </Button>
+              </>
+            ) : (
+              <Button size="sm" onClick={() => setEditing(true)}>
+                {s.edit.enter}
               </Button>
-              <Button size="sm" onClick={leaveEdit}>
-                {s.edit.done}
-              </Button>
-            </>
-          ) : (
-            <Button size="sm" onClick={() => setEditing(true)}>
-              {s.edit.enter}
-            </Button>
-          )}
-        </div>
-      </div>
+            )}
+          </>
+        }
+      />
+
+      {/* „Kako stojim?" before „šta mi je na spisku?". Drawn only when at least
+          one module could answer — a band of nothing is a hairline across the
+          page saying that some modules are switched off, which nobody asked. */}
+      {summaryStats.length > 0 && <StatBand stats={summaryStats} />}
 
       {(layoutFailed || actionFailed || setsActionFailed || defaultRestored) && (
         <div className="dash__notices">
@@ -1301,20 +1446,38 @@ export function DashboardPage({
             const classes = ["dash__widget"];
             if (draggedId === entry.instanceId) classes.push("dash__widget--dragging");
             if (dropId === entry.instanceId) classes.push("dash__widget--drop");
-            // In edit mode the title moves into the strip below, beside the "⋯",
-            // so the card's own caption is withheld rather than drawn twice.
+            // The module the placement belongs to, from the module half of its
+            // qualified id — the same split `DASHBOARD_WIDGETS` is keyed on.
+            const sigil = MODULE_SIGILS[entry.widgetId.split(":")[0] ?? ""];
             return (
               <Card
                 key={entry.instanceId}
                 className={classes.join(" ")}
-                style={{ "--dash-span": DASHBOARD_WIDGET_SPANS[entry.size] } as CSSProperties}
-                {...(editing ? {} : { title })}
+                // Both readings of the preset, so which one applies is a pure
+                // CSS decision (see `DASHBOARD_WIDGET_SPANS_WIDE`).
+                style={
+                  {
+                    "--dash-span": DASHBOARD_WIDGET_SPANS[entry.size],
+                    "--dash-span-wide": DASHBOARD_WIDGET_SPANS_WIDE[entry.size],
+                  } as CSSProperties
+                }
                 onDragOver={editing ? (event) => dragOverCard(event, entry.instanceId) : undefined}
                 onDragLeave={editing ? (event) => dragLeaveCard(event, entry.instanceId) : undefined}
                 onDrop={editing ? (event) => dropOnCard(event, order, entry.instanceId) : undefined}
               >
-                {editing && (
-                  <div className="dash__widget-strip">
+                {/* ONE head for both modes. Until 2026-08-08 the card drew its
+                    own caption while reading and a separate „strip" while
+                    editing — two elements holding the same words at the same
+                    size, differing only in what sat beside them. The mark is
+                    what the head gained by being written once: nine cards that
+                    differ only in an 11px caption are a wall of text. */}
+                <div className="dash__widget-head">
+                  {sigil !== undefined && (
+                    <span className="dash__widget-sigil" aria-hidden="true">
+                      <Icon name={sigil} size={14} />
+                    </span>
+                  )}
+                  {editing ? (
                     <span
                       className="nx-card__title dash__widget-grip"
                       draggable
@@ -1324,6 +1487,10 @@ export function DashboardPage({
                     >
                       {title}
                     </span>
+                  ) : (
+                    <span className="nx-card__title">{title}</span>
+                  )}
+                  {editing && (
                     <WidgetMenu
                       title={title}
                       contract={contract}
@@ -1337,8 +1504,8 @@ export function DashboardPage({
                       onConfigure={(config) => void configureWidget(entry.instanceId, config)}
                       onRemove={() => void removeWidget(entry.instanceId)}
                     />
-                  </div>
-                )}
+                  )}
+                </div>
                 <Body
                   profileId={profileId}
                   enabledModules={enabledModules}

@@ -47,7 +47,7 @@ export function FitnessPage({ profileId }: FitnessPageProps) {
 
   return (
     <div className="fit">
-      <PageHeader title={moduleName("fitness")} />
+      <PageHeader title={moduleName("fitness")} sigil="fitness" />
 
       <div className="fit__sections" role="group" aria-label={s.label}>
         {FIT_SECTIONS.map((option) => (

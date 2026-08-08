@@ -1,5 +1,5 @@
 import { TOOL_CATEGORIES, type ToolRegistration } from "@nexus/core";
-import { Button, PageHeader, TextField } from "@nexus/ui";
+import { Button, EmptyState, PageHeader, TextField } from "@nexus/ui";
 import { useMemo, useState } from "react";
 
 import { createModuleRegistry } from "../../shared/modules.js";
@@ -81,7 +81,7 @@ export function ToolsPage({ enabledModules }: ToolsPageProps) {
 
   return (
     <div className="tool">
-      <PageHeader title={moduleName("tools")} />
+      <PageHeader title={moduleName("tools")} sigil="tools" />
       <TextField
         className="tool__search"
         type="search"
@@ -102,21 +102,36 @@ export function ToolsPage({ enabledModules }: ToolsPageProps) {
             return (
               <div key={category} className="tool__group">
                 <h3 className="tool__group-title">{s.category[category]}</h3>
-                {members.map((tool) => (
-                  <button
-                    key={tool.id}
-                    type="button"
-                    className={
-                      tool.id === selectedId ? "tool__item tool__item--active" : "tool__item"
-                    }
-                    aria-current={tool.id === selectedId}
-                    onClick={() => {
-                      setSelectedId(tool.id);
-                    }}
-                  >
-                    {tool.name}
-                  </button>
-                ))}
+                {/* The app's ONE nav-row grammar (`.nx-nav-item`): the hover
+                    tint, the gold-and-weight selection and the trailing ✦ all
+                    come from the shared rule, and `.tool__item` adds only what
+                    a `<button>` needs in order to wear it. The drawer used to
+                    carry a private copy that had drifted on all three — see the
+                    rule in `tools.css` for what each drift was. */}
+                {members.map((tool) => {
+                  const active = tool.id === selectedId;
+                  return (
+                    <button
+                      key={tool.id}
+                      type="button"
+                      className={`nx-nav-item tool__item${active ? " nx-nav-item--active" : ""}`}
+                      // Only on the row that IS current. A rendered
+                      // `aria-current="false"` on every other row is noise a
+                      // screen reader reads out; the attribute's absence is how
+                      // „not this one" is said.
+                      {...(active ? { "aria-current": true } : {})}
+                      onClick={() => {
+                        setSelectedId(tool.id);
+                      }}
+                    >
+                      {/* The component's own inner span, not a bare text node:
+                          it is what clips a long name to an ellipsis instead of
+                          wrapping it onto a second line, and an anonymous flex
+                          item cannot be given that rule. */}
+                      <span className="nx-nav-item__label">{tool.name}</span>
+                    </button>
+                  );
+                })}
               </div>
             );
           })}
@@ -127,8 +142,18 @@ export function ToolsPage({ enabledModules }: ToolsPageProps) {
               written for this control and rendered nowhere. */}
           {visible.length === 0 && (
             <div className="tool__empty">
-              <p className="tool__note">{s.noMatches}</p>
-              <Button size="sm" className="tool__clear" onClick={() => setQuery("")}>
+              {/* `inline`, and inside a 180–240px rail: the page shape's 48px
+                  mark and its column of centred type would be wider than the
+                  rail it is reporting on. The mark still rides the line, so the
+                  absence is still the module's. */}
+              <EmptyState variant="inline" sigil="tools" title={s.noMatches} />
+              {/* `quiet` is the primitive for exactly this — a control that
+                  reads as a line of text and still keeps the pointer floor. The
+                  drawer had a hand-rolled `.tool__clear` doing the same three
+                  declarations, which is the shape that variant was added to
+                  retire. Its negative inline margin is what keeps the label
+                  flush with the line above it. */}
+              <Button variant="quiet" onClick={() => setQuery("")}>
                 {s.clearSearch}
               </Button>
             </div>
@@ -142,7 +167,10 @@ export function ToolsPage({ enabledModules }: ToolsPageProps) {
               <Surface />
             </>
           ) : (
-            <p className="tool__note">{s.empty}</p>
+            // The whole right pane is empty, which is the `page` shape — and it
+            // takes the module's mark, so the drawer looks like a surface
+            // waiting for a choice rather than a paragraph nobody finished.
+            <EmptyState sigil="tools" title={s.emptyTitle} description={s.empty} />
           )}
         </section>
       </div>

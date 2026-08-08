@@ -112,7 +112,12 @@ export function FocusLanes({ sessions }: FocusLanesProps) {
   const description = `${s.descriptionLead}: ${String(sessions.length)} ${s.descriptionPhases}, ${formatDurationMinutes(totalMinutes)}.`;
 
   return (
-    <div className="nx-chart-group">
+    // Capped to the same 720 the drawing is laid out at, so the figure's title,
+    // its bars and its caption share one left edge. An `align-self: stretch`
+    // group in a 1180px pane left the title at x=0 while `preserveAspectRatio`
+    // centred a 720-wide drawing two hundred pixels to its right — a graphic
+    // visibly come loose from its own heading.
+    <div className="nx-chart-group foc__lanes">
       <SpanLanes
         title={s.heading}
         description={description}
@@ -122,6 +127,10 @@ export function FocusLanes({ sessions }: FocusLanesProps) {
         lanes={lanes}
         rule={{ at: minuteOfDay(new Date()), label: s.nowLabel, tone: "neutral" }}
         width={720}
+        // A lane is a KIND, and there are at most three of them — so each one can
+        // have real height instead of the card default. At 26 a day of work sat
+        // as one thin bar in a strip barely taller than its own label.
+        laneHeight={34}
       />
     </div>
   );

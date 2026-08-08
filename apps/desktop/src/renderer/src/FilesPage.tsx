@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { MIME_FAMILIES, isInlineImageMime } from "@nexus/core";
-import { Button, EmptyState, LoadingState, PageHeader } from "@nexus/ui";
+import { Button, EmptyState, LoadingState, PageHeader, StatBand } from "@nexus/ui";
+import type { Stat } from "@nexus/ui";
+import { DOC_ATTACHMENT_LIST_LIMIT } from "../../shared/ipc.js";
 import type {
   DocAttachmentEntry,
   DocAttachmentList,
@@ -14,7 +16,7 @@ import { FileSpace } from "./FileSpace.js";
 import { persistFileView, readStoredFileView, FILE_VIEWS, type FileView } from "./filePrefs.js";
 import { NotePopover } from "./notePopover.js";
 import { SEARCH_DEBOUNCE_MS, formatContextDate } from "./searchShared.js";
-import { countUnit, strings } from "./strings.js";
+import { strings } from "./strings.js";
 import { moduleName } from "./moduleName.js";
 
 /**
@@ -161,6 +163,30 @@ export function FilesPage({ profileId, onOpenOwner }: FilesPageProps) {
     return title.length > 0 ? title : s.untitledOwner;
   }
 
+  /**
+   * Where the file LIVES, as one control — the same control in both views.
+   *
+   * The list and the grid used to draw two different things here: the row's
+   * owner carried a „BELEŠKA" eyebrow before its title, the card's showed the
+   * bare title at caption size. So the page told you where a file lives two
+   * ways depending on which shape the toggle happened to be on, and a reader
+   * switching views had to re-learn the surface. A view toggle changes the
+   * ARRANGEMENT of a surface; it must not change its vocabulary.
+   */
+  function renderOwner(entry: DocAttachmentEntry) {
+    return (
+      <button
+        type="button"
+        className="doc__owner"
+        title={ownerLabel(entry)}
+        onClick={() => onOpenOwner(entry.ownerKind, entry.ownerId)}
+      >
+        <span className="doc__owner-kind">{s.owners[entry.ownerKind]}</span>
+        <span className="doc__owner-title">{ownerLabel(entry)}</span>
+      </button>
+    );
+  }
+
   /** The actions every row and every card carries — one menu, one set, whichever shape is on screen. */
   function renderMenu(entry: DocAttachmentEntry) {
     const previewKind = attachmentPreviewKind(entry.mime, entry.fileName, entry.sizeBytes);
@@ -228,15 +254,7 @@ export function FilesPage({ profileId, onOpenOwner }: FilesPageProps) {
             <span className="doc__row-name" title={entry.fileName}>
               {entry.fileName}
             </span>
-            <button
-              type="button"
-              className="doc__row-owner"
-              title={ownerLabel(entry)}
-              onClick={() => onOpenOwner(entry.ownerKind, entry.ownerId)}
-            >
-              <span className="doc__row-owner-kind">{s.owners[entry.ownerKind]}</span>
-              <span className="doc__row-owner-title">{ownerLabel(entry)}</span>
-            </button>
+            {renderOwner(entry)}
             <span className="doc__row-size">{formatFileSize(entry.sizeBytes)}</span>
             <span className="doc__row-date">{formatContextDate(entry.createdAt)}</span>
             {renderMenu(entry)}
@@ -271,14 +289,7 @@ export function FilesPage({ profileId, onOpenOwner }: FilesPageProps) {
               <span className="doc__card-name" title={entry.fileName}>
                 {entry.fileName}
               </span>
-              <button
-                type="button"
-                className="doc__card-owner"
-                title={ownerLabel(entry)}
-                onClick={() => onOpenOwner(entry.ownerKind, entry.ownerId)}
-              >
-                {ownerLabel(entry)}
-              </button>
+              {renderOwner(entry)}
               <span className="doc__card-meta">
                 {`${formatFileSize(entry.sizeBytes)} · ${formatContextDate(entry.createdAt)}`}
               </span>
@@ -292,29 +303,43 @@ export function FilesPage({ profileId, onOpenOwner }: FilesPageProps) {
 
   /**
    * What is on screen, in numbers this page derived from the rows it is
-   * drawing. When the read hit its cap the count is a FLOOR („500+") and the
-   * size is prefixed with „najmanje" — both are true of the rows in hand, and
-   * neither claims a total nothing measured.
+   * drawing — never from a total nothing measured.
+   *
+   * When the read hit its cap, BOTH figures are lower bounds and both say so in
+   * the band's own way: the count reads „500+", and the size carries a `note`
+   * admitting that older files were never weighed. That `note` is the field the
+   * band exists to make available — „a derived number whose source is lossy
+   * reads as a total unless the drawing says otherwise" — and this page is the
+   * clearest case of it in the product.
    */
-  function renderSummary(data: DocAttachmentList) {
+  function summaryStats(data: DocAttachmentList): Stat[] {
     const count = data.entries.length;
-    const bytes = formatFileSize(totalFileBytes(data.entries));
-    const unit = data.truncated
-      ? s.summaryUnitMany
-      : countUnit(count, s.summaryUnitOne, s.summaryUnitFew, s.summaryUnitMany);
-    return (
-      <div className="doc__meta">
-        <span className="doc__count">
-          {`${data.truncated ? `${count}+` : count} ${unit} · ${
-            data.truncated ? `${s.summaryAtLeast} ${bytes}` : bytes
-          }`}
-        </span>
-      </div>
-    );
+    const shown = `${strings.files.cap.lead} ${String(DOC_ATTACHMENT_LIST_LIMIT)} ${
+      strings.files.cap.newest
+    }`;
+    return [
+      {
+        label: s.band.files,
+        value: data.truncated ? `${count}+` : String(count),
+        ...(data.truncated ? { note: shown } : {}),
+      },
+      {
+        label: s.band.total,
+        value: formatFileSize(totalFileBytes(data.entries)),
+        ...(data.truncated ? { note: s.band.floorNote } : {}),
+      },
+    ];
   }
 
   const filtered = ownerKind !== null || family !== null || query.trim().length > 0;
 
+  /**
+   * Everything the ready state draws, in one place, so the band, the graphic and
+   * the rows are the same three things about the same read — and so an empty
+   * result draws NONE of them: a band reading „0 · 0 B" over a bar chart of four
+   * zeroes, above a sentence saying there is nothing here, is the page saying
+   * the same nothing three times.
+   */
   function renderBody(data: DocAttachmentList) {
     if (data.entries.length === 0) {
       // Two different situations. „You have no files" and „nothing matches
@@ -322,6 +347,7 @@ export function FilesPage({ profileId, onOpenOwner }: FilesPageProps) {
       // both would be a lie about whichever it is not.
       return filtered ? (
         <EmptyState
+          sigil="files"
           title={s.noMatchTitle}
           description={s.noMatchDescription}
           action={
@@ -331,13 +357,16 @@ export function FilesPage({ profileId, onOpenOwner }: FilesPageProps) {
           }
         />
       ) : (
-        <EmptyState title={s.emptyTitle} description={s.emptyDescription} />
+        <EmptyState sigil="files" title={s.emptyTitle} description={s.emptyDescription} />
       );
     }
     return (
       <>
-        {renderSummary(data)}
-        {data.truncated && <p className="doc__truncated">{s.truncatedNote}</p>}
+        <StatBand stats={summaryStats(data)} />
+        {/* The summary the list below is the detail of — same entries, same
+            read, no second call. */}
+        <FileSpace entries={data.entries} truncated={data.truncated} />
+        {data.truncated && <p className="doc__truncated">{s.truncatedAdvice}</p>}
         {view === "lista" ? renderList(data.entries) : renderGrid(data.entries)}
       </>
     );
@@ -350,36 +379,38 @@ export function FilesPage({ profileId, onOpenOwner }: FilesPageProps) {
   }
 
   return (
-    <section className="doc">
+    // `.nx-measure`: this is a rows surface, and at 1600px a file's name and its
+    // date were a thousand pixels apart — two columns with nothing between them
+    // rather than one row.
+    <section className="doc nx-measure">
       <PageHeader
         title={moduleName("files")}
+        sigil="files"
         // „Sve datoteke priložene uz beleške, zadatke i predmete." is what this
         // page IS, so it belongs under the title rather than beside the view
         // switcher — a sentence sitting in a row of buttons reads as a control
         // that lost its button.
         subtitle={s.caption}
         actions={
-          <>
-            <div className="doc__view" role="group" aria-label={s.viewLabel}>
-              {FILE_VIEWS.map((option) => (
-                <Button
-                  key={option}
-                  size="sm"
-                  // The segmented idiom, not a filled primary. This toggle was
-                  // the app's ONE outlier: it said „selected" with the same
-                  // treatment the product uses for „press this", and it did so
-                  // in a header that also holds real filter chips saying the
-                  // same thing typographically. Two idioms, one page
-                  // (STATUS §5 C item 15).
-                  className="nx-segmented__option doc__chip"
-                  aria-pressed={view === option}
-                  onClick={() => changeView(option)}
-                >
-                  {s.views[option]}
-                </Button>
-              ))}
-            </div>
-          </>
+          <div className="doc__view" role="group" aria-label={s.viewLabel}>
+            {FILE_VIEWS.map((option) => (
+              <Button
+                key={option}
+                size="sm"
+                // The segmented idiom, not a filled primary. This toggle was
+                // the app's ONE outlier: it said „selected" with the same
+                // treatment the product uses for „press this", and it did so
+                // in a header that also holds real filter chips saying the
+                // same thing typographically. Two idioms, one page
+                // (STATUS §5 C item 15).
+                className="nx-segmented__option doc__chip"
+                aria-pressed={view === option}
+                onClick={() => changeView(option)}
+              >
+                {s.views[option]}
+              </Button>
+            ))}
+          </div>
         }
       />
 
@@ -397,7 +428,7 @@ export function FilesPage({ profileId, onOpenOwner }: FilesPageProps) {
             <Button
               key={option ?? "all"}
               size="sm"
-className="nx-segmented__option doc__chip"
+              className="nx-segmented__option doc__chip"
               aria-pressed={ownerKind === option}
               onClick={() => setOwnerKind(option)}
             >
@@ -408,7 +439,7 @@ className="nx-segmented__option doc__chip"
         <div className="doc__chips" role="group" aria-label={s.familyFilterLabel}>
           <Button
             size="sm"
-className="nx-segmented__option doc__chip"
+            className="nx-segmented__option doc__chip"
             aria-pressed={family === null}
             onClick={() => setFamily(null)}
           >
@@ -418,7 +449,7 @@ className="nx-segmented__option doc__chip"
             <Button
               key={option}
               size="sm"
-className="nx-segmented__option doc__chip"
+              className="nx-segmented__option doc__chip"
               aria-pressed={family === option}
               onClick={() => setFamily(option)}
             >
@@ -444,11 +475,7 @@ className="nx-segmented__option doc__chip"
           </Button>
         </div>
       ) : (
-        <>
-          {/* The summary the list below is the detail of — same entries, same read, no second call. */}
-          <FileSpace entries={state.data.entries} truncated={state.data.truncated} />
-          {renderBody(state.data)}
-        </>
+        renderBody(state.data)
       )}
 
       {preview !== null && (

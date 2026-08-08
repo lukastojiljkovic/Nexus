@@ -119,31 +119,45 @@ export function ForeignMark() {
 
 /** A subject-swatch dot (exam/block), a series marker (a recurring event's occurrence) or the swap origin marker (a foreign item), followed by the ellipsized label. Exported for the week/day grid's all-day band, which reuses these very classes. */
 export function renderBarContent(item: CalendarItem): ReactNode {
+  // Computed once: every branch below both shows this text AND needs it again
+  // verbatim as `title` — CSS ellipsises `.cal__month-bar-label` with no way
+  // back to the clipped part, and `title` is that way back.
+  const label = itemLabel(item);
   switch (item.kind) {
     case "exam":
     case "block":
       return (
         <>
           <span className={`study__dot study__dot--${item.subject.color}`} aria-hidden="true" />
-          <span className="cal__month-bar-label">{itemLabel(item)}</span>
+          <span className="cal__month-bar-label" title={label}>
+            {label}
+          </span>
         </>
       );
     case "event":
       return (
         <>
           {item.occurrence !== null && <RecurrenceMark />}
-          <span className="cal__month-bar-label">{itemLabel(item)}</span>
+          <span className="cal__month-bar-label" title={label}>
+            {label}
+          </span>
         </>
       );
     case "foreign":
       return (
         <>
           <ForeignMark />
-          <span className="cal__month-bar-label">{itemLabel(item)}</span>
+          <span className="cal__month-bar-label" title={label}>
+            {label}
+          </span>
         </>
       );
     default:
-      return <span className="cal__month-bar-label">{itemLabel(item)}</span>;
+      return (
+        <span className="cal__month-bar-label" title={label}>
+          {label}
+        </span>
+      );
   }
 }
 
@@ -361,6 +375,7 @@ export function CalendarMonth({
                               key={item.id}
                               type="button"
                               className="cal__month-chip cal__month-chip--foreign"
+                              title={`${formatClockLabel(item.startMinutes, clock)} — ${item.foreign.title}`}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 onOpenForeign(e.currentTarget.getBoundingClientRect());
@@ -374,6 +389,7 @@ export function CalendarMonth({
                               key={item.id}
                               type="button"
                               className="cal__month-chip"
+                              title={`${formatClockLabel(item.startMinutes, clock)} — ${item.event.title}`}
                               draggable
                               onClick={(e) => activateEvent(e, item)}
                               onDragStart={(e) => startDrag(e, item)}

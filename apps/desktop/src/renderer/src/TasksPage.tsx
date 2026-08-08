@@ -14,10 +14,13 @@ import {
   ListView,
   PageHeader,
   Select,
+  StatBand,
   TextField,
 } from "@nexus/ui";
+import type { Stat } from "@nexus/ui";
 import {
   applyFilters,
+  applySort,
   foldSearchText,
   isEmptyTaskViewConfig,
   isInlineImageMime,
@@ -80,6 +83,7 @@ import type {
 import { AttachmentPreviewDialog } from "./attachmentPreview.js";
 import { attachmentPreviewKind, type AttachmentPreviewKind } from "./attachmentPreviewKind.js";
 import { localTodayKey } from "./examDates.js";
+import { shiftDay } from "./habitDone.js";
 import {
   hiddenKanbanColumnCount,
   kanbanColumnRows,
@@ -279,6 +283,137 @@ function formatQuickDate(dayKey: string): string {
         month: "short",
         timeZone: "UTC",
       }).format(date);
+}
+
+// --- Dated groups -----------------------------------------------------------
+//
+// Sixty rows in one run is unscannable by construction: there is no place for
+// the eye to rest and no way to say "this much is today". The same sixty cut
+// into dated runs of roughly ten, each under its own heading, is read rather
+// than searched — and the heading is free, because it is a fact the rows
+// already carry.
+//
+// THE HEADINGS ARE ONLY HONEST WHERE THE ORDER IS THE DATE'S. Bands are runs of
+// CONSECUTIVE rows sharing a day, never a re-grouping: a scope whose order is
+// something else would produce a heading per row, and a manual order cut into
+// date buckets would destroy the arrangement the user made by hand. So
+// `dateBandField` answers null everywhere the order is not by one of these
+// three dates, and the page draws exactly what it drew before.
+
+/** The three date fields a run of rows can be banded along — the sortable ones a task actually carries. */
+type BandField = "dueDate" | "startDate" | "completedAt";
+
+const BAND_FIELDS: readonly BandField[] = ["dueDate", "startDate", "completedAt"];
+
+function isBandField(field: string): field is BandField {
+  return (BAND_FIELDS as readonly string[]).includes(field);
+}
+
+/**
+ * Which date the shown rows are already ordered by, or null for "do not band".
+ *
+ * A VIEW's order is derived and known here (`compareSmartListTasks`): „Sledećih
+ * 7 dana“, „Kasni“ and „Hitno“ all lead with the rok, „Završeno“ with the
+ * completion instant, and every one of those comparators puts a null date last
+ * — which is what makes „Bez roka“ a single trailing run rather than a heading
+ * scattered through the list. „Danas“ is deliberately excluded: every row of it
+ * shares one day, so its heading would be the column's name rather than data.
+ *
+ * A real list has no derived order, so it bands only under a sort the user
+ * actually chose, and only when that sort IS one of these dates. `applySort`
+ * puts nulls last in both directions, so the same single trailing run holds.
+ */
+function dateBandField(
+  smartListId: SmartListId | null,
+  sort: TaskViewSort | undefined,
+): BandField | null {
+  if (smartListId === "zavrseno") return "completedAt";
+  if (smartListId === "danas") return null;
+  if (smartListId !== null) return "dueDate";
+  return sort !== undefined && isBandField(sort.field) ? sort.field : null;
+}
+
+/**
+ * How far either side of today a band is one DAY. Inside this reach the
+ * headings are „Danas“, „Sutra“, „Juče“ and named weekdays; outside it
+ * everything collapses into „Ranije“ and „Kasnije“.
+ *
+ * The reach is what keeps banding from making the page WORSE. A pure day-per-
+ * band rule reads beautifully on „Sledećih 7 dana“ and falls apart on „Kasni“,
+ * where thirty overdue tasks are scattered across four months: thirty headings
+ * over thirty rows is not a grouping, it is a second list. Seven days is the
+ * span this app already means by „a week“ everywhere else (`SEARCH_DUE_WEEK_
+ * DAYS`, „Sledećih 7 dana“), so the near future and the near past are named a
+ * day at a time and the long tails are named once.
+ */
+const BAND_DAY_REACH = 7;
+
+/** The bucket a row falls in, beyond the day keys themselves. Both are ordered relative to any real day key by the comparisons in `bandKey`, never by string order. */
+const BAND_PAST = "__past__";
+const BAND_FUTURE = "__future__";
+const BAND_NONE = "__none__";
+
+/** One run of rows sharing a band; `key` is a bare day key or one of the three buckets above. */
+interface TaskBand {
+  key: string;
+  rows: TaskFields[];
+}
+
+/**
+ * Which band one row belongs to. Day keys are ISO, so `<` and `>` on them are
+ * chronological and no date arithmetic is needed beyond the two edges.
+ */
+function bandKey(row: TaskFields, field: BandField, earliest: string, latest: string): string {
+  const value = row[field];
+  // The store accepts a date-TIME rok, so the day is the leading ten characters
+  // — the same slice the rok chip's overdue test takes.
+  if (typeof value !== "string") return BAND_NONE;
+  const day = value.slice(0, 10);
+  if (day < earliest) return BAND_PAST;
+  if (day > latest) return BAND_FUTURE;
+  return day;
+}
+
+/**
+ * The rows cut into consecutive same-band runs, in the order they arrived —
+ * never re-ordered, and never merged across a gap. Two runs with the same key
+ * would mean the caller handed rows that are not in that date's order, which
+ * `dateBandField` is what prevents; if it ever happened the drawing would say
+ * so plainly rather than quietly gathering rows the order had separated.
+ */
+function bandRows(rows: readonly TaskFields[], field: BandField, today: string): TaskBand[] {
+  const earliest = shiftDay(today, -BAND_DAY_REACH);
+  const latest = shiftDay(today, BAND_DAY_REACH);
+  const bands: TaskBand[] = [];
+  for (const row of rows) {
+    const key = bandKey(row, field, earliest, latest);
+    const open = bands[bands.length - 1];
+    if (open !== undefined && open.key === key) open.rows.push(row);
+    else bands.push({ key, rows: [row] });
+  }
+  return bands;
+}
+
+/**
+ * A run's heading. The three days a person names in words get those words;
+ * every other day inside the reach is drawn as its own weekday and date,
+ * because a relative phrase past „sutra“ („za tri nedelje“) is something the
+ * reader has to count back from rather than check against a calendar.
+ *
+ * „Ranije“ and „Kasnije“ are worded so they hold for any banded field: a rok
+ * more than a week past is late and a completion more than a week past is old,
+ * and „earlier“ is the one word that is true of both without the heading having
+ * to know which field it is over.
+ */
+function bandLabel(key: string, today: string): string {
+  const s = strings.tasks.groups;
+  if (key === BAND_NONE) return s.noDate;
+  if (key === BAND_PAST) return s.earlier;
+  if (key === BAND_FUTURE) return s.later;
+  if (key === today) return s.today;
+  if (key === shiftDay(today, 1)) return s.tomorrow;
+  if (key === shiftDay(today, -1)) return s.yesterday;
+  return formatQuickDate(key);
 }
 
 // --- Reminders (ADR-028) ----------------------------------------------------
@@ -798,57 +933,6 @@ function InlineNameForm({
   );
 }
 
-interface MoveMenuProps {
-  /** Accessible name of the "⋯" trigger — whose row this menu belongs to. */
-  label: string;
-  triggerClassName: string;
-  /** Where a step up / down would land the row, or null at that end of its scope. */
-  up: StepTarget | null;
-  down: StepTarget | null;
-  onMove: (step: StepTarget) => void;
-}
-
-/**
- * The "⋯" menu that steps one row of an ordered scope up or down (TASK-004) —
- * the rail's lists and a list's section headings alike, since it is the same
- * gesture over the same sparse `position`.
- *
- * Deliberately a MENU rather than a second pair of inline arrows: the row's
- * quiet ✎/+/× cluster is already as wide as a rail row can carry, and a menu
- * item is a plain focusable button, so this reaches the keyboard by
- * construction — which the existing mouse drag never did and still does not.
- * An item at the end of its scope is DISABLED, never dropped: a menu whose
- * items come and go is one the user has to re-read on every open.
- */
-function MoveMenu({ label, triggerClassName, up, down, onMove }: MoveMenuProps) {
-  const s = strings.tasks.lists;
-  const item = (text: string, step: StepTarget | null, close: () => void): ReactNode => (
-    <button
-      className="note__menu-item"
-      role="menuitem"
-      type="button"
-      disabled={step === null}
-      onClick={() => {
-        if (step !== null) onMove(step);
-        close();
-      }}
-    >
-      {text}
-    </button>
-  );
-
-  return (
-    <NotePopover label={label} triggerClassName={triggerClassName}>
-      {(close) => (
-        <>
-          {item(s.moveUp, up, close)}
-          {item(s.moveDown, down, close)}
-        </>
-      )}
-    </NotePopover>
-  );
-}
-
 interface ColumnMoveMenuProps {
   /** The columns as the board draws them, and the one this card sits in. */
   columnValues: readonly (string | null)[];
@@ -1324,6 +1408,13 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
    */
   const manualOrder = activeSort === undefined;
   const activeFilterSpecs: FilterSpec[] = taskViewFilterSpecs(activeFilters);
+  /**
+   * The date the rows are cut into headed runs along, or null for one flat run
+   * (see `dateBandField`). Never both: a scope either has an order that IS a
+   * date, in which case the headings are that order made visible, or it does
+   * not, in which case there is nothing honest for a heading to say.
+   */
+  const bandField: BandField | null = dateBandField(smartListId, activeSort);
 
   /** What the five views ask about this render — the day, the derived blocked-ness, and the device preference over it. */
   const smartContext: SmartListContext = {
@@ -1664,6 +1755,17 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [selecting]);
+
+  // „Dodaj podzadatak“ now lives in the row's overflow menu, and closing a
+  // popover hands focus back to the control that opened it
+  // (`useAnchoredPosition`). That return runs as an effect CLEANUP, i.e. after
+  // React has applied the new line's `autoFocus` during commit — so the caret
+  // would land back on the „⋯“ rather than in the line that just appeared. A
+  // passive effect runs after every cleanup of the same commit, which makes
+  // this the one place the focus can be claimed for good.
+  useEffect(() => {
+    if (subtaskParentId !== null) subtaskInputRef.current?.focus();
+  }, [subtaskParentId]);
 
   // A due date read straight out of the title (TASK-007). Derived plainly on
   // every render — the scan is a handful of regexes over a title-length string,
@@ -3004,7 +3106,21 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                 each be a second meaning for a click in a mode that has exactly
                 one. */}
             {!selecting && (
-              <>
+              // TWO inline controls, never four. „✎“ opens the row; everything
+              // else — a subtask, the tags, a template, the delete — is behind
+              // the one overflow menu beside it. The cluster is `opacity: 0`
+              // until the row is hovered or something inside it takes focus:
+              // opacity rather than `display: none`, so the buttons stay in the
+              // tab order and the keyboard reaches every action a mouse can.
+              <span className="tasks__row-actions">
+                <Button
+                  size="sm"
+                  className="tasks__edit"
+                  aria-label={strings.tasks.editLabel}
+                  onClick={() => startEdit(task)}
+                >
+                  <Icon name="pencil" size={14} />
+                </Button>
                 {/* The row's own "⋯" menu, exactly as on a note row. Attaching and
                     detaching tags lives here, and only where the profile HAS a tag
                     to attach — an affordance that can do nothing is one this page
@@ -3014,6 +3130,26 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                 <NotePopover label={strings.tasks.rowMenuLabel} triggerClassName="tasks__row-menu">
                   {(close) => (
                     <>
+                      {/* A VIEW draws every row flat (see `renderBranch`), so a
+                          subtask added here would land somewhere this screen
+                          cannot show — the same reason the quick-add is not
+                          drawn in one. */}
+                      {smartListId === null && (
+                        <>
+                          <button
+                            className="note__menu-item"
+                            role="menuitem"
+                            type="button"
+                            onClick={() => {
+                              openSubtaskInput(task.id);
+                              close();
+                            }}
+                          >
+                            {strings.tasks.addSubtaskLabel}
+                          </button>
+                          <div className="note__menu-sep" role="separator" />
+                        </>
+                      )}
                       {sortedTags.length > 0 && (
                         <>
                           <span className="note__menu-label">{strings.tasks.tags.label}</span>
@@ -3043,7 +3179,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                               {strings.tasks.tags.actionError}
                             </p>
                           )}
-                          <div className="note__menu-sep" />
+                          <div className="note__menu-sep" role="separator" />
                         </>
                       )}
                       <span className="note__menu-label">{strings.tasks.templates.title}</span>
@@ -3079,39 +3215,29 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                           {strings.tasks.templates.actionError}
                         </p>
                       )}
+                      {/* LAST, and behind a rule. Opening a menu puts focus on
+                          its first item (the APG menu-button pattern), so a
+                          destructive action at the top is one stray Enter away
+                          from running — the same reason the attachment menu
+                          keeps „Ukloni prilog“ at its foot. The delete is
+                          undoable here, which is why it can be a menu item at
+                          all rather than a dialog. */}
+                      <div className="note__menu-sep" role="separator" />
+                      <button
+                        className="note__menu-item note__menu-item--danger"
+                        role="menuitem"
+                        type="button"
+                        onClick={() => {
+                          close();
+                          void remove(task);
+                        }}
+                      >
+                        {strings.tasks.deleteLabel}
+                      </button>
                     </>
                   )}
                 </NotePopover>
-                {/* A VIEW draws every row flat (see `renderBranch`), so a
-                    subtask added here would land somewhere this screen cannot
-                    show — the same reason the quick-add is not drawn in one. */}
-                {smartListId === null && (
-                  <Button
-                    size="sm"
-                    className="tasks__add-subtask"
-                    aria-label={strings.tasks.addSubtaskLabel}
-                    onClick={() => openSubtaskInput(task.id)}
-                  >
-                    <Icon name="plus" size={14} />
-                  </Button>
-                )}
-                <Button
-                  size="sm"
-                  className="tasks__edit"
-                  aria-label={strings.tasks.editLabel}
-                  onClick={() => startEdit(task)}
-                >
-                  <Icon name="pencil" size={14} />
-                </Button>
-                <Button
-                  size="sm"
-                  className="tasks__delete"
-                  aria-label={strings.tasks.deleteLabel}
-                  onClick={() => void remove(task)}
-                >
-                  <Icon name="trash" size={14} />
-                </Button>
-              </>
+              </span>
             )}
           </span>
         }
@@ -3338,8 +3464,35 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     );
   }
 
-  /** One section's heading: its name, the inline ✎/⋯/× actions, and the drop target that files a dragged task under it. */
-  function renderSectionHead(section: TaskSection, order: readonly string[]): ReactNode {
+  /** `railMoveItem`'s twin for a section heading — the same gesture over the same sparse `position`, one scope in. */
+  function sectionMoveItem(
+    text: string,
+    step: StepTarget | null,
+    section: TaskSection,
+    close: () => void,
+  ): ReactNode {
+    return (
+      <button
+        className="note__menu-item"
+        role="menuitem"
+        type="button"
+        disabled={step === null}
+        onClick={() => {
+          if (step !== null) moveSectionStep(section, step);
+          close();
+        }}
+      >
+        {text}
+      </button>
+    );
+  }
+
+  /** One section's heading: its name, how many rows are under it, its overflow menu, and the drop target that files a dragged task under it. */
+  function renderSectionHead(
+    section: TaskSection,
+    order: readonly string[],
+    count: number,
+  ): ReactNode {
     const s = strings.tasks.lists;
     if (sectionEditing?.mode === "rename" && sectionEditing.id === section.id) {
       return (
@@ -3377,40 +3530,96 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
         }
       >
         <span className="tasks__section-name">{section.name}</span>
-        <span className="tasks__section-actions">
-          <Button
-            size="sm"
-            className="tasks__section-action"
-            aria-label={s.renameSectionLabel}
-            onClick={() => beginRenameSection(section)}
-          >
-            <Icon name="pencil" size={14} />
-          </Button>
-          {/* A lone heading has nothing to step past — see the rail row. */}
-          {order.length > 1 && (
-            <MoveMenu
-              label={s.sectionMenuLabel}
-              triggerClassName="tasks__section-menu"
-              up={stepNeighbours(order, index, -1)}
-              down={stepNeighbours(order, index, 1)}
-              onMove={(step) => moveSectionStep(section, step)}
-            />
-          )}
-          <Button
-            size="sm"
-            className="tasks__section-action tasks__section-delete"
-            aria-label={s.deleteSectionLabel}
-            // A hard delete of a user-named container asks first, the way the
-            // note rail's folders do. The tasks in it are not lost — they move
-            // to the list body — and the dialog says so, since that is the fact
-            // the answer turns on.
-            onClick={() => setPendingDeleteSection(section)}
-          >
-            <Icon name="trash" size={14} />
-          </Button>
+        {/* How much is under this heading, so a collapsed-looking group is
+            never mistaken for an empty one. Tabular, so the counts down a
+            column of headings line up. */}
+        <span className="tasks__group-count nx-num" title={strings.tasks.groups.countTitle}>
+          {count}
         </span>
+        {/* The rail row's rule, one scope in: ONE overflow control rather than
+            three hidden-but-laid-out buttons, so a heading's name is never
+            ellipsised to make room for affordances that are not being drawn. */}
+        <NotePopover label={s.sectionMenuLabel} triggerClassName="tasks__section-menu">
+          {(close) => (
+            <>
+              <button
+                className="note__menu-item"
+                role="menuitem"
+                type="button"
+                onClick={() => {
+                  beginRenameSection(section);
+                  close();
+                }}
+              >
+                {s.renameSectionLabel}
+              </button>
+              {/* A lone heading has nothing to step past — see the rail row. */}
+              {order.length > 1 && (
+                <>
+                  {sectionMoveItem(s.moveUp, stepNeighbours(order, index, -1), section, close)}
+                  {sectionMoveItem(s.moveDown, stepNeighbours(order, index, 1), section, close)}
+                </>
+              )}
+              <div className="note__menu-sep" role="separator" />
+              <button
+                className="note__menu-item note__menu-item--danger"
+                role="menuitem"
+                type="button"
+                // A hard delete of a user-named container asks first, the way
+                // the note rail's folders do. The tasks in it are not lost —
+                // they move to the list body — and the dialog says so, since
+                // that is the fact the answer turns on.
+                onClick={() => {
+                  setPendingDeleteSection(section);
+                  close();
+                }}
+              >
+                {s.deleteSectionLabel}
+              </button>
+            </>
+          )}
+        </NotePopover>
       </div>
     );
+  }
+
+  /**
+   * The same rows, cut into dated runs under 28px headings — the answer to a
+   * sixty-row list, and drawn only where `dateBandField` says the order already
+   * IS that date (see its own comment).
+   *
+   * The order is taken from the very engine the rows are then handed back to
+   * (`applySort` with this view's own sort), so the headings and the rows can
+   * never disagree about which run a task is in. A VIEW has no sort at all —
+   * `activeSort` is undefined there and `applySort` returns its input untouched
+   * — which is exactly right: its order is `compareSmartListTasks`', already
+   * applied upstream.
+   *
+   * No drop gaps and no grips: banding happens only where the order is derived
+   * or sorted, and both of those already suppress the drag (`manualOrder`).
+   */
+  function renderBands(roots: readonly TaskFields[], field: BandField): ReactNode {
+    const ordered = applySort<TaskFields>(roots, activeSort, TASK_SCHEMA);
+    return bandRows(ordered, field, todayKey).map((band, index) => (
+      // The run's index joins its day in the key: two runs can legitimately
+      // share a day if a future comparator stops being monotonic, and a
+      // duplicate React key would silently drop one of them.
+      <div className="tasks__band" key={`${band.key}-${String(index)}`}>
+        <div className="tasks__band-head">
+          <span className="tasks__band-name">{bandLabel(band.key, todayKey)}</span>
+          <span className="tasks__group-count nx-num" title={strings.tasks.groups.countTitle}>
+            {band.rows.length}
+          </span>
+        </div>
+        <ListView<TaskFields>
+          items={band.rows}
+          schema={TASK_SCHEMA}
+          config={smartListId === null ? listConfig : LIST_CONFIG}
+          itemKey={(task) => task.id}
+          renderItem={(task) => renderBranch(task, 0, new Set())}
+        />
+      </div>
+    ));
   }
 
   /**
@@ -3434,21 +3643,26 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
 
     return (
       <div className="tasks__group" key={group.section?.id ?? "__body__"}>
-        {group.section !== null && renderSectionHead(group.section, sectionOrder)}
+        {group.section !== null &&
+          renderSectionHead(group.section, sectionOrder, group.roots.length)}
         {/* Only the top-level rows are handed to the engine; each one renders
             its own subtree (see `renderBranch`). */}
-        <ListView<TaskFields>
-          items={group.roots}
-          schema={TASK_SCHEMA}
-          // A VIEW is always the bare config (ADR-049): its order is the query's,
-          // and it has no list row to remember a sort in.
-          config={smartListId === null ? listConfig : LIST_CONFIG}
-          itemKey={(task) => task.id}
-          renderItem={(task) => [
-            dragInGroup ? renderDropGap(previousOf.get(task.id) ?? null, task.id) : null,
-            ...renderBranch(task, 0, new Set()),
-          ]}
-        />
+        {bandField !== null ? (
+          renderBands(group.roots, bandField)
+        ) : (
+          <ListView<TaskFields>
+            items={group.roots}
+            schema={TASK_SCHEMA}
+            // A VIEW is always the bare config (ADR-049): its order is the query's,
+            // and it has no list row to remember a sort in.
+            config={smartListId === null ? listConfig : LIST_CONFIG}
+            itemKey={(task) => task.id}
+            renderItem={(task) => [
+              dragInGroup ? renderDropGap(previousOf.get(task.id) ?? null, task.id) : null,
+              ...renderBranch(task, 0, new Set()),
+            ]}
+          />
+        )}
         {/* The end of the group: the one gap that cannot live inside a row. */}
         {dragInGroup && last !== null && renderDropGap(last.id, null)}
       </div>
@@ -3579,6 +3793,33 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   }
 
   /**
+   * One „Pomeri gore/dole“ item of a rail row's overflow menu. `MoveMenu`'s own
+   * rule, one menu in: the item at the end of its scope is DISABLED rather than
+   * dropped, so the menu has the same shape every time it opens.
+   */
+  function railMoveItem(
+    text: string,
+    step: StepTarget | null,
+    list: TaskList,
+    close: () => void,
+  ): ReactNode {
+    return (
+      <button
+        className="note__menu-item"
+        role="menuitem"
+        type="button"
+        disabled={step === null}
+        onClick={() => {
+          if (step !== null) moveListStep(list, step);
+          close();
+        }}
+      >
+        {text}
+      </button>
+    );
+  }
+
+  /**
    * One scope of the rail, in the order it draws — the roots, or one list's
    * children. The movable order is computed once per scope here rather than per
    * row, and it is what „Pomeri gore/dole“ steps through (see `stepNeighbours`).
@@ -3637,55 +3878,74 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
               >
                 <span className="tasks__rail-name">{list.name}</span>
               </button>
-              <span className="tasks__rail-actions">
-                <Button
-                  size="sm"
-                  className="tasks__rail-action"
-                  aria-label={s.renameListLabel}
-                  onClick={() => beginRenameList(list)}
-                >
-                  <Icon name="pencil" size={14} />
-                </Button>
-                <Button
-                  size="sm"
-                  className="tasks__rail-action"
-                  aria-label={s.newSubList}
-                  onClick={() => beginNewList(list.id)}
-                >
-                  <Icon name="plus" size={14} />
-                </Button>
-                {/* The Inbox is where "premesti u Inbox" moves things and where a
-                    task lands when the user names no list, so it can neither be
-                    deleted nor moved — the store refuses both, and neither
-                    affordance is shown at all rather than offered and then
-                    rejected. */}
-                {!list.isInbox && (
+              {/* ONE overflow control, not four inline ones. The four ✎ ＋ ⋯ ×
+                  buttons were `opacity: 0` at rest but still took their width
+                  in the row's flex line — about 108px of a 167px rail — so
+                  every list name was ellipsised to roughly six characters
+                  („Fakul…“, „Proje…“) to make room for affordances that were
+                  not even being drawn. A hidden control that still occupies
+                  layout is the defect; collapsing the cluster to a single 24px
+                  menu is the fix, and the name gets the rail back. */}
+              <NotePopover label={s.listMenuLabel} triggerClassName="tasks__rail-menu">
+                {(close) => (
                   <>
-                    {/* An only child has no siblings to step past, and a menu
-                        that can do nothing is an affordance this page does not
-                        draw (see the row's tag menu). Within a scope that HAS
-                        somewhere to go, the two items always both appear — the
-                        one at the end merely disabled. */}
-                    {order.length > 1 && (
-                      <MoveMenu
-                        label={s.listMenuLabel}
-                        triggerClassName="tasks__rail-menu"
-                        up={stepNeighbours(order, index, -1)}
-                        down={stepNeighbours(order, index, 1)}
-                        onMove={(step) => moveListStep(list, step)}
-                      />
-                    )}
-                    <Button
-                      size="sm"
-                      className="tasks__rail-action tasks__rail-delete"
-                      aria-label={s.deleteListLabel}
-                      onClick={() => setDeletePrompt(list)}
+                    <button
+                      className="note__menu-item"
+                      role="menuitem"
+                      type="button"
+                      onClick={() => {
+                        beginRenameList(list);
+                        close();
+                      }}
                     >
-                      <Icon name="trash" size={14} />
-                    </Button>
+                      {s.renameListLabel}
+                    </button>
+                    <button
+                      className="note__menu-item"
+                      role="menuitem"
+                      type="button"
+                      onClick={() => {
+                        beginNewList(list.id);
+                        close();
+                      }}
+                    >
+                      {s.newSubList}
+                    </button>
+                    {/* The Inbox is where "premesti u Inbox" moves things and
+                        where a task lands when the user names no list, so it
+                        can neither be deleted nor moved — the store refuses
+                        both, and neither item is shown at all rather than
+                        offered and then rejected. */}
+                    {!list.isInbox && (
+                      <>
+                        {/* An only child has no siblings to step past. Within a
+                            scope that HAS somewhere to go, both items always
+                            appear — the one at the end merely disabled, because
+                            a menu whose items come and go is one the user has
+                            to re-read on every open. */}
+                        {order.length > 1 && (
+                          <>
+                            {railMoveItem(s.moveUp, stepNeighbours(order, index, -1), list, close)}
+                            {railMoveItem(s.moveDown, stepNeighbours(order, index, 1), list, close)}
+                          </>
+                        )}
+                        <div className="note__menu-sep" role="separator" />
+                        <button
+                          className="note__menu-item note__menu-item--danger"
+                          role="menuitem"
+                          type="button"
+                          onClick={() => {
+                            setDeletePrompt(list);
+                            close();
+                          }}
+                        >
+                          {s.deleteListLabel}
+                        </button>
+                      </>
+                    )}
                   </>
                 )}
-              </span>
+              </NotePopover>
             </>
           )}
         </div>
@@ -3757,6 +4017,48 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     danas: countSmart("danas"),
     kasni: countSmart("kasni"),
   };
+
+  // --- „Kako stojim“ (the band above the rows) ------------------------------
+  //
+  // Four figures, every one of them counted from the tasks this page has
+  // actually loaded — the WHOLE profile, never the rail's current selection,
+  // exactly as the chart under it is. Two of them are the very counts the rail
+  // draws beside „Danas“ and „Kasni“ (`countSmart`), reused rather than
+  // recomputed, so the band and the rail can never state two different numbers
+  // for one question.
+  //
+  // „Zatvoreno“ is a FLOOR and says so. `completedAt` is the only evidence a
+  // closure leaves and it is lost three ways — a deleted task takes its history
+  // with it, reopening one clears the instant, and a recurring one stamps
+  // nothing until its rule is exhausted. The chart's caption already spells all
+  // three out directly beneath; the note here is what keeps the figure from
+  // reading as a total in the meantime.
+  const openCount = (tasks ?? []).reduce((count, task) => (task.done ? count : count + 1), 0);
+  /** Inclusive seven-day window ending today — the same span the search „nedelja“ operator means. */
+  const closedFrom = shiftDay(todayKey, -6);
+  const closedCount = (tasks ?? []).reduce((count, task) => {
+    const day = task.completedAt === null ? null : task.completedAt.slice(0, 10);
+    return day !== null && day >= closedFrom && day <= todayKey ? count + 1 : count;
+  }, 0);
+  const overdueCount = smartCounts.kasni ?? 0;
+  const summaryStats: Stat[] = [
+    { label: strings.tasks.summary.open, value: String(openCount) },
+    { label: strings.tasks.summary.today, value: String(smartCounts.danas ?? 0), tone: "accent" },
+    {
+      label: strings.tasks.summary.overdue,
+      value: String(overdueCount),
+      // Tinted only when there IS something owed: a red zero is an alarm about
+      // nothing, and a band that always shows one stops being read.
+      tone: overdueCount > 0 ? "danger" : "neutral",
+    },
+    {
+      label: strings.tasks.summary.closed,
+      value: String(closedCount),
+      unit: strings.tasks.summary.closedUnit,
+      note: strings.tasks.summary.closedNote,
+      tone: "data",
+    },
+  ];
 
   // --- The four engine configs this render hands its view (ADR-050) ---------
   //
@@ -3867,9 +4169,129 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     }
   }
 
+  /**
+   * What the rows below actually are — the selected list's name, or the view's.
+   * The rail says the same thing in gold two hundred pixels to the left, which
+   * is exactly why the header repeats it: the rows themselves carry no heading,
+   * so on a page scrolled past the rail there is otherwise nothing on screen
+   * that names the scope its sixty rows came from.
+   */
+  const scopeName: string | null =
+    smartListId !== null ? strings.tasks.smart.names[smartListId] : (selectedList?.name ?? null);
+
+  /**
+   * The page's own top-level controls, in the slot `PageHeader` declares for
+   * them (ADR-050's toggle, ADR-035's „Šabloni“, ADR-038's „Izbor“).
+   *
+   * They used to sit in `.tasks__toolbar` beside the capture form, where they
+   * collided with it outright — see the named-trigger rule in tasks.css for the
+   * cascade defect that made „Šabloni“ paint over the toggle. Here they are a
+   * wrapping flex row of their own with nothing competing for the line, which
+   * is what makes the collision unrepresentable rather than merely fixed: the
+   * form no longer shares a row with anything at all.
+   *
+   * Absent until the lists are in hand: every one of them acts on a list, and a
+   * toggle offered over a page that does not yet know which list it is showing
+   * is a control with nothing behind it.
+   */
+  const headerActions: ReactNode = lists === null ? null : (
+    <>
+      {/* Šabloni (ADR-035). Absent inside a VIEW: there is no list for a new
+          task to land in, so every item in this menu would be an affordance
+          that can do nothing. */}
+      {smartListId === null && (
+        <NotePopover
+          label={strings.tasks.templates.menuLabel}
+          triggerClassName="tasks__templates-trigger"
+          triggerContent={strings.tasks.templates.title}
+        >
+          {(close) => (
+            <>
+              <span className="note__menu-label">{strings.tasks.templates.title}</span>
+              {sortedTemplates.length === 0 ? (
+                <p className="note__menu-caption">{strings.tasks.templates.empty}</p>
+              ) : (
+                sortedTemplates.map((template) => (
+                  <div key={template.id} className="tasks__template-row">
+                    <button
+                      className="note__menu-item tasks__template-apply"
+                      role="menuitem"
+                      type="button"
+                      title={strings.tasks.templates.applyTitle}
+                      onClick={() => void applyTemplate(template, close)}
+                    >
+                      {template.name}
+                    </button>
+                    <button
+                      className="tasks__template-delete"
+                      type="button"
+                      aria-label={strings.tasks.templates.delete}
+                      onClick={() => void deleteTemplate(template.id)}
+                    >
+                      <Icon name="trash" size={14} />
+                    </button>
+                  </div>
+                ))
+              )}
+              {templateFailed && (
+                <p className="note__menu-caption" role="status">
+                  {strings.tasks.templates.actionError}
+                </p>
+              )}
+            </>
+          )}
+        </NotePopover>
+      )}
+
+      {/* Izbor borrows the toggle's typographic active state but stays OUT of
+          that group: it is not a fifth shape, and the board has no rows to
+          pick. */}
+      {view === "list" && (
+        <Button
+          size="sm"
+          className="nx-segmented__option tasks__view"
+          aria-pressed={selecting}
+          onClick={toggleSelectionMode}
+        >
+          {strings.tasks.bulk.mode}
+        </Button>
+      )}
+
+      {/* The shape toggle is a per-LIST memory (TASK-005); a view has no row to
+          remember one in and is always a list, so the group is not drawn rather
+          than drawn disabled. Four shapes since ADR-050. */}
+      {smartListId === null && (
+        <div className="tasks__views" role="group" aria-label={strings.tasks.viewLabel}>
+          {viewOptions().map(({ value, label }) => (
+            <Button
+              key={value}
+              size="sm"
+              className="nx-segmented__option tasks__view"
+              aria-pressed={view === value}
+              onClick={() => void selectView(value)}
+            >
+              {label}
+            </Button>
+          ))}
+        </div>
+      )}
+    </>
+  );
+
   return (
     <div className="tasks">
-      <PageHeader title={moduleName("tasks")} className="tasks__header" />
+      {/* The override here sets the header's GRID PLACEMENT and nothing else.
+          It must never state a height or an overflow: the shared header is
+          72px so its watermark can be a whole mark rather than a slice, and a
+          page that shortened or clipped it would cut the mark back into the
+          fragment the sweep found hanging off the corner. */}
+      <PageHeader
+        title={moduleName("tasks")}
+        sigil="tasks"
+        className="tasks__header"
+        {...(headerActions === null ? {} : { actions: headerActions })}
+        {...(scopeName === null ? {} : { subtitle: scopeName })}
+      />
       <aside className="tasks__rail" aria-label={strings.tasks.lists.railLabel}>
         {/* Pregledi (ADR-049), above the lists: five VIRTUAL lists — queries
             over every list at once, never places anything is filed into. */}
@@ -4016,21 +4438,30 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
       </aside>
 
       <div className="tasks__main">
-        {/* The regimen's shape before its rows, the wall's own precedent
-            (HabitWall): a summary of the whole profile, never gated on
-            which list or view the rail has selected. Absent while the fetch
-            is still in flight or has failed — a chart drawn over data that
-            is not actually in hand yet would be a picture of nothing. */}
+        {/* Summary before detail. Both of these describe the whole profile and
+            neither is gated on which list or view the rail has selected — the
+            band answers „kako stojim“ in the time it takes to look, and the
+            chart answers „and which way is it going“. Both are absent while the
+            fetch is still in flight or has failed: a figure drawn over data
+            that is not actually in hand yet would be a number about nothing,
+            which is the one thing a 24px numeral must never be. */}
         {!failed && tasks !== null && (
-          <TaskFlow tasks={tasks} today={todayKey} weekStart={weekStart} />
+          <>
+            <StatBand stats={summaryStats} />
+            <TaskFlow tasks={tasks} today={todayKey} weekStart={weekStart} />
+          </>
         )}
-        <div className="tasks__toolbar">
-          {/* The add/edit form is hidden inside a VIEW while nothing is being
-              edited (ADR-049): a capture typed under „Danas“ would file into the
-              Inbox, which is a lie about where the row went — and an empty view
-              must not invite typing that goes somewhere else. Editing an
-              existing row is a different act entirely, so ✎ still opens it. */}
-          {(smartListId === null || editingId !== null) && (
+        {/* The add/edit form is hidden inside a VIEW while nothing is being
+            edited (ADR-049): a capture typed under „Danas“ would file into the
+            Inbox, which is a lie about where the row went — and an empty view
+            must not invite typing that goes somewhere else. Editing an
+            existing row is a different act entirely, so ✎ still opens it.
+
+            The row WRAPPER goes with it, not just the form: an empty div is
+            still a flex item of `.tasks__main`, and it would spend the column's
+            gap on nothing every time a view is open. */}
+        {(smartListId === null || editingId !== null) && (
+          <div className="tasks__toolbar">
             <form className="tasks__form" onSubmit={submitForm}>
               <div className="tasks__quick-add">
                 <input
@@ -4254,93 +4685,8 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                 </p>
               )}
             </form>
-          )}
-
-          <div className="tasks__toolbar-actions">
-            {/* Šabloni (ADR-035). Beside the view toggle rather than on a row,
-                because applying one is an action on the LIST the rail has
-                selected — and it behaves identically in the kanban view, which
-                shows that same list. That is also why it is absent inside a
-                VIEW: there is no list for a new task to land in, so every item
-                in this menu would be an affordance that can do nothing. */}
-            {smartListId === null && (
-              <NotePopover
-                label={strings.tasks.templates.menuLabel}
-                triggerClassName="tasks__templates-trigger"
-                triggerContent={strings.tasks.templates.title}
-              >
-                {(close) => (
-                  <>
-                    <span className="note__menu-label">{strings.tasks.templates.title}</span>
-                    {sortedTemplates.length === 0 ? (
-                      <p className="note__menu-caption">{strings.tasks.templates.empty}</p>
-                    ) : (
-                      sortedTemplates.map((template) => (
-                        <div key={template.id} className="tasks__template-row">
-                          <button
-                            className="note__menu-item tasks__template-apply"
-                            role="menuitem"
-                            type="button"
-                            title={strings.tasks.templates.applyTitle}
-                            onClick={() => void applyTemplate(template, close)}
-                          >
-                            {template.name}
-                          </button>
-                          <button
-                            className="tasks__template-delete"
-                            type="button"
-                            aria-label={strings.tasks.templates.delete}
-                            onClick={() => void deleteTemplate(template.id)}
-                          >
-                            <Icon name="trash" size={14} />
-                          </button>
-                        </div>
-                      ))
-                    )}
-                    {templateFailed && (
-                      <p className="note__menu-caption" role="status">
-                        {strings.tasks.templates.actionError}
-                      </p>
-                    )}
-                  </>
-                )}
-              </NotePopover>
-            )}
-
-            {/* The shape toggle is a per-LIST memory (TASK-005); a view has no
-                row to remember one in and is always a list, so the group is not
-                drawn rather than drawn disabled. Four shapes since ADR-050. */}
-            {smartListId === null && (
-              <div className="tasks__views" role="group" aria-label={strings.tasks.viewLabel}>
-                {viewOptions().map(({ value, label }) => (
-                  <Button
-                    key={value}
-                    size="sm"
-                    className="nx-segmented__option tasks__view"
-                    aria-pressed={view === value}
-                    onClick={() => void selectView(value)}
-                  >
-                    {label}
-                  </Button>
-                ))}
-              </div>
-            )}
           </div>
-
-          {/* Izbor sits beside the view toggle and borrows its typographic
-              active state, but stays OUT of that group: it is not a third view,
-              and the board has no rows to pick. */}
-          {view === "list" && (
-            <Button
-              size="sm"
-className="nx-segmented__option tasks__view"
-              aria-pressed={selecting}
-              onClick={toggleSelectionMode}
-            >
-              {strings.tasks.bulk.mode}
-            </Button>
-          )}
-        </div>
+        )}
 
         {/* The view's own controls (ADR-050), above the rows they order and
             narrow: what the shown scope is sorted by, what a board's columns
@@ -4697,7 +5043,11 @@ className="nx-segmented__option tasks__view"
         )}
 
         {failed ? (
-          <EmptyState title={strings.tasks.emptyTitle} description={strings.tasks.loadError} />
+          <EmptyState
+            sigil="tasks"
+            title={strings.tasks.emptyTitle}
+            description={strings.tasks.loadError}
+          />
         ) : tasks === null || lists === null ? (
           <p className="app__muted">{strings.app.loading}</p>
         ) : view === "list" ? (
@@ -4714,20 +5064,27 @@ className="nx-segmented__option tasks__view"
               // was ever finished" — the archive right beneath holds it all,
               // and the empty state says so instead.
               <EmptyState
+                sigil="tasks"
                 title={strings.tasks.smart.names.zavrseno}
                 description={`${strings.tasks.smart.allArchivedPrefix} ${TASK_ARCHIVE_AFTER_DAYS} ${strings.tasks.smart.allArchivedSuffix}`}
               />
             ) : filterHidesEverything ? (
-              <EmptyState title={strings.tasks.emptyTitle} description={filterEmptyDescription} />
+              <EmptyState
+                sigil="tasks"
+                title={strings.tasks.emptyTitle}
+                description={filterEmptyDescription}
+              />
             ) : smartListId !== null && visibleTasks.length === 0 ? (
               // A view's own calm statement of fact, never the list's „zapiši
               // prvi zadatak“ invitation: there is no field to type into here.
               <EmptyState
+                sigil="tasks"
                 title={strings.tasks.smart.names[smartListId]}
                 description={strings.tasks.smart.empty[smartListId]}
               />
             ) : listTasks.length === 0 && listSections.length === 0 ? (
               <EmptyState
+                sigil="tasks"
                 title={strings.tasks.emptyTitle}
                 description={strings.tasks.emptyDescription}
               />
@@ -4811,6 +5168,7 @@ className="nx-segmented__option tasks__view"
           // for the board before TASK-004 — and a filter that hides everything
           // says which of the two it is.
           <EmptyState
+            sigil="tasks"
             title={strings.tasks.emptyTitle}
             description={
               filterHidesEverything ? filterEmptyDescription : strings.tasks.emptyDescription

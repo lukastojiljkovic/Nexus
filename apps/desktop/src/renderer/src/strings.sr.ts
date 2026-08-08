@@ -70,6 +70,18 @@ export const sr = {
     themeToggle: "Promeni temu",
     themeDan: "Dan",
     themeNoc: "Noć",
+    /**
+     * The drawn window frame (`TitleBar.tsx`). Three controls that used to be
+     * the operating system's, so their names have to be the ones a Serbian
+     * Windows already uses — this is the one strip in the app where inventing
+     * vocabulary would be a usability defect rather than a voice.
+     */
+    window: {
+      minimize: "Umanji",
+      maximize: "Uvećaj",
+      restore: "Vrati veličinu",
+      close: "Zatvori prozor",
+    },
     loading: "Učitavanje…",
     /**
      * Asked before a file is removed, by all THREE attachment panels — notes,
@@ -388,12 +400,49 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
        */
       focusPaused: "Fokus je pauziran",
     },
+    /**
+     * The summary band over the grid — „kako stojim?" answered before „šta mi
+     * je na spisku?".
+     *
+     * Every figure is COUNTED from rows this page itself read, through the
+     * owning module's own predicates; nothing here is estimated and nothing is
+     * a projection. A figure whose module is switched off is not drawn at all
+     * rather than drawn as a zero, because a calendar that is not installed has
+     * not reported an empty day.
+     */
+    summary: {
+      eventsToday: "Događaji danas",
+      /** Tasks whose rok is today — TASK's own „Danas“ list, counted. */
+      tasksToday: "Rokovi danas",
+      /** Tasks whose rok is already past — TASK's own „Kasni“ list, counted. */
+      tasksLate: "Kasni",
+      focus: "Fokus danas",
+      /** The unit beside the focus figure; the „Fokus“ card states the same day as a duration. */
+      focusUnit: "min",
+      /**
+       * Drawn ONLY while a phase is actually running, which is exactly when the
+       * figure is a lower bound rather than a total: the engine writes a
+       * session when one is stopped, so the minutes a timer is earning right
+       * now are in no row yet and cannot be counted honestly.
+       */
+      focusRunningNote: "bez sesije koja upravo traje",
+    },
     /** Danas widget — today's events, birthdays, and tasks due today. */
     today: {
       title: "Danas",
       empty: "Nema obaveza danas 🎉",
+      /**
+       * The kind of a row that has no time to show, as the LEADING MARK's
+       * accessible name — never as visible text.
+       *
+       * It used to be printed on every task row, which meant the word „zadatak"
+       * ran down the card once per row and said the same thing every time. A
+       * word that is constant down a list is the column's name and not its
+       * data; the mark carries it now, and this copy is what a screen reader is
+       * told instead of being told nothing.
+       */
       taskTag: "zadatak",
-      /** Leading tag on a birthday/anniversary row, in place of a time — same lower-case idiom as `taskTag`. */
+      /** The same, for the birthday/anniversary mark — the one leading whose kind really does vary row to row. */
       personTag: {
         birthday: "rođendan",
         anniversary: "godišnjica",
@@ -486,8 +535,13 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       title: "Trening",
       empty: "Ove nedelje još nema treninga",
       weekLabel: "Ove nedelje",
-      /** A session in progress outranks the count — it is the one thing on this card that is happening. */
-      openLabel: "U toku",
+      /**
+       * A session in progress outranks the count — it is the one thing on this
+       * card that is happening rather than having happened. It is the whole row
+       * title and carries no separate „U toku" tag beside it: the two said the
+       * same thing, and one of them was sitting in the gutter every other card
+       * uses for a time.
+       */
       openTitle: "Trening u toku",
       sessionUnitOne: "trening",
       sessionUnitFew: "treninga",
@@ -656,6 +710,30 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       weekUnitFew: "nedelje",
       weekUnitMany: "nedelja",
       emptyReason: "Grafik se crta čim postoji bar jedan zadatak sa datumom nastanka.",
+    },
+    /**
+     * The band above the rows: „how am I doing", answered before „what is on
+     * the list". A page holding sixty rows cannot be read row by row, and the
+     * question somebody arrives with is not about any single one of them.
+     *
+     * Every figure is counted from the tasks this page has actually loaded —
+     * the whole profile, never the rail's current selection, exactly as the
+     * chart beneath it is. THE LAST ONE IS A FLOOR: `completedAt` is the only
+     * evidence a closure leaves, and it is lost three ways (a deleted task
+     * takes its history with it, reopening one clears the instant, a recurring
+     * one stamps nothing until its rule is exhausted — see `chart.caption`).
+     * So it carries a note saying so; a derived number whose source is lossy
+     * reads as a total unless the drawing says otherwise.
+     */
+    summary: {
+      open: "Otvoreno",
+      today: "Za danas",
+      overdue: "Kasni",
+      closed: "Zatvoreno",
+      /** The window „Zatvoreno“ counts, set beside the figure rather than folded into its label. */
+      closedUnit: "za 7 dana",
+      /** One line under that figure — the whole reason is in `chart.caption` right beneath it. */
+      closedNote: "Donja granica",
     },
     quickAddPlaceholder: "Novi zadatak — upiši i pritisni Enter",
     quickAddSubmit: "Dodaj",
@@ -896,6 +974,49 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       allArchivedSuffix: "dana je u arhivi.",
       /** Tooltip on the row chip that names a task's list — inside a view the rows come from every list at once. */
       listChipTitle: "Lista kojoj zadatak pripada",
+    },
+    /**
+     * Dated group headings over the rows. Sixty rows in one run cannot be
+     * scanned; the same sixty in six dated runs of ten can, and the heading is
+     * what makes each run answerable at a glance.
+     *
+     * Only three days get a WORD. Every other day within a week of today is
+     * drawn as its own weekday and date by `formatQuickDate`, so a heading is
+     * never a relative phrase the reader has to count backwards from („za 3
+     * nedelje“ says nothing a calendar can be checked against).
+     *
+     * Past that week the rows collapse into „Ranije“ and „Kasnije“ — one
+     * heading each, not one per day. A day-per-heading rule reads well on
+     * „Sledećih 7 dana“ and falls apart on „Kasni“, where thirty overdue tasks
+     * are spread over four months and would take thirty headings.
+     *
+     * The headings are only drawn where the ROW ORDER is itself by that date —
+     * a view's derived order, or a list sorted by rok/počinje/završen. Under a
+     * manual order they would cut the arrangement the user made into pieces.
+     */
+    groups: {
+      today: "Danas",
+      tomorrow: "Sutra",
+      yesterday: "Juče",
+      /**
+       * The two long tails, worded so each holds for any banded date: a rok
+       * more than a week gone is late and a completion more than a week gone is
+       * old, and „ranije“ is true of both without the heading needing to know
+       * which field it is drawn over.
+       */
+      earlier: "Ranije",
+      later: "Kasnije",
+      /**
+       * The trailing run: rows the banded date is simply not set on.
+       *
+       * „Bez datuma“ rather than „Bez roka“, and that is not pedantry: the same
+       * heading is drawn over a list sorted by „Završen“, where every unfinished
+       * task lands in this band — calling them „bez roka“ would state something
+       * about their deadlines that the band knows nothing about.
+       */
+      noDate: "Bez datuma",
+      /** Tooltip on the count beside a heading — a bare number cannot say what it counts. */
+      countTitle: "Broj zadataka u grupi",
     },
     /**
      * The list rail and the sections inside a list (TASK-004 / ADR-029).
@@ -1270,6 +1391,18 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       legendMore: "Tri do pet",
       legendMost: "Šest i više",
       emptyReason: "Ritam se crta čim postoji bar jedna beleška.",
+      /**
+       * The three figures in the band the rhythm is drawn beside. Two are
+       * exact counts of rows the page genuinely loaded; the middle one is a
+       * FLOOR, and its `note` says so in the same breath — a lower bound set
+       * in 24px type reads as a total unless the drawing itself objects.
+       */
+      statNotes: "Beleške",
+      statDays: "Dana sa upisom",
+      /** Reads as „47 od 182" — the denominator is how many days are actually drawn, not the window's nominal length. */
+      statDaysOf: "od",
+      statDaysNote: "Najmanje toliko — pamte se dan nastanka i dan poslednje izmene, ništa između.",
+      statPinned: "Zakačeno",
     },
     newNote: "Nova beleška",
     untitled: "Bez naslova",
@@ -1332,6 +1465,26 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     viewNames: {
       list: "Lista",
       cards: "Kartice",
+    },
+    /**
+     * The note list's sticky group headings. A pane of fifty rows run flat is
+     * not a list, it is a wall, and these are the cuts through it.
+     *
+     * The store hands the rows over ordered `pinned DESC, updated_at DESC`, so
+     * these buckets are already contiguous — grouping only ever inserts a
+     * heading, it never reorders a row.
+     *
+     * Anything older than „ovog meseca" is named by its OWN month („jul
+     * 2026."), formatted from the date through `Intl` rather than written out
+     * here: a hand-typed list of twelve Serbian month names is a second
+     * calendar to keep in step with the one `Intl` already has.
+     */
+    listGroups: {
+      pinned: "Zakačeno",
+      today: "Danas",
+      yesterday: "Juče",
+      week: "Poslednjih 7 dana",
+      month: "Ovog meseca",
     },
     save: "Sačuvaj",
     cancel: "Otkaži",
@@ -2148,10 +2301,33 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     chart: {
       heading: "Šta zauzima prostor",
       caption: "Zbir veličina po vrsti datoteke.",
-      truncatedCaption:
-        "Prikazano je 500 najnovijih datoteka, pa je ovo najmanje što zauzimaju — ne ukupno.",
       descriptionLead: "Šta zauzima prostor",
       emptyReason: "Pregled se crta čim postoji bar jedna priložena datoteka.",
+    },
+    /**
+     * Every sentence this page says about the 500-entry cap, in pieces, because
+     * the NUMBER is never written here: it comes from `DOC_ATTACHMENT_LIST_LIMIT`
+     * — the very constant the store caps on — so no caption can outlive the cap
+     * it names. The three surfaces that must say it (the graphic's caption, the
+     * band's lower-bound note, the read-aloud sentence) all build it from the
+     * same two halves, so they cannot drift apart either.
+     */
+    cap: {
+      lead: "Prikazano je",
+      newest: "najnovijih.",
+      chartTail: "najnovijih datoteka, pa je ovo najmanje što zauzimaju — ne ukupno.",
+    },
+    /** Said once, under the band, when the read was capped — the advice, not the number. */
+    truncatedAdvice: "Suzi pretragu ili filtere da vidiš ostale.",
+    /**
+     * The band above the graphic. Two figures, both derived from exactly the rows
+     * on screen — and when the read hit its cap the count is a floor („500+") and
+     * the size says in its own note that older files were never weighed.
+     */
+    band: {
+      files: "Datoteke",
+      total: "Ukupno",
+      floorNote: "Najmanje — starije datoteke nisu uračunate.",
     },
     title: "Datoteke",
     caption: "Sve datoteke priložene uz beleške, zadatke i predmete.",
@@ -2196,13 +2372,10 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     untitledOwner: "Bez naslova",
     /** Alt text for a grid thumbnail is the file name; this labels the typographic mark a non-image gets instead. */
     fileMarkLabel: "Datoteka",
-    /** The summary line: „N datoteka · X" (or „N+ datoteka · najmanje X" when the read was capped). */
+    /** The counted noun beside a per-family figure — „12 datoteke". */
     summaryUnitOne: "datoteka",
     summaryUnitFew: "datoteke",
     summaryUnitMany: "datoteka",
-    summaryAtLeast: "najmanje",
-    truncatedNote:
-      "Prikazano je prvih 500 datoteka. Suzi pretragu ili filtere da vidiš ostale.",
     /** Two different situations, two different sentences — one of them would be a lie about the other. */
     emptyTitle: "Nema priloženih datoteka",
     emptyDescription:
@@ -2241,6 +2414,32 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       descriptionActual: "izmereno",
       emptyReason: "Grafik se crta čim postoji planiran ili izmeren minut.",
     },
+    /**
+     * The band the hub opens with — „kako stojim" answered before „šta je na
+     * spisku".
+     *
+     * Every figure is counted out of what the page has ALREADY loaded: the špil
+     * counts it draws the špil rows from, the 30-day statistics it draws the
+     * section at the bottom from, and the exam list itself. Nothing here asks
+     * the store a question of its own, and nothing here is a figure this module
+     * went looking for — which is the only way a number this large on a page
+     * can be trusted.
+     */
+    overview: {
+      dueLabel: "Za ponavljanje",
+      newLabel: "Nove kartice",
+      matureLabel: "Zrele kartice",
+      /**
+       * The maturity census is over the WHOLE collection, while everything in
+       * „Poslednjih 30 dana" below is windowed — so the figure says which of
+       * the two it is, in the same breath.
+       */
+      matureNote: "u celoj kolekciji",
+      examLabel: "Sledeći ispit",
+      /** The figure when no exam is ahead. Never a zero, which reads as „danas". */
+      examNone: "—",
+      examNoneNote: "nema zakazanih",
+    },
     title: "Predmeti",
     nameLabel: "Naziv predmeta",
     namePlaceholder: "Naziv predmeta",
@@ -2267,7 +2466,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     undo: "Vrati",
     dismiss: "Zatvori",
     emptyTitle: "Nema predmeta",
-    emptyDescription: "Dodaj prvi predmet u formi iznad — naziv je dovoljan.",
+    /** „u formi iznad" until the form moved behind „Dodaj predmet" — the sentence had to stop pointing at a form nobody can see. */
+    emptyDescription: "Dodaj prvi predmet — naziv je dovoljan.",
     loadError: "Predmeti se trenutno ne mogu učitati. Pokušaj ponovo kasnije.",
     showArchived: "Prikaži arhivirano",
     hideArchived: "Sakrij arhivirano",
@@ -2400,8 +2600,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     // --- Card management (deck drill-in) ------------------------------------
     cardsBack: "← Nazad",
     cardsEmptyTitle: "Nema kartica",
-    cardsEmptyDescription:
-      "Dodaj prvu karticu u formi iznad — prednja i zadnja strana su dovoljne.",
+    /** The card form is BELOW this empty state, never above it — the sentence used to point the wrong way. */
+    cardsEmptyDescription: "Dodaj prvu karticu — prednja i zadnja strana su dovoljne.",
     loadCardsError: "Kartice se trenutno ne mogu učitati. Pokušaj ponovo kasnije.",
     addCard: "Dodaj karticu",
     saveCard: "Sačuvaj",
@@ -2932,6 +3132,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       archive: "Arhiviraj",
       unarchive: "Vrati iz arhive",
       delete: "Obriši",
+      /** The row's „⋯" — everything that can be DONE to an account, behind one control. */
+      menuLabel: "Radnje nad računom",
       deletedNotice: "Račun je obrisan, zajedno sa svojim transakcijama.",
       /** The invitation a profile with no accounts sees — never a sample row. */
       emptyTitle: "Još nema računa",
@@ -2941,6 +3143,12 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       invalidOpening: "Početno stanje nije ispravan iznos.",
       invalidName: "Naziv računa ne može biti prazan.",
     },
+    /**
+     * The band at the top of the page — „Ukupno" and, on „Knjiga", what came in
+     * and went out of the rows currently on screen. The figures are the message,
+     * so the explanation is a CAPTION under them and never the paragraph beside
+     * them it used to be.
+     */
     totals: {
       heading: "Ukupno",
       /**
@@ -2948,6 +3156,16 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
        * an omission: without kursa nijedan zbir preko valuta ne bi bio istinit.
        */
       caption: "Po valuti — Nexus nema kurs, pa se stanja u različitim valutama nikada ne sabiraju.",
+      /**
+       * The same, plus the two things the flow figures beside „Ukupno" would
+       * otherwise be misread as: they cover the PRIKAZANE rows (a filter changes
+       * them) and they leave prenosi out, because a prenos is neither prihod
+       * nor rashod anywhere in this module.
+       */
+      captionLedger:
+        "Ukupno je zbir aktivnih računa. Prihod i rashod se odnose na prikazane stavke; prenosi se ne računaju. Nexus nema kurs, pa se valute nikada ne sabiraju.",
+      /** Where a balance would stand for a currency the profile keeps no active account in — never a zero, which would be a claim. */
+      noBalance: "—",
       /** Shown while the profile has accounts but every one of them is archived. */
       none: "Nema aktivnih računa.",
     },
@@ -3042,8 +3260,17 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       loadError: "Učitavanje izveštaja nije uspelo. Izaberi mesec ponovo.",
     },
     ledger: {
+      /** The entry form is a disclosure now: the ledger is read far more often than it is written to. */
+      newTransaction: "Nova transakcija",
+      /**
+       * How many rows the filters left standing — the one thing a filtered
+       * ledger owes the reader that the rows themselves cannot say.
+       */
+      itemsOne: "stavka",
+      itemsFew: "stavke",
+      itemsMany: "stavki",
       emptyTitle: "Još nema transakcija",
-      emptyDescription: "Upiši prvu iznad — iznos, opis i datum su dovoljni.",
+      emptyDescription: "Dodaj prvu transakciju — iznos, opis i datum su dovoljni.",
       /** When a filter matches nothing, which is a different fact from an empty ledger. */
       filterEmptyTitle: "Ništa ne odgovara filterima",
       filterEmptyDescription: "Promeni račun, kategoriju ili period da vidiš više.",
@@ -3084,12 +3311,16 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       categoryLabel: "Filter po kategoriji",
       categoryAll: "Sve kategorije",
       categoryNone: "Bez kategorije",
+      /** Names the „Od – Do" pair as ONE control, so each half needs only its own short name. */
+      periodLabel: "Period",
       fromLabel: "Od",
       toLabel: "Do",
       clear: "Poništi filtere",
       invalidPeriod: "„Od“ ne može biti posle „Do“.",
     },
     views: {
+      /** Its own name, distinct from `pages.label`: two groups on one screen both announced „Prikaz" name nothing. */
+      label: "Oblik knjige",
       list: "Lista",
       cards: "Kartice",
     },
@@ -3147,6 +3378,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       cancel: "Otkaži",
       edit: "Izmeni",
       delete: "Obriši",
+      /** The row's „⋯": brisanje is the one act on a subscription that clicking the same button again does not undo. */
+      menuLabel: "Još radnji",
       deletedNotice: "Pretplata je obrisana.",
       /**
        * Pauza (ADR-074) — „zadrži pretplatu, ali me ne naplaćuj". A state of its
@@ -3202,14 +3435,29 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     undo: "Opozovi",
     dismiss: "Zatvori",
     /**
+     * The band above the wall. Every figure in it is counted off rows this page
+     * has genuinely loaded — today's tick state, the live habits, the longest
+     * niz actually standing — and the third one is ABSENT rather than zero when
+     * no niz is running, because „0 dana" beside no habit's name is a figure
+     * about nobody.
+     */
+    band: {
+      today: "Urađeno danas",
+      active: "Aktivne navike",
+      /** Label-first, so the count needs no numeral agreement: „Arhivirano: 3". */
+      archived: "Arhivirano",
+      streak: "Najduži niz u toku",
+    },
+    /**
      * „Zid navika" — the module's signature graphic: every habit as a row, every
      * day as a square, the whole regimen's texture at once.
      *
      * Deliberately NOT a second version of the per-habit calendar below it. That
      * one answers „how is THIS habit going" and is a control — its cells are
-     * buttons. The wall answers „is my regimen alive", is read at a glance, and
-     * is only ever looked at: a 8px square is texture, not a target, and two
-     * places to correct the same day is how they would start disagreeing.
+     * buttons and are sized like ones. The wall answers „is my regimen alive",
+     * is read at a glance, and is only ever looked at: a square that small is
+     * texture, not a target, and two places to correct the same day is how they
+     * would start disagreeing.
      */
     wall: {
       heading: "Zid navika",
@@ -3237,6 +3485,13 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       /** Said once: the picture is not where a day is corrected. */
       note: "Zid se samo gleda. Dan se ispravlja u kalendaru same navike, ispod.",
     },
+    /**
+     * „Danas" is the CHECKLIST — the one act this page is opened for. It is a
+     * short table rather than a second copy of the register below it: the same
+     * habits are here, but what is said about them is today's state, and every
+     * word that would otherwise repeat down the column („Niz", „ove nedelje")
+     * is said once in the head instead.
+     */
     today: {
       heading: "Danas",
       /**
@@ -3245,17 +3500,27 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
        * up every day — any day counts towards its week.
        */
       caption: "Navike koje se danas očekuju. One sa nedeljnom kvotom stoje ovde svaki dan.",
-      /** The compact niz beside a row — the full pair lives in the habit's own details. */
-      streakLabel: "Niz",
-      /** The quota row's week progress, e.g. „2/3 ove nedelje". */
-      thisWeek: "ove nedelje",
+      /** The column heads. Each of them carries a word that would otherwise be retyped on every row. */
+      columnHabit: "Navika",
+      columnWeek: "Ove nedelje",
+      columnStreak: "Niz",
+      columnToday: "Danas",
       /** Nothing is scheduled for today — a different fact from having no habits at all. */
-      emptyTitle: "Danas nema ničega",
-      emptyDescription:
-        "Nijedna navika se danas ne očekuje. Sve što imaš stoji ispod, u „Sve navike“.",
+      emptyTitle: "Danas nema ničega.",
+      emptyDescription: "Sve što vodiš stoji ispod, u „Sve navike“.",
     },
+    /**
+     * „Sve navike" is the REGISTER, and that is the whole difference between it
+     * and „Danas": this list says what each habit ASKS FOR — its raspored, its
+     * cilj, its podsetnik — and it is the only place a habit is made, changed,
+     * archived or deleted. „Danas" says what has been done about them today and
+     * offers no management at all, so the two lists never repeat one another
+     * even when they hold the same habits.
+     */
     all: {
       heading: "Sve navike",
+      caption:
+        "Šta svaka navika traži od tebe. Ovde se navika pravi, menja, arhivira i briše; otvori je za istoriju i brojeve.",
       /** The row's disclosure — one verb each way, since the row itself is the label. */
       expand: "Prikaži detalje",
       collapse: "Sakrij detalje",
@@ -3268,9 +3533,11 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       archive: "Arhiviraj",
       unarchive: "Vrati iz arhive",
       delete: "Obriši",
-      /** The chip on an archived row: a statement about the navika, never a warning. */
-      archivedChip: "Arhivirano",
-      archivedChipTitle: "Više se ne očekuje. Istorija i statistika ostaju.",
+      /** The register row's third level: the hour a habit nudges at, when it has one. */
+      reminderPrefix: "Podsetnik",
+      /** An archived row states itself in words rather than in a chip: it is a fact about the navika, never a warning. */
+      archived: "Arhivirano",
+      archivedTitle: "Više se ne očekuje. Istorija i statistika ostaju.",
       deletedNotice: "Navika je obrisana, zajedno sa svojom istorijom.",
     },
     /** The habit's own details, under an expanded row. */
@@ -3481,7 +3748,13 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
        */
       caption: "Nexus predlaže sledeću fazu po tvom ciklusu. Možeš pokrenuti bilo koju.",
       start: "Pokreni",
-      /** The three explicit starts, when the suggestion is not what you want. */
+      /**
+       * The explicit starts, offered only for the kinds the suggestion is NOT.
+       * „Pokreni" and „Pokreni rad" used to sit side by side doing the identical
+       * thing whenever the cycle suggested work — two buttons at the same volume
+       * for one act, which is the „one surface, one primary" rule broken by a
+       * duplicate rather than by a second colour.
+       */
       startWork: "Pokreni rad",
       startShortBreak: "Pokreni pauzu",
       startLongBreak: "Pokreni dugu pauzu",
@@ -3507,8 +3780,13 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       phaseUnitOne: "faza",
       phaseUnitFew: "faze",
       phaseUnitMany: "faza",
-      /** Said when today holds nothing at all. */
-      emptyTitle: "Danas još nema nijedne faze",
+      /**
+       * Said when today holds nothing at all. Drawn INLINE — one list inside a
+       * page that already carries the timer panel — so the two halves are joined
+       * into one sentence and the title ends in a full stop rather than running
+       * straight into the invitation after it.
+       */
+      emptyTitle: "Danas još nema nijedne faze.",
       emptyDescription:
         "Pokreni prvu fazu — Nexus vodi vreme, pauze i istoriju umesto tebe.",
       /** The zero that has something to say: no break was taken all day. */
@@ -3555,6 +3833,12 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       conversion: "Pretvaranje",
       calculation: "Računanje",
     },
+    /**
+     * The right pane before a tool is picked. A title and a line under it, not
+     * one sentence: this is the whole surface being empty, and the shape the
+     * app draws that in (`EmptyState variant="page"`) leads with a title.
+     */
+    emptyTitle: "Nijedna alatka nije otvorena",
     /** The invitation before a tool is picked — the drawer is a list, not a dashboard. */
     empty: "Izaberi alatku sa liste.",
     /** Shared by every converter surface. */
@@ -3701,7 +3985,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       /** How much dearer per unit than the cheapest row — never „ušteda", which would imply a purchase. */
       premium: "skuplje po jedinici",
       /** Says the one thing this tool does NOT do, so „500 g" and „1 kg" are not compared as 500 and 1. */
-      note: "Uporedi pakovanja izražena u istoj jedinici. Ako su različite, prvo ih pretvori alatkama „Masa” i „Zapremina”.",
+      note: "Uporedi pakovanja izražena u istoj jedinici. Ako su različite, prvo ih pretvori alatkama „Masa“ i „Zapremina“.",
       invalid: "Svako pakovanje treba cenu i količinu veće od nule.",
     },
   },
@@ -4141,6 +4425,32 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
        * four chances to get the teens wrong.
        */
       setsUnit: { one: "serija", few: "serije", many: "serija" },
+      /**
+       * The band „Trening" opens with: what the last seven days actually held.
+       *
+       * Counted out of the sessions this section has ALREADY loaded — the window
+       * is shorter than the shortest range the history list offers, so the band
+       * never costs a read of its own and can never disagree with the list under
+       * it. Only FINISHED sessions count, for `progressSets`' reason: a session
+       * still open is one in the middle of happening.
+       *
+       * Tonnage carries the same coverage caveat here that it carries inside a
+       * session. A week's total that silently dropped the planks and the pull-ups
+       * is exactly the failure `setTonnage`'s refusal exists to prevent, and a
+       * figure this large is the last place to start pretending otherwise.
+       */
+      summary: {
+        setsLabel: "Tvrde serije",
+        sessionsLabel: "Treninzi",
+        /**
+         * The eyebrow over the band, composed with the window constant itself
+         * so it cannot outlive the window it names — „POSLEDNJIH 7 DANA".
+         */
+        windowLead: "Poslednjih",
+        windowDayUnit: "dana",
+        /** Under the band: what the three figures did and did not count. */
+        note: "Broji se samo ono što je upisano i završeno; zagrevanje se nigde ne broji.",
+      },
       /** The session in progress — there is at most one, which the schema itself guarantees. */
       session: {
         heading: "Trening u toku",
@@ -4618,6 +4928,15 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
   canvas: {
     /** Above the board strip. Reuses nothing from `strings.modules` — this line names the SECTION, not the sidebar entry. */
     boardsLabel: "Table",
+    /**
+     * The second line of a row in the board list, before the instant itself:
+     * „izmenjeno 14:32", „izmenjeno 5. avg, 09:10".
+     *
+     * A prefix and a formatted time rather than one sentence, exactly as
+     * `app.saveSavedPrefix` is — the formatter decides how much of a date the
+     * instant needs, and a full sentence here would have to guess.
+     */
+    boardUpdatedPrefix: "izmenjeno",
     /** The board a profile gets the first time it opens the page. */
     firstBoardName: "Tabla",
     newBoard: "Nova tabla",
@@ -4779,6 +5098,15 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
      * `strings.search.emptyResults`, which says exactly this and nothing else.
      */
     searchPlaceholder: "Pretraži podešavanja…",
+    /**
+     * The second line of the „nema rezultata“ empty state. The title itself is
+     * the search palette's own `strings.search.emptyResults`, reused — this
+     * says the one thing that is specific to a FILTER rather than to a search:
+     * nothing is lost, the cards come back the moment the box is cleared.
+     */
+    searchEmptyDescription: "Obriši pretragu da bi se vratili svi odeljci.",
+    /** The page's table of contents, above the cards — a landmark name, never drawn. */
+    indexLabel: "Odeljci podešavanja",
     /** Section-card titles, in the order they appear on the page. */
     sectionTitle: {
       profile: "Profil",
@@ -4932,6 +5260,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         "Menja se odmah, bez ponovnog pokretanja. Spisak nudi jezike koji su prevedeni — obaveštenja koja šalje sistem prate isti izbor.",
       /** Names the theme segmented row now that a second one (the week start) stands beside it. */
       themeLabel: "Tema",
+      /** What „Sistemski“ actually follows — the one thing about this row that is not visible from the three option names. */
+      themeHint: "„Sistemski“ prati podešavanje svetle ili tamne teme na ovom računaru.",
       accentLabel: "Boja akcenta",
       /** Accent swatch names, keyed by AccentId (SET's 8-accent palette). */
       accentNames: {
@@ -5231,6 +5561,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       "Ista pitanja kao pri prvom pokretanju — kreće od onoga što sada imaš i menja samo ono što promeniš.",
     /** NTF-008 appetite presets — shortcuts over the per-source toggles below. */
     notificationPresets: {
+      /** The row's own name, so the three buttons stop being an unlabelled bar at the top of the card. */
+      label: "Koliko obaveštenja",
       minimal: "Minimalno",
       normal: "Normalno",
       all: "Sve",
@@ -6466,6 +6798,14 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     kindFilterLabel: "Filter po vrsti",
     recentGroup: "Nedavno",
     commandsGroup: "Komande",
+    /**
+     * The command group over an EMPTY box, which is a short curated offer
+     * rather than the whole registry — „Idi na…" duplicates the sidebar and the
+     * index repair is a tool, so neither is what somebody opens the palette
+     * for with nothing in mind. „Komande" is kept for the typed and the „>"
+     * lists, which really are all of them.
+     */
+    quickActionsGroup: "Brze radnje",
     emptyResults: "Nema rezultata.",
     /** Shown instead of `emptyResults` when the fetch itself rejected — a failure is not an empty result and must not read as one. */
     searchError: "Pretraga trenutno ne radi. Pokušaj ponovo.",

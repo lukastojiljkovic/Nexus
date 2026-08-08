@@ -13,7 +13,19 @@ import {
   withClozeDeletion,
 } from "@nexus/core";
 import type { ClozeSegment } from "@nexus/core";
-import { Button, Checkbox, Chip, EmptyState, Icon, ListRow, PageHeader, TextField } from "@nexus/ui";
+import {
+  Button,
+  Checkbox,
+  Chip,
+  EmptyState,
+  Icon,
+  ListRow,
+  PageHeader,
+  ProportionBar,
+  StatBand,
+  TextField,
+} from "@nexus/ui";
+import type { Stat } from "@nexus/ui";
 import type {
   Card,
   CardFieldChanges,
@@ -188,11 +200,6 @@ function cardStateVariant(state: CardState): "neutral" | "data" | "accent" {
   if (state === 0) return "neutral";
   if (state === 2) return "data";
   return "accent";
-}
-
-/** Deck badge chip variant: quiet at zero, the given accent once there is actually something to act on. */
-function countVariant(count: number, whenPositive: "data" | "accent"): "neutral" | "data" | "accent" {
-  return count > 0 ? whenPositive : "neutral";
 }
 
 /**
@@ -430,6 +437,85 @@ function planRestoreErrorMessage(error: unknown): string {
   return message.includes("another active plan already exists") ? copy.duplicate : copy.generic;
 }
 
+// --- The hub's summary band (STUDY, „kako stojim" before „šta je na spisku") --
+
+/** Locale grouping for the band's figures — Serbian sets `1.234`, never `1234`. */
+const SUMMARY_FORMATTER = new Intl.NumberFormat("sr-Latn");
+
+/**
+ * How close an exam has to be for its figure to take the accent.
+ *
+ * Seven days, and not a number invented for this band: it is the same window
+ * `isExamWeekDay` draws the exam-week posture over, so the page cannot say „this
+ * is the last stretch" in one place and something else in another.
+ */
+const EXAM_SOON_DAYS = 7;
+
+/**
+ * The four figures the hub opens with.
+ *
+ * **Every one is counted out of what the page has already loaded** — the špil
+ * counts it draws the špil rows from, the maturity census the statistics
+ * section reports, and the exam list itself. Nothing here asks the store a
+ * question of its own, and nothing here is derived from a figure the page does
+ * not otherwise show; that is what makes a 24px number on a screen trustworthy
+ * rather than decorative.
+ *
+ * The maturity total is the WHOLE collection while everything in „Poslednjih 30
+ * dana" is windowed, so its `note` says which of the two it is — a figure whose
+ * period is ambiguous is a figure being read wrongly.
+ */
+function studySummaryStats(
+  deckCounts: readonly DeckCounts[],
+  exams: readonly Exam[],
+  subjectsById: ReadonlyMap<string, Subject>,
+  matureTotal: number,
+): Stat[] {
+  const copy = strings.study.overview;
+  const countdown = strings.study.countdown;
+
+  const due = deckCounts.reduce((sum, counts) => sum + counts.dueCount, 0);
+  const fresh = deckCounts.reduce((sum, counts) => sum + counts.newCount, 0);
+
+  // Soonest exam still ahead, joined the way every other list on this page
+  // joins: an exam whose subject no longer resolves is skipped rather than
+  // named after a subject the page cannot show.
+  const upcoming = exams
+    .flatMap((exam) => {
+      const days = daysUntilExam(exam.examDate);
+      const subject = subjectsById.get(exam.subjectId);
+      return days >= 0 && subject ? [{ exam, subject, days }] : [];
+    })
+    .sort((a, b) => a.days - b.days || a.exam.id.localeCompare(b.exam.id))[0];
+
+  // „danas" and „sutra" are the honest figures for 0 and 1: „0 dana" reads as a
+  // measurement that came back empty rather than as an exam happening now.
+  const examStat: Stat = { label: copy.examLabel, value: copy.examNone, note: copy.examNoneNote };
+  if (upcoming !== undefined) {
+    examStat.note = `${upcoming.subject.name} — ${strings.study.examType[upcoming.exam.examType]}`;
+    if (upcoming.days === 0) examStat.value = countdown.today;
+    else if (upcoming.days === 1) examStat.value = countdown.tomorrow;
+    else {
+      examStat.value = SUMMARY_FORMATTER.format(upcoming.days);
+      examStat.unit = dayUnit(upcoming.days, countdown.unitOne, countdown.unitMany);
+    }
+    if (upcoming.days <= EXAM_SOON_DAYS) examStat.tone = "accent";
+  }
+
+  return [
+    {
+      label: copy.dueLabel,
+      value: SUMMARY_FORMATTER.format(due),
+      // Accent only when there is something to act on — a nought in the accent
+      // colour would be an alarm about nothing.
+      ...(due > 0 ? { tone: "accent" as const } : {}),
+    },
+    { label: copy.newLabel, value: SUMMARY_FORMATTER.format(fresh) },
+    { label: copy.matureLabel, value: SUMMARY_FORMATTER.format(matureTotal), note: copy.matureNote },
+    examStat,
+  ];
+}
+
 /** A row of colour-dot toggle buttons over the six closed `SubjectColor` keys. */
 function ColorPicker({
   value,
@@ -507,6 +593,14 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
   const [actionError, setActionError] = useState<string | null>(null);
 
   // One form serves both add + edit; a non-null id means "editing that subject".
+  //
+  // It is REVEALED rather than permanent since this pass. A page whose first
+  // impression is a name field, six colour swatches, a semester field and a
+  // submit button reads as a database front end — the answer to „kako mi ide"
+  // has to be the first thing on the screen, and a form nobody asked for was
+  // standing in front of it. „Dodaj predmet" in the page header opens it, and
+  // it closes itself on save, on cancel and on the delete of the row it edits.
+  const [subjectFormOpen, setSubjectFormOpen] = useState(false);
   const [editingSubjectId, setEditingSubjectId] = useState<string | null>(null);
   const [subjectName, setSubjectName] = useState("");
   const [subjectColor, setSubjectColor] = useState<SubjectColor>("jade");
@@ -1067,11 +1161,23 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     setCards(await window.nexus.listCardsByDeck(profileId, deckId));
   }
 
+  /** Empties the form AND closes it — the state a „Otkaži", a save or a vanished row leaves behind. */
   function resetSubjectForm(): void {
+    setSubjectFormOpen(false);
     setEditingSubjectId(null);
     setSubjectName("");
     setSubjectColor("jade");
     setSubjectSemester("");
+  }
+
+  /** „Dodaj predmet" from the page header: an empty form, opened. */
+  function startAddSubject(): void {
+    setEditingSubjectId(null);
+    setSubjectName("");
+    setSubjectColor("jade");
+    setSubjectSemester("");
+    setSubjectFormOpen(true);
+    nameRef.current?.focus();
   }
 
   function startEditSubject(subject: Subject): void {
@@ -1079,6 +1185,9 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     setSubjectName(subject.name);
     setSubjectColor(subject.color);
     setSubjectSemester(subject.semester ?? "");
+    setSubjectFormOpen(true);
+    // Focuses the field when the form is ALREADY open; when this call is what
+    // mounts it, the field's own `autoFocus` does the job on mount instead.
     nameRef.current?.focus();
   }
 
@@ -1104,7 +1213,12 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
         if (trimmedSemester.length > 0) fields.semester = trimmedSemester;
         const created = await window.nexus.createSubject(profileId, fields);
         setSubjects((prev) => (prev ? [...prev, created] : [created]));
-        resetSubjectForm();
+        // Cleared but left OPEN, and the caret put back — adding subjects is
+        // the one thing on this page a person does several of in a row, and
+        // closing the form after each would cost a click per predmet.
+        setSubjectName("");
+        setSubjectColor("jade");
+        setSubjectSemester("");
         nameRef.current?.focus();
       }
     } catch (error) {
@@ -2246,6 +2360,19 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     return subject ? [{ session, subject }] : [];
   });
 
+  /**
+   * The hub's opening figures. Built from the four lists already on screen, so
+   * they can never report a state the page below them is not in; the `?? `
+   * fallbacks are for the type checker only — the band renders solely inside
+   * the branch where `loading` is already false.
+   */
+  const summaryStats = studySummaryStats(
+    deckCounts ?? [],
+    exams ?? [],
+    subjectsById,
+    statsRecent?.matured.total ?? 0,
+  );
+
   // --- Review session route --------------------------------------------------
   if (route.kind === "review") {
     return (
@@ -2351,13 +2478,18 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
         )}
 
         {cardsFailed ? (
-          <EmptyState title={strings.study.cardsEmptyTitle} description={strings.study.loadCardsError} />
+          <EmptyState
+            sigil="study"
+            title={strings.study.cardsEmptyTitle}
+            description={strings.study.loadCardsError}
+          />
         ) : cards === null ? (
           <p className="app__muted">{strings.app.loading}</p>
         ) : (
           <>
             {cards.length === 0 ? (
               <EmptyState
+                sigil="study"
                 title={strings.study.cardsEmptyTitle}
                 description={strings.study.cardsEmptyDescription}
               />
@@ -2928,35 +3060,45 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
   // --- Hub route (subjects, exams, decks) -------------------------------------
   return (
     <div className="study">
-      <PageHeader title={moduleName("study")} />
+      <PageHeader
+        title={moduleName("study")}
+        sigil="study"
+        actions={
+          <Button variant="primary" onClick={startAddSubject}>
+            {strings.study.add}
+          </Button>
+        }
+      />
 
-      <form className="study__subject-form" onSubmit={(e) => void submitSubjectForm(e)}>
-        <input
-          ref={nameRef}
-          className="nx-textfield__input study__name-input"
-          value={subjectName}
-          placeholder={strings.study.namePlaceholder}
-          aria-label={strings.study.nameLabel}
-          autoFocus
-          onChange={(event: ChangeEvent<HTMLInputElement>) => setSubjectName(event.target.value)}
-        />
-        <ColorPicker value={subjectColor} onChange={setSubjectColor} />
-        <input
-          className="nx-textfield__input study__semester-input"
-          value={subjectSemester}
-          placeholder={strings.study.semesterPlaceholder}
-          aria-label={strings.study.semesterLabel}
-          onChange={(event: ChangeEvent<HTMLInputElement>) => setSubjectSemester(event.target.value)}
-        />
-        <Button type="submit" variant="primary">
-          {editingSubjectId != null ? strings.study.save : strings.study.add}
-        </Button>
-        {editingSubjectId != null && (
+      {subjectFormOpen && (
+        <form className="study__subject-form" onSubmit={(e) => void submitSubjectForm(e)}>
+          <input
+            ref={nameRef}
+            className="nx-textfield__input study__name-input"
+            value={subjectName}
+            placeholder={strings.study.namePlaceholder}
+            aria-label={strings.study.nameLabel}
+            autoFocus
+            onChange={(event: ChangeEvent<HTMLInputElement>) => setSubjectName(event.target.value)}
+          />
+          <ColorPicker value={subjectColor} onChange={setSubjectColor} />
+          <input
+            className="nx-textfield__input study__semester-input"
+            value={subjectSemester}
+            placeholder={strings.study.semesterPlaceholder}
+            aria-label={strings.study.semesterLabel}
+            onChange={(event: ChangeEvent<HTMLInputElement>) =>
+              setSubjectSemester(event.target.value)
+            }
+          />
+          <Button type="submit" variant="primary">
+            {editingSubjectId != null ? strings.study.save : strings.study.add}
+          </Button>
           <Button type="button" className="study__cancel" onClick={resetSubjectForm}>
             {strings.study.cancel}
           </Button>
-        )}
-      </form>
+        </form>
+      )}
 
       {pendingUndoSubjectId != null && (
         <div className="study__undo" role="status">
@@ -3072,13 +3214,40 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
       )}
 
       {failed ? (
-        <EmptyState title={strings.study.emptyTitle} description={strings.study.loadError} />
+        <EmptyState
+          sigil="study"
+          title={strings.study.emptyTitle}
+          description={strings.study.loadError}
+        />
       ) : loading ? (
         <p className="app__muted">{strings.app.loading}</p>
       ) : sortedSubjects.length === 0 ? (
-        <EmptyState title={strings.study.emptyTitle} description={strings.study.emptyDescription} />
+        <EmptyState
+          sigil="study"
+          title={strings.study.emptyTitle}
+          description={strings.study.emptyDescription}
+          action={
+            <Button variant="primary" onClick={startAddSubject}>
+              {strings.study.add}
+            </Button>
+          }
+        />
       ) : (
         <>
+          {/* The page's ANSWER, before its contents. „Plan i stvarnost" was the
+              last element on this page and is the module's identity — planned
+              minutes against measured ones, the one picture that says whether
+              a semester is going the way it was written down. It belongs at the
+              top, at the width it was drawn for. */}
+          {/* A plain wrapper and not a labelled region: „Statistika i fokus"
+              further down already owns that name, and two landmarks answering to
+              one name is worse for a screen reader than no landmark at all. The
+              band's own labels and the chart's title carry the meaning. */}
+          <div className="study__overview">
+            <StatBand stats={summaryStats} />
+            <StudyPlanVsActual profileId={profileId} />
+          </div>
+
           <div className="study__subjects">
             {activeSubjects.map((subject) => {
               const subjectExams = examsForSubject(subject.id);
@@ -3236,6 +3405,17 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                   <div className="study__decks">
                     <div className="study__decks-header">
                       <h3 className="study__decks-title">{strings.study.decksTitle}</h3>
+                      {/* Names the two figures ONCE for the whole list. They used
+                          to be two chips repeating „nove" and „za ponavljanje"
+                          on every špil row — the same two constants down the
+                          length of the list, which is what the legend removes.
+                          Composed from the row copy itself, so the legend and
+                          the accessible reading of a row cannot drift apart. */}
+                      {subjectDecks.length > 0 && (
+                        <span className="study__col-legend">
+                          {`${strings.study.newCount} · ${strings.study.dueCount}`}
+                        </span>
+                      )}
                       {subjectHasStudiable(subject.id) && (
                         <span className="study__decks-actions">
                           <Button size="sm" onClick={() => setPracticeSubjectId(subject.id)}>
@@ -3262,12 +3442,28 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                             key={deck.id}
                             trailing={
                               <span className="study__deck-actions">
-                                <Chip variant={countVariant(counts.newCount, "data")}>
-                                  {counts.newCount} {strings.study.newCount}
-                                </Chip>
-                                <Chip variant={countVariant(counts.dueCount, "accent")}>
-                                  {counts.dueCount} {strings.study.dueCount}
-                                </Chip>
+                                {/* The pair of figures the legend above names,
+                                    in its order. `title` keeps the words on the
+                                    row for anyone who needs them without
+                                    printing them twenty times over. */}
+                                <span
+                                  className="study__deck-counts"
+                                  title={`${counts.newCount} ${strings.study.newCount} · ${counts.dueCount} ${strings.study.dueCount}`}
+                                >
+                                  <span className="study__deck-count">{counts.newCount}</span>
+                                  <span className="study__deck-count-sep" aria-hidden="true">
+                                    ·
+                                  </span>
+                                  <span
+                                    className={
+                                      counts.dueCount > 0
+                                        ? "study__deck-count study__deck-count--due"
+                                        : "study__deck-count"
+                                    }
+                                  >
+                                    {counts.dueCount}
+                                  </span>
+                                </span>
                                 <Button
                                   size="sm"
                                   className="study__edit"
@@ -3402,7 +3598,13 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
             <h2 className="study__plans-title">{strings.study.plansTitle}</h2>
 
             <div className="study__today">
-              <h3 className="study__today-heading">{strings.study.todayTitle}</h3>
+              <div className="study__today-head">
+                <h3 className="study__today-heading">{strings.study.todayTitle}</h3>
+                {/* „min" said once over the column instead of on every block row. */}
+                {todayEntries.length > 0 && (
+                  <span className="study__col-legend">{strings.study.minutesUnit}</span>
+                )}
+              </div>
               {todayEntries.length === 0 ? (
                 <EmptyState variant="inline" title={strings.study.todayEmpty} />
               ) : (
@@ -3434,8 +3636,11 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                                 {strings.study.practice.open}
                               </Button>
                             )}
-                            <span className="study__block-minutes">
-                              {block.minutes} {strings.study.minutesUnit}
+                            <span
+                              className="study__block-minutes"
+                              title={`${block.minutes} ${strings.study.minutesUnit}`}
+                            >
+                              {block.minutes}
                             </span>
                           </span>
                         }
@@ -3543,6 +3748,13 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                     >
                       {expanded ? strings.study.planHideBlocks : strings.study.planShowBlocks}
                     </Button>
+                    {/* „min" over the column, once, in place of the word on every
+                        block row. Drawn only where there are rows to name. */}
+                    {expanded && blocks.length > 0 && (
+                      <div className="study__blocks-legend">
+                        <span className="study__col-legend">{strings.study.minutesUnit}</span>
+                      </div>
+                    )}
                     {expanded && (
                       <div className="study__plan-blocks">
                         {blocks.map((block) => {
@@ -3587,8 +3799,11 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                                         : strings.study.blockPin}
                                     </Button>
                                   )}
-                                  <span className="study__block-minutes">
-                                    {block.minutes} {strings.study.minutesUnit}
+                                  <span
+                                    className="study__block-minutes"
+                                    title={`${block.minutes} ${strings.study.minutesUnit}`}
+                                  >
+                                    {block.minutes}
                                   </span>
                                   <Chip variant={blockStatusVariant(block.status)}>
                                     {strings.study.blockStatus[block.status]}
@@ -3945,7 +4160,9 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
           <div className="study__stats">
             <h2 className="study__stats-title">{strings.study.statsTitle}</h2>
 
-            <StudyPlanVsActual profileId={profileId} />
+            {/* „Plan i stvarnost" used to be drawn here, at the bottom of the
+                page, under everything. It is the module's identity and now
+                opens the hub — see `.study__overview` above. */}
 
             <div className="study__focus-card">
               <h3 className="study__focus-heading">{strings.study.focusTitle}</h3>
@@ -4042,27 +4259,32 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                   {subjectMinutesRows.length > 0 && (
                     <div className="study__stats-bars">
                       <h4 className="study__stats-bars-heading">{strings.study.statsMinutesTitle}</h4>
+                      {/* `ProportionBar`, which is the house's ONE part-of-whole
+                          strip and had five hand-rolled copies retired into it —
+                          this was the sixth, and had never been migrated. What
+                          it drew was a gold→jade GRADIENT along the track, so
+                          the same quantity wore a different colour at different
+                          lengths, and a muted row was the fill at 50% opacity
+                          rather than the neutral tone the app already has.
+                          The arithmetic is untouched: the fraction is still each
+                          subject's minutes over the largest subject's, so no
+                          figure on this page changes. `describedAs` is new — the
+                          hand-rolled row read out as three unlabelled spans. */}
                       {subjectMinutesRows.map((row) => (
-                        <div key={row.id} className="study__stats-bar-row">
-                          <span
-                            className={`study__stats-bar-label${
-                              row.muted ? " study__stats-bar-label--muted" : ""
-                            }`}
-                          >
-                            {row.label}
-                          </span>
-                          <span className="study__stats-bar-track">
-                            <span
-                              className={`study__stats-bar-fill${
-                                row.muted ? " study__stats-bar-fill--muted" : ""
-                              }`}
-                              style={{ width: `${(row.minutes / maxSubjectMinutes) * 100}%` }}
-                            />
-                          </span>
-                          <span className="study__stats-bar-value">
-                            {formatDurationMinutes(row.minutes)}
-                          </span>
-                        </div>
+                        <ProportionBar
+                          key={row.id}
+                          label={row.label}
+                          value={formatDurationMinutes(row.minutes)}
+                          segments={[
+                            {
+                              key: "minutes",
+                              fraction: row.minutes / maxSubjectMinutes,
+                              tone: row.muted ? "neutral" : "data",
+                              label: row.label,
+                            },
+                          ]}
+                          describedAs={`${row.label}: ${formatDurationMinutes(row.minutes)}`}
+                        />
                       ))}
                     </div>
                   )}
@@ -4285,7 +4507,15 @@ function PracticeDialog({ decks, countsFor, onStart, onClose }: PracticeDialogPr
         <h2 id={titleId} className="recur-dialog__title">
           {s.title}
         </h2>
-        <p className="recur-dialog__question">{s.decksLabel}</p>
+        <p className="recur-dialog__question">
+          {s.decksLabel}
+          {/* The hub's špil legend, in the one other place the same two figures
+              are listed per špil — one construct, so the pair reads identically
+              wherever it appears. */}
+          <span className="study__col-legend study__col-legend--inline">
+            {`${strings.study.newCount} · ${strings.study.dueCount}`}
+          </span>
+        </p>
 
         <div className="study-practice__body">
           {decks.map((deck) => {
@@ -4299,13 +4529,23 @@ function PracticeDialog({ decks, countsFor, onStart, onClose }: PracticeDialogPr
                 >
                   {deck.name}
                 </Checkbox>
-                <span className="study-practice__counts">
-                  <Chip variant={countVariant(counts.newCount, "data")}>
-                    {counts.newCount} {strings.study.newCount}
-                  </Chip>
-                  <Chip variant={countVariant(counts.dueCount, "accent")}>
-                    {counts.dueCount} {strings.study.dueCount}
-                  </Chip>
+                <span
+                  className="study-practice__counts study__deck-counts"
+                  title={`${counts.newCount} ${strings.study.newCount} · ${counts.dueCount} ${strings.study.dueCount}`}
+                >
+                  <span className="study__deck-count">{counts.newCount}</span>
+                  <span className="study__deck-count-sep" aria-hidden="true">
+                    ·
+                  </span>
+                  <span
+                    className={
+                      counts.dueCount > 0
+                        ? "study__deck-count study__deck-count--due"
+                        : "study__deck-count"
+                    }
+                  >
+                    {counts.dueCount}
+                  </span>
                 </span>
               </div>
             );

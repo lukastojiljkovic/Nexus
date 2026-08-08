@@ -1,7 +1,19 @@
 import { useEffect, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { ACCENT_IDS } from "@nexus/tokens";
-import { Button, Checkbox, Chip, EmptyState, Icon, ListRow, LoadingState, PageHeader, TextField } from "@nexus/ui";
+import {
+  Button,
+  Checkbox,
+  EmptyState,
+  Icon,
+  ListRow,
+  LoadingState,
+  PageHeader,
+  Select,
+  StatBand,
+  TextField,
+} from "@nexus/ui";
+import type { Stat } from "@nexus/ui";
 import { computeHabitStreak } from "@nexus/core";
 import type { WeekStart } from "@nexus/core";
 import {
@@ -68,6 +80,21 @@ import { moduleName } from "./moduleName.js";
  *   the 30-day fraction — `computeHabitStreak`'s own gentleness, restated on
  *   every surface that could contradict it.
  *
+ * **The two sections are two SHAPES, not one list drawn twice.** This page used
+ * to print every habit in „Danas" and then again in „Sve navike" immediately
+ * below, from one row recipe — so on a profile of daily habits the second list
+ * was the first list with different buttons on the end, and neither heading
+ * explained why you were reading the same thing twice. They now answer two
+ * different questions and look like it:
+ *
+ * - **„Danas" is the CHECKLIST.** A short table of today's state — the niz, the
+ *   week's quota, the tick — with every word that would otherwise repeat down a
+ *   column („Niz", „ove nedelje") hoisted into the head. It offers no
+ *   management at all: you are here to tick something off.
+ * - **„Sve navike" is the REGISTER.** One row per habit saying what it ASKS FOR
+ *   — raspored, cilj, podsetnik — and it is the only place a habit is made,
+ *   changed, archived or deleted. Its rows say nothing about today.
+ *
  * Slice c adds the two things slice b deliberately left for it:
  *
  * - **A past day can be corrected.** The history grid's cells are buttons
@@ -86,6 +113,16 @@ import { moduleName } from "./moduleName.js";
 const HISTORY_WEEKS = 12;
 
 const DAYS_PER_WEEK = 7;
+
+/**
+ * Whole counts, grouped the way Serbian sets them — „11.929", not „11929". A
+ * measured habit's day is routinely five digits („koraka"), and an ungrouped
+ * five-digit numeral beside its five-digit target is two numbers nobody can
+ * compare at a glance. Same locale request as `fileRows.ts`'s own formatter, and
+ * `maximumFractionDigits: 0` because a target and a tick are both integers by
+ * the store's own refusal.
+ */
+const COUNT_FORMAT = new Intl.NumberFormat("sr-Latn", { maximumFractionDigits: 0 });
 
 /** Which schedule kind the form is editing. The stored value is `HabitSchedule`; this is only what the switch stands on. */
 type ScheduleKind = HabitSchedule["kind"];
@@ -438,6 +475,57 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
    */
   const todayHabits = habitsExpectedToday(habitList, today);
 
+  /**
+   * Every live habit's CURRENT niz, computed once. The band above the page and
+   * the „Danas" table both want it, and two independent passes over the same
+   * ticks is how a figure at the top and a figure in a row start disagreeing.
+   */
+  const streakByHabit = new Map<string, number>();
+  for (const habit of liveHabits) {
+    streakByHabit.set(
+      habit.id,
+      computeHabitStreak(habit.schedule, satisfiedDaysOf(habit, index), today, weekStart).current,
+    );
+  }
+
+  /**
+   * The band. Three figures, each counted off rows already in hand:
+   *
+   * - how many of the habits today expects have been done — the fraction the
+   *   „Danas" table below is the detail of;
+   * - how many habits are live, with the archived ones stated in the note
+   *   rather than folded into the count, because archiving is not deleting;
+   * - the longest niz actually standing, and whose it is.
+   *
+   * The third is ABSENT rather than zero when nothing is running: „0 dana"
+   * under „Najduži niz u toku" would be a figure about no habit at all, and the
+   * band's own rule is that a number in 24px type must be about something.
+   */
+  const doneToday = todayHabits.filter((habit) =>
+    countsAsDone(habit.target, valueOn(index, habit.id, today)),
+  ).length;
+  const archivedCount = habitList.length - liveHabits.length;
+  const bestStreak = liveHabits.reduce<{ habit: Habit; days: number } | null>((best, habit) => {
+    const days = streakByHabit.get(habit.id) ?? 0;
+    return days > (best?.days ?? 0) ? { habit, days } : best;
+  }, null);
+  const summaryStats: Stat[] = [
+    { label: s.band.today, value: `${doneToday}/${todayHabits.length}` },
+    {
+      label: s.band.active,
+      value: String(liveHabits.length),
+      ...(archivedCount > 0 ? { note: `${s.band.archived}: ${archivedCount}` } : {}),
+    },
+  ];
+  if (bestStreak !== null) {
+    summaryStats.push({
+      label: s.band.streak,
+      value: habitPeriodPhrase(bestStreak.days, bestStreak.habit.schedule.kind),
+      note: bestStreak.habit.name,
+      tone: "accent",
+    });
+  }
+
   /** The grid's columns, in the device's own week order; the rows are the last 12 weeks, oldest first. */
   const gridWeekdays = weekdayOrder(weekStart);
   const historyWeeks: string[] = [];
@@ -490,6 +578,12 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
    * target for a measured one. Both write through `setDay` with TODAY stated
    * outright, so „urađeno" reaches the store as the same act either way — and as
    * the same act a history cell performs on a past day.
+   *
+   * The FIGURE and its UNIT are two elements, not one string. „11.929/10.000"
+   * right-aligns in a fixed slot against „5/8" from the row above it, and
+   * „koraka" then starts exactly where „čaša" starts — which is the whole of
+   * hoisting a unit out of a number: the digits get a column, the word gets its
+   * own, and neither has to be read past to reach the other.
    */
   function renderTick(habit: Habit): ReactNode {
     const value = valueOn(index, habit.id, today);
@@ -502,8 +596,9 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
         />
       );
     }
+    const done = countsAsDone(habit.target, value);
     return (
-      <span className="hab__stepper">
+      <>
         <Button
           size="sm"
           className="hab__step"
@@ -513,8 +608,11 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
         >
           <Icon name="minus" size={14} />
         </Button>
-        <span className={countsAsDone(habit.target, value) ? "hab__count hab__count--done" : "hab__count"}>
-          {`${value}/${habit.target}${habit.unit === null ? "" : ` ${habit.unit}`}`}
+        <span className="hab__measure">
+          <span className={done ? "hab__count hab__count--done" : "hab__count"}>
+            {`${COUNT_FORMAT.format(value)}/${COUNT_FORMAT.format(habit.target)}`}
+          </span>
+          {habit.unit !== null && <span className="hab__unit">{habit.unit}</span>}
         </span>
         <Button
           size="sm"
@@ -524,40 +622,85 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
         >
           <Icon name="plus" size={14} />
         </Button>
-      </span>
+      </>
     );
   }
 
-  /** One „Danas" row: the swatch, the name, what the schedule says, the niz, and the tick. */
-  function renderTodayRow(habit: Habit): ReactNode {
-    const streak = computeHabitStreak(habit.schedule, satisfiedDaysOf(habit, index), today, weekStart);
+  /**
+   * „Danas" as a table. The head is what makes it one, and it is not decoration:
+   * „Niz" and „Ove nedelje" used to ride on every row as chips — identical in
+   * weight to the schedule chip beside them, so the one interesting fact on the
+   * row was indistinguishable from its least interesting one. Said once above a
+   * column, each becomes a heading and the rows are left holding only figures.
+   *
+   * Two columns are conditional and both conditions are about the habits
+   * actually standing here: the week fraction only when today holds a quota
+   * habit at all, and the tick column only widens for a stepper when one of them
+   * measures something. A column that is blank for every row is a column of
+   * nothing.
+   */
+  function renderTodayTable(): ReactNode {
+    const t = s.today;
+    const hasQuota = todayHabits.some((habit) => habit.schedule.kind === "quota");
+    const hasMeasured = todayHabits.some((habit) => habit.target !== null);
+    const className = ["hab__today"]
+      .concat(hasQuota ? ["hab__today--quota"] : [])
+      .concat(hasMeasured ? ["hab__today--measured"] : [])
+      .join(" ");
+    return (
+      <div className={className}>
+        {/* `aria-hidden`, because each cell restores its own heading with
+            `.nx-sr-only`: an eye reads one column head, a reader hears „Niz: 12
+            dana" on the row it is actually on. */}
+        <div className="hab__today-head" aria-hidden="true">
+          <span>{t.columnHabit}</span>
+          {hasQuota && <span className="hab__figure">{t.columnWeek}</span>}
+          <span className="hab__figure">{t.columnStreak}</span>
+          <span className="hab__tick">{t.columnToday}</span>
+        </div>
+        {todayHabits.map((habit) => renderTodayRow(habit, hasQuota))}
+      </div>
+    );
+  }
+
+  /** One „Danas" row: the habit and its raspored, its week, its niz, and the tick. */
+  function renderTodayRow(habit: Habit, hasQuota: boolean): ReactNode {
+    const t = s.today;
+    const streak = streakByHabit.get(habit.id) ?? 0;
     const quota = quotaWeekProgress(habit, index, today, weekStart);
     return (
-      <ListRow
-        key={habit.id}
-        leading={<span className="hab__dot" style={swatchStyle(habit.color)} aria-hidden="true" />}
-        trailing={renderTick(habit)}
-      >
-        <span className="hab__row-body">
-          <span className="hab__name">{habit.name}</span>
-          <div className="hab__chips">
-            <Chip>{scheduleLabel(habit.schedule)}</Chip>
-            {/* A quota habit says how far into its week it is, as a plain
-                fraction — the one figure that explains why it is on today's
-                list at all. */}
-            {quota !== null && (
-              <Chip variant="data">
-                {`${quota.done}/${quota.perWeek} ${s.today.thisWeek}`}
-              </Chip>
-            )}
-            {streak.current > 0 && (
-              <Chip variant="accent">
-                {`${s.today.streakLabel}: ${habitPeriodPhrase(streak.current, habit.schedule.kind)}`}
-              </Chip>
-            )}
-          </div>
+      <div key={habit.id} className="hab__today-row">
+        <span className="hab__today-habit">
+          <span className="hab__dot" style={swatchStyle(habit.color)} aria-hidden="true" />
+          <span className="hab__row-body">
+            <span className="hab__name">{habit.name}</span>
+            {/* The raspored, demoted to the row's third level: it is context for
+                why the habit is standing here, not news about it. */}
+            <span className="hab__today-sched">{scheduleLabel(habit.schedule)}</span>
+          </span>
         </span>
-      </ListRow>
+        {hasQuota && (
+          <span className="hab__figure">
+            {quota !== null && (
+              <>
+                <span className="nx-sr-only">{`${t.columnWeek}: `}</span>
+                {`${quota.done}/${quota.perWeek}`}
+              </>
+            )}
+          </span>
+        )}
+        {/* An empty cell is a habit with no niz yet — it stays empty rather than
+            printing a zero the habit never earned. */}
+        <span className={streak > 0 ? "hab__figure hab__figure--live" : "hab__figure"}>
+          {streak > 0 && (
+            <>
+              <span className="nx-sr-only">{`${t.columnStreak}: `}</span>
+              {habitPeriodPhrase(streak, habit.schedule.kind)}
+            </>
+          )}
+        </span>
+        <span className="hab__tick">{renderTick(habit)}</span>
+      </div>
     );
   }
 
@@ -654,7 +797,15 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
     );
   }
 
-  /** The habit's own numbers: the streak pair, and the honest 30-day fraction. */
+  /**
+   * The habit's own numbers: the streak pair, and the honest 30-day fraction.
+   *
+   * A `StatBand`, not a fifth hand-rolled block of the same three rules — and
+   * the fraction's `note` is exactly the field the band carries for a figure
+   * that is not a plain total: it says what the denominator IS, because it is
+   * not thirty, and a fraction whose bottom half nobody explained is a fraction
+   * nobody can trust.
+   */
   function renderStats(habit: Habit): ReactNode {
     const d = s.detail;
     const satisfied = satisfiedDaysOf(habit, index);
@@ -669,40 +820,55 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
     }
 
     return (
-      <div className="hab__stats">
-        <span className="hab__stat">
-          <span className="hab__stat-label">{d.streakCurrent}</span>
-          <span className="hab__stat-value">{habitPeriodPhrase(streak.current, kind)}</span>
-        </span>
-        <span className="hab__stat">
-          <span className="hab__stat-label">{d.streakBest}</span>
-          <span className="hab__stat-value">{habitPeriodPhrase(streak.best, kind)}</span>
-        </span>
-        <span className="hab__stat">
-          {/* „Poslednjih 30 dana", with the 30 coming from the constant the
-              window is actually measured over. */}
-          <span className="hab__stat-label">
-            {`${d.windowPrefix} ${habitDayPhrase(HABIT_WINDOW_DAYS)}`}
-          </span>
-          <span className="hab__stat-value">
-            {`${score.done}/${
-              score.kind === "weeks" ? habitWeekPhrase(score.expected) : habitDayPhrase(score.expected)
-            }`}
-          </span>
-          {/* What the denominator IS — it is not thirty, and a fraction whose
-              bottom half nobody explained is a fraction nobody can trust. */}
-          <span className="hab__stat-caption">
-            {score.kind === "weeks" ? d.windowWeeksCaption : d.windowDaysCaption}
-          </span>
-        </span>
-      </div>
+      <StatBand
+        stats={[
+          {
+            label: d.streakCurrent,
+            value: habitPeriodPhrase(streak.current, kind),
+            // Accent only while one is actually running: a tinted „0 dana"
+            // would be the page congratulating somebody on nothing.
+            ...(streak.current > 0 ? { tone: "accent" as const } : {}),
+          },
+          { label: d.streakBest, value: habitPeriodPhrase(streak.best, kind) },
+          {
+            // „Poslednjih 30 dana", with the 30 coming from the constant the
+            // window is actually measured over.
+            label: `${d.windowPrefix} ${habitDayPhrase(HABIT_WINDOW_DAYS)}`,
+            value: `${score.done}/${
+              score.kind === "weeks"
+                ? habitWeekPhrase(score.expected)
+                : habitDayPhrase(score.expected)
+            }`,
+            note: score.kind === "weeks" ? d.windowWeeksCaption : d.windowDaysCaption,
+          },
+        ]}
+      />
     );
   }
 
-  /** One „Sve navike" row: the habit and its four actions, and — when expanded — its history and its numbers. */
+  /**
+   * One „Sve navike" row — the REGISTER's row, and deliberately not „Danas"'s.
+   * It says what the habit asks for and what is standing about it, in three
+   * levels: the name, then the raspored and the cilj as one sentence, then the
+   * quiet facts (its podsetnik, and „Arhivirano"). Nothing here is about today.
+   */
   function renderHabitRow(habit: Habit): ReactNode {
     const archived = habit.archivedAt !== null;
     const expanded = expandedId === habit.id;
+    // What the habit asks for. One sentence rather than a strip of chips: two
+    // chips of identical weight is what let the schedule drown the fact beside
+    // it, and the register's facts are all of one kind anyway.
+    const asks = [scheduleLabel(habit.schedule)]
+      .concat(
+        habit.target === null
+          ? []
+          : [`${COUNT_FORMAT.format(habit.target)}${habit.unit === null ? "" : ` ${habit.unit}`}`],
+      )
+      .join(" · ");
+    const reminder = habit.reminderTime;
+    const state = (reminder === null ? [] : [`${s.all.reminderPrefix} ${reminder}`])
+      .concat(archived ? [s.all.archived] : [])
+      .join(" · ");
     return (
       <div key={habit.id} className="hab__item">
         <ListRow
@@ -757,19 +923,15 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
         >
           <span className="hab__row-body">
             <span className="hab__name">{habit.name}</span>
-            <div className="hab__chips">
-              <Chip>{scheduleLabel(habit.schedule)}</Chip>
-              {habit.target !== null && (
-                <Chip variant="data">
-                  {`${habit.target}${habit.unit === null ? "" : ` ${habit.unit}`}`}
-                </Chip>
-              )}
-              {archived && (
-                <Chip className="hab__archived-chip" title={s.all.archivedChipTitle}>
-                  {s.all.archivedChip}
-                </Chip>
-              )}
-            </div>
+            <span className="hab__reg-what">{asks}</span>
+            {state.length > 0 && (
+              <span
+                className="hab__reg-state"
+                {...(archived ? { title: s.all.archivedTitle } : {})}
+              >
+                {state}
+              </span>
+            )}
           </span>
         </ListRow>
         {expanded && (
@@ -848,20 +1010,20 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
             </Button>
           </>
         ) : (
-          <label className="hab__field">
-            <span className="hab__field-label">{f.perWeekLabel}</span>
-            <select
-              className="hab__select"
-              value={String(perWeekDraft)}
-              onChange={(event) => setPerWeekDraft(Number(event.target.value))}
-            >
-              {Array.from({ length: HABIT_MAX_PER_WEEK }, (_, index) => index + 1).map((count) => (
-                <option key={count} value={String(count)}>
-                  {count}
-                </option>
-              ))}
-            </select>
-          </label>
+          // The house `Select`, which carries its own visible label — the bare
+          // `<select>` this replaced had a hand-written one beside it, which is
+          // the exact arrangement that left 39 of the app's selects nameless.
+          <Select
+            label={f.perWeekLabel}
+            value={String(perWeekDraft)}
+            onChange={(event) => setPerWeekDraft(Number(event.target.value))}
+          >
+            {Array.from({ length: HABIT_MAX_PER_WEEK }, (_, index) => index + 1).map((count) => (
+              <option key={count} value={String(count)}>
+                {count}
+              </option>
+            ))}
+          </Select>
         )}
       </>
     );
@@ -876,9 +1038,14 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
     return <LoadingState label={strings.app.loading} rows={6} />;
   }
 
+  const noHabits = habitList.length === 0;
+
   return (
-    <div className="hab">
-      <PageHeader title={moduleName("habits")} />
+    // `.nx-measure`: this page is rows, and a row whose label and value are a
+    // thousand pixels apart has stopped being a row. The wall inside it is
+    // measured against whatever that cap leaves and fills it exactly.
+    <div className="hab nx-measure">
+      <PageHeader title={moduleName("habits")} sigil="habits" />
       {pendingUndoId !== null && (
         <div className="hab__undo" role="status">
           <span className="hab__undo-text">{s.all.deletedNotice}</span>
@@ -896,6 +1063,10 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
         </div>
       )}
 
+      {/* „Kako stojim" before „šta je na spisku" — three figures the page has
+          already loaded the rows for. */}
+      {!noHabits && <StatBand stats={summaryStats} />}
+
       {/* The regimen before its parts. „Danas" and „Sve navike" are both lists
           of one habit at a time; the wall is the only thing on this page that
           shows the shape of the whole thing, so it opens the page. Live habits
@@ -906,31 +1077,34 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
         </section>
       )}
 
-      <section className="hab__section" aria-label={s.today.heading}>
-        <div className="hab__heading">{s.today.heading}</div>
-        <p className="hab__note">{s.today.caption}</p>
-        {habitList.length === 0 ? (
-          // No habits at all and nothing expected today are two different
-          // situations with two different answers; one sentence for both would
-          // be a lie about one of them.
-          <EmptyState
-            title={s.all.emptyTitle}
-            description={s.all.emptyDescription}
-            action={
-              <Button variant="primary" onClick={beginNew}>
-                {s.all.newHabit}
-              </Button>
-            }
-          />
-        ) : todayHabits.length === 0 ? (
-          <EmptyState title={s.today.emptyTitle} description={s.today.emptyDescription} />
-        ) : (
-          <div className="hab__list">{todayHabits.map((habit) => renderTodayRow(habit))}</div>
-        )}
-      </section>
+      {/* With no habits at all there is no checklist to draw and nothing for a
+          band to count: the page says so ONCE, in the register below, where the
+          one primary action that answers it already lives. It used to say it
+          twice — an empty state here with a „Nova navika" button and a second
+          „Nova navika" button under the next heading, two filled primaries on
+          one surface saying the same word. */}
+      {!noHabits && (
+        <section className="hab__section" aria-label={s.today.heading}>
+          <div className="hab__heading">{s.today.heading}</div>
+          <p className="hab__note">{s.today.caption}</p>
+          {todayHabits.length === 0 ? (
+            // Nothing due today, inside a page that is otherwise full — one
+            // quiet line where the rows would be, not a centred 18px title.
+            <EmptyState
+              variant="inline"
+              sigil="habits"
+              title={s.today.emptyTitle}
+              description={s.today.emptyDescription}
+            />
+          ) : (
+            renderTodayTable()
+          )}
+        </section>
+      )}
 
       <section className="hab__section" aria-label={s.all.heading}>
         <div className="hab__heading">{s.all.heading}</div>
+        <p className="hab__note">{s.all.caption}</p>
 
         {editing !== null ? (
           <form className="hab__form" onSubmit={(event) => void submitForm(event)}>
@@ -1022,13 +1196,25 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
               </Button>
             </div>
           </form>
+        ) : noHabits ? (
+          // The page's ONE invitation, and its one primary. Never a sample habit.
+          <EmptyState
+            sigil="habits"
+            title={s.all.emptyTitle}
+            description={s.all.emptyDescription}
+            action={
+              <Button variant="primary" onClick={beginNew}>
+                {s.all.newHabit}
+              </Button>
+            }
+          />
         ) : (
           <Button variant="primary" onClick={beginNew}>
             {s.all.newHabit}
           </Button>
         )}
 
-        {habitList.length > 0 && (
+        {!noHabits && (
           <div className="hab__list">{habitList.map((habit) => renderHabitRow(habit))}</div>
         )}
 

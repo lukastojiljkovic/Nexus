@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { ageAtOccurrence, birthdayOccurrencesInRange, shiftDayKey } from "@nexus/core";
-import { Button, Chip, EmptyState, Icon, ListRow, LoadingState, TextField } from "@nexus/ui";
+import { Button, EmptyState, Icon, ListRow, LoadingState, Select, TextField } from "@nexus/ui";
 import type { NewPersonFields, Person, PersonFieldChanges, PersonKind } from "../../shared/ipc.js";
 import { localTodayKey } from "./examDates.js";
 import { strings } from "./strings.js";
@@ -264,10 +264,10 @@ export function PeoplePanel({ profileId }: PeoplePanelProps) {
           aria-label={s.nameLabel}
           onChange={(event: ChangeEvent<HTMLInputElement>) => setName(event.target.value)}
         />
-        <select
-          className="people__select"
+        <Select
+          label={s.kindLabel}
+          layout="inline"
           value={kind}
-          aria-label={s.kindLabel}
           onChange={(event: ChangeEvent<HTMLSelectElement>) =>
             setKind(asPersonKind(event.target.value))
           }
@@ -277,11 +277,11 @@ export function PeoplePanel({ profileId }: PeoplePanelProps) {
               {s.kind[value]}
             </option>
           ))}
-        </select>
-        <select
-          className="people__select"
+        </Select>
+        <Select
+          label={s.dayLabel}
+          layout="inline"
           value={day}
-          aria-label={s.dayLabel}
           onChange={(event: ChangeEvent<HTMLSelectElement>) => setDay(Number(event.target.value))}
         >
           {DAYS.map((value) => (
@@ -289,11 +289,11 @@ export function PeoplePanel({ profileId }: PeoplePanelProps) {
               {value}.
             </option>
           ))}
-        </select>
-        <select
-          className="people__select"
+        </Select>
+        <Select
+          label={s.monthLabel}
+          layout="inline"
           value={month}
-          aria-label={s.monthLabel}
           onChange={(event: ChangeEvent<HTMLSelectElement>) => setMonth(Number(event.target.value))}
         >
           {MONTHS.map((value) => (
@@ -301,7 +301,7 @@ export function PeoplePanel({ profileId }: PeoplePanelProps) {
               {monthName(value)}
             </option>
           ))}
-        </select>
+        </Select>
         <TextField
           type="number"
           className="people__year"
@@ -365,7 +365,20 @@ export function PeoplePanel({ profileId }: PeoplePanelProps) {
             return (
               <ListRow
                 key={person.id}
-                leading={<Chip>{s.kind[person.kind]}</Chip>}
+                // The row's KIND, as a mark rather than a word (dashboard's own
+                // RowMark recipe): the demo profile's twenty birthdays used to
+                // print the chip „Rođendan" twenty times down one column — the
+                // column's name, not the row's data. `title` keeps the
+                // accessible name exactly what it was; the icon is `person` for
+                // BOTH kinds, matching the dashboard's own „Danas" card — the
+                // set has no honest cake/ring mark to tell a birthday from an
+                // anniversary apart, and a shape invented for the occasion
+                // would be a guess, not a mark.
+                leading={
+                  <span className="people__lead">
+                    <Icon name="person" size={15} title={s.kind[person.kind]} />
+                  </span>
+                }
                 trailing={
                   <span className="people__row-actions">
                     <Button

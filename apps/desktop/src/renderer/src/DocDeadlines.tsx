@@ -37,6 +37,40 @@ import { strings } from "./strings.js";
 
 const MS_PER_DAY = 86_400_000;
 
+/**
+ * The lane gutter, and how much of a label fits in it.
+ *
+ * `SpanLanes` draws each lane's name as a bare `<text x="4">` and starts the
+ * track at 84 user units — and it neither measures nor truncates, while
+ * `.nx-chart__svg` is `overflow: visible`, so a name that outruns the gutter is
+ * not clipped: it is painted straight across the bars, over the neighbouring
+ * lanes' names, and past the edge of the figure onto the rows underneath it.
+ * Serbian document names run long — „Zdravstvena knjižica", „Registracija
+ * vozila" — so this is the ordinary case, not the pathological one.
+ *
+ * The component takes a string, so the only honest place to bound it is here,
+ * where the string is chosen. Characters rather than pixels because there is no
+ * measurement available in a pure render, and the estimate is stable: at
+ * `--nx-font-size-caption` (11px) in the UI face an average glyph is a little
+ * under half an em, so 80 units of usable gutter holds about fifteen, and
+ * fourteen plus the ellipsis stays inside that on the wide letters too.
+ *
+ * The count is only true while one user unit is one CSS pixel, which is what
+ * `.documents__chart` pins by giving the figure exactly the 720px `SpanLanes`
+ * is handed below.
+ *
+ * NOTHING IS LOST BY SHORTENING IT. Every document drawn here is also a row in
+ * the list directly beneath, under its full name — the chart is the shortcut
+ * and the rows are the truth — and the terminus dot at the end of each lane
+ * carries the full name plus its status as its own `<title>`.
+ */
+// `SpanLanes` shortens a lane label to what its own gutter holds, and keeps the
+// full string reachable as a `<title>` on the same element. This file used to
+// do it here — which was the first copy of a rule every future caller would
+// have written again, and worse: shortening BEFORE handing the label over left
+// the component titling the already-shortened text, so the way back to the
+// whole name was gone.
+
 /** How far past today the horizon reaches when nothing pushes it further — a year, which is the span most of these documents are issued for. */
 const MIN_FUTURE_DAYS = 365;
 /** And how far back, so a lane that expired last month is still visibly in the past rather than pinned against the edge. */
@@ -121,6 +155,8 @@ export function DocDeadlines({ profileId, documents, today }: DocDeadlinesProps)
       (best, entry) => (best === null || entry.renewedAt > best.renewedAt ? entry : best),
       null,
     );
+    // The hover text keeps the name in full — it is the truncated lane label's
+    // way back to what was cut, as well as the status the lane's tone encodes.
     const label = `${document.label} · ${statusLabel[document.status]}`;
     return {
       key: document.id,
@@ -165,8 +201,13 @@ export function DocDeadlines({ profileId, documents, today }: DocDeadlinesProps)
     `${s.descriptionExpired} ${String(expired)}` +
     (soonest === undefined ? "." : `, ${s.descriptionSoonest} ${String(soonest)}.`);
 
+  // `documents__chart` is what gives the horizon a block of its own: 720px —
+  // exactly the `width` handed to `SpanLanes` below, so one user unit is one
+  // CSS pixel and the component's own lane-label arithmetic holds — and
+  // `flex: none`, so the list under it can never squeeze the figure into its
+  // own caption.
   return (
-    <div className="nx-chart-group">
+    <div className="nx-chart-group documents__chart">
       <SpanLanes
         title={s.heading}
         description={description}

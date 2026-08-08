@@ -1,9 +1,9 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { foldSearchTag, parseSearchQuery, SEARCH_KINDS } from "@nexus/core";
+import { foldSearchTag, formatChord, parseSearchQuery, SEARCH_KINDS } from "@nexus/core";
 import type { SearchKind } from "@nexus/core";
-import { Button, Chip, EmptyState, Icon } from "@nexus/ui";
+import { Button, EmptyState, Icon } from "@nexus/ui";
 import type { NoteTag, SearchHistoryEntry, SearchResult, TaskTag } from "../../shared/ipc.js";
 import { REBUILD_COMMAND_ID, matchCommands } from "./searchCommands.js";
 import type { SearchCommand } from "./searchCommands.js";
@@ -15,6 +15,13 @@ import {
   isRecordableQuery,
   renderHighlighted,
 } from "./searchShared.js";
+import {
+  readStoredShortcutOverrides,
+  resolveShortcuts,
+  type ShortcutActionId,
+  type ShortcutBindings,
+} from "./shortcuts.js";
+import { Kbd } from "./ShortcutsDialog.js";
 import { strings } from "./strings.js";
 import { useFocusTrap } from "./useFocusTrap.js";
 
@@ -51,7 +58,57 @@ const TAG_SUGGESTION_LIMIT = 6;
  */
 const HISTORY_ROW_LIMIT = 5;
 
+/**
+ * How long the panel stays mounted after `open` turns false, so its exit
+ * animation can run. Must match `--nx-motion-exit` in the tokens; there is no
+ * way to read a CSS custom property's value from here without a layout read per
+ * close, and a 6ms disagreement costs nothing either way — the panel is
+ * `pointer-events: none` and already at zero opacity by then.
+ */
+const PALETTE_EXIT_MS = 140;
+
 const collator = new Intl.Collator(["sr-Latn", "sr"]);
+
+/**
+ * The commands that ALSO have a key binding, and which one (ADR-040).
+ *
+ * A palette that teaches its shortcuts is worth more than one that only runs
+ * them, so every row that can be reached another way says so — and only those.
+ * Three of them can be stated honestly and the rest cannot:
+ *
+ *  - „Novi unos" (Ctrl+N) creates in whatever module is open, so it is not the
+ *    shortcut for „Novi zadatak" and printing it on that row would be a lie.
+ *  - The positional Ctrl+1…9 family reaches the Nth VISIBLE module, and visible
+ *    order is the registry's category order, which is deliberately not the order
+ *    the „Idi na…" commands are built in (`App.tsx` says so where it derives
+ *    `visibleModuleIds`). The palette is handed the commands, never that list,
+ *    so it cannot number them without guessing — and a guessed shortcut is
+ *    worse than a missing one.
+ */
+const COMMAND_CHORD_ACTIONS: Readonly<Record<string, ShortcutActionId>> = {
+  lock: "lock",
+  shortcuts: "shortcutsHelp",
+  "goto-settings": "settings",
+};
+
+/**
+ * The commands offered over an EMPTY box.
+ *
+ * With nothing typed, `matchCommands` matches everything — which used to put
+ * the entire registry under the box: fourteen „Idi na…" rows that duplicate the
+ * sidebar, five task views, and the index repair. That is a dump, not an offer.
+ * What is left when those go is what a person actually opens the palette to do
+ * with no query in mind: create something, flip the theme, lock up, read the
+ * shortcuts.
+ *
+ * Nothing is hidden — a bare „>" still lists every command, and typing any of
+ * these words finds it. This is the empty box's own answer, not a filter on the
+ * registry.
+ */
+function isQuickAction(commandId: string): boolean {
+  if (commandId === REBUILD_COMMAND_ID) return false;
+  return !commandId.startsWith("goto-") && !commandId.startsWith("tasks-smart-");
+}
 
 /** The active `#` token, only while the caret is still inside it: `[1]` is the whitespace it rides on, `[2]` what has been typed after the `#`. */
 const ACTIVE_TAG_TOKEN_RE = /(^|\s)#(\S*)$/;
@@ -175,10 +232,26 @@ export function SearchPalette({
     [chipKinds, parsed.kinds],
   );
   const isRecent = query.trim().length === 0;
-  const matchedCommands = useMemo(
-    () => matchCommands(commands, parsed.terms),
-    [commands, parsed.terms],
+  const matchedCommands = useMemo(() => {
+    const matched = matchCommands(commands, parsed.terms);
+    // Command mode („>") is a request for the whole list; an empty box is not.
+    if (!isRecent || parsed.commandsOnly) return matched;
+    return matched.filter((command) => isQuickAction(command.id));
+  }, [commands, parsed.terms, parsed.commandsOnly, isRecent]);
+
+  /**
+   * The live chords, re-read each time the palette opens (ADR-040 stores them
+   * on the device, and `readStoredShortcutOverrides` is the one reader). Read
+   * here rather than threaded down from the shell: the shell already holds the
+   * same value, but a prop for it would have to be added to every caller of
+   * this component, and the store is the source both of them read anyway.
+   */
+  const [bindings, setBindings] = useState<ShortcutBindings>(() =>
+    resolveShortcuts(readStoredShortcutOverrides()),
   );
+  useEffect(() => {
+    if (open) setBindings(resolveShortcuts(readStoredShortcutOverrides()));
+  }, [open]);
 
   // The `#` token the caret is still inside, if any — `start` is where its `#`
   // sits, so picking a suggestion can replace exactly that token and nothing
@@ -210,6 +283,41 @@ export function SearchPalette({
       isRecent && !parsed.commandsOnly ? history.slice(0, HISTORY_ROW_LIMIT) : NO_HISTORY,
     [isRecent, parsed.commandsOnly, history],
   );
+
+  /**
+   * Keeps the panel mounted for one exit animation after `open` turns false.
+   *
+   * The palette is the one surface in this product where motion earns its
+   * place: it arrives over the page rather than replacing it, so it has to be
+   * seen to arrive and seen to go. A panel that eased in and then vanished
+   * between two frames is worse than one that never moved.
+   *
+   * `useLayoutEffect`, not `useEffect`: the render in which `open` first reads
+   * false returns `null`, and only this can turn the panel back on before the
+   * browser paints that frame. With a passive effect the user would see the
+   * palette disappear and then reappear to fade out.
+   *
+   * Nothing here is interactive: `.search__overlay--leaving` takes no pointer
+   * events, focus was already handed back by the effect below, and the focus
+   * trap has been released (it is driven by `open`, not by this).
+   */
+  const [leaving, setLeaving] = useState(false);
+  // Whether there is anything to animate away. Without it, the very first
+  // render — `open` false, as it is for the whole session until someone presses
+  // Ctrl+K — would count as a close and flash the panel on screen at startup.
+  const wasOpenRef = useRef(false);
+  useLayoutEffect(() => {
+    if (open) {
+      wasOpenRef.current = true;
+      setLeaving(false);
+      return undefined;
+    }
+    if (!wasOpenRef.current) return undefined;
+    wasOpenRef.current = false;
+    setLeaving(true);
+    const timer = window.setTimeout(() => setLeaving(false), PALETTE_EXIT_MS);
+    return () => window.clearTimeout(timer);
+  }, [open]);
 
   // Opening resets every bit of the palette's own transient state and
   // remembers what had focus so it can be restored; closing hands focus back
@@ -556,7 +664,18 @@ export function SearchPalette({
     }
   }
 
-  function renderResultRow(result: SearchResult): ReactNode {
+  /**
+   * One result, in the three levels a result has: where it lives, what
+   * matched, and the line it matched in.
+   *
+   * `showKind` is what keeps the first of those from being said twice. In a
+   * list grouped BY kind the heading over the group already answers „where does
+   * this live", and repeating it on every row under it is thirty labels saying
+   * what one heading said. The mixed lists — „Nedavno" and the recent entities
+   * over an empty box — have no such heading, and there the kind is the only
+   * thing telling a note from an exam.
+   */
+  function renderResultRow(result: SearchResult, showKind: boolean): ReactNode {
     const id = resultRowId(result);
     const isActive = rowIndexById.get(id) === activeIndex;
     return (
@@ -583,8 +702,14 @@ export function SearchPalette({
         }}
       >
         <div className="search__row-main">
-          <Chip className="search__row-kind">{strings.search.kindSingular[result.kind]}</Chip>
           <div className="search__row-text">
+            {/* The tertiary tier: a mark on the row, not a line of it — which
+                is exactly what a bordered Chip per row was not. Thirty pills
+                down a list is thirty objects competing with the thirty titles
+                they were meant to qualify. */}
+            {showKind && (
+              <div className="search__row-kind">{strings.search.kindSingular[result.kind]}</div>
+            )}
             <div className="search__row-title">
               {renderHighlighted(result.title, result.titleRanges)}
             </div>
@@ -690,6 +815,7 @@ export function SearchPalette({
   function renderCommandRow(command: SearchCommand): ReactNode {
     const id = commandRowId(command);
     const isActive = rowIndexById.get(id) === activeIndex;
+    const chordAction = COMMAND_CHORD_ACTIONS[command.id];
     return (
       <div
         key={id}
@@ -708,11 +834,18 @@ export function SearchPalette({
       >
         <span className="search__row-title">{command.label}</span>
         {command.hint !== undefined && <span className="search__row-hint">{command.hint}</span>}
+        {/* The key that also runs this, in the app's one <kbd> recipe — the same
+            cap the shortcuts reference and the Settings card print. */}
+        {chordAction !== undefined && (
+          <span className="search__row-chord">
+            <Kbd>{formatChord(bindings[chordAction])}</Kbd>
+          </span>
+        )}
       </div>
     );
   }
 
-  if (!open) return null;
+  if (!open && !leaving) return null;
 
   // A failed fetch is reported instead of the empty state — an empty result
   // is a real answer ("nothing matches"); a rejected IPC call is not one.
@@ -726,7 +859,7 @@ export function SearchPalette({
   const activeRowId = rows[activeIndex]?.id;
 
   return createPortal(
-    <div className="search__overlay">
+    <div className={leaving ? "search__overlay search__overlay--leaving" : "search__overlay"}>
       {/* A separate sibling, never an ancestor, of the panel — CSS opacity on
           a parent would wash out its children too, which is not what "dim
           the backdrop" means. */}
@@ -803,19 +936,26 @@ className="nx-segmented__option search__chip"
             ? results.length > 0 && (
                 <div className="search__group">
                   <div className="search__group-heading">{strings.search.recentGroup}</div>
-                  {results.map((result) => renderResultRow(result))}
+                  {results.map((result) => renderResultRow(result, true))}
                 </div>
               )
             : groupByKind(results).map(([kind, list]) => (
                 <div className="search__group" key={kind}>
                   <div className="search__group-heading">{strings.search.kindPlural[kind]}</div>
-                  {list.map((result) => renderResultRow(result))}
+                  {list.map((result) => renderResultRow(result, false))}
                 </div>
               ))}
 
           {matchedCommands.length > 0 && (
             <div className="search__group">
-              <div className="search__group-heading">{strings.search.commandsGroup}</div>
+              {/* Over an empty box this group is a curated offer rather than the
+                  registry, so it is named for what it holds — „Komande" there
+                  would promise a list that is deliberately not all of it. */}
+              <div className="search__group-heading">
+                {isRecent && !parsed.commandsOnly
+                  ? strings.search.quickActionsGroup
+                  : strings.search.commandsGroup}
+              </div>
               {matchedCommands.map((command) => renderCommandRow(command))}
             </div>
           )}

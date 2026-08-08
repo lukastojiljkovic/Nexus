@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { ChangeEvent, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { FOCUS_PHASE_KINDS, phaseProgress } from "@nexus/core";
 import type { FocusPhaseKind } from "@nexus/core";
 import {
@@ -10,6 +10,8 @@ import {
   ListRow,
   LoadingState,
   PageHeader,
+  Select,
+  StatBand,
   TextField,
 } from "@nexus/ui";
 import { MAX_FOCUS_LABEL_LENGTH } from "../../shared/ipc.js";
@@ -235,6 +237,22 @@ export function FocusPage({ profileId, enabledModules }: FocusPageProps) {
   const totals = focusDayTotals(todaySessions);
   const suggestion = upcomingPhase(config, todaySessions);
 
+  /**
+   * The three kinds, as a label and a length each. One place, so the explicit
+   * starts below are a `map` over the kinds rather than three hand-written
+   * buttons that have to be kept in step with the config quartet.
+   */
+  const startLabel: Record<FocusPhaseKind, string> = {
+    work: s.idle.startWork,
+    short_break: s.idle.startShortBreak,
+    long_break: s.idle.startLongBreak,
+  };
+  const configMinutes: Record<FocusPhaseKind, number> = {
+    work: config.workMinutes,
+    short_break: config.shortBreakMinutes,
+    long_break: config.longBreakMinutes,
+  };
+
   const taskById = new Map(tasks.map((task) => [task.id, task] as const));
   const subjectById = new Map(subjects.map((subject) => [subject.id, subject] as const));
   // A finished task is not something to focus ON, and an archived subject is one
@@ -398,38 +416,34 @@ export function FocusPage({ profileId, enabledModules }: FocusPageProps) {
 
         {/* The attachment and the label describe a WORK phase, so they are
             offered where one is started and quietly ignored by a break's own
-            button (see `start`). */}
+            button (see `start`). The picker is the house `Select`, so its label
+            is visible as well as announced. */}
         <div className="foc__fields">
-          <label className="foc__field">
-            <span className="foc__field-label">{s.idle.attachLabel}</span>
-            <select
-              className="foc__select"
-              value={attachmentValue(attachment)}
-              onChange={(event: ChangeEvent<HTMLSelectElement>) =>
-                setAttachment(parseAttachment(event.target.value))
-              }
-            >
-              <option value={NO_ATTACHMENT}>{s.idle.attachNone}</option>
-              {openTasks.length > 0 && (
-                <optgroup label={s.idle.attachTaskGroup}>
-                  {openTasks.map((task) => (
-                    <option key={task.id} value={`task:${task.id}`}>
-                      {task.title}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-              {openSubjects.length > 0 && (
-                <optgroup label={s.idle.attachSubjectGroup}>
-                  {openSubjects.map((subject) => (
-                    <option key={subject.id} value={`subject:${subject.id}`}>
-                      {subject.name}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-            </select>
-          </label>
+          <Select
+            label={s.idle.attachLabel}
+            value={attachmentValue(attachment)}
+            onChange={(event) => setAttachment(parseAttachment(event.target.value))}
+          >
+            <option value={NO_ATTACHMENT}>{s.idle.attachNone}</option>
+            {openTasks.length > 0 && (
+              <optgroup label={s.idle.attachTaskGroup}>
+                {openTasks.map((task) => (
+                  <option key={task.id} value={`task:${task.id}`}>
+                    {task.title}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {openSubjects.length > 0 && (
+              <optgroup label={s.idle.attachSubjectGroup}>
+                {openSubjects.map((subject) => (
+                  <option key={subject.id} value={`subject:${subject.id}`}>
+                    {subject.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+          </Select>
           <TextField
             label={s.idle.labelLabel}
             value={labelDraft}
@@ -448,45 +462,54 @@ export function FocusPage({ profileId, enabledModules }: FocusPageProps) {
           >
             {s.idle.start}
           </Button>
-          {/* The suggestion is a suggestion. Every kind stays one click away, so
-              the cycle never becomes a rule the user has to argue with. */}
-          <Button
-            size="sm"
-            className="foc__quiet"
-            onClick={() => void start("work", config.workMinutes)}
-          >
-            {s.idle.startWork}
-          </Button>
-          <Button
-            size="sm"
-            className="foc__quiet"
-            onClick={() => void start("short_break", config.shortBreakMinutes)}
-          >
-            {s.idle.startShortBreak}
-          </Button>
-          <Button
-            size="sm"
-            className="foc__quiet"
-            onClick={() => void start("long_break", config.longBreakMinutes)}
-          >
-            {s.idle.startLongBreak}
-          </Button>
+          {/* The suggestion is a suggestion: every OTHER kind stays one click
+              away, so the cycle never becomes a rule the user has to argue with.
+              „Other" is the fix, not a nicety — the three explicit starts used to
+              include the suggested kind too, so a cycle proposing work drew
+              „Pokreni" and „Pokreni rad" side by side, two buttons for one act
+              and the second of them the same size and shape as the first. One
+              surface, one primary, and nothing beside it doing the same thing. */}
+          {FOCUS_PHASE_KINDS.filter((kind) => kind !== suggestion.kind).map((kind) => (
+            <Button
+              key={kind}
+              size="sm"
+              className="foc__quiet"
+              onClick={() => void start(kind, configMinutes[kind])}
+            >
+              {startLabel[kind]}
+            </Button>
+          ))}
         </div>
       </section>
     );
   }
 
-  /** One finished phase: when it was, what kind, how long it actually held, and what it was about. */
+  /**
+   * One finished phase, in three levels: WHEN it was, WHAT it was about, and
+   * what is standing about it. The kind leads as a chip and the duration sits in
+   * the trailing slot, where a fixed, right-aligned column of them lines up down
+   * the list — it used to ride in the body between the date and the name, at
+   * whichever x that row's date happened to end.
+   */
   function renderRow(session: FocusSession): ReactNode {
     const minutes = focusSessionMinutes(session);
     // The row's own overrun test is against the ATTENTION it held, the same
-    // figure printed beside it — so the chip and the number can never disagree.
+    // figure printed beside it — so the mark and the number can never disagree.
     const overran = session.plannedMinutes !== null && minutes > session.plannedMinutes;
     const what =
       session.subjectId !== null
         ? (subjectById.get(session.subjectId)?.name ?? session.label)
         : (session.label ??
           (session.taskId !== null ? (taskById.get(session.taskId)?.title ?? null) : null));
+    // At most one thing to say about the row itself, and in the quiet register
+    // rather than in a second chip: a chip beside the kind chip would put two
+    // pills of equal weight on a row whose first fact is neither of them.
+    const mark =
+      session.plannedMinutes === null
+        ? s.history.openEndedChip
+        : overran
+          ? s.history.overrunChip
+          : null;
     return (
       <ListRow
         key={session.id}
@@ -494,32 +517,30 @@ export function FocusPage({ profileId, enabledModules }: FocusPageProps) {
           <Chip variant={session.kind === "work" ? "accent" : "data"}>{s.kind[session.kind]}</Chip>
         }
         trailing={
-          <span className="foc__row-actions">
-            <Button
-              size="sm"
-              className="foc__row-action"
-              onClick={() =>
-                void run(async () => {
-                  await window.nexus.deleteFocus(profileId, session.id);
-                  // One pending undo at a time — a fresh delete replaces the offer.
-                  setPendingUndoId(session.id);
-                })
-              }
-            >
-              {s.history.delete}
-            </Button>
+          <span className="foc__row-trailing">
+            <span className="foc__row-minutes">{formatDurationMinutes(minutes)}</span>
+            <span className="foc__row-actions">
+              <Button
+                size="sm"
+                className="foc__row-action"
+                onClick={() =>
+                  void run(async () => {
+                    await window.nexus.deleteFocus(profileId, session.id);
+                    // One pending undo at a time — a fresh delete replaces the offer.
+                    setPendingUndoId(session.id);
+                  })
+                }
+              >
+                {s.history.delete}
+              </Button>
+            </span>
           </span>
         }
       >
         <span className="foc__row-body">
           <span className="foc__row-when">{formatFocusSessionWhen(session.startedAt)}</span>
-          <span className="foc__row-minutes">{formatDurationMinutes(minutes)}</span>
           {what !== null && what.length > 0 && <span className="foc__row-what">{what}</span>}
-          {session.plannedMinutes === null ? (
-            <Chip>{s.history.openEndedChip}</Chip>
-          ) : overran ? (
-            <Chip variant="data">{s.history.overrunChip}</Chip>
-          ) : null}
+          {mark !== null && <span className="foc__row-mark">{mark}</span>}
         </span>
       </ListRow>
     );
@@ -535,8 +556,10 @@ export function FocusPage({ profileId, enabledModules }: FocusPageProps) {
   }
 
   return (
-    <div className="foc">
-      <PageHeader title={moduleName("focus")} />
+    // `.nx-measure`: everything under the timer panel is rows, and a row spread
+    // across 1360px is two columns pretending to be one.
+    <div className="foc nx-measure">
+      <PageHeader title={moduleName("focus")} sigil="focus" />
       {pendingUndoId !== null && (
         <div className="foc__undo" role="status">
           <span className="foc__undo-text">{s.history.deletedNotice}</span>
@@ -570,43 +593,45 @@ export function FocusPage({ profileId, enabledModules }: FocusPageProps) {
         </p>
       )}
 
+      {/* One section for today, in the house order: the figures, then the
+          picture, then the rows the picture is drawn from. „Trake pažnje" used
+          to sit in a section of its own AFTER the list, which put the shortcut
+          behind the thing it is a shortcut for. */}
       <section className="foc__section" aria-label={s.today.heading}>
         <div className="foc__heading">{s.today.heading}</div>
         {todaySessions.length === 0 ? (
-          <EmptyState title={s.today.emptyTitle} description={s.today.emptyDescription} />
+          // One list inside a page that already has a timer panel on it — the
+          // inline shape, not a centred 18px title with sixty pixels of air.
+          <EmptyState
+            variant="inline"
+            sigil="focus"
+            title={s.today.emptyTitle}
+            description={s.today.emptyDescription}
+          />
         ) : (
           <>
-            <div className="foc__totals">
-              {FOCUS_PHASE_KINDS.map((kind) => (
-                <div key={kind} className="foc__total">
-                  <span className="foc__total-label">{s.kind[kind]}</span>
-                  <span className="foc__total-value">
-                    {formatDurationMinutes(totals[kind].minutes)}
-                  </span>
-                  <span className="foc__total-caption">
-                    {`${totals[kind].sessions} ${countUnit(
-                      totals[kind].sessions,
-                      s.today.phaseUnitOne,
-                      s.today.phaseUnitFew,
-                      s.today.phaseUnitMany,
-                    )}`}
-                  </span>
-                </div>
-              ))}
-            </div>
+            <StatBand
+              stats={FOCUS_PHASE_KINDS.map((kind) => ({
+                label: s.kind[kind],
+                value: formatDurationMinutes(totals[kind].minutes),
+                note: `${totals[kind].sessions} ${countUnit(
+                  totals[kind].sessions,
+                  s.today.phaseUnitOne,
+                  s.today.phaseUnitFew,
+                  s.today.phaseUnitMany,
+                )}`,
+              }))}
+            />
             {/* The zero that has something to say. Stated in words as well as in
                 the totals above, because a „0 min" among three figures is easy
                 to read past and „danas nijedna pauza" is not. */}
             {totals.short_break.sessions + totals.long_break.sessions === 0 && (
               <p className="foc__note">{s.today.noBreaks}</p>
             )}
+            <FocusLanes sessions={todaySessions} />
             <div className="foc__list">{todaySessions.map((session) => renderRow(session))}</div>
           </>
         )}
-      </section>
-
-      <section className="foc__section" aria-label={s.chart.heading}>
-        <FocusLanes sessions={todaySessions} />
       </section>
 
       <section className="foc__section" aria-label={s.history.heading}>

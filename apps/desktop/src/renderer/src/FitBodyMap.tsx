@@ -45,14 +45,34 @@ const WINDOW_DAYS = 7;
 const BAND_LOW = 5;
 const BAND_HIGH = 10;
 
-/** One figure's own space. Both views share it; the second is translated sideways. */
+/**
+ * One figure's own space — the coordinate system every rectangle in `REGIONS`
+ * is written in, and deliberately UNTOUCHED by the sizing below. The map is
+ * FIT's signature graphic and used to be drawn at the 320px card width, tucked
+ * under a list of records; it is a panel graphic now, and it gets there by
+ * scaling the whole drawing rather than by anyone re-typing twenty plates.
+ */
 const FIGURE_WIDTH = 120;
 const FIGURE_HEIGHT = 260;
-const FRONT_X = 10;
-const BACK_X = 170;
-const FIGURE_TOP = 18;
-const VIEW_WIDTH = 320;
-const VIEW_HEIGHT = FIGURE_TOP + FIGURE_HEIGHT;
+
+/**
+ * How much bigger than its own space each figure is drawn. 1.6 is what fits two
+ * figures plus a readable gap inside the 720 panel box `ChartFrame` allows —
+ * `2 × 192 + 192 + 2 × 72 = 720` exactly, so the two bodies are as far apart as
+ * they are wide and neither is crowded against an edge.
+ */
+const FIGURE_SCALE = 1.6;
+const DRAWN_WIDTH = FIGURE_WIDTH * FIGURE_SCALE;
+const DRAWN_HEIGHT = FIGURE_HEIGHT * FIGURE_SCALE;
+
+/** The panel box. 320 (card) or 720 (panel) — `ChartFrame` allows no third. */
+const VIEW_WIDTH = 720;
+const SIDE_MARGIN = 72;
+const FRONT_X = SIDE_MARGIN;
+const BACK_X = VIEW_WIDTH - SIDE_MARGIN - DRAWN_WIDTH;
+/** Room above each figure for its view label, which sits OUTSIDE the scale. */
+const FIGURE_TOP = 20;
+const VIEW_HEIGHT = FIGURE_TOP + DRAWN_HEIGHT;
 
 const PLATE_RADIUS = 3;
 
@@ -214,12 +234,15 @@ export function FitBodyMap({ sets, today }: FitBodyMapProps) {
     return `${name}: ${String(entry.sets)} ${s.setsSuffix}${when}`;
   };
 
+  // The label rides in the VIEW's units and the body in the figure's own, which
+  // is why the scale starts below it: a label inside the scaled group would be
+  // an 18px word over a schematic drawing, competing with the shading it names.
   const figure = (side: "front" | "back", offsetX: number, label: string) => (
     <g transform={`translate(${String(offsetX)} 0)`}>
-      <text className="fit__body-side" x={FIGURE_WIDTH / 2} y={10} textAnchor="middle">
+      <text className="fit__body-side" x={DRAWN_WIDTH / 2} y={11} textAnchor="middle">
         {label}
       </text>
-      <g transform={`translate(0 ${String(FIGURE_TOP)})`}>
+      <g transform={`translate(0 ${String(FIGURE_TOP)}) scale(${String(FIGURE_SCALE)})`}>
         <Silhouette />
         {REGIONS.filter((region) => region.side === side).map((region) => (
           <g key={region.muscle}>

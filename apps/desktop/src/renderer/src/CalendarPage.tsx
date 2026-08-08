@@ -1483,17 +1483,17 @@ export function CalendarPage({
         sources,
         expansionRange,
       );
-  // „Sat dana"'s own scope. `calendarItems` is deliberately WIDER than the
-  // period on screen — a one-off event, a task or an exam flows through
-  // `buildCalendarItems` untouched however far outside `expansionRange` it
-  // falls (see that module's header); only a recurring master's occurrences
-  // and birthdays are actually bounded by it. A grid draws that narrower
-  // slice itself, cell by cell (`CalendarMonth` filters by `startKey` per
-  // day it renders); the ring has no cells to filter through, so it does the
-  // same filter once here — by `startKey`, „did this item START inside the
-  // horizon this page currently treats as the visible one," the same
-  // `expansionRange` every view (agenda included, per its own comment above)
-  // already reads as that horizon.
+  // „Sat dana"'s own scope — read by the agenda alone, which is the one view
+  // that draws the ring (see `CalendarHourRing`'s header). `calendarItems` is
+  // deliberately WIDER than the period on screen: a one-off event, a task or an
+  // exam flows through `buildCalendarItems` untouched however far outside
+  // `expansionRange` it falls (see that module's header); only a recurring
+  // master's occurrences and birthdays are actually bounded by it. A grid draws
+  // that narrower slice itself, cell by cell (`CalendarMonth` filters by
+  // `startKey` per day it renders); the ring has no cells to filter through, so
+  // it does the same filter once here — by `startKey`, „did this item START
+  // inside the horizon this page currently treats as the visible one," the same
+  // `expansionRange` the agenda reads as that horizon per its own comment above.
   const visibleCalendarItems = calendarItems.filter(
     (item) => item.startKey >= expansionRange.from && item.startKey <= expansionRange.to,
   );
@@ -1512,7 +1512,7 @@ export function CalendarPage({
 
   return (
     <div className="cal">
-      <PageHeader title={moduleName("calendar")} />
+      <PageHeader title={moduleName("calendar")} sigil="calendar" />
       {pendingSeries !== null && (
         <RecurrenceScopeDialog
           action={pendingSeries.kind === "delete" ? "delete" : "edit"}
@@ -1891,15 +1891,9 @@ className="nx-segmented__option cal__source"
             </p>
           )}
 
-          {/* The one thing the grid below cannot say (CAL's signature
-              graphic): which HOURS the visible period is busy in, not just
-              which days. Re-derives with `calendarItems` itself, so it never
-              needs a fetch of its own and always matches whatever range the
-              grid or agenda is currently showing. */}
-          {!failed && !dataLoading && <CalendarHourRing items={visibleCalendarItems} />}
-
           {failed ? (
             <EmptyState
+              sigil="calendar"
               title={strings.calendar.emptyTitle}
               description={strings.calendar.loadError}
             />
@@ -2001,11 +1995,20 @@ className="nx-segmented__option cal__source"
             </div>
           ) : calendarItems.length === 0 ? (
             <EmptyState
+              sigil="calendar"
               title={strings.calendar.emptyTitle}
               description={strings.calendar.emptyDescription}
             />
           ) : (
             <div className="cal__agenda">
+              {/* CAL's signature graphic, and the one thing this view cannot
+                  otherwise say: which HOURS the loaded horizon is busy in, not
+                  just which days. It is drawn INSIDE the agenda's scroller, and
+                  in this view alone — see `CalendarHourRing`'s own header for
+                  why both of those are load-bearing rather than incidental. It
+                  re-derives from `calendarItems` itself, so it never needs a
+                  fetch and can never disagree with the rows beneath it. */}
+              <CalendarHourRing items={visibleCalendarItems} />
               {groupAgenda(calendarItems).map(([key, dayItems]) => (
                 <section key={key} className="cal__day">
                   <h2 className="cal__day-header">{formatDay(key)}</h2>
@@ -2038,7 +2041,13 @@ className="nx-segmented__option cal__source"
                         >
                           <span className="cal__event">
                             {item.occurrence !== null && <RecurrenceMark />}
-                            <span className="cal__event-title">{item.event.title}</span>
+                            {/* Every title on this list ellipsises, so every
+                                one of them carries the full text as its hover
+                                title — an ellipsis with no way back to what was
+                                cut is information the row simply lost. */}
+                            <span className="cal__event-title" title={item.event.title}>
+                              {item.event.title}
+                            </span>
                             {item.event.location ? (
                               <Chip variant="data">{item.event.location}</Chip>
                             ) : null}
@@ -2072,7 +2081,9 @@ className="nx-segmented__option cal__source"
                         >
                           <span className="cal__event">
                             <ForeignMark />
-                            <span className="cal__event-title">{item.foreign.title}</span>
+                            <span className="cal__event-title" title={item.foreign.title}>
+                              {item.foreign.title}
+                            </span>
                           </span>
                         </ListRow>
                       );
@@ -2087,7 +2098,9 @@ className="nx-segmented__option cal__source"
                             <Chip className="cal__birthday-tag">
                               {strings.calendar.people.kind[item.person.kind]}
                             </Chip>
-                            <span className="cal__event-title">{item.person.name}</span>
+                            <span className="cal__event-title" title={item.person.name}>
+                              {item.person.name}
+                            </span>
                             {item.age !== null && (
                               <Chip variant="data">
                                 {item.age} {strings.calendar.people.yearsUnit}
@@ -2106,7 +2119,9 @@ className="nx-segmented__option cal__source"
                         >
                           <span className="cal__event">
                             <Chip className="cal__task-tag">{strings.calendar.taskTag}</Chip>
-                            <span className="cal__event-title">{item.task.title}</span>
+                            <span className="cal__event-title" title={item.task.title}>
+                              {item.task.title}
+                            </span>
                           </span>
                         </ListRow>
                       );
@@ -2131,13 +2146,16 @@ className="nx-segmented__option cal__source"
                             <Chip className="cal__subscription-tag">
                               {strings.calendar.subscriptionTag}
                             </Chip>
-                            <span className="cal__event-title">{item.renewal.name}</span>
+                            <span className="cal__event-title" title={item.renewal.name}>
+                              {item.renewal.name}
+                            </span>
                           </span>
                         </ListRow>
                       );
                     }
                     if (item.kind === "exam") {
                       const days = daysUntilExam(item.exam.examDate);
+                      const examTitle = `${item.subject.name} — ${strings.study.examType[item.exam.examType]}`;
                       return (
                         <ListRow
                           key={item.id}
@@ -2158,8 +2176,8 @@ className="nx-segmented__option cal__source"
                         >
                           <span className="cal__event">
                             <Chip className="cal__exam-tag">{strings.study.calendarTag}</Chip>
-                            <span className="cal__event-title">
-                              {item.subject.name} — {strings.study.examType[item.exam.examType]}
+                            <span className="cal__event-title" title={examTitle}>
+                              {examTitle}
                             </span>
                             {item.exam.scope ? <Chip variant="data">{item.exam.scope}</Chip> : null}
                           </span>
@@ -2168,6 +2186,7 @@ className="nx-segmented__option cal__source"
                     }
                     // Study-block row (STUDY-003): read-only — check-off lives on StudyPage.
                     const status = item.block.status;
+                    const blockTitle = `${item.subject.name} — ${strings.study.examType[item.exam.examType]}`;
                     return (
                       <ListRow
                         key={item.id}
@@ -2190,8 +2209,8 @@ className="nx-segmented__option cal__source"
                       >
                         <span className="cal__event">
                           <Chip className="cal__block-tag">{strings.study.planCalendarTag}</Chip>
-                          <span className="cal__event-title">
-                            {item.subject.name} — {strings.study.examType[item.exam.examType]}
+                          <span className="cal__event-title" title={blockTitle}>
+                            {blockTitle}
                           </span>
                           {/* The block's topic and kind, quietly (ADR-063) — the
                               row stays read-only; check-off lives on StudyPage. */}

@@ -26,6 +26,25 @@ import { strings } from "./strings.js";
  * zone). `getHours()`, never `getUTCHours()`: „when is my evening" is a
  * question about the clock on the wall in front of the user, not the one in
  * Greenwich.
+ *
+ * WHERE IT IS DRAWN, AND WHY IN ONE VIEW ONLY. `CalendarPage` renders this
+ * inside the AGENDA's own scroller and nowhere else. It used to sit between
+ * the event form and whichever view was showing — that is, as a 320px `<svg>`
+ * plus its title and caption, roughly 360px, dropped into a flex column that
+ * has the page's height and no scrollbar of its own. An `<svg>` with a height
+ * attribute cannot shrink below it, so the ring took its 360px out of a 589px
+ * page, collapsed the grid under it to nothing, and still hung off the bottom
+ * of `.cal`.
+ *
+ * Moving it is not merely where it fits — it is where it says something. The
+ * Nedelja and Dan grids ALREADY draw the hour axis at full resolution, so a
+ * dial restating it there costs a third of the grid to repeat what the grid
+ * shows; Mesec and Semestar are height-hungry grids where 360px above them
+ * puts the calendar itself below the fold. The agenda is a plain scrolling
+ * list with no fixed-height contract and no hour axis at all — which is
+ * exactly the view that cannot otherwise answer „which hours is my life in",
+ * and it is the house arrangement already: a signature graphic above the rows
+ * it summarises, the way „Rokovi" sits above the documents list.
  */
 
 const HOURS_PER_DAY = 24;
@@ -89,15 +108,21 @@ export function CalendarHourRing({ items }: CalendarHourRingProps) {
       ? s.emptyReason
       : `${s.descriptionLead}: ${String(total)}, ${s.descriptionBusiest} ${String(busiestHour)}${s.hourSuffix}.`;
 
+  // `nx-chart-group` is the house wrapper for a graphic and the things that
+  // explain it; `cal__chart` is what pins this one to a real block — 320px
+  // wide, the ring's own `size`, and `flex: none` so a height-constrained
+  // column can never squeeze it into its own caption. See calendar.css.
   return (
-    <RadialCycle
-      title={s.heading}
-      description={description}
-      caption={s.caption}
-      empty={total === 0 ? { reason: s.emptyReason } : null}
-      period={{ kind: "day" }}
-      spokes={spokes}
-      size={320}
-    />
+    <div className="nx-chart-group cal__chart">
+      <RadialCycle
+        title={s.heading}
+        description={description}
+        caption={s.caption}
+        empty={total === 0 ? { reason: s.emptyReason } : null}
+        period={{ kind: "day" }}
+        spokes={spokes}
+        size={320}
+      />
+    </div>
   );
 }

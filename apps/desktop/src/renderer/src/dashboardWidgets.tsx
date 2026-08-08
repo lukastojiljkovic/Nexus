@@ -13,9 +13,10 @@ import {
   widgetTaskLists,
 } from "@nexus/core";
 import type { WidgetContract } from "@nexus/core";
-import { Button, Checkbox, Chip, EmptyState, ListRow, LoadingState } from "@nexus/ui";
+import { Button, Checkbox, Chip, EmptyState, Icon, ListRow, LoadingState } from "@nexus/ui";
+import type { IconName } from "@nexus/ui";
 import { FIT_MEAL_SLOTS } from "../../shared/ipc.js";
-import type { DocumentStatus, Event, Exam, Subject } from "../../shared/ipc.js";
+import type { Event, Exam, Subject } from "../../shared/ipc.js";
 import { buildCalendarItems } from "./calendarItems.js";
 import type { CalendarItem, CalendarSource } from "./calendarItems.js";
 import {
@@ -103,14 +104,6 @@ function formatDueDate(iso: string): string {
       );
 }
 
-// Status → Chip variant, reusing DocumentsPanel's mapping: on time reads as data,
-// the reminder window as accent, an expired document as danger.
-const STATUS_VARIANT: Record<DocumentStatus, "data" | "accent" | "danger"> = {
-  ok: "data",
-  uskoro: "accent",
-  istekao: "danger",
-};
-
 /**
  * "Time to expiry" hint from the store's derived daysUntilExpiry, reusing the
  * strings.documents.days phrasing so DASH and CAL never drift. The dan/dana
@@ -143,6 +136,54 @@ function DashRow({
         {children}
       </ListRow>
     </button>
+  );
+}
+
+/**
+ * A widget row's TEXT COLUMN — the only way any card on this page renders one.
+ *
+ * Two levels and no third: what the row is about, and at most one line
+ * qualifying it. The card's own caption is the eleven-pixel eyebrow above, so a
+ * row with three lines of its own would be a fourth level on a surface whose
+ * whole job is to be scannable.
+ *
+ * It is a component rather than a convention because the alternative is what
+ * this file already shipped: four bespoke text containers (`dash__doc`,
+ * `dash__exam`, `dash__study`, `dash__fit`), each re-declaring the same
+ * arrangement, one of which was an `inline-flex` — an atomic inline box floored
+ * at its own min-content width — and therefore laid out WIDER than the column
+ * containing it whenever the leading and trailing slots had taken the row. The
+ * result was a document's name painted on top of its own expiry. With one
+ * component there is nowhere for the fifth copy to be written.
+ */
+function RowText({ title, meta }: { title: ReactNode; meta?: ReactNode }) {
+  return (
+    <span className="dash__text">
+      <span className="dash__row-title">{title}</span>
+      {meta != null && <span className="dash__row-meta">{meta}</span>}
+    </span>
+  );
+}
+
+/**
+ * The row's KIND, as a mark in the leading gutter.
+ *
+ * „Danas" used to print the word „zadatak" on every task row and „rođendan" on
+ * every birthday row — which is a word that is the same on every row of its
+ * group, i.e. the column's name rather than the row's data. The mark says the
+ * same thing without spending a line on it, and `title` is what a screen reader
+ * is told, so nothing is lost to somebody who cannot see it.
+ *
+ * It sits in `.dash__lead`, the SAME gutter a time sits in, and that is the
+ * point: „Danas" mixes rows that have a time with rows that only have a kind,
+ * and one shared gutter width is what keeps every title in the card starting at
+ * the same x.
+ */
+function RowMark({ name, label }: { name: IconName; label: string }) {
+  return (
+    <span className="dash__lead">
+      <Icon name={name} size={15} title={label} />
+    </span>
   );
 }
 
@@ -376,38 +417,34 @@ function TodayWidget({
               <DashRow
                 key={item.id}
                 onClick={() => onOpenModule("calendar")}
-                leading={<span className="dash__time">{formatEventTime(item.event, clock)}</span>}
+                leading={<span className="dash__lead">{formatEventTime(item.event, clock)}</span>}
               >
-                <span className="dash__row-title">{item.event.title}</span>
+                <RowText title={item.event.title} />
               </DashRow>
             ))}
             {capped.birthdays.map((item) => (
               <DashRow
                 key={item.id}
                 onClick={() => onOpenModule("calendar")}
-                leading={
-                  <span className="dash__time dash__time--tag">
-                    {s.personTag[item.person.kind]}
-                  </span>
-                }
+                leading={<RowMark name="person" label={s.personTag[item.person.kind]} />}
                 trailing={
                   item.age !== null ? (
-                    <Chip variant="data">
+                    <span className="dash__num">
                       {item.age} {strings.calendar.people.yearsUnit}
-                    </Chip>
+                    </span>
                   ) : undefined
                 }
               >
-                <span className="dash__row-title">{item.person.name}</span>
+                <RowText title={item.person.name} />
               </DashRow>
             ))}
             {capped.tasks.map((task) => (
               <DashRow
                 key={`task-${task.id}`}
                 onClick={() => onOpenModule("tasks")}
-                leading={<span className="dash__time dash__time--tag">{s.taskTag}</span>}
+                leading={<RowMark name="tasks" label={s.taskTag} />}
               >
-                <span className="dash__row-title">{task.title}</span>
+                <RowText title={task.title} />
               </DashRow>
             ))}
           </div>
@@ -456,11 +493,17 @@ function UpcomingTasksWidget({ profileId, contract, config, onOpenModule }: Dash
               <DashRow
                 key={task.id}
                 onClick={() => onOpenModule("tasks")}
+                // A rok is a DATE, and every row on this card has one or has
+                // none — so it is a column of dates rather than a state worth a
+                // chip on each of five rows. „Hitno i kasni" below still chips
+                // its rok, because there the colour is the point.
                 trailing={
-                  task.dueDate ? <Chip variant="data">{formatDueDate(task.dueDate)}</Chip> : undefined
+                  task.dueDate ? (
+                    <span className="dash__num">{formatDueDate(task.dueDate)}</span>
+                  ) : undefined
                 }
               >
-                <span className="dash__row-title">{task.title}</span>
+                <RowText title={task.title} />
               </DashRow>
             ))}
           </div>
@@ -518,7 +561,7 @@ function UrgentTasksWidget({ profileId, contract, config, onOpenModule }: Dashbo
                   // always carries at least one of the two — it is on the card
                   // because it is late (so it has a rok) or because it is high.
                   trailing={
-                    <span className="tasks__chips">
+                    <span className="dash__chips">
                       {task.priority === "high" ? (
                         <Chip variant="accent">{strings.tasks.priority.high}</Chip>
                       ) : null}
@@ -530,7 +573,7 @@ function UrgentTasksWidget({ profileId, contract, config, onOpenModule }: Dashbo
                     </span>
                   }
                 >
-                  <span className="dash__row-title">{task.title}</span>
+                  <RowText title={task.title} />
                 </DashRow>
               );
             })}
@@ -576,12 +619,12 @@ function RecentNotesWidget({ profileId, contract, config, onOpenNote }: Dashboar
                 // the instant label NTF and the search results already use, so
                 // a timestamp reads the same wherever the app shows one.
                 trailing={
-                  <span className="dash__days">{formatNotificationWhen(note.updatedAt)}</span>
+                  <span className="dash__num">{formatNotificationWhen(note.updatedAt)}</span>
                 }
               >
-                <span className="dash__row-title">
-                  {note.title.trim().length > 0 ? note.title : strings.notes.untitled}
-                </span>
+                <RowText
+                  title={note.title.trim().length > 0 ? note.title : strings.notes.untitled}
+                />
               </DashRow>
             ))}
           </div>
@@ -613,17 +656,28 @@ function ExpiringDocumentsWidget({ profileId, contract, config, onOpenModule }: 
               <DashRow
                 key={doc.id}
                 onClick={() => onOpenModule("calendar")}
-                leading={
-                  <Chip variant={STATUS_VARIANT[doc.status]}>
-                    {strings.documents.status[doc.status]}
-                  </Chip>
+                // The status CHIP that used to lead this row is gone, and both
+                // reasons matter. It said the same word on every row — under
+                // the shipped „prag" reading a document is on this card only
+                // because it is „uskoro" or „istekao" — and it said it twice,
+                // since the phrase trailing the row already reads „isteklo pre
+                // 200 dana". What is left is the phrase, tinted where the news
+                // is bad; the colour reinforces a word rather than replacing
+                // one, so the row survives being read without colour.
+                trailing={
+                  <span
+                    className={
+                      doc.status === "istekao" ? "dash__num dash__num--overdue" : "dash__num"
+                    }
+                  >
+                    {daysUntilLabel(doc.daysUntilExpiry)}
+                  </span>
                 }
-                trailing={<span className="dash__days">{daysUntilLabel(doc.daysUntilExpiry)}</span>}
               >
-                <span className="dash__doc">
-                  <span className="dash__doc-type">{strings.documents.type[doc.docType]}</span>
-                  <span className="dash__doc-label">{doc.label}</span>
-                </span>
+                <RowText
+                  title={strings.documents.type[doc.docType]}
+                  meta={doc.label.trim().length > 0 ? doc.label : undefined}
+                />
               </DashRow>
             ))}
           </div>
@@ -681,13 +735,12 @@ function ExamsWidget({ profileId, contract, config, onOpenModule }: DashboardWid
                   <Chip variant={examCountdownVariant(days)}>{examCountdownLabel(days)}</Chip>
                 }
               >
-                <span className="dash__exam">
-                  <span className="dash__exam-subject">{subject.name}</span>
-                  <span className="dash__exam-meta">
-                    <span>{strings.study.examType[exam.examType]}</span>
-                    <span>{formatExamDate(exam.examDate)}</span>
-                  </span>
-                </span>
+                <RowText
+                  title={subject.name}
+                  // One secondary line, joined by the house separator, rather
+                  // than two spans that could each claim a level of their own.
+                  meta={`${strings.study.examType[exam.examType]} · ${formatExamDate(exam.examDate)}`}
+                />
               </DashRow>
             ))}
           </div>
@@ -726,23 +779,33 @@ function StudyWidget({ profileId, onOpenModule }: DashboardWidgetBodyProps) {
         if (!hasStreak && focusMinutes === 0) {
           return <EmptyState variant="inline" title={strings.study.streakZero} />;
         }
+        // Two peer facts, so two rows — and each one FIGURE FIRST, with its
+        // name under it. „Niz učenja: 5 dana" on one line makes the label as
+        // loud as the number and is the shape everything else on this card set
+        // deliberately is not: the first row of a widget is what the reader is
+        // meant to see, and here that is the count.
         return (
           <div className="dash__list">
-            <DashRow onClick={() => onOpenModule("study")}>
-              <span className="dash__study">
-                {hasStreak && (
-                  <span className="dash__study-line">
-                    {strings.study.streakLabel}: {streak.current}{" "}
-                    {dayUnit(streak.current, strings.study.streakUnitOne, strings.study.streakUnitMany)}
-                  </span>
-                )}
-                {focusMinutes > 0 && (
-                  <span className="dash__study-line">
-                    {strings.study.dashboardFocusTodayLabel}: {formatDurationMinutes(focusMinutes)}
-                  </span>
-                )}
-              </span>
-            </DashRow>
+            {hasStreak && (
+              <DashRow onClick={() => onOpenModule("study")}>
+                <RowText
+                  title={`${streak.current} ${dayUnit(
+                    streak.current,
+                    strings.study.streakUnitOne,
+                    strings.study.streakUnitMany,
+                  )}`}
+                  meta={strings.study.streakLabel}
+                />
+              </DashRow>
+            )}
+            {focusMinutes > 0 && (
+              <DashRow onClick={() => onOpenModule("study")}>
+                <RowText
+                  title={formatDurationMinutes(focusMinutes)}
+                  meta={strings.study.dashboardFocusTodayLabel}
+                />
+              </DashRow>
+            )}
           </div>
         );
       }}
@@ -794,12 +857,20 @@ function UpcomingRenewalsWidget({ profileId, contract, config, onOpenModule }: D
               <DashRow
                 key={`${renewal.recurringId}@${renewal.date}`}
                 onClick={() => onOpenModule("finance")}
-                leading={<span className="dash__time">{formatDueDate(renewal.date)}</span>}
+                leading={
+                  <span className="dash__lead">{formatDueDate(renewal.date)}</span>
+                }
+                // A column of amounts, not a column of chips: five chips down a
+                // card's right edge is five filled shapes competing with the
+                // five names beside them, and the figures no longer line up on
+                // their comma once each sits in its own pill.
                 trailing={
-                  <Chip variant="data">{formatMoney(renewal.amount, renewal.currency)}</Chip>
+                  <span className="dash__num">
+                    {formatMoney(renewal.amount, renewal.currency)}
+                  </span>
                 }
               >
-                <span className="dash__row-title">{renewal.name}</span>
+                <RowText title={renewal.name} />
               </DashRow>
             ))}
           </div>
@@ -923,7 +994,7 @@ function HabitsTodayWidget({ profileId, onOpenModule }: DashboardWidgetBodyProps
                     className="dash__row-link"
                     onClick={() => onOpenModule("habits")}
                   >
-                    <span className="dash__row-title">{habit.name}</span>
+                    <RowText title={habit.name} />
                   </button>
                 </ListRow>
               );
@@ -1002,16 +1073,20 @@ function FocusWidget({ profileId, onOpenModule }: DashboardWidgetBodyProps) {
             <div className="dash__list">
               <DashRow
                 onClick={() => onOpenModule("focus")}
-                leading={<span className="dash__time dash__time--tag">{label}</span>}
                 trailing={
                   <Chip variant={running.kind === "work" ? "accent" : "data"}>
                     {strings.focus.kind[running.kind]}
                   </Chip>
                 }
               >
-                <span className="dash__row-title dash__focus-clock">
-                  {formatPhaseClock(progress, running.plannedMinutes)}
-                </span>
+                {/* The CLOCK leads and the state names it underneath. It led
+                    from the gutter before, which put a 70-pixel word („Prekoračeno")
+                    in the slot every other card uses for a time, and made the
+                    one live number on the page the second thing read. */}
+                <RowText
+                  title={formatPhaseClock(progress, running.plannedMinutes)}
+                  meta={label}
+                />
               </DashRow>
             </div>
           );
@@ -1023,11 +1098,8 @@ function FocusWidget({ profileId, onOpenModule }: DashboardWidgetBodyProps) {
         if (minutes === 0) return <EmptyState variant="inline" title={s.empty} />;
         return (
           <div className="dash__list">
-            <DashRow
-              onClick={() => onOpenModule("focus")}
-              leading={<span className="dash__time dash__time--tag">{s.todayLabel}</span>}
-            >
-              <span className="dash__row-title">{formatDurationMinutes(minutes)}</span>
+            <DashRow onClick={() => onOpenModule("focus")}>
+              <RowText title={formatDurationMinutes(minutes)} meta={s.todayLabel} />
             </DashRow>
           </div>
         );
@@ -1079,21 +1151,23 @@ function FitnessTodayWidget({ profileId, onOpenModule }: DashboardWidgetBodyProp
           <div className="dash__list">
             <DashRow
               onClick={() => onOpenModule("fitness")}
-              leading={<span className="dash__time dash__time--tag">{s.todayLabel}</span>}
               trailing={
                 kcal.target !== null && kcal.over ? (
                   <Chip variant="danger">{s.overGoal}</Chip>
                 ) : undefined
               }
             >
-              <span className="dash__fit">
-                <span className="dash__row-title">{figure}</span>
-                {kcal.target !== null && (
-                  <span className="dash__fit-goal">
-                    {`${s.ofGoalPrefix} ${formatKcal(kcal.target)} ${t.unitKcal}`}
-                  </span>
-                )}
-              </span>
+              {/* No „Danas" tag leading the row: the card is called „Ishrana
+                  danas", so the gutter was spending itself on a word already
+                  printed two lines above it. */}
+              <RowText
+                title={figure}
+                meta={
+                  kcal.target !== null
+                    ? `${s.ofGoalPrefix} ${formatKcal(kcal.target)} ${t.unitKcal}`
+                    : undefined
+                }
+              />
             </DashRow>
             {kcal.target !== null && (
               <span
@@ -1178,30 +1252,33 @@ function FitnessTrainingWidget({ profileId, onOpenModule }: DashboardWidgetBodyP
         }
         return (
           <div className="dash__list">
-            <DashRow
-              onClick={() => onOpenModule("fitness")}
-              leading={
-                <span className="dash__time dash__time--tag">
-                  {open === null ? s.weekLabel : s.openLabel}
-                </span>
-              }
-            >
-              <span className="dash__row-title">
-                {open !== null
-                  ? s.openTitle
-                  : `${String(done)} ${countUnit(done, s.sessionUnitOne, s.sessionUnitFew, s.sessionUnitMany)}`}
-              </span>
+            <DashRow onClick={() => onOpenModule("fitness")}>
+              <RowText
+                title={
+                  open !== null
+                    ? s.openTitle
+                    : `${String(done)} ${countUnit(done, s.sessionUnitOne, s.sessionUnitFew, s.sessionUnitMany)}`
+                }
+                // „Trening u toku" already says when it is, so it takes no
+                // second line; the count needs one, because a bare „3 treninga"
+                // does not say over what.
+                meta={open === null ? s.weekLabel : undefined}
+              />
             </DashRow>
             {stalest !== undefined && (
               <DashRow onClick={() => onOpenModule("fitness")}>
-                <span className="dash__fit">
-                  <span className="dash__row-title">{stalest.name}</span>
-                  <span className="dash__fit-goal">
-                    {lastUsed.has(stalest.id)
-                      ? `${s.lastDoneLabel}: ${lastUsed.get(stalest.id) ?? ""}`
-                      : s.neverDone}
-                  </span>
-                </span>
+                <RowText
+                  title={stalest.name}
+                  meta={
+                    lastUsed.has(stalest.id)
+                      ? // FORMATTED, not the bare day key: this line used to
+                        // print „2026-08-01" verbatim out of the workout row,
+                        // which is a storage value and not a date anybody in
+                        // this locale writes.
+                        `${s.lastDoneLabel}: ${formatDueDate(lastUsed.get(stalest.id) ?? "")}`
+                      : s.neverDone
+                  }
+                />
               </DashRow>
             )}
           </div>

@@ -76,7 +76,7 @@ export function StudyPlanVsActual({ profileId }: StudyPlanVsActualProps) {
   }, [profileId, from, today]);
 
   if (failed) {
-    return <EmptyState title={s.heading} description={strings.study.actionError} />;
+    return <EmptyState sigil="study" title={s.heading} description={strings.study.actionError} />;
   }
   if (blocks === null || sessions === null) {
     return <LoadingState label={strings.app.loading} rows={3} />;
@@ -127,6 +127,12 @@ export function StudyPlanVsActual({ profileId }: StudyPlanVsActualProps) {
           { key: "izmereno", tone: "accent", values: actualValues },
         ]}
         width={720}
+        /* `ColumnPlot`'s default is 160px, which is a strip — and this chart is
+           STUDY's identity, drawn at the top of the hub rather than tucked under
+           the statistics at the bottom. Twenty-eight bars over fourteen days
+           need vertical room before a difference between two of them is a thing
+           the eye can measure rather than infer. */
+        height={240}
       />
       {!empty && (
         <ChartLegend

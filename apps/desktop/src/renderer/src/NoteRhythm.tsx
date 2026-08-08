@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { CellMatrix, ChartLegend } from "@nexus/ui";
-import type { ChartLevel, MatrixCell } from "@nexus/ui";
+import { CellMatrix, ChartLegend, StatBand } from "@nexus/ui";
+import type { ChartLevel, MatrixCell, Stat } from "@nexus/ui";
 import { heatmapWeeks, weekOpeningDayKey } from "@nexus/core";
 import type { NoteMeta } from "../../shared/ipc.js";
 import { localTodayKey, shiftDayKey } from "./examDates.js";
@@ -32,11 +32,41 @@ import { strings } from "./strings.js";
  * **A word count is deliberately absent here and everywhere else.** A note's
  * text never leaves its own document; a library-wide figure would mean
  * opening and replaying every note in the profile just to print one number.
+ *
+ * **It is drawn as the page's top BAND, beside the library's figures**, rather
+ * than as a small figure tucked under the panes. „Koliko beležaka imam" and
+ * „koliko sam radio na njima" are one question asked two ways, and answering
+ * them in one band is what lets the three panes below be read deliberately
+ * instead of scanned anxiously. The band is profile-wide at every width — it
+ * deliberately ignores whichever folder the organizer has selected, exactly as
+ * the matrix always has.
  */
 
 /** How far back the rhythm reaches — half a year of weeks, long enough to show a habit and short enough to still be "lately". */
 const WINDOW_WEEKS = 26;
 const DAYS_PER_WEEK = 7;
+
+/**
+ * The drawn cell and the gap between cells — larger than `CellMatrix`'s 13px
+ * house size, which is the size for a graphic that shares a dashboard card.
+ * This one is the module's signature and has the top of its own page.
+ */
+const CELL_SIZE = 18;
+const CELL_GAP = 3;
+
+/**
+ * Exactly what the matrix draws at: `columns * (size + gap) - gap`, the same
+ * arithmetic `CellMatrix` performs to build its viewBox (26 * 21 - 3 = 543).
+ *
+ * It is handed to the wrapper as a width because `ChartFrame` emits
+ * `<svg width="100%">` and refuses to distort — with `preserveAspectRatio` at
+ * its default, a box WIDER than the drawing does not stretch it, it centres it
+ * and leaves air on both sides. Sizing the wrapper to the drawing makes
+ * „centred" a no-op, and gives the `StatBand` aside (which is `flex: none`) the
+ * definite width that percentage resolves against. At the app's enforced 900px
+ * minimum window the content column is 632px, so this never overflows.
+ */
+const MATRIX_WIDTH = WINDOW_WEEKS * (CELL_SIZE + CELL_GAP) - CELL_GAP;
 
 const CELL_DAY_FORMAT = new Intl.DateTimeFormat("sr-Latn", {
   day: "numeric",
@@ -52,8 +82,16 @@ function levelForCount(count: number): ChartLevel {
   return 3;
 }
 
-/** The local calendar day ("YYYY-MM-DD") a full ISO instant falls on, in the host's own time zone. */
-function localDayOf(iso: string): string {
+/**
+ * The local calendar day ("YYYY-MM-DD") a full ISO instant falls on, in the
+ * host's own time zone.
+ *
+ * Exported because `NotesPage` cuts the note list into the same days this chart
+ * shades, and two hand-written copies of „which day is this instant on" is
+ * precisely how one surface ends up a day out from the other across a DST
+ * boundary.
+ */
+export function localDayOf(iso: string): string {
   const date = new Date(iso);
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
@@ -123,39 +161,64 @@ export function NoteRhythm({ profileId }: NoteRhythmProps) {
     };
   }
 
-  // Every day actually drawn (inside the window, not in the future) that has
-  // at least one touch — the same test `cellAt` uses to pick a non-zero level,
-  // counted once here rather than re-derived from a second read of the grid.
+  // One walk of the grid answers both figures the band prints: how many days
+  // are DRAWN (inside the window, not in the future — the denominator) and how
+  // many of those carry at least one touch. Both use exactly the test `cellAt`
+  // uses to pick a non-zero level, rather than a second reading of the grid
+  // that could disagree with the squares beside them.
   let daysWithNotes = 0;
+  let drawnDays = 0;
   for (const week of weeks) {
     for (const day of week) {
-      if (day !== null && day <= today && (dayCounts.get(day) ?? 0) > 0) daysWithNotes += 1;
+      if (day === null || day > today) continue;
+      drawnDays += 1;
+      if ((dayCounts.get(day) ?? 0) > 0) daysWithNotes += 1;
     }
   }
 
   const description = `${s.descriptionLead}: ${String(daysWithNotes)} ${s.descriptionDays}.`;
 
+  // Two exact counts of rows this component genuinely loaded, and one floor
+  // that admits to being one. Nothing here is estimated or interpolated.
+  const stats: Stat[] = [
+    { label: s.statNotes, value: String(notes.length) },
+    {
+      label: s.statDays,
+      value: String(daysWithNotes),
+      unit: `${s.statDaysOf} ${String(drawnDays)}`,
+      note: s.statDaysNote,
+    },
+    { label: s.statPinned, value: String(notes.filter((note) => note.pinned).length) },
+  ];
+
   return (
-    <div className="nx-chart-group">
-      <CellMatrix
-        title={s.heading}
-        description={description}
-        caption={s.caption}
-        empty={notes.length === 0 ? { reason: s.emptyReason } : null}
-        columns={columns}
-        rows={rows}
-        cellAt={cellAt}
-      />
-      {notes.length > 0 && (
-        <ChartLegend
-          inline
-          items={[
-            { label: s.legendSome, tone: "accent", level: 1, shape: "swatch" },
-            { label: s.legendMore, tone: "accent", level: 2, shape: "swatch" },
-            { label: s.legendMost, tone: "accent", level: 3, shape: "swatch" },
-          ]}
-        />
-      )}
-    </div>
+    <StatBand
+      stats={stats}
+      aside={
+        <div className="nx-chart-group note__rhythm" style={{ width: `${String(MATRIX_WIDTH)}px` }}>
+          <CellMatrix
+            title={s.heading}
+            description={description}
+            caption={s.caption}
+            empty={notes.length === 0 ? { reason: s.emptyReason } : null}
+            columns={columns}
+            rows={rows}
+            cellAt={cellAt}
+            size={CELL_SIZE}
+            gap={CELL_GAP}
+          />
+          {notes.length > 0 && (
+            <ChartLegend
+              inline
+              items={[
+                { label: s.legendSome, tone: "accent", level: 1, shape: "swatch" },
+                { label: s.legendMore, tone: "accent", level: 2, shape: "swatch" },
+                { label: s.legendMost, tone: "accent", level: 3, shape: "swatch" },
+              ]}
+            />
+          )}
+        </div>
+      }
+    />
   );
 }

@@ -16,9 +16,11 @@ import { NoteCardsDeleteDialog } from "./NoteCardsDeleteDialog.js";
 import { NoteChecklistTasksDialog } from "./NoteChecklistTasksDialog.js";
 import { NoteEditor } from "./NoteEditor.js";
 import { NOTE_ORGANIZER_PANE_ID, NoteOrganizer, type FolderSelection } from "./NoteOrganizer.js";
-import { NoteRhythm } from "./NoteRhythm.js";
+import { NoteRhythm, localDayOf } from "./NoteRhythm.js";
 import { PRIV_LOCKED_EVENT } from "./PrivPage.js";
 import { TypedConfirmDialog } from "./TypedConfirmDialog.js";
+import { localTodayKey, shiftDayKey } from "./examDates.js";
+import { formatClockTime } from "./timeFormat.js";
 import { formatNotificationWhen } from "./notificationFormat.js";
 import { NotePopover } from "./notePopover.js";
 import { persistRootNoteView, readStoredRootNoteView } from "./notePrefs.js";
@@ -70,6 +72,133 @@ function formatNoteDate(iso: string): string {
   return Number.isNaN(date.getTime())
     ? iso
     : new Intl.DateTimeFormat("sr-Latn", { day: "2-digit", month: "short" }).format(date);
+}
+
+/**
+ * A month group's own name — „jul 2026." — for everything older than the
+ * current one.
+ *
+ * `timeZone: "UTC"` is load-bearing rather than tidy: the key it formats is a
+ * bare `YYYY-MM`, read back as UTC midnight of the first, and in any zone
+ * behind UTC that instant is the LAST day of the previous month locally. The
+ * group would then be headed with the wrong month for every user west of
+ * Greenwich. `NoteRhythm`'s cell formatter pins the zone for exactly this
+ * reason.
+ */
+const MONTH_LABEL = new Intl.DateTimeFormat("sr-Latn", {
+  month: "long",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+/** The buckets the note list is cut into, widest-window last. */
+type NoteGroupKind = "pinned" | "today" | "yesterday" | "week" | "month" | "older";
+
+interface NoteGroup {
+  /**
+   * React key. It carries the run's INDEX as well as its bucket, so two runs of
+   * one bucket could not collide even if the store's ordering ever changed —
+   * see the note in `groupNotes`.
+   */
+  key: string;
+  /** Bucket identity, which is what decides whether a note joins the open run. */
+  bucket: string;
+  kind: NoteGroupKind;
+  /**
+   * `YYYY-MM` for `older`, the empty string otherwise — never optional, so no
+   * call site has to test for absence before formatting it.
+   */
+  monthKey: string;
+  notes: NoteMeta[];
+}
+
+/**
+ * The visible notes, cut into the sticky groups the list pane draws.
+ *
+ * THIS NEVER REORDERS ANYTHING, and that is what makes it safe. `listNotes`
+ * answers `ORDER BY pinned DESC, updated_at DESC, id DESC`, so every bucket
+ * below is already CONTIGUOUS in the array: the walk opens a new group when the
+ * key changes and appends otherwise. Bucketing into a map and re-emitting would
+ * have produced the same headings and a different order inside them.
+ *
+ * The tests run narrowest-window first, so the first that matches is the most
+ * specific true statement about the note. `day >= today` rather than `===`
+ * catches a stamp from a skewed clock: a note „from tomorrow" belongs under
+ * „Danas", not silently under „Poslednjih 7 dana".
+ */
+function groupNotes(notes: readonly NoteMeta[], today: string): NoteGroup[] {
+  const yesterday = shiftDayKey(today, -1);
+  // Seven days INCLUDING today, so this bucket picks up exactly what „danas"
+  // and „juče" have not already taken.
+  const weekStart = shiftDayKey(today, -6);
+  const thisMonth = today.slice(0, 7);
+  const groups: NoteGroup[] = [];
+  for (const note of notes) {
+    const day = localDayOf(note.updatedAt);
+    const kind: NoteGroupKind = note.pinned
+      ? "pinned"
+      : day >= today
+        ? "today"
+        : day === yesterday
+          ? "yesterday"
+          : day >= weekStart
+            ? "week"
+            : day.slice(0, 7) === thisMonth
+              ? "month"
+              : "older";
+    const monthKey = kind === "older" ? day.slice(0, 7) : "";
+    const bucket = kind === "older" ? `older:${monthKey}` : kind;
+    const last = groups[groups.length - 1];
+    if (last !== undefined && last.bucket === bucket) {
+      last.notes.push(note);
+      continue;
+    }
+    // The React key is the bucket AND the run index. Contiguity makes a second
+    // run of one bucket impossible under the store's ordering; this makes a
+    // duplicate key impossible under ANY ordering, which is the version of the
+    // guarantee that does not depend on a `ORDER BY` in another package.
+    groups.push({
+      key: `${bucket}#${String(groups.length)}`,
+      bucket,
+      kind,
+      monthKey,
+      notes: [note],
+    });
+  }
+  return groups;
+}
+
+/** A group's heading. Every bucket but the per-month ones is a fixed phrase. */
+function groupLabel(group: NoteGroup): string {
+  switch (group.kind) {
+    case "pinned":
+      return strings.notes.listGroups.pinned;
+    case "today":
+      return strings.notes.listGroups.today;
+    case "yesterday":
+      return strings.notes.listGroups.yesterday;
+    case "week":
+      return strings.notes.listGroups.week;
+    case "month":
+      return strings.notes.listGroups.month;
+    case "older":
+      return MONTH_LABEL.format(new Date(`${group.monthKey}-01T00:00:00Z`));
+  }
+}
+
+/**
+ * A row's own timestamp, given the group it sits in.
+ *
+ * Inside „Danas" and „Juče" the heading has already said the day, so printing
+ * it again on every row would be the same four characters repeated down a
+ * column — the rule against a constant word in a list. The row says the HOUR
+ * there instead, which is strictly more than the date it replaces. Every other
+ * bucket spans several days, so there the date is the informative half.
+ */
+function rowTimestamp(note: NoteMeta, kind: NoteGroupKind): string {
+  return kind === "today" || kind === "yesterday"
+    ? formatClockTime(note.updatedAt)
+    : formatNoteDate(note.updatedAt);
 }
 
 /**
@@ -701,6 +830,30 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
     () => new Map(categories.map((category) => [category.id, category])),
     [categories],
   );
+  const folderNameById = useMemo(
+    () => new Map(folders.map((folder) => [folder.id, folder.name])),
+    [folders],
+  );
+
+  /**
+   * Whether a row prints the folder it lives in.
+   *
+   * Only under „Sve beleške", where the folder is one of the few things telling
+   * two rows apart. Inside a folder it would be the SAME word on every row down
+   * the whole pane, and under „Bez fascikle" there is no word to print — both
+   * are the rule against repeating a constant down a list, and both are decided
+   * here rather than per row.
+   */
+  const showFolder = selection.kind === "all";
+
+  /**
+   * The list shape's sticky groups. Recomputed on every render rather than
+   * memoised, and on purpose: `groupNotes` is one pass over an array that is
+   * already memoised, and the day it groups against has to be TODAY's — a memo
+   * keyed on the notes alone would go on labelling yesterday's rows „Danas"
+   * until something else happened to refetch.
+   */
+  const noteGroups = groupNotes(visibleNotes, localTodayKey());
 
   /**
    * WHICH SHAPE the middle pane draws (NOTE-002). A folder remembers its own —
@@ -756,12 +909,20 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
    * Only the TIMESTAMP differs, and by design: a row in a dense column says
    * „28. jul“, while a card has room for the instant label the dashboard's recent
    * notes and the search results already use.
+   *
+   * THE ROW HAS THREE LEVELS AND THERE IS NO FOURTH. The title carries the
+   * name; the second line is what the note is ABOUT (its kind and its tags), in
+   * one muted sentence rather than a wrapping thicket of bordered chips; the
+   * third is where it lives and when it was touched, in the tertiary register.
+   * A fourth level is what turns a pane of fifty notes back into a wall.
    */
   function renderNoteEntry(note: NoteMeta, timestamp: string) {
     const noteTagIds = tagsByNote.get(note.id);
     const noteTags =
       noteTagIds && noteTagIds.size > 0 ? sortedTags.filter((tag) => noteTagIds.has(tag.id)) : [];
     const noteCategory = note.categoryId === null ? undefined : categoryById.get(note.categoryId);
+    const folderName =
+      showFolder && note.folderId !== null ? (folderNameById.get(note.folderId) ?? null) : null;
     return (
       <>
         <button
@@ -784,11 +945,10 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
           </span>
           {(noteCategory !== undefined || noteTags.length > 0) && (
             <span className="note__item-tags">
-              {/* The category leads its note's chips (NOTE-002): the same muted
-                  chip the tags are, told apart by the swatch the user gave it
-                  rather than by a second chip design — no new colour value, no
-                  glow. An uncoloured category shows the dashed dot the folder
-                  tree already uses for one. */}
+              {/* The category leads the line (NOTE-002), told apart from the
+                  tags by the swatch the user gave it rather than by a second
+                  design — no new colour value, no glow. An uncoloured category
+                  shows the dashed dot the folder tree already uses for one. */}
               {noteCategory !== undefined && (
                 <span className="note__item-tag note__item-tag--category">
                   <span
@@ -811,7 +971,10 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
               ))}
             </span>
           )}
-          <span className="note__item-date">{timestamp}</span>
+          <span className="note__item-meta">
+            {folderName !== null && <span className="note__item-folder">{folderName}</span>}
+            <span className="note__item-date">{timestamp}</span>
+          </span>
         </button>
         <NotePopover label={strings.notes.noteMenuLabel} triggerClassName="note__row-menu">
           {(close) => (
@@ -988,6 +1151,7 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
           `flex: 1; min-height: 0`, and the height contract is unchanged. */}
       <PageHeader
         title={moduleName("notes")}
+        sigil="notes"
         actions={
           // A disclosure for the organizer, hidden by CSS at the widths where
           // the organizer is a column and there is nothing to disclose.
@@ -1058,7 +1222,7 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
                 <Button
                   key={value}
                   size="sm"
-className="nx-segmented__option note__view"
+                  className="nx-segmented__option"
                   aria-pressed={view === value}
                   onClick={() => void selectView(value)}
                 >
@@ -1111,11 +1275,14 @@ className="nx-segmented__option note__view"
             ))}
 
           {failed ? (
+            // No sigil: a module's own mark above a failure would say „there is
+            // nothing here", and what happened is that we could not find out.
             <EmptyState title={strings.notes.listEmptyTitle} description={strings.notes.loadError} />
           ) : notes === null ? (
             <LoadingState label={strings.app.loading} rows={6} />
           ) : notes.length === 0 ? (
             <EmptyState
+              sigil="notes"
               title={strings.notes.listEmptyTitle}
               description={strings.notes.listEmptyDescription}
             />
@@ -1123,19 +1290,43 @@ className="nx-segmented__option note__view"
             // Two filters, two sentences: the line has to name the one the user
             // actually set, and only the tag filter is on when both are off. With
             // both on, the tag line is the more specific of the two.
+            //
+            // `inline`, and deliberately not the page shape with a mark: the
+            // module is NOT empty, one filter matched nothing. A 48px sigil here
+            // would be the surface claiming a state it is not in.
+            //
+            // The filter sentence is the `title`, with no `description`: the
+            // inline shape folds the two into one line, so a title as well would
+            // read „Nema beležaka Nijedna beleška ne odgovara…" — two sentences
+            // run together with no stop between them. Same idiom as the
+            // dashboard's own inline empties.
             <EmptyState
-              title={strings.notes.listEmptyTitle}
-              description={
+              variant="inline"
+              title={
                 tagFilter.length === 0
                   ? strings.notes.categoryFilterEmptyDescription
                   : strings.notes.tagFilterEmptyDescription
               }
             />
           ) : view === "list" ? (
+            // Sticky groups, never a flat run of fifty rows. Each group is one
+            // item of the outer list, so its heading sticks against the pane's
+            // scroll and leaves exactly when its last row does — see `.note__group`.
             <ul className="note__list">
-              {visibleNotes.map((note) => (
-                <li key={note.id} className="note__item-row">
-                  {renderNoteEntry(note, formatNoteDate(note.updatedAt))}
+              {noteGroups.map((group) => (
+                <li key={group.key} className="note__group">
+                  <h3 className="note__group-head">
+                    {groupLabel(group)}
+                    {/* A number, not „12 beležaka" repeated down the pane. */}
+                    <span className="note__group-count">{group.notes.length}</span>
+                  </h3>
+                  <ul className="note__group-items">
+                    {group.notes.map((note) => (
+                      <li key={note.id} className="note__item-row">
+                        {renderNoteEntry(note, rowTimestamp(note, group.kind))}
+                      </li>
+                    ))}
+                  </ul>
                 </li>
               ))}
             </ul>
@@ -1144,6 +1335,12 @@ className="nx-segmented__option note__view"
             // carries no sort — see CARDS_CONFIG). The wrapper owns the scroll the
             // <ul> owns in the other shape; the grid, the card frame and its
             // padding are the UI package's.
+            //
+            // NO GROUPS HERE, deliberately. A card grid is a gallery, and a
+            // gallery cut by five headings is five short galleries; the shape
+            // exists precisely for the case where you are looking rather than
+            // scanning. The date on a card is the fuller instant label for the
+            // same reason — nothing above it has said the day.
             <div className="note__cards">
               <CardsView<NoteFields>
                 items={visibleNotes}
@@ -1179,6 +1376,7 @@ className="nx-segmented__option note__view"
           ) : (
             <div className="note__editor-empty">
               <EmptyState
+                sigil="notes"
                 title={strings.notes.noSelectionTitle}
                 description={strings.notes.noSelectionDescription}
               />

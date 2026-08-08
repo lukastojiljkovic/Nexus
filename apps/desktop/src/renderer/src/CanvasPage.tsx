@@ -29,6 +29,13 @@ import type { CanvasBoard, CanvasRefCard } from "../../shared/ipc.js";
 import { boardAfterDelete, looksLikeMermaid, resolveActiveBoard } from "./canvasBoards.js";
 import { moduleName } from "./moduleName.js";
 import { NotePopover } from "./notePopover.js";
+// „Danas u 14:32" collapses to the bare clock and anything older grows a date —
+// the rule the notification centre wrote first and the only one in the renderer
+// that answers „when was this, said shortly". Imported rather than copied: a
+// second implementation of that sentence is how the two start disagreeing about
+// what „today" means. Its right home is `timeFormat.ts`, which is a shared file
+// this change does not own.
+import { formatNotificationWhen } from "./notificationFormat.js";
 import { formatClockTime } from "./timeFormat.js";
 import { CanvasCard } from "./CanvasCard.js";
 import { CanvasCardPicker } from "./CanvasCardPicker.js";
@@ -409,8 +416,24 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
       );
       setSaveStatus("saving");
       try {
-        await window.nexus.saveCanvasScene(profileId, boardId, scene);
+        const saved = await window.nexus.saveCanvasScene(profileId, boardId, scene);
         savedVersion.current = version;
+        // The write answers with the board's own metadata, and the board list
+        // shows when each board was last drawn on — so the answer is folded
+        // back in rather than dropped. Without this the switcher would keep
+        // showing the `updatedAt` of the last LIST read, which is a timestamp
+        // that goes quietly stale the whole time somebody is drawing: the
+        // board they are working in would claim to be the oldest one they
+        // have. Patched in place rather than re-read, so an autosave stays one
+        // round trip.
+        setState((previous) =>
+          previous.boards === null
+            ? previous
+            : {
+                ...previous,
+                boards: previous.boards.map((board) => (board.id === saved.id ? saved : board)),
+              },
+        );
         setSaveError(null);
         setSavedAt(new Date().toISOString());
         setSaveStatus("saved");
@@ -698,7 +721,7 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
   }
 
   if (failed) {
-    return <EmptyState title={s.loadErrorTitle} description={s.loadError} />;
+    return <EmptyState sigil="canvas" title={s.loadErrorTitle} description={s.loadError} />;
   }
   // Until 2026-08-07 this returned `null` — the page rendered LITERALLY NOTHING
   // for its whole initial read, so opening „Tabla" showed a blank pane and gave
@@ -707,7 +730,7 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
   if (boards === null) {
     return (
       <>
-        <PageHeader className="canv__header" title={moduleName("canvas")} />
+        <PageHeader className="canv__header" title={moduleName("canvas")} sigil="canvas" />
         <LoadingState label={strings.app.loading} rows={4} />
       </>
     );
@@ -728,6 +751,7 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
       <PageHeader
         className="canv__header"
         title={moduleName("canvas")}
+        sigil="canvas"
         {...(active === null ? {} : { subtitle: active.name })}
         actions={
           <>
@@ -743,7 +767,9 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
               triggerContent={
                 <>
                   {s.boardsLabel}
-                  <span aria-hidden="true"> ({boards.length})</span>
+                  <span className="canv__board-count" aria-hidden="true">
+                    {boards.length}
+                  </span>
                 </>
               }
             >
@@ -769,7 +795,20 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
                         >
                           <Icon name="check" size={14} />
                         </span>
-                        {board.name}
+                        {/* Two lines, not one. „Which board" is a question about
+                            four or five names that look alike a month after they
+                            were typed, and the only thing that tells them apart
+                            is when each was last drawn on — which the list read
+                            already carried and threw away. It stays true after
+                            an autosave because the write's own answer updates it
+                            (`writeScene`), rather than because the list happens
+                            to be re-read. */}
+                        <span className="canv__board-text">
+                          <span className="canv__board-name">{board.name}</span>
+                          <span className="canv__board-meta">
+                            {s.boardUpdatedPrefix} {formatNotificationWhen(board.updatedAt)}
+                          </span>
+                        </span>
                       </button>
                     );
                   })}
@@ -849,17 +888,14 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
       )}
 
       {active === null ? (
-        <EmptyState title={s.emptyTitle} description={s.emptyDescription} />
+        <EmptyState sigil="canvas" title={s.emptyTitle} description={s.emptyDescription} />
       ) : (
+        // The bar and the board are ONE bordered object (`.canv__instrument`),
+        // for the reason that rule gives: a strip floating above a box reads as
+        // a palette that happens to be near a drawing. The picker is NOT inside
+        // it — it portals itself onto `document.body`, so where it sits in this
+        // tree decides nothing.
         <>
-          {toolbar !== null && (
-            <CanvasToolbar
-              editor={api}
-              state={toolbar}
-              onMermaid={openMermaid}
-              onAddCard={() => setPickerOpen(true)}
-            />
-          )}
           {pickerOpen && (
             <CanvasCardPicker
               profileId={profileId}
@@ -867,74 +903,84 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
               onCancel={() => setPickerOpen(false)}
             />
           )}
-          <div className="canv__surface">
-            <Excalidraw
-              // Remounts on a board switch, which is what makes `initialData`
-              // (read once, at mount) the right place to load a scene at all.
-              key={active.id}
-              excalidrawAPI={(instance) => {
-                api.current = instance;
-                // Seeds the toolbar from the editor's REAL state rather than a
-                // guessed default. This runs inside React's commit phase, so the
-                // render it schedules lands before the browser paints and the bar
-                // never appears a frame late.
-                setToolbar(canvasToolbarStateOf(instance.getAppState()));
-              }}
-              initialData={initialData}
-              onChange={onChange}
-              onPaste={onPaste}
-              // The two halves of a card (slice c), and neither works without
-              // the other. The predicate is `isCanvasRefText` and NOTHING else:
-              // every string it admits is a string this app has promised to
-              // draw itself, because the editor's fall-through for one it
-              // admits is a real iframe. The renderer honours that promise on
-              // every path — see `CanvasCard.tsx`.
-              validateEmbeddable={isCanvasRefText}
-              renderEmbeddable={renderEmbeddable}
-              theme={theme === "noc" ? "dark" : "light"}
-              // English, and stated rather than papered over: Excalidraw ships 54
-              // locales, Serbian is not one of them, and it cannot be added — the
-              // loader is a hard-coded import map inside the bundle and
-              // `setLanguage` is not re-exported. This is why the chrome is ours
-              // (`CanvasToolbar`) instead of translated. The only English a user
-              // can now reach is inside the editor's own mermaid dialog, opened by
-              // a deliberate action, and mermaid is a developer-facing notation
-              // whose keywords are English to begin with.
-              langCode="en"
-              zenModeEnabled
-              aiEnabled={false}
-              UIOptions={{
-                canvasActions: {
-                  // Every one of these writes or reads a FILE behind our back —
-                  // „Open", „Save to…", „Export image" — and the app has its own
-                  // export surface (IMEX). „Clear canvas" is off because a board
-                  // is deleted, not emptied in place.
-                  loadScene: false,
-                  saveToActiveFile: false,
-                  saveAsImage: false,
-                  export: false,
-                  clearCanvas: false,
-                  // The theme follows Nexus's own setting; a second toggle inside
-                  // the canvas would be a preference that disagrees with the app.
-                  toggleTheme: false,
-                  // Off since slice b1, and this is a REMOVAL rather than an
-                  // oversight: the only control for it lived in the left island
-                  // that is now hidden, so leaving it on would be advertising a
-                  // capability nothing can reach. The canvas colour is
-                  // `--nx-bg` (`elementDefaults`) and follows the theme, which is
-                  // the same answer `toggleTheme` above gets.
-                  changeViewBackgroundColor: false,
-                },
-              }}
-            >
-              {/* Refused in the TREE rather than in CSS: providing a menu replaces
-                  Excalidraw's default one, whose items include the Help dialog,
-                  „Excalidraw+" and the GitHub/X/Discord links. Ours is
-                  deliberately empty — every action lives in our own bars above,
-                  in Serbian — so those entries are absent from the DOM rather
-                  than merely hidden. */}
-              <MainMenu />
-            </Excalidraw>
+          <div className="canv__instrument">
+            {toolbar !== null && (
+              <CanvasToolbar
+                editor={api}
+                state={toolbar}
+                onMermaid={openMermaid}
+                onAddCard={() => setPickerOpen(true)}
+              />
+            )}
+            <div className="canv__surface">
+              <Excalidraw
+                // Remounts on a board switch, which is what makes `initialData`
+                // (read once, at mount) the right place to load a scene at all.
+                key={active.id}
+                excalidrawAPI={(instance) => {
+                  api.current = instance;
+                  // Seeds the toolbar from the editor's REAL state rather than a
+                  // guessed default. This runs inside React's commit phase, so the
+                  // render it schedules lands before the browser paints and the bar
+                  // never appears a frame late.
+                  setToolbar(canvasToolbarStateOf(instance.getAppState()));
+                }}
+                initialData={initialData}
+                onChange={onChange}
+                onPaste={onPaste}
+                // The two halves of a card (slice c), and neither works without
+                // the other. The predicate is `isCanvasRefText` and NOTHING else:
+                // every string it admits is a string this app has promised to
+                // draw itself, because the editor's fall-through for one it
+                // admits is a real iframe. The renderer honours that promise on
+                // every path — see `CanvasCard.tsx`.
+                validateEmbeddable={isCanvasRefText}
+                renderEmbeddable={renderEmbeddable}
+                theme={theme === "noc" ? "dark" : "light"}
+                // English, and stated rather than papered over: Excalidraw ships 54
+                // locales, Serbian is not one of them, and it cannot be added — the
+                // loader is a hard-coded import map inside the bundle and
+                // `setLanguage` is not re-exported. This is why the chrome is ours
+                // (`CanvasToolbar`) instead of translated. The only English a user
+                // can now reach is inside the editor's own mermaid dialog, opened by
+                // a deliberate action, and mermaid is a developer-facing notation
+                // whose keywords are English to begin with.
+                langCode="en"
+                zenModeEnabled
+                aiEnabled={false}
+                UIOptions={{
+                  canvasActions: {
+                    // Every one of these writes or reads a FILE behind our back —
+                    // „Open", „Save to…", „Export image" — and the app has its own
+                    // export surface (IMEX). „Clear canvas" is off because a board
+                    // is deleted, not emptied in place.
+                    loadScene: false,
+                    saveToActiveFile: false,
+                    saveAsImage: false,
+                    export: false,
+                    clearCanvas: false,
+                    // The theme follows Nexus's own setting; a second toggle inside
+                    // the canvas would be a preference that disagrees with the app.
+                    toggleTheme: false,
+                    // Off since slice b1, and this is a REMOVAL rather than an
+                    // oversight: the only control for it lived in the left island
+                    // that is now hidden, so leaving it on would be advertising a
+                    // capability nothing can reach. The canvas colour is
+                    // `--nx-bg` (`elementDefaults`) and follows the theme, which is
+                    // the same answer `toggleTheme` above gets.
+                    changeViewBackgroundColor: false,
+                  },
+                }}
+              >
+                {/* Refused in the TREE rather than in CSS: providing a menu replaces
+                    Excalidraw's default one, whose items include the Help dialog,
+                    „Excalidraw+" and the GitHub/X/Discord links. Ours is
+                    deliberately empty — every action lives in our own bars above,
+                    in Serbian — so those entries are absent from the DOM rather
+                    than merely hidden. */}
+                <MainMenu />
+              </Excalidraw>
+            </div>
           </div>
         </>
       )}

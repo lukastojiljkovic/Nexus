@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import {
   Button,
@@ -7,14 +7,14 @@ import {
   EmptyState,
   Icon,
   ListRow,
-  ListView,
   LoadingState,
   PageHeader,
   ProportionBar,
+  Select,
   TextField,
 } from "@nexus/ui";
 import { applyFilters, isValidDayKey, monthKeyOf, shiftMonthKey } from "@nexus/core";
-import type { CardsViewConfig, CollectionSchema, FilterSpec, ListViewConfig } from "@nexus/core";
+import type { CardsViewConfig, CollectionSchema, FilterSpec } from "@nexus/core";
 import {
   FIN_ACCOUNT_KINDS,
   FIN_CATEGORY_KINDS,
@@ -51,52 +51,75 @@ import {
   type FinReportSection,
 } from "./financeReport.js";
 import { formatMoney, formatMoneyPlain, moneyInputValue, parseMoneyInput } from "./money.js";
-import { strings } from "./strings.js";
+import { NotePopover } from "./notePopover.js";
+import { countUnit, strings } from "./strings.js";
 import { TypedConfirmDialog } from "./TypedConfirmDialog.js";
 import { moduleName } from "./moduleName.js";
 
 /**
- * Finansije (FIN slice b) — the ledger's page. Slice a shipped the data layer
- * and the five decisions written into migration 051; this page is bound by
- * every one of them and revisits none:
+ * Finansije (FIN) — the ledger's page. Slice a shipped the data layer and the
+ * five decisions written into migration 051; this page is bound by every one of
+ * them and revisits none:
  *
  * - **Money is an INTEGER of minor units** in every value this file holds. The
  *   only decimal anywhere is produced by `money.ts` at the moment of drawing,
  *   and the only decimal ever read is parsed by the same module before it
  *   crosses the wire. There is no `toFixed` here and no float arithmetic.
- * - **Currency is per ACCOUNT and nothing converts.** Which is why the rail's
- *   „Ukupno" block renders `finCurrencyTotals`' LIST verbatim — one row per
- *   currency — and why nothing here ever reduces that list to a number. A
- *   cross-currency sum is not merely avoided: the store publishes no method
- *   that could produce one, so there is nothing to add up by accident.
+ * - **Currency is per ACCOUNT and nothing converts.** Which is why every
+ *   aggregate on this page — the band, a day's net, the month report — is a
+ *   LIST keyed by currency rather than a number, and why nothing here ever
+ *   reduces such a list. A cross-currency sum is not merely avoided: the store
+ *   publishes no method that could produce one, and `money.ts` cannot format an
+ *   amount without being told which money it is, so there is nothing to add up
+ *   by accident.
  * - **A balance is DERIVED**, read on its own channel and never patched
  *   locally: every write re-reads the whole screen (`reload`), so a balance on
  *   screen is always one the store just computed from the rows beside it.
  * - **A transfer is ONE row** naming both accounts. „Prenos" is the single act
  *   that writes it, and a transfer row is DRAWN as a transfer — the two account
  *   names and the direction — never as an expense wearing a strange category.
+ *   It is also absent from every aggregate here, because it is neither income
+ *   nor expense and folding it into one would be inventing money.
  * - **Categories are flat, with a kind**, so the picker offers exactly the kind
- *   the current entry can carry, and offers none at all for a transfer, which
- *   is neither income nor expense.
+ *   the current entry can carry, and offers none at all for a transfer.
  *
- * The ledger is drawn with the house's existing view vocabulary (list and
- * cards, ADR-050) and is handed the rows in the store's own order: no `sort`
- * spec, so `applySort` returns its input untouched and „newest day first" stays
- * what the store already guarantees. The CATEGORY filter is a `FilterSpec` —
- * strict equality is exactly what it needs, `null` for „Bez kategorije"
- * included — while the ACCOUNT and PERIOD filters are predicates applied here,
- * because equality cannot express „either side of a transfer" or a range. That
- * is the same split TASK's page makes between its smart lists and its filter
- * specs, not a third vocabulary.
+ * **What this page is, as a piece of design.** It is three hundred numbers, so
+ * the numbers come first and everything else is chrome around them:
  *
- * **Slice c adds the second half: „Izveštaj".** It reads ONE month and states
- * what happened in it — per currency, never merged — under one rule more than
- * the ledger obeys: it claims nothing it was not told. No projection, no
- * forecast, no „ovim tempom ćeš…", and no budget inferred from what was spent
- * before; a category with no limit says so. All of the month's arithmetic lives
- * in `financeReport.ts`, where it is a table of cases rather than logic inside
- * JSX. Budgets are edited beside the categories, because a budget IS a
- * category's monthly limit and has no life of its own.
+ * - *Summary before detail.* The band at the top states the balance the profile
+ *   holds and what came in and went out of the rows currently on screen — one
+ *   group per currency, the code named once as the group's caption.
+ * - *The unit is hoisted exactly when it is constant.* `soleValue` decides,
+ *   from the rows about to be drawn, whether they share one currency. When they
+ *   do, the code moves to the column head and the cells hold the figure alone;
+ *   when they do not, every cell carries its own, because the repetition is
+ *   then information. The rail applies the identical rule to its balances.
+ * - *Grouped by day, never paginated.* Rows arrive newest-day-first and stay
+ *   that way; the page cuts them at each date change and gives every run a
+ *   sticky rule carrying that day's net.
+ * - *One row of chrome.* The half switcher moved into the page header's actions
+ *   slot, the entry form became a disclosure — it is used a few times a day on
+ *   a surface that is read a hundred — and what is left above the ledger is a
+ *   single controls row.
+ *
+ * The ledger's FILTERING is still the views engine's (`applyFilters`, ADR-050):
+ * the list draws `visibleRows`, and „Kartice" hands `CardsView` the same specs,
+ * so the two shapes can never disagree about which rows exist. Only the list's
+ * ARRANGEMENT is the page's own, because a ledger is grouped by day and the
+ * engine has no slot for a group. There is no `sort` spec, so „newest day
+ * first" stays what the store already guarantees.
+ *
+ * The CATEGORY filter is a `FilterSpec` — strict equality is exactly what it
+ * needs, `null` for „Bez kategorije" included — while the ACCOUNT and PERIOD
+ * filters are predicates applied here, because equality cannot express „either
+ * side of a transfer" or a range. That is the same split TASK's page makes.
+ *
+ * **„Izveštaj"** reads ONE month and states what happened in it — per currency,
+ * never merged — under one rule more than the ledger obeys: it claims nothing
+ * it was not told. No projection, no forecast, no „ovim tempom ćeš…", and no
+ * budget inferred from what was spent before; a category with no limit says so.
+ * All of the month's arithmetic lives in `financeReport.ts`. Budgets are edited
+ * beside the categories, because a budget IS a category's monthly limit.
  */
 
 /** The three acts the one entry form performs. It decides the SIGN and what the row may carry — never a stored field. */
@@ -172,6 +195,91 @@ type PendingUndo =
 /** Which inline rail editor is open, if any. */
 type AccountEditing = null | { mode: "new" } | { mode: "edit"; id: string };
 type CategoryEditing = null | { mode: "new" } | { mode: "rename"; id: string };
+
+/**
+ * The one value a run of rows all carry, or `null` when they carry more than
+ * one. **This is the page's rule for telling a caption from a datum**, and it
+ * is computed rather than assumed: a word that is the same on every row is the
+ * heading of the column it sits in, and printing it sixty times is sixty copies
+ * of one fact competing with the sixty facts that differ. The currency is the
+ * case that matters — „ RSD" after every amount is 180 characters of noise
+ * beside the figures — and the moment two currencies are genuinely on screen
+ * the same rule puts the code back on every cell, where it is information.
+ *
+ * An empty run has no shared value and gets `null`, which is the safe answer:
+ * nothing is hoisted out of a column that has nothing in it.
+ */
+function soleValue(values: Iterable<string>): string | null {
+  let sole: string | null = null;
+  for (const value of values) {
+    if (value === "") continue;
+    if (sole === null) sole = value;
+    else if (sole !== value) return null;
+  }
+  return sole;
+}
+
+/**
+ * A MOVEMENT of money, with its direction stated by the SIGN PAIR: an explicit
+ * „+" for money arriving, the locale's own minus for money leaving.
+ *
+ * The pair is the point. A lone minus is something a reader has to notice, and
+ * on a page where most rows are expenses it becomes the wallpaper; a plus
+ * opposite it is something they cannot miss, and it is a glyph rather than a
+ * hue — so the jade on income reinforces the fact instead of being the only
+ * thing carrying it. The „+" is prefixed rather than asked of `Intl` because
+ * `money.ts` owns every other decision about the string, including where the
+ * MINUS goes, and sr-Latn is a prefix-sign locale in both directions.
+ *
+ * A BALANCE is not a movement and never comes through here: it is a state, and
+ * „+123.456,00" for having money is a claim about a direction it is not going
+ * in. The band prints those with `formatMoneyPlain` directly.
+ *
+ * `unit` is the currency hoisted out of the column (`soleValue`), or null when
+ * every cell has to carry its own code.
+ */
+function signedMoney(minorUnits: number, currency: string, unit: string | null): string {
+  const text =
+    unit === null ? formatMoney(minorUnits, currency) : formatMoneyPlain(minorUnits, currency);
+  return minorUnits > 0 ? `+${text}` : text;
+}
+
+/**
+ * The ledger's dated rule — „ČET, 7. AVG 2026." UTC because a day key is a
+ * calendar day and not an instant: parsing it in the local zone would shift the
+ * label by one day for anybody east of Greenwich at the wrong hour.
+ */
+const LEDGER_DAY_FORMATTER = new Intl.DateTimeFormat("sr-Latn", {
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+/** A day key as the ledger's rule reads it; degrades to the key itself rather than throwing on a malformed one. */
+function formatLedgerDay(dayKey: string): string {
+  const date = new Date(`${dayKey}T00:00:00Z`);
+  return Number.isNaN(date.getTime()) ? dayKey : LEDGER_DAY_FORMATTER.format(date);
+}
+
+/** One dated run of the ledger, and what that day came to. */
+interface FinDayGroup {
+  date: string;
+  rows: FinTransactionFields[];
+  /** The day's net per CURRENCY — never one number across two, and no transfer in any of them. */
+  nets: Map<string, number>;
+}
+
+/** One currency's line in the page's summary band. */
+interface FinBandGroup {
+  currency: string;
+  /** The profile's balance in this currency, or null when it keeps no live account in it. */
+  balance: number | null;
+  /** Money that arrived, and money that left, among the rows currently on screen — both as positive magnitudes. */
+  income: number;
+  outflow: number;
+}
 
 /**
  * Maps a FIN store/IPC failure onto the Serbian copy by matching the store's
@@ -332,6 +440,9 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
   const [toDraft, setToDraft] = useState("");
 
   // The one entry form, serving create and edit (the tasks page's own shape).
+  // It is a DISCLOSURE: the ledger is read far more often than it is written
+  // to, so the form is not on screen until somebody asks for it.
+  const [formOpen, setFormOpen] = useState(false);
   const [entryKind, setEntryKind] = useState<EntryKind>("expense");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [amountDraft, setAmountDraft] = useState("");
@@ -377,8 +488,8 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
   const [pendingUndo, setPendingUndo] = useState<PendingUndo>(null);
   const amountRef = useRef<HTMLInputElement>(null);
   // Bumped by an arriving intent, so the focus lands in the effect AFTER the
-  // one that switches to „Knjiga" — the amount field does not exist to be
-  // focused until that switch has rendered.
+  // one that switches to „Knjiga" and opens the form — the amount field does
+  // not exist to be focused until that has rendered.
   const [focusTick, setFocusTick] = useState(0);
 
   // The setters are written out here rather than routed through a shared
@@ -433,11 +544,12 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
   }, [profileId, monthKey]);
 
   // Consumes „Nova transakcija" (021-e): the entry form lives in „Knjiga", so
-  // the intent puts that half on screen and asks for the caret. Reported
-  // handled immediately — there is no row to wait for, unlike a reveal.
+  // the intent puts that half on screen, opens the form and asks for the caret.
+  // Reported handled immediately — there is no row to wait for, unlike a reveal.
   useEffect(() => {
     if (!intent) return;
     setPage("ledger");
+    setFormOpen(true);
     setFocusTick((tick) => tick + 1);
     onIntentHandled();
   }, [intent, onIntentHandled]);
@@ -522,12 +634,19 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
   const subAccountId =
     subAccount !== "" && accountById.has(subAccount) ? subAccount : (liveAccounts[0]?.id ?? "");
   const subCurrency = accountById.get(subAccountId)?.currency ?? readStoredPrimaryCurrency();
-  /** Which currency the amount field is being typed in — the account's own, said out loud beside it. */
+  /** Which currency the amount field is being typed in — the account's own, said in the field's own label. */
   const formCurrency = formAccount?.currency ?? readStoredPrimaryCurrency();
 
-  function resetForm(): void {
+  /**
+   * Clears the draft but LEAVES the panel open — filing one row usually means
+   * filing the next, which is also why `keepKind` exists: somebody entering
+   * three prihoda in a row should not have to say „Prihod" three times. The
+   * kind is only reset when the ACT ends (closing the panel), never between two
+   * rows of the same act.
+   */
+  function resetForm(keepKind = false): void {
     setEditingId(null);
-    setEntryKind("expense");
+    if (!keepKind) setEntryKind("expense");
     setAmountDraft("");
     setPayeeDraft("");
     setNoteDraft("");
@@ -538,9 +657,16 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
     setFormError(null);
   }
 
+  /** Clears the draft AND puts the panel away — „Otkaži", and whatever else ends the act. */
+  function closeForm(): void {
+    resetForm();
+    setFormOpen(false);
+  }
+
   /** Opens an existing row in the same form; its kind is derived from the row, never stored on it. */
   function beginEdit(transaction: FinTransactionFields): void {
     const account = accountById.get(transaction.accountId);
+    setFormOpen(true);
     setEditingId(transaction.id);
     setEntryKind(entryKindOf(transaction));
     setAmountDraft(
@@ -553,7 +679,8 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
     setCounterDraft(transaction.counterAccountId ?? "");
     setCategoryDraft(transaction.categoryId ?? "");
     setFormError(null);
-    amountRef.current?.focus();
+    // One render later: the panel may not have been on screen a moment ago.
+    setFocusTick((tick) => tick + 1);
   }
 
   /**
@@ -602,7 +729,10 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
       } else {
         await window.nexus.updateFinTransaction(profileId, editingId, fields);
       }
-      resetForm();
+      resetForm(true);
+      // The caret goes back where the next amount is typed: filing a row is
+      // almost never the last thing somebody does on this screen.
+      amountRef.current?.focus();
       await reload();
     } catch (error) {
       setFormError(financeErrorMessage(error));
@@ -615,7 +745,7 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
     setFormError(null);
     try {
       await window.nexus.deleteFinTransaction(profileId, transaction.id);
-      if (editingId === transaction.id) resetForm();
+      if (editingId === transaction.id) closeForm();
       // One pending undo at a time — a fresh delete replaces the previous offer.
       setPendingUndo({ kind: "transaction", id: transaction.id });
       await reload();
@@ -797,9 +927,7 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
     setSubDirection(subscription.amount > 0 ? "in" : "out");
     setSubName(subscription.name);
     setSubAmount(
-      account === undefined
-        ? ""
-        : moneyInputValue(Math.abs(subscription.amount), account.currency),
+      account === undefined ? "" : moneyInputValue(Math.abs(subscription.amount), account.currency),
     );
     setSubAccount(subscription.accountId);
     setSubCategory(subscription.categoryId ?? "");
@@ -1008,9 +1136,8 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
   // No `sort`, deliberately: `applySort` returns its input untouched without
   // one, so the rows render in exactly the order `listFinTransactions` handed
   // over — newest day first, which is what a ledger is.
-  const listConfig: ListViewConfig = { type: "list", filters: filterSpecs };
   const cardsConfig: CardsViewConfig = { type: "cards", filters: filterSpecs };
-  /** What the views will actually draw — the same engine call they make, so the empty state and the rows can never disagree. */
+  /** What both shapes draw — the SAME engine call, so „Lista" and „Kartice" can never disagree about which rows exist. */
   const visibleRows = applyFilters(scopedRows, filterSpecs);
 
   /** The currency a row's amount is stated in — its account's own, always; there is no other it could be in. */
@@ -1020,55 +1147,72 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
   const accountNameOf = (id: string | null): string =>
     id === null ? "" : (accountById.get(id)?.name ?? "");
 
+  /**
+   * The unit hoisted out of the ledger's amount column, or null when the rows
+   * on screen genuinely hold more than one currency. The column head carries it
+   * in the first case; every cell carries its own in the second.
+   */
+  const ledgerUnit = soleValue(visibleRows.map(currencyOf));
+  /** The same rule over the rail's balances: one currency across every account, or none hoisted. */
+  const railUnit = soleValue(accountList.map((account) => account.currency));
+
+  /**
+   * Whether the row's own words still say something. The account chip and the
+   * category chip were on every row unconditionally, and when the ledger is
+   * filtered to one account that chip is the FILTER's name repeated sixty
+   * times, not the row's data. Same for a single-account profile, where the one
+   * account is a fact about the profile rather than about any row in it.
+   */
+  const showAccount = selectedAccountId === null && accountList.length > 1;
+  const showCategory = categoryFilter === CATEGORY_FILTER_ALL;
+  /** The same rule in the rail: „Rashod" over a list of nothing but rashod categories is a caption, not a datum. */
+  const categoryKindsPresent = FIN_CATEGORY_KINDS.filter((kind) =>
+    categories.some((category) => category.kind === kind),
+  ).length;
+
+  /**
+   * What the row did to the account whose ledger this is. A transfer is ONE row
+   * carrying the SOURCE account's delta, so in the destination account's ledger
+   * that same number is the wrong way round — the money arrived there. Nothing
+   * else on the page is scoped this way, and nothing needs to be: only a
+   * transfer names two accounts.
+   */
+  function scopedAmount(row: FinTransactionFields): number {
+    return selectedAccountId !== null && row.counterAccountId === selectedAccountId
+      ? -row.amount
+      : row.amount;
+  }
+
   /** A row's own one-line title: what it was for, or — on a transfer, which has no payee to speak of — what it is. */
   const rowTitle = (row: FinTransactionFields): string =>
     row.payee ?? (entryKindOf(row) === "transfer" ? s.ledger.transfer : "—");
 
-  /** The chips a ledger row carries: what kind of movement it is, whose account, and under which label. */
-  function rowChips(row: FinTransactionFields): ReactNode {
+  /** The row's second level: where it landed and under which label, as text — sixty pills are sixty boxes drawn around words. */
+  function rowMeta(row: FinTransactionFields): string {
     if (entryKindOf(row) === "transfer") {
-      return (
-        <div className="fin__chips">
-          <Chip variant="data">
-            {`${s.ledger.transfer}: ${accountNameOf(row.accountId)} ${s.ledger.transferArrow} ${accountNameOf(row.counterAccountId)}`}
-          </Chip>
-        </div>
+      const arrow = s.ledger.transferArrow;
+      return `${accountNameOf(row.accountId)} ${arrow} ${accountNameOf(row.counterAccountId)}`;
+    }
+    const parts: string[] = [];
+    if (showAccount) parts.push(accountNameOf(row.accountId));
+    if (showCategory) {
+      parts.push(
+        row.categoryId === null
+          ? s.ledger.uncategorized
+          : (categoryById.get(row.categoryId)?.name ?? s.ledger.uncategorized),
       );
     }
-    return (
-      <div className="fin__chips">
-        <Chip>{accountNameOf(row.accountId)}</Chip>
-        <Chip variant={row.categoryId === null ? "neutral" : "accent"}>
-          {row.categoryId === null
-            ? s.ledger.uncategorized
-            : (categoryById.get(row.categoryId)?.name ?? s.ledger.uncategorized)}
-        </Chip>
-      </div>
-    );
+    return parts.join(" · ");
   }
 
-  /**
-   * A row's amount. Income takes the data colour (jade), everything else the
-   * ordinary text colour: an expense is not an error, and painting every one of
-   * them red would make an ordinary month read as a warning.
-   */
-  function rowAmount(row: FinTransactionFields): ReactNode {
+  /** The class the amount cell wears — three states, and the sign in the text is what carries the fact. */
+  function amountClass(row: FinTransactionFields): string {
     const kind = entryKindOf(row);
-    return (
-      <span
-        className={
-          kind === "income"
-            ? "fin__amount fin__amount--in"
-            : kind === "transfer"
-              ? "fin__amount fin__amount--move"
-              : "fin__amount"
-        }
-      >
-        {formatMoney(row.amount, currencyOf(row))}
-      </span>
-    );
+    if (kind === "transfer") return "nx-num fin__amount fin__amount--move";
+    return kind === "income" ? "nx-num fin__amount fin__amount--in" : "nx-num fin__amount";
   }
 
+  /** Two inline actions, which is the cap; they stay in the DOM at `opacity: 0` so the keyboard can still reach them. */
   function rowActions(row: FinTransactionFields): ReactNode {
     return (
       <span className="fin__row-actions">
@@ -1076,6 +1220,7 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
           size="sm"
           className="fin__row-action"
           aria-label={`${s.ledger.edit}: ${rowTitle(row)}`}
+          title={s.ledger.edit}
           onClick={() => beginEdit(row)}
         >
           <Icon name="pencil" size={14} />
@@ -1084,6 +1229,7 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
           size="sm"
           className="fin__row-action fin__row-delete"
           aria-label={`${s.ledger.delete}: ${rowTitle(row)}`}
+          title={s.ledger.delete}
           onClick={() => void deleteTransaction(row)}
         >
           <Icon name="trash" size={14} />
@@ -1092,18 +1238,151 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
     );
   }
 
-  function renderRow(row: FinTransactionFields): ReactNode {
+  /**
+   * The ledger, cut at every date change. The rows arrive newest-day-first from
+   * the store and stay in that order, so one pass over them is the whole
+   * grouping — no sort, no map of days, nothing that could reorder what the
+   * store already ordered.
+   *
+   * A day's net is a MAP keyed by currency and never one number: a day may hold
+   * rows from a dinar account and a euro one, and there is no rate with which
+   * to add them. Transfers are absent from every net, because a transfer is
+   * neither income nor expense — the rule the whole module is built on.
+   */
+  const dayGroups: FinDayGroup[] = [];
+  for (const row of visibleRows) {
+    let group = dayGroups[dayGroups.length - 1];
+    if (group === undefined || group.date !== row.date) {
+      group = { date: row.date, rows: [], nets: new Map<string, number>() };
+      dayGroups.push(group);
+    }
+    group.rows.push(row);
+    if (entryKindOf(row) === "transfer") continue;
+    const currency = currencyOf(row);
+    if (currency === "") continue;
+    group.nets.set(currency, (group.nets.get(currency) ?? 0) + row.amount);
+  }
+
+  /**
+   * The band: the page's hero, and the one place „Ukupno" is stated. ONE group
+   * per currency, in code order — nothing here reduces the list, and the store
+   * publishes no method that could.
+   *
+   * `balance` is the profile's own, read from `finCurrencyTotals`; a currency
+   * that reaches the band only through the rows on screen (every account in it
+   * archived, say) has none to state and says so rather than inventing a zero.
+   * `income` and `outflow` cover exactly the rows currently VISIBLE, which is
+   * what the caption under the band says out loud — and, like every other
+   * aggregate here, they leave transfers out.
+   */
+  const bandByCurrency = new Map<string, FinBandGroup>();
+  const bandGroupFor = (currency: string): FinBandGroup => {
+    const existing = bandByCurrency.get(currency);
+    if (existing !== undefined) return existing;
+    const created: FinBandGroup = { currency, balance: null, income: 0, outflow: 0 };
+    bandByCurrency.set(currency, created);
+    return created;
+  };
+  for (const total of totals) bandGroupFor(total.currency).balance = total.minorUnits;
+  if (page === "ledger") {
+    for (const row of visibleRows) {
+      if (entryKindOf(row) === "transfer") continue;
+      const currency = currencyOf(row);
+      if (currency === "") continue;
+      const group = bandGroupFor(currency);
+      if (row.amount > 0) group.income += row.amount;
+      else group.outflow -= row.amount;
+    }
+  }
+  // ISO-4217 codes are ASCII, so a plain code-point comparison IS alphabetical
+  // here — no collator, and none of the sr-Latn tailoring a Serbian word needs.
+  const bandGroups = [...bandByCurrency.values()].sort((a, b) =>
+    a.currency < b.currency ? -1 : a.currency > b.currency ? 1 : 0,
+  );
+
+  /** One figure of the band: an 11px uppercase label over a large tabular number, and nothing else. */
+  function renderFigure(label: string, value: string, tone: "" | "in" | "out"): ReactNode {
     return (
-      <ListRow leading={<span className="fin__date">{row.date}</span>} trailing={rowActions(row)}>
-        <span className="fin__row-body">
-          <span className="fin__title">{rowTitle(row)}</span>
-          {rowChips(row)}
-          {rowAmount(row)}
+      <span className={tone === "" ? "fin__figure" : "fin__figure fin__figure--flow"}>
+        <span className="fin__figure-label">{label}</span>
+        <span
+          className={
+            tone === "" ? "fin__figure-value" : `fin__figure-value fin__figure-value--${tone}`
+          }
+        >
+          {value}
         </span>
-      </ListRow>
+      </span>
     );
   }
 
+  function renderBand(): ReactNode {
+    if (bandGroups.length === 0) {
+      return (
+        <div className="fin__band nx-hairline">
+          <p className="fin__caption">{s.totals.none}</p>
+        </div>
+      );
+    }
+    return (
+      <div className="fin__band nx-hairline">
+        <div className="fin__band-groups">
+          {bandGroups.map((group) => (
+            <div key={group.currency} className="fin__band-group">
+              {/* The unit, said ONCE for the three figures under it — which is
+                  what lets every one of them be a bare number. */}
+              <span className="fin__band-currency">{group.currency}</span>
+              <div className="fin__band-figures">
+                {renderFigure(
+                  s.totals.heading,
+                  group.balance === null
+                    ? s.totals.noBalance
+                    : formatMoneyPlain(group.balance, group.currency),
+                  "",
+                )}
+                {/* The two flow figures belong to the LEDGER: they are about the
+                    rows on screen, and there are no rows on screen on the other
+                    two halves. The module's own words for them, so „Prihod"
+                    means the same thing here and in the month report. */}
+                {page === "ledger" && (
+                  <>
+                    {renderFigure(
+                      s.report.income,
+                      formatMoneyPlain(group.income, group.currency),
+                      "in",
+                    )}
+                    {renderFigure(
+                      s.report.expense,
+                      formatMoneyPlain(group.outflow, group.currency),
+                      "out",
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+        <p className="fin__caption">
+          {page === "ledger" ? s.totals.captionLedger : s.totals.caption}
+        </p>
+      </div>
+    );
+  }
+
+  function renderLedgerRow(row: FinTransactionFields): ReactNode {
+    return (
+      <div key={row.id} className="fin__row">
+        <span className="fin__title">{rowTitle(row)}</span>
+        <span className="fin__meta">{rowMeta(row)}</span>
+        <span className={amountClass(row)}>
+          {signedMoney(scopedAmount(row), currencyOf(row), ledgerUnit)}
+        </span>
+        {rowActions(row)}
+      </div>
+    );
+  }
+
+  /** A card is a column, not a row: the title and its actions, then the day and the row's own second level. */
   function renderCard(row: FinTransactionFields): ReactNode {
     return (
       <>
@@ -1111,9 +1390,13 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
           <span className="fin__title">{rowTitle(row)}</span>
           {rowActions(row)}
         </div>
-        <span className="fin__date">{row.date}</span>
-        {rowChips(row)}
-        {rowAmount(row)}
+        <div className="fin__card-foot">
+          <span className="fin__date">{formatLedgerDay(row.date)}</span>
+          <span className={amountClass(row)}>
+            {signedMoney(scopedAmount(row), currencyOf(row), ledgerUnit)}
+          </span>
+        </div>
+        <span className="fin__meta">{rowMeta(row)}</span>
       </>
     );
   }
@@ -1146,9 +1429,9 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
                     <span className="fin__budget-amount">
                       {formatMoney(budget.amount, budget.currency)}
                     </span>
-                    <button
-                      type="button"
-                      className="fin__budget-clear"
+                    <Button
+                      size="sm"
+                      className="fin__rail-action fin__row-delete"
                       title={s.budgets.clearHint}
                       aria-label={`${s.budgets.clearHint} ${budget.currency}`}
                       onClick={() =>
@@ -1164,7 +1447,7 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
                       }
                     >
                       <Icon name="trash" size={14} />
-                    </button>
+                    </Button>
                   </div>
                 ))}
               </div>
@@ -1174,10 +1457,9 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
             ) : (
               <>
                 <div className="fin__budget-controls">
-                  <select
-                    className="fin__select fin__budget-currency"
+                  <Select
+                    label={s.budgets.currencyLabel}
                     value={activeBudgetCurrency}
-                    aria-label={s.budgets.currencyLabel}
                     onChange={(event) => setBudgetCurrency(event.target.value)}
                   >
                     {budgetCurrencies.map((currency) => (
@@ -1185,13 +1467,13 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
                         {currency}
                       </option>
                     ))}
-                  </select>
-                  <input
-                    className="nx-textfield__input fin__budget-input"
+                  </Select>
+                  <TextField
+                    className="fin__budget-input"
+                    label={s.budgets.amountLabel}
                     value={budgetAmount}
                     inputMode="decimal"
                     placeholder={s.form.amountPlaceholder}
-                    aria-label={s.budgets.amountLabel}
                     onChange={(event) => setBudgetAmount(event.target.value)}
                     onKeyDown={(event) => {
                       if (event.key !== "Enter") return;
@@ -1266,26 +1548,27 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
   /**
    * One currency's whole month. Two of them are two sections, never one sum:
    * every figure drawn here is read out of a section that names its currency,
-   * and nothing on this page adds two of those together.
+   * and nothing on this page adds two of those together. The head is the band's
+   * own figure recipe — one fact, one shape, wherever the page states it.
    */
   function renderReportSection(section: FinReportSection): ReactNode {
     const hasAnyBudget = section.lines.some((line) => line.budget !== null);
     return (
       <section key={section.currency} className="fin__report-section" aria-label={section.currency}>
         <div className="fin__report-head">
-          <span className="fin__report-currency">{section.currency}</span>
-          <span className="fin__report-figure">
-            <span className="fin__report-figure-label">{s.report.income}</span>
-            <span className="fin__report-figure-value fin__report-figure-value--in">
-              {formatMoney(section.income, section.currency)}
-            </span>
-          </span>
-          <span className="fin__report-figure">
-            <span className="fin__report-figure-label">{s.report.expense}</span>
-            <span className="fin__report-figure-value">
-              {formatMoney(section.expense, section.currency)}
-            </span>
-          </span>
+          <span className="fin__band-currency">{section.currency}</span>
+          <div className="fin__band-figures">
+            {renderFigure(
+              s.report.income,
+              formatMoneyPlain(section.income, section.currency),
+              "in",
+            )}
+            {renderFigure(
+              s.report.expense,
+              formatMoneyPlain(section.expense, section.currency),
+              "out",
+            )}
+          </div>
         </div>
         <FinBalanceFlow
           currency={section.currency}
@@ -1322,6 +1605,10 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
    * muted, wears „Pauzirano", and the date column says „Bez naplate" — because
    * while it is paused its cursor names a day that will not happen, and printing
    * that day would be the one thing this row must never do.
+   *
+   * Two inline actions and no more: pause/resume and edit are what this list is
+   * used for, and the delete — the one act that cannot be undone by clicking
+   * the same button again — sits behind the row's own „⋯".
    */
   function renderSubscriptionRow(subscription: FinRecurring): ReactNode {
     const account = accountById.get(subscription.accountId);
@@ -1329,6 +1616,7 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
     const category =
       subscription.categoryId === null ? null : categoryById.get(subscription.categoryId);
     const paused = subscription.pausedAt !== null;
+    const meta = [account?.name ?? "", category?.name ?? ""].filter((part) => part !== "");
     return (
       <ListRow
         key={subscription.id}
@@ -1356,52 +1644,79 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
               size="sm"
               className="fin__row-action"
               aria-label={`${s.subscriptions.edit}: ${subscription.name}`}
+              title={s.subscriptions.edit}
               onClick={() => beginEditSubscription(subscription)}
             >
               <Icon name="pencil" size={14} />
             </Button>
-            <Button
-              size="sm"
-              className="fin__row-action fin__row-delete"
-              aria-label={`${s.subscriptions.delete}: ${subscription.name}`}
-              onClick={() => void deleteSubscription(subscription)}
+            <NotePopover
+              label={`${s.subscriptions.menuLabel}: ${subscription.name}`}
+              triggerClassName="fin__row-action"
             >
-              <Icon name="trash" size={14} />
-            </Button>
+              {(close) => (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="note__menu-item note__menu-item--danger"
+                  onClick={() => {
+                    close();
+                    void deleteSubscription(subscription);
+                  }}
+                >
+                  {s.subscriptions.delete}
+                </button>
+              )}
+            </NotePopover>
           </span>
         }
       >
-        <span className="fin__row-body">
+        <span className="fin__sub-body">
           <span className="fin__title">{subscription.name}</span>
-          <div className="fin__chips">
-            <Chip>{account?.name ?? ""}</Chip>
-            {category != null && <Chip variant="accent">{category.name}</Chip>}
+          <span className="fin__sub-meta">
+            <span className="fin__meta">{meta.join(" · ")}</span>
             {paused && (
               <Chip className="fin__paused-chip" title={s.subscriptions.pausedChipTitle}>
                 {s.subscriptions.pausedChip}
               </Chip>
             )}
             {subscription.reminderDays !== null && (
-              <Chip variant="data">
-                {`${s.subscriptions.reminderChip}: ${reminderLabel(subscription.reminderDays)}`}
+              <Chip variant="data" title={s.subscriptions.reminderChip}>
+                {reminderLabel(subscription.reminderDays)}
               </Chip>
             )}
-          </div>
+          </span>
           <span
             className={
-              subscription.amount > 0 ? "fin__amount fin__amount--in" : "fin__amount"
+              subscription.amount > 0 ? "nx-num fin__amount fin__amount--in" : "nx-num fin__amount"
             }
           >
-            {formatMoney(subscription.amount, currency)}
+            {/* Always coded: this list is not scoped to one account, so two
+                subscriptions side by side can genuinely be two currencies. */}
+            {signedMoney(subscription.amount, currency, null)}
           </span>
         </span>
       </ListRow>
     );
   }
 
-  /** One account row in the rail: its name, its own DERIVED balance, and the three things that can be done to it. */
+  /**
+   * One account row in the rail: its name, its own DERIVED balance, what kind
+   * of account it is — and one „⋯" holding everything that can be DONE to it.
+   *
+   * The menu is the reason the names fit. The row used to keep three hover-only
+   * buttons in flow, which took about 80px of a 248px rail permanently, so the
+   * name was squeezed into roughly 116px and „Devizna štednja" truncated at
+   * twelve characters with half the rail standing empty beside it. One 24px
+   * control gives that width back, and the name now has the whole row: about
+   * 187px, which is twenty-two characters at this size.
+   *
+   * The kind and the balance share the line under it, as `.fin__rail-meta` —
+   * a GRID, which is where the escaping balance was fixed. See that rule.
+   */
   function renderAccountRow(account: FinAccount): ReactNode {
     const balance = balanceById.get(account.id);
+    const minorUnits = balance === undefined ? account.openingBalance : balance.minorUnits;
+    const currency = balance === undefined ? account.currency : balance.currency;
     const active = selectedAccountId === account.id;
     return (
       <div key={account.id} className="fin__rail-row">
@@ -1416,62 +1731,135 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
             <span className="fin__rail-kind">
               {account.archived ? s.accounts.archivedChip : s.accounts.kinds[account.kind]}
             </span>
-            <span className="fin__rail-balance">
-              {balance === undefined
-                ? formatMoney(account.openingBalance, account.currency)
-                : formatMoney(balance.minorUnits, balance.currency)}
+            <span className="fin__rail-balance nx-num">
+              {railUnit === null
+                ? formatMoney(minorUnits, currency)
+                : formatMoneyPlain(minorUnits, currency)}
             </span>
           </span>
         </button>
-        <span className="fin__rail-actions">
-          <Button
-            size="sm"
-            className="fin__rail-action"
-            aria-label={`${s.accounts.edit}: ${account.name}`}
-            title={s.accounts.edit}
-            onClick={() => beginEditAccount(account)}
-          >
-            <Icon name="pencil" size={14} />
-          </Button>
-          <Button
-            size="sm"
-            className="fin__rail-action"
-            aria-label={`${account.archived ? s.accounts.unarchive : s.accounts.archive}: ${account.name}`}
-            title={account.archived ? s.accounts.unarchive : s.accounts.archive}
-            onClick={() =>
-              void runRailAction(async () => {
-                await window.nexus.updateFinAccount(profileId, account.id, {
-                  archived: !account.archived,
-                });
-              })
-            }
-          >
-            <Icon name={account.archived ? "unarchive" : "archive"} size={14} />
-          </Button>
-          <Button
-            size="sm"
-            className="fin__rail-action fin__rail-delete"
-            aria-label={`${s.accounts.delete}: ${account.name}`}
-            title={s.accounts.delete}
-            onClick={() =>
-              void runRailAction(async () => {
-                await window.nexus.deleteFinAccount(profileId, account.id);
-                if (selectedAccountId === account.id) setSelectedAccountId(null);
-                setPendingUndo({ kind: "account", id: account.id });
-              })
-            }
-          >
-            <Icon name="trash" size={14} />
-          </Button>
-        </span>
+        <NotePopover
+          label={`${s.accounts.menuLabel}: ${account.name}`}
+          triggerClassName="fin__rail-menu"
+        >
+          {(close) => (
+            <>
+              <button
+                type="button"
+                role="menuitem"
+                className="note__menu-item"
+                onClick={() => {
+                  close();
+                  beginEditAccount(account);
+                }}
+              >
+                {s.accounts.edit}
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className="note__menu-item"
+                onClick={() => {
+                  close();
+                  void runRailAction(async () => {
+                    await window.nexus.updateFinAccount(profileId, account.id, {
+                      archived: !account.archived,
+                    });
+                  });
+                }}
+              >
+                {account.archived ? s.accounts.unarchive : s.accounts.archive}
+              </button>
+              <div className="note__menu-sep" role="separator" />
+              <button
+                type="button"
+                role="menuitem"
+                className="note__menu-item note__menu-item--danger"
+                onClick={() => {
+                  close();
+                  void runRailAction(async () => {
+                    await window.nexus.deleteFinAccount(profileId, account.id);
+                    if (selectedAccountId === account.id) setSelectedAccountId(null);
+                    setPendingUndo({ kind: "account", id: account.id });
+                  });
+                }}
+              >
+                {s.accounts.delete}
+              </button>
+            </>
+          )}
+        </NotePopover>
       </div>
+    );
+  }
+
+  /**
+   * The categories of ONE kind, listed under that kind's own heading. They used
+   * to be a wrap of pills, each cramming „Kafa i izlasci · Rashod · limit" into
+   * a single 11px line inside a 14.8px-tall button beside an 18px „×" — three
+   * facts with no separation and two targets under the 24px floor. Grouping by
+   * kind deletes the middle fact from every row at once (it is the heading
+   * now), the limit becomes a chip of its own, and both targets clear the
+   * floor by construction.
+   */
+  function renderCategoryGroup(kind: FinCategoryKind, showHeading: boolean): ReactNode {
+    const own = categories.filter((category) => category.kind === kind);
+    if (own.length === 0) return null;
+    return (
+      <Fragment key={kind}>
+        {/* Only when there are actually two kinds to tell apart. A profile with
+            nothing but rashod categories has „Rashod" as a fact about itself,
+            not about any row — the same rule that hoists the currency. */}
+        {showHeading && (
+          <div className="fin__rail-heading fin__rail-heading--stacked">
+            {s.categories.kinds[kind]}
+          </div>
+        )}
+        <div className="fin__cat-rows">
+          {own.map((category) => (
+            <div key={category.id} className="fin__cat-row">
+              <button
+                type="button"
+                className="fin__cat-name"
+                aria-label={`${s.categories.edit}: ${category.name}`}
+                title={s.categories.editHint}
+                onClick={() => beginEditCategory(category)}
+              >
+                {category.name}
+              </button>
+              {/* A category that carries a limit says so where it is managed —
+                  one word, never an amount, because one category can hold one
+                  limit per currency. */}
+              {budgetsOf(category.id).length > 0 ? (
+                <Chip variant="accent" className="fin__cat-limit">
+                  {s.budgets.marker}
+                </Chip>
+              ) : (
+                <span />
+              )}
+              <Button
+                size="sm"
+                className="fin__rail-action fin__row-delete fin__cat-delete"
+                aria-label={`${s.categories.delete}: ${category.name}`}
+                title={s.categories.deleteHint}
+                // Asks first: this is a HARD delete with no restore endpoint,
+                // and NOTE's identical category rail has always asked for the
+                // name back before running one.
+                onClick={() => setPendingDeleteCategory(category)}
+              >
+                <Icon name="trash" size={14} />
+              </Button>
+            </div>
+          ))}
+        </div>
+      </Fragment>
     );
   }
 
   // --- The screen -------------------------------------------------------------
 
   if (failed) {
-    return <EmptyState title={s.loadErrorTitle} description={s.loadError} />;
+    return <EmptyState sigil="finance" title={s.loadErrorTitle} description={s.loadError} />;
   }
   if (accounts === null || transactions === null) {
     return <LoadingState label={strings.app.loading} rows={6} />;
@@ -1491,77 +1879,115 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
     (account) => !account.archived || account.id === formAccountId,
   );
   const transferTargets = accountList.filter(
-    (account) =>
-      account.id !== formAccountId && (!account.archived || account.id === counterDraft),
+    (account) => account.id !== formAccountId && (!account.archived || account.id === counterDraft),
   );
+  /**
+   * The table's own column heads. Every one of them is a word the page already
+   * owns — the entry form's field labels, which is what those columns hold —
+   * and the amount's carries the hoisted unit whenever the rows below it share
+   * one. The second column names exactly the facts it is currently showing, so
+   * a head can never promise a word the rows have dropped.
+   */
+  const amountColumnLabel =
+    ledgerUnit === null ? s.form.amountLabel : `${s.form.amountLabel} · ${ledgerUnit}`;
+  /**
+   * …and whether that second column has anything to hold at all. Both hoists
+   * can fire at once — a ledger filtered to one account AND one category — but
+   * a TRANSFER names two accounts whatever the filters took away, so one
+   * visible transfer keeps the column open. Without that check the track
+   * collapses to zero underneath a row that still has „Tekući → Štednja" in it.
+   */
+  const showMetaColumn =
+    showAccount || showCategory || visibleRows.some((row) => row.counterAccountId !== null);
+  const metaColumnLabel = !showMetaColumn
+    ? ""
+    : showAccount && showCategory
+      ? `${s.form.accountLabel} · ${s.form.categoryLabel}`
+      : showCategory
+        ? s.form.categoryLabel
+        : s.form.accountLabel;
 
   return (
     <div className="fin">
-      <PageHeader title={moduleName("finance")} className="fin__header" />
-      <aside className="fin__rail" aria-label={s.accounts.heading}>
-        {/* Per CURRENCY, drawn straight from the store's list. Nothing here adds
-            two rows together, and no method exists that could: without an
-            exchange rate a cross-currency total could only be invented. */}
-        <div className="fin__rail-heading">{s.totals.heading}</div>
-        {totals.length === 0 ? (
-          <p className="fin__rail-note">{s.totals.none}</p>
-        ) : (
-          <div className="fin__totals">
-            {totals.map((total) => (
-              <div key={total.currency} className="fin__total">
-                {formatMoney(total.minorUnits, total.currency)}
-              </div>
+      {/* The page's three halves, in the header's own actions slot. They used to
+          be the first of five stacked switcher rows above the data; a half is a
+          property of the PAGE, so it belongs beside the page's name. */}
+      <PageHeader
+        title={moduleName("finance")}
+        sigil="finance"
+        actions={
+          <div className="fin__segmented" role="group" aria-label={s.pages.label}>
+            {FIN_PAGES.map((option) => (
+              <Button
+                key={option}
+                size="sm"
+                className="nx-segmented__option"
+                aria-pressed={page === option}
+                onClick={() => setPage(option)}
+              >
+                {option === "ledger"
+                  ? s.pages.ledger
+                  : option === "report"
+                    ? s.pages.report
+                    : s.pages.subscriptions}
+              </Button>
             ))}
           </div>
-        )}
-        <p className="fin__rail-note">{s.totals.caption}</p>
+        }
+      />
 
-        <div className="fin__rail-heading fin__rail-heading--stacked">{s.accounts.heading}</div>
-        <div className="fin__rail-rows" role="group" aria-label={s.accounts.heading}>
-          <div className="fin__rail-row">
-            <button
-              type="button"
-              className={
-                selectedAccountId === null
-                  ? "fin__rail-item fin__rail-item--active"
-                  : "fin__rail-item"
-              }
-              aria-current={selectedAccountId === null ? "true" : undefined}
-              onClick={() => setSelectedAccountId(null)}
-            >
-              <span className="fin__rail-name">{s.accounts.all}</span>
-            </button>
+      <div className="fin__body">
+        <aside className="fin__rail" aria-label={s.accounts.heading}>
+          <div className="fin__rail-heading">
+            <span>{s.accounts.heading}</span>
+            {/* The unit, hoisted out of the balances beneath it on exactly the
+                ledger's rule — present only while every account shares one. */}
+            {railUnit !== null && <span className="fin__rail-heading-unit">{railUnit}</span>}
           </div>
-          {liveAccounts.map((account) => renderAccountRow(account))}
-        </div>
-
-        {archivedAccounts.length > 0 && (
-          <>
-            {/* Visible, and clearly secondary: a closed account still has a
-                balance, and a page that hid it would be hiding money. It is out
-                of „Ukupno" all the same — that total is what you can spend. */}
-            <div className="fin__rail-heading fin__rail-heading--stacked">
-              {s.accounts.archivedHeading}
+          <div className="fin__rail-rows" role="group" aria-label={s.accounts.heading}>
+            <div className="fin__rail-row">
+              <button
+                type="button"
+                className={
+                  selectedAccountId === null
+                    ? "fin__rail-item fin__rail-item--active"
+                    : "fin__rail-item"
+                }
+                aria-current={selectedAccountId === null ? "true" : undefined}
+                onClick={() => setSelectedAccountId(null)}
+              >
+                <span className="fin__rail-name">{s.accounts.all}</span>
+              </button>
             </div>
-            <div className="fin__rail-rows fin__rail-rows--muted">
-              {archivedAccounts.map((account) => renderAccountRow(account))}
-            </div>
-          </>
-        )}
+            {liveAccounts.map((account) => renderAccountRow(account))}
+          </div>
 
-        {accountEditing !== null ? (
-          <form className="fin__rail-form" onSubmit={submitAccount}>
-            <TextField
-              label={s.accounts.nameLabel}
-              value={accountName}
-              placeholder={s.accounts.namePlaceholder}
-              maxLength={MAX_FIN_ACCOUNT_NAME_LENGTH}
-              onChange={(event) => setAccountName(event.target.value)}
-            />
-            <label className="fin__field">
-              <span className="fin__field-label">{s.accounts.kindLabel}</span>
-              <select
-                className="fin__select"
+          {archivedAccounts.length > 0 && (
+            <>
+              {/* Visible, and clearly secondary: a closed account still has a
+                  balance, and a page that hid it would be hiding money. It is
+                  out of „Ukupno" all the same — that total is what you can
+                  spend. */}
+              <div className="fin__rail-heading fin__rail-heading--stacked">
+                {s.accounts.archivedHeading}
+              </div>
+              <div className="fin__rail-rows fin__rail-rows--muted">
+                {archivedAccounts.map((account) => renderAccountRow(account))}
+              </div>
+            </>
+          )}
+
+          {accountEditing !== null ? (
+            <form className="fin__rail-form" onSubmit={submitAccount}>
+              <TextField
+                label={s.accounts.nameLabel}
+                value={accountName}
+                placeholder={s.accounts.namePlaceholder}
+                maxLength={MAX_FIN_ACCOUNT_NAME_LENGTH}
+                onChange={(event) => setAccountName(event.target.value)}
+              />
+              <Select
+                label={s.accounts.kindLabel}
                 value={accountKind}
                 onChange={(event) => setAccountKind(asAccountKind(event.target.value))}
               >
@@ -1570,678 +1996,737 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
                     {s.accounts.kinds[kind]}
                   </option>
                 ))}
-              </select>
-            </label>
-            <TextField
-              label={s.accounts.currencyLabel}
-              value={accountCurrency}
-              maxLength={3}
-              spellCheck={false}
-              autoComplete="off"
-              onChange={(event) => setAccountCurrency(event.target.value)}
-            />
-            <span className="fin__field-hint">{s.accounts.currencyHint}</span>
-            <TextField
-              label={s.accounts.openingLabel}
-              value={accountOpening}
-              inputMode="decimal"
-              placeholder={s.form.amountPlaceholder}
-              onChange={(event) => setAccountOpening(event.target.value)}
-            />
-            <span className="fin__field-hint">{s.accounts.openingHint}</span>
-            <div className="fin__rail-form-actions">
-              <Button type="submit" size="sm" variant="primary">
-                {s.accounts.save}
-              </Button>
-              <Button type="button" size="sm" className="fin__quiet" onClick={closeAccountEditor}>
-                {s.accounts.cancel}
-              </Button>
-            </div>
-          </form>
-        ) : (
-          <Button size="sm" className="fin__rail-add" onClick={beginNewAccount}>
-            {s.accounts.newAccount}
-          </Button>
-        )}
-
-        <div className="fin__rail-heading fin__rail-heading--stacked">{s.categories.heading}</div>
-        {categories.length === 0 ? (
-          <p className="fin__rail-note">{s.categories.empty}</p>
-        ) : (
-          <div className="fin__chips">
-            {categories.map((category) => (
-              <span key={category.id} className="fin__category">
-                <button
-                  type="button"
-                  className="fin__category-name"
-                  aria-label={`${s.categories.edit}: ${category.name}`}
-                  title={s.categories.editHint}
-                  onClick={() => beginEditCategory(category)}
-                >
-                  {category.name}
-                  <span className="fin__category-kind">
-                    {s.categories.kinds[category.kind]}
-                    {/* A category that carries a limit says so where it is
-                        managed — one word, never an amount, because one
-                        category can hold one limit per currency. */}
-                    {budgetsOf(category.id).length > 0 && ` · ${s.budgets.marker}`}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  className="fin__category-delete"
-                  aria-label={`${s.categories.delete}: ${category.name}`}
-                  title={s.categories.deleteHint}
-                  // Asks first: this is a HARD delete with no restore endpoint,
-                  // and NOTE's identical category rail has always asked for the
-                  // name back before running one.
-                  onClick={() => setPendingDeleteCategory(category)}
-                >
-                  <Icon name="trash" size={14} />
-                </button>
-              </span>
-            ))}
-          </div>
-        )}
-        {categoryEditing !== null ? (
-          <div className="fin__rail-form">
-            <form className="fin__category-form" onSubmit={submitCategory}>
+              </Select>
               <TextField
-                label={s.categories.heading}
-                value={categoryName}
-                placeholder={s.categories.namePlaceholder}
-                maxLength={MAX_FIN_CATEGORY_NAME_LENGTH}
-                onChange={(event) => setCategoryName(event.target.value)}
+                label={s.accounts.currencyLabel}
+                value={accountCurrency}
+                maxLength={3}
+                spellCheck={false}
+                autoComplete="off"
+                onChange={(event) => setAccountCurrency(event.target.value)}
               />
-              {/* The kind is fixed once a category exists: flipping „Plata" from
-                  prihod to rashod would silently re-classify every transaction
-                  ever filed under it, which is exactly why the store has no
-                  method that could. */}
-              {categoryEditing.mode === "new" && (
-                <div className="fin__segmented" role="group" aria-label={s.categories.heading}>
-                  {FIN_CATEGORY_KINDS.map((kind) => (
-                    <Button
-                      key={kind}
-                      type="button"
-                      size="sm"
-                      variant={categoryKind === kind ? "primary" : "ghost"}
-                      aria-pressed={categoryKind === kind}
-                      onClick={() => setCategoryKind(kind)}
-                    >
-                      {s.categories.kinds[kind]}
-                    </Button>
-                  ))}
-                </div>
-              )}
+              <span className="fin__field-hint">{s.accounts.currencyHint}</span>
+              <TextField
+                label={s.accounts.openingLabel}
+                value={accountOpening}
+                inputMode="decimal"
+                placeholder={s.form.amountPlaceholder}
+                onChange={(event) => setAccountOpening(event.target.value)}
+              />
+              <span className="fin__field-hint">{s.accounts.openingHint}</span>
               <div className="fin__rail-form-actions">
                 <Button type="submit" size="sm" variant="primary">
                   {s.accounts.save}
                 </Button>
-                <Button type="button" size="sm" className="fin__quiet" onClick={closeCategoryEditor}>
+                <Button type="button" size="sm" className="fin__quiet" onClick={closeAccountEditor}>
                   {s.accounts.cancel}
                 </Button>
               </div>
             </form>
-            {/* Beside the rename rather than inside it: a limit is its own act
-                with its own submit, and a form cannot hold another form. */}
-            {editingCategory !== undefined && renderBudgetEditor(editingCategory)}
+          ) : (
+            <Button size="sm" className="fin__rail-add" onClick={beginNewAccount}>
+              <Icon name="plus" size={14} />
+              {s.accounts.newAccount}
+            </Button>
+          )}
+
+          <div className="fin__rail-heading fin__rail-heading--stacked">
+            {s.categories.heading}
           </div>
-        ) : (
-          <Button size="sm" className="fin__rail-add" onClick={beginNewCategory}>
-            {s.categories.newCategory}
-          </Button>
-        )}
-
-        {railError !== null && (
-          <p className="fin__rail-error" role="status">
-            {railError}
-          </p>
-        )}
-      </aside>
-
-      <div className="fin__main">
-        {/* The page's two halves. Typographic active state, exactly as the
-            ledger's own view toggle — no bar, no highlight, no glow. */}
-        <div className="fin__pages" role="group" aria-label={s.pages.label}>
-          {FIN_PAGES.map((option) => (
-            <Button
-              key={option}
-              size="sm"
-className="nx-segmented__option fin__page"
-              aria-pressed={page === option}
-              onClick={() => setPage(option)}
-            >
-              {option === "ledger"
-                ? s.pages.ledger
-                : option === "report"
-                  ? s.pages.report
-                  : s.pages.subscriptions}
-            </Button>
-          ))}
-        </div>
-
-        {/* Above both halves: an account can be deleted from the rail, which is
-            on screen whichever half is. */}
-        {pendingUndo !== null && (
-          <div className="fin__undo" role="status">
-            <span className="fin__undo-text">
-              {pendingUndo.kind === "transaction"
-                ? s.ledger.deletedNotice
-                : pendingUndo.kind === "subscription"
-                  ? s.subscriptions.deletedNotice
-                  : s.accounts.deletedNotice}
-            </span>
-            <Button size="sm" className="fin__undo-action" onClick={() => void undoDelete()}>
-              {s.undo}
-            </Button>
-            <Button
-              size="sm"
-              className="fin__quiet"
-              aria-label={s.dismiss}
-              onClick={() => setPendingUndo(null)}
-            >
-              <Icon name="close" size={14} />
-            </Button>
-          </div>
-        )}
-
-        {page === "subscriptions" ? (
-          <div className="fin__subs">
-            {/* Said out loud, above everything: nothing here is in the balance
-                until its day arrives. A screen that showed „predstojeće" beside
-                a total would otherwise invite the reading that it already is. */}
-            <p className="fin__report-caption">{s.subscriptions.caption}</p>
-
-            {accountList.length === 0 ? (
-              <EmptyState
-                title={s.subscriptions.needsAccountTitle}
-                description={s.subscriptions.needsAccountDescription}
-                action={
-                  <Button variant="primary" onClick={beginNewAccount}>
-                    {s.accounts.newAccount}
-                  </Button>
-                }
-              />
-            ) : (
-              <>
-                {subFormOpen ? (
-                  <form className="fin__form" onSubmit={(event) => void submitSubscription(event)}>
-                    <div className="fin__segmented" role="group" aria-label={s.subscriptions.directionLabel}>
-                      {(["out", "in"] as const).map((option) => (
-                        <Button
-                          key={option}
-                          type="button"
-                          size="sm"
-                          variant={subDirection === option ? "primary" : "ghost"}
-                          aria-pressed={subDirection === option}
-                          onClick={() => setSubDirection(option)}
-                        >
-                          {option === "out"
-                            ? s.subscriptions.directionOut
-                            : s.subscriptions.directionIn}
-                        </Button>
-                      ))}
-                    </div>
-
-                    <div className="fin__quick-add">
-                      <input
-                        className="nx-textfield__input fin__payee-input"
-                        value={subName}
-                        placeholder={s.subscriptions.namePlaceholder}
-                        aria-label={s.subscriptions.nameLabel}
-                        maxLength={MAX_FIN_RECURRING_NAME_LENGTH}
-                        onChange={(event) => setSubName(event.target.value)}
-                      />
-                      <input
-                        className="nx-textfield__input fin__amount-input"
-                        value={subAmount}
-                        inputMode="decimal"
-                        placeholder={s.form.amountPlaceholder}
-                        aria-label={s.subscriptions.amountLabel}
-                        onChange={(event) => setSubAmount(event.target.value)}
-                      />
-                      <span className="fin__amount-currency">{subCurrency}</span>
-                      <Button type="submit" variant="primary">
-                        {s.subscriptions.save}
+          {categories.length === 0 ? (
+            <p className="fin__rail-note">{s.categories.empty}</p>
+          ) : (
+            FIN_CATEGORY_KINDS.map((kind) => renderCategoryGroup(kind, categoryKindsPresent > 1))
+          )}
+          {categoryEditing !== null ? (
+            <div className="fin__rail-form">
+              <form className="fin__category-form" onSubmit={submitCategory}>
+                <TextField
+                  label={s.categories.heading}
+                  value={categoryName}
+                  placeholder={s.categories.namePlaceholder}
+                  maxLength={MAX_FIN_CATEGORY_NAME_LENGTH}
+                  onChange={(event) => setCategoryName(event.target.value)}
+                />
+                {/* The kind is fixed once a category exists: flipping „Plata"
+                    from prihod to rashod would silently re-classify every
+                    transaction ever filed under it, which is exactly why the
+                    store has no method that could. */}
+                {categoryEditing.mode === "new" && (
+                  <div className="fin__segmented" role="group" aria-label={s.accounts.kindLabel}>
+                    {FIN_CATEGORY_KINDS.map((kind) => (
+                      <Button
+                        key={kind}
+                        type="button"
+                        size="sm"
+                        variant={categoryKind === kind ? "primary" : "ghost"}
+                        aria-pressed={categoryKind === kind}
+                        onClick={() => setCategoryKind(kind)}
+                      >
+                        {s.categories.kinds[kind]}
                       </Button>
-                      <Button type="button" className="fin__quiet" onClick={closeSubForm}>
-                        {s.subscriptions.cancel}
-                      </Button>
-                    </div>
-
-                    <div className="fin__fields">
-                      <select
-                        className="fin__select"
-                        value={subAccountId}
-                        aria-label={s.subscriptions.accountLabel}
-                        onChange={(event) => setSubAccount(event.target.value)}
-                      >
-                        {accountList
-                          .filter((account) => !account.archived || account.id === subAccountId)
-                          .map((account) => (
-                            <option key={account.id} value={account.id}>
-                              {account.name}
-                            </option>
-                          ))}
-                      </select>
-                      {/* The picker offers the kind this direction can carry —
-                          the ledger form's own rule, applied to a template. */}
-                      <select
-                        className="fin__select"
-                        value={subCategory}
-                        aria-label={s.subscriptions.categoryLabel}
-                        onChange={(event) => setSubCategory(event.target.value)}
-                      >
-                        <option value="">{s.form.categoryNone}</option>
-                        {categories
-                          .filter((category) =>
-                            subDirection === "in"
-                              ? category.kind === "income"
-                              : category.kind === "expense",
-                          )
-                          .map((category) => (
-                            <option key={category.id} value={category.id}>
-                              {category.name}
-                            </option>
-                          ))}
-                      </select>
-                      <TextField
-                        type="date"
-                        value={subStart}
-                        aria-label={s.subscriptions.startLabel}
-                        onChange={(event) => setSubStart(event.target.value)}
-                      />
-                      <select
-                        className="fin__select"
-                        value={subReminder === null ? "" : String(subReminder)}
-                        aria-label={s.subscriptions.reminderLabel}
-                        onChange={(event) =>
-                          setSubReminder(event.target.value === "" ? null : Number(event.target.value))
-                        }
-                      >
-                        <option value="">{s.subscriptions.reminderNone}</option>
-                        {REMINDER_DAY_OPTIONS.map((days) => (
-                          <option key={days} value={String(days)}>
-                            {reminderLabel(days)}
-                          </option>
-                        ))}
-                      </select>
-                      <input
-                        className="nx-textfield__input fin__note-input"
-                        value={subNote}
-                        placeholder={s.subscriptions.noteLabel}
-                        aria-label={s.subscriptions.noteLabel}
-                        maxLength={MAX_FIN_NOTE_LENGTH}
-                        onChange={(event) => setSubNote(event.target.value)}
-                      />
-                    </div>
-
-                    {/* ADR-024's own field, the very component the task and event
-                        forms mount: there is one schedule language in this app,
-                        and „svakog 5. u mesecu" means the same thing in all three. */}
-                    <RecurrencePicker
-                      key={subEditingId ?? "new"}
-                      value={subRule}
-                      anchor={subStart}
-                      onChange={setSubRule}
-                    />
-
-                    {subError !== null && (
-                      <p className="fin__error" role="alert">
-                        {subError}
-                      </p>
-                    )}
-                  </form>
-                ) : (
-                  <Button variant="primary" onClick={beginNewSubscription}>
-                    {s.subscriptions.newSubscription}
-                  </Button>
-                )}
-
-                {subscriptions.length === 0 ? (
-                  <EmptyState
-                    title={s.subscriptions.emptyTitle}
-                    description={s.subscriptions.emptyDescription}
-                  />
-                ) : (
-                  <div className="fin__subs-list">
-                    {subscriptions.map((subscription) => renderSubscriptionRow(subscription))}
-                  </div>
-                )}
-
-                {/* What the RULES say is coming. Not a forecast and not a
-                    balance — a reading of the schedule, which is the only thing
-                    that can honestly be said about a charge that has not
-                    happened yet. */}
-                <div className="fin__rail-heading fin__rail-heading--stacked">
-                  {s.subscriptions.upcomingHeading}
-                </div>
-                {renewals.length === 0 ? (
-                  <p className="fin__rail-note">{s.subscriptions.upcomingEmpty}</p>
-                ) : (
-                  <div className="fin__subs-upcoming">
-                    {renewals.map((renewal) => (
-                      <div
-                        key={`${renewal.recurringId}@${renewal.date}`}
-                        className="fin__subs-upcoming-row"
-                      >
-                        <span className="fin__date">{renewal.date}</span>
-                        <span className="fin__title">{renewal.name}</span>
-                        <span className="fin__amount">
-                          {formatMoney(renewal.amount, renewal.currency)}
-                        </span>
-                      </div>
                     ))}
                   </div>
                 )}
-              </>
-            )}
-          </div>
-        ) : page === "report" ? (
-          <div className="fin__report">
-            <div className="fin__report-nav">
+                <div className="fin__rail-form-actions">
+                  <Button type="submit" size="sm" variant="primary">
+                    {s.accounts.save}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="fin__quiet"
+                    onClick={closeCategoryEditor}
+                  >
+                    {s.accounts.cancel}
+                  </Button>
+                </div>
+              </form>
+              {/* Beside the rename rather than inside it: a limit is its own act
+                  with its own submit, and a form cannot hold another form. */}
+              {editingCategory !== undefined && renderBudgetEditor(editingCategory)}
+            </div>
+          ) : (
+            <Button size="sm" className="fin__rail-add" onClick={beginNewCategory}>
+              <Icon name="plus" size={14} />
+              {s.categories.newCategory}
+            </Button>
+          )}
+
+          {railError !== null && (
+            <p className="fin__rail-error" role="status">
+              {railError}
+            </p>
+          )}
+        </aside>
+
+        <div className="fin__main">
+          {/* Summary before detail: the figures open the page, and everything
+              under them is the detail behind those figures. */}
+          {renderBand()}
+
+          {/* Above all three halves: an account can be deleted from the rail,
+              which is on screen whichever half is. */}
+          {pendingUndo !== null && (
+            <div className="fin__undo" role="status">
+              <span className="fin__undo-text">
+                {pendingUndo.kind === "transaction"
+                  ? s.ledger.deletedNotice
+                  : pendingUndo.kind === "subscription"
+                    ? s.subscriptions.deletedNotice
+                    : s.accounts.deletedNotice}
+              </span>
+              <Button size="sm" onClick={() => void undoDelete()}>
+                {s.undo}
+              </Button>
               <Button
                 size="sm"
                 className="fin__quiet"
-                aria-label={s.report.previousMonth}
-                title={s.report.previousMonth}
-                onClick={() => setMonthKey(shiftMonthKey(monthKey, -1))}
+                aria-label={s.dismiss}
+                title={s.dismiss}
+                onClick={() => setPendingUndo(null)}
               >
-                <Icon name="chevronLeft" size={14} />
+                <Icon name="close" size={14} />
               </Button>
-              <span className="fin__report-month">{formatFinMonthLabel(monthKey)}</span>
-              <Button
-                size="sm"
-                className="fin__quiet"
-                aria-label={s.report.nextMonth}
-                title={s.report.nextMonth}
-                onClick={() => setMonthKey(shiftMonthKey(monthKey, 1))}
-              >
-                <Icon name="chevronRight" size={14} />
-              </Button>
-              {monthKey !== currentMonthKey && (
+            </div>
+          )}
+
+          {page === "subscriptions" ? (
+            <div className="fin__subs">
+              {/* Said out loud, above everything: nothing here is in the balance
+                  until its day arrives. A screen that showed „predstojeće"
+                  beside a total would otherwise invite the reading that it
+                  already is. */}
+              <p className="fin__caption">{s.subscriptions.caption}</p>
+
+              {accountList.length === 0 ? (
+                <EmptyState
+                  sigil="finance"
+                  title={s.subscriptions.needsAccountTitle}
+                  description={s.subscriptions.needsAccountDescription}
+                  action={
+                    <Button variant="primary" onClick={beginNewAccount}>
+                      {s.accounts.newAccount}
+                    </Button>
+                  }
+                />
+              ) : (
+                <>
+                  {subFormOpen ? (
+                    <form
+                      className="fin__panel fin__form"
+                      onSubmit={(event) => void submitSubscription(event)}
+                    >
+                      <div
+                        className="fin__segmented"
+                        role="group"
+                        aria-label={s.subscriptions.directionLabel}
+                      >
+                        {(["out", "in"] as const).map((option) => (
+                          <Button
+                            key={option}
+                            type="button"
+                            size="sm"
+                            variant={subDirection === option ? "primary" : "ghost"}
+                            aria-pressed={subDirection === option}
+                            onClick={() => setSubDirection(option)}
+                          >
+                            {option === "out"
+                              ? s.subscriptions.directionOut
+                              : s.subscriptions.directionIn}
+                          </Button>
+                        ))}
+                      </div>
+
+                      <div className="fin__quick-add">
+                        <TextField
+                          className="fin__payee-input"
+                          label={s.subscriptions.nameLabel}
+                          value={subName}
+                          placeholder={s.subscriptions.namePlaceholder}
+                          maxLength={MAX_FIN_RECURRING_NAME_LENGTH}
+                          onChange={(event) => setSubName(event.target.value)}
+                        />
+                        {/* The unit lives in the field's own label — the one
+                            place it is needed, and never beside the figure. */}
+                        <TextField
+                          className="fin__amount-input"
+                          label={`${s.subscriptions.amountLabel} · ${subCurrency}`}
+                          value={subAmount}
+                          inputMode="decimal"
+                          placeholder={s.form.amountPlaceholder}
+                          onChange={(event) => setSubAmount(event.target.value)}
+                        />
+                      </div>
+
+                      <div className="fin__fields">
+                        <Select
+                          label={s.subscriptions.accountLabel}
+                          value={subAccountId}
+                          onChange={(event) => setSubAccount(event.target.value)}
+                        >
+                          {accountList
+                            .filter((account) => !account.archived || account.id === subAccountId)
+                            .map((account) => (
+                              <option key={account.id} value={account.id}>
+                                {account.name}
+                              </option>
+                            ))}
+                        </Select>
+                        {/* The picker offers the kind this direction can carry —
+                            the ledger form's own rule, applied to a template. */}
+                        <Select
+                          label={s.subscriptions.categoryLabel}
+                          value={subCategory}
+                          onChange={(event) => setSubCategory(event.target.value)}
+                        >
+                          <option value="">{s.form.categoryNone}</option>
+                          {categories
+                            .filter((category) =>
+                              subDirection === "in"
+                                ? category.kind === "income"
+                                : category.kind === "expense",
+                            )
+                            .map((category) => (
+                              <option key={category.id} value={category.id}>
+                                {category.name}
+                              </option>
+                            ))}
+                        </Select>
+                        <TextField
+                          type="date"
+                          label={s.subscriptions.startLabel}
+                          value={subStart}
+                          onChange={(event) => setSubStart(event.target.value)}
+                        />
+                        <Select
+                          label={s.subscriptions.reminderLabel}
+                          value={subReminder === null ? "" : String(subReminder)}
+                          onChange={(event) =>
+                            setSubReminder(
+                              event.target.value === "" ? null : Number(event.target.value),
+                            )
+                          }
+                        >
+                          <option value="">{s.subscriptions.reminderNone}</option>
+                          {REMINDER_DAY_OPTIONS.map((days) => (
+                            <option key={days} value={String(days)}>
+                              {reminderLabel(days)}
+                            </option>
+                          ))}
+                        </Select>
+                        <TextField
+                          className="fin__note-input"
+                          label={s.subscriptions.noteLabel}
+                          value={subNote}
+                          maxLength={MAX_FIN_NOTE_LENGTH}
+                          onChange={(event) => setSubNote(event.target.value)}
+                        />
+                      </div>
+
+                      {/* ADR-024's own field, the very component the task and
+                          event forms mount: there is one schedule language in
+                          this app, and „svakog 5. u mesecu" means the same thing
+                          in all three. */}
+                      <RecurrencePicker
+                        key={subEditingId ?? "new"}
+                        value={subRule}
+                        anchor={subStart}
+                        onChange={setSubRule}
+                      />
+
+                      <div className="fin__form-actions">
+                        <Button type="submit" variant="primary">
+                          {s.subscriptions.save}
+                        </Button>
+                        <Button type="button" className="fin__quiet" onClick={closeSubForm}>
+                          {s.subscriptions.cancel}
+                        </Button>
+                      </div>
+
+                      {subError !== null && (
+                        <p className="fin__error" role="alert">
+                          {subError}
+                        </p>
+                      )}
+                    </form>
+                  ) : (
+                    <Button variant="primary" onClick={beginNewSubscription}>
+                      <Icon name="plus" size={15} />
+                      {s.subscriptions.newSubscription}
+                    </Button>
+                  )}
+
+                  {subscriptions.length === 0 ? (
+                    <EmptyState
+                      sigil="finance"
+                      title={s.subscriptions.emptyTitle}
+                      description={s.subscriptions.emptyDescription}
+                    />
+                  ) : (
+                    <div className="fin__subs-list">
+                      {subscriptions.map((subscription) => renderSubscriptionRow(subscription))}
+                    </div>
+                  )}
+
+                  {/* What the RULES say is coming. Not a forecast and not a
+                      balance — a reading of the schedule, which is the only
+                      thing that can honestly be said about a charge that has
+                      not happened yet. */}
+                  <div className="fin__rail-heading fin__rail-heading--stacked">
+                    {s.subscriptions.upcomingHeading}
+                  </div>
+                  {renewals.length === 0 ? (
+                    <p className="fin__rail-note">{s.subscriptions.upcomingEmpty}</p>
+                  ) : (
+                    <div className="fin__subs-upcoming">
+                      {renewals.map((renewal) => (
+                        <div
+                          key={`${renewal.recurringId}@${renewal.date}`}
+                          className="fin__subs-upcoming-row"
+                        >
+                          <span className="fin__date">{renewal.date}</span>
+                          <span className="fin__title">{renewal.name}</span>
+                          <span className="nx-num fin__amount">
+                            {signedMoney(renewal.amount, renewal.currency, null)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          ) : page === "report" ? (
+            <div className="fin__report">
+              <div className="fin__report-nav">
+                <Button
+                  size="sm"
+                  className="fin__row-action"
+                  aria-label={s.report.previousMonth}
+                  title={s.report.previousMonth}
+                  onClick={() => setMonthKey(shiftMonthKey(monthKey, -1))}
+                >
+                  <Icon name="chevronLeft" size={14} />
+                </Button>
+                <span className="fin__report-month">{formatFinMonthLabel(monthKey)}</span>
+                <Button
+                  size="sm"
+                  className="fin__row-action"
+                  aria-label={s.report.nextMonth}
+                  title={s.report.nextMonth}
+                  onClick={() => setMonthKey(shiftMonthKey(monthKey, 1))}
+                >
+                  <Icon name="chevronRight" size={14} />
+                </Button>
+                {monthKey !== currentMonthKey && (
+                  <Button
+                    size="sm"
+                    className="fin__quiet"
+                    onClick={() => setMonthKey(currentMonthKey)}
+                  >
+                    {s.report.thisMonth}
+                  </Button>
+                )}
+              </div>
+              {/* The whole report's one caption: what it covers, and what it
+                  will never do. Said out loud so nobody waits for a
+                  prediction. */}
+              <p className="fin__caption">{s.report.caption}</p>
+
+              {monthFailed ? (
+                <EmptyState
+                  sigil="finance"
+                  title={s.report.loadErrorTitle}
+                  description={s.report.loadError}
+                />
+              ) : month === null ? (
+                <LoadingState label={strings.app.loading} rows={6} />
+              ) : accountList.length === 0 ? (
+                // No accounts is a different fact from an empty month, and it
+                // has a different answer: the same invitation the ledger offers.
+                <EmptyState
+                  sigil="finance"
+                  title={s.accounts.emptyTitle}
+                  description={s.accounts.emptyDescription}
+                  action={
+                    <Button variant="primary" onClick={beginNewAccount}>
+                      {s.accounts.newAccount}
+                    </Button>
+                  }
+                />
+              ) : report.length === 0 ? (
+                // Nothing happened, said plainly — and the transfer rule
+                // restated, because „prazan mesec" would otherwise look wrong to
+                // somebody who moved money between their own accounts all month.
+                <EmptyState
+                  sigil="finance"
+                  title={s.report.emptyTitle}
+                  description={s.report.emptyDescription}
+                />
+              ) : (
+                report.map((section) => renderReportSection(section))
+              )}
+            </div>
+          ) : (
+            <>
+              {/* ONE row of chrome, where there used to be five. What to do on
+                  the left; what to leave out on the right. */}
+              <div className="fin__toolbar">
+                <Button
+                  variant="primary"
+                  disabled={liveAccounts.length === 0}
+                  aria-expanded={formOpen}
+                  onClick={() => {
+                    // Three states, not two: closed opens a fresh draft, open-on
+                    // -a-draft closes, and open-on-an-EDIT starts a new draft
+                    // rather than closing — this button says „Nova transakcija",
+                    // and a control that silently discarded an edit instead
+                    // would be doing something it never claimed to.
+                    if (formOpen && editingId === null) {
+                      closeForm();
+                      return;
+                    }
+                    resetForm();
+                    setFormOpen(true);
+                    setFocusTick((tick) => tick + 1);
+                  }}
+                >
+                  <Icon name="plus" size={15} />
+                  {s.ledger.newTransaction}
+                </Button>
                 <Button
                   size="sm"
                   className="fin__quiet"
-                  onClick={() => setMonthKey(currentMonthKey)}
+                  aria-expanded={importOpen}
+                  onClick={() => setImportOpen((open) => !open)}
                 >
-                  {s.report.thisMonth}
+                  {importOpen ? s.importDisclosure.hide : s.importDisclosure.show}
                 </Button>
-              )}
-            </div>
-            {/* The whole report's one caption: what it covers, and what it will
-                never do. Said out loud so nobody waits for a prediction. */}
-            <p className="fin__report-caption">{s.report.caption}</p>
 
-            {monthFailed ? (
-              <EmptyState title={s.report.loadErrorTitle} description={s.report.loadError} />
-            ) : month === null ? (
-              <LoadingState label={strings.app.loading} rows={6} />
-            ) : accountList.length === 0 ? (
-              // No accounts is a different fact from an empty month, and it has
-              // a different answer: the same invitation the ledger half offers.
-              <EmptyState
-                title={s.accounts.emptyTitle}
-                description={s.accounts.emptyDescription}
-                action={
-                  <Button variant="primary" onClick={beginNewAccount}>
-                    {s.accounts.newAccount}
-                  </Button>
-                }
-              />
-            ) : report.length === 0 ? (
-              // Nothing happened, said plainly — and the transfer rule restated,
-              // because „prazan mesec" would otherwise look wrong to somebody
-              // who moved money between their own accounts all month.
-              <EmptyState
-                title={s.report.emptyTitle}
-                description={s.report.emptyDescription}
-              />
-            ) : (
-              report.map((section) => renderReportSection(section))
-            )}
-          </div>
-        ) : (
-          <>
-            <form className="fin__form" onSubmit={(event) => void submitForm(event)}>
-              <div className="fin__segmented" role="group" aria-label={s.form.kindLabel}>
-                {ENTRY_KINDS.map((kind) => (
-                  <Button
-                    key={kind}
-                    type="button"
-                    size="sm"
-                    variant={entryKind === kind ? "primary" : "ghost"}
-                    aria-pressed={entryKind === kind}
-                    onClick={() => {
-                      setEntryKind(kind);
-                      // A transfer carries no category and an ordinary row no
-                      // counter account; leaving a stale one selected would let the
-                      // form ask for something the store must refuse.
-                      if (kind === "transfer") setCategoryDraft("");
-                      else setCounterDraft("");
-                    }}
+                <div className="fin__toolbar-filters">
+                  <span className="fin__count">
+                    {`${visibleRows.length} ${countUnit(
+                      visibleRows.length,
+                      s.ledger.itemsOne,
+                      s.ledger.itemsFew,
+                      s.ledger.itemsMany,
+                    )}`}
+                  </span>
+                  <Select
+                    layout="inline"
+                    label={s.filters.categoryLabel}
+                    value={categoryFilter}
+                    onChange={(event) => setCategoryFilter(event.target.value)}
                   >
-                    {kind === "expense"
-                      ? s.form.kindExpense
-                      : kind === "income"
-                        ? s.form.kindIncome
-                        : s.form.kindTransfer}
-                  </Button>
-                ))}
-              </div>
-
-              <div className="fin__quick-add">
-                <input
-                  ref={amountRef}
-                  className="nx-textfield__input fin__amount-input"
-                  value={amountDraft}
-                  inputMode="decimal"
-                  placeholder={s.form.amountPlaceholder}
-                  aria-label={s.form.amountLabel}
-                  onChange={(event) => setAmountDraft(event.target.value)}
-                />
-                {/* Which money the amount is in — the account's own, said where the
-                    amount is typed rather than left to be assumed. */}
-                <span className="fin__amount-currency">{formCurrency}</span>
-                <input
-                  className="nx-textfield__input fin__payee-input"
-                  value={payeeDraft}
-                  placeholder={s.form.payeePlaceholder}
-                  aria-label={s.form.payeeLabel}
-                  maxLength={MAX_FIN_PAYEE_LENGTH}
-                  onChange={(event) => setPayeeDraft(event.target.value)}
-                />
-                <Button type="submit" variant="primary" disabled={liveAccounts.length === 0}>
-                  {editingId === null ? s.form.submitAdd : s.form.submitSave}
-                </Button>
-                {editingId !== null && (
-                  <Button type="button" className="fin__quiet" onClick={resetForm}>
-                    {s.form.cancel}
-                  </Button>
-                )}
-              </div>
-
-              <div className="fin__fields">
-                <TextField
-                  type="date"
-                  value={dateDraft}
-                  aria-label={s.form.dateLabel}
-                  onChange={(event) => setDateDraft(event.target.value)}
-                />
-                <select
-                  className="fin__select"
-                  value={formAccountId}
-                  aria-label={entryKind === "transfer" ? s.form.fromAccountLabel : s.form.accountLabel}
-                  onChange={(event) => setAccountDraft(event.target.value)}
-                >
-                  {accountOptions.map((account) => (
-                    <option key={account.id} value={account.id}>
-                      {account.name}
-                    </option>
-                  ))}
-                </select>
-                {entryKind === "transfer" ? (
-                  <select
-                    className="fin__select"
-                    value={counterDraft}
-                    aria-label={s.form.toAccountLabel}
-                    onChange={(event) => setCounterDraft(event.target.value)}
-                  >
-                    <option value="">{s.form.toAccountLabel}</option>
-                    {transferTargets.map((account) => (
-                      <option key={account.id} value={account.id}>
-                        {account.name}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <select
-                    className="fin__select"
-                    value={categoryDraft}
-                    aria-label={s.form.categoryLabel}
-                    onChange={(event) => setCategoryDraft(event.target.value)}
-                  >
-                    <option value="">{s.form.categoryNone}</option>
-                    {categoryOptions.map((category) => (
+                    <option value={CATEGORY_FILTER_ALL}>{s.filters.categoryAll}</option>
+                    <option value={CATEGORY_FILTER_NONE}>{s.filters.categoryNone}</option>
+                    {categories.map((category) => (
                       <option key={category.id} value={category.id}>
                         {category.name}
                       </option>
                     ))}
-                  </select>
-                )}
-                <input
-                  className="nx-textfield__input fin__note-input"
-                  value={noteDraft}
-                  placeholder={s.form.noteLabel}
-                  aria-label={s.form.noteLabel}
-                  maxLength={MAX_FIN_NOTE_LENGTH}
-                  onChange={(event) => setNoteDraft(event.target.value)}
-                />
+                  </Select>
+                  {/* „Od – Do" as one control: the pair reads as a range because
+                      it is drawn as one, and each half keeps its own name. */}
+                  <span className="fin__period" role="group" aria-label={s.filters.periodLabel}>
+                    <span className="fin__period-label">{s.filters.periodLabel}</span>
+                    <input
+                      type="date"
+                      className="fin__period-input"
+                      value={fromDraft}
+                      aria-label={s.filters.fromLabel}
+                      onChange={(event) => setFromDraft(event.target.value)}
+                    />
+                    <span className="fin__period-sep" aria-hidden="true">
+                      –
+                    </span>
+                    <input
+                      type="date"
+                      className="fin__period-input"
+                      value={toDraft}
+                      aria-label={s.filters.toLabel}
+                      onChange={(event) => setToDraft(event.target.value)}
+                    />
+                  </span>
+                  <div className="fin__segmented" role="group" aria-label={s.views.label}>
+                    {LEDGER_VIEWS.map((option) => (
+                      <Button
+                        key={option}
+                        size="sm"
+                        className="nx-segmented__option"
+                        aria-pressed={view === option}
+                        onClick={() => setView(option)}
+                      >
+                        {option === "list" ? s.views.list : s.views.cards}
+                      </Button>
+                    ))}
+                  </div>
+                  {filtersActive && (
+                    <Button
+                      size="sm"
+                      className="fin__quiet"
+                      onClick={() => {
+                        setSelectedAccountId(null);
+                        setCategoryFilter(CATEGORY_FILTER_ALL);
+                        setFromDraft("");
+                        setToDraft("");
+                      }}
+                    >
+                      {s.filters.clear}
+                    </Button>
+                  )}
+                </div>
               </div>
 
-              {formError !== null && (
-                <p className="fin__error" role="alert">
-                  {formError}
+              {periodInvalid && (
+                <p className="fin__error" role="status">
+                  {s.filters.invalidPeriod}
                 </p>
               )}
-            </form>
 
-            {/* Uvoz izvoda (FIN slice e) — the SAME component Settings mounts,
-                so there is one flow and two ways to reach it. Closed by
-                default: the ledger is what the page is for, and an importer
-                permanently open above it would be a form nobody asked for. */}
-            <div className="fin__import">
-              <Button
-                size="sm"
-                className="fin__quiet"
-                aria-expanded={importOpen}
-                onClick={() => setImportOpen((open) => !open)}
-              >
-                {importOpen ? s.importDisclosure.hide : s.importDisclosure.show}
-              </Button>
-              {importOpen && <FinCsvImportSection profileId={profileId} />}
-            </div>
+              {/* The entry form, on request. It is the same form for create and
+                  edit, and it stays open after a row is filed — filing one
+                  usually means filing the next — with the caret back in the
+                  amount field. */}
+              {formOpen && (
+                <form className="fin__panel fin__form" onSubmit={(event) => void submitForm(event)}>
+                  <div className="fin__segmented" role="group" aria-label={s.form.kindLabel}>
+                    {ENTRY_KINDS.map((kind) => (
+                      <Button
+                        key={kind}
+                        type="button"
+                        size="sm"
+                        variant={entryKind === kind ? "primary" : "ghost"}
+                        aria-pressed={entryKind === kind}
+                        onClick={() => {
+                          setEntryKind(kind);
+                          // A transfer carries no category and an ordinary row
+                          // no counter account; leaving a stale one selected
+                          // would let the form ask for something the store must
+                          // refuse.
+                          if (kind === "transfer") setCategoryDraft("");
+                          else setCounterDraft("");
+                        }}
+                      >
+                        {kind === "expense"
+                          ? s.form.kindExpense
+                          : kind === "income"
+                            ? s.form.kindIncome
+                            : s.form.kindTransfer}
+                      </Button>
+                    ))}
+                  </div>
 
-            <div className="fin__view-controls">
-              <div className="fin__views">
-                {LEDGER_VIEWS.map((option) => (
-                  <Button
-                    key={option}
-                    size="sm"
-className="nx-segmented__option fin__view"
-                    aria-pressed={view === option}
-                    onClick={() => setView(option)}
-                  >
-                    {option === "list" ? s.views.list : s.views.cards}
-                  </Button>
-                ))}
-              </div>
-              <select
-                className="fin__select"
-                value={categoryFilter}
-                aria-label={s.filters.categoryLabel}
-                onChange={(event) => setCategoryFilter(event.target.value)}
-              >
-                <option value={CATEGORY_FILTER_ALL}>{s.filters.categoryAll}</option>
-                <option value={CATEGORY_FILTER_NONE}>{s.filters.categoryNone}</option>
-                {categories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
-                ))}
-              </select>
-              <TextField
-                type="date"
-                value={fromDraft}
-                aria-label={s.filters.fromLabel}
-                onChange={(event) => setFromDraft(event.target.value)}
-              />
-              <TextField
-                type="date"
-                value={toDraft}
-                aria-label={s.filters.toLabel}
-                onChange={(event) => setToDraft(event.target.value)}
-              />
-              {filtersActive && (
-                <Button
-                  size="sm"
-                  className="fin__quiet"
-                  onClick={() => {
-                    setSelectedAccountId(null);
-                    setCategoryFilter(CATEGORY_FILTER_ALL);
-                    setFromDraft("");
-                    setToDraft("");
-                  }}
-                >
-                  {s.filters.clear}
-                </Button>
+                  <div className="fin__quick-add">
+                    {/* Written by hand rather than through `TextField`, which
+                        forwards no `ref` — and the caret has to be able to land
+                        here, both from the palette's „Nova transakcija" and
+                        after every filed row. `.fin__field` restates the
+                        component's own two rules so the field is
+                        indistinguishable from its neighbours.
+
+                        Which money the amount is in — the account's own — is
+                        said in the label rather than left to be assumed. */}
+                    <label className="fin__field fin__amount-input">
+                      <span className="fin__field-label">
+                        {`${s.form.amountLabel} · ${formCurrency}`}
+                      </span>
+                      <input
+                        ref={amountRef}
+                        className="nx-textfield__input"
+                        value={amountDraft}
+                        inputMode="decimal"
+                        placeholder={s.form.amountPlaceholder}
+                        onChange={(event) => setAmountDraft(event.target.value)}
+                      />
+                    </label>
+                    <TextField
+                      className="fin__payee-input"
+                      label={s.form.payeeLabel}
+                      value={payeeDraft}
+                      placeholder={s.form.payeePlaceholder}
+                      maxLength={MAX_FIN_PAYEE_LENGTH}
+                      onChange={(event) => setPayeeDraft(event.target.value)}
+                    />
+                  </div>
+
+                  <div className="fin__fields">
+                    <TextField
+                      type="date"
+                      label={s.form.dateLabel}
+                      value={dateDraft}
+                      onChange={(event) => setDateDraft(event.target.value)}
+                    />
+                    <Select
+                      label={
+                        entryKind === "transfer" ? s.form.fromAccountLabel : s.form.accountLabel
+                      }
+                      value={formAccountId}
+                      onChange={(event) => setAccountDraft(event.target.value)}
+                    >
+                      {accountOptions.map((account) => (
+                        <option key={account.id} value={account.id}>
+                          {account.name}
+                        </option>
+                      ))}
+                    </Select>
+                    {entryKind === "transfer" ? (
+                      <Select
+                        label={s.form.toAccountLabel}
+                        value={counterDraft}
+                        onChange={(event) => setCounterDraft(event.target.value)}
+                      >
+                        <option value="">{s.form.toAccountLabel}</option>
+                        {transferTargets.map((account) => (
+                          <option key={account.id} value={account.id}>
+                            {account.name}
+                          </option>
+                        ))}
+                      </Select>
+                    ) : (
+                      <Select
+                        label={s.form.categoryLabel}
+                        value={categoryDraft}
+                        onChange={(event) => setCategoryDraft(event.target.value)}
+                      >
+                        <option value="">{s.form.categoryNone}</option>
+                        {categoryOptions.map((category) => (
+                          <option key={category.id} value={category.id}>
+                            {category.name}
+                          </option>
+                        ))}
+                      </Select>
+                    )}
+                    <TextField
+                      className="fin__note-input"
+                      label={s.form.noteLabel}
+                      value={noteDraft}
+                      maxLength={MAX_FIN_NOTE_LENGTH}
+                      onChange={(event) => setNoteDraft(event.target.value)}
+                    />
+                  </div>
+
+                  <div className="fin__form-actions">
+                    <Button type="submit" variant="primary" disabled={liveAccounts.length === 0}>
+                      {editingId === null ? s.form.submitAdd : s.form.submitSave}
+                    </Button>
+                    <Button type="button" className="fin__quiet" onClick={closeForm}>
+                      {s.form.cancel}
+                    </Button>
+                  </div>
+
+                  {formError !== null && (
+                    <p className="fin__error" role="alert">
+                      {formError}
+                    </p>
+                  )}
+                </form>
               )}
-            </div>
 
-            {periodInvalid && (
-              <p className="fin__error" role="status">
-                {s.filters.invalidPeriod}
-              </p>
-            )}
+              {/* Uvoz izvoda (FIN slice e) — the SAME component Settings mounts,
+                  so there is one flow and two ways to reach it. */}
+              {importOpen && <FinCsvImportSection profileId={profileId} />}
 
-            {accountList.length === 0 ? (
-              // An honest invitation, never a fabricated starter row: nothing in
-              // this app writes money the user did not.
-              <EmptyState
-                title={s.accounts.emptyTitle}
-                description={s.accounts.emptyDescription}
-                action={
-                  <Button variant="primary" onClick={beginNewAccount}>
-                    {s.accounts.newAccount}
-                  </Button>
-                }
-              />
-            ) : visibleRows.length === 0 && filtersActive ? (
-              <EmptyState
-                title={s.ledger.filterEmptyTitle}
-                description={s.ledger.filterEmptyDescription}
-              />
-            ) : visibleRows.length === 0 ? (
-              <EmptyState title={s.ledger.emptyTitle} description={s.ledger.emptyDescription} />
-            ) : view === "list" ? (
-              <ListView<FinTransactionFields>
-                items={scopedRows}
-                schema={FIN_SCHEMA}
-                config={listConfig}
-                itemKey={(row) => row.id}
-                renderItem={renderRow}
-              />
-            ) : (
-              <CardsView<FinTransactionFields>
-                items={scopedRows}
-                schema={FIN_SCHEMA}
-                config={cardsConfig}
-                itemKey={(row) => row.id}
-                renderItem={renderCard}
-              />
-            )}
-          </>
-        )}
+              {accountList.length === 0 ? (
+                // An honest invitation, never a fabricated starter row: nothing
+                // in this app writes money the user did not.
+                <EmptyState
+                  sigil="finance"
+                  title={s.accounts.emptyTitle}
+                  description={s.accounts.emptyDescription}
+                  action={
+                    <Button variant="primary" onClick={beginNewAccount}>
+                      {s.accounts.newAccount}
+                    </Button>
+                  }
+                />
+              ) : visibleRows.length === 0 && filtersActive ? (
+                <EmptyState
+                  sigil="finance"
+                  title={s.ledger.filterEmptyTitle}
+                  description={s.ledger.filterEmptyDescription}
+                />
+              ) : visibleRows.length === 0 ? (
+                <EmptyState
+                  sigil="finance"
+                  title={s.ledger.emptyTitle}
+                  description={s.ledger.emptyDescription}
+                />
+              ) : view === "list" ? (
+                <div className={showMetaColumn ? "fin__ledger" : "fin__ledger fin__ledger--nometa"}>
+                  <div className="fin__ledger-head">
+                    <span>{s.form.payeeLabel}</span>
+                    <span>{metaColumnLabel}</span>
+                    <span className="fin__ledger-head-amount">{amountColumnLabel}</span>
+                    <span />
+                  </div>
+                  {dayGroups.map((group) => (
+                    <Fragment key={group.date}>
+                      <div className="fin__day">
+                        <span className="fin__day-name">{formatLedgerDay(group.date)}</span>
+                        <span className="fin__day-net">
+                          {[...group.nets.entries()].map(([currency, net]) => (
+                            <span key={currency}>{signedMoney(net, currency, ledgerUnit)}</span>
+                          ))}
+                        </span>
+                      </div>
+                      {group.rows.map((row) => renderLedgerRow(row))}
+                    </Fragment>
+                  ))}
+                </div>
+              ) : (
+                <CardsView<FinTransactionFields>
+                  items={scopedRows}
+                  schema={FIN_SCHEMA}
+                  config={cardsConfig}
+                  itemKey={(row) => row.id}
+                  renderItem={renderCard}
+                />
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       {pendingDeleteCategory !== null && (

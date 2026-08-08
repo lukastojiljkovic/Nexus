@@ -9,8 +9,10 @@ import {
   LoadingState,
   ProportionBar,
   Select,
+  StatBand,
   TextField,
 } from "@nexus/ui";
+import type { Stat } from "@nexus/ui";
 import { SET_KINDS } from "@nexus/core";
 import { clockText } from "../../shared/duration.js";
 import { MAX_FIT_WORKOUT_NOTES_LENGTH } from "../../shared/ipc.js";
@@ -122,6 +124,90 @@ function windowStart(today: string, days: number): string {
   return start.toISOString().slice(0, 10);
 }
 
+// --- The section's opening figures -------------------------------------------
+
+/**
+ * The window the band reports. Seven days — the span a training week is
+ * actually balanced over, and the same window „Mapa tela" reads, so the two
+ * things on this page that answer „kako je prošla nedelja" answer about the
+ * same nedelja.
+ *
+ * It is shorter than the shortest range the history list offers (30 days), so
+ * the band is always fully covered by a read the section has already made and
+ * never costs one of its own.
+ */
+const SUMMARY_WINDOW_DAYS = 7;
+
+/**
+ * The three figures „Trening" opens with, counted out of the sessions already
+ * on screen.
+ *
+ * **FINISHED sessions only**, which is `progressSets`' rule one level up: a
+ * session still open is one in the middle of happening, and letting it into a
+ * weekly total would make the figure climb while somebody is still in the gym.
+ *
+ * **The tonnage says what it covered.** A week's total that silently dropped
+ * the planks, the runs and the pull-ups is exactly the failure `setTonnage`'s
+ * refusal exists to prevent — the caveat that is written under a single
+ * session's figure is written under the week's for the same reason, and a
+ * figure this large is the last place to start implying it covered everything.
+ */
+function trainingSummaryStats(finished: readonly FitWorkout[], today: string): Stat[] {
+  const s = strings.fitness.training;
+  const from = windowStart(today, SUMMARY_WINDOW_DAYS);
+
+  let hardSets = 0;
+  let kg = 0;
+  let counted = 0;
+  let sessions = 0;
+  for (const workout of finished) {
+    if (workout.day < from || workout.day > today) continue;
+    sessions += 1;
+    const tonnage = workoutTonnage(workout.sets);
+    // The identity the session panel already relies on: counted + uncounted is
+    // every WORKING set, warm-ups having been split off before either.
+    hardSets += tonnage.counted + tonnage.uncounted;
+    kg += tonnage.kg;
+    counted += tonnage.counted;
+  }
+
+  return [
+    { label: s.summary.setsLabel, value: String(hardSets) },
+    { label: s.summary.sessionsLabel, value: String(sessions) },
+    tonnageStat(kg, counted, hardSets),
+  ];
+}
+
+/**
+ * A tonnage as a band figure, WITH what it covered.
+ *
+ * The one place in this module a `TonnageTotal` becomes a figure somebody
+ * reads, used by the open session and by the week above it — two surfaces
+ * quoting the same quantity with two hand-written caveats would eventually
+ * disagree about what a tonnage claims, and the disagreement would be invisible.
+ *
+ * Zero counted sets is an em dash and not a nought: a session whose every set
+ * was a plank did real work, and „0 kg" would be a claim about that work rather
+ * than a fact about the arithmetic.
+ */
+function tonnageStat(kg: number, counted: number, workingCount: number): Stat {
+  const s = strings.fitness.training;
+  if (counted === 0) {
+    return { label: s.session.tonnageLabel, value: s.set.missing, note: s.session.tonnageNone };
+  }
+  const stat: Stat = {
+    label: s.session.tonnageLabel,
+    value: tonnageText(kg),
+    unit: s.session.tonnageUnit,
+  };
+  // Said only when the total really did leave something out — a figure that
+  // covered every set needs no caveat, and one that did not must not imply it.
+  if (counted < workingCount) {
+    stat.note = `${s.session.tonnageCoverage} ${String(counted)} ${s.session.tonnageCoverageOf} ${setCountText(workingCount)}`;
+  }
+  return stat;
+}
+
 export interface FitTrainingProps {
   profileId: string;
 }
@@ -204,7 +290,7 @@ export function FitTraining({ profileId }: FitTrainingProps) {
   }
 
   if (failed) {
-    return <EmptyState title={s.loadErrorTitle} description={s.loadError} />;
+    return <EmptyState sigil="fitness" title={s.loadErrorTitle} description={s.loadError} />;
   }
   if (snapshot === null) {
     return <LoadingState label={strings.app.loading} rows={6} />;
@@ -214,6 +300,8 @@ export function FitTraining({ profileId }: FitTrainingProps) {
   const history = [...snapshot.history]
     .filter((workout) => workout.endedAt !== null)
     .reverse();
+  const summaryStats = trainingSummaryStats(history, today);
+  const summaryWindow = `${s.summary.windowLead} ${String(SUMMARY_WINDOW_DAYS)} ${s.summary.windowDayUnit}`;
   // Bound to a local const so the narrowing survives into the callbacks below —
   // a property of a state object loses it, and the alternative is a cast.
   const open = snapshot.open;
@@ -238,6 +326,20 @@ export function FitTraining({ profileId }: FitTrainingProps) {
           >
             <Icon name="close" size={14} />
           </Button>
+        </div>
+      )}
+
+      {/* „Kako je prošla nedelja", before „šta je na spisku". Three figures the
+          section already holds the sessions for, and the window they cover named
+          once above them rather than repeated in all three labels.
+          Drawn only once there is a finished session to count: a band reading
+          0 · 0 · — over an empty history is three zeros where an empty state
+          already says the same thing in words. */}
+      {history.length > 0 && (
+        <div className="fit__band">
+          <div className="fit__heading">{summaryWindow}</div>
+          <StatBand stats={summaryStats} />
+          <p className="fit__note">{s.summary.note}</p>
         </div>
       )}
 
@@ -292,23 +394,37 @@ export function FitTraining({ profileId }: FitTrainingProps) {
       )}
 
       <section className="fit__section" aria-label={s.history.heading}>
-        <div className="fit__heading">{s.history.heading}</div>
-        <div className="fit__ranges" role="group" aria-label={s.history.rangeLabel}>
-          {HISTORY_RANGES.map((option) => (
-            <Button
-              key={option}
-              type="button"
-              size="sm"
-              className="nx-segmented__option fit__range"
-              aria-pressed={range === option}
-              onClick={() => setRange(option)}
-            >
-              {option === 30 ? s.history.range30 : option === 90 ? s.history.range90 : s.history.range365}
-            </Button>
-          ))}
+        {/* The window filter belongs ON the heading of the list it filters, not
+            on a row of its own above it: a second switcher strip stacked under
+            the page's own section switch is two rows of chrome before any
+            content, which is what made this page read as a control panel. */}
+        <div className="fit__section-head">
+          <div className="fit__heading">{s.history.heading}</div>
+          <div className="fit__ranges" role="group" aria-label={s.history.rangeLabel}>
+            {HISTORY_RANGES.map((option) => (
+              <Button
+                key={option}
+                type="button"
+                size="sm"
+                className="nx-segmented__option fit__range"
+                aria-pressed={range === option}
+                onClick={() => setRange(option)}
+              >
+                {option === 30
+                  ? s.history.range30
+                  : option === 90
+                    ? s.history.range90
+                    : s.history.range365}
+              </Button>
+            ))}
+          </div>
         </div>
         {history.length === 0 ? (
-          <EmptyState title={s.history.emptyTitle} description={s.history.emptyDescription} />
+          <EmptyState
+            sigil="fitness"
+            title={s.history.emptyTitle}
+            description={s.history.emptyDescription}
+          />
         ) : (
           <div className="fit__list">
             {history.map((workout) => (
@@ -618,6 +734,20 @@ function SessionPanel({ profileId, workout, routine, onChanged, onDiscard }: Ses
   const minutes = elapsedMinutes(workout.startedAt, now);
   const tonnage = workoutTonnage(workout.sets);
   const workingCount = tonnage.counted + tonnage.uncounted;
+  const sessionStats: Stat[] = [
+    ...(minutes === null
+      ? []
+      : [
+          {
+            label: s.session.elapsedLabel,
+            value: String(minutes),
+            unit: s.session.elapsedUnit,
+            tone: "data" as const,
+          },
+        ]),
+    { label: s.session.setsLabel, value: String(workingCount) },
+    tonnageStat(tonnage.kg, tonnage.counted, workingCount),
+  ];
 
   // How much of the ROUTINE has been started at all — lines carrying at least
   // one working set, over the lines the routine holds. Deliberately „started"
@@ -641,9 +771,6 @@ function SessionPanel({ profileId, workout, routine, onChanged, onDiscard }: Ses
         <span className="fit__session-title">
           {workout.routineLabel === "" ? s.session.adHoc : workout.routineLabel}
         </span>
-        {minutes !== null && (
-          <Chip variant="data">{`${s.session.elapsedLabel} ${String(minutes)} ${s.session.elapsedUnit}`}</Chip>
-        )}
         <Button size="sm" variant="primary" onClick={() => void finish()}>
           {s.session.finish}
         </Button>
@@ -661,28 +788,12 @@ function SessionPanel({ profileId, workout, routine, onChanged, onDiscard }: Ses
         </Button>
       </div>
 
-      <div className="fit__figures">
-        <span className="fit__fact">
-          <span className="fit__fact-label">{s.session.setsLabel}</span>
-          <span className="fit__fact-value">{String(workingCount)}</span>
-        </span>
-        <span className="fit__fact">
-          <span className="fit__fact-label">{s.session.tonnageLabel}</span>
-          <span className="fit__fact-value">
-            {tonnage.counted === 0
-              ? s.session.tonnageNone
-              : `${tonnageText(tonnage.kg)} ${s.session.tonnageUnit}`}
-          </span>
-        </span>
-      </div>
-      {/* Said only when the total really did leave something out — a figure that
-          covered every set needs no caveat, and one that did not must not imply
-          it did. */}
-      {tonnage.counted > 0 && tonnage.uncounted > 0 && (
-        <p className="fit__note">
-          {`${s.session.tonnageCoverage} ${String(tonnage.counted)} ${s.session.tonnageCoverageOf} ${setCountText(workingCount)}`}
-        </p>
-      )}
+      {/* The session's own figures, on the app's one band — the elapsed clock
+          moved off the head row and in here, because „koliko traje" is a figure
+          about the session and not a control beside its title. The tonnage's
+          coverage caveat travels WITH the tonnage now, as its `note`, instead of
+          as a separate sentence somebody could read on its own. */}
+      <StatBand stats={sessionStats} />
       {tonnage.warmup > 0 && <p className="fit__note">{s.session.warmupNote}</p>}
 
       {routineLines > 0 && (
