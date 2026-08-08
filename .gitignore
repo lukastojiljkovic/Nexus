@@ -10,6 +10,10 @@ release/
 *.tsbuildinfo
 packages/tokens/gen/
 
+# The screenshot sweep's output (`pnpm --filter @nexus/desktop shots`) — hundreds
+# of PNGs regenerated on demand, never a source artefact.
+apps/desktop/shots/
+
 # Environment & local state
 .env
 .env.*

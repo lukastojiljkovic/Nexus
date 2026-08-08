@@ -147,6 +147,21 @@ and [docs/SPECIFICATION.md](docs/SPECIFICATION.md). For *where we are*:
   re-run the db tests.
 - **Verification gates before any commit:** `pnpm typecheck` (7/7), `pnpm test`
   (all green), `pnpm build` (3/3), `pnpm --filter @nexus/desktop smoke` prints
-  `SMOKE OK`, and the raw-colour grep is empty. New store logic is **TDD** (tests
+  `SMOKE OK`, and the four static gates pass — `check:colours` (no raw hex/rgb/
+  hsl outside `packages/tokens`), `check:contrast` (every token pair clears
+  WCAG AA, marks clear 3:1, hairlines sit inside the 1.2–2.4:1 band),
+  `check:strings` (no module-scope reads of the strings table) and
+  **`check:tokens`** (every `var(--nx-*)` resolves to a real token or a
+  declaration in source — CSS drops an undefined custom property silently, so
+  „uses a token" and „uses nothing" are otherwise indistinguishable).
+- **Looking at the app is a command, not a chore.**
+  `pnpm --filter @nexus/desktop shots` seeds a demo profile, drives the real
+  renderer through every module and sub-view in both themes at three window
+  sizes plus maximised, types into each create form, and writes ~350 PNGs to
+  `apps/desktop/shots/` with `report.md` — a geometric audit of clipped text,
+  boxes escaping their parent, overlapping text and sub-24px targets, grouped
+  as classes. `pnpm --filter @nexus/desktop demo` adds a populated „Demo"
+  account to this device (passcode `demo-nexus-2026`). Both flip the native ABI
+  through `launch.mjs`, so **never run either while agents are running tests.** New store logic is **TDD** (tests
   red before green). Serbian sr-Latn sorting/formatting uses
   `Intl.Collator(["sr-Latn","sr"])` — plain `"sr"` mis-tailors Latin š/č/ć.

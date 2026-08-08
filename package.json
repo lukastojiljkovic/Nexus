@@ -15,7 +15,9 @@
     "test": "turbo run test && vitest run --config vitest.scripts.config.mjs",
     "check:colours": "node scripts/check-colours.mjs",
     "check:contrast": "node scripts/check-contrast.mjs",
-    "check:strings": "node scripts/check-string-capture.mjs"
+    "check:strings": "node scripts/check-string-capture.mjs",
+    "check:tokens": "node scripts/check-tokens.mjs",
+    "check:css": "node scripts/check-css.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

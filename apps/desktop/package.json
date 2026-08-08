@@ -12,6 +12,8 @@
     "lint": "eslint .",
     "test": "vitest run",
     "smoke": "electron-vite build && node scripts/launch.mjs --smoke",
+    "shots": "electron-vite build && node scripts/launch.mjs --shots",
+    "demo": "electron-vite build && node scripts/launch.mjs --demo",
     "licences": "node scripts/generate-licences.mjs",
     "rebuild:electron": "node scripts/rebuild-native.mjs electron",
     "rebuild:node": "node scripts/rebuild-native.mjs node",
