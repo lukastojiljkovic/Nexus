@@ -1,0 +1,1802 @@
+/* Calendar (CAL page) ------------------------------------------------- */
+/* THE HEIGHT HALF OF THE SAME CONTRACT: a page fills the height it was given
+   and scrolls INSIDE itself. It never makes `.app__main` scroll, and it never
+   sizes an inner scroller against a number picked in advance.
+
+   `.note` has always obeyed this (`flex: 1; min-height: 0`, panes scrolling
+   internally). The calendar did not, and the result was two vertical
+   scrollbars at once: `.cal__grid-body` capped itself at fourteen hours —
+   14 x 44px = 616px, a figure with no relationship to the space available —
+   while the window offers 589px of content height at the size this app ships
+   at (681 viewport, less the 44px topbar, less `.app__main`'s 48px of
+   padding). So the grid was taller than the page, the page was taller than the
+   pane, and the month view began below the fold under two rows of chrome.
+
+   The chrome is `flex: none` and the view claims the remainder. Open the event
+   form and the grid shrinks by exactly the form's height, which is the
+   behaviour the fixed cap was standing in for and never actually delivered.
+
+   THE CONTRACT NOW HOLDS FOR ALL SEVEN VIEWS, which it did not: `.cal__month`
+   and `.cal__agenda` obeyed it and `.documents`/`.people` did not, so two tabs
+   of one page scrolled two different things. All four are now `flex: 1;
+   min-height: 0; overflow-y: auto`, and the two things that cannot shrink —
+   a signature graphic's `<svg>` and the hour grid's twenty-four rows — are
+   inside one of those scrollers rather than beside it. That is the whole rule:
+   NOTHING WITH A FIXED HEIGHT IS EVER A BARE CHILD OF `.cal`. A 320px ring
+   dropped in here took its 360px out of a 589px page, left the grid nothing,
+   and still hung off the bottom — see `.cal__chart` and `CalendarHourRing`. */
+.cal {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-5);
+}
+
+/* View toggle (Agenda | Dokumenta) — typographic active state, mirrors tasks. */
+.cal__views {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  flex: none;
+}
+
+/* Event form (create + edit) — one wrapping row; the title takes the slack. */
+.cal__form {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+  /* Chrome: it takes the height it needs and the view below gives it up. */
+  flex: none;
+}
+.cal__title {
+  flex: 1;
+  min-width: 240px;
+}
+/* Reminder chip row — the event form's "Podsetnici" (CAL-006) and the task
+   form's "Podsetnik" (ADR-028) share this recipe outright, the way the house
+   dialog is shared further down: one ladder of lead times, one look, only the
+   unit differs (an event counts minutes, a task counts days). The same
+   typographic toggle as .cal__source and .recur__day: accent text + weight when
+   on, never a glow. Takes a full row of the wrapping form, like .recur does, so
+   a long ladder wraps under itself instead of pushing the submit button
+   around. */
+.cal__reminders,
+.tasks__reminders {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+}
+.cal__reminders-label,
+.tasks__reminders-label {
+  flex: none;
+  font-size: var(--nx-font-size-label);
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-muted);
+}
+.cal__reminder-chips,
+.tasks__reminder-chips {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  flex-wrap: wrap;
+}
+.cal__reminder.nx-button,
+.tasks__reminder.nx-button {
+  padding: 2px 8px;
+}
+/* Stands in for the chips while the form has no rok to count back from — the
+   same muted "why this field is off" line as .recur__caption right beside it.
+   .tasks__deps-caption is the same line one field down: "waits on nothing", or
+   the dependency block's own failure notice. */
+.tasks__reminders-caption,
+.tasks__deps-caption {
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+
+/* Prilozi on the task form (migration 024) — the NOTE panel's rows
+   (.note__attachment*) in the form's own context: a full row of the wrapping
+   field row, like .tasks__reminders above, so a long file name wraps under
+   itself instead of pushing the submit button around. Shown only while editing
+   an existing task (TasksPage), which is why it has no empty state: the block
+   IS the affordance, and one button is not a page. */
+.tasks__attachments {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+.tasks__attachments-head {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+/* Matched to .tasks__reminders-label, the field label right above it. */
+.tasks__attachments-label {
+  flex: none;
+  font-size: var(--nx-font-size-label);
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-muted);
+}
+/* Zavisnosti (migration 029 / ADR-037) — the edit form's "this one first" block.
+   Takes a full row of the wrapping form exactly as .tasks__reminders above does,
+   so a long list of blockers wraps under itself instead of pushing the submit
+   button around; the label is that block's label, restated here rather than
+   sharing the selector because the two fields are not the same field. */
+.tasks__deps {
+  flex-basis: 100%;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+}
+.tasks__deps-label {
+  flex: none;
+  font-size: var(--nx-font-size-label);
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-muted);
+}
+/* Quiet text button, the .tasks__reminder recipe rather than a second one. */
+.tasks__attach.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.tasks__attach.nx-button:hover:not(:disabled) {
+  background: transparent;
+  color: var(--nx-text);
+}
+/* Same recipe as .note__attachment-error, scoped to this form's channel. */
+.tasks__attachment-error {
+  margin: 0;
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-danger-soft);
+  color: var(--nx-danger);
+  border-radius: var(--nx-radius-md);
+  font-size: var(--nx-font-size-body-sm);
+}
+.tasks__attachment {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-1) var(--nx-space-2);
+  border-radius: var(--nx-radius-md);
+  transition: background var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.tasks__attachment:hover {
+  background: var(--nx-surface-alt);
+}
+.tasks__attachment-thumb {
+  flex-shrink: 0;
+  max-width: 96px;
+  max-height: 40px;
+  object-fit: cover;
+  border-radius: var(--nx-radius-sm);
+}
+.tasks__attachment-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nx-font-size-body-sm);
+}
+.tasks__attachment-size {
+  flex-shrink: 0;
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+/* The "⋯" stays quiet until its row is hovered or the menu is open — the
+   .note__row-menu treatment, on a form row. */
+.tasks__attachment-menu {
+  opacity: 0;
+}
+.tasks__attachment:hover .tasks__attachment-menu,
+.tasks__attachment-menu[aria-expanded="true"],
+.tasks__attachment-menu:focus-visible {
+  opacity: 1;
+}
+/* The row/card count chip is OUTLINED like .tasks__tag-chip beside it, and for
+   the same reason: how many files a task carries is metadata about the row, not
+   a state of it. */
+.tasks__attachment-chip.nx-chip {
+  background: transparent;
+  border: 1px solid var(--nx-border);
+  padding: 1px 8px;
+}
+.tasks__dep-list {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+}
+/* One blocker: its title, an optional „završeno“ note, and the × that unmakes
+   the edge. Outlined like the tag chip family, since it is the same weight of
+   thing — a quiet statement about the task, not a control that changes it. */
+.tasks__dep-row {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  padding: 1px 4px 1px 8px;
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  font-size: var(--nx-font-size-body-sm);
+}
+.tasks__dep-title {
+  color: var(--nx-text);
+}
+/* A finished blocker stays listed — the edge is still real — but says so and
+   stops competing for attention with the ones that still hold this task up. */
+.tasks__dep-title--done {
+  color: var(--nx-text-muted);
+  text-decoration: line-through;
+}
+.tasks__dep-done {
+  font-size: var(--nx-font-size-label);
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-muted);
+}
+.tasks__dep-remove.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 0 4px;
+}
+.tasks__dep-remove.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+/* The picker's trigger is a NAMED action, not a row's „⋯“ overflow, so it takes
+   the quiet text-button treatment the other in-form buttons have rather than the
+   popover trigger's default glyph sizing. */
+.tasks__dep-add.note__menu-trigger {
+  width: auto;
+  padding: 2px 8px;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+.tasks__dep-add.note__menu-trigger:hover {
+  color: var(--nx-text);
+}
+/* The filter line at the top of the picker panel. The panel supplies its own
+   padding (.note__menu-panel), so this adds only the gap that separates the
+   field from the options under it and lets the input fill the panel's width. */
+.tasks__dep-search.nx-textfield {
+  margin-bottom: var(--nx-space-1);
+}
+.tasks__dep-search .nx-textfield__input {
+  width: 100%;
+}
+.tasks__deps-error {
+  flex-basis: 100%;
+}
+
+/* Edit-mode cancel: a quiet ghost beside the primary submit (text feel). */
+.cal__cancel.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.cal__cancel.nx-button:hover {
+  background: transparent;
+  color: var(--nx-text);
+}
+
+/* „Šabloni“ (CAL-009) — the TASK page's own template recipe applied to the
+   event form. The apply trigger is a NAMED button rather than the row-level "⋯"
+   glyph (a bare "⋯" beside „Dodaj“ would say nothing about what it opens),
+   while the capture trigger IS that glyph, because it belongs to the one event
+   the form is holding. */
+/* Chained to `.note__menu-trigger` rather than left as a bare class: both
+   selectors sat at specificity (0,1,0), and `app.css` imports `calendar.css`
+   BEFORE `notes.css` — so a tie was broken by document order, not by which
+   rule was meant to win, and this declaration parsed, linted and did nothing.
+   The trigger never left its 24×24 square and „Šabloni" spilled out both
+   sides over its neighbour. Two classes together is (0,2,0), which beats
+   `.note__menu-trigger` regardless of import order — the only fix that
+   cannot regress the next time a stylesheet gets reordered.
+   `height`/`min-height`/`white-space` are restated rather than inherited:
+   `.note__menu-trigger` is being changed elsewhere to stop forcing a fixed
+   square, so this box states its own 24px floor instead of depending on
+   what the base class happens to do underneath it. */
+.note__menu-trigger.cal__templates-trigger {
+  width: auto;
+  height: auto;
+  min-height: 24px;
+  white-space: nowrap;
+  padding: 0 var(--nx-space-2);
+  font-size: var(--nx-font-size-body-sm);
+}
+.cal__templates-trigger[aria-expanded="true"],
+.cal__template-menu[aria-expanded="true"] {
+  color: var(--nx-text);
+}
+/* One template in the popover list: its name applies it, the × removes it. */
+.cal__template-row {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+.cal__template-apply {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 24×24, the app's floor for anything a pointer has to hit. It was 22 — under
+   the floor by two pixels, which is the size at which a target is not missed
+   often enough for anyone to report it and is missed anyway. */
+.cal__template-delete {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  font: inherit;
+  line-height: 1;
+  color: var(--nx-text-muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--nx-radius-sm);
+  cursor: pointer;
+}
+.cal__template-delete:hover {
+  background: var(--nx-danger-soft);
+  color: var(--nx-danger);
+}
+/* The capture prompt lives INSIDE the "⋯" panel, which is far narrower than the
+   form row: its buttons would squeeze the field to nothing on one line, so the
+   field takes the full width and the pair wraps beneath it. */
+.cal__template-form {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nx-space-1);
+  padding: var(--nx-space-1) var(--nx-space-2);
+}
+.cal__template-form .nx-textfield {
+  flex-basis: 100%;
+}
+
+/* Delete + undo: inline, token-styled undo bar (mirrors the tasks pattern). */
+.cal__undo {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+}
+.cal__undo-text {
+  flex: 1;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+}
+.cal__undo-dismiss.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.cal__undo-dismiss.nx-button:hover {
+  background: var(--nx-surface);
+  color: var(--nx-text);
+}
+
+/* Agenda: day sections in ascending order, each a quiet label over its rows. */
+.cal__agenda {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  /* An inner scroller never hands its overscroll on: reaching the end of the
+     agenda must not start scrolling the shell behind it. */
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-5);
+}
+.cal__day {
+  display: flex;
+  flex-direction: column;
+}
+/* The day is the agenda's STRUCTURE rather than one of its facts, so it takes
+   the tertiary tier — 11px, uppercase, tracked, `--nx-text-subtle` — and it
+   stays on screen while its own rows scroll under it. Sticky rather than merely
+   repeated: an agenda a hundred rows long otherwise loses the answer to „which
+   day is this" the moment the header leaves the top, which is the single
+   question the view exists to answer. `--nx-surface-alt` is this system's
+   sticky-header surface, and it has to be opaque or the rows would read
+   through it. */
+.cal__day-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0 0 var(--nx-space-1);
+  padding: var(--nx-space-1) var(--nx-space-2);
+  background: var(--nx-surface-alt);
+  border-radius: var(--nx-radius-xs);
+  font-size: var(--nx-font-size-label);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-subtle);
+}
+
+/* „Sat dana" (CalendarHourRing) inside the agenda's own scroller — see that
+   component's header for WHY it lives there and in no other view. Two
+   declarations, both load-bearing:
+
+     - `flex: none`, because a `<svg height="320">` cannot shrink below its
+       content and a shrinkable 320px block in a height-constrained column is
+       exactly how the ring came to hang 210px off the bottom of the page;
+     - a width equal to the ring's OWN `size` prop, so the drawing lands at
+       1:1 with its user space. `RadialCycle` is `preserveAspectRatio` „meet":
+       any wider box only pads it with dead air, any narrower one shrinks the
+       whole dial including its hour labels. */
+.cal__chart {
+  --cal-ring-w: 320px;
+  flex: none;
+  align-self: flex-start;
+  width: var(--cal-ring-w);
+  max-width: 100%;
+}
+
+/* Row: a fixed time gutter, the title, and an optional location chip. */
+.cal__time {
+  flex: none;
+  min-width: 52px;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.cal__event {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  min-width: 0;
+}
+/* `min-width: 0` is what makes the ellipsis reachable at all: a flex item's
+   automatic minimum is its own content, so without it a long title does not
+   shorten — it widens the row until the page itself has to scroll sideways.
+   The declaration next to it does nothing on its own. */
+.cal__event-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Trailing: edit + delete affordances, quiet until hovered (tasks pattern). */
+.cal__row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+.cal__edit.nx-button,
+.cal__delete.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.cal__edit.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.cal__delete.nx-button:hover {
+  background: var(--nx-danger-soft);
+  color: var(--nx-danger);
+}
+
+/* Exam rows (STUDY-002): a subject-colour dot fills the time gutter, and an
+   "Ispit" tag chip marks the row as read-only — no edit/delete affordance. */
+.cal__exam-time {
+  display: inline-flex;
+  align-items: center;
+}
+.cal__exam-tag {
+  font-weight: var(--nx-font-weight-semibold);
+}
+
+/* Study-block rows (STUDY-003): read-only like exam rows — the subject dot in
+   the time gutter, an "Učenje" tag chip; check-off lives on the Study page. */
+.cal__block-tag {
+  font-weight: var(--nx-font-weight-semibold);
+}
+/* The block's topic name on an agenda row (ADR-063) — quiet, beside the title. */
+.cal__block-topic {
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+
+/* Task rows (dated tasks merged into the agenda, ADR-020): same quiet tag
+   idiom as the exam/block rows above; muted when done. */
+.cal__task-tag {
+  font-weight: var(--nx-font-weight-semibold);
+}
+
+/* Birthday rows (CAL-007): read-only like the exam/block/task rows — the same
+   quiet tag chip, carrying Rođendan/Godišnjica. */
+.cal__birthday-tag {
+  font-weight: var(--nx-font-weight-semibold);
+}
+
+/* Subscription renewal rows (FIN slice d): read-only like every other
+   non-event source here, and drawn with the identical quiet tag chip — a
+   renewal is a fact about a day, not a new kind of thing the calendar needs a
+   colour for. */
+.cal__subscription-tag {
+  font-weight: var(--nx-font-weight-semibold);
+}
+
+/* Source-filter toggle chips (Događaji/Zadaci/Ispiti/Učenje/Rođendani, ADR-020) — same
+   typographic active state as .cal__view; applies to the month grid and the
+   agenda alike, so it lives beside the view toggle rather than either view. */
+.cal__sources {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  flex-wrap: wrap;
+  flex: none;
+}
+
+/* Month grid (CAL Mesec view, ADR-020) --------------------------------- */
+/* The three views each claim what the chrome left and scroll inside it, so the
+   page has exactly one scrollbar wherever you are in it. */
+.cal__month {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+
+/* Nav header: the period label (left) + ‹ / Danas / › (right, quiet ghosts). */
+.cal__month-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-3);
+  flex-wrap: wrap;
+}
+.cal__month-label {
+  font-size: var(--nx-font-size-title);
+  line-height: var(--nx-font-leading-tight);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.cal__month-nav-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+
+/* Grid shell — two local geometry constants drive every bar/spacer calc
+   below: the fixed-height date-number line, and one bar "lane" row. Neither
+   is a token (they are compact, component-local layout constants, same as
+   e.g. .app__topbar's 44px), and neither needs any DOM measurement. */
+.cal__month-grid {
+  /* 24, not 20. The date number is not just a label — it is a BUTTON (it opens
+     that day's Dan view), it spans the cell's full width, and its height is the
+     only thing deciding whether it clears the app's 24px floor for a pointer
+     target. Everything downstream is derived from this one variable — the bar
+     overlay's origin, the week-number gutter's baseline — so raising it moves
+     the whole cell in step and there is no second number to keep in sync. */
+  --cal-daynum-h: 24px;
+  --cal-bar-h: 20px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+  overflow: hidden;
+  background: var(--nx-surface);
+}
+.cal__month-grid:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: -2px;
+}
+
+.cal__month-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  border-bottom: 1px solid var(--nx-border);
+}
+/* Eyebrow tier: „PON … NED" names the columns and is never what anyone is
+   reading — at the secondary tier seven of them were competing with the day
+   numbers directly beneath. */
+.cal__month-weekday {
+  padding: var(--nx-space-1) var(--nx-space-2);
+  text-align: center;
+  font-size: var(--nx-font-size-label);
+  text-transform: uppercase;
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-subtle);
+  font-weight: var(--nx-font-weight-semibold);
+}
+
+/* ISO week numbers (CAL-010) — a gutter column down the left of the grid,
+   opened by a modifier so it stays CAL's: the TASK module renders these very
+   same cal__month-* classes (see TaskMonthGrid) and keeps its plain 7 columns.
+   Everything the gutter costs is one column: the weekday header grows a
+   leading cell, the week row becomes [gutter | cells], and the bar overlay —
+   absolutely positioned, so no column of any grid — is pushed off the gutter
+   by the same width. */
+.cal__month-grid--weeknum {
+  /* Wide enough for the „ned.“ header at label size + its tracking; the numbers
+     under it are never more than two digits. */
+  --cal-weeknum-w: 36px;
+}
+.cal__month-grid--weeknum .cal__month-weekdays {
+  grid-template-columns: var(--cal-weeknum-w) repeat(7, 1fr);
+}
+.cal__month-grid--weeknum .cal__month-week {
+  display: grid;
+  grid-template-columns: var(--cal-weeknum-w) 1fr;
+}
+.cal__month-grid--weeknum .cal__month-bars {
+  left: var(--cal-weeknum-w);
+}
+/* The way back out of an expanded row spans both columns — it belongs to the
+   whole week, not to the cells beside the number. */
+.cal__month-grid--weeknum .cal__month-collapse {
+  grid-column: 1 / -1;
+}
+/* Lower case where the weekday shorts beside it are upper — „ned.“ has to read
+   as a different kind of label than „PON … NED“, not as an eighth weekday. */
+.cal__month-weeknum-head {
+  padding: var(--nx-space-1);
+  text-align: center;
+  font-size: var(--nx-font-size-label);
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-subtle);
+  font-weight: var(--nx-font-weight-semibold);
+}
+/* Quiet by construction: muted, caption-sized, on the same baseline as the day
+   numbers it sits beside (--cal-daynum-h, the cells' own top line). */
+.cal__month-weeknum {
+  padding: var(--nx-space-1) 0;
+  line-height: var(--cal-daynum-h);
+  text-align: center;
+  border-right: 1px solid var(--nx-border-subtle);
+  font-size: var(--nx-font-size-caption);
+  font-variant-numeric: tabular-nums;
+  color: var(--nx-text-subtle);
+}
+
+/* THE GRIDLINE RULE, stated once for every line this file draws inside a grid:
+   a rule that separates two cells is STRUCTURE, not content, and takes
+   `--nx-border-subtle`. `--nx-border` is reserved for the edges that bound a
+   whole object — the grid's own frame, the strip under the weekday names, the
+   band that divides all-day from timed — where the line is saying „a different
+   kind of thing starts here" rather than „another cell". Forty-two identical
+   `--nx-border` hairlines is a wall of lines; the eye then has to find the
+   events inside it. */
+.cal__month-week {
+  position: relative;
+  border-top: 1px solid var(--nx-border-subtle);
+}
+.cal__month-week:first-child {
+  border-top: none;
+}
+.cal__month-cells {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+}
+
+.cal__month-day {
+  position: relative;
+  min-height: 92px;
+  padding: var(--nx-space-1);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-left: 1px solid var(--nx-border-subtle);
+  cursor: pointer;
+  transition:
+    background var(--nx-motion-fast) var(--nx-motion-ease),
+    border-color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.cal__month-cells > .cal__month-day:first-child {
+  border-left: none;
+}
+.cal__month-day:hover {
+  background: var(--nx-surface-alt);
+}
+/* A leading/trailing day belongs to the month either side of this one: it is
+   context for the grid's shape, not one of its facts, so it drops a whole tier
+   rather than merely fading. */
+.cal__month-day--out {
+  color: var(--nx-text-subtle);
+}
+.cal__month-day--out .cal__month-day-number {
+  color: var(--nx-text-subtle);
+}
+/* Drop target = accent border + soft background, matching KanbanView's
+   .nx-kanban-view__col--drop exactly — never a glow. An inset outline rather
+   than `border-color`, because a cell only draws its left border: recolouring
+   that alone would mark the day with a single stripe instead of a target. */
+.cal__month-day--drop {
+  outline: 1px solid var(--nx-accent);
+  outline-offset: -1px;
+  background: var(--nx-accent-soft);
+}
+
+/* While a drag is in flight the bars and chips stop intercepting pointer
+   events, so a drop aimed at a day that already holds something lands on the
+   day cell instead of dying on the item drawn over it. */
+.cal__month-grid--dragging .cal__month-bar,
+.cal__month-grid--dragging .cal__month-chip {
+  pointer-events: none;
+}
+
+/* The way back out of an expanded week row (see CalendarMonth). */
+button.cal__month-collapse {
+  display: block;
+  width: 100%;
+  font: inherit;
+  font-size: var(--nx-font-size-caption);
+  text-align: center;
+  padding: var(--nx-space-1);
+  border: none;
+  border-top: 1px solid var(--nx-border);
+  background: var(--nx-surface-alt);
+  color: var(--nx-text-muted);
+  cursor: pointer;
+}
+.cal__month-collapse:hover {
+  color: var(--nx-text);
+}
+
+.cal__month-day-number {
+  display: block;
+  height: var(--cal-daynum-h);
+  line-height: var(--cal-daynum-h);
+  font-size: var(--nx-font-size-body-sm);
+  font-variant-numeric: tabular-nums;
+}
+.cal__month-day-number--today {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+/* Today can land in a leading/trailing (out-of-month) week — the accent
+   marker still wins over the muted treatment, matching specificity. */
+.cal__month-day--out .cal__month-day-number--today {
+  color: var(--nx-accent-strong);
+}
+
+/* Reserves the vertical space the bar overlay's lanes occupy for this row —
+   height is set inline per-cell (`laneCount * var(--cal-bar-h)`), since the
+   engine's lane count is per-week data, not a static value. */
+.cal__month-spacer {
+  flex: none;
+}
+
+.cal__month-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+button.cal__month-chip {
+  display: block;
+  width: 100%;
+  font: inherit;
+  font-size: var(--nx-font-size-caption);
+  text-align: left;
+  padding: 1px 4px;
+  border: none;
+  border-radius: var(--nx-radius-xs);
+  background: var(--nx-accent-soft);
+  color: var(--nx-accent-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.cal__month-chip:hover {
+  text-decoration: underline;
+}
+.cal__month-chip:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 1px;
+}
+
+button.cal__month-more {
+  display: block;
+  width: 100%;
+  font: inherit;
+  font-size: var(--nx-font-size-caption);
+  text-align: left;
+  padding: 1px 4px;
+  border: none;
+  background: transparent;
+  color: var(--nx-text-muted);
+  cursor: pointer;
+}
+.cal__month-more:hover {
+  color: var(--nx-text);
+  text-decoration: underline;
+}
+
+/* Bar overlay: one element per row, offset below the date-number line; each
+   bar then positions itself with `top: calc(lane * var(--cal-bar-h))`
+   relative to that already-offset origin. Non-interactive bars (exam/block)
+   stay click-through so the cell underneath still selects that day. */
+.cal__month-bars {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: var(--cal-daynum-h);
+  pointer-events: none;
+}
+.cal__month-bar {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  height: calc(var(--cal-bar-h) - 3px);
+  margin-top: 1px;
+  padding: 0 6px;
+  border-radius: var(--nx-radius-xs);
+  font: inherit;
+  font-size: var(--nx-font-size-caption);
+}
+.cal__month-bar-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+/* A multi-day bar flattens the edge that continues into the next/previous
+   row, so it reads as one uninterrupted span across week boundaries. */
+.cal__month-bar--continues-before {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+.cal__month-bar--continues-after {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+/* Done task / missed block — quiet, never a colour change (mirrors
+   .study__stats-bar-fill--muted's exact opacity). */
+.cal__month-bar--muted {
+  opacity: 0.5;
+}
+
+button.cal__month-bar--event {
+  border: none;
+  text-align: left;
+  pointer-events: auto;
+  cursor: pointer;
+  background: var(--nx-accent-soft);
+  color: var(--nx-accent-strong);
+}
+.cal__month-bar--event:hover {
+  text-decoration: underline;
+}
+.cal__month-bar--event:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 1px;
+}
+/* Draggable but not clickable — pointer-events stays on so native HTML5 drag
+   can start, the grab cursor (not pointer) signals "drag", not "click". */
+.cal__month-bar--task {
+  pointer-events: auto;
+  cursor: grab;
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  color: var(--nx-text);
+}
+.cal__month-bar--task:active {
+  cursor: grabbing;
+}
+/* Fully inert: neither clickable nor draggable, so clicks pass through to
+   the day cell beneath (day-select still works under an exam/block bar). */
+.cal__month-bar--exam,
+.cal__month-bar--block {
+  pointer-events: none;
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  color: var(--nx-text);
+}
+/* A cross-profile guest (CAL-005/ADR-058): clickable but never draggable —
+   the click opens the origin popover, never an editor. Muted through COLOUR
+   (text-muted on the quiet surface) plus a dashed border and the ⇄ glyph:
+   visibly a guest in both themes, no new hue, no glow. */
+button.cal__month-bar--foreign {
+  pointer-events: auto;
+  cursor: pointer;
+  text-align: left;
+  background: var(--nx-surface-alt);
+  border: 1px dashed var(--nx-border);
+  color: var(--nx-text-muted);
+}
+.cal__month-bar--foreign:hover {
+  text-decoration: underline;
+}
+.cal__month-bar--foreign:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 1px;
+}
+/* The same guest treatment on a month cell's timed chip and on an hour-grid
+   block — one look wherever a foreign occurrence shows up. */
+button.cal__month-chip--foreign {
+  background: var(--nx-surface-alt);
+  border: 1px dashed var(--nx-border);
+  color: var(--nx-text-muted);
+}
+button.cal__grid-event--foreign {
+  background: var(--nx-surface-alt);
+  border: 1px dashed var(--nx-border);
+  color: var(--nx-text-muted);
+}
+/* The ⇄ origin glyph (typographic, like the ↻ series marker). */
+.cal__foreign-mark {
+  flex: none;
+  margin-right: 2px;
+}
+
+/* Clickable but never draggable (CAL-007): a birthday is not something you
+   move — the click leads to the Ljudi panel, where it is edited. Quiet surface
+   like the read-only bars, with the pointer affordance an event bar has. */
+button.cal__month-bar--birthday {
+  pointer-events: auto;
+  cursor: pointer;
+  text-align: left;
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  color: var(--nx-text);
+}
+.cal__month-bar--birthday:hover {
+  text-decoration: underline;
+}
+.cal__month-bar--birthday:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 1px;
+}
+
+/* The day-number affordance is now also a button (ADR-020's second overflow
+   escape: jump straight to that day's Dan view) — reset the button's UA
+   defaults only; the existing .cal__month-day-number(--today) rules above
+   still carry height/line-height/colour/weight via the plain class match. */
+button.cal__month-day-number {
+  display: block;
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+button.cal__month-day-number:hover {
+  text-decoration: underline;
+}
+
+/* Event-form validation (end-time vs. start-time, ADR-020) — same idiom as
+   StudyPage's .study__plan-error: a full-width line under the form's fields. */
+.cal__form-error {
+  margin: 0;
+  flex-basis: 100%;
+  color: var(--nx-danger);
+  font-size: var(--nx-font-size-body-sm);
+}
+
+/* Semestar (CAL-010) --------------------------------------------------- */
+/* Four mini months in a responsive track: as many columns as fit at 210px, so
+   a maximized window shows the term in one row and a narrow one folds it to
+   two and then to one. The track does that on its own — no media query. */
+.cal__semester {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: var(--nx-space-3);
+  border-radius: var(--nx-radius-lg);
+}
+/* Focusable for the same reason the month and week grids are: ‹ / › and Danas
+   are also ← / → and Home, and the ring says where those keys land. Outside
+   the tracks rather than inset — unlike those grids this one has no border of
+   its own to draw the ring into, which is also why it carries a radius: the
+   outline takes it, and lands parallel to the cards' own corners. */
+.cal__semester:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+.cal__mini {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  padding: var(--nx-space-2);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+  background: var(--nx-surface);
+}
+.cal__mini-title {
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.cal__mini-weekdays,
+.cal__mini-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+}
+.cal__mini-days {
+  gap: 1px;
+}
+.cal__mini-weekday {
+  text-align: center;
+  font-size: var(--nx-font-size-caption);
+  text-transform: uppercase;
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-subtle);
+}
+/* One day: its number, plus an absolutely-placed dot — so a day holding
+   nothing is exactly as tall as a day holding everything. The transparent
+   border is the exam ring's reserved space; without it the ring would shift
+   the whole row by a pixel when it appears. */
+button.cal__mini-day {
+  position: relative;
+  font: inherit;
+  font-size: var(--nx-font-size-caption);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  padding: 3px 0 8px;
+  border: 1px solid transparent;
+  border-radius: var(--nx-radius-sm);
+  background: transparent;
+  color: var(--nx-text);
+  cursor: pointer;
+}
+.cal__mini-day:hover {
+  background: var(--nx-surface-alt);
+}
+.cal__mini-day:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 1px;
+}
+/* Today in the app's own typographic idiom — accent + weight, never a ring;
+   the ring here already means something else. */
+.cal__mini-day--today .cal__mini-num {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+/* The exam ring — what a term is actually scanned for. A border, never a glow. */
+.cal__mini-day--exam {
+  border-color: var(--nx-accent);
+}
+/* Days outside a SET term inside a boundary month (ADR-054): the term has
+   edges, and opacity is this grid's one word for "quieter" — same rule as the
+   density dot's steps, never a different colour. Still clickable. */
+.cal__mini-day--outside {
+  opacity: 0.35;
+}
+.cal__mini-dot {
+  position: absolute;
+  left: 50%;
+  bottom: 3px;
+  width: 4px;
+  height: 4px;
+  transform: translateX(-50%);
+  border-radius: var(--nx-radius-round);
+  background: var(--nx-accent);
+}
+/* Three steps, opacity only — the same "quieter, never a different colour"
+   rule a muted bar follows. */
+.cal__mini-dot--1 {
+  opacity: 0.35;
+}
+.cal__mini-dot--2 {
+  opacity: 0.65;
+}
+.cal__mini-dot--3 {
+  opacity: 1;
+}
+.cal__semester-legend {
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+
+/* Week/day time grid (CAL Nedelja/Dan views, ADR-020) ------------------ */
+/* Three local geometry constants, same idiom as .cal__month-grid's own
+   --cal-bar-h: the all-day band reuses that exact value so a bar looks
+   identical whether it is drawn here or in the month grid; --cal-hour-h and
+   --cal-gutter-w are new to this component. */
+.cal__grid {
+  --cal-bar-h: 20px;
+  --cal-hour-h: 44px;
+  /* A WHOLE DAY, derived — never restated. Every box in the hour grid is a
+     multiple of `--cal-hour-h`: a row is one, an event block is
+     `minutes / 60` of one, and the stack the rows live in is twenty-four of
+     them. It has to be a `calc` off the same variable and not a second number,
+     because the defect it retires was precisely two authorities for one height
+     — see `.cal__grid-body` below. */
+  --cal-day-h: calc(var(--cal-hour-h) * 24);
+  --cal-gutter-w: 56px;
+  display: flex;
+  flex-direction: column;
+  /* WHY A FLOOR AND NOT `min-height: 0`. `overflow: hidden` is here for the
+     rounded corners, and it costs this element its flexbox content minimum:
+     a scroll container's automatic minimum size is ZERO, so as a flex item of
+     `.cal__month` this grid could be shrunk to any height at all and silently
+     swallow the difference — no ellipsis, no scrollbar, 288px of week simply
+     unreachable. The floor is what makes „the grid either fits or the page
+     scrolls" true by construction: below it `.cal__month` — which does scroll
+     — takes over, and above it the body scrolls inside the grid. The chrome
+     above the body is `flex: none` for the same reason: it must never be the
+     thing that gets squeezed.
+
+     Five hours, measured rather than picked: at the window this app ships at
+     (1120×681) the page leaves this grid a little over 230px once its own
+     header, both switcher rows and the wrapped event form have taken theirs,
+     so five hours' worth is the largest floor that still lets the shipped
+     default FIT. Anything larger would put a permanent scrollbar on
+     `.cal__month` at the size the founder actually opens. */
+  min-height: calc(var(--cal-hour-h) * 5);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+  overflow: hidden;
+  background: var(--nx-surface);
+}
+.cal__grid:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: -2px;
+}
+
+/* CAL §5: „12:00 AM“ does not fit the column „00:00“ was measured for, so the
+   12-hour clock widens the gutter instead of clipping its own labels. The
+   columns beside it are flex, so they simply take the rest. */
+.cal__grid[data-clock="12h"] {
+  --cal-gutter-w: 76px;
+}
+.cal__grid-gutter-spacer,
+.cal__grid-gutter {
+  flex: none;
+  width: var(--cal-gutter-w);
+}
+/* The header corner is the one gutter spacer that carries anything: the week's
+   ISO number (CAL-010). The band row's spacer below it stays empty. */
+.cal__grid-header-row .cal__grid-gutter-spacer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--nx-space-1);
+}
+.cal__grid-weeknum {
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-subtle);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Column headers: weekday + day number, each a button (click → Dan view).
+   `flex: none` — see `.cal__grid`'s floor: the two chrome rows state what the
+   columns ARE, so they are never the part that gives up height. */
+.cal__grid-header-row {
+  flex: none;
+  display: flex;
+  border-bottom: 1px solid var(--nx-border);
+}
+.cal__grid-headers {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+button.cal__grid-header {
+  flex: 1;
+  display: block;
+  font: inherit;
+  font-size: var(--nx-font-size-body-sm);
+  text-align: center;
+  padding: var(--nx-space-1) var(--nx-space-2);
+  border: none;
+  border-left: 1px solid var(--nx-border-subtle);
+  background: transparent;
+  color: var(--nx-text-muted);
+  cursor: pointer;
+}
+.cal__grid-headers > button.cal__grid-header:first-child {
+  border-left: none;
+}
+.cal__grid-header:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+/* Today reads as typographic emphasis only — accent + weight, never a ring or
+   glow. Qualified with `button` so it outweighs `button.cal__grid-header`'s
+   muted colour above — a bare class loses that fight on specificity and today
+   rendered bold but muted. */
+/* Plus one accent rule under the column, drawn as an inset shadow rather than a
+   border so it costs no layout: a real `border-bottom` would push today's label
+   two pixels up out of line with the six beside it. A rule, not a fill — a
+   tinted column would be competing with the very blocks drawn inside it, which
+   are the thing the eye is actually looking for. */
+button.cal__grid-header--today {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+  box-shadow: inset 0 -2px 0 var(--nx-accent);
+}
+
+/* All-day band: day-granular/multi-day items, drawn with the month grid's own
+   .cal__month-bar* classes (see CalendarTimeGrid) so the two views agree
+   pixel-for-pixel. Grows with its lane count — this band never collapses. */
+.cal__grid-band-row {
+  flex: none;
+  display: flex;
+  border-bottom: 1px solid var(--nx-border);
+}
+.cal__grid-band {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+/* No drag affordance in the time grid (there is no onMoveItem here) — reset
+   the grab cursor the reused .cal__month-bar--task rule implies elsewhere. */
+.cal__grid-band .cal__month-bar--task {
+  cursor: default;
+}
+
+/* Hour grid: a fixed label gutter + one column per day, both 24 rows of
+   var(--cal-hour-h) with a hairline between hours. Only this part scrolls.
+   Was `max-height: calc(var(--cal-hour-h) * 14)` — fourteen hours, chosen in
+   advance and unrelated to the height the page actually has. It is the space
+   left over after the day header and the all-day band, whatever that is.
+
+   `align-items: flex-start` is the whole of defect (2). The gutter and the
+   columns strip were flex items with the default `stretch`, so their height was
+   the SPACE LEFT OVER by this scroller, while the rows inside them were
+   twenty-four times `--cal-hour-h`. Two authorities for one number: they agreed
+   only when the window happened to make them agree, and the day they did not,
+   the last hour label hung 4.4px below the gutter it lives in and the last hour
+   cell hung the same 4.4px below its column — one error, reported twice,
+   because it was one rule applied to both stacks. Now nothing is stretched and
+   both stacks are given `--cal-day-h`, which IS `24 * --cal-hour-h`: the parent
+   is defined as the sum of its rows, so a disagreement has nowhere to live. */
+.cal__grid-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: flex-start;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.cal__grid-gutter {
+  height: var(--cal-day-h);
+}
+/* Hour LABELS are text and keep the text tiers; the hairlines between them are
+   marks, and take the structural border. The six-hour marks are the scale a
+   reader actually navigates by — „is that block before or after noon" — so
+   those four rules and their four labels step up one tier each, and the twenty
+   between them step down. A wall of twenty-four identical lines is a wall; a
+   scale is something you can read at a glance, which is the entire job. */
+.cal__grid-hour-label {
+  height: var(--cal-hour-h);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 var(--nx-space-2);
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-subtle);
+  font-variant-numeric: tabular-nums;
+  border-top: 1px solid var(--nx-border-subtle);
+}
+/* 1, 7, 13, 19 — that is hours 00, 06, 12 and 18, the quarters of the day. */
+.cal__grid-gutter > .cal__grid-hour-label:nth-child(6n + 1) {
+  color: var(--nx-text-muted);
+  border-top-color: var(--nx-border);
+}
+.cal__grid-gutter > .cal__grid-hour-label:first-child {
+  border-top: none;
+}
+.cal__grid-columns {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  height: var(--cal-day-h);
+}
+.cal__grid-column {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  border-left: 1px solid var(--nx-border-subtle);
+  cursor: pointer;
+}
+.cal__grid-columns > .cal__grid-column:first-child {
+  border-left: none;
+}
+.cal__grid-hour-cell {
+  height: var(--cal-hour-h);
+  border-top: 1px solid var(--nx-border-subtle);
+}
+.cal__grid-column > .cal__grid-hour-cell:nth-child(6n + 1) {
+  border-top-color: var(--nx-border);
+}
+.cal__grid-column > .cal__grid-hour-cell:first-child {
+  border-top: none;
+}
+
+/* A timed event, absolutely positioned from layoutTimedColumns' clamped
+   output — same accent-soft treatment as the month grid's timed chips.
+
+   ONE LINE, never two. The block's height is the event's DURATION, so a
+   half-hour meeting is 22px tall — and a two-line stack of a time over a title
+   needs 35px, which is why the title was being cut two pixels short of its own
+   descenders on every short block in the grid. A row cannot outgrow its box the
+   way a column can: time first in tabular figures, then the title taking the
+   rest and ellipsising, and a 30-minute block holds it with room to spare.
+
+   `flex-start`, not `center`: a block's TOP edge is its start time, so that is
+   where its text belongs. Centred, a three-hour block would float its own name
+   in the middle of an empty rectangle, and a block too short for one line would
+   show the middle of the glyphs rather than their readable top. */
+button.cal__grid-event {
+  position: absolute;
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  overflow: hidden;
+  padding: 2px 4px;
+  border: none;
+  border-radius: var(--nx-radius-xs);
+  background: var(--nx-accent-soft);
+  color: var(--nx-accent-strong);
+  font: inherit;
+  font-size: var(--nx-font-size-caption);
+  /* Stated rather than inherited: `font: inherit` above brings the page's
+     leading with it, and a line box shorter than the ink it holds is what
+     clips a Serbian č/ž/đ against `overflow: hidden`. */
+  line-height: var(--nx-font-leading-snug);
+  text-align: left;
+  cursor: pointer;
+}
+.cal__grid-event:hover {
+  text-decoration: underline;
+}
+.cal__grid-event:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 1px;
+}
+/* Being dragged (ADR-034): the same accent border + soft background every drop
+   affordance in the app uses — never a glow — plus enough transparency to read
+   the hour lines it is passing over, and a stacking order that keeps the ghost
+   above the blocks of whichever column it is crossing into. Qualified with
+   `button` to match the specificity of `button.cal__grid-event` above, whose
+   `border: none` and `cursor: pointer` a bare class would lose to. */
+button.cal__grid-event--dragging {
+  z-index: 2;
+  opacity: 0.9;
+  border: 1px solid var(--nx-accent);
+  cursor: grabbing;
+}
+.cal__grid-event--dragging:hover {
+  text-decoration: none;
+}
+/* The bottom grab strip: a cursor and nothing else. The mode is decided from
+   the pointer's distance to the block's bottom edge (CalendarTimeGrid), so this
+   span only has to be hit-testable — visible chrome on a 30-minute block would
+   cost more than it explains. */
+.cal__grid-event-handle {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 6px;
+  cursor: ns-resize;
+}
+.cal__grid-event-time {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--nx-font-weight-semibold);
+}
+/* `min-width: 0` is what actually makes the ellipsis reachable: without it a
+   flex item's automatic minimum is its content, so the title would push itself
+   out of the block rather than be shortened inside it. */
+.cal__grid-event-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The current-time rule — a plain 1px line, never animated, click-through so
+   it never blocks the slot-creation click underneath it. */
+.cal__grid-now {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--nx-accent);
+  pointer-events: none;
+}
+
+/* Documents (CAL Dokumenta panel) ------------------------------------- */
+/* Obeys the height contract this file opens with, exactly as the grid and the
+   agenda do: the panel claims what the page chrome left and scrolls INSIDE
+   itself. It used to be an auto-height block, so a profile with a dozen
+   documents made `.app__main` scroll — the whole shell, view switcher and all,
+   sliding away under a list. One scrollbar, and it belongs to the list.
+
+   `overflow-y: auto` also makes the used `overflow-x` `auto` (a box cannot be
+   `visible` on one axis and clipped on the other), which is the second half of
+   the fix and deliberate: a form row too wide for a narrow window now gets a
+   scrollbar of its own instead of pushing the whole page sideways. */
+.documents {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+}
+
+/* Add/edit form — one wrapping row; the label field takes the slack. */
+.documents__form {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+  /* The form is chrome for the list under it: it takes the height its own
+     wrapped rows need and never shrinks into them. */
+  flex: none;
+}
+.documents__label-input {
+  flex: 1;
+  min-width: 200px;
+}
+
+/* „Rokovi" (DocDeadlines) — a first-class block, not something fitted into what
+   the list left over. Two declarations, the same two the hour ring's block
+   carries and for the same reasons: `flex: none` because an `<svg>` with a
+   height attribute cannot shrink and a shrinkable graphic in a scrolling column
+   is how a caption ends up drawn over the rows beneath it; and a width equal to
+   `SpanLanes`' own `width` prop, so one user unit is one CSS pixel. That last
+   one is not cosmetic — `DocDeadlines` shortens each lane's label to the 84
+   units of gutter the component reserves, and that arithmetic is only honest
+   while the drawing is at 1:1. */
+.documents__chart {
+  --doc-chart-w: 720px;
+  flex: none;
+  align-self: flex-start;
+  width: var(--doc-chart-w);
+  max-width: 100%;
+}
+
+/* Edit-mode cancel: a quiet ghost beside the primary submit (text feel). */
+.documents__cancel.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.documents__cancel.nx-button:hover {
+  background: transparent;
+  color: var(--nx-text);
+}
+
+/* Delete + undo: inline, token-styled undo bar (mirrors the tasks pattern). */
+.documents__undo {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+}
+.documents__undo-text {
+  flex: 1;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+}
+.documents__undo-dismiss.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.documents__undo-dismiss.nx-button:hover {
+  background: var(--nx-surface);
+  color: var(--nx-text);
+}
+
+/* List: rows ordered by soonest expiry, each led by a derived status chip. */
+.documents__list {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The renewal ledger under an open renew form — a quiet list, never a card:
+   it is context for the date being chosen above it, not a second subject. */
+.documents__renewals {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: var(--nx-space-2);
+  padding-left: var(--nx-space-3);
+  /* An indent rule, not an object's edge — the gridline tier applies here too. */
+  border-left: 1px solid var(--nx-border-subtle);
+}
+/* `--nx-font-tracking-label`, not a hand-typed `0.04em`: this is an eyebrow, and
+   the app has exactly one tracking for eyebrows. A second, private value is how
+   a set of labels stops looking like one set. */
+.documents__renewals-title {
+  font-size: var(--nx-font-size-label);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-subtle);
+}
+.documents__renewal,
+.documents__renewals-note {
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Row content: label + type on the heading line, expiry + days-until below. */
+.documents__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.documents__heading {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--nx-space-2);
+  min-width: 0;
+}
+.documents__doc-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--nx-font-weight-medium);
+}
+/* Three levels down a row and no more: the label is what you are looking for,
+   the expiry and the countdown under it are what you then read, and the type is
+   the tertiary eyebrow — 11px, uppercase, tracked. It was set at the same size
+   and colour as the meta line, which put three things on one row all claiming
+   to be equally worth reading. */
+.documents__type {
+  flex: none;
+  font-size: var(--nx-font-size-label);
+  font-weight: var(--nx-font-weight-medium);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-subtle);
+}
+.documents__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+/* Both halves of the meta line are figures, and they sit one under another down
+   the whole list: proportional digits make that column wobble by a pixel or two
+   per row, which reads as sloppiness nobody can quite name. */
+.documents__expiry,
+.documents__days {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Trailing: renew/edit/delete affordances, quiet until hovered (cal pattern). */
+.documents__row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+.documents__renew-start.nx-button,
+.documents__edit.nx-button,
+.documents__delete.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.documents__renew-start.nx-button:hover,
+.documents__edit.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.documents__delete.nx-button:hover {
+  background: var(--nx-danger-soft);
+  color: var(--nx-danger);
+}
+
+/* Inline renew: a compact date input + confirm, replacing the row actions. */
+.documents__renew {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+.documents__renew-input {
+  width: auto;
+}
+.documents__renew-cancel.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.documents__renew-cancel.nx-button:hover {
+  background: var(--nx-surface);
+  color: var(--nx-text);
+}
+
+/* People (CAL Ljudi panel, CAL-007) ------------------------------------ */
+/* Deliberately the .documents panel's structure and spacing, class for class —
+   the two panels sit behind neighbouring tabs of one page, so anything but an
+   identical rhythm would read as an accident. That now includes the height
+   contract: one of them scrolling the shell while the other scrolls itself
+   would be the loudest possible way to say they were built by two hands. */
+.people {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+}
+
+/* Add/edit form — one wrapping row; the name field takes the slack. */
+.people__form {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+  flex: none;
+}
+.people__name-input {
+  flex: 1;
+  min-width: 200px;
+}
+/* A year is four digits — it never needs the width a free-text field takes. */
+.people__year {
+  width: 120px;
+}
+
+/* The four raw `<select>`s these two panels once wrote by hand (a document's
+   type; a person's kind, day and month) now all use `Select` from @nexus/ui,
+   which draws its own chevron, its own focus ring and a REQUIRED visible
+   label — so the private padding/focus-ring patch this file used to carry for
+   them is gone with the elements it was patching. */
+
+/* Edit-mode cancel: a quiet ghost beside the primary submit (text feel). */
+.people__cancel.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.people__cancel.nx-button:hover {
+  background: transparent;
+  color: var(--nx-text);
+}
+
+/* Form validation (an impossible day/month pair, a refused write) — same
+   full-width line under the fields as .cal__form-error. */
+.people__error {
+  margin: 0;
+  flex-basis: 100%;
+  color: var(--nx-danger);
+  font-size: var(--nx-font-size-body-sm);
+}
+
+/* Delete + undo: inline, token-styled undo bar (mirrors the documents panel). */
+.people__undo {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+}
+.people__undo-text {
+  flex: 1;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+}
+.people__undo-dismiss.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.people__undo-dismiss.nx-button:hover {
+  background: var(--nx-surface);
+  color: var(--nx-text);
+}
+
+/* List: rows in Serbian-collated name order, each led by its kind mark. */
+.people__list {
+  display: flex;
+  flex-direction: column;
+}
+/* The kind mark in the leading gutter — the dashboard's own `.dash__lead`
+   recipe: a quiet icon that announces the row's kind once, with the full word
+   still given to a screen reader via the icon's own `title`, rather than
+   printing „Rođendan" as a chip on every one of twenty rows. */
+.people__lead .nx-icon {
+  color: var(--nx-text-subtle);
+}
+
+/* Row content: name + recurring date on the heading line, year/age and the
+   note below. */
+.people__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.people__heading {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--nx-space-2);
+  min-width: 0;
+}
+.people__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--nx-font-weight-medium);
+}
+/* The recurring day („15. mart") is the one thing every row of this list is
+   scanned for after the name, and it is a figure — so it aligns like one. */
+.people__date {
+  flex: none;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.people__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  min-width: 0;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+.people__years {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+.people__note {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Trailing: edit/delete affordances, quiet until hovered (documents pattern). */
+.people__row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+.people__edit.nx-button,
+.people__delete.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.people__edit.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.people__delete.nx-button:hover {
+  background: var(--nx-danger-soft);
+  color: var(--nx-danger);
+}

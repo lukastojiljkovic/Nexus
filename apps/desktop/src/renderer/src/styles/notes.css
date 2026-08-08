@@ -1,0 +1,2230 @@
+/* Notes (NOTE page, slice a2) ------------------------------------------ */
+/* Three panes fill the main column: the folder organizer, the note list, and
+   the block editor. Each scrolls internally so the page never grows.
+
+   A PANE IS FULL WIDTH OR IT IS NOT THERE. That replaces two earlier rules, and
+   it is the founder's call (2026-08-07) rather than a technique. What shipped
+   first paid the two fixed rails and gave writing the remainder — 75px of
+   editor at the window size this app ENFORCES. `f1fa51a` inverted it: the
+   editor held a floor derived from `--note-measure` and the rails took the
+   squeeze instead. Better arithmetic, still the wrong answer, because a folder
+   tree at 119px is not a narrow folder tree, it is an unusable one — and with
+   the „široka" measure the floor only moved the slivers into a wider band.
+
+   So nothing yields. The rails are fixed, the editor is the slack, and the
+   width at which the slack falls below the default measure is where a pane
+   LEAVES:
+
+     content = window − 220px sidebar − 48px of `.app__main` padding
+     three panes = 220 + 280 + two 20px gaps + 70ch + the editor's own 16px
+                 = 1076px of content = 1344px of window
+
+   1345px is the first width at which all three fit with the writing column at
+   its default measure — the same figure `f1fa51a` computed and could not act
+   on. Below it the organizer leaves and comes back as a drawer over the list
+   (the media query under `.note__org-pane`); the LIST stays, because a notes
+   app whose note list can vanish is a worse trade than a narrower column. Two
+   panes are 280 + 20 + the slack, so at the shipped 1120px window the editor
+   gets 552px — clear of the default measure — and at the enforced 900px minimum
+   it gets 332px: narrow, but a readable column, and a width the user has to
+   drag to on purpose. `.priv__body` has drawn exactly this shape all along.
+
+   The measure is a user setting („uska"/„normalna"/„široka" = 55/70/90ch,
+   ADR-036) and the breakpoint is stated once, at the default: inside a media
+   query font-relative units resolve against the browser's initial font rather
+   than this page's, so `ch` there would not mean what it means here. „Široka"
+   simply reaches its 90ch at a wider window, and nothing collapses on the way,
+   because no track can be squeezed any more.
+
+   `position: relative` is the drawer's containing block. The only other
+   absolutely positioned thing under `.note` is ProseMirror's gapcursor, which
+   sets no offsets and is therefore placed at its static position either way. */
+.note {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns:
+    var(--nx-layout-rail)
+    var(--nx-layout-rail-wide)
+    minmax(0, 1fr);
+  gap: var(--nx-space-5);
+}
+
+/* Left pane: the folder organizer (slice a3b) — "Sve beleške"/"Bez fascikle",
+   the nested folder tree, and the "Nova fascikla" action. */
+.note__org-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: var(--nx-space-4);
+  border-right: 1px solid var(--nx-border);
+}
+
+/* The drawer's two extra elements — the disclosure that opens it and the
+   outside-click target — exist only under the breakpoint, and both are stated
+   off HERE, before the query that turns them on.
+
+   One query rather than a matching `min-width` pair, because window widths are
+   fractional under display scaling and 1344.5px would match neither: the wide
+   layout with a toggle that names a pane already on screen. Off by default also
+   means a browser that ignores the query lands on the wide layout whole, rather
+   than on a scrim stretched across the page as a third grid item. */
+.note__org-toggle.nx-button,
+.note__org-scrim {
+  display: none;
+}
+/* Under 1345px the organizer leaves the grid and becomes a drawer over the list.
+
+   `position: absolute` is what takes it out: the template is restated with two
+   tracks and the two panes that stayed fill them — no empty column, no
+   `display: contents` trick. Closed is `display: none` rather than merely
+   invisible, so a drawer nobody opened is out of the tab order too.
+
+   These rules sit AFTER `.note__org-pane`'s own block deliberately. A media
+   query adds no specificity, so from above it the base `padding-right` and
+   `border-right` would win on source order and leave the drawer trimmed down
+   one side only. */
+@media (max-width: 1344px) {
+  .note {
+    grid-template-columns: var(--nx-layout-rail-wide) minmax(0, 1fr);
+  }
+  .note__org-pane {
+    position: absolute;
+    inset-block: 0;
+    left: 0;
+    /* Over `.note__find`'s sticky 3 and under every portalled panel (50–70), so
+       a folder menu opened inside the drawer still paints above it. It cannot
+       be `auto`: `.note__menu` is `position: relative` on every row of the note
+       list, which comes LATER in the DOM, so the row menus would show through.
+
+       KNOWN, and the reason it is written down: a positioned box with a
+       z-index is a stacking context, so the three typed-name confirmations
+       `NoteOrganizer` renders inside this pane sit in ITS layer (5) rather than
+       their own (60) while the drawer is the drawer. Nothing reaches that
+       today — the dialog's own fixed overlay covers the bell and the sidebar,
+       Escape is guarded on `[role="dialog"]`, and a folder menu closes when its
+       item is chosen — so the only observable difference is that Ctrl+K over an
+       open confirmation would draw the palette above it instead of behind it,
+       which is a layering question the app has anyway. The real answer is a
+       declared layer scale, which belongs to the overhaul and not to this. */
+    z-index: 5;
+    width: calc(var(--nx-layout-rail) + 2 * var(--nx-space-2));
+    padding: var(--nx-space-2);
+    border: 1px solid var(--nx-border);
+    border-radius: var(--nx-radius-lg);
+    background: var(--nx-surface);
+  }
+  .note:not([data-organizer="open"]) .note__org-pane {
+    display: none;
+  }
+  .note__org-toggle.nx-button {
+    display: inline-flex;
+  }
+  /* Transparent on purpose: the drawer is navigation, not a modal, and a wash
+     over the page would claim otherwise. It still covers the panes, which is
+     the point — one click anywhere outside puts the drawer away. */
+  .note__org-scrim {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+  }
+}
+.note__org-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-2);
+  margin: var(--nx-space-3) 0 var(--nx-space-1);
+  padding: 0 var(--nx-space-2);
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--nx-text-muted);
+}
+.note__folder-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.note__folder-row {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  padding-left: calc(var(--nx-space-3) * var(--note-depth, 0));
+}
+/* A folder is a focusable button; selection is typographic (gold name + weight),
+   never a background bar. Hover uses surface-alt like the note list and nav. */
+.note__folder {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-2);
+  font: inherit;
+  font-size: var(--nx-font-size-body);
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: var(--nx-radius-md);
+  cursor: pointer;
+  transition: background var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.note__folder:hover {
+  background: var(--nx-surface-alt);
+}
+.note__folder:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: -2px;
+}
+.note__folder--active .note__folder-name {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.note__folder-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.note__folder-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--nx-radius-round);
+  border: 1px solid var(--nx-border);
+}
+.note__folder-dot[data-empty="true"] {
+  background: transparent;
+  border-style: dashed;
+}
+.note__new-folder.nx-button {
+  margin-top: var(--nx-space-2);
+  align-self: flex-start;
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.note__new-folder.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.note__org-error {
+  margin: var(--nx-space-2) 0 0;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-danger);
+}
+
+/* Inline folder create/rename form. */
+.note__folder-form {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-1) 0;
+}
+.note__folder-form-actions {
+  display: flex;
+  gap: var(--nx-space-2);
+}
+
+/* Folder colour picker: the eight accent swatches + a "no colour" option,
+   mirroring the Settings accent row. Selection = 2px text-coloured ring, no glow. */
+.note__swatch-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-2) 0 var(--nx-space-2) calc(var(--nx-space-3) * var(--note-depth, 0));
+}
+/* 24px, not the 22 this drew at: it is a button, and the floor is the floor
+   wherever the recipe is mounted — the folder tree, the category rows, and
+   HabitsPage, which borrows this class outright. */
+.note__swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--nx-radius-round);
+  border: 1px solid var(--nx-border);
+  padding: 0;
+  cursor: pointer;
+  transition: border-color var(--nx-motion-base) var(--nx-motion-ease);
+}
+.note__swatch--selected {
+  border: 2px solid var(--nx-text);
+}
+.note__swatch--none {
+  display: grid;
+  place-items: center;
+  background: var(--nx-surface);
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+  line-height: 1;
+}
+
+/* Default-template picker (ADR-036): the second-level row the folder menu's
+   "Podrazumevani šablon" opens, indented under its folder exactly like
+   .note__swatch-row above. The options are chips on the .note__tag recipe —
+   the same "one of these is chosen" affordance the tag filter already uses —
+   so the selected one is typographic (gold text + weight + accent border),
+   never a fill or a glow. */
+.note__template-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-2) 0 var(--nx-space-2) calc(var(--nx-space-3) * var(--note-depth, 0));
+}
+.note__template-option {
+  display: inline-flex;
+  align-items: center;
+  /* Same recipe as `.note__tag`, and therefore the same 24px floor. */
+  min-height: 24px;
+  padding: 2px 10px;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+  background: transparent;
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  cursor: pointer;
+  transition:
+    background var(--nx-motion-fast) var(--nx-motion-ease),
+    border-color var(--nx-motion-fast) var(--nx-motion-ease),
+    color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.note__template-option:hover {
+  background: var(--nx-surface-alt);
+}
+.note__template-option:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+.note__template-option--selected {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+  border-color: var(--nx-accent);
+}
+
+/* The quick-capture mark (ADR-036) — a quiet muted dot at the row's right
+   edge, with the tooltip carrying the meaning. Deliberately NOT the ✦ brand
+   glyph: ✦ is the design language's mark for the ACTIVE nav row, and a gold ✦
+   in the same right-edge position on a non-selected folder would read as a
+   second selection. */
+.note__folder-capture {
+  flex: none;
+  margin-left: auto;
+  padding-left: var(--nx-space-2);
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-caption);
+  line-height: 1;
+}
+
+/* Oznake (tags) section, below the folder tree (slice a3b-2): filter chips
+   with inline create/rename/delete, mirroring the folder actions above.
+   Selecting a tag for the filter is typographic (gold text + weight), never a
+   fill or glow — the house rule applied to chips instead of a nav row.
+   Shared outright with the TASK rail's own Oznake section (.tasks__tag*,
+   migration 023) the way the dialog and reminder recipes are: it is the same
+   feature on a different entity, so one look for it is the point. */
+.note__tag-clear,
+.tasks__tag-clear {
+  /* Every interactive target clears 24px, an 11px text button included. Stated
+     as `min-height` on an inline-flex box rather than as padding, so the
+     control gains a hit area without gaining an optical size — it still reads
+     as a word beside the heading it sits on. */
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  font: inherit;
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-regular);
+  letter-spacing: var(--nx-font-tracking-normal);
+  text-transform: none;
+  color: var(--nx-text-muted);
+  cursor: pointer;
+  transition: color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.note__tag-clear:hover,
+.tasks__tag-clear:hover {
+  color: var(--nx-text);
+}
+.note__tag-row,
+.tasks__tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-1) var(--nx-space-2);
+}
+.note__tag-item,
+.tasks__tag-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.note__tag,
+.tasks__tag {
+  display: inline-flex;
+  align-items: center;
+  /* 13px type inside 2px of padding drew a 21px chip — under the 24px floor at
+     BOTH of this recipe's call sites (the NOTE tag filter, the TASK rail's), so
+     the fix belongs on the shared rule rather than on either page. `min-height`
+     rather than more padding: the chip's drawn size is unchanged, it simply
+     stops being a target you have to aim at. */
+  min-height: 24px;
+  padding: 2px 10px;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+  background: transparent;
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  cursor: pointer;
+  transition:
+    background var(--nx-motion-fast) var(--nx-motion-ease),
+    border-color var(--nx-motion-fast) var(--nx-motion-ease),
+    color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.note__tag:hover,
+.tasks__tag:hover {
+  background: var(--nx-surface-alt);
+}
+.note__tag:focus-visible,
+.tasks__tag:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+.note__tag--active,
+.tasks__tag--active {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+  border-color: var(--nx-accent);
+}
+/* The tag chip's "⋯" menu trigger stays quiet until the chip is hovered, the
+   trigger is focused, or its menu is open — mirrors .note__row-menu. */
+.note__tag-menu,
+.tasks__tag-menu {
+  opacity: 0;
+}
+.note__tag-item:hover .note__tag-menu,
+.note__tag-menu[aria-expanded="true"],
+.note__tag-menu:focus-visible,
+.tasks__tag-item:hover .tasks__tag-menu,
+.tasks__tag-menu[aria-expanded="true"],
+.tasks__tag-menu:focus-visible {
+  opacity: 1;
+}
+.note__new-tag.nx-button {
+  margin-top: var(--nx-space-1);
+  align-self: flex-start;
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.note__new-tag.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+/* Rename/new tag form: reuses .note__folder-form (.tasks__name-form in the TASK
+   rail), but flex-basis: 100% makes it take the whole wrap row instead of
+   sitting beside the other chips. */
+.note__tag-form,
+.tasks__tag-form {
+  flex-basis: 100%;
+}
+
+/* Left pane: "Nova beleška" + the note list, ordered newest-updated first. */
+.note__list-pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  min-height: 0;
+  padding-right: var(--nx-space-4);
+  border-right: 1px solid var(--nx-border);
+}
+.note__new.nx-button {
+  width: 100%;
+  justify-content: center;
+}
+
+/* The pane's own toolbar (NOTE-002): today just the shape toggle, right-aligned
+   so it reads as a control over the list below rather than a second heading. */
+.note__list-head {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+/* Shape toggle — the TASK recipe verbatim (.tasks__views): the active state is
+   typographic (accent + weight), never a glow, a fill or a side-bar. */
+.note__views {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  flex: none;
+}
+
+/* Kartice (NOTE-002): the same row anatomy the list draws, one per card — so
+   the pin, the hover-revealed "⋯" and the tag chips all keep their own rules
+   and the card needs none of its own. The grid, the card frame and its padding
+   are the UI package's (.nx-cards-view); what belongs here is only the scroll
+   the <ul> owns in the other shape, and putting the pin and the menu on the
+   card's TOP line rather than the middle of a stacked column. */
+.note__cards {
+  overflow-y: auto;
+  min-height: 0;
+}
+/* Top-aligned, not centred as in the dense column: a card is read from its
+   title down, and a star floating at the vertical middle of a three-line stack
+   would point at nothing. The open button drops its own padding here — the card
+   frame already provides it — which is also what lines the pin and the "⋯" up
+   with the title's first line. */
+.note__cards .note__item-row {
+  align-items: flex-start;
+}
+.note__cards .note__item {
+  padding: 0;
+}
+
+/* A refused list-pane action (NOTE-010's „Dupliraj") — the organizer's own
+   error line, in the middle pane. */
+.note__list-error {
+  margin: var(--nx-space-2) 0 0;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-danger);
+}
+/* The neutral twin of the line above: a result that is not a failure — how many
+   tasks „Pretvori u zadatke“ made, or that there was no checklist to make them
+   from. Same place, same size, quiet text instead of danger. */
+.note__list-notice {
+  margin: var(--nx-space-2) 0 0;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+
+/* Delete + undo: the inline, token-styled undo bar (mirrors the tasks pattern). */
+.note__undo {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+}
+.note__undo-text {
+  flex: 1;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+}
+.note__undo-dismiss.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.note__undo-dismiss.nx-button:hover {
+  background: var(--nx-surface);
+  color: var(--nx-text);
+}
+
+.note__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+/* Sticky groups (list shape only) --------------------------------------
+   A NOTE LIST THAT RUNS FIFTY ROWS FLAT IS NOT A LIST, IT IS A WALL — no amount
+   of row craft fixes that, because the eye has nothing to land on between the
+   first row and the last. The pane is cut into „Zakačeno", „Danas", „Juče",
+   the last seven days, this month, then one group per calendar month.
+
+   The cut is FREE, in the strict sense: `listNotes` answers `ORDER BY pinned
+   DESC, updated_at DESC, id DESC`, so those buckets are already contiguous in
+   the array and `groupNotes` only inserts headings — it cannot move a row.
+
+   The heading sticks against `.note__list` (the scrolling ancestor) while
+   `.note__group` is its containing block, which is exactly what makes a heading
+   leave when its last row does rather than pile up with the next one.
+
+   `--nx-bg` and NOT `--nx-surface-alt`: the band has to be opaque to occlude
+   the rows sliding under it, and surface-alt is what a HOVERED row is — a
+   sticky strip in the hover colour would read as a row the pointer is on.
+   Against the pane's own (unpainted) background, `--nx-bg` disappears and only
+   the type remains, which is the whole idea.
+
+   Cards keep no groups; see the note at that branch in `NotesPage`. */
+.note__group {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.note__group + .note__group {
+  margin-top: var(--nx-space-3);
+}
+.note__group-head {
+  position: sticky;
+  top: 0;
+  /* Over the rows; under `.note__find`'s bar (3), the organizer drawer (5) and
+     every portalled panel (50–70). */
+  z-index: 1;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nx-space-2);
+  margin: 0 0 var(--nx-space-1);
+  padding: var(--nx-space-2) var(--nx-space-2) var(--nx-space-1);
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-subtle);
+  background: var(--nx-bg);
+}
+/* A NUMBER, never a counted noun: „12" beside „Danas" rather than „12 beležaka"
+   printed six times down one pane. Regular weight is the only thing separating
+   it from the label it shares a line with. */
+.note__group-count {
+  flex: none;
+  font-weight: var(--nx-font-weight-regular);
+  font-variant-numeric: tabular-nums;
+}
+.note__group-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.note__item-row {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+/* THE ROW HAS EXACTLY THREE LEVELS AND THERE IS NO FOURTH.
+     1. the title            15px / 500, full ink
+     2. what it is ABOUT     13px / 400, `--nx-text-muted` — kind, then tags
+     3. where and when       11px / 500, uppercase + tracking, `--nx-text-subtle`
+   Three is a hard cap rather than a starting point: each level the eye has to
+   tell apart costs it a fixation, and at fifty rows a fourth is what turns a
+   scan back into a read. `PrivPage` draws levels 1 and 3 from the same classes,
+   which is how the two note surfaces stay one shape.
+
+   Row is a focusable button; selection is typographic (gold title + weight),
+   never a background bar. Hover uses surface-alt like the nav/dashboard rows. */
+.note__item {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--nx-space-2);
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: var(--nx-radius-md);
+  cursor: pointer;
+  transition: background var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.note__item:hover {
+  background: var(--nx-surface-alt);
+}
+.note__item:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: -2px;
+}
+/* Level 1. */
+.note__item-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nx-font-size-body);
+  font-weight: var(--nx-font-weight-medium);
+}
+.note__item--active .note__item-title {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+/* Level 2: the note's kind and its tags, as ONE muted line.
+   These were bordered 11px chips that wrapped, so a note with four tags grew a
+   two-row thicket of tiny boxes and fifty such rows read as a grid of boxes
+   with some text in it. The information is unchanged; what is gone is fifty
+   borders per screen and the wrap. It clips with an ellipsis rather than
+   wrapping, because level 2 is one line by definition. */
+.note__item-tags {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+/* The separator is a MARK between words, so it takes the tier that exists for
+   marks. On the first item there is nothing to separate, and the category is
+   always rendered first, so this never lands on it. */
+.note__item-tag + .note__item-tag::before {
+  content: "·";
+  margin: 0 var(--nx-space-2);
+  color: var(--nx-text-faint);
+}
+/* The category leads the line and carries the swatch the user gave it — the one
+   thing distinguishing it from a tag. No second colour, no border, no glow: the
+   dot is a colour that was CHOSEN for the category, not a state this word is
+   in. */
+.note__item-tag--category {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+/* Level 3: where the note lives and when it was last touched.
+   Uppercase with `tracking-label` at 11px is the app's tertiary register — the
+   same treatment as a group heading or a stat label — and using it here is what
+   makes the three levels legible as three at a glance rather than as three
+   greys. The folder is only printed when it VARIES down the pane (see
+   `showFolder` in `NotesPage`); the date is the row's own, and inside „Danas" /
+   „Juče" it is the hour instead, since the heading has already said the day. */
+.note__item-meta {
+  display: flex;
+  align-items: baseline;
+  gap: var(--nx-space-2);
+  min-width: 0;
+}
+.note__item-folder,
+.note__item-date {
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-medium);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-subtle);
+}
+.note__item-folder {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.note__item-date {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+/* Per-row delete stays hidden until the row is hovered or the button focused. */
+.note__delete.nx-button {
+  flex: none;
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+  opacity: 0;
+  transition: opacity var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.note__item-row:hover .note__delete.nx-button,
+.note__delete.nx-button:focus-visible {
+  opacity: 1;
+}
+.note__delete.nx-button:hover {
+  background: var(--nx-danger-soft);
+  color: var(--nx-danger);
+}
+
+/* Per-row pin toggle: a star that fills gold when pinned (organizer, slice a3b). */
+.note__pin {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  font-size: var(--nx-font-size-body);
+  line-height: 1;
+  color: var(--nx-text-muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--nx-radius-sm);
+  cursor: pointer;
+  transition: color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.note__pin:hover {
+  color: var(--nx-text);
+}
+.note__pin--on {
+  color: var(--nx-accent-strong);
+}
+
+/* The "⋯" actions popover (notePopover.tsx). The class family belongs to that
+   component rather than to the NOTE module: folder rows, note rows, and the TASK
+   rail's tag chips and task rows all mount it, and the panel's own classes come
+   from the component, so its menu items keep this family wherever they are
+   written. */
+.note__menu {
+  position: relative;
+  flex: none;
+}
+/* The house popover trigger, and the app's most re-used control — it hosts the
+   „⋯" on every row AND several NAMED triggers („Šabloni", „Izbor", the profile
+   switcher, the dashboard set picker).
+ *
+ * It used to declare a fixed `width: 24px; height: 24px`, which is right for a
+ * glyph and wrong for a word: a named trigger was a whole label centred in a
+ * 24px square, spilling out of both sides and painting over its neighbour. Five
+ * call sites had each written their own override to undo it, and three of those
+ * overrides SILENTLY DID NOTHING — they matched at the same (0,1,0) specificity
+ * as this rule, and their stylesheet is imported earlier, so document order
+ * decided the tie against them. The overflow on „Šabloni" survived two separate
+ * attempts to fix it for exactly that reason.
+ *
+ * `min-width`/`min-height` with `width: auto` removes the class instead of
+ * patching its instances: a glyph-only trigger is still 24×24 because that is
+ * its floor, a trigger holding a word grows to hold it, and no call site has to
+ * win a cascade fight to get either. */
+.note__menu-trigger {
+  display: inline-grid;
+  grid-auto-flow: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--nx-space-1);
+  width: auto;
+  height: auto;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0 2px;
+  white-space: nowrap;
+  font-size: var(--nx-font-size-body);
+  line-height: 1;
+  color: var(--nx-text-muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--nx-radius-sm);
+  cursor: pointer;
+  transition:
+    color var(--nx-motion-fast) var(--nx-motion-ease),
+    opacity var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.note__menu-trigger:hover {
+  color: var(--nx-text);
+}
+/* On note rows the menu stays quiet until the row is hovered or it is open. */
+.note__row-menu {
+  opacity: 0;
+}
+.note__item-row:hover .note__row-menu,
+.note__row-menu[aria-expanded="true"],
+.note__row-menu:focus-visible {
+  opacity: 1;
+}
+.note__menu-panel {
+  /* Portalled to <body> and positioned inline by `useAnchoredPosition`, so the
+     panel escapes the surrounding overflow:auto list/tree instead of being
+     clipped by it — and does so structurally, rather than depending on no
+     ancestor ever growing a transform.
+
+     ABOVE the dialog layer (60), not the 40 this sat at while it was nested.
+     Nesting used to make the question moot: a menu inside a dialog inherited
+     that dialog's stacking context and was drawn over it for free. A portalled
+     panel is a sibling of the dialog instead, so the first "⋯" somebody puts
+     inside one would have vanished behind it. A menu is always the most recent
+     thing the user opened, and this is what says so. */
+  z-index: 70;
+  /* One of its homes is a section HEADING, whose uppercase/tracked caption type
+     `font: inherit` on the items does NOT reset (the same reason
+     .tasks__name-form spells it out). A menu is prose, not a heading. */
+  text-transform: none;
+  letter-spacing: var(--nx-font-tracking-normal);
+  min-width: 180px;
+  /* The PREFERRED scroll window, and the height the panel is measured at:
+     `PANEL_MAX_HEIGHT` in anchoredPlacement.ts carries the same number. What
+     actually applies is the inline value the helper computes from the room the
+     viewport has left — inline wins over this rule, so a short window shrinks
+     the panel rather than pushing it off the edge. Keep the two in step. */
+  max-height: 320px;
+  overflow-y: auto;
+  padding: var(--nx-space-1);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  box-shadow: var(--nx-shadow);
+}
+.note__menu-label {
+  padding: 6px 10px 2px;
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+.note__menu-item {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: var(--nx-radius-sm);
+  cursor: pointer;
+}
+.note__menu-item:hover {
+  background: var(--nx-surface-alt);
+}
+/* An action that is unavailable HERE is dimmed rather than dropped (the row at
+   the end of its ordering scope, see MoveMenu), on the same recipe as
+   .nx-button:disabled — a menu whose items come and go has to be re-read on
+   every open. */
+.note__menu-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.note__menu-item:disabled:hover {
+  background: transparent;
+}
+.note__menu-item--danger:hover {
+  background: var(--nx-danger-soft);
+  color: var(--nx-danger);
+}
+/* Per-note tag toggles (slice a3b-2): a checkmark column reserved even when
+   unchecked, so every tag label lines up regardless of attachment state. */
+.note__menu-item--check {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+/* The dashboard's list picker draws the task rail's tree, so it indents the way
+   the rail does — `--task-depth` and nothing else: no rails, no glow. Its own
+   class rather than a base rule on `--check`, which twenty other menus use flat
+   and would all have shifted. */
+.dash__config-list-row {
+  padding-left: calc(var(--nx-space-3) * var(--task-depth, 0));
+}
+.note__menu-check {
+  flex: none;
+  width: 1em;
+  text-align: center;
+}
+.note__menu-check--hidden {
+  visibility: hidden;
+}
+.note__menu-sep {
+  height: 1px;
+  margin: var(--nx-space-1) 0;
+  background: var(--nx-border);
+}
+/* A quiet line inside a menu panel that is not an action: an empty state, a
+   note about what an action will do, or a failure. Same caption type as
+   .note__menu-label but sentence-shaped, so it wraps instead of clipping. */
+.note__menu-caption {
+  padding: 2px 10px 6px;
+  font-size: var(--nx-font-size-caption);
+  line-height: var(--nx-font-leading-snug);
+  color: var(--nx-text-muted);
+}
+
+/* Right pane: the editor, on a comfortable reading measure, centered.
+
+   That measure is ONE declaration (ADR-036): every element in the pane —
+   canvas, toolbar, deck bar, Prilozi, backlinks, the Istorija/Šabloni panes
+   and each channel's error row — reads `--note-measure`, so the Settings
+   control below can retune the whole column without any of them drifting out
+   of alignment with the rest. The default IS the historical 70ch, so a profile
+   that never touches the setting is pixel-identical to before.
+
+   Set on :root rather than the pane, because `data-note-width` lives on the
+   document element (the theme/accent idiom) and the panes are nested well
+   below it. */
+:root {
+  --note-measure: 70ch;
+}
+:root[data-note-width="uska"] {
+  --note-measure: 55ch;
+}
+:root[data-note-width="siroka"] {
+  --note-measure: 90ch;
+}
+
+.note__editor-pane {
+  min-height: 0;
+  overflow-y: auto;
+}
+.note__editor-empty {
+  height: 100%;
+  display: grid;
+  place-items: center;
+}
+.note__save-error {
+  max-width: var(--note-measure);
+  margin: 0 auto var(--nx-space-3);
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-danger-soft);
+  color: var(--nx-danger);
+  border-radius: var(--nx-radius-md);
+  font-size: var(--nx-font-size-body-sm);
+}
+/* The writing column. The horizontal padding is `--nx-space-2` and must stay
+   there: every other box in this pane that reads `--note-measure` uses the same
+   value, and that is what keeps the toolbar, the deck bar, Prilozi and the
+   backlinks flush with the text rather than merely near it. Only the vertical
+   padding is a free choice, and the first line gets room to breathe under the
+   toolbar. */
+.note__editor {
+  max-width: var(--note-measure);
+  margin: 0 auto;
+  padding: var(--nx-space-6) var(--nx-space-2) var(--nx-space-8);
+}
+
+/* „Ritam pisanja" (NoteRhythm), drawn as the aside of the page's figures band.
+   `.nx-stat-band__aside` is `flex: none`, so this needs a definite width for
+   the SVG's `width: 100%` to resolve against — it gets one inline, computed
+   from the very constants the matrix is drawn with, so the box and the drawing
+   can never disagree. `max-width` is the belt: if the enforced window minimum
+   ever drops below the point where this fits, it scales down (uniformly — the
+   frame refuses to distort) instead of overflowing the pane. */
+.note__rhythm {
+  max-width: 100%;
+}
+
+/* Drop-target wrapper around the editor body (canvas + Prilozi + backlinks),
+   so dropping a file works anywhere in the pane. The border defaults to
+   transparent so the drop state (accent border + soft background — the exact
+   .nx-kanban-view__col--drop recipe, never a glow) never shifts layout. */
+.note__editor-body {
+  min-height: 100%;
+  border: 1px solid transparent;
+  border-radius: var(--nx-radius-lg);
+  transition:
+    border-color var(--nx-motion-fast) var(--nx-motion-ease),
+    background var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.note__editor-body--drop {
+  border-color: var(--nx-accent);
+  background: var(--nx-accent-soft);
+}
+
+/* Toolbar row (NOTE-008b / NOTE-009b): the "Šabloni" and "Istorija verzija"
+   pane toggles, right-aligned above the canvas. Same reading measure as
+   everything below it. */
+.note__editor-tools {
+  max-width: var(--note-measure);
+  margin: 0 auto;
+  padding: var(--nx-space-2) var(--nx-space-2) 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--nx-space-3);
+}
+
+/* Backlinks panel (NOTE-004b): the notes that link here, listed below the
+   editor on the same reading measure. Quiet rows — navigation, never a
+   selection affordance. */
+.note__backlinks {
+  max-width: var(--note-measure);
+  margin: 0 auto;
+  padding: var(--nx-space-4) var(--nx-space-2) var(--nx-space-8);
+  border-top: 1px solid var(--nx-border);
+}
+.note__backlinks-title {
+  margin: 0 0 var(--nx-space-2);
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--nx-text-muted);
+}
+.note__backlink {
+  display: block;
+  width: 100%;
+  padding: var(--nx-space-2) var(--nx-space-3);
+  font: inherit;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: var(--nx-radius-md);
+  cursor: pointer;
+  transition: background var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.note__backlink:hover {
+  background: var(--nx-surface-alt);
+}
+.note__backlink:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: -2px;
+}
+
+/* Prilozi panel (NOTE-003b): attachment rows. Always rendered (unlike
+   backlinks), same reading measure and border-top recipe. */
+.note__attachments {
+  max-width: var(--note-measure);
+  margin: 0 auto;
+  padding: var(--nx-space-4) var(--nx-space-2) var(--nx-space-8);
+  border-top: 1px solid var(--nx-border);
+}
+.note__attachments-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-2);
+  margin: 0 0 var(--nx-space-2);
+}
+.note__attachments-title {
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--nx-text-muted);
+}
+/* Quiet text button, matching .note__tag-clear's recipe — including its 24px
+   floor, which this shares because it is the same control in another heading. */
+.note__attach {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  font: inherit;
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-regular);
+  letter-spacing: var(--nx-font-tracking-normal);
+  text-transform: none;
+  color: var(--nx-text-muted);
+  cursor: pointer;
+  transition: color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.note__attach:hover {
+  color: var(--nx-text);
+}
+/* Same recipe as .note__save-error, scoped to the attachment channel. */
+.note__attachment-error {
+  margin: 0 0 var(--nx-space-2);
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-danger-soft);
+  color: var(--nx-danger);
+  border-radius: var(--nx-radius-md);
+  font-size: var(--nx-font-size-body-sm);
+}
+.note__attachment {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-2) var(--nx-space-3);
+  border-radius: var(--nx-radius-md);
+  transition: background var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.note__attachment:hover {
+  background: var(--nx-surface-alt);
+}
+.note__attachment-thumb {
+  flex-shrink: 0;
+  max-width: 96px;
+  max-height: 48px;
+  object-fit: cover;
+  border-radius: var(--nx-radius-sm);
+}
+.note__attachment-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nx-font-size-body-sm);
+}
+.note__attachment-size {
+  flex-shrink: 0;
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+
+/* Istorija verzija (NOTE-008b / ADR-015): the in-pane version browser that
+   replaces canvas + Prilozi + backlinks while `mode === "history"`. Same
+   reading measure as the rest of the pane, split into a list column and a
+   preview column. Selecting a row is typographic only — the
+   .note__folder--active / .nx-nav-item--active recipe — never a fill, border or
+   glow.
+
+   THE SPLIT IS CONDITIONAL, and that is `.note`'s own defect one level down.
+   A fixed 280px list beside a column with no floor, inside a box already capped
+   at `--note-measure`, left the preview 208px at the default measure and 100px
+   at „uska" — a version preview too narrow to preview anything, at every window
+   width, since the day it was written. `auto-fit` states the rule rather than a
+   breakpoint: two columns when 260px each will fit, one when they will not, and
+   `min(…, 100%)` so a pane narrower than a single column still cannot overflow.
+   This reads BOTH axes the width depends on — the user's measure and the pane —
+   which no media query on the window could do.
+
+   The list keeps a two-row span, which is what puts the preview and the restore
+   row in the second column when there is one; with a single column it spans two
+   auto rows of one item and is invisible. Everything else auto-places, in DOM
+   order, which is the order it has to stack in. */
+.note__history {
+  max-width: var(--note-measure);
+  margin: 0 auto;
+  padding: var(--nx-space-4) var(--nx-space-2) var(--nx-space-8);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+  gap: var(--nx-space-4);
+}
+.note__history-list {
+  grid-row: span 2;
+  min-width: 0;
+}
+.note__history-title {
+  margin: 0 0 var(--nx-space-2);
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--nx-text-muted);
+}
+.note__history-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: var(--nx-space-2) var(--nx-space-3);
+  font: inherit;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: var(--nx-radius-md);
+  cursor: pointer;
+  transition: background var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.note__history-item:hover {
+  background: var(--nx-surface-alt);
+}
+.note__history-item:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: -2px;
+}
+.note__history-item-time {
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+}
+.note__history-item-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+.note__history-item--selected .note__history-item-time,
+.note__history-item--selected .note__history-item-title {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.note__history-preview {
+  min-width: 0;
+  padding: var(--nx-space-4);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+}
+.note__history-restore-row {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: var(--nx-space-3);
+}
+.note__history-note {
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+/* Same recipe as .note__save-error, scoped to the version-history channel. */
+.note__history-error {
+  max-width: var(--note-measure);
+  margin: 0 auto var(--nx-space-3);
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-danger-soft);
+  color: var(--nx-danger);
+  border-radius: var(--nx-radius-md);
+  font-size: var(--nx-font-size-body-sm);
+}
+
+/* Šabloni (NOTE-009b / ADR-016): the in-pane template picker that replaces
+   canvas + Prilozi + backlinks while `mode === "templates"` — the same grid
+   shape as .note__history*, including the conditional split and the reason for
+   it, which is written out once there. Selecting a row is typographic only,
+   same recipe as .note__history-item. */
+.note__templates {
+  max-width: var(--note-measure);
+  margin: 0 auto;
+  padding: var(--nx-space-4) var(--nx-space-2) var(--nx-space-8);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+  gap: var(--nx-space-4);
+}
+.note__templates-list {
+  grid-row: span 2;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+.note__templates-title {
+  margin: 0 0 var(--nx-space-2);
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--nx-text-muted);
+}
+/* Group label, the .note__backlinks-title recipe with a top margin so the
+   second group ("Moji šabloni") separates from the built-in rows above it. */
+.note__templates-group {
+  margin: var(--nx-space-2) 0 0;
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--nx-text-muted);
+}
+.note__templates-item {
+  display: block;
+  width: 100%;
+  padding: var(--nx-space-2) var(--nx-space-3);
+  font: inherit;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: var(--nx-radius-md);
+  cursor: pointer;
+  transition: background var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.note__templates-item:hover {
+  background: var(--nx-surface-alt);
+}
+.note__templates-item:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: -2px;
+}
+/* `display: block` is load-bearing: the ellipsis recipe below only applies to
+   a block-level box, and this span's parent is a block button (unlike
+   .note__history-item-title, whose parent is a flex column, making it one). */
+.note__templates-item-name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+}
+.note__templates-item--selected .note__templates-item-name {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+/* Row + its popover trigger, the .note__tag-item shape. */
+.note__templates-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.note__templates-row .note__templates-item {
+  flex: 1;
+  min-width: 0;
+}
+.note__templates-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-1) var(--nx-space-3);
+}
+.note__templates-preview {
+  min-width: 0;
+  padding: var(--nx-space-4);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+}
+.note__templates-actions {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: var(--nx-space-3);
+}
+/* Muted caption, the .note__history-note recipe — under the save form's
+   field and under the insert action. */
+.note__templates-note {
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+/* Same recipe as .note__save-error, scoped to the templates channel. */
+.note__templates-error {
+  max-width: var(--note-measure);
+  margin: 0 auto;
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-danger-soft);
+  color: var(--nx-danger);
+  border-radius: var(--nx-radius-md);
+  font-size: var(--nx-font-size-body-sm);
+}
+.note__templates-empty {
+  margin: 0;
+  padding: var(--nx-space-2) var(--nx-space-3);
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+
+/* ProseMirror content — THE WRITTEN PAGE ---------------------------------
+   Scoped under `.note__editor`, which is also `PrivNoteEditor`'s container, so
+   both writing surfaces in the product are set once and cannot drift.
+
+   THE THREE DECISIONS, written down because they ARE the product:
+
+   MEASURE — `--note-measure`, the user's own setting (ADR-036: uska / normalna
+   / široka = 55 / 70 / 90ch; the default 70ch is ≈585px, ≈75 characters at the
+   15px body). Deliberately NOT swapped for `--nx-layout-prose` (68ch), the
+   app's generic prose cap: the two agree to within 2ch, the 1345px pane-drop
+   breakpoint at the top of this file is derived from the 70ch default, and
+   eight other boxes in this pane resolve the SAME token in order to stay flush
+   with the writing column. Adopting the generic value would cost a shipped
+   setting its documented default and buy two characters.
+
+   LEADING — `--nx-font-leading-normal` (1.55), which is what @nexus/ui's base
+   rule names for prose (the UI runs at `snug`, headings at `tight`). This
+   surface was at `loose` (1.7) with a 12px gap between paragraphs, and THAT
+   pairing was the real defect: 1.7 leaves ≈10.5px between lines, so a 12px
+   paragraph gap made paragraphs indistinguishable from line breaks. At 1.55 the
+   interline gap is ≈8px against the 16px paragraph gap below — twice it — and a
+   paragraph reads as a paragraph. The generosity this surface is owed went into
+   the block rhythm, where the eye can use it, rather than into uniformly airy
+   lines, where it cannot.
+
+   SCALE — 32 / 24 / 18 over the 15px body (the display / h1 / title tokens),
+   with tracking bound to SIZE rather than one value shared by all three: 32px
+   takes `tracking-display`, 24px `tracking-h1`, 18px `tracking-tight`. That is
+   the same binding @nexus/ui's base rule makes for the app's own type, applied
+   inside the document. */
+.note__editor .ProseMirror {
+  outline: none;
+  white-space: pre-wrap;
+  min-height: 60vh;
+  line-height: var(--nx-font-leading-normal);
+  font-size: var(--nx-font-size-body);
+  color: var(--nx-text);
+  caret-color: var(--nx-text);
+}
+.note__editor .ProseMirror p {
+  margin: 0;
+}
+/* 600 rather than the browser's 700. Segoe UI Variable's bold is heavy enough
+   at 15px to break the colour of the paragraph it appears in — emphasis should
+   be read, not stumbled over. */
+.note__editor .ProseMirror strong {
+  font-weight: var(--nx-font-weight-semibold);
+}
+/* THE BLOCK RHYTHM. One paragraph gap; progressively more air BEFORE a heading
+   the larger it is; and deliberately little AFTER one, so a heading binds to
+   the block it introduces instead of floating between two. */
+.note__editor .ProseMirror > * + * {
+  margin-top: var(--nx-space-4);
+}
+.note__editor .ProseMirror > * + h1 {
+  margin-top: var(--nx-space-8);
+}
+.note__editor .ProseMirror > * + h2 {
+  margin-top: var(--nx-space-6);
+}
+.note__editor .ProseMirror > * + h3 {
+  margin-top: var(--nx-space-5);
+}
+/* LAST of the four on purpose. `> * + h2` and this have the same specificity,
+   so source order decides an h2 that directly follows an h1 — and a subtitle
+   under a title is one pair, not two sections. */
+.note__editor .ProseMirror > :is(h1, h2, h3) + * {
+  margin-top: var(--nx-space-2);
+}
+.note__editor .ProseMirror h1,
+.note__editor .ProseMirror h2,
+.note__editor .ProseMirror h3 {
+  margin: 0;
+  font-weight: var(--nx-font-weight-semibold);
+  line-height: var(--nx-font-leading-tight);
+}
+.note__editor .ProseMirror h1 {
+  font-size: var(--nx-font-size-display);
+  letter-spacing: var(--nx-font-tracking-display);
+}
+.note__editor .ProseMirror h2 {
+  font-size: var(--nx-font-size-h1);
+  letter-spacing: var(--nx-font-tracking-h1);
+}
+.note__editor .ProseMirror h3 {
+  font-size: var(--nx-font-size-title);
+  letter-spacing: var(--nx-font-tracking-tight);
+}
+/* Markers hang OUTSIDE the text column, which is what keeps a document's left
+   edge straight whether a block is a paragraph or a list. 24px rather than 20
+   so a two-digit ordered marker („10.") still clears it. */
+.note__editor .ProseMirror ul,
+.note__editor .ProseMirror ol {
+  margin: 0;
+  padding-left: var(--nx-space-6);
+}
+.note__editor .ProseMirror li {
+  margin: 0;
+}
+.note__editor .ProseMirror li > p {
+  margin: 0;
+}
+/* Half the paragraph gap. Items of one list belong together more than two
+   paragraphs do, and 1:2 is the relationship that says so; a nested list is the
+   same statement one level down.
+
+   The nested case is a DESCENDANT selector, not a child one, and deliberately:
+   a task item's content is wrapped in a node-view element of TipTap's own, so
+   `li > ul` would silently stop matching inside exactly the list type most
+   likely to be nested. Depth-independent is also simply correct here — a list
+   opening under anything inside an item wants the same gap. */
+.note__editor .ProseMirror li + li,
+.note__editor .ProseMirror li :is(ul, ol) {
+  margin-top: var(--nx-space-2);
+}
+/* A bullet or a number is a MARK on the page rather than a word in it, so it
+   sits one tier back from the text it counts. */
+.note__editor .ProseMirror li::marker {
+  color: var(--nx-text-muted);
+}
+/* Task list (visual checkboxes only): accent-coloured box, content beside it. */
+.note__editor .ProseMirror ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0;
+}
+.note__editor .ProseMirror ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nx-space-2);
+}
+/* THE LABEL is the target, not the 15px box inside it: a 24×24 cell centring
+   the checkbox on the item's first line. That is what puts this control over
+   the floor without drawing an oversized checkbox into the middle of a
+   sentence — and it replaces a hand-tuned `margin-top: 3px` that only happened
+   to line up at the leading this surface used to run at. */
+.note__editor .ProseMirror ul[data-type="taskList"] li > label {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--nx-space-6);
+  height: var(--nx-space-6);
+}
+.note__editor .ProseMirror ul[data-type="taskList"] li > div {
+  flex: 1;
+  min-width: 0;
+}
+.note__editor .ProseMirror ul[data-type="taskList"] input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  accent-color: var(--nx-accent);
+}
+/* A quotation is secondary text held off the column by a rule — the same 2px
+   left rule the callouts, the flashcard block and the table of contents use, so
+   every „this block is set apart" in the document says it one way. */
+.note__editor .ProseMirror blockquote {
+  margin: 0;
+  padding-left: var(--nx-space-3);
+  border-left: 2px solid var(--nx-border);
+  color: var(--nx-text-muted);
+}
+.note__editor .ProseMirror code {
+  font-family: var(--nx-font-family-mono);
+  font-size: 0.9em;
+  background: var(--nx-surface-alt);
+  padding: 1px 4px;
+  border-radius: var(--nx-radius-xs);
+}
+/* A code block is a WELL, and the scale has a surface for exactly that —
+   `surface-sunken`, the input-field fill. It had been `surface-alt`, which is
+   also the callouts, the table of contents and a hovered row, so a block of
+   code and a „Savet" box were one object with different text in it. The
+   hairline is what makes a well read as inset rather than as a tint. Inline
+   code keeps `surface-alt`: a hole punched through the middle of a sentence is
+   not what an inline mark should look like. */
+.note__editor .ProseMirror pre {
+  margin: 0;
+  font-family: var(--nx-font-family-mono);
+  font-size: var(--nx-font-size-body-sm);
+  line-height: var(--nx-font-leading-normal);
+  tab-size: 2;
+  background: var(--nx-surface-sunken);
+  border: 1px solid var(--nx-border-subtle);
+  padding: var(--nx-space-3);
+  border-radius: var(--nx-radius-md);
+  overflow-x: auto;
+}
+.note__editor .ProseMirror pre code {
+  padding: 0;
+  font-size: inherit;
+  background: none;
+}
+/* A rule between two sections needs more air than a paragraph break, or it
+   reads as a very heavy paragraph break. */
+.note__editor .ProseMirror hr {
+  border: none;
+  border-top: 1px solid var(--nx-border);
+  margin: var(--nx-space-6) 0;
+}
+/* The underline sits clear of the descenders instead of cutting through them —
+   the single cheapest difference between a link that was set and one that was
+   defaulted. */
+.note__editor .ProseMirror a {
+  color: var(--nx-accent-strong);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.15em;
+  cursor: pointer;
+}
+/* Wiki-links (NOTE-004b): an inline atom resolved live from the id->title
+   map. Typographic only — no pill background, no border, no glow. */
+.note__wikilink {
+  cursor: pointer;
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-medium);
+  text-decoration: none;
+}
+.note__wikilink:hover,
+.note__wikilink:focus-visible {
+  text-decoration: underline;
+}
+.note__wikilink--missing {
+  color: var(--nx-text-muted);
+  cursor: default;
+}
+.note__wikilink--missing:hover,
+.note__wikilink--missing:focus-visible {
+  text-decoration: none;
+}
+
+/* Inline flashcards (NOTE-006c / ADR-017): the `::` separator and `{{…}}`
+   spans NoteFlashcard's decoration plugin highlights — derived only, nothing
+   stored. The card marker is the jade data hue, deliberately NOT the gold
+   accent that means "link/selection" elsewhere in this editor. */
+.note__card-block {
+  border-left: 2px solid var(--nx-data);
+  padding-left: var(--nx-space-3);
+}
+.note__card-cloze {
+  color: var(--nx-data);
+  border-bottom: 1px dotted var(--nx-data);
+}
+/* A labelled deletion's `cN::` head (ADR-068), nested inside the run above:
+   the number stays legible but reads as a marker rather than as answer text,
+   which is all it takes for „{{c1::Beograd}}" to be read as „Beograd, praznina
+   broj 1". Colour only — changing the size here would shift the line's
+   baseline mid-sentence. */
+.note__card-cloze-num {
+  color: var(--nx-text-muted);
+}
+.note__card-sep {
+  color: var(--nx-text-muted);
+}
+
+/* The deck-mapping bar (NOTE-006c): rendered directly under
+   .note__editor-tools, same reading measure — its own centering, since it
+   sits in .note__editor-body rather than an already-centered container. */
+.note__cards-bar {
+  max-width: var(--note-measure);
+  margin: 0 auto;
+  padding: var(--nx-space-2);
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-3);
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+/* Same recipe as .note__save-error, scoped to the cards channel — its own
+   centering too, exactly like .note__history-error above. */
+.note__cards-error {
+  max-width: var(--note-measure);
+  margin: 0 auto var(--nx-space-3);
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-danger-soft);
+  color: var(--nx-danger);
+  border-radius: var(--nx-radius-md);
+  font-size: var(--nx-font-size-body-sm);
+}
+/* Native select matched to the deck bar, mirroring .study__select. */
+.note__cards-select {
+  font: inherit;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  padding: 7px 13px;
+  transition: border-color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.note__cards-select:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+
+/* „Pronađi u belešci“ (NOTE-005): the Ctrl+F bar docked at the top of the
+   editor pane — a bar, not a dialog, so the note stays readable under it.
+   Quiet paper with a hairline and nothing else: no shadow, no glow. Sticky
+   against .note__editor-pane (the scrolling ancestor), which is why the fill
+   has to be opaque — hits scroll underneath it. */
+.note__find {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  margin-bottom: var(--nx-space-4);
+  padding: var(--nx-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+}
+.note__find-row {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+/* The .nx-textfield__input recipe, compacted: the bar is a toolbar row, not a
+   form, so the fields sit tighter than a labelled field would. */
+.note__find-input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  padding: 5px 10px;
+  transition: border-color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.note__find-input::placeholder {
+  color: var(--nx-text-muted);
+}
+.note__find-input:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+/* „3/17“, or „Nema rezultata.“ in the same slot — one place for the bar to
+   answer from, so the eye never has to look for the answer in two spots.
+   Tabular figures keep the counter from twitching as the numbers change. */
+.note__find-count {
+  flex-shrink: 0;
+  min-width: 6ch;
+  text-align: right;
+  font-size: var(--nx-font-size-caption);
+  font-variant-numeric: tabular-nums;
+  color: var(--nx-text-muted);
+}
+/* Every control on the bar: the .note__attach quiet-text recipe with a hit
+   area, since these sit in a row rather than beside a heading. Active states
+   are typographic (gold + weight) — never a fill, border or glow. */
+.note__find-button {
+  flex-shrink: 0;
+  /* 11px type in 4px of padding drew a ~23px control — under the floor, on a
+     bar whose whole job is to be hit repeatedly. */
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 4px 8px;
+  font: inherit;
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--nx-radius-sm);
+  cursor: pointer;
+  transition: color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.note__find-button:hover:not(:disabled) {
+  color: var(--nx-text);
+}
+.note__find-button:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: -2px;
+}
+.note__find-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.note__find-button[aria-pressed="true"],
+.note__find-button[aria-expanded="true"] {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+
+/* The matches themselves — DECORATIONS over the document, never marks in it.
+   Every hit gets the quiet surface tint; the active one gets accent-soft +
+   accent text. Deliberately NOT the browser's selection colour: the caret's
+   own selection also lives in this editor, and „the one I am on“ has to stay
+   distinguishable from „the text I have selected“. */
+.note__find-hit {
+  background: var(--nx-surface-alt);
+  border-radius: var(--nx-radius-sm);
+}
+.note__find-hit--active {
+  background: var(--nx-accent-soft);
+  color: var(--nx-accent-strong);
+}
+
+/* Attachment image blocks (NOTE-003b): a block atom resolved live from the
+   attachment id — a removed row falls back to a muted inline placeholder,
+   never breaking layout. Selection is a 2px accent outline on ProseMirror's
+   own .ProseMirror-selectednode class, never a glow. */
+.note__attachment-image img {
+  display: block;
+  max-width: 100%;
+  border-radius: var(--nx-radius-md);
+  margin: var(--nx-space-2) 0;
+}
+.note__attachment-image--missing {
+  display: inline-block;
+  padding: var(--nx-space-2) 0;
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+.note__attachment-image.ProseMirror-selectednode {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+  border-radius: var(--nx-radius-md);
+}
+
+/* NOTE-011 container blocks — „Okvir", „Sklopivi odeljak", „Sadržaj". All
+   three read as quiet paper and as siblings of the block set above: a soft
+   token fill, a 2px left rule in the block's own hue (blockquote's and
+   .note__card-block's idiom), token radius. No box outline, no glow, and no
+   hue outside the system's gold / jade / garnet. */
+
+/* Callout: `variant` is its only stored attribute, and colour is all it
+   changes — the block carries no visible label, so the node's own aria-label
+   is what tells a screen reader „Upozorenje" where the eye sees gold. */
+.note__editor .ProseMirror [data-callout] {
+  padding: var(--nx-space-3);
+  border-left: 2px solid var(--nx-border);
+  /* Square on the ruled edge: a radius there would clip the rule's ends and
+     turn a left rule into a hairline outline. */
+  border-radius: 0 var(--nx-radius-md) var(--nx-radius-md) 0;
+  background: var(--nx-surface-alt);
+}
+/* The top-level block rhythm stops at .ProseMirror's own children, so a
+   container has to restate it for the blocks nested inside it. */
+.note__editor .ProseMirror [data-callout] > * + * {
+  margin-top: var(--nx-space-3);
+}
+.note__editor .ProseMirror [data-callout][data-variant="tip"] {
+  border-left-color: var(--nx-data);
+  background: var(--nx-data-soft);
+}
+.note__editor .ProseMirror [data-callout][data-variant="warning"] {
+  border-left-color: var(--nx-accent);
+  background: var(--nx-accent-soft);
+}
+.note__editor .ProseMirror [data-callout][data-variant="danger"] {
+  border-left-color: var(--nx-danger);
+  background: var(--nx-danger-soft);
+}
+
+/* Collapsible section: a marker column beside the summary + content column.
+   The marker is a CSS triangle (a bordered zero-size box) turned by a
+   transform — no icon library, no glyph font. Its rotation IS the state, so
+   the reduced-motion blanket in @nexus/ui's styles.css only collapses the
+   transition; the marker still ends up pointing the right way. */
+.note__toggle {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--nx-space-2);
+  align-items: start;
+}
+/* 24 square: this is an interactive control inside prose, and the app's hit
+   floor applies inside a document too — it drew 16px wide. 24px is also within
+   a pixel of the editor's own line box at `--nx-font-leading-normal` (1.55 ×
+   15px = 23.25px), so the marker still sits ON the summary's first line rather
+   than above it — which is what the hand-written `1.6em` was reaching for. */
+.note__toggle-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--nx-space-6);
+  height: var(--nx-space-6);
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--nx-radius-xs);
+  color: var(--nx-text-muted);
+  cursor: pointer;
+  transition: color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.note__toggle-mark:hover {
+  color: var(--nx-text);
+}
+.note__toggle-mark:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: -2px;
+}
+.note__toggle-mark::before {
+  content: "";
+  border-style: solid;
+  border-width: 4px 0 4px 6px;
+  border-color: transparent transparent transparent currentColor;
+  transform: rotate(90deg);
+  transition: transform var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.note__toggle--collapsed > .note__toggle-mark::before {
+  transform: rotate(0deg);
+}
+/* Descendant, not child, selectors below: TipTap's React node view puts its
+   own content element between .note__toggle-body and the schema's two child
+   nodes, and naming that internal element in a selector would make these
+   rules an upgrade hazard. Depth-independent is also exactly right here — a
+   nested toggle's summary should read like a summary, and its content is
+   inside a hidden subtree whenever an ancestor is folded, so hiding it twice
+   changes nothing. */
+.note__toggle-body [data-toggle-summary] {
+  font-weight: var(--nx-font-weight-medium);
+}
+.note__toggle-body [data-toggle-summary] + [data-toggle-content] {
+  margin-top: var(--nx-space-2);
+}
+.note__toggle-body [data-toggle-content] > * + * {
+  margin-top: var(--nx-space-2);
+}
+.note__toggle--collapsed > .note__toggle-body [data-toggle-content] {
+  display: none;
+}
+
+/* Table of contents: a block atom rendering the note's live headings. Same
+   paper recipe as the callout; entries are quiet typographic rows on
+   .note__backlink's recipe, indented by heading level. */
+.note__toc {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: var(--nx-space-3);
+  border-left: 2px solid var(--nx-border);
+  border-radius: 0 var(--nx-radius-md) var(--nx-radius-md) 0;
+  background: var(--nx-surface-alt);
+}
+.note__toc-title {
+  margin-bottom: var(--nx-space-2);
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--nx-text-muted);
+}
+.note__toc-item {
+  display: block;
+  width: 100%;
+  padding: var(--nx-space-1) var(--nx-space-2);
+  font: inherit;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: var(--nx-radius-sm);
+  cursor: pointer;
+  transition: background var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.note__toc-item:hover {
+  background: var(--nx-surface);
+}
+.note__toc-item:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: -2px;
+}
+.note__toc-item--l2 {
+  padding-left: var(--nx-space-4);
+}
+.note__toc-item--l3 {
+  padding-left: var(--nx-space-6);
+}
+.note__toc.ProseMirror-selectednode {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+/* The active "/query" range while the slash menu is open reads as a command. */
+.note__editor .ProseMirror .suggestion {
+  color: var(--nx-accent-strong);
+}
+/* Placeholder — shown only on the first line of an empty note (calm, muted). */
+.note__editor .ProseMirror .is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: var(--nx-text-muted);
+  pointer-events: none;
+}
+/* Gapcursor (between block nodes) — token colour, adapted from the PM base. */
+.note__editor .ProseMirror-gapcursor {
+  display: none;
+  pointer-events: none;
+  position: absolute;
+}
+.note__editor .ProseMirror-gapcursor::after {
+  content: "";
+  display: block;
+  position: absolute;
+  top: -2px;
+  width: 20px;
+  border-top: 1px solid var(--nx-text);
+}
+.note__editor .ProseMirror-focused .ProseMirror-gapcursor {
+  display: block;
+}
+
+/* Slash menu — a floating, tokens-styled command panel at the caret (portal to
+   <body>). Active row is typographic (gold + weight) over a soft surface; no
+   glow, no inset side-bar. Placed by `useAnchoredPosition` off the suggestion's
+   live clientRect, which flips it above the caret when the line being typed is
+   near the bottom of the window. */
+.note__slash {
+  position: fixed;
+  /* The same layer as `.note__menu-panel`, and for the same reason — see the
+     note there. Both are portalled panels that belong on top of whatever they
+     were opened from. */
+  z-index: 70;
+  min-width: 208px;
+  /* The preferred scroll window — see `.note__menu-panel`; the helper's inline
+     value is what actually applies. */
+  max-height: 320px;
+  overflow-y: auto;
+  padding: var(--nx-space-1);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  box-shadow: var(--nx-shadow);
+}
+.note__slash-item {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: var(--nx-radius-sm);
+  cursor: pointer;
+}
+.note__slash-item:hover {
+  background: var(--nx-surface-alt);
+}
+.note__slash-item--active {
+  background: var(--nx-surface-alt);
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+
+/* Global search palette (021-d / ADR-021) — a Spotlight-style overlay
+   portalled to <body>, positioned toward the top of the viewport rather than
+   centred. The active row is typographic (gold + weight) over a soft
+   surface, exactly like .note__slash-item--active above: no glow, no inset
+   bar. Backdrop and panel are siblings, never ancestor/descendant — opacity
+   on a parent would wash out its children too, which is not what dimming the
+   page behind the panel means. */
+.search__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  justify-content: center;
+  /* Without this the panel is a flex item with `align-items: stretch`, so it
+     would take the full 70vh its max-height allows no matter how little is in
+     it — a nearly empty palette rendered as a tall box with the footer pinned
+     far below the last result. The panel must size to its content and only
+     then stop growing. */
+  align-items: flex-start;
+  padding-top: 12vh;
+}
+.search__backdrop {
+  position: absolute;
+  inset: 0;
+  /* A solid wash of the app's own background colour, not a raw black/white
+     scrim — dims whatever is behind the panel without introducing a colour
+     that isn't a token. */
+  background: var(--nx-bg);
+  opacity: 0.75;
+}
+.search__panel {
+  position: relative;
+  width: min(640px, 92vw);
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+  box-shadow: var(--nx-shadow);
+}
+.search__input-row {
+  padding: var(--nx-space-3) var(--nx-space-4) var(--nx-space-2);
+  border-bottom: 1px solid var(--nx-border);
+}
+.search__input.nx-textfield__input {
+  font-size: var(--nx-font-size-title);
+  border: none;
+  padding: var(--nx-space-1) 0;
+}
+/* Filter chips — same typographic-toggle idiom as .cal__source. */
+.search__chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nx-space-1);
+  padding: var(--nx-space-2) var(--nx-space-4);
+  border-bottom: 1px solid var(--nx-border);
+}
+.search__list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--nx-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+.search__group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.search__group-heading {
+  margin: var(--nx-space-1) var(--nx-space-2);
+  font-size: var(--nx-font-size-caption);
+  text-transform: uppercase;
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-muted);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.search__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-3);
+  padding: var(--nx-space-2);
+  border-radius: var(--nx-radius-md);
+  cursor: pointer;
+}
+.search__row:hover {
+  background: var(--nx-surface-alt);
+}
+.search__row--active {
+  background: var(--nx-surface-alt);
+}
+.search__row--active .search__row-title {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.search__row-main {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  min-width: 0;
+}
+.search__row-kind {
+  flex: none;
+}
+.search__row-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.search__row-title {
+  /* `min-width: 0` so the ellipsis actually engages when the title is a DIRECT
+     flex child of the row (a tag suggestion, a remembered query) rather than
+     wrapped in `.search__row-text`, which already carries it. No effect on the
+     wrapped case. */
+  min-width: 0;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.search__row-snippet {
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* "matched inside an attached file" (SRCH-008). Quieter than the snippet it
+   sits under — caption size, muted, no colour of its own — because it is a
+   note about the row rather than part of it. */
+.search__row-source,
+.searchpage__row-source {
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.search__row-date,
+.search__row-hint {
+  flex: none;
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+/* The „×" on a remembered query (SRCH-009). Invisible until the row is hovered
+   or keyboard-active, so a list of queries reads as a list of queries rather
+   than as a row of delete buttons — and it takes the accent only on its own
+   hover, the same typographic register every other control here uses. */
+.search__row-remove {
+  flex: none;
+  border: none;
+  background: transparent;
+  padding: 0 var(--nx-space-1);
+  color: var(--nx-text-muted);
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+}
+.search__row:hover .search__row-remove,
+.search__row--active .search__row-remove {
+  opacity: 1;
+}
+.search__row-remove:hover {
+  color: var(--nx-accent-strong);
+}
+.search__mark {
+  background: var(--nx-accent-soft);
+  color: var(--nx-accent-strong);
+  border-radius: var(--nx-radius-xs);
+  padding: 0 1px;
+}
+.search__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nx-space-1) var(--nx-space-3);
+  padding: var(--nx-space-2) var(--nx-space-4);
+  border-top: 1px solid var(--nx-border);
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-muted);
+}
+/* The operator grammar sits opposite the key hints, in the footer's own muted
+   register — a reference the eye returns to, never something competing with
+   the results above it. Tabular figures keep its example date from jittering
+   against the key hints on the other side. */
+.search__footer-operators {
+  font-variant-numeric: tabular-nums;
+}

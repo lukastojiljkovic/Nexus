@@ -1,0 +1,877 @@
+/* Desktop shell chrome only — component styling lives in @nexus/ui. Tokens
+   exclusively; raw color values are forbidden outside @nexus/tokens. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/* The CANVAS background, and it has to live here rather than on `.nx-app`.
+   `.nx-app` paints `--nx-bg` on a `100vh` div, which leaves every pixel outside
+   that div — an overscroll, a stray document scroll, the frame mid-resize — on
+   Chromium's base colour, and the BrowserWindow sets no `backgroundColor`, so
+   that base is WHITE. Per CSS Backgrounds 2.11.2 the canvas takes its background
+   from the root element and, failing that, from `body`; declaring it here makes
+   „white never appears" true by construction instead of true only while nothing
+   happens to overflow. This is what the founder saw as „malo puca boja kad se
+   skroluje app": a pure white strip against Noć's blue-black. */
+body {
+  margin: 0;
+  background: var(--nx-bg);
+}
+
+/* Global "you found it" mark for a global-search reveal (021-e), applied by
+   `useRevealedRow` (reveal.ts) to whichever row a palette result points at.
+   Same idiom as .cal__month-day--drop below — accent border + soft
+   background, never a glow — but momentary, which is why it is an animation
+   and not a transition: a class that is added and then removed can only
+   transition IN, and this mark has to fade back OUT by itself. Keyframes
+   also outrank the marked element's own declarations whatever the
+   specificity, which this block (sitting above every page's styles) would
+   otherwise lose the tie to — .study__subject-card sets its own background.
+   The overlay is a flat gradient rather than background-color so it layers
+   over that background instead of replacing it, leaving nothing to flash
+   back when the class goes. Duration matches REVEAL_DURATION_MS, which is
+   what removes the class once the fade has finished. */
+.nx-revealed {
+  /* One source of truth for the dwell: the reduced-motion rule below reuses it,
+     and it must stay equal to REVEAL_DURATION_MS in reveal.ts. */
+  --nx-reveal-duration: 2000ms;
+  outline: 1px solid transparent;
+  outline-offset: 2px;
+  border-radius: var(--nx-radius-xs);
+  animation: nx-reveal var(--nx-reveal-duration) var(--nx-motion-ease) forwards;
+}
+
+@keyframes nx-reveal {
+  0%,
+  75% {
+    outline-color: var(--nx-accent);
+    background-image: linear-gradient(var(--nx-accent-soft), var(--nx-accent-soft));
+  }
+  100% {
+    outline-color: transparent;
+    background-image: linear-gradient(transparent, transparent);
+  }
+}
+
+/* Reduced motion — a documented exception to the blanket rule in
+   @nexus/ui's styles.css. This mark is the whole answer to "which row was the
+   search result", so it has to still appear; what goes is the fade, not the
+   mark. Restoring the duration and stepping the timing function holds the ring
+   perfectly still for the full dwell and drops it in one frame at the end,
+   which is also exactly when reveal.ts's timer takes the class away. Letting
+   the blanket 1ms apply instead would land on the animation's last keyframe —
+   transparent — and the row would never be marked at all. */
+@media (prefers-reduced-motion: reduce) {
+  .nx-revealed {
+    animation-duration: var(--nx-reveal-duration) !important;
+    animation-timing-function: step-end !important;
+  }
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  min-height: 0;
+  /* The DOCUMENT never scrolls: the shell is a fixed frame and the two panes
+     inside it own every scrollbar. Safe for the overlays — the palette and the
+     dialogs are `position: fixed`, and `.app` sets no transform, filter or
+     containment, so it is not their containing block and cannot clip them. The
+     anchored popovers no longer rely on that promise at all: they are portalled
+     to <body>, outside this element entirely (`useAnchoredPosition`). */
+  overflow: hidden;
+}
+/* Everything below the title strip. One element, so the strip is never itself
+   subject to the centring the loading and failure states apply to their
+   content — an earlier arrangement centred the whole column and put the window
+   controls in the middle of the screen. */
+.app__stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.app__stage--center {
+  align-items: center;
+  justify-content: center;
+}
+
+/* Title strip (the drawn window frame) --------------------------------
+   `frame: false` in the main process means these 38 px ARE the window's title
+   bar: the drag region, the double-click target and the only three controls
+   that close, minimise and restore it. Three rules make that work, and each is
+   load-bearing rather than stylistic:
+
+     1. `-webkit-app-region: drag` on the strip. Without it the window cannot be
+        moved at all — there is no OS frame left to grab.
+     2. `-webkit-app-region: no-drag` on every control inside it. A drag region
+        swallows the press before the DOM sees it, so a button that forgets this
+        is not merely awkward, it is dead.
+     3. `flex: none` and a fixed height. The strip must not absorb the shell's
+        overflow; the two panes below it own every scrollbar. */
+.app__titlebar {
+  --app-titlebar-h: 38px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--app-titlebar-h);
+  padding-left: var(--nx-space-4);
+  border-bottom: 1px solid var(--nx-border);
+  background: var(--nx-surface);
+  -webkit-app-region: drag;
+  /* Double-clicking the strip maximises; without this it would also select the
+     wordmark, leaving a highlighted „Nexus" behind after every resize. */
+  -webkit-user-select: none;
+  user-select: none;
+}
+/* An OS frame dims when its window is not the front one. A drawn frame that
+   does not looks like the active window when it is not — a real misread with
+   two Nexus windows open, since the PDF preview (ADR-064) is a window too. */
+.app__titlebar--blurred .app__brand-name,
+.app__titlebar--blurred .app__titlebar-surface {
+  color: var(--nx-text-muted);
+}
+.app__titlebar--blurred .app__brand-mark {
+  opacity: 0.55;
+}
+
+.app__titlebar-identity {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  min-width: 0;
+}
+.app__brand-mark {
+  color: var(--nx-accent);
+  font-size: var(--nx-font-size-title);
+  line-height: 1;
+}
+.app__brand-name {
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-normal);
+}
+/* A hairline, not a „/" or a „·". A drawn separator holds its weight at every
+   type size and never inherits the letterform of whatever face is loaded. */
+.app__titlebar-sep {
+  width: 1px;
+  height: 14px;
+  margin: 0 var(--nx-space-1);
+  background: var(--nx-border);
+}
+/* The surface name. Muted and regular-weight against the semibold wordmark:
+   this line answers „where am I", and answering it louder than the product's
+   own name would be the wrong hierarchy. */
+.app__titlebar-surface {
+  min-width: 0;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app__titlebar-controls {
+  display: flex;
+  align-items: stretch;
+  align-self: stretch;
+  -webkit-app-region: no-drag;
+}
+/* Full-height, rectangular, no radius — the shape every desktop's window
+   controls have. Rounding them would read as „buttons that happen to be up
+   there" rather than as the frame itself. */
+.app__titlebar-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--nx-text-muted);
+  cursor: default;
+  transition: background var(--nx-motion-fast) var(--nx-motion-ease),
+    color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.app__titlebar-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.app__titlebar-button:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: -3px;
+}
+/* Close is the one destructive control on the strip, and the one place the
+   danger tint earns a full fill: on every desktop this button turns red under
+   the pointer, and a person's hand already knows that before they read it. */
+.app__titlebar-button--close:hover {
+  background: var(--nx-danger);
+  color: var(--nx-bg);
+}
+/* The theme toggle is not a window control, so it does not get their width or
+   their full-bleed shape — it sits inside the strip's own padding. */
+.app__titlebar-button--theme {
+  width: 34px;
+  margin-right: var(--nx-space-2);
+  border-radius: var(--nx-radius-sm);
+  align-self: center;
+  height: 26px;
+}
+.app__titlebar-divider {
+  align-self: center;
+  width: 1px;
+  height: 16px;
+  margin-right: var(--nx-space-2);
+  background: var(--nx-border);
+}
+
+/* Body: sidebar + main ----------------------------------------------- */
+.app__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+/* Two regions, and the split is the whole point: the module list scrolls, the
+   foot — whose data this is, „Pretraga", the bell, the profile switcher and the
+   two ways out — is pinned.
+
+   A stretched flex item takes exactly its line's cross size, so this column's
+   border box is pinned to the window height however tall its content is. With
+   `overflow: visible` and no split, the surplus simply PAINTED past the bottom
+   border: at the shipped default window (1120×720 outer ≈ 681 inner) the
+   content measures ~677 px against ~637 px available, which is precisely the
+   ghosted „Profil: Luka" and half a „Zaključaj" hanging outside the sidebar in
+   the founder's screenshot — and the document scrollbar that came with it.
+
+   Deliberately NO `overflow` on the sidebar or on the foot: `.ntf__panel` is
+   absolutely positioned inside the foot and is 360 px wide against a 220 px
+   column, so a clip here would cut the notification centre in half. */
+.app__sidebar {
+  flex: none;
+  width: 220px;
+  min-height: 0;
+  padding: var(--nx-space-3) var(--nx-space-2) var(--nx-space-3);
+  border-right: 1px solid var(--nx-border);
+  /* Noć's sky, as a GROUND rather than a flat fill: `materialHorizon` under the
+     star field, so the two read as one substrate instead of stars floating on a
+     panel. Dan resolves the same token to `none` and falls through to the flat
+     `--nx-surface` below it, which is what paper should be.
+
+     It belongs here and not on `.app__main` for the reason the star field's own
+     doc gives: the main pane scrolls and paints its own opaque background, so
+     any texture on it would travel with the content. The sidebar is the largest
+     surface in the shell that never scrolls as a whole. */
+  background-color: var(--nx-surface);
+  background-image: var(--nx-material-horizon);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  /* Host for Noć's star field (`.nx-starfield`), which is absolutely
+     positioned at `z-index: -1`. `position: relative` gives it something to
+     size against; `isolation: isolate` makes this element a stacking context so
+     that negative index lands behind the nav rows but still in FRONT of this
+     element's own `--nx-surface` fill. Without the isolation the layer would
+     escape to the nearest ancestor stacking context and paint behind the whole
+     shell, where nothing would ever see it.
+
+     Deliberately `isolation` rather than `transform`/`filter`/`contain`: those
+     would also create the context, and would additionally make this element a
+     containing block for `position: fixed` descendants — which would trap any
+     dialog or popover rendered from inside the sidebar. */
+  position: relative;
+  isolation: isolate;
+}
+/* The only part of the shell chrome that scrolls. `min-height: 0` is what lets
+   it shrink UNDER the foot instead of pushing it out — a flex item's automatic
+   minimum size is content-based, and that rule is exactly what broke this
+   column. */
+.app__nav-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  /* A fade at both ends instead of a hard cut. At the shipped 720px window the
+     module list is a few rows taller than the space it has, and the scroller
+     was slicing „RAD" horizontally in half — which reads as a rendering fault
+     rather than as „there is more below". The mask makes the boundary say what
+     it means. `to bottom` with two 12px ramps: content at the very top and
+     bottom of the scroll range fades rather than snapping, and nothing is
+     clipped mid-glyph.
+
+     A mask does not create a containing block for fixed descendants, so the
+     notification panel and the profile popover — both anchored out of the foot,
+     which is a SIBLING of this element — are unaffected.
+
+     `black` here is not a colour: a mask reads only the alpha channel, so the
+     two stops mean „fully opaque" and „fully transparent". There is no token
+     for that and there should not be one. */
+  --app-nav-fade: linear-gradient(
+    to bottom,
+    transparent 0,
+    black 12px,
+    black calc(100% - 12px),
+    transparent 100%
+  );
+  -webkit-mask-image: var(--app-nav-fade);
+  mask-image: var(--app-nav-fade);
+}
+/* Pinned, and a SIBLING of the scroller rather than an auto-margined item in
+   the same column — so the nav shrinks around it and the two can never overlap,
+   at any window height. */
+.app__sidebar-foot {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+.app__main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* The scroller owns its own paint. Inheriting the background from `.app` left
+     the scrolling-contents layer non-opaque, so Chromium re-rastered the strip
+     every frame instead of blitting it — visible as a colour seam over the
+     dashboard's cover image and its opacity scrim.
+
+     `background-color` rather than the `background` shorthand, which resets
+     every background property at once. Nothing layers here today, so the two
+     are equivalent — but the longhand states the ONE thing this rule is
+     actually responsible for (the opaque fill the paragraph above depends on)
+     and cannot silently wipe a sibling declaration added later. */
+  background-color: var(--nx-bg);
+  padding: var(--nx-space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-5);
+}
+
+/* Sidebar category groups — subtle separator between categories (DASH-008,
+   decision #11); a hairline on the border token, nothing louder. */
+.app__nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+/* The category name IS the separator. A hairline above the group as well would
+   be saying the same thing twice, which is how a rail starts to look busy. */
+.app__nav-group + .app__nav-group {
+  margin-top: var(--nx-space-3);
+}
+/* `text-faint`, not `text-muted`. These five words repeat down the whole rail
+   and name nothing a person is looking for — they are the rail's structure, not
+   its content. At the secondary tier they were competing with the module names
+   directly beneath them. */
+.app__nav-group-label {
+  margin: 0;
+  padding: 0 var(--nx-space-2) 3px;
+  font-size: var(--nx-font-size-label);
+  font-weight: var(--nx-font-weight-semibold);
+  line-height: var(--nx-font-leading-snug);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-faint);
+}
+
+/* The profile avatar (SET-001). One circle, two diameters — `md` above the
+   Settings buttons, `sm` in the sidebar row. Quiet by construction: the surface
+   token behind it, a hairline border, and nothing else. No ring, no glow, no
+   accent fill. `object-fit: cover` matters even though main already crops to a
+   square: a picture restored from an older archive, or one a future build wrote
+   differently, must never stretch. */
+.avatar {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  color: var(--nx-text-muted);
+  font-weight: var(--nx-font-weight-semibold);
+  overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.avatar--md {
+  width: 64px;
+  height: 64px;
+  font-size: var(--nx-font-size-h1);
+}
+.avatar--sm {
+  width: 24px;
+  height: 24px;
+  font-size: var(--nx-font-size-label);
+}
+
+/* The foot is the module list continued, not a second list with its own rules.
+   Every row in it — search, the bell, the profile switcher, the two ways out —
+   is the same 28px-tall, icon-led, `--nx-radius-md` row the modules above use,
+   separated from them by one hairline and nothing else. It had been four
+   different row shapes built by four different surfaces: two with icons and two
+   without, three different left insets, and one 21px-tall trigger under the
+   24px target floor. */
+.app__sidebar-foot {
+  padding-top: var(--nx-space-2);
+  margin-top: var(--nx-space-1);
+  border-top: 1px solid var(--nx-border-subtle);
+}
+.app__profile-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+}
+/* Points down because the panel opens downward from this row. A caret that
+   pointed the other way would be telling the reader the wrong thing about
+   where the menu is going to appear. */
+.app__profile-caret {
+  flex: none;
+  color: var(--nx-text-faint);
+}
+
+/* The profile switcher (ADR-058 §2): a quiet typographic row — „Profil: <ime>“
+   — over the house popover. It borrows the popover trigger and only reshapes
+   it from the 24px "⋯" square into a full-width text row; active state inside
+   the panel is gold + weight (the dash__set-item precedent), never a pill. */
+/* The profile switcher IS the profile row: avatar, name, caret. Shaped like a
+   `.nx-nav-item` rather than like a popover trigger, because in this rail that
+   is what it is. `min-height` rather than padding alone is what puts it over
+   the 24px target floor whatever the avatar does. */
+.app__profile-switch.note__menu-trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  width: 100%;
+  height: auto;
+  min-height: 30px;
+  justify-items: start;
+  padding: 3px var(--nx-space-2);
+  border-radius: var(--nx-radius-md);
+  font-size: var(--nx-font-size-body-sm);
+  text-align: left;
+  overflow: hidden;
+  transition: background var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.app__profile-switch.note__menu-trigger:hover,
+.app__profile-switch.note__menu-trigger[aria-expanded="true"] {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+/* Doubled with the base class on purpose: .note__menu-item declares its own
+   colour later in this file, and the ACTIVE profile's gold must win over it. */
+.note__menu-item.app__profile-item--active {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+/* The „Posao“ kind marker beside a business profile's name in the popover —
+   typographic (the calendar's undated-label caption treatment), never a pill.
+   The row's own flex gap spaces it off the name. */
+.app__profile-kind {
+  font-size: var(--nx-font-size-caption);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-muted);
+}
+/* The switcher path's own error line (the „Profili“ card reports its errors
+   itself): danger-hued caption under the row, nothing louder. */
+.app__profile-error {
+  margin: 0;
+  padding: 0 var(--nx-space-2);
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-danger);
+}
+/* The two profile dialogs (passcode gate, typed-name delete): a field inside
+   the house dialog panel. The panel's own gap spaces the blocks; the form only
+   stacks its field over its actions and gives the action row the pair gap the
+   base class (justify-end, no gap) does not carry. */
+.app__profile-dialog-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+.app__profile-dialog-form .nx-textfield {
+  width: 100%;
+}
+.app__profile-dialog-actions.recur-dialog__actions {
+  gap: var(--nx-space-2);
+}
+
+/* App-info facts (Settings "O aplikaciji") ---------------------------- */
+.app__facts {
+  margin: 0;
+  display: grid;
+  gap: var(--nx-space-2);
+}
+.app__facts > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--nx-space-4);
+  font-size: var(--nx-font-size-body-sm);
+}
+.app__facts dt {
+  color: var(--nx-text-muted);
+}
+.app__facts dd {
+  margin: 0;
+  font-family: var(--nx-font-family-mono);
+  text-align: right;
+}
+.app__path {
+  word-break: break-all;
+}
+.app__muted {
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+/**
+ * A Settings sub-section's explanatory paragraph. `.app__muted`'s treatment
+ * plus the one thing it must not have: a measure.
+ *
+ * `f1fa51a` gave the Settings CARDS a measure and this level kept none, because
+ * these paragraphs render through the SHARED `.app__muted`, which App,
+ * StudyPage, PrivPage, FinCsvImport, noteTemplatePane, attachmentPreview and
+ * moduleSettingsPanels also use — almost always for a short status or loading
+ * line that a 68ch cap would do nothing for. Capping the shared class would
+ * have been a blast radius nobody asked for; a description class adopted where
+ * a description actually is costs nothing anywhere else.
+ */
+.app__description {
+  max-width: var(--nx-layout-prose);
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+
+/* Restore undo banner (IMEX slice 3d): sits at the top of the main column on
+   every page, since a restore replaces the whole profile and the offer to take
+   it back belongs wherever the user happens to be. Deliberately the same shell
+   as the per-page undo bars (.tasks__undo and friends) — surface-alt fill,
+   hairline border, no glow — because it is the same promise, only app-wide. */
+.app__restore-banner {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+}
+.app__restore-banner-text {
+  flex: 1;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+}
+.app__restore-banner-when {
+  color: var(--nx-text-muted);
+}
+.app__restore-banner-error {
+  color: var(--nx-danger);
+  font-size: var(--nx-font-size-body-sm);
+}
+.app__restore-banner-dismiss.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.app__restore-banner-dismiss.nx-button:hover {
+  background: var(--nx-surface);
+  color: var(--nx-text);
+}
+
+/* Onboarding (ONB lite) ----------------------------------------------- */
+/* Mirrors `.auth` exactly, because the first two screens a person ever sees
+   are these two and a difference between them would read as two products. */
+.onb {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: var(--nx-space-6);
+  position: relative;
+  isolation: isolate;
+  background-image: var(--nx-material-horizon);
+}
+.onb__card {
+  width: 100%;
+  max-width: 400px;
+}
+.onb__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+}
+.onb__brand {
+  color: var(--nx-accent);
+  font-size: var(--nx-font-size-display);
+  line-height: 1;
+}
+/* Display size takes display tracking — see `.auth__title`. */
+.onb__title {
+  margin: 0;
+  font-family: var(--nx-font-family-display);
+  font-size: var(--nx-font-size-display);
+  line-height: var(--nx-font-leading-tight);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-display);
+}
+.onb__desc {
+  margin: 0;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+  line-height: var(--nx-font-leading-normal);
+}
+/* Label-above-options, mirroring the nx-textfield label rhythm. */
+.onb__theme {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.onb__theme-label {
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-muted);
+  font-weight: var(--nx-font-weight-medium);
+}
+.onb__theme-options {
+  display: flex;
+  gap: var(--nx-space-2);
+}
+.onb__error {
+  margin: 0;
+  color: var(--nx-danger);
+  font-size: var(--nx-font-size-body-sm);
+}
+/* ADR-065 — the four-screen questionnaire, drawn on the shell above. The card
+   keeps its 400px so the first and second screens a user ever sees still match
+   (.auth mirrors it); everything below is content inside that width. */
+.onb__steps {
+  margin: 0;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-caption);
+  letter-spacing: var(--nx-font-tracking-label);
+}
+/* „Uloga“ and „Podsetnici“: a wrapping row of choices, the .set__preset-row
+   recipe — the picked one is the primary button, no glow and no fill trickery. */
+.onb__choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+}
+.onb__choice {
+  flex: 1 1 auto;
+}
+.onb__caption {
+  margin: 0;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-caption);
+}
+/* „Oblasti“: the Settings module gallery's own rows. Capped and scrollable so a
+   growing registry can never push the card past the viewport — the shell is a
+   centred grid with no scroll of its own. */
+.onb__modules {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  max-height: 46vh;
+  overflow-y: auto;
+}
+.onb__module-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+.onb__module-group-title {
+  margin: 0;
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-muted);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.onb__module-list {
+  display: flex;
+  flex-direction: column;
+}
+.onb__module-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-3);
+  padding: var(--nx-space-2) 0;
+}
+.onb__module-row + .onb__module-row {
+  border-top: 1px solid var(--nx-border);
+}
+.onb__module-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.onb__module-name {
+  font-weight: var(--nx-font-weight-medium);
+}
+.onb__module-desc {
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+/* „Nazad“ beside „Dalje“/„Počni“, the primary always last so the forward move
+   sits where the eye leaves the card. */
+.onb__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+.onb__actions > .nx-button[type="submit"] {
+  margin-left: auto;
+}
+/* „Preskoči“/„Otkaži“: typographic and muted, the .set__reset idiom — an exit
+   is available, not advertised, so no border and no fill. */
+.onb__quiet {
+  align-self: center;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: var(--nx-radius-xs);
+  background: transparent;
+  color: var(--nx-text-muted);
+  font: inherit;
+  font-size: var(--nx-font-size-caption);
+  cursor: pointer;
+}
+.onb__quiet:hover:enabled {
+  color: var(--nx-text);
+}
+.onb__quiet:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.onb__quiet:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+
+/* Local account lock screen (AUTH, ADR-018) ---------------------------- */
+/* Mirrors .onb's shell exactly (centered grid, 400px card) so the first
+   screen a user ever sees matches the second (Onboarding). */
+.auth {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: var(--nx-space-6);
+}
+/* The sky, and ONLY on the full-window lock screen.
+   `.auth` is reused nested inside the private section's own gate
+   (`.priv__gate`), which lives on a page that scrolls — and a gradient on a
+   scrolling pane travels with the content, which is exactly the arrangement
+   `StarField`'s own doc forbids for sky. A modifier the top-level screen opts
+   into keeps the two apart by construction rather than by a `:not()` that the
+   next reuse would silently fall out of.
+
+   `position: relative` gives the canvas something to size against; `isolation`
+   makes this a stacking context so a `z-index: -1` layer lands behind the card
+   and still in FRONT of this element's own ground. Deliberately `isolation`
+   and not `transform`/`filter`/`contain`, which would also make this a
+   containing block for `position: fixed` descendants and trap any dialog
+   opened from the lock screen. */
+.auth--sky {
+  position: relative;
+  isolation: isolate;
+  background-image: var(--nx-material-horizon);
+}
+/* The card has to sit ON the sky rather than dissolve into it: on Noć the
+   ground behind it is now a gradient, and a surface-coloured card at the
+   gradient's lighter end has almost no edge left. */
+.auth--sky .auth__card,
+.onb__card {
+  position: relative;
+  box-shadow: var(--nx-elevation-lifted), inset 0 1px 0 var(--nx-material-edge);
+}
+.auth__card {
+  width: 100%;
+  max-width: 400px;
+}
+/* Outer wrapper for all four screens (brand glyph + whichever screen is
+   active); .auth__form is the same recipe, used by the three actual <form>
+   elements — screens b/keystore-unavailable render plain content instead. */
+.auth__shell,
+.auth__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+}
+.auth__brand {
+  color: var(--nx-accent);
+  font-size: var(--nx-font-size-display);
+  line-height: 1;
+}
+/* Display size takes display tracking. `tracking-tight` (-0.012em) is the
+   value for 18–20px; at 32px it reads loose, which is the single most reliable
+   difference between type that has been set and type that has been typed. */
+.auth__title {
+  margin: 0;
+  font-family: var(--nx-font-family-display);
+  font-size: var(--nx-font-size-display);
+  line-height: var(--nx-font-leading-tight);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-display);
+}
+/* The picker row's two trailing actions („Preimenuj" + „Obriši"): the row's
+   trailing slot is a bare inline-flex, so the gap between them belongs here. */
+.auth__row-actions {
+  display: inline-flex;
+  gap: var(--nx-space-2);
+}
+/* Quiet informational line — the create-screen encryption notice, the
+   unlock-screen throttle countdown, the recovery-screen explanation. */
+.auth__note {
+  margin: 0;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+  line-height: var(--nx-font-leading-normal);
+}
+/* Same recipe as .note__save-error, scoped to the auth channel. */
+.auth__error {
+  margin: 0;
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-danger-soft);
+  color: var(--nx-danger);
+  border-radius: var(--nx-radius-md);
+  font-size: var(--nx-font-size-body-sm);
+}
+.auth__recovery-kit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+}
+/* Selectable monospace block for the one-time Recovery Kit code. */
+.auth__code {
+  margin: 0;
+  padding: var(--nx-space-3);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  font-family: var(--nx-font-family-mono);
+  font-size: var(--nx-font-size-body-sm);
+  line-height: var(--nx-font-leading-loose);
+  white-space: pre-wrap;
+  word-break: break-all;
+  -webkit-user-select: all;
+  user-select: all;
+}

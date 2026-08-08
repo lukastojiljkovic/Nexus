@@ -1,0 +1,2109 @@
+/* Finansije (FIN page) --------------------------------------------------
+   The page is nothing but numbers, so the numbers are the design and the rest
+   is chrome around them. Four rules decide everything below:
+
+   1. SUMMARY BEFORE DETAIL. The page opens with a band of figures — the
+      balance the profile holds, and what came in and went out of the rows on
+      screen — one group per CURRENCY and never a sum across them, because
+      Nexus holds no exchange rate and deliberately never will.
+   2. THE UNIT IS HOISTED EXACTLY WHEN IT IS CONSTANT. Sixty rows each ending
+      in „ RSD" is a hundred and eighty characters competing with the figures.
+      The page computes whether the rows it is about to draw share ONE currency
+      (`soleValue` in FinancePage.tsx); when they do, the code moves to the
+      column head or the group's caption and the cells hold the number alone.
+      When they do not, every cell carries its own code — the repetition is
+      then information rather than noise.
+   3. A LEDGER IS A TABLE. One grid template for the head and every row, so
+      three hundred amounts read as a column. `minmax(0, …)` on the text tracks
+      is not decoration: a FLEX row's children default to `min-width: auto`,
+      which is their min-content, so a pair of texts too wide for the row
+      cannot shrink and simply overflows it — which is exactly how the rail's
+      balance came to be painted 22.8px outside the row containing it. A grid
+      track with a zero floor has no such failure mode, and the ellipsis it
+      promises is reachable rather than theoretical.
+   4. THREE VISUAL LEVELS PER ROW, and no fourth. Primary is 15px/500 body,
+      secondary 13px `text-muted`, tertiary 11px uppercase `text-subtle` on
+      `tracking-label`. Facts beyond three are grouped away (the categories
+      are listed UNDER their kind instead of each repeating it) or moved into
+      the row's overflow menu.
+
+   No glows, no coloured left-border strips, no animated numbers, and no hue
+   used as the only encoding of anything: income is „+" AND jade, expense is
+   the locale's own minus AND plain ink. */
+
+/* --- The page ------------------------------------------------------------
+   A flex COLUMN whose second child is the two-track grid — deliberately not
+   one grid with the header spanning both tracks, which is what it used to be.
+   As a grid item the header's box was sized by the page's own track and
+   alignment rules, so a finance rule could pin the height `PageHeader` states
+   a `min-height: 72px` for (it hosts a 72px module watermark) without ever
+   naming the header. Two things close that off. This file no longer contains a
+   selector that can REACH the header — it carries no class of ours at all now.
+   And `.nx-page-header`'s own `flex: none`, which was inert on a grid item,
+   is live again in a flex column: the component defends its own height, from
+   its own stylesheet, whatever a page puts around it. */
+.fin {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+  min-width: 0;
+}
+.fin__body {
+  display: grid;
+  grid-template-columns: 248px minmax(0, 1fr);
+  gap: var(--nx-space-5);
+  align-items: start;
+  min-width: 0;
+}
+.fin__main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+}
+
+/* Every „which one of these is on" row on this page — the half switcher in the
+   header, the entry form's kind, the ledger's shape, a subscription's
+   direction. The selection itself is `nx-segmented__option`'s and stays
+   typographic: accent text and weight, no fill, no bar, no glow. */
+.fin__segmented {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  align-self: flex-start;
+  flex: none;
+}
+/* Every quiet ghost on this page — cancel, dismiss, „Poništi filtere". */
+.fin__quiet.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.fin__quiet.nx-button:hover:not(:disabled) {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.fin__error {
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-danger);
+}
+/* One caption recipe for every sentence this page says about its own figures:
+   what „Ukupno" covers, why two currencies are never added, what a minus in a
+   column means. Captions, not paragraphs — the figures are the message. */
+.fin__caption {
+  margin: 0;
+  max-width: var(--nx-layout-prose);
+  font-size: var(--nx-font-size-caption);
+  line-height: var(--nx-font-leading-snug);
+  color: var(--nx-text-subtle);
+}
+
+/* --- The band: the page's hero -------------------------------------------
+   „UKUPNO" used to be a 18px figure in the rail with a two-line paragraph
+   beside it, set at the same weight as every other thing on the page. It is
+   the answer to the question the page exists to answer, so it is now the
+   loudest thing on it: an 11px uppercase label over a large tabular number,
+   one group per currency, with the currency named ONCE as the group's caption
+   so the three figures under it need no code at all. */
+/* The same object as `@nexus/ui`'s `.nx-stat-band`, which six other surfaces
+   draw: a band separated from the content below it by ONE hairline, not a card.
+   It was written here independently — this page needs per-currency groups,
+   which the shared component does not model — and came out as a bordered,
+   filled, rounded box, so „summary before detail" looked like one thing on
+   Finansije and a different thing everywhere else.
+
+   A shared `StatBand` that understands groups is the real answer and is
+   recorded as such; matching the chrome is what makes the app read as one
+   product in the meantime. */
+.fin__band {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  padding-bottom: var(--nx-space-4);
+  border-bottom: 1px solid var(--nx-border-subtle);
+}
+.fin__band-groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-5) var(--nx-space-8);
+  min-width: 0;
+}
+.fin__band-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  min-width: 0;
+}
+/* The unit, said once for the group beneath it. `text` rather than `subtle`,
+   which is what tells it apart from the figure labels below at the same size:
+   this is a heading over three figures, they are captions under one each. */
+.fin__band-currency {
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text);
+  white-space: nowrap;
+}
+.fin__band-figures {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nx-space-3) var(--nx-space-6);
+  min-width: 0;
+}
+.fin__figure {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+.fin__figure-label {
+  font-size: var(--nx-font-size-caption);
+  /* `.nx-stat__label` is semibold; medium here made the same eyebrow lighter on
+     this page than on the six others. */
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-subtle);
+  white-space: nowrap;
+}
+/* Deliberately carries no transition of any kind: a figure that counts up to
+   its value is a figure nobody can read while it does so, and money is the
+   last number in the product that should be in motion. */
+.fin__figure-value {
+  /* `.nx-stat__value`'s exact recipe — the display family and the size-matched
+     tracking. A 24px figure at `tracking-tight` (the 18–20px value) reads
+     looser than the same figure in the band on any other page. */
+  font-family: var(--nx-font-family-display);
+  font-size: var(--nx-font-size-h1);
+  line-height: var(--nx-font-leading-tight);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-h1);
+  font-variant-numeric: tabular-nums;
+  color: var(--nx-text);
+  white-space: nowrap;
+}
+/* The two flow figures are subordinate to the balance beside them — the same
+   treatment, one step down the scale, so the band has one hero and not three. */
+.fin__figure--flow .fin__figure-value {
+  font-size: var(--nx-font-size-title);
+}
+/* Jade for money arriving, plain muted ink for money leaving. The direction is
+   already stated by the LABEL over each figure, so the hue is the second
+   encoding and never the only one — and an ordinary month of spending is not
+   painted as a warning. */
+.fin__figure-value--in {
+  color: var(--nx-data);
+}
+.fin__figure-value--out {
+  color: var(--nx-text-muted);
+}
+
+/* --- The ledger's one controls row ---------------------------------------
+   FIVE rows of chrome used to stand between the page title and the first
+   transaction: three switchers stacked on each other, a permanently open entry
+   form, and a filter row. Three of them were never the ledger's controls — the
+   half switcher belongs to the PAGE (it sits in the header's actions slot now)
+   and the entry form is used a few times a day on a surface that is read a
+   hundred, so it is a disclosure. What is left is one row: what to do on the
+   left, what to leave out on the right. */
+.fin__toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.fin__toolbar-filters {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-3);
+  flex-wrap: wrap;
+  margin-left: auto;
+  min-width: 0;
+}
+/* A `<select>` is as wide as its widest option unless told otherwise, and one
+   category named „Kafa i izlasci sa ekipom" would push the rest of the row onto
+   a second line. */
+.fin__toolbar-filters .nx-select__control {
+  max-width: 200px;
+}
+/* How many rows the filters left standing. A count is the one thing a filtered
+   ledger owes the reader that the rows themselves cannot say. */
+.fin__count {
+  font-size: var(--nx-font-size-caption);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  color: var(--nx-text-subtle);
+  white-space: nowrap;
+}
+/* „Od – Do" as ONE control rather than two labelled fields: the pair reads as
+   a range because it is drawn as one, and each half still carries its own
+   accessible name. */
+.fin__period {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  flex: none;
+}
+.fin__period-label {
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-muted);
+  white-space: nowrap;
+}
+.fin__period-sep {
+  color: var(--nx-text-subtle);
+}
+.fin__period-input {
+  width: 148px;
+}
+
+/* --- The forms, which are DISCLOSURES ------------------------------------
+   The entry form sat permanently above the ledger, which is backwards: it is
+   used a few times a day on a surface that is read a hundred. It — and the
+   subscription form beside it — is a panel now, opened on purpose and closed
+   again. (The statement importer is the third disclosure and draws its own
+   `set__import-block`; there is one import flow and two ways to reach it.) */
+.fin__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  padding: var(--nx-space-4);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border-subtle);
+  border-radius: var(--nx-radius-lg);
+}
+.fin__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+/* The amount and the description on one line — this alone is still the quick
+   add: type, press Enter, the row is filed. */
+.fin__quick-add {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+}
+.fin__amount-input {
+  width: 168px;
+  flex: none;
+}
+.fin__amount-input .nx-textfield__input {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+/* One field written by hand rather than through `TextField` — the amount, which
+   needs a `ref` the component does not forward. The two rules below are
+   `.nx-textfield`'s own, so the hand-written field is indistinguishable from
+   its neighbours and stays that way if the component's spacing changes. */
+.fin__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.fin__field-label {
+  font-size: var(--nx-font-size-label);
+  font-weight: var(--nx-font-weight-medium);
+  color: var(--nx-text-muted);
+}
+.fin__payee-input.nx-textfield {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.fin__fields {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--nx-space-3);
+  flex-wrap: wrap;
+}
+.fin__note-input.nx-textfield {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.fin__form-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+}
+
+/* --- The ledger ----------------------------------------------------------
+   Grouped by DAY, never paginated: three hundred rows in one undifferentiated
+   run is a wall, and the same three hundred under dated rules — each carrying
+   that day's net — is a statement. Both rules are sticky, the column head at
+   the top of the scrollport and the day rule directly beneath it; the two
+   offsets are read from ONE custom property so they cannot drift apart. */
+.fin__ledger {
+  --fin-head-height: 26px;
+  /* The three trailing tracks are FIXED, and that is the whole reason the
+     columns line up: every row is its own grid (it has to be — a row needs a
+     background and a radius, which `display: contents` would take away), so a
+     content-sized track would be measured per row and three hundred amounts
+     would each stop somewhere slightly different. A fixed track is the same
+     width in the head and in every row by construction. */
+  --fin-meta-column: 240px;
+  --fin-amount-column: 160px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+/* …and when the meta column has nothing left to say — the ledger is filtered to
+   one account AND to one category, so both words would be the filter's name —
+   the track goes to zero rather than holding 240px of nothing open. */
+.fin__ledger--nometa {
+  --fin-meta-column: 0px;
+}
+.fin__ledger-head,
+.fin__row {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr) var(--fin-meta-column)
+    var(--fin-amount-column) 52px;
+  align-items: center;
+  gap: var(--nx-space-3);
+  padding: 0 var(--nx-space-2);
+  min-width: 0;
+}
+.fin__ledger-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  height: var(--fin-head-height);
+  /* Opaque, and on the page's own colour: the rows scroll UNDER this, and a
+     translucent head would let them show through the labels. */
+  background: var(--nx-bg);
+  border-bottom: 1px solid var(--nx-border);
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-subtle);
+}
+.fin__ledger-head-amount {
+  text-align: right;
+}
+/* One day, and what it came to. `surface-alt` is the sticky-header surface, so
+   the rule reads as a band across the table rather than as a row of its own. */
+.fin__day {
+  position: sticky;
+  top: var(--fin-head-height);
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: var(--nx-space-3);
+  margin-top: var(--nx-space-2);
+  padding: 5px var(--nx-space-2);
+  background: var(--nx-surface-alt);
+  border-bottom: 1px solid var(--nx-border-subtle);
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-subtle);
+}
+.fin__ledger-head + .fin__day {
+  margin-top: 0;
+}
+.fin__day-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The day's net, per currency present in it — never one number across two,
+   for the reason the band gives. Transfers are absent by construction: they
+   move nothing into or out of the profile. */
+.fin__day-net {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--nx-space-3);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--nx-font-tracking-normal);
+  color: var(--nx-text-muted);
+  white-space: nowrap;
+}
+/* ~38px and a hover tint, with NO hairline: a rule under each of three hundred
+   rows is a spreadsheet grid, and the day rules already say where one group
+   ends. */
+.fin__row {
+  min-height: 38px;
+  border-radius: var(--nx-radius-md);
+  transition: background-color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.fin__row:hover {
+  background: var(--nx-surface-alt);
+}
+.fin__title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nx-font-size-body);
+  font-weight: var(--nx-font-weight-medium);
+  color: var(--nx-text);
+}
+/* The row's second level, and never a strip of pills: sixty chips down a
+   ledger are sixty boxes drawn around words that are already in a column of
+   their own. Empty when the ledger is already filtered to the thing the words
+   would have named — that chip was the filter's name, not the row's data. */
+.fin__meta {
+  /* `display: block` for the CARD, where this is a plain child of a block box
+     and `overflow`/`text-overflow` would have no effect on an inline span; in
+     every grid it sits in it is blockified anyway, so the rule costs nothing
+     and closes the one place the ellipsis was theoretical. */
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+.fin__amount {
+  min-width: 0;
+  white-space: nowrap;
+  color: var(--nx-text);
+}
+/* Income is „+" AND jade; an expense carries the locale's own minus and plain
+   ink. The SIGN PAIR is the encoding — a lone minus is what a reader has to
+   notice, a plus opposite it is what they cannot miss — and the hue only
+   reinforces it, so neither colour nor a single glyph is doing this alone. An
+   expense is not an error, which is why it is not painted as one. A transfer
+   moves nothing in or out of the profile, so it is muted. */
+.fin__amount--in {
+  color: var(--nx-data);
+  font-weight: var(--nx-font-weight-medium);
+}
+.fin__amount--move {
+  color: var(--nx-text-muted);
+}
+/* Two inline actions, which is the cap, and an overflow „⋯" for whatever is
+   left over. They stay in the DOM at `opacity: 0` and are revealed on hover or
+   focus — never `display: none`, which would take them out of the tab order and
+   off the keyboard entirely.
+
+   The fade sits on each CONTROL rather than on the container, for one reason: a
+   container at `opacity: 0` hides its children whatever they say about
+   themselves, and an open overflow menu whose pointer has since left the row
+   would have vanished while its panel was still on screen. On the control, the
+   trigger's own `aria-expanded` can hold it visible — which is also the state a
+   screen reader is told, so the two cannot drift. */
+.fin__row-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--nx-space-1);
+}
+.fin__row-actions .fin__row-action {
+  opacity: 0;
+  transition:
+    opacity var(--nx-motion-fast) var(--nx-motion-ease),
+    background-color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.fin__row:hover .fin__row-action,
+.fin .nx-list-row:hover .fin__row-action,
+.fin .nx-cards-view__card:hover .fin__row-action,
+.fin__row-actions:focus-within .fin__row-action,
+.fin__row-action[aria-expanded="true"] {
+  opacity: 1;
+}
+/* Every glyph-only control on this page is a 24×24 target. It was 20 and the
+   category chip's was 18 — under the floor, and unhittable on a touchpad. */
+.fin__row-action.nx-button,
+.fin__rail-action.nx-button {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.fin__row-action.nx-button:hover,
+.fin__rail-action.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.fin__row-delete.nx-button:hover {
+  background: var(--nx-danger-soft);
+  color: var(--nx-danger);
+}
+
+/* --- „Kartice" -----------------------------------------------------------
+   A card is a column, not a row: title and actions on the first line, then the
+   day and the row's own second level, then the amount. */
+.fin__card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-2);
+  min-width: 0;
+}
+.fin__card-foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nx-space-2);
+  margin-top: var(--nx-space-1);
+  min-width: 0;
+}
+
+/* --- The rail ------------------------------------------------------------
+   Accounts, then categories. Both are LISTS of rows whose management sits
+   behind one 24px overflow control, which is what freed the width: the account
+   row used to reserve room for three hover-only buttons, so a 248px rail gave
+   its names about 116px and „Devizna štednja" truncated at twelve characters
+   with half the rail standing empty beside it. */
+.fin__rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  min-width: 0;
+  padding-right: var(--nx-space-4);
+  border-right: 1px solid var(--nx-border-subtle);
+}
+.fin__rail-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nx-space-2);
+  margin: 0;
+  padding: 0 var(--nx-space-2);
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-subtle);
+}
+.fin__rail-heading--stacked {
+  margin-top: var(--nx-space-3);
+}
+/* The unit, hoisted out of the rows exactly as the ledger hoists it — present
+   only while every account this profile keeps shares one currency. */
+.fin__rail-heading-unit {
+  color: var(--nx-text);
+  white-space: nowrap;
+}
+.fin__rail-note {
+  margin: 0;
+  padding: 0 var(--nx-space-2);
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-subtle);
+}
+.fin__rail-error {
+  margin: var(--nx-space-1) 0 0;
+  padding: 0 var(--nx-space-2);
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-danger);
+}
+.fin__rail-rows {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+/* The archived group: present, and quieter than the live one. Its rows keep
+   every affordance — a closed account can still be reopened or deleted. */
+.fin__rail-rows--muted {
+  opacity: 0.68;
+}
+.fin__rail-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 24px;
+  align-items: center;
+  gap: var(--nx-space-1);
+  min-width: 0;
+  border-radius: var(--nx-radius-md);
+}
+/* The name on its own line — it gets the row's whole width, which is the other
+   half of why „Devizna štednja" fits now — and the kind and the balance under
+   it. */
+.fin__rail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  min-height: 34px;
+  justify-content: center;
+  padding: var(--nx-space-1) var(--nx-space-2);
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: var(--nx-radius-md);
+  cursor: pointer;
+  transition: background-color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.fin__rail-item:hover {
+  background: var(--nx-surface-alt);
+}
+.fin__rail-item:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: -2px;
+}
+/* Selection is TYPOGRAPHIC — gold text and weight. Never a fill, never an
+   inset strip down the side, never a glow. */
+.fin__rail-item--active .fin__rail-name {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.fin__rail-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nx-font-size-body-sm);
+  font-weight: var(--nx-font-weight-medium);
+  color: var(--nx-text);
+}
+/* The row's second line, and THE fix for the escaping balance. It was a flex
+   row with `justify-content: space-between`, and both of its children defaulted
+   to `min-width: auto` — which on a flex item is its MIN-CONTENT — so the pair
+   could not shrink below their combined intrinsic width and simply overflowed
+   the rail, by the 22.8px the sweep measured.
+
+   As a grid the kind's track has a floor of zero and truncates, while the
+   figure's `auto` track is never cut: a truncated account name is a nuisance,
+   a truncated amount is a lie. And because the figure is the LAST track, its
+   right edge is the row's right edge on every row — a column of balances that
+   lines up without anybody measuring, which an `auto`-width flex child could
+   never do.
+
+   The one shape that could still overflow is a balance wider than the whole
+   row, and there is no such balance: the store's own bound is
+   `Number.MAX_SAFE_INTEGER` minor units, which prints as 21 characters —
+   roughly 155px at this size, inside a 187px row. */
+.fin__rail-meta {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: var(--nx-space-2);
+  min-width: 0;
+}
+.fin__rail-balance {
+  white-space: nowrap;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+}
+.fin__rail-kind {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nx-font-size-caption);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-subtle);
+}
+/* The row's whole management, behind one control — the app's own „⋯", so a
+   finance row's menu opens and behaves exactly like a note's. */
+.fin__rail-menu {
+  opacity: 0;
+  transition: opacity var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.fin__rail-row:hover .fin__rail-menu,
+.fin__rail-menu[aria-expanded="true"],
+.fin__rail-menu:focus-visible {
+  opacity: 1;
+}
+.fin__rail-add.nx-button {
+  align-self: flex-start;
+  margin-top: var(--nx-space-1);
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.fin__rail-add.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+/* The rail's inline forms (new/edit account, new/rename category): a stacked
+   column, since a 248px rail has no room for a row of fields. */
+.fin__rail-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  margin-top: var(--nx-space-1);
+  padding: var(--nx-space-3);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border-subtle);
+  border-radius: var(--nx-radius-md);
+}
+.fin__rail-form-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+.fin__field-hint {
+  font-size: var(--nx-font-size-caption);
+  line-height: var(--nx-font-leading-snug);
+  color: var(--nx-text-subtle);
+}
+
+/* --- Categories ----------------------------------------------------------
+   Rows under their KIND, not a wrap of pills each carrying its own copy of the
+   word. „Kafa i izlasci · Rashod · limit" was three facts crammed into one
+   11px line inside a 14.8px-tall button; the kind is now the heading the row
+   sits under, the limit is a chip of its own, and both targets clear 24px. */
+.fin__cat-rows {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.fin__cat-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 24px;
+  align-items: center;
+  gap: var(--nx-space-1);
+  min-width: 0;
+  border-radius: var(--nx-radius-md);
+}
+/* `display: block` with the height built from padding and leading rather than a
+   centred flex box: `text-overflow` has no effect on a flex container's text,
+   which sits in an anonymous item it cannot reach. 6 + 18 + 6 = 30px, clear of
+   the 24px floor the old 14.8px chip was under. */
+.fin__cat-name {
+  min-width: 0;
+  display: block;
+  padding: 6px var(--nx-space-2);
+  line-height: 18px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: inherit;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: var(--nx-radius-md);
+  cursor: pointer;
+  transition: background-color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.fin__cat-row:hover .fin__cat-name {
+  background: var(--nx-surface-alt);
+}
+.fin__cat-name:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: -2px;
+}
+.fin__cat-limit.nx-chip {
+  flex: none;
+}
+.fin__cat-delete.nx-button {
+  opacity: 0;
+  transition:
+    opacity var(--nx-motion-fast) var(--nx-motion-ease),
+    background-color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.fin__cat-row:hover .fin__cat-delete.nx-button,
+.fin__cat-delete.nx-button:focus-visible {
+  opacity: 1;
+}
+
+/* Budžet, inside the category editor — the one place a limit is set, because a
+   limit IS a category's monthly amount. Separated from the rename above it by
+   a hairline, since the two are different acts with different submits. */
+.fin__category-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+.fin__budget {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  margin-top: var(--nx-space-1);
+  padding-top: var(--nx-space-3);
+  border-top: 1px solid var(--nx-border-subtle);
+}
+.fin__budget-heading {
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-subtle);
+}
+.fin__budget-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+/* One standing allowance, in one currency. Its bin removes THAT currency's
+   limit and nothing else, which the label on it says out loud. */
+.fin__budget-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 24px;
+  align-items: center;
+  gap: var(--nx-space-1);
+  min-width: 0;
+}
+.fin__budget-amount {
+  min-width: 0;
+  font-size: var(--nx-font-size-body-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--nx-text);
+}
+.fin__budget-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+}
+/* Three letters, so the picker is sized to them rather than stretched across
+   the rail. Targeted through the PARENT because `Select` puts `className` on
+   the control and the box that needs the width is the wrapper around it. */
+.fin__budget-controls > .nx-select {
+  flex: none;
+  width: 96px;
+}
+.fin__budget-input.nx-textfield {
+  flex: 1 1 96px;
+  min-width: 0;
+}
+.fin__budget-input .nx-textfield__input {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* --- Izveštaj ------------------------------------------------------------
+   ONE month, one section per currency. Nothing here adds two sections
+   together, and nothing anywhere predicts a third. The section head reuses the
+   band's figure recipe outright: the same fact deserves the same shape
+   wherever the page states it. */
+.fin__report {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+}
+.fin__report-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+}
+.fin__report-month {
+  font-size: var(--nx-font-size-title);
+  line-height: var(--nx-font-leading-tight);
+  font-weight: var(--nx-font-weight-semibold);
+  color: var(--nx-text);
+  min-width: 10ch;
+  text-align: center;
+}
+.fin__report-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  padding: var(--nx-space-4);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border-subtle);
+  border-radius: var(--nx-radius-lg);
+  min-width: 0;
+}
+/* The currency names itself once, at the head — which is what lets the column
+   beneath it drop the code from every row without becoming ambiguous. */
+.fin__report-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  padding-bottom: var(--nx-space-3);
+  border-bottom: 1px solid var(--nx-border-subtle);
+}
+.fin__report-note {
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-subtle);
+}
+/* The bars: one row per category, all drawn against the SECTION's single
+   scale, so two of them can be compared by eye. Data, not decoration — no
+   gradient, no animation, no glow. Row, label, track, fill and limit are
+   `ProportionBar`'s; these are only the colour states it has no slot for. */
+.fin__bars {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+/* „Bez kategorije" is a real line and stays visible — quieter, because it is
+   the leftover rather than a category. */
+.fin__bar-label--muted {
+  color: var(--nx-text-muted);
+}
+.fin__bar-spent--over {
+  color: var(--nx-danger);
+  font-weight: var(--nx-font-weight-medium);
+}
+.fin__bar-budget,
+.fin__bar-nobudget {
+  color: var(--nx-text-subtle);
+}
+/* Never an amount — a category with no limit has none, and this page invents
+   none for it. */
+.fin__bar-nobudget {
+  font-variant-numeric: normal;
+}
+
+/* --- Pretplate -----------------------------------------------------------
+   The charges that repeat. Nothing new visually: the rows are `ListRow`s
+   carrying the ledger's own title/meta/amount cluster, and the form is the
+   ledger form's panel. A schedule is not a fourth kind of thing this page
+   needs a look for. */
+.fin__subs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+}
+.fin__subs-list {
+  display: flex;
+  flex-direction: column;
+}
+/* The row's own levels, as a grid with FIXED trailing tracks for the ledger's
+   reason: every row is its own grid, so a content-sized track is measured per
+   row and the amounts stop wherever each row's text happens to end.
+   State — paused, reminded — stays a pill where the ledger's account and
+   category became text, because a state is a fact about THIS row rather than a
+   word repeated down the column. */
+.fin__sub-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px 160px;
+  align-items: center;
+  gap: var(--nx-space-3);
+  min-width: 0;
+}
+/* The text yields to the chips, never the other way round: a truncated name for
+   a category is a nuisance, a half-drawn „Pauzirano" is a state nobody can read. */
+.fin__sub-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  min-width: 0;
+}
+.fin__sub-meta .fin__meta {
+  flex: 0 1 auto;
+}
+.fin__sub-meta .nx-chip {
+  flex: none;
+}
+/* A PAUSED subscription (ADR-074) stays in the one alphabetical list —
+   splitting it in two would turn „koje pretplate imam" into two questions —
+   and says so by going quiet instead of by moving. `ListRow`'s own `muted`
+   takes the content down; the AMOUNT is the one thing it cannot reach, because
+   that element sets its own colour. A paused row is not stating a direction its
+   money is currently going in. */
+.fin__subs-row--paused .fin__amount {
+  color: var(--nx-text-muted);
+}
+/* The tasks page's „Blokiran" recipe outright — outlined, muted text, no fill,
+   no glow — for exactly its reason: a pause is a fact about the subscription,
+   not a warning about it. Nothing is refused, and one click undoes it. */
+.fin__paused-chip.nx-chip {
+  background: transparent;
+  border: 1px solid var(--nx-border);
+  padding: 1px 8px;
+  color: var(--nx-text-muted);
+}
+.fin__subs-upcoming {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.fin__subs-upcoming-row {
+  display: grid;
+  grid-template-columns: 11ch minmax(0, 1fr) 160px;
+  align-items: baseline;
+  gap: var(--nx-space-3);
+  min-height: 32px;
+  padding: 0 var(--nx-space-2);
+  min-width: 0;
+  border-radius: var(--nx-radius-md);
+}
+.fin__subs-upcoming-row:hover {
+  background: var(--nx-surface-alt);
+}
+.fin__date {
+  font-size: var(--nx-font-size-caption);
+  font-variant-numeric: tabular-nums;
+  color: var(--nx-text-subtle);
+  white-space: nowrap;
+}
+
+/* --- The undo bar --------------------------------------------------------
+   The tasks page's own recipe, because it is the same promise. */
+.fin__undo {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border-subtle);
+  border-radius: var(--nx-radius-md);
+}
+.fin__undo-text {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+}
+
+/* The settings card's currency field — three letters, so it does not need to
+   take a whole column's width. */
+.set__currency-input {
+  width: 96px;
+  text-transform: uppercase;
+}
+
+/* Navike (HABIT): the default reminder hour. Sized to its own content like the
+   currency code beside it, rather than stretching a four-character value across
+   a card. */
+.set__time-input {
+  width: 132px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Fokus (UTIL): four minute fields. Sized to the widest value any of them can
+   hold (three digits) on the same reasoning as the two above — a card of
+   full-width inputs over two-digit numbers reads as a form with something to
+   hide. */
+.set__focus-input {
+  width: 96px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Datoteke (DOC) ------------------------------------------------------
+   The browse page over every attachment in the profile. Its header, chips and
+   meta line are the search page's (.searchpage__*) arrangement — the two are
+   the app's only browse surfaces, and they should read as one idea — with the
+   list/grid pair the page adds. */
+.doc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-5);
+}
+.doc__view {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  flex-shrink: 0;
+}
+.doc__filters {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+.doc__search {
+  width: 100%;
+}
+.doc__chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+/* The hand-rolled „N datoteka · X" meta line is gone: it was a band of figures
+   drawn at caption size, which is the one thing `StatBand` exists to stop each
+   page inventing for itself. What is left here is the ADVICE under the band —
+   the number itself is the band's business. */
+.doc__truncated {
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-subtle);
+}
+.doc__action-error {
+  margin: 0;
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-danger);
+}
+/* The page's ONE read, with the dashboard widgets' isolated boundary: a quiet
+   placeholder while it is in flight, and a failure that offers to ask again
+   rather than an EmptyState claiming there is nothing here. */
+.doc__failure {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nx-space-2);
+}
+.doc__error {
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+/* --- Lista --------------------------------------------------------------- */
+/* One grid template for the head and every row, so the columns line up without
+   a table: name takes the slack, the three facts are sized to their content,
+   and the menu keeps the 24px square every row-level "⋯" sits in. */
+.doc__list {
+  display: flex;
+  flex-direction: column;
+}
+.doc__list-head,
+.doc__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 240px) 88px 112px 24px;
+  align-items: center;
+  gap: var(--nx-space-3);
+  padding: var(--nx-space-1) var(--nx-space-2);
+}
+.doc__list-head {
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-subtle);
+  border-bottom: 1px solid var(--nx-border-subtle);
+}
+.doc__row {
+  min-height: 36px;
+  border-radius: var(--nx-radius-md);
+  transition: background var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.doc__row:hover {
+  background: var(--nx-surface-alt);
+}
+/* The file's name is the row's FIRST level, at the house size for one — 15/500.
+   It had been 13px, which put it on the same step as the owner beside it and
+   the date after it, so a row of four facts read as four equals and the reader
+   had to work out which one the row was about. */
+.doc__row-name,
+.doc__card-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nx-font-size-body);
+  font-weight: var(--nx-font-weight-medium);
+  color: var(--nx-text);
+}
+/* The owner is a link in everything but its chrome: it is the row's „Idi na…",
+   reachable without opening the menu.
+ *
+ * ONE recipe, shared by the row and the card. The two used to be different
+ * controls saying the same thing — the row's owner carried a „BELEŠKA" eyebrow
+ * and the card's did not — so the same page told you where a file lives two
+ * ways depending on which shape you had switched to. A view toggle changes the
+ * ARRANGEMENT of a surface; it must not change its vocabulary. */
+.doc__owner {
+  display: flex;
+  align-items: baseline;
+  gap: var(--nx-space-1);
+  min-width: 0;
+  min-height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--nx-text-muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.doc__owner:hover {
+  color: var(--nx-accent-strong);
+}
+.doc__owner:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+  border-radius: var(--nx-radius-xs);
+}
+.doc__owner-kind {
+  flex-shrink: 0;
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-medium);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-subtle);
+}
+.doc__owner-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nx-font-size-body-sm);
+}
+.doc__row-size,
+.doc__row-date,
+.doc__card-meta {
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Mreža --------------------------------------------------------------- */
+/* Wide enough for the 15px name the list uses — a card that had to set its own
+   smaller type would be the two views drifting apart again. */
+.doc__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: var(--nx-space-3);
+}
+.doc__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  padding: var(--nx-space-2);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+  background: var(--nx-surface);
+  min-width: 0;
+}
+.doc__card-thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 92px;
+  border-radius: var(--nx-radius-md);
+  background: var(--nx-surface-alt);
+  overflow: hidden;
+}
+.doc__card-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/* The house file-type mark: the file's own extension, set in the UI face —
+   never a pictogram, because this app draws none. */
+.doc__card-mark {
+  font-size: var(--nx-font-size-body-sm);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-subtle);
+}
+/* The "⋯" stays quiet until its row/card is hovered or the menu is open — the
+   .study__material-menu treatment. */
+.doc__menu {
+  opacity: 0;
+}
+.doc__row:hover .doc__menu,
+.doc__card:hover .doc__menu,
+.doc__menu[aria-expanded="true"],
+.doc__menu:focus-visible {
+  opacity: 1;
+}
+/* On a card the menu goes to the trailing edge rather than into a column of
+   its own: a card is a column, not a row. */
+.doc__card > .note__menu {
+  align-self: flex-end;
+}
+
+/* --- Navike (HABIT slice b) ----------------------------------------------
+   Two stacked sections rather than a rail and a body: „Danas“ is a short list
+   that is done with in seconds, and „Sve navike“ is the reference underneath it
+   — a sidebar would give a page with one subject two columns to look at.
+
+   THE TWO SECTIONS ARE TWO SHAPES, and that is the fix for the page's oldest
+   defect: it printed every habit twice, in two lists built from one row recipe,
+   so on a profile of daily habits „Danas“ and „Sve navike“ were the same list
+   drawn twice with different actions on the end. They now answer two questions
+   and look like it — „Danas“ is a TABLE of today's state, with every repeated
+   word („Niz“, „ove nedelje“) hoisted into its head; „Sve navike“ is a REGISTER
+   of what each habit asks for, and the only place one is made or changed.
+
+   Every colour a habit wears is its own `--nx-swatch-*` (the folder palette,
+   reused rather than respelled); nothing here mints a second vocabulary, and
+   there is no glow anywhere — a picked weekday is an accent border, and the
+   history grid's three states differ by fill and outline alone. */
+.hab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-5);
+}
+.hab__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  align-items: flex-start;
+}
+/* A band inside a section takes the section's whole width. The sections pack
+   their children to the leading edge, and a `StatBand` that shrink-wrapped would
+   draw its own hairline under only as much of the page as its figures happened
+   to occupy. Chained rather than bare: `.nx-stat-band` is defined in
+   packages/ui, and a same-specificity rule here would be a coin toss decided by
+   import order. */
+.hab__section > .nx-stat-band {
+  align-self: stretch;
+}
+.hab__heading {
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-subtle);
+}
+.hab__note {
+  margin: 0;
+  max-width: 68ch;
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+/* --- „Zid navika" ---------------------------------------------------------
+   The module's signature graphic, and it deliberately carries no colour of its
+   own: the squares are `CellMatrix`'s `.nx-cell` recipe verbatim, so the wall
+   and every other drawn graphic in the app share one intensity ramp rather
+   than two that can drift. The wrapper is `.nx-chart-group` (packages/ui) —
+   four surfaces had each grown the same one before it was hoisted.
+
+   Only the two TEXT roles are defined here, because SVG text does not inherit
+   the page's type scale — and both are given a token, which inside a viewBox
+   is read as user units and therefore scales with the squares it labels. That
+   is the whole reason the names live in the drawing instead of in a column
+   beside it: a flex column would keep its own px height while the SVG shrank,
+   and the labels would slide off their rows.
+
+   THE HOST IS WHAT THE WALL IS MEASURED AGAINST (see `HabitWall.tsx`): the
+   component re-derives its own square size from this element's width, so the
+   lattice is drawn AT the pane rather than scaled into the middle of it.
+   Nothing here may give it a max-width — that would put the marooning back. */
+.hab__wall {
+  align-self: stretch;
+  min-width: 0;
+}
+.hab__wall-name {
+  font-size: var(--nx-font-size-caption);
+  fill: var(--nx-text);
+}
+.hab__wall-week {
+  font-size: var(--nx-font-size-caption);
+  fill: var(--nx-text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+.hab__error {
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-danger);
+}
+/* Every quiet ghost on this page — cancel, dismiss, „Svaki dan“. */
+.hab__quiet.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.hab__quiet.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.hab__list {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+}
+
+/* The single-slot undo bar, the FIN/TASK recipe outright: one offer at a time,
+   above both sections, because a deleted habit is gone from each of them. */
+.hab__undo {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+}
+.hab__undo-text {
+  flex: 1;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+}
+
+/* A row: the habit's swatch dot in the leading slot, then its name and its two
+   quieter levels; the actions sit in the trailing slot and stay quiet until
+   hover — the ledger row's own treatment. */
+.hab__dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--nx-radius-round);
+  border: 1px solid var(--nx-border);
+}
+.hab__row-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+/* Level one, on both lists. */
+.hab__name {
+  font-size: var(--nx-font-size-body);
+  font-weight: var(--nx-font-weight-medium);
+  line-height: var(--nx-font-leading-snug);
+  color: var(--nx-text);
+}
+/* Level two of a REGISTER row: what the habit asks for — its raspored and, when
+   it measures something, its cilj. One sentence rather than a strip of chips,
+   because two chips of identical weight is precisely how the schedule used to
+   drown the one interesting fact beside it. */
+.hab__reg-what {
+  font-size: var(--nx-font-size-body-sm);
+  line-height: var(--nx-font-leading-snug);
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+/* Level three: the standing facts about the row itself — the reminder hour, and
+   „Arhivirano". An ARCHIVED habit stays in the one alphabetical list (splitting
+   it would make „koje navike imam“ two questions) and says so in words, quietly,
+   rather than by moving or by wearing a chip: being finished with something is a
+   fact about the habit, not a warning about it. */
+.hab__reg-state {
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-medium);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+.hab__row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.hab .nx-list-row:hover .hab__row-actions,
+.hab__row-actions:focus-within {
+  opacity: 1;
+}
+.hab__row-action.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 6px;
+}
+.hab__row-action.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.hab__row-delete.nx-button:hover {
+  color: var(--nx-danger);
+}
+
+/* --- „Danas“, the checklist ----------------------------------------------
+   A table, and the head is what makes it one: „Niz“ and „ove nedelje“ are said
+   ONCE up there instead of on every row, which is what they were doing when
+   they rode along as chips. The four columns are fixed widths rather than
+   `auto` because each row is its own grid — `auto` would size to that row's own
+   content and no two rows would line up.
+
+   Two of the columns are conditional, and both conditions are about the habits
+   actually on screen: the week fraction is only drawn when today holds a quota
+   habit, and the tick column only widens to hold a stepper when one of them
+   measures something. A permanently blank column is a column of nothing, and a
+   250px well around a single checkbox is the same defect from the other side. */
+.hab__today {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  /* Wide enough for the „DANAS“ heading above a lone checkbox. */
+  --hab-tick-col: 56px;
+}
+.hab__today--measured {
+  --hab-tick-col: 264px;
+}
+.hab__today-head,
+.hab__today-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 96px var(--hab-tick-col);
+  align-items: center;
+  gap: var(--nx-space-3);
+  padding: var(--nx-space-1) var(--nx-space-2);
+}
+.hab__today--quota .hab__today-head,
+.hab__today--quota .hab__today-row {
+  grid-template-columns: minmax(0, 1fr) 96px 96px var(--hab-tick-col);
+}
+.hab__today-head {
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-subtle);
+  border-bottom: 1px solid var(--nx-border-subtle);
+}
+.hab__today-row {
+  min-height: 44px;
+  border-radius: var(--nx-radius-md);
+  transition: background var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.hab__today-row:hover {
+  background: var(--nx-surface-alt);
+}
+/* The name column: the dot, then the habit's levels. */
+.hab__today-habit {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  min-width: 0;
+}
+/* Level three: the raspored, demoted out of the chip it used to share with the
+   niz. It is context, not news — the niz is the news, and it now has a column. */
+.hab__today-sched {
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-medium);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* The two numeric columns. Right-aligned and tabular, so a column of streaks
+   reads as a column and not as ragged prose. An empty cell is a habit with no
+   niz yet, and stays empty rather than claiming a zero. */
+.hab__figure {
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+.hab__figure--live {
+  color: var(--nx-text);
+  font-weight: var(--nx-font-weight-medium);
+}
+/* The head reuses `.hab__figure` only to inherit its RIGHT ALIGNMENT — its type
+   is the head's. Without this the column headings would take the row recipe's
+   13px muted and stop reading as headings, which is the same one-class-two-jobs
+   trap that produced the chips this table replaced. */
+.hab__today-head .hab__figure {
+  font-size: inherit;
+  font-weight: inherit;
+  color: inherit;
+}
+
+/* „Danas“'s tick. A binary habit gets a checkbox, a measured one the stepper
+   below; both sit at the trailing edge of the same column, so the controls form
+   one edge down the list whatever mix of habits is in it. */
+.hab__tick {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--nx-space-1);
+}
+/* − value/target unit + . The FIGURE and its UNIT are two slots, which is the
+   whole point: „11.929/10.000“ right-aligns against „5/8“ in a fixed column and
+   „koraka“ starts where „čaša“ starts, so a list of measured habits has one
+   column of digits instead of five strings of different lengths. The figure
+   goes accent the moment the day counts — the one piece of feedback the control
+   owes — and never animates.
+
+   104px holds „100.000/100.000" — the store's own `MAX_HABIT_COUNT` on both
+   halves — at the row's 13px tabular figures, so the widest value the app can
+   hold still fits its slot rather than shouldering the unit out of the way. */
+.hab__measure {
+  display: inline-grid;
+  grid-template-columns: 104px 72px;
+  align-items: baseline;
+  gap: var(--nx-space-1);
+}
+.hab__step.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.hab__step.nx-button:hover:not(:disabled) {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.hab__count {
+  overflow: hidden;
+  text-align: right;
+  font-size: var(--nx-font-size-body-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--nx-text-muted);
+  white-space: nowrap;
+}
+.hab__count--done {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.hab__unit {
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The expanded row's own block, under the row it belongs to. */
+.hab__item {
+  display: flex;
+  flex-direction: column;
+}
+.hab__detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  padding: var(--nx-space-3) var(--nx-space-3) var(--nx-space-4);
+  border-bottom: 1px solid var(--nx-border);
+}
+.hab__history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+.hab__history-heading {
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-subtle);
+}
+
+/* The 12-week calendar: one row per week, one cell per day, in the DEVICE's own
+   weekday order. Three quiet states and nothing else — a satisfied cell is
+   filled with the habit's own swatch, a missed one is an outline (the day was
+   asked for and is empty), and a day the schedule never asked for is a faint
+   block that accuses nobody. A cell with no verdict to give — before the habit
+   existed, after today, or today while it is still running — draws nothing at
+   all, which keeps the grid rectangular without inventing a fourth state.
+
+   THE CELL IS A 24px TARGET, not the 13px square it drew at. Half of these
+   cells are real buttons and the pointer floor is 24 wherever a button is
+   mounted — and, unlike the wall, this grid can afford it: it is SEVEN columns
+   (the weekdays) by twelve rows (the weeks), so at 24px it is about 190px wide,
+   not the 2000 a 84-across strip would have needed. The wall's own squares are
+   exempt because nothing there is a target at all. */
+.hab__grid {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.hab__grid-week {
+  display: flex;
+  gap: 3px;
+}
+.hab__cell {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--nx-radius-sm);
+  border: 1px solid transparent;
+}
+/* The legend's swatches are marks, not targets, so they keep the small square —
+   three 24px blocks beside three words would read as three buttons. */
+.hab__legend .hab__cell {
+  width: 13px;
+  height: 13px;
+  border-radius: var(--nx-radius-xs);
+}
+/* A cell that carries a verdict is a real button (slice c), so the element's own
+   chrome has to be reset before the square above survives. Only the two states a
+   click can move between get this — the inert ones stay spans, and a pointer
+   that changes shape over exactly the squares that respond is the honest way to
+   say which those are. The focus ring is the app's own, never a glow. */
+.hab__cell--editable {
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  cursor: pointer;
+  appearance: none;
+}
+.hab__cell--editable:hover {
+  border-color: var(--nx-accent);
+}
+.hab__cell--editable:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+/* The fill is the habit's own swatch, set inline. The accent stands in when the
+   habit was given no colour — without it a satisfied cell would be an empty box
+   with a border, which is exactly what a MISSED one is. */
+.hab__cell--satisfied {
+  background: var(--nx-accent);
+  border-color: var(--nx-border);
+}
+.hab__cell--missed {
+  border-color: var(--nx-border);
+  background: transparent;
+}
+.hab__cell--unexpected {
+  background: var(--nx-surface-alt);
+}
+.hab__cell--unjudged {
+  background: transparent;
+}
+.hab__legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nx-space-3);
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+/* „Podsetnik": the time field and the clear beside it, on one line. */
+.hab__reminder {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+/* Chained with the primitive it modifies: `.nx-textfield__input` sets
+   `width: 100%` from packages/ui, and a bare `.hab__time` would be a tie decided
+   by which stylesheet happened to be imported last. */
+.nx-textfield__input.hab__time {
+  width: auto;
+  font-variant-numeric: tabular-nums;
+}
+.hab__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+
+/* The habit's numbers are a `StatBand` now, not five rules of their own: label,
+   figure, and — where the figure is a fraction — the `note` saying what its
+   denominator IS, which is the very field the band was given for a figure that
+   is not a plain total. Five hand-rolled stat blocks is the class that produced
+   the band in the first place, and this was the fifth. */
+
+/* The one form, serving create and edit. */
+.hab__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  align-self: stretch;
+  padding: var(--nx-space-3);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+}
+.hab__form-title {
+  font-size: var(--nx-font-size-body);
+  font-weight: var(--nx-font-weight-semibold);
+  color: var(--nx-text);
+}
+.hab__form-actions {
+  display: flex;
+  gap: var(--nx-space-2);
+}
+.hab__pair {
+  display: flex;
+  gap: var(--nx-space-3);
+  flex-wrap: wrap;
+}
+.hab__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  align-items: flex-start;
+}
+.hab__field-label {
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-muted);
+}
+.hab__field-hint {
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+/* „Puta nedeljno" is a `Select` now, so its chrome, its chevron and — the point
+   — its VISIBLE label come from the primitive rather than from a bare `<select>`
+   with a hand-written label beside it. One digit wide, sized through the PARENT
+   because `Select` puts `className` on the control while the box that needs the
+   width is the wrapper around it (`.fin__budget-controls`' own note). */
+.hab__form > .nx-select {
+  align-self: flex-start;
+  width: 132px;
+}
+.hab__segmented {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  align-self: flex-start;
+}
+
+/* The weekday multi-select. A picked day is an ACCENT BORDER plus accent text —
+   the drop-target rule applied to a toggle: never a fill that competes with the
+   primary button beside it, and never a glow. */
+.hab__weekdays {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-1);
+}
+.hab__weekday.nx-button {
+  background: transparent;
+  border-color: var(--nx-border);
+  color: var(--nx-text-muted);
+  padding: 4px 10px;
+}
+.hab__weekday.nx-button:hover {
+  color: var(--nx-text);
+}
+.hab__weekday--picked.nx-button {
+  border-color: var(--nx-accent);
+  background: var(--nx-accent-soft);
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+
+/* --- Fokus (UTIL slice b) -------------------------------------------------
+   One panel at the top and two stacked sections under it, on „Navike"'s own
+   arrangement: a page with one subject does not earn two columns.
+
+   The panel is the whole design decision. A focus timer is the one screen in
+   this app somebody actually LOOKS at while it runs, so the clock is the
+   largest thing on it and everything else is quiet around it — no ring, no
+   progress bar, no glow. A ring would be a second reading of the same number,
+   and the moment a phase overruns it would have to either lie (stay full) or
+   invent a second lap; the figure says the truth in both directions with a
+   sign in front of it, and that is enough.
+
+   Three states, and each is a colour of TEXT rather than a treatment of the
+   panel: running is the plain text colour, paused goes muted (the clock is
+   frozen, so it reads as inactive), and overrun goes accent — which is the same
+   „look at this" the app uses for a high-priority task and never a danger red,
+   because running past a Pomodoro is not an error. */
+.foc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-5);
+}
+.foc__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  align-items: flex-start;
+}
+/* Same reason as „Navike"'s: the section packs to its leading edge, and a band
+   is a full-width object with a hairline under it. */
+.foc__section > .nx-stat-band {
+  align-self: stretch;
+}
+.foc__heading {
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-subtle);
+}
+.foc__note {
+  margin: 0;
+  max-width: 56ch;
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+.foc__note--overrun {
+  color: var(--nx-accent-strong);
+}
+.foc__error {
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-danger);
+}
+/* Every quiet ghost on this page — dismiss, the three explicit starts. „Odbaci"
+   uses `variant="danger"` instead (still an outline, still subordinate to
+   „Završi"'s filled primary, but marked as the destructive one). */
+.foc__quiet.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.foc__quiet.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.foc__list {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+}
+/* „Trake pažnje" sits at the house PANEL width (`SpanLanes` knows two: 320 for
+   a card and 720 for a panel). The GROUP is capped to the same 720 so the
+   figure's title, its bars and its caption share one left edge — an
+   `align-self: stretch` group in a 1180px pane left the title at x=0 while the
+   drawing floated centred two hundred pixels away, which is the same marooning
+   the wall had and reads as a graphic that has come loose from its heading. */
+.foc__lanes {
+  max-width: 720px;
+}
+
+/* The single-slot undo bar, the HABIT/FIN/TASK recipe outright. */
+.foc__undo {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+}
+.foc__undo-text {
+  flex: 1;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+}
+
+/* The panel: the running phase, or what to start next. Both use it, so the page
+   does not visibly rearrange itself the moment a timer starts. */
+.foc__now {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  align-self: stretch;
+  align-items: flex-start;
+  padding: var(--nx-space-5);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+}
+.foc__now-head {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+/* The best-set thing in the app, and it earns that: it is the largest figure on
+   the one screen somebody actually watches while it runs. The DISPLAY face at
+   the display size with the display tracking — the same trio the page title
+   uses, one step up — and tabular figures, without which a countdown's width
+   changes on every second that turns a 1 into a 4 and the whole clock jitters.
+
+   IT CARRIES NO TRANSITION OF ANY KIND, deliberately, and none may be added:
+   the three states below are colour changes on a figure that redraws once a
+   second, so a transition would leave the digits perpetually mid-fade between
+   two colours — and a NUMBER that animates is a number the reader cannot trust
+   to be the one it is showing. (The same rule, and the same sentence, as
+   `.fin__figure-value`.) */
+.foc__clock {
+  font-family: var(--nx-font-family-display);
+  font-size: var(--nx-font-size-display);
+  font-weight: var(--nx-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--nx-font-tracking-display);
+  line-height: 1;
+  color: var(--nx-text);
+}
+/* Frozen, and it says so by going quiet — the same muted the app uses for
+   anything that is not currently doing something. */
+.foc__clock--paused {
+  color: var(--nx-text-muted);
+}
+/* Past its plan. Accent, never danger: overrunning a Pomodoro is a fact about
+   the phase, not a fault. */
+.foc__clock--overrun {
+  color: var(--nx-accent-strong);
+}
+/* The idle panel shows a LENGTH rather than a clock, so it is deliberately
+   smaller — it is a proposal, and a proposal at 48px would read as a countdown
+   that had stopped. */
+.foc__clock--idle {
+  font-size: var(--nx-font-size-h1);
+  letter-spacing: var(--nx-font-tracking-h1);
+  line-height: var(--nx-font-leading-tight);
+  color: var(--nx-text-muted);
+}
+.foc__now-what {
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+}
+.foc__now-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+}
+
+/* The idle panel's two fields — what to attach, and what to call it. The
+   attachment is a `Select`, so its label is the primitive's and is visible;
+   sized through the parent, like every other `Select` in the house. */
+.foc__fields {
+  display: flex;
+  gap: var(--nx-space-3);
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+.foc__fields > .nx-select {
+  flex: 1 1 240px;
+  min-width: 0;
+  max-width: 300px;
+}
+.foc__field-hint {
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+
+/* „Danas"'s three figures are a `StatBand` now — one per phase kind, zeros
+   included, because the zero is the point (see the page's own comment). It had
+   been a fourth hand-rolled copy of the band's own three rules. */
+
+/* A history row: the kind chip leads, then the three levels — WHEN it was
+   (first), WHAT it was about (second), and what is standing about it (third).
+   The duration leaves the body for the trailing slot, where a column of them
+   right-aligns against one edge instead of floating after names of five
+   different lengths. The delete stays quiet until hover — the ledger row's own
+   treatment, shared with „Navike". */
+.foc__row-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.foc__row-when {
+  font-size: var(--nx-font-size-body);
+  font-weight: var(--nx-font-weight-medium);
+  line-height: var(--nx-font-leading-snug);
+  color: var(--nx-text);
+  font-variant-numeric: tabular-nums;
+}
+.foc__row-minutes {
+  min-width: 76px;
+  text-align: right;
+  font-size: var(--nx-font-size-body-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--nx-text-muted);
+  white-space: nowrap;
+}
+.foc__row-what {
+  font-size: var(--nx-font-size-body-sm);
+  line-height: var(--nx-font-leading-snug);
+  color: var(--nx-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 48ch;
+}
+/* Level three: „Prekoračeno" / „Bez plana" — a fact about the row, said in the
+   quiet register rather than in a chip that would sit at the same weight as the
+   kind chip already leading the row. */
+.foc__row-mark {
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-medium);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-subtle);
+}
+/* The trailing slot: the duration in its own fixed, right-aligned column, then
+   the action that stays hidden until the row is hovered. The width is fixed so
+   the durations line up down the list — a slot sized to its own row's content
+   would put every one of them at a different x. */
+.foc__row-trailing {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--nx-space-2);
+}
+.foc__row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.foc .nx-list-row:hover .foc__row-actions,
+.foc__row-actions:focus-within {
+  opacity: 1;
+}
+.foc__row-action.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 6px;
+}
+.foc__row-action.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-danger);
+}

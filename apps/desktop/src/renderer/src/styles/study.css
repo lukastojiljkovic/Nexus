@@ -1,0 +1,1481 @@
+/* Study (STUDY page) --------------------------------------------------- */
+.study {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-5);
+  /* THE MEASURE. At a 1600px window the main column is ~1350px wide, and a row
+     whose label sits at the far left and whose figure sits at the far right
+     becomes two unrelated objects: the eye cannot carry one across the other.
+     `--nx-layout-measure` is the token that already existed for this and had
+     never been adopted anywhere — it is adopted here and in `.fit`, and it
+     belongs on the page shell so every module inherits it rather than each one
+     remembering (reported, `shell.css` is not this agent's file). */
+  max-width: var(--nx-layout-measure);
+}
+/* The hub's opening block: the figures band, then the signature graphic. Both
+   are the page's ANSWER, so they sit above the first list rather than under the
+   last one — „Plan i stvarnost" used to be the final element on the page. */
+.study__overview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+}
+/* Names a COLUMN of figures once, above the rows, so „min" and „za ponavljanje"
+   stop being repeated on every row of a list (the `StatBand` `unit` rule,
+   applied to a list). Tertiary ink: it is a mark on the layout, not content. */
+.study__col-legend {
+  flex: none;
+  font-size: var(--nx-font-size-label);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-subtle);
+  white-space: nowrap;
+}
+/* The same legend trailing a sentence rather than heading a flex row — the
+   „Vežbaj" dialog names its špil figures inside its own question line. */
+.study__col-legend--inline {
+  margin-left: var(--nx-space-2);
+}
+/* Subject form (create + edit) — one wrapping row; the name field takes the slack. */
+.study__subject-form {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+}
+.study__name-input {
+  flex: 1;
+  min-width: 200px;
+}
+.study__semester-input {
+  width: auto;
+  min-width: 120px;
+  flex: none;
+}
+/* Edit-mode cancel: a quiet ghost beside the primary submit (text feel). */
+.study__cancel.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.study__cancel.nx-button:hover {
+  background: transparent;
+  color: var(--nx-text);
+}
+
+/* Colour picker — a row of dot toggles; the selected one gets an accent border
+   + soft background (never a glow), mirroring the drop-target treatment. */
+.study__color-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+/* 24×24 is the floor for any pointer target in this app, and this control was
+   21px (4px padding around a 10px dot, plus a 1.5px ring). The DOT stays 10px —
+   it is the same mark the subject and plan headers draw, and growing it here
+   would have made one swatch read louder than the thing it names — so the size
+   is taken by the hit area around it instead. `place-items` rather than more
+   padding, so the dot is centred at whatever size the mark later becomes. */
+.study__color-option {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: transparent;
+  border: 1.5px solid transparent;
+  border-radius: var(--nx-radius-round);
+  cursor: pointer;
+  transition:
+    border-color var(--nx-motion-fast) var(--nx-motion-ease),
+    background var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.study__color-option:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+.study__color-option:hover {
+  background: var(--nx-surface-alt);
+}
+.study__color-option[aria-pressed="true"] {
+  border-color: var(--nx-accent);
+  background: var(--nx-accent-soft);
+}
+
+/* Colour dot — the 6 SubjectColor keys mapped onto existing tokens only, no new
+   ones added. crimson and burgundy both read as --nx-danger (no distinct hue
+   exists yet for burgundy) — an accepted interim duplicate until the founder's
+   8-accent palette decision. */
+.study__dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--nx-radius-round);
+  flex: none;
+}
+.study__dot--jade {
+  background: var(--nx-data);
+}
+.study__dot--gold {
+  background: var(--nx-accent);
+}
+.study__dot--bronze {
+  background: var(--nx-accent-strong);
+}
+.study__dot--crimson,
+.study__dot--burgundy {
+  background: var(--nx-danger);
+}
+.study__dot--graphite {
+  background: var(--nx-text-muted);
+}
+
+/* Delete + undo (subjects and exams): inline, token-styled undo bar (mirrors
+   the tasks/cal/documents pattern) — the two can stack if both are pending. */
+.study__undo {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+}
+.study__undo-text {
+  flex: 1;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+}
+.study__undo-dismiss.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.study__undo-dismiss.nx-button:hover {
+  background: var(--nx-surface);
+  color: var(--nx-text);
+}
+/* A failed plan restore reuses the undo row's shell but has no action (a
+   stale offer can't be retried) — only the message, tinted danger, and dismiss. */
+.study__undo--error .study__undo-text {
+  color: var(--nx-danger);
+}
+
+/* Subject list: one bordered card per subject, stacked (mirrors nx-card). */
+.study__subjects {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+}
+.study__subject-card {
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+  padding: var(--nx-space-4);
+  box-shadow: var(--nx-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+.study__subject-header {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+.study__subject-name {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nx-font-size-title);
+  line-height: var(--nx-font-leading-tight);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.study__subject-semester {
+  flex: none;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+.study__subject-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  flex: none;
+}
+.study__edit.nx-button,
+.study__archive.nx-button,
+.study__delete.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.study__edit.nx-button:hover,
+.study__archive.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.study__delete.nx-button:hover {
+  background: var(--nx-danger-soft);
+  color: var(--nx-danger);
+}
+
+/* Exams under a subject — rows ordered soonest first. */
+.study__exams {
+  display: flex;
+  flex-direction: column;
+}
+.study__exam-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.study__exam-heading {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--nx-space-2);
+}
+.study__exam-type {
+  font-weight: var(--nx-font-weight-medium);
+}
+.study__exam-date {
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+.study__exam-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+
+/* Inline exam form (add/edit) — revealed under a subject's exam list. */
+.study__exam-form {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+}
+/* Native select matched to the textfield input (tokens only, no custom arrow;
+   mirrors .documents__select). */
+.study__select {
+  font: inherit;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  padding: 7px 13px;
+  transition: border-color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.study__select:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+.study__scope-input {
+  min-width: 160px;
+}
+.study__add-exam.nx-button {
+  align-self: flex-start;
+}
+
+/* Archived subjects — a collapsed secondary section, muted rows. */
+.study__archived {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+.study__archived-list {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Decks (Špilovi) under a subject — mirrors the exams section idiom. ---- */
+.study__decks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+.study__decks-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-2);
+}
+/* „Vežbaj" beside „Uči sve": one group opposite the heading, so the header keeps
+   its two-part balance instead of spreading three items across the row. */
+.study__decks-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+/* `flex: 1` so the title takes the slack and the column legend lands beside the
+   section's own actions, over the end of the rows it names. */
+.study__decks-title {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-size: var(--nx-font-size-caption);
+  text-transform: uppercase;
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-subtle);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.study__deck-name {
+  font-weight: var(--nx-font-weight-medium);
+}
+/* A špil's two figures. They used to be two CHIPS carrying the words „nove" and
+   „za ponavljanje" on every single row — the same two constants repeated down
+   the whole list, which is the noise the column legend above the list exists to
+   remove. What is left is the pair of numbers, tabular so they line up, in the
+   legend's own order. The due figure takes the accent when there is actually
+   something to act on: typographic emphasis, never a chip and never a glow. */
+.study__deck-counts {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--nx-space-1);
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.study__deck-count {
+  min-width: 2ch;
+  text-align: right;
+}
+.study__deck-count--due {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-medium);
+}
+/* A mark between two figures, not text: the faint tier is exactly what it is for. */
+.study__deck-count-sep {
+  color: var(--nx-text-faint);
+}
+.study__deck-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.study__deck-form {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+}
+.study__deck-name-input {
+  flex: 1;
+  min-width: 160px;
+}
+
+/* Materijali + Povezane beleške under a subject (STUDY-001, migration 035) —
+   the decks section's idiom (heading opposite one action, a muted empty line),
+   with the row treatment lifted from the TASK form's „Prilozi" block. Both stay
+   quiet: no borders of their own, no glow, the "⋯" only on hover. --------- */
+.study__materials,
+.study__linked-notes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+.study__materials-header,
+.study__linked-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-2);
+}
+.study__materials-title,
+.study__linked-title {
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+  text-transform: uppercase;
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-subtle);
+  font-weight: var(--nx-font-weight-semibold);
+}
+/* Same recipe as .tasks__attachment-error, scoped to these panels' channels. */
+.study__material-error,
+.study__linked-error {
+  margin: 0;
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-danger-soft);
+  color: var(--nx-danger);
+  border-radius: var(--nx-radius-md);
+  font-size: var(--nx-font-size-body-sm);
+}
+.study__material {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-1) var(--nx-space-2);
+  border-radius: var(--nx-radius-md);
+  transition: background var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.study__material:hover {
+  background: var(--nx-surface-alt);
+}
+.study__material-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nx-font-size-body-sm);
+}
+.study__material-size {
+  flex-shrink: 0;
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+/* The "⋯" stays quiet until its row is hovered or the menu is open — the
+   .tasks__attachment-menu treatment, on a panel row. */
+.study__material-menu {
+  opacity: 0;
+}
+.study__material:hover .study__material-menu,
+.study__material-menu[aria-expanded="true"],
+.study__material-menu:focus-visible {
+  opacity: 1;
+}
+/* „Poveži belešku" names itself instead of showing the bare "⋯": it is a
+   section-level action, and the glyph reads as "more actions on THIS row" only
+   when it sits on a row (see NotePopover's own note). */
+.study__link-note.note__menu-trigger {
+  width: auto;
+  padding: 2px var(--nx-space-2);
+  font-size: var(--nx-font-size-body-sm);
+}
+.study__linked-picker-empty {
+  margin: 0;
+  padding: var(--nx-space-2) var(--nx-space-3);
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+  white-space: nowrap;
+}
+.study__linked-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-1);
+  padding: var(--nx-space-1) 0;
+}
+/* Outlined, like .tasks__tag-chip: which notes a subject is filed with is
+   metadata about the subject, not a state of it. */
+.study__linked-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  padding: 1px 4px 1px 8px;
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-round);
+  font-size: var(--nx-font-size-caption);
+}
+.study__linked-open {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: none;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  color: var(--nx-text);
+  cursor: pointer;
+}
+.study__linked-open:hover {
+  color: var(--nx-accent);
+}
+.study__linked-open--inert {
+  color: var(--nx-text-muted);
+  cursor: default;
+}
+.study__linked-unlink {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  padding: 0 2px;
+  font: inherit;
+  line-height: 1;
+  color: var(--nx-text-muted);
+  cursor: pointer;
+}
+.study__linked-unlink:hover {
+  color: var(--nx-danger);
+}
+
+/* Dnevnik učenja under a subject (STUDY-014) — the same section frame as the
+   two above it (heading opposite one action, muted empty line), with the plan
+   card's quiet text toggle for opening it and its own day rows. Read-only, so
+   nothing here is hoverable or clickable: no row background, no "⋯". ------ */
+.study__log {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+.study__log-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-2);
+}
+.study__log-title {
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+  text-transform: uppercase;
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-subtle);
+  font-weight: var(--nx-font-weight-semibold);
+}
+/* .study__plan-toggle's treatment: an affordance that opens a list is text, not a button face. */
+.study__log-toggle.nx-button,
+.study__log-more.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.study__log-toggle.nx-button:hover,
+.study__log-more.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.study__log-more.nx-button {
+  align-self: flex-start;
+}
+.study__log-empty {
+  margin: 0;
+  padding: var(--nx-space-2) 0;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+/* Same recipe as .study__linked-error, scoped to this section's channel. */
+.study__log-error {
+  margin: 0;
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-danger-soft);
+  color: var(--nx-danger);
+  border-radius: var(--nx-radius-md);
+  font-size: var(--nx-font-size-body-sm);
+}
+.study__log-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  padding: var(--nx-space-1) 0;
+}
+/* One day, one line. The date is the anchor and the facts trail it in muted
+   text — the row is a record, not a control, so it stays flat. */
+.study__log-day {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  font-size: var(--nx-font-size-body-sm);
+}
+.study__log-date {
+  flex-shrink: 0;
+  min-width: 8.5rem;
+  font-variant-numeric: tabular-nums;
+}
+.study__log-facts {
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Study plans (Planovi učenja, STUDY piece 3b) — a top-level hub section: a
+   "Danas za učenje" strip, one card per active plan (countdown chip via the
+   shared exam-date math), and the inline plan form (exam-form idiom). Done
+   reads as jade (data chip / checkbox strike-through); missed is a muted row —
+   never a glow, never a hand-rolled colour. ------------------------------- */
+.study__plans {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+.study__plans-title {
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+  text-transform: uppercase;
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-subtle);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.study__today {
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+  padding: var(--nx-space-3) var(--nx-space-4);
+  box-shadow: var(--nx-shadow);
+}
+/* The strip's heading and the „min" column legend on one baseline, so the unit
+   is stated ONCE over the column instead of on every block row under it. */
+.study__today-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nx-space-2);
+  margin-bottom: var(--nx-space-1);
+}
+.study__today-heading {
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+  text-transform: uppercase;
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-subtle);
+  font-weight: var(--nx-font-weight-semibold);
+}
+/* The same legend over an expanded plan's block list, which has no heading of
+   its own — right-aligned, over the end of the rows it names. */
+.study__blocks-legend {
+  display: flex;
+  justify-content: flex-end;
+  padding-bottom: 2px;
+}
+.study__today-list {
+  display: flex;
+  flex-direction: column;
+}
+.study__plan-card {
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+  padding: var(--nx-space-3) var(--nx-space-4);
+  box-shadow: var(--nx-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+.study__plan-header {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+.study__plan-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nx-font-size-title);
+  line-height: var(--nx-font-leading-tight);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.study__plan-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  flex: none;
+}
+.study__plan-meta {
+  display: flex;
+  align-items: baseline;
+  gap: var(--nx-space-3);
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+/* Expand/collapse toggle for the block list — quiet text affordance. */
+.study__plan-toggle.nx-button {
+  align-self: flex-start;
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.study__plan-toggle.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.study__plan-blocks {
+  display: flex;
+  flex-direction: column;
+}
+.study__block-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+.study__block-minutes {
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.study__plan-form {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+}
+/* Edit mode shows the plan's exam as static text — the exam is not changeable. */
+.study__plan-form-exam {
+  font-size: var(--nx-font-size-body-sm);
+  font-weight: var(--nx-font-weight-medium);
+}
+.study__minutes-input {
+  width: 110px;
+  flex: none;
+}
+/* Mapped store-validation message — full-width line under the form controls. */
+.study__plan-error {
+  margin: 0;
+  flex-basis: 100%;
+  color: var(--nx-danger);
+  font-size: var(--nx-font-size-body-sm);
+}
+
+/* Exam topics & the honest planner (ADR-063, slice b) ----------------------
+   The plan card's health line, the exam-week row variant (the picked/drop-
+   target recipe — accent border + soft background, never a glow), the pin
+   toggle, the per-weekday minutes row and the topics editor inside the plan
+   form, and the „Predlog skraćenja" dialog body. Tokens only. */
+.study__plan-health {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-danger);
+}
+/* A passed exam's unabsorbed backlog is a fact, not an alarm — muted, no button. */
+.study__plan-health--passed {
+  color: var(--nx-text-muted);
+}
+/* How many topics the user cut out of this plan: a standing fact under the
+   health sentence, muted like the rest of the card's meta. */
+.study__plan-scope {
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+/* Exam-week rows = the house picked recipe (accent border + soft background),
+   as an outline so a row lighting up never moves the rows under it. */
+.study__block-row--exam-week {
+  background: var(--nx-accent-soft);
+  outline: 1px solid var(--nx-accent);
+  outline-offset: -1px;
+  border-radius: var(--nx-radius-sm);
+}
+/* The block's topic name and quiet kind chip ride inside the checkbox label. */
+.study__block-topic {
+  margin-left: var(--nx-space-2);
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+.study__block-kind {
+  margin-left: var(--nx-space-2);
+}
+/* Pin toggle — quiet text affordance (the plan-toggle treatment); a pinned
+   block reads typographically: gold text + weight, never a glow. */
+.study__pin.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.study__pin.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.study__pin.nx-button[aria-pressed="true"] {
+  color: var(--nx-accent);
+  font-weight: var(--nx-font-weight-semibold);
+}
+/* Per-weekday minutes (Pon..Ned) — a full-width form line of seven labelled
+   inputs; the hint states the quiet contract (all equal = the scalar). */
+.study__weekdays {
+  flex-basis: 100%;
+  display: flex;
+  align-items: flex-end;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+}
+.study__weekdays-label {
+  font-size: var(--nx-font-size-caption);
+  text-transform: uppercase;
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-subtle);
+  font-weight: var(--nx-font-weight-semibold);
+  align-self: center;
+  margin-right: var(--nx-space-1);
+}
+.study__weekday {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.study__weekday-name {
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+.study__weekday-input .nx-textfield__input {
+  width: 62px;
+}
+.study__weekdays-hint {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+/* The topics editor — a full-width block under the plan form's fields,
+   separated by the house hairline; rank order is scope-cut priority. */
+.study__topics {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  border-top: 1px solid var(--nx-border);
+  padding-top: var(--nx-space-2);
+}
+.study__topics-heading {
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+  text-transform: uppercase;
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-subtle);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.study__topics-hint {
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+.study__topic-row,
+.study__topic-add {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+}
+.study__topic-rank {
+  flex: none;
+  width: 1.5em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+.study__topic-name {
+  flex: 1;
+  min-width: 160px;
+}
+.study__topic-derived {
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+  white-space: nowrap;
+}
+/* The stale-link chip sits inline with the deck picker it explains; its two
+   words never wrap the row. */
+.study__topic-stale-deck {
+  white-space: nowrap;
+}
+.study__topic-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  flex: none;
+}
+.study__topic-error {
+  margin: 0;
+  color: var(--nx-danger);
+  font-size: var(--nx-font-size-body-sm);
+}
+/* „Predlog skraćenja" — the house dialog recipe; rows scroll past ~40vh so a
+   long syllabus never pushes the actions off screen. */
+.study-cut__panel.recur-dialog__panel {
+  width: min(440px, calc(100vw - 2 * var(--nx-space-6)));
+}
+.study-cut__rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  max-height: 40vh;
+  overflow-y: auto;
+  margin: var(--nx-space-2) 0;
+}
+.study-cut__row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--nx-space-3);
+  font-size: var(--nx-font-size-body-sm);
+}
+.study-cut__row-minutes {
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Study stats + focus timer (Statistika i fokus, STUDY piece 4b) — a
+   top-level hub section mirroring .study__plans' visual weight exactly: same
+   card surfaces, same muted section headings. Per-subject figures are
+   PROPORTION ROWS rather than columns (see StudyPage's join helper): a column
+   chart gives every slot the same width and puts its label under it, which
+   works for a short constant label set like weekdays and fails here, where
+   subject names are variable-length and the subject count is unbounded. A row
+   per subject reads its name at full length and grows downward instead.
+   Missed blocks and the "Ostalo" rollup stay muted text, never red/glowing. */
+.study__stats {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+.study__stats-title {
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+  text-transform: uppercase;
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-subtle);
+  font-weight: var(--nx-font-weight-semibold);
+}
+
+.study__focus-card {
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+  padding: var(--nx-space-3) var(--nx-space-4);
+  box-shadow: var(--nx-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+.study__focus-heading {
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+  text-transform: uppercase;
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-subtle);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.study__focus-idle {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+}
+.study__focus-running {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-3);
+  flex-wrap: wrap;
+}
+.study__focus-subject {
+  font-weight: var(--nx-font-weight-medium);
+}
+.study__focus-elapsed {
+  font-size: var(--nx-font-size-h1);
+  line-height: var(--nx-font-leading-tight);
+  font-weight: var(--nx-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  color: var(--nx-accent-strong);
+}
+.study__focus-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  margin-left: auto;
+}
+
+.study__stats-streak {
+  display: flex;
+  align-items: baseline;
+  gap: var(--nx-space-3);
+  font-size: var(--nx-font-size-body-sm);
+}
+.study__stats-streak-current {
+  font-weight: var(--nx-font-weight-medium);
+}
+.study__stats-streak-best {
+  color: var(--nx-text-muted);
+}
+
+.study__stats-section {
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+  padding: var(--nx-space-3) var(--nx-space-4);
+  box-shadow: var(--nx-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+.study__stats-subheading {
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+  text-transform: uppercase;
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-subtle);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.study__stats-line {
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+}
+.study__stats-muted {
+  color: var(--nx-text-muted);
+}
+
+.study__stats-bars {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+.study__stats-bars-heading {
+  margin: 0;
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-subtle);
+  font-weight: var(--nx-font-weight-semibold);
+}
+/* `.study__stats-bar-row/-label/-track/-fill/-value` used to live here — a
+   sixth hand-rolled copy of the part-of-whole strip that `ProportionBar` was
+   written to retire five of, and the only one still painting a two-hue
+   GRADIENT along its fill (gold at the start, jade at the end), so the same
+   quantity changed colour with its own length. The rows are `ProportionBar`
+   now and the rules are gone with them; only the stack and its heading remain,
+   which is layout the component does not own. */
+
+.study__focus-sessions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+.study__focus-sessions-heading {
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+  text-transform: uppercase;
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-subtle);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.study__focus-sessions-list {
+  display: flex;
+  flex-direction: column;
+}
+.study__focus-session-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.study__focus-session-time {
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+.study__focus-session-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+
+/* Deck drill-in (card management) --------------------------------------- */
+.study__deck-view-header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--nx-space-3);
+}
+.study__back.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.study__back.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.study__deck-view-heading {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--nx-space-2);
+  min-width: 0;
+}
+.study__deck-view-name {
+  font-size: var(--nx-font-size-h1);
+  line-height: var(--nx-font-leading-tight);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.study__deck-view-subject {
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+
+.study__cards {
+  display: flex;
+  flex-direction: column;
+}
+.study__card-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.study__card-due {
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+/* Long card content stays on one line in the row, ellipsized (STUDY flashcards). */
+.study__card-front {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 60ch;
+}
+/* Note-source control replacing edit/delete on a note-generated card
+   (STUDY-008 / ADR-017): quiet and typographic, matching .note__wikilink's
+   muted/inert recipe for an unresolvable source. `.study__card-actions` is a
+   flex row, so the label is forced block-level (overriding .nx-button's
+   inline-flex) — an inline element ignores overflow/text-overflow, and
+   without this the ellipsis below would never trigger. */
+.study__card-source {
+  display: block;
+  max-width: 20ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-regular);
+  letter-spacing: var(--nx-font-tracking-normal);
+  color: var(--nx-text-muted);
+}
+.study__card-source.nx-button {
+  padding: 2px 0;
+  background: transparent;
+  border-color: transparent;
+}
+.study__card-source.nx-button:hover {
+  background: transparent;
+  color: var(--nx-text);
+}
+.study__card-source.nx-button:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+/* Card form (add/edit) --------------------------------------------------- */
+.study__card-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  padding: var(--nx-space-3);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+}
+.study__card-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+.study__textarea {
+  min-height: 72px;
+  resize: vertical;
+  font-family: inherit;
+  line-height: var(--nx-font-leading-normal);
+}
+.study__math-preview {
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-sm);
+  color: var(--nx-text);
+  font-size: var(--nx-font-size-body-sm);
+}
+.study__math-hint {
+  margin: 0;
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-muted);
+}
+.study__card-form-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+/* Osnovna/Cloze kind toggle above the card form (ADR-042) — the house
+   segmented recipe, identical to Izgled's `.set__segmented`. */
+.study__segmented {
+  display: inline-flex;
+  gap: var(--nx-space-1);
+  flex-wrap: wrap;
+}
+/* "3 praznine → 3 kartice" under the cloze textarea, and "3 koraka" under the
+   problem one — one recipe, since both answer the same question: how many
+   cards, or how many steps, this text currently makes. Quiet by default; the
+   zero nudge is muted rather than alarming — nothing is wrong yet, there is
+   simply nothing to make a card from. */
+/* „Dodaj prazninu" and the live count share one row under the cloze field: the
+   action on the left, what it produced on the right, on the same baseline. */
+.study__cloze-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-3);
+}
+.study__cloze-count,
+.study__step-count {
+  margin: 0;
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text);
+  font-variant-numeric: tabular-nums;
+}
+.study__cloze-count--empty,
+.study__step-count--empty {
+  color: var(--nx-text-muted);
+}
+/* The problem form's live preview (ADR-046): the steps as the reviewer will
+   show them, one per line, read through the same grammar the store derives the
+   back with. Same box as every other math preview — only the stacking is new. */
+.study__step-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+/* The store's refusal, surfaced in the form rather than the console. */
+.study__card-form-error {
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-danger);
+}
+
+/* KaTeX host (MathText) — no colour of its own, so its output inherits
+   currentColor and matches the surrounding themed text in both Dan and Noć. */
+.study__math {
+  display: inline;
+}
+.study__katex {
+  color: inherit;
+}
+
+/* Review session (STUDY flashcards) — minimal chrome, one card centred. - */
+.review {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--nx-space-5);
+  max-width: 640px;
+  margin: 0 auto;
+  padding: var(--nx-space-6) 0;
+}
+.review__topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: var(--nx-space-3);
+}
+.review__title {
+  font-size: var(--nx-font-size-label);
+  text-transform: uppercase;
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-subtle);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.review__progress {
+  font-variant-numeric: tabular-nums;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+.review__exit.nx-button {
+  background: transparent;
+  border-color: var(--nx-border);
+}
+
+.review__card {
+  width: 100%;
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--nx-space-4);
+  padding: var(--nx-space-6);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+  box-shadow: var(--nx-shadow);
+  text-align: center;
+  font-size: var(--nx-font-size-title);
+  line-height: var(--nx-font-leading-normal);
+}
+/* Which špil the card in front of you belongs to (ADR-047), shown only when a
+   session actually spans more than one. Quiet and above the question — it is
+   context for the card, never part of it. */
+.review__deck {
+  align-self: center;
+}
+.review__divider {
+  width: 100%;
+  max-width: 240px;
+  border-top: 1px solid var(--nx-border);
+}
+.review__back {
+  color: var(--nx-text-muted);
+}
+
+/* Cloze review surface (STUDY-006 / ADR-042): one line that keeps the sentence
+   in place while the blank becomes the answer. `inline` so the segments flow as
+   one paragraph and the line re-wraps around whatever length the answer has. */
+.review__cloze {
+  display: inline;
+}
+/* The masked deletion before reveal: a token-styled chip, not a glow. The
+   dashed border reads as "something belongs here" and the muted foreground
+   keeps the surrounding sentence the thing being read. */
+.review__cloze-blank {
+  display: inline-block;
+  padding: 0 var(--nx-space-2);
+  border: 1px dashed var(--nx-border);
+  border-radius: var(--nx-radius-sm);
+  background: var(--nx-surface-alt);
+  color: var(--nx-text-muted);
+}
+/* The answer after reveal, in the blank's own place: the house typographic
+   emphasis — accent colour plus weight, no glow, no background. */
+.review__cloze-answer {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+
+/* Problem review surface (ADR-046): the statement stays put and the worked
+   solution grows under it, one step per press. Numbered, because the order IS
+   the content — but quietly: the marker is muted and the step itself carries
+   the reading weight. No glow, no card-within-a-card. */
+.review__steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  margin: 0;
+  padding: 0 0 0 var(--nx-space-5);
+  width: 100%;
+  text-align: left;
+  font-size: var(--nx-font-size-body);
+  color: var(--nx-text);
+}
+.review__step::marker {
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.review__reveal.nx-button {
+  align-self: center;
+}
+
+.review__grades {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--nx-space-2);
+  width: 100%;
+}
+.review__grade.nx-button {
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--nx-space-2);
+}
+.review__grade-label {
+  font-weight: var(--nx-font-weight-medium);
+}
+.review__grade-interval {
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+/* Semantic tint per rating, tokens only, applied over the ghost variant.
+   Again uses the house danger Button variant instead (persistent, not just
+   on hover). Hard stays neutral — no dedicated "warning" token exists yet. */
+.review__grade--good.nx-button {
+  border-color: var(--nx-data);
+  color: var(--nx-data);
+}
+.review__grade--good.nx-button:hover {
+  background: var(--nx-data-soft);
+}
+.review__grade--easy.nx-button {
+  border-color: var(--nx-accent);
+  color: var(--nx-accent-strong);
+}
+.review__grade--easy.nx-button:hover {
+  background: var(--nx-accent-soft);
+}
+
+.review__footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+.review__hint {
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+.review__undo.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.review__undo.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+
+/* Session complete -------------------------------------------------------- */
+.review--complete {
+  text-align: center;
+}
+.review__complete-title {
+  font-size: var(--nx-font-size-title);
+  line-height: var(--nx-font-leading-tight);
+  font-weight: var(--nx-font-weight-semibold);
+  margin: 0;
+}
+.review__complete-count {
+  margin: 0;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+.review__complete-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+/* End-of-session summary (STUDY-009): the four ratings on one quiet row, the
+   duration under them. No emphasis anywhere — the session is over, and this is
+   a report, not a scoreboard. */
+.review__summary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+.review__summary-ratings {
+  display: flex;
+  gap: var(--nx-space-4);
+  margin: 0;
+}
+.review__summary-rating {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.review__summary-rating-label {
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+.review__summary-rating-count {
+  margin: 0;
+  font-family: var(--nx-font-family-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--nx-text);
+}
+.review__summary-duration,
+.review__summary-cap {
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}

@@ -1,0 +1,381 @@
+/* Full search page (ADR-039) ------------------------------------------- */
+/* Its own `searchpage__` family rather than more `search__` rules: the two
+   surfaces share meaning, not measurements — the palette is a 640px overlay
+   with a scrolling list, this is a full page column. The one class they do
+   share is `.search__mark`, since a highlight is a highlight. Chips reuse the
+   same typographic toggle as `.search__chip` (accent text + weight, no glow,
+   no inset bar); rows are real <button>s here, unlike the palette's listbox
+   options, because there is no combobox owning focus on this page. */
+.searchpage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-5);
+}
+.searchpage__input.nx-textfield__input {
+  width: 100%;
+  font-size: var(--nx-font-size-body);
+}
+.searchpage__facets {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+.searchpage__chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+.searchpage__chip.nx-button {
+  gap: var(--nx-space-1);
+}
+.searchpage__chip-count {
+  margin-left: var(--nx-space-1);
+  font-size: var(--nx-font-size-label);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+}
+.searchpage__meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nx-space-3);
+  flex-wrap: wrap;
+  padding-bottom: var(--nx-space-2);
+  border-bottom: 1px solid var(--nx-border);
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-muted);
+}
+.searchpage__count {
+  font-variant-numeric: tabular-nums;
+}
+.searchpage__truncated {
+  margin: 0;
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-muted);
+}
+.searchpage__results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+}
+.searchpage__group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.searchpage__group-heading {
+  margin: 0 var(--nx-space-2) var(--nx-space-1);
+  font-size: var(--nx-font-size-caption);
+  text-transform: uppercase;
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-muted);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.searchpage__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-3);
+  width: 100%;
+  padding: var(--nx-space-2);
+  border: none;
+  border-radius: var(--nx-radius-md);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.searchpage__row:hover {
+  background: var(--nx-surface-alt);
+}
+.searchpage__row:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: -2px;
+}
+.searchpage__row:hover .searchpage__row-title {
+  color: var(--nx-accent-strong);
+}
+.searchpage__row-main {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  min-width: 0;
+}
+/* Its type is stated once for both surfaces at the foot of this file; what is
+   left here is the one thing that is this page's own — it must not shrink out
+   of a row whose title is competing for the same width. */
+.searchpage__row-kind {
+  flex: none;
+}
+.searchpage__row-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.searchpage__row-title {
+  /* Same reason as `.search__row-title`: a remembered query puts this span
+     directly inside the flex row, with no `.searchpage__row-text` around it to
+     carry the constraint. */
+  min-width: 0;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.searchpage__row-snippet {
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.searchpage__row-date {
+  flex: none;
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.searchpage__more.nx-button {
+  align-self: flex-start;
+}
+/* A remembered query and its „×" as two real buttons side by side (SRCH-009).
+   The page has no combobox owning focus, so both are ordinary tab stops —
+   unlike the palette's, where the row is a listbox option and Delete is the
+   keyboard path. The remove button stays hidden until the row is hovered or
+   either button is focused, so the list reads as queries rather than as a
+   column of delete controls. */
+.searchpage__history {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+.searchpage__history-run {
+  flex: 1;
+  min-width: 0;
+}
+.searchpage__history-remove {
+  flex: none;
+  border: none;
+  background: transparent;
+  padding: var(--nx-space-1) var(--nx-space-2);
+  border-radius: var(--nx-radius-md);
+  color: var(--nx-text-muted);
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+}
+.searchpage__history:hover .searchpage__history-remove,
+.searchpage__history:focus-within .searchpage__history-remove {
+  opacity: 1;
+}
+.searchpage__history-remove:hover {
+  color: var(--nx-accent-strong);
+}
+.searchpage__history-remove:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: -2px;
+}
+
+/* The palette's own full-page escape hatch, styled as a quiet footer row
+   rather than another result: it is an action, not something to open. */
+.search__row--all {
+  justify-content: center;
+  border-top: 1px solid var(--nx-border-subtle);
+  border-radius: 0;
+  margin-top: var(--nx-space-1);
+  padding-top: var(--nx-space-3);
+}
+.search__row--all .search__row-title {
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+.search__row--all.search__row--active .search__row-title {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+
+/* ONE INSTRUMENT AT TWO SIZES ------------------------------------------
+   Everything below is the part the palette and the page must agree on, and it
+   is written here — after `notes.css`, which is where the palette's own box
+   rules live — precisely so the two can be stated once for both. A rule that
+   applies to `search__*` and `searchpage__*` alike belongs in this block; a
+   measurement that is a 640px overlay's or a full page column's does not. */
+
+/* A RESULT HAS THREE LEVELS, and they are the same three on both surfaces:
+   WHERE IT LIVES (tertiary — an 11px tracked mark, not a line of content),
+   WHAT MATCHED (primary — the title), THE LINE IT MATCHED IN (secondary).
+   Until now the first of these was a bordered Chip at the head of every row:
+   thirty small objects down a list, each competing with the title it was
+   supposed to qualify, and each one repeating a group heading two rows up. */
+.search__row-kind,
+.searchpage__row-kind {
+  font-size: var(--nx-font-size-label);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* The title is the row. On the page it had been set at the same 13px as the
+   palette's, which is right for an overlay of thirty rows and one size too
+   quiet for a page whose whole job is these rows. */
+.searchpage__row-title {
+  font-size: var(--nx-font-size-body);
+}
+/* Both snippets step up from 11px to the readable secondary tier: the snippet
+   is the evidence that the row is the right one, and evidence nobody reads is
+   not evidence. */
+.search__row-snippet,
+.searchpage__row-snippet {
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+/* A row is three stacked lines now, so it needs room to breathe and to align
+   its date against the block rather than against whichever line happens to be
+   in the middle. The 1px the text column carried was a hairline between tiers
+   that are already distinguished by size and ink; 2px lets them separate
+   without the row growing a line's worth of air. */
+.search__row-text,
+.searchpage__row-text {
+  gap: 2px;
+}
+.search__row,
+.searchpage__row {
+  align-items: flex-start;
+}
+/* The page is the same row at page scale — it has the height to spend and only
+   one column to spend it in. */
+.searchpage__row {
+  padding: var(--nx-space-3) var(--nx-space-2);
+}
+.search__row-main,
+.searchpage__row-main {
+  align-items: flex-start;
+}
+.search__row-date,
+.searchpage__row-date {
+  /* The date sits on the title's line, not on the row's centre. */
+  padding-top: 1px;
+}
+
+/* THE MATCH MARK, typographically.
+   It had been a filled accent-soft chip with accent-strong text — the accent is
+   this app's ACTIVE state (the selected row, the current nav item), and spending
+   it on „these four characters matched" put a second, louder accent inside every
+   row of a list whose real selection is drawn in the same colour. A match is
+   marked by weight and by ink, which costs no colour at all and cannot fight
+   anything. `color: inherit` so a mark inside an active or hovered title follows
+   that title rather than dropping out of its state. */
+.search__mark {
+  background: none;
+  border-radius: 0;
+  padding: 0;
+  color: inherit;
+  font-weight: var(--nx-font-weight-semibold);
+}
+/* In a snippet the surrounding text is muted, so the match additionally steps
+   up to full ink — the strongest mark available without a colour. */
+.search__row-snippet .search__mark,
+.searchpage__row-snippet .search__mark {
+  color: var(--nx-text);
+}
+
+/* THE 24px POINTER FLOOR on the two „×" buttons. Both wrap a 14px icon in
+   nothing but a hair of horizontal padding, which made them 14px targets — the
+   smallest things in either surface, and the only destructive ones. */
+.search__row-remove,
+.searchpage__history-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  min-height: 24px;
+}
+
+/* THE COMMAND'S OWN KEY, on the trailing edge (ADR-040). A palette that teaches
+   its shortcuts is worth more than one that only runs them, so a command that
+   can also be reached by a chord prints it — in the app's single <kbd> recipe,
+   on tabular figures, so the caps form a column instead of jittering against
+   each other. */
+.search__row-chord {
+  flex: none;
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+/* THE ONE PLACE MOTION EARNS ITS PLACE.
+   The palette arrives OVER the page rather than replacing it, so it has to be
+   seen to arrive and seen to go — a panel that eased in and then vanished
+   between two frames reads worse than one that never moved.
+
+   `animation`, never `transition`, and that is the load-bearing choice: an
+   animation runs once when the element is inserted and does not restart on
+   re-render, so filtering results as the user types stays INSTANT. Animated
+   list filtering in a keyboard-first surface is the clearest possible „this was
+   generated" signal, and a transition on the panel would have produced exactly
+   that on every keystroke that changed its height.
+
+   `transform` and `opacity` only, so both directions composite. The blanket
+   reduced-motion rule in `@nexus/ui` collapses these to 1ms with everything
+   else. */
+@keyframes nx-palette-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes nx-palette-leave {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+@keyframes nx-palette-scrim-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 0.75;
+  }
+}
+@keyframes nx-palette-scrim-leave {
+  from {
+    opacity: 0.75;
+  }
+  to {
+    opacity: 0;
+  }
+}
+.search__panel {
+  animation: nx-palette-enter var(--nx-motion-overlay) var(--nx-motion-ease-soft) both;
+}
+.search__backdrop {
+  animation: nx-palette-scrim-enter var(--nx-motion-overlay) var(--nx-motion-ease-soft) both;
+}
+/* The closing frame. The panel is still in the tree for one exit animation and
+   is inert while it is there: nothing may be clicked on a surface that is on
+   its way out, and focus has already been handed back to whatever opened it. */
+.search__overlay--leaving {
+  pointer-events: none;
+}
+.search__overlay--leaving .search__panel {
+  animation: nx-palette-leave var(--nx-motion-exit) var(--nx-motion-ease-exit) both;
+}
+.search__overlay--leaving .search__backdrop {
+  animation: nx-palette-scrim-leave var(--nx-motion-exit) var(--nx-motion-ease-exit) both;
+}

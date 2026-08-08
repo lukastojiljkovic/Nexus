@@ -1,0 +1,565 @@
+/* Dashboard (DASH) — the home surface ---------------------------------------
+
+   The first screen anybody sees, so it is held to the strictest reading of the
+   house rules: three visual levels per row and no fourth, every column of
+   digits tabular and right-aligned, no word repeated down a list, and no
+   selection or status ever drawn as a coloured bar or a glow.
+
+   The page header itself is NOT here. It is `PageHeader` from @nexus/ui, the
+   same component the other fourteen pages open with — this surface was the one
+   that had grown a header of its own (a 32px greeting with the board switcher
+   sitting on its baseline as loose text), which is exactly the drift the shared
+   component exists to prevent. What remains below is the board: the summary
+   band's placement, the grid, the cards, and one row grammar for all twelve
+   widget bodies. */
+.dash {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-5);
+}
+
+/* Custom background (SET-006 / ADR-041). Only when one is set: without it the
+   dashboard is exactly what it always was — no frame, no padding, no layers.
+   `position: relative` establishes the containing block the two layers fill;
+   every other child gets it too so it paints ABOVE them (both are positioned
+   with z-index auto, so DOM order decides, and content comes last). */
+.dash--framed {
+  position: relative;
+  padding: var(--nx-space-5);
+  border-radius: var(--nx-radius-xl);
+}
+.dash--framed > * {
+  position: relative;
+}
+.dash__bg,
+.dash__scrim {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.dash__bg {
+  background-size: cover;
+  background-position: center;
+}
+/* The scrim IS the theme surface, at the user's chosen opacity — which is what
+   makes Dan dim toward warm paper and Noć toward blue-black without a single
+   new colour value. Opacity is inline: it is user data, not a design token. */
+.dash__scrim {
+  background: var(--nx-bg);
+}
+
+/* The header's subtitle is the only one in the app that opens with a WORD the
+   language writes in lower case: Serbian sets weekday names „ponedeljak", not
+   „Ponedeljak". Sentence case is a rendering decision, not a change to the
+   string — which is why it is `::first-letter` here and not a `toUpperCase` in
+   the formatter, exactly as the date line carried it before the page adopted
+   the shared header. */
+.dash__header .nx-page-header__subtitle::first-letter {
+  text-transform: uppercase;
+}
+
+/* --- The board switcher (DASH-008 / ADR-055) -------------------------------
+
+   It rides in the page header's ACTIONS slot, beside „Uredi", and it is drawn
+   as a control: a mark, the active board's name, a chevron. Until 2026-08-08 it
+   sat on the greeting's baseline as bare text at `height: auto` — which made it
+   19px tall, under the 24px floor every target in this app has to clear, and
+   made a piece of navigation read as a stray word after somebody's name.
+
+   `min-height` rather than a fixed height, so a long board name may wrap the
+   cluster without the control collapsing again; the floor is `.nx-button`'s own
+   30px, because it is standing next to one. */
+.dash__set-switcher.note__menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--nx-space-2);
+  width: auto;
+  height: auto;
+  min-height: 30px;
+  max-width: 28ch;
+  padding: 0 var(--nx-space-3);
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  transition:
+    background var(--nx-motion-fast) var(--nx-motion-ease),
+    color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.dash__set-switcher.note__menu-trigger:hover,
+.dash__set-switcher.note__menu-trigger[aria-expanded="true"] {
+  color: var(--nx-text);
+  background: var(--nx-surface-alt);
+}
+/* It looks like the button next to it, so it takes that button's focus ring
+   rather than the browser's — the one that came with a `border: none` glyph. */
+.dash__set-switcher.note__menu-trigger:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+/* The two glyphs are furniture: they never shrink, and they never take the
+   name's colour — the name is what is being read. */
+.dash__set-switcher .nx-icon {
+  flex: none;
+  color: var(--nx-text-subtle);
+}
+.dash__set-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Doubled with the base class on purpose: .note__menu-item declares its own
+   colour later in the cascade, and the ACTIVE board's gold must win over it. */
+.note__menu-item.dash__set-item--active {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+/* The "⋯" manage trigger, sized to the switcher beside it rather than to the
+   24px row glyph it inherits from — two controls of different heights in one
+   cluster is the same defect the switcher itself had. */
+.dash__set-manage.note__menu-trigger {
+  width: 30px;
+  height: 30px;
+}
+/* The inline name line the switcher becomes (create / rename) — the tasks-rail
+   naming idiom, in the header's action cluster. */
+.dash__set-form {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+
+/* Quiet page-level lines: a layout read that failed (with its retry), a write
+   that did not land, and the one thing the store does that a user could not
+   predict — the default arrangement coming back. Never a dialog. */
+.dash__notices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+.dash__status {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+
+/* --- The widget grid -------------------------------------------------------
+
+   An AUTHORED column grid (ADR-045 section 1): a size preset is a whole number
+   of columns, which only means something against a fixed column count. The span
+   rides in as `--dash-span` because it is layout data the user stored, not a
+   design value — the same idiom as the task rail's `--task-depth`.
+
+   The column COUNT is responsive, and that is the fix for a board that did not
+   fill honestly. Six columns at every width meant „Srednja" was a half of the
+   window whatever the window was: at 1600px that is a 700-pixel card holding a
+   34-pixel row, which is not a medium card but a wide one nobody asked for, and
+   the taller card beside it then had to be twice as tall for the row to look
+   balanced. Twelve columns past 1440px give the same three fractions a tighter
+   reading — a quarter, a third, the whole — so three medium cards share a row
+   and every card's height variance drops with its width.
+
+   `align-items` is left at its `stretch` default deliberately. With `start`,
+   the shorter card of a pair simply ended and left page background showing
+   under it — the „dead rectangle" a screenshot sweep found under „Ispiti". A
+   grid row's cards now share a height, so that space belongs to a card. */
+.dash__grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: var(--nx-space-4);
+}
+.dash__widget {
+  grid-column: span var(--dash-span, 3);
+  /* Contains the momentary "just landed" mark, and lets a dragged card lift
+     above its neighbours. */
+  position: relative;
+  min-width: 0;
+  /* A column, so a stretched card's caption and rows stay at its top rather
+     than being spread down the height its neighbour set. */
+  display: flex;
+  flex-direction: column;
+}
+
+/* The single narrow-window collapse, and this codebase's FIRST media query.
+   There are no breakpoint tokens — none of the other pages needed one, because
+   none of them lets the user choose a width. This one does: below roughly this
+   width the main column (window − 220px rail − 48px padding) leaves a two-column
+   "Mala" card under ~190px, which is narrower than a Danas row's time gutter
+   plus a title. Order is kept: the grid draws in list order, so one column is
+   the same list. */
+@media (max-width: 900px) {
+  .dash__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .dash__widget {
+    grid-column: auto;
+  }
+}
+/* The wide reading. `--dash-span-wide` is the same preset over twelve columns
+   (S = a quarter, M = a third, L = the whole); the page sets both custom
+   properties on every card, so which one is in force is a pure CSS decision. */
+@media (min-width: 1440px) {
+  .dash__grid {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
+  .dash__widget {
+    grid-column: span var(--dash-span-wide, 4);
+  }
+}
+
+/* --- The card's own head ---------------------------------------------------
+
+   The module's mark, the caption, and — in edit mode — the "⋯". One head for
+   both modes, rather than a caption in one mode and a strip in the other: they
+   held the same words at the same size and differed only in what sat beside
+   them, which is one element, not two.
+
+   The mark is why it exists. Nine cards that differ only in an eleven-pixel
+   uppercase caption are a wall of text; the mark is the one thing on a card a
+   reader finds without reading, and it is the SAME glyph the sidebar lists that
+   module under, so „which module is this" is answered by recognition. It is a
+   shape and not a colour for `PageHeader`'s reason: the palette bans three
+   hues, and what is left can carry three identities, not fourteen. */
+.dash__widget-head {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  margin-bottom: var(--nx-space-3);
+  /* Tall enough for the two things that only appear in EDIT mode — the 24px
+     "⋯" and the padded drag grip — so entering edit mode changes what is in the
+     head without moving the rows underneath it. It used to push the whole card
+     down by about eleven pixels, on every card at once. */
+  min-height: 26px;
+}
+.dash__widget-head .nx-card__title {
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dash__widget-sigil {
+  display: inline-flex;
+  flex: none;
+  /* The caption's own tier: the mark is the caption's companion, not a second
+     thing to look at. */
+  color: var(--nx-text-subtle);
+}
+/* The caption doubles as the drag grip in edit mode. Padded rather than sized,
+   so it stays a block box and keeps the ellipsis its flex sibling rules give it
+   — a grip is a target, and an eleven-pixel caption is a seventeen-pixel one. */
+.dash__widget-grip {
+  padding: 4px 0;
+  cursor: grab;
+}
+.dash__widget-menu {
+  flex: none;
+}
+
+/* „Podesi…" (DASH-004 / ADR-059): the ⋯ menu flips into the per-widget config
+   form. Choices and the list checkboxes reuse the menu's own item idioms; the
+   count is the settings page's select recipe (.set__select), inset to the
+   panel's label margins so it lines up with the items above it. */
+.dash__config-select {
+  font: inherit;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  padding: 5px 10px;
+  margin: 2px 10px 6px;
+  transition: border-color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.dash__config-select:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+
+/* Drop target = accent border + soft background, the house recipe — never a
+   glow. The card already has a 1px border, so recolouring it shifts nothing. */
+.dash__widget--drop {
+  border-color: var(--nx-accent);
+  background: var(--nx-accent-soft);
+}
+/* The card being dragged, on the .cal__grid-event--dragging precedent: the same
+   accent border, enough transparency to read what it is passing over, and a
+   stacking order that keeps the ghost above the cards it crosses. */
+.dash__widget--dragging {
+  z-index: 2;
+  opacity: 0.9;
+  border-color: var(--nx-accent);
+  cursor: grabbing;
+}
+
+/* The momentary "just landed" mark — an accent ring over the card that moved,
+   fading out by itself. An animation and not a transition for .nx-revealed's
+   reason: a class that is added and then removed can only transition IN. Its
+   own element, keyed by the move, so moving the same card twice re-runs it.
+   `inset: -1px` lays the ring exactly over the card's own border rather than
+   inside it, so nothing appears to grow. */
+.dash__widget-mark {
+  /* One source of truth for the dwell — the reduced-motion rule below reuses it. */
+  --dash-landed-duration: 900ms;
+  position: absolute;
+  inset: -1px;
+  border: 1px solid var(--nx-accent);
+  border-radius: inherit;
+  pointer-events: none;
+  animation: dash-landed var(--dash-landed-duration) var(--nx-motion-ease) forwards;
+}
+@keyframes dash-landed {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Reduced motion — a documented exception to the blanket rule in @nexus/ui's
+   styles.css, for two reasons at once. The ring is the only thing that says
+   WHERE the card just went, so it must still be seen; and its `animationend`
+   is what clears `landed` in DashboardPage, so the animation must still run to
+   completion. Keeping the real duration satisfies both, and `step-end` removes
+   the one thing reduced motion is actually about: the fade. The ring holds
+   still for the full dwell, then goes in a single step. */
+@media (prefers-reduced-motion: reduce) {
+  .dash__widget-mark {
+    animation-duration: var(--dash-landed-duration) !important;
+    animation-timing-function: step-end !important;
+  }
+}
+
+/* One widget's isolated failure: this card could not read, and the way to ask
+   again. No EmptyState — that block would say the page is empty, and it isn't. */
+.dash__failure {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nx-space-2);
+}
+
+/* A quiet line on a card that is NOT „nothing here" — the failure notice, which
+   `EmptyState` must never be used for: a card that could not READ has not been
+   told there is nothing to read. Empty states are the component's now. */
+.dash__quiet {
+  margin: 0;
+  padding: var(--nx-space-2) 0;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+
+/* --- ONE row grammar for all twelve widget bodies --------------------------
+
+   Every widget row is three columns and at most three levels of type:
+
+     leading   a fixed gutter — a time or a date (tabular, right-aligned), or
+               the row's KIND as a mark. Never a word that is the same on every
+               row: a word constant down a list is the column's name, not its
+               data, and „zadatak" printed once per row was exactly that.
+     content   the title, and at most one secondary line under it. Fills what
+               the two fixed columns leave, and CLIPS.
+     trailing  one short fact — a chip, or a figure.
+
+   The clipping is the whole of the fix for the overlap this card set shipped
+   with. „Dokumenta koja ističu" drew its two lines inside an `inline-flex`,
+   which is an atomic inline box: its width is shrink-to-fit, floored at its own
+   min-content, so once the leading chip and the trailing phrase (both of which
+   refuse to shrink) had taken the row, that box was laid out WIDER than the
+   column containing it and painted straight over the phrase. Making it a block
+   is only half the answer — a flex item's automatic minimum size is its
+   min-content width too, so a title without `overflow: hidden` can still only
+   be as narrow as its longest word.
+
+   So both halves are stated once, here, for every row in the product's home
+   surface: the text column is a block that fills, and every line inside it
+   clips. There is exactly ONE component (`RowText`) that renders row content,
+   so a widget cannot opt out by hand. */
+.dash__list {
+  display: flex;
+  flex-direction: column;
+}
+/* Row metrics. ~34px and a hover tint, rather than 48px separated by a hairline
+   on every row: these rows are for SCANNING, and a rule drawn between every two
+   of them is nine cards' worth of lines competing with nine cards' worth of
+   content. The gutter/title/figure gap is a step wider than the component's own
+   default, since this row really does have three columns. */
+.dash__list .nx-list-row {
+  min-height: 34px;
+  padding: 6px 0;
+  gap: var(--nx-space-3);
+  border-bottom: none;
+}
+/* Stated even though the component already says it: it is the half of the
+   overlap fix that belongs to the COLUMN rather than to the text in it, and a
+   rule this surface depends on should not be inherited silently. */
+.dash__list .nx-list-row__content {
+  min-width: 0;
+}
+/* One short fact, capped at a bit under half the row. A trailing slot does not
+   shrink (`flex-shrink: 0`, by the component's design — a chip must not be
+   squeezed), so without a cap a long phrase would take the row and leave the
+   title nothing. The cap plus the clipping inside it is what makes „the row
+   overlaps itself" unrepresentable rather than merely unlikely. */
+.dash__list .nx-list-row__trailing {
+  max-width: 45%;
+}
+
+/* Widget rows are read-only deep-links: a reset button wrapping a ListRow, so
+   the whole row is a keyboard-focusable target into its module. */
+.dash__row {
+  display: block;
+  width: 100%;
+  padding: 0 var(--nx-space-2);
+  margin: 0 calc(-1 * var(--nx-space-2));
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: var(--nx-radius-md);
+  cursor: pointer;
+  transition: background var(--nx-motion-fast) var(--nx-motion-ease);
+}
+/* A background tint and nothing else. Never a glow, never a coloured bar down
+   the side — that bar is the single most reliable „a machine designed this"
+   tell in the whole vocabulary. */
+.dash__row:hover {
+  background: var(--nx-surface-alt);
+}
+.dash__row:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: -2px;
+}
+
+/* The text column: a title, and at most one line under it. */
+.dash__text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  overflow: hidden;
+}
+.dash__row-title,
+.dash__row-meta {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: var(--nx-font-leading-snug);
+  /* Every figure in this product's rows is tabular, and a title is as likely to
+     BE a figure („1.480 kcal", „25:00", „3 treninga") as to contain one. */
+  font-variant-numeric: tabular-nums;
+}
+/* Level one: the thing the row is about. */
+.dash__row-title {
+  font-size: var(--nx-font-size-body);
+  font-weight: var(--nx-font-weight-medium);
+  color: var(--nx-text);
+}
+/* Level two: what qualifies it — a type, a date, a goal, a label for the figure
+   above. `text-muted`, which is the tier secondary content is set in and is
+   genuinely readable; `text-subtle` is for eyebrows and `text-faint` is not
+   text at all. */
+.dash__row-meta {
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+
+/* „Navike danas" is the one card whose row already holds a control (the tick),
+   so its deep link cannot be the whole row the way `.dash__row` is everywhere
+   else — a button inside a button is not a thing. The NAME carries it instead:
+   the same underline-on-hover a text link has, and nothing else, so the row
+   still reads as a row rather than as two competing affordances. */
+.dash__row-link {
+  display: flex;
+  align-items: center;
+  /* The one target on this page that is not a whole row, and a 15px line is a
+     20px box — under the floor every target has to clear. */
+  min-height: 24px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+/* It is the row's whole width, so the name it holds truncates against the row
+   rather than against its own longest word. */
+.dash__row-link .dash__text {
+  flex: 1;
+}
+.dash__row-link:hover .dash__row-title {
+  text-decoration: underline;
+}
+.dash__row-link:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+  border-radius: var(--nx-radius-sm);
+}
+
+/* The leading gutter — ONE width whatever is in it, which is the whole point.
+   „Danas" mixes rows that have a time („14:00", „Ceo dan") with rows that only
+   have a kind, and a gutter that sized itself to its contents would start every
+   third title at a different x. 52px is what „Ceo dan" needs at 13px; the
+   contents are right-aligned inside it, so the colons of a column of times line
+   up with each other and a mark sits exactly where a time would have ended. */
+.dash__lead {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 52px;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* The mark is quieter than a time: a time is data being read, a mark is the
+   row's kind being recognised. */
+.dash__lead .nx-icon {
+  color: var(--nx-text-subtle);
+}
+
+/* The trailing figure: an age, a timestamp, an amount, a time to expiry. Right
+   aligned and tabular, so a card's right edge is a column of numbers rather
+   than a ragged one — the Serbian 1.234,56 then aligns on its comma by
+   construction rather than by anyone measuring. */
+.dash__num {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+/* The one figure that is bad news. Colour REINFORCES a word that already says
+   it („isteklo pre 200 dana"); it never carries the meaning alone, which is
+   what lets the row survive being read without colour at all. */
+.dash__num--overdue {
+  color: var(--nx-danger);
+}
+
+/* Two chips in one trailing slot — „Hitno i kasni" is the only row that needs
+   to state a priority and a rok at once. */
+.dash__chips {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+}

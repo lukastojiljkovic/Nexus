@@ -1,0 +1,1144 @@
+/* Tasks (TASK page) ---------------------------------------------------
+
+   A NOTE ON THE CASCADE, because this file has already been bitten by it and
+   the bite was invisible: `app.css` imports the thirteen stylesheets in a fixed
+   order and tasks.css is SECOND, ahead of notes.css, calendar.css and the rest.
+   CSS breaks a specificity tie by document order, so a `.tasks__x` rule written
+   at (0,1,0) to override a `.note__y` rule written at (0,1,0) SILENTLY LOSES —
+   the override parses, validates, lints, and does nothing. That is exactly how
+   „Šabloni“ came to be painted on top of the view toggle: it declared
+   `width: auto` and was still laid out as a 24px square with a whole word
+   spilling out of both sides of it.
+
+   So: every rule here that overrides a class this file does not own is written
+   CHAINED (`.tasks__a.note__b`) or SCOPED (`.tasks .nx-c`), never bare. Both
+   raise the specificity above the shared rule, which makes the failure mode
+   unreachable rather than merely absent.
+
+   Two columns since TASK-004: the list rail, then everything that was the whole
+   page before it. `align-items: start` keeps the rail from stretching to the
+   rows' height, and minmax(0, 1fr) is what lets the kanban's own grid shrink
+   instead of pushing the rail off. The rail takes the app's declared rail width
+   rather than a number of its own — see .tasks__rail for what that width is
+   actually spent on. */
+.tasks {
+  display: grid;
+  grid-template-columns: var(--nx-layout-rail) minmax(0, 1fr);
+  gap: var(--nx-space-5);
+  align-items: start;
+}
+/* The page header spans both rail and main columns, above them both.
+   PLACEMENT AND NOTHING ELSE: the shared header is 72px tall so that its
+   watermark can be a whole mark instead of the 26px slice an earlier override
+   left hanging off the corner, and it carries its own `min-width: 0`. A height,
+   a max-height or an `overflow` stated here would cut that mark back up. */
+.tasks__header {
+  grid-column: 1 / -1;
+}
+.tasks__main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+}
+
+/* The list rail (TASK-004 / ADR-029) — the NOTE organizer's feel one module
+   over: a hairline separator, rows that are buttons, and a selection that is
+   TYPOGRAPHIC (gold name + weight), never a highlight bar or a glow.
+
+   IT SCROLLS ITSELF, and that is the fix for a real defect rather than a
+   flourish. The rail stacks three sections — Pregledi, Liste, Oznake — and at
+   the shipped default window (1120×720) their total runs past the bottom of the
+   viewport, so the tag chips at its foot could only be reached by scrolling the
+   whole page, which takes the rows they filter off screen with them. Bounding
+   the rail and letting it scroll on its own axis makes „the foot of the rail is
+   unreachable“ unrepresentable at any window height; `position: sticky` then
+   keeps it beside the rows while sixty of them scroll past.
+
+   The bound is the viewport less the drawn title strip and the page scroller's
+   own bottom padding. `--nx-layout-titlebar` carries a fallback because it is a
+   layout token this file must not go blank without. */
+.tasks__rail {
+  position: sticky;
+  top: 0;
+  max-height: calc(100vh - var(--nx-layout-titlebar, 38px) - var(--nx-space-6));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-right: var(--nx-space-4);
+  border-right: 1px solid var(--nx-border);
+}
+/* An eyebrow, on the tier the ink scale reserves for one: 11px, uppercase, the
+   label tracking, and `text-subtle` — the third tier, quieter than the muted
+   body text under it, which is what keeps a section name from competing with
+   the list names it introduces. */
+.tasks__rail-heading {
+  margin: 0 0 var(--nx-space-1);
+  padding: 0 var(--nx-space-2);
+  font-size: var(--nx-font-size-label);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-subtle);
+}
+/* A rail section that is not the first one gets the room „Oznake“ already takes
+   above it (see .tasks__tag-heading) — since ADR-049 „Liste“ is the second. */
+.tasks__rail-heading--stacked {
+  margin-top: var(--nx-space-4);
+}
+/* „Pregledi“ (ADR-049) are ONE named group — unlike the lists, which are a tree
+   of independent rows — so the group element restates the rail's own column
+   rhythm rather than letting its rows fall out of it. */
+.tasks__rail-views {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+/* The transparent border is reserved for the drop state, so lighting a row up
+   never shifts the rail's layout by a pixel. */
+.tasks__rail-row {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  padding-left: calc(var(--nx-space-3) * var(--task-depth, 0));
+  border: 1px solid transparent;
+  border-radius: var(--nx-radius-md);
+}
+/* Drop target = accent border + soft background, the same recipe as
+   .nx-kanban-view__col--drop and .cal__month-day--drop — never a glow. */
+.tasks__rail-row--drop {
+  border-color: var(--nx-accent);
+  background: var(--nx-accent-soft);
+}
+.tasks__rail-list {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  padding: var(--nx-space-2);
+  font: inherit;
+  font-size: var(--nx-font-size-body);
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: var(--nx-radius-md);
+  cursor: pointer;
+  transition: background var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.tasks__rail-list:hover {
+  background: var(--nx-surface-alt);
+}
+.tasks__rail-list:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: -2px;
+}
+.tasks__rail-list--active .tasks__rail-name {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.tasks__rail-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* „Pregledi“ (ADR-049): the count beside „Danas“ / „Kasni“ is muted plain text,
+   deliberately NOT a chip — a pill beside a name reads as a state of it, and
+   this is only a fact about the view. It stays muted while the row is active,
+   so the gold weight keeps saying which view is selected on its own. */
+.tasks__rail-count {
+  flex: none;
+  margin-left: var(--nx-space-2);
+  font-size: var(--nx-font-size-caption);
+  font-variant-numeric: tabular-nums;
+  color: var(--nx-text-muted);
+}
+/* ONE overflow control per rail row, and the reason is a measurement rather
+   than a preference.
+
+   The row used to carry four of them — ✎ ＋ ⋯ × — each `opacity: 0` at rest.
+   OPACITY DOES NOT REMOVE A BOX. All four kept their width in the row's flex
+   line whether or not anything was drawn, which spent roughly 108px of a 167px
+   rail on affordances nobody could see, and left the list NAME about 59px: six
+   characters, hence „Fakul…“ where the list is called „Fakultet“. Rename the
+   list and it truncates at six characters again — the width was never the
+   name's to begin with.
+
+   So the cluster is one 24px menu. That is the general rule too (two inline
+   controls at most, everything else behind an overflow), and here it happens to
+   hand a hundred pixels back to the only thing in the row a reader is looking
+   for. The trigger keeps `.note__menu-trigger`'s 24×24 box, which is also the
+   pointer-target floor — CHAINED, so the shared rule cannot win the tie. */
+.tasks__rail-menu.note__menu-trigger,
+.tasks__section-menu.note__menu-trigger {
+  flex: none;
+  border-radius: var(--nx-radius-md);
+  opacity: 0;
+  transition: opacity var(--nx-motion-fast) var(--nx-motion-ease);
+}
+/* Quiet until the row is hovered, the trigger is focused, or its menu is open —
+   .note__tag-menu's own reveal. Never `display: none`: a control taken out of
+   the DOM is a control the keyboard cannot reach. */
+.tasks__rail-row:hover .tasks__rail-menu.note__menu-trigger,
+.tasks__section:hover .tasks__section-menu.note__menu-trigger,
+.tasks__rail-menu.note__menu-trigger:focus-visible,
+.tasks__section-menu.note__menu-trigger:focus-visible,
+.tasks__rail-menu.note__menu-trigger[aria-expanded="true"],
+.tasks__section-menu.note__menu-trigger[aria-expanded="true"] {
+  opacity: 1;
+}
+.tasks__rail-menu.note__menu-trigger:hover,
+.tasks__section-menu.note__menu-trigger:hover {
+  background: var(--nx-surface-alt);
+}
+.tasks__new-list.nx-button,
+.tasks__new-section.nx-button,
+.tasks__new-tag.nx-button {
+  margin-top: var(--nx-space-2);
+  align-self: flex-start;
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.tasks__new-list.nx-button:hover,
+.tasks__new-section.nx-button:hover,
+.tasks__new-tag.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.tasks__rail-error {
+  margin: var(--nx-space-2) 0 0;
+  padding: 0 var(--nx-space-2);
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-danger);
+}
+/* Oznake, the rail's second section (migration 023): the same caption heading as
+   „Liste“, plus the room a second section needs above it and the „Poništi“ the
+   NOTE organizer puts on the same line. The chips themselves share the NOTE tag
+   recipe outright — see .note__tag / .tasks__tag further down. */
+.tasks__tag-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-2);
+  margin-top: var(--nx-space-4);
+}
+
+/* The one inline "type a name" line, shared by the rail's and the sections'
+   create/rename actions (InlineNameForm). It borrows the textfield rather than
+   inventing a second field, and wraps so the two buttons drop under a narrow
+   rail instead of squeezing the input to nothing. */
+.tasks__name-form {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-1) 0;
+  /* One of its two homes is a section HEADING, whose uppercase/tracked/caption
+     type would otherwise be inherited by the name being typed into it (the same
+     reset .note__tag-clear needs inside .note__org-heading). */
+  font-size: var(--nx-font-size-body);
+  font-weight: var(--nx-font-weight-regular);
+  letter-spacing: var(--nx-font-tracking-normal);
+  text-transform: none;
+}
+.tasks__name-form .nx-textfield {
+  flex: 1;
+  min-width: 100px;
+}
+.tasks__name-cancel.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.tasks__name-cancel.nx-button:hover {
+  background: transparent;
+  color: var(--nx-text);
+}
+
+/* Group headings ------------------------------------------------------
+   Two kinds, one look: a SECTION heading (the list body and the headings the
+   user made) and a BAND heading (a dated run — see .tasks__band). They are the
+   same object as far as a reader is concerned — "everything under this line is
+   one thing" — so they share every declaration and differ only in what puts
+   them on screen.
+
+   STICKY, and 28px. Sixty rows is more than a screen; a heading that scrolls
+   away takes with it the only answer to „which group am I in“, which is the
+   whole reason the rows were grouped. It needs an opaque background to be
+   sticky at all — rows would otherwise read through it — and `surface-alt` is
+   the surface reserved for exactly that.
+
+   Third-tier ink: 11px, uppercase, label tracking, `text-subtle`. A heading is
+   the quietest thing in the group, not the loudest; the rows are the content. */
+.tasks__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+/* NO `margin-top` here, and that is not a style choice: a sticky box is offset
+   by its MARGIN box, so a margin above a stuck heading is a transparent strip
+   the rows scroll through. The room above a heading is the parent's gap
+   instead, which does not travel with it. */
+.tasks__section,
+.tasks__band-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  min-height: 28px;
+  padding: 0 var(--nx-space-2);
+  background: var(--nx-surface-alt);
+  /* The transparent border is reserved for the drop state so lighting a heading
+     up never shifts the rows by a pixel; only the bottom edge is drawn at rest.
+     It is what keeps a stuck heading legible against the row hovering directly
+     beneath it — the two share `surface-alt`, and this hairline is the seam. */
+  border: 1px solid transparent;
+  border-bottom-color: var(--nx-border-subtle);
+  border-radius: var(--nx-radius-sm);
+  font-size: var(--nx-font-size-label);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-subtle);
+}
+.tasks__section--drop {
+  border-color: var(--nx-accent);
+  background: var(--nx-accent-soft);
+}
+/* The name takes the line and the count sits at its end, so the count column is
+   in the same place under every heading rather than wherever a name happens to
+   stop. */
+.tasks__section-name,
+.tasks__band-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* How many rows are in the group. Tabular and right-aligned via .nx-num, so a
+   column of counts down a page of headings lines up on its own. */
+.tasks__group-count {
+  flex: none;
+  color: var(--nx-text-subtle);
+}
+
+/* A dated run of rows (see `renderBands`). No box, no rule of its own: the
+   heading above it already says where the run starts, and a border around each
+   would turn six groups into six cards. */
+.tasks__band {
+  display: flex;
+  flex-direction: column;
+}
+/* THE TWO HEADINGS STACK. A list that has sections AND a date sort draws both
+   kinds at once — „Ispiti“ over „Sutra“ over the rows — and two sticky boxes
+   both pinned at `top: 0` would land on top of each other the moment either
+   stuck. The band's heading is therefore offset by exactly the section
+   heading's own 28px, and ONLY where a section heading is actually its sibling:
+   in the list body, which has none, `top: 0` still holds and no gap opens under
+   a stuck heading. `box-sizing: border-box` (shell.css) is what makes 28px the
+   whole box rather than 28px plus its rules. */
+.tasks__section ~ .tasks__band > .tasks__band-head {
+  top: 28px;
+}
+
+/* Manual ordering (TASK-004): a grip on top-level rows, and the gaps a dragged
+   row can land in. The grip is quiet until its row is hovered — that is when a
+   drag starts — and keeps a fixed width so revealing it never moves the row.
+   The gaps exist only while a drag is in flight (see renderDropGap), so at rest
+   the list is exactly as dense as it was before.
+
+   ONE WIDTH FOR THE WHOLE LEAD COLUMN — the grip, the pick control that stands
+   in for it in Izbor, and the spacer a row with neither opens with. They must
+   agree to the pixel or the first indent step lands under the grip and a
+   subtask sits level with its own parent, so the width is stated once here and
+   nowhere else. 24px rather than the old 16px, because two of the three are
+   pointer targets and 24px is the floor (see the block at the foot of this
+   file); the indent step below is unchanged and simply no longer happens to be
+   the same number. `.tasks__row-lead` holds the spacer and the indent together
+   as ONE flex item, so the flex gap around it applies once. */
+.tasks .tasks__grip,
+.tasks__grip-spacer,
+.tasks__pick {
+  flex: none;
+  width: var(--nx-space-6);
+}
+.tasks__row-lead {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+}
+.tasks .tasks__grip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--nx-text-muted);
+  cursor: grab;
+  opacity: 0;
+  transition: opacity var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.tasks .nx-list-row:hover .tasks__grip {
+  opacity: 1;
+}
+.tasks__drop-gap {
+  height: var(--nx-space-3);
+  border: 1px solid transparent;
+  border-radius: var(--nx-radius-sm);
+}
+.tasks__drop-gap--active {
+  border-color: var(--nx-accent);
+  background: var(--nx-accent-soft);
+}
+
+/* Izbor — batch selection over the list view (ADR-038). The pick control takes
+   the grip's column, so entering the mode shifts nothing: same width, same
+   quiet-until-hovered reveal as the grip it stands in for. */
+.tasks__pick {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font: inherit;
+  line-height: 1;
+  color: var(--nx-accent-strong);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+.tasks__pick:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+  border-radius: var(--nx-radius-sm);
+}
+/* Hidden rather than absent, so every row's title starts at the same x whether
+   it is picked or not (.note__menu-check's reserved column, one page over). */
+.tasks__pick-mark--off {
+  visibility: hidden;
+  color: var(--nx-text-muted);
+}
+.tasks .nx-list-row:hover .tasks__pick-mark--off,
+.tasks__pick:focus-visible .tasks__pick-mark--off {
+  visibility: visible;
+}
+/* The whole row is the toggle while the mode is on. The done checkbox stays
+   drawn but disabled, and lets clicks through, so the box is not a dead spot in
+   the middle of that target. */
+.tasks__row--picking {
+  cursor: pointer;
+}
+.tasks__row--picking .nx-checkbox input {
+  pointer-events: none;
+}
+/* Picked = the house drop-target recipe (accent border + soft background), as
+   an outline so a row lighting up never moves the rows under it. Never a glow,
+   and never a side bar.
+
+   Written at (0,3,0) so it outranks the row hover tint: a picked row that lost
+   its accent the moment the pointer crossed it would stop reporting the one
+   thing the batch bar is counting. Picked beats hovered, always. */
+.tasks .nx-list-row.tasks__row--picked {
+  background: var(--nx-accent-soft);
+  outline: 1px solid var(--nx-accent);
+  outline-offset: -1px;
+  border-radius: var(--nx-radius-sm);
+}
+
+/* The capture form's row, and now ONLY the capture form's row. „Šabloni“, the
+   shape toggle and „Izbor“ used to share it; they are page-level controls and
+   have moved to the header's own actions slot, which is where the design system
+   puts them. What that buys is not tidiness: with nothing else on the line
+   there is nothing for the form to collide with at any width, so the overlap
+   that sweep found is gone by construction rather than by tuning. */
+.tasks__toolbar {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nx-space-4);
+  flex-wrap: wrap;
+}
+/* One form serves create and edit (mirrors .cal__form): the title line alone is
+   still the quick-add — type a name, press Enter — and the detail fields below
+   it are what a task actually has. */
+.tasks__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  flex: 1;
+  min-width: 240px;
+}
+/* The marker on a closed disclosure: something behind the fold is set.
+   Accent, never a badge and never a count — it answers one bit. */
+.tasks__details-mark {
+  color: var(--nx-accent);
+  font-size: var(--nx-font-size-body);
+  line-height: 1;
+}
+.tasks__quick-add {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+.tasks__quick-add .nx-textfield__input {
+  flex: 1;
+}
+.tasks__fields {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+}
+/* Due date read out of the quick-add line itself (TASK-007): a quiet row under
+   the title input, borrowing the undo bar's dismiss idiom rather than inventing
+   a second one. The arrow is typographic — no icon, no glow. */
+.tasks__quick-date {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+.tasks__quick-date-mark {
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+.tasks__quick-date-dismiss.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.tasks__quick-date-dismiss.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+/* Native select matched to the textfield input (tokens only, no custom arrow;
+   mirrors .documents__select). */
+.tasks__select {
+  font: inherit;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  padding: 7px 13px;
+  transition: border-color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.tasks__select:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+/* Edit-mode cancel: a quiet ghost beside the primary submit (text feel). */
+.tasks__cancel.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.tasks__cancel.nx-button:hover {
+  background: transparent;
+  color: var(--nx-text);
+}
+
+/* NAMED popover triggers — „Šabloni“ (ADR-035), „Kolone“ (ADR-060) and the
+   batch bar's „Premesti… / Prioritet… / Rok…“ (ADR-038).
+
+   THE BUG THIS RULE EXISTS TO MAKE UNREPRESENTABLE. All three borrow
+   `.note__menu-trigger`, which is a 24×24 grid square built for a "⋯" glyph. A
+   trigger that shows a WORD has to size to that word instead, and the two
+   written bare — `.tasks__templates-trigger` and `.tasks__columns-trigger`, at
+   (0,1,0), in a file imported ahead of notes.css — lost the tie to the shared
+   rule and were laid out as 24px squares with the word centred in them and
+   spilling out of both sides. That is what painted „Šabloni“ across the view
+   toggle: not a margin, not a wrap failure, a box that was never as wide as its
+   own contents. The batch triggers, written CHAINED from the start, were fine
+   the whole time.
+
+   So all three are one chained rule now. Chained is not decoration here: it is
+   the only form of this declaration that has any effect at all.
+
+   `min-width: 0` is deliberately NOT set. A named trigger must never be
+   allowed to shrink below its word — that is the same failure by another
+   route — so its automatic minimum size is left where the flexbox spec puts
+   it, at min-content. */
+.tasks__templates-trigger.note__menu-trigger,
+.tasks__columns-trigger.note__menu-trigger,
+.tasks__bulk-trigger.note__menu-trigger {
+  flex: none;
+  width: auto;
+  /* Height is a FLOOR, not a fixed box: the 24px pointer-target minimum, which
+     a longer word or a larger type scale may grow past but can never sink
+     below. `.note__menu-trigger`'s `height: 24px` is what this replaces. */
+  height: auto;
+  min-height: 24px;
+  padding: 0 var(--nx-space-2);
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+  white-space: nowrap;
+}
+.tasks__templates-trigger.note__menu-trigger:hover,
+.tasks__columns-trigger.note__menu-trigger:hover,
+.tasks__bulk-trigger.note__menu-trigger:hover,
+.tasks__templates-trigger.note__menu-trigger[aria-expanded="true"],
+.tasks__columns-trigger.note__menu-trigger[aria-expanded="true"],
+.tasks__bulk-trigger.note__menu-trigger[aria-expanded="true"] {
+  color: var(--nx-text);
+}
+
+/* The board's column configuration (ADR-060). One popover row: the checkmark
+   toggle (the house .note__menu-item--check recipe — the mark keeps its slot
+   while unchecked, so titles stay aligned) grows, and the ↑/↓ steps stay a
+   quiet fixed square on its right. */
+.tasks__column-row {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+.tasks__column-toggle {
+  flex: 1;
+}
+.tasks__column-step {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: var(--nx-radius-sm);
+  background: transparent;
+  color: var(--nx-text-muted);
+  cursor: pointer;
+}
+.tasks__column-step:hover:not(:disabled) {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.tasks__column-step:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+/* The column head's own „⋯“ — the card menu's rule (always drawn, never
+   hover-revealed: it is the keyboard's way to hide a column too). */
+.tasks__column-menu.note__menu-trigger {
+  flex: none;
+  cursor: pointer;
+}
+.tasks__column-menu:hover {
+  background: var(--nx-surface-alt);
+}
+/* The quiet statement that columns are hidden — a caption among the controls,
+   deliberately not a button: the „Kolone“ popover is where it is undone. */
+.tasks__hidden-columns {
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+/* One template in the popover list: its name applies it, the × removes it. */
+.tasks__template-row {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+.tasks__template-apply {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 24px, the pointer-target floor — and stated HERE rather than in the block at
+   the foot of this file, because that block is scoped `.tasks …` and this button
+   lives in a popover panel portalled to <body>, outside the page element
+   entirely. A scoped rule would have looked like a fix and matched nothing. */
+.tasks__template-delete {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  font: inherit;
+  line-height: 1;
+  color: var(--nx-text-muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--nx-radius-sm);
+  cursor: pointer;
+}
+.tasks__template-delete:hover {
+  background: var(--nx-danger-soft);
+  color: var(--nx-danger);
+}
+/* The save-as-template prompt lives INSIDE the row menu, whose panel is far
+   narrower than the rail: the shared InlineNameForm's buttons would squeeze the
+   field to nothing there, so they wrap onto their own full-width row. */
+.tasks__template-form {
+  padding: var(--nx-space-1) var(--nx-space-2);
+}
+.tasks__template-form .nx-textfield {
+  flex-basis: 100%;
+}
+
+/* View toggle — active state is typographic (accent + weight), no glow or
+   side-bar, per the direction brief; the ghost frame is dropped to a text feel.
+
+   It lives in the header's actions row now. `flex: none` keeps the four shapes
+   together as one control rather than letting them be squeezed one at a time,
+   and `flex-wrap` is what that costs nothing: at a width where the group cannot
+   fit a line it breaks onto two rather than painting past its own box, which is
+   the failure this page has already had once. */
+.tasks__views {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nx-space-1);
+  flex: none;
+}
+/* Wrapped or not, the page's controls stay on the right. `.nx-page-header` is
+   `space-between`, which right-aligns them only while they share the title's
+   line; on a narrow window they wrap to a line of their own, where
+   space-between has nothing to push them against. */
+.tasks__header .nx-page-header__actions {
+  margin-left: auto;
+}
+
+/* The view's own controls (ADR-050): sort, grouping and the two filters, on one
+   quiet row above the rows they act on. Plain selects rather than a bar with a
+   surface of its own — they are the same control the form already uses
+   (.tasks__select), and a panel around them would read as a second toolbar. */
+.tasks__view-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+}
+
+/* --- Kartice (ADR-050) --------------------------------------------------
+   The grid, the card and its padding are the UI package's (.nx-cards-view);
+   what belongs to TASK is the card's own line: title on the left, the move
+   menu — on a BOARD card — on the right, with the chip cluster wrapping under
+   both. */
+.tasks__card-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nx-space-1);
+  min-width: 0;
+}
+/* The board card's "⋯" trigger. Always drawn, never hover-revealed: it is the
+   only way to move a card without a mouse, and an affordance that appears under
+   the pointer is one a keyboard never finds. The row menu's own hover treatment
+   (.tasks__row-menu), one surface over. */
+.tasks__card-menu.note__menu-trigger {
+  flex: none;
+  cursor: pointer;
+}
+.tasks__card-menu:hover {
+  background: var(--nx-surface-alt);
+}
+/* A card's chips sit under its title rather than beside it: a card is a column,
+   not a row, and a cluster on the same line would push the title into an
+   ellipsis on the narrowest track the grid can produce. */
+.nx-cards-view__card > .tasks__chips {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: var(--nx-space-1);
+}
+
+/* --- Kalendar (ADR-050) -------------------------------------------------
+   The grid itself reuses the CAL module's .cal__month-* classes outright (see
+   TaskMonthGrid): two month grids in one app that differ visually would read as
+   an accident. Only what a TASK bar does differently lives here. */
+
+/* Draggable AND clickable, unlike CAL's read-only task bar: here a bar opens
+   the task's own edit form. The quiet surface is that bar's, the pointer
+   affordances are the event bar's. */
+button.tasks__cal-bar {
+  pointer-events: auto;
+  cursor: grab;
+  text-align: left;
+  font: inherit;
+  font-size: var(--nx-font-size-caption);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  color: var(--nx-text);
+}
+button.tasks__cal-bar:active {
+  cursor: grabbing;
+}
+.tasks__cal-bar:hover {
+  text-decoration: underline;
+}
+.tasks__cal-bar:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 1px;
+}
+
+/* A statement of fact, not a door: this grid has no week expansion and no day
+   view, so the overflow count is muted TEXT rather than CAL's button. */
+.tasks__cal-more {
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+  padding: 1px 4px;
+}
+
+/* The strip under the grid: the tasks a calendar cannot place, still draggable
+   onto a day — which is exactly what gives them a rok. */
+.tasks__cal-undated {
+  display: flex;
+  align-items: baseline;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+  padding-top: var(--nx-space-1);
+}
+.tasks__cal-undated-label {
+  font-size: var(--nx-font-size-label);
+  text-transform: uppercase;
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-muted);
+  font-weight: var(--nx-font-weight-semibold);
+  flex: none;
+}
+.tasks__cal-undated-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-1);
+  min-width: 0;
+}
+button.tasks__cal-chip {
+  font: inherit;
+  font-size: var(--nx-font-size-caption);
+  cursor: grab;
+  padding: 2px 8px;
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-sm);
+  background: var(--nx-surface);
+  color: var(--nx-text);
+}
+button.tasks__cal-chip:active {
+  cursor: grabbing;
+}
+.tasks__cal-chip:hover {
+  text-decoration: underline;
+}
+.tasks__cal-chip:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 1px;
+}
+/* Finished work stays visible and goes quiet — the bar's own --muted opacity. */
+.tasks__cal-chip--done {
+  opacity: 0.5;
+}
+
+/* Delete + undo (TASK-011): an inline, token-styled undo bar above the list. */
+.tasks__undo {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+}
+.tasks__undo-text {
+  flex: 1;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+}
+.tasks__undo-dismiss.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.tasks__undo-dismiss.nx-button:hover {
+  background: var(--nx-surface);
+  color: var(--nx-text);
+}
+
+/* The batch action bar (ADR-038) is the undo bar's recipe with a wrap: it holds
+   three menu triggers and a delete rather than one action, and must not squeeze
+   the count out of view on a narrow window. */
+.tasks__bulk {
+  flex-wrap: wrap;
+}
+/* Sub-lists indent under their parent exactly as the rail draws them, so the
+   menu reads as the same tree rather than as a flat list of names. */
+.tasks__bulk-list {
+  padding-left: calc(10px + var(--nx-space-3) * var(--task-depth, 0));
+}
+.tasks__bulk-due {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-1);
+}
+.tasks__bulk-error {
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-danger);
+}
+
+/* The row itself ------------------------------------------------------
+   Three things, and each one is a rule rather than a taste.
+
+   NO HAIRLINE UNDER EVERY ROW. A rule under all sixty is a spreadsheet: it
+   draws sixty lines competing with sixty titles, and it says nothing, because
+   every row has one. What separates rows here is the 38px rhythm and the hover
+   tint; what separates GROUPS is the sticky heading, which is the division a
+   reader actually asked about.
+
+   HOVER IS A TINT. `surface-alt`, edge to edge of the row's own padded box —
+   never a bar down one side and never a glow.
+
+   ~38px. The padding is 8px against a 24px-floored checkbox line, which is the
+   density this list wants: tight enough that a screen holds a useful number of
+   rows, loose enough that a title and its chips are not touching. Scoped with
+   `.tasks ` so it beats `.nx-list-row`'s own padding wherever the packages are
+   loaded relative to this file. */
+.tasks .nx-list-row {
+  padding: var(--nx-space-2);
+  border-bottom: none;
+  border-radius: var(--nx-radius-sm);
+}
+/* The engine draws the separator from `.nx-list-view__item > .nx-list-row`,
+   which is (0,2,0) — the same weight as the rule above, so which of them won
+   would come down to which stylesheet the bundler happened to emit second. It
+   is answered on specificity instead. */
+.tasks .nx-list-view__item > .nx-list-row {
+  border-bottom: none;
+}
+.tasks .nx-list-row:hover {
+  background: var(--nx-surface-alt);
+}
+
+/* Row trailing: priority/due chips next to the row's two controls. */
+.tasks__row-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+/* The two inline controls — „✎“ and the overflow „⋯“ — quiet until the row is
+   hovered or one of them takes focus. `opacity`, never `display: none`: a
+   control removed from the DOM is a control no keyboard can reach, and the
+   whole point of an overflow menu is that it holds the actions a mouse would
+   otherwise need a fourth button for. */
+.tasks__row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.tasks .nx-list-row:hover .tasks__row-actions,
+.tasks__row-actions:focus-within {
+  opacity: 1;
+}
+.tasks__chips {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+/* A tag chip in that cluster is OUTLINED where prioritet/rok are filled: a label
+   is not a state, and the note list's own tag chip (.note__item-tag) reads the
+   same way — quiet metadata, never a selection affordance. The border takes the
+   pixel the padding gives up on each side, so an outlined chip is exactly as tall
+   and as wide as a filled one beside it.
+
+   The „Blokiran“ mark (ADR-037) shares that recipe outright and adds only muted
+   text: waiting on something is a fact about the task, not a warning about it —
+   nothing is refused, and a chip that shouted would say otherwise. */
+.tasks__tag-chip.nx-chip,
+.tasks__blocked-chip.nx-chip {
+  background: transparent;
+  border: 1px solid var(--nx-border);
+  padding: 1px 8px;
+}
+.tasks__blocked-chip.nx-chip {
+  color: var(--nx-text-muted);
+}
+/* The per-task "⋯" menu sits in the row's action cluster, so it takes that
+   cluster's hover treatment rather than the popover trigger's bare colour
+   change. Chained, so the shared trigger rule cannot win the tie. */
+.tasks__row-menu.note__menu-trigger {
+  flex: none;
+}
+.tasks__row-menu.note__menu-trigger:hover {
+  background: var(--nx-surface-alt);
+}
+/* „✎“ on a row, and „Obriši“ in the batch bar. Ghost buttons: the `.nx-button`
+   floor keeps them 24px tall, so the padding only has to say how wide. */
+.tasks__edit.nx-button,
+.tasks__delete.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.tasks__edit.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.tasks__delete.nx-button:hover {
+  background: var(--nx-danger-soft);
+  color: var(--nx-danger);
+}
+/* The „Završeno“ bound (ADR-049 / ADR-039 §4): one muted line saying how far
+   the view currently reaches, and one quiet step that widens it — the same
+   ghost treatment as „Nova lista“, since neither is the point of the screen. */
+.tasks__more {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-3);
+  padding: var(--nx-space-3) var(--nx-space-2) 0;
+}
+.tasks__more-note {
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+.tasks__more-action.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.tasks__more-action.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+/* The „Završeno“ archive: a quiet typographic disclosure beneath the recent
+   rows — the export module picker's idiom (.set__disclosure) one module over:
+   triangle mark, muted text, no border and no fill, so the archive asks for no
+   attention until someone goes looking for it. */
+.tasks__archive-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  align-self: flex-start;
+  margin: 0;
+  padding: 0 var(--nx-space-2);
+  border: none;
+  border-radius: var(--nx-radius-xs);
+  background: transparent;
+  color: var(--nx-text-muted);
+  font: inherit;
+  font-size: var(--nx-font-size-body-sm);
+  cursor: pointer;
+  transition: color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.tasks__archive-toggle:hover {
+  color: var(--nx-text);
+}
+.tasks__archive-toggle:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+.tasks__archive-mark {
+  border-style: solid;
+  border-width: 4px 0 4px 6px;
+  border-color: transparent transparent transparent currentColor;
+  transition: transform var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.tasks__archive-toggle[aria-expanded="true"] > .tasks__archive-mark {
+  transform: rotate(90deg);
+}
+.tasks__archive-count {
+  font-size: var(--nx-font-size-caption);
+}
+
+/* Subtasks (TASK-008) ---------------------------------------------------
+   Nesting is carried by indentation alone — no rails, no glow: a subtask row
+   is the same row, one step in. The depth is capped (MAX_INDENT_DEPTH in
+   TasksPage); past three steps the indent starts eating the row instead of
+   explaining it, so deeper subtasks render at the third step's offset.
+
+   The spacer is purely horizontal — it is a flex item in both places it
+   appears (a row's leading slot and the subtask line), so it needs no height
+   of its own. */
+.tasks__indent {
+  flex: none;
+}
+.tasks__indent--1 {
+  width: var(--nx-space-4);
+}
+.tasks__indent--2 {
+  width: calc(var(--nx-space-4) * 2);
+}
+.tasks__indent--3 {
+  width: calc(var(--nx-space-4) * 3);
+}
+
+/* A rule used to live here putting a separator back on every row of the last
+   subtree, because the engine drops the last item's. Nothing separates rows any
+   more (see `.tasks .nx-list-row`), so it had nothing left to repair. */
+
+/* Inline "new subtask" line, directly under the row it belongs to. It borrows
+   the quick-add input rather than inventing a second field; the padding is
+   tighter than a row's because the input already carries its own, and the
+   indent puts its left edge exactly where the new subtask's checkbox lands. */
+.tasks__subtask-add {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-1) 0;
+}
+.tasks__subtask-input.nx-textfield__input {
+  flex: 1;
+}
+
+/* Roll-up chip: neutral like the rest of the cluster. Every direct subtask
+   done takes the module's own done treatment — the struck-through label of a
+   ticked checkbox (packages/ui .nx-checkbox--done) — never a new colour. */
+.tasks__progress-done {
+  text-decoration: line-through;
+}
+
+/* The 24px pointer-target floor -----------------------------------------
+   `.nx-button` states this floor once for every button in the product. What is
+   left over on this page is the handful of targets that are NOT buttons of that
+   kind — raw `<button>` elements borrowed from the note rail, a draggable span,
+   a native checkbox — and each of them had been sized purely by the padding
+   around a 14px glyph, which lands at 20–22px every time. Padding is not a
+   floor: it is an offset from whatever the content happens to measure, so the
+   same arithmetic gives the same answer again the next time somebody writes it.
+   Stating `min-height` is what makes the class unreachable rather than fixed.
+
+   Every one of these is a scoped or chained selector for the reason given at
+   the top of this file. THE SCOPE IS ALSO A CONSTRAINT: `.tasks …` only reaches
+   what is inside the page element, and every popover panel on this page is
+   portalled to <body>. The two controls that live in one — the template row's
+   „×“ and the column popover's ↑/↓ — are therefore sized at their own
+   declarations further up, where the selector can actually match them. */
+.tasks .tasks__tag,
+.tasks .tasks__tag-clear,
+.tasks .tasks__pick,
+.tasks .tasks__archive-toggle,
+.tasks button.tasks__cal-chip,
+.tasks .tasks__grip {
+  min-height: 24px;
+}
+
+/* The done box is 15×15 because that is the size the checkmark is drawn at, and
+   it must stay that size — this page cannot make its checkboxes a different
+   shape from every other page's. So the PAINTED box is left alone and the
+   CLICKED one is grown around it: a transparent 24×24 pseudo-element, centred,
+   out of flow so the tick's own `place-content` is untouched.
+
+   The label around it is floored too, since clicking the title toggles the row
+   and that is the target most people actually hit.
+
+   The right home for both is `.nx-checkbox` in packages/ui, where every page
+   would get them; this file cannot reach it. */
+.tasks .nx-checkbox {
+  min-height: 24px;
+}
+.tasks .nx-checkbox input {
+  position: relative;
+}
+.tasks .nx-checkbox input::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 24px;
+  height: 24px;
+  transform: translate(-50%, -50%);
+}

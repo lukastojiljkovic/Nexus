@@ -1,0 +1,254 @@
+/* Notifications (NTF bell + center panel, piece a3) --------------------- */
+/* Sidebar footer: pinned to the bottom of the nav column (flex auto-margin),
+   a hairline separator above it, and the anchor for the overlay panel. */
+/* The bell's block inside the pinned foot. It used to pin ITSELF with
+   `margin-top: auto`, which was wrong twice over: it pinned only the bell —
+   the switcher and the two ways out render after it and hung below — and at
+   exactly the window heights where it mattered there was no free space left,
+   so it resolved to 0 and pinned nothing at all. `.app__sidebar-foot` pins the
+   whole group instead. */
+.app__sidebar-footer {
+  position: relative;
+  padding-top: var(--nx-space-2);
+  border-top: 1px solid var(--nx-border);
+}
+
+/* The bell: full-width, typographic like a nav item — open state is gold
+   text + weight (the direction brief's selection idiom), never a glow or
+   fill. The unread count is plain gold-accent text, never a filled blob. */
+/* Shaped like the nav rows it sits among: same height, same inset, same radius,
+   same hover. It is a `Button` rather than a `NavItem` only because it toggles
+   a panel instead of navigating — which is a difference in what it does, not in
+   what it should look like. */
+.ntf__bell.nx-button {
+  width: 100%;
+  min-height: 28px;
+  justify-content: space-between;
+  padding: 5px var(--nx-space-2);
+  border-radius: var(--nx-radius-md);
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text);
+  font-weight: var(--nx-font-weight-regular);
+}
+.ntf__bell-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  min-width: 0;
+}
+.ntf__bell-label .nx-icon {
+  color: var(--nx-text-subtle);
+}
+.ntf__bell.nx-button:hover .nx-icon,
+.ntf__bell--open.nx-button .nx-icon {
+  color: var(--nx-accent);
+}
+.ntf__bell.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.ntf__bell--open.nx-button {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.ntf__bell-count {
+  font-size: var(--nx-font-size-label);
+  font-weight: var(--nx-font-weight-semibold);
+  color: var(--nx-accent-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Center panel: anchored above the bell, a bordered/shadowed surface (never
+   a glow), scrolling internally so it never outgrows the viewport. */
+.ntf__panel {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + var(--nx-space-2));
+  width: 360px;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+  box-shadow: var(--nx-shadow);
+  z-index: 20;
+}
+.ntf__list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+/* The centre's loading and failure lines. Same rule as `.dash__quiet` and named
+   the same way on purpose — an empty list is `EmptyState`, and these two are not
+   empty lists. */
+.ntf__quiet {
+  margin: 0;
+  padding: var(--nx-space-4);
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+
+.ntf__row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  padding: var(--nx-space-3) var(--nx-space-4);
+  border-bottom: 1px solid var(--nx-border);
+}
+.ntf__row:last-child {
+  border-bottom: none;
+}
+/* The clickable deep-link zone: title/body/meta only, no nested interactive
+   controls (actions live as a sibling, never inside this button). */
+.ntf__row-open {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+.ntf__row-open:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+.ntf__row-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nx-space-2);
+}
+.ntf__row-title {
+  font-weight: var(--nx-font-weight-semibold);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.ntf__row-body {
+  margin: 0;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+  line-height: var(--nx-font-leading-snug);
+}
+.ntf__row-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+.ntf__row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-2);
+  margin-top: var(--nx-space-1);
+}
+.ntf__snooze-presets {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  flex-wrap: wrap;
+}
+/* The four explicit presets are flattened to quiet chips — but not the
+   default-snooze button beside them (NTF-009), which keeps its primary weight
+   because it is the answer in the common case rather than one option of five. */
+.ntf__snooze-presets .nx-button:not(.ntf__snooze-default) {
+  background: transparent;
+  border-color: var(--nx-border);
+  color: var(--nx-text-muted);
+}
+.ntf__snooze-presets .nx-button:not(.ntf__snooze-default):hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.ntf__dismiss.nx-button {
+  background: transparent;
+  border-color: var(--nx-border);
+  color: var(--nx-text-muted);
+}
+.ntf__dismiss.nx-button:hover {
+  background: var(--nx-danger-soft);
+  color: var(--nx-danger);
+}
+
+/* Settings disclosure — mirrors the study__archived/plan-toggle idiom
+   exactly: a Button whose label switches between the show/hide phrasing. */
+.ntf__settings {
+  flex: none;
+  border-top: 1px solid var(--nx-border);
+  padding: var(--nx-space-3) var(--nx-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+.ntf__settings-toggle.nx-button {
+  align-self: flex-start;
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.ntf__settings-toggle.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.ntf__settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+.ntf__settings-row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+}
+.ntf__settings-time {
+  width: auto;
+}
+.ntf__settings-hint {
+  margin: 0;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-caption);
+}
+.ntf__settings-error {
+  margin: 0;
+  color: var(--nx-danger);
+  font-size: var(--nx-font-size-body-sm);
+}
+.ntf__settings-sources {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+/* NTF-009: „Podrazumevano odlaganje“ — a labelled choice of four, drawn as the
+   SET page's own preset row (active = primary) so the same kind of decision
+   looks the same wherever it is made. The label copies TextField's, since it
+   stands beside those inputs and must not read as a different rank of thing. */
+.ntf__settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ntf__settings-label {
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-muted);
+  font-weight: var(--nx-font-weight-medium);
+}
+.ntf__settings-presets {
+  display: inline-flex;
+  gap: var(--nx-space-1);
+  flex-wrap: wrap;
+}

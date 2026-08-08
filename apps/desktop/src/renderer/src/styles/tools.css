@@ -1,0 +1,374 @@
+/* --- Alatke (UTIL slice c) ---------------------------------------------------
+   The tool drawer: a searchable rail on the left, the open tool on the right.
+
+   The rail is the app's own nav row (`.nx-nav-item`), not a fourth reading of
+   it — see `.tool__item`. Every colour, space and radius below is a token;
+   nothing here mints a hue.
+
+   The layout collapses to one column under 720px, where a two-pane drawer would
+   leave both panes too narrow to read. */
+.tool {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-5);
+  /*
+   * TABULAR FIGURES FOR THE WHOLE DRAWER.
+   *
+   * A converter and a calculator are almost entirely numbers, and proportional
+   * digits make every one of them move: type a digit into „Vrednost" and the
+   * three characters already in the box shuffle sideways, and the answer under
+   * them wanders as its own digits change. It reads as the surface being
+   * unsure of itself.
+   *
+   * Stated on the PAGE rather than on each figure, because the defect is not
+   * „this figure was missed" — it is that a tool added tomorrow would have to
+   * remember. The property inherits, so anything drawn in this subtree is
+   * tabular by construction.
+   */
+  font-variant-numeric: tabular-nums;
+}
+/* Form controls do not inherit their font: the browser's own `font` shorthand
+   on `<input>`, `<select>` and `<button>` resets every font-variant longhand to
+   `normal`, so inheritance never reaches them unless the control's own rule
+   hands it back. The app's primitives do hand it back (`font: inherit`), and
+   that is precisely the kind of thing that is true until somebody writes a
+   control that sets only `font-family`. These three selectors make the page
+   rule reach every control in the drawer whatever its own rule says. */
+.tool input,
+.tool select,
+.tool .nx-button {
+  font-variant-numeric: tabular-nums;
+}
+.tool__search {
+  max-width: 360px;
+}
+/*
+ * The rail and the tool are ONE instrument, not a list beside a form.
+ *
+ * They had been two panes with twenty-four pixels of nothing between them and
+ * no line to say they belonged together, and the rail stopped at its own last
+ * row — so on a tool with a long body the left column simply ran out halfway
+ * down the page. A hairline that runs the full height is what makes the pair
+ * read as one object: `stretch` gives the rail the taller pane's height, and
+ * the rule below hangs the line off its edge.
+ */
+.tool__layout {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+  align-items: stretch;
+}
+@media (max-width: 720px) {
+  .tool__layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The rail. */
+.tool__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+  padding-right: var(--nx-space-5);
+  border-right: 1px solid var(--nx-border-subtle);
+}
+/* Stacked, the divider turns through ninety degrees rather than disappearing:
+   the two panes are still one instrument, just folded. */
+@media (max-width: 720px) {
+  .tool__list {
+    padding: 0 0 var(--nx-space-4);
+    border-right: 0;
+    border-bottom: 1px solid var(--nx-border-subtle);
+  }
+}
+.tool__group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+/* „Pretvaranje" / „Računanje" — the rail's structure, not its content, so it
+   takes the tertiary tier the app gives every 11px caps eyebrow. It had been
+   `--nx-text-muted`, the SECONDARY tier, where it competed with the tool names
+   directly beneath it — the same defect `.app__nav-group-label` was fixed for,
+   and the same fix. */
+.tool__group-title {
+  margin: 0 0 var(--nx-space-1);
+  padding: 0 var(--nx-space-3);
+  font-size: var(--nx-font-size-label);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-subtle);
+}
+/*
+ * A rail row IS `.nx-nav-item` — the app's one nav-row grammar, which this
+ * drawer had been writing a fourth version of.
+ *
+ * What the private version got wrong, and why it is worth naming rather than
+ * patching: the ✦ led the label instead of trailing it, so choosing a tool
+ * shoved the name of every selected row sideways by a glyph; the mark inherited
+ * the row's bold weight and `--nx-accent-strong` instead of the caption weight
+ * and `--nx-accent` the sidebar uses; and hover changed the ink only, with none
+ * of the surface tint every other list in the product answers a pointer with.
+ * Three drifts, one cause — a shared row re-cut by hand.
+ *
+ * So the markup carries `.nx-nav-item` and this rule is only what a `<button>`
+ * needs in order to BE one. `<button>` and not the `NavItem` component
+ * deliberately: this row swaps a panel, it does not navigate, and an anchor
+ * with no href would be a worse promise than a private class.
+ */
+.tool__item.nx-nav-item {
+  appearance: none;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  /*
+   * Deliberately NOT `font: inherit`, which is the obvious way to write this
+   * and would silently break the selection it exists to adopt: the shorthand
+   * carries `font-weight` with it, this selector outranks
+   * `.nx-nav-item--active`, and the chosen tool would therefore have lost the
+   * weight half of „gold text and weight" while keeping the gold. Only the
+   * longhands a `<button>` actually needs are set — the browser's own `font`
+   * shorthand overrides INHERITANCE, so family, size, leading and figures each
+   * have to be handed back by name — and `font-weight` is deliberately not
+   * among them, which is what leaves the selection to the shared rule.
+   */
+  font-family: inherit;
+  font-size: var(--nx-font-size-body-sm);
+  line-height: var(--nx-font-leading-snug);
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+  cursor: pointer;
+}
+.tool__item.nx-nav-item:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+
+/* The open tool. */
+.tool__surface {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  min-width: 0;
+  padding-left: var(--nx-space-5);
+}
+@media (max-width: 720px) {
+  .tool__surface {
+    padding: var(--nx-space-4) 0 0;
+  }
+}
+.tool__surface-title {
+  margin: 0;
+  font-size: var(--nx-font-size-title);
+  line-height: var(--nx-font-leading-tight);
+  letter-spacing: var(--nx-font-tracking-tight);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.tool__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  align-items: stretch;
+  max-width: 44rem;
+}
+.tool__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  padding-top: var(--nx-space-3);
+  border-top: 1px solid var(--nx-border-subtle);
+}
+.tool__section:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+.tool__section-title {
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+  font-weight: var(--nx-font-weight-semibold);
+  color: var(--nx-text);
+}
+
+/* Two fields side by side, with the converter's swap button between them. */
+.tool__pair {
+  display: flex;
+  gap: var(--nx-space-3);
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+.tool__pair > * {
+  flex: 1 1 8rem;
+  min-width: 0;
+}
+.tool__swap.nx-button,
+.tool__row-remove.nx-button {
+  flex: 0 0 auto;
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.tool__swap.nx-button:hover,
+.tool__row-remove.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+
+.tool__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+/* The drawer writes its own labelled `<select>` where the app now has one
+   (`Select`), so this matches `.nx-select__label` to the declaration — same
+   size, same weight, same ink — and the two read identically until the surfaces
+   adopt the component. It had been `--nx-font-size-caption` at regular weight,
+   which is a caption and not a form label. */
+.tool__field-label {
+  font-size: var(--nx-font-size-label);
+  font-weight: var(--nx-font-weight-medium);
+  color: var(--nx-text-muted);
+}
+/*
+ * The control itself is DELIBERATELY not styled here any more.
+ *
+ * `.nx-app select:not(.nx-select__control)` in `@nexus/ui` now draws every raw
+ * `<select>` the app still writes by hand — the same box as
+ * `.nx-textfield__input` to the pixel, the 30px pointer floor, and a focus ring
+ * — at a higher specificity than a single class. Everything this rule used to
+ * declare was therefore already dead: a byte-identical copy that could only
+ * ever drift away from the shared one. What it needs is the transition the
+ * shared rule leaves to the caller, and nothing else.
+ */
+.tool__select {
+  transition:
+    border-color var(--nx-motion-fast) var(--nx-motion-ease),
+    background-color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+
+/*
+ * THE ANSWER.
+ *
+ * A converter is two fields and a result, and the result had been drawn as a
+ * third box the same size as the fields — so the surface said „here are three
+ * equally interesting things" when two of them are a question and one is the
+ * reason the tool exists. Every answer in the drawer now sits in the same well:
+ * a tinted panel that is plainly not an input, with the figure as the loudest
+ * type on the page.
+ */
+.tool__figure,
+.tool__results {
+  padding: var(--nx-space-3) var(--nx-space-4);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border-subtle);
+  border-radius: var(--nx-radius-md);
+}
+.tool__figure {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+}
+.tool__figure-value {
+  font-size: var(--nx-font-size-display);
+  letter-spacing: var(--nx-font-tracking-display);
+  line-height: var(--nx-font-leading-tight);
+  font-weight: var(--nx-font-weight-semibold);
+  color: var(--nx-text);
+}
+/* The unit names the figure and is not part of it: secondary tier, and readable
+   — „milja (mi)" is the half of the answer that says what the number means. */
+.tool__figure-unit {
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+/* The percentage tool's four answers. One size below the converter's single
+   one, because four displays stacked down a page is a page of displays — but
+   still, against a 13px title and 13px fields, unmistakably the loudest thing
+   in its own section. */
+.tool__figure-inline {
+  margin: 0;
+  font-size: var(--nx-font-size-h1);
+  line-height: var(--nx-font-leading-tight);
+  letter-spacing: var(--nx-font-tracking-h1);
+  font-weight: var(--nx-font-weight-semibold);
+  color: var(--nx-text);
+}
+.tool__results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+/* Names what the column of figures IS, for the one tool whose row labels are
+   taken by which package each row is. The tertiary tier, on the tracking token
+   rather than a hand-written 0.04em — the value was right and the way it got
+   there was how a scale stops being a scale. */
+.tool__results-heading {
+  margin-bottom: var(--nx-space-1);
+  font-size: var(--nx-font-size-label);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-subtle);
+}
+.tool__result-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nx-space-3);
+}
+.tool__result-label {
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+/* „Mesečna rata" and „Osnovica" are the answer too, not a footnote to it: the
+   figure carries the title size, the label stays secondary beside it, and the
+   two levels are the row. */
+.tool__result-value {
+  display: flex;
+  align-items: baseline;
+  gap: var(--nx-space-2);
+  font-size: var(--nx-font-size-title);
+  line-height: var(--nx-font-leading-tight);
+  font-weight: var(--nx-font-weight-semibold);
+  color: var(--nx-text);
+}
+.tool__badge {
+  font-size: var(--nx-font-size-label);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-accent-strong);
+}
+.tool__premium {
+  font-size: var(--nx-font-size-body-sm);
+  font-weight: var(--nx-font-weight-regular);
+  color: var(--nx-text-muted);
+}
+
+/* What a tool says about itself: the PDV note, the loan's caveat, the kB/KiB
+   warning. Secondary tier and READABLE — it had been 11px, the tier that exists
+   for eyebrows and counts, and the loan caveat is three lines of prose a person
+   is expected to actually read before trusting the figure above it. */
+.tool__note {
+  margin: 0;
+  max-width: 64ch;
+  font-size: var(--nx-font-size-body-sm);
+  line-height: var(--nx-font-leading-normal);
+  color: var(--nx-text-muted);
+}
+/* „Nijedna alatka ne odgovara pretrazi." plus the way out of it. The button is
+   left-aligned under the line rather than beside it, because the line wraps and
+   a trailing control would move with it. */
+.tool__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nx-space-2);
+}
+.tool__error {
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+  line-height: var(--nx-font-leading-snug);
+  color: var(--nx-danger);
+}

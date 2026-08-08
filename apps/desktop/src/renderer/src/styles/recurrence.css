@@ -1,0 +1,516 @@
+/* Recurrence field + scope dialog (ADR-024) ---------------------------- */
+/* Shared by the task form and the event form, so this family is its own
+   (`recur__`) rather than living under either page. Every control reuses the
+   existing form recipes: the selects match .documents__select, the number
+   inputs are plain .nx-textfield__input, and the weekday chips are the same
+   typographic toggle as .cal__source — accent text + weight, never a glow. */
+.recur {
+  /* Takes a full row inside the wrapping forms it sits in, so opening
+     Prilagođeno grows downward instead of shoving the submit button around. */
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+}
+.recur__field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+}
+.recur__label {
+  flex: none;
+  font-size: var(--nx-font-size-label);
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-muted);
+}
+/* Native select matched to the textfield input (tokens only, no custom arrow;
+   mirrors .documents__select). */
+.recur__select {
+  font: inherit;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  padding: 7px 13px;
+  transition: border-color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.recur__select:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+.recur__select:disabled {
+  color: var(--nx-text-muted);
+  cursor: not-allowed;
+}
+.recur__number.nx-textfield__input {
+  width: 72px;
+}
+.recur__counted {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+.recur__unit {
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+.recur__caption {
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+/* The Prilagođeno panel: its own full-width line under the preset select. */
+.recur__custom {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nx-space-3);
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+}
+.recur__days {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  flex-wrap: wrap;
+}
+.recur__day.nx-button {
+  padding: 2px 8px;
+}
+/* The "this repeats" marker: a quiet glyph, never an icon and never a colour
+   of its own beyond the muted text token. */
+.recur__mark {
+  flex: none;
+  font-size: var(--nx-font-size-label);
+  line-height: 1;
+  color: var(--nx-text-muted);
+}
+/* On the accent-tinted calendar surfaces the muted text token would read as
+   washed out, so there the marker takes the surface's own colour — it is a
+   density cue, not a second palette. The two inline contexts (a month chip and
+   a timed event's title) have no flex gap to space it, hence the margin. */
+.cal__month-bar--event .recur__mark,
+.cal__month-chip .recur__mark,
+.cal__grid-event-title .recur__mark {
+  color: inherit;
+}
+.cal__month-chip .recur__mark,
+.cal__grid-event-title .recur__mark {
+  margin-right: 3px;
+}
+
+/* House dialog recipe — the recurrence scope question (.recur-dialog__*), the
+   open-subtasks question (.tasks__dialog-*, TASK-008) and the one-time
+   notification-appetite question (.ntf__appetite-*, NTF-008) share it outright:
+   each asks something the app must not answer on the user's behalf, and one
+   look for that kind of question is the point. The same overlay as the search
+   palette (backdrop and panel as siblings, a solid wash of the app background
+   rather than a raw scrim), centred because it is a question, not a search
+   surface. */
+.recur-dialog__overlay,
+.tasks__dialog-overlay,
+.ntf__appetite-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--nx-space-6);
+}
+.recur-dialog__backdrop,
+.tasks__dialog-backdrop,
+.ntf__appetite-backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--nx-bg);
+  opacity: 0.75;
+}
+.recur-dialog__panel,
+.tasks__dialog-panel,
+.ntf__appetite-panel {
+  position: relative;
+  width: min(420px, 92vw);
+  /* The height counterpart of the width above, and for the same reason: this
+     recipe is worn by dialogs that have grown well past a title and two
+     choices (the shortcuts sheet, the CSV column mapper, the practice sheet,
+     the document preview), and on a short window those ran off the bottom with
+     no way to reach the actions. `92vh` leaves the same breathing room the
+     overlay's own padding gives horizontally; the panel scrolls inside it.
+     `min-height: 0` because the panel is itself a flex column — without it a
+     tall child refuses to shrink and the max-height is decorative. */
+  max-height: 92vh;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  padding: var(--nx-space-5);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+  box-shadow: var(--nx-shadow);
+}
+.recur-dialog__title,
+.tasks__dialog-title,
+.ntf__appetite-title {
+  margin: 0;
+  font-size: var(--nx-font-size-title);
+  line-height: var(--nx-font-leading-tight);
+  font-weight: var(--nx-font-weight-semibold);
+  color: var(--nx-text);
+}
+.recur-dialog__question,
+.tasks__dialog-question,
+.ntf__appetite-question {
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+/* Which record the question is about (the list being deleted, the note being
+   deleted) — full-strength text between the title and the muted question, so
+   the name is the one thing read before the choices. */
+.tasks__dialog-name,
+.recur-dialog__name {
+  margin: 0;
+  font-size: var(--nx-font-size-body);
+  color: var(--nx-text);
+  overflow-wrap: anywhere;
+}
+/* Equal choices and no primary among them: the dialog exists so that nothing
+   here is picked by accident. */
+.recur-dialog__choices,
+.tasks__dialog-choices,
+.ntf__appetite-choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+.recur-dialog__choice.nx-button,
+.tasks__dialog-choice.nx-button,
+.ntf__appetite-choice.nx-button {
+  justify-content: flex-start;
+  text-align: left;
+}
+.recur-dialog__actions,
+.tasks__dialog-actions,
+.ntf__appetite-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+/* The quiet way out of a question that must still be answered: "Zadrži
+   podrazumevano" carries the same recessive treatment as Otkaži, because it is
+   the answer that changes nothing — not because it is a cancel. */
+.recur-dialog__cancel.nx-button,
+.tasks__dialog-cancel.nx-button,
+.ntf__appetite-keep.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.recur-dialog__cancel.nx-button:hover,
+.tasks__dialog-cancel.nx-button:hover,
+.ntf__appetite-keep.nx-button:hover {
+  background: transparent;
+  color: var(--nx-text);
+}
+
+/* Shortcuts reference (ADR-040) — the house dialog recipe above, widened for a
+   two-column list and scrolling in its body rather than growing past the
+   window. It reuses those classes outright and only overrides what a reference
+   needs; nothing about the overlay, backdrop or title differs. */
+.shortcuts-dialog__panel.recur-dialog__panel {
+  width: min(520px, 94vw);
+  max-height: min(680px, 86vh);
+}
+.shortcuts-dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+  overflow-y: auto;
+  /* Without this a flex item refuses to shrink below its content, and the
+     panel grows past its max-height instead of the list scrolling. */
+  min-height: 0;
+  /* The scroll edge needs breathing room, or a clipped row reads as the end. */
+  padding-right: var(--nx-space-2);
+}
+.shortcuts-dialog__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+.shortcuts-dialog__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nx-space-4);
+  font-size: var(--nx-font-size-body-sm);
+}
+.shortcuts-dialog__row-label {
+  min-width: 0;
+}
+/* The one row that behaves unlike its neighbours (TASK-002) says so on its own
+   second line — quiet, typographic, no badge and no colour of its own. */
+.shortcuts-dialog__row-note {
+  display: block;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-caption);
+}
+
+/* „Dodaj vidžet" (ADR-045 section 5) — the same house dialog recipe again, and
+   the same treatment the shortcuts reference gets: the recur-dialog classes
+   outright, with only a width and a scrolling body of its own. */
+.dash-gallery__panel.recur-dialog__panel {
+  width: min(460px, 92vw);
+  max-height: min(600px, 84vh);
+}
+.dash-gallery__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+  overflow-y: auto;
+}
+.dash-gallery__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+.dash-gallery__row {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-1) 0;
+}
+.dash-gallery__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nx-font-size-body);
+}
+/* Why the button beside it is disabled — stated, not left to be inferred. */
+.dash-gallery__added {
+  flex: none;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+
+/* „Vežbaj" — the interleaved-practice selection (ADR-047). The same treatment
+   the widget gallery gets: the recur-dialog classes outright, with only a width
+   and a scrolling špil list of its own. Two actions rather than one, hence the
+   only other override here. */
+.study-practice__panel.recur-dialog__panel {
+  width: min(460px, 92vw);
+  max-height: min(600px, 84vh);
+}
+.study-practice__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  overflow-y: auto;
+  /* Without this a flex item refuses to shrink below its content, and the panel
+     grows past its max-height instead of the list scrolling. */
+  min-height: 0;
+}
+.study-practice__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-3);
+  padding: var(--nx-space-1) 0;
+}
+/* The name takes the room; the two count chips never wrap away from it, and a
+   long špil name truncates instead of pushing them off the row. */
+.study-practice__deck.nx-checkbox {
+  flex: 1;
+  min-width: 0;
+}
+.study-practice__deck .nx-checkbox__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.study-practice__counts {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+/* The filter sits apart from the list it narrows: a hairline above it says it
+   is about the whole selection, not about the last špil in the list. */
+.study-practice__problems.nx-checkbox {
+  display: flex;
+  padding-top: var(--nx-space-3);
+  border-top: 1px solid var(--nx-border);
+}
+.study-practice__actions.recur-dialog__actions {
+  gap: var(--nx-space-2);
+}
+/* „Pretvori u zadatke“ — the recur-dialog recipe outright; two actions rather
+   than one, which is the only thing it needs of its own. */
+.note__checklist-actions.recur-dialog__actions {
+  gap: var(--nx-space-2);
+}
+
+/* „Mapiranje kolona“ (ADR-062) — the house dialog recipe again, the shortcuts
+   reference's own treatment: the recur-dialog classes outright, widened for a
+   column list and scrolling in its body rather than growing past the window. */
+.csv-map__panel.recur-dialog__panel {
+  width: min(560px, 94vw);
+  max-height: min(680px, 86vh);
+}
+.csv-map__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  overflow-y: auto;
+  /* Without this a flex item refuses to shrink below its content, and the
+     panel grows past its max-height instead of the list scrolling. */
+  min-height: 0;
+  /* The scroll edge needs breathing room, or a clipped row reads as the end. */
+  padding-right: var(--nx-space-2);
+}
+.csv-map__toggles {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--nx-space-4);
+  padding-bottom: var(--nx-space-2);
+  border-bottom: 1px solid var(--nx-border);
+}
+.csv-map__toggle {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+/* One detected column: its name and samples take the room, the role select
+   keeps a fixed lane — fifteen rows must read as one table, not fifteen forms. */
+.csv-map__column {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-3);
+}
+.csv-map__column-facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  min-width: 0;
+}
+.csv-map__column-name {
+  font-size: var(--nx-font-size-body);
+  color: var(--nx-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The first few values, muted: evidence for the role choice, never content. */
+.csv-map__samples {
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-caption);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.csv-map__column .set__select {
+  flex: none;
+  width: 180px;
+}
+/* The destination sits apart from the columns it receives: a hairline above it
+   says it is about the whole import, not about the last column in the list. */
+.csv-map__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  padding-top: var(--nx-space-3);
+  border-top: 1px solid var(--nx-border);
+}
+.csv-map__actions.recur-dialog__actions {
+  gap: var(--nx-space-2);
+}
+/* A file-level refusal, inside the mapping dialog it is answered from (FIN
+   slice e). Set off by the same hairline the destination block uses, because it
+   is the same kind of statement: about the whole file, not about one column. */
+.csv-map__refusal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  padding-top: var(--nx-space-3);
+  border-top: 1px solid var(--nx-border);
+}
+
+/* „Pregledaj" — the in-app attachment preview (DOC tier 0, ADR-064): the house
+   dialog recipe again, the shortcuts reference's own treatment — the
+   recur-dialog classes outright, widened for a document and scrolling in its
+   body. One panel for its three shapes: an image lightbox, an escaped text
+   pane, a read-only markdown render (the note editor's own .note__prosemirror
+   classes, so a previewed .md and an open note can never drift apart). */
+.doc-preview__panel.recur-dialog__panel {
+  width: min(760px, 94vw);
+  max-height: min(760px, 90vh);
+}
+/* The title is a file name the user chose — it wraps rather than dictating the panel's width. */
+.doc-preview__title {
+  overflow-wrap: anywhere;
+}
+.doc-preview__body {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  /* Without this a flex item refuses to shrink below its content, and the
+     panel grows past its max-height instead of the body scrolling. */
+  min-height: 0;
+  /* The scroll edge needs breathing room, or a clipped line reads as the end. */
+  padding-right: var(--nx-space-2);
+}
+/* The lightbox: the image at its natural size up to the body, never cropped
+   and never glowing — the panel's own border is all the framing it gets. */
+.doc-preview__image {
+  align-self: center;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: var(--nx-radius-md);
+}
+/* The .txt pane: the app's one mono recipe, wrapped — a preview scrolls down,
+   never sideways. */
+.doc-preview__text {
+  margin: 0;
+  font-family: var(--nx-font-family-mono);
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.doc-preview__error {
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+
+/* The app's single <kbd> recipe, shared by the reference and the Settings card:
+   a quiet key cap on the alternate surface — a printed key, never a control. */
+.shortcut-kbd {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px var(--nx-space-2);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-sm);
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+  font-family: var(--nx-font-family-mono);
+  font-size: var(--nx-font-size-caption);
+  white-space: nowrap;
+}
+.shortcut-kbd-row {
+  display: inline-flex;
+  gap: var(--nx-space-1);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}

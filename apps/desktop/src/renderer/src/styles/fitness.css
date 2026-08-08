@@ -1,0 +1,887 @@
+/* Ishrana (FIT page) ---------------------------------------------------------
+
+   The day, its five meals, its four figures and the user's own foods. Two
+   things about this block are deliberate rather than incidental.
+
+   The BARS are the FIN month report's grammar to the pixel: one track per
+   macro, a fill on a scale of max(value, goal), and the goal as a tick standing
+   taller than the track on both sides. Over the goal takes `--nx-danger`,
+   exactly as an overspent envelope does — one visual vocabulary for „past the
+   line you drew", never a second one invented for food. Nothing glows, nothing
+   animates, and no hue is minted here.
+
+   A macro with NO goal draws an empty, quieter track and says „bez cilja" in
+   words: the row keeps the grid so four rows still line up, and it invents no
+   proportion, because there is nothing to be a proportion of. */
+.fit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-5);
+  /* THE MEASURE — the same reasoning, and the same token, as `.study`: past
+     ~1180px a row's label and its figure stop being one row. The token existed
+     and had never been adopted; it belongs on the page shell rather than on each
+     page (reported — `shell.css` is not this agent's file). */
+  max-width: var(--nx-layout-measure);
+}
+.fit__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  align-items: flex-start;
+}
+/* A section's name and the one control that governs it, on the same line. The
+   history range filter used to be a strip of its own directly under the page's
+   section switch — two rows of chrome before any content. */
+.fit__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-3);
+  flex-wrap: wrap;
+  align-self: stretch;
+}
+/* The section's opening figures and the one line naming the window they cover.
+   `StatBand` draws its own hairline underneath, so this adds only the gap. */
+.fit__band {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  align-self: stretch;
+}
+.fit__heading {
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-subtle);
+}
+.fit__note {
+  margin: 0;
+  max-width: 64ch;
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+/* The one place a `stated` figure's uncertainty is spelled out. Accent, not
+   danger: an estimate is a fact about the number, not a fault in it. */
+.fit__note--stated {
+  color: var(--nx-accent-strong);
+}
+.fit__error {
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-danger);
+}
+.fit__quiet.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.fit__quiet.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.fit__list {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+}
+
+/* The single-slot undo bar — the HABIT/FIN/TASK recipe outright. */
+.fit__undo {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+}
+.fit__undo-text {
+  flex: 1;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+}
+
+/* The day strip: which day is open, and the walk backwards through history. */
+.fit__daybar {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  align-self: stretch;
+}
+.fit__day-name {
+  flex: 1;
+  font-size: var(--nx-font-size-title);
+  line-height: var(--nx-font-leading-tight);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.fit__day-name::first-letter {
+  text-transform: uppercase;
+}
+.fit__day-step.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 8px;
+}
+.fit__day-step.nx-button:hover:not(:disabled) {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+
+/* The day's four figures, on the FIN report's scale-and-tick grammar. Row,
+   label, empty track and value are `ProportionBar`'s now — see
+   `renderGoalRow`. Track, fill, over and goal survive here because the
+   dashboard's „Ishrana danas" card still draws a bare bar with them directly
+   (`FitnessTodayWidget`): it has no label or value column to hand
+   `ProportionBar`, only a track under a figure the card already drew itself. */
+.fit__bars {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  align-self: stretch;
+}
+.fit__bar-track {
+  position: relative;
+  height: 10px;
+  border-radius: var(--nx-radius-round);
+  background: var(--nx-surface-alt);
+}
+.fit__bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: var(--nx-data);
+}
+/* Past a goal meant as a CEILING takes the semantic colour this app already uses
+   for an overspent envelope. Only the bars that ARE over change. */
+.fit__bar-fill--over {
+  background: var(--nx-danger);
+}
+/* The goal, as a tick on the same scale — taller than the track on both sides,
+   so it stays legible over an empty track and a full one alike. */
+.fit__bar-goal {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--nx-text);
+}
+.fit__bar-figure--over {
+  color: var(--nx-danger);
+  font-weight: var(--nx-font-weight-medium);
+}
+/* A floor goal that has been reached: the same emphasis, the success semantic
+   rather than the danger one. Only the FIGURE takes it — the fill does not,
+   because `--nx-success` and `--nx-data` are the same jade (see
+   tokens/themes/*.json), so a reached and an unreached floor already draw the
+   same bar; `renderGoalRow` gives `ProportionBar` the ordinary `data` tone for
+   both and lets this rule carry the whole distinction. */
+.fit__bar-figure--reached {
+  color: var(--nx-success);
+  font-weight: var(--nx-font-weight-medium);
+}
+.fit__bar-goal-text {
+  color: var(--nx-text-muted);
+}
+/* Never a number — a macro with no goal has none, and this page invents none. */
+.fit__bar-nogoal {
+  color: var(--nx-text-muted);
+  font-variant-numeric: normal;
+}
+
+/* The five meals. Always five, so the day keeps its shape whatever is in it. */
+.fit__slots {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-5);
+  align-self: stretch;
+}
+.fit__slot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  align-items: flex-start;
+  align-self: stretch;
+}
+.fit__slot-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nx-space-3);
+  align-self: stretch;
+}
+.fit__slot-name {
+  font-size: var(--nx-font-size-body);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.fit__slot-total {
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A logged row, and „Moje namirnice"' rows — one recipe, since both are a name
+   with facts under it and the same quiet actions on the right. */
+.fit__row-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.fit__row-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--nx-font-weight-medium);
+}
+.fit__row-meta {
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.fit__chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+.fit__row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+.fit__row-action.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+  padding: 2px 6px;
+}
+.fit__row-action.nx-button:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.fit__row-delete.nx-button:hover {
+  color: var(--nx-danger);
+}
+.fit__grams-field {
+  width: 9ch;
+}
+
+/* The picker: a query, a ranked list over both sources, then one food's own
+   numbers and the amount. A panel rather than a dialog — it belongs to the meal
+   it is filling, and a modal over five sections would lose which one that is. */
+.fit__picker,
+.fit__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  align-self: stretch;
+  align-items: flex-start;
+  padding: var(--nx-space-4);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+}
+.fit__form-title {
+  font-size: var(--nx-font-size-body);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.fit__form-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+.fit__results {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.fit__result-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.fit__result-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--nx-font-weight-medium);
+}
+.fit__chosen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  align-self: stretch;
+  align-items: flex-start;
+}
+.fit__chosen-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-3);
+  align-self: stretch;
+}
+.fit__chosen-figures {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  align-self: stretch;
+}
+.fit__figures-heading {
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-subtle);
+}
+/* --- „Mapa tela" ----------------------------------------------------------
+   FIT's signature graphic. The plates carry no colour of their own: they are
+   `CellMatrix`'s `.nx-cell` recipe verbatim, so the body map, the habit wall
+   and every other drawn graphic share one intensity ramp instead of three that
+   can drift apart. The wrapper is `.nx-chart-group` (packages/ui) — four
+   surfaces had each grown the identical one before it was hoisted. Defined here
+   are only the two things SVG does not inherit — the outline that turns the
+   plates into a figure, and the view labels. */
+/* `non-scaling-stroke` for the reason `.fit__chart-line` states one line down:
+   the figure is drawn at 1.6× its own coordinate space, and without this the
+   outline would come out at 1.6px — a hairline that thickens with the drawing
+   stops being a hairline and starts being a border around the data. */
+.fit__body-outline {
+  fill: none;
+  stroke: var(--nx-border);
+  stroke-width: 1;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.fit__body-side {
+  font-size: var(--nx-font-size-caption);
+  fill: var(--nx-text-subtle);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+}
+.fit__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-3);
+}
+.fit__fact {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.fit__fact-label {
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+.fit__fact-value {
+  font-size: var(--nx-font-size-body-sm);
+  font-variant-numeric: tabular-nums;
+}
+/* The food's own household measures, as one-tap amounts beside the gram field. */
+.fit__servings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-1);
+}
+.fit__serving.nx-button {
+  font-variant-numeric: tabular-nums;
+}
+
+/* „Odakle ovaj broj" — every food can answer it, and a `stated` one must. */
+.fit__source {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  align-self: stretch;
+  padding: var(--nx-space-3);
+  background: var(--nx-surface-alt);
+  border-radius: var(--nx-radius-md);
+}
+.fit__source-heading {
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-subtle);
+}
+.fit__source-kind {
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+  font-weight: var(--nx-font-weight-medium);
+}
+.fit__source-line {
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+/* The citation address, as text: this app opens no external links yet, so it is
+   monospaced to be read and copied rather than styled to be clicked. */
+.fit__source-url {
+  margin: 0;
+  font-family: var(--nx-font-family-mono);
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+  overflow-wrap: anywhere;
+}
+.fit__recipe {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fit__recipe-row {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: var(--nx-font-size-caption);
+}
+.fit__recipe-grams {
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* „Moje namirnice" and its form. */
+.fit__food {
+  display: flex;
+  flex-direction: column;
+}
+.fit__food-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-3) 0 var(--nx-space-4);
+}
+.fit__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+.fit__field-label {
+  font-size: var(--nx-font-size-label);
+  font-weight: var(--nx-font-weight-medium);
+  color: var(--nx-text-muted);
+}
+.fit__field-hint {
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+.fit__select {
+  padding: 6px 10px;
+  background: var(--nx-surface);
+  color: var(--nx-text);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-sm);
+  font-family: inherit;
+  font-size: var(--nx-font-size-body-sm);
+}
+/* The seven per-100 g fields. A grid rather than a column: they are read
+   together, off one label in the hand. */
+.fit__macro-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--nx-space-2);
+  align-self: stretch;
+}
+.fit__serving-row {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--nx-space-2);
+  align-self: stretch;
+}
+
+/* --- Trening (FIT slice c) ---------------------------------------------------
+   The FIT page's other half. Every colour, space and radius is a token; the
+   only two states with any colour of their own are the accent on a finished
+   countdown and the danger hue the shared row-delete already owns.
+
+   Selection everywhere below is the app's ONE grammar — `.nx-segmented__option`
+   keyed off `aria-pressed`, typographic and never a bar, a fill or a glow. */
+
+/* The page's two halves. */
+.fit__sections {
+  display: flex;
+  gap: var(--nx-space-1);
+  align-self: flex-start;
+}
+
+/* Starting a session: a day and the two ways in. */
+.fit__start {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+  align-self: stretch;
+}
+.fit__day-field {
+  max-width: 180px;
+}
+.fit__ranges {
+  display: flex;
+  gap: var(--nx-space-1);
+}
+
+/* The session in progress. Its own surface, because it is the one thing on the
+   page that is HAPPENING — everything else is a list of things that are not. */
+.fit__session {
+  padding: var(--nx-space-4);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+  align-self: stretch;
+}
+.fit__session-head {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  align-self: stretch;
+}
+/* `.fit__section` is `align-items: flex-start`, so a band inside one shrinks to
+   its own figures and the hairline it closes with stops short of the section it
+   summarises. This is `.nx-chart-group`'s `align-self: stretch` rule, needed for
+   the identical reason — reported: it belongs on `.nx-stat-band` itself, in
+   `packages/ui`, which is not this agent's file. */
+.fit__session > .nx-stat-band {
+  align-self: stretch;
+}
+.fit__session-title {
+  flex: 1;
+  font-size: var(--nx-font-size-title);
+  line-height: var(--nx-font-leading-tight);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.fit__figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-4);
+}
+
+/* The rest countdown. One row: what it is, the clock or the lengths to pick
+   from, and the sentence saying it is recorded nowhere. */
+.fit__rest {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  align-self: stretch;
+}
+.fit__rest-label {
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-subtle);
+}
+.fit__rest-presets {
+  display: flex;
+  gap: var(--nx-space-1);
+}
+.fit__rest-clock {
+  font-size: var(--nx-font-size-title);
+  font-weight: var(--nx-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  min-width: 4ch;
+}
+/* Accent, not danger: a rest being over is a fact, not a fault. */
+.fit__rest-clock--done {
+  font-size: var(--nx-font-size-body);
+  color: var(--nx-accent-strong);
+}
+.fit__rest-note {
+  flex: 1 1 100%;
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+
+/* One exercise inside the session. */
+.fit__exercises {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  align-self: stretch;
+}
+.fit__exercise {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-3);
+  background: var(--nx-surface-alt);
+  border-radius: var(--nx-radius-md);
+}
+.fit__exercise-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+}
+
+/* „Prošli put" — the single most used line in the module, and therefore its own
+   row rather than a chip somewhere at the end. */
+.fit__lasttime {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nx-space-2);
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+}
+.fit__lasttime-label {
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-subtle);
+}
+.fit__lasttime-day,
+.fit__lasttime-none {
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.fit__lasttime-sets {
+  color: var(--nx-text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The sets logged so far. */
+.fit__sets {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+.fit__set {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  font-size: var(--nx-font-size-body-sm);
+}
+.fit__set--editing {
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+.fit__set-index {
+  min-width: 2ch;
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.fit__set-text {
+  flex: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The log form: the kind, the metric's own fields, RIR, and one button. */
+.fit__logform {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+}
+.fit__set-field {
+  max-width: 110px;
+}
+.fit__set-field--rir {
+  max-width: 72px;
+}
+.fit__notes-row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--nx-space-2);
+  align-self: stretch;
+}
+.fit__notes-row .nx-textfield {
+  flex: 1;
+}
+
+/* One finished session in the history. */
+.fit__history {
+  display: flex;
+  flex-direction: column;
+}
+.fit__history-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-3) 0 var(--nx-space-3) var(--nx-space-4);
+}
+.fit__history-exercise {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The routine editor: one line per exercise, its metric-driven targets
+   (`SET_FIELDS` — a plank draws one, a weighted lift with a target load draws
+   up to five) and the moves. Flex rather than a fixed grid: how many target
+   fields a line draws depends on its exercise's metric, so a rigid column
+   count would either waste columns for a plank or crowd them for a lift with
+   a load target, and would misalign every row's own action buttons whenever
+   it draws fewer fields than the widest metric does. Wrapping keeps every
+   field a fixed, readable width at any window size instead of shrinking to
+   fit or overflowing at the app's minimum. */
+.fit__item-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--nx-space-2);
+  align-self: stretch;
+}
+.fit__item-name {
+  flex: 1 1 160px;
+  min-width: 0;
+  font-size: var(--nx-font-size-body-sm);
+  padding-bottom: 6px;
+}
+.fit__item-missing {
+  color: var(--nx-text-muted);
+}
+.fit__target-field {
+  flex: 0 0 88px;
+}
+/* Kept together and pushed to the row's own end (`margin-left: auto`) rather
+   than left to fall wherever the last target field happens to wrap to. */
+.fit__item-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  margin-left: auto;
+}
+
+/* The muscle pickers. Twenty toggles twice over, so they wrap and stay small —
+   and the chosen ones read typographically, like every other selection. */
+.fit__muscles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-1);
+  align-self: stretch;
+}
+.fit__checkline {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  font-size: var(--nx-font-size-body-sm);
+}
+
+/* --- Napredak i Merenja (FIT slice d) ---------------------------------------
+   Two surfaces whose whole job is to say what a number IS, so every figure sits
+   under its own label and every caveat gets a line rather than a tooltip. */
+
+/* One week of volume: the Monday, then its figures. */
+.fit__weeks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  align-self: stretch;
+}
+.fit__week {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nx-space-3);
+  font-size: var(--nx-font-size-body-sm);
+}
+.fit__week-day {
+  min-width: 10ch;
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.fit__week-figure {
+  font-variant-numeric: tabular-nums;
+}
+
+/* One exercise's records. */
+.fit__records {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  align-self: stretch;
+}
+.fit__record {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  padding: var(--nx-space-3);
+  background: var(--nx-surface-alt);
+  border-radius: var(--nx-radius-md);
+}
+.fit__record-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: baseline;
+  gap: var(--nx-space-3);
+  font-size: var(--nx-font-size-body-sm);
+}
+.fit__record-label {
+  color: var(--nx-text-muted);
+}
+.fit__record-value {
+  font-weight: var(--nx-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+.fit__record-day {
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* What a weaker tier is still waiting for, and the working behind the best one. */
+.fit__gaps,
+.fit__working {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  align-self: stretch;
+}
+
+/* The weight trend: the 7-day line, and the readings it was drawn from. The
+   dots are MUTED and the line is not — the line is the honest read, the dots are
+   the evidence behind it, and the hierarchy says which is which. */
+.fit__chart {
+  display: block;
+  align-self: stretch;
+  overflow: visible;
+}
+/* A zero-length subpath with a round cap — a filled circle of exactly the
+   stroke width, the same way the icon set draws a dot. `non-scaling-stroke` is
+   what makes it survive the chart's deliberate horizontal stretch: stroke
+   geometry is exempted from the user-space transform, so the cap stays a true
+   circle instead of the ellipse a `<circle r>` became at every container width
+   other than 320px. */
+.fit__chart-dot {
+  fill: none;
+  stroke: var(--nx-text-muted);
+  stroke-width: 3.6;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.45;
+}
+.fit__chart-line {
+  stroke: var(--nx-accent);
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  /* Same reason as the dots: under a non-uniform scale a diagonal stroke
+     thickens and thins along its own length. */
+  vector-effect: non-scaling-stroke;
+}
+
+/* „Ishrana danas" on the dashboard draws the same bar the page draws — one bar
+   grammar, never a second one for a card.
+
+   `.dash__fit` and `.dash__fit-goal` used to live here too. They are gone
+   because the dashboard's four bespoke row-text containers were replaced by one
+   shared `RowText`, which left them with no call site — and a rule nothing
+   references is a rule the next reader has to prove is dead before touching
+   anything near it. */
+.dash__fit-track {
+  display: block;
+  margin: var(--nx-space-1) var(--nx-space-2) 0;
+}

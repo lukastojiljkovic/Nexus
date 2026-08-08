@@ -1,0 +1,1040 @@
+/* Settings (SET page) --------------------------------------------------- */
+.set {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-5);
+}
+/* Section cards reuse nx-card's surface; this only spaces their innards.
+
+   `scroll-margin-top` is what makes the section index above land a card under
+   the sticky index rather than behind it: `scrollIntoView({block:"start"})`
+   aligns the element's margin box, so the card stops one comfortable step below
+   the strip instead of exactly at the scrollport edge. */
+.set__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+  /* One index strip's height (24px entry + its own padding) plus a step, so a
+     jumped-to card's title clears the strip instead of stopping behind it. */
+  scroll-margin-top: calc(var(--nx-space-8) + var(--nx-space-4));
+}
+.set__section .nx-card__title {
+  margin-bottom: 0;
+}
+
+/* THE SETTINGS ROW — one shape, and every preference on this page is it.
+   ----------------------------------------------------------------------
+   Label on the left, its explanation under the label, the control that answers
+   it pushed to the trailing edge. That is the whole grammar of the page, and
+   the reason it is a grid rather than a column: with every control landing on
+   the same right edge, a person scanning for the one row they came for reads a
+   column of names down the left and a column of answers down the right, instead
+   of a stack in which a label, a hint and a control are three lines of the same
+   size in the same colour.
+
+   The three tiers are hard-capped per row (design rules): the label is primary
+   (15px/500, `--nx-text`), the explanation is secondary (13px, `--nx-text-muted`
+   — READABLE, which the 11px it used to be was not), and nothing in a row is
+   allowed a third voice.
+
+   The placement rules read the row's own DOM shape — `label, control, hint…` —
+   rather than requiring a class per part, because the module panels
+   (`moduleSettingsPanels.tsx`) already write exactly that shape and must get
+   the same row without being rewritten. `.set__field-control` is there for the
+   rare row whose control is not the label's immediate sibling. */
+.set__field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--nx-space-5);
+  row-gap: var(--nx-space-1);
+}
+/* Everything is a left-column line until a rule below says otherwise. */
+.set__field > * {
+  grid-column: 1;
+}
+/* The control: the first thing after the label that is not more prose. Pinned
+   to row 1 so it sits BESIDE the label, and to the trailing edge so the whole
+   page's controls line up. */
+.set__field > .set__section-caption:first-child + *:not(.set__section-caption),
+.set__field > .set__field-control {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+  /* Beats the `align-self: flex-start` the surrounding blocks put on their own
+     buttons (`.set__restore-block .nx-button`), which is meant for a column and
+     would hang a control off the top of its row here. */
+  align-self: center;
+}
+/* The row's own name. Primary tier — this is the word the page is scanned for. */
+.set__field > .set__section-caption:first-child {
+  grid-row: 1;
+  font-size: var(--nx-font-size-body);
+  font-weight: var(--nx-font-weight-medium);
+  color: var(--nx-text);
+}
+/* A row whose "control" is a whole form (two passphrase fields and a button)
+   rather than one control. Right-aligning a form would be nonsense, so this one
+   named exception drops back to a column — declared, never accidental. */
+.set__field--stacked {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nx-space-2);
+}
+/* Consecutive rows are a LIST, and a list of preferences reads as one when the
+   rows are ruled apart. `border-subtle`, not `border`: this is rhythm, not
+   structure — the card's own edge is the structure. */
+.set__field + .set__field,
+.set__field + .set__module-row,
+.set__module-row + .set__field,
+.set__security-block + .set__field {
+  padding-top: var(--nx-space-4);
+  border-top: 1px solid var(--nx-border-subtle);
+}
+/* A `Select` IS the row when it carries the row's label (its `inline` layout):
+   the component owns both halves, so it spans the grid and does its own
+   spacing. Its label then has to speak in the ROW's register rather than the
+   filter-bar register the component ships — an 11px uppercase eyebrow is what a
+   controls bar wants and is exactly one tier too quiet for the name of a
+   setting. */
+.set__field > .nx-select--inline {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  justify-content: space-between;
+  gap: var(--nx-space-5);
+}
+.set__field > .nx-select--inline > .nx-select__label {
+  font-size: var(--nx-font-size-body);
+  font-weight: var(--nx-font-weight-medium);
+  letter-spacing: var(--nx-font-tracking-normal);
+  text-transform: none;
+  color: var(--nx-text);
+  white-space: normal;
+}
+.set__field > .nx-select--inline > .nx-select__field {
+  flex: none;
+  min-width: 172px;
+}
+
+/* SET-014: the page filter, sitting alone under the title. Sized like the
+   Profil name field so the page keeps one measure down its left edge. */
+.set__search {
+  max-width: 320px;
+}
+/* The section index (SET §5's answer to „a page this long with no way to jump
+   is a scroll hunt"). It is the page's table of contents and it sticks to the
+   top of the scroller, so the answer to „where am I, and where is the card I
+   came for" is on screen at every scroll position.
+
+   Typographic, like every other navigation state in the product: the current
+   section is gold text plus weight, never a pill and never a filled tab. It
+   also answers to the filter above it — a query that hides eleven cards hides
+   their entries here too, so the index never offers a jump to something that is
+   not on the page. */
+.set__index {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-1) var(--nx-space-2);
+  margin: 0 calc(-1 * var(--nx-space-2));
+  padding: var(--nx-space-2);
+  background: var(--nx-bg);
+  border-bottom: 1px solid var(--nx-border-subtle);
+  /* Twenty-odd short words wrap to two lines at any sane window width. The cap
+     is for the pathological one — a very narrow window where a table of
+     contents would otherwise take a quarter of the page and keep it forever. */
+  max-height: 25vh;
+  overflow-y: auto;
+}
+.set__index-link {
+  padding: var(--nx-space-1) var(--nx-space-2);
+  /* The pointer-target floor, stated for a control that is deliberately not a
+     bordered button — an index entry that looked like a button would read as
+     eleven actions rather than as a table of contents. */
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  border: none;
+  border-radius: var(--nx-radius-xs);
+  background: transparent;
+  color: var(--nx-text-muted);
+  font: inherit;
+  font-size: var(--nx-font-size-body-sm);
+  cursor: pointer;
+  transition: color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.set__index-link:hover {
+  color: var(--nx-text);
+}
+.set__index-link:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+.set__index-link--current {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+/* A filtered-out section hides but stays MOUNTED — unmounting would discard
+   in-progress state (a restore preview holding its archive open, a half-typed
+   passcode, unsaved quiet-hours edits) on a keystroke in the filter box. */
+.set__section--hidden {
+  display: none;
+}
+/* SET-014's hit highlight is the LAST rule in this file — see its own block at
+   the foot, which explains why it has to be. */
+
+/* Profil: name field + save side by side (study__subject-form idiom). */
+.set__row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+}
+.set__row .nx-textfield {
+  flex: 1;
+  min-width: 200px;
+  max-width: 320px;
+}
+/* Profil → the picture (SET-001): the round preview beside its label, its two
+   actions and the caption that states the automatic crop. Laid out as
+   avatar-then-column so the caption sits under the buttons rather than under
+   the avatar, which is where the sentence it qualifies is. */
+.set__avatar-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nx-space-3);
+  margin-top: var(--nx-space-4);
+}
+.set__avatar-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  min-width: 0;
+}
+.set__avatar-label {
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-muted);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.set__avatar-actions {
+  display: flex;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+}
+/* Danger-QUIET: the destructive action is named in the danger hue without being
+   a filled red button. Removing a picture is one click to undo, so it must read
+   as available, not as a warning. The border stays the ordinary one until
+   hover, which is where the intent is confirmed. */
+.set__avatar-remove.nx-button {
+  color: var(--nx-danger);
+}
+.set__avatar-remove.nx-button:hover:not(:disabled) {
+  border-color: var(--nx-danger);
+  background: var(--nx-danger-soft);
+}
+
+/* Izgled: the three-way theme preference and the two-way first-day-of-week
+   (PRD 04 §5) as compact segmented rows, each under its own caption label. */
+.set__segmented {
+  display: inline-flex;
+  gap: var(--nx-space-1);
+  flex-wrap: wrap;
+}
+/* Izgled: the 8-swatch accent picker below the theme segmented row. */
+.set__accent-row {
+  display: flex;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+}
+.set__accent-swatch {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--nx-radius-round);
+  border: 1px solid var(--nx-border);
+  cursor: pointer;
+  padding: 0;
+  transition: border-color var(--nx-motion-base) var(--nx-motion-ease);
+}
+.set__accent-swatch--selected {
+  border: 2px solid var(--nx-text);
+}
+/* Kontrolna tabla (SET-006 / ADR-041): the current background's thumbnail
+   beside its two actions, then the dim slider — shown only once there is an
+   image to dim. */
+.set__dash-row {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-3);
+  flex-wrap: wrap;
+}
+.set__dash-thumb {
+  width: 96px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: var(--nx-radius-md);
+  border: 1px solid var(--nx-border);
+}
+.set__dash-actions {
+  display: flex;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+}
+.set__dash-dim {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+.set__dash-dim-label {
+  display: flex;
+  align-items: baseline;
+  gap: var(--nx-space-2);
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-muted);
+  font-weight: var(--nx-font-weight-semibold);
+}
+/* The live value, in the mono face every other numeric readout uses. */
+.set__dash-dim-value {
+  font-family: var(--nx-font-family-mono);
+  color: var(--nx-text);
+}
+/* A plain range input, restyled to the app's own track/thumb rather than the
+   platform's — border + surface for the track, accent for the thumb, and no
+   glow anywhere. `accent-color` alone would leave Chromium's blue thumb. */
+.set__dash-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  max-width: 320px;
+  height: 18px;
+  background: transparent;
+  cursor: pointer;
+}
+.set__dash-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: var(--nx-radius-round);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+}
+.set__dash-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -6px;
+  border-radius: var(--nx-radius-round);
+  background: var(--nx-accent);
+  border: 1px solid var(--nx-border);
+}
+.set__dash-slider:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+
+/* Učenje (STUDY-007): the retention presets reuse `.set__segmented`; the two
+   daily caps sit side by side, each a label + narrow number field + its hint. */
+.set__study-fields {
+  display: flex;
+  gap: var(--nx-space-4);
+  flex-wrap: wrap;
+}
+.set__study-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  max-width: 260px;
+}
+.set__study-label {
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-muted);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.set__study-number {
+  max-width: 110px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Kalendar (ADR-054): the two date fields side by side, actions on their own
+   row below — the study card's field row with a submit, not a new pattern. */
+.set__calendar-form {
+  display: flex;
+  gap: var(--nx-space-4);
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+.set__calendar-form .nx-textfield {
+  max-width: 200px;
+}
+.set__calendar-actions {
+  display: flex;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+}
+
+/* Moduli: category heading + one bordered row per module. */
+.set__module-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+.set__module-group + .set__module-group {
+  margin-top: var(--nx-space-4);
+}
+/* A GROUP heading inside a card — the tertiary tier, and the only place on this
+   page that tier is spent. 11px, caps, tracked, `text-subtle`: it names the
+   structure of a card rather than any of its content, so it must be legible and
+   must not compete with a single row label beneath it. The class is shared with
+   ShortcutsDialog, DashboardPage and FinCsvImport, which use it for exactly the
+   same thing. */
+.set__module-group-title {
+  margin: 0;
+  font-size: var(--nx-font-size-label);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-subtle);
+}
+.set__module-list {
+  display: flex;
+  flex-direction: column;
+}
+/* The same row as `.set__field`, written with markup instead of read off the
+   DOM shape — a name and its description on the left, the control that answers
+   them on the right. The two must stay identical: a page whose module gallery
+   and whose preferences are two different rows is the page this one was. */
+.set__module-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-5);
+  padding: var(--nx-space-2) 0;
+}
+.set__module-row + .set__module-row {
+  border-top: 1px solid var(--nx-border-subtle);
+}
+/* ADR-065 §5: the „ponovo pokreni upitnik“ row at the card's foot. It sits
+   outside the category groups, so it earns the rule the stacked rows get from
+   their sibling selector, plus one step clear of the last group. */
+.set__module-row--foot {
+  margin-top: var(--nx-space-2);
+  border-top: 1px solid var(--nx-border-subtle);
+}
+.set__module-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+/* Primary tier, exactly like a `.set__field` label — same size, same weight. */
+.set__module-name {
+  font-size: var(--nx-font-size-body);
+  font-weight: var(--nx-font-weight-medium);
+  color: var(--nx-text);
+}
+/* Secondary tier, exactly like a `.set__field` explanation line. */
+.set__module-desc {
+  max-width: var(--nx-layout-prose);
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+  line-height: var(--nx-font-leading-snug);
+}
+/* „Profili“ (SET-003 / ADR-058): a profile row is the module-row recipe with
+   the name and its kind chip on one line; the ACTIVE profile's name carries
+   the gold + weight active state, the app's one active-marker idiom. */
+.set__profile-name-row {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  min-width: 0;
+}
+.set__profile-active {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+/* Obaveštenja: NTF-008 preset shortcuts above the shared ntf controls. */
+.set__preset-row {
+  display: inline-flex;
+  gap: var(--nx-space-1);
+  flex-wrap: wrap;
+}
+/* THE SECONDARY TIER. Every explanation line on this page is this class, and it
+   is 13px rather than the 11px it was: 11px caps-tracked is the tertiary tier,
+   which exists for eyebrows and counts, and prose set in it is not READ — it is
+   skipped, which is the same as not shipping it. Identical to `.app__description`
+   in shell.css by construction; the two differ only in which surface adopted
+   which name first.
+
+   Explanatory text also has a maximum measure, like every other run of prose in
+   the product. Settings is the one pane that fills the whole main column, so
+   without a cap this ran the full window width — lines a thousand pixels wide,
+   which is not a line anybody's eye can track back from. The cap is a token
+   because it is a typographic decision, not a Settings one. */
+.set__section-caption {
+  margin: 0;
+  max-width: var(--nx-layout-prose);
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+  line-height: var(--nx-font-leading-snug);
+}
+.set__error {
+  margin: 0;
+  color: var(--nx-danger);
+  font-size: var(--nx-font-size-body-sm);
+}
+/* SET §5: „Vrati na podrazumevano“ at the foot of a device-preference card.
+   Typographic and muted like `.set__disclosure` above — an undo is available,
+   not advertised — and self-aligned so it sits under the controls it undoes
+   rather than stretching across the card. No border, no fill: a bordered
+   control here would read heavier than the settings it resets.
+
+   It is deliberately NOT an `nx-button`, and therefore does not inherit that
+   primitive's 24px floor: `@nexus/ui` has no quiet/link variant, and every
+   bordered variant it does have reads louder than the settings this undoes.
+   The floor is restored here by hand — `min-height` plus a negative inline
+   margin, so the target grows without the label drifting off the card's left
+   edge. The same three lines appear on `.set__disclosure` and
+   `.set__licence-toggle`, which are the page's two other hand-rolled quiet
+   buttons; see the note on `.set__disclosure`. */
+.set__reset {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  /* One step clear of the last control, so it reads as the card's foot rather
+     than as one more caption in the stack. */
+  margin: var(--nx-space-1) 0 0 calc(-1 * var(--nx-space-2));
+  padding: 0 var(--nx-space-2);
+  border: none;
+  border-radius: var(--nx-radius-xs);
+  background: transparent;
+  color: var(--nx-text-muted);
+  font: inherit;
+  font-size: var(--nx-font-size-body-sm);
+  cursor: pointer;
+  transition: color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.set__reset:hover {
+  color: var(--nx-text);
+}
+.set__reset:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+/* Rezervna kopija → „Šta se izvozi" (IMEX-003): a disclosure over the module
+   checkboxes. Typographic, not a button — the default is everything, so this
+   asks for no attention until someone goes looking for it. The triangle is the
+   note toggle's own marker, rotating the same way.
+
+   THE CLASS, not the instance: this page hand-rolls a quiet text button three
+   times (`.set__reset`, this, `.set__licence-toggle`) because the shared
+   `Button` has only bordered variants, and all three shipped under the 24px
+   pointer floor for the same reason — a `padding: 0` text button is exactly as
+   tall as its own line box. Each now states the floor itself; the real fix is a
+   `quiet` variant on the primitive, which is not this file's to add. */
+.set__disclosure {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  align-self: flex-start;
+  min-height: 24px;
+  margin: 0 0 0 calc(-1 * var(--nx-space-2));
+  padding: 0 var(--nx-space-2);
+  border: none;
+  border-radius: var(--nx-radius-xs);
+  background: transparent;
+  color: var(--nx-text-muted);
+  font: inherit;
+  font-size: var(--nx-font-size-body-sm);
+  cursor: pointer;
+  transition: color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.set__disclosure:hover {
+  color: var(--nx-text);
+}
+.set__disclosure:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+.set__disclosure-mark {
+  border-style: solid;
+  border-width: 4px 0 4px 6px;
+  border-color: transparent transparent transparent currentColor;
+  transition: transform var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.set__disclosure[aria-expanded="true"] > .set__disclosure-mark {
+  transform: rotate(90deg);
+}
+/* The count beside a disclosure's name — tertiary tier, and a number, so it
+   takes tabular figures like every other count in the product. */
+.set__disclosure-summary {
+  font-size: var(--nx-font-size-label);
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+/* One row per module while there is width for it, then as many as fit. */
+.set__module-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-1) var(--nx-space-5);
+  padding-left: var(--nx-space-4);
+}
+/* Sigurnost: change-passcode form, Recovery Kit regenerate, auto-lock select. */
+.set__security-block + .set__security-block {
+  margin-top: var(--nx-space-4);
+}
+.set__security-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+.set__security-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  max-width: 320px;
+}
+.set__security-form .nx-button {
+  align-self: flex-start;
+}
+/* Rezervna kopija → Vraćanje iz arhive (IMEX slice 3d) and Uvoz iz arhive
+   (ADR-043): sibling blocks below the export, each separated from what is above
+   it by the same hairline the sidebar uses between nav groups. */
+.set__restore-block,
+.set__import-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  padding-top: var(--nx-space-3);
+  border-top: 1px solid var(--nx-border);
+}
+.set__restore-block .nx-button,
+.set__import-block .nx-button {
+  align-self: flex-start;
+}
+/* Preview header: the archive's file name and its manifest facts, wrapping
+   onto as many lines as the width needs. */
+.set__restore-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-1) var(--nx-space-3);
+  font-size: var(--nx-font-size-body-sm);
+}
+/* An archive's facts: a timestamp, a version, a profile name. Two of the three
+   are figures, so the whole strip takes tabular ones. */
+.set__restore-meta {
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.set__restore-warning {
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+}
+/* Sada vs. Iz arhive: a compact five-row table, counts right-aligned on
+   tabular figures so the two columns read as a comparison. */
+.set__restore-table {
+  width: 100%;
+  max-width: 360px;
+  border-collapse: collapse;
+  font-size: var(--nx-font-size-body-sm);
+}
+.set__restore-table th,
+.set__restore-table td {
+  padding: var(--nx-space-1) 0;
+  text-align: right;
+  font-weight: var(--nx-font-weight-regular);
+}
+/* Column headings are the tertiary tier — they name the structure of the table,
+   never any of its content. */
+.set__restore-table thead th {
+  color: var(--nx-text-subtle);
+  font-size: var(--nx-font-size-label);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+}
+.set__restore-table tbody th {
+  text-align: left;
+}
+.set__restore-table tbody td {
+  width: 88px;
+  font-variant-numeric: tabular-nums;
+}
+.set__restore-table tbody tr + tr th,
+.set__restore-table tbody tr + tr td {
+  border-top: 1px solid var(--nx-border-subtle);
+}
+/* Refusals and warnings: an archive can carry many, so the list scrolls
+   instead of pushing the buttons off the page. */
+.set__restore-problems {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 160px;
+  overflow-y: auto;
+}
+.set__restore-fragment {
+  color: var(--nx-text-muted);
+  font-family: var(--nx-font-family-mono);
+  font-size: var(--nx-font-size-caption);
+}
+.set__restore-actions {
+  display: flex;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+}
+/* Uvoz iz arhive: the same table recipe with four numeric columns instead of
+   two — it needs more room overall and less of it per column. Must follow
+   `.set__restore-table`, which it shares specificity with. */
+.set__import-table {
+  max-width: 460px;
+}
+.set__import-table tbody td {
+  width: 76px;
+}
+/* The skip report: the reason reads as prose, the module and count trail it
+   muted, so a long list scans by sentence rather than by number. */
+.set__import-skip {
+  font-size: var(--nx-font-size-body-sm);
+}
+.set__import-skip-meta {
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-caption);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* „Već postoji kod tebe" (ADR-051): one quiet row per detected duplicate group
+   — the group's name, then how many rows and what „isto" means for it, then the
+   two-state answer pushed to the trailing edge so the answers line up in a
+   column across rows. Hairlines between rows, like the module list above; no
+   card, no fill, nothing that would make a question look like a warning. */
+.set__import-duplicates {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-width: 460px;
+}
+.set__import-duplicate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nx-space-1) var(--nx-space-2);
+  font-size: var(--nx-font-size-body-sm);
+}
+.set__import-duplicate + .set__import-duplicate {
+  padding-top: var(--nx-space-1);
+  border-top: 1px solid var(--nx-border-subtle);
+}
+.set__import-duplicate-name {
+  font-weight: var(--nx-font-weight-medium);
+}
+.set__import-duplicate-meta {
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-caption);
+  font-variant-numeric: tabular-nums;
+}
+.set__import-duplicate-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  margin-left: auto;
+}
+/* Overrides `.set__import-block .nx-button`'s `align-self: flex-start`, which
+   is meant for the block's own column and would top-align these in their row. */
+.set__import-duplicate-choice .nx-button {
+  align-self: center;
+}
+/* Uvoz iz Anki (ADR-052): the subject choice — a caption, the select, and the
+   „Nova oblast" name field when that option is picked. Its own column at the
+   same width the security forms use, so the text input does not stretch to the
+   card's full width beside a select that never would. */
+.set__apkg-subject {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  max-width: 320px;
+}
+/* Uvoz preko AI asistenta (IMEX-005): the generated instruction, shown so
+   „Kopiraj" is never a black box. Monospace and scrollable, exactly as the
+   Recovery Kit code block is — it is text meant to be read, selected and taken
+   somewhere else, not prose. Capped in height so it cannot push the answer
+   field and the buttons below it off the card. */
+.set__llm-prompt {
+  margin: 0;
+  padding: var(--nx-space-2) var(--nx-space-3);
+  max-height: 260px;
+  overflow: auto;
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  color: var(--nx-text-muted);
+  font-family: var(--nx-font-family-mono);
+  font-size: var(--nx-font-size-caption);
+  line-height: var(--nx-font-leading-normal);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.set__llm-prompt:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+/* The pasted answer. Taller than the study card's textarea because what lands
+   here is a whole JSON reply, and a three-line window would make it impossible
+   to see whether the paste arrived whole. */
+.set__llm-answer {
+  min-height: 132px;
+  resize: vertical;
+  font-family: var(--nx-font-family-mono);
+  font-size: var(--nx-font-size-caption);
+  line-height: var(--nx-font-leading-normal);
+}
+/* The deck choice for kartice — „Postojeći špil / Novi špil" and whichever
+   form follows. The `.set__apkg-subject` column's recipe, at the same width,
+   so the two study-bound imports read as siblings. */
+.set__llm-deck {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  max-width: 320px;
+}
+/* „Već imaš N događaja…" plus its two-state answer (ADR-051): the sentence and
+   the same typographic choice pair the archive import's duplicate rows use —
+   no fill, no glow, the active answer carried by accent text and weight. */
+.set__llm-duplicates {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+.set__llm-duplicate-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+/* Overrides `.set__import-block .nx-button`'s `align-self: flex-start`, for the
+   reason `.set__import-duplicate-choice` does: these sit in a row of their own. */
+.set__llm-duplicate-choice .nx-button {
+  align-self: center;
+}
+/* A settings select's SIZING, and nothing else.
+   This class used to restate the whole box — font, colour, border, radius,
+   padding — which was correct while every select on the page was raw markup and
+   wrong the moment one of them became a `Select`: the component's control
+   reserves its right-hand padding for the drawn chevron, and a `padding: 7px
+   13px` from here took that reservation away, so the chevron sat on top of the
+   chosen option's text. „Jezik" shipped like that.
+
+   Everything the box needs is already stated once, in the right place: raw
+   selects by `.nx-app select:not(.nx-select__control)` and component ones by
+   `.nx-select__control`. What is left here is the one thing this page actually
+   has an opinion about — how wide a control in a settings row is allowed to be
+   — which is why the rule no longer fights either of them. */
+.set__select {
+  align-self: flex-start;
+  max-width: 100%;
+}
+/* Raw selects keep the focus ring the component's control already has, so the
+   two kinds cannot be told apart by how they answer the keyboard. */
+.set__select:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+/* Prečice (ADR-040): one row per remappable action — label, its current chord,
+   then the row's own buttons. Same hairline-separated row rhythm as the module
+   gallery above, so the two cards read as the same kind of list. */
+.set__shortcut-list {
+  display: flex;
+  flex-direction: column;
+}
+.set__shortcut-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  padding: var(--nx-space-2) 0;
+}
+.set__shortcut-item + .set__shortcut-item {
+  border-top: 1px solid var(--nx-border-subtle);
+}
+.set__shortcut-row {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-3);
+}
+/* The action's name is a row label, so it takes the row-label tier the rest of
+   the page uses — the chord and the row's buttons are its answer. */
+.set__shortcut-label {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--nx-font-size-body);
+  font-weight: var(--nx-font-weight-medium);
+  color: var(--nx-text);
+}
+/* Pushed to the end so every row's buttons line up regardless of label length. */
+.set__shortcut-actions {
+  display: flex;
+  gap: var(--nx-space-1);
+  flex-wrap: wrap;
+}
+.set__shortcut-footer {
+  display: flex;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+}
+
+/* „Licence": the third-party notices, in two groups behind the card's own
+   disclosure idiom. Nothing here is a control, so nothing here is a bordered
+   button — a notice list is read, and a row that looked clickable-as-an-action
+   would misdescribe what opening it does. */
+.set__licence-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+.set__licence-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* The hairline-separated row rhythm of `.set__shortcut-item`, so the two long
+   lists on this page read as the same kind of list. */
+.set__licence-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-2) 0;
+  /* min-width:0 on a flex child is what lets the notice below scroll inside
+     itself instead of stretching the card — see .set__licence-notice. */
+  min-width: 0;
+}
+.set__licence-item + .set__licence-item {
+  border-top: 1px solid var(--nx-border-subtle);
+}
+/* The row itself: the same muted triangle-and-label as .set__disclosure, laid
+   out so the name takes the width and the version · licence pair sits at the end. */
+.set__licence-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  width: 100%;
+  /* The 24px pointer floor, for the reason `.set__disclosure` states it. */
+  min-height: 24px;
+  margin: 0 0 0 calc(-1 * var(--nx-space-2));
+  padding: 0 var(--nx-space-2);
+  border: none;
+  border-radius: var(--nx-radius-xs);
+  background: transparent;
+  color: var(--nx-text-muted);
+  font: inherit;
+  font-size: var(--nx-font-size-body-sm);
+  text-align: left;
+  cursor: pointer;
+  transition: color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.set__licence-toggle:hover {
+  color: var(--nx-text);
+}
+.set__licence-toggle:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+.set__licence-toggle[aria-expanded="true"] > .set__disclosure-mark {
+  transform: rotate(90deg);
+}
+/* The open row is marked typographically — accent text plus weight, the app's
+   one active-state recipe. Never a background wash and never a glow. */
+.set__licence-toggle[aria-expanded="true"] > .set__licence-name {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.set__licence-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+/* Version · licence: a number and a short code naming the row, never its
+   content — tertiary tier, and tabular so the versions form a column. */
+.set__licence-meta {
+  flex-shrink: 0;
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+.set__licence-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  min-width: 0;
+  padding-left: var(--nx-space-4);
+}
+/* A licence is several thousand characters of pre-formatted text, so it scrolls
+   inside its own box: the page's width is set by the card, never by the longest
+   line of somebody else's disclaimer. `anywhere` covers the URLs that have no
+   break opportunity at all. The recipe is `.set__llm-prompt`'s, unchanged — both
+   are somebody else's verbatim text quoted inside a card. */
+.set__licence-notice {
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  padding: var(--nx-space-2) var(--nx-space-3);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  background: var(--nx-surface-alt);
+  color: var(--nx-text-muted);
+  font-family: var(--nx-font-family-mono);
+  font-size: var(--nx-font-size-caption);
+  line-height: var(--nx-font-leading-normal);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.set__licence-notice:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+/* Provenance is a file path, which has no break opportunity of its own. */
+.set__licence-source {
+  overflow-wrap: anywhere;
+}
+
+/* SET-014: THE SEARCH HIT — and it is the last rule in the file on purpose.
+   ------------------------------------------------------------------------
+   A hit is typographic: accent text plus weight, exactly like
+   `.tasks__view--active` and `.cal__reminder--active`. Never a background wash
+   and never a glow.
+
+   `set__hit` lands on the SAME element as that label's own base class
+   (`labelClass("set__module-name", hit)` → `class="set__module-name set__hit"`),
+   so the two rules are both one class deep and the cascade is settled purely by
+   which appears later. Every base label rule lives in this file, so the only
+   position from which this one always wins is the end of it — and „always wins"
+   is the whole contract: a matched label that stayed the colour of its
+   neighbours is a filter that has told the user nothing.
+
+   That is not hypothetical. `.set__module-group-title` states a colour and sits
+   below the position this block used to occupy, so „Vraćanje iz arhive“ and
+   every other group heading matched by a query has been rendering unmarked.
+
+   The two `set__hit-field` selectors reach the label INSIDE a TextField or a
+   Select, whose own `className` lands on the wrapper and on the control
+   respectively: colouring either of those would drag the input's own text along
+   with it, so the hit class rides the WRAPPER and this picks the label out of
+   it. The last selector exists because the settings row's own label override
+   (`.set__field > .nx-select--inline > .nx-select__label`) is one class deeper
+   than a bare `.set__hit-field .nx-select__label`, which order alone cannot
+   beat. */
+.set__hit,
+.set__hit-field .nx-textfield__label,
+.set__hit-field .nx-select__label,
+.set__field.set__hit-field > .nx-select--inline > .nx-select__label {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}

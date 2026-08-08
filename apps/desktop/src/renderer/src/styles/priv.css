@@ -1,0 +1,177 @@
+/* Private notes (PRIV, ADR-057) ---------------------------------------- */
+/* The section page: header row, then the two NOTE panes (list + editor) --
+   the list/item/editor recipes are the NOTE module's own classes, reused so
+   the two note surfaces can never drift apart in shape. */
+.priv {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-5);
+}
+.priv--center {
+  display: grid;
+  place-items: center;
+}
+/* The setup/lock gates reuse .auth's centered card; inside a page the card
+   centers itself rather than the whole viewport. */
+.priv__gate {
+  width: 100%;
+}
+/* The section's own mark, where the auth card draws the app's ✦.
+   `.auth__brand`'s exact register — accent, display-sized, line-height 1, so
+   `.auth__shell`'s gap rhythm is untouched — and only the silhouette differs.
+   That is the point: the lock screen has to say WHICH door this is before it
+   says anything else, and „Nexus" is not that. */
+.priv__gate-mark {
+  display: block;
+  line-height: 1;
+  color: var(--nx-accent);
+}
+/* The page-level skeleton, which lives inside `.priv--center` — a grid that
+   centres its child, so a stretch-width skeleton would size to its own zero
+   content and paint nothing. 400px is `.auth__card`'s width: what is loading
+   here resolves into a gate card or into the section, and the wait should stand
+   where the first of those will. */
+.priv__loading {
+  width: min(400px, 100%);
+}
+/* Sized, not stretched: it sits in the page header's actions slot now, which is
+   already pushed to the trailing edge — the `flex: 1` and `margin-left: auto`
+   it carried were doing that job back when the field lived in a bare header row
+   beside the title, and inside the actions row they only fought the gap. */
+.priv__search {
+  width: 240px;
+}
+/* The best-effort clipboard notice (PRIV-012) -- the undo bar's quiet recipe. */
+.priv__clipboard {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+.priv__clipboard > span {
+  flex: 1;
+}
+/* The same two-pane shape `.note` falls back to under 1345px, and deliberately
+   so: one fixed list rail, the editor taking the slack, and no third pane to
+   take away. The 300px this carried was a hand-written copy of a rail the
+   tokens already name — the list in it IS `.note__list-pane`, so the two pages
+   were drawing one component at two widths. At the enforced 900px minimum the
+   editor here gets 332px, which is the figure NOTE's own fallback lands on. */
+.priv__body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: var(--nx-layout-rail-wide) minmax(0, 1fr);
+  gap: var(--nx-space-5);
+}
+/* Row actions are the NOTE row's own „⋯" (`.note__row-menu` + `.note__menu-*`)
+   and have no classes of their own any more. They used to be two 11px text
+   buttons — „Premesti u Beleške" and „Obriši" — spelled out at the end of every
+   row, which is both louder than the NOTE list and a different shape from it,
+   on two surfaces whose whole contract is that they are one shape. */
+
+/* A named dead row: the sealed container no longer opens. Muted, inert — and
+   inert INCLUDES the hover tint `.note__item` carries, which this inherited and
+   which is the app's way of saying „this row can be pressed". A row that lights
+   up under the pointer and then does nothing is a worse answer than one that
+   never lit up. */
+.priv__item--dead {
+  cursor: default;
+  color: var(--nx-text-muted);
+}
+.priv__item--dead:hover {
+  background: transparent;
+}
+/* Setup-screen radio groups: a bare fieldset drawn as the stacked choice
+   list the auth card's rhythm expects.
+
+   THE ROW HAS TWO LEVELS, and it did not. The option and the sentence
+   explaining it were both `body-sm` in the same grey, with the radio dot
+   carrying the entire answer — on the screen that decides how the most
+   sensitive data in the app is locked, and where one of the four options means
+   „lose everything if you forget the password". The name is now body ink at
+   500, the consequence is muted underneath it, and the CHOSEN row says so
+   typographically: accent name plus weight, the app's one way of saying „this
+   one". No fill, no border, no glow. */
+.priv__choice {
+  margin: 0;
+  padding: 0;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+.priv__choice-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-2);
+  border-radius: var(--nx-radius-md);
+  cursor: pointer;
+  transition: background var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.priv__choice-row:hover {
+  background: var(--nx-surface-alt);
+}
+/* The native control keeps its own size; `margin-top` sits it on the first
+   line of the name beside it rather than on the whole two-line block. */
+.priv__choice-row input {
+  flex: none;
+  margin-top: 3px;
+  accent-color: var(--nx-accent);
+}
+.priv__choice-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.priv__choice-name {
+  font-size: var(--nx-font-size-body);
+  font-weight: var(--nx-font-weight-medium);
+}
+.priv__choice-row--on .priv__choice-name {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.priv__choice-note {
+  font-size: var(--nx-font-size-body-sm);
+  line-height: var(--nx-font-leading-normal);
+  color: var(--nx-text-muted);
+}
+
+/* „Ovde namerno nema nijednog grafika…" — the section's stated principle, and
+   the reason it has no signature graphic while every other module got one.
+   It had been rendered through `.app__muted`, the class this app uses for
+   „Učitavanje…", so a deliberate design position was dressed as a status line —
+   which reads like an apology for a missing feature rather than like the
+   feature it actually is. Prose measure, prose leading, and the section's own
+   mark set beside it in the tier that exists for marks. The sentence itself is
+   untouched. */
+.priv__no-chart {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nx-space-2);
+  max-width: var(--nx-layout-prose);
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+  line-height: var(--nx-font-leading-normal);
+  color: var(--nx-text-muted);
+}
+.priv__no-chart-mark {
+  flex: none;
+  /* On the first line of the sentence, not above it. */
+  margin-top: 1px;
+  color: var(--nx-text-faint);
+}
+
+.priv__attachments-note {
+  margin: 0 0 var(--nx-space-2);
+}
