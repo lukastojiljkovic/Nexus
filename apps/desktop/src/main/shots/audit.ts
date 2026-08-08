@@ -59,13 +59,28 @@ export const AUDIT_SCRIPT = `(() => {
   const findings = [];
   const seen = new Set();
 
-  function label(el) {
-    if (!el || el === document.documentElement) return "html";
+  function ownLabel(el) {
     const tag = el.tagName.toLowerCase();
     const cls = typeof el.className === "string" && el.className
       ? "." + el.className.trim().split(/\\s+/).slice(0, 3).join(".")
       : "";
     return tag + cls;
+  }
+
+  // The element AND the nearest ancestor that carries a class, joined by " in ".
+  // A finding whose element is a bare "path" or "text" names nothing a person
+  // can grep for — the sweep reported an SVG path 72.6px off-screen on FIN and
+  // there was no way to tell which drawing it belonged to. One level of
+  // ancestry is what turns that into an address.
+  function label(el) {
+    if (!el || el === document.documentElement) return "html";
+    const own = ownLabel(el);
+    for (let node = el.parentElement; node !== null; node = node.parentElement) {
+      if (typeof node.className === "string" && node.className.trim() !== "") {
+        return own + " in " + ownLabel(node);
+      }
+    }
+    return own;
   }
 
   function textOf(el) {
@@ -113,17 +128,48 @@ export const AUDIT_SCRIPT = `(() => {
     return null;
   }
 
+  // The part of the rectangle a reader can actually see, clipped by EVERY
+  // clipping ancestor rather than by the nearest one.
+  //
+  // The nearest one is not enough and the calendar is why. An event's time
+  // label sits inside the event button, which clips for its own ellipsis — so
+  // the nearest clipper is the button, the label is entirely inside it, and
+  // nothing is trimmed. The thing that actually hid it is two levels further
+  // up: the hour grid scrolls to the working day, and everything above that
+  // point is off the top of the pane. Stopping at the first clipper reported
+  // those labels as overlapping the column headers they were scrolled behind.
+  function visibleRect(el, rect) {
+    let box = { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
+    for (let node = el.parentElement; node !== null; node = node.parentElement) {
+      const style = getComputedStyle(node);
+      if (
+        style.overflow === "visible" &&
+        style.overflowX === "visible" &&
+        style.overflowY === "visible"
+      ) {
+        continue;
+      }
+      const bounds = node.getBoundingClientRect();
+      box = {
+        left: Math.max(box.left, bounds.left),
+        right: Math.min(box.right, bounds.right),
+        top: Math.max(box.top, bounds.top),
+        bottom: Math.min(box.bottom, bounds.bottom),
+      };
+    }
+    return box;
+  }
+
   /** True when a clipping ancestor has scrolled this element out of sight. */
   function isClippedAway(el, rect) {
-    const clipper = clipperOf(el);
-    if (clipper === null) return false;
-    const bounds = clipper.getBoundingClientRect();
-    const visibleX = Math.min(rect.right, bounds.right) - Math.max(rect.left, bounds.left);
-    const visibleY = Math.min(rect.bottom, bounds.bottom) - Math.max(rect.top, bounds.top);
+    const visible = visibleRect(el, rect);
     // Half of each axis has to survive the clip. A row peeking under a fade is
     // genuinely on screen and its geometry still counts; one entirely past the
     // edge is not being looked at by anyone.
-    return visibleX < rect.width / 2 || visibleY < rect.height / 2;
+    return (
+      visible.right - visible.left < rect.width / 2 ||
+      visible.bottom - visible.top < rect.height / 2
+    );
   }
 
   for (const el of all) {
@@ -232,7 +278,14 @@ export const AUDIT_SCRIPT = `(() => {
       (node) => node.nodeType === 3 && node.textContent.trim().length > 0,
     );
     if (ownText && !el.closest(OVERLAY_SELECTOR)) {
-      boxes.push({ el: el, rect: rect, z: style.zIndex });
+      // The VISIBLE rect, not the laid-out one. An element half-scrolled out
+      // of a pane still reports where it would be if the pane were not
+      // scrolled, and the part hanging outside lands on whatever is pinned
+      // above or below it — the calendar's hour grid scrolls to the working
+      // day, so every event above that point was reported as overlapping the
+      // column headers. Comparing what a reader can see is the only comparison
+      // that means anything.
+      boxes.push({ el: el, rect: visibleRect(el, rect), z: style.zIndex });
     }
   }
 

@@ -80,7 +80,12 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     // version of this scene clicked a row and photographed the unchanged list,
     // which is the quietest way for a scene to be wrong: the frame looks like a
     // module with no detail view rather than like a broken probe.
-    prepare: CLICK_TEXT("Detalji"),
+    // The view switcher is clicked back to its FIRST option first. Landing on
+    // a module that is already open remounts nothing, so this scene inherited
+    // whatever view the fan-out before it ended on — and „Detalji" only exists
+    // on the list view. That is why the run kept printing „found nothing to
+    // open": the probe was right and the page was somewhere else.
+    prepare: CLICK_THEN(".nx-segmented__option", "text:Detalji"),
     fanout: null,
   },
   { id: "calendar", module: "calendar" },
@@ -96,7 +101,46 @@ export const SHOT_SCENES: readonly ShotScene[] = [
   { id: "study", module: "study" },
   { id: "finance", module: "finance" },
   { id: "habits", module: "habits" },
-  { id: "fitness", module: "fitness" },
+  {
+    id: "fitness",
+    module: "fitness",
+    // NOT the default `.nx-segmented__option`: „Mapa tela" puts twenty muscle
+    // buttons on the page wearing the same class as the four section tabs, so
+    // the default fan-out would photograph twenty near-identical frames and
+    // then walk off the page when one of them switched sections underneath it.
+    // The tabs have a class of their own; the map's own states are scenes.
+    fanout: ".fit__section-tab",
+  },
+  {
+    id: "fitness-muscle",
+    module: "fitness",
+    // The map's second state: a muscle chosen, so the rail lists what trains
+    // it. The figure is FIT's centrepiece and this is half of what it does.
+    //
+    // „Mapa tela" is clicked FIRST because the scene before this one fanned
+    // out through the section tabs and left the page on the last of them —
+    // navigating to a module that is already open remounts nothing, so the
+    // section survives. Without this the frame was a photograph of „Merenja"
+    // filed under the body map's name.
+    prepare: CLICK_THEN(".fit__section-tab", ".fit__muscle-option"),
+    fanout: null,
+  },
+  {
+    id: "fitness-exercise",
+    module: "fitness",
+    // The third state, and the one the whole section exists for: an exercise
+    // chosen, with the body repainted to show what it hits.
+    // A DIFFERENT muscle than the scene before it picks. Choosing a group is a
+    // toggle, the page is not remounted between two scenes on the same module,
+    // and clicking the same button again therefore DESELECTED it — the frame
+    // came back showing the week summary under the name of the exercise view.
+    prepare: CLICK_THEN(
+      ".fit__section-tab",
+      ".fit__muscle-list > :nth-child(3)",
+      ".fit__exercise-row",
+    ),
+    fanout: null,
+  },
   { id: "focus", module: "focus" },
   { id: "tools", module: "tools" },
   { id: "canvas", module: "canvas" },
@@ -128,6 +172,16 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     cleanup: CLICK(".ntf__bell"),
     fanout: null,
   },
+  {
+    // The app menu behind the mark — everything the OS menu bar used to hold.
+    // It is the first thing in the window and the last thing that had never
+    // been photographed.
+    id: "app-menu",
+    module: "dashboard",
+    prepare: CLICK(".app__menu-trigger"),
+    cleanup: DISPATCH_KEY("Escape"),
+    fanout: null,
+  },
 
   // The lock screen is deliberately NOT a scene. Locking ends the session, and
   // the sweep re-enters this list once per theme and once per window size — so
@@ -139,7 +193,24 @@ export const SHOT_SCENES: readonly ShotScene[] = [
 /** Fires a keydown on `window` — where the shell's own global handler listens. */
 function DISPATCH_KEY(key: string, modifiers: Record<string, boolean> = {}): string {
   const init = JSON.stringify({ key, bubbles: true, cancelable: true, ...modifiers });
-  return `(() => { window.dispatchEvent(new KeyboardEvent("keydown", ${init})); return true; })()`;
+  // Dispatched on the FOCUSED element, not on `window`.
+  //
+  // An event dispatched on `window` has no path through the DOM, so it reaches
+  // only the listeners registered on `window` itself. That is enough to OPEN
+  // the palette — the shell's chord handler is a window listener — and not
+  // enough to close it, because the dialog's Escape lives on the dialog. The
+  // sweep therefore opened the palette and never shut it, and every overlay
+  // frame after it was a photograph of the palette wearing another scene's
+  // name: „notifications" and „app-menu" both came back with the search
+  // overlay across them.
+  //
+  // From the focused element the event bubbles up through the dialog, the
+  // document and on to `window`, which is the path a real keystroke takes.
+  return `(() => {
+    const target = document.activeElement instanceof HTMLElement ? document.activeElement : document.body;
+    target.dispatchEvent(new KeyboardEvent("keydown", ${init}));
+    return true;
+  })()`;
 }
 
 /**
@@ -164,26 +235,35 @@ function OPEN_FIRST(selectors: string): string {
 }
 
 /**
- * Clicks the button whose visible label is exactly `label`.
+ * Clicks each step in turn, waiting for React to commit between them.
  *
- * By its WORD rather than by a class, because a control's label is the app's
- * own vocabulary and survives a page being restructured, while its class is
- * that page's private detail and does not.
+ * A step is a CSS SELECTOR, or `text:<label>` for a button matched by the words
+ * on it. Both forms exist because both are true of different controls: a view
+ * switcher is a class the page owns, while a disclosure is named in the app's
+ * own vocabulary and keeps its name through a restructuring that renames every
+ * class around it. `startsWith` rather than equality on the label, because a
+ * disclosure trigger carries more than its word — „Detalji" sits beside a
+ * marker saying the fold still holds a choice.
  *
- * `startsWith` rather than equality: a disclosure trigger carries more than its
- * label — „Detalji" sits beside a marker saying the fold still holds a choice —
- * so an exact match found nothing and the scene silently photographed the
- * unopened form.
+ * The two rAFs between steps are the same wait the write probe needs and for
+ * the same reason: `click()` only SCHEDULES a state update, so the next step's
+ * target does not exist yet at the moment the previous handler returns.
+ * Chaining the clicks without the wait finds nothing and photographs the
+ * unchanged page — the quietest way for a scene to be wrong.
  */
-function CLICK_TEXT(label: string): string {
-  return `(() => {
-    const button = Array.prototype.find.call(
-      document.querySelectorAll("button"),
-      (el) => (el.textContent || "").trim().startsWith(${JSON.stringify(label)}),
-    );
-    if (!button) return "none";
-    button.click();
-    return ${JSON.stringify(label)};
+function CLICK_THEN(...steps: readonly string[]): string {
+  return `(async () => {
+    for (const step of ${JSON.stringify(steps)}) {
+      const target = step.startsWith("text:")
+        ? Array.prototype.find.call(
+            document.querySelectorAll("button"),
+            (node) => (node.textContent || "").trim().startsWith(step.slice(5)),
+          )
+        : document.querySelector(step);
+      if (target) target.click();
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    }
+    return true;
   })()`;
 }
 
