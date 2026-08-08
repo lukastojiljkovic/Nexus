@@ -128,6 +128,43 @@ describe("the sync map against the real schema", () => {
     }
   });
 
+  it("gives every collection the identity its primary key actually has", () => {
+    for (const entry of SYNC_MAP) {
+      if (entry.kind !== "collection") continue;
+      const key = columns(entry.table)
+        .filter((column) => column.pk > 0)
+        .sort((left, right) => left.pk - right.pk)
+        .map((column) => column.name);
+      // `profile_id` is dropped from the identity deliberately: which profile a
+      // row belongs to is already decided by the content key that opened it, and
+      // putting it on the wire would be saying the same thing twice. Everything
+      // else in the key IS the object id — including, for six collections,
+      // nothing at all, because the profile's key was the whole of it.
+      const expected = key.filter((name) => name !== "profile_id");
+      expect({ table: entry.table, identity: [...entry.identity] }).toEqual({
+        table: entry.table,
+        identity: expected,
+      });
+    }
+  });
+
+  it("names the six per-profile singletons and no others", () => {
+    // Recorded as a list rather than a count, so a seventh has to be a decision
+    // somebody made rather than a number that quietly changed. Their object id
+    // is the EMPTY key, which the transport has to handle for real.
+    const singletons = SYNC_MAP.filter(
+      (entry) => entry.kind === "collection" && entry.identity.length === 0,
+    ).map((entry) => entry.table);
+    expect(singletons.sort()).toEqual([
+      "calendar_settings",
+      "dashboard_settings",
+      "fit_body_profile",
+      "fit_targets",
+      "ntf_settings",
+      "study_settings",
+    ]);
+  });
+
   it("proves no table it calls a collection is secretly a join row", () => {
     const jointish = SYNC_MAP.filter((entry) => entry.kind === "collection")
       .map((entry) => entry.table)
