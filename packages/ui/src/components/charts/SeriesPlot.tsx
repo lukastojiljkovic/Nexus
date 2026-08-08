@@ -43,8 +43,15 @@ export interface SeriesPlotProps {
    * between the two readings, not just two dots that happen to share an axis.
    */
   connectPairs?: boolean;
-  /** Sparkline mode: no axis, no ticks, the full width goes to the drawing. */
-  compact?: boolean;
+  /* A `compact` sparkline mode — no axis, no ticks, `leftMargin` forced to 0 —
+     was declared here and branched on in three places, and in the whole
+     product not one call site ever passed it. Deleted rather than left
+     standing: an untaken branch is not a feature, it is an untested claim
+     about how the component behaves, and the next person to switch it on would
+     have been its first user AND its first tester. The house already has a
+     shape for a figure that must shrink — `width={320}` — and if a genuine
+     sparkline is ever wanted it is a component with its own name, not a
+     boolean that quietly deletes a chart's axis. */
   /**
    * 320 (a dashboard card), 720 (a page panel), or 1180 (the full reading
    * measure, `--nx-layout-measure`).
@@ -100,12 +107,38 @@ const TICK_MARGIN_MAX = 96;
  */
 const TICK_HALF_LINE = 9;
 
+/**
+ * The gutter width for a given set of ALREADY-FORMATTED tick labels.
+ *
+ * Exported and named rather than inlined in the render, because it is the one
+ * piece of this component's geometry that has already been wrong in shipped
+ * code (the fixed 30 above), and a rule that has failed once is a rule that
+ * gets a test.
+ */
+export function tickGutter(labels: readonly string[]): number {
+  const widest = labels.reduce((w, label) => Math.max(w, label.length), 0);
+  return Math.min(TICK_MARGIN_MAX, Math.max(TICK_MARGIN_MIN, widest * TICK_CHAR_W + TICK_GAP * 2));
+}
+
+/** Keeps a `dominantBaseline="middle"` tick label's line box inside the drawing — see `TICK_HALF_LINE`. */
+export function clampTickLabelY(y: number, height: number): number {
+  return Math.min(height - TICK_HALF_LINE, Math.max(TICK_HALF_LINE, y));
+}
+
+/**
+ * The reference rule's label sits above the rule, and below it when „above"
+ * would be outside the drawing. A label clipped by the top edge names nothing.
+ */
+export function ruleLabelY(ruleY: number): number {
+  return ruleY - 3 < TICK_HALF_LINE ? ruleY + TICK_HALF_LINE + 3 : ruleY - 3;
+}
+
 function isPoint(p: Point | null): p is Point {
   return p !== null;
 }
 
 /** Splits a points array on its `null`s into the contiguous runs a path may connect. */
-function splitRuns(points: readonly (Point | null)[]): Point[][] {
+export function splitRuns(points: readonly (Point | null)[]): Point[][] {
   const runs: Point[][] = [];
   let current: Point[] = [];
   for (const p of points) {
@@ -121,7 +154,7 @@ function splitRuns(points: readonly (Point | null)[]): Point[][] {
 }
 
 /** Step-after expansion: hold the previous y until the new x, then rise — the staircase a `linePath` alone cannot draw. */
-function stepExpand(points: readonly Point[]): Point[] {
+export function stepExpand(points: readonly Point[]): Point[] {
   if (points.length < 2) return points.slice();
   const head = points[0];
   if (head === undefined) return [];
@@ -146,7 +179,6 @@ export function SeriesPlot({
   y,
   rule,
   connectPairs = false,
-  compact = false,
   width = 320,
   height = 160,
 }: SeriesPlotProps) {
@@ -154,16 +186,16 @@ export function SeriesPlot({
   if (rule !== undefined) allY.push(rule.value);
   const dataExtent = extent(allY) ?? [0, 1];
   const yDomain = y?.domain ?? dataExtent;
-  const yTicks = compact ? [] : niceTicks(yDomain[0], yDomain[1], Math.min(5, y?.ticks ?? 5));
   const format = y?.format ?? ((n: number) => String(n));
+  const yTicks = niceTicks(yDomain[0], yDomain[1], Math.min(5, y?.ticks ?? 5)).map((value) => ({
+    value,
+    text: format(value),
+  }));
 
   // The gutter is sized to the labels that will actually be written in it —
   // see `TICK_CHAR_W`. Computed before the scales, because the plot begins
   // where the gutter ends.
-  const widestTick = yTicks.reduce((widest, tick) => Math.max(widest, format(tick).length), 0);
-  const leftMargin = compact
-    ? 0
-    : Math.min(TICK_MARGIN_MAX, Math.max(TICK_MARGIN_MIN, widestTick * TICK_CHAR_W + TICK_GAP * 2));
+  const leftMargin = tickGutter(yTicks.map((tick) => tick.text));
 
   const xScale = scaleLinear(x.domain, [leftMargin, width]);
   const yScale = scaleLinear(yDomain, [height - PAD_Y, PAD_Y]);
@@ -178,22 +210,21 @@ export function SeriesPlot({
       viewBox={[width, height]}
       height={height}
     >
-      {!compact &&
-        yTicks.map((t) => (
-          <text
-            key={t}
-            className="nx-seriesplot__tick"
-            x={leftMargin - TICK_GAP}
-            // Clamped inside the box — see `TICK_HALF_LINE`. The extreme ticks
-            // are the only two this can move, and it moves them by three
-            // pixels rather than letting them hang out of the drawing.
-            y={Math.min(height - TICK_HALF_LINE, Math.max(TICK_HALF_LINE, yScale(t)))}
-            textAnchor="end"
-            dominantBaseline="middle"
-          >
-            {format(t)}
-          </text>
-        ))}
+      {yTicks.map((tick) => (
+        <text
+          key={tick.value}
+          className="nx-seriesplot__tick"
+          x={leftMargin - TICK_GAP}
+          // Clamped inside the box — see `TICK_HALF_LINE`. The extreme ticks
+          // are the only two this can move, and it moves them by three
+          // pixels rather than letting them hang out of the drawing.
+          y={clampTickLabelY(yScale(tick.value), height)}
+          textAnchor="end"
+          dominantBaseline="middle"
+        >
+          {tick.text}
+        </text>
+      ))}
       {series.map((s) => {
         const real = s.points.filter(isPoint);
         const total = real.length;
@@ -284,14 +315,7 @@ export function SeriesPlot({
           <text
             className={`nx-chart-rule__label nx-chart-rule__label--${rule.tone}`}
             x={width}
-            // Above the rule normally, below it when the rule is high enough
-            // that „above" would be outside the drawing. A reference label
-            // clipped by the top edge names nothing.
-            y={
-              yScale(rule.value) - 3 < TICK_HALF_LINE
-                ? yScale(rule.value) + TICK_HALF_LINE + 3
-                : yScale(rule.value) - 3
-            }
+            y={ruleLabelY(yScale(rule.value))}
             textAnchor="end"
           >
             {rule.label}

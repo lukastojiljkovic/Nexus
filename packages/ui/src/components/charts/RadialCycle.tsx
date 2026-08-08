@@ -55,26 +55,69 @@ export interface RadialCycleProps {
   size?: 320 | 720;
 }
 
-function slotCount(period: RadialPeriod): number {
+/** How many positions the ring has. A day is 24 hours, a week 7 days, a year 12 months. */
+export function slotCount(period: RadialPeriod): number {
   if (period.kind === "day") return 24;
   if (period.kind === "week") return 7;
   return 12;
 }
 
-function clamp01(n: number): number {
+export function clamp01(n: number): number {
   if (!Number.isFinite(n)) return 0;
   return n < 0 ? 0 : n > 1 ? 1 : n;
 }
 
-// Slot 0 sits at twelve o'clock, running clockwise — the orientation a clock
-// face or a compass already trained every reader to expect.
-function angleFor(at: number, n: number): number {
+/**
+ * Slot 0 sits at twelve o'clock, running clockwise — the orientation a clock
+ * face or a compass already trained every reader to expect. That is the whole
+ * reason for the `- π/2`: SVG's angle zero points RIGHT, so without it every
+ * ring in the product would be rotated a quarter turn and „ponedeljak" would
+ * be where three o'clock is.
+ */
+export function angleFor(at: number, n: number): number {
   return (at / n) * Math.PI * 2 - Math.PI / 2;
 }
 
 // Room outside the dial for a mark's dot and label, so neither is clipped
 // against the frame edge.
 const PAD = 30;
+
+/**
+ * The ring's centre and radius inside a square box.
+ *
+ * The radius is the half-box minus `PAD`, and `PAD` is not padding in the
+ * layout sense — it is the room the marks live in. Marks are drawn at `r + 6`
+ * (the dot) and `r + 14` (the label), so a radius taken as `size / 2` would
+ * put every mark outside the `viewBox`.
+ */
+export function ringGeometry(size: number): { cx: number; cy: number; r: number } {
+  return { cx: size / 2, cy: size / 2, r: size / 2 - PAD };
+}
+
+/**
+ * Which end of a mark's label is anchored, from the cosine of its angle.
+ *
+ * A label at three o'clock must run outward to the right, one at nine o'clock
+ * outward to the left, and one at the top or bottom is centred. Anchoring them
+ * all the same way is how the left half of a ring ends up written over the
+ * ring itself. The 0.2 dead band is what keeps the two labels nearest the
+ * vertical from flipping side on a one-slot difference.
+ */
+export function markAnchor(cos: number): "start" | "middle" | "end" {
+  return cos > 0.2 ? "start" : cos < -0.2 ? "end" : "middle";
+}
+
+/**
+ * The slots that get a dial tick: every position in the period except the ones
+ * the caller says were never asked of the user.
+ *
+ * Different from a slot that simply has no `spokes` entry — that slot still
+ * gets its tick, because it WAS in scope and happened to record nothing.
+ */
+export function dialSlotsFor(period: RadialPeriod, absent: readonly number[]): number[] {
+  const absentSet = new Set(absent);
+  return Array.from({ length: slotCount(period) }, (_, i) => i).filter((i) => !absentSet.has(i));
+}
 
 export function RadialCycle({
   title,
@@ -89,12 +132,10 @@ export function RadialCycle({
   size = 320,
 }: RadialCycleProps) {
   const n = slotCount(period);
-  const cx = size / 2;
-  const cy = size / 2;
-  const r = size / 2 - PAD;
+  const { cx, cy, r } = ringGeometry(size);
   const absentSet = new Set(absent);
 
-  const dialSlots = Array.from({ length: n }, (_, i) => i).filter((i) => !absentSet.has(i));
+  const dialSlots = dialSlotsFor(period, absent);
   const visibleSpokes = spokes.filter((s) => !absentSet.has(s.at));
   const handTip =
     hand === null
@@ -146,7 +187,7 @@ export function RadialCycle({
         const a = angleFor(m.at, n);
         const cos = Math.cos(a);
         const sin = Math.sin(a);
-        const anchor = cos > 0.2 ? "start" : cos < -0.2 ? "end" : "middle";
+        const anchor = markAnchor(cos);
         return (
           <g key={i} className={`nx-tone--${m.tone}`} aria-hidden="true">
             <circle className="nx-radialcycle__mark-dot" cx={cx + cos * (r + 6)} cy={cy + sin * (r + 6)} r={2.5}>

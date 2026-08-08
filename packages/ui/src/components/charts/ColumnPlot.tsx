@@ -82,36 +82,66 @@ const GAP = 8;
 const BAR_RADIUS = 2;
 const LABEL_ROW = 16;
 
-export function ColumnPlot({
-  title,
-  description,
-  caption,
-  empty,
-  slots,
-  series,
-  baseline = "zero",
-  layout = "stacked",
-  rule,
-  max,
-  width = 320,
-  height = 160,
-}: ColumnPlotProps) {
-  const plotHeight = Math.max(1, height - LABEL_ROW);
-  const bandStep = slots.length > 0 ? width / slots.length : width;
-  const bandWidth = Math.max(1, bandStep - GAP);
-  const grouped = layout === "grouped" && series.length > 1;
-  // A grouped band is split between the series, with a hairline between them
-  // so two adjacent bars of the same height never read as one wide bar.
-  const barWidth = grouped ? Math.max(1, (bandWidth - (series.length - 1)) / series.length) : bandWidth;
+/** Where a slot's band sits and how wide one bar inside it is. */
+export interface ColumnBands {
+  /** Distance from one band's left edge to the next — includes the gap. */
+  bandStep: number;
+  /** The drawn part of a band, gap removed. */
+  bandWidth: number;
+  /** One series' bar. Equal to `bandWidth` unless the band is shared side by side. */
+  barWidth: number;
+}
 
-  // The value domain. Each slot's positive and negative stacks are summed
-  // independently so "signed" data — gains one day, losses the next — never
-  // lets one direction dwarf the other's scale on the same chart. Grouped
-  // series do NOT sum: they stand side by side, so the tallest single bar sets
-  // the ceiling and summing them would leave the axis with headroom nothing
-  // ever reaches.
+/**
+ * The band arithmetic, named so it can be checked without a DOM.
+ *
+ * `grouped` is passed in rather than derived from `layout` because one series
+ * is never grouped no matter what the caller asked for — two bars side by side
+ * needs two series — and that decision belongs at the call site where both
+ * facts are in hand.
+ *
+ * Every result is floored at 1: a zero-width `<rect>` draws nothing at all, so
+ * a chart with more slots than pixels degrades to a dense picket fence rather
+ * than to an empty box that looks like a load failure.
+ */
+export function columnBands(
+  width: number,
+  slotCount: number,
+  seriesCount: number,
+  grouped: boolean,
+): ColumnBands {
+  const bandStep = slotCount > 0 ? width / slotCount : width;
+  const bandWidth = Math.max(1, bandStep - GAP);
+  // A hairline between grouped bars, so two adjacent bars of the same height
+  // never read as one wide bar.
+  const barWidth = grouped
+    ? Math.max(1, (bandWidth - (seriesCount - 1)) / seriesCount)
+    : bandWidth;
+  return { bandStep, bandWidth, barWidth };
+}
+
+/**
+ * The value domain.
+ *
+ * Each slot's positive and negative stacks are summed independently so
+ * "signed" data — gains one day, losses the next — never lets one direction
+ * dwarf the other's scale on the same chart. Grouped series do NOT sum: they
+ * stand side by side, so the tallest single bar sets the ceiling and summing
+ * them would leave the axis with headroom nothing ever reaches.
+ *
+ * An all-empty chart falls back to a domain of 1 rather than 0, because a
+ * zero-span domain sends `scaleLinear` to the middle of the range and every
+ * bar would be drawn from the centre of the box.
+ */
+export function columnDomain(
+  slotCount: number,
+  series: readonly ColumnPlotSeries[],
+  grouped: boolean,
+  baseline: "zero" | "signed",
+  max?: number,
+): [number, number] {
   let computedMax = 0;
-  for (let i = 0; i < slots.length; i += 1) {
+  for (let i = 0; i < slotCount; i += 1) {
     let pos = 0;
     let neg = 0;
     for (const s of series) {
@@ -129,7 +159,52 @@ export function ColumnPlot({
     computedMax = Math.max(computedMax, pos, baseline === "signed" ? -neg : 0);
   }
   const domainMax = max ?? (computedMax > 0 ? computedMax : 1);
-  const domain: [number, number] = baseline === "signed" ? [-domainMax, domainMax] : [0, domainMax];
+  return baseline === "signed" ? [-domainMax, domainMax] : [0, domainMax];
+}
+
+/**
+ * Where a slot's label is written, and which end of it is anchored.
+ *
+ * Centred over its own band, EXCEPT at the two ends. A centred label is only
+ * safe while half of it fits inside the band's own half — and at twelve weekly
+ * slots on a 720 box a band is 60 units wide while „31.12." is nearly 40, so
+ * the first and last labels reached past the edges of the drawing and were cut
+ * in half by the `<svg>`'s own clip. Anchoring those two to the edge they sit
+ * against costs a couple of pixels of centring on two labels and guarantees
+ * the whole axis is readable.
+ *
+ * A single slot stays centred: with nothing beside it there is no crowding to
+ * relieve, and pinning it to the left edge would just look like a mistake.
+ */
+export function slotLabelPlacement(
+  index: number,
+  slotCount: number,
+  bandStep: number,
+  width: number,
+): { x: number; anchor: "start" | "middle" | "end" } {
+  if (slotCount > 1 && index === 0) return { x: 0, anchor: "start" };
+  if (slotCount > 1 && index === slotCount - 1) return { x: width, anchor: "end" };
+  return { x: index * bandStep + bandStep / 2, anchor: "middle" };
+}
+
+export function ColumnPlot({
+  title,
+  description,
+  caption,
+  empty,
+  slots,
+  series,
+  baseline = "zero",
+  layout = "stacked",
+  rule,
+  max,
+  width = 320,
+  height = 160,
+}: ColumnPlotProps) {
+  const plotHeight = Math.max(1, height - LABEL_ROW);
+  const grouped = layout === "grouped" && series.length > 1;
+  const { bandStep, bandWidth, barWidth } = columnBands(width, slots.length, series.length, grouped);
+  const domain = columnDomain(slots.length, series, grouped, baseline, max);
   const yScale = scaleLinear(domain, [plotHeight, 0]);
 
   return (
@@ -163,6 +238,7 @@ export function ColumnPlot({
         let posCum = 0;
         let negCum = 0;
         const bandX = i * bandStep + (bandStep - bandWidth) / 2;
+        const label = slotLabelPlacement(i, slots.length, bandStep, width);
         return (
           <g key={slot.key}>
             {series.map((s, seriesIndex) => {
@@ -191,31 +267,13 @@ export function ColumnPlot({
                 />
               );
             })}
-            {/* Centred over its own band, EXCEPT at the two ends.
-                A centred label is only safe while half of it fits inside the
-                band's own half — and at twelve weekly slots on a 720 box a
-                band is 60 units wide while „31.12." is nearly 40, so the first
-                and last labels reached past the edges of the drawing and were
-                cut in half by the `<svg>`'s own clip. Anchoring those two to
-                the edge they sit against costs a couple of pixels of centring
-                on two labels and guarantees the whole axis is readable. */}
+            {/* Centred over its own band, except at the two ends — see
+                `slotLabelPlacement` for why the ends are anchored instead. */}
             <text
               className="nx-columnplot__label"
-              x={
-                slots.length > 1 && i === 0
-                  ? 0
-                  : slots.length > 1 && i === slots.length - 1
-                    ? width
-                    : i * bandStep + bandStep / 2
-              }
+              x={label.x}
               y={height - 4}
-              textAnchor={
-                slots.length > 1 && i === 0
-                  ? "start"
-                  : slots.length > 1 && i === slots.length - 1
-                    ? "end"
-                    : "middle"
-              }
+              textAnchor={label.anchor}
             >
               {slot.label}
             </text>

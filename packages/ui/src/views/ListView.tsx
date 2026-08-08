@@ -9,7 +9,6 @@ export interface ListViewProps<T extends Record<string, unknown>> {
   config: ListViewConfig;
   /** Renders one row — modules own row content (typically a ListRow); the engine owns order. */
   renderItem: (item: T) => ReactNode;
-  onItemClick?: (item: T) => void;
   /** Stable React key per item; falls back to the render index. */
   itemKey?: (item: T) => string | number;
 }
@@ -17,30 +16,33 @@ export interface ListViewProps<T extends Record<string, unknown>> {
 /**
  * List view of the shared views engine (TASK-005). Applies the config's
  * filters and sort via @nexus/core — the single source of ordering truth —
- * and delegates row rendering to the module. Stateless over data: props in,
- * clicks out. Keyboard row activation lands with the views-engine a11y pass.
+ * and delegates row rendering to the module. Stateless over data: props in.
+ *
+ * ROW ACTIVATION IS THE ROW'S, NOT THE WRAPPER'S. An `onItemClick` prop lived
+ * here and in `CardsView`, with a `--clickable` modifier and a hover rule
+ * behind it, and in the whole product no caller ever passed one — so the two
+ * style rules could never match anything and the hover they describe had never
+ * been on a screen. That is not an oversight to be filled in later, it is the
+ * design being right: what a row does when it is clicked is a module's
+ * decision, the module already renders the row's contents, and a click handler
+ * on a plain `<div>` wrapper is unreachable by keyboard anyway — it would have
+ * shipped a control that only a mouse can operate. Modules put a real button
+ * or link inside `renderItem` instead, which is where the accessible name and
+ * the focus ring already are. Deleted rather than left declared: an unused
+ * prop reads as a supported feature to the next caller.
  */
 export function ListView<T extends Record<string, unknown>>({
   items,
   schema,
   config,
   renderItem,
-  onItemClick,
   itemKey,
 }: ListViewProps<T>) {
   const visible = applySort(applyFilters(items, config.filters), config.sort, schema);
   return (
     <div className="nx-list-view">
       {visible.map((item, index) => (
-        <div
-          key={itemKey ? itemKey(item) : index}
-          className={
-            onItemClick
-              ? "nx-list-view__item nx-list-view__item--clickable"
-              : "nx-list-view__item"
-          }
-          onClick={onItemClick ? () => onItemClick(item) : undefined}
-        >
+        <div key={itemKey ? itemKey(item) : index} className="nx-list-view__item">
           {renderItem(item)}
         </div>
       ))}

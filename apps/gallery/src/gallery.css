@@ -83,6 +83,25 @@
   display: inline-flex;
   gap: var(--nx-space-1);
 }
+/* A host for `StarField`: a fixed, non-scrolling box, which is the only kind of
+   surface the sky is allowed on. `isolation: isolate` is load-bearing — the
+   canvas is `z-index: -1`, so without a stacking context here it would escape
+   to the nearest ancestor that has one and paint behind the whole gallery. */
+.gallery__sky {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  width: 220px;
+  height: 180px;
+  display: flex;
+  align-items: flex-end;
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  padding: var(--nx-space-2);
+  background: var(--nx-bg);
+  color: var(--nx-text-subtle);
+  font-size: var(--nx-font-size-caption);
+}
 @media (max-width: 900px) {
   .gallery__themes { grid-template-columns: 1fr; }
 }

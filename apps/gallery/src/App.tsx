@@ -19,6 +19,8 @@ import {
   SaveIndicator,
   SeriesPlot,
   SpanLanes,
+  StarField,
+  StatBand,
   CardsView,
   KanbanCard,
   KanbanColumn,
@@ -325,6 +327,72 @@ function ThemePanel({ theme, label }: { theme: ThemeName; label: string }) {
             <Checkbox>Linearna algebra i AG — za 48 dana</Checkbox>
           </div>
         </Card>
+      </Section>
+
+      {/* „How am I doing", above „what is on the list" — so the band belongs
+          here, immediately before the row it summarises, and not down among
+          the charts. Both shapes are on screen because they are a UNION in the
+          type and a page picks exactly one: flat figures that share nothing,
+          or groups that each say their unit once. The `note` is the one part
+          worth reviewing by eye every time — it is where a figure admits to
+          being a lower bound rather than a total. */}
+      <Section title="StatBand (ravan niz figura)">
+        <StatBand
+          stats={[
+            { label: "Ukupno", value: "84", note: "Bez obrisanih stavki." },
+            { label: "Na vreme", value: "51", tone: "data" },
+            { label: "Sa zakašnjenjem", value: "33", tone: "danger" },
+            { label: "Najduže", value: "19", unit: "dana" },
+          ]}
+          aside={
+            <SeriesPlot
+              title="Fokus po danu"
+              description="Fokus po danu: 353 minuta kroz sedam dana, najviše u petak."
+              empty={null}
+              x={{ domain: [0, 6] }}
+              series={[
+                {
+                  key: "focus",
+                  tone: "data",
+                  shape: "line",
+                  dots: true,
+                  points: focusData.map((d, i) => ({ x: i, y: d.value })),
+                },
+              ]}
+              width={320}
+              height={96}
+            />
+          }
+          caption="Poslednjih sedam dana; zadaci bez roka se ne broje ni u jednu kolonu."
+        />
+      </Section>
+
+      {/* The grouped shape: the unit is said ONCE above the figures that share
+          it, and the two flows sit a tier below the figure they moved — which
+          is what `size: "flow"` is for and the only place the second tier can
+          be judged, side by side with a `lead`. */}
+      <Section title="StatBand (grupe — jedinica se kaže jednom)">
+        <StatBand
+          groups={[
+            {
+              label: "RSD",
+              stats: [
+                { label: "Stanje", value: "128.400", unit: "RSD" },
+                { label: "Prihod", value: "92.000", size: "flow", tone: "data" },
+                { label: "Rashod", value: "74.300", size: "flow", tone: "danger" },
+              ],
+            },
+            {
+              label: "EUR",
+              stats: [
+                { label: "Stanje", value: "1.240", unit: "EUR" },
+                { label: "Prihod", value: "400", size: "flow", tone: "data" },
+                { label: "Rashod", value: "260", size: "flow", tone: "danger" },
+              ],
+            },
+          ]}
+          caption="Tekući mesec, samo evidentirani računi."
+        />
       </Section>
 
       <Section title="ListRow (task / agenda red)">
@@ -673,6 +741,35 @@ function ThemePanel({ theme, label }: { theme: ThemeName; label: string }) {
         <Card>
           <EmptyState variant="inline" title="Danas još nema upisanih obroka" />
         </Card>
+      </Section>
+
+      {/* Noć's ground, and the only component in this gallery that renders
+          differently per panel rather than merely being coloured differently:
+          Dan has no sky, so `enabled` is false there and NOTHING is painted —
+          not a faded sky, no canvas at all. Both states are worth having side
+          by side, because „it is off in Dan" is a claim that is otherwise only
+          checkable by launching the app.
+
+          The host box is deliberately a fixed, NON-SCROLLING panel. That is the
+          component's binding rule and not a gallery convenience: the app's
+          scrolling panes paint their own opaque background, so a sky placed on
+          one would scroll with the content, and the single CSS property that
+          would pin it forces a main-thread repaint on every scroll frame. Sky
+          goes on the sidebar, the lock screen and empty states — never behind
+          a list. `density` is stars across the full 3840×2160 world box, not
+          across this element, so the two panels below are the same sky at two
+          densities rather than two different skies. */}
+      <Section title="StarField (Noćina podloga — u Danu se ne crta)">
+        <div className="gallery__row">
+          <div className="gallery__sky">
+            <StarField enabled={theme === "noc"} />
+            <span>podrazumevana gustina</span>
+          </div>
+          <div className="gallery__sky">
+            <StarField enabled={theme === "noc"} density={1600} />
+            <span>density=1600</span>
+          </div>
+        </div>
       </Section>
     </div>
   );

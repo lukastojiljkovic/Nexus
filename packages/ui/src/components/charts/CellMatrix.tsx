@@ -50,6 +50,36 @@ export interface CellMatrixProps<R, C> {
 
 const RADIUS = 2.5;
 
+/** The user-space box a matrix of a given shape occupies. */
+export interface MatrixBox {
+  /** One cell plus one gap — the pitch a cell's origin advances by. */
+  step: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * The grid's outer box, and the one thing about it that is easy to get wrong.
+ *
+ * The box is `n * step - gap`, NOT `n * step`: a matrix has n cells and n-1
+ * gaps between them, so the trailing gap has to come back off. Leaving it in
+ * puts a band of dead space down the right edge and along the bottom of every
+ * heatmap, which inside a `viewBox` is not empty margin — it is scale, and the
+ * whole grid is drawn a few percent small to make room for a gap that has no
+ * cell after it.
+ *
+ * The floor at 1 is for the empty matrix: a `viewBox` of width 0 is invalid
+ * and browsers respond to it by not drawing the `<svg>` at all.
+ */
+export function matrixBox(columns: number, rows: number, size: number, gap: number): MatrixBox {
+  const step = size + gap;
+  return {
+    step,
+    width: Math.max(1, columns * step - gap),
+    height: Math.max(1, rows * step - gap),
+  };
+}
+
 export function CellMatrix<R, C>({
   title,
   description,
@@ -62,9 +92,7 @@ export function CellMatrix<R, C>({
   gap = 3,
   onActivate,
 }: CellMatrixProps<R, C>) {
-  const step = size + gap;
-  const width = Math.max(1, columns.length * step - gap);
-  const height = Math.max(1, rows.length * step - gap);
+  const { step, width, height } = matrixBox(columns.length, rows.length, size, gap);
   const interactive = onActivate !== undefined;
 
   return (

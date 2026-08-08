@@ -9,7 +9,6 @@ export interface CardsViewProps<T extends Record<string, unknown>> {
   config: CardsViewConfig;
   /** Renders one card's content — modules own card anatomy; the engine owns order. */
   renderItem: (item: T) => ReactNode;
-  onItemClick?: (item: T) => void;
   /** Stable React key per item; falls back to the render index. */
   itemKey?: (item: T) => string | number;
 }
@@ -18,7 +17,10 @@ export interface CardsViewProps<T extends Record<string, unknown>> {
  * Cards view of the shared views engine (ADR-050) — `ListView`'s pipeline laid
  * out as a grid instead of a column. Applies the config's filters and sort via
  * @nexus/core, the single source of ordering truth, and delegates the card body
- * to the module. Stateless over data: props in, clicks out.
+ * to the module. Stateless over data: props in.
+ *
+ * Card activation belongs to the card, not to this wrapper — the reasoning is
+ * on `ListView`, where the same dead `onItemClick` was deleted.
  *
  * There is deliberately no grouping here. A card grid's structure IS its order,
  * and a second axis over it would be the kanban view — which already exists,
@@ -33,22 +35,13 @@ export function CardsView<T extends Record<string, unknown>>({
   schema,
   config,
   renderItem,
-  onItemClick,
   itemKey,
 }: CardsViewProps<T>) {
   const visible = applySort(applyFilters(items, config.filters), config.sort, schema);
   return (
     <div className="nx-cards-view">
       {visible.map((item, index) => (
-        <div
-          key={itemKey ? itemKey(item) : index}
-          className={
-            onItemClick
-              ? "nx-cards-view__card nx-cards-view__card--clickable"
-              : "nx-cards-view__card"
-          }
-          onClick={onItemClick ? () => onItemClick(item) : undefined}
-        >
+        <div key={itemKey ? itemKey(item) : index} className="nx-cards-view__card">
           {renderItem(item)}
         </div>
       ))}

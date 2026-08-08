@@ -78,7 +78,7 @@ const LEFT_MARGIN = 84;
  */
 const LABEL_GLYPHS = 14;
 
-function fitLabel(label: string): string {
+export function fitLabel(label: string): string {
   const glyphs = Array.from(label);
   return glyphs.length <= LABEL_GLYPHS ? label : `${glyphs.slice(0, LABEL_GLYPHS - 1).join("")}…`;
 }
@@ -91,6 +91,54 @@ const VISIBLE_CAP = 12;
 // svg, so the scroll cap lines up with "twelve lane rows are visible", not
 // "twelve lane rows plus whatever chrome happens to be attached".
 const SCROLL_CHROME = 44;
+
+/** Where one lane's row sits, and where its track sits inside that row. */
+export interface LaneRow {
+  /** Top of the whole row. */
+  rowY: number;
+  /** Top of the drawn track — the row's remaining height split evenly above and below. */
+  trackY: number;
+  /** The track's centre line: where a terminus dot's `cy` goes. */
+  trackMid: number;
+}
+
+/**
+ * A lane's vertical geometry.
+ *
+ * The track is CENTRED in its row rather than sitting at its top, which is
+ * what lets `laneHeight` be raised for a roomier chart without the marks
+ * drifting away from the bars they annotate — every one of them is derived
+ * from `trackY`, so they move together or not at all.
+ */
+export function laneRow(index: number, laneHeight: number): LaneRow {
+  const rowY = index * laneHeight;
+  const trackY = rowY + (laneHeight - TRACK_H) / 2;
+  return { rowY, trackY, trackMid: trackY + TRACK_H / 2 };
+}
+
+/**
+ * A span's horizontal extent, and the one case that is not arithmetic.
+ *
+ * `"open"` runs to the right edge and is NOT scaled: an interval that has not
+ * ended has no end to map, and putting `xScale(domain[1])` there would be the
+ * same pixel with a false claim behind it. The caller reads `open` back to
+ * decide the terminus, so „ends at the frame" and „ends at the domain's last
+ * day" stay distinguishable.
+ *
+ * The width floor of 1 is what makes a same-day span visible at all: a
+ * zero-width `<rect>` draws nothing, so a one-day holiday would silently
+ * vanish from the chart that exists to show it.
+ */
+export function spanExtent(
+  from: number,
+  to: number | "open",
+  xScale: (value: number) => number,
+  right: number,
+): { x: number; width: number; open: boolean } {
+  const x = xScale(from);
+  const x2 = to === "open" ? right : xScale(to);
+  return { x, width: Math.max(1, x2 - x), open: to === "open" };
+}
 
 export function SpanLanes({
   title,
@@ -116,9 +164,7 @@ export function SpanLanes({
       height={height}
     >
       {lanes.map((lane, li) => {
-        const rowY = li * laneHeight;
-        const trackY = rowY + (laneHeight - TRACK_H) / 2;
-        const trackMid = trackY + TRACK_H / 2;
+        const { rowY, trackY, trackMid } = laneRow(li, laneHeight);
         return (
           <g key={lane.key}>
             <text className="nx-spanlanes__label" x={4} y={rowY + laneHeight / 2} dominantBaseline="middle">
@@ -129,18 +175,16 @@ export function SpanLanes({
               {fitLabel(lane.label)}
             </text>
             {lane.spans.map((span, si) => {
-              const x1 = xScale(span.from);
-              const x2 = span.to === "open" ? width : xScale(span.to);
-              const open = span.to === "open";
+              const extent = spanExtent(span.from, span.to, xScale, width);
               return (
                 <rect
                   key={si}
                   className={`nx-spanlanes__span nx-tone--${span.tone ?? lane.tone}`}
-                  x={x1}
+                  x={extent.x}
                   y={trackY}
-                  width={Math.max(1, x2 - x1)}
+                  width={extent.width}
                   height={TRACK_H}
-                  rx={open ? 0 : TRACK_H / 2}
+                  rx={extent.open ? 0 : TRACK_H / 2}
                   aria-hidden="true"
                 >
                   <title>{span.label}</title>

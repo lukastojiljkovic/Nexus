@@ -70,9 +70,56 @@ export interface ProportionBarProps {
   describedAs?: string;
 }
 
-function clamp01(n: number): number {
+/**
+ * A fraction of the track, with the two ways a caller can hand over nonsense
+ * closed off. Non-finite is 0 rather than propagated: a `0 / 0` from an empty
+ * denominator would otherwise reach the style attribute as `NaN%`, which CSS
+ * discards silently — the fill simply never appears and nothing says why.
+ */
+export function clamp01(n: number): number {
   if (!Number.isFinite(n)) return 0;
   return n < 0 ? 0 : n > 1 ? 1 : n;
+}
+
+/** A segment with its place on the track worked out. */
+export type LaidSegment = ProportionSegment & { start: number; width: number };
+
+/**
+ * Segments lay end to end; each one's offset is the sum of those before it.
+ *
+ * THE CLAMP IS CUMULATIVE, and that is the correctness question here. Clamping
+ * each segment on its own — which is what this did — bounds every individual
+ * fill to the track's width but not the RUNNING TOTAL, so two segments of 0.7
+ * produced `left: 70%; width: 70%` and the second fill painted 40% of a track's
+ * width past the end of its track. `.nx-proportion__track` has no `overflow:
+ * hidden` (it must not: the target mark and the rounded ends depend on that),
+ * so nothing downstream catches it — the strip simply runs into whatever sits
+ * beside it, which on a macro row is the figure.
+ *
+ * Giving each segment only the room that is actually left makes the class
+ * unrepresentable rather than merely unlikely: a laid-out strip is bounded by
+ * construction, whatever fractions arrive. A segment that starts past the end
+ * gets width 0 and draws nothing, which is the honest picture of "there is no
+ * room left for this".
+ *
+ * Over-budget data is NOT what this protects against — that case is expressed
+ * by the caller normalising against the larger total (180/210 + 30/210), which
+ * is how the drawing manages to show both the goal and the overshoot. This is
+ * for the caller who has not.
+ */
+export function layOutSegments(segments: readonly ProportionSegment[]): LaidSegment[] {
+  let offset = 0;
+  return segments.map((segment) => {
+    const start = offset;
+    // The `max(0, …)` is not defensive noise: `start + (1 - start)` is not
+    // guaranteed to land exactly on 1 in binary floating point, so a full
+    // track can leave a remainder of about -1e-17 — and a negative `width:`
+    // percentage is a value CSS drops silently, which is the disappearance
+    // failure this file already documents once.
+    const width = Math.min(clamp01(segment.fraction), Math.max(0, 1 - start));
+    offset += width;
+    return { ...segment, start, width };
+  });
 }
 
 export function ProportionBar({
@@ -83,14 +130,7 @@ export function ProportionBar({
   unmeasured = false,
   describedAs,
 }: ProportionBarProps) {
-  // Segments lay end to end; each one's offset is the sum of those before it.
-  let offset = 0;
-  const laid = segments.map((segment) => {
-    const start = offset;
-    const width = clamp01(segment.fraction);
-    offset += width;
-    return { ...segment, start, width };
-  });
+  const laid = layOutSegments(segments);
 
   return (
     <div

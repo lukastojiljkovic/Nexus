@@ -1220,19 +1220,13 @@ samp {
   display: flex;
   flex-direction: column;
 }
-/* A row that answers the pointer says so under it. A background tint and
-   nothing else: no glow, no coloured left bar, no size change — a hover that
-   moves the row is a hover that moves everything below it. The tint is bled
-   into the row's own gutter with a negative inset so it reads as a band across
-   the list rather than as a box around the text. */
-.nx-list-view__item--clickable {
-  cursor: pointer;
-  border-radius: var(--nx-radius-sm);
-  transition: background var(--nx-motion-fast) var(--nx-motion-ease);
-}
-.nx-list-view__item--clickable:hover {
-  background: var(--nx-surface-alt);
-}
+/* `.nx-list-view__item--clickable` and its `:hover` used to sit here. They are
+   gone with `ListView.onItemClick`: no caller ever passed the prop, so the
+   modifier was never emitted and neither rule could ever match. A rule that
+   cannot match is worse than absent — it reads as evidence that hover on a
+   list row is a decided, working part of the design, when in fact nothing has
+   ever painted it. Row activation lives inside the module's own `renderItem`,
+   on a real control that also has focus. */
 /* Row separators live on the wrapper level so :last-child math survives it. */
 .nx-list-view__item > .nx-list-row {
   border-bottom: 1px solid var(--nx-border);
@@ -1302,9 +1296,8 @@ samp {
   padding: var(--nx-space-2);
   min-width: 0;
 }
-.nx-cards-view__card--clickable {
-  cursor: pointer;
-}
+/* `.nx-cards-view__card--clickable` is gone for the same reason as its list
+   counterpart above — `CardsView.onItemClick` was never passed by anything. */
 
 /* --- Charts ------------------------------------------------------------
    The drawn-data layer. House rules, so the ninth chart added next year still
