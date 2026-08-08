@@ -798,6 +798,12 @@ export const IpcChannel = {
   windowClose: "window:close",
   windowState: "window:state",
   windowStateChanged: "window:state-changed",
+  // The rest of what an OS menu bar used to offer: page zoom and full screen.
+  // ONE channel with a closed command vocabulary rather than four, because they
+  // are the same kind of request — „change how this window presents itself" —
+  // and each one is a bare enum with no other field to validate. Four channels
+  // would be four handlers repeating the same three lines.
+  windowView: "window:view",
   appInfo: "app:info",
 } as const;
 
@@ -7683,7 +7689,29 @@ export interface GlobalShortcutResult {
 export interface WindowState {
   maximized: boolean;
   focused: boolean;
+  /** Drawn separately from `maximized`: a full-screen window has no strip to restore from, so the menu offers „leave" instead. */
+  fullScreen: boolean;
+  /** Chromium's zoom LEVEL, not a factor — the scale is `1.2 ** level`, and 0 is „stvarna veličina". */
+  zoomLevel: number;
 }
+
+/**
+ * What the „Prikaz" section of the app menu can ask of its own window.
+ *
+ * A closed list rather than a number, so the renderer never names a zoom level:
+ * main owns the step and the clamp, and a renderer that asked for level 40
+ * would get the same answer as one that asked for level 4. The alternative —
+ * sending a target level and range-checking it — validates the same request
+ * twice and still leaves the step size in two places.
+ */
+export const WINDOW_VIEW_COMMANDS = [
+  "zoom-in",
+  "zoom-out",
+  "zoom-reset",
+  "fullscreen-toggle",
+] as const;
+
+export type WindowViewCommand = (typeof WINDOW_VIEW_COMMANDS)[number];
 
 /** Runtime and environment facts, proving the main-process path end to end. */
 export interface AppInfo {
@@ -8998,5 +9026,7 @@ export interface NexusApi {
   windowState(): Promise<WindowState>;
   /** Subscribes to maximise/restore/focus changes for the calling window. Returns an unsubscribe function. */
   onWindowStateChanged(listener: (state: WindowState) => void): () => void;
+  /** Zoom or full screen for the calling window. The resulting state arrives through `onWindowStateChanged`, never as a reply — one path, so the strip can never disagree with itself. */
+  windowView(command: WindowViewCommand): Promise<void>;
   appInfo(): Promise<AppInfo>;
 }

@@ -660,10 +660,17 @@ import {
   type TaskAttachmentsAddResult,
   type TaskListsSnapshot,
   type TopicMoveDirection,
+  WINDOW_VIEW_COMMANDS,
   type WindowState,
+  type WindowViewCommand,
 } from "../shared/ipc.js";
 import { businessProfileFlags, createModuleRegistry } from "../shared/modules.js";
-import { DEMO_PROFILE_NAME, seedDemoProfile } from "./demo/index.js";
+import {
+  DEMO_BUSINESS_PROFILE_NAME,
+  DEMO_PROFILE_NAME,
+  seedDemoBusiness,
+  seedDemoProfile,
+} from "./demo/index.js";
 import { runShots } from "./shots/index.js";
 
 const isSmoke = process.argv.includes("--smoke");
@@ -1622,6 +1629,14 @@ function asNoteCardSpecArray(value: unknown, field: string): NoteCardSpec[] {
           : asInteger(spec.clozeOrdinal, `${field}[${index}].clozeOrdinal`),
     };
   });
+}
+
+/** The app menu's „Prikaz" vocabulary — the whole of `window:view`'s payload, so an unknown command reaches no window API at all. */
+function asWindowViewCommand(value: unknown, field: string): WindowViewCommand {
+  if (typeof value === "string" && (WINDOW_VIEW_COMMANDS as readonly string[]).includes(value)) {
+    return value as WindowViewCommand;
+  }
+  throw new Error(`Invalid IPC payload: "${field}" is not a valid window view command.`);
 }
 
 /** The closed card-kind domain (ADR-042); anything else is rejected before it reaches the store. */
@@ -10942,7 +10957,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.windowToggleMaximize, (event): WindowState => {
     assertTrustedSender(event);
     const win = senderWindow(event);
-    if (win === null) return { maximized: false, focused: false };
+    if (win === null) return BLANK_WINDOW_STATE;
     if (win.isMaximized()) win.unmaximize();
     else win.maximize();
     return windowStateOf(win);
@@ -10959,7 +10974,33 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.windowState, (event): WindowState => {
     assertTrustedSender(event);
     const win = senderWindow(event);
-    return win === null ? { maximized: false, focused: false } : windowStateOf(win);
+    return win === null ? BLANK_WINDOW_STATE : windowStateOf(win);
+  });
+
+  // „Prikaz" in the app menu. The renderer names an INTENT and main owns the
+  // arithmetic — see `WINDOW_VIEW_COMMANDS` on why a target level never crosses.
+  ipcMain.handle(IpcChannel.windowView, (event, payload): void => {
+    assertTrustedSender(event);
+    const command = asWindowViewCommand(asRecord(payload).command, "command");
+    const win = senderWindow(event);
+    if (win === null) return;
+    switch (command) {
+      case "zoom-in":
+        setZoomLevel(win, win.webContents.getZoomLevel() + ZOOM_STEP);
+        break;
+      case "zoom-out":
+        setZoomLevel(win, win.webContents.getZoomLevel() - ZOOM_STEP);
+        break;
+      case "zoom-reset":
+        setZoomLevel(win, 0);
+        break;
+      case "fullscreen-toggle":
+        win.setFullScreen(!win.isFullScreen());
+        // No push here: `enter-full-screen`/`leave-full-screen` are already
+        // wired in `pushWindowState`, and pushing again would send the state
+        // twice for one action.
+        break;
+    }
   });
 
   ipcMain.handle(IpcChannel.appInfo, (event): AppInfo => {
@@ -11000,8 +11041,41 @@ function senderWindow(event: IpcMainInvokeEvent): BrowserWindow | null {
   return BrowserWindow.fromWebContents(event.sender);
 }
 
+/** What a torn-down window reports. Named rather than repeated, so a field added to `WindowState` cannot be forgotten on one of the two paths. */
+const BLANK_WINDOW_STATE: WindowState = {
+  maximized: false,
+  focused: false,
+  fullScreen: false,
+  zoomLevel: 0,
+};
+
+/**
+ * One press of „Uvećaj"/„Umanji", in Chromium zoom LEVELS.
+ *
+ * The scale is `1.2 ** level`, so half a level is ~9.5 % — small enough that
+ * the step reads as a nudge rather than a jump, and it takes four presses to
+ * reach the ~1.44× that a full two levels would reach in two. The bounds are
+ * where this app's own layout stops working rather than where Chromium stops:
+ * below −2 (0.69×) the 11px eyebrow type falls under 8 device pixels, and above
+ * +3 (1.73×) the 220px sidebar rail eats a third of a 900px window.
+ */
+const ZOOM_STEP = 0.5;
+const ZOOM_MIN = -2;
+const ZOOM_MAX = 3;
+
+/** Clamps, applies, and pushes — zoom fires no `BrowserWindow` event of its own, so the strip has to be told. */
+function setZoomLevel(win: BrowserWindow, level: number): void {
+  win.webContents.setZoomLevel(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, level)));
+  if (!win.isDestroyed()) win.webContents.send(IpcChannel.windowStateChanged, windowStateOf(win));
+}
+
 function windowStateOf(win: BrowserWindow): WindowState {
-  return { maximized: win.isMaximized(), focused: win.isFocused() };
+  return {
+    maximized: win.isMaximized(),
+    focused: win.isFocused(),
+    fullScreen: win.isFullScreen(),
+    zoomLevel: win.webContents.getZoomLevel(),
+  };
 }
 
 /**
@@ -11831,13 +11905,31 @@ async function runShotsAuthSetup(): Promise<void> {
   fillDemoProfile();
 }
 
-/** Names the just-created account's first-run profile and fills it. Shared by both harnesses so they cannot drift apart. */
+/**
+ * Names the just-created account's first-run profile, fills it, and adds the
+ * account's BUSINESS profile beside it. Shared by both harnesses so they cannot
+ * drift apart.
+ *
+ * Both kinds, because ADR-058 gives the top layer two and a demo of one of them
+ * is a demo of half the product (founder, 2026-08-08). They live under ONE
+ * account on purpose — that is what a business profile IS here: the same
+ * person's work, behind the same passcode, with its own data and its own module
+ * set. Two accounts would have demonstrated the lock screen, not the profiles.
+ */
 function fillDemoProfile(): void {
   const database = requireDb();
+  const now = Date.now();
   const profile = listProfiles(database)[0];
   if (profile === undefined) throw new Error("expected a first-run profile to seed");
   renameProfile(database, profile.id, DEMO_PROFILE_NAME);
-  seedDemoProfile(database.raw, profile.id, Date.now());
+  seedDemoProfile(database.raw, profile.id, now);
+
+  const business = new ProfileStore(database.raw).create(
+    "business",
+    DEMO_BUSINESS_PROFILE_NAME,
+    new Date(now).toISOString(),
+  );
+  seedDemoBusiness(database.raw, business.id, now);
 }
 
 /**
@@ -11858,7 +11950,8 @@ async function runDemoSeed(): Promise<void> {
   if (!created.ok) throw new Error(`demo account creation failed: ${created.reason}`);
   fillDemoProfile();
   process.stdout.write(
-    `DEMO OK — nalog „${DEMO_ACCOUNT_LABEL}“, lozinka „${DEMO_PASSCODE}“, profil „${DEMO_PROFILE_NAME}“\n`,
+    `DEMO OK — nalog „${DEMO_ACCOUNT_LABEL}“, lozinka „${DEMO_PASSCODE}“, ` +
+      `profili „${DEMO_PROFILE_NAME}“ (lični) i „${DEMO_BUSINESS_PROFILE_NAME}“ (poslovni)\n`,
   );
 }
 

@@ -802,6 +802,7 @@ const api: NexusApi = {
     ipcRenderer.on(IpcChannel.windowStateChanged, handler);
     return () => ipcRenderer.removeListener(IpcChannel.windowStateChanged, handler);
   },
+  windowView: (command) => ipcRenderer.invoke(IpcChannel.windowView, { command }),
   appInfo: () => ipcRenderer.invoke(IpcChannel.appInfo),
 };
 

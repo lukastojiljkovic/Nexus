@@ -15,7 +15,8 @@
  */
 
 import { SqliteFlagStore, TaskListStore } from "@nexus/db";
-import { createModuleRegistry } from "../../shared/modules.js";
+import { BUSINESS_DISABLED_MODULE_IDS, createModuleRegistry } from "../../shared/modules.js";
+import { seedDemoBusinessProfile } from "./business.js";
 import { createDemoContext, type DatabaseHandle, type DemoContext } from "./context.js";
 import { seedDemoTasks } from "./tasks.js";
 import { seedDemoCalendar } from "./calendar.js";
@@ -30,6 +31,9 @@ import { seedDemoDocuments } from "./documents.js";
 
 /** The name the demo profile carries, so it is obvious in the switcher what it is. */
 export const DEMO_PROFILE_NAME = "Demo";
+
+/** The second kind ADR-058 gives the top layer to. Named for what it is, so the switcher states which profile you are standing in. */
+export const DEMO_BUSINESS_PROFILE_NAME = "Demo posao";
 
 /**
  * Fills `profileId` with a complete, believable life.
@@ -82,4 +86,35 @@ export function seedDemoProfile(db: DatabaseHandle, profileId: string, now: numb
   seedDemoPeople(db, ctx);
   seedDemoDocuments(db, ctx);
   seedDemoFocus(db, ctx);
+}
+
+/**
+ * Fills `profileId` with a working life instead of a whole one — the BUSINESS
+ * half of ADR-058's two profile kinds (founder, 2026-08-08: „hoću demo naloge
+ * za sve tipove poslovnih naloga koje imamo").
+ *
+ * Two things make it a different profile rather than the same one twice:
+ *
+ *  - **The module set is the product's own answer**, not a demo invention:
+ *    `BUSINESS_DISABLED_MODULE_IDS` is exactly what `handleProfilesCreate`
+ *    writes for a real business profile, so „Učenje" is absent here for the
+ *    same reason it is absent for anybody who creates one. Reading the shared
+ *    set rather than restating it means a module added to that list is off
+ *    here too, without anybody remembering to come back.
+ *  - **The rows are business rows** — clients, offers, invoices, VAT, an
+ *    accountant — written by `business.ts`, which seeds six modules and
+ *    deliberately not the four that belong to a person rather than to a
+ *    practice.
+ *
+ * PRIV is the one deviation from the product's defaults, and it is the same one
+ * `seedDemoProfile` makes: the section ships off, and a demo that never shows
+ * it is a demo of thirteen modules.
+ */
+export function seedDemoBusiness(db: DatabaseHandle, profileId: string, now: number): void {
+  const flags = new SqliteFlagStore(db, profileId);
+  for (const manifest of createModuleRegistry().all()) {
+    void flags.set(manifest.id, !BUSINESS_DISABLED_MODULE_IDS.has(manifest.id));
+  }
+  new TaskListStore(db, profileId).ensureInbox(new Date(now).toISOString());
+  seedDemoBusinessProfile(db, createDemoContext(profileId, now));
 }

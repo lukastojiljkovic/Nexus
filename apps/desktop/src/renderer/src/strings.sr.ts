@@ -82,6 +82,30 @@ export const sr = {
       restore: "Vrati veličinu",
       close: "Zatvori prozor",
     },
+    /**
+     * The app menu, behind the mark (founder, 2026-08-08). Removing the OS
+     * frame removed the OS menu bar with it, and this is where what it held
+     * came back — plus the shell's own commands, so „gde su opcije" has one
+     * answer instead of two.
+     *
+     * The two section names are the ones a Serbian Windows already uses, for
+     * the same reason the window controls above are: a menu is the last place
+     * in a product to invent vocabulary.
+     */
+    menu: {
+      label: "Meni aplikacije",
+      viewSection: "Prikaz",
+      zoomIn: "Uvećaj prikaz",
+      zoomOut: "Umanji prikaz",
+      zoomReset: "Stvarna veličina",
+      fullScreenEnter: "Preko celog ekrana",
+      fullScreenLeave: "Napusti ceo ekran",
+      windowSection: "Prozor",
+      /** The shell's own rows, named here because `App` builds them and `TitleBar` only draws them. */
+      search: "Pretraga",
+      settings: "Podešavanja",
+      shortcuts: "Prečice na tastaturi",
+    },
     loading: "Učitavanje…",
     /**
      * Asked before a file is removed, by all THREE attachment panels — notes,
@@ -4225,6 +4249,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
      */
     sections: {
       label: "Odeljak",
+      /** Keyed by `FitSection` so the switch reads `s[option]` and cannot fall through to a wrong label. */
+      body: "Mapa tela",
       nutrition: "Ishrana",
       training: "Trening",
       measurements: "Merenja",
@@ -4800,10 +4826,52 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
           untouchedHeading: "Bez ijedne serije u poslednjih",
           untouchedNone: "Svaka mišićna grupa je dobila bar jednu seriju u ovom periodu.",
           setsSuffix: "ser.",
-          /** A muscle's own label, read aloud on hover and by a reader: „Grudi: 6 ser. · poslednji put 2026-08-05". */
+          /** A muscle's own label, read on hover: „Grudi: 6 ser. · poslednji put 5. avg 2026.". */
           lastPrefix: "poslednji put",
           neverTrained: "bez serije u ovom periodu",
           emptyReason: "Mapa se crta čim upišeš prvu seriju.",
+          /**
+           * „Mapa tela" as its own section (founder, 2026-08-08). The map used
+           * to answer one question — šta nisam trenirao — and now answers the
+           * other direction too: koji mišić radi koja vežba, i šta ta vežba
+           * pogađa. The copy below is that second direction.
+           */
+          sectionNote:
+            "Klikni na mišićnu grupu — na telu ili u spisku ispod — pa na vežbu, da vidiš šta ta vežba pogađa.",
+          pickerLabel: "Mišićne grupe",
+          pickHint: "Izaberi mišićnu grupu da vidiš vežbe koje je treniraju.",
+          weekHeading: "Poslednjih",
+          clear: "Poništi izbor",
+          backToWeek: "Nazad",
+          drawnFront: "Nacrtan na prednjoj strani.",
+          drawnBack: "Nacrtan na zadnjoj strani.",
+          primaryHeading: "Vežbe kojima je ovo cilj",
+          primaryNone: "Nijedna vežba u spisku nema ovu grupu kao primarnu.",
+          secondaryHeading: "Vežbe koje ga još angažuju",
+          secondaryNone: "Nijedna vežba u spisku ga ne angažuje sekundarno.",
+          /** The one chip that tells the shipped catalogue and the profile's own rows apart. */
+          mine: "Moja",
+          factEquipment: "Sprava",
+          factPattern: "Obrazac pokreta",
+          factMetric: "Serija beleži",
+          factSide: "Izvođenje",
+          factUnilateral: "Jednostrano (po strani)",
+          factBilateral: "Obostrano",
+          hitsPrimary: "Primarno",
+          hitsSecondary: "Sekundarno",
+          /**
+           * While an exercise is chosen the shading stops being a count and
+           * becomes a claim about the movement. Saying so is not a nicety: a
+           * shade that means two things without announcing which is the module
+           * changing the rules under the reader.
+           */
+          exerciseCaption: "Zasićenost sada prikazuje šta pogađa vežba",
+          rolePrimary: "primarno",
+          roleSecondary: "sekundarno",
+          roleNone: "ne angažuje se",
+          /** The catalogue carries no instructions, on purpose — see `ExerciseEntry`. */
+          noHowTo:
+            "Nexus ne opisuje izvođenje vežbe: to je tekst koji se prepisuje iz tuđih proizvoda, a poluopisan bi bio gori od nikakvog.",
         },
         /** Personal records, derived on read. A stored PR row and a set table can disagree, and only one of them is the truth. */
         recordsHeading: "Lični rekordi",

@@ -1153,6 +1153,42 @@ export function App() {
         surface={effectiveId === SEARCH_PAGE_ID ? strings.search.navLabel : moduleName(effectiveId)}
         theme={theme}
         onToggleTheme={toggleTheme}
+        // The shell half of the app menu. „Prikaz" and „Prozor" belong to the
+        // strip and it builds those itself; these are the four commands that
+        // need the shell's own state — where to navigate, which account is
+        // open, whether there is a second one to switch to.
+        //
+        // Deliberately NOT every command the palette carries. „Sve komande" is
+        // what Ctrl+K is, and a menu that tried to mirror it would be a worse
+        // copy of a better surface — one that also has to be kept in step.
+        commands={[
+          {
+            id: "search",
+            label: strings.app.menu.search,
+            icon: "search" as const,
+            chord: formatChord(shortcuts.palette),
+            onSelect: () => setActiveId(SEARCH_PAGE_ID),
+          },
+          {
+            id: "settings",
+            label: strings.app.menu.settings,
+            icon: "settings" as const,
+            onSelect: () => setActiveId("settings"),
+          },
+          {
+            id: "shortcuts",
+            label: strings.app.menu.shortcuts,
+            icon: "keyboard" as const,
+            chord: formatChord(shortcuts.shortcutsHelp),
+            onSelect: () => setShortcutsHelpOpen(true),
+          },
+          {
+            id: "lock",
+            label: strings.auth.lockAction,
+            icon: "lock" as const,
+            onSelect: () => void handleLock(),
+          },
+        ]}
       />
 
       <div className="app__body">

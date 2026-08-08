@@ -125,7 +125,11 @@ body {
   align-items: center;
   justify-content: space-between;
   height: var(--app-titlebar-h);
-  padding-left: var(--nx-space-4);
+  /* One step, not four: the mark is a BUTTON now (the app menu), and its own
+     padding is what holds it off the corner. Keeping the strip's old 16px here
+     would have pushed a hoverable control a thumb's width inboard of the edge
+     it belongs to. */
+  padding-left: var(--nx-space-1);
   border-bottom: 1px solid var(--nx-border);
   background: var(--nx-surface);
   -webkit-app-region: drag;
@@ -178,6 +182,101 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* The app menu ------------------------------------------------------------
+   The mark is the trigger. It reads as the wordmark until the pointer is on
+   it — no button chrome at rest, because a title bar whose first element is a
+   drawn button reads as a toolbar. The caret is the only permanent tell, and
+   it is 12px and tertiary ink so it says „there is more here" without
+   competing with the name it follows. */
+.app__menu-trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  height: 26px;
+  padding: 0 var(--nx-space-2);
+  border: 0;
+  border-radius: var(--nx-radius-sm);
+  background: transparent;
+  color: inherit;
+  cursor: default;
+  -webkit-app-region: no-drag;
+  transition: background var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.app__menu-trigger:hover,
+.app__menu-trigger[aria-expanded="true"] {
+  background: var(--nx-surface-alt);
+}
+.app__menu-trigger:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: -2px;
+}
+.app__menu-caret {
+  margin-left: calc(var(--nx-space-1) * -1);
+  color: var(--nx-text-faint);
+}
+
+/* The panel. Wider than a row menu because every row here carries a chord in
+   its second column, and a chord that wraps is a chord nobody can read. */
+.app__menu-panel {
+  min-width: 268px;
+  padding: var(--nx-space-1);
+}
+.app__menu-section {
+  padding: var(--nx-space-2) var(--nx-space-2) var(--nx-space-1);
+}
+/* Three columns: glyph, name, and the chord or reading. The name is the only
+   one that flexes, so the chords line up down the right whatever the labels
+   do — the whole reason a menu can be scanned rather than read. */
+.app__menu-item {
+  display: grid;
+  grid-template-columns: 15px 1fr auto;
+  align-items: center;
+  gap: var(--nx-space-2);
+  width: 100%;
+  min-height: 28px;
+  padding: 0 var(--nx-space-2);
+  border: 0;
+  border-radius: var(--nx-radius-sm);
+  background: transparent;
+  color: var(--nx-text);
+  font-size: var(--nx-font-size-body-sm);
+  text-align: left;
+  cursor: default;
+}
+.app__menu-item:hover,
+.app__menu-item:focus-visible {
+  background: var(--nx-surface-alt);
+  outline: none;
+}
+.app__menu-item:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--nx-accent);
+}
+.app__menu-icon {
+  color: var(--nx-text-muted);
+}
+.app__menu-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Tabular figures so „110%" and „100%" occupy the same width — the reading
+   changes under the pointer and a column that shifts with it looks broken. */
+.app__menu-trailing {
+  color: var(--nx-text-faint);
+  font-size: var(--nx-font-size-caption);
+  font-variant-numeric: tabular-nums;
+}
+/* The build, stated rather than offered: this is the only place in the app
+   that names a version, and it is a fact, not a command. */
+.app__menu-foot {
+  margin: var(--nx-space-1) 0 0;
+  padding: var(--nx-space-2) var(--nx-space-2) var(--nx-space-1);
+  border-top: 1px solid var(--nx-border-subtle);
+  color: var(--nx-text-faint);
+  font-size: var(--nx-font-size-caption);
 }
 
 .app__titlebar-controls {

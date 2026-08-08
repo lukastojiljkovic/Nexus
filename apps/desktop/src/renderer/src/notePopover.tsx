@@ -30,6 +30,17 @@ export interface NotePopoverProps {
    * to `true`.
    */
   menu?: boolean;
+  /**
+   * Which edge the panel hangs from. „end" (the default) keeps a row-level "⋯"
+   * menu tucked back under the glyph that opened it, which is right for a
+   * trigger sitting at the right of its row. A trigger at the LEFT of the
+   * window — the app menu on the brand — needs „start", or the panel is placed
+   * from its right edge and then clamped against the window's left, which
+   * detaches it from the control by however wide the panel happens to be.
+   */
+  align?: "start" | "end";
+  /** Extra class on the panel, for a menu whose rows are richer than a name and a tick. */
+  panelClassName?: string;
 }
 
 /** The panel's real `role="menuitem"` children, read fresh every time — content is arbitrary, caller-supplied JSX, so nothing else tracks its shape. Module-level (not a closure) so effects that call it need not name it as a dependency: it has none of its own beyond the element handed in. */
@@ -66,6 +77,8 @@ export function NotePopover({
   triggerContent = <Icon name="more" size={14} />,
   children,
   menu = true,
+  align = "end",
+  panelClassName,
 }: NotePopoverProps) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -79,7 +92,7 @@ export function NotePopover({
     open,
     anchor: triggerRef,
     trigger: triggerRef,
-    align: "end",
+    align,
     onClose: () => setOpen(false),
   });
 
@@ -157,7 +170,7 @@ export function NotePopover({
         portal(
           <div
             id={panelId}
-            className="note__menu-panel"
+            className={`note__menu-panel${panelClassName ? ` ${panelClassName}` : ""}`}
             role={menu ? "menu" : "group"}
             aria-label={menu ? undefined : label}
             onKeyDown={onPanelKeyDown}
