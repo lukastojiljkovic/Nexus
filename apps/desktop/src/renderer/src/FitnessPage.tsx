@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Button, PageHeader } from "@nexus/ui";
+import { FitBody } from "./FitBody.js";
 import { FitMeasurements } from "./FitMeasurements.js";
 import { FitNutrition } from "./FitNutrition.js";
 import { FitTraining } from "./FitTraining.js";
@@ -32,8 +33,16 @@ import { strings } from "./strings.js";
  * read is the honest behaviour and costs one round trip.
  */
 
-/** The page's two halves, in the order the switch draws them. */
-const FIT_SECTIONS = ["nutrition", "training", "measurements"] as const;
+/**
+ * The page's sections, in the order the switch draws them.
+ *
+ * „Mapa tela" leads (founder, 2026-08-08). It is the one surface in this module
+ * that answers a question before anything has been logged — which exercises
+ * train which muscle — so it is also the only one that has something to say to
+ * a profile on its first day. The two daily surfaces are one click away, which
+ * is what a switch is for.
+ */
+const FIT_SECTIONS = ["body", "nutrition", "training", "measurements"] as const;
 
 type FitSection = (typeof FIT_SECTIONS)[number];
 
@@ -43,7 +52,7 @@ export interface FitnessPageProps {
 
 export function FitnessPage({ profileId }: FitnessPageProps) {
   const s = strings.fitness.sections;
-  const [section, setSection] = useState<FitSection>("nutrition");
+  const [section, setSection] = useState<FitSection>("body");
 
   return (
     <div className="fit">
@@ -59,12 +68,14 @@ export function FitnessPage({ profileId }: FitnessPageProps) {
             aria-pressed={section === option}
             onClick={() => setSection(option)}
           >
-            {option === "nutrition" ? s.nutrition : option === "training" ? s.training : s.measurements}
+            {s[option]}
           </Button>
         ))}
       </div>
 
-      {section === "nutrition" ? (
+      {section === "body" ? (
+        <FitBody profileId={profileId} />
+      ) : section === "nutrition" ? (
         <FitNutrition profileId={profileId} />
       ) : section === "training" ? (
         <FitTraining profileId={profileId} />

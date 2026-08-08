@@ -5,7 +5,7 @@ import { exerciseRecords, weeklyVolume } from "@nexus/core";
 import type { ExerciseRecords, MuscleGroup, WeekVolume } from "@nexus/core";
 import type { FitWorkout } from "../../shared/ipc.js";
 import { localTodayKey } from "./examDates.js";
-import { FitBodyMap } from "./FitBodyMap.js";
+import { formatFitDay } from "./fitDay.js";
 import { progressSets } from "./fitWorkout.js";
 import { figureText, setCountText, tonnageText } from "./fitWorkoutCopy.js";
 import { countUnit, strings } from "./strings.js";
@@ -163,7 +163,10 @@ export function FitProgress({ profileId }: FitProgressProps) {
           <div className="fit__weeks">
             {[...recentWeeks].reverse().map((week) => (
               <div key={week.weekStart} className="fit__week">
-                <span className="fit__week-day">{week.weekStart}</span>
+                {/* The week's Monday, read rather than decoded. This column
+                    printed the raw `2026-08-03` — a storage format wearing a
+                    display's clothes, and the last one left in the module. */}
+                <span className="fit__week-day">{formatFitDay(week.weekStart)}</span>
                 <span className="fit__week-figure">{setCountText(week.sets)}</span>
                 {week.tonnageSets > 0 && (
                   <span className="fit__week-figure">
@@ -175,14 +178,12 @@ export function FitProgress({ profileId }: FitProgressProps) {
             ))}
           </div>
 
-          {/* The body before the counts. „Šta nisam trenirao" is answered by a
-              silhouette at a glance and by twenty sorted chips only in
-              sequence, so the map comes first and the per-muscle figures below
-              are its detail. Its own window is seven days, stated in its
-              caption — deliberately not the 90/365 range this section is set
-              to, because a week is what a training week balances over. */}
-          <FitBodyMap sets={sets} today={today} />
-
+          {/* The body map used to be drawn here, under the volume chart. It is
+              its own section now („Mapa tela", founder 2026-08-08) — it grew a
+              second job, browsing the catalogue by muscle, and a graphic that
+              answers two questions is not a figure inside a third surface. What
+              stays here is the per-muscle COUNT for the latest week, which is
+              the number this section is about; the map is the picture of it. */}
           {latestWeek !== undefined && (
             <>
               <div className="fit__figures-heading">{s.muscleHeading}</div>
@@ -298,7 +299,7 @@ function RecordCard({ record }: { record: ExerciseRecords }): ReactNode {
         <div key={row.label} className="fit__record-row">
           <span className="fit__record-label">{row.label}</span>
           <span className="fit__record-value">{row.value}</span>
-          <span className="fit__record-day">{row.day}</span>
+          <span className="fit__record-day">{formatFitDay(row.day)}</span>
         </div>
       ))}
     </div>

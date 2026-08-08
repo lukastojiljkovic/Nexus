@@ -348,22 +348,164 @@
    surfaces had each grown the identical one before it was hoisted. Defined here
    are only the two things SVG does not inherit — the outline that turns the
    plates into a figure, and the view labels. */
-/* `non-scaling-stroke` for the reason `.fit__chart-line` states one line down:
-   the figure is drawn at 1.6× its own coordinate space, and without this the
-   outline would come out at 1.6px — a hairline that thickens with the drawing
-   stops being a hairline and starts being a border around the data. */
+/* FILLED, and carrying no stroke at all.
+   A stroked outline draws every seam between the parts the figure is assembled
+   from, so the body reads as six floating boxes with muscle plates painted
+   over the gaps — which is precisely what the first sweep photographed. The
+   parts overlap and share one fill, so they merge into a single silhouette
+   with no seam to see, and the shading sits on a body instead of inside a
+   wireframe. `--nx-surface-alt` against the page's `--nx-surface` is the same
+   one-step separation an empty cell of the habit wall uses: enough to read as
+   a shape, not enough to compete with the data on top of it. */
 .fit__body-outline {
-  fill: none;
-  stroke: var(--nx-border);
-  stroke-width: 1;
-  stroke-linejoin: round;
-  vector-effect: non-scaling-stroke;
+  fill: var(--nx-surface-alt);
+  stroke: none;
 }
 .fit__body-side {
   font-size: var(--nx-font-size-caption);
   fill: var(--nx-text-subtle);
   letter-spacing: var(--nx-font-tracking-label);
   text-transform: uppercase;
+}
+/* The section the map became (founder, 2026-08-08). One column by default: the
+   figure is 720 user units wide and the main pane at the shipped default window
+   is ~860, so a rail beside it would be a 140px column — narrower than the
+   exercise names it has to hold. The two-column form appears only where there
+   is genuinely room for both, which is the same rule the NOTE rails follow
+   (DC-06: a pane is full width or it is not there). */
+.fit__body {
+  display: grid;
+  gap: var(--nx-space-5);
+  align-items: start;
+}
+/* The figure is 560 wide (`VIEW_WIDTH`), so the rail stands beside it from
+   1080px of window — which includes the size this app ships at. Below that it
+   goes underneath, full width: a 200px column of exercise names is not a rail,
+   it is a defect (DC-06 — a pane is full width or it is not there). */
+@media (min-width: 1080px) {
+  .fit__body {
+    grid-template-columns: minmax(0, 560px) minmax(280px, 1fr);
+  }
+}
+.fit__body-figure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  min-width: 0;
+}
+.fit__body-svg {
+  display: block;
+  max-width: 560px;
+}
+/* A plate answers the mouse; the list below answers everything else. The stroke
+   is the whole of the hover state — no fill change, because the fill IS the
+   data and a hover that repainted it would be the picture lying while the
+   pointer is on it. */
+.fit__body-region {
+  cursor: pointer;
+}
+.fit__body-plate {
+  stroke: transparent;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+  transition: stroke var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.fit__body-region:hover .fit__body-plate {
+  stroke: var(--nx-accent-strong);
+}
+.fit__body-region--on .fit__body-plate {
+  stroke: var(--nx-accent);
+  stroke-width: 2;
+}
+/* Twenty groups as a wrapped list of real buttons — the control the plates are
+   a shortcut for. Sorted by the vocabulary's own order, never by count: a list
+   that reordered itself every time a set was logged could not be learned. */
+.fit__muscle-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-1);
+}
+.fit__muscle-option {
+  gap: var(--nx-space-2);
+}
+.fit__muscle-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  flex: none;
+}
+.fit__muscle-count {
+  min-width: 1.4em;
+  color: var(--nx-text-faint);
+  font-size: var(--nx-font-size-caption);
+}
+.fit__body-rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  min-width: 0;
+}
+.fit__rail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-3);
+}
+.fit__rail-title {
+  margin: 0;
+  font-size: var(--nx-font-size-title);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.fit__rail-lead {
+  margin: 0;
+  color: var(--nx-text-muted);
+}
+.fit__rail-section {
+  margin-top: var(--nx-space-3);
+}
+.fit__exercise-list {
+  display: flex;
+  flex-direction: column;
+}
+/* A row, not a card: forty of these stack under „Vežbe kojima je ovo cilj", and
+   forty cards is a wall. The name flexes, the implement sits right, and the
+   caret is the only thing saying the row goes somewhere. */
+.fit__exercise-row {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  width: 100%;
+  padding: 0 var(--nx-space-1);
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+  background: transparent;
+  color: var(--nx-text);
+  text-align: left;
+  cursor: default;
+}
+.fit__exercise-row:hover {
+  background: var(--nx-surface-alt);
+}
+.fit__exercise-row:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: -2px;
+}
+.fit__exercise-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fit__exercise-equipment {
+  flex: none;
+  color: var(--nx-text-faint);
+  font-size: var(--nx-font-size-caption);
+}
+.fit__exercise-caret {
+  flex: none;
+  color: var(--nx-text-faint);
 }
 .fit__facts {
   display: flex;

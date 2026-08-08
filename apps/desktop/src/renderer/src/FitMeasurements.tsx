@@ -32,7 +32,7 @@ import type {
   MuscleReading,
 } from "../../shared/ipc.js";
 import { localTodayKey } from "./examDates.js";
-import { parseAmountInput, gramsInputValue, formatKcal } from "./fitDay.js";
+import { parseAmountInput, gramsInputValue, formatFitDay, formatKcal } from "./fitDay.js";
 import { figureText } from "./fitWorkoutCopy.js";
 import { countUnit, strings } from "./strings.js";
 
@@ -713,7 +713,7 @@ export function FitMeasurements({ profileId }: FitMeasurementsProps) {
               >
                 <span className="fit__row-body">
                   <span className="fit__row-title">{`${figureText(row.weightKg)} ${s.trend.unitKg}`}</span>
-                  <span className="fit__row-meta">{row.day}</span>
+                  <span className="fit__row-meta">{formatFitDay(row.day)}</span>
                   <span className="fit__chips">
                     {row.bodyFatPercent !== null && (
                       <Chip variant="data">{`${s.entry.bodyFatLabel}: ${figureText(row.bodyFatPercent)}`}</Chip>

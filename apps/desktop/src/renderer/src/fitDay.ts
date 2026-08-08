@@ -206,6 +206,36 @@ export function formatGrams(value: number): string {
 }
 
 /**
+ * A FIT day key as a person reads it: „5. avg 2026.".
+ *
+ * The module was printing `2026-08-05` verbatim in five places across three
+ * files — a personal record's date, a measurement row, a weekly-volume row, the
+ * body map's „poslednji put" and the workout list — because there was nowhere
+ * to put the one line that fixes it. A bare ISO key is a storage format wearing
+ * a display's clothes: it is the only date shape in the app a Serbian reader
+ * has to decode rather than read.
+ *
+ * `month: "short"` rather than `"long"`: these dates sit at the end of dense
+ * rows beside a figure, where „5. avgust 2026." is the widest thing on the line
+ * and the least important. The year stays, because a record from last August
+ * and one from this August are different claims.
+ *
+ * A malformed key comes back verbatim rather than as „Invalid Date" — this
+ * reads history, and history should not be able to blank a row.
+ */
+export function formatFitDay(day: string): string {
+  const date = new Date(`${day.slice(0, 10)}T00:00:00Z`);
+  return Number.isNaN(date.getTime()) ? day : FIT_DAY_FORMAT.format(date);
+}
+
+const FIT_DAY_FORMAT = new Intl.DateTimeFormat(FIT_LOCALE, {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+/**
  * Whether the day navigation may step FORWARD from `day`.
  *
  * The diary walks back through history and stops at today: a meal is a fact
