@@ -689,6 +689,23 @@ export function App() {
       case "finance":
         dispatchIntent({ module: "finance", intent: { kind: "create" } });
         return;
+      default:
+        // THE FALLBACK IS THE POINT, and its absence was the defect: this
+        // switch had four arms and no default, so the chord whose own label
+        // reads „Novi unos" did nothing at all on ten of fourteen modules —
+        // including „Kontrolna tabla", which is both the landing surface and
+        // the fallback target for an unknown module id. A shortcut that
+        // silently does nothing on the first screen a person sees is worse
+        // than no shortcut, because they conclude the app is broken rather
+        // than that the key is unbound.
+        //
+        // Falling through to ZADACI's quick-add is not an arbitrary pick: it
+        // is the app's UNIVERSAL CAPTURE, the same landing the OS-wide chord
+        // (TASK-002) and the palette's own „Novi zadatak" already use. So the
+        // behaviour a user learns once holds everywhere, and „I had a thought
+        // and pressed the key" always has somewhere to go.
+        dispatchIntent({ module: "tasks", intent: { kind: "create" } });
+        return;
     }
   }
 

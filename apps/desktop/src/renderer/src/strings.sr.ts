@@ -7030,7 +7030,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     globalTaken: "Prečica je zauzeta na nivou sistema.",
     actions: {
       palette: "Komandna paleta",
-      quickCreate: "Novi unos u aktivnom modulu",
+      /** Says „ili u Zadacima" because that is now literally what it does — see `createInModule`'s default arm. The old copy promised the active module and delivered nothing on ten of fourteen. */
+      quickCreate: "Novi unos u aktivnom modulu (ili u Zadacima)",
       globalCapture: "Brzi unos zadatka — globalna prečica",
       lock: "Zaključaj aplikaciju",
       privLock: "Zaključaj privatne beleške",
