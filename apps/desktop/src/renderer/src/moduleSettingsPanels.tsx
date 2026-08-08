@@ -762,7 +762,7 @@ function PrivSettingsPanel({ profileId, hits }: SettingsPanelProps) {
       <div className="set__security-block">
         <h3
           className={labelClass(
-            "set__module-group-title",
+            "nx-eyebrow set__module-group-title",
             hits.has(settingsEntryId("priv", "auto-lock")),
           )}
         >

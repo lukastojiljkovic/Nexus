@@ -708,7 +708,9 @@ export function SearchPalette({
                 down a list is thirty objects competing with the thirty titles
                 they were meant to qualify. */}
             {showKind && (
-              <div className="search__row-kind">{strings.search.kindSingular[result.kind]}</div>
+              <div className="nx-eyebrow search__row-kind">
+                {strings.search.kindSingular[result.kind]}
+              </div>
             )}
             <div className="search__row-title">
               {renderHighlighted(result.title, result.titleRanges)}

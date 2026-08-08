@@ -187,7 +187,7 @@ export function CanvasToolbar({ editor, state, onMermaid, onAddCard }: CanvasToo
     label: string,
   ): ReactNode => (
     <div className="canv__tool-group" role="group" aria-label={label}>
-      <span className="canv__label">{label}</span>
+      <span className="nx-eyebrow canv__label">{label}</span>
       {channel === "background" && (
         <button
           type="button"
@@ -227,7 +227,7 @@ export function CanvasToolbar({ editor, state, onMermaid, onAddCard }: CanvasToo
   return (
     <div className="canv__toolbar" role="group" aria-label={s.label}>
       <div className="canv__tool-group" role="group" aria-label={s.toolLabel}>
-        <span className="canv__label">{s.toolLabel}</span>
+        <span className="nx-eyebrow canv__label">{s.toolLabel}</span>
         {CANVAS_TOOLS.map((tool) => {
           const active = state.tool === tool.id;
           return (
@@ -250,7 +250,7 @@ className="nx-segmented__option canv__tool"
       {swatchRow("background", state.background, s.fillLabel)}
 
       <div className="canv__tool-group" role="group" aria-label={s.widthLabel}>
-        <span className="canv__label">{s.widthLabel}</span>
+        <span className="nx-eyebrow canv__label">{s.widthLabel}</span>
         {CANVAS_STROKE_WIDTHS.map((width) => {
           const active = activeStrokeWidth(state.strokeWidth) === width.id;
           return (

@@ -423,11 +423,6 @@
   padding: var(--nx-space-1) var(--nx-space-2);
   background: var(--nx-surface-alt);
   border-radius: var(--nx-radius-xs);
-  font-size: var(--nx-font-size-label);
-  font-weight: var(--nx-font-weight-semibold);
-  letter-spacing: var(--nx-font-tracking-label);
-  text-transform: uppercase;
-  color: var(--nx-text-subtle);
 }
 
 /* „Sat dana" (CalendarHourRing) inside the agenda's own scroller — see that
@@ -634,11 +629,6 @@
 .cal__month-weekday {
   padding: var(--nx-space-1) var(--nx-space-2);
   text-align: center;
-  font-size: var(--nx-font-size-label);
-  text-transform: uppercase;
-  letter-spacing: var(--nx-font-tracking-label);
-  color: var(--nx-text-subtle);
-  font-weight: var(--nx-font-weight-semibold);
 }
 
 /* ISO week numbers (CAL-010) — a gutter column down the left of the grid,
@@ -1606,16 +1596,6 @@ button.cal__grid-event--dragging {
   padding-left: var(--nx-space-3);
   /* An indent rule, not an object's edge — the gridline tier applies here too. */
   border-left: 1px solid var(--nx-border-subtle);
-}
-/* `--nx-font-tracking-label`, not a hand-typed `0.04em`: this is an eyebrow, and
-   the app has exactly one tracking for eyebrows. A second, private value is how
-   a set of labels stops looking like one set. */
-.documents__renewals-title {
-  font-size: var(--nx-font-size-label);
-  font-weight: var(--nx-font-weight-semibold);
-  letter-spacing: var(--nx-font-tracking-label);
-  text-transform: uppercase;
-  color: var(--nx-text-subtle);
 }
 .documents__renewal,
 .documents__renewals-note {

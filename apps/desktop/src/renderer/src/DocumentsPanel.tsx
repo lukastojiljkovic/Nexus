@@ -470,7 +470,7 @@ export function DocumentsPanel({
                     those is a real answer and the other two are not. */}
                 {renewingId === doc.id && (
                   <span className="documents__renewals">
-                    <span className="documents__renewals-title">
+                    <span className="nx-eyebrow">
                       {strings.documents.renewalsTitle}
                     </span>
                     {renewalsFailed ? (

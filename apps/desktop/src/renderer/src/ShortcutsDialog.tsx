@@ -65,7 +65,7 @@ function ReferenceGroup({
 }) {
   return (
     <section className="shortcuts-dialog__group">
-      <h3 className="set__module-group-title">{title}</h3>
+      <h3 className="nx-eyebrow set__module-group-title">{title}</h3>
       {caption !== undefined && <p className="set__section-caption">{caption}</p>}
       {children}
     </section>

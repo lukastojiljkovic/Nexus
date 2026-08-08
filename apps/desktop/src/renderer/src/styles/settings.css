@@ -390,11 +390,6 @@
    same thing. */
 .set__module-group-title {
   margin: 0;
-  font-size: var(--nx-font-size-label);
-  font-weight: var(--nx-font-weight-semibold);
-  letter-spacing: var(--nx-font-tracking-label);
-  text-transform: uppercase;
-  color: var(--nx-text-subtle);
 }
 .set__module-list {
   display: flex;

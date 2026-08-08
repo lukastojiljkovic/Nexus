@@ -194,12 +194,7 @@
 .canv__label {
   flex: none;
   margin-right: var(--nx-space-1);
-  font-size: var(--nx-font-size-label);
-  font-weight: var(--nx-font-weight-semibold);
-  letter-spacing: var(--nx-font-tracking-label);
   line-height: var(--nx-font-leading-snug);
-  text-transform: uppercase;
-  color: var(--nx-text-subtle);
   -webkit-user-select: none;
   user-select: none;
 }

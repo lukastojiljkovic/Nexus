@@ -93,11 +93,6 @@
 .tool__group-title {
   margin: 0 0 var(--nx-space-1);
   padding: 0 var(--nx-space-3);
-  font-size: var(--nx-font-size-label);
-  font-weight: var(--nx-font-weight-semibold);
-  letter-spacing: var(--nx-font-tracking-label);
-  text-transform: uppercase;
-  color: var(--nx-text-subtle);
 }
 /*
  * A rail row IS `.nx-nav-item` — the app's one nav-row grammar, which this
@@ -305,11 +300,6 @@
    there was how a scale stops being a scale. */
 .tool__results-heading {
   margin-bottom: var(--nx-space-1);
-  font-size: var(--nx-font-size-label);
-  font-weight: var(--nx-font-weight-semibold);
-  letter-spacing: var(--nx-font-tracking-label);
-  text-transform: uppercase;
-  color: var(--nx-text-subtle);
 }
 .tool__result-row {
   display: flex;

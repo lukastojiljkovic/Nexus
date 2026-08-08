@@ -486,7 +486,7 @@ function UnitPriceTool() {
               taken by which package a row is, so the figures were printed with
               nothing saying what they are. `unitPriceLabel` was written for
               this heading and rendered nowhere. */}
-          <div className="tool__results-heading">{s.unitPrice.unitPriceLabel}</div>
+          <div className="nx-eyebrow tool__results-heading">{s.unitPrice.unitPriceLabel}</div>
           {ranked.map((row) => (
             <ResultRow
               key={row.id}

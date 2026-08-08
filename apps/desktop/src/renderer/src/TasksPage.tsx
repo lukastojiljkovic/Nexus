@@ -3503,7 +3503,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     const s = strings.tasks.lists;
     if (sectionEditing?.mode === "rename" && sectionEditing.id === section.id) {
       return (
-        <div className="tasks__section" key={`head-${section.id}`}>
+        <div className="nx-eyebrow tasks__section" key={`head-${section.id}`}>
           <InlineNameForm
             value={sectionDraft}
             placeholder={s.sectionNamePlaceholder}
@@ -3524,7 +3524,9 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     return (
       <div
         key={`head-${section.id}`}
-        className={active ? "tasks__section tasks__section--drop" : "tasks__section"}
+        className={
+          active ? "nx-eyebrow tasks__section tasks__section--drop" : "nx-eyebrow tasks__section"
+        }
         onDragOver={droppable ? (event) => dragOverTarget(event, target) : undefined}
         onDragLeave={droppable ? (event) => dragLeaveTarget(event, target) : undefined}
         onDrop={
@@ -3612,7 +3614,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
       // share a day if a future comparator stops being monotonic, and a
       // duplicate React key would silently drop one of them.
       <div className="tasks__band" key={`${band.key}-${String(index)}`}>
-        <div className="tasks__band-head">
+        <div className="nx-eyebrow tasks__band-head">
           <span className="tasks__band-name">{bandLabel(band.key, todayKey)}</span>
           <span className="tasks__group-count nx-num" title={strings.tasks.groups.countTitle}>
             {band.rows.length}
@@ -4300,7 +4302,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
       <aside className="tasks__rail" aria-label={strings.tasks.lists.railLabel}>
         {/* Pregledi (ADR-049), above the lists: five VIRTUAL lists — queries
             over every list at once, never places anything is filed into. */}
-        <div className="tasks__rail-heading">{strings.tasks.smart.heading}</div>
+        <div className="nx-eyebrow tasks__rail-heading">{strings.tasks.smart.heading}</div>
         <div
           className="tasks__rail-views"
           role="group"
@@ -4309,7 +4311,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
           {SMART_LIST_IDS.map((listId) => renderSmartRow(listId, smartCounts[listId] ?? null))}
         </div>
 
-        <div className="tasks__rail-heading tasks__rail-heading--stacked">
+        <div className="nx-eyebrow tasks__rail-heading tasks__rail-heading--stacked">
           {strings.tasks.lists.title}
         </div>
         {/* The Inbox's own name is rendered like every other list's: it is a
@@ -4342,7 +4344,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
             that narrows the selected list further, and carries its own rename/
             delete menu — the NOTE organizer's tag section, chip for chip.
             Selecting one is typographic (gold text + weight), never a fill. */}
-        <div className="tasks__rail-heading tasks__tag-heading">
+        <div className="nx-eyebrow tasks__rail-heading tasks__tag-heading">
           <span>{strings.tasks.tags.label}</span>
           {tagFilter.length > 0 && (
             <button type="button" className="tasks__tag-clear" onClick={() => setTagFilter([])}>

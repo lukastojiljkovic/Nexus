@@ -278,7 +278,7 @@ export function CalendarMonth({
           {strings.calendar.weekNumber.abbrev}
         </span>
         {(weeks[0] ?? []).map((day) => (
-          <span key={day.key} className="cal__month-weekday">
+          <span key={day.key} className="nx-eyebrow cal__month-weekday">
             {formatUtcKey(day.key, weekdayFormatter)}
           </span>
         ))}

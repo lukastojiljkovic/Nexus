@@ -77,11 +77,6 @@
 .tasks__rail-heading {
   margin: 0 0 var(--nx-space-1);
   padding: 0 var(--nx-space-2);
-  font-size: var(--nx-font-size-label);
-  font-weight: var(--nx-font-weight-semibold);
-  letter-spacing: var(--nx-font-tracking-label);
-  text-transform: uppercase;
-  color: var(--nx-text-subtle);
 }
 /* A rail section that is not the first one gets the room „Oznake“ already takes
    above it (see .tasks__tag-heading) — since ADR-049 „Liste“ is the second. */
@@ -302,11 +297,6 @@
   border: 1px solid transparent;
   border-bottom-color: var(--nx-border-subtle);
   border-radius: var(--nx-radius-sm);
-  font-size: var(--nx-font-size-label);
-  font-weight: var(--nx-font-weight-semibold);
-  letter-spacing: var(--nx-font-tracking-label);
-  text-transform: uppercase;
-  color: var(--nx-text-subtle);
 }
 .tasks__section--drop {
   border-color: var(--nx-accent);

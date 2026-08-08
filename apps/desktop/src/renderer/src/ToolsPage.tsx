@@ -101,7 +101,7 @@ export function ToolsPage({ enabledModules }: ToolsPageProps) {
             if (members.length === 0) return null;
             return (
               <div key={category} className="tool__group">
-                <h3 className="tool__group-title">{s.category[category]}</h3>
+                <h3 className="nx-eyebrow tool__group-title">{s.category[category]}</h3>
                 {/* The app's ONE nav-row grammar (`.nx-nav-item`): the hover
                     tint, the gold-and-weight selection and the trailing ✦ all
                     come from the shared rule, and `.tool__item` adds only what

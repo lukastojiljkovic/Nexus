@@ -2011,7 +2011,7 @@ className="nx-segmented__option cal__source"
               <CalendarHourRing items={visibleCalendarItems} />
               {groupAgenda(calendarItems).map(([key, dayItems]) => (
                 <section key={key} className="cal__day">
-                  <h2 className="cal__day-header">{formatDay(key)}</h2>
+                  <h2 className="nx-eyebrow cal__day-header">{formatDay(key)}</h2>
                   {dayItems.map((item) => {
                     if (item.kind === "event") {
                       return (

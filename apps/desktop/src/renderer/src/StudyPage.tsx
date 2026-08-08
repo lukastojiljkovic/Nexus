@@ -3437,7 +3437,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                           Composed from the row copy itself, so the legend and
                           the accessible reading of a row cannot drift apart. */}
                       {subjectDecks.length > 0 && (
-                        <span className="study__col-legend">
+                        <span className="nx-eyebrow study__col-legend">
                           {`${strings.study.newCount} · ${strings.study.dueCount}`}
                         </span>
                       )}
@@ -3627,7 +3627,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                 <h3 className="study__today-heading">{strings.study.todayTitle}</h3>
                 {/* „min" said once over the column instead of on every block row. */}
                 {todayEntries.length > 0 && (
-                  <span className="study__col-legend">{strings.study.minutesUnit}</span>
+                  <span className="nx-eyebrow study__col-legend">{strings.study.minutesUnit}</span>
                 )}
               </div>
               {todayEntries.length === 0 ? (
@@ -3777,7 +3777,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                         block row. Drawn only where there are rows to name. */}
                     {expanded && blocks.length > 0 && (
                       <div className="study__blocks-legend">
-                        <span className="study__col-legend">{strings.study.minutesUnit}</span>
+                        <span className="nx-eyebrow study__col-legend">{strings.study.minutesUnit}</span>
                       </div>
                     )}
                     {expanded && (
@@ -4550,7 +4550,7 @@ function PracticeDialog({ decks, countsFor, onStart, onClose }: PracticeDialogPr
           {/* The hub's špil legend, in the one other place the same two figures
               are listed per špil — one construct, so the pair reads identically
               wherever it appears. */}
-          <span className="study__col-legend study__col-legend--inline">
+          <span className="nx-eyebrow study__col-legend study__col-legend--inline">
             {`${strings.study.newCount} · ${strings.study.dueCount}`}
           </span>
         </p>
@@ -5013,7 +5013,7 @@ function ReviewSession({ profileId, scope, practice, decks, onExit }: ReviewSess
   return (
     <div className="review">
       <div className="review__topbar">
-        <span className="review__title">
+        <span className="nx-eyebrow">
           {practice !== null ? strings.study.practice.title : strings.study.reviewTitle}
         </span>
         <span className="review__progress">

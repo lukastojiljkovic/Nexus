@@ -176,7 +176,7 @@ export function TaskMonthGrid({ items, undated, onOpen, onMoveToDay }: TaskMonth
         {/* Decorative: each cell's own aria-label already names its weekday. */}
         <div className="cal__month-weekdays" aria-hidden="true">
           {(weeks[0] ?? []).map((day) => (
-            <span key={day.key} className="cal__month-weekday">
+            <span key={day.key} className="nx-eyebrow cal__month-weekday">
               {formatUtcKey(day.key, weekdayFormatter)}
             </span>
           ))}

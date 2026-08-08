@@ -625,7 +625,7 @@ function WidgetGallery({
           <div className="dash-gallery__body">
             {groups.map(({ manifest, widgets }) => (
               <section key={manifest.id} className="dash-gallery__group">
-                <h3 className="set__module-group-title">
+                <h3 className="nx-eyebrow set__module-group-title">
                   {lookup(strings.modules, manifest.id) ?? manifest.id}
                 </h3>
                 {widgets.map((widget) => {

@@ -1004,7 +1004,7 @@ function AutoBackupSection({ profileId, hits }: AutoBackupSectionProps) {
   if (settings === null) {
     return (
       <div className="set__restore-block">
-        <h3 className={labelClass("set__module-group-title", hits.has("backup-auto"))}>{s.title}</h3>
+        <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-auto"))}>{s.title}</h3>
         <p className="app__muted">{strings.app.loading}</p>
       </div>
     );
@@ -1015,7 +1015,7 @@ function AutoBackupSection({ profileId, hits }: AutoBackupSectionProps) {
 
   return (
     <div className="set__restore-block">
-      <h3 className={labelClass("set__module-group-title", hits.has("backup-auto"))}>{s.title}</h3>
+      <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-auto"))}>{s.title}</h3>
       <p className="app__description">{s.description}</p>
 
       {/* A boolean preference is the module gallery's row, not a labelled
@@ -1217,7 +1217,7 @@ function SearchHistorySection({ profileId, hits }: SearchHistorySectionProps) {
 
   return (
     <div className="set__restore-block">
-      <h3 className={labelClass("set__module-group-title", hits.has("privacy-search-history"))}>
+      <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("privacy-search-history"))}>
         {s.title}
       </h3>
       <p className="app__description">{s.caption}</p>
@@ -1278,7 +1278,7 @@ function CalendarExportSection({ profileId, hits }: CalendarExportSectionProps) 
 
   return (
     <div className="set__restore-block">
-      <h3 className={labelClass("set__module-group-title", hits.has("backup-calendar"))}>{s.title}</h3>
+      <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-calendar"))}>{s.title}</h3>
       <p className="app__description">{s.description}</p>
       <Button size="sm" disabled={running} onClick={() => void runExport()}>
         {s.button}
@@ -1512,7 +1512,7 @@ function RestoreSection({ profileId, hits }: RestoreSectionProps) {
 
   return (
     <div className="set__restore-block">
-      <h3 className={labelClass("set__module-group-title", hits.has("backup-restore"))}>{s.title}</h3>
+      <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-restore"))}>{s.title}</h3>
       <p className="app__description">{s.description}</p>
 
       {!previewing && state.phase !== "applied" && (
@@ -1954,7 +1954,7 @@ function ImportSection({ profileId, hits }: ImportSectionProps) {
 
   return (
     <div className="set__import-block">
-      <h3 className={labelClass("set__module-group-title", hits.has("backup-import"))}>{s.title}</h3>
+      <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-import"))}>{s.title}</h3>
       <p className="app__description">{s.description}</p>
 
       {!previewing && state.phase !== "applied" && (
@@ -2065,7 +2065,7 @@ function ImportSection({ profileId, hits }: ImportSectionProps) {
               states what will happen, while this states what they decided. */}
           {state.preview.report.duplicates.length > 0 && (
             <>
-              <h4 className="set__module-group-title">{s.duplicatesTitle}</h4>
+              <h4 className="nx-eyebrow set__module-group-title">{s.duplicatesTitle}</h4>
               <p className="set__section-caption">{s.duplicatesCaption}</p>
               <ul className="set__import-duplicates">
                 {state.preview.report.duplicates.map((group) => (
@@ -2085,7 +2085,7 @@ function ImportSection({ profileId, hits }: ImportSectionProps) {
 
           {state.preview.report.skips.length > 0 && (
             <>
-              <h4 className="set__module-group-title">{s.skipsTitle}</h4>
+              <h4 className="nx-eyebrow set__module-group-title">{s.skipsTitle}</h4>
               <ul className="set__restore-problems">
                 {state.preview.report.skips.map((reason) => (
                   <ImportSkipRow
@@ -2099,7 +2099,7 @@ function ImportSection({ profileId, hits }: ImportSectionProps) {
 
           {state.preview.warnings.length > 0 && (
             <>
-              <h4 className="set__module-group-title">{s.warningsTitle}</h4>
+              <h4 className="nx-eyebrow set__module-group-title">{s.warningsTitle}</h4>
               <ul className="set__restore-problems">
                 {state.preview.warnings.map((warning, index) => (
                   <RestoreProblemRow key={`${warning.code}-${index}`} problem={warning} tone="muted" />
@@ -2341,7 +2341,7 @@ function IcsImportSection({ profileId, hits }: IcsImportSectionProps) {
 
   return (
     <div className="set__import-block">
-      <h3 className={labelClass("set__module-group-title", hits.has("backup-ics"))}>{s.title}</h3>
+      <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-ics"))}>{s.title}</h3>
       <p className="app__description">{s.description}</p>
 
       {!previewing && state.phase !== "applied" && (
@@ -2463,7 +2463,7 @@ function IcsImportSection({ profileId, hits }: IcsImportSectionProps) {
 
           {(state.preview.components.length > 0 || state.preview.skips.length > 0) && (
             <>
-              <h4 className="set__module-group-title">{s.skipsTitle}</h4>
+              <h4 className="nx-eyebrow set__module-group-title">{s.skipsTitle}</h4>
               <ul className="set__restore-problems">
                 {state.preview.components.map((component) => (
                   <IcsComponentRow key={component.name} component={component} />
@@ -2716,7 +2716,7 @@ function ApkgImportSection({ profileId, hits }: ApkgImportSectionProps) {
 
   return (
     <div className="set__import-block">
-      <h3 className={labelClass("set__module-group-title", hits.has("backup-apkg"))}>{s.title}</h3>
+      <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-apkg"))}>{s.title}</h3>
       <p className="app__description">{s.description}</p>
 
       {state.phase !== "applied" && (
@@ -2865,7 +2865,7 @@ function ApkgImportSection({ profileId, hits }: ApkgImportSectionProps) {
 
           {state.preview.skips.length > 0 && (
             <>
-              <h4 className="set__module-group-title">{s.skipsTitle}</h4>
+              <h4 className="nx-eyebrow set__module-group-title">{s.skipsTitle}</h4>
               <ul className="set__restore-problems">
                 {state.preview.skips.map((skip) => (
                   <ApkgSkipRow key={skip.code} skip={skip} />
@@ -3324,7 +3324,7 @@ function CsvImportSection({ profileId, hits }: CsvImportSectionProps) {
 
   return (
     <div className="set__import-block">
-      <h3 className={labelClass("set__module-group-title", hits.has("backup-csv"))}>{s.title}</h3>
+      <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-csv"))}>{s.title}</h3>
       <p className="app__description">{s.description}</p>
 
       {!planned && state.phase !== "applied" && (
@@ -3446,7 +3446,7 @@ function CsvImportSection({ profileId, hits }: CsvImportSectionProps) {
 
           {(state.plan.drops.length > 0 || state.plan.listCellsDropped > 0) && (
             <>
-              <h4 className="set__module-group-title">{s.dropsTitle}</h4>
+              <h4 className="nx-eyebrow set__module-group-title">{s.dropsTitle}</h4>
               <ul className="set__restore-problems">
                 {state.plan.drops.map((drop, index) => (
                   <li className="set__import-skip" key={`${drop.row}-${drop.code}-${index}`}>
@@ -3816,7 +3816,7 @@ function LlmImportSection({ profileId, hits }: LlmImportSectionProps) {
   if (state.phase === "applied") {
     return (
       <div className="set__import-block">
-        <h3 className={labelClass("set__module-group-title", hits.has("backup-llm"))}>{s.title}</h3>
+        <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-llm"))}>{s.title}</h3>
         <p className="set__section-caption">{s.applied}</p>
       </div>
     );
@@ -3824,7 +3824,7 @@ function LlmImportSection({ profileId, hits }: LlmImportSectionProps) {
 
   return (
     <div className="set__import-block">
-      <h3 className={labelClass("set__module-group-title", hits.has("backup-llm"))}>{s.title}</h3>
+      <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-llm"))}>{s.title}</h3>
       <p className="app__description">{s.description}</p>
 
       <p className="set__section-caption">{s.kindLabel}</p>
@@ -4078,7 +4078,7 @@ function LlmImportSection({ profileId, hits }: LlmImportSectionProps) {
 
           {state.preview.skipped.length > 0 && (
             <>
-              <h4 className="set__module-group-title">{s.skipsTitle}</h4>
+              <h4 className="nx-eyebrow set__module-group-title">{s.skipsTitle}</h4>
               <ul className="set__restore-problems">
                 {state.preview.skipped.map((skip) => (
                   <LlmSkipRow key={skip.index} skip={skip} />
@@ -4189,7 +4189,7 @@ function MarkdownImportSection({ profileId, hits }: MarkdownImportSectionProps) 
 
   return (
     <div className="set__import-block">
-      <h3 className={labelClass("set__module-group-title", hits.has("backup-markdown"))}>
+      <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-markdown"))}>
         {s.title}
       </h3>
       <p className="app__description">{s.description}</p>
@@ -4238,7 +4238,7 @@ function MarkdownImportSection({ profileId, hits }: MarkdownImportSectionProps) 
           )}
           {report.skipped.length > 0 && (
             <>
-              <h4 className="set__module-group-title">{s.skipsTitle}</h4>
+              <h4 className="nx-eyebrow set__module-group-title">{s.skipsTitle}</h4>
               <ul className="set__restore-problems">
                 {report.skipped.map((skip, index) => (
                   <li key={`${skip.name}-${skip.reason}-${index}`} className="set__import-skip">
@@ -4340,7 +4340,7 @@ function SecuritySection({ autoLockMinutes, onAutoLockChange, hits }: SecuritySe
   return (
     <>
       <div className="set__security-block">
-        <h3 className={labelClass("set__module-group-title", hits.has("security-passcode"))}>
+        <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("security-passcode"))}>
           {s.changeTitle}
         </h3>
         <form className="set__security-form" onSubmit={(event) => void submitChange(event)}>
@@ -4377,7 +4377,7 @@ function SecuritySection({ autoLockMinutes, onAutoLockChange, hits }: SecuritySe
       </div>
 
       <div className="set__security-block">
-        <h3 className={labelClass("set__module-group-title", hits.has("security-recovery"))}>
+        <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("security-recovery"))}>
           {s.recoveryTitle}
         </h3>
         {newRecoveryCode != null ? (
@@ -5274,7 +5274,7 @@ export function SettingsPage({
       >
         {[...registry.byCategory()].map(([category, members]) => (
           <div key={category} className="set__module-group">
-            <h3 className="set__module-group-title">
+            <h3 className="nx-eyebrow set__module-group-title">
               {strings.settings.moduleCategories[category] ?? category}
             </h3>
             <div className="set__module-list">
@@ -5376,7 +5376,7 @@ export function SettingsPage({
             writes money is a second place for it to go wrong. */}
         <FinCsvImportSection
           profileId={profileId}
-          titleClassName={labelClass("set__module-group-title", hits.has("backup-fin-csv"))}
+          titleClassName={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-fin-csv"))}
         />
         <LlmImportSection profileId={profileId} hits={hits} />
         <MarkdownImportSection profileId={profileId} hits={hits} />

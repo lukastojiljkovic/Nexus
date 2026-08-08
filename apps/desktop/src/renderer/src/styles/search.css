@@ -214,11 +214,6 @@
    supposed to qualify, and each one repeating a group heading two rows up. */
 .search__row-kind,
 .searchpage__row-kind {
-  font-size: var(--nx-font-size-label);
-  font-weight: var(--nx-font-weight-semibold);
-  letter-spacing: var(--nx-font-tracking-label);
-  text-transform: uppercase;
-  color: var(--nx-text-subtle);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

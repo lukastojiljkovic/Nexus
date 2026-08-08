@@ -210,7 +210,7 @@ export function SearchPage({
         <span className="searchpage__row-main">
           <span className="searchpage__row-text">
             {showKind && (
-              <span className="searchpage__row-kind">
+              <span className="nx-eyebrow searchpage__row-kind">
                 {strings.search.kindSingular[result.kind]}
               </span>
             )}

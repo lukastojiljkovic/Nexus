@@ -291,7 +291,7 @@ function FinCsvMappingDialog({
 
           {refusal !== null && (
             <div className="csv-map__refusal">
-              <h4 className="set__module-group-title">{s.refusalTitle}</h4>
+              <h4 className="nx-eyebrow set__module-group-title">{s.refusalTitle}</h4>
               <p className="set__error">{s.refusals[refusal.code]}</p>
               <p className="set__section-caption">
                 {s.refusalColumnPrefix}{" "}
@@ -501,7 +501,7 @@ export function FinCsvImportSection({ profileId, titleClassName }: FinCsvImportS
 
   return (
     <div className="set__import-block">
-      <h3 className={titleClassName ?? "set__module-group-title"}>{s.title}</h3>
+      <h3 className={titleClassName ?? "nx-eyebrow set__module-group-title"}>{s.title}</h3>
       <p className="app__muted">{s.description}</p>
 
       {accounts.length === 0 ? (
@@ -602,7 +602,7 @@ export function FinCsvImportSection({ profileId, titleClassName }: FinCsvImportS
           {/* How the file was READ. Said out loud rather than trusted: the two
               conventions were settled over whole columns, and the user is the
               only one who can tell us we settled them wrongly. */}
-          <h4 className="set__module-group-title">{s.formatsTitle}</h4>
+          <h4 className="nx-eyebrow set__module-group-title">{s.formatsTitle}</h4>
           <table className="set__restore-table">
             <tbody>
               <tr>
@@ -622,7 +622,7 @@ export function FinCsvImportSection({ profileId, titleClassName }: FinCsvImportS
 
           {state.plan.skips.length > 0 && (
             <>
-              <h4 className="set__module-group-title">{s.skipsTitle}</h4>
+              <h4 className="nx-eyebrow set__module-group-title">{s.skipsTitle}</h4>
               <p className="set__section-caption">{s.skipsCaption}</p>
               <ul className="set__restore-problems">
                 {state.plan.skips.map((skip, index) => (
@@ -639,7 +639,7 @@ export function FinCsvImportSection({ profileId, titleClassName }: FinCsvImportS
 
           {state.plan.drops.length > 0 && (
             <>
-              <h4 className="set__module-group-title">{s.dropsTitle}</h4>
+              <h4 className="nx-eyebrow set__module-group-title">{s.dropsTitle}</h4>
               <ul className="set__restore-problems">
                 {state.plan.drops.map((drop, index) => (
                   <li className="set__import-skip" key={`${drop.row}-${drop.code}-${index}`}>

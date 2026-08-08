@@ -25,11 +25,6 @@
    applied to a list). Tertiary ink: it is a mark on the layout, not content. */
 .study__col-legend {
   flex: none;
-  font-size: var(--nx-font-size-label);
-  font-weight: var(--nx-font-weight-semibold);
-  letter-spacing: var(--nx-font-tracking-label);
-  text-transform: uppercase;
-  color: var(--nx-text-subtle);
   white-space: nowrap;
 }
 /* The same legend trailing a sentence rather than heading a flex row — the
@@ -1275,13 +1270,6 @@
   justify-content: space-between;
   width: 100%;
   gap: var(--nx-space-3);
-}
-.review__title {
-  font-size: var(--nx-font-size-label);
-  text-transform: uppercase;
-  letter-spacing: var(--nx-font-tracking-label);
-  color: var(--nx-text-subtle);
-  font-weight: var(--nx-font-weight-semibold);
 }
 .review__progress {
   font-variant-numeric: tabular-nums;
