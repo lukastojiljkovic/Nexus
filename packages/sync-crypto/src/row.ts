@@ -70,6 +70,10 @@
  *  - `object_id` — swap two rows so an edit lands on the wrong object.
  *  - `version` — roll a row back to a version whose contents the user deleted.
  *  - `deleted` — strip a tombstone and resurrect deleted data.
+ *  - `parent_id` — reparent a row: move a transaction under another account, or
+ *    slide a live object beneath a tombstone so the cascade reaps it. This one
+ *    was missing from this list and from the AAD while every other clear column
+ *    was bound, which is exactly the shape a hostile operator looks for.
  *
  * Binding them into the AAD does not stop the server DOING any of that; it
  * guarantees the client notices, because `openRow` rebuilds the AAD from the
@@ -95,6 +99,29 @@ export interface RowIdentity {
   readonly version: number;
   /** A tombstone is a row like any other; the flag is authenticated, never inferred. */
   readonly deleted: boolean;
+  /**
+   * The owning object, or `null` for a root. Authenticated for the same reason
+   * every other clear column is, and it was the ONE that was not.
+   *
+   * `sync_objects.parent_id` is a clear, server-writable column, and this AAD
+   * bound `version` and `deleted` while leaving it out. That asymmetry is the
+   * whole finding: an untrusted operator rewrites `parent_id` with a single
+   * UPDATE, the AEAD tag is untouched because it never covered that byte, and
+   * every client on earth accepts the new parent as fact. Silent, key-free
+   * reparenting — move a transaction under a different account, or slide a live
+   * row beneath a tombstone and let the cascade reap it.
+   *
+   * `null` and the empty string are DIFFERENT values here and the encoding keeps
+   * them apart (see `rowAad`): „this is a root" and „this hangs off an object
+   * whose id is empty" must not produce the same tag, or the server can turn one
+   * into the other for free.
+   *
+   * The column stays in the schema because the server needs it to answer
+   * queries, but no client tree-walk or GC pass may trust it: the authoritative
+   * parent travels INSIDE the ciphertext, and the column is a hint that has to
+   * agree with it.
+   */
+  readonly parentId: string | null;
 }
 
 /** A sealed row, JSON-shaped for a database column or a request body. */
@@ -126,6 +153,28 @@ function assertIdentity(identity: RowIdentity): void {
       `RowIdentity.version must be a non-negative safe integer, got: ${String(identity.version)}`,
     );
   }
+  // `null` says „root"; `""` says nothing at all. The AAD encoding keeps them
+  // apart, but an empty parent id is a caller bug either way and it is cheaper
+  // to refuse it than to store rows whose parent is unnameable.
+  if (identity.parentId !== null && identity.parentId.length === 0) {
+    throw new TypeError("RowIdentity.parentId must be a non-empty string or null.");
+  }
+}
+
+/**
+ * `parent_id` is nullable, and a null must not encode as an empty string.
+ *
+ * `encodeStruct` length-frames each field, so an empty string is a legal,
+ * distinguishable field — but only from a field with content, not from
+ * „absent". Without the presence byte, `parentId: null` and `parentId: ""`
+ * would produce identical AADs, and the server could flip a root object into a
+ * child of the empty id (or the reverse) with the tag still verifying. One
+ * byte, and the two states stay two states.
+ */
+function parentField(parentId: string | null): Uint8Array {
+  return parentId === null
+    ? encodeStruct([booleanByte(false)])
+    : encodeStruct([booleanByte(true), utf8(parentId)]);
 }
 
 function rowAad(identity: RowIdentity): Uint8Array {
@@ -137,6 +186,7 @@ function rowAad(identity: RowIdentity): Uint8Array {
     utf8(identity.objectId),
     uint64BE(identity.version),
     booleanByte(identity.deleted),
+    parentField(identity.parentId),
   ]);
 }
 

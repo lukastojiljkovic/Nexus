@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    // `DOM` for the WebCrypto types — `SubtleCrypto`, `CryptoKey`,
+    // `CryptoKeyPair`. This package deliberately targets the WEB platform
+    // surface rather than `node:crypto`, precisely so one implementation serves
+    // the Electron main process, the renderer and the browser (see
+    // `webCryptoPort.ts`'s header); the types have to come from the same place
+    // the API does. Nothing here touches `document` or `window`.
+    "lib": ["ES2023", "DOM"]
+  },
+  "include": ["src"]
+}

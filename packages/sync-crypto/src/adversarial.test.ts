@@ -473,6 +473,7 @@ describe("the tombstone is not stored twice with nothing comparing the copies", 
     objectId: "01J0000000000000000000000",
     version: 7,
     deleted: false,
+    parentId: null,
   };
 
   it("refuses a plaintext whose tombstone disagrees with the authenticated envelope", async () => {

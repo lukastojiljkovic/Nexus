@@ -15,6 +15,7 @@ const IDENTITY: RowIdentity = {
   objectId: "01J0000000000000000000000",
   version: 7,
   deleted: false,
+  parentId: null,
 };
 
 const PLAINTEXT = utf8("zadatak: kupiti hleb");
@@ -66,6 +67,11 @@ describe("the AAD binds the row to its identity", () => {
     ["another object", { ...IDENTITY, objectId: "01J1111111111111111111111" }],
     ["another version", { ...IDENTITY, version: 8 }],
     ["a stripped tombstone", { ...IDENTITY, deleted: true }],
+    // `parent_id` is a clear column the server writes, and it was the one clear
+    // column this AAD did not cover: rewriting it silently reparented any
+    // object — under another account, or beneath a tombstone that then reaps it
+    // — with the tag still verifying, because the tag never covered the byte.
+    ["a rewritten parent", { ...IDENTITY, parentId: "01J2222222222222222222222" }],
   ];
 
   for (const [what, moved] of moves) {
@@ -74,6 +80,37 @@ describe("the AAD binds the row to its identity", () => {
       await expectCode(openRow(port, CONTENT_KEY, moved, sealed), "row/aead-failed");
     });
   }
+
+  it("refuses to promote a child to a root", async () => {
+    // The direction that matters and the one the presence byte in `parentField`
+    // exists for: „this hangs off object X" and „this is a root" are different
+    // claims about the same row, and the server owns the column that carries
+    // the difference.
+    const child: RowIdentity = { ...IDENTITY, parentId: "01J2222222222222222222222" };
+    const sealed = await sealRow(port, CONTENT_KEY, child, PLAINTEXT);
+    await expectCode(
+      openRow(port, CONTENT_KEY, { ...child, parentId: null }, sealed),
+      "row/aead-failed",
+    );
+  });
+
+  it("refuses an empty parent id on both sides, so `null` and `\"\"` never meet", async () => {
+    // TWO LAYERS, and they are asserted separately because they fail
+    // differently. `assertIdentity` refuses `""` outright — an object whose
+    // parent cannot be named is a caller bug, not a row — so the ambiguous
+    // value never reaches the AEAD at all. The presence byte in `parentField`
+    // is the second layer, and it is not redundant: it is what keeps `null`
+    // and `""` producing different tags on the day somebody relaxes this
+    // validator, which is the kind of change that looks harmless.
+    await expect(
+      sealRow(port, CONTENT_KEY, { ...IDENTITY, parentId: "" }, PLAINTEXT),
+    ).rejects.toThrow(TypeError);
+
+    const sealed = await sealRow(port, CONTENT_KEY, IDENTITY, PLAINTEXT);
+    await expect(
+      openRow(port, CONTENT_KEY, { ...IDENTITY, parentId: "" }, sealed),
+    ).rejects.toThrow(TypeError);
+  });
 
   it("refuses a tombstone whose `deleted` flag was cleared by the server", async () => {
     // The reverse direction of the case above, and the one that matters: a
