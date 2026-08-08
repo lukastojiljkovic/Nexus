@@ -183,6 +183,47 @@ export default defineConfig({
     resolve: {
       dedupe: ["react", "react-dom"],
     },
+    /**
+     * A CSP IN DEVELOPMENT TOO, which is the half that was missing.
+     *
+     * `rendererHardening` is `apply: "build"`, so until now `pnpm dev` ran with
+     * no Content-Security-Policy at all. Two comments elsewhere in this repo
+     * already state the consequence out loud — `excalidrawFonts` explains that
+     * it serves fonts in dev because „dev has no CSP … so a font Excalidraw
+     * could not find locally would be fetched from esm.sh for real", and
+     * `excalidrawAssets.ts` explains that the packaged build is safe precisely
+     * BECAUSE the CSP drops that entry before a request exists. Put together:
+     * the protection the packaged app relies on was absent in the mode a
+     * developer spends every day in, and the mitigation was „make sure the
+     * fallback is never needed" rather than „make the fallback impossible".
+     *
+     * This is the same policy the build injects, with exactly two relaxations
+     * that HMR cannot work without, both scoped to loopback: the client's
+     * WebSocket, and the inline preamble React Refresh injects. Everything the
+     * policy is FOR — `font-src`, `img-src`, `connect-src`, `object-src`,
+     * `base-uri`, `frame-ancestors` — is identical to production.
+     */
+    server: {
+      headers: {
+        "Content-Security-Policy": [
+          "default-src 'self'",
+          // React Refresh injects an inline preamble; Vite serves modules from
+          // the dev origin. No 'unsafe-eval' — Vite dev is native ESM.
+          "script-src 'self' 'unsafe-inline'",
+          "style-src 'self' 'unsafe-inline'",
+          "img-src 'self' data: blob: nx-blob: priv-blob:",
+          // THE LINE THIS BLOCK EXISTS FOR.
+          "font-src 'self' data:",
+          // The HMR socket, and nothing else. Not `ws:` — that would admit any
+          // host on the network.
+          "connect-src 'self' ws://localhost:* ws://127.0.0.1:*",
+          "object-src 'none'",
+          "base-uri 'none'",
+          "form-action 'none'",
+          "frame-ancestors 'none'",
+        ].join("; "),
+      },
+    },
     plugins: [react(), rendererHardening(), excalidrawFonts()],
   },
 });

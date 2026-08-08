@@ -14,6 +14,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, protocol, sess
 import type { IpcMainInvokeEvent, OpenDialogOptions } from "electron";
 // `electron-updater` is deliberately NOT imported — see the disarmed
 // auto-update section below for the three conditions that must hold first.
+import { devServerOrigin, isRequestAllowed, shouldBlockResolver } from "./net/offline.js";
 import {
   ACTIVITY_LEVELS,
   applySearchOperators,
@@ -774,6 +775,28 @@ protocol.registerSchemesAsPrivileged([
 // (%APPDATA%\Nexus) rather than the scoped package name. Set before any
 // getPath("userData") call.
 app.setName("Nexus");
+
+// SEC-NET: the resolver-level layer of the cloud-off boundary.
+//
+// MUST run at module scope, for the same reason the scheme registration above
+// does: a Chromium command-line switch is read once while the browser process
+// is starting, and appending it after `ready` changes nothing while looking
+// like it changed something. And it MUST run after `app.setName`, because
+// `shouldBlockResolver` reads `cloud.json` out of `userData` and that path is
+// what the line above decides.
+//
+// This is the layer that cannot be lifted at runtime, and the asymmetry is the
+// design rather than a shortcoming: the state this product has to be able to
+// guarantee is the DEFAULT one, and every launch builds it from scratch before
+// a line of renderer code has run. `net/offline.ts` covers the other three
+// layers and why turning cloud ON needs no restart while turning it off does.
+//
+// `MAP * ~NOTFOUND` blocks NAMES, not literal IPs, which is exactly why it is
+// the third line of defence and not the only one — `webRequest` does not care
+// how the destination was spelled.
+if (shouldBlockResolver(app.getPath("userData"))) {
+  app.commandLine.appendSwitch("host-resolver-rules", "MAP * ~NOTFOUND");
+}
 
 // Interim brand glyph (four-pointed star, see build/make-icon.ps1). Resolved
 // via getAppPath() so the same relative path works unpacked (dev/smoke, app
@@ -11164,6 +11187,13 @@ function createWindow(): BrowserWindow {
       contextIsolation: true, // SEC-EL-01
       nodeIntegration: false, // SEC-EL-01
       sandbox: true, // SEC-EL-01
+      // SEC-NET: Chromium's spellchecker defaults to ON and downloads its
+      // dictionary from a Google host the first time an editable field is
+      // focused. That is a network call the shipped 1.0.0 made, contradicting
+      // its own privacy copy, and it is not one anybody chose. Off here and
+      // emptied on the session in `whenReady` — two switches, because either
+      // one alone leaves the other able to fire.
+      spellcheck: false,
       // webSecurity is left at its secure default and never touched (SEC-EL-01).
     },
   });
@@ -11268,6 +11298,7 @@ function openDocPreviewWindow(attachment: { fileName: string; sha256: string }):
       nodeIntegration: false,
       sandbox: true,
       plugins: true,
+      spellcheck: false, // SEC-NET, as in createWindow.
       // webSecurity is left at its secure default and never touched (SEC-EL-01).
     },
   });
@@ -12063,6 +12094,67 @@ app.whenReady().then(async () => {
     callback(false);
   });
   session.defaultSession.setPermissionCheckHandler(() => false);
+
+  // SEC-NET: the three runtime layers of the cloud-off boundary. The fourth
+  // (`host-resolver-rules`) went on at module scope; `net/offline.ts` carries
+  // the full reasoning for all four.
+  //
+  // `allowedRemoteOrigins` is empty and STAYS empty until the sync transport
+  // exists and the user has turned cloud on — at which point it holds exactly
+  // the project's two Supabase origins and never a wildcard. Until then the
+  // honest value is „nothing", and the boundary is written before the thing it
+  // guards, which is the only order in which a guarantee like this is worth
+  // anything.
+  const allowedRemoteOrigins: readonly string[] = [];
+  const devOrigin = devServerOrigin(process.env);
+
+  // Layer 1: every request Chromium initiates — fetch, XHR, a stylesheet
+  // `url()`, an `<img>`, a redirect, a service worker, a preconnect.
+  session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
+    callback({ cancel: !isRequestAllowed(details.url, allowedRemoteOrigins, devOrigin) });
+  });
+
+  // Layer 2: nowhere to connect even if something reaches the socket layer.
+  // Port 9 is `discard`; nothing listens on it.
+  //
+  // `<-loopback>` UNDOES Chromium's built-in „never proxy loopback" rule, which
+  // would otherwise leave every 127.0.0.1 destination reachable — including a
+  // local relay a compromised renderer could be talked into using. It is
+  // omitted in development for the one reason it has to be: the dev server IS
+  // on loopback, and `loadURL` goes through this same stack. `ELECTRON_RENDERER_URL`
+  // is undefined in every packaged build, so the weaker form is not reachable
+  // from a shipped app.
+  void session.defaultSession.setProxy({
+    proxyRules: "http=127.0.0.1:9;https=127.0.0.1:9",
+    ...(devOrigin === null ? { proxyBypassRules: "<-loopback>" } : {}),
+  });
+
+  // Layer 4: the one network client Chromium runs without being asked. The
+  // windows below set `spellcheck: false`, and this empties the download URL as
+  // well, because the two are separate switches: the shipped 1.0.0 fetched a
+  // Google-hosted dictionary while its own privacy copy told the user the only
+  // outbound request was a version check.
+  //
+  // ONE CALL, NOT TWO, and the missing one is deliberate.
+  //
+  // The security review's wording was to also call
+  // `setSpellCheckerDictionaryDownloadURL('')`. That cannot be done safely, and
+  // finding out cost two smoke runs. Electron refuses an empty string („not a
+  // valid URL") — and it refuses it by rejecting a promise it created
+  // INTERNALLY, while the method itself returns `void`. So there is nothing to
+  // `await`, nothing to `.catch()`, and a `try`/`catch` around the call catches
+  // nothing; the rejection surfaces as an unhandled rejection inside
+  // `app.whenReady().then(…)` and strands the rest of startup. Both times, the
+  // symptom was a window open at 0% CPU until the run was killed.
+  //
+  // The line is dropped rather than made to work with some other URL, because
+  // the thing it was defending is already defended three times: the
+  // spellchecker is off for the session here, off per-window (`spellcheck:
+  // false` in both `webPreferences` blocks), and any dictionary request would
+  // be cancelled by layer 1 above. A fourth layer that can take the application
+  // down at startup is not defence in depth — it is the control breaking the
+  // product it protects.
+  session.defaultSession.setSpellCheckerEnabled(false);
 
   // Never the developer's real `%APPDATA%\Nexus` — a nested, disposable
   // directory, one per harness. Wiped up front (Electron only auto-creates the
