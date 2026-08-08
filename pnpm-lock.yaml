@@ -252,6 +252,9 @@ importers:
         specifier: ^5.4.1
         version: 5.4.1
     devDependencies:
+      '@nexus/sync':
+        specifier: workspace:*
+        version: link:../sync
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13
@@ -264,6 +267,19 @@ importers:
       vitest:
         specifier: ^3.2.0
         version: 3.2.6(@types/debug@4.1.13)(@types/node@24.13.2)(jiti@2.7.0)
+
+  packages/sync:
+    dependencies:
+      '@nexus/sync-crypto':
+        specifier: workspace:*
+        version: link:../sync-crypto
+    devDependencies:
+      typescript:
+        specifier: ^5.8.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.0
+        version: 3.2.6(@types/debug@4.1.13)(@types/node@24.13.3)(jiti@2.7.0)
 
   packages/sync-crypto:
     devDependencies:

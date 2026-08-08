@@ -1,0 +1,22 @@
+{
+  "name": "@nexus/sync",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The sync engine's pure half: what syncs and as what (the collection map), and the merge planning over @nexus/sync-crypto's HLC/LWW primitives. No SQLite, no network, no platform — so the same engine runs in the Electron main process and in a browser tab.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@nexus/sync-crypto": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0",
+    "vitest": "^3.2.0"
+  }
+}
