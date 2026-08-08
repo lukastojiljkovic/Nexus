@@ -16,16 +16,35 @@ env:
   # CI never launches Electron; skip the ~100 MB binary download in postinstall.
   ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
 
+# EVERY `uses:` IN THIS REPOSITORY IS PINNED TO A 40-CHARACTER COMMIT SHA, with
+# the human-readable tag as a trailing comment.
+#
+# A tag is a mutable pointer. In March 2025 an attacker repointed EVERY tag of
+# `tj-actions/changed-files` — including tags that had been stable for years —
+# at one malicious commit that dumped CI secrets into the build log
+# (CVE-2025-30066). Nobody had to be compromised downstream; everyone who wrote
+# `@v35` was running the new code within minutes.
+#
+# `@v7` and `@v7.0.1` are equally mutable; only a SHA is not. Dependabot
+# understands SHA pins and keeps them current, so this costs a review rather
+# than an upgrade path. The tag comment is what makes the diff readable — a bare
+# SHA bump is unreviewable, `# v7` → `# v8` is not.
+#
+# This becomes load-bearing rather than prudent the moment a deploy workflow
+# holds a `CLOUDFLARE_API_TOKEN` or a Supabase key: at that point a third-party
+# action is a path to the production credentials, and the rule is that the
+# deploy workflow uses NO third-party action at all.
+
 jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       # pnpm version is read from the root package.json "packageManager" field.
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 24
           cache: pnpm
@@ -59,6 +78,17 @@ jobs:
 
       - run: pnpm check:tokens
 
+      # The style half of the cloud-off boundary. The ASSERTION is
+      # `apps/desktop/src/main/net/offline.ts` and its unit tests; this catches
+      # a new egress construct before it ever has to be caught at runtime.
+      - run: pnpm check:egress
+
+      # Reads the migration SQL as text and needs no database, so it belongs
+      # with the other static gates. It catches „the new table's migration
+      # forgot a line"; the `database` job below catches „the line is there and
+      # Postgres disagrees". Both, because they are not the same claim.
+      - run: pnpm check:rls
+
       - run: pnpm build
 
       - run: pnpm typecheck
@@ -66,3 +96,43 @@ jobs:
       - run: pnpm lint
 
       - run: pnpm test
+
+  # THE WALL, RUN RATHER THAN READ.
+  #
+  # A separate job because it needs something no other step does: a live
+  # Postgres with GoTrue's `auth` schema, the `anon`/`authenticated`/
+  # `service_role` roles and Supabase's own `storage`/`realtime` tables. Half of
+  # what these 75 assertions prove is about the interaction between this
+  # repository's policies and objects the platform created, so a bare `postgres`
+  # service container would prove the wrong thing.
+  #
+  # It is also the job that has already earned its keep. On its first run
+  # against a real Postgres 17 it failed two assertions that had read as
+  # correct for as long as they had existed — `storage.objects` and
+  # `realtime.messages` cannot be FORCED by any role a Supabase project issues —
+  # and it changed an `is_empty` into a `throws_ok` by showing that `anon` is
+  # refused a table before a policy is ever consulted. Neither is findable by
+  # reading SQL.
+  database:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: supabase/setup-cli@ab058987d8d6c725971f6cf9d0b5c98467e30bd1 # v1
+        with:
+          version: latest
+
+      # The whole stack rather than `-x` a list of services. The tests assert
+      # against `storage.buckets`, `storage.objects` and `realtime.messages`,
+      # and which of those schemas exist without their containers running is a
+      # detail of the Postgres image that would silently change under us. A
+      # slower job that tests the real shape beats a faster one that tests a
+      # shape no deployment has.
+      - run: supabase start
+
+      # From scratch, so a migration that only works against an
+      # already-migrated database fails here rather than on the day it is
+      # deployed.
+      - run: supabase db reset
+
+      - run: supabase test db

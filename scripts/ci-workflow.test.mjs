@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -40,6 +40,54 @@ describe("the CI workflow", () => {
   it("still runs the four expensive checks the gates are cheap in front of", () => {
     for (const step of ["build", "typecheck", "lint", "test"]) {
       expect(workflow).toContain(`- run: pnpm ${step}`);
+    }
+  });
+});
+
+/**
+ * Supply-chain pinning, asserted over EVERY workflow rather than the one above.
+ *
+ * A tag is a mutable pointer, and in March 2025 that stopped being theoretical:
+ * an attacker repointed every tag of `tj-actions/changed-files` — years-old
+ * ones included — at a single commit that printed CI secrets into the build log
+ * (CVE-2025-30066). Everyone who had written `@v35` was running it within
+ * minutes, with no change on their side to review.
+ *
+ * The test is here and not in a `check:actions-pinning` script because the rule
+ * is three lines of regex over two files; a gate with its own npm script, its
+ * own CLI and its own test file would be more ceremony than rule. It reads
+ * every workflow by directory listing, so a third file added later is covered
+ * on the day it appears rather than on the day somebody remembers this one.
+ */
+describe("every workflow pins its actions", () => {
+  const dir = join(root, ".github", "workflows");
+  const files = readdirSync(dir).filter((name) => name.endsWith(".yml"));
+
+  it("has workflows to check", () => {
+    expect(files.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it.each(files)("%s uses only 40-hex SHAs", (name) => {
+    const uses = readFileSync(join(dir, name), "utf8")
+      .split(/\r?\n/)
+      .map((line) => /^\s*-?\s*uses:\s*(\S+)/.exec(line)?.[1])
+      .filter((ref) => ref !== undefined);
+
+    expect(uses.length).toBeGreaterThan(0);
+    for (const ref of uses) {
+      // `owner/repo@<40 hex>`. A tag, a branch or a short SHA all fail.
+      expect(ref, `${name}: ${ref} is not pinned to a full commit SHA`).toMatch(
+        /^[^@]+@[0-9a-f]{40}$/,
+      );
+    }
+  });
+
+  it.each(files)("%s labels each pin with the tag it came from", (name) => {
+    // A bare SHA bump is unreviewable; `# v7` → `# v8` is not. This is the
+    // difference between a pin that stays current and one nobody dares touch.
+    for (const line of readFileSync(join(dir, name), "utf8").split(/\r?\n/)) {
+      if (!/^\s*-?\s*uses:/.test(line)) continue;
+      expect(line, `${name}: ${line.trim()} has no version comment`).toMatch(/#\s*v?\d/);
     }
   });
 });
