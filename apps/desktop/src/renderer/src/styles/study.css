@@ -163,7 +163,23 @@
   color: var(--nx-danger);
 }
 
-/* Subject list: one bordered card per subject, stacked (mirrors nx-card). */
+/* Subject list: one bordered card per subject, stacked (mirrors nx-card).
+
+   „Mirrors nx-card" is also why the elevation is `--nx-elevation-raised`: this
+   box and the four below it (`__today`, `__plan-card`, `__focus-card`,
+   `__stats-section`) are cards among cards on a scrolling page, which is
+   precisely that tier's definition — a plane that SITS on the paper rather than
+   floating over it. All five asked for `--nx-shadow`, the single token the ramp
+   replaced, and Dan defines that as `none`; in the light theme the whole of
+   Učenje was therefore a stack of 1px outlines, and `surface` and `bg` are
+   2.6 L* apart, which no border rescues on its own. Noć barely moves (a 2px
+   tighter blur at 3% less alpha than `--nx-shadow` drew there) — the defect was
+   only ever visible in ONE theme, which is exactly why it survived this long:
+   nobody reading these pages in Noć could see it.
+
+   The tier only, not `nx-card`'s full recipe: the inset `--nx-material-edge`
+   highlight belongs to the shared component, and hand-copying it here would be
+   a sixth private twin of the thing these pages should eventually just BE. */
 .study__subjects {
   display: flex;
   flex-direction: column;
@@ -174,7 +190,7 @@
   border: 1px solid var(--nx-border);
   border-radius: var(--nx-radius-lg);
   padding: var(--nx-space-4);
-  box-shadow: var(--nx-shadow);
+  box-shadow: var(--nx-elevation-raised);
   display: flex;
   flex-direction: column;
   gap: var(--nx-space-3);
@@ -610,7 +626,7 @@
   border: 1px solid var(--nx-border);
   border-radius: var(--nx-radius-lg);
   padding: var(--nx-space-3) var(--nx-space-4);
-  box-shadow: var(--nx-shadow);
+  box-shadow: var(--nx-elevation-raised);
 }
 /* The strip's heading and the „min" column legend on one baseline, so the unit
    is stated ONCE over the column instead of on every block row under it. */
@@ -645,7 +661,7 @@
   border: 1px solid var(--nx-border);
   border-radius: var(--nx-radius-lg);
   padding: var(--nx-space-3) var(--nx-space-4);
-  box-shadow: var(--nx-shadow);
+  box-shadow: var(--nx-elevation-raised);
   display: flex;
   flex-direction: column;
   gap: var(--nx-space-2);
@@ -938,7 +954,7 @@
   border: 1px solid var(--nx-border);
   border-radius: var(--nx-radius-lg);
   padding: var(--nx-space-3) var(--nx-space-4);
-  box-shadow: var(--nx-shadow);
+  box-shadow: var(--nx-elevation-raised);
   display: flex;
   flex-direction: column;
   gap: var(--nx-space-2);
@@ -998,7 +1014,7 @@
   border: 1px solid var(--nx-border);
   border-radius: var(--nx-radius-lg);
   padding: var(--nx-space-3) var(--nx-space-4);
-  box-shadow: var(--nx-shadow);
+  box-shadow: var(--nx-elevation-raised);
   display: flex;
   flex-direction: column;
   gap: var(--nx-space-2);
@@ -1296,7 +1312,13 @@
   background: var(--nx-surface);
   border: 1px solid var(--nx-border);
   border-radius: var(--nx-radius-lg);
-  box-shadow: var(--nx-shadow);
+  /* LIFTED, not raised — the one card on this screen and the only reason the
+     screen exists, the same shape (and so the same tier) as `.auth__card` and
+     `.onb__card`. „Minimal chrome, one card centred" only works if the card is
+     unmistakably the object; at the raised tier it would read as one card that
+     happens to be alone, and on Dan — where it had `--nx-shadow: none` — it did
+     not read as an object at all. */
+  box-shadow: var(--nx-elevation-lifted);
   text-align: center;
   font-size: var(--nx-font-size-title);
   line-height: var(--nx-font-leading-normal);

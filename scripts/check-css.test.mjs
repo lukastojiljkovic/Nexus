@@ -1,6 +1,9 @@
+import { readdirSync, statSync } from "node:fs";
+import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { checkCss, scanStylesheets } from "./check-css.mjs";
+import { REPO_ROOT } from "./check-colours.mjs";
+import { checkCss, scanRoots, scanStylesheets } from "./check-css.mjs";
 
 /**
  * The gate's own coverage. Asserting only that the tree is clean would leave
@@ -66,5 +69,48 @@ describe("checkCss", () => {
 describe("the repository itself", () => {
   it("has no stylesheet that fails to parse as CSS", () => {
     expect(scanStylesheets()).toEqual([]);
+  });
+
+  // „No stylesheet failed" is only worth something if every stylesheet was
+  // read. This gate used to walk three hand-written roots, so a package that
+  // grew its first `.css` after the list was written would have been outside a
+  // scan that never said so — the failure `check-tokens.mjs` already shipped
+  // once with `packages/db`. The roots are discovered now, and this is what
+  // makes the discovery provable rather than merely claimed.
+  it("scans every directory that actually holds a stylesheet", () => {
+    const walk = (dir, out) => {
+      for (const entry of readdirSync(dir)) {
+        if (entry === "node_modules" || entry === "dist" || entry === "out") continue;
+        const path = join(dir, entry);
+        if (statSync(path).isDirectory()) walk(path, out);
+        else if (path.endsWith(".css")) out.push(path);
+      }
+      return out;
+    };
+
+    const roots = scanRoots();
+    const stylesheets = [];
+    for (const group of ["apps", "packages"]) {
+      for (const name of readdirSync(join(REPO_ROOT, group))) {
+        // `packages/tokens` is out of the shared root list because it is the one
+        // package allowed to WRITE colour values. It has no `src/` at all — its
+        // CSS is generated into `dist/` — so nothing is skipped here today; if
+        // it ever grows one, this exclusion is the thing to re-examine rather
+        // than a stylesheet quietly going unread.
+        if (group === "packages" && name === "tokens") continue;
+        const src = join(REPO_ROOT, group, name, "src");
+        try {
+          if (statSync(src).isDirectory()) walk(src, stylesheets);
+        } catch {
+          // a package without a `src/` holds no stylesheet to miss
+        }
+      }
+    }
+
+    expect(stylesheets.length).toBeGreaterThan(10); // sanity: the walk found the tree
+    const missed = stylesheets
+      .filter((file) => !roots.some((root) => file.startsWith(root)))
+      .map((file) => relative(REPO_ROOT, file));
+    expect(missed).toEqual([]);
   });
 });

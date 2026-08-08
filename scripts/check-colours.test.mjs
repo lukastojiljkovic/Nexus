@@ -6,10 +6,11 @@
 // header comment) is proven NOT caught, and the escape hatch is proven to
 // work exactly as awkwardly as designed.
 
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { findScanFiles, REPO_ROOT, scanSource } from "./check-colours.mjs";
+import { findScanFiles, REPO_ROOT, scanSource, sourceRoots } from "./check-colours.mjs";
 
 /** Violations only — the shape a caller checking "did this fail" wants. */
 function violations(filePath, text) {
@@ -43,6 +44,44 @@ describe("scanSource — clean input", () => {
   it("never scans packages/tokens", () => {
     const files = findScanFiles(REPO_ROOT);
     expect(files.some((f) => f.split(/[\\/]/).includes("tokens"))).toBe(false);
+  });
+});
+
+describe("sourceRoots — the scope both styling gates share", () => {
+  /** Every package that actually has a `src/`, worked out here independently of the gate. */
+  function packagesWithSource() {
+    const found = [];
+    for (const group of ["apps", "packages"]) {
+      for (const name of readdirSync(join(REPO_ROOT, group))) {
+        const src = join(REPO_ROOT, group, name, "src");
+        try {
+          if (statSync(src).isDirectory()) found.push(`${group}/${name}`);
+        } catch {
+          // a package without a `src/` (packages/tokens ships JSON + a build script)
+        }
+      }
+    }
+    return found;
+  }
+
+  // The defect this replaced: `check-tokens.mjs` carried four hand-written
+  // roots under a comment saying they mirrored this gate's. `packages/db` was
+  // added later and never reached the copy, so one package was outside a scan
+  // that claimed to include it — invisible unless you read both files at once.
+  // Discovery is what makes the claim self-maintaining; this test is what makes
+  // the discovery provable, since "covers everything" and "covers nothing new"
+  // otherwise look identical from a green run.
+  it("covers every package that has a src/ directory, except packages/tokens", () => {
+    const covered = sourceRoots(REPO_ROOT).map((dir) =>
+      relative(REPO_ROOT, join(dir, "..")).split(/[\\/]/).join("/"),
+    );
+    const expected = packagesWithSource().filter((p) => p !== "packages/tokens");
+    expect(expected.length).toBeGreaterThan(1); // the walk found real packages, not an empty tree
+    expect(covered.sort()).toEqual(expected.sort());
+  });
+
+  it("excludes packages/tokens, the one package allowed to hold real colour values", () => {
+    expect(sourceRoots(REPO_ROOT).some((dir) => dir.includes(join("packages", "tokens")))).toBe(false);
   });
 });
 

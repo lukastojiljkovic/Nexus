@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { FormEvent, ReactNode } from "react";
+import type { FormEvent, KeyboardEvent, ReactNode } from "react";
 import {
   Button,
   Chip,
@@ -271,9 +271,18 @@ export function FitNutrition({ profileId }: FitNutritionProps) {
   const [amountDraft, setAmountDraft] = useState("");
   const [pickerError, setPickerError] = useState<string | null>(null);
 
-  // One item's weight, while it is being corrected in place.
+  // One item's weight AND its meal, while they are being corrected in place.
+  //
+  // The slot was the missing half. `fitUpdateItem` has always taken it — the
+  // patch, the validator and the store all name it — but no control ever asked
+  // for it, so a yoghurt logged under „Doručak" that was actually the morning
+  // snack could only be fixed by deleting the row and typing it again, and the
+  // undo bar then held a delete the user did not really mean. A correction form
+  // that can fix one of a row's two facts is a correction form with a hole in
+  // it.
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [itemGramsDraft, setItemGramsDraft] = useState("");
+  const [itemSlotDraft, setItemSlotDraft] = useState<FitMealSlot>("dorucak");
 
   // „Moje namirnice": the one form, serving create and edit alike.
   const [editing, setEditing] = useState<FoodEditing>(null);
@@ -424,6 +433,10 @@ export function FitNutrition({ profileId }: FitNutritionProps) {
     setActionError(null);
     setEditingItemId(item.id);
     setItemGramsDraft(gramsInputValue(item.grams));
+    // Seeded from the row, never from the slot the row is DRAWN in: the two are
+    // the same today, and seeding from the drawing would be a second source for
+    // a fact the item already carries.
+    setItemSlotDraft(item.slot);
   }
 
   async function submitItemEdit(item: FitMealItem): Promise<void> {
@@ -433,7 +446,11 @@ export function FitNutrition({ profileId }: FitNutritionProps) {
       return;
     }
     await run(async () => {
-      await window.nexus.fitUpdateItem(profileId, item.id, { grams });
+      // Both fields go every time rather than only what changed: the patch is
+      // an assignment of what the row should now say, and a „send only the
+      // difference" rule would need to know what the row said when the form
+      // opened — a second copy of the truth, for no gain.
+      await window.nexus.fitUpdateItem(profileId, item.id, { grams, slot: itemSlotDraft });
       setEditingItemId(null);
     });
   }
@@ -854,12 +871,46 @@ export function FitNutrition({ profileId }: FitNutritionProps) {
   function renderItem(item: FitMealItem): ReactNode {
     const macros = itemMacros(item);
     const editingThis = editingItemId === item.id;
+    /**
+     * Enter commits, Escape backs out — on EVERY field of the inline form, not
+     * only on the one that happened to have it first. A correction row where
+     * the keys work in the amount and do nothing in the meal picker is the same
+     * class of half-application the slot control itself was: a rule present on
+     * one path is not a rule.
+     */
+    function onEditKey(event: KeyboardEvent<HTMLElement>): void {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        void submitItemEdit(item);
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setEditingItemId(null);
+      }
+    }
     return (
       <ListRow
         key={item.id}
         trailing={
           editingThis ? (
             <span className="fit__row-actions">
+              {/* Which meal the row belongs to. Same `inline` arrangement the
+                  rest of the app's controls rows use, so the label is visible
+                  rather than smuggled into an `aria-label`. */}
+              <Select
+                label={s.item.slotLabel}
+                layout="inline"
+                className="fit__select"
+                value={itemSlotDraft}
+                onChange={(event) => setItemSlotDraft(event.target.value as FitMealSlot)}
+                onKeyDown={onEditKey}
+              >
+                {FIT_MEAL_SLOTS.map((option) => (
+                  <option key={option} value={option}>
+                    {s.slot[option]}
+                  </option>
+                ))}
+              </Select>
               {/* Opens with the caret in it, commits on Enter, backs out on
                   Escape — the inline row TASK has always had. This one opened a
                   field the user then had to click into, and offered no key at
@@ -871,16 +922,7 @@ export function FitNutrition({ profileId }: FitNutritionProps) {
                 className="fit__grams-field"
                 autoFocus
                 onChange={(event) => setItemGramsDraft(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    void submitItemEdit(item);
-                  }
-                  if (event.key === "Escape") {
-                    event.preventDefault();
-                    setEditingItemId(null);
-                  }
-                }}
+                onKeyDown={onEditKey}
               />
               <Button size="sm" variant="primary" onClick={() => void submitItemEdit(item)}>
                 {s.item.save}

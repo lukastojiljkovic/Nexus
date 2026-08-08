@@ -6,7 +6,7 @@ import { Collaboration } from "@tiptap/extension-collaboration";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { Placeholder } from "@tiptap/extensions";
 import { isInlineImageMime, mergeNoteState, replaceNoteContent } from "@nexus/core";
-import { EmptyState } from "@nexus/ui";
+import { EmptyState, SaveIndicator, type SaveStatus } from "@nexus/ui";
 import {
   PRIV_ATTACHMENTS_MAX_COUNT,
   PRIV_PLAINTEXT_MAX_BYTES,
@@ -25,6 +25,7 @@ import { Toggle, ToggleContent, ToggleSummary } from "./noteToggle.js";
 import { PrivAttachmentImage, PrivAttachmentProvider } from "./privAttachmentImage.js";
 import { PrivVersionHistory } from "./privVersionHistory.js";
 import { strings } from "./strings.js";
+import { formatClockTime } from "./timeFormat.js";
 
 /**
  * The private editor (PRIV v1 / ADR-057): `NoteEditor.tsx`'s TipTap surface
@@ -126,6 +127,21 @@ export function PrivNoteEditor({ profileId, noteId, onSaved, onMaybeLocked }: Pr
   const [doc, setDoc] = useState<Y.Doc | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [saveError, setSaveError] = useState<"generic" | "tooLarge" | null>(null);
+  /**
+   * What this editor says about its own persistence — `SaveIndicator`'s two
+   * halves, not just the one that hurts.
+   *
+   * This was the THIRD autosaving surface in the app and the only one still
+   * announcing refusals and never once announcing a write, which is exactly the
+   * half-state the canvas report named: from the reader's side, a note typed
+   * into the sealed section looked identical whether it had been written or had
+   * failed quietly — and „quietly" is the worst possible adjective in the one
+   * section whose whole promise is that the bytes went somewhere safe. The
+   * saved line carries a CLOCK because a bare „Sačuvano" is still true-looking
+   * an hour after the last write and therefore proves nothing.
+   */
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const [savedAt, setSavedAt] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<PrivAttachmentRef[]>([]);
   const [attachmentError, setAttachmentError] = useState<
     "generic" | "tooLarge" | "tooMany" | null
@@ -172,8 +188,12 @@ export function PrivNoteEditor({ profileId, noteId, onSaved, onMaybeLocked }: Pr
     // of the same walk, sealed instead of indexed).
     const plaintext = capUtf8Bytes(mergeNoteState(state, []).plaintext, PRIV_PLAINTEXT_MAX_BYTES);
     if (yjsState.length > PRIV_STATE_MAX_BYTES) {
-      // Left dirty: a later edit (presumably a deletion) retries.
+      // Left dirty: a later edit (presumably a deletion) retries. The status
+      // goes to `error` here rather than `saving`, because this refusal happens
+      // BEFORE anything is in flight — a „Čuvanje…" that never resolves would
+      // be the same silence in a more reassuring costume.
       setSaveError("tooLarge");
+      setSaveStatus("error");
       return;
     }
     const envelope = {
@@ -184,14 +204,18 @@ export function PrivNoteEditor({ profileId, noteId, onSaved, onMaybeLocked }: Pr
     };
     dirtyRef.current = false;
     inFlightRef.current = true;
+    setSaveStatus("saving");
     try {
       await window.nexus.privWrite(profileId, noteId, envelope);
       setSaveError(null);
+      setSavedAt(new Date().toISOString());
+      setSaveStatus("saved");
       onSavedRef.current();
       if (dirtyRef.current) scheduleFlush();
     } catch (error) {
       dirtyRef.current = true; // never drop — the next edit or flush retries
       setSaveError("generic");
+      setSaveStatus("error");
       console.error("Nexus: failed to persist private note:", error);
       onMaybeLockedRef.current();
     } finally {
@@ -219,6 +243,11 @@ export function PrivNoteEditor({ profileId, noteId, onSaved, onMaybeLocked }: Pr
     setDoc(null);
     setLoadFailed(false);
     setSaveError(null);
+    // The indicator belongs to the note that is open, not to the surface: a
+    // „Sačuvano u 14:02" carried across a note switch would be the new note
+    // claiming a write that happened to the previous one.
+    setSaveStatus("idle");
+    setSavedAt(null);
     setAttachmentError(null);
     dirtyRef.current = false;
     attachmentsRef.current = [];
@@ -372,11 +401,20 @@ export function PrivNoteEditor({ profileId, noteId, onSaved, onMaybeLocked }: Pr
 
   return (
     <>
-      {saveError !== null && (
-        <div className="note__save-error" role="status">
-          {saveError === "tooLarge" ? strings.priv.editor.saveTooLarge : strings.priv.editor.saveError}
-        </div>
-      )}
+      {/* The house autosave line, in the shape the public editor and the board
+          already use — a bespoke „only on failure" div here was the app saying
+          the same thing three ways and one of them badly. */}
+      <SaveIndicator
+        status={saveStatus}
+        savingLabel={strings.app.saveSaving}
+        savedLabel={`${strings.app.saveSavedPrefix} ${formatClockTime(savedAt ?? "")}`}
+        errorLabel={
+          saveError === "tooLarge"
+            ? strings.priv.editor.saveTooLarge
+            : strings.priv.editor.saveError
+        }
+      />
+
       {restoreError && (
         <div className="note__history-error" role="status">
           {strings.priv.editor.history.error}

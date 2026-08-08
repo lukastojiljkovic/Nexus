@@ -79,8 +79,14 @@ export const migration035: Migration = {
         created_at TEXT NOT NULL,
         PRIMARY KEY (subject_id, note_id)
       );
-      -- "Which subjects is this note filed under" — the direction the note side
-      -- reads in; the primary key's own index covers the subject direction.
+      -- "Which subjects is this note filed under" — the reverse of the direction
+      -- the primary key's own index already covers. NO SURFACE READS IT YET:
+      -- SubjectNoteLinkStore.listSubjectsOfNote is its only caller and nothing
+      -- in the renderer calls that, so the note side of this relation is
+      -- currently write-only. The index and the store method are both kept
+      -- deliberately — the note editor is meant to show the subjects a note is
+      -- filed under, and that surface is being built — but until it exists this
+      -- comment must not claim a reader that does not.
       CREATE INDEX subject_note_links_note ON subject_note_links (note_id);
     `);
   },

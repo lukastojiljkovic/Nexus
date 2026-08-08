@@ -496,9 +496,16 @@ export const IpcChannel = {
   fitRoutineRestore: "fit:routine-restore",
   // The session. `fit:workout-open` answers the ONE unfinished session or null,
   // which is what the page opens on; the schema allows no second one.
+  //
+  // There is deliberately no read-one-by-id channel beside these. Every workout
+  // this module hands back — from `fit:workout-open`, from `fit:workouts-range`,
+  // from each mutation — already arrives with its sets nested, so a surface that
+  // holds a workout never has an id it has to go back and resolve. One existed
+  // anyway for a while, fully validated and called by nobody: a rung of the
+  // bridge is attack surface whether or not anything stands on it, and this one
+  // was surface for nothing.
   fitWorkoutOpen: "fit:workout-open",
   fitWorkoutStart: "fit:workout-start",
-  fitWorkoutGet: "fit:workout-get",
   fitWorkoutFinish: "fit:workout-finish",
   fitWorkoutReopen: "fit:workout-reopen",
   fitWorkoutUpdate: "fit:workout-update",
@@ -8573,7 +8580,6 @@ export interface NexusApi {
     routineRef?: string | null,
     notes?: string,
   ): Promise<FitWorkout>;
-  fitWorkout(profileId: string, id: string): Promise<FitWorkout>;
   fitFinishWorkout(profileId: string, id: string): Promise<FitWorkout>;
   /** Reopens a finished session for a correction. Refuses while another is open. */
   fitReopenWorkout(profileId: string, id: string): Promise<FitWorkout>;

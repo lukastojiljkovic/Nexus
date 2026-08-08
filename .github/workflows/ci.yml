@@ -32,11 +32,32 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # Fast, dependency-free static check — the CLAUDE.md/README.md
-      # design-token rule (no raw colour literal outside packages/tokens)
-      # made into a real gate. Runs first: it needs no build output and
-      # should fail before the slower steps spend any time.
+      # The five static gates — the rules CLAUDE.md and README.md state in
+      # prose, made executable. None of them needs build output, all of them
+      # are seconds, so they run first and fail before the slower steps spend
+      # any time.
+      #
+      # ALL five, which is the point. For months this job invoked
+      # `check:colours` alone while `check:contrast`, `check:css`,
+      # `check:strings` and `check:tokens` were written, wired into
+      # `package.json`, given their own unit tests — and run nowhere except on
+      # the machine of whoever remembered. A gate that only fires when someone
+      # types it is a convention, not a gate: four rules the repo believed it
+      # enforced were, on every pull request, enforcing nothing. `check:tokens`
+      # exists precisely because an undefined custom property is invisible, and
+      # it was itself invisible.
+      #
+      # One step each rather than one combined step: the run summary then names
+      # the rule that broke, so a red check is diagnosable before opening a log.
       - run: pnpm check:colours
+
+      - run: pnpm check:contrast
+
+      - run: pnpm check:css
+
+      - run: pnpm check:strings
+
+      - run: pnpm check:tokens
 
       - run: pnpm build
 

@@ -553,6 +553,19 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
     setCategoryFilter([]);
   }
 
+  /**
+   * Both filter axes at once — the way back out of an empty result.
+   *
+   * The rail's two „Poništi" links each clear one axis, and they are the only
+   * ones that exist; below 1345px the rail is a drawer that is closed by
+   * default, so a list emptied by a filter had no reachable undo at all. This
+   * sits ON the empty state, where the dead end is.
+   */
+  function clearNoteFilters(): void {
+    setTagFilter([]);
+    setCategoryFilter([]);
+  }
+
   /** Deleting a category uncategorizes its notes, so the list has to be refetched with the categories. */
   const onCategoriesChanged = useCallback(async () => {
     await loadCategories();
@@ -1287,25 +1300,33 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
               description={strings.notes.listEmptyDescription}
             />
           ) : visibleNotes.length === 0 ? (
-            // Two filters, two sentences: the line has to name the one the user
-            // actually set, and only the tag filter is on when both are off. With
-            // both on, the tag line is the more specific of the two.
+            // Two filters, two sentences: the description has to name the one
+            // the user actually set, and only the tag filter is on when both are
+            // off. With both on, the tag line is the more specific of the two.
             //
-            // `inline`, and deliberately not the page shape with a mark: the
-            // module is NOT empty, one filter matched nothing. A 48px sigil here
-            // would be the surface claiming a state it is not in.
+            // No `sigil`, and that is still deliberate: the module is NOT empty,
+            // one filter matched nothing, and a 48px module mark here would be
+            // the surface claiming a state it is not in.
             //
-            // The filter sentence is the `title`, with no `description`: the
-            // inline shape folds the two into one line, so a title as well would
-            // read „Nema beležaka Nijedna beleška ne odgovara…" — two sentences
-            // run together with no stop between them. Same idiom as the
-            // dashboard's own inline empties.
+            // It is the PAGE shape now, against the earlier reasoning, and the
+            // reason is the action. `inline` has no room for one and drops it on
+            // the floor (`EmptyState` says so in its own prop doc), so the pane
+            // stated a dead end and offered no way out of it — while the only
+            // two „Poništi" links live in the organizer rail, which below
+            // 1345px is a drawer that is closed. „Datoteke" already draws this
+            // exact moment correctly (`FilesPage`'s `noMatchTitle` +
+            // `clearFilters`); this is that rule, applied here too.
             <EmptyState
-              variant="inline"
-              title={
+              title={strings.notes.filterEmptyTitle}
+              description={
                 tagFilter.length === 0
                   ? strings.notes.categoryFilterEmptyDescription
                   : strings.notes.tagFilterEmptyDescription
+              }
+              action={
+                <Button size="sm" onClick={clearNoteFilters}>
+                  {strings.notes.filterEmptyClear}
+                </Button>
               }
             />
           ) : view === "list" ? (

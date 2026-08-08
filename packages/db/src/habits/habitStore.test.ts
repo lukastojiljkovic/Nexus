@@ -246,7 +246,7 @@ describe("HabitStore soft delete, restore and archive", () => {
 
     habits.restore(habit.id, LATER);
     expect(
-      habits.listEntries(habit.id, { from: "2026-06-01", to: "2026-06-07" }).map((e) => e.date),
+      habits.listAllEntries({ from: "2026-06-01", to: "2026-06-07" }).map((e) => e.date),
     ).toEqual(["2026-06-01", "2026-06-03"]);
   });
 
@@ -302,7 +302,7 @@ describe("HabitStore entries", () => {
       createdAt: NOW,
       updatedAt: NOW,
     });
-    expect(habits.listEntries(habit.id, { from: "2026-06-01", to: "2026-06-07" })).toEqual([entry]);
+    expect(habits.listAllEntries({ from: "2026-06-01", to: "2026-06-07" })).toEqual([entry]);
   });
 
   it("updates the SAME row on a second tick of the same day", () => {
@@ -312,7 +312,7 @@ describe("HabitStore entries", () => {
     const second = habits.setEntry(habit.id, "2026-06-01", 5, LATER);
 
     expect(second).toEqual({ ...first, value: 5, updatedAt: LATER });
-    expect(habits.listEntries(habit.id, { from: "2026-06-01", to: "2026-06-01" })).toEqual([second]);
+    expect(habits.listAllEntries({ from: "2026-06-01", to: "2026-06-01" })).toEqual([second]);
   });
 
   it("clears a tick, and clearing an unticked day changes nothing", () => {
@@ -321,7 +321,7 @@ describe("HabitStore entries", () => {
     habits.setEntry(habit.id, "2026-06-01", 1, NOW);
 
     habits.clearEntry(habit.id, "2026-06-01");
-    expect(habits.listEntries(habit.id, { from: "2026-06-01", to: "2026-06-07" })).toEqual([]);
+    expect(habits.listAllEntries({ from: "2026-06-01", to: "2026-06-07" })).toEqual([]);
     expect(() => habits.clearEntry(habit.id, "2026-06-01")).not.toThrow();
   });
 
@@ -349,11 +349,11 @@ describe("HabitStore entries", () => {
 
     expect(() => theirs.setEntry(habit.id, "2026-06-02", 1, NOW)).toThrow(HabitNotFoundError);
     expect(() => theirs.clearEntry(habit.id, "2026-06-01")).toThrow(HabitNotFoundError);
-    expect(() => theirs.listEntries(habit.id, { from: "2026-06-01", to: "2026-06-07" })).toThrow(
-      HabitNotFoundError,
-    );
-    // And the write that was refused left the original alone.
-    expect(mine.listEntries(habit.id, { from: "2026-06-01", to: "2026-06-07" })).toHaveLength(1);
+    // The read names no habit, so it does not refuse — it simply sees nothing,
+    // which is the same scope answered a different way.
+    expect(theirs.listAllEntries({ from: "2026-06-01", to: "2026-06-07" })).toEqual([]);
+    // And the writes that were refused left the original alone.
+    expect(mine.listAllEntries({ from: "2026-06-01", to: "2026-06-07" })).toHaveLength(1);
   });
 
   it("reads every habit's entries over a range in ONE query", () => {

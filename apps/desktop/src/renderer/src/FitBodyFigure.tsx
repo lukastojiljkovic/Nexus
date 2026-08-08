@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { MUSCLE_GROUPS } from "@nexus/core";
 import type { MuscleGroup } from "@nexus/core";
 
 /**
@@ -253,6 +252,3 @@ export function FitBodyFigure({
 export function sideOf(muscle: MuscleGroup): "front" | "back" {
   return REGIONS.find((region) => region.muscle === muscle)?.side ?? "front";
 }
-
-/** Every group, in the order `MUSCLE_GROUPS` declares them. Re-exported so the list beside the figure never builds a second order. */
-export const ALL_MUSCLES: readonly MuscleGroup[] = MUSCLE_GROUPS;

@@ -433,10 +433,16 @@ export function FitTraining({ profileId }: FitTrainingProps) {
                 workout={workout}
                 expanded={openHistoryId === workout.id}
                 canReopen={open === null}
+                maxDay={today}
                 onToggle={() => setOpenHistoryId(openHistoryId === workout.id ? null : workout.id)}
                 onReopen={() =>
                   void run(async () => {
                     await window.nexus.fitReopenWorkout(profileId, workout.id);
+                  })
+                }
+                onCorrectDay={(day) =>
+                  void run(async () => {
+                    await window.nexus.fitUpdateWorkout(profileId, workout.id, { day });
                   })
                 }
                 onDelete={() => void deleteWorkout(workout)}
@@ -1230,20 +1236,42 @@ function HistoryRow({
   workout,
   expanded,
   canReopen,
+  maxDay,
   onToggle,
   onReopen,
+  onCorrectDay,
   onDelete,
 }: {
   workout: FitWorkout;
   expanded: boolean;
   canReopen: boolean;
+  /** Today. A session cannot have happened tomorrow, so the correction is capped exactly as starting one is. */
+  maxDay: string;
   onToggle: () => void;
   onReopen: () => void;
+  onCorrectDay: (day: string) => void;
   onDelete: () => void;
 }): ReactNode {
   const s = strings.fitness.training;
   const tonnage = workoutTonnage(workout.sets);
   const workingCount = tonnage.counted + tonnage.uncounted;
+  /**
+   * The session's day, while it is being corrected.
+   *
+   * „Trenirao sam ovo u utorak, a upisano je za sredu" had exactly one answer
+   * before this: delete the session and log every set of it again. The day is
+   * the one thing a finished session carries that „Nastavi" cannot reach —
+   * reopening puts the sets back in reach and leaves the date alone — and the
+   * write has been there the whole time (`fitUpdateWorkout` takes `day`, and
+   * only the notes field ever called it).
+   *
+   * A draft with an explicit save rather than a commit-on-change, because a
+   * native date input fires while a partial date is being typed: „2026-01-0"
+   * is a change event, and writing it would be the field correcting the row to
+   * something nobody meant. The button appears only once the draft actually
+   * differs, so a row that is already right shows no action at all.
+   */
+  const [dayDraft, setDayDraft] = useState(workout.day);
 
   return (
     <div className="fit__history">
@@ -1287,6 +1315,21 @@ function HistoryRow({
             </p>
           )}
           {workout.notes.trim() !== "" && <p className="fit__note">{workout.notes}</p>}
+          <div className="fit__start">
+            <TextField
+              label={s.history.dayLabel}
+              type="date"
+              value={dayDraft}
+              max={maxDay}
+              className="fit__day-field"
+              onChange={(event) => setDayDraft(event.target.value)}
+            />
+            {dayDraft !== "" && dayDraft !== workout.day && (
+              <Button size="sm" variant="primary" onClick={() => onCorrectDay(dayDraft)}>
+                {s.history.dayCorrect}
+              </Button>
+            )}
+          </div>
           <div className="fit__form-actions">
             <Button size="sm" disabled={!canReopen} title={canReopen ? undefined : s.history.reopenBlocked} onClick={onReopen}>
               {s.history.reopen}

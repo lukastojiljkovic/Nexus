@@ -99,109 +99,16 @@
   color: var(--nx-text-subtle);
 }
 
-/* --- The band: the page's hero -------------------------------------------
-   „UKUPNO" used to be a 18px figure in the rail with a two-line paragraph
-   beside it, set at the same weight as every other thing on the page. It is
-   the answer to the question the page exists to answer, so it is now the
-   loudest thing on it: an 11px uppercase label over a large tabular number,
-   one group per currency, with the currency named ONCE as the group's caption
-   so the three figures under it need no code at all. */
-/* The same object as `@nexus/ui`'s `.nx-stat-band`, which six other surfaces
-   draw: a band separated from the content below it by ONE hairline, not a card.
-   It was written here independently — this page needs per-currency groups,
-   which the shared component does not model — and came out as a bordered,
-   filled, rounded box, so „summary before detail" looked like one thing on
-   Finansije and a different thing everywhere else.
-
-   A shared `StatBand` that understands groups is the real answer and is
-   recorded as such; matching the chrome is what makes the app read as one
-   product in the meantime. */
-.fin__band {
-  align-self: stretch;
-  display: flex;
-  flex-direction: column;
-  gap: var(--nx-space-3);
-  padding-bottom: var(--nx-space-4);
-  border-bottom: 1px solid var(--nx-border-subtle);
-}
-.fin__band-groups {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--nx-space-5) var(--nx-space-8);
-  min-width: 0;
-}
-.fin__band-group {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nx-space-2);
-  min-width: 0;
-}
-/* The unit, said once for the group beneath it. `text` rather than `subtle`,
-   which is what tells it apart from the figure labels below at the same size:
-   this is a heading over three figures, they are captions under one each. */
-.fin__band-currency {
-  font-size: var(--nx-font-size-caption);
-  font-weight: var(--nx-font-weight-semibold);
-  letter-spacing: var(--nx-font-tracking-label);
-  text-transform: uppercase;
-  color: var(--nx-text);
-  white-space: nowrap;
-}
-.fin__band-figures {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--nx-space-3) var(--nx-space-6);
-  min-width: 0;
-}
-.fin__figure {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  min-width: 0;
-}
-.fin__figure-label {
-  font-size: var(--nx-font-size-caption);
-  /* `.nx-stat__label` is semibold; medium here made the same eyebrow lighter on
-     this page than on the six others. */
-  font-weight: var(--nx-font-weight-semibold);
-  letter-spacing: var(--nx-font-tracking-label);
-  text-transform: uppercase;
-  color: var(--nx-text-subtle);
-  white-space: nowrap;
-}
-/* Deliberately carries no transition of any kind: a figure that counts up to
-   its value is a figure nobody can read while it does so, and money is the
-   last number in the product that should be in motion. */
-.fin__figure-value {
-  /* `.nx-stat__value`'s exact recipe — the display family and the size-matched
-     tracking. A 24px figure at `tracking-tight` (the 18–20px value) reads
-     looser than the same figure in the band on any other page. */
-  font-family: var(--nx-font-family-display);
-  font-size: var(--nx-font-size-h1);
-  line-height: var(--nx-font-leading-tight);
-  font-weight: var(--nx-font-weight-semibold);
-  letter-spacing: var(--nx-font-tracking-h1);
-  font-variant-numeric: tabular-nums;
-  color: var(--nx-text);
-  white-space: nowrap;
-}
-/* The two flow figures are subordinate to the balance beside them — the same
-   treatment, one step down the scale, so the band has one hero and not three. */
-.fin__figure--flow .fin__figure-value {
-  font-size: var(--nx-font-size-title);
-}
-/* Jade for money arriving, plain muted ink for money leaving. The direction is
-   already stated by the LABEL over each figure, so the hue is the second
-   encoding and never the only one — and an ordinary month of spending is not
-   painted as a warning. */
-.fin__figure-value--in {
-  color: var(--nx-data);
-}
-.fin__figure-value--out {
-  color: var(--nx-text-muted);
-}
+/* --- The band: drawn by `@nexus/ui`'s `StatBand`, not here ----------------
+   `.fin__band*` and `.fin__figure*` used to live here — a hand-written twin of
+   the shared band, justified by the fact that this page needs PER-CURRENCY
+   groups and the shared component modelled a flat list. `StatGroup` closed that
+   gap and `FinancePage.renderBand` adopted it, but the ~100 lines stayed, and
+   with them a header comment still arguing in the present tense that the twin
+   had to exist. Dead CSS is merely unused; a dead ARGUMENT is actively wrong,
+   because the next reader takes it as the reason not to reach for `StatBand`.
+   Both are gone. What the band looks like is `.nx-stat-*`'s business now, and
+   why this page hands it groups is documented at the call site. */
 
 /* --- The ledger's one controls row ---------------------------------------
    FIVE rows of chrome used to stand between the page title and the first
@@ -1966,8 +1873,9 @@
    the three states below are colour changes on a figure that redraws once a
    second, so a transition would leave the digits perpetually mid-fade between
    two colours — and a NUMBER that animates is a number the reader cannot trust
-   to be the one it is showing. (The same rule, and the same sentence, as
-   `.fin__figure-value`.) */
+   to be the one it is showing. (The rule that used to be spelled out on
+   `.fin__figure-value` beside it; every money figure is set in `.nx-stat__value`
+   now, which carries no transition either — and must not grow one.) */
 .foc__clock {
   font-family: var(--nx-font-family-display);
   font-size: var(--nx-font-size-display);

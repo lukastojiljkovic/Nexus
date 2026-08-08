@@ -29,21 +29,26 @@
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { dirname, join, relative } from "node:path";
+import { dirname, extname, join, relative } from "node:path";
+
+import { SCANNED_EXTENSIONS, sourceRoots } from "./check-colours.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..");
 const TOKENS = join(ROOT, "packages", "tokens", "tokens");
 
-/** Where a `var(--nx-…)` may appear. Mirrors `check-colours.mjs`'s roots. */
-const SOURCE_ROOTS = [
-  join(ROOT, "apps", "desktop", "src"),
-  join(ROOT, "apps", "gallery", "src"),
-  join(ROOT, "packages", "ui", "src"),
-  join(ROOT, "packages", "core", "src"),
-];
-
-const SOURCE_EXTENSIONS = new Set([".css", ".ts", ".tsx"]);
+// Where a `var(--nx-…)` may appear: the same roots and the same file types
+// `check-colours.mjs` covers, IMPORTED from it rather than restated. This used
+// to be four hand-written paths under a comment claiming they mirrored that
+// gate's scope. They did not. `packages/db` joined the repo after the copy was
+// made and never reached it, so this gate scanned four packages while saying it
+// scanned the same five — and the only way to notice was to open two files that
+// nobody had a reason to read together. „Mirrors" is a claim an import can keep
+// and a copy cannot; `check-colours.test.mjs` proves the derived list really
+// does reach every package that has a `src/`.
+//
+// `packages/tokens` is out, as it is over there: it is where the names are
+// DEFINED, and a definition is not a reference.
 
 /** `--nx-font-size-body-sm` — the emitted spelling. */
 const REFERENCE = /var\(\s*(--nx-[a-z0-9-]+)/gi;
@@ -122,7 +127,7 @@ function* walk(dir) {
 /** Every source file the scan covers, read once and reused for both passes. */
 function sourceFiles() {
   const files = [];
-  for (const root of SOURCE_ROOTS) {
+  for (const root of sourceRoots(ROOT)) {
     let entries;
     try {
       entries = [...walk(root)];
@@ -130,8 +135,7 @@ function sourceFiles() {
       continue; // an app that is not checked out is not a failure
     }
     for (const path of entries) {
-      const dot = path.lastIndexOf(".");
-      if (!SOURCE_EXTENSIONS.has(path.slice(dot))) continue;
+      if (!SCANNED_EXTENSIONS.has(extname(path))) continue;
       files.push({ path, text: readFileSync(path, "utf8") });
     }
   }

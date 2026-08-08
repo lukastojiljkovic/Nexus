@@ -320,63 +320,6 @@ describe("FocusStore", () => {
     });
   });
 
-  describe("statsByKind", () => {
-    /** Minutes of wall span, from a fixed noon start. */
-    const span = (minutes: number, day = "2026-07-08") => ({
-      startedAt: `${day}T12:00:00.000Z`,
-      endedAt: new Date(Date.parse(`${day}T12:00:00.000Z`) + minutes * 60_000).toISOString(),
-    });
-
-    it("groups by kind, counting sessions and attention minutes", () => {
-      const { focus } = fixture();
-      focus.create({ ...span(25), kind: "work" }, "2026-07-08T13:00:00.000Z");
-      focus.create({ ...span(30), kind: "work" }, "2026-07-08T13:00:00.000Z");
-      focus.create({ ...span(5), kind: "short_break" }, "2026-07-08T13:00:00.000Z");
-
-      // Ordered by kind, and `long_break` is simply absent — nothing in range.
-      expect(focus.statsByKind("2026-07-08", "2026-07-08")).toEqual([
-        { kind: "short_break", sessions: 1, minutes: 5 },
-        { kind: "work", sessions: 2, minutes: 55 },
-      ]);
-    });
-
-    it("subtracts paused time — a phase you paused held less attention", () => {
-      const { focus } = fixture();
-      focus.create(
-        { ...span(30), kind: "work", pausedSeconds: 600 },
-        "2026-07-08T13:00:00.000Z",
-      );
-      expect(focus.statsByKind("2026-07-08", "2026-07-08")).toEqual([
-        { kind: "work", sessions: 1, minutes: 20 },
-      ]);
-    });
-
-    it("omits a kind with nothing in range, and excludes soft-deleted rows", () => {
-      const { focus } = fixture();
-      const deleted = focus.create({ ...span(25), kind: "work" }, "2026-07-08T13:00:00.000Z");
-      focus.create({ ...span(15), kind: "long_break" }, "2026-07-08T13:00:00.000Z");
-      focus.softDelete(deleted.id, "2026-07-08T13:00:00.000Z");
-
-      expect(focus.statsByKind("2026-07-08", "2026-07-08")).toEqual([
-        { kind: "long_break", sessions: 1, minutes: 15 },
-      ]);
-    });
-
-    it("bounds by the local start day and isolates profiles", () => {
-      const a = fixture();
-      const b = fixture();
-      a.focus.create({ ...span(25, "2026-07-01"), kind: "work" }, "2026-07-01T13:00:00.000Z");
-      expect(a.focus.statsByKind("2026-07-08", "2026-07-09")).toEqual([]);
-      expect(b.focus.statsByKind("2026-07-01", "2026-07-01")).toEqual([]);
-    });
-
-    it("rejects a malformed fromDate or toDate", () => {
-      const { focus } = fixture();
-      expect(() => focus.statsByKind("not-a-date", "2026-07-08")).toThrow(FocusValidationError);
-      expect(() => focus.statsByKind("2026-07-08", "not-a-date")).toThrow(FocusValidationError);
-    });
-  });
-
   describe("listRange", () => {
     it("returns active sessions in range, newest first", () => {
       const { focus, subjectId } = fixture();

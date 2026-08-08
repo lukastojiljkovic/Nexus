@@ -283,45 +283,6 @@ describe("SubjectAttachmentStore — refCount / mimeForHash (profile-agnostic)",
   });
 });
 
-describe("SubjectAttachmentStore — countsBySubject", () => {
-  it("returns one entry per live subject that carries at least one material", () => {
-    const { materials, subjects } = fixture();
-    const withTwo = subjects.create({ name: "Dva" });
-    const withOne = subjects.create({ name: "Jedan" });
-    subjects.create({ name: "Bez materijala" });
-
-    expect(materials.countsBySubject()).toEqual([]);
-
-    materials.add(withTwo.id, validInput({ sha256: SHA_A }), T1);
-    materials.add(withTwo.id, validInput({ sha256: SHA_B }), T1);
-    materials.add(withOne.id, validInput({ sha256: SHA_A }), T1);
-
-    const counts = materials.countsBySubject();
-    expect(new Map(counts.map((row) => [row.subjectId, row.count]))).toEqual(
-      new Map([
-        [withTwo.id, 2],
-        [withOne.id, 1],
-      ]),
-    );
-  });
-
-  it("hides a soft-deleted subject's count and never counts another profile's", () => {
-    const a = fixture();
-    const b = fixture();
-    const kept = a.subjects.create({ name: "Ostaje" });
-    const deleted = a.subjects.create({ name: "Obrisan" });
-    const other = b.subjects.create({ name: "Tuđi" });
-    a.materials.add(kept.id, validInput(), T1);
-    a.materials.add(deleted.id, validInput(), T1);
-    b.materials.add(other.id, validInput(), T1);
-
-    a.subjects.softDelete(deleted.id);
-
-    expect(a.materials.countsBySubject()).toEqual([{ subjectId: kept.id, count: 1 }]);
-    expect(b.materials.countsBySubject()).toEqual([{ subjectId: other.id, count: 1 }]);
-  });
-});
-
 describe("SubjectAttachmentStore — soft-delete / hard-delete interaction", () => {
   it("keeps rows (and refCount) through a soft delete, and list works again after restore", () => {
     const { materials, subjects } = fixture();

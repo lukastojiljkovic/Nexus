@@ -38,8 +38,11 @@ import { moduleName } from "./moduleName.js";
  * - „Pregledaj" is the EXISTING preview — the house dialog for images and
  *   text/markdown, the hardened window for PDFs — offered on exactly the rows
  *   `attachmentPreviewKind` says the app can render, never a list of its own.
- * - „Otvori" is the existing per-module open, with its main-owned temp-file
- *   discipline. The renderer names ids; it never sees a path or a hash.
+ * - „Otvori" and „Sačuvaj kao…" are the existing per-module open and copy-out,
+ *   with their main-owned temp-file and save-dialog discipline. The renderer
+ *   names ids; it never sees a path or a hash. Both are reads: they take a copy
+ *   OUT and change nothing in the store, which is why they belong on a page
+ *   that owns nothing while a delete does not.
  * - „Idi na…" rides the shell's own intent mechanism (021-e) — the same one the
  *   search palette opens a result with — so there is one way into a note from
  *   elsewhere in the app, not two.
@@ -147,6 +150,41 @@ export function FilesPage({ profileId, onOpenOwner }: FilesPageProps) {
     }
   }
 
+  /**
+   * „Sačuvaj kao…": the existing per-module copy-out, chosen by the row's own
+   * owner kind — the same three-way switch „Otvori" makes one function above.
+   *
+   * This page's header refuses a DELETE and explains why at length, and the
+   * absence of this line was read as the same refusal — but the two are not the
+   * same shape at all. A delete here would need a fourth undo for a row shown
+   * without the note it belongs to; a copy out of the encrypted store destroys
+   * nothing, and every OTHER attachment surface in the app has offered it since
+   * the day it shipped. So Datoteke was the one place a file could be found and
+   * not taken, which is a gap in the only surface built for finding files.
+   *
+   * Main owns the dialog and the write, as it does for the three surfaces this
+   * borrows from: the renderer names ids and never sees a path.
+   */
+  async function saveAsCopy(entry: DocAttachmentEntry): Promise<void> {
+    setActionFailed(false);
+    try {
+      switch (entry.ownerKind) {
+        case "note":
+          await window.nexus.saveNoteAttachmentAs(profileId, entry.ownerId, entry.id);
+          return;
+        case "task":
+          await window.nexus.saveTaskAttachmentAs(profileId, entry.ownerId, entry.id);
+          return;
+        case "subject":
+          await window.nexus.saveSubjectAttachmentAs(profileId, entry.ownerId, entry.id);
+          return;
+      }
+    } catch (error) {
+      setActionFailed(true);
+      console.error("Nexus: failed to save a copy of a file:", error);
+    }
+  }
+
   /** The PDF half of „Pregledaj" (ADR-064): the dedicated hardened window, asked for by ids only. */
   async function previewPdf(entry: DocAttachmentEntry): Promise<void> {
     setActionFailed(false);
@@ -218,6 +256,17 @@ export function FilesPage({ profileId, onOpenOwner }: FilesPageProps) {
               }}
             >
               {s.open}
+            </button>
+            <button
+              type="button"
+              className="note__menu-item"
+              role="menuitem"
+              onClick={() => {
+                void saveAsCopy(entry);
+                close();
+              }}
+            >
+              {s.saveAs}
             </button>
             <div className="note__menu-sep" role="separator" />
             {/* Where the file LIVES — and, deliberately, where it is removed.

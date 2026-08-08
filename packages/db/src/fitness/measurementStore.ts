@@ -48,7 +48,7 @@ const COLUMNS =
  * **Deletion here is HARD, unlike every soft-deleting store beside it.** A
  * mis-typed weigh-in is corrected in place (`save` again) or removed outright;
  * a soft-deleted reading would sit in the table looking recoverable while
- * `latest()` and `listRange` silently skip past it, which is a stranger state
+ * `get` and `listRange` silently skip past it, which is a stranger state
  * than simply not existing — migration 060's own doc draws the same line
  * between the two child tables (`fit_routine_items` soft-deletes with its
  * parent, `fit_workout_sets` hard-deletes on `removeSet`) for the identical
@@ -59,11 +59,17 @@ const COLUMNS =
  * `BodyProblem[]` a caller would otherwise have to interpret twice (here and at
  * the IPC boundary). `today` for its future-date check comes from `now`'s own
  * date, never a clock read in this file.
+ *
+ * **There are exactly two reads — `get` and `listRange` — and „the newest
+ * reading" is not one of them.**
+ * A `latest()` (`ORDER BY day DESC LIMIT 1`) shipped here and was never called
+ * outside its own tests: the only measurement read on the IPC allowlist is
+ * `fit:measurements`, which is `listRange`, and every FIT surface wants the whole
+ * window anyway — the newest reading is its last element, not a second query.
  */
 export class FitMeasurementStore {
   private readonly selectByDay: Database.Statement;
   private readonly selectRange: Database.Statement;
-  private readonly selectLatest: Database.Statement;
   private readonly upsertMeasurement: Database.Statement;
   private readonly deleteByDay: Database.Statement;
 
@@ -78,12 +84,6 @@ export class FitMeasurementStore {
       `SELECT ${COLUMNS} FROM fit_measurements
         WHERE profile_id = ? AND day >= ? AND day <= ?
         ORDER BY day`,
-    );
-    this.selectLatest = db.prepare(
-      `SELECT ${COLUMNS} FROM fit_measurements
-        WHERE profile_id = ?
-        ORDER BY day DESC
-        LIMIT 1`,
     );
     this.upsertMeasurement = db.prepare(
       `INSERT INTO fit_measurements
@@ -165,12 +165,6 @@ export class FitMeasurementStore {
     }
     const rows = this.selectRange.all(this.profileId, from, to) as MeasurementRow[];
     return rows.map((row) => toMeasurement(row));
-  }
-
-  /** The most recent day's reading, or `null` when nothing was ever recorded. */
-  latest(): FitMeasurement | null {
-    const row = this.selectLatest.get(this.profileId) as MeasurementRow | undefined;
-    return row === undefined ? null : toMeasurement(row);
   }
 
   /** Hard-deletes one day's reading. A silent no-op for a day with nothing recorded — the same posture `RestoreStore`'s wipe passes carry, and there is nothing here for a caller to have gotten wrong. */

@@ -674,17 +674,46 @@ import {
 } from "./demo/index.js";
 import { runShots } from "./shots/index.js";
 
-const isSmoke = process.argv.includes("--smoke");
+/**
+ * Reads a harness flag off the command line — and answers false for every one
+ * of them in a packaged build.
+ *
+ * The three flags below are development tools with a person's authority: two of
+ * them wipe a directory, all three mint an account whose passcode is printed in
+ * this very file, and each then drives the app unattended. That was safe only
+ * because nobody was expected to type them at an installed `Nexus.exe`, which is
+ * an expectation, not a defence — `process.argv` on a shipped app belongs to
+ * whoever launches it, including a shortcut or a scheduled task somebody else
+ * wrote. The comment that used to sit here claimed these modes were "never
+ * reachable from a packaged install"; nothing made that true, so it is made
+ * true here instead of asserted.
+ *
+ * `app.isPackaged` is readable before `ready` (it is decided by where the
+ * executable is, not by app state), so the check can live at module scope with
+ * the flags themselves rather than at each of the eight places that branch on
+ * one. Funnelling every flag through one function is the point: three separate
+ * `&& !app.isPackaged` clauses are three chances for a fourth harness to be
+ * added without one.
+ */
+function developmentFlag(flag: string): boolean {
+  return !app.isPackaged && process.argv.includes(flag);
+}
+
+/**
+ * `--smoke`: prove the shell is wired end to end against a disposable
+ * `userData` subdirectory and its own throwaway account, then exit with a
+ * verdict on stdout.
+ */
+const isSmoke = developmentFlag("--smoke");
 
 /**
  * `--shots`: photograph every surface, in both themes, at three window sizes,
  * and report what the page's own geometry says is wrong with it (`shots/`).
  *
- * A development mode, never reachable from a packaged install: like `--smoke`
- * it redirects `userData` into a disposable subdirectory, creates its own
- * throwaway account, and exits when it is done.
+ * Like `--smoke` it redirects `userData` into a disposable subdirectory,
+ * creates its own throwaway account, and exits when it is done.
  */
-const isShots = process.argv.includes("--shots");
+const isShots = developmentFlag("--shots");
 
 /**
  * `--demo`: add a fully populated account to THIS device and exit, so the whole
@@ -694,9 +723,12 @@ const isShots = process.argv.includes("--shots");
  * that is the point, since the account has to still be there when the app is
  * opened normally afterwards. It is strictly additive: accounts are separate
  * directories with separate key chains (ADR-044), so seeding one cannot reach
- * another's data.
+ * another's data. Which is why it survived the audit that closed the other two,
+ * and it is still refused in a packaged build for a plainer reason: `DEMO_PASSCODE`
+ * is a constant four lines below, so on a real install the account it adds is an
+ * unlock anyone who has read this repository already knows.
  */
-const isDemo = process.argv.includes("--demo");
+const isDemo = developmentFlag("--demo");
 
 /** The label and passcode `--demo` creates its account with. Printed on exit, because an account nobody can unlock is not a demo. */
 const DEMO_ACCOUNT_LABEL = "Demo";
@@ -9783,13 +9815,6 @@ function registerIpc(): void {
       { day, routineRef: routine.id, routineLabel: routine.name, notes },
       new Date().toISOString(),
     );
-  });
-
-  ipcMain.handle(IpcChannel.fitWorkoutGet, (event, payload): FitWorkout => {
-    assertTrustedSender(event);
-    const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    return fitWorkoutStore(profileId).get(asNonEmptyString(body.id, "id"));
   });
 
   ipcMain.handle(IpcChannel.fitWorkoutFinish, (event, payload): FitWorkout => {

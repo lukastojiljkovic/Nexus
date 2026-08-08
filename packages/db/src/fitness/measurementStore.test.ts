@@ -154,21 +154,6 @@ describe("FitMeasurementStore.listRange", () => {
   });
 });
 
-describe("FitMeasurementStore.latest", () => {
-  it("answers the most recent day's reading", () => {
-    const measurements = store();
-    measurements.save(measurement("2026-08-01"), MUCH_LATER);
-    measurements.save(measurement("2026-08-05"), MUCH_LATER);
-    measurements.save(measurement("2026-08-03"), MUCH_LATER);
-
-    expect(measurements.latest()?.day).toBe("2026-08-05");
-  });
-
-  it("answers null when nothing was ever recorded", () => {
-    expect(store().latest()).toBeNull();
-  });
-});
-
 describe("FitMeasurementStore.remove", () => {
   it("hard-deletes a reading", () => {
     const measurements = store();

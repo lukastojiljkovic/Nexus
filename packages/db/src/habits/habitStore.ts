@@ -153,10 +153,11 @@ const ENTRY_COLUMNS = "id, habit_id, entry_date, value, created_at, updated_at";
  *
  * **Every habit statement is scoped by `profile_id`; every ENTRY statement is
  * scoped through its habit.** `habit_entries` carries no `profile_id` of its own
- * (migration 055, the `note_attachments` arrangement), so `setEntry`,
- * `clearEntry` and `listEntries` all resolve the habit in THIS profile first and
- * refuse when they cannot — an entry write naming another profile's habit is a
- * `HabitNotFoundError`, never a row.
+ * (migration 055, the `note_attachments` arrangement), so `setEntry` and
+ * `clearEntry` both resolve the habit in THIS profile first and refuse when they
+ * cannot — an entry write naming another profile's habit is a
+ * `HabitNotFoundError`, never a row. `listAllEntries` needs no such gate: it
+ * names no habit, and its own join is already scoped by `profile_id`.
  *
  * **Nothing here computes a week, or a streak.** The streak engine is pure and
  * lives in `@nexus/core` (`computeHabitStreak`), because a week's boundaries come
@@ -184,7 +185,6 @@ export class HabitStore {
   private readonly upsertEntry: Database.Statement;
   private readonly selectEntry: Database.Statement;
   private readonly deleteEntry: Database.Statement;
-  private readonly selectEntriesForHabit: Database.Statement;
   private readonly selectEntriesForProfile: Database.Statement;
 
   constructor(
@@ -249,11 +249,6 @@ export class HabitStore {
     );
     this.deleteEntry = db.prepare(
       `DELETE FROM habit_entries WHERE habit_id = ? AND entry_date = ?`,
-    );
-    this.selectEntriesForHabit = db.prepare(
-      `SELECT ${ENTRY_COLUMNS} FROM habit_entries
-       WHERE habit_id = ? AND entry_date >= ? AND entry_date <= ?
-       ORDER BY entry_date`,
     );
     // ONE query for every habit of the profile — the today list and the history
     // grid both want all of them at once, and an N+1 per habit is the obvious
@@ -419,18 +414,15 @@ export class HabitStore {
     this.deleteEntry.run(habitId, validDay);
   }
 
-  /** One habit's ticks inside an inclusive day window, oldest first. */
-  listEntries(habitId: string, range: HabitDayRange): HabitEntry[] {
-    const { from, to } = validateRange(range);
-    this.requireHabit(habitId);
-    const rows = this.selectEntriesForHabit.all(habitId, from, to) as HabitEntryRow[];
-    return rows.map((row) => this.toEntry(row));
-  }
-
   /**
    * EVERY live habit's ticks inside an inclusive day window, in one query,
    * grouped by habit and oldest first within each — what the today list and the
-   * history grid both read, so neither has to walk `listEntries` per habit.
+   * history grid both read, so neither has to fire one query per habit.
+   *
+   * A per-habit `listEntries` used to sit beside this one and was never called
+   * outside its own tests: the surfaces that exist want every habit at once, and
+   * the one-habit answer is a filter over this list rather than a second query.
+   * It is gone, along with its `selectEntriesForHabit` statement.
    */
   listAllEntries(range: HabitDayRange): HabitEntry[] {
     const { from, to } = validateRange(range);

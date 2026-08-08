@@ -20,6 +20,15 @@
  *   zero.
  *
  * Nothing here reads a clock, touches a DOM or imports `node:` anything.
+ *
+ * **A fourth aggregate used to live here and does not any more.** `oneRepMaxTrend`
+ * returned one estimated-1RM point per day for a single exercise, and its doc
+ * reasoned carefully about what a CHART would draw on a day with no defensible
+ * estimate — but the chart was never built and nothing outside its own tests ever
+ * called it. `estimateOneRepMax` (in `training.ts`) is the piece that is really
+ * used: `exerciseRecords` reads it for the `bestOneRm` record, and FIT's exercise
+ * detail shows that one number. When a trend chart is actually designed, it can be
+ * written against the shape that chart needs rather than against a guess.
  */
 
 import type { ExerciseMetric, MuscleGroup } from "./exercise.js";
@@ -28,7 +37,6 @@ import {
   estimateOneRepMax,
   setTonnage,
   type OneRepMaxEstimate,
-  type OneRepMaxFormula,
   type SetKind,
 } from "./training.js";
 
@@ -301,42 +309,4 @@ export function mondayOf(day: string): string | null {
   const weekday = new Date(ms).getUTCDay();
   const back = weekday === 0 ? 6 : weekday - 1;
   return new Date(ms - back * MS_PER_DAY).toISOString().slice(0, 10);
-}
-
-/** One day's best estimated one-rep max for one exercise. */
-export interface OneRepMaxPoint {
-  readonly day: string;
-  readonly estimate: OneRepMaxEstimate;
-}
-
-/**
- * The estimated-1RM trend for ONE exercise: the best defensible estimate on each
- * day it was trained, oldest first.
- *
- * Days on which no set produced an estimate are ABSENT — not zero, and not
- * carried forward from the day before. A set of fifteen has no defensible
- * estimate (`ONE_RM_MAX_REPS`), and drawing the previous week's number on that
- * day would be the chart asserting a lift that was never made.
- */
-export function oneRepMaxTrend(
-  sets: readonly ProgressSet[],
-  exerciseRef: string,
-  formula?: OneRepMaxFormula,
-): OneRepMaxPoint[] {
-  const best = new Map<string, OneRepMaxEstimate>();
-  for (const set of sets) {
-    if (set.exerciseRef !== exerciseRef) continue;
-    if (!countsTowardVolume(set.kind)) continue;
-    if (set.metric !== "weight_reps" || set.weightKg === null || set.reps === null) continue;
-    const estimate =
-      formula === undefined
-        ? estimateOneRepMax(set.weightKg, set.reps)
-        : estimateOneRepMax(set.weightKg, set.reps, formula);
-    if (estimate === null) continue;
-    const current = best.get(set.day);
-    if (current === undefined || estimate.kg > current.kg) best.set(set.day, estimate);
-  }
-  return [...best]
-    .map(([day, estimate]) => ({ day, estimate }))
-    .sort((left, right) => (left.day < right.day ? -1 : 1));
 }

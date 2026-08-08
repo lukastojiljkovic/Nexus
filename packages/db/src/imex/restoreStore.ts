@@ -82,13 +82,14 @@ export interface RestoreProfileInput {
  * CASCADE` to reach a row (a future migration's table would silently survive
  * a restore if it relied on cascade alone — see `restoreStore.test.ts`'s
  * guard test, which reads `sqlite_master` and fails until a new table is
- * either added here or explicitly allow-listed as exempt). Thirteen tables carry
- * no `profile_id` of their own and are scoped through their parent instead
- * (`document_renewals` through `tracked_documents`; `task_sections` through
- * `task_lists`; `task_tag_links`, `task_attachments` and `task_dependencies`
- * through `tasks`; `subject_attachments` and `subject_note_links` through
- * `subjects`; the six `note_*` child tables through `notes`; `habit_entries`
- * through `habits`) — see `wipeSqlFor` below.
+ * either added here or explicitly allow-listed as exempt). Fourteen tables carry
+ * no `profile_id` of their own and are scoped through their parent instead —
+ * `SCOPED_THROUGH_PARENT` below is the list itself, and the count here is only
+ * ever right by accident, so read it there: `document_renewals` through
+ * `tracked_documents`; `task_sections` through `task_lists`; `task_tag_links`,
+ * `task_attachments` and `task_dependencies` through `tasks`;
+ * `subject_attachments` and `subject_note_links` through `subjects`; the six
+ * `note_*` child tables through `notes`; `habit_entries` through `habits`.
  */
 export const RESTORE_WIPE_TABLES = [
   "document_renewals",

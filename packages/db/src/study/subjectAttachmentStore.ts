@@ -30,12 +30,6 @@ export interface AddSubjectAttachmentInput {
   sha256: string;
 }
 
-/** How many materials one live subject carries — `TaskAttachmentCount`'s flat-row shape, so the wire carries something structured-clone-plain. */
-export interface SubjectAttachmentCount {
-  subjectId: string;
-  count: number;
-}
-
 interface SubjectAttachmentRow {
   id: string;
   subject_id: string;
@@ -44,11 +38,6 @@ interface SubjectAttachmentRow {
   size_bytes: number;
   sha256: string;
   created_at: string;
-}
-
-interface SubjectAttachmentCountRow {
-  subject_id: string;
-  n: number;
 }
 
 const COLUMNS = "id, subject_id, file_name, mime, size_bytes, sha256, created_at";
@@ -90,6 +79,13 @@ const ISO_8601_DATETIME =
  * lets the undo bar bring a deleted subject back still carrying its files. Only
  * a hard delete at the SQL level (`subjects` row removed) cascades the rows
  * away.
+ *
+ * **The mirror of `TaskAttachmentStore` stops short of one method.** A
+ * `countsBySubject` was copied over with the rest and was never called outside
+ * its own tests — `countsByTask` exists because the task LIST draws a paperclip
+ * badge per row, and STUDY's subject cards draw no such badge. Copying a method
+ * because its twin has one is how a store grows a surface nobody asked for, so
+ * this one is gone until a page actually wants it.
  */
 export class SubjectAttachmentStore {
   private readonly selectActiveSubjectById: Database.Statement;
@@ -99,7 +95,6 @@ export class SubjectAttachmentStore {
   private readonly deleteAttachment: Database.Statement;
   private readonly countBySha: Database.Statement;
   private readonly selectMimeBySha: Database.Statement;
-  private readonly selectCountsBySubject: Database.Statement;
 
   constructor(
     db: DatabaseHandle,
@@ -127,17 +122,6 @@ export class SubjectAttachmentStore {
     );
     this.selectMimeBySha = db.prepare(
       `SELECT mime FROM subject_attachments WHERE sha256 = ? LIMIT 1`,
-    );
-    // Scoped through the subject, exactly as `TaskAttachmentStore.countsByTask`
-    // is through its task: a soft-deleted subject's rows still exist (see the
-    // class doc comment) but its count belongs to no card the page draws.
-    this.selectCountsBySubject = db.prepare(
-      `SELECT sa.subject_id, count(*) AS n
-       FROM subject_attachments sa
-       JOIN subjects s ON s.id = sa.subject_id
-       WHERE s.profile_id = ? AND s.deleted_at IS NULL
-       GROUP BY sa.subject_id
-       ORDER BY sa.subject_id`,
     );
   }
 
@@ -193,17 +177,6 @@ export class SubjectAttachmentStore {
   mimeForHash(sha256: string): string | null {
     const row = this.selectMimeBySha.get(sha256) as { mime: string } | undefined;
     return row ? row.mime : null;
-  }
-
-  /**
-   * One entry per LIVE subject of this profile that carries at least one
-   * material. A subject with none is simply absent rather than reported as zero
-   * — `countsByTask`'s rule, and for its reason: a count is drawn only where
-   * there is something to count.
-   */
-  countsBySubject(): SubjectAttachmentCount[] {
-    const rows = this.selectCountsBySubject.all(this.profileId) as SubjectAttachmentCountRow[];
-    return rows.map((row) => ({ subjectId: row.subject_id, count: row.n }));
   }
 
   /** Confirms an active subject exists in this profile or throws — the gate every method above goes through. */

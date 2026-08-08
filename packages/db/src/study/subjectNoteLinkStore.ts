@@ -161,7 +161,15 @@ export class SubjectNoteLinkStore {
     }));
   }
 
-  /** The reverse lookup, over `subject_note_links_note`: which live subjects one live note is filed under. */
+  /**
+   * The reverse lookup, over `subject_note_links_note`: which live subjects one
+   * live note is filed under.
+   *
+   * No renderer surface calls this yet — the note editor that will show a note's
+   * subjects is being built, and this is the read it needs. Kept rather than
+   * deleted for exactly that reason, and said out loud here so „unused" is never
+   * mistaken for „dead": migration 035's index comment carries the same note.
+   */
   listSubjectsOfNote(noteId: string): string[] {
     this.requireActiveNote(noteId);
     const rows = this.selectSubjectsOfNote.all(noteId, this.profileId, this.profileId) as {

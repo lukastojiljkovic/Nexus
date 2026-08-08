@@ -133,6 +133,15 @@
     z-index: 4;
   }
 }
+/* The first of seven eyebrows in this file, and the note that covers all seven:
+   each hand-wrote `letter-spacing: 0.04em` where the app's one eyebrow tracking
+   is `--nx-font-tracking-label` (0.12em). Not a rounding difference — a THIRD of
+   the tracking, so Beleške's section names read tight while the same mark reads
+   open on every other page, which is how a scale stops being a scale. The value
+   is the token's now.
+
+   These blocks are otherwise still hand-copies of `.nx-eyebrow`; finishing that
+   is a `className` change on the elements, not a CSS one, and is handed off. */
 .note__org-heading {
   display: flex;
   align-items: center;
@@ -142,7 +151,7 @@
   padding: 0 var(--nx-space-2);
   font-size: var(--nx-font-size-caption);
   font-weight: var(--nx-font-weight-semibold);
-  letter-spacing: 0.04em;
+  letter-spacing: var(--nx-font-tracking-label);
   text-transform: uppercase;
   color: var(--nx-text-muted);
 }
@@ -720,24 +729,14 @@
   flex: none;
   font-variant-numeric: tabular-nums;
 }
-/* Per-row delete stays hidden until the row is hovered or the button focused. */
-.note__delete.nx-button {
-  flex: none;
-  background: transparent;
-  border-color: transparent;
-  color: var(--nx-text-muted);
-  padding: 2px 8px;
-  opacity: 0;
-  transition: opacity var(--nx-motion-fast) var(--nx-motion-ease);
-}
-.note__item-row:hover .note__delete.nx-button,
-.note__delete.nx-button:focus-visible {
-  opacity: 1;
-}
-.note__delete.nx-button:hover {
-  background: var(--nx-danger-soft);
-  color: var(--nx-danger);
-}
+/* `.note__delete` used to sit here — a bare per-row „×" with its own
+   hover-reveal and its own danger tint. The row grew a „⋯" menu instead
+   (`.note__row-menu`), which is where move/tag/delete live for both the row and
+   the card face, so the standalone button was removed from the markup and only
+   its rules stayed behind. Deleted rather than kept „in case": a styled class
+   with no element is an invitation to re-adopt it by grepping for the name, and
+   whoever did would get a delete affordance that skips what the menu's item
+   routes through — the flashcard-disposition question and the undo offer. */
 
 /* Per-row pin toggle: a star that fills gold when pinned (organizer, slice a3b). */
 .note__pin {
@@ -856,7 +855,13 @@
   background: var(--nx-surface);
   border: 1px solid var(--nx-border);
   border-radius: var(--nx-radius-md);
-  box-shadow: var(--nx-shadow);
+  /* The OVERLAY tier, not the raised one a card wears: this panel is portalled
+     to <body> and floats over content it must be readable against, and the
+     shadow is the only thing saying so — a border alone puts it in the page.
+     It sat on `--nx-shadow`, which Dan defines as `none`, so in the light theme
+     the menu was a flat outlined rectangle pasted over the list it came from,
+     with no separation from the rows showing through around it. */
+  box-shadow: var(--nx-elevation-overlay);
 }
 .note__menu-label {
   padding: 6px 10px 2px;
@@ -1036,7 +1041,7 @@
   margin: 0 0 var(--nx-space-2);
   font-size: var(--nx-font-size-caption);
   font-weight: var(--nx-font-weight-semibold);
-  letter-spacing: 0.04em;
+  letter-spacing: var(--nx-font-tracking-label);
   text-transform: uppercase;
   color: var(--nx-text-muted);
 }
@@ -1081,7 +1086,7 @@
   margin: 0;
   font-size: var(--nx-font-size-caption);
   font-weight: var(--nx-font-weight-semibold);
-  letter-spacing: 0.04em;
+  letter-spacing: var(--nx-font-tracking-label);
   text-transform: uppercase;
   color: var(--nx-text-muted);
 }
@@ -1184,7 +1189,7 @@
   margin: 0 0 var(--nx-space-2);
   font-size: var(--nx-font-size-caption);
   font-weight: var(--nx-font-weight-semibold);
-  letter-spacing: 0.04em;
+  letter-spacing: var(--nx-font-tracking-label);
   text-transform: uppercase;
   color: var(--nx-text-muted);
 }
@@ -1277,7 +1282,7 @@
   margin: 0 0 var(--nx-space-2);
   font-size: var(--nx-font-size-caption);
   font-weight: var(--nx-font-weight-semibold);
-  letter-spacing: 0.04em;
+  letter-spacing: var(--nx-font-tracking-label);
   text-transform: uppercase;
   color: var(--nx-text-muted);
 }
@@ -1287,7 +1292,7 @@
   margin: var(--nx-space-2) 0 0;
   font-size: var(--nx-font-size-caption);
   font-weight: var(--nx-font-weight-semibold);
-  letter-spacing: 0.04em;
+  letter-spacing: var(--nx-font-tracking-label);
   text-transform: uppercase;
   color: var(--nx-text-muted);
 }
@@ -1918,7 +1923,7 @@
   margin-bottom: var(--nx-space-2);
   font-size: var(--nx-font-size-caption);
   font-weight: var(--nx-font-weight-semibold);
-  letter-spacing: 0.04em;
+  letter-spacing: var(--nx-font-tracking-label);
   text-transform: uppercase;
   color: var(--nx-text-muted);
 }
@@ -2006,7 +2011,11 @@
   background: var(--nx-surface);
   border: 1px solid var(--nx-border);
   border-radius: var(--nx-radius-md);
-  box-shadow: var(--nx-shadow);
+  /* Overlay tier, same reason as `.note__menu-panel` — and more sharply here,
+     because this one floats over the prose being typed rather than over a list
+     of rows, so without a shadow the panel's own text and the paragraph behind
+     it read as one column of words. */
+  box-shadow: var(--nx-elevation-overlay);
 }
 .note__slash-item {
   display: block;
@@ -2069,7 +2078,12 @@
   background: var(--nx-surface);
   border: 1px solid var(--nx-border);
   border-radius: var(--nx-radius-lg);
-  box-shadow: var(--nx-shadow);
+  /* Overlay tier. The backdrop above dims the app to 25% of itself, which is
+     what says „something is in front"; the shadow is what says HOW far in
+     front. On Dan the pair had been doing half the job — a 75%-opaque wash with
+     a perfectly flat rectangle sitting on it, which reads as the page having
+     greyed out rather than as a palette having opened over it. */
+  box-shadow: var(--nx-elevation-overlay);
 }
 .search__input-row {
   padding: var(--nx-space-3) var(--nx-space-4) var(--nx-space-2);

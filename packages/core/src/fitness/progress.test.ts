@@ -1,13 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ExerciseMetric, MuscleGroup } from "./exercise.js";
 import type { SetKind } from "./training.js";
-import {
-  exerciseRecords,
-  mondayOf,
-  oneRepMaxTrend,
-  weeklyVolume,
-  type ProgressSet,
-} from "./progress.js";
+import { exerciseRecords, mondayOf, weeklyVolume, type ProgressSet } from "./progress.js";
 
 function set(over: Partial<ProgressSet> & { day: string }): ProgressSet {
   return {
@@ -165,55 +159,5 @@ describe("mondayOf", () => {
   it("refuses a day that does not exist", () => {
     expect(mondayOf("2026-02-30")).toBeNull();
     expect(mondayOf("juce")).toBeNull();
-  });
-});
-
-describe("oneRepMaxTrend", () => {
-  it("keeps one point per day — the best estimate that day", () => {
-    const trend = oneRepMaxTrend(
-      [
-        set({ day: "2026-07-01", weightKg: 100, reps: 3 }),
-        set({ day: "2026-07-01", weightKg: 90, reps: 5 }),
-        set({ day: "2026-07-08", weightKg: 105, reps: 3 }),
-      ],
-      "catalogue:potisak-sa-klupe",
-    );
-    expect(trend).toHaveLength(2);
-    expect(trend[0]?.day).toBe("2026-07-01");
-    expect(trend[0]?.estimate.kg).toBeCloseTo(110, 10);
-  });
-
-  it("skips a day whose sets produced no defensible estimate rather than carrying one forward", () => {
-    const trend = oneRepMaxTrend(
-      [
-        set({ day: "2026-07-01", weightKg: 100, reps: 3 }),
-        set({ day: "2026-07-08", weightKg: 60, reps: 20 }),
-      ],
-      "catalogue:potisak-sa-klupe",
-    );
-    expect(trend.map((point) => point.day)).toEqual(["2026-07-01"]);
-  });
-
-  it("answers about ONE exercise and ignores the rest of the log", () => {
-    const trend = oneRepMaxTrend(
-      [
-        set({ day: "2026-07-01", weightKg: 100, reps: 3 }),
-        set({ day: "2026-07-02", exerciseRef: "catalogue:cucanj", weightKg: 140, reps: 3 }),
-      ],
-      "catalogue:cucanj",
-    );
-    expect(trend).toHaveLength(1);
-    expect(trend[0]?.estimate.kg).toBeCloseTo(154, 10);
-  });
-
-  it("takes the formula it is given", () => {
-    const trend = oneRepMaxTrend(
-      [set({ day: "2026-07-01", weightKg: 100, reps: 5 })],
-      "catalogue:potisak-sa-klupe",
-      "brzycki",
-    );
-    // Brzycki: 100 × 36/32 = 112.5.
-    expect(trend[0]?.estimate.kg).toBeCloseTo(112.5, 10);
-    expect(trend[0]?.estimate.formula).toBe("brzycki");
   });
 });

@@ -88,7 +88,14 @@ export const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
 export const ESCAPE_MARKER = "nx-colour-allow:";
 
 const TS_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts"]);
-const SCANNED_EXTENSIONS = new Set([...TS_EXTENSIONS, ".css", ".html"]);
+
+/**
+ * Every file type that can carry a style value. Exported alongside
+ * `sourceRoots` below and for the same reason: `check-tokens.mjs` walks the
+ * identical tree looking for a different property, and a second hand-written
+ * copy of "which files count" is a second thing to forget.
+ */
+export const SCANNED_EXTENSIONS = new Set([...TS_EXTENSIONS, ".css", ".html"]);
 
 // --- Colour-form patterns --------------------------------------------------
 
@@ -297,19 +304,38 @@ function walk(dir, out) {
   return out;
 }
 
-// Every scanned file under each package's `src/` directory, across `apps/*`
-// and `packages/*`, excluding `packages/tokens`.
-export function findScanFiles(repoRoot = REPO_ROOT) {
-  const files = [];
+/**
+ * Every `src/` directory the styling gates cover: one per package across
+ * `apps/*` and `packages/*`, discovered from the filesystem, minus
+ * `packages/tokens` — the one package allowed to hold real colour values,
+ * being the source of truth the rest of the tree points at.
+ *
+ * Exported because `check-tokens.mjs` walks this same tree for a different
+ * property. Its root list used to be four hand-written entries under a comment
+ * claiming it "mirrors check-colours.mjs's roots"; `packages/db` was added to
+ * the repo after that copy was made and never reached it, so an entire package
+ * sat outside a gate whose own comment said it was covered. A comment cannot
+ * mirror anything and a literal list cannot notice a new package — only
+ * discovery can, and only one importer of it can stay in step.
+ */
+export function sourceRoots(repoRoot = REPO_ROOT) {
+  const roots = [];
   for (const group of ["apps", "packages"]) {
     const groupDir = join(repoRoot, group);
     if (!isDirectory(groupDir)) continue;
     for (const pkgName of readdirSync(groupDir)) {
       if (group === "packages" && pkgName === "tokens") continue;
       const srcDir = join(groupDir, pkgName, "src");
-      if (isDirectory(srcDir)) walk(srcDir, files);
+      if (isDirectory(srcDir)) roots.push(srcDir);
     }
   }
+  return roots;
+}
+
+// Every scanned file under each of those roots.
+export function findScanFiles(repoRoot = REPO_ROOT) {
+  const files = [];
+  for (const srcDir of sourceRoots(repoRoot)) walk(srcDir, files);
   return files.filter((f) => SCANNED_EXTENSIONS.has(extname(f)));
 }
 

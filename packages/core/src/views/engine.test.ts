@@ -16,18 +16,16 @@ import {
 } from "./engine.js";
 import type { KanbanGroup } from "./engine.js";
 
+// No `titleKey` anywhere: the engine reads `key` and `type` and nothing else,
+// and the fixture used to carry five label keys that named no real `strings`
+// path — see `FieldDef.titleKey` for why the property is now optional.
 const schema: CollectionSchema = {
   fields: [
-    { key: "naslov", type: "text", titleKey: "task.title" },
-    { key: "rok", type: "date", titleKey: "task.due" },
-    {
-      key: "status",
-      type: "select",
-      titleKey: "task.status",
-      options: ["Za učenje", "U toku", "Naučeno"],
-    },
-    { key: "tezina", type: "number", titleKey: "task.effort" },
-    { key: "gotovo", type: "boolean", titleKey: "task.done" },
+    { key: "naslov", type: "text" },
+    { key: "rok", type: "date" },
+    { key: "status", type: "select", options: ["Za učenje", "U toku", "Naučeno"] },
+    { key: "tezina", type: "number" },
+    { key: "gotovo", type: "boolean" },
   ],
 };
 

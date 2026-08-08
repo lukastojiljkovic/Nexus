@@ -174,7 +174,6 @@ export class FitWorkoutStore {
   private readonly updateWorkoutFields: Database.Statement;
   private readonly markWorkoutDeleted: Database.Statement;
   private readonly markWorkoutRestored: Database.Statement;
-  private readonly selectByDay: Database.Statement;
   private readonly selectByRange: Database.Statement;
   private readonly selectSetsByWorkout: Database.Statement;
   private readonly insertSet: Database.Statement;
@@ -222,11 +221,6 @@ export class FitWorkoutStore {
     this.markWorkoutRestored = db.prepare(
       `UPDATE fit_workouts SET deleted_at = NULL, updated_at = ?
        WHERE id = ? AND profile_id = ? AND deleted_at IS NOT NULL`,
-    );
-    this.selectByDay = db.prepare(
-      `SELECT ${WORKOUT_COLUMNS} FROM fit_workouts
-        WHERE profile_id = ? AND workout_date = ? AND deleted_at IS NULL
-        ORDER BY started_at, id`,
     );
     this.selectByRange = db.prepare(
       `SELECT ${WORKOUT_COLUMNS} FROM fit_workouts
@@ -369,14 +363,14 @@ export class FitWorkoutStore {
     }
   }
 
-  /** Every live workout of one day, ordered by when it was started. */
-  listByDay(day: string): FitWorkout[] {
-    const validDay = validateDay(day, "day");
-    const rows = this.selectByDay.all(this.profileId, validDay) as WorkoutRow[];
-    return rows.map((row) => this.toWorkout(row));
-  }
-
-  /** Every live workout in an inclusive day span, ascending. */
+  /**
+   * Every live workout in an inclusive day span, ascending.
+   *
+   * The ONE list read. A `listByDay(day)` sat beside it and was never called
+   * outside its own tests — one day is `listRange(day, day)`, and a second
+   * statement for that is a second place the „live, this profile, started_at
+   * order" rule has to stay true.
+   */
   listRange(fromDay: string, toDay: string): FitWorkout[] {
     const from = validateDay(fromDay, "fromDay");
     const to = validateDay(toDay, "toDay");

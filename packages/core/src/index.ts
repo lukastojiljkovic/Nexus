@@ -259,14 +259,8 @@ export type {
 // volume, and a record only exists where its question does. „The heaviest
 // assisted pull-up" is the one figure this module will not print, because there
 // a bigger number is LESS work. `progress.ts`'s header carries the reasoning.
-export { exerciseRecords, mondayOf, oneRepMaxTrend, weeklyVolume } from "./fitness/progress.js";
-export type {
-  ExerciseRecords,
-  OneRepMaxPoint,
-  ProgressSet,
-  RecordAt,
-  WeekVolume,
-} from "./fitness/progress.js";
+export { exerciseRecords, mondayOf, weeklyVolume } from "./fitness/progress.js";
+export type { ExerciseRecords, ProgressSet, RecordAt, WeekVolume } from "./fitness/progress.js";
 export {
   catalogueExercise,
   catalogueFood,

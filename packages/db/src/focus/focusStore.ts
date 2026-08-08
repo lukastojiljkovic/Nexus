@@ -31,9 +31,6 @@ const ISO_8601_DATETIME =
 const BARE_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 const MS_PER_SECOND = 1000;
-const SECONDS_PER_MINUTE = 60;
-/** `julianday` differences are in DAYS; 1440 turns one into minutes. */
-const MINUTES_PER_DAY = 1440;
 
 /**
  * One FINISHED focus session — the single row type behind the one focus timer
@@ -111,18 +108,6 @@ export interface CreateFocusSessionInput {
   label?: string | null;
 }
 
-/**
- * One kind of phase over a range: how many there were and how many minutes of
- * ATTENTION they held (the span, less what was paused). A kind with nothing in
- * range is simply absent, exactly as a subject with no time is absent from
- * `StatsStore.subjectMinutes`.
- */
-export interface FocusKindStats {
-  kind: FocusPhaseKind;
-  sessions: number;
-  minutes: number;
-}
-
 interface FocusSessionRow {
   id: string;
   profile_id: string;
@@ -155,13 +140,21 @@ const COLUMNS =
  * This store lives under `focus/` rather than `study/` because it stopped being
  * STUDY's the moment one timer served both modules; nothing about its behaviour
  * changed in the move.
+ *
+ * **There is deliberately no per-kind aggregate here.** One existed
+ * (`statsByKind`, a `GROUP BY kind` that subtracted `paused_seconds` in SQL) and
+ * its doc claimed „what a Pomodoro history reads instead of walking `listRange`",
+ * but no Pomodoro history ever read it: `FocusPage` groups and sums the rows
+ * `listRange` returns, through the renderer's own `focusPhases.ts`, because the
+ * page needs every kind present including the zeros and a SQL `GROUP BY` cannot
+ * report a kind with no rows. Two definitions of „attention minutes", only one of
+ * them exercised, is how the two drift apart — so the unread one is gone.
  */
 export class FocusStore {
   private readonly insert: Database.Statement;
   private readonly selectSubjectActive: Database.Statement;
   private readonly selectInRange: Database.Statement;
   private readonly selectAllActive: Database.Statement;
-  private readonly selectStatsByKind: Database.Statement;
   private readonly markDeleted: Database.Statement;
   private readonly markRestored: Database.Statement;
 
@@ -188,21 +181,6 @@ export class FocusStore {
       `SELECT ${COLUMNS} FROM focus_sessions
        WHERE profile_id = ? AND deleted_at IS NULL
        ORDER BY started_at, id`,
-    );
-    // The Pomodoro history's one aggregate. `paused_seconds` is subtracted in
-    // SQL rather than after the fact so the sum is over ATTENTION, which is the
-    // number the page is about — a phase you paused for ten minutes did not hold
-    // ten more minutes of focus.
-    this.selectStatsByKind = db.prepare(
-      `SELECT kind,
-              COUNT(*) AS sessions,
-              SUM((julianday(ended_at) - julianday(started_at)) * ${MINUTES_PER_DAY}
-                  - paused_seconds / ${SECONDS_PER_MINUTE}.0) AS minutes
-         FROM focus_sessions
-        WHERE profile_id = ? AND deleted_at IS NULL
-          AND date(started_at, 'localtime') BETWEEN ? AND ?
-        GROUP BY kind
-        ORDER BY kind`,
     );
     this.markDeleted = db.prepare(
       `UPDATE focus_sessions SET deleted_at = ?, updated_at = ?
@@ -291,31 +269,6 @@ export class FocusStore {
   listActive(): FocusSession[] {
     const rows = this.selectAllActive.all(this.profileId) as FocusSessionRow[];
     return rows.map(toFocusSession);
-  }
-
-  /**
-   * Per-kind session counts and ATTENTION minutes over `[fromDate, toDate]`,
-   * ordered by kind — what a Pomodoro history reads instead of walking
-   * `listRange` and summing in the renderer.
-   *
-   * Minutes are the wall span less `paused_seconds`, rounded once per kind, and
-   * floored at zero. There is deliberately NO rule about which outcomes count:
-   * a running phase is never a row, so every row here is time somebody actually
-   * spent, and the sum needs no asterisk.
-   */
-  statsByKind(fromDate: string, toDate: string): FocusKindStats[] {
-    const validFrom = validateBareDate(fromDate, "fromDate");
-    const validTo = validateBareDate(toDate, "toDate");
-    const rows = this.selectStatsByKind.all(this.profileId, validFrom, validTo) as {
-      kind: string;
-      sessions: number;
-      minutes: number | null;
-    }[];
-    return rows.map((row) => ({
-      kind: row.kind as FocusPhaseKind,
-      sessions: row.sessions,
-      minutes: Math.max(0, Math.round(row.minutes ?? 0)),
-    }));
   }
 
   /** Soft-deletes an active session (reversible via `restore`). */

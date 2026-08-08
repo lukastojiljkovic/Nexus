@@ -156,7 +156,13 @@
   background: var(--nx-surface);
   border: 1px solid var(--nx-border);
   border-radius: var(--nx-radius-lg);
-  box-shadow: var(--nx-shadow);
+  /* The deepest tier the ramp has, and the surface that most clearly deserves
+     it: the three selectors above are the shared dialog box, and a modal is the
+     one thing on screen the user must answer before anything else happens. It
+     asked for `--nx-shadow` — `none` on Dan — so a light-theme dialog was an
+     outlined rectangle on a dimmed page: the flattest possible drawing of the
+     most emphatic state the app has. */
+  box-shadow: var(--nx-elevation-overlay);
 }
 .recur-dialog__title,
 .tasks__dialog-title,

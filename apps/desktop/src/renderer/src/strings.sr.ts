@@ -354,8 +354,6 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
      * therefore the text a delete of such a profile is confirmed by typing.
      */
     businessLabel: "Posao",
-    /** The switcher row reads „Profil: <ime>“ — a statement of where you are that opens the list. */
-    rowPrefix: "Profil:",
     switcherLabel: "Promena profila",
     createBusiness: "Novi poslovni profil",
     createError: "Pravljenje profila nije uspelo. Pokušaj ponovo.",
@@ -1576,6 +1574,20 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     /** As `tagDuplicate`: the store refuses a duplicate name, so the line names that instead of asking for a retry against a UNIQUE index. */
     categoryDuplicate: "Kategorija sa tim imenom već postoji.",
     categoryFilterEmptyDescription: "Nijedna beleška ne pripada izabranim kategorijama.",
+    /**
+     * The title and the way OUT of a filter that matched nothing.
+     *
+     * The two sentences above say WHICH filter emptied the list; neither of
+     * them could undo it, and the two „Poništi" links that can live in the
+     * organizer rail — which is a closed drawer below 1345px. So on a narrow
+     * window the pane stated a dead end and offered nothing, which is the
+     * „Datoteke" rule (`files.noMatchTitle` + `files.clearFilters`) applied
+     * everywhere except here. The button clears BOTH axes, because with both
+     * set the reader cannot tell which one to drop and „try one, then the
+     * other" is not an affordance.
+     */
+    filterEmptyTitle: "Nema beležaka po ovim filterima",
+    filterEmptyClear: "Poništi filtere",
     /** The typed-name confirmation before a category delete — no undo exists for this write. Its notes are never deleted, only uncategorized (see the store's own `ON DELETE SET NULL`). */
     deleteCategoryDialog: {
       title: "Brisanje kategorije",
@@ -2391,6 +2403,12 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     menuLabel: "Radnje nad datotekom",
     preview: "Pregledaj",
     open: "Otvori",
+    /**
+     * The copy-out, spelled exactly as the note, task and subject panels spell
+     * it — this page borrows their three write channels, so it must not invent
+     * a fourth wording for the one action.
+     */
+    saveAs: "Sačuvaj kao…",
     goTo: "Idi na…",
     /** What a note with no title is called here — the same word Beleške uses for it. */
     untitledOwner: "Bez naslova",
@@ -4165,8 +4183,16 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     },
     /** One logged row: what, how much, and what it came to. */
     item: {
-      /** Row actions, quiet until hover, exactly as every other list in this app. */
-      edit: "Izmeni količinu",
+      /**
+       * Row actions, quiet until hover, exactly as every other list in this app.
+       *
+       * „Izmeni stavku" and no longer „Izmeni količinu": the same form now also
+       * moves the row between meals, and a label naming one of the two fields
+       * would send anyone looking for the other one to the delete button.
+       */
+      edit: "Izmeni stavku",
+      /** The slot picker inside that form — the fix for „upisao sam ovo pod doručak, a bila je užina". */
+      slotLabel: "Obrok",
       remove: "Ukloni",
       removedNotice: "Stavka je uklonjena.",
       save: "Sačuvaj",
@@ -4640,6 +4666,16 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         /** Reopening a finished session for a correction. Refused while another is open. */
         reopen: "Nastavi",
         reopenBlocked: "Ne može dok je drugi trening u toku.",
+        /**
+         * Correcting the DAY a finished session is filed under.
+         *
+         * „Nastavi" reopens the sets and leaves the date alone, so a session
+         * logged on the wrong day used to be fixable only by deleting it and
+         * repeating every set. The write always existed (`fitUpdateWorkout`
+         * takes `day`); the control did not.
+         */
+        dayLabel: "Datum treninga",
+        dayCorrect: "Premesti na ovaj datum",
         delete: "Obriši trening",
         deletedNotice: "Trening je obrisan.",
         adHoc: "Slobodan trening",

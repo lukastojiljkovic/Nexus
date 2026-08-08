@@ -282,7 +282,6 @@ export {
 export type {
   AddSubjectAttachmentInput,
   SubjectAttachment,
-  SubjectAttachmentCount,
 } from "./study/subjectAttachmentStore.js";
 
 export { SubjectNoteLinkStore } from "./study/subjectNoteLinkStore.js";
@@ -355,11 +354,7 @@ export {
   MAX_FOCUS_LABEL_LENGTH,
   MAX_FOCUS_PLANNED_MINUTES,
 } from "./focus/focusStore.js";
-export type {
-  CreateFocusSessionInput,
-  FocusKindStats,
-  FocusSession,
-} from "./focus/focusStore.js";
+export type { CreateFocusSessionInput, FocusSession } from "./focus/focusStore.js";
 
 export { StatsStore } from "./study/statsStore.js";
 export type {

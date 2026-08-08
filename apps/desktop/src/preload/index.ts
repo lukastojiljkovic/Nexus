@@ -613,7 +613,6 @@ const api: NexusApi = {
   fitOpenWorkout: (profileId) => ipcRenderer.invoke(IpcChannel.fitWorkoutOpen, { profileId }),
   fitStartWorkout: (profileId, day, routineRef, notes) =>
     ipcRenderer.invoke(IpcChannel.fitWorkoutStart, { profileId, day, routineRef, notes }),
-  fitWorkout: (profileId, id) => ipcRenderer.invoke(IpcChannel.fitWorkoutGet, { profileId, id }),
   fitFinishWorkout: (profileId, id) =>
     ipcRenderer.invoke(IpcChannel.fitWorkoutFinish, { profileId, id }),
   fitReopenWorkout: (profileId, id) =>

@@ -28,14 +28,23 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join, relative } from "node:path";
 
+import { sourceRoots } from "./check-colours.mjs";
+
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..");
 
-const SOURCE_ROOTS = [
-  join(ROOT, "apps", "desktop", "src"),
-  join(ROOT, "apps", "gallery", "src"),
-  join(ROOT, "packages", "ui", "src"),
-];
+// The scan roots come from `check-colours.mjs`, which discovers every `apps/*`
+// and `packages/*` that has a `src/`, rather than from a list written here.
+//
+// This file used to hold three hand-written paths — desktop, gallery, ui — the
+// three packages that happened to own a stylesheet on the day it was written.
+// That is the identical construct that had already failed in `check-tokens.mjs`,
+// where a copied root list quietly stopped covering `packages/db` the moment
+// that package existed. A literal list cannot notice a new package; it just
+// keeps passing, and a gate that passes because it looked nowhere is
+// indistinguishable from one that passed because the tree is clean. The
+// stylesheets are all still under those three today — which is exactly when the
+// list is cheapest to remove and hardest to remember to.
 
 /**
  * Every character a selector, an at-rule prelude or a `@media` query may
@@ -146,9 +155,19 @@ function* walkCss(dir) {
   }
 }
 
+/**
+ * The directories this gate walks. Exported so its own test can assert that no
+ * stylesheet in the tree falls outside them — asserting against `sourceRoots`
+ * instead would only prove that the shared list is right, not that THIS gate
+ * uses it, and a revert to a literal list would go unnoticed.
+ */
+export function scanRoots() {
+  return sourceRoots(ROOT);
+}
+
 export function scanStylesheets() {
   const failures = [];
-  for (const root of SOURCE_ROOTS) {
+  for (const root of scanRoots()) {
     let files;
     try {
       files = [...walkCss(root)];

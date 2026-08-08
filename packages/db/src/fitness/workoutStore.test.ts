@@ -199,7 +199,7 @@ describe("FitWorkoutStore.updateWorkout/remove/restore", () => {
   });
 });
 
-describe("FitWorkoutStore.listByDay/listRange", () => {
+describe("FitWorkoutStore.listRange", () => {
   it("lists live workouts of one day, ordered by start time", () => {
     const workouts = store();
     const a = workouts.start(startInput("2026-08-01"), NOW);
@@ -207,7 +207,7 @@ describe("FitWorkoutStore.listByDay/listRange", () => {
     const b = workouts.start(startInput("2026-08-01"), EVEN_LATER);
     workouts.finish(b.id, "2026-08-01T11:00:00.000Z");
 
-    expect(workouts.listByDay("2026-08-01").map((w) => w.id)).toEqual([a.id, b.id]);
+    expect(workouts.listRange("2026-08-01", "2026-08-01").map((w) => w.id)).toEqual([a.id, b.id]);
   });
 
   it("lists an inclusive range, ascending by day", () => {
