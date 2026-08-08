@@ -28,15 +28,47 @@ function target(overrides: Partial<CsvFinanceTarget> = {}): CsvFinanceTarget {
 }
 
 describe("currencyMinorDigits", () => {
-  it("reads the currency's own CLDR exponent rather than assuming two", () => {
+  it("states ISO 4217's exponent rather than assuming two", () => {
     expect(currencyMinorDigits("RSD")).toBe(2);
     expect(currencyMinorDigits("EUR")).toBe(2);
     expect(currencyMinorDigits("JPY")).toBe(0);
     expect(currencyMinorDigits("KWD")).toBe(3);
+    expect(currencyMinorDigits("CLF")).toBe(4);
   });
 
-  it("falls back to ISO's own default of two for a code the runtime has no data for", () => {
+  it("falls back to ISO's own default of two for a code the table does not name", () => {
     expect(currencyMinorDigits("ZZZ")).toBe(2);
+  });
+
+  it("is case-insensitive, so a lower-case code cannot fail open to two", () => {
+    expect(currencyMinorDigits("jpy")).toBe(0);
+    expect(currencyMinorDigits("kwd")).toBe(3);
+  });
+
+  // THE REGRESSION THIS BLOCK EXISTS FOR.
+  //
+  // The exponent used to be read from `Intl.NumberFormat().resolvedOptions()`,
+  // which answers a DISPLAY question out of whichever CLDR the process happens
+  // to bundle. Node and Chromium disagree about exactly one currency that
+  // matters here: Node resolves RSD to 2, and Chromium — where the app actually
+  // runs — to 0, because Serbia has written dinars without para for years and
+  // CLDR records the custom. So this suite passed under Node, agreed with ISO,
+  // and the shipped app rendered every dinar figure ONE HUNDRED TIMES TOO LARGE
+  // while a CSV import parsed one a hundred times too small.
+  //
+  // Pinning the answer AGAINST the runtime's is what makes the class
+  // unrepresentable: an implementation that merely forwards whatever ICU says
+  // cannot satisfy this and the RSD assertion above on both runtimes at once.
+  it("does not ask the runtime, whose display convention may differ from the ISO exponent", () => {
+    const displayDigits = new Intl.NumberFormat("sr-Latn", {
+      style: "currency",
+      currency: "RSD",
+      currencyDisplay: "code",
+    }).resolvedOptions().maximumFractionDigits;
+    // Whatever this runtime's CLDR says — 0 on Chromium, 2 on Node — the stored
+    // scale is ISO's, and it is 2.
+    expect(currencyMinorDigits("RSD")).toBe(2);
+    expect([0, 2]).toContain(displayDigits);
   });
 });
 

@@ -51,10 +51,24 @@ const formatters = new Map<string, Intl.NumberFormat>();
 function formatterFor(currency: string): Intl.NumberFormat {
   const existing = formatters.get(currency);
   if (existing !== undefined) return existing;
+  // The fraction digits are STATED, from the same table `decimalLiteral` splits
+  // the integer with, rather than left to the formatter's own CLDR default.
+  //
+  // Left to itself, `Intl` writes a currency the way the LOCALE writes it, and
+  // for RSD under Chromium's ICU that is zero decimals — Serbia stopped writing
+  // para long ago. This module stores 100 minor units to the dinar (migration
+  // 051, and this file's own header), so a formatter rounding to zero decimals
+  // would silently drop the para off every amount, and — before the exponent
+  // itself was fixed — was rendering every dinar figure a hundred times too
+  // large. Passing the digits in is what makes the split and the rendering the
+  // same decision instead of two that happen to agree.
+  const digits = currencyMinorDigits(currency);
   const created = new Intl.NumberFormat(MONEY_LOCALE, {
     style: "currency",
     currency,
     currencyDisplay: "code",
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
   });
   formatters.set(currency, created);
   return created;

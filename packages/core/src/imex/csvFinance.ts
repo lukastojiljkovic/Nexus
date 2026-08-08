@@ -165,40 +165,58 @@ export function suggestCsvFinanceMapping(
 
 // --- The currency's own exponent ---------------------------------------------
 
-/** One `Intl.NumberFormat` per currency, built on first use — constructing one is the expensive part, and a statement asks the same question once per file. */
-const exponentFormatters = new Map<string, Intl.NumberFormat>();
+/**
+ * ISO 4217 exponents for every currency whose exponent is NOT 2.
+ *
+ * A stated table, not a runtime query, and the difference is a money defect
+ * this app actually shipped. This function used to ask
+ * `Intl.NumberFormat(...).resolvedOptions().maximumFractionDigits`, which
+ * answers a DISPLAY question — "how many decimals does this locale write for
+ * this currency" — and answers it from whatever CLDR the process happens to
+ * bundle. The two runtimes in this repo disagree about exactly one currency
+ * that matters here: under the Node that runs the tests, RSD resolves to 2;
+ * under the Chromium ICU inside Electron, where the app actually runs, it
+ * resolves to 0, because Serbia has written dinars without para for years and
+ * CLDR records the custom. So the tests asserted 2, agreed with ISO, passed,
+ * and the shipped app rendered every dinar figure ONE HUNDRED TIMES TOO LARGE.
+ *
+ * The scale of a currency is a property of the currency, fixed by ISO 4217 —
+ * RSD has 100 para whether or not anyone spends them. A display convention is a
+ * different fact, and reading one to answer the other is what made a number in
+ * this app depend on which binary was executing it.
+ *
+ * Everything absent from this table is 2, which is ISO's own default and covers
+ * every currency an account in this app is likely to hold.
+ */
+const MINOR_DIGITS: Readonly<Record<string, number>> = {
+  // Exponent 0 — no minor unit at all.
+  BIF: 0, CLP: 0, DJF: 0, GNF: 0, ISK: 0, JPY: 0, KMF: 0, KRW: 0, PYG: 0,
+  RWF: 0, UGX: 0, UYI: 0, VND: 0, VUV: 0, XAF: 0, XOF: 0, XPF: 0,
+  // Exponent 3 — the Gulf and Maghreb currencies with 1000 minor units.
+  BHD: 3, IQD: 3, JOD: 3, KWD: 3, LYD: 3, OMR: 3, TND: 3,
+  // Exponent 4 — the two index units.
+  CLF: 4, UYW: 4,
+};
 
 /**
- * How many minor units make one major unit of `currency`, read from the
- * currency's own CLDR data rather than assumed: 2 for RSD and EUR, 0 for JPY,
- * 3 for KWD. A well-formed code the runtime has no data for answers 2, which is
- * ISO's own default and what `Intl` itself would use.
+ * How many minor units make one major unit of `currency`: 2 for RSD and EUR, 0
+ * for JPY, 3 for KWD. A code the table does not name answers 2, which is ISO's
+ * own default.
  *
- * The renderer's `money.ts` — the DISPLAY edge — reads the same fact from the
- * same source, and reading a statement is that edge's exact INVERSE: text in
- * major units becoming the integer minor units everything else in FIN speaks.
- * One definition, imported by both, so the two cannot drift; migration 051's
- * „the exponent is a display fact, never a schema one" is untouched, since
- * nothing here stores it.
+ * The renderer's `money.ts` — the DISPLAY edge — reads this same fact from this
+ * same function, and reading a bank statement is that edge's exact INVERSE:
+ * text in major units becoming the integer minor units everything else in FIN
+ * speaks. One definition, imported by both, so the two cannot drift; migration
+ * 051's "the exponent is a display fact, never a schema one" is untouched,
+ * since nothing here stores it.
  *
  * `currency` must be a validated ISO-4217 code (three upper-case ASCII
  * letters) — every code that reaches this module comes out of `fin_accounts`,
- * whose CHECK is exactly that rule.
+ * whose CHECK is exactly that rule. It is upper-cased here anyway, because a
+ * table lookup that is case-sensitive would fail open to 2 rather than loudly.
  */
 export function currencyMinorDigits(currency: string): number {
-  let formatter = exponentFormatters.get(currency);
-  if (formatter === undefined) {
-    formatter = new Intl.NumberFormat("sr-Latn", {
-      style: "currency",
-      currency,
-      currencyDisplay: "code",
-    });
-    exponentFormatters.set(currency, formatter);
-  }
-  // Always present for a CURRENCY formatter in practice: `Intl` resolves it from
-  // the currency's own data (or ISO's default of 2) before this returns. The
-  // fallback matches what would have been resolved anyway.
-  return formatter.resolvedOptions().maximumFractionDigits ?? 2;
+  return MINOR_DIGITS[currency.toUpperCase()] ?? 2;
 }
 
 // --- The amount convention ---------------------------------------------------
