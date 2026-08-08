@@ -58,25 +58,65 @@ select is_empty(
 -- ---------------------------------------------------------------------------
 -- 5–8. The two tables Supabase created, which are the two nobody checks.
 -- ---------------------------------------------------------------------------
--- Migration 004 may only have been able to WARN about these, if the migration
--- role was not a member of the owning role. That is exactly why these four
--- assertions exist and why they are not conditional: a wall may be reported
--- missing, but it must never be reported present when it is not.
+-- ENABLE is asserted flatly. FORCE is asserted as what FORCE is actually FOR,
+-- and the difference was found by running this file rather than by reading it.
+--
+-- WHAT THE FIRST VERSION ASSERTED, AND WHY IT WAS WRONG. It demanded
+-- `relforcerowsecurity` on both, on the theory that migration 004 would set it
+-- wherever the migration role was a member of the owning role. Against a real
+-- Postgres 17 both assertions fail, and they fail on every Supabase project
+-- there will ever be: `storage.objects` is owned by `supabase_storage_admin`
+-- and `realtime.messages` by `supabase_realtime_admin`, `postgres` is a member
+-- of neither, and no hosted project hands out those two passwords. `alter table
+-- … force row level security` answers `must be owner of table objects` and
+-- there is no ceremony, dashboard or support ticket that changes it.
+--
+-- FORCE removes the OWNER'S exemption from its own policies. So the security
+-- question is never „is the bit set" — it is „can anything Nexus is able to be
+-- slip past the policies by being the owner". On the tables in `public` and
+-- `private` the owner is `postgres`, which is the migration role, the dashboard
+-- SQL editor's role and whatever a leaked connection string grants, so there the
+-- exemption is reachable and FORCE is load-bearing. On these two the owner is a
+-- platform service role that lives in Supabase's own infrastructure; an attacker
+-- holding it holds the platform, at which point RLS is not what is protecting
+-- anything.
+--
+-- So the invariant is written as the thing that is true and that could stop
+-- being true: FORCE is set, OR the owner is a role none of the five identities
+-- this product can present is a member of. If a future platform change ever
+-- reassigns `storage.objects` to `postgres`, `pg_has_role` flips, this goes red,
+-- and FORCE becomes both possible and mandatory on the same day. That is a
+-- weaker claim than the one it replaces, and it is the one that is true — a wall
+-- may be reported missing, but must never be reported present when it is not.
 select ok(
   (select relrowsecurity from pg_class where oid = 'storage.objects'::regclass),
   'storage.objects has row level security ENABLED'
 );
-select ok(
-  (select relforcerowsecurity from pg_class where oid = 'storage.objects'::regclass),
-  'storage.objects has row level security FORCED'
+select is_empty(
+  $$ select 'storage.objects is owner-exempt and its owner '
+            || pg_get_userbyid(c.relowner) || ' is assumable by ' || r.rolname
+       from pg_class c
+       cross join (values ('postgres'), ('authenticator'), ('authenticated'),
+                          ('anon'), ('service_role')) as r(rolname)
+      where c.oid = 'storage.objects'::regclass
+        and not c.relforcerowsecurity
+        and pg_has_role(r.rolname, c.relowner, 'MEMBER') $$,
+  'storage.objects: FORCED, or owned by a role no Nexus identity can assume'
 );
 select ok(
   (select relrowsecurity from pg_class where oid = 'realtime.messages'::regclass),
   'realtime.messages has row level security ENABLED'
 );
-select ok(
-  (select relforcerowsecurity from pg_class where oid = 'realtime.messages'::regclass),
-  'realtime.messages has row level security FORCED'
+select is_empty(
+  $$ select 'realtime.messages is owner-exempt and its owner '
+            || pg_get_userbyid(c.relowner) || ' is assumable by ' || r.rolname
+       from pg_class c
+       cross join (values ('postgres'), ('authenticator'), ('authenticated'),
+                          ('anon'), ('service_role')) as r(rolname)
+      where c.oid = 'realtime.messages'::regclass
+        and not c.relforcerowsecurity
+        and pg_has_role(r.rolname, c.relowner, 'MEMBER') $$,
+  'realtime.messages: FORCED, or owned by a role no Nexus identity can assume'
 );
 
 -- ---------------------------------------------------------------------------

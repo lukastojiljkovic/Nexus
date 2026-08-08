@@ -9,18 +9,35 @@
 -- and left these two on stock settings has not built a wall; it has built a
 -- fence with a gate in the part of the garden it did not survey.
 --
--- OWNERSHIP, AND WHY THIS FILE MAY WARN INSTEAD OF FAILING. `storage.objects` is
+-- OWNERSHIP, AND WHY THE `force` HERE IS EXPECTED TO WARN. `storage.objects` is
 -- owned by `supabase_storage_admin` and `realtime.messages` by
--- `supabase_realtime_admin`. In most Supabase projects the migration role is a
--- member of both and everything below simply applies. Where it is not, `alter
--- table` raises `insufficient_privilege`, and there is no good answer that ends
--- the deploy: aborting the migration takes the whole schema with it over a table
--- this file did not create. So each block catches that one error, converts it
--- into a WARNING naming the exact statement a human must run, and lets the
--- deploy continue — and `supabase/tests/database/00_rls_enabled.test.sql` then
--- FAILS, loudly, because it asserts the end state rather than the attempt. The
--- rule this arrangement follows is that a wall may be reported missing but must
--- never be reported present when it is not.
+-- `supabase_realtime_admin`. The migration role is `postgres`, which is a member
+-- of NEITHER — verified against a live Supabase Postgres 17, where the `alter
+-- table` below answers `must be owner of table objects`, and no hosted project
+-- issues those two passwords, so there is no ceremony that changes it. An
+-- earlier version of this header guessed that „in most Supabase projects the
+-- migration role is a member of both"; running it is what corrected that.
+--
+-- `create policy` DOES succeed for `postgres` on both tables (Supabase's Postgres
+-- allows policy management by a sufficiently privileged non-owner), which is why
+-- everything below this block is real and applied. It is only the owner-exemption
+-- bit that cannot be set.
+--
+-- WHAT STANDS IN ITS PLACE, and why that is enough HERE and only here. `force`
+-- removes the owner's exemption from its own policies. It is load-bearing on
+-- every table in `public` and `private`, whose owner is `postgres` — the
+-- migration role, the dashboard SQL editor's role, and whatever a leaked
+-- connection string grants. It is not reachable on these two, whose owner is a
+-- platform service role living inside Supabase's own infrastructure: an attacker
+-- who holds it holds the platform, and RLS is not the control that was protecting
+-- anything at that point. `00_rls_enabled.test.sql` therefore asserts the honest
+-- invariant — FORCED, or owned by a role no Nexus identity is a member of — so
+-- that the day a platform change reassigns either table to `postgres`, the gate
+-- goes red and `force` becomes both possible and mandatory.
+--
+-- The `attempt, catch, warn` shape stays: it costs nothing, it is correct on any
+-- Postgres where the migration role IS the owner, and aborting the whole schema
+-- over a table this file did not create is the one outcome that helps nobody.
 
 -- No `begin;`/`commit;` — the CLI wraps each migration file in a transaction of
 -- its own; migration 001's header has the full reasoning.
@@ -65,15 +82,41 @@ exception when insufficient_privilege then
 end;
 $$;
 
+-- TWO BLOCKS, NOT ONE, and the split is the whole point. `enable` and `force`
+-- both raise `insufficient_privilege` for a non-owner, and a single block that
+-- ran `enable` and then `force` would roll BOTH back when the second one threw —
+-- so on any project where `enable` was permitted and `force` was not, this
+-- migration would have silently un-enabled row level security on the table
+-- holding every user's file bytes, and reported success. That the two happen to
+-- fail together on Supabase (where the platform has already enabled RLS on both
+-- tables) is luck, not design, and luck is not what this file is for.
 do $$
 begin
   execute 'alter table storage.objects enable row level security';
+exception when insufficient_privilege then
+  -- Not fatal, and on Supabase not even a problem: the platform ships
+  -- `storage.objects` with RLS enabled. `00_rls_enabled.test.sql` asserts the
+  -- end state, so if that ever stops being true the gate says so.
+  raise warning
+    'Nexus: could not enable RLS on storage.objects (owned by %); relying on the '
+    'platform default, which 00_rls_enabled.test.sql verifies.',
+    (select pg_get_userbyid(relowner) from pg_class where oid = 'storage.objects'::regclass);
+end;
+$$;
+
+do $$
+begin
   execute 'alter table storage.objects force row level security';
 exception when insufficient_privilege then
+  -- EXPECTED ON EVERY SUPABASE PROJECT. See this file's header: `postgres` is not
+  -- a member of `supabase_storage_admin` and no hosted project issues that
+  -- password, so „run it as the owner" is advice nobody can take and this warning
+  -- deliberately does not give it. What replaces FORCE, and the gate that watches
+  -- the assumption, are both in the header.
   raise warning
-    'Nexus: could not force RLS on storage.objects (owned by %). Run as that '
-    'owner: ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY; ALTER TABLE '
-    'storage.objects FORCE ROW LEVEL SECURITY;',
+    'Nexus: RLS on storage.objects is ENABLED but not FORCED — owner % is a '
+    'platform service role this migration cannot become. This is expected; '
+    '00_rls_enabled.test.sql asserts that the owner stays unassumable.',
     (select pg_get_userbyid(relowner) from pg_class where oid = 'storage.objects'::regclass);
 end;
 $$;
@@ -158,15 +201,28 @@ $$;
 -- The topic namespace is fixed here: `nexus:<user_id>`. `realtime.topic()` is
 -- the Realtime server's view of the channel being joined, so the predicate is an
 -- equality against the caller's own uuid and there is no wildcard in it.
+-- Split for the reason given above `storage.objects`: one block that ran both
+-- would roll `enable` back when `force` threw.
 do $$
 begin
   execute 'alter table realtime.messages enable row level security';
-  execute 'alter table realtime.messages force row level security';
 exception when insufficient_privilege then
   raise warning
-    'Nexus: could not force RLS on realtime.messages (owned by %). Run as that '
-    'owner: ALTER TABLE realtime.messages ENABLE ROW LEVEL SECURITY; ALTER TABLE '
-    'realtime.messages FORCE ROW LEVEL SECURITY;',
+    'Nexus: could not enable RLS on realtime.messages (owned by %); relying on '
+    'the platform default, which 00_rls_enabled.test.sql verifies.',
+    (select pg_get_userbyid(relowner) from pg_class where oid = 'realtime.messages'::regclass);
+end;
+$$;
+
+do $$
+begin
+  execute 'alter table realtime.messages force row level security';
+exception when insufficient_privilege then
+  -- Expected on every Supabase project; owner is `supabase_realtime_admin`.
+  raise warning
+    'Nexus: RLS on realtime.messages is ENABLED but not FORCED — owner % is a '
+    'platform service role this migration cannot become. This is expected; '
+    '00_rls_enabled.test.sql asserts that the owner stays unassumable.',
     (select pg_get_userbyid(relowner) from pg_class where oid = 'realtime.messages'::regclass);
 end;
 $$;

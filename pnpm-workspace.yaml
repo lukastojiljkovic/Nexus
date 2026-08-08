@@ -1,6 +1,14 @@
 packages:
   - "apps/*"
   - "packages/*"
+  # The sync server. It builds nothing and ships no JavaScript to any app — it
+  # holds the migrations, the pgTAP suite and the static wall audit. It is a
+  # workspace member for one reason: so `pnpm test` runs its 33 static tests and
+  # `turbo` sees them. Before this line, `supabase/package.json` declared `test`
+  # and `check` scripts that nothing on earth invoked — the exact failure the
+  # ci.yml comment above `check:colours` describes, repeated on the one
+  # subsystem whose whole job is to be checked.
+  - "supabase"
 allowBuilds:
   better-sqlite3-multiple-ciphers: true
   electron: true
