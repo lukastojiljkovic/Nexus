@@ -62,12 +62,16 @@ export interface DeletedState {
 /** A row as this module understands it. Immutable; every operation returns a new one. */
 export interface RowState {
   /**
-   * The server's optimistic-concurrency counter, carried here only so a merge
-   * can report the greater of the two. **This module never invents the next
-   * version.** A merged row is submitted with the version it was based on; the
-   * server accepts and increments, or rejects, and a rejection means another
-   * device got there first and the caller must re-fetch and merge again. That
-   * loop is the sync engine's, not this module's.
+   * The optimistic-concurrency counter, carried here only so a merge can report
+   * the greater of the two. **This module never invents the next version.**
+   *
+   * Nor does the server: the version is inside the row's AEAD associated data,
+   * so a number the server chose would not be a number the ciphertext
+   * authenticates. The client advances it by exactly one when it pushes
+   * (`@nexus/sync`'s `planPush`), and the server's compare-and-swap either
+   * accepts that or rejects it as `NX001` — which means another device got there
+   * first, and the caller must re-fetch and merge again. That loop is the sync
+   * engine's, not this module's.
    */
   readonly version: number;
   readonly fields: FieldStates;

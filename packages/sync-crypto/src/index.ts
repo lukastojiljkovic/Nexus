@@ -50,7 +50,11 @@ export { SyncCryptoError } from "./errors.js";
 export type { SyncCryptoErrorCode } from "./errors.js";
 
 // ── Byte helpers callers need to move sealed material through JSON ──────────
-export { base64urlToBytes, bytesToBase64url, constantTimeEqual, zeroize } from "./bytes.js";
+// `utf8` is exported for one reason worth naming: the server bounds `object_id`
+// and `parent_id` by `octet_length`, and a client that checked `String.length`
+// would pass a 200-character Serbian id that is 320 bytes on the wire. Counting
+// the same bytes the database counts needs the same encoder.
+export { base64urlToBytes, bytesToBase64url, constantTimeEqual, utf8, zeroize } from "./bytes.js";
 
 // ── Canonical JSON ──────────────────────────────────────────────────────────
 export { canonicalJson, isJsonObject, parseJsonValue } from "./json.js";
@@ -144,9 +148,9 @@ export type {
 // ── The hybrid logical clock ────────────────────────────────────────────────
 export {
   HLC_MAX_FORWARD_DRIFT_MS,
-  clampRemoteHlc,
   compareHlc,
   formatHlc,
+  hlcExceedsDriftWindow,
   hlcReceive,
   hlcSend,
   hlcZero,

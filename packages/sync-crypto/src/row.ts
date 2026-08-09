@@ -120,7 +120,7 @@ export interface RowIdentity {
   readonly profileId: string;
   readonly collection: string;
   readonly objectId: string;
-  /** Monotonic per object. Also the optimistic-concurrency token the server checks. */
+  /** The optimistic-concurrency token: exactly one more than the stored version, per object. */
   readonly version: number;
   /** A tombstone is a row like any other; the flag is authenticated, never inferred. */
   readonly deleted: boolean;

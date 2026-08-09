@@ -17,10 +17,13 @@
  *               survives only because a browser never derives K_wrap; see
  *               `kdf.ts`'s header on `deriveWebAuthPassword` and on the bundle
  *               constraint the web app owes.
- *   CK_p        256 random bits per profile, wrapped under MK. A browser
- *               session receives only the CK_p of profiles the user marked
- *               web-enabled. A profile marked local-only is enforced by NEVER
- *               WRAPPING its CK_p under MK — so "this profile stays on my
+ *   CK_p        256 random bits per profile PER EPOCH, wrapped under MK. A
+ *               rotation mints the next generation and re-encrypts the
+ *               profile's rows one at a time, so both wraps must exist at once
+ *               or every row the pass has not reached becomes unopenable. A
+ *               browser session receives only the CK_p of profiles the user
+ *               marked web-enabled. A profile marked local-only is enforced by
+ *               NEVER WRAPPING its CK_p under MK — so "this profile stays on my
  *               computer" is a fact about which ciphertexts exist, not a
  *               boolean somebody can flip.
  *
@@ -62,12 +65,13 @@
  * ─── Why the context is inside the derivation, not just the AAD ─────────────
  *
  * `K_enc` and `K_commit` are derived over the FULL AAD — version, purpose, user
- * id and (for a content key) profile id. So a `mk/web-password` wrap and a
- * `mk/sync-recovery` wrap of the same MK under the same key material use
- * different encryption keys entirely. Opening one as the other is not a check
- * that could be deleted; it is arithmetic that does not come out. The `purpose`
- * comparison at the top of `unwrapKey` exists only to produce a legible error
- * instead of an opaque one.
+ * id and (for a content key) profile id and epoch. So a `mk/web-password` wrap
+ * and a `mk/sync-recovery` wrap of the same MK under the same key material use
+ * different encryption keys entirely, and so do two generations of one
+ * profile's content key. Opening one as the other is not a check that could be
+ * deleted; it is arithmetic that does not come out. The `purpose` comparison at
+ * the top of `unwrapKey` exists only to produce a legible error instead of an
+ * opaque one.
  */
 
 import {
@@ -76,6 +80,7 @@ import {
   concatBytes,
   constantTimeEqual,
   encodeStruct,
+  uint64BE,
   utf8,
 } from "./bytes.js";
 import { SyncCryptoError } from "./errors.js";
@@ -117,7 +122,28 @@ const ALL_PURPOSES: readonly WrapPurpose[] = [...MK_PURPOSES, "ck/master-key"];
  */
 export type WrapContext =
   | { readonly purpose: "mk/local-data-key" | "mk/web-password" | "mk/sync-recovery"; readonly userId: string }
-  | { readonly purpose: "ck/master-key"; readonly userId: string; readonly profileId: string };
+  | {
+      readonly purpose: "ck/master-key";
+      readonly userId: string;
+      readonly profileId: string;
+      /**
+       * WHICH GENERATION of this profile's content key. Part of the union's
+       * content-key arm only, because the master key is not rotated by this
+       * mechanism and an epoch on an `mk/*` wrap would name a generation nothing
+       * mints.
+       *
+       * It is here rather than merely alongside because a profile holds one wrap
+       * PER EPOCH: `sync_objects.ck_epoch` exists so two generations can be live
+       * while a rotation runs. Without the epoch in the derivation, CK_1's wrap
+       * and CK_2's wrap for one profile are bound to identical context, so the
+       * server can serve either where the other was asked for — and the client
+       * cannot tell, because both open perfectly. It would then decrypt nothing
+       * and have no way to say why. With it, asking for epoch 2 and being handed
+       * epoch 1 fails at the commitment check, which is a sentence a user can be
+       * shown.
+       */
+      readonly epoch: number;
+    };
 
 /**
  * A wrapped 256-bit key, in the shape that goes into a database column or a
@@ -162,12 +188,18 @@ const EMPTY_SALT = new Uint8Array(0);
  * when ids are attacker-influenced strings).
  */
 function wrapAad(context: WrapContext): Uint8Array {
-  const profileId = context.purpose === "ck/master-key" ? context.profileId : "";
+  const isContentKey = context.purpose === "ck/master-key";
+  const profileId = isContentKey ? context.profileId : "";
+  // Zero for the `mk/*` slots, which the server stores as NULL. Fixed-width
+  // rather than the decimal spelling, matching how `row.ts` binds the same
+  // number, so „epoch 10" and „epoch 1 followed by a 0" cannot be one encoding.
+  const epoch = uint64BE(isContentKey ? context.epoch : 0);
   return encodeStruct([
     utf8(WRAP_AAD_LABEL),
     utf8(context.purpose),
     utf8(context.userId),
     utf8(profileId),
+    epoch,
   ]);
 }
 

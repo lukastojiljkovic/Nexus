@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   HLC_MAX_FORWARD_DRIFT_MS,
-  clampRemoteHlc,
   compareHlc,
   formatHlc,
+  hlcExceedsDriftWindow,
   hlcReceive,
   hlcSend,
   hlcZero,
@@ -14,6 +14,9 @@ import {
 const A = "device-a";
 const B = "device-b";
 const T0 = 1_800_000_000_000; // a plain millisecond wall clock
+
+/** A peer stamping from ten years in the future. */
+const INSANE: Hlc = { wallMs: T0 + 10 * 365 * 24 * 3600 * 1000, counter: 0, nodeId: B };
 
 describe("hlcSend", () => {
   it("takes the wall clock and resets the counter when time has moved on", () => {
@@ -53,24 +56,20 @@ describe("hlcSend", () => {
   });
 });
 
-describe("clampRemoteHlc", () => {
-  it("leaves a timestamp inside the window untouched", () => {
-    const remote: Hlc = { wallMs: T0 + HLC_MAX_FORWARD_DRIFT_MS, counter: 3, nodeId: B };
-    expect(clampRemoteHlc(remote, T0)).toEqual(remote);
+describe("hlcExceedsDriftWindow", () => {
+  it("admits a stamp on the window edge and everything behind it", () => {
+    expect(hlcExceedsDriftWindow({ wallMs: T0 + HLC_MAX_FORWARD_DRIFT_MS, counter: 3, nodeId: B }, T0)).toBe(false);
+    expect(hlcExceedsDriftWindow({ wallMs: T0 - 10_000_000, counter: 3, nodeId: B }, T0)).toBe(false);
   });
 
-  it("leaves a timestamp in the past untouched", () => {
-    const remote: Hlc = { wallMs: T0 - 10_000_000, counter: 3, nodeId: B };
-    expect(clampRemoteHlc(remote, T0)).toEqual(remote);
+  it("flags a stamp one millisecond past the edge, and a stamp from 2099", () => {
+    expect(hlcExceedsDriftWindow({ wallMs: T0 + HLC_MAX_FORWARD_DRIFT_MS + 1, counter: 0, nodeId: B }, T0)).toBe(true);
+    expect(hlcExceedsDriftWindow(INSANE, T0)).toBe(true);
   });
 
-  it("pulls a timestamp beyond the window back to exactly the window edge", () => {
-    const remote: Hlc = { wallMs: T0 + 10 * 365 * 24 * 3600 * 1000, counter: 3, nodeId: B };
-    expect(clampRemoteHlc(remote, T0)).toEqual({
-      wallMs: T0 + HLC_MAX_FORWARD_DRIFT_MS,
-      counter: 3,
-      nodeId: B,
-    });
+  it("rejects a reference time that is not a non-negative safe integer", () => {
+    expect(() => hlcExceedsDriftWindow(INSANE, Number.NaN)).toThrow(TypeError);
+    expect(() => hlcExceedsDriftWindow(INSANE, -1)).toThrow(TypeError);
   });
 });
 
@@ -100,25 +99,18 @@ describe("hlcReceive", () => {
   });
 
   it("cannot be dragged into the far future by a device with an insane clock", () => {
-    const insane: Hlc = { wallMs: T0 + 10 * 365 * 24 * 3600 * 1000, counter: 0, nodeId: B };
-    const next = hlcReceive({ wallMs: T0, counter: 0, nodeId: A }, insane, T0);
+    const next = hlcReceive({ wallMs: T0, counter: 0, nodeId: A }, INSANE, T0);
     expect(next.wallMs).toBe(T0 + HLC_MAX_FORWARD_DRIFT_MS);
   });
-});
 
-describe("a device with an insane clock cannot win every merge", () => {
-  it("is bounded to at most the drift window of undeserved priority", () => {
-    const insane: Hlc = { wallMs: T0 + 10 * 365 * 24 * 3600 * 1000, counter: 0, nodeId: B };
-    const admitted = clampRemoteHlc(insane, T0);
-
-    // An honest write made a minute after the window closes now beats it.
-    const honest = hlcSend({ wallMs: T0, counter: 0, nodeId: A }, T0 + HLC_MAX_FORWARD_DRIFT_MS + 60_000);
-    expect(compareHlc(honest, admitted)).toBe(1);
-
-    // And an honest write from inside the window still loses — that residual
-    // 24 hours of priority is the cost of admitting the row at all.
-    const inside = hlcSend({ wallMs: T0, counter: 0, nodeId: A }, T0 + 3600_000);
-    expect(compareHlc(inside, admitted)).toBe(-1);
+  it("clamps only this device's clock, never the stamp it was given", () => {
+    // The distinction the file header turns on. `hlcReceive` returns the local
+    // clock's next reading; the remote stamp is an input and comes out of the
+    // sync engine unchanged, because a stamp rewritten differently on two
+    // devices is exactly the divergence the clock exists to prevent.
+    const remote: Hlc = { ...INSANE };
+    hlcReceive({ wallMs: T0, counter: 0, nodeId: A }, remote, T0);
+    expect(remote).toEqual(INSANE);
   });
 });
 

@@ -23,42 +23,46 @@
  * The stamp travels INSIDE the row ciphertext (see `row.ts`): a server that
  * could rewrite a clock could decide every conflict.
  *
- * ─── The 24-hour forward clamp, and its one sharp edge ──────────────────────
+ * ─── The 24-hour forward clamp, and the one thing it must never be used for ──
  *
  * A device whose clock says 2099 stamps every write in 2099 and wins every
- * merge it ever participates in, forever. {@link clampRemoteHlc} bounds that:
- * a remote stamp more than {@link HLC_MAX_FORWARD_DRIFT_MS} ahead of the
- * receipt time is pulled back to exactly the window edge.
+ * merge it ever participates in, forever. The clamp bounds that: a remote stamp
+ * more than {@link HLC_MAX_FORWARD_DRIFT_MS} ahead of the receipt time is
+ * pulled back to exactly the window edge.
  *
- * **There are two distinct uses of that clamp, and they take different
- * receipt times.** Confusing them is the trap.
+ * **It has exactly ONE legitimate use, and it is local.** {@link hlcReceive}
+ * clamps against this device's physical clock, because the question it answers
+ * is „how far may this message drag MY clock forward", and that is a purely
+ * local question whose answer never has to match another device. That is why
+ * the clamp is private to this module.
  *
- *  1. *Protecting this device's own clock.* {@link hlcReceive} clamps against
- *     the LOCAL physical clock, because the question it answers is "how far
- *     may this message drag my clock forward", and that is a purely local
- *     question. Nothing about the answer has to match another device.
- *  2. *Deciding the stamp a received row is STORED with.* Here the clamp must
- *     produce the same number everywhere. If each device clamped against its
- *     own `Date.now()`, a row received at 10:00 on one device and 11:00 on
- *     another would be stored with two different stamps, the two devices would
- *     order it differently against a competing write, and they would converge
- *     to different states — the exact failure the clock exists to rule out. So
- *     for THIS use, `receivedAtMs` MUST be a value every device sees
- *     identically: **the server's attested receipt time, carried as cleartext
- *     row metadata**, never the local clock.
+ * The use it must never have is deciding the stamp a received row is STORED
+ * with — rewriting a peer's field stamp on the way into the database. That
+ * sounds like the same operation and is not, because a stored stamp has to be
+ * IDENTICAL on every device or the field it stamps orders two ways and the two
+ * devices converge to different states, which is the one failure this clock
+ * exists to rule out. Clamping at store time cannot be identical everywhere,
+ * and it is worth being precise about why, because the obvious repair does not
+ * work:
  *
- * That the server can lie about that timestamp is acceptable and worth stating
- * plainly. Lying only reorders writes, which a server can already do by
- * withholding or reordering rows; it cannot forge a ciphertext, and it cannot
- * make a clamp produce different values on different devices, which is the
- * property being bought.
+ *  - Clamping against the local `Date.now()` is plainly non-deterministic: a
+ *    row received at 10:00 on one device and 11:00 on another gets two ceilings.
+ *  - Clamping against the SERVER's attested receipt time looks deterministic
+ *    and is not. A field stamp travels inside the row ciphertext and is carried
+ *    forward by every later version — but `sync_objects.updated_at` is
+ *    re-stamped by the server on each version. A device that pulled the stamp
+ *    at version 3 clamps it against `updated_at(v3)`; a device that first sees
+ *    it inside version 7 clamps the SAME stamp against `updated_at(v7)`. Two
+ *    ceilings again, and now permanently, because each device stores what it
+ *    computed.
  *
- * What the clamp does NOT do: eliminate the advantage. A device stamping from
- * 2099 still lands 24 hours in the future and still beats every honest write
- * made in the next day. It bounds the damage to one day instead of a century —
- * that is the whole claim, and it is worth being honest that it is a bound and
- * not a cure. Detecting the bad clock and telling the user is a separate
- * matter, and belongs in the sync engine, not here.
+ * So a received stamp is stored exactly as it arrived. The bound against a
+ * lying clock therefore has to be applied where it CAN be applied once: at the
+ * origin, before the stamp is sealed. A device compares its own clock against
+ * the server time it last observed and refuses to stamp a write implausibly far
+ * ahead of it; the pull side treats a stamp beyond the window as a peer to
+ * report, not a value to silently rewrite. Both belong to the sync engine,
+ * which knows the server time and has a user to tell; neither belongs here.
  */
 
 /** How far ahead of the receipt time a remote stamp may sit before it is pulled back. */
@@ -159,18 +163,30 @@ export function hlcSend(state: Hlc, nowMs: number): Hlc {
 }
 
 /**
- * Pulls a remote stamp back inside the drift window. Pure, and a function of
- * nothing but its two arguments — which is what lets every device compute the
- * same result, PROVIDED the caller passes the same `receivedAtMs`. When this is
- * used to decide the stamp a row is stored under, that means the server's
- * attested receipt time; when `hlcReceive` uses it to protect the local clock,
- * the local clock is the right input. See the file header on the two uses.
+ * Pulls a remote stamp back inside the drift window, for the sole purpose of
+ * deciding how far it may move THIS device's clock. Deliberately not exported:
+ * see the file header on the store-time use that looks identical and diverges.
  */
-export function clampRemoteHlc(remote: Hlc, receivedAtMs: number): Hlc {
-  assertClockMs(receivedAtMs, "receivedAtMs");
-  const ceiling = Math.min(receivedAtMs + HLC_MAX_FORWARD_DRIFT_MS, MAX_WALL_MS);
+function clampAgainstLocalClock(remote: Hlc, nowMs: number): Hlc {
+  const ceiling = Math.min(nowMs + HLC_MAX_FORWARD_DRIFT_MS, MAX_WALL_MS);
   if (remote.wallMs <= ceiling) return remote;
   return { wallMs: ceiling, counter: remote.counter, nodeId: remote.nodeId };
+}
+
+/**
+ * Whether `stamp` sits further ahead of `referenceMs` than the drift window
+ * allows — the question the sync engine asks on both sides of the wire.
+ *
+ * At send time the reference is the server time this device last observed, and
+ * a `true` answer means „do not seal this write, this machine's clock is
+ * wrong". At pull time it is the row's server-attested receipt time, and a
+ * `true` answer means „tell the user which device is stamping from the future".
+ * It never means „rewrite the stamp": that is the store-time clamp the header
+ * rules out.
+ */
+export function hlcExceedsDriftWindow(stamp: Hlc, referenceMs: number): boolean {
+  assertClockMs(referenceMs, "referenceMs");
+  return stamp.wallMs > Math.min(referenceMs + HLC_MAX_FORWARD_DRIFT_MS, MAX_WALL_MS);
 }
 
 /**
@@ -181,12 +197,12 @@ export function clampRemoteHlc(remote: Hlc, receivedAtMs: number): Hlc {
  *
  * Clamps the remote first, so a peer with a broken clock cannot drag THIS
  * device's clock into the future and poison every stamp it writes afterwards.
- * The clamp here is against the LOCAL clock deliberately — this is use (1) in
- * the file header, and it does not have to agree with any other device.
+ * The clamp is against the LOCAL clock deliberately, and it changes only what
+ * this device's clock becomes — never what the received row is stored with.
  */
 export function hlcReceive(state: Hlc, remote: Hlc, nowMs: number): Hlc {
   assertClockMs(nowMs, "nowMs");
-  const clamped = clampRemoteHlc(remote, nowMs);
+  const clamped = clampAgainstLocalClock(remote, nowMs);
   const wallMs = Math.max(state.wallMs, clamped.wallMs, nowMs);
 
   let counter: number;

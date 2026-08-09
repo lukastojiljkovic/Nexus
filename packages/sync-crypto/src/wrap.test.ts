@@ -21,7 +21,12 @@ const CONTENT_KEY = new Uint8Array(32).fill(0x22);
 const MK_LOCAL: WrapContext = { purpose: "mk/local-data-key", userId: "user-1" };
 const MK_WEB: WrapContext = { purpose: "mk/web-password", userId: "user-1" };
 const MK_RECOVERY: WrapContext = { purpose: "mk/sync-recovery", userId: "user-1" };
-const CK: WrapContext = { purpose: "ck/master-key", userId: "user-1", profileId: "profile-a" };
+const CK: WrapContext = {
+  purpose: "ck/master-key",
+  userId: "user-1",
+  profileId: "profile-a",
+  epoch: 1,
+};
 
 /** Asserts the thrown error is a SyncCryptoError carrying exactly `code`. */
 async function expectCode(promise: Promise<unknown>, code: SyncCryptoErrorCode): Promise<void> {
@@ -79,9 +84,21 @@ describe("purpose binding", () => {
         purpose: "ck/master-key",
         userId: "user-1",
         profileId: "profile-b",
+        epoch: 1,
       }),
       "wrap/commitment-mismatch",
     );
+  });
+
+  it("binds the epoch: one generation's wrap does not open as the next", async () => {
+    // The failure this prevents is not theft, it is a rotation that half
+    // happened. A profile holds one wrap per epoch precisely so both are live
+    // while the rows are re-encrypted, and without the epoch in the derivation
+    // the two wraps are bound to identical context — so a server could serve
+    // CK_1 where CK_2 was asked for and the client would open it happily, then
+    // fail to decrypt every row and have nothing to say about why.
+    const sealed = await wrapKey(port, KEK, CONTENT_KEY, CK);
+    await expectCode(unwrapKey(port, KEK, sealed, { ...CK, epoch: 2 }), "wrap/commitment-mismatch");
   });
 });
 
