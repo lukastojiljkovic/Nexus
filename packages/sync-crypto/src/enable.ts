@@ -52,6 +52,7 @@
 
 import { constantTimeEqual, zeroize } from "./bytes.js";
 import { assertDeviceName, sealDeviceName, type SealedDeviceName } from "./device-name.js";
+import { deriveDeviceRegisterProof } from "./device-register.js";
 import { SyncCryptoError } from "./errors.js";
 import { deriveWebPasswordKeys, type WebPasswordInput } from "./kdf.js";
 import { AEAD_KEY_BYTES, type Argon2idParams, type CryptoPort } from "./port.js";
@@ -115,6 +116,18 @@ export interface SyncEnableMaterial {
   readonly recoveryKdfParams: Argon2idParams;
   /** The device name, sealed under a subkey of MK, in the shape `devices` stores. */
   readonly sealedDeviceName: SealedDeviceName;
+  /**
+   * The 32-byte proof of MK possession, stored by the mint and presented later
+   * by a desktop asking for a new device row.
+   *
+   * It is produced HERE, at the mint, and not by whatever needs it later,
+   * because the mint is the only transaction that can store it: the table has no
+   * client grants and nothing can add a row to it afterwards. An account minted
+   * without one could never recover a stranded desktop. See
+   * `device-register.ts` — the argument is the same one this file already makes
+   * about `mk_under_src`.
+   */
+  readonly registerProof: Uint8Array;
 }
 
 /**
@@ -170,17 +183,19 @@ export async function prepareSyncEnable(
       params: SYNC_RECOVERY_KDF_PARAMS,
     });
 
-    const [localWrap, passwordWrap, recoveryWrap, sealedDeviceName] = await Promise.all([
-      wrapKey(port, input.localDataKey, masterKey, localContext),
-      wrapKey(port, passwordKek, masterKey, passwordContext),
-      wrapKey(port, recoveryKek, masterKey, recoveryContext),
-      sealDeviceName(
-        port,
-        masterKey,
-        { userId: input.userId, platform: "desktop" },
-        input.deviceName,
-      ),
-    ]);
+    const [localWrap, passwordWrap, recoveryWrap, sealedDeviceName, registerProof] =
+      await Promise.all([
+        wrapKey(port, input.localDataKey, masterKey, localContext),
+        wrapKey(port, passwordKek, masterKey, passwordContext),
+        wrapKey(port, recoveryKek, masterKey, recoveryContext),
+        sealDeviceName(
+          port,
+          masterKey,
+          { userId: input.userId, platform: "desktop" },
+          input.deviceName,
+        ),
+        deriveDeviceRegisterProof(port, masterKey, input.userId),
+      ]);
 
     await assertOpensToMasterKey(port, masterKey, [
       [input.localDataKey, localWrap, localContext],
@@ -198,6 +213,7 @@ export async function prepareSyncEnable(
       passwordKdfParams: input.web.params,
       recoveryKdfParams: SYNC_RECOVERY_KDF_PARAMS,
       sealedDeviceName,
+      registerProof,
     };
   } catch (error) {
     // The master key is of no use to anybody now, including this process. It is

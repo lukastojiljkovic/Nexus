@@ -142,6 +142,12 @@ export {
 } from "./device-name.js";
 export type { DeviceNameContext, DevicePlatform, SealedDeviceName } from "./device-name.js";
 
+// ── Getting a device row back ───────────────────────────────────────────────
+// DESKTOP ONLY, and absent from the web barrel for the reason the whole module
+// exists: it is derived from MK, and a browser never holds MK. A browser has no
+// use for it either — `platform = 'desktop'` is what this proof buys.
+export { DEVICE_REGISTER_PROOF_BYTES, deriveDeviceRegisterProof } from "./device-register.js";
+
 // ── Pairing ─────────────────────────────────────────────────────────────────
 export {
   PAIRING_CODE_DIGITS,
