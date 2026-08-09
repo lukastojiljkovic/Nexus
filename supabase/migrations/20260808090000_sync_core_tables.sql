@@ -72,24 +72,63 @@ grant usage on schema private to authenticated, service_role;
 -- the wire, and it is coarse (`tasks`, `notes`, `fin_tx`) rather than a column
 -- list.
 --
+-- AN OBJECT ID IS TEXT, AND IT IS ONLY UNIQUE INSIDE ITS PROFILE AND
+-- COLLECTION. This column was `uuid` and the primary key was `(user_id,
+-- object_id)`, and both were wrong against the client's actual identity model
+-- (ADR-082, checked against the real primary keys by
+-- `packages/db/src/sync/collectionGuard.test.ts`). An object id is the row's
+-- primary key MINUS `profile_id`, which is a uuid for most collections but is
+-- also: a natural key (`feature_flags` → `'task'`, `fit_measurements` →
+-- `'2026-08-09'`), a composite joined by U+001F (`note_updates` → the note's id,
+-- the separator, the sequence number), and — for the six per-profile singletons
+-- — THE EMPTY STRING, which is the honest spelling of „this collection holds
+-- exactly one object per profile".
+--
+-- Both errors were silent in the same direction. `uuid` would have rejected five
+-- collections outright, and `(user_id, object_id)` would have collided the
+-- moment two profiles each had a `calendar_settings` (id `''`) or a
+-- `fit_measurements` for the same day: one profile's settings overwriting
+-- another's, with the version counter making it look like an ordinary edit.
+--
 -- `parent_id` IS NOT A FOREIGN KEY, deliberately. It would have to be
--- `foreign key (user_id, parent_id) references sync_objects (user_id, object_id)`
--- and it would be wrong twice over. Sync arrives out of order — a child pulled
--- in the same batch as its parent has a 50 % chance of being applied first — so
--- the constraint would reject perfectly correct traffic and the client would
--- have to topologically sort a batch it cannot read. And a tombstoned parent
--- must NOT take its children with it: deletion is a tombstone that replicates,
--- not a cascade that runs on one machine. The column exists so the server can
--- answer „give me this note's blocks" in one round trip; it is a hint, and the
--- client re-derives the tree from plaintext it alone can read.
+-- `foreign key (user_id, profile_id, collection, parent_id) references
+-- sync_objects (user_id, profile_id, collection, object_id)` — which does not
+-- even typecheck as an idea, since a child's parent is in a DIFFERENT
+-- collection — and it would be wrong twice over besides. Sync arrives out of
+-- order — a child pulled in the same batch as its parent has a 50 % chance of
+-- being applied first — so the constraint would reject perfectly correct traffic
+-- and the client would have to topologically sort a batch it cannot read. And a
+-- tombstoned parent must NOT take its children with it: deletion is a tombstone
+-- that replicates, not a cascade that runs on one machine. The column exists so
+-- the server can answer „give me this note's blocks" in one round trip; it is a
+-- hint, and the client re-derives the tree from plaintext it alone can read.
 create table public.sync_objects (
   user_id     uuid        not null references auth.users (id) on delete cascade,
   profile_id  uuid        not null,
   collection  text        not null,
-  object_id   uuid        not null,
-  parent_id   uuid,
+  object_id   text        not null,
+  parent_id   text,
   version     bigint      not null,
   deleted     boolean     not null default false,
+  -- WHICH CONTENT KEY SEALED THIS ROW. In the clear, and bound into the row's
+  -- AEAD associated data, which is the whole reason it exists.
+  --
+  -- Rotation is this product's revocation path: `key_wraps.disabled_at` stops
+  -- the next hand-out, but a browser that already holds CK_p still holds it, so
+  -- actually locking it out means minting a new content key and re-encrypting
+  -- the profile. During that pass both keys are live, and without an epoch a
+  -- client meeting a row has to TRIAL-DECRYPT under CK_old and then CK_new —
+  -- which is the one thing a non-committing AEAD makes genuinely dangerous, and
+  -- which leaves a half-finished rotation undiagnosable because nothing in the
+  -- database says which rows have been done.
+  --
+  -- With the epoch bound into the AAD, a row is openable only under the key it
+  -- claims: trialling disappears, cross-epoch confusion is unrepresentable, a
+  -- row that was re-wrapped but not re-encrypted fails loudly instead of
+  -- quietly, and „what is left to rotate" is `where ck_epoch = <old>`. It costs
+  -- two bytes and no ciphertext overhead, which is why it is here rather than a
+  -- 16-byte per-row commitment tag.
+  ck_epoch    smallint    not null default 1,
   nonce       bytea       not null,
   ciphertext  bytea       not null,
   -- `seq` is the pull cursor, and it is NOT in the original column list because
@@ -113,7 +152,12 @@ create table public.sync_objects (
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now(),
 
-  primary key (user_id, object_id),
+  -- ALL FOUR COLUMNS, because an object id identifies an object only inside its
+  -- profile and its collection — see the header. This is also, incidentally, the
+  -- exact tuple the row's AEAD associated data binds, so the key of the row and
+  -- the identity the ciphertext commits to are the same four values by
+  -- construction rather than by two files agreeing.
+  primary key (user_id, profile_id, collection, object_id),
 
   -- The version ceiling is 2^53-1, not 2^63-1, and the reason is the client
   -- rather than the database. Every client here is JavaScript; `JSON.parse`
@@ -148,7 +192,27 @@ create table public.sync_objects (
   -- for anything that ever builds a channel name or a file path out of it, and
   -- a place to smuggle a payload into a column the server is allowed to read.
   constraint sync_objects_collection_shape
-    check (collection ~ '^[a-z][a-z0-9_]{0,63}$')
+    check (collection ~ '^[a-z][a-z0-9_]{0,63}$'),
+
+  -- A CEILING, AND NO FLOOR. The longest real id is a `note_updates` composite —
+  -- a 36-character uuid, one separator and a sequence number — so 255 is roughly
+  -- three times the largest thing the client can produce, which is the right
+  -- amount of room for a key whose only job is to be an identifier. The absence
+  -- of a floor is the deliberate half: `''` is the object id of all six
+  -- per-profile singletons, and a `length > 0` check here would reject
+  -- `calendar_settings` forever. Postgres `text` cannot hold a NUL byte, so the
+  -- one genuinely dangerous character is already unrepresentable.
+  constraint sync_objects_object_id_len check (octet_length(object_id) <= 255),
+
+  -- A parent is a real object of a real collection, so unlike `object_id` it may
+  -- not be empty: „hangs off the object with no id" names nothing.
+  constraint sync_objects_parent_id_len
+    check (parent_id is null or octet_length(parent_id) between 1 and 255),
+
+  -- Epochs start at 1 and only ever go up. The ceiling is smallint's, which is
+  -- 32 767 rotations of one profile's content key — a number no user reaches,
+  -- and one that keeps the column two bytes.
+  constraint sync_objects_ck_epoch_range check (ck_epoch >= 1)
 );
 
 comment on table public.sync_objects is
@@ -167,10 +231,18 @@ comment on column public.sync_objects.collection is
   'for pulls and part of the AEAD associated data, so it cannot be encrypted.';
 comment on column public.sync_objects.object_id is
   'LEAKS: a stable per-object identifier, so the server can count objects and '
-  'watch one object change over time. Client-minted; never derived from content.';
+  'watch one object change over time. For five collections it is a natural key '
+  '(a module name, a date), which leaks slightly more than a uuid would; for '
+  'the six per-profile singletons it is the empty string. Client-minted; never '
+  'derived from content. Unique only within (user_id, profile_id, collection).';
 comment on column public.sync_objects.parent_id is
   'LEAKS: the SHAPE of the object graph (which rows hang off which) without any '
   'of its content. A hint for batched reads, not a foreign key — see the header.';
+comment on column public.sync_objects.ck_epoch is
+  'LEAKS: how many times this profile''s content key has been rotated, and '
+  'which rows are still on an older one — i.e. that a rotation is in progress '
+  'and how far it has got. Conceded: it is bound into the AEAD associated data '
+  'so a client never has to trial-decrypt under two keys, which is the point.';
 comment on column public.sync_objects.version is
   'LEAKS: how many times an object has been edited. Also the optimistic-'
   'concurrency counter and part of the AEAD associated data, so a server cannot '
@@ -209,9 +281,12 @@ create index sync_objects_pull
 create index sync_objects_user_seq on public.sync_objects (user_id, seq);
 
 -- The batched-children read `parent_id` exists for. Partial, because the vast
--- majority of rows are roots and indexing their NULLs buys nothing.
+-- majority of rows are roots and indexing their NULLs buys nothing — and scoped
+-- by `profile_id`, because a parent id is only unique inside its profile, so
+-- without it the „give me this note's blocks" read would answer with the blocks
+-- of a same-id object in a different profile.
 create index sync_objects_children
-  on public.sync_objects (user_id, parent_id)
+  on public.sync_objects (user_id, profile_id, parent_id)
   where parent_id is not null;
 
 -- ---------------------------------------------------------------------------
@@ -241,6 +316,23 @@ create table public.key_wraps (
   profile_id  uuid,
   nonce       bytea       not null,
   wrapped     bytea       not null,
+  -- THE KEY-COMMITMENT TAG, AND IT HAS TO BE A COLUMN OF ITS OWN.
+  --
+  -- `wrap.ts` derives two subkeys from the KEK — one to encrypt with, one that
+  -- IS this tag — and refuses to attempt the AEAD at all unless the tag it
+  -- recomputes matches. That is what makes a wrong password answer „wrong
+  -- password" instead of handing back a key-shaped 32 bytes that decrypt
+  -- garbage, and it is what closes the partitioning-oracle family of attacks
+  -- against the two password-derived slots.
+  --
+  -- The client produced this tag from the first commit and the schema had
+  -- nowhere to put it, which is a quiet way to lose a defence: a transport that
+  -- maps `SealedKey` onto `(nonce, wrapped)` simply drops the field, key-
+  -- committing wrapping silently becomes ordinary wrapping, and every test still
+  -- passes because the client checks the tag against the tag it just derived.
+  -- NOT NULL is the whole fix — a wrap that arrives without one cannot be
+  -- stored.
+  commit_tag  bytea       not null,
   kdf_salt    bytea,
   kdf_params  jsonb,
   created_at  timestamptz not null default now(),
@@ -268,8 +360,19 @@ create table public.key_wraps (
     or (kind <> 'ck_under_mk' and profile_id is null)
   ),
 
+  -- 24 bytes here for the same reason as `sync_objects`, and this one is a
+  -- DECISION rather than an inherited constant. `key_wraps` sees O(devices ×
+  -- rotations) seals — a few dozen in an account's life — so a 96-bit nonce
+  -- would have been statistically fine here. It is 24 anyway because one AEAD
+  -- means one code path, one set of test vectors and one thing to get right, and
+  -- because a schema in which two tables pin two nonce widths invites a client
+  -- to pick the wrong one. Uniformity, stated, not uniformity by copy-paste.
   constraint key_wraps_nonce_len check (octet_length(nonce) = 24),
-  constraint key_wraps_wrapped_len check (octet_length(wrapped) between 48 and 512),
+  -- EXACTLY 48: a 32-byte key plus a 16-byte Poly1305 tag. Every wrap in this
+  -- table seals one symmetric key and nothing else, so a range would only be
+  -- room for something that is not a wrapped key.
+  constraint key_wraps_wrapped_len check (octet_length(wrapped) = 48),
+  constraint key_wraps_commit_tag_len check (octet_length(commit_tag) = 32),
   -- A password-derived wrap MUST carry its salt and its Argon2id parameters,
   -- or the client cannot reproduce the key and the wrap is a brick. An
   -- MK-under-MK wrap must not, because there is no password in that path and a
@@ -279,6 +382,38 @@ create table public.key_wraps (
       and kdf_salt is not null and octet_length(kdf_salt) = 16
       and kdf_params is not null)
     or (kind = 'ck_under_mk' and kdf_salt is null and kdf_params is null)
+  ),
+
+  -- THE COST PARAMETERS HAVE A FLOOR, because they are the only thing standing
+  -- between „somebody has this database" and „somebody has this account".
+  --
+  -- `kdf_params` is client-written, and a client that wrote `{"memoryKiB": 8,
+  -- "iterations": 1, "parallelism": 1}` would produce a wrap that opens under a
+  -- dictionary attack at a few million guesses a second. That client would be a
+  -- bug or a downgrade — and the user would never know, because the wrap works
+  -- perfectly. The floor is RFC 9106's SECOND recommended configuration (64 MiB,
+  -- t=3, p=4), which is the one meant for memory-constrained environments and
+  -- is therefore the lowest setting this product can call defensible on a
+  -- laptop. Raising the real parameters later is unaffected: they are recorded
+  -- per row precisely so they can go UP without locking anyone out.
+  --
+  -- The shape is checked as well as the values, because `kdf_params` is `jsonb`
+  -- and a missing key compares as NULL, which is neither true nor false — so
+  -- without the `?` existence tests a params object with no `iterations` at all
+  -- would pass a `>=` check by being unknown rather than by being large enough.
+  constraint key_wraps_kdf_params_floor check (
+    kdf_params is null
+    or (
+      jsonb_typeof(kdf_params) = 'object'
+      and kdf_params ? 'memoryKiB' and kdf_params ? 'iterations'
+      and kdf_params ? 'parallelism'
+      and jsonb_typeof(kdf_params -> 'memoryKiB') = 'number'
+      and jsonb_typeof(kdf_params -> 'iterations') = 'number'
+      and jsonb_typeof(kdf_params -> 'parallelism') = 'number'
+      and (kdf_params ->> 'memoryKiB')::numeric >= 65536
+      and (kdf_params ->> 'iterations')::numeric >= 3
+      and (kdf_params ->> 'parallelism')::numeric >= 1
+    )
   )
 );
 
@@ -328,6 +463,11 @@ comment on column public.key_wraps.nonce is
   'the party a rotation is performed to lock out.';
 comment on column public.key_wraps.wrapped is
   'LEAKS: nothing beyond its length, which is fixed by the key size.';
+comment on column public.key_wraps.commit_tag is
+  'LEAKS: nothing. Public by design — it is an HKDF output over the KEK, and a '
+  'client checks it BEFORE attempting the AEAD so a wrong password fails as a '
+  'wrong password rather than as 32 bytes of garbage. Its presence is what '
+  'makes the two password-derived slots key-committing.';
 comment on column public.key_wraps.kdf_salt is
   'LEAKS: nothing (16 random bytes). Public by construction — a salt is not a '
   'secret, and hiding it would only stop the legitimate client re-deriving.';

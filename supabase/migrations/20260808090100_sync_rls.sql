@@ -156,10 +156,16 @@ revoke all on public.sync_objects from authenticated;
 -- definer` helper that runs with different privileges. Two mechanisms, because
 -- privileges cannot see OLD and triggers cannot see the statement.
 grant select on public.sync_objects to authenticated;
+--
+-- `ck_epoch` IS UPDATABLE, unlike the other four identity columns, and that is
+-- the point of it: re-encrypting a profile under a new content key rewrites
+-- `ciphertext`, `nonce` and the epoch together, one row at a time, and a
+-- rotation that could not raise the epoch would be a rotation that could not be
+-- recorded. The trigger in migration 003 refuses to let it go DOWN.
 grant insert (user_id, profile_id, collection, object_id, parent_id, version,
-              deleted, nonce, ciphertext)
+              deleted, ck_epoch, nonce, ciphertext)
   on public.sync_objects to authenticated;
-grant update (parent_id, version, deleted, nonce, ciphertext)
+grant update (parent_id, version, deleted, ck_epoch, nonce, ciphertext)
   on public.sync_objects to authenticated;
 
 -- USAGE ON THE IDENTITY SEQUENCE, WITHOUT WHICH NO CLIENT CAN UPDATE ANYTHING.
@@ -252,9 +258,13 @@ revoke all on public.key_wraps from authenticated;
 -- only two lifecycle operations this table has, and no DELETE exists to express
 -- either.
 grant select on public.key_wraps to authenticated;
-grant insert (user_id, kind, profile_id, nonce, wrapped, kdf_salt, kdf_params)
+-- `commit_tag` travels with `wrapped` on both grants and never apart from it:
+-- the tag is derived from the same KEK as the encryption subkey, so a wrap whose
+-- ciphertext moved and whose tag did not is a wrap that cannot be opened at all.
+-- Granting one without the other would only make that state reachable.
+grant insert (user_id, kind, profile_id, nonce, wrapped, commit_tag, kdf_salt, kdf_params)
   on public.key_wraps to authenticated;
-grant update (nonce, wrapped, kdf_salt, kdf_params, rotated_at, disabled_at)
+grant update (nonce, wrapped, commit_tag, kdf_salt, kdf_params, rotated_at, disabled_at)
   on public.key_wraps to authenticated;
 
 create policy key_wraps_owner_select on public.key_wraps

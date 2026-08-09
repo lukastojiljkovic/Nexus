@@ -163,6 +163,23 @@ begin
       hint    = 'These four columns are the AEAD associated data.';
   end if;
 
+  -- RULE 4b — THE CONTENT-KEY EPOCH ONLY GOES UP.
+  -- `ck_epoch` is the one identity-ish column a client MAY change, because
+  -- raising it is what re-encrypting a profile under a new content key looks
+  -- like. Lowering it is the reverse of a rotation, and a rotation exists
+  -- precisely to lock out a party that already holds the old key: rolling a row
+  -- back to the old epoch, together with the old ciphertext some peer still has,
+  -- hands that party the row again. It is bound into the AAD, so the rolled-back
+  -- row would not open under the NEW key — but it would open perfectly under the
+  -- old one, in the hands of the only person who still has it.
+  if new.ck_epoch < old.ck_epoch then
+    raise exception using
+      errcode = 'NX007',
+      message = 'sync_objects.ck_epoch may not go backwards',
+      detail  = format('object %s: epoch %s -> %s', old.object_id, old.ck_epoch, new.ck_epoch),
+      hint    = 'A content-key rotation only ever moves forward.';
+  end if;
+
   -- RULE 5 — THE NONCE IS FRESH ON EVERY WRITE.
   -- Migration 001 pins the nonce to 24 bytes and stops there, which fixes the
   -- CIPHER (XChaCha20-Poly1305) and says nothing about the one way that cipher

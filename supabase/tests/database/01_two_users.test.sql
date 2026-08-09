@@ -62,10 +62,11 @@ values
    'tasks', 'b0000000-0000-4000-8000-000000000002', 1,
    decode(repeat('22', 24), 'hex'), decode(repeat('bb', 32), 'hex'));
 
-insert into public.key_wraps (user_id, kind, profile_id, nonce, wrapped)
+insert into public.key_wraps (user_id, kind, profile_id, nonce, wrapped, commit_tag)
 values ('aaaaaaaa-0000-4000-8000-000000000001', 'ck_under_mk',
         '11111111-1111-4111-8111-111111111111',
-        decode(repeat('11', 24), 'hex'), decode(repeat('aa', 48), 'hex'));
+        decode(repeat('11', 24), 'hex'), decode(repeat('aa', 48), 'hex'),
+        decode(repeat('a1', 32), 'hex'));
 
 insert into public.sync_state (user_id, device_id, profile_id, collection, last_seq)
 values ('aaaaaaaa-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-00000000000a',

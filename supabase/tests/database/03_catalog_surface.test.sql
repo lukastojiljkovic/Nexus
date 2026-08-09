@@ -148,11 +148,17 @@ values ('cccccccc-0000-4000-8000-000000000003', '33333333-3333-4333-8333-3333333
         'tasks', 'c0000000-0000-4000-8000-000000000003', 1,
         decode(repeat('33', 24), 'hex'), decode(repeat('cc', 32), 'hex'));
 
-insert into public.key_wraps (user_id, kind, nonce, wrapped, kdf_salt, kdf_params)
+-- The parameter NAMES are `Argon2idParams` in `@nexus/sync-crypto`'s `port.ts`,
+-- not libsodium's `m`/`t`/`p`. This fixture used the short names, which nothing
+-- in the product has ever written — and `key_wraps_kdf_params_floor` now checks
+-- the shape as well as the values, so an invented spelling is a failing test
+-- instead of a wrap a future client cannot read.
+insert into public.key_wraps (user_id, kind, nonce, wrapped, commit_tag, kdf_salt, kdf_params)
 values ('cccccccc-0000-4000-8000-000000000003', 'mk_under_kwrap',
         decode(repeat('33', 24), 'hex'), decode(repeat('cc', 48), 'hex'),
+        decode(repeat('c3', 32), 'hex'),
         decode(repeat('33', 16), 'hex'),
-        '{"m":262144,"t":4,"p":1}'::jsonb);
+        '{"memoryKiB":262144,"iterations":4,"parallelism":1}'::jsonb);
 
 insert into public.sync_state (user_id, device_id, profile_id, collection, last_seq)
 values ('cccccccc-0000-4000-8000-000000000003',
