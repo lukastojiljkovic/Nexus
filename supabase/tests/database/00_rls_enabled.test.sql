@@ -18,7 +18,7 @@
 
 begin;
 
-select plan(21);
+select plan(22);
 
 -- ---------------------------------------------------------------------------
 -- 1–4. ENABLE and FORCE on everything this repository creates.
@@ -272,7 +272,11 @@ select is_empty(
                     ('pairing', 'completion_token_hash'), ('pairing', 'attempts'),
                     ('pairing', 'consumed_at'), ('pairing', 'expires_at'),
                     ('sync_state', 'user_id'), ('sync_state', 'device_id'),
-                    ('sync_state', 'profile_id'), ('sync_state', 'collection')
+                    ('sync_state', 'profile_id'), ('sync_state', 'collection'),
+                    -- Added by migration 008. It is a server-stated time on the
+                    -- one table where it used to be a client claim, which made
+                    -- „when this device last synced" a value the device chose.
+                    ('sync_state', 'updated_at')
             ) as f(tbl, col) on f.tbl = p.table_name and f.col = p.column_name
       where p.grantee = 'authenticated' and p.table_schema = 'public'
         and p.privilege_type = 'UPDATE' $$,
@@ -317,6 +321,15 @@ select has_trigger(
 select has_trigger(
   'public', 'devices', 'devices_guard_before_update',
   'devices carries the guard that makes revoked_at terminal'
+);
+
+-- The revoke above stops a client STATING this column; only the trigger makes
+-- the column true. Revoking alone would leave it frozen at its insert-time
+-- default while still reading as „last synced", so both halves are asserted or
+-- neither is proved.
+select has_trigger(
+  'public', 'sync_state', 'sync_state_touch_before_write',
+  'sync_state carries the trigger that stamps updated_at on every write'
 );
 
 select * from finish();

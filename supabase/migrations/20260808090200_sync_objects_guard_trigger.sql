@@ -78,11 +78,27 @@
 --
 -- Verified against PostgreSQL 17, not inferred: in `insert … on conflict do
 -- update`, every per-row BEFORE INSERT trigger fires BEFORE the conflict is
--- detected. So on the upsert path — which is how a client pushes, because it
--- cannot know whether another device created the object first — this branch is
--- handed the version of an UPDATE. A flat „a creation is version 1" here would
--- therefore refuse every push of an existing object at version 2 or above, and
--- the failure would look like a version bug rather than a trigger bug.
+-- detected. So on the upsert path this branch is handed the version of an
+-- UPDATE. A flat „a creation is version 1" here would therefore refuse every
+-- upsert of an existing object at version 2 or above, and the failure would look
+-- like a version bug rather than a trigger bug.
+--
+-- WHOSE PATH THAT IS, corrected 2026-08-09. This paragraph used to say „which is
+-- how a client pushes", and that is false — measured, not re-read. PostgREST
+-- compiles `Prefer: resolution=merge-duplicates` into `on conflict do update set
+-- <every column in the payload>`, which needs the UPDATE privilege on all of
+-- them, including the four identity columns migration 002 deliberately withholds
+-- because they are the AEAD associated data. Every upsert by `authenticated`
+-- therefore dies at `403 42501 permission denied for table sync_objects`, for a
+-- creation exactly as for an update. The column grants that make a row's
+-- identity immutable are what close the upsert path to clients, which is a good
+-- outcome arrived at sideways.
+--
+-- A client pushes with two verbs instead — `POST` for a creation, `PATCH`
+-- filtered by the four identity columns for an update — and knows which it is
+-- from its own `RowState.version`. See `packages/sync-transport/src/push.ts`.
+-- This branch still matters, because `service_role` CAN upsert: `pair-complete`
+-- holds that key, and so will first-desktop registration.
 --
 -- The probe is one primary-key lookup and it makes the rule exact: a statement
 -- that will really create a row is judged here, and a statement that will really

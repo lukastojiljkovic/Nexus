@@ -30,7 +30,7 @@ begin;
 
 set local search_path = public, extensions;
 
-select plan(28);
+select plan(30);
 
 -- ASSERTED FIRST, so a misconfigured runner produces one clear failure instead
 -- of twenty-seven confusing ones. Every table here has FORCE row level security,
@@ -450,6 +450,50 @@ select throws_ok(
 );
 
 alter table public.sync_objects enable trigger sync_objects_guard_before_write;
+
+-- ---------------------------------------------------------------------------
+-- `sync_state.updated_at` — the same rule, on the other table that carries it.
+-- ---------------------------------------------------------------------------
+-- Migration 008's whole reason for existing. The column is commented „when the
+-- device last synced" and is the one value here a human might read as evidence
+-- that a device is alive; before that migration nothing wrote it after the
+-- INSERT, so it would have sat at „when this cursor row was first created" while
+-- reading as „last synced" — populated, plausible and monotonically wrong.
+--
+-- WHY THE TIME BEING ASSERTED IS 2020 AND NOT „IT CHANGED". `now()` is the
+-- TRANSACTION timestamp, so an insert and an update inside this test carry the
+-- identical stamp and „the value moved" is unassertable here without a clock
+-- this suite has no business owning. What is assertable — and is the actual
+-- rule — is that a value the writer stated does not survive: both statements
+-- below name a time in 2000, and both rows come back stamped now. That is the
+-- same shape the `sync_objects` assertion above uses, for the same reason.
+insert into public.devices (id, user_id, session_id, platform, name_nonce, name_ciphertext)
+values ('d0000000-0000-4000-8000-00000000000a', 'aaaaaaaa-0000-4000-8000-000000000001',
+        'a5000000-0000-4000-8000-000000000001', 'desktop',
+        decode(repeat('a5', 24), 'hex'), decode(repeat('a6', 32), 'hex'));
+
+insert into public.sync_state (user_id, device_id, profile_id, collection, last_seq, updated_at)
+values ('aaaaaaaa-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-00000000000a',
+        '11111111-1111-4111-8111-111111111111', 'tasks', 7,
+        timestamptz '2000-01-01 00:00:00+00');
+
+select ok(
+  (select s.updated_at > timestamptz '2020-01-01 00:00:00+00'
+     from public.sync_state s
+    where s.device_id = 'd0000000-0000-4000-8000-00000000000a'),
+  'sync_state.updated_at is stamped by the server on INSERT'
+);
+
+update public.sync_state
+   set last_seq = 9, updated_at = timestamptz '2000-01-01 00:00:00+00'
+ where device_id = 'd0000000-0000-4000-8000-00000000000a';
+
+select ok(
+  (select s.updated_at > timestamptz '2020-01-01 00:00:00+00'
+     from public.sync_state s
+    where s.device_id = 'd0000000-0000-4000-8000-00000000000a'),
+  'and on UPDATE — the path `default now()` alone never reaches'
+);
 
 select * from finish();
 

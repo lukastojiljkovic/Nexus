@@ -130,6 +130,7 @@ supabase/
     …090260_devices_guard…        revoked_at is terminal; identity and platform are immutable
     …090300_storage_realtime_rls  the same wall over storage.objects and realtime.messages
     …090400_pair_complete_rpcs    three service-role-only routines the Edge Function calls
+    …120000_sync_state_touch      updated_at on sync_state becomes the server's clock, not a claim
   functions/pair-complete/        the one Edge Function, and the only holder of a service-role key
   scripts/check-rls-wall.mjs      static drift guard — no database required
   tests/static/                   node:test suite; proves the guard can fail
@@ -181,6 +182,16 @@ a constraint. Each grant therefore names its columns, and
 `information_schema.column_privileges`, which expands a table grant per column so
 that „widened to the whole table" and „one column added to the list" fail
 identically.
+
+Migration `…120000` is that idea applied to the one column that had escaped it.
+`sync_state.updated_at` is commented „when the device last synced" and was
+granted to `authenticated` — so the value a human would read as evidence that a
+device is alive was the device's own claim about its own clock. And nothing
+wrote it: `default now()` fires on INSERT only, so it would have sat at „when
+this cursor row was created" while reading as „last synced". The revoke stops it
+being stated; a `BEFORE INSERT OR UPDATE` trigger makes it true. Both halves are
+needed, and both are asserted — the grant in `00_rls_enabled.test.sql`, the
+stamping in `02_guard_trigger.test.sql`.
 
 ---
 
