@@ -9,14 +9,26 @@
    `scroll-margin-top` is what makes the section index above land a card under
    the sticky index rather than behind it: `scrollIntoView({block:"start"})`
    aligns the element's margin box, so the card stops one comfortable step below
-   the strip instead of exactly at the scrollport edge. */
+   the strip instead of exactly at the scrollport edge.
+
+   `--set-index-height` is the strip's MEASURED height, republished by
+   `stickyOffset.ts` on `.set` whenever it changes. It used to be the constant
+   `calc(var(--nx-space-8) + var(--nx-space-4))` — „one index strip's height",
+   which is what it is only while the strip fits on one line. It fits on two or
+   three at every window size the app opens at, and on a different number again
+   as the filter hides sections, so the constant was wrong at all three sizes in
+   both themes and the layout sweep saw the card title under the strip.
+
+   The fallback is that same constant, and it is the honest one: it is the value
+   for a single-line strip, which is what the page looks like for the one frame
+   before the observer's first measurement lands. */
 .set__section {
   display: flex;
   flex-direction: column;
   gap: var(--nx-space-4);
-  /* One index strip's height (24px entry + its own padding) plus a step, so a
-     jumped-to card's title clears the strip instead of stopping behind it. */
-  scroll-margin-top: calc(var(--nx-space-8) + var(--nx-space-4));
+  scroll-margin-top: calc(
+    var(--set-index-height, var(--nx-space-8)) + var(--nx-space-4)
+  );
 }
 .set__section .nx-card__title {
   margin-bottom: 0;

@@ -41,6 +41,7 @@ import type {
   ProfilePicturePickErrorCode,
   RestoreModuleCounts,
   RestoreProblemCode,
+  SyncEnableProblem,
 } from "../../shared/ipc.js";
 import type { OnboardingOccupation } from "../../shared/onboardingPresets.js";
 import type { ClockPreference } from "./calendarPrefs.js";
@@ -5233,6 +5234,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       modules: "Moduli",
       notifications: "Obaveštenja",
       backup: "Rezervna kopija",
+      sync: "Sinhronizacija",
       privacy: "Podaci i privatnost",
       about: "O aplikaciji",
       licences: "Licence",
@@ -6751,10 +6753,96 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       error: "Uvoz beležaka nije uspeo. Pokušaj ponovo.",
     },
     /**
-     * „Podaci i privatnost“ (SET-010, local half): five plain sentences, each
+     * „Sinhronizacija“ (the cloud half of SET-010).
+     *
+     * Same house style as the privacy card below: every sentence is a fact
+     * about how the thing is built, checkable in the source, rather than a
+     * reassurance. „Ključ ostaje na tvojim uređajima" is `key_wraps` holding
+     * wraps and never a key; „server ne čita ime uređaja" is `device-name.ts`
+     * sealing it under a subkey of MK before it is posted; „prikazuje se samo
+     * sada" is the recovery code being derived, shown, and never written
+     * anywhere — not to the database, not to the log, not to the server.
+     *
+     * `errors` is typed `Record<SyncEnableProblem, string>`, so a refusal the
+     * protocol can produce and this table does not name is a compile error
+     * rather than an empty message box in front of a user. The sentences are
+     * deliberately about what to DO next; several distinct protocol refusals
+     * therefore share one sentence, because the user's next move is the same
+     * and the distinction is ours, not theirs.
+     */
+    sync: {
+      description:
+        "Nexus može da čuva šifrovanu kopiju tvojih podataka na Nexus nalogu i da je deli sa veb aplikacijom. Server vidi samo šifrovan sadržaj — ključ ostaje na tvojim uređajima.",
+      /** The switch, and the one thing about it a user has to be told up front. */
+      cloudLabel: "Dozvoli mrežni pristup",
+      cloudHint: "Dok je isključeno, Nexus ne otvara nijednu vezu ka internetu — nijednu jedinu.",
+      cloudRestart: "Promena važi od sledećeg pokretanja Nexusa.",
+      /** No project baked into this build: the card says so instead of failing later. */
+      unconfigured: "Ova verzija Nexusa nije povezana ni sa jednim serverom, pa sinhronizacija nije dostupna.",
+      enableTitle: "Uključi sinhronizaciju na ovom računaru",
+      enableIntro:
+        "Nalog i potvrdu u dva koraka praviš u veb aplikaciji. Ovde upisuješ isti imejl i lozinku i jedan kod iz aplikacije za potvrdu.",
+      emailLabel: "Imejl naloga",
+      passwordLabel: "Lozinka naloga",
+      passwordHint: "Lozinka ne napušta ovaj računar — server dobija samo vrednost izvedenu iz nje.",
+      totpLabel: "Kod iz aplikacije za potvrdu",
+      deviceNameLabel: "Ime ovog računara",
+      deviceNameHint: "Ime se šifruje pre slanja — server ga ne čita.",
+      submit: "Uključi sinhronizaciju",
+      working: "Uključujem…",
+      /** Shown once, and the copy has to make that unmistakable. */
+      recoveryTitle: "Kod za oporavak sinhronizacije",
+      recoveryIntro:
+        "Prepiši ovaj kod i čuvaj ga van računara. Prikazuje se samo sada i nigde se ne čuva. Bez njega i bez uparenog uređaja nema povratka do ključa naloga.",
+      recoveryDone: "Prepisao sam kod",
+      statusOn: "Sinhronizacija je uključena na ovom računaru.",
+      accountLabel: "Nalog",
+      deviceLabel: "Uređaj",
+      enabledAtLabel: "Uključeno",
+      signedOut: "Ovaj računar trenutno nije prijavljen na nalog.",
+      /** The account has a key this computer did not mint. Not an error — a fork in the road. */
+      alreadyMinted:
+        "Ovaj nalog već ima ključ, a ovaj računar ga nema. Upari ga sa uređajem koji ključ ima ili upotrebi kod za oporavak.",
+      disconnectTitle: "Odjavi ovaj računar",
+      disconnectWarning:
+        "Uređaj se povlači sa naloga i ovaj računar zaboravlja svoju kopiju ključa. Podaci ostaju ovde i otvaraju se pristupnim kodom kao i do sada; povratak na nalog ide preko uparivanja sa drugim uređajem ili preko koda za oporavak.",
+      disconnect: "Odjavi ovaj računar",
+      disconnectConfirm: "Odjavi",
+      disconnectCancel: "Otkaži",
+      errors: {
+        invalid_credentials: "Pogrešan imejl ili lozinka.",
+        email_not_confirmed: "Potvrdi imejl adresu u veb aplikaciji, pa pokušaj ponovo.",
+        invalid_code: "Kod za potvrdu nije prihvaćen. Sačekaj sledeći kod i pokušaj ponovo.",
+        mfa_not_enrolled: "Nalog nema potvrdu u dva koraka. Uključi je u veb aplikaciji, pa se vrati ovde.",
+        mfa_ambiguous: "Nalog ima više načina potvrde. Ostavi jedan u veb aplikaciji, pa pokušaj ponovo.",
+        session_expired: "Prijava je istekla. Pokušaj ponovo.",
+        rate_limited: "Previše pokušaja. Sačekaj nekoliko minuta.",
+        unavailable: "Server trenutno ne odgovara. Pokušaj kasnije.",
+        unknown: "Nešto nije prošlo. Pokušaj ponovo.",
+        step_up_failed: "Potvrda u dva koraka nije prošla do kraja. Pokušaj ponovo.",
+        unauthenticated: "Prijava nije prošla. Pokušaj ponovo.",
+        session_not_live: "Prijava više ne važi. Pokušaj ponovo.",
+        second_factor_required: "Nalogu je potrebna potvrda u dva koraka.",
+        factor_must_predate_session: "Potvrda u dva koraka nije prošla do kraja. Pokušaj ponovo.",
+        sessions_from_different_accounts: "Prijave ne pripadaju istom nalogu. Pokušaj ponovo.",
+        sessions_must_differ: "Prijava nije prošla kako treba. Pokušaj ponovo.",
+        rejected_by_schema: "Server je odbio podatke. Prijavi grešku.",
+        mint_failed: "Server nije uspeo da napravi ključ naloga. Pokušaj kasnije.",
+        round_trip_mismatch:
+          "Server nije sačuvao ono što je ovaj računar poslao, pa sinhronizacija nije uključena. Pokušaj ponovo; ako se ponovi, prijavi grešku.",
+        cloud_off: "Mrežni pristup je isključen za ovo pokretanje.",
+        locked: "Otključaj Nexus, pa pokušaj ponovo.",
+        already_enabled: "Sinhronizacija je već uključena na ovom računaru.",
+        bad_request: "Podaci nisu ispravni. Proveri ime računara.",
+      } satisfies Record<SyncEnableProblem, string>,
+      error: "Uključivanje sinhronizacije nije uspelo. Pokušaj ponovo.",
+      disconnectError: "Odjava nije uspela. Pokušaj ponovo.",
+    },
+    /**
+     * „Podaci i privatnost“ (SET-010, local half): six plain sentences, each
      * one a fact about how this build is put together rather than a promise.
      *
-     * The five sentences have deliberately nothing to operate — no toggle, no
+     * The six sentences have deliberately nothing to operate — no toggle, no
      * link, no „saznaj više“. A privacy panel with a switch on it is a panel
      * about a setting; those are about what is already true, and every
      * sentence is checkable in the source:
@@ -6765,13 +6853,16 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
      *                  (Argon2id → AES-GCM, ADR-018).
      *  - `noTelemetry` — there is no telemetry or analytics dependency, and no
      *                  such code, anywhere in the tree.
-     *  - `offline`   — `apps/desktop/src` contains no `fetch`, `XMLHttpRequest`,
-     *                  `WebSocket` or remote URL at all, and the packaged
-     *                  renderer's CSP is `default-src 'self'; connect-src
-     *                  'self'`. The ONE exception is named out loud rather than
-     *                  papered over: the packaged build asks its release feed
-     *                  whether a newer Nexus exists (`checkForUpdates`,
-     *                  SEC-EL-07), which carries none of the user's data.
+     *  - `offline`   — the only socket in the tree is `net.fetch` in
+     *                  `main/sync/electronFetch.ts`, which `check:egress` pins
+     *                  to that one file, and it is unreachable unless the cloud
+     *                  switch is on: `createCloudPorts` returns `null`
+     *                  otherwise. The packaged renderer's CSP is `default-src
+     *                  'self'; connect-src 'self'`, unchanged.
+     *  - `sync`      — the other half of the same fact, because a card that
+     *                  lists what leaves the device has to name what leaves it
+     *                  once the user turns sync on: ciphertext, plus the row
+     *                  metadata migration 003 keeps in the clear.
      *  - `exports`   — `main/imex.ts` writes to a path chosen in the system
      *                  save dialog, sealed under a passphrase-derived key when
      *                  one is given (ADR-022).
@@ -6793,8 +6884,20 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         "Svi tvoji podaci — beleške, zadaci, događaji, kartice i prilozi — stoje na ovom uređaju, u bazi koja je šifrovana. Ključ se otključava tvojim pristupnim kodom i nigde se ne šalje.",
       noTelemetry:
         "Nexus ne prikuplja telemetriju ni analitiku. Nema brojača, nema izveštaja o korišćenju, nema profilisanja.",
+      /**
+       * REWRITTEN, because both halves of the old sentence had stopped being
+       * true, in opposite directions. It promised the content „nikada" leaves
+       * the device — sync now exists and the user may turn it on — and it named
+       * an update check as the one exception, which this build does not make at
+       * all: the auto-updater is disarmed and `checkForUpdates` is not called
+       * (see the disarmed auto-update section in `main/index.ts`). Claiming an
+       * outbound call the app never makes is exactly as wrong as hiding one it
+       * does, so both halves are restated as facts with their condition
+       * attached.
+       */
       offline:
-        "Tvoj sadržaj se nikada ne šalje na mrežu i aplikacija radi bez interneta. Jedino što izlazi napolje jeste provera da li postoji novija verzija Nexusa — ona ne nosi ništa od tvojih podataka.",
+        "Dok je mrežni pristup isključen — a tako je od prvog pokretanja — Nexus ne otvara nijednu vezu ka internetu. Ni provere verzije: aplikacija se ne javlja nigde.",
+      sync: "Ako uključiš sinhronizaciju, na server odlazi šifrovan sadržaj — uz podatak koji ga je uređaj poslao i kada. Ključ ostaje na tvojim uređajima; server ga nema i ne može da pročita ono što čuva.",
       exports:
         "Izvoz je običan fajl: ti biraš gde se čuva, a arhivu možeš zaštititi lozinkom pri pravljenju.",
       deletion:

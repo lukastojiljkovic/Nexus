@@ -49,6 +49,12 @@ import type {
   SetKind,
   TaskViewConfig,
 } from "@nexus/core";
+// The sync surface's refusal vocabulary joins on the closed-list ground stated
+// above, and on a sharper version of it: these two unions are what the auth
+// server and `nexus_mk_mint` actually answer, and a redeclared copy would drift
+// into naming a state the protocol cannot produce — or, worse, into omitting one
+// it can, which is a screen with no message for a case that happens.
+import type { AuthRefusal, SyncEnableRefusal } from "@nexus/sync-transport";
 
 /** The only channels the preload bridge and the main handlers agree on. */
 export const IpcChannel = {
@@ -811,6 +817,25 @@ export const IpcChannel = {
   // and each one is a bare enum with no other field to validate. Four channels
   // would be four handlers repeating the same three lines.
   windowView: "window:view",
+  // Sync (the cloud half). Four channels, and the smallness is the design.
+  //
+  // `sync:status` is the only read, and it answers no token, no key and no
+  // server message — an address, a device id, a date and four booleans.
+  // `sync:set-cloud` writes `cloud.json` and says a restart is needed, which
+  // both directions are; it does NOT lift the boundary in this run, because the
+  // resolver-level layer is a command-line switch fixed for the life of the
+  // process. `sync:enable` runs the whole mint protocol in main and returns the
+  // Sync Recovery Code exactly once, because the user has to write it down.
+  //
+  // There is deliberately no „sign out" beside `sync:disconnect`. A desktop's
+  // authority is a live `devices` row naming its `session_id`, and the grant on
+  // that table withholds `session_id` from every client — so a desktop that
+  // ends its session can never re-point its row at a new one. „Signed out but
+  // still enabled" would be a dead end presented as a toggle.
+  syncStatus: "sync:status",
+  syncSetCloud: "sync:set-cloud",
+  syncEnable: "sync:enable",
+  syncDisconnect: "sync:disconnect",
   appInfo: "app:info",
 } as const;
 
@@ -7741,6 +7766,90 @@ export interface AppInfo {
 }
 
 /**
+ * The sync surface as the renderer sees it: an address, a device id, a date and
+ * four booleans.
+ *
+ * No token, no key, no wrap and no server message. Everything the protocol
+ * produces that is not one of these fields stays in main — the English `detail`
+ * strings in particular, which are developer fault reports and would eventually
+ * be shown to somebody if they crossed.
+ */
+export interface SyncStatusView {
+  /**
+   * The cloud switch AS STORED — the position the settings checkbox shows, and
+   * the value the next launch will come up under.
+   *
+   * Deliberately the stored value rather than the running one. They differ for
+   * the whole of the session in which the switch is changed, and the renderer
+   * needs the stored one: a user who ticks the box, walks to another page and
+   * comes back must find it still ticked. Whether THIS launch has the boundary
+   * lifted is main's business — nothing in the renderer can act on it, because
+   * every operation that would is refused in main by name.
+   */
+  cloudEnabled: boolean;
+  /**
+   * True while the stored switch differs from the one this launch came up with,
+   * in EITHER direction — see `cloudRequiresRestart`, which is the one place
+   * that rule is written and which explains why enabling mid-session is not a
+   * thing that can work.
+   */
+  cloudRestartRequired: boolean;
+  /** Whether this build knows which project to talk to at all. */
+  configured: boolean;
+  /** Null until sync has been enabled on this computer. */
+  account: {
+    email: string;
+    deviceId: string | null;
+    enabledAt: string;
+  } | null;
+  /** Whether main is currently holding a live session for that account. */
+  signedIn: boolean;
+}
+
+/**
+ * Why turning sync on was refused. Machine codes, never prose — the renderer
+ * maps each to its own Serbian sentence, exactly as `BackupRunErrorCode` does.
+ *
+ * The first two unions are the protocol's own and are IMPORTED rather than
+ * copied: `AuthRefusal` is what the auth server answers, `SyncEnableRefusal` is
+ * what `nexus_mk_mint` answers, and a redeclared copy would drift into naming a
+ * state neither can produce or omitting one they can.
+ */
+export type SyncEnableProblem =
+  | AuthRefusal
+  | SyncEnableRefusal
+  /** The account has several second factors and none was named. */
+  | "mfa_ambiguous"
+  /** The verify call succeeded and the session did not come back at `aal2`. */
+  | "step_up_failed"
+  /** The server stored something other than what this desktop sent. Nothing was enabled. */
+  | "round_trip_mismatch"
+  /** Cloud is switched off for this launch, or this build has no project. */
+  | "cloud_off"
+  /** The database is locked, so there is no data key to wrap a master key under. */
+  | "locked"
+  /** Sync is already on here. Enabling twice would mint a second master key. */
+  | "already_enabled"
+  /** A caller-side fault: a device name this schema cannot store, a bad key length. */
+  | "bad_request";
+
+/** Everything `enableSync` can answer. */
+export type SyncEnableView =
+  | {
+      outcome: "enabled";
+      /**
+       * The Sync Recovery Code, shown ONCE and never stored. It crosses this
+       * bridge because the user has to be able to write it down; nothing else
+       * key-shaped ever does.
+       */
+      recoveryCode: string;
+      status: SyncStatusView;
+    }
+  /** The account already has a master key this computer did not mint: pair, or recover. */
+  | { outcome: "already-minted" }
+  | { outcome: "refused"; reason: SyncEnableProblem };
+
+/**
  * The exact object exposed on `window.nexus`: one method per channel, nothing
  * generic. Frozen at exposure time (see preload).
  */
@@ -9040,5 +9149,24 @@ export interface NexusApi {
   onWindowStateChanged(listener: (state: WindowState) => void): () => void;
   /** Zoom or full screen for the calling window. The resulting state arrives through `onWindowStateChanged`, never as a reply — one path, so the strip can never disagree with itself. */
   windowView(command: WindowViewCommand): Promise<void>;
+  /** Whether cloud is on for this launch, whether this build has a project, and which account this computer belongs to. Answers while locked. */
+  syncStatus(): Promise<SyncStatusView>;
+  /** Writes the cloud switch and answers with the whole status. Takes effect on the NEXT launch — `cloudRestartRequired` comes back true in both directions, and the settings card says so. */
+  setCloudEnabled(enabled: boolean): Promise<SyncStatusView>;
+  /**
+   * Turns sync on for this computer: signs in with the derived key, steps the
+   * session up with the TOTP code, mints the account's master key, and reads
+   * the stored wraps back byte for byte before calling any of it done. The
+   * password never leaves main and never leaves this machine.
+   */
+  enableSync(request: {
+    email: string;
+    password: string;
+    totpCode: string;
+    deviceName: string;
+    factorId?: string;
+  }): Promise<SyncEnableView>;
+  /** Retires this computer's device row, ends its session, and forgets its copy of the master key. Coming back needs pairing or the Recovery Kit. */
+  disconnectSync(): Promise<SyncStatusView>;
   appInfo(): Promise<AppInfo>;
 }

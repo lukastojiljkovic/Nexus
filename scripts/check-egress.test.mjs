@@ -36,6 +36,8 @@ describe("stripComments", () => {
 describe("the rules catch what they are for", () => {
   const cases = [
     ["fetch", 'await fetch("/x")'],
+    ["global-fetch", 'await globalThis.fetch("/x")'],
+    ["electron-net-fetch", "await net.fetch(url, init)"],
     ["xhr", "const r = new XMLHttpRequest()"],
     ["beacon", 'navigator.sendBeacon("/collect", body)'],
     ["eventsource", 'const es = new EventSource("/stream")'],
@@ -96,6 +98,31 @@ describe("the rules do NOT fire on data", () => {
 
   it("ignores a loopback URL, which is the dev server and never egress", () => {
     expect(scanSource("some/file.ts", 'win.loadURL("http://localhost:5173")')).toEqual([]);
+  });
+
+  it("ignores an injected transport port, which is the seam and not the socket", () => {
+    // `main/sync/port.ts` calls whatever it was handed. Firing here would force
+    // an exemption on the one file whose purity is the thing worth checking, and
+    // then on every port after it — see the `fetch` rule's own comment.
+    for (const source of [
+      "return options.fetch({ url, method, headers, body });",
+      "await deps.ports.http({ path, method });",
+      "const response = await this.fetch(request);",
+    ]) {
+      expect(scanSource("some/file.ts", source)).toEqual([]);
+    }
+  });
+
+  it("still fires on the global reached through a name that only looks like a port", () => {
+    // The two ways round the narrowed rule, both of them real sockets.
+    expect(ids(scanSource("some/file.ts", "await window.fetch(url)"))).toContain("global-fetch");
+    expect(ids(scanSource("some/file.ts", "await self.fetch(url)"))).toContain("global-fetch");
+    // And a destructured port, which at the call site IS the global as far as
+    // anything reading the line can tell. `createAuthPort` names its parameter
+    // `send` for exactly this reason.
+    expect(ids(scanSource("some/file.ts", "const { fetch } = deps;\nawait fetch(request);"))).toContain(
+      "fetch",
+    );
   });
 });
 

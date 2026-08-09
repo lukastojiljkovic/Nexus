@@ -345,7 +345,45 @@ function shellEntries(): readonly ShellSettingsSearchEntry[] {
       keywords: ["markdown", "md", "beleske", "fajlovi", "obsidian", "uvoz"],
     },
     {
-      // SET-010: five sentences, one entry. There is nothing to operate in that
+      // The cloud switch gets its own entry rather than keywords on the enable
+      // form below, because it is the control somebody hunting for „internet"
+      // or „mreza" actually wants — and it is the one control on this card that
+      // exists even in a build with no project configured.
+      id: "sync-cloud",
+      section: "sync",
+      label: s.sync.cloudLabel,
+      keywords: ["mreza", "internet", "oblak", "cloud", "veza", "onlajn", "offline"],
+    },
+    {
+      // The words are the account's, not the protocol's: nobody types „aal2" or
+      // „master key". „dvofaktorska“ and „kod“ are here because the form asks
+      // for a TOTP code and that is the field people get stuck on.
+      id: "sync-enable",
+      section: "sync",
+      label: s.sync.enableTitle,
+      keywords: [
+        "sinhronizacija",
+        "sinhronizuj",
+        "nalog",
+        "prijava",
+        "lozinka",
+        "imejl",
+        "dvofaktorska",
+        "kod",
+        "uredjaj",
+        "veb",
+      ],
+    },
+    {
+      // Its own entry because it is a BUTTON with consequences, and because the
+      // word somebody reaches for („odjavi") appears nowhere else on the page.
+      id: "sync-disconnect",
+      section: "sync",
+      label: s.sync.disconnect,
+      keywords: ["odjavi", "odjava", "iskljuci", "prekini", "uredjaj", "sinhronizacija"],
+    },
+    {
+      // SET-010: six sentences, one entry. There is nothing to operate in that
       // card, so it has nothing to highlight and only ever steers visibility —
       // and the words are the ones a worried user types, not the card's own.
       id: "privacy-practices",

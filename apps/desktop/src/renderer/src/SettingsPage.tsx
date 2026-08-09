@@ -129,6 +129,9 @@ import {
 } from "./localePrefs.js";
 import { useFocusTrap } from "./useFocusTrap.js";
 import { moduleName } from "./moduleName.js";
+import { formatArchiveInstant } from "./timeFormat.js";
+import { useStickyBarHeight } from "./stickyOffset.js";
+import { SyncSection } from "./SyncSettings.js";
 
 const THEME_OPTIONS: ThemePreference[] = ["system", "dan", "noc"];
 
@@ -156,6 +159,11 @@ const SHELL_SECTIONS_AFTER_MODULES = [
   "modules",
   "notifications",
   "backup",
+  // Between „Rezervna kopija" and „Podaci i privatnost", because it is the third
+  // answer to the same question those two answer — where does a copy of my data
+  // go — and because the privacy card's own `sync` sentence reads as a summary
+  // of the card immediately above it rather than a forward reference.
+  "sync",
   "privacy",
   "about",
   "licences",
@@ -187,6 +195,12 @@ interface SectionIndexEntry {
  */
 function SectionIndex({ entries }: { entries: readonly SectionIndexEntry[] }) {
   const [current, setCurrent] = useState<string | null>(null);
+  // The strip's real height, published on `.set` so `.set__section`'s
+  // `scroll-margin-top` can be it. It wraps to two or three lines at every size
+  // the app opens at, and to a different number of lines as the filter hides
+  // sections — see `stickyOffset.ts` for the defect the constant it replaced
+  // produced at all three window sizes.
+  const indexHeight = useStickyBarHeight("--set-index-height");
   // A stable dependency for the effect below: `entries` is a fresh array on
   // every keystroke in the filter, and re-attaching an observer per render
   // would be a new observer per keystroke for an unchanged set of cards.
@@ -226,7 +240,7 @@ function SectionIndex({ entries }: { entries: readonly SectionIndexEntry[] }) {
   }, [ids]);
 
   return (
-    <nav className="set__index" aria-label={strings.settings.indexLabel}>
+    <nav ref={indexHeight} className="set__index" aria-label={strings.settings.indexLabel}>
       {entries.map((entry) => (
         <button
           key={entry.id}
@@ -1326,27 +1340,6 @@ type RestoreState =
   | { phase: "ready"; pick: PickedArchive; preview: RestorePreview; error: string | null }
   | { phase: "applying"; pick: PickedArchive; preview: RestorePreview }
   | { phase: "applied" };
-
-/**
- * An instant as a full sr-Latn day + time label ("8. jul 2026. 14:32").
- * Mirrors `focusFormat.ts`'s `formatFocusSessionWhen`, but carries the year:
- * a focus session is recent by nature, while a restore archive can have been
- * written at any time and its age is exactly what the user is judging.
- * Exported for App.tsx's undo banner, which formats the same kind of instant
- * (the `AuthGate` precedent: a helper lives with the screen that owns it and
- * is imported, never re-spelled). Raw input on an unparseable string.
- */
-export function formatArchiveInstant(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  const day = new Intl.DateTimeFormat("sr-Latn", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  }).format(date);
-  const time = new Intl.DateTimeFormat("sr-Latn", { hour: "2-digit", minute: "2-digit" }).format(date);
-  return `${day} ${time}`;
-}
 
 /** The machine-readable half of a problem — `data/tasks.ndjson:12 · <detail>` — or empty when it carries none. */
 function problemFragment(problem: RestoreProblem): string {
@@ -5382,7 +5375,18 @@ export function SettingsPage({
         <MarkdownImportSection profileId={profileId} hits={hits} />
       </Card>
 
-      {/* SET-010, local half. Five statements of fact — no toggle, no link, no
+      {/* The cloud half. It is a DEVICE card, not a profile one: the cloud
+          switch, the account and the master key belong to this computer, so it
+          takes no `profileId` and shows the same thing in every profile. */}
+      <Card
+        id={sectionDomId("sync")}
+        title={strings.settings.sectionTitle.sync}
+        className={sectionClass(sections.has("sync"))}
+      >
+        <SyncSection hits={hits} />
+      </Card>
+
+      {/* SET-010, local half. Six statements of fact — no toggle, no link, no
           „saznaj više“ on any of them. Every sentence is checkable in the
           source; see the copy block's own comment, which names the file each
           one is true because of. Below them, the one thing on this card that
@@ -5397,6 +5401,7 @@ export function SettingsPage({
         <p className="set__section-caption">{strings.settings.privacy.storage}</p>
         <p className="set__section-caption">{strings.settings.privacy.noTelemetry}</p>
         <p className="set__section-caption">{strings.settings.privacy.offline}</p>
+        <p className="set__section-caption">{strings.settings.privacy.sync}</p>
         <p className="set__section-caption">{strings.settings.privacy.exports}</p>
         <p className="set__section-caption">{strings.settings.privacy.deletion}</p>
         <SearchHistorySection profileId={profileId} hits={hits} />

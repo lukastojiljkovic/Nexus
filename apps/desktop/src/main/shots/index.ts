@@ -146,6 +146,18 @@ export const SHOT_SCENES: readonly ShotScene[] = [
   { id: "canvas", module: "canvas" },
   { id: "search", module: "dashboard", prepare: OPEN_SEARCH_PAGE(), fanout: null },
   { id: "settings", module: "settings" },
+  {
+    // „Podešavanja" is twenty-odd cards long and a frame only ever shows the
+    // first one, so every card below the fold was unphotographed — which is why
+    // this scene exists at all rather than only for the card that prompted it.
+    // Named by DOM id, not by the Serbian title: `sectionDomId` builds these
+    // from the section id, so this survives a translation the way the module
+    // scenes survive one by matching `data-module-id`.
+    id: "settings-sync",
+    module: "settings",
+    prepare: SCROLL_TO("#set-section-sync"),
+    fanout: null,
+  },
 
   // --- Overlays -------------------------------------------------------------
   // Surfaces with no sidebar row of their own. Each opens something, is
@@ -264,6 +276,28 @@ function CLICK_THEN(...steps: readonly string[]): string {
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     }
     return true;
+  })()`;
+}
+
+/**
+ * Brings one element to the top of whatever scrolls it, and reports whether it
+ * was there to bring.
+ *
+ * `"none"` rather than a silent no-op for `OPEN_FIRST`'s reason: a selector
+ * that stops matching would otherwise photograph the top of the page under the
+ * name of a card halfway down it, which reads as „the card is fine" rather than
+ * „the probe missed".
+ *
+ * `behavior: "instant"` is load-bearing — the harness photographs on the next
+ * frame, and a smooth scroll would still be in flight.
+ */
+function SCROLL_TO(selector: string): string {
+  return `(async () => {
+    const el = document.querySelector(${JSON.stringify(selector)});
+    if (!el) return "none";
+    el.scrollIntoView({ behavior: "instant", block: "start" });
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    return ${JSON.stringify(selector)};
   })()`;
 }
 

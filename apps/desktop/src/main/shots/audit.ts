@@ -172,12 +172,20 @@ export const AUDIT_SCRIPT = `(() => {
     );
   }
 
+  // Every \`sticky\`/\`fixed\` element met so far — see the overlap guard below.
+  const pinned = [];
+
   for (const el of all) {
     const style = getComputedStyle(el);
     if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") continue;
     const rect = el.getBoundingClientRect();
     if (rect.width < 1 || rect.height < 1) continue;
     if (isClippedAway(el, rect)) continue;
+
+    // Recorded HERE, above every later \`continue\`, so a pinned bar that is
+    // itself skipped by one of them (a visually-hidden one, say) still shields
+    // its descendants. See the overlap guard for what it is for.
+    if (style.position === "sticky" || style.position === "fixed") pinned.push(el);
 
     // --- Painted outside the window -----------------------------------------
     // Only the leading edges and the right edge: a page that scrolls vertically
@@ -277,7 +285,20 @@ export const AUDIT_SCRIPT = `(() => {
       el.childNodes,
       (node) => node.nodeType === 3 && node.textContent.trim().length > 0,
     );
-    if (ownText && !el.closest(OVERLAY_SELECTOR)) {
+    // A \`sticky\` or \`fixed\` ancestor makes an element an overlay in fact even
+    // when it carries no overlay ROLE, and \`OVERLAY_SELECTOR\` cannot see it:
+    // that list is about dialogs and menus, while this is about a bar pinned to
+    // the edge of a scroller. Content scrolling underneath such a bar is what
+    // the bar is FOR, so the shared pixels are the design working. Adding the
+    // \`settings-sync\` scene — the first that scrolls a page before shooting —
+    // turned four of those into standing findings, which is how a report starts
+    // being scrolled past.
+    //
+    // \`pinned\` is collected during this same pass rather than by walking
+    // ancestors per leaf: \`all\` is in document order, so a pinned ancestor is
+    // always already in the list by the time one of its descendants is reached,
+    // and the list holds a handful of elements rather than one per node.
+    if (ownText && !el.closest(OVERLAY_SELECTOR) && !pinned.some((root) => root.contains(el))) {
       // The VISIBLE rect, not the laid-out one. An element half-scrolled out
       // of a pane still reports where it would be if the pane were not
       // scrolled, and the part hanging outside lands on whatever is pinned

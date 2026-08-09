@@ -61,7 +61,33 @@ const SCANNED_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".mjs", ".cjs", ".css"
  * exemptions, which is how an allowlist becomes wallpaper.
  */
 export const EGRESS_RULES = [
-  { id: "fetch", pattern: /\bfetch\s*\(/, what: "fetch()" },
+  /**
+   * A BARE `fetch(` — the global — and deliberately not `x.fetch(`.
+   *
+   * The rule used to be `\bfetch\s*\(`, which fires on any call to any method
+   * named `fetch` on anything. That was right while nothing in the tree had one
+   * and wrong the moment `main/sync/port.ts` appeared: its whole design is that
+   * the transport is an INJECTED port, so `options.fetch({…})` is a call to
+   * whatever the caller passed — in production `net.fetch`, in tests a
+   * function — and is precisely the construct that makes the boundary
+   * enforceable. Exempting the file would have been the wrong repair twice
+   * over: it would bless every other construct in it, and the next port would
+   * need its own exemption until the allowlist was wallpaper.
+   *
+   * The two things the widened rule was really catching are kept as rules of
+   * their own below, so nothing is lost: reaching the global through an
+   * explicit `globalThis`/`window`, and Electron's `net.fetch`. What is now
+   * allowed is exactly „a method named fetch on some other object", which is a
+   * seam, not a socket.
+   *
+   * A DESTRUCTURED port (`const { fetch } = options; fetch(…)`) still fires,
+   * and should: at the call site it is indistinguishable from the global, and a
+   * later edit deleting the binding would silently turn it into one. That is
+   * why `createAuthPort` takes its port as `send` rather than `fetch`.
+   */
+  { id: "fetch", pattern: /(?<![.\w$])fetch\s*\(/, what: "the global fetch()" },
+  { id: "global-fetch", pattern: /\b(globalThis|window|self|global)\s*\.\s*fetch\s*\(/, what: "the global fetch(), reached explicitly" },
+  { id: "electron-net-fetch", pattern: /\bnet\s*\.\s*fetch\s*\(/, what: "Electron's net.fetch()" },
   { id: "xhr", pattern: /\bXMLHttpRequest\b/, what: "XMLHttpRequest" },
   { id: "beacon", pattern: /\bsendBeacon\s*\(/, what: "navigator.sendBeacon()" },
   { id: "eventsource", pattern: /\bnew\s+EventSource\b/, what: "EventSource" },
@@ -125,6 +151,24 @@ export const ALLOWLIST = new Map([
     // have.
     "packages/sync-transport/src/live.test.ts",
     ["fetch"],
+  ],
+  [
+    // The ONE socket in the shipped application, and the exemption is the point
+    // rather than a concession: what it exempts is `net.fetch`, which goes
+    // through the default session and therefore through the four cloud-off
+    // layers. Node's `fetch` in this process would go through none of them, so
+    // the rule firing here is the gate doing its job — the file's entire header
+    // is the argument for why this call and no other. It is also why the
+    // exemption names one file and not a directory: `port.ts` beside it is pure
+    // and takes this as a parameter, and must keep failing the gate if it ever
+    // stops being.
+    //
+    // It exempts `electron-net-fetch` and NOT `fetch`, which is the whole
+    // distinction: this file may call `net.fetch`, and may still not call the
+    // global — the one substitution that would quietly bypass all four layers
+    // while leaving the file looking identical.
+    "apps/desktop/src/main/sync/electronFetch.ts",
+    ["electron-net-fetch"],
   ],
 ]);
 

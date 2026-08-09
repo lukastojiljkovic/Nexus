@@ -55,6 +55,18 @@ importers:
       '@nexus/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@nexus/sync':
+        specifier: workspace:*
+        version: link:../../packages/sync
+      '@nexus/sync-crypto':
+        specifier: workspace:*
+        version: link:../../packages/sync-crypto
+      '@nexus/sync-port':
+        specifier: workspace:*
+        version: link:../../packages/sync-port
+      '@nexus/sync-transport':
+        specifier: workspace:*
+        version: link:../../packages/sync-transport
       '@nexus/tokens':
         specifier: workspace:*
         version: link:../../packages/tokens

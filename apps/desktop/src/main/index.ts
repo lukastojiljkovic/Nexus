@@ -15,6 +15,9 @@ import type { IpcMainInvokeEvent, OpenDialogOptions } from "electron";
 // `electron-updater` is deliberately NOT imported — see the disarmed
 // auto-update section below for the three conditions that must hold first.
 import { devServerOrigin, isRequestAllowed, shouldBlockResolver } from "./net/offline.js";
+import { buildCloudEnv } from "./sync/config.js";
+import { electronCloudFetch } from "./sync/electronFetch.js";
+import { createSyncService, type SyncService } from "./sync/service.js";
 import {
   ACTIVITY_LEVELS,
   applySearchOperators,
@@ -347,6 +350,7 @@ import {
   type UpdatePlanFields,
   type UpdateSubjectFields,
   type UpdateTaskFields,
+  SyncAccountStore,
   uuidv7,
 } from "@nexus/db";
 import {
@@ -659,6 +663,8 @@ import {
   type StudyStats,
   type SubjectAttachmentsAddResult,
   type SubjectStudyLog,
+  type SyncEnableView,
+  type SyncStatusView,
   type TaskAttachmentsAddResult,
   type TaskListsSnapshot,
   type TopicMoveDirection,
@@ -4859,6 +4865,34 @@ function dashboardSetsState(profileId: string): DashboardSetsState {
 function requireUnlockedDataKeyHex(): string {
   if (unlockedDataKeyHex === null) throw new Error("The data key is locked.");
   return unlockedDataKeyHex;
+}
+
+// --- Sync (the cloud half) --------------------------------------------------
+//
+// ONE service, built once per launch, and everything network-shaped decided
+// inside it at that moment: `cloud.json` and the build's project configuration
+// are read at construction, and the ports either exist or do not. That is why
+// this is a memoised singleton rather than a fresh object per call — a second
+// instance could read a `cloud.json` the first one has since rewritten, and the
+// two halves of the boundary would disagree about the same launch.
+//
+// The two accessors it is given are the ones the rest of main already uses for
+// „is the session open": both throw while locked, and the service turns that
+// into a named refusal rather than letting it surface as an exception.
+let syncServiceInstance: SyncService | null = null;
+
+function syncService(): SyncService {
+  syncServiceInstance ??= createSyncService({
+    userDataPath: userDataDir(),
+    env: buildCloudEnv(),
+    // The one socket in the application — `net.fetch`, on the default session,
+    // and therefore inside all four cloud-off layers. See `sync/port.ts`.
+    fetch: electronCloudFetch,
+    accountStore: () => new SyncAccountStore(requireDb().raw),
+    dataKeyHex: requireUnlockedDataKeyHex,
+    now: () => new Date(),
+  });
+  return syncServiceInstance;
 }
 
 // --- Search (ADR-021): the query pipeline -----------------------------------
@@ -11052,6 +11086,52 @@ function registerIpc(): void {
     }
   });
 
+  // Sync (the cloud half). Four validation shims over `main/sync/service.ts`,
+  // which holds the ports, the session and the whole mint protocol.
+  //
+  // `sync:status` answers while LOCKED, deliberately: the settings screen has to
+  // be able to say „cloud is off" before anyone signs in, and the account read it
+  // needs fails closed to `null` inside the service. The other three do not — the
+  // service refuses `locked` for the enable, and `disconnect` needs the account
+  // row it is about to delete.
+  ipcMain.handle(IpcChannel.syncStatus, (event): SyncStatusView => {
+    assertTrustedSender(event);
+    return syncService().status();
+  });
+
+  ipcMain.handle(IpcChannel.syncSetCloud, (event, payload): SyncStatusView => {
+    assertTrustedSender(event);
+    const enabled = asBoolean(asRecord(payload).enabled, "enabled");
+    return syncService().setCloudEnabled(enabled);
+  });
+
+  // Every field is validated for SHAPE here and for meaning by the layers below:
+  // the address by the KDF's normaliser, the device name by `device-name.ts`'s
+  // one rule, and the whole payload again by the Edge Function and by eleven
+  // CHECK constraints. The password crosses this bridge and stops here — it is
+  // put through Argon2id in main and never reaches a socket.
+  ipcMain.handle(IpcChannel.syncEnable, async (event, payload): Promise<SyncEnableView> => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const email = asNonEmptyString(body.email, "email");
+    const password = asNonEmptyString(body.password, "password");
+    const totpCode = asNonEmptyString(body.totpCode, "totpCode");
+    const deviceName = asNonEmptyString(body.deviceName, "deviceName");
+    const factorId = body.factorId === undefined ? undefined : asNonEmptyString(body.factorId, "factorId");
+    return syncService().enable({
+      email,
+      password,
+      totpCode,
+      deviceName,
+      ...(factorId === undefined ? {} : { factorId }),
+    });
+  });
+
+  ipcMain.handle(IpcChannel.syncDisconnect, async (event): Promise<SyncStatusView> => {
+    assertTrustedSender(event);
+    return syncService().disconnect();
+  });
+
   ipcMain.handle(IpcChannel.appInfo, (event): AppInfo => {
     assertTrustedSender(event);
     return appInfo();
@@ -12099,13 +12179,16 @@ app.whenReady().then(async () => {
   // (`host-resolver-rules`) went on at module scope; `net/offline.ts` carries
   // the full reasoning for all four.
   //
-  // `allowedRemoteOrigins` is empty and STAYS empty until the sync transport
-  // exists and the user has turned cloud on — at which point it holds exactly
-  // the project's two Supabase origins and never a wildcard. Until then the
-  // honest value is „nothing", and the boundary is written before the thing it
-  // guards, which is the only order in which a guarantee like this is worth
-  // anything.
-  const allowedRemoteOrigins: readonly string[] = [];
+  // `allowedRemoteOrigins` is EXACTLY the project's two Supabase origins —
+  // `https://<host>` for PostgREST and the Edge Functions, `wss://<host>` for
+  // Realtime — and only when this launch has cloud switched on AND this build
+  // knows which project it is. Every other case is the empty list, which is the
+  // value it held for the whole of 1.0.0.
+  //
+  // Read from the service rather than computed here, because the service is what
+  // decides whether the ports exist at all: „a port was built" and „its origin is
+  // admitted" have to be the same decision, or one of them is a second opinion.
+  const allowedRemoteOrigins: readonly string[] = syncService().allowedOrigins();
   const devOrigin = devServerOrigin(process.env);
 
   // Layer 1: every request Chromium initiates — fetch, XHR, a stylesheet

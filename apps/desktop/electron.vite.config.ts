@@ -8,7 +8,16 @@ import type { Plugin } from "vite";
 // Workspace packages are consumed as TypeScript source, so they must be BUNDLED
 // into the main/preload output rather than externalized and require()d at
 // runtime (Node cannot execute their raw .ts).
-const NEXUS_WORKSPACE = ["@nexus/core", "@nexus/db", "@nexus/ui", "@nexus/tokens"];
+const NEXUS_WORKSPACE = [
+  "@nexus/core",
+  "@nexus/db",
+  "@nexus/ui",
+  "@nexus/tokens",
+  "@nexus/sync",
+  "@nexus/sync-crypto",
+  "@nexus/sync-port",
+  "@nexus/sync-transport",
+];
 
 /**
  * Production-only renderer hardening. Injects a strict CSP (SEC-EL-05,
