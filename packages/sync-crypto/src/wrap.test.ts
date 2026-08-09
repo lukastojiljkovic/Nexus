@@ -150,10 +150,13 @@ describe("parseSealedKey", () => {
     const sealed = await wrapKey(port, KEK, MASTER_KEY, MK_WEB);
     expect(parseSealedKey(null)).toBeNull();
     expect(parseSealedKey("not an object")).toBeNull();
-    expect(parseSealedKey({ ...sealed, v: 2 })).toBeNull();
+    // `v: 1` was AES-GCM with a 12-byte nonce and a `v1` HKDF label. Nothing
+    // ever wrote one, and a server offering one is offering a downgrade.
+    expect(parseSealedKey({ ...sealed, v: 1 })).toBeNull();
+    expect(parseSealedKey({ ...sealed, v: 3 })).toBeNull();
     expect(parseSealedKey({ ...sealed, purpose: "mk/something-else" })).toBeNull();
     expect(parseSealedKey({ ...sealed, nonce: "!!!" })).toBeNull();
-    expect(parseSealedKey({ ...sealed, nonce: bytesToBase64url(new Uint8Array(11)) })).toBeNull();
+    expect(parseSealedKey({ ...sealed, nonce: bytesToBase64url(new Uint8Array(23)) })).toBeNull();
     expect(parseSealedKey({ ...sealed, commitment: bytesToBase64url(new Uint8Array(31)) })).toBeNull();
     expect(parseSealedKey({ ...sealed, ciphertext: bytesToBase64url(new Uint8Array(16)) })).toBeNull();
     expect(parseSealedKey({ ...sealed, extra: 1 })).toBeNull();

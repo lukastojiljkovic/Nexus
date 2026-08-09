@@ -150,6 +150,113 @@ describe("published test vectors", () => {
       "474a6203375a58b28bad70ca3fe8a2598a48cc74eb8839850766bc64c9084ad9",
     );
   });
+
+  /**
+   * XCHACHA20-POLY1305, AND WHY THIS ONE NEEDED MORE THAN A CITATION.
+   *
+   * Every other vector above is checked by WebCrypto or by WASM Argon2 — code
+   * this repository did not choose and cannot change. The AEAD is the one
+   * primitive that comes from a library (`@noble/ciphers`, pinned exactly),
+   * because WebCrypto has no extended-nonce ChaCha and never will, so „the
+   * vector matches" has to mean more than „the library agrees with itself".
+   *
+   * The vector is `draft-irtf-cfrg-xchacha-03` §A.3.1 — the CFRG draft's own
+   * AEAD example, on the RFC 8439 „sunscreen" plaintext. Before it was pinned
+   * here it was reproduced independently in a throwaway script, by composing
+   * OpenSSL's `chacha20-poly1305` (through `node:crypto`, an implementation with
+   * nothing to do with noble) under a subkey from an HChaCha20 written out of
+   * §2.2 by hand — and that hand-written HChaCha20 was itself checked against
+   * the draft's §2.2.1 HChaCha20 vector first, so it was an oracle rather than a
+   * guess. The two implementations agreed on this vector and on 200 randomised
+   * cases with varying AAD and plaintext lengths.
+   *
+   * `node:crypto` is deliberately NOT imported here: this package's tsconfig
+   * carries `lib: ["ES2023", "DOM"]` and no Node types, because the package
+   * targets the web platform surface so that one adapter serves main, browser
+   * and Vitest. The differential run was the verification; this is the record of
+   * it.
+   */
+  const XCHACHA_KEY = fromHex("808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f");
+  const XCHACHA_NONCE = fromHex("404142434445464748494a4b4c4d4e4f5051525354555657");
+  const XCHACHA_AAD = fromHex("50515253c0c1c2c3c4c5c6c7");
+  const XCHACHA_PLAINTEXT =
+    "Ladies and Gentlemen of the class of '99: If I could offer you only one tip " +
+    "for the future, sunscreen would be it.";
+  const XCHACHA_SEALED =
+    "bd6d179d3e83d43b9576579493c0e939572a1700252bfaccbed2902c21396cbb" +
+    "731c7f1b0b4aa6440bf3a82f4eda7e39ae64c6708c54c216cb96b72e1213b452" +
+    "2f8c9ba40db5d945b11b69b982c1bb9e3f3fac2bc369488f76b2383565d3fff9" +
+    "21f9664c97637da9768812f615c68b13b52e" +
+    // The 16-byte Poly1305 tag, which the draft prints separately and this port
+    // appends. Split out on its own line so the layout is visible rather than
+    // asserted: a port that returned the tag detached, or prepended it, fails
+    // here and nowhere else.
+    "c0875924c1c7987947deafd8780acf49";
+
+  it("XChaCha20-Poly1305 seals draft-irtf-cfrg-xchacha-03 §A.3.1", async () => {
+    const sealed = await port.aeadSeal({
+      key: XCHACHA_KEY,
+      nonce: XCHACHA_NONCE,
+      plaintext: ascii(XCHACHA_PLAINTEXT),
+      aad: XCHACHA_AAD,
+    });
+    expect(hex(sealed)).toBe(XCHACHA_SEALED);
+  });
+
+  it("XChaCha20-Poly1305 opens draft-irtf-cfrg-xchacha-03 §A.3.1", async () => {
+    const opened = await port.aeadOpen({
+      key: XCHACHA_KEY,
+      nonce: XCHACHA_NONCE,
+      ciphertext: fromHex(XCHACHA_SEALED),
+      aad: XCHACHA_AAD,
+    });
+    expect(opened).not.toBeNull();
+    expect(new TextDecoder().decode(opened as Uint8Array)).toBe(XCHACHA_PLAINTEXT);
+  });
+
+  /**
+   * The same vector, damaged one way at a time. A published vector proves the
+   * cipher computes; these prove the ADAPTER refuses — and refuses identically,
+   * with `null` and no reason attached, whichever byte was wrong.
+   */
+  it("XChaCha20-Poly1305 refuses every single-field corruption of §A.3.1 alike", async () => {
+    const sealed = fromHex(XCHACHA_SEALED);
+    const base = {
+      key: XCHACHA_KEY,
+      nonce: XCHACHA_NONCE,
+      ciphertext: sealed,
+      aad: XCHACHA_AAD,
+    } as const;
+
+    const flip = (bytes: Uint8Array, index: number): Uint8Array => {
+      const copy = Uint8Array.from(bytes);
+      copy.set([(copy.at(index) ?? 0) ^ 0x01], index);
+      return copy;
+    };
+
+    for (const damaged of [
+      // A body byte, the first tag byte, and the last tag byte.
+      { ...base, ciphertext: flip(sealed, 0) },
+      { ...base, ciphertext: flip(sealed, sealed.length - AEAD_TAG_BYTES) },
+      { ...base, ciphertext: flip(sealed, sealed.length - 1) },
+      // The tag cut off entirely, and cut in half.
+      { ...base, ciphertext: sealed.subarray(0, sealed.length - AEAD_TAG_BYTES) },
+      { ...base, ciphertext: sealed.subarray(0, sealed.length - 8) },
+      // Nothing but a tag, and less than a tag.
+      { ...base, ciphertext: sealed.subarray(sealed.length - AEAD_TAG_BYTES) },
+      { ...base, ciphertext: new Uint8Array(AEAD_TAG_BYTES - 1) },
+      { ...base, ciphertext: new Uint8Array(0) },
+      // One bit of the key, one of the nonce, one of the AAD.
+      { ...base, key: flip(XCHACHA_KEY, 31) },
+      { ...base, nonce: flip(XCHACHA_NONCE, 0) },
+      { ...base, nonce: flip(XCHACHA_NONCE, 23) },
+      { ...base, aad: flip(XCHACHA_AAD, 0) },
+      { ...base, aad: new Uint8Array(0) },
+      { ...base, aad: new Uint8Array([...XCHACHA_AAD, 0]) },
+    ]) {
+      expect(await port.aeadOpen(damaged)).toBeNull();
+    }
+  });
 });
 
 describe("the contract port.ts states, method by method", () => {
@@ -256,7 +363,51 @@ describe("the contract port.ts states, method by method", () => {
     ).rejects.toThrow(/key must be 32 bytes/);
     await expect(
       port.aeadOpen({ key, nonce: new Uint8Array(16), ciphertext: new Uint8Array(32), aad: ascii("") }),
-    ).rejects.toThrow(/nonce must be 12 bytes/);
+    ).rejects.toThrow(/nonce must be 24 bytes/);
+    // BOTH CHECKS RUN BEFORE THE LIBRARY DOES, which is the part worth pinning.
+    // `@noble/ciphers` throws for a bad key length AND for a forged tag, so an
+    // adapter that simply forwarded its exceptions would turn every forgery into
+    // a throw, or — worse, if it caught them all — every caller bug into a
+    // `null` the caller reads as "wrong password".
+    await expect(
+      port.aeadOpen({ key: new Uint8Array(31), nonce, ciphertext: new Uint8Array(32), aad: ascii("") }),
+    ).rejects.toThrow(/key must be 32 bytes/);
+  });
+
+  it("neither seals nor opens by mutating what it was given", async () => {
+    // `port.ts`: „an implementation MUST NOT retain or mutate any array it is
+    // given". The JS cipher writes into buffers it allocates, but it takes the
+    // key, nonce and AAD by reference — noble's own source says so — so this is
+    // the assertion that a future version which decided to scrub them in place
+    // would fail loudly instead of corrupting the caller's content key.
+    const key = port.randomBytes(AEAD_KEY_BYTES);
+    const nonce = port.randomBytes(AEAD_NONCE_BYTES);
+    const aad = ascii("nexus/ctx");
+    const plaintext = ascii("zdravo");
+    const before = [hex(key), hex(nonce), hex(aad), hex(plaintext)];
+
+    const sealed = await port.aeadSeal({ key, nonce, plaintext, aad });
+    expect([hex(key), hex(nonce), hex(aad), hex(plaintext)]).toEqual(before);
+
+    const sealedCopy = hex(sealed);
+    await port.aeadOpen({ key, nonce, ciphertext: sealed, aad });
+    expect([hex(key), hex(nonce), hex(aad), hex(sealed)]).toEqual([...before.slice(0, 3), sealedCopy]);
+  });
+
+  it("seals the same plaintext twice under one key and nonce without refusing", async () => {
+    // NOT AN ENDORSEMENT OF NONCE REUSE — `row.ts` explains at length why that
+    // ends the integrity of everything sealed at that nonce, and `sealRow` is
+    // the only caller, drawing 24 fresh bytes every time. This pins a property
+    // of the ADAPTER: `@noble/ciphers` arms a one-shot guard („cannot encrypt()
+    // twice with same key + nonce") on the cipher INSTANCE, so a port that
+    // cached one instance would throw on its second seal and take sync down.
+    // Constructing per call is what makes the port stateless, as `port.ts` says
+    // it is.
+    const key = port.randomBytes(AEAD_KEY_BYTES);
+    const nonce = port.randomBytes(AEAD_NONCE_BYTES);
+    const first = await port.aeadSeal({ key, nonce, plaintext: ascii("x"), aad: ascii("") });
+    const second = await port.aeadSeal({ key, nonce, plaintext: ascii("x"), aad: ascii("") });
+    expect(hex(second)).toBe(hex(first));
   });
 });
 
@@ -323,6 +474,7 @@ describe("the real protocol on real primitives", () => {
     version: 7,
     deleted: false,
     parentId: null,
+    ckEpoch: 1,
   };
 
   it("wraps and unwraps a master key under a real KEK", async () => {
@@ -366,6 +518,10 @@ describe("the real protocol on real primitives", () => {
       { ...identity, objectId: "99999999-9999-4999-8999-999999999999" },
       { ...identity, version: 6 },
       { ...identity, deleted: true },
+      // The content-key generation. A server that serves a row sealed under the
+      // retired key while claiming the current one is what the epoch is in the
+      // AAD to catch.
+      { ...identity, ckEpoch: 2 },
     ] satisfies RowIdentity[]) {
       await expect(openRow(port, ck, moved, sealed)).rejects.toThrow();
     }

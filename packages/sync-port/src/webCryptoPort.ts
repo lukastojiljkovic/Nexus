@@ -1,3 +1,4 @@
+import { xchacha20poly1305 } from "@noble/ciphers/chacha.js";
 import { argon2id as wasmArgon2id } from "hash-wasm";
 import type {
   AeadOpenRequest,
@@ -11,6 +12,7 @@ import type {
 import {
   AEAD_KEY_BYTES,
   AEAD_NONCE_BYTES,
+  AEAD_TAG_BYTES,
   SHA256_BYTES,
   X25519_PUBLIC_KEY_BYTES,
 } from "@nexus/sync-crypto";
@@ -40,6 +42,38 @@ import {
  * WASM Argon2id". This is the same decision applied to sync, and the same
  * `hash-wasm` version, which is what makes the two subsystems' Argon2 outputs
  * comparable at all.
+ *
+ * WHERE IT RUNS, STATED ACCURATELY. The Electron MAIN process, the web app in a
+ * browser (a secure context, which the Workers deployment guarantees), and
+ * Vitest. NOT the Electron renderer: production loads it with `loadFile`, so its
+ * origin is `file://`, and this package is deliberately never imported there —
+ * the desktop's sync work happens in main, behind the IPC allowlist, which is
+ * also where the database is. An earlier version of this comment listed the
+ * renderer, and that claim was load-bearing for the „one implementation"
+ * argument while being untrue.
+ *
+ * WHY THE AEAD IS THE ONE PRIMITIVE THAT IS NOT WEBCRYPTO. WebCrypto has no
+ * XChaCha20-Poly1305 and will not get one; `port.ts` explains why the nonce is
+ * 192 bits and the server pins that length in three CHECK constraints. So the
+ * AEAD comes from `@noble/ciphers`, pinned to an exact version, and everything
+ * else stays on the platform.
+ *
+ * Be honest about what that costs. It is NOT a side-channel improvement: the
+ * AES this replaces was BoringSSL on AES-NI — native, constant-time, off the JS
+ * heap — and a pure-JS ChaCha20 is source-level constant-time (ARX, no S-box
+ * tables, no secret-dependent branches) with no machine-level guarantee. In this
+ * threat model that is moot, because the attacker is the server operator and
+ * anyone holding the ciphertext, neither of whom can observe timing inside a
+ * client. It also forecloses one thing permanently: a future port shaped around
+ * non-extractable AEAD keys. That property was never actually held — `port.ts`'s
+ * `AeadSealRequest.key` has always been a `Uint8Array` — but after this it
+ * cannot be recovered, and that is worth knowing rather than discovering.
+ *
+ * What it buys, besides the nonce: a WebCrypto key import ran on EVERY seal and
+ * open, so a push of ten thousand rows crossed the WebCrypto boundary twenty
+ * thousand times for payloads of a few hundred bytes each. The synchronous JS
+ * cipher is faster at these sizes, and the 4 MiB ciphertext ceiling on
+ * `sync_objects` means there is no large blocking seal in this design at all.
  *
  * WHY X25519 IS WEBCRYPTO AND NOT A LIBRARY. `crypto.subtle` implements X25519
  * in Node 20+, Chrome 133+, Firefox 132+ and Safari 18.4+. That buys three
@@ -218,41 +252,45 @@ export function createWebCryptoPort(): CryptoPort {
       });
     },
 
+    // `async` WITH NOTHING AWAITED, deliberately. The port's contract is a
+    // Promise on both sides and every caller is written against one; a
+    // synchronous cipher is not a reason to change that shape, and `async` keeps
+    // the door open for an implementation that is genuinely asynchronous again.
+    //
+    // A FRESH CIPHER INSTANCE PER CALL, also deliberately. `@noble/ciphers` arms
+    // a one-shot guard on the instance („cannot encrypt() twice with same key +
+    // nonce"), so hoisting one out of this method to „avoid the allocation"
+    // would throw on the second row of every push. Constructing here is what
+    // makes this port stateless, which is what its own header claims it is.
     async aeadSeal(request: AeadSealRequest): Promise<Uint8Array> {
       const { key, nonce, plaintext, aad } = request;
       assertKeyAndNonce("aeadSeal", key, nonce);
-      const cryptoKey = await importAesKey(key, "encrypt");
-      const sealed = await subtle().encrypt(
-        // WebCrypto appends the 128-bit tag to the ciphertext, which is exactly
-        // the layout the port specifies („the 16-byte tag APPENDED … never
-        // returned as a separate field"). No slicing here, deliberately.
-        { name: "AES-GCM", iv: view(nonce), additionalData: view(aad), tagLength: 128 },
-        cryptoKey,
-        view(plaintext),
-      );
-      return bytesOf(sealed);
+      // noble appends the 16-byte Poly1305 tag to the ciphertext, which is
+      // exactly the layout the port specifies („the 16-byte tag APPENDED … never
+      // returned as a separate field"). No slicing here, deliberately.
+      return xchacha20poly1305(key, nonce, aad).encrypt(plaintext);
     },
 
     async aeadOpen(request: AeadOpenRequest): Promise<Uint8Array | null> {
       const { key, nonce, ciphertext, aad } = request;
-      // Thrown, not `null`: a malformed key or nonce LENGTH is a bug in the
-      // caller, and the port draws that line explicitly. Only authentication
-      // failure is an expected outcome.
+      // VALIDATED HERE, BEFORE THE LIBRARY, and that ordering is the contract.
+      // The port says a malformed key or nonce LENGTH throws (a caller bug) and
+      // an authentication failure returns `null` (an expected outcome). noble
+      // signals both by throwing, so the only way to keep the two apart is to
+      // decide the first ones ourselves and treat every remaining throw as the
+      // second.
       assertKeyAndNonce("aeadOpen", key, nonce);
-      const cryptoKey = await importAesKey(key, "decrypt");
+      // A ciphertext shorter than the tag cannot be one. Checked here rather
+      // than left to noble so that it lands as `null` — it is a forgery attempt
+      // or a truncated response, never a caller bug.
+      if (ciphertext.length < AEAD_TAG_BYTES) return null;
       try {
-        const opened = await subtle().decrypt(
-          { name: "AES-GCM", iv: view(nonce), additionalData: view(aad), tagLength: 128 },
-          cryptoKey,
-          view(ciphertext),
-        );
-        return bytesOf(opened);
+        return xchacha20poly1305(key, nonce, aad).decrypt(ciphertext);
       } catch {
-        // EVERY failure collapses to `null`, and the bare `catch` is the point
-        // rather than laziness. A ciphertext shorter than the tag throws
-        // `OperationError` just as a forged tag does; distinguishing them here
-        // and reporting the difference upward would hand an attacker the oracle
-        // the port's comment on this method exists to deny.
+        // EVERY remaining failure collapses to `null`, and the bare `catch` is
+        // the point rather than laziness. Matching on the message would be worse
+        // than useless: it hands an attacker an oracle if it works, and it
+        // breaks silently on a patch release if it does not.
         return null;
       }
     },
@@ -317,10 +355,6 @@ function assertKeyAndNonce(where: string, key: Uint8Array, nonce: Uint8Array): v
   if (nonce.length !== AEAD_NONCE_BYTES) {
     throw new Error(`${where}: nonce must be ${AEAD_NONCE_BYTES} bytes, got ${nonce.length}`);
   }
-}
-
-async function importAesKey(key: Uint8Array, usage: "encrypt" | "decrypt"): Promise<CryptoKey> {
-  return subtle().importKey("raw", view(key), { name: "AES-GCM" }, false, [usage]);
 }
 
 /**

@@ -27,6 +27,7 @@ import {
   type ProviderGrantResult,
   type SealedPairingPayload,
 } from "./pairing.js";
+import { AEAD_NONCE_BYTES } from "./port.js";
 import { createFakeCryptoPort, type FakeCryptoPort } from "./testing/fakeCryptoPort.js";
 
 /**
@@ -659,7 +660,7 @@ describe("the sealed payload", () => {
     state: JoinerAwaitingPayload,
     body: unknown,
   ): Promise<SealedPairingPayload> {
-    const nonce = port.randomBytes(12);
+    const nonce = port.randomBytes(AEAD_NONCE_BYTES);
     const ciphertext = await port.aeadSeal({
       key: state.sessionKey,
       nonce,

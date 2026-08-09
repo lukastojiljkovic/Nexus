@@ -6,57 +6,38 @@
  *
  * ─── Why that rule, and what it prevents ────────────────────────────────────
  *
- * AES-GCM is a counter mode with a polynomial MAC, and both halves collapse if
- * a nonce is ever used twice under one key.
+ * XChaCha20-Poly1305 is a stream cipher with a one-time MAC, and both halves
+ * collapse if a nonce is ever used twice under one key.
  *
  *  - The keystream repeats, so the XOR of the two plaintexts falls straight out
  *    of the XOR of the two ciphertexts. Two versions of the same row differ in
  *    a handful of bytes, so that XOR is very close to a plaintext.
- *  - Far worse, the authentication collapses. Two ciphertexts under one
- *    (key, nonce) pair give a polynomial equation in GHASH's subkey H whose
- *    roots can be enumerated; recovering H lets an attacker forge a valid tag
- *    for ANY message under that key. One repeat does not leak one row — it
- *    ends the integrity of every row that key ever protects.
+ *  - Far worse, the authentication collapses. Poly1305's one-time key `(r, s)`
+ *    is derived from the key and the nonce alone, so two messages authenticated
+ *    under one pair give two linear equations in `r` and `s` — recover them and
+ *    an attacker forges a valid tag for ANY message under that pair. One repeat
+ *    does not leak one row; it ends the integrity of everything sealed at that
+ *    nonce.
  *
- * A nonce is safe here for exactly one reason: it is 12 fresh bytes from
+ * A nonce is safe here for exactly one reason: it is 24 fresh bytes from
  * `CryptoPort.randomBytes` on every single seal, and there is one function
  * that does it. Spread the same logic over four call sites and one of them
  * eventually caches a nonce, or reuses the one it just parsed while
  * re-encrypting, or takes it from the row id "so re-encryption is idempotent".
  * Every one of those is a plausible commit; none of them is survivable.
  *
- * ─── The birthday bound, in numbers ─────────────────────────────────────────
+ * ─── Why 192 bits and not 96 ────────────────────────────────────────────────
  *
- * Random 96-bit nonces collide by the birthday paradox: over q seals under one
- * key, P(collision) ≈ q² / 2^97.
- *
- *      q = 2^32  (≈ 4.3 × 10^9)   →  P ≈ 2^-33  ≈ 1.2 × 10^-10
- *      q = 2^40  (≈ 1.1 × 10^12)  →  P ≈ 2^-17  ≈ 7.6 × 10^-6
- *      q = 2^48  (≈ 2.8 × 10^14)  →  P ≈ 0.5
- *
- * NIST SP 800-38D §8.3 draws the line at **2^32 invocations per key with
- * random IVs**, which is the 2^-33 row above. That is the number to hold onto:
- * **one content key may seal about 4.3 billion row-versions.** A Nexus profile
- * writes maybe 10^5–10^6 row-versions in its life, so there are roughly four
- * orders of magnitude of headroom, and CK_p is per profile, which divides the
- * count again.
- *
- * The bound stops being comfortable the day a row is sealed by something other
- * than a human editing an object — telemetry, a per-keystroke CRDT update log,
- * an import that rewrites every row on a schedule. **If sealing rate ever
- * becomes machine-driven, this construction must change before it ships**, and
- * the change is one of: XChaCha20-Poly1305, whose 192-bit nonce makes random
- * selection safe past any plausible volume; or a deterministic nonce built from
- * a per-device counter, which removes the birthday bound entirely at the cost
- * of having to guarantee the counter never rewinds across a restore-from-backup
- * (a guarantee an offline-first product cannot actually make, which is why the
- * 192-bit nonce is the likely answer). Both are a change to `CryptoPort` and to
- * this file, and to nothing else.
+ * `port.ts`'s {@link AEAD_NONCE_BYTES} carries the argument in full. In one
+ * line: with a 96-bit random nonce the safe seal budget is a per-KEY number
+ * that no single device can observe, because a content key is shared by every
+ * device the user owns — and the only remedy for approaching it is re-encrypting
+ * the entire profile. 192 bits removes the question rather than bounding it.
  *
  * ─── The AAD ────────────────────────────────────────────────────────────────
  *
- *   "nexus/sync/row/v1" ‖ user_id ‖ profile_id ‖ collection ‖ object_id
- *                       ‖ version ‖ deleted
+ *   "nexus/sync/row/v2" ‖ user_id ‖ profile_id ‖ collection ‖ object_id
+ *                       ‖ version ‖ deleted ‖ parent_id ‖ ck_epoch
  *
  * each field length-framed (see `bytes.ts`'s `encodeStruct` for why plain
  * concatenation is a vulnerability and not a style choice). The server stores
@@ -74,14 +55,58 @@
  *    slide a live object beneath a tombstone so the cascade reaps it. This one
  *    was missing from this list and from the AAD while every other clear column
  *    was bound, which is exactly the shape a hostile operator looks for.
+ *  - `ck_epoch` — serve a row sealed under the retired content key as though it
+ *    were current. See below; this is the one that also buys something the
+ *    others do not.
  *
  * Binding them into the AAD does not stop the server DOING any of that; it
  * guarantees the client notices, because `openRow` rebuilds the AAD from the
  * metadata the server just claimed and the tag check fails when the claim and
  * the ciphertext disagree.
+ *
+ * ─── Why `ck_epoch` is in there, and why there is no per-row commitment ─────
+ *
+ * XChaCha20-Poly1305 is not key-committing, exactly as AES-GCM is not: a tag
+ * proves „someone holding *a* key produced this", not „the key you just tried
+ * is the one that produced this". `wrap.ts` therefore carries an explicit
+ * 32-byte commitment, because the keys it protects are derived from a PASSWORD
+ * and a low-entropy secret is what a partitioning oracle partitions.
+ *
+ * A row is different: a content key is 256 random bits, so there is no candidate
+ * set to search. What a row needed instead was a guarantee that a client never
+ * has to TRY more than one key — and that guarantee did not hold. Rotating a
+ * content key is this product's only real revocation (a browser that already has
+ * CK_p keeps it), and a rotation re-encrypts a profile row by row, so during one
+ * both keys are live. Without an epoch, a client meeting a row would trial CK_old
+ * and then CK_new, and a half-finished rotation would be invisible.
+ *
+ * With `ck_epoch` in the clear AND in the AAD, the row names its own key: one
+ * attempt, always; a row re-wrapped but not re-encrypted fails loudly rather
+ * than quietly; and „what is left to rotate" is a WHERE clause. That is strictly
+ * more than a 16-byte commitment tag would have bought, and it costs no
+ * ciphertext at all.
+ *
+ * ─── What this does NOT protect, stated so nobody assumes it does ───────────
+ *
+ * Every row is authenticated; the SET of rows is not. A hostile server can drop
+ * the tail of an append-only collection, withhold a collection entirely, or
+ * serve one device a view that omits another device's writes, and every AAD
+ * check here still passes — the rows it does serve are genuine. Detecting that
+ * needs a signed, monotonic manifest over `(object_id, version, ck_epoch)` per
+ * profile and collection, which is a new table and not a change to this file.
+ * `ck_epoch` is in the AAD partly so that manifest can be added later without
+ * breaking the wire format a second time.
  */
 
-import { base64urlToBytes, booleanByte, bytesToBase64url, encodeStruct, fromUtf8, uint64BE, utf8 } from "./bytes.js";
+import {
+  base64urlToBytes,
+  booleanByte,
+  bytesToBase64url,
+  encodeStruct,
+  fromUtf8,
+  uint64BE,
+  utf8,
+} from "./bytes.js";
 import { SyncCryptoError } from "./errors.js";
 import { canonicalJson, isJsonObject, parseJsonValue, type JsonObject } from "./json.js";
 import { AEAD_KEY_BYTES, AEAD_NONCE_BYTES, AEAD_TAG_BYTES, type CryptoPort } from "./port.js";
@@ -122,29 +147,51 @@ export interface RowIdentity {
    * agree with it.
    */
   readonly parentId: string | null;
+  /**
+   * Which generation of this profile's content key sealed the row. Starts at 1
+   * and only ever rises; see the file header on why it is authenticated.
+   */
+  readonly ckEpoch: number;
 }
 
-/** A sealed row, JSON-shaped for a database column or a request body. */
+/**
+ * A sealed row, JSON-shaped for a database column or a request body.
+ *
+ * **`v: 2`, and there is deliberately no reader for `v: 1`.** Version 1 was
+ * AES-256-GCM with a 12-byte nonce and an AAD that bound neither `parent_id` nor
+ * `ck_epoch`. Nothing has ever synced, so no v1 ciphertext exists anywhere in
+ * the world — and a package that could read both would carry a version-dependent
+ * nonce length, a version-dependent label and a branch nobody exercises, which
+ * is the branch that rots. {@link parseSealedRow} rejects anything that is not 2.
+ */
 export interface SealedRow {
-  readonly v: 1;
-  /** 12 bytes, fresh for every seal. */
+  readonly v: 2;
+  /** 24 bytes, fresh for every seal. */
   readonly nonce: string;
   /** AEAD output: ciphertext followed by the 16-byte tag. */
   readonly ciphertext: string;
 }
 
-const ROW_AAD_LABEL = "nexus/sync/row/v1";
+const ROW_AAD_LABEL = "nexus/sync/row/v2";
 
 function assertIdentity(identity: RowIdentity): void {
+  // `objectId` IS NOT IN THIS LIST, and that is a decision rather than an
+  // oversight. It was, and it would have rejected six collections outright: the
+  // per-profile singletons (`calendar_settings`, `ntf_settings`, …) whose
+  // primary key is the profile alone, so their object id is the empty string —
+  // the honest spelling of „this collection holds exactly one object per
+  // profile". The rule the old check was reaching for („an empty identifier
+  // cannot bind anything") is not true here, because `encodeStruct` LENGTH-FRAMES
+  // every field: an empty `objectId` inside collection `calendar_settings` of
+  // profile P produces a different AAD from every other row in the account, and
+  // no two distinct objects can share the four values. The other three stay
+  // required — an empty user, profile or collection really would bind nothing.
   for (const [name, value] of [
     ["userId", identity.userId],
     ["profileId", identity.profileId],
     ["collection", identity.collection],
-    ["objectId", identity.objectId],
   ] as const) {
     if (value.length === 0) {
-      // An empty identifier cannot bind anything, and an AAD that binds
-      // nothing is an AAD that lets the server move the row freely.
       throw new TypeError(`RowIdentity.${name} must not be empty.`);
     }
   }
@@ -158,6 +205,11 @@ function assertIdentity(identity: RowIdentity): void {
   // to refuse it than to store rows whose parent is unnameable.
   if (identity.parentId !== null && identity.parentId.length === 0) {
     throw new TypeError("RowIdentity.parentId must be a non-empty string or null.");
+  }
+  if (!Number.isSafeInteger(identity.ckEpoch) || identity.ckEpoch < 1) {
+    throw new TypeError(
+      `RowIdentity.ckEpoch must be an integer >= 1, got: ${String(identity.ckEpoch)}`,
+    );
   }
 }
 
@@ -187,6 +239,7 @@ function rowAad(identity: RowIdentity): Uint8Array {
     uint64BE(identity.version),
     booleanByte(identity.deleted),
     parentField(identity.parentId),
+    uint64BE(identity.ckEpoch),
   ]);
 }
 
@@ -205,6 +258,17 @@ export async function sealRow(
 ): Promise<SealedRow> {
   assertContentKey(contentKey);
   assertIdentity(identity);
+  // AN EMPTY PLAINTEXT IS REFUSED, and the reason is on the server. Sealing zero
+  // bytes yields exactly the 16-byte tag, and `sync_objects_ciphertext_len`
+  // floors the column at 17 — one byte of plaintext plus the tag — so such a row
+  // would be built, encrypted, sent, and rejected by a CHECK constraint whose
+  // message says nothing a client could act on. Refusing it here turns a
+  // confusing round trip into a caller bug named at the point it was made. It is
+  // also not a shape this product has: a row always seals a field map, and the
+  // smallest of those is `{}`.
+  if (plaintext.length === 0) {
+    throw new TypeError("Refusing to seal an empty row plaintext — see sealRow.");
+  }
 
   const nonce = port.randomBytes(AEAD_NONCE_BYTES);
   const ciphertext = await port.aeadSeal({
@@ -213,7 +277,7 @@ export async function sealRow(
     plaintext,
     aad: rowAad(identity),
   });
-  return { v: 1, nonce: bytesToBase64url(nonce), ciphertext: bytesToBase64url(ciphertext) };
+  return { v: 2, nonce: bytesToBase64url(nonce), ciphertext: bytesToBase64url(ciphertext) };
 }
 
 /**
@@ -224,7 +288,7 @@ export async function sealRow(
  * is what turns a relocation into a visible failure instead of a silent
  * success. A `row/aead-failed` here means one of: the wrong content key (this
  * profile's key does not open this row), edited bytes, or a server that moved
- * the ciphertext. AES-GCM cannot tell those apart and this does not pretend to.
+ * the ciphertext. The AEAD cannot tell those apart and this does not pretend to.
  */
 export async function openRow(
   port: CryptoPort,
@@ -323,7 +387,7 @@ export function parseSealedRow(value: unknown): SealedRow | null {
   for (const key of Object.keys(value)) {
     if (!allowed.has(key)) return null;
   }
-  if (value["v"] !== 1) return null;
+  if (value["v"] !== 2) return null;
 
   const nonce = value["nonce"];
   const ciphertext = value["ciphertext"];
@@ -334,5 +398,5 @@ export function parseSealedRow(value: unknown): SealedRow | null {
   if (nonceBytes === null || nonceBytes.length !== AEAD_NONCE_BYTES) return null;
   if (ciphertextBytes === null || ciphertextBytes.length < AEAD_TAG_BYTES) return null;
 
-  return { v: 1, nonce, ciphertext };
+  return { v: 2, nonce, ciphertext };
 }

@@ -169,6 +169,39 @@ export default tseslint.config(
     },
   },
 
+  // --- The AEAD library has exactly one import site ------------------------
+  // `@nexus/sync-crypto` reaches every primitive through `CryptoPort`, and its
+  // header states the payoff: „What crypto does sync use?" is answered by
+  // reading that interface and its one adapter, never by walking a lockfile.
+  // XChaCha20-Poly1305 is the single primitive WebCrypto cannot supply, so
+  // `@noble/ciphers` is a real dependency of `@nexus/sync-port` — and a real
+  // dependency is one `import` away from being used somewhere the port cannot
+  // see, at which point the sentence stops being true and nothing says so.
+  //
+  // pnpm's strict layout already stops OTHER packages resolving it (only
+  // `@nexus/sync-port` declares it). This rule covers the case that isolation
+  // cannot: a second import inside sync-port itself. The exemption is the exact
+  // path of the adapter, so a new file never inherits it.
+  {
+    files: ["**/*.{ts,tsx,mts,cts,js,mjs,cjs}"],
+    ignores: ["packages/sync-port/src/webCryptoPort.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@noble/**"],
+              message:
+                "The AEAD library has one import site: packages/sync-port/src/webCryptoPort.ts. " +
+                "Everything else reaches crypto through CryptoPort (packages/sync-crypto/src/port.ts).",
+            },
+          ],
+        },
+      ],
+    },
+  },
+
   // --- React ---------------------------------------------------------------
   {
     files: REACT_FILES,

@@ -26,14 +26,19 @@
  *
  * ─── Why every wrap carries an explicit key-commitment tag ───────────────────
  *
- * **AES-GCM is not key-committing.** Its tag proves "someone holding *a* key
- * produced this", not "the key you just tried is the key that produced this".
- * Given a ciphertext, an adversary who knows the plaintext can construct a
- * SECOND key under which the same ciphertext authenticates and decrypts to a
- * different, chosen plaintext — the GHASH polynomial has enough freedom to
- * arrange it (the "invisible salamander" / partitioning-oracle family of
- * attacks). Worse, the construction generalises: a single ciphertext can be
- * built that opens successfully under *many* candidate keys at once.
+ * **The AEAD is not key-committing.** Neither AES-GCM nor XChaCha20-Poly1305
+ * is; this argument was written about the first and survives the move to the
+ * second unchanged, because the property was never there to lose. The tag proves
+ * "someone holding *a* key produced this", not "the key you just tried is the
+ * key that produced this". Given a ciphertext, an adversary who knows the
+ * plaintext can construct a SECOND key under which the same ciphertext
+ * authenticates and decrypts to a different, chosen plaintext: both ciphers
+ * authenticate with a polynomial MAC over a key-derived point — GHASH in GCM,
+ * Poly1305 here — and a polynomial has enough freedom to be made to agree twice
+ * (the "invisible salamander" / partitioning-oracle family of attacks, whose
+ * original paper demonstrates it against AES-GCM and ChaCha20-Poly1305 alike).
+ * Worse, the construction generalises: a single ciphertext can be built that
+ * opens successfully under *many* candidate keys at once.
  *
  * What that would allow here, concretely. MK's web wrap is opened by a key
  * derived from the user's password. A hostile server hands the client a
@@ -119,21 +124,31 @@ export type WrapContext =
  * server row: plain JSON, every byte field unpadded base64url.
  */
 export interface SealedKey {
-  /** Format version. A second version coexists with this one; it never reinterprets it. */
-  readonly v: 1;
+  /**
+   * Format version. A second version coexists with this one; it never
+   * reinterprets it.
+   *
+   * `2` because the AEAD under it changed from AES-256-GCM to
+   * XChaCha20-Poly1305, and the HKDF labels below changed with it — so a `v: 1`
+   * KEK and a `v: 2` KEK derive DIFFERENT encryption subkeys from the same
+   * password, and using one where the other was meant is unrepresentable rather
+   * than merely wrong. Nothing has ever been wrapped and stored, so there is no
+   * v1 reader.
+   */
+  readonly v: 2;
   /** Repeated in the clear only so a wrong-purpose open produces a legible error. */
   readonly purpose: WrapPurpose;
   /** The key-commitment tag, 32 bytes. Public by design — see the file header. */
   readonly commitment: string;
-  /** AEAD nonce, 12 bytes, fresh for every wrap. */
+  /** AEAD nonce, 24 bytes, fresh for every wrap. */
   readonly nonce: string;
   /** AEAD output over the 32-byte key, 48 bytes: ciphertext followed by the tag. */
   readonly ciphertext: string;
 }
 
-const WRAP_AAD_LABEL = "nexus/sync/wrap/v1";
-const ENC_INFO_LABEL = "nexus/sync/wrap/enc/v1";
-const COMMIT_INFO_LABEL = "nexus/sync/wrap/commit/v1";
+const WRAP_AAD_LABEL = "nexus/sync/wrap/v2";
+const ENC_INFO_LABEL = "nexus/sync/wrap/enc/v2";
+const COMMIT_INFO_LABEL = "nexus/sync/wrap/commit/v2";
 
 /** The exact byte length of a sealed 32-byte key: plaintext plus the AEAD tag. */
 const SEALED_KEY_BYTES = AEAD_KEY_BYTES + AEAD_TAG_BYTES;
@@ -219,7 +234,7 @@ export async function wrapKey(
   const ciphertext = await port.aeadSeal({ key: encKey, nonce, plaintext: key, aad });
 
   return {
-    v: 1,
+    v: 2,
     purpose: context.purpose,
     commitment: bytesToBase64url(commitment),
     nonce: bytesToBase64url(nonce),
@@ -319,7 +334,7 @@ export function parseSealedKey(value: unknown): SealedKey | null {
     if (!allowed.has(key)) return null;
   }
 
-  if (value["v"] !== 1) return null;
+  if (value["v"] !== 2) return null;
 
   const purpose = value["purpose"];
   if (typeof purpose !== "string" || !ALL_PURPOSES.includes(purpose as WrapPurpose)) return null;
@@ -329,7 +344,7 @@ export function parseSealedKey(value: unknown): SealedKey | null {
   const ciphertext = readBase64url(value["ciphertext"], SEALED_KEY_BYTES);
   if (commitment === null || nonce === null || ciphertext === null) return null;
 
-  return { v: 1, purpose: purpose as WrapPurpose, commitment, nonce, ciphertext };
+  return { v: 2, purpose: purpose as WrapPurpose, commitment, nonce, ciphertext };
 }
 
 /** `value` if it is a base64url string decoding to exactly `expectedBytes` bytes. */

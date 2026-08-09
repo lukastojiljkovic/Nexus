@@ -308,6 +308,27 @@ export function consumePairingCode(record: PairingCodeRecord): PairingCodeRecord
 
 // ── Messages ────────────────────────────────────────────────────────────────
 
+/**
+ * WHY THESE STAY AT `v: 1` WHILE `SealedRow` AND `SealedKey` WENT TO `v: 2`.
+ *
+ * The AEAD swap (AES-256-GCM/12-byte → XChaCha20-Poly1305/24-byte) touched every
+ * sealed thing in this package, and row and wrap were versioned up because their
+ * ciphertext sits AT REST on a server this design assumes is hostile: there, an
+ * old version marker is a downgrade offer, and refusing it by number is the
+ * cheapest possible refusal.
+ *
+ * A pairing message is never at rest. It is relayed live between two devices
+ * inside a single handshake with a 10-minute code, and neither end stores one.
+ * The version number cannot buy a downgrade defence here because there is
+ * nothing to downgrade FROM — and the width change is already refused by the
+ * only mechanism that matters: every parser below reads its nonce through
+ * `readBytesField(…, AEAD_NONCE_BYTES)`, so a peer on an older build offering a
+ * 12-byte nonce is rejected on length before its version is ever consulted.
+ *
+ * These numbers therefore describe the PROTOCOL's shape — which fields, in which
+ * order, with which transcript — and that shape did not change.
+ */
+
 /** joiner → provider. Every byte field is unpadded base64url. */
 export interface PairingM1 {
   readonly v: 1;

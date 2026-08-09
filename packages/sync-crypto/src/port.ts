@@ -10,9 +10,9 @@
  * Three concrete reasons, none of them ceremony:
  *
  *  1. **The primitive choice stays a decision, not an accident.** Nothing in
- *     this package pins a library version, so swapping AES-256-GCM for
- *     XChaCha20-Poly1305 (see `row.ts` on the 96-bit nonce birthday bound) is a
- *     change in one adapter, not a change scattered through the protocol code.
+ *     this package pins a library version, which is what let the AEAD move from
+ *     AES-256-GCM to XChaCha20-Poly1305 (see {@link AEAD_NONCE_BYTES}) as a
+ *     change in one adapter rather than one scattered through the protocol code.
  *  2. **A dependency audit has one place to look.** "What crypto does sync
  *     use?" is answered by reading this file and the two adapters, never by
  *     walking a lockfile.
@@ -34,11 +34,32 @@ export const SHA256_BYTES = 32;
 export const AEAD_KEY_BYTES = 32;
 
 /**
- * AEAD nonce size. 96 bits is AES-GCM's native IV width — the only width for
- * which GCM does not hash the IV down, and therefore the only one with a clean
- * security proof. `row.ts` states the birthday arithmetic this implies.
+ * AEAD nonce size: 192 bits, XChaCha20-Poly1305's extended nonce.
+ *
+ * **Why not AES-256-GCM's 96 bits, which this was.** Not because the birthday
+ * bound is close — it is not, and claiming so would be a rationalisation. NIST
+ * SP 800-38D §8.3 draws the line at 2^32 seals per key with random IVs, and a
+ * profile writing a hundred million row-versions a year would take about forty
+ * years to reach it. The reasons are the other three:
+ *
+ *  1. **The budget is global and unobservable.** 2^32 is per KEY, and a content
+ *     key is shared by every device the user owns. No device knows what the
+ *     others have spent. There is nowhere to put the counter, so „we would
+ *     notice on the way up" is not merely unimplemented — it is unavailable.
+ *  2. **The only remedy is a full re-encrypt.** Approaching the bound means
+ *     rotating the content key and rewriting every row of the profile. A limit
+ *     you cannot measure whose remedy is rewriting the user's whole history is
+ *     not worth carrying for twelve bytes a row.
+ *  3. **It is the same answer already given about counters.** A deterministic
+ *     nonce was rejected because an offline-first product cannot promise a
+ *     counter never rewinds across a restore. A 96-bit RANDOM nonce has the
+ *     same exposure to a rewound CSPRNG — a cloned VM, a restored disk image —
+ *     and 192 bits is the width at which the question stops being askable.
+ *
+ * The server pins this length in three CHECK constraints, so the choice is
+ * structural on both sides rather than a convention either could drop.
  */
-export const AEAD_NONCE_BYTES = 12;
+export const AEAD_NONCE_BYTES = 24;
 
 /** AEAD tag size, appended to the ciphertext (never returned separately). */
 export const AEAD_TAG_BYTES = 16;
@@ -163,13 +184,23 @@ export interface CryptoPort {
   argon2id(request: Argon2idRequest): Promise<Uint8Array>;
 
   /**
-   * AEAD sealing, AES-256-GCM, with the 16-byte tag APPENDED to the ciphertext
-   * (never returned as a separate field — a separated tag is one more thing a
-   * caller can forget to authenticate).
+   * AEAD sealing, XChaCha20-Poly1305, with the 16-byte tag APPENDED to the
+   * ciphertext (never returned as a separate field — a separated tag is one more
+   * thing a caller can forget to authenticate).
    *
    * MUST reject a `key` that is not {@link AEAD_KEY_BYTES} bytes or a `nonce`
    * that is not {@link AEAD_NONCE_BYTES} bytes, by throwing: both are
    * programming errors in the caller, never runtime conditions.
+   *
+   * **The AEAD key is bytes, and that is a concession this file should own.**
+   * {@link X25519SecretKey} is an opaque `object` specifically so an
+   * implementation can keep a private scalar off the JS heap — and then
+   * {@link AeadSealRequest.key} is a `Uint8Array`, which cannot. The asymmetry is
+   * real and it is deliberate: a content key is derived, re-derived, wrapped and
+   * unwrapped by this package's own code, so it has to be a value here, whereas
+   * an ephemeral scalar is generated and consumed entirely inside the port. The
+   * consequence to state plainly is that an implementation is FREE to be a pure
+   * JavaScript one for the AEAD without giving up a property that was ever held.
    */
   aeadSeal(request: AeadSealRequest): Promise<Uint8Array>;
 

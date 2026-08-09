@@ -16,6 +16,7 @@ const IDENTITY: RowIdentity = {
   version: 7,
   deleted: false,
   parentId: null,
+  ckEpoch: 1,
 };
 
 const PLAINTEXT = utf8("zadatak: kupiti hleb");
@@ -30,12 +31,12 @@ describe("sealRow / openRow", () => {
     expect(await openRow(port, CONTENT_KEY, IDENTITY, sealed)).toEqual(PLAINTEXT);
   });
 
-  it("draws a fresh 12-byte nonce from the port on every seal", async () => {
+  it("draws a fresh 24-byte nonce from the port on every seal", async () => {
     const local = createFakeCryptoPort({ seed: 5 });
     const before = local.drawnBytes;
     const first = await sealRow(local, CONTENT_KEY, IDENTITY, PLAINTEXT);
     const second = await sealRow(local, CONTENT_KEY, IDENTITY, PLAINTEXT);
-    expect(local.drawnBytes - before).toBe(24);
+    expect(local.drawnBytes - before).toBe(48);
     expect(second.nonce).not.toBe(first.nonce);
     expect(second.ciphertext).not.toBe(first.ciphertext);
   });
@@ -72,6 +73,11 @@ describe("the AAD binds the row to its identity", () => {
     // object — under another account, or beneath a tombstone that then reaps it
     // — with the tag still verifying, because the tag never covered the byte.
     ["a rewritten parent", { ...IDENTITY, parentId: "01J2222222222222222222222" }],
+    // The content-key generation. A hostile server that serves a row sealed
+    // under the RETIRED key while claiming the current one is what puts
+    // `ck_epoch` in the AAD — without it a client trials both keys and a
+    // half-finished rotation is invisible.
+    ["a claimed key rotation", { ...IDENTITY, ckEpoch: 2 }],
   ];
 
   for (const [what, moved] of moves) {
@@ -142,13 +148,43 @@ describe("identity validation", () => {
     }
   });
 
-  it("refuses an empty identifier — an unnamed row cannot be bound to anything", async () => {
-    await expect(
-      sealRow(port, CONTENT_KEY, { ...IDENTITY, collection: "" }, PLAINTEXT),
-    ).rejects.toThrow(TypeError);
-    await expect(
-      sealRow(port, CONTENT_KEY, { ...IDENTITY, objectId: "" }, PLAINTEXT),
-    ).rejects.toThrow(TypeError);
+  it("refuses an empty user, profile or collection — those really do bind nothing", async () => {
+    for (const field of ["userId", "profileId", "collection"] as const) {
+      await expect(
+        sealRow(port, CONTENT_KEY, { ...IDENTITY, [field]: "" }, PLAINTEXT),
+      ).rejects.toThrow(TypeError);
+    }
+  });
+
+  // THE OPPOSITE RULE FOR `objectId`, and it used to be in the list above. Six
+  // collections are per-profile singletons whose primary key is the profile
+  // alone — `calendar_settings`, `study_settings`, … — so their object id is the
+  // empty string, and rejecting it would have made those six unsyncable. It is
+  // safe because `encodeStruct` length-frames every field: the empty id is a
+  // field with content zero, not an absent one.
+  it("accepts the empty object id the per-profile singletons really have", async () => {
+    const singleton: RowIdentity = { ...IDENTITY, collection: "calendar_settings", objectId: "" };
+    const sealed = await sealRow(port, CONTENT_KEY, singleton, PLAINTEXT);
+    expect(await openRow(port, CONTENT_KEY, singleton, sealed)).toEqual(PLAINTEXT);
+
+    // And it is still bound: the same empty id in another collection, or in
+    // another profile, is a different row and does not open.
+    await expectCode(
+      openRow(port, CONTENT_KEY, { ...singleton, collection: "study_settings" }, sealed),
+      "row/aead-failed",
+    );
+    await expectCode(
+      openRow(port, CONTENT_KEY, { ...singleton, profileId: "profile-b" }, sealed),
+      "row/aead-failed",
+    );
+  });
+
+  it("refuses a ck_epoch below 1 or off the integers", async () => {
+    for (const ckEpoch of [0, -1, 1.5, Number.NaN]) {
+      await expect(
+        sealRow(port, CONTENT_KEY, { ...IDENTITY, ckEpoch }, PLAINTEXT),
+      ).rejects.toThrow(TypeError);
+    }
   });
 
   it("refuses a content key that is not 32 bytes", async () => {
@@ -165,7 +201,7 @@ describe("sealRowFields / openRowFields", () => {
 
   it("serialises equal state to equal plaintext regardless of key order", async () => {
     const local = createFakeCryptoPort({ seed: 1 });
-    const nonce = new Uint8Array(12).fill(0x77);
+    const nonce = new Uint8Array(24).fill(0x77);
     local.enqueueRandom(nonce);
     const a = await sealRowFields(local, CONTENT_KEY, IDENTITY, { a: 1, b: 2 });
     local.enqueueRandom(nonce);
@@ -189,8 +225,14 @@ describe("parseSealedRow", () => {
     const sealed = await sealRow(port, CONTENT_KEY, IDENTITY, PLAINTEXT);
     expect(parseSealedRow(JSON.parse(JSON.stringify(sealed)))).toEqual(sealed);
     expect(parseSealedRow(null)).toBeNull();
-    expect(parseSealedRow({ ...sealed, v: 2 })).toBeNull();
-    expect(parseSealedRow({ ...sealed, nonce: bytesToBase64url(new Uint8Array(11)) })).toBeNull();
+    // `v: 1` is the AES-GCM/12-byte format this package used to write. There is
+    // no reader for it and there is nothing in the world that produced one, so
+    // the only way it can arrive is from a server trying to talk a client down
+    // to a shorter nonce and a weaker AAD.
+    expect(parseSealedRow({ ...sealed, v: 1 })).toBeNull();
+    expect(parseSealedRow({ ...sealed, v: 3 })).toBeNull();
+    expect(parseSealedRow({ ...sealed, v: "2" })).toBeNull();
+    expect(parseSealedRow({ ...sealed, nonce: bytesToBase64url(new Uint8Array(23)) })).toBeNull();
     expect(parseSealedRow({ ...sealed, ciphertext: bytesToBase64url(new Uint8Array(15)) })).toBeNull();
     expect(parseSealedRow({ ...sealed, extra: true })).toBeNull();
   });

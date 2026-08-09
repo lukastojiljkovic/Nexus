@@ -8,10 +8,22 @@
  * What is real and what is not, stated plainly, because a test that passes
  * against a fake primitive proves only what the fake models:
  *
- *  - **Real** (WebCrypto, the same primitives the shipped adapters will use):
- *    SHA-256, HMAC-SHA256, HKDF-SHA256, AES-256-GCM and X25519. So the
- *    tamper, wrong-key, wrong-AAD, reflection and low-order-point tests in this
- *    package exercise genuine AEAD and genuine Diffie-Hellman, not a toy.
+ *  - **Real** (WebCrypto): SHA-256, HMAC-SHA256, HKDF-SHA256 and X25519 — the
+ *    same primitives the shipped adapter uses, byte-for-byte.
+ *  - **Real, but a DIFFERENT AEAD than production**: AES-256-GCM, with the
+ *    24-byte nonce this package specifies (NIST SP 800-38D allows any IV length;
+ *    GCM derives J0 through GHASH when it is not 12 bytes). The shipped adapter
+ *    uses XChaCha20-Poly1305, which WebCrypto does not have — and reaching it
+ *    here would mean taking the runtime dependency this package's whole shape
+ *    exists to avoid. The substitution is invisible to everything the protocol
+ *    code can observe: same key size, same nonce size, same
+ *    `plaintext.length + 16` output, same tamper-detection semantics. So the
+ *    tamper, wrong-key, wrong-AAD and reflection tests here exercise a genuine
+ *    AEAD, not a toy — they simply do not prove that the sealed bytes are the
+ *    ones a real device produces. THAT is proved where the real primitive lives:
+ *    `@nexus/sync-port` checks the shipped adapter against
+ *    `draft-irtf-cfrg-xchacha-03` §A.3.1 and round-trips `sealRow`/`openRow`
+ *    through it.
  *  - **Fake**: Argon2id. It is HKDF-SHA256 with the cost parameters folded into
  *    the `info` string. That is deterministic, instant, and structurally
  *    faithful in the only way the protocol code can observe — different

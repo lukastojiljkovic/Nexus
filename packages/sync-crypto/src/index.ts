@@ -14,7 +14,7 @@
  *  - `kdf.ts`     the web password → K_auth / K_wrap split, and the re-wrap an
  *                 email change forces (the salt binds the address).
  *  - `wrap.ts`    MK and CK_p wrapping, with an explicit key-commitment tag,
- *                 because AES-GCM is not key-committing.
+ *                 because the AEAD is not key-committing.
  *  - `row.ts`     the ONLY place in the product that encrypts a row.
  *  - `pairing.ts` the desktop→browser handshake, as pure functions over an
  *                 injected transport, with a state machine in which a wrong
