@@ -55,6 +55,12 @@ import type { PushRow, SyncScope } from "@nexus/sync";
 
 import { base64urlToBytea } from "./bytea.js";
 import { readCursors, writeCursor } from "./cursor.js";
+import {
+  keyWrapReadbackRequest,
+  syncEnableBody,
+  syncEnableRoundTripProblem,
+  type SyncEnableInput,
+} from "./enable.js";
 import { jsonHeaders, type HttpPort, type HttpRequest } from "./http.js";
 import { advanceCursor, pullPage, pullWindow } from "./pull.js";
 import { pushRow } from "./push.js";
@@ -70,7 +76,12 @@ const LIVE =
 const b64url = (value: string | Uint8Array): string =>
   Buffer.from(typeof value === "string" ? value : value).toString("base64url");
 
-function mintAal2(userId: string): string {
+/**
+ * `sessionId` is a parameter because the desktop-only wall on `key_wraps` joins
+ * `devices.session_id` to the caller's own `session_id` claim. A test that wants
+ * to be on the desktop side of that wall has to hold both halves.
+ */
+function mintAal2(userId: string, sessionId: string = randomUUID()): string {
   const now = Math.floor(Date.now() / 1000);
   const head = b64url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
   const claims = b64url(
@@ -78,7 +89,7 @@ function mintAal2(userId: string): string {
       aud: "authenticated",
       role: "authenticated",
       sub: userId,
-      session_id: randomUUID(),
+      session_id: sessionId,
       aal: "aal2",
       iat: now,
       exp: now + 3600,
@@ -137,6 +148,13 @@ const freshSeal = (): { nonce: string; ciphertext: string } => {
 
 describe.skipIf(!LIVE)("the transport against a real PostgREST", () => {
   const profileId = randomUUID();
+  /**
+   * The session every request in this file is made under, fixed rather than
+   * random, because `key_wraps_desktop_only` joins `devices.session_id` to the
+   * caller's own `session_id` claim. One session, one desktop device row, both
+   * halves in hand — which is what a real desktop holds.
+   */
+  const sessionId = randomUUID();
   let userId = "";
   let deviceId = "";
   let http: HttpPort;
@@ -153,7 +171,12 @@ describe.skipIf(!LIVE)("the transport against a real PostgREST", () => {
     ...over,
   });
 
-  async function admin(path: string, method: string, body?: unknown): Promise<Response> {
+  async function admin(
+    path: string,
+    method: string,
+    body?: unknown,
+    extra: Record<string, string> = {},
+  ): Promise<Response> {
     // Permitted by the same exemption as the port above.
     return fetch(`${URL_BASE ?? ""}${path}`, {
       method,
@@ -161,6 +184,7 @@ describe.skipIf(!LIVE)("the transport against a real PostgREST", () => {
         apikey: SERVICE ?? "",
         Authorization: `Bearer ${SERVICE ?? ""}`,
         "Content-Type": "application/json",
+        ...extra,
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
@@ -175,7 +199,38 @@ describe.skipIf(!LIVE)("the transport against a real PostgREST", () => {
     expect(response.status, await response.clone().text()).toBe(200);
     userId = ((await response.json()) as { id: string }).id;
     scope = { userId, profileId };
-    http = livePort(mintAal2(userId));
+    http = livePort(mintAal2(userId, sessionId));
+
+    // THE DESKTOP DEVICE ROW COMES FIRST, and it is written by the SERVICE role.
+    //
+    // `key_wraps_desktop_only`'s WITH CHECK requires a live `platform =
+    // 'desktop'` device bound to the caller's own session for EVERY write to
+    // `key_wraps` — `ck_under_mk` included, not only the master-key slots — and
+    // `grant insert` on `devices` withholds `platform`, so no client can declare
+    // itself a desktop. In production `nexus_mk_mint` writes this row under
+    // `service_role`; here that is what the service key stands in for. Seeding it
+    // any other way would be modelling a client that cannot exist.
+    //
+    // `sync_state`'s tenant-scoped foreign key needs this row too, so one device
+    // serves both purposes.
+    const device = await admin(
+      "/rest/v1/devices?select=id",
+      "POST",
+      [
+        {
+          user_id: userId,
+          session_id: sessionId,
+          platform: "desktop",
+          name_nonce: base64urlToBytea(filled(24, 0x11)),
+          name_ciphertext: base64urlToBytea(filled(32, 0x22)),
+          public_key: null,
+        },
+      ],
+      { Prefer: "return=representation" },
+    );
+    const deviceBody = await device.text();
+    expect(device.status, deviceBody).toBe(201);
+    deviceId = (JSON.parse(deviceBody) as { id: string }[])[0]!.id;
 
     // NX007 refuses any row naming an epoch whose `ck_under_mk` wrap does not
     // exist, so the content key has to be stored before anything is sealed under
@@ -198,26 +253,6 @@ describe.skipIf(!LIVE)("the transport against a real PostgREST", () => {
       ]),
     });
     expect(wrap.status, wrap.body).toBe(201);
-
-    // `sync_state` carries a tenant-scoped foreign key to `devices`, so a cursor
-    // needs a device to belong to.
-    deviceId = randomUUID();
-    const device = await http({
-      method: "POST",
-      path: "/devices?select=id",
-      headers: jsonHeaders("return=representation"),
-      body: JSON.stringify([
-        {
-          user_id: userId,
-          session_id: randomUUID(),
-          name_nonce: base64urlToBytea(filled(24, 0x11)),
-          name_ciphertext: base64urlToBytea(filled(32, 0x22)),
-          public_key: null,
-        },
-      ]),
-    });
-    expect(device.status, device.body).toBe(201);
-    deviceId = (JSON.parse(device.body) as { id: string }[])[0]!.id;
   }, 30_000);
 
   afterAll(async () => {
@@ -384,5 +419,81 @@ describe.skipIf(!LIVE)("the transport against a real PostgREST", () => {
     });
     expect(upsert.status).toBe(403);
     expect(upsert.body).toContain("42501");
+  });
+
+  /**
+   * The readback the mint is verified with, against the real thing.
+   *
+   * Two claims are being measured, and neither is checkable against a fake.
+   * First, that `kind=in.(a%2Cb)` is understood: `filterValue` percent-encodes
+   * every value, so the list separator arrives encoded, and „PostgREST decodes
+   * the whole query string before parsing" being true of `eq.` does not make it
+   * true of a list. Second, that the two master-key slots come back and the
+   * `ck_under_mk` row `beforeAll` created does NOT — a filter that silently
+   * matched everything would still make the round-trip check pass, and would be
+   * comparing rows the mint never wrote.
+   *
+   * It runs on the desktop device `beforeAll` registered — a master-key wrap
+   * cannot be written or read any other way, and that wall is migration 010's
+   * whole subject.
+   */
+  it("reads back exactly the two master-key wraps, and the round-trip check passes", async () => {
+    const input: SyncEnableInput = {
+      authorisingToken: "unused — this test does not call the Edge Function",
+      deviceName: { nonce: filled(24, 0x01), ciphertext: filled(40, 0x02) },
+      passwordWrap: {
+        nonce: filled(24, 0x11),
+        ciphertext: filled(48, 0x12),
+        commitment: filled(32, 0x13),
+      },
+      passwordKdfParams: { memoryKiB: 65536, iterations: 3, parallelism: 1 },
+      recoveryWrap: {
+        nonce: filled(24, 0x21),
+        ciphertext: filled(48, 0x22),
+        commitment: filled(32, 0x23),
+      },
+      recoveryKdfParams: { memoryKiB: 65536, iterations: 3, parallelism: 1 },
+      recoverySalt: filled(16, 0x31),
+    };
+    const body = syncEnableBody(input);
+
+    const wrote = await http({
+      method: "POST",
+      path: "/key_wraps",
+      headers: jsonHeaders("return=minimal"),
+      body: JSON.stringify([
+        {
+          user_id: userId,
+          kind: "mk_under_kwrap",
+          nonce: base64urlToBytea(body.kwrap.nonce),
+          wrapped: base64urlToBytea(body.kwrap.wrapped),
+          commit_tag: base64urlToBytea(body.kwrap.commit_tag),
+          // Spelled out as null rather than omitted: PostgREST refuses a bulk
+          // insert whose objects do not carry the same keys (PGRST102, „All
+          // object keys must match"), and the two slots differ by exactly this
+          // one. The request body this package builds is a JSON body for an Edge
+          // Function, not a PostgREST insert, so the rule does not reach it — but
+          // it does reach anything that ever writes these two rows side by side.
+          kdf_salt: null,
+          kdf_params: body.kwrap.kdf_params,
+        },
+        {
+          user_id: userId,
+          kind: "mk_under_src",
+          nonce: base64urlToBytea(body.src.nonce),
+          wrapped: base64urlToBytea(body.src.wrapped),
+          commit_tag: base64urlToBytea(body.src.commit_tag),
+          kdf_salt: base64urlToBytea(body.src.kdf_salt),
+          kdf_params: body.src.kdf_params,
+        },
+      ]),
+    });
+    expect(wrote.status, wrote.body).toBe(201);
+
+    const readback = await http(keyWrapReadbackRequest());
+    expect(readback.status, readback.body).toBe(200);
+    const rows = JSON.parse(readback.body) as unknown[];
+    expect(rows).toHaveLength(2);
+    expect(syncEnableRoundTripProblem(input, rows)).toBeNull();
   });
 });
