@@ -132,7 +132,13 @@ function harness(options: HarnessOptions = {}): {
     };
   };
 
-  return { ports: { auth, functions, http }, calls, holder: createSessionHolder() };
+  // Nothing in this flow steps a session up, so the aal2 port is unreachable
+  // here — it throws rather than answering, which is what makes that a claim.
+  const httpAs = (): never => {
+    throw new Error("this flow must not need an aal2 port");
+  };
+
+  return { ports: { auth, functions, http, httpAs }, calls, holder: createSessionHolder() };
 }
 
 const input = {

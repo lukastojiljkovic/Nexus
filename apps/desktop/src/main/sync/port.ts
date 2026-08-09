@@ -64,6 +64,22 @@ export interface CloudPorts {
   readonly http: HttpPort;
   readonly functions: FunctionPort;
   readonly auth: AuthPort;
+  /**
+   * A PostgREST port presenting a token this desktop is deliberately NOT keeping.
+   *
+   * Exactly one flow needs it. Adopting an account with the Sync Recovery Code
+   * has to write a `devices` row, and `devices_insert_requires_aal2` means that
+   * write is only legal from a stepped-up session — while `session.ts` refuses
+   * to hold an `aal2` session at all, because `aal` survives every refresh and an
+   * `aal2` desktop would have browser powers over every device row on the account
+   * for the life of the machine.
+   *
+   * Both rules are right, and they meet here. The answer is a port that presents
+   * a token passed to it, used for the two calls that must be `aal2` and dropped
+   * with the function that made it — rather than relaxing the holder, which would
+   * trade a five-second exposure for a permanent one.
+   */
+  readonly httpAs: (accessToken: string) => HttpPort;
 }
 
 export interface CloudPortOptions {
@@ -228,5 +244,11 @@ export function createCloudPorts(
     http: createHttpPort(options),
     functions: createFunctionPort(options),
     auth: createAuthPort(config, rest.fetch),
+    // A CONSTANT `accessToken`, and the only one in this file. Everywhere else
+    // the token is read at call time because it is refreshed; this port exists
+    // for the length of one function call against a session that is signed out
+    // at the end of it, so a token that could change under it would be the bug,
+    // not the feature.
+    httpAs: (accessToken: string) => createHttpPort({ ...options, accessToken: () => accessToken }),
   };
 }

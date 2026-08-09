@@ -7872,6 +7872,47 @@ export type SyncReconnectView =
   | { outcome: "reconnected"; status: SyncStatusView }
   | { outcome: "refused"; reason: SyncReconnectProblem };
 
+/**
+ * Why joining an account that already has a master key failed.
+ *
+ * Distinct from {@link SyncEnableProblem} even though the two flows share their
+ * first four steps, because they diverge on the one question the user acts on:
+ * enabling can be told `already_minted`, and adopting is the answer TO that. A
+ * shared union would mean every screen handling one had to handle states the
+ * other produces.
+ *
+ * **Declared ahead of its channel, deliberately.** `main/sync/adopt.ts` walks
+ * the whole protocol and is tested; what is missing is the `sync:adopt` channel,
+ * its handler, and the screen. This union is the contract those three will meet,
+ * written while the reasoning behind each refusal is still in one place.
+ */
+export type SyncAdoptProblem =
+  | AuthRefusal
+  | DeviceRegisterRefusal
+  /** The account has several second factors and none was named. */
+  | "mfa_ambiguous"
+  /** The verify call succeeded and the session did not come back at `aal2`. */
+  | "step_up_failed"
+  /** The bootstrap device row was refused, so nothing on the account is readable. */
+  | "bootstrap_failed"
+  /** This account has no recovery wrap: sync was never enabled on it. Enable it here. */
+  | "not_minted"
+  /** The Sync Recovery Code did not open the wrap. Nothing else is wrong. */
+  | "recovery_code_rejected"
+  /** Cloud is switched off for this launch, or this build has no project. */
+  | "cloud_off"
+  /** The database is locked, so there is no data key to wrap the master key under. */
+  | "locked"
+  /** This computer already belongs to an account. Adopting would replace it. */
+  | "already_enabled"
+  /** A caller-side fault: a device name this schema cannot store. */
+  | "bad_request";
+
+/** Everything `adoptSync` can answer. There is no code to show: the user has it. */
+export type SyncAdoptView =
+  | { outcome: "adopted"; status: SyncStatusView }
+  | { outcome: "refused"; reason: SyncAdoptProblem };
+
 /** Everything `enableSync` can answer. */
 export type SyncEnableView =
   | {
