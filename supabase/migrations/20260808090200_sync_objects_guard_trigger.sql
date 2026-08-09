@@ -224,7 +224,7 @@ begin
 
   -- NX003 — THE CIPHERTEXT CHANGES WITH THE VERSION.
   --
-  -- Zero false positives, and that is provable rather than hoped for: RULE 1
+  -- Zero false positives, and that is provable rather than hoped for: NX001
   -- forces the version to change on every update, the version is in the
   -- associated data, and NX005 forbids reusing the nonce — so an honest
   -- re-seal cannot produce the bytes it produced last time. An unchanged
