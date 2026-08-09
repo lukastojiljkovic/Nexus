@@ -91,7 +91,7 @@ export interface SweepInput {
   readonly collection: SyncCollection;
   /** Every column of the table, so the projection can subtract rather than guess. */
   readonly columns: readonly string[];
-  /** The row as the database holds it, or `null` when it is gone. */
+  /** The row as the database holds it, or `null` when it is physically gone. */
   readonly row: Readonly<Record<string, JsonValue>> | null;
   /** What this device last sealed or merged for this object, or `null` for one it has never seen. */
   readonly previous: RowState | null;
@@ -100,36 +100,24 @@ export interface SweepInput {
 }
 
 /**
- * The next `RowState` for one dirty object, or `null` when the change turned out
- * to be no change at all.
+ * **Deleted means "the user cannot see it any more", not "the row is absent".**
+ * Most of this schema soft-deletes: `deleted_at` is set and the row stays right
+ * where it was, which is an UPDATE. Since `deleted_at` is subtracted from the
+ * field map as derived (it is a shadow of the tombstone `merge.ts` carries as a
+ * stamped field of its own), a sweep that only looked for an absent row would
+ * find no field change at all in a soft delete and push NOTHING — the deletion
+ * would simply never travel, and the user's evidence for the bug would be the
+ * thing they deleted coming back on their other device.
  *
- * Four cases, and the two involving absence are the ones worth stating:
- *
- * - **Gone, and never known.** A row created and deleted between two sweeps.
- *   Nothing is pushed, because there is nothing another device could need: it
- *   never saw the row, and a tombstone for an object it has no record of is
- *   noise it would have to keep forever.
- * - **Gone, already tombstoned.** Idempotent — the journal is a dirty set and an
- *   entry can legitimately be resolved twice.
- * - **Present, previously tombstoned.** An undelete. The tombstone is cleared at
- *   `now` and the fields are diffed as usual, so restoring a row does not also
- *   silently re-assert every field it happens to hold.
- * - **Present.** Only differing fields are stamped; identical values keep the
- *   stamp they already had.
+ * `!= null` rather than `!== null` on purpose: a table without the column at all
+ * reads as `undefined`, which is not a tombstone.
  */
-export function sweepRow(input: SweepInput): RowState | null {
-  const { collection, columns, row, previous, now } = input;
+function isTombstoned(row: Readonly<Record<string, JsonValue>>): boolean {
+  return row["deleted_at"] != null;
+}
 
-  if (row === null) {
-    if (previous === null) return null;
-    if (previous.deleted.value) return null;
-    return markDeleted(previous, now);
-  }
-
-  const projected = projectRow(collection, columns, row);
-  const base = previous ?? emptyRowState(now);
-  const before = rowFields(base);
-
+/** The fields whose value really differs, or `null` when none of them does. */
+function changedFields(before: JsonObject, projected: JsonObject): JsonObject | null {
   const patch: Record<string, JsonValue> = {};
   for (const [name, value] of Object.entries(projected)) {
     // Canonical JSON rather than `===`, so an object or array field compares by
@@ -140,10 +128,53 @@ export function sweepRow(input: SweepInput): RowState | null {
       patch[name] = value;
     }
   }
+  return Object.keys(patch).length === 0 ? null : patch;
+}
+
+/**
+ * The next `RowState` for one dirty object, or `null` when the change turned out
+ * to be no change at all.
+ *
+ * The cases involving absence are the ones worth stating:
+ *
+ * - **Gone, and never known.** A row created and deleted between two sweeps.
+ *   Nothing is pushed, because there is nothing another device could need: it
+ *   never saw the row, and a tombstone for an object it has no record of is
+ *   noise it would have to keep forever.
+ * - **Gone, already tombstoned.** Idempotent — the journal is a dirty set and an
+ *   entry can legitimately be resolved twice.
+ * - **Soft-deleted.** The row is still readable, so its fields are diffed as
+ *   usual and THEN the tombstone is set. An edit and a delete inside one sweep
+ *   window keep both, which is what lets a restore on another device bring back
+ *   the last thing the user actually typed rather than the last thing this
+ *   device happened to have pushed.
+ * - **Present, previously tombstoned.** An undelete. The tombstone is cleared at
+ *   `now` and the fields are diffed as usual, so restoring a row does not also
+ *   silently re-assert every field it happens to hold.
+ * - **Present.** Only differing fields are stamped; identical values keep the
+ *   stamp they already had.
+ */
+export function sweepRow(input: SweepInput): RowState | null {
+  const { collection, columns, row, previous, now } = input;
+  const gone = row === null || isTombstoned(row);
+
+  if (gone && previous === null) return null;
+
+  const base = previous ?? emptyRowState(now);
+  const patch =
+    row === null ? null : changedFields(rowFields(base), projectRow(collection, columns, row));
+
+  if (gone) {
+    // `previous` is non-null here — the never-known case returned above.
+    const tombstoned = previous!.deleted.value;
+    if (tombstoned && patch === null) return null;
+    const edited = patch === null ? previous! : applyEdit(previous!, patch, now);
+    return tombstoned ? edited : markDeleted(edited, now);
+  }
 
   const restoring = previous !== null && previous.deleted.value;
-  if (Object.keys(patch).length === 0 && !restoring && previous !== null) return null;
+  if (patch === null && !restoring && previous !== null) return null;
 
-  const edited = applyEdit(base, patch, now);
+  const edited = patch === null ? base : applyEdit(base, patch, now);
   return restoring ? markRestored(edited, now) : edited;
 }

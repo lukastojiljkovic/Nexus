@@ -657,3 +657,6 @@ export type {
 } from "./imex/restoreStore.js";
 
 export { ForeignImportStore } from "./imex/foreignImportStore.js";
+
+export { SyncJournal } from "./sync/syncJournal.js";
+export type { SweptObject } from "./sync/syncJournal.js";

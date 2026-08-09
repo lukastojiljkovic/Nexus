@@ -165,6 +165,49 @@ describe("the sync map against the real schema", () => {
     ]);
   });
 
+  it("says how every collection reaches its profile, and is right about it", () => {
+    for (const entry of SYNC_MAP) {
+      if (entry.kind !== "collection") continue;
+      const hasColumn = columns(entry.table).some((column) => column.name === "profile_id");
+      // Exactly one of the two, never both and never neither. A table with the
+      // column AND a declared path would have two answers to "whose row is
+      // this"; a table with neither has none, and migration 063's trigger would
+      // have had nothing to write.
+      expect({ table: entry.table, hasColumn, declared: entry.profileVia !== undefined }).toEqual({
+        table: entry.table,
+        hasColumn,
+        declared: !hasColumn,
+      });
+
+      if (entry.profileVia === undefined) continue;
+      const foreignKeys = db.raw.prepare(`PRAGMA foreign_key_list(${entry.table})`).all() as {
+        table: string;
+        from: string;
+      }[];
+      // The declared path has to be a real foreign key, or it is a sentence
+      // about a join the database would refuse to perform.
+      expect({
+        table: entry.table,
+        via: `${entry.profileVia.key}->${entry.profileVia.parent}`,
+        real: foreignKeys.some(
+          (key) => key.from === entry.profileVia?.key && key.table === entry.profileVia.parent,
+        ),
+      }).toEqual({
+        table: entry.table,
+        via: `${entry.profileVia.key}->${entry.profileVia.parent}`,
+        real: true,
+      });
+      // And the parent must itself carry `profile_id`, or the join lands one
+      // table short of an answer.
+      expect({
+        parent: entry.profileVia.parent,
+        carriesProfile: columns(entry.profileVia.parent).some(
+          (column) => column.name === "profile_id",
+        ),
+      }).toEqual({ parent: entry.profileVia.parent, carriesProfile: true });
+    }
+  });
+
   it("proves no table it calls a collection is secretly a join row", () => {
     const jointish = SYNC_MAP.filter((entry) => entry.kind === "collection")
       .map((entry) => entry.table)

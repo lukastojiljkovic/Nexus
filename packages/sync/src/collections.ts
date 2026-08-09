@@ -42,7 +42,7 @@
 export type CollectionShape =
   /**
    * A map from field name to (value, HLC), merged per field
-   * (`@nexus/sync-crypto`'s `mergeRowState`). Right for every row in the product
+   * (`@nexus/sync-crypto`'s `mergeRows`). Right for every row in the product
    * that is a handful of scalars — which is all of them but one.
    */
   | "fields"
@@ -85,6 +85,18 @@ export interface SyncCollection {
    * migration that re-keys a table cannot leave this list quietly wrong.
    */
   readonly identity: readonly string[];
+  /**
+   * How a row of this table reaches the profile it belongs to, for the eight
+   * collections that carry no `profile_id` column of their own. Absent means the
+   * table has the column and nothing has to be joined.
+   *
+   * This is not bookkeeping: it is what lets the sweeper enumerate one profile's
+   * objects when sync is first switched on, and it is the fact migration 063's
+   * triggers are built out of — the profile has to be joined for at write time,
+   * because a cascade removes the parent before the child's own trigger runs.
+   * `@nexus/db`'s guard checks it against the real foreign key.
+   */
+  readonly profileVia?: { readonly parent: string; readonly key: string };
   /** Why this is an object of its own rather than a field of something else. */
   readonly why: string;
 }
@@ -142,6 +154,7 @@ export const SYNC_MAP: readonly SyncClassification[] = [
     table: "document_renewals",
     shape: "fields",
     identity: ["id"],
+    profileVia: { parent: "tracked_documents", key: "document_id" },
     why: "A renewal is a dated obligation the user creates, edits and completes on its own; it outlives edits to the document it hangs off.",
   },
   {
@@ -212,6 +225,7 @@ export const SYNC_MAP: readonly SyncClassification[] = [
     table: "subject_attachments",
     shape: "fields",
     identity: ["id"],
+    profileVia: { parent: "subjects", key: "subject_id" },
     why: "Carries bytes, so the metadata rides here and the file rides the Storage path — two different transports, therefore two different objects.",
   },
   {
@@ -274,6 +288,7 @@ export const SYNC_MAP: readonly SyncClassification[] = [
     table: "task_attachments",
     shape: "fields",
     identity: ["id"],
+    profileVia: { parent: "tasks", key: "task_id" },
     why: "Carries bytes — see `subject_attachments`.",
   },
   {
@@ -296,6 +311,7 @@ export const SYNC_MAP: readonly SyncClassification[] = [
     table: "task_sections",
     shape: "fields",
     identity: ["id"],
+    profileVia: { parent: "task_lists", key: "list_id" },
     why: "A heading is named and reordered on its own; ADR-082 §3.1's rank is per section scope.",
   },
   {
@@ -342,6 +358,7 @@ export const SYNC_MAP: readonly SyncClassification[] = [
     table: "note_attachments",
     shape: "fields",
     identity: ["id"],
+    profileVia: { parent: "notes", key: "note_id" },
     why: "Carries bytes — see `subject_attachments`.",
   },
   {
@@ -349,6 +366,7 @@ export const SYNC_MAP: readonly SyncClassification[] = [
     table: "note_versions",
     shape: "fields",
     identity: ["note_id", "covered_seq"],
+    profileVia: { parent: "notes", key: "note_id" },
     why: "A named version is a thing the user asked to keep. It must carry its own snapshot bytes rather than pointing at a compaction another device may never have made.",
   },
   {
@@ -362,6 +380,7 @@ export const SYNC_MAP: readonly SyncClassification[] = [
     table: "note_updates",
     shape: "updates",
     identity: ["note_id", "seq"],
+    profileVia: { parent: "notes", key: "note_id" },
     why: "The note BODY. The one place last-write-wins is not a merge but a lost paragraph, so it travels as an append-only log of encrypted CRDT updates.",
   },
   {
@@ -506,6 +525,7 @@ export const SYNC_MAP: readonly SyncClassification[] = [
     table: "habit_entries",
     shape: "fields",
     identity: ["id"],
+    profileVia: { parent: "habits", key: "habit_id" },
     why: "One day's mark is a fact with its own moment, and two devices can legitimately mark different days of the same habit.",
   },
   {

@@ -88,8 +88,8 @@ describe("fieldColumns", () => {
   });
 
   it("keeps a singleton's every column, since its identity is the profile it is scoped by", () => {
-    const columns = ["profile_id", "week_starts_on", "day_start_minutes", "updated_at"];
-    expect(fieldColumns(SETTINGS, columns)).toEqual(["week_starts_on", "day_start_minutes"]);
+    const columns = ["profile_id", "semester_start", "semester_end", "updated_at"];
+    expect(fieldColumns(SETTINGS, columns)).toEqual(["semester_start", "semester_end"]);
   });
 
   it("explains every derived column it subtracts", () => {
@@ -205,6 +205,114 @@ describe("sweepRow", () => {
     expect(gone).not.toBeNull();
     expect(gone!.deleted).toEqual({ value: true, at: T2 });
     expect(rowFields(gone!)["title"]).toBe("Prijava");
+  });
+
+  it("tombstones a SOFT-deleted row, which is the only way most of this schema deletes", () => {
+    // The row is still right there; `deleted_at` is set and nothing else in the
+    // field map moved. A sweep that only looked for an absent row would push
+    // nothing at all, and the deletion would never travel.
+    const first = sweepRow({
+      collection: TASKS,
+      columns: TASK_COLUMNS,
+      row: taskRow(),
+      previous: null,
+      now: T1,
+    });
+    const soft = sweepRow({
+      collection: TASKS,
+      columns: TASK_COLUMNS,
+      row: taskRow({ deleted_at: "2026-08-08T12:00:00.000Z" }),
+      previous: first,
+      now: T2,
+    });
+    expect(soft).not.toBeNull();
+    expect(soft!.deleted).toEqual({ value: true, at: T2 });
+    expect(rowFields(soft!)["title"]).toBe("Prijava");
+  });
+
+  it("keeps an edit made in the same window as the soft delete", () => {
+    const first = sweepRow({
+      collection: TASKS,
+      columns: TASK_COLUMNS,
+      row: taskRow(),
+      previous: null,
+      now: T1,
+    });
+    const soft = sweepRow({
+      collection: TASKS,
+      columns: TASK_COLUMNS,
+      row: taskRow({ title: "Prijava ispita", deleted_at: "2026-08-08T12:00:00.000Z" }),
+      previous: first,
+      now: T2,
+    });
+    expect(rowFields(soft!)["title"]).toBe("Prijava ispita");
+    expect(soft!.fields["title"]?.at).toEqual(T2);
+    expect(soft!.deleted.value).toBe(true);
+  });
+
+  it("says nothing when a soft-deleted row is swept twice", () => {
+    const first = sweepRow({
+      collection: TASKS,
+      columns: TASK_COLUMNS,
+      row: taskRow(),
+      previous: null,
+      now: T1,
+    });
+    const soft = sweepRow({
+      collection: TASKS,
+      columns: TASK_COLUMNS,
+      row: taskRow({ deleted_at: "2026-08-08T12:00:00.000Z" }),
+      previous: first,
+      now: T2,
+    });
+    expect(
+      sweepRow({
+        collection: TASKS,
+        columns: TASK_COLUMNS,
+        row: taskRow({ deleted_at: "2026-08-08T12:00:00.000Z" }),
+        previous: soft,
+        now: T3,
+      }),
+    ).toBeNull();
+  });
+
+  it("clears the tombstone when `deleted_at` goes back to null", () => {
+    const first = sweepRow({
+      collection: TASKS,
+      columns: TASK_COLUMNS,
+      row: taskRow(),
+      previous: null,
+      now: T1,
+    });
+    const soft = sweepRow({
+      collection: TASKS,
+      columns: TASK_COLUMNS,
+      row: taskRow({ deleted_at: "2026-08-08T12:00:00.000Z" }),
+      previous: first,
+      now: T2,
+    });
+    const back = sweepRow({
+      collection: TASKS,
+      columns: TASK_COLUMNS,
+      row: taskRow(),
+      previous: soft,
+      now: T3,
+    });
+    expect(back!.deleted).toEqual({ value: false, at: T3 });
+    expect(back!.fields["title"]?.at).toEqual(T1);
+  });
+
+  it("does not mistake a row of a table that has no `deleted_at` for a tombstone", () => {
+    const columns = ["profile_id", "semester_start", "updated_at"];
+    const next = sweepRow({
+      collection: SETTINGS,
+      columns,
+      row: { profile_id: "p1", semester_start: "2026-10-01", updated_at: "2026-08-08T10:00:00Z" },
+      previous: null,
+      now: T1,
+    });
+    expect(next).not.toBeNull();
+    expect(next!.deleted.value).toBe(false);
   });
 
   it("says nothing for a row that is gone and was never known", () => {

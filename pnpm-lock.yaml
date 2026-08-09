@@ -245,6 +245,12 @@ importers:
       '@nexus/core':
         specifier: workspace:*
         version: link:../core
+      '@nexus/sync':
+        specifier: workspace:*
+        version: link:../sync
+      '@nexus/sync-crypto':
+        specifier: workspace:*
+        version: link:../sync-crypto
       better-sqlite3-multiple-ciphers:
         specifier: ^12.11.1
         version: 12.11.1
@@ -252,9 +258,6 @@ importers:
         specifier: ^5.4.1
         version: 5.4.1
     devDependencies:
-      '@nexus/sync':
-        specifier: workspace:*
-        version: link:../sync
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13

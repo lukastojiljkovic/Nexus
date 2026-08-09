@@ -1466,6 +1466,19 @@ describe("RestoreStore", () => {
     //    was typed into this install's search box. A restore that wiped it
     //    would be answering a question nobody asked; one that FILLED it would
     //    be a privacy leak in the other direction.
+    //  - sync_journal / sync_row_state (migration 063 / ADR-083): sync
+    //    bookkeeping, not content — and both are deliberately left alone for
+    //    the same reason, from opposite ends. The wipe and refill fire
+    //    migration 063's triggers on every row they touch, so the JOURNAL
+    //    fills itself with exactly the objects the restore changed; wiping it
+    //    first would only throw away entries the same statement is about to
+    //    re-create. `sync_row_state` matters more: it is the baseline the
+    //    sweep diffs against AND it carries the server's version counter per
+    //    object. Delete it and the next sweep restamps the entire profile as
+    //    new at version 0, which the server rejects as stale on every single
+    //    row. Leaving it is also what makes the restore travel CORRECTLY —
+    //    the sweep diffs the restored rows against what was last sealed and
+    //    sends the fields that really moved.
     const allowlist = new Set<string>([
       "meta",
       "profiles",
@@ -1480,6 +1493,8 @@ describe("RestoreStore", () => {
       "private_note_versions",
       "private_settings",
       "search_history",
+      "sync_journal",
+      "sync_row_state",
     ]);
 
     const wipeTables = new Set<string>(RESTORE_WIPE_TABLES);

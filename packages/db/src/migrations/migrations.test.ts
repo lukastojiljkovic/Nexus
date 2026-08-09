@@ -27,8 +27,8 @@ import { CardStore, MIGRATIONS, NexusDatabase, openDatabase, runMigrations } fro
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 62 (every hand-orderable scope ranks instead of counting), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(62);
+  it("is at version 63 (the change journal, off by default), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(63);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -3907,8 +3907,12 @@ describe("migration 035 — subject materials and linked notes", () => {
         .prepare("SELECT name FROM sqlite_master WHERE type = 'trigger'")
         .all() as { name: string }[]
     ).map((row) => row.name);
-    expect(triggers.filter((name) => name.includes("subject_attachment"))).toEqual([]);
-    expect(triggers.filter((name) => name.includes("subject_note_link"))).toEqual([]);
+    // Scoped to `_search_`, because migration 063 later gave both tables sync
+    // triggers: what this test has always meant is that the SEARCH INDEX gained
+    // nothing here, not that nothing in the schema may ever watch these tables.
+    const search = triggers.filter((name) => name.includes("_search_"));
+    expect(search.filter((name) => name.includes("subject_attachment"))).toEqual([]);
+    expect(search.filter((name) => name.includes("subject_note_link"))).toEqual([]);
     db.close();
   });
 });
