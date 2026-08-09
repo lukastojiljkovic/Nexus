@@ -202,6 +202,74 @@ export default tseslint.config(
     },
   },
 
+  // --- The browser gets one barrel, and it is not the package root ---------
+  // `@nexus/sync-crypto`'s root barrel exports `deriveWebPasswordKeys`,
+  // `rewrapMasterKeyForEmailChange` and `unwrapKey`. K_wrap opens the
+  // master-key wrap; the wrap is a row of the signed-in user's own account and
+  // the server will hand it over on request. So a browser that can compute
+  // K_wrap is a browser that is one call from MK, and MK opens every profile.
+  //
+  // `@nexus/sync-crypto/web` is the same package with those absent — see its
+  // header for what is missing and why each one is. `/testing` is refused for a
+  // sharper reason: it is a DETERMINISTIC fake `CryptoPort`, a random number
+  // generator that is not one, and a bundle that reached for it would produce
+  // predictable nonces and predictable keys while every test stayed green.
+  //
+  // THE `@noble/**` GROUP IS REPEATED HERE ON PURPOSE. Flat config does not
+  // merge rule options: the last matching block wins outright, so a block that
+  // sets `no-restricted-imports` for `apps/web` REPLACES the AEAD rule above
+  // for every file under it. Dropping the group would silently exempt the web
+  // app from the one-import-site rule, and nothing in either block would say so.
+  {
+    files: ["apps/web/**/*.{ts,tsx,mts,cts,js,mjs,cjs}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          // `paths` AND NOT `patterns`, WHICH THE FIRST VERSION USED AND WHICH
+          // DOES NOT WORK HERE. `patterns.group` matches the way `.gitignore`
+          // matches: `@nexus/sync-crypto` covers every subpath beneath it, and
+          // gitignore cannot re-include a path under an excluded directory — so
+          // `!@nexus/sync-crypto/web` does nothing and the rule refuses the one
+          // import the web app is SUPPOSED to make. Found by running it, not by
+          // reading it. That failure does not read as a rule being too broad; it
+          // reads as the barrel being wrong, and the repair somebody reaches for
+          // is an `eslint-disable` on the exact line the rule exists for.
+          //
+          // `paths` matches the specifier exactly, so `/web` is untouched. The
+          // list is complete rather than open-ended because a package's
+          // importable subpaths are closed by its `exports` map — an undeclared
+          // one does not resolve — and `scripts/web-key-surface.test.mjs`
+          // asserts that every entry in that map except `./web` is named here.
+          paths: [
+            {
+              name: "@nexus/sync-crypto",
+              message:
+                "The web app imports @nexus/sync-crypto/web. This barrel exports " +
+                "deriveWebPasswordKeys, rewrapMasterKeyForEmailChange and unwrapKey, which " +
+                "together turn the web password into the master key. " +
+                "See packages/sync-crypto/src/kdf.ts.",
+            },
+            {
+              name: "@nexus/sync-crypto/testing",
+              message:
+                "That is a DETERMINISTIC fake CryptoPort — a random number generator that is " +
+                "not one. The web app imports @nexus/sync-crypto/web.",
+            },
+          ],
+          patterns: [
+            {
+              group: ["@noble/**"],
+              message:
+                "The AEAD library has one import site: packages/sync-port/src/webCryptoPort.ts. " +
+                "Everything else reaches crypto through CryptoPort (packages/sync-crypto/src/port.ts).",
+            },
+          ],
+        },
+      ],
+    },
+  },
+
   // --- React ---------------------------------------------------------------
   {
     files: REACT_FILES,

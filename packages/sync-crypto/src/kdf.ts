@@ -43,8 +43,8 @@
  * therefore renders the stored master-key wrap unopenable.** Changing the
  * address is consequently not a profile edit — it is a re-wrap, and it can
  * only be done while the current password is in hand.
- * {@link rewrapMasterKeyForEmailChange} is that operation, and the address
- * change must not be committed unless it succeeds.
+ * `rewrapMasterKeyForEmailChange` in `rewrap.ts` is that operation, and the
+ * address change must not be committed unless it succeeds.
  *
  * The salt is deliberately NOT a secret. It is a public function of a public
  * identifier; its whole job is to stop one rainbow table covering every Nexus
@@ -75,19 +75,44 @@
  * That reduces the rule to something a build can actually check and a reviewer
  * can actually grep: **the web bundle must not reference
  * `deriveWebPasswordKeys`, `rewrapMasterKeyForEmailChange` or `unwrapKey`.**
- * This package cannot enforce that from the inside — it does not know who is
- * importing it — so it belongs in the web app's entry points and in a lint rule
- * over them. It is recorded here because this is where a reader will look.
+ *
+ * ─── And what actually enforces it, in four places ──────────────────────────
+ *
+ * Written out because „a rule applied on one path is not applied; it is only
+ * present" is the defect class this repository keeps meeting, and a rule stated
+ * in a doc comment is exactly that shape.
+ *
+ *  1. **The `@nexus/sync-crypto/web` subpath** exports `deriveWebAuthPassword`
+ *     and not the other two, so a browser reaching for them does not compile.
+ *     A barrel is a capability list; this is the list a browser gets.
+ *  2. **No module that barrel re-exports has a path to `wrap.ts`,** which is why
+ *     `rewrapMasterKeyForEmailChange` moved to `rewrap.ts` — it was the single
+ *     edge that pulled `unwrapKey` into the browser's module graph. That makes
+ *     the third forbidden name unreachable rather than merely unexported.
+ *  3. **`no-restricted-imports` over `apps/web`,** refusing the package root and
+ *     `@nexus/sync-crypto/testing` (a DETERMINISTIC fake `CryptoPort` — shipping
+ *     it to a browser would be worse than any of this).
+ *  4. **`scripts/web-key-surface.test.mjs`,** which walks the web app's whole
+ *     workspace closure and the barrel's import graph and does not care what
+ *     ESLint was told. Rule 3 is one `eslint-disable` from gone; this is not.
+ *
+ * The SERVER carries the same rule independently, because none of the four
+ * survives an attacker who is not using our bundle at all: the restrictive
+ * policy `key_wraps_master_key_is_desktop_only` in `supabase/migrations/…_sync_rls.sql`
+ * refuses to serve — or overwrite — an `mk_*` wrap for any session a live
+ * `devices` row does not call a desktop.
  *
  * The address change is the awkward consequence: it needs K_wrap, so it is a
  * DESKTOP operation. A browser-only user who changes their address must be told
  * to do it from the desktop, or the account's master-key wrap is orphaned.
  */
 
+// NOTHING FROM `wrap.ts` IS IMPORTED HERE, and that absence is a rule rather
+// than a coincidence — see the „which half a browser may compute" section above
+// and `rewrap.ts`, which is where the one function that needed it went.
 import { bytesToBase64url, concatBytes, utf8, zeroize } from "./bytes.js";
 import { SyncCryptoError } from "./errors.js";
 import { AEAD_KEY_BYTES, SHA256_BYTES, type Argon2idParams, type CryptoPort } from "./port.js";
-import { unwrapKey, wrapKey, type SealedKey } from "./wrap.js";
 
 /**
  * OWASP's Argon2id baseline (64 MiB, t=3, p=1) — the same figures the local
@@ -310,78 +335,4 @@ export async function deriveWebPasswordKeys(
   zeroize(prk);
 
   return { authPassword: bytesToBase64url(authKey), wrapKey: wrapKeyBytes };
-}
-
-/** What {@link rewrapMasterKeyForEmailChange} needs. */
-export interface EmailChangeInput {
-  /** The master-key wrap currently stored server-side (`purpose: "mk/web-password"`). */
-  readonly sealed: SealedKey;
-  /** The account id the wrap is bound to. Unchanged by an address change. */
-  readonly userId: string;
-  readonly currentEmail: string;
-  readonly nextEmail: string;
-  /** The password, unchanged: an address change re-salts, it does not re-password. */
-  readonly password: string;
-  readonly params: Argon2idParams;
-}
-
-/**
- * Re-derives the master-key wrap for a new email address.
- *
- * This is the operation the salt design makes mandatory. It opens the wrap
- * under the key derived from the CURRENT address and re-seals it under the key
- * derived from the NEXT one, and it throws if the first step fails — so an
- * address change can never be committed against a wrap nobody can open. The
- * caller must treat this as one transaction with the identity provider's own
- * address change: **write the new wrap first, and only then let the address
- * change land.** Doing it the other way round loses the account, because the
- * old wrap's key is no longer derivable from anything the user knows.
- *
- * MK is held in plaintext for the few microseconds between the two calls, and
- * that is unavoidable — a re-wrap is by definition an unwrap followed by a
- * wrap. It never leaves this function. **It is also why this is a DESKTOP
- * operation**: it holds both K_wrap and MK, and neither belongs in a browser.
- */
-export async function rewrapMasterKeyForEmailChange(
-  port: CryptoPort,
-  input: EmailChangeInput,
-): Promise<SealedKey> {
-  const context = { purpose: "mk/web-password", userId: input.userId } as const;
-
-  // An address that normalises to the one already in use is not a change, and
-  // re-wrapping under the identical key would burn a live wrap for nothing —
-  // and, if the caller then "committed" the change, would look like it worked.
-  if (normalizeWebEmail(input.currentEmail) === normalizeWebEmail(input.nextEmail)) {
-    throw new SyncCryptoError(
-      "kdf/bad-input",
-      "The new address is the same address; there is nothing to re-wrap.",
-    );
-  }
-
-  const current = await deriveWebPasswordKeys(port, {
-    email: input.currentEmail,
-    password: input.password,
-    params: input.params,
-  });
-  // `try/finally` around the unwrap as well, not just the wrap: a wrong
-  // password throws here, and the key derived from it must not outlive the
-  // attempt just because the attempt failed.
-  let masterKey: Uint8Array;
-  try {
-    masterKey = await unwrapKey(port, current.wrapKey, input.sealed, context);
-  } finally {
-    zeroize(current.wrapKey);
-  }
-
-  const next = await deriveWebPasswordKeys(port, {
-    email: input.nextEmail,
-    password: input.password,
-    params: input.params,
-  });
-  try {
-    return await wrapKey(port, next.wrapKey, masterKey, context);
-  } finally {
-    zeroize(next.wrapKey);
-    zeroize(masterKey);
-  }
 }

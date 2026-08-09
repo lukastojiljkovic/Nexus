@@ -21,12 +21,7 @@ import { describe, expect, it } from "vitest";
 import { bytesToBase64url } from "./bytes.js";
 import { SyncCryptoError } from "./errors.js";
 import { compareHlc, formatHlc, parseHlc, type Hlc } from "./hlc.js";
-import {
-  WEB_KDF_PARAMS,
-  deriveWebAuthPassword,
-  deriveWebPasswordKeys,
-  rewrapMasterKeyForEmailChange,
-} from "./kdf.js";
+import { WEB_KDF_PARAMS, deriveWebAuthPassword, deriveWebPasswordKeys } from "./kdf.js";
 import { applyEdit, decodeRowState, emptyRowState, encodeRowState, markDeleted } from "./merge.js";
 import {
   PAIRING_CODE_TTL_MS,
@@ -41,6 +36,7 @@ import {
   type PairingGrant,
 } from "./pairing.js";
 import { type CryptoPort } from "./port.js";
+import { rewrapMasterKeyForEmailChange } from "./rewrap.js";
 import { openRowFields, sealRowFields, type RowIdentity } from "./row.js";
 import { createFakeCryptoPort, type FakeCryptoPort } from "./testing/fakeCryptoPort.js";
 import { wrapKey } from "./wrap.js";

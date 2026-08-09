@@ -9,10 +9,16 @@
  * separate `@nexus/sync-crypto/testing` subpath and is deliberately not
  * reachable from here.
  *
- * The six pieces, and where the reasoning for each lives:
+ * **This barrel is the DESKTOP's.** `@nexus/sync-crypto/web` is the same package
+ * with the capabilities a browser must not hold removed — see `web.ts` for what
+ * is missing and why each one is.
  *
- *  - `kdf.ts`     the web password → K_auth / K_wrap split, and the re-wrap an
- *                 email change forces (the salt binds the address).
+ * The seven pieces, and where the reasoning for each lives:
+ *
+ *  - `kdf.ts`     the web password → K_auth / K_wrap split. Browser-safe: it has
+ *                 no path to `wrap.ts`, which is what `rewrap.ts` exists for.
+ *  - `rewrap.ts`  the re-wrap an email change forces (the salt binds the
+ *                 address). Desktop only — it holds K_wrap and MK.
  *  - `wrap.ts`    MK and CK_p wrapping, with an explicit key-commitment tag,
  *                 because the AEAD is not key-committing.
  *  - `row.ts`     the ONLY place in the product that encrypts a row.
@@ -61,20 +67,24 @@ export { canonicalJson, isJsonObject, parseJsonValue } from "./json.js";
 export type { JsonObject, JsonValue } from "./json.js";
 
 // ── The web password KDF ────────────────────────────────────────────────────
-// `deriveWebAuthPassword` is the browser's half; `deriveWebPasswordKeys` and
-// `rewrapMasterKeyForEmailChange` derive K_wrap and are DESKTOP ONLY — see
-// `kdf.ts`'s header on why that separation is a function boundary and not a
-// convention, and on the bundle rule the web app owes in return.
+// THIS BARREL IS THE DESKTOP'S. `deriveWebAuthPassword` is the browser's half;
+// `deriveWebPasswordKeys` and `rewrapMasterKeyForEmailChange` derive K_wrap and
+// are DESKTOP ONLY — see `kdf.ts`'s header on why that separation is a function
+// boundary and not a convention. A browser imports `@nexus/sync-crypto/web`,
+// which is the same package with the desktop-only capabilities absent; it is a
+// separate barrel rather than a comment for the same reason this one is not
+// simply „everything".
 export {
   WEB_KDF_PARAMS,
   deriveWebAuthPassword,
   deriveWebPasswordKeys,
   normalizeWebEmail,
   normalizeWebPassword,
-  rewrapMasterKeyForEmailChange,
   webKdfSalt,
 } from "./kdf.js";
-export type { EmailChangeInput, WebPasswordInput, WebPasswordKeys } from "./kdf.js";
+export type { WebPasswordInput, WebPasswordKeys } from "./kdf.js";
+export { rewrapMasterKeyForEmailChange } from "./rewrap.js";
+export type { EmailChangeInput } from "./rewrap.js";
 
 // ── Key wrapping ────────────────────────────────────────────────────────────
 export {
