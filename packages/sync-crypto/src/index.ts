@@ -86,6 +86,25 @@ export type { WebPasswordInput, WebPasswordKeys } from "./kdf.js";
 export { rewrapMasterKeyForEmailChange } from "./rewrap.js";
 export type { EmailChangeInput } from "./rewrap.js";
 
+// The sync recovery code. `deriveSyncRecoveryKey` is DESKTOP ONLY and absent
+// from the web barrel: `mk_under_src` is deliberately readable without a desktop
+// device row (a recovering desktop has none), so a browser that could also
+// derive its opener would be one call from MK. The code helpers themselves are
+// harmless — they encode and check a string — but they live here with the
+// derivation rather than being split across two barrels, because a browser has
+// no reason to display or validate a code it can never use.
+export {
+  SYNC_RECOVERY_CODE_DIGITS,
+  SYNC_RECOVERY_KDF_PARAMS,
+  SYNC_RECOVERY_SALT_BYTES,
+  deriveSyncRecoveryKey,
+  formatSyncRecoveryCode,
+  generateSyncRecoveryCode,
+  generateSyncRecoverySalt,
+  normalizeSyncRecoveryCode,
+} from "./recovery.js";
+export type { SyncRecoveryInput } from "./recovery.js";
+
 // ── Key wrapping ────────────────────────────────────────────────────────────
 export {
   generateContentKey,

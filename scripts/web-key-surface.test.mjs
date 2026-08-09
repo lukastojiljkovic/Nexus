@@ -17,6 +17,14 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
  * stated in that file: **the web bundle must not reference
  * `deriveWebPasswordKeys`, `rewrapMasterKeyForEmailChange` or `unwrapKey`.**
  *
+ * `deriveSyncRecoveryKey` is the fourth name and arrives by a different road.
+ * `mk_under_src` is deliberately readable WITHOUT a desktop device row — a
+ * machine recovering an account has none, and getting one is what it is doing —
+ * so the server-side backstop below does not cover that row. The printed code is
+ * the only thing between it and MK, which makes „a browser that can derive the
+ * opener" the same outcome as „a browser that holds K_wrap", reached by a path
+ * the database cannot refuse.
+ *
  * WHY THIS IS NOT A GREP OF `apps/web/dist`. That was the obvious shape and it
  * is unsound in both directions: a minified bundle has renamed every local
  * binding, so the names are absent whether or not the code is there; and a
@@ -39,8 +47,8 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
  *
  * The server carries the same rule independently, because none of the four
  * survives an attacker who is not using our bundle at all: the restrictive
- * policy `key_wraps_master_key_is_desktop_only` refuses to serve an `mk_*` wrap
- * to any session a live `devices` row does not call a desktop.
+ * policy `key_wraps_desktop_only` refuses to serve an `mk_under_kwrap` to any
+ * session a live `devices` row does not call a desktop.
  */
 
 const PACKAGE = "@nexus/sync-crypto";
@@ -49,11 +57,26 @@ const WEB_BARREL = "packages/sync-crypto/src/web.ts";
 const FORBIDDEN_MODULE = "packages/sync-crypto/src/wrap.ts";
 
 /**
- * The three names, spelled once. They appear in this file, which is why the
+ * The four names, spelled once. They appear in this file, which is why the
  * scan below excludes it — a gate that names what it forbids matches its own
  * rule, and `scripts/crypto-import-sites.test.mjs` met the same thing.
+ *
+ * WHEN `@nexus/web` EVENTUALLY DEPENDS ON `@nexus/sync-crypto` — it must, for
+ * row encryption — the closure scan starts walking that package's own sources
+ * and finds all four names in the modules that DEFINE them. That failure is
+ * correct in direction if wrong in target: it is fail-closed and loud, and the
+ * answer is to exclude `packages/sync-crypto` from the NAME scan only, because
+ * the module-graph assertion above already proves the web barrel cannot reach
+ * `wrap.ts` — a strictly stronger statement about that one package. Do not
+ * answer it by deleting the scan; it is the layer that catches a re-export
+ * added in some package in the middle.
  */
-const DESKTOP_ONLY = ["deriveWebPasswordKeys", "rewrapMasterKeyForEmailChange", "unwrapKey"];
+const DESKTOP_ONLY = [
+  "deriveWebPasswordKeys",
+  "deriveSyncRecoveryKey",
+  "rewrapMasterKeyForEmailChange",
+  "unwrapKey",
+];
 
 const SELF = "scripts/web-key-surface.test.mjs";
 
