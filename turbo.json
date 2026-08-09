@@ -19,7 +19,21 @@
       "dependsOn": ["^build"]
     },
     "test": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      // `@nexus/sync-transport`'s live suite is opt-in: it skips unless four
+      // `NEXUS_LIVE_*` variables point it at a running Supabase. Turbo hides
+      // every environment variable a task does not declare, so without this the
+      // opt-in is unreachable through `pnpm test` — the suite reports „skipped"
+      // with the variables set in the shell, which reads as „ran and found
+      // nothing to do". Declared as `env` rather than `passThroughEnv` so the
+      // values are part of the cache key: a run with a server and a run without
+      // one are different runs and must not share a cached result.
+      "env": [
+        "NEXUS_LIVE_SUPABASE_URL",
+        "NEXUS_LIVE_ANON_KEY",
+        "NEXUS_LIVE_SERVICE_KEY",
+        "NEXUS_LIVE_JWT_SECRET"
+      ]
     }
   }
 }

@@ -115,6 +115,17 @@ export const ALLOWLIST = new Map([
     "apps/desktop/src/main/net/offline.test.ts",
     ["websocket"],
   ],
+  [
+    // The one file in `@nexus/sync-transport` that talks to a server, and it is
+    // opt-in: it skips unless four `NEXUS_LIVE_*` variables point it at a local
+    // Supabase. The package itself holds no `fetch` — its whole design is an
+    // injected port — so this exemption covers the test's own port and its two
+    // admin calls, and nothing that ships. If this entry ever needs a second
+    // rule id, something in the package has grown a capability it should not
+    // have.
+    "packages/sync-transport/src/live.test.ts",
+    ["fetch"],
+  ],
 ]);
 
 /**

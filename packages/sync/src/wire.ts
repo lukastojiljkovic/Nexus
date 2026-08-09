@@ -35,7 +35,7 @@
  * control.
  */
 
-import { utf8, type SealedRow } from "@nexus/sync-crypto";
+import { utf8, type SealedRow } from "@nexus/sync-crypto/web";
 
 /** `sync_objects_collection_shape`: a lowercase identifier, at most 64 characters. */
 export const COLLECTION_PATTERN = /^[a-z][a-z0-9_]{0,63}$/;

@@ -31,7 +31,7 @@ import {
   type JsonObject,
   type JsonValue,
   type RowState,
-} from "@nexus/sync-crypto";
+} from "@nexus/sync-crypto/web";
 import type { SyncCollection } from "./collections.js";
 
 /**

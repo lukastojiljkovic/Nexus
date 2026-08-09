@@ -102,7 +102,7 @@ jobs:
   # A separate job because it needs something no other step does: a live
   # Postgres with GoTrue's `auth` schema, the `anon`/`authenticated`/
   # `service_role` roles and Supabase's own `storage`/`realtime` tables. Half of
-  # what these 75 assertions prove is about the interaction between this
+  # what the pgTAP assertions prove is about the interaction between this
   # repository's policies and objects the platform created, so a bare `postgres`
   # service container would prove the wrong thing.
   #
@@ -136,3 +136,47 @@ jobs:
       - run: supabase db reset
 
       - run: supabase test db
+
+      # THE OTHER HALF OF THE SERVER CONTRACT, and the only place it is ever
+      # executed. pgTAP proves what Postgres does; this proves what PostgREST
+      # does with it — how `bytea` is spelled on the wire, that a filter value
+      # must be percent-encoded and never quoted, that a PATCH matching no row
+      # is a silent HTTP 200, that an upsert is refused at the privilege layer,
+      # and which SQLSTATE reaches a client for each trigger rule. Every one of
+      # those was measured rather than derived, and four of them contradict what
+      # the documentation implies — so they are exactly the rules that rot
+      # silently if nothing re-runs them.
+      #
+      # It hangs off this job because it needs the running stack the job already
+      # has. `verify` runs the same suite and it skips itself there — correctly,
+      # there is no server — so `pnpm test` being green says nothing about any
+      # of the above, and this step is what stops that being mistaken for
+      # coverage. `set -u` is what makes a `supabase status` that yielded
+      # nothing fail the job here, rather than one step later and further away.
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # `supabase status -o env` prints the local stack's own keys, which are
+      # the well-known development ones and are NOT secrets — they are fixed
+      # constants of the CLI, identical on every machine that runs it. Read from
+      # the running stack rather than pasted here so this step cannot drift into
+      # asserting against a project that is not the one the job just started.
+      - name: The wire, against the running PostgREST
+        run: |
+          set -euo pipefail
+          # Only NAME="value" lines. `status` also prints a deprecation warning
+          # and a „Stopped services" note, and `eval`-ing either of those under
+          # `set -e` fails the job with a shell syntax error that says nothing
+          # about what actually happened.
+          eval "$(supabase status -o env | grep -E '^[A-Z0-9_]+=' | sed 's/^/export /')"
+          NEXUS_LIVE_SUPABASE_URL="$API_URL" \
+          NEXUS_LIVE_ANON_KEY="$ANON_KEY" \
+          NEXUS_LIVE_SERVICE_KEY="$SERVICE_ROLE_KEY" \
+          NEXUS_LIVE_JWT_SECRET="$JWT_SECRET" \
+            pnpm --filter @nexus/sync-transport test

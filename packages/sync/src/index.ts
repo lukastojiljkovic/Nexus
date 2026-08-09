@@ -1,3 +1,28 @@
+/**
+ * `@nexus/sync` — the sync engine's pure half.
+ *
+ * ─── Every source file here imports `@nexus/sync-crypto/web`, not the root ──
+ *
+ * This package runs in the Electron main process AND in a browser tab, so it is
+ * part of the web bundle's import graph. The root barrel of `@nexus/sync-crypto`
+ * reaches `wrap.ts`, and `unwrapKey` plus a key wrap the browser is allowed to
+ * fetch is the master key — which is the one thing `scripts/web-key-surface.test.mjs`
+ * exists to make unreachable. Importing the `/web` subpath makes that structural
+ * here too: nothing this package can name leads to `wrap.ts`.
+ *
+ * It costs nothing, because everything this package uses — `sealRowFields`,
+ * `openRowFields`, the HLC, the merge, the byte helpers — is in both barrels.
+ * The `/web` one is a strict subset, so the desktop loses nothing by being handed
+ * the smaller surface.
+ *
+ * The test files still import the root barrel and `@nexus/sync-crypto/testing`,
+ * which is correct: a `*.test.ts` is not in any app's import graph and the fake
+ * port must never be. The gate walks whole package directories rather than import
+ * graphs, so it will have to decide about test files on the day `apps/web`
+ * depends on this package — recorded in `docs/STATUS.md` rather than pre-empted
+ * here with a guess.
+ */
+
 export {
   ATTACHMENT_COLLECTIONS,
   classify,

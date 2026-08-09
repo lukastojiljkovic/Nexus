@@ -60,7 +60,7 @@ import {
   type CryptoPort,
   type RowIdentity,
   type RowState,
-} from "@nexus/sync-crypto";
+} from "@nexus/sync-crypto/web";
 
 import type { SyncScope } from "./push.js";
 import type { PulledRow } from "./wire.js";

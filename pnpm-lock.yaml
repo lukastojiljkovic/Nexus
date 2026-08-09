@@ -312,6 +312,22 @@ importers:
         specifier: ^3.2.0
         version: 3.2.6(@types/debug@4.1.13)(@types/node@24.13.3)(jiti@2.7.0)
 
+  packages/sync-transport:
+    dependencies:
+      '@nexus/sync':
+        specifier: workspace:*
+        version: link:../sync
+      '@nexus/sync-crypto':
+        specifier: workspace:*
+        version: link:../sync-crypto
+    devDependencies:
+      typescript:
+        specifier: ^5.8.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.0
+        version: 3.2.6(@types/debug@4.1.13)(@types/node@24.13.3)(jiti@2.7.0)
+
   packages/tokens:
     devDependencies:
       typescript:

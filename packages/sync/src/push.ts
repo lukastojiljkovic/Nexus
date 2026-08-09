@@ -55,7 +55,7 @@ import {
   type CryptoPort,
   type RowIdentity,
   type RowState,
-} from "@nexus/sync-crypto";
+} from "@nexus/sync-crypto/web";
 
 import {
   COLLECTION_PATTERN,
