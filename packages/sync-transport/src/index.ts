@@ -14,13 +14,19 @@
  * never constructs a port, and there is nothing in here that could go looking
  * for one.
  *
- * The nine pieces:
+ * The eleven pieces:
  *
- *  - `http.ts`     the port seam, and `filterValue` — the measured rule that
- *                  keeps a PATCH from silently matching nothing.
+ *  - `http.ts`     the three port seams, and `filterValue` — the measured rule
+ *                  that keeps a PATCH from silently matching nothing.
+ *  - `auth.ts`     GoTrue as six requests and the answers to them, with no
+ *                  session store and no clock — because which sessions exist,
+ *                  and for how long, is the part with the argument in it.
  *  - `enable.ts`   the one Edge Function call — minting the account's master key
  *                  — and the byte comparison that proves the server stored what
  *                  this desktop sent.
+ *  - `devices.ts`  the two writes a desktop may make to its own device row, and
+ *                  the one it may not — `session_id`, which is why a revoked
+ *                  desktop cannot rescue itself.
  *  - `bytea.ts`    hex `bytea` ↔ base64url, the one translation nobody else can do.
  *  - `rows.ts`     column names ↔ `PushRow`/`PulledRow`, and the explicit select list.
  *  - `outcome.ts`  every way a write can end, named, with the SQLSTATE map.
@@ -41,6 +47,8 @@ export {
   queryString,
 } from "./http.js";
 export type {
+  AuthPort,
+  AuthRequest,
   FunctionPort,
   FunctionRequest,
   HttpMethod,
@@ -50,6 +58,28 @@ export type {
   PostgrestFailure,
   QueryParam,
 } from "./http.js";
+
+// ── Signing in ──────────────────────────────────────────────────────────────
+export {
+  challengeRequest,
+  listTotpFactors,
+  parseChallengeId,
+  parseFactors,
+  parseSession,
+  parseSignOut,
+  readTokenClaims,
+  refreshRequest,
+  refreshSession,
+  signIn,
+  signInRequest,
+  signOut,
+  signOutRequest,
+  startChallenge,
+  userRequest,
+  verifyChallenge,
+  verifyRequest,
+} from "./auth.js";
+export type { AuthRefusal, AuthResult, AuthSession, TokenClaims, TotpFactor } from "./auth.js";
 
 // ── Turning sync on ─────────────────────────────────────────────────────────
 export {
@@ -71,6 +101,9 @@ export type {
   SyncEnableRefusal,
   SyncEnableResult,
 } from "./enable.js";
+
+// ── This computer's device row ──────────────────────────────────────────────
+export { retireDeviceRequest, touchDeviceRequest } from "./devices.js";
 
 // ── bytea ───────────────────────────────────────────────────────────────────
 export { base64urlToBytea, byteaToBase64url } from "./bytea.js";

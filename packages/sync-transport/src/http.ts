@@ -84,6 +84,38 @@ export interface FunctionRequest {
 
 export type FunctionPort = (request: FunctionRequest) => Promise<HttpResponse>;
 
+/**
+ * A call to the auth server, which is the third root and therefore the third
+ * seam.
+ *
+ * ─── Why this one does NOT let the port supply the bearer ───────────────────
+ *
+ * {@link HttpRequest} and {@link FunctionRequest} both say the port owns
+ * `Authorization`, because for those two there is exactly one token in play: the
+ * device session. Auth is the opposite case, and every call proves it. Signing
+ * in has no bearer at all. Refreshing has none either — the refresh token
+ * travels in the body. Stepping a session up carries THAT session's token, which
+ * is not the one the rest of the app is using. Signing out carries the token of
+ * the session being ended, which is by definition not the one being kept.
+ *
+ * A port that wrote `Authorization` last, as the other two do, would silently
+ * replace all four with the wrong one, and the visible symptom would be the
+ * device session being signed out instead of the authorising one — leaving the
+ * account enabled and the desktop locked out of it. So the rule is inverted
+ * here and stated in the type: an auth port adds `apikey` and NOTHING else, and
+ * each request below states its own bearer or deliberately carries none.
+ */
+export interface AuthRequest {
+  readonly method: HttpMethod;
+  /** Path and encoded query UNDER the auth root — `/token?grant_type=password`. */
+  readonly path: string;
+  /** Complete, `Authorization` included where the call has one. */
+  readonly headers: Readonly<Record<string, string>>;
+  readonly body: string | null;
+}
+
+export type AuthPort = (request: AuthRequest) => Promise<HttpResponse>;
+
 /** A PostgREST query parameter, value UNENCODED. */
 export type QueryParam = readonly [name: string, value: string];
 
