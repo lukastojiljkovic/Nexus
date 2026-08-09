@@ -105,3 +105,16 @@ verify_enabled = true
 # endpoint cannot be used as an oracle.
 [functions.pair-complete]
 verify_jwt = false
+
+# `true`, AND IT IS WORTH ALMOST NOTHING — which is exactly why it is written
+# here with its own paragraph instead of being left to the default.
+#
+# The platform's gate accepts ANY JWT this project signed, and the anon key IS
+# one: it is a signed JWT printed into every client build. So `verify_jwt = true`
+# refuses unsigned noise and nothing else, and an unauthenticated caller still
+# reaches the first line of the function. It is on because a free filter is worth
+# having, and the real authentication — two tokens, each handed back to the auth
+# server for validation, with the session ids taken only from what it confirms —
+# is inside `sync-enable/index.ts` where it can be read and tested.
+[functions.sync-enable]
+verify_jwt = true

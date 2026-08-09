@@ -188,3 +188,22 @@ jobs:
           NEXUS_LIVE_SERVICE_KEY="$SERVICE_ROLE_KEY" \
           NEXUS_LIVE_JWT_SECRET="$JWT_SECRET" \
             pnpm --filter @nexus/sync-transport test
+
+      # THE EDGE FUNCTIONS, which neither pgTAP nor the step above touches.
+      # `sync-enable` decides everything it decides from state only GoTrue
+      # writes — whether a session exists, its assurance, which factors were
+      # presented, when the factor was armed relative to the session — so a test
+      # that mocks the auth server tests the mock. This suite signs in for real,
+      # enrols and verifies a real TOTP factor, and steps a session up.
+      #
+      # It also pins a platform behaviour nothing in our code reads as depending
+      # on: an MFA step-up REVOKES the account's other sessions, which is why the
+      # desktop must obtain its device session after the step-up and not before.
+      - name: The edge functions, against the running stack
+        run: |
+          set -euo pipefail
+          eval "$(supabase status -o env | grep -E '^[A-Z0-9_]+=' | sed 's/^/export /')"
+          NEXUS_LIVE_SUPABASE_URL="$API_URL" \
+          NEXUS_LIVE_ANON_KEY="$ANON_KEY" \
+          NEXUS_LIVE_SERVICE_KEY="$SERVICE_ROLE_KEY" \
+            pnpm test:live

@@ -269,7 +269,7 @@ supabase db reset          # applies migrations/ from scratch
 supabase test db           # runs tests/database/*.test.sql through pgTAP
 ```
 
-Five files, all wrapped in a transaction that rolls back:
+Six files, all wrapped in a transaction that rolls back:
 
 - **`00_rls_enabled.test.sql`** — the migration-drift guard against the live
   catalog. Every table in the exposed schema has `relrowsecurity` **and**
@@ -308,10 +308,32 @@ Five files, all wrapped in a transaction that rolls back:
   as the shapes the real client produces on its first push. Table constraints and
   a trigger rather than policies, so the migration role proves them as well as any
   client role would.
+- **`05_mk_mint.test.sql`** — `nexus_mk_mint` against seeded `auth.sessions`,
+  `auth.mfa_amr_claims` and `auth.mfa_factors` rows: each of its seven guards,
+  the two outcomes, the device row it writes, idempotency on a retry, 23505 on a
+  lost race, and 42501 for `authenticated` and for `anon`. Every guard was proved
+  by *removing* it from the function and confirming exactly one named assertion
+  goes red — which is how the `aal2` guard was caught being covered for by the
+  AMR guard, passing while asserting nothing.
 
 These require the local stack, where the migration role can bypass RLS; each
 file asserts that first, so a wrong seat produces one clear failure rather than
 seventeen confusing ones.
+
+```sh
+# The edge functions, against the same running stack. Skips loudly, by name,
+# when the three variables are absent — CI's database job supplies them from
+# `supabase status`.
+eval "$(supabase status -o env | grep -E '^[A-Z0-9_]+=' | sed 's/^/export /')"
+NEXUS_LIVE_SUPABASE_URL="$API_URL" NEXUS_LIVE_ANON_KEY="$ANON_KEY" \
+NEXUS_LIVE_SERVICE_KEY="$SERVICE_ROLE_KEY" pnpm test:live
+```
+
+`tests/live/sync-enable.test.mjs` is the only place the mint is exercised the way
+a client will use it: real password sign-ins, a real TOTP factor enrolled and
+verified, a real step-up to `aal2`. Nothing about `auth.sessions` can be faked
+for it, which is the point — the function derives the account from a session row
+precisely so a claim cannot stand in for one.
 
 ### What `aal2` actually proves — measured against GoTrue, not assumed
 
@@ -339,9 +361,17 @@ Two consequences worth stating plainly, because both are easy to assume away:
 - Any design whose gate is `aal2` **on a fresh account** is gated on the
   password. `pairing_insert_requires_aal2` and `devices_insert_requires_aal2` are
   in that position for exactly as long as the user has no factor.
-- The window is where the master key would be minted, since an account without
-  MK is an account that has never synced. What protects the owner there is not
-  the gate; it is that minting is **not adoptable** — see §6.6.
+- The window is where the master key is minted, since an account without MK is an
+  account that has never synced. What protects the owner there is not the gate;
+  it is that minting is **not adoptable** — see §6.6.
+
+A third measurement, from the same stack and pinned by `tests/live`: **verifying
+a factor revokes every other session the account holds.** The stepped-up session
+survives, sessions signed in afterwards survive, everything from before is
+answered `403` by `/auth/v1/user`. Nothing in this repository's code reads as if
+it depends on that, which is exactly why it is written down — it forces the order
+in which the desktop signs in (§6.6), and it means one machine enabling sync ends
+another machine's session.
 
 ---
 
@@ -612,10 +642,16 @@ fails closed. That direction is the safe one — an outage, not a leak — but i
 an outage, and it has not been observed either way. **Check both services work
 immediately after `supabase db push`**, before pointing a client at the project.
 
-### 6.6 The master-key mint — decided, not yet built
+### 6.6 The master-key mint — built; what still is not
 
-Nothing mints MK today, so no account can sync. The design below is settled and
-is recorded here because three of its decisions are the kind that get quietly
+`public.nexus_mk_mint` (migration 011) and the `sync-enable` Edge Function are
+the whole of it, covered by `05_mk_mint.test.sql` (19 pgTAP assertions, each of
+its seven guards proved by removing that guard and watching one named assertion
+go red) and by `tests/live/sync-enable.test.mjs`, which runs the real thing
+against real GoTrue sessions. **The desktop client half is not written**, so no
+account can sync yet; what exists is the server end of it.
+
+The three decisions below are recorded because they are the kind that get quietly
 reversed by someone making the honest path smoother.
 
 **It cannot be adopted.** A device that races to mint and loses does **not**
@@ -652,7 +688,15 @@ authorises the mint and is then signed out, and a separate `aal1` session is the
 one written into `devices.session_id` and used forever after. That keeps „a
 desktop's working session is `aal1`" true, which two other files rest on.
 
-Also settled: the RPC takes **session ids, never a `user_id`** — under
+**And the sign-in order is forced by the platform, not chosen.** Measured against
+this GoTrue and pinned by the live suite: verifying an MFA factor **revokes every
+other session the account holds**. The stepped-up session survives, and so does
+anything signed in afterwards. So the only order that works is step up first,
+sign in for the device session second, call the endpoint, sign the authorising
+session out. Backwards, the desktop destroys its own device session at the
+step-up and the endpoint answers `401` — a message that says nothing about why.
+
+Also as built: the RPC takes **session ids, never a `user_id`** — under
 `service_role` there is no `auth.uid()` to disagree with a parameter, so a
 caller naming somebody else's uuid would be minting on their account; it is
 `security invoker` (`03_catalog_surface` asserts no `SECURITY DEFINER` routine
@@ -664,10 +708,20 @@ mint cannot commit; and the Edge Function **refuses any request carrying an
 and it sends none — which shuts out the whole class of „a page the user happened
 to visit" without depending on preflight semantics.
 
-Not yet designed: a mint notification the owner can act on. On a brand-new
-account nothing distinguishes the owner from someone holding the password, so the
-only remaining asymmetry is the mailbox, and using it needs SMTP that does not
-exist yet.
+Two things this does **not** answer, both recorded in `docs/STATUS.md`:
+
+- **A mint notification the owner can act on.** On a brand-new account nothing
+  distinguishes the owner from someone holding the password, so the only
+  remaining asymmetry is the mailbox, and using it needs SMTP that does not
+  exist yet.
+- **What a desktop does when its session is revoked under it.** The step-up
+  revocation above is not confined to one machine: enabling sync from a *second*
+  desktop revokes the first one's session, and a `devices` row is bound to a
+  `session_id`. The row survives, the session does not, and the desktop's next
+  sign-in produces a different `session_id` that no longer matches its row — so
+  it fails `nexus_session_is_live` and reads nothing. Re-binding a device row to
+  a fresh session is device lifecycle and is unbuilt; nothing here is wrong, but
+  a desktop cannot currently recover from this on its own.
 
 ### 6.7 Considered and deliberately left alone
 

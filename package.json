@@ -14,6 +14,7 @@
     "lint": "turbo run lint && eslint scripts",
     "test": "turbo run test && vitest run --config vitest.scripts.config.mjs && pnpm test:wall",
     "test:wall": "node --test \"supabase/tests/static/*.test.mjs\"",
+    "test:live": "node --test \"supabase/tests/live/*.test.mjs\"",
     "check:colours": "node scripts/check-colours.mjs",
     "check:contrast": "node scripts/check-contrast.mjs",
     "check:strings": "node scripts/check-string-capture.mjs",
