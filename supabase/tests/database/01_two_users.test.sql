@@ -21,7 +21,7 @@ begin;
 -- after each switch is four chances to forget one.
 set local search_path = public, extensions;
 
-select plan(29);
+select plan(31);
 
 -- ASSERTED FIRST, so a misconfigured runner produces one clear failure instead
 -- of fifteen confusing ones. The seeding below and the „as postgres" checks in
@@ -218,6 +218,25 @@ select throws_ok(
   'a browser cannot overwrite the recovery wrap it is allowed to read'
 );
 
+-- THE CONTENT-KEY WRAP, WHICH THE WRITE HALF USED TO EXEMPT UNCONDITIONALLY.
+-- Migration 002's `with check` began `kind = 'ck_under_mk' or …`, carrying the
+-- READ-side argument — a browser is supposed to hold content keys — into the
+-- write side, where it does not hold: a browser RECEIVES content keys through
+-- pairing and never authors the row. What the exemption actually granted was one
+-- UPDATE per profile, from any session that cleared the live-session gate, over
+-- `nonce`/`wrapped`/`commit_tag` — and there is no DELETE, `epoch` is immutable
+-- (NX102) and `sync_objects.ck_epoch` is admitted only while a wrap exists at
+-- that epoch, so that single statement detaches every row of the profile from
+-- any key that can open it, permanently. Migration 010 removed the branch.
+select throws_ok(
+  $$ update public.key_wraps
+        set wrapped = decode(repeat('ef', 48), 'hex'),
+            nonce = decode(repeat('ef', 24), 'hex')
+      where kind = 'ck_under_mk' $$,
+  '42501'::char(5), NULL::text,
+  'a browser cannot overwrite the content-key wrap it is allowed to read'
+);
+
 -- And the UPDATE of the row it cannot read, which cannot be asserted on the
 -- statement: a row filtered out by a policy's USING clause is not an error, it
 -- is zero rows and a reported success. So that assertion is made afterwards,
@@ -360,6 +379,20 @@ select isnt_empty(
 select isnt_empty(
   $$ select id from public.key_wraps where kind = 'mk_under_kwrap' $$,
   'a paired desktop reads the master-key wrap — the desktop-only rule is not a lock-out'
+);
+
+-- THE POSITIVE CONTROL FOR MIGRATION 010, and without it „a browser cannot
+-- overwrite a content-key wrap" would be satisfied by nobody being able to. A
+-- content key is rotated by writing a new wrap and re-encrypting the profile's
+-- rows, and the machine that holds the plaintext is the only one that can do the
+-- second half — so the write belongs here, at aal1, on the strength of the
+-- device row alone.
+select lives_ok(
+  $$ update public.key_wraps
+        set wrapped = decode(repeat('a7', 48), 'hex'),
+            nonce = decode(repeat('a8', 24), 'hex')
+      where kind = 'ck_under_mk' $$,
+  'the desktop that holds the plaintext may re-wrap its own content key'
 );
 
 -- Pairing is the one statement the OR does not cover. If it did, a stolen

@@ -267,6 +267,11 @@ select is_empty(
                     ('devices', 'platform'), ('devices', 'created_at'),
                     ('key_wraps', 'user_id'), ('key_wraps', 'kind'),
                     ('key_wraps', 'profile_id'), ('key_wraps', 'created_at'),
+                    -- Removed from the grant by migration 010. It records that
+                    -- a wrap was replaced — which is how a substituted Recovery
+                    -- Kit slot becomes visible — so a client that could write it
+                    -- could stamp the substitution and then walk the stamp back.
+                    ('key_wraps', 'rotated_at'),
                     ('pairing', 'user_id'), ('pairing', 'code_id'),
                     ('pairing', 'initiator_pub'), ('pairing', 'sealed_payload'),
                     ('pairing', 'completion_token_hash'), ('pairing', 'attempts'),

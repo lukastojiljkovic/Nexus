@@ -77,7 +77,7 @@ app**. It does not learn *what*.
    is the strongest sentence anything here can say: nothing in HTTP attests what
    program sent a request.
 
-   `key_wraps_master_key_is_desktop_only` applies it, and its two halves differ:
+   `key_wraps_desktop_only` applies it, and its two halves differ:
 
    - **READ confines `mk_under_kwrap` only.** `ck_under_mk` is what a browser is
      *supposed* to hold — it gets those through pairing. `mk_under_src` stays
@@ -86,11 +86,14 @@ app**. It does not learn *what*.
      obtaining one is what it is trying to do. That costs nothing here, because
      its opener is the Recovery Kit code and the web password does not yield it.
      A stolen password gets those bytes and no way into them.
-   - **WRITE confines both `mk_*` kinds**, which is not symmetry. A password-only
-     session never needs to read what it destroys: overwriting `mk_under_kwrap`
-     locks every real device out of `MK`, and overwriting `mk_under_src` removes
-     the way back. Both are unrecoverable and neither leaks anything, which is
-     exactly the shape of an attack nobody thinks to test for.
+   - **WRITE confines every kind**, which is not symmetry. A session never needs
+     to read what it destroys: overwriting `mk_under_kwrap` locks every real
+     device out of `MK`, overwriting `mk_under_src` removes the way back, and
+     overwriting a `ck_under_mk` detaches a whole profile's rows from any key
+     that opens them. All three are unrecoverable and none of them leaks
+     anything, which is exactly the shape of an attack nobody thinks to test for.
+     Authoring a wrap is a desktop operation in every case: a browser receives
+     content keys through pairing and never writes the row.
 
    What the server still cannot do is stop a browser that has been *given* the
    recovery code by its user from recovering `MK` in a tab. That is a deliberate
@@ -154,9 +157,9 @@ a session vouched for by a live, unrevoked device.
 
 `key_wraps` carries a **second** restrictive gate on top of that one, because the
 session gate is about *whether you are signed in properly* and this one is about
-*what kind of client you are*: `key_wraps_master_key_is_desktop_only` confines
-`mk_under_kwrap` on read, and both `mk_*` kinds on write, to a session a live
-`devices` row calls a `desktop`. §1 has the reasoning and the asymmetry.
+*what kind of client you are*: `key_wraps_desktop_only` confines `mk_under_kwrap`
+on read, and a wrap of any kind on write, to a session a live `devices` row calls
+a `desktop`. §1 has the reasoning and the asymmetry.
 
 The `OR` in that gate is load-bearing: a desktop's pair-minted session is `aal1`
 for its whole life, so a blanket `aal2` rule would lock out the only clients that
@@ -280,16 +283,20 @@ Five files, all wrapped in a transaction that rolls back:
   does see its own rows, and a paired desktop at `aal1` does reach its own. A
   wall that denies everyone passes every isolation assertion in the file while
   the product does not work. It also asserts the gate's two entrances directly:
-  a password-only session can neither start a pairing **nor mint the `devices`
-  row that would vouch for it**, no client may state its own `platform` at any
-  assurance level, and a revoked device cannot be un-revoked even at `aal2`.
+  a session seated at `aal1` can neither start a pairing **nor mint the
+  `devices` row that would vouch for it**, no client may state its own
+  `platform` at any assurance level, and a revoked device cannot be un-revoked
+  even at `aal2`. („Seated at" and not „a password-only session": what a real
+  password-only session can reach is a GoTrue question, measured just below.)
   The desktop-only rule is exercised in all four of its directions: a `web`
   session at `aal2` cannot read `mk_under_kwrap`, *can* read `mk_under_src`,
   cannot mint or overwrite either, and a paired desktop at `aal1` — the weaker
   session, by the only measure the identity provider has — reads the wrap the
   browser was refused.
-- **`02_guard_trigger.test.sql`** — the four illegal updates, each by its own
-  SQLSTATE, plus the boundary cases and the server-stamped columns.
+- **`02_guard_trigger.test.sql`** — the four illegal updates to `sync_objects`,
+  each by its own SQLSTATE, plus the boundary cases and the server-stamped
+  columns; and the `key_wraps` guard (NX101, NX102 column by column, `created_at`
+  and `rotated_at`), which migration 003b shipped without.
 - **`03_catalog_surface.test.sql`** — what `01` structurally cannot see, because
   it signs in as two real users. `anon` is the role behind the publishable key,
   and it is refused every table at the privilege layer before any policy runs,
@@ -305,6 +312,36 @@ Five files, all wrapped in a transaction that rolls back:
 These require the local stack, where the migration role can bypass RLS; each
 file asserts that first, so a wrong seat produces one clear failure rather than
 seventeen confusing ones.
+
+### What `aal2` actually proves — measured against GoTrue, not assumed
+
+Every assertion above seats a session at a chosen `aal` by writing the claim into
+`request.jwt.claims`. That proves the *policy*. It cannot prove the *claim* the
+policy is usually summarised with — „a password-only session cannot get there" —
+because whether a session holding nothing but the password can reach `aal2` is a
+question about the identity provider, not about this schema. It was measured
+against the running stack, twice, on two populations:
+
+| the account | a password-only `aal1` session enrols its own TOTP factor |
+| --- | --- |
+| brand-new, no verified factor | **succeeds** → verify returns `aal2`, `amr = [password, totp]` |
+| one factor already verified | **refused**, `403 insufficient_aal` |
+
+So `aal2` is a genuine second factor for the whole life of an account **except**
+in the window between sign-up and the first verified factor, where it is the
+password with thirty seconds of extra typing. That is not a defect in GoTrue —
+the first factor has to be armed by a session that does not yet have one — and it
+is why the sign-up ordering in §7 is a security control rather than a
+convenience: it closes the window immediately, and nothing else can.
+
+Two consequences worth stating plainly, because both are easy to assume away:
+
+- Any design whose gate is `aal2` **on a fresh account** is gated on the
+  password. `pairing_insert_requires_aal2` and `devices_insert_requires_aal2` are
+  in that position for exactly as long as the user has no factor.
+- The window is where the master key would be minted, since an account without
+  MK is an account that has never synced. What protects the owner there is not
+  the gate; it is that minting is **not adoptable** — see §6.6.
 
 ---
 
@@ -514,12 +551,24 @@ That needs an authenticated Edge Function and is not built.
 
 ### 6.3 `mk_*` wraps are readable by any session that passes the gate — CLOSED, with a stated limit
 
-**Closed.** `key_wraps_master_key_is_desktop_only` now confines reading
-`mk_under_kwrap`, and writing either `mk_*` kind, to a session a live `devices`
-row calls a `desktop`. The recovery path that this would have broken is what
-shapes the asymmetry: `mk_under_src` stays readable, because a brand-new desktop
-recovering an account has no device row and obtaining one is what it is trying
-to do. §1 has the full argument.
+**Closed.** `key_wraps_desktop_only` (migration 010; it was
+`key_wraps_master_key_is_desktop_only` until the write half stopped being only
+about the master key) confines reading `mk_under_kwrap`, and writing **any**
+wrap, to a session a live `devices` row calls a `desktop`. The recovery path that
+this would have broken is what shapes the asymmetry: `mk_under_src` stays
+readable, because a brand-new desktop recovering an account has no device row and
+obtaining one is what it is trying to do. §1 has the full argument.
+
+The write half was narrower than it looked until migration 010. It began
+`kind = 'ck_under_mk' or …`, carrying the read-side argument — a browser is
+supposed to hold content keys — into a place where it does not hold, and that
+branch let any session past the live-session gate overwrite `nonce`/`wrapped`/
+`commit_tag` on every content-key wrap on the account. With no DELETE, an
+immutable `epoch` and `sync_objects.ck_epoch` admitted only while a wrap exists
+at that epoch, one statement per profile detached every row from any key that
+could open it, permanently. A browser never authors that row — it receives
+content keys through pairing — so the exemption bought nothing and cost the
+corpus.
 
 **The limit that remains, and it is not a defect of the policy.** This confines
 a *browser*; it does not confine an attacker who has the web password and is not
@@ -563,7 +612,64 @@ fails closed. That direction is the safe one — an outage, not a leak — but i
 an outage, and it has not been observed either way. **Check both services work
 immediately after `supabase db push`**, before pointing a client at the project.
 
-### 6.6 Considered and deliberately left alone
+### 6.6 The master-key mint — decided, not yet built
+
+Nothing mints MK today, so no account can sync. The design below is settled and
+is recorded here because three of its decisions are the kind that get quietly
+reversed by someone making the honest path smoother.
+
+**It cannot be adopted.** A device that races to mint and loses does **not**
+fetch the existing `mk_under_kwrap` and open it. Opening under `K_wrap` proves
+knowledge of the password and says nothing about who *chose* the key — and in a
+design whose whole premise is that the password is phishable, that cannot be the
+provenance test for the root of the hierarchy. The concrete attack it stops:
+someone holding the password mints first, the owner's real desktop adopts, and
+from that instant the owner seals everything under a key the attacker generated,
+with nothing anywhere reporting an anomaly. So „already minted" is terminal for a
+device that did not win, and the two ways to an existing MK are pairing with a
+device that holds it and the Recovery Kit code — both proofs a password thief
+does not have. It costs the honest user nothing: the honest loser is their own
+second machine, which was going to pair anyway.
+
+**`commit_tag` is not an MK fingerprint and must never be used as one.**
+`wrap.ts` derives it as `HKDF(KEK, COMMIT_LABEL ‖ AAD)` — the KEK and the AAD,
+not the wrapped key. Two *different* master keys, wrapped under the same `K_wrap`
+for the same user, produce byte-identical tags. The obvious idempotency check —
+„is the stored tag the one my MK would produce?" — therefore returns *yes* for
+the attacker's key, silently, in the attacker's favour. Win and loss are read
+from the `devices` row instead: the winner's transaction wrote one, the loser's
+rolled back, and `key_wraps_desktop_only` then makes the wrap readable to exactly
+one of them.
+
+**The mint session is not the sync session.** The mint requires `aal2`, which is
+worth having for an account that already armed a factor (see §3) and buys nothing
+for one that has not. But `aal` survives refresh, so a desktop that stepped up
+once would be `aal2` for the life of that session — and `devices_live_session`
+hands an `aal2` session read and write over *every* device row on the account,
+while `pairing_insert_requires_aal2` lets it act as a pairing initiator. Both are
+browser powers. So the desktop signs in twice: an ephemeral `aal2` session
+authorises the mint and is then signed out, and a separate `aal1` session is the
+one written into `devices.session_id` and used forever after. That keeps „a
+desktop's working session is `aal1`" true, which two other files rest on.
+
+Also settled: the RPC takes **session ids, never a `user_id`** — under
+`service_role` there is no `auth.uid()` to disagree with a parameter, so a
+caller naming somebody else's uuid would be minting on their account; it is
+`security invoker` (`03_catalog_surface` asserts no `SECURITY DEFINER` routine
+exists, and `service_role` already carries BYPASSRLS and the grants); the wraps
+are written **before** the device row, for the reason `pair-complete` gives at
+its own device insert; 23505 propagates rather than being caught, so a partial
+mint cannot commit; and the Edge Function **refuses any request carrying an
+`Origin` header**, because the only honest caller is the Electron main process
+and it sends none — which shuts out the whole class of „a page the user happened
+to visit" without depending on preflight semantics.
+
+Not yet designed: a mint notification the owner can act on. On a brand-new
+account nothing distinguishes the owner from someone holding the password, so the
+only remaining asymmetry is the mailbox, and using it needs SMTP that does not
+exist yet.
+
+### 6.7 Considered and deliberately left alone
 
 - **`pairing.burned_at` can be cleared by an account session.** Burning on the
   first AEAD failure is what keeps a ~65-bit code out of reach of online

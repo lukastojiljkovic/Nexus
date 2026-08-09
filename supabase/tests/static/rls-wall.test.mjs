@@ -32,6 +32,7 @@ const TRIGGER = "20260808090200_sync_objects_guard_trigger.sql";
 const KEY_WRAPS = "20260808090250_key_wraps_guard_trigger.sql";
 const DEVICES = "20260808090260_devices_guard_trigger.sql";
 const STORAGE = "20260808090300_storage_realtime_rls.sql";
+const DESKTOP_ONLY = "20260809160000_key_wraps_writes_are_desktop_only.sql";
 
 /**
  * Copy the real migrations, apply one edit, audit the result. The mutation is
@@ -201,21 +202,27 @@ test("catches a restrictive gate that stopped calling the shared predicate", () 
 });
 
 // THE MASTER-KEY WRAPS, IN BOTH DIRECTIONS. The rule is „only a session a live
-// `devices` row calls a desktop may touch a master-key wrap", and it has two
-// halves that differ and fail differently. READ confines `mk_under_kwrap` only;
-// losing it hands MK to any browser holding the web password, because K_wrap is
-// derived from that password on the way to K_auth. WRITE confines both `mk_*`
-// kinds; losing it hands a password-only session the ability to overwrite a wrap
-// it cannot read, which locks every real device out of the account and, on
-// `mk_under_src`, destroys the way back.
+// `devices` row calls a desktop may touch a key wrap", and it has two halves
+// that differ and fail differently. READ confines `mk_under_kwrap` only; losing
+// it hands MK to any browser holding the web password, because K_wrap is derived
+// from that password on the way to K_auth. WRITE confines every kind; losing it
+// hands a session the ability to overwrite a wrap it cannot read, which locks
+// every real device out of the account and, on `mk_under_src`, destroys the way
+// back — or, on a `ck_under_mk`, detaches a whole profile's rows from any key.
+//
+// THE POLICY LIVES IN MIGRATION 010, NOT IN THE RLS MIGRATION. `…_sync_rls.sql`
+// still contains the superseded `key_wraps_master_key_is_desktop_only`, dropped
+// by 010 and replaced under a name that describes both halves. Mutating the dead
+// text would change nothing the database has, which is precisely the confusion
+// `policiesOf` had to learn to avoid.
 //
 // Every mutation below keeps the policy, keeps `as restrictive`, keeps a device
 // subquery and keeps the word `desktop`, so every coarser rule still passes.
-const MK_GATE = /create policy key_wraps_master_key_is_desktop_only on public\.key_wraps\n[\s\S]*?\n {2}\);\n/;
+const MK_GATE = /create policy key_wraps_desktop_only on public\.key_wraps\n[\s\S]*?\n {2}\);\n/;
 
 /** The real subquery, so a mutation differs from the original in one clause only. */
 const DESKTOP_EXISTS =
-  "    or exists (\n" +
+  "    exists (\n" +
   "      select 1 from public.devices d\n" +
   "      where d.user_id = key_wraps.user_id\n" +
   "        and d.session_id = nullif((select auth.jwt()) ->> 'session_id', '')::uuid\n" +
@@ -224,15 +231,15 @@ const DESKTOP_EXISTS =
   "    )\n";
 
 const mkPolicy = (using, withCheck) =>
-  "create policy key_wraps_master_key_is_desktop_only on public.key_wraps\n" +
+  "create policy key_wraps_desktop_only on public.key_wraps\n" +
   "  as restrictive for all to authenticated\n" +
   `  using (\n${using}  )\n  with check (\n${withCheck}  );\n`;
 
 test("catches the master-key wrap losing its desktop-only READ gate", () => {
-  const problems = auditWithMutation(RLS, (sql) =>
+  const problems = auditWithMutation(DESKTOP_ONLY, (sql) =>
     sql.replace(MK_GATE, mkPolicy(
       "    kind <> 'mk_under_kwrap' or true\n",
-      `    kind = 'ck_under_mk'\n${DESKTOP_EXISTS}`,
+      DESKTOP_EXISTS,
     )));
   assertReports(problems, "public.key_wraps: no restrictive policy confines mk_under_kwrap");
 });
@@ -241,25 +248,49 @@ test("catches the desktop-only gate applied to reads but not to writes", () => {
   // The likelier of the two, and the one a reviewer's eye slides over: the
   // sentence „a master-key wrap is desktop-only" reads as satisfied the moment
   // USING says so, and `with check` is three lines further down.
-  const problems = auditWithMutation(RLS, (sql) =>
+  const problems = auditWithMutation(DESKTOP_ONLY, (sql) =>
     sql.replace(MK_GATE, mkPolicy(
-      `    kind <> 'mk_under_kwrap'\n${DESKTOP_EXISTS}`,
+      `    kind <> 'mk_under_kwrap' or\n${DESKTOP_EXISTS}`,
       "    user_id = (select auth.uid())\n",
     )));
-  assertReports(problems, "BOTH mk_* kinds on write");
+  assertReports(problems, "EVERY kind on write");
 });
 
-test("catches the WRITE gate narrowed to the one kind the READ gate confines", () => {
-  // The sharpest of the three, and it looks like a tidy-up: making the two
-  // halves match. It leaves `mk_under_src` writable by any session on the
-  // account — which cannot read it, does not need to, and by overwriting it
-  // turns „recoverable with the Recovery Kit" into „gone".
-  const problems = auditWithMutation(RLS, (sql) =>
+test("catches the WRITE gate exempting the recovery wrap", () => {
+  // It looks like a tidy-up: making the two halves match. It leaves
+  // `mk_under_src` writable by any session on the account — which cannot read
+  // it, does not need to, and by overwriting it turns „recoverable with the
+  // Recovery Kit" into „gone".
+  const problems = auditWithMutation(DESKTOP_ONLY, (sql) =>
     sql.replace(MK_GATE, mkPolicy(
-      `    kind <> 'mk_under_kwrap'\n${DESKTOP_EXISTS}`,
-      `    kind <> 'mk_under_kwrap'\n${DESKTOP_EXISTS}`,
+      `    kind <> 'mk_under_kwrap' or\n${DESKTOP_EXISTS}`,
+      `    kind <> 'mk_under_kwrap' or\n${DESKTOP_EXISTS}`,
     )));
-  assertReports(problems, "BOTH mk_* kinds on write");
+  assertReports(problems, "EVERY kind on write");
+});
+
+test("catches the WRITE gate exempting content-key wraps — the defect 010 closed", () => {
+  // THE ONE THAT SHIPPED. `ck_under_mk` was exempt from the write half outright,
+  // on the read side's reasoning — a browser is supposed to hold content keys —
+  // which does not carry: a browser RECEIVES them through pairing and never
+  // authors the row. What the branch granted was one UPDATE per profile,
+  // permanently detaching every row of it from any key that could open it.
+  const problems = auditWithMutation(DESKTOP_ONLY, (sql) =>
+    sql.replace(MK_GATE, mkPolicy(
+      `    kind <> 'mk_under_kwrap' or\n${DESKTOP_EXISTS}`,
+      `    kind = 'ck_under_mk' or\n${DESKTOP_EXISTS}`,
+    )));
+  assertReports(problems, "EVERY kind on write");
+});
+
+test("catches the gate being dropped and not replaced", () => {
+  // The rule `policiesOf` had to learn. Every other mutation here rewrites a
+  // predicate; this one deletes the statement that creates it, leaving the
+  // superseded definition in `…_sync_rls.sql` as the only `create policy` for
+  // this table that mentions `mk_under_kwrap`. A checker that collects creates
+  // and ignores drops finds that dead body, likes it, and reports nothing.
+  const problems = auditWithMutation(DESKTOP_ONLY, (sql) => sql.replace(MK_GATE, ""));
+  assertReports(problems, "public.key_wraps: no restrictive policy confines mk_under_kwrap");
 });
 
 // BOTH MUTATIONS BELOW REPLACE THE PREDICATE AND KEEP THE POLICY NAME, and both

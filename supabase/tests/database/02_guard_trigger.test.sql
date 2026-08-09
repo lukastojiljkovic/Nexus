@@ -30,7 +30,7 @@ begin;
 
 set local search_path = public, extensions;
 
-select plan(30);
+select plan(41);
 
 -- ASSERTED FIRST, so a misconfigured runner produces one clear failure instead
 -- of twenty-seven confusing ones. Every table here has FORCE row level security,
@@ -450,6 +450,121 @@ select throws_ok(
 );
 
 alter table public.sync_objects enable trigger sync_objects_guard_before_write;
+
+-- ---------------------------------------------------------------------------
+-- NX101 / NX102 — the guard on `key_wraps`, which had never been run.
+-- ---------------------------------------------------------------------------
+-- Migration 003b shipped with no assertion of any kind behind it. Everything
+-- below was true of the deployed function before this section existed; none of
+-- it was established, and a rule nobody has ever executed is indistinguishable
+-- from a rule that does not fire. It is the table that holds the keys.
+--
+-- `mk_under_src` is seeded here because the rotation rules matter most on the
+-- Recovery Kit slot: it is the one wrap whose replacement is invisible to its
+-- owner, and re-arming a lost kit is a legitimate operation, so „this wrap
+-- changed" cannot be forbidden — only dated.
+insert into public.key_wraps
+  (user_id, kind, nonce, wrapped, commit_tag, kdf_salt, kdf_params)
+values ('aaaaaaaa-0000-4000-8000-000000000001', 'mk_under_src',
+        decode(repeat('c1', 24), 'hex'), decode(repeat('c2', 48), 'hex'),
+        decode(repeat('c3', 32), 'hex'), decode(repeat('c4', 16), 'hex'),
+        '{"memoryKiB": 65536, "iterations": 3, "parallelism": 1}'::jsonb);
+
+-- The rotation performed at the old nonce, which is the break this rule exists
+-- for: MK does not change when the code does, so the old and new ciphertexts are
+-- two messages under one (key, nonce) pair and XOR to the XOR of the two wrapped
+-- keys. The party the re-arming was meant to lock out is exactly the party
+-- holding the old one.
+select throws_ok(
+  $$ update public.key_wraps set wrapped = decode(repeat('c5', 48), 'hex')
+      where kind = 'mk_under_src' $$,
+  'NX101'::char(5), NULL::text,
+  'a changed wrap at the previous nonce is refused'
+);
+
+select lives_ok(
+  $$ update public.key_wraps
+        set wrapped = decode(repeat('c5', 48), 'hex'),
+            nonce = decode(repeat('c6', 24), 'hex'),
+            rotated_at = timestamptz '2000-01-01 00:00:00+00'
+      where kind = 'mk_under_src' $$,
+  'and is allowed at a fresh one — re-arming a lost Recovery Kit is legitimate'
+);
+
+-- The statement above STATED a rotation date in 2000 and holds the privilege to
+-- write the column; the server's answer is the only one that survives. Asserted
+-- as „not the value the writer named" rather than „it moved", because `now()` is
+-- the transaction timestamp and every statement in this file shares one.
+select ok(
+  (select k.rotated_at > timestamptz '2020-01-01 00:00:00+00'
+     from public.key_wraps k where k.kind = 'mk_under_src'),
+  'rotated_at is stamped by the server, not by whoever replaced the wrap'
+);
+
+-- AND CANNOT BE WALKED BACK. Stamping alone would have been defeated by a second
+-- statement changing nothing else: the attacker substitutes the wrap, the row is
+-- dated, and one more UPDATE re-dates it to whenever they like. This is the half
+-- that makes the timestamp evidence rather than a default.
+select lives_ok(
+  $$ update public.key_wraps
+        set disabled_at = now(), rotated_at = timestamptz '2000-01-01 00:00:00+00'
+      where kind = 'mk_under_src' $$,
+  'retiring a wrap is still one column edit — disabled_at has no other expression'
+);
+
+select ok(
+  (select k.rotated_at > timestamptz '2020-01-01 00:00:00+00'
+     from public.key_wraps k where k.kind = 'mk_under_src'),
+  'and an update that does not touch the wrap cannot move rotated_at at all'
+);
+
+-- NX102, one column per assertion. A single statement moving all four passes as
+-- long as ANY one of them is compared, so it would keep passing after three of
+-- the four comparisons were deleted — the same reason NX004 is split above.
+select throws_ok(
+  $$ update public.key_wraps set kind = 'mk_under_kwrap'
+      where kind = 'mk_under_src' $$,
+  'NX102'::char(5), NULL::text,
+  'kind is immutable — a recovery wrap cannot become the password wrap'
+);
+
+select throws_ok(
+  $$ update public.key_wraps set profile_id = '99999999-9999-4999-8999-999999999999'
+      where kind = 'ck_under_mk' and epoch = 1 $$,
+  'NX102'::char(5), NULL::text,
+  'profile_id is immutable — a profile is web-enabled by the existence of its row'
+);
+
+select throws_ok(
+  $$ update public.key_wraps set epoch = 3
+      where kind = 'ck_under_mk' and epoch = 1 $$,
+  'NX102'::char(5), NULL::text,
+  'epoch is immutable — moving it strands every row sealed at the old one'
+);
+
+select throws_ok(
+  $$ update public.key_wraps set user_id = 'bbbbbbbb-0000-4000-8000-000000000002'
+      where kind = 'mk_under_src' $$,
+  'NX102'::char(5), NULL::text,
+  'user_id is immutable — a wrap cannot be moved between accounts'
+);
+
+-- `created_at` answers „since when could this password open my account", so it is
+-- the one value here that must survive every rotation. Pinned in the trigger and
+-- not merely withheld by a grant, which is what this assertion is about: the
+-- statement below holds the privilege and the value still does not take.
+select lives_ok(
+  $$ update public.key_wraps
+        set disabled_at = null, created_at = timestamptz '2000-01-01 00:00:00+00'
+      where kind = 'mk_under_src' $$,
+  'a privileged writer may name created_at'
+);
+
+select ok(
+  (select k.created_at > timestamptz '2020-01-01 00:00:00+00'
+     from public.key_wraps k where k.kind = 'mk_under_src'),
+  'and it does not take — created_at survives every write'
+);
 
 -- ---------------------------------------------------------------------------
 -- `sync_state.updated_at` — the same rule, on the other table that carries it.

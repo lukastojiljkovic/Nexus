@@ -98,9 +98,9 @@
  *
  * The SERVER carries the same rule independently, because none of the four
  * survives an attacker who is not using our bundle at all: the restrictive
- * policy `key_wraps_master_key_is_desktop_only` in `supabase/migrations/…_sync_rls.sql`
- * refuses to serve — or overwrite — an `mk_*` wrap for any session a live
- * `devices` row does not call a desktop.
+ * policy `key_wraps_desktop_only` in `supabase/migrations/…_key_wraps_writes_are_desktop_only.sql`
+ * refuses to serve an `mk_under_kwrap`, or to write a wrap of ANY kind, for any
+ * session a live `devices` row does not call a desktop.
  *
  * The address change is the awkward consequence: it needs K_wrap, so it is a
  * DESKTOP operation. A browser-only user who changes their address must be told

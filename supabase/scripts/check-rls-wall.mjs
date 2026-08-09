@@ -232,7 +232,7 @@ function columnsOf(body) {
 }
 
 /**
- * Every `create policy` statement, as `{ name, table, body }`.
+ * The policies that EXIST after every migration has run, as `{ name, table, body }`.
  *
  * `body` EXCLUDES THE HEADER, and that is not tidiness. The first version of
  * this checker tested the whole statement text for `aal2`, and the policy is
@@ -241,21 +241,33 @@ function columnsOf(body) {
  * password-only session from minting its own device passed while being gone.
  * The mutation test in `tests/static/` is what surfaced it. A predicate check
  * must never be able to read the name of the thing it is checking.
+ *
+ * DROPS ARE HONOURED, AND THAT WAS NOT ALWAYS TRUE. This function used to
+ * collect every `create policy` in the migration set and return them all, which
+ * is right exactly while migrations only ever add. The moment one supersedes a
+ * policy — `drop policy` then `create policy` under a better name, which is what
+ * migration 010 does to the `key_wraps` gate — the old body is still in the blob,
+ * still first, and every rule below that picks a policy by shape reads the
+ * DEAD one. The checker then audits a rule the database does not have, passes,
+ * and says nothing about the rule it does. Statements are therefore replayed in
+ * file order into a live set: create writes, drop removes.
  */
 function policiesOf(sql) {
-  const found = [];
-  const re = /create\s+policy\s+([a-z0-9_]+)\s+on\s+([a-z_]+\.[a-z_]+)/g;
+  const live = new Map();
+  const re = /(create|drop)\s+policy\s+(?:if\s+exists\s+)?([a-z0-9_]+)\s+on\s+([a-z_]+\.[a-z_]+)/g;
   let match;
   while ((match = re.exec(sql)) !== null) {
+    const [header, verb, name, table] = match;
+    const key = `${table}/${name}`;
+    if (verb === "drop") {
+      live.delete(key);
+      continue;
+    }
     const end = sql.indexOf(";", match.index);
     const stop = end === -1 ? sql.length : end;
-    found.push({
-      name: match[1],
-      table: match[2],
-      body: sql.slice(match.index + match[0].length, stop),
-    });
+    live.set(key, { name, table, body: sql.slice(match.index + header.length, stop) });
   }
-  return found;
+  return [...live.values()];
 }
 
 /**
@@ -542,26 +554,28 @@ export function auditWall(dir = MIGRATIONS, root = SUPABASE_ROOT) {
   //     password by construction. `mk_under_src` stays readable or account
   //     recovery cannot happen at all: a recovering desktop has no device row
   //     yet, and its opener is the Recovery Kit code, which the password does
-  //     not yield. WRITE confines BOTH, because overwriting either wrap is how a
-  //     password-only session makes an account permanently unopenable — it never
-  //     needs to read what it destroys.
+  //     not yield.
   //
-  //     Both exemptions are matched literally, not just „the word desktop
-  //     appears somewhere". A write side written as `kind <> 'mk_under_kwrap'`
-  //     mentions the column, the value and the desktop test, and quietly hands
-  //     back `mk_under_src`.
+  //     WRITE TAKES NO EXEMPTION AT ALL, and the write half is therefore checked
+  //     for the ABSENCE of `kind` rather than for the presence of the right
+  //     exemption. Any branch keyed on the kind is a hole, because authoring a
+  //     wrap is a desktop operation in every case: a browser receives content
+  //     keys through pairing and never writes the row. The rule is stated that
+  //     way because the defect it replaces was an exemption that looked correct
+  //     — `kind = 'ck_under_mk' or …`, carrying the read-side argument into the
+  //     write side — and any check that asked „is the right exemption present"
+  //     would have been satisfied by it.
   const mkGate = policies.find(
     (p) => p.table === "public.key_wraps" && /as\s+restrictive/.test(p.body) &&
       p.body.includes("mk_under_kwrap"),
   );
   const [reads, writes] = mkGate === undefined ? [] : mkGate.body.split(/\bwith\s+check\b/);
-  const confines = (half, exemption) =>
-    half !== undefined && exemption.test(half) && /platform\s*=\s*'desktop'/.test(half);
-  if (!confines(reads, /kind\s*<>\s*'mk_under_kwrap'/) ||
-      !confines(writes, /kind\s*=\s*'ck_under_mk'/)) {
+  const desktop = (half) => half !== undefined && /platform\s*=\s*'desktop'/.test(half);
+  if (!desktop(reads) || !/kind\s*<>\s*'mk_under_kwrap'/.test(reads ?? "") ||
+      !desktop(writes) || /\bkind\b/.test(writes ?? "")) {
     problems.push(
       "public.key_wraps: no restrictive policy confines mk_under_kwrap to a desktop session on " +
-      "read and BOTH mk_* kinds on write",
+      "read and EVERY kind on write",
     );
   }
 
