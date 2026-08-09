@@ -102,7 +102,28 @@ const HKDF_MAX_OUTPUT_BYTES = 255 * SHA256_BYTES;
  */
 const HMAC_BLOCK_BYTES = 64;
 
-const subtle = (): SubtleCrypto => {
+/**
+ * The WebCrypto types, DERIVED from the global rather than named.
+ *
+ * `SubtleCrypto`, `CryptoKey` and `CryptoKeyPair` are DOM identifiers, and
+ * naming them makes this file compile only where the `DOM` lib is loaded. That
+ * quietly contradicted the header above: the whole claim of this package is that
+ * ONE implementation serves the browser, the renderer and the Electron MAIN
+ * process — and main is typed against Node's libs, where those three names do
+ * not exist. It was not a hypothetical; importing this module into main is what
+ * surfaced it.
+ *
+ * Reading the types off `globalThis.crypto` resolves to the DOM's `SubtleCrypto`
+ * under a browser config and to `webcrypto.SubtleCrypto` under Node's, which is
+ * the same API in both places — so the types now follow the API instead of
+ * following a lib setting.
+ */
+type Subtle = (typeof globalThis)["crypto"]["subtle"];
+
+/** WebCrypto's opaque key handle, under whichever name the host libs give it. */
+type KeyHandle = Awaited<ReturnType<Subtle["importKey"]>>;
+
+const subtle = (): Subtle => {
   const c = globalThis.crypto;
   if (c?.subtle === undefined) {
     // Not a runtime condition to recover from: every environment this package
@@ -131,7 +152,7 @@ const subtle = (): SubtleCrypto => {
  * function exists to hold this comment, because the „optimisation" of reaching
  * for `.buffer` is the kind a future reader makes in good faith.
  */
-const view = (bytes: Uint8Array): BufferSource =>
+const view = (bytes: Uint8Array): Uint8Array<ArrayBuffer> =>
   // The cast is TypeScript 5.7's `Uint8Array<ArrayBufferLike>` meeting
   // WebCrypto's `BufferSource`, which is `ArrayBufferView<ArrayBuffer>`. The
   // gap is `SharedArrayBuffer`: a `Uint8Array` COULD be backed by one, and
@@ -296,9 +317,15 @@ export function createWebCryptoPort(): CryptoPort {
     },
 
     async x25519GenerateKeyPair(): Promise<X25519KeyPair> {
+      // `as unknown as` because the host typings disagree with the runtime here
+      // and only one of them is right. Passing a bare `{ name }` selects the
+      // overload declared to answer a single `CryptoKey`, while X25519 is an
+      // asymmetric algorithm and WebCrypto answers a PAIR — which is what the
+      // line below then reads `publicKey` and `privateKey` off, successfully, in
+      // every environment this runs in.
       const pair = (await subtle().generateKey({ name: "X25519" }, false, [
         "deriveBits",
-      ])) as CryptoKeyPair;
+      ])) as unknown as { publicKey: KeyHandle; privateKey: KeyHandle };
       // The private key is `extractable: false`, so the scalar never exists as
       // JS-visible bytes and the „you cannot erase a Uint8Array" problem
       // `port.ts` describes does not arise. The PUBLIC key is exported raw
@@ -317,7 +344,7 @@ export function createWebCryptoPort(): CryptoPort {
         // `x25519GenerateKeyPair` and nowhere else.
         throw new Error("x25519SharedSecret: secretKey is not a CryptoKey from this port");
       }
-      let peer: CryptoKey;
+      let peer: KeyHandle;
       try {
         peer = await subtle().importKey("raw", view(peerPublicKey), { name: "X25519" }, false, []);
       } catch {
@@ -367,7 +394,7 @@ function assertKeyAndNonce(where: string, key: Uint8Array, nonce: Uint8Array): v
  * this come from `generateKey`" — without depending on which realm it came
  * from.
  */
-function isCryptoKey(value: unknown): value is CryptoKey {
+function isCryptoKey(value: unknown): value is KeyHandle {
   if (typeof value !== "object" || value === null) return false;
   const candidate = value as { type?: unknown; algorithm?: unknown; usages?: unknown };
   return (
