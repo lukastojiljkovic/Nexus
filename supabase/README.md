@@ -59,28 +59,46 @@ app**. It does not learn *what*.
 
 ### What the server cannot enforce, and this must not be misread
 
-1. **„`MK` must never enter a browser." — still a client rule, and here is
-   exactly why.** The `mk_under_kwrap` row is fetchable by any session that
-   passes the policies, and the browser derives `K_wrap` from the password on its
-   way to computing `K_auth`, so it holds the opener by construction. One fetch
-   and one AEAD open separate a web session from `MK`, and the only thing in
-   between is the web client's own source — which is served by the party this
-   document calls hostile.
+1. **„`MK` must never enter a browser." — now enforced by the server for the
+   wrap that matters, and the shape of what is left is worth being exact about.**
 
-   The schema now goes as far as a schema can. `devices.platform` is
-   **server-attested**: it is absent from the client's INSERT grant, defaults to
-   `web`, and is immutable afterwards, so the single writer that can say
-   `desktop` is `pair-complete` under the service-role key after a completed
-   handshake. That makes a policy of the shape „only an attested desktop session
-   may read a `mk_*` wrap" *expressible*, where before it was not.
+   The threat is short: the browser derives `K_wrap` from the password on its way
+   to computing `K_auth`, so it holds the opener of `mk_under_kwrap` by
+   construction, and that row is one HTTP request away from any session on the
+   account. One fetch and one AEAD open separate a web session from `MK` — and
+   the only thing between them used to be the web client's own source, which is
+   served by the party this document calls hostile.
 
-   It is not *applied*, and the blocker is the protocol rather than the policy: a
-   brand-new desktop recovering an account from the sync recovery code has no
-   attested device row yet — obtaining one is what it is trying to do — so that
-   policy would refuse the one flow `mk_under_src` exists for. Closing this needs
-   the recovery path designed first. Until then the honest statement is the one
-   above, and the schema carries the material to close it rather than a rule that
-   half-closes it.
+   `devices.platform` is what makes a rule possible: it is **server-attested** —
+   absent from the client's INSERT grant, defaulting to `web`, immutable
+   afterwards — so the single writer that can say `desktop` is `pair-complete`
+   under the service-role key after a completed handshake. „Desktop" therefore
+   means, precisely, *vouched for by a device that already had the keys*, which
+   is the strongest sentence anything here can say: nothing in HTTP attests what
+   program sent a request.
+
+   `key_wraps_master_key_is_desktop_only` applies it, and its two halves differ:
+
+   - **READ confines `mk_under_kwrap` only.** `ck_under_mk` is what a browser is
+     *supposed* to hold — it gets those through pairing. `mk_under_src` stays
+     readable because confining it would break the one flow it exists for: a
+     brand-new desktop recovering an account has no device row yet, since
+     obtaining one is what it is trying to do. That costs nothing here, because
+     its opener is the Recovery Kit code and the web password does not yield it.
+     A stolen password gets those bytes and no way into them.
+   - **WRITE confines both `mk_*` kinds**, which is not symmetry. A password-only
+     session never needs to read what it destroys: overwriting `mk_under_kwrap`
+     locks every real device out of `MK`, and overwriting `mk_under_src` removes
+     the way back. Both are unrecoverable and neither leaks anything, which is
+     exactly the shape of an attack nobody thinks to test for.
+
+   What the server still cannot do is stop a browser that has been *given* the
+   recovery code by its user from recovering `MK` in a tab. That is a deliberate
+   act by the person who owns the account, not an escalation from a stolen
+   credential, and no policy can tell the two apart. The client-side rule — the
+   web bundle imports `@nexus/sync-crypto/web`, which exports neither
+   `deriveWebPasswordKeys` nor `unwrapKey` — is what covers that, and it is
+   enforced in four places listed in `packages/sync-crypto/src/kdf.ts`.
 
 2. **„A local-only profile stays on this computer."** This one *is* structural,
    and by absence rather than by rule: a local-only profile simply has no
@@ -132,6 +150,12 @@ privilege** (rows are tombstoned), grants INSERT and UPDATE **by column and neve
 by table**, and carries **one `AS RESTRICTIVE` gate** demanding either `aal2` or
 a session vouched for by a live, unrevoked device.
 
+`key_wraps` carries a **second** restrictive gate on top of that one, because the
+session gate is about *whether you are signed in properly* and this one is about
+*what kind of client you are*: `key_wraps_master_key_is_desktop_only` confines
+`mk_under_kwrap` on read, and both `mk_*` kinds on write, to a session a live
+`devices` row calls a `desktop`. §1 has the reasoning and the asymmetry.
+
 The `OR` in that gate is load-bearing: a desktop's pair-minted session is `aal1`
 for its whole life, so a blanket `aal2` rule would lock out the only clients that
 hold keys. What stops the `OR` being a self-service entrance is that **both ways
@@ -179,7 +203,10 @@ column; no DELETE policy and no DELETE grant; no permissive `FOR ALL` policy
 clause (a policy with none is addressed to PUBLIC, which includes `anon`); a
 restrictive gate on every table, calling the shared predicate; the row-local
 predicate on `devices`, which is the one table exempt from the shared one and
-therefore the one whose gate nothing else checks; the `aal2`-only INSERT on
+therefore the one whose gate nothing else checks; the desktop-only gate on
+`key_wraps`, with its USING and WITH CHECK halves checked separately because they
+confine different sets of kinds and a single scan over the statement would report
+the read half as covering both; the `aal2`-only INSERT on
 **both** `pairing` and `devices`; every write grant to `authenticated` being
 column-scoped and naming no forbidden column; the three guard triggers, with the
 `sync_objects` one covering INSERT as well as UPDATE; `set search_path` on every
@@ -214,7 +241,7 @@ supabase db reset          # applies migrations/ from scratch
 supabase test db           # runs tests/database/*.test.sql through pgTAP
 ```
 
-Three files, all wrapped in a transaction that rolls back:
+Five files, all wrapped in a transaction that rolls back:
 
 - **`00_rls_enabled.test.sql`** — the migration-drift guard against the live
   catalog. Every table in the exposed schema has `relrowsecurity` **and**
@@ -231,8 +258,24 @@ Three files, all wrapped in a transaction that rolls back:
   a password-only session can neither start a pairing **nor mint the `devices`
   row that would vouch for it**, no client may state its own `platform` at any
   assurance level, and a revoked device cannot be un-revoked even at `aal2`.
+  The desktop-only rule is exercised in all four of its directions: a `web`
+  session at `aal2` cannot read `mk_under_kwrap`, *can* read `mk_under_src`,
+  cannot mint or overwrite either, and a paired desktop at `aal1` — the weaker
+  session, by the only measure the identity provider has — reads the wrap the
+  browser was refused.
 - **`02_guard_trigger.test.sql`** — the four illegal updates, each by its own
   SQLSTATE, plus the boundary cases and the server-stamped columns.
+- **`03_catalog_surface.test.sql`** — what `01` structurally cannot see, because
+  it signs in as two real users. `anon` is the role behind the publishable key,
+  and it is refused every table at the privilege layer before any policy runs,
+  holds EXECUTE on no routine and no USAGE on `private`. Alongside it: no
+  `SECURITY DEFINER` routine exists at all in the schemas this repository owns,
+  every routine pins its `search_path`, no view or foreign table hides a table
+  behind an unwalled name, and no storage bucket is public.
+- **`04_object_identity.test.sql`** — the composite and singleton object ids, run
+  as the shapes the real client produces on its first push. Table constraints and
+  a trigger rather than policies, so the migration role proves them as well as any
+  client role would.
 
 These require the local stack, where the migration role can bypass RLS; each
 file asserts that first, so a wrong seat produces one clear failure rather than

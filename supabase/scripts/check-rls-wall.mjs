@@ -522,6 +522,49 @@ export function auditWall(dir = MIGRATIONS, root = SUPABASE_ROOT) {
     );
   }
 
+  // 8e. The master-key wraps are desktop-only, and that is a SERVER rule.
+  //
+  //     `@nexus/sync-crypto`'s `kdf.ts` keeps MK out of the browser by never
+  //     giving a browser the function that derives K_wrap. That defence is real
+  //     and it is entirely a fact about the WEB BUNDLE — one stray import and
+  //     it is gone, with nothing in the database noticing. So the same rule is
+  //     written a second time here, where it does not depend on what anybody
+  //     imported: `key_wraps` carries a SECOND restrictive policy, on top of the
+  //     session gate, keyed on whether a live `devices` row calls the session a
+  //     DESKTOP.
+  //
+  //     Asserted on the shape rather than the name, because a policy renamed is
+  //     still the wall and a policy rewritten to `using (true)` is not.
+  //
+  //     USING AND WITH CHECK ARE CHECKED SEPARATELY AND DIFFER, because the read
+  //     half and the write half are different rules. READ confines
+  //     `mk_under_kwrap` only — the row whose opener a browser derives from the
+  //     password by construction. `mk_under_src` stays readable or account
+  //     recovery cannot happen at all: a recovering desktop has no device row
+  //     yet, and its opener is the Recovery Kit code, which the password does
+  //     not yield. WRITE confines BOTH, because overwriting either wrap is how a
+  //     password-only session makes an account permanently unopenable — it never
+  //     needs to read what it destroys.
+  //
+  //     Both exemptions are matched literally, not just „the word desktop
+  //     appears somewhere". A write side written as `kind <> 'mk_under_kwrap'`
+  //     mentions the column, the value and the desktop test, and quietly hands
+  //     back `mk_under_src`.
+  const mkGate = policies.find(
+    (p) => p.table === "public.key_wraps" && /as\s+restrictive/.test(p.body) &&
+      p.body.includes("mk_under_kwrap"),
+  );
+  const [reads, writes] = mkGate === undefined ? [] : mkGate.body.split(/\bwith\s+check\b/);
+  const confines = (half, exemption) =>
+    half !== undefined && exemption.test(half) && /platform\s*=\s*'desktop'/.test(half);
+  if (!confines(reads, /kind\s*<>\s*'mk_under_kwrap'/) ||
+      !confines(writes, /kind\s*=\s*'ck_under_mk'/)) {
+    problems.push(
+      "public.key_wraps: no restrictive policy confines mk_under_kwrap to a desktop session on " +
+      "read and BOTH mk_* kinds on write",
+    );
+  }
+
   // 8d. Write grants to `authenticated` must name their columns, and must not
   //     name a column some other rule treats as a fact. See
   //     FORBIDDEN_WRITE_COLUMNS for why each entry is there.

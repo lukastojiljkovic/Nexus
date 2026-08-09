@@ -200,6 +200,68 @@ test("catches a restrictive gate that stopped calling the shared predicate", () 
   assertReports(problems, "public.key_wraps: restrictive gate does not call");
 });
 
+// THE MASTER-KEY WRAPS, IN BOTH DIRECTIONS. The rule is „only a session a live
+// `devices` row calls a desktop may touch a master-key wrap", and it has two
+// halves that differ and fail differently. READ confines `mk_under_kwrap` only;
+// losing it hands MK to any browser holding the web password, because K_wrap is
+// derived from that password on the way to K_auth. WRITE confines both `mk_*`
+// kinds; losing it hands a password-only session the ability to overwrite a wrap
+// it cannot read, which locks every real device out of the account and, on
+// `mk_under_src`, destroys the way back.
+//
+// Every mutation below keeps the policy, keeps `as restrictive`, keeps a device
+// subquery and keeps the word `desktop`, so every coarser rule still passes.
+const MK_GATE = /create policy key_wraps_master_key_is_desktop_only on public\.key_wraps\n[\s\S]*?\n {2}\);\n/;
+
+/** The real subquery, so a mutation differs from the original in one clause only. */
+const DESKTOP_EXISTS =
+  "    or exists (\n" +
+  "      select 1 from public.devices d\n" +
+  "      where d.user_id = key_wraps.user_id\n" +
+  "        and d.session_id = nullif((select auth.jwt()) ->> 'session_id', '')::uuid\n" +
+  "        and d.revoked_at is null\n" +
+  "        and d.platform = 'desktop'\n" +
+  "    )\n";
+
+const mkPolicy = (using, withCheck) =>
+  "create policy key_wraps_master_key_is_desktop_only on public.key_wraps\n" +
+  "  as restrictive for all to authenticated\n" +
+  `  using (\n${using}  )\n  with check (\n${withCheck}  );\n`;
+
+test("catches the master-key wrap losing its desktop-only READ gate", () => {
+  const problems = auditWithMutation(RLS, (sql) =>
+    sql.replace(MK_GATE, mkPolicy(
+      "    kind <> 'mk_under_kwrap' or true\n",
+      `    kind = 'ck_under_mk'\n${DESKTOP_EXISTS}`,
+    )));
+  assertReports(problems, "public.key_wraps: no restrictive policy confines mk_under_kwrap");
+});
+
+test("catches the desktop-only gate applied to reads but not to writes", () => {
+  // The likelier of the two, and the one a reviewer's eye slides over: the
+  // sentence „a master-key wrap is desktop-only" reads as satisfied the moment
+  // USING says so, and `with check` is three lines further down.
+  const problems = auditWithMutation(RLS, (sql) =>
+    sql.replace(MK_GATE, mkPolicy(
+      `    kind <> 'mk_under_kwrap'\n${DESKTOP_EXISTS}`,
+      "    user_id = (select auth.uid())\n",
+    )));
+  assertReports(problems, "BOTH mk_* kinds on write");
+});
+
+test("catches the WRITE gate narrowed to the one kind the READ gate confines", () => {
+  // The sharpest of the three, and it looks like a tidy-up: making the two
+  // halves match. It leaves `mk_under_src` writable by any session on the
+  // account — which cannot read it, does not need to, and by overwriting it
+  // turns „recoverable with the Recovery Kit" into „gone".
+  const problems = auditWithMutation(RLS, (sql) =>
+    sql.replace(MK_GATE, mkPolicy(
+      `    kind <> 'mk_under_kwrap'\n${DESKTOP_EXISTS}`,
+      `    kind <> 'mk_under_kwrap'\n${DESKTOP_EXISTS}`,
+    )));
+  assertReports(problems, "BOTH mk_* kinds on write");
+});
+
 // BOTH MUTATIONS BELOW REPLACE THE PREDICATE AND KEEP THE POLICY NAME, and both
 // name their policy in the pattern rather than matching the predicate alone.
 //

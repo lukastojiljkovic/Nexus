@@ -21,7 +21,7 @@ begin;
 -- after each switch is four chances to forget one.
 set local search_path = public, extensions;
 
-select plan(22);
+select plan(29);
 
 -- ASSERTED FIRST, so a misconfigured runner produces one clear failure instead
 -- of fifteen confusing ones. The seeding below and the „as postgres" checks in
@@ -62,6 +62,36 @@ values
    '22222222-2222-4222-8222-222222222222', 1,
    decode(repeat('22', 24), 'hex'), decode(repeat('bb', 48), 'hex'),
    decode(repeat('b1', 32), 'hex'));
+
+-- THE MASTER-KEY WRAPS, which are what the desktop-only policy is about. The
+-- `mk_*` kinds take no profile and no epoch (the master key is not rotated by
+-- that mechanism) and MUST carry the Argon2id salt and parameters, because they
+-- are the two slots derived from a password — `key_wraps_kdf_presence` and
+-- `key_wraps_kdf_params_floor` in migration 001 enforce both.
+--
+-- B gets BOTH slots, because the policy treats them differently on the read side
+-- and identically on the write side, and a fixture holding only one can test
+-- just half of that. A gets only `mk_under_kwrap`: its role here is the positive
+-- control that a paired desktop still reaches the wrap a browser is refused.
+--
+-- `wrapped` differs from each account's content-key wrap byte for byte, so the
+-- „changed nothing" assertion further down cannot pass by comparing a row
+-- against itself.
+insert into public.key_wraps
+  (user_id, kind, nonce, wrapped, commit_tag, kdf_salt, kdf_params)
+values
+  ('aaaaaaaa-0000-4000-8000-000000000001', 'mk_under_kwrap',
+   decode(repeat('a2', 24), 'hex'), decode(repeat('a3', 48), 'hex'),
+   decode(repeat('a4', 32), 'hex'), decode(repeat('a5', 16), 'hex'),
+   '{"memoryKiB": 65536, "iterations": 3, "parallelism": 1}'::jsonb),
+  ('bbbbbbbb-0000-4000-8000-000000000002', 'mk_under_kwrap',
+   decode(repeat('b2', 24), 'hex'), decode(repeat('b3', 48), 'hex'),
+   decode(repeat('b4', 32), 'hex'), decode(repeat('b5', 16), 'hex'),
+   '{"memoryKiB": 65536, "iterations": 3, "parallelism": 1}'::jsonb),
+  ('bbbbbbbb-0000-4000-8000-000000000002', 'mk_under_src',
+   decode(repeat('b6', 24), 'hex'), decode(repeat('b7', 48), 'hex'),
+   decode(repeat('b8', 32), 'hex'), decode(repeat('b9', 16), 'hex'),
+   '{"memoryKiB": 65536, "iterations": 3, "parallelism": 1}'::jsonb);
 
 insert into public.sync_objects
   (user_id, profile_id, collection, object_id, version, nonce, ciphertext)
@@ -118,6 +148,77 @@ select isnt_empty(
   $$ select id from public.key_wraps $$,
   'B does see its own key wrap — the wall is a wall, not a brick'
 );
+
+-- THE WRAP WHOSE OPENER THIS SESSION ALREADY HOLDS. B is at aal2 with a live
+-- device row, so it passes the session gate completely; it is refused here for
+-- the one reason that matters, which is that its device row says `web`. Its own
+-- account, its own row, and still no.
+--
+-- The reason this is a policy at all and not just a fact about which functions
+-- the web bundle imports: K_wrap is derived from the web password on the way to
+-- K_auth, so this session has the opener by construction. Hand it the wrap and
+-- MK follows, and after MK every content key and every row of plaintext.
+select is_empty(
+  $$ select id from public.key_wraps where kind = 'mk_under_kwrap' $$,
+  'a browser at aal2 cannot read MK-under-the-web-password, not even its own'
+);
+
+-- AND THE ONE THAT IS DELIBERATELY LEFT READABLE, asserted so that the asymmetry
+-- is a decision on the record rather than a gap. `mk_under_src` opens under the
+-- Recovery Kit code, which the web password does not yield — so serving it costs
+-- nothing against a stolen password, and refusing it would break the only flow
+-- it exists for: a brand-new desktop recovering an account, which has no device
+-- row yet because obtaining one is what it is trying to do.
+select isnt_empty(
+  $$ select id from public.key_wraps where kind = 'mk_under_src' $$,
+  'MK-under-the-recovery-code stays readable — recovery happens before any device exists'
+);
+
+-- The positive control, and it is the whole design in one assertion: a browser
+-- is supposed to hold content keys — it receives them through pairing — and is
+-- never supposed to hold the key they hang off.
+select isnt_empty(
+  $$ select id from public.key_wraps where kind = 'ck_under_mk' $$,
+  'the same browser still reads its content-key wraps — that is what it pairs for'
+);
+
+-- THE WRITE HALF, WHICH IS BROADER THAN THE READ HALF AND IS NOT SYMMETRY. This
+-- session cannot open either master-key wrap; it can still be handed `nonce`,
+-- `wrapped` and `commit_tag` by the column grant, so without WITH CHECK it could
+-- replace one with a wrap of a key it chose. Nothing would be leaked and the
+-- account would be destroyed: over `mk_under_kwrap` every real device loses MK,
+-- and over `mk_under_src` the way back is gone with it.
+select throws_ok(
+  $$ insert into public.key_wraps
+       (user_id, kind, nonce, wrapped, commit_tag, kdf_salt, kdf_params)
+     values ('bbbbbbbb-0000-4000-8000-000000000002', 'mk_under_src',
+             decode(repeat('c2', 24), 'hex'), decode(repeat('c3', 48), 'hex'),
+             decode(repeat('c4', 32), 'hex'), decode(repeat('c5', 16), 'hex'),
+             '{"memoryKiB": 65536, "iterations": 3, "parallelism": 1}'::jsonb) $$,
+  '42501'::char(5), NULL::text,
+  'a browser at aal2 cannot mint a master-key wrap of its own'
+);
+
+-- THE UPDATE OF THE ROW IT CAN READ, which is the sharp one and the only place
+-- the read/write asymmetry is observable from a client: `mk_under_src` passes
+-- USING, so the statement reaches WITH CHECK and is refused loudly rather than
+-- silently matching nothing.
+select throws_ok(
+  $$ update public.key_wraps
+        set wrapped = decode(repeat('ee', 48), 'hex'),
+            nonce = decode(repeat('ee', 24), 'hex')
+      where kind = 'mk_under_src' $$,
+  '42501'::char(5), NULL::text,
+  'a browser cannot overwrite the recovery wrap it is allowed to read'
+);
+
+-- And the UPDATE of the row it cannot read, which cannot be asserted on the
+-- statement: a row filtered out by a policy's USING clause is not an error, it
+-- is zero rows and a reported success. So that assertion is made afterwards,
+-- against the row.
+update public.key_wraps
+   set wrapped = decode(repeat('ee', 48), 'hex'), nonce = decode(repeat('ee', 24), 'hex')
+ where kind = 'mk_under_kwrap';
 
 select is_empty(
   $$ select id from public.devices
@@ -184,6 +285,13 @@ select is(
   'B''s update of A''s row changed nothing'
 );
 
+select is(
+  (select wrapped from public.key_wraps
+    where user_id = 'bbbbbbbb-0000-4000-8000-000000000002' and kind = 'mk_under_kwrap'),
+  decode(repeat('b3', 48), 'hex'),
+  'B''s overwrite of its OWN master-key wrap changed nothing'
+);
+
 -- ---------------------------------------------------------------------------
 -- The restrictive session gate, in all three of its states.
 -- ---------------------------------------------------------------------------
@@ -235,6 +343,17 @@ set local role authenticated;
 select isnt_empty(
   $$ select object_id from public.sync_objects $$,
   'a paired desktop at aal1 reaches its own rows — the OR branch works'
+);
+
+-- THE OTHER DIRECTION OF THE DESKTOP-ONLY RULE, and the assertion without which
+-- „the master-key wrap is unreadable" would be satisfied by it being unreadable
+-- by everybody. This session is aal1 — weaker, by the only measure the identity
+-- provider has, than the browser refused above — and it reads the wrap, because
+-- the question the policy asks is not „how strong is this session" but „did a
+-- completed pairing write a row calling it a desktop".
+select isnt_empty(
+  $$ select id from public.key_wraps where kind = 'mk_under_kwrap' $$,
+  'a paired desktop reads the master-key wrap — the desktop-only rule is not a lock-out'
 );
 
 -- Pairing is the one statement the OR does not cover. If it did, a stolen

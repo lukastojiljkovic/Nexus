@@ -294,6 +294,96 @@ create policy key_wraps_live_session on public.key_wraps
   using ((select private.nexus_session_is_live()))
   with check ((select private.nexus_session_is_live()));
 
+-- THE MASTER KEY NEVER LEAVES FOR A BROWSER, AND THIS IS WHERE THAT STOPS BEING
+-- A PROPERTY OF THE BUNDLE.
+--
+-- `@nexus/sync-crypto`'s `kdf.ts` states the rule and is honest about what
+-- enforces it: the browser is given `deriveWebAuthPassword` (K_auth only) and
+-- never `deriveWebPasswordKeys` (K_auth AND K_wrap), so it cannot compute the
+-- key that opens `mk_under_kwrap`. That is a real defence and it is entirely a
+-- fact about which functions the WEB BUNDLE imports. One stray import, one
+-- dependency that re-exports the package barrel, one `unwrapKey` reached through
+-- a debug path — and MK is one call away, because the wrap itself is a row of
+-- the caller's own account that every policy above happily serves.
+--
+-- This policy makes the server refuse to hand it over at all — to a session that
+-- no live `devices` row calls a DESKTOP. `devices.platform` is worth exactly
+-- that much because no client may write it (see the grants on `devices`): a
+-- client-inserted row takes the default `web`, and the only writer that can
+-- state `desktop` is `pair-complete`, running under the service-role key after a
+-- completed handshake. So „desktop" means, precisely, „vouched for by a device
+-- that already had the keys" — which is the strongest sentence anything in this
+-- schema can say, since nothing in HTTP attests what program sent a request.
+--
+-- ─── THE READ SIDE IS NARROWER THAN THE WRITE SIDE, ON PURPOSE ──────────────
+--
+-- Only `mk_under_kwrap` is confined on READ, and the asymmetry is the whole
+-- design rather than an oversight:
+--
+--  * `ck_under_mk` — per-profile content keys are exactly what a browser
+--    session is supposed to hold. It receives them through pairing.
+--
+--  * `mk_under_src` — MK under the Sync Recovery Code. Confining this one would
+--    break the single flow it exists for: a brand-new desktop recovering an
+--    account has no device row yet, and obtaining one is what it is trying to
+--    do. Leaving it readable costs nothing against the threat this policy is
+--    about, because its opener is NOT derivable from the web password — it is a
+--    high-entropy code printed in the Recovery Kit. A stolen password yields
+--    these bytes and no way into them; a browser that holds the code holds it
+--    because the person typed it in, deliberately, once.
+--
+--  * `mk_under_kwrap` — MK under K_wrap, and K_wrap is derived from the web
+--    password on the way to K_auth. A browser holds the opener BY CONSTRUCTION.
+--    This is the row where „one fetch and one AEAD open" is literally true, and
+--    it is the row this policy exists for.
+--
+-- WITH CHECK IS THE BROADER HALF, covering both `mk_*` kinds, and it is not
+-- symmetry. A browser session holding nothing but a password could otherwise
+-- UPDATE either master-key wrap — `nonce`, `wrapped` and `commit_tag` are all in
+-- its grant — and replace it with a wrap of a key it chose. It could not read
+-- the old MK, and it would not need to: overwriting `mk_under_kwrap` locks every
+-- real device out of MK, and overwriting `mk_under_src` destroys the recovery
+-- path that was the way back. Reading `mk_under_src` is harmless; writing it is
+-- how an attacker makes a recoverable account unrecoverable.
+--
+-- WHAT THIS COMMITS THE UNBUILT AUTH FLOW TO, stated here because it is the file
+-- that enforces it. Minting MK and writing its wraps cannot be done by an
+-- ordinary session that has only just signed in, because such a session has no
+-- device row yet and therefore fails the WITH CHECK. Those writes belong to a
+-- service-role path — which is where „mint MK exactly once per account" has to
+-- live anyway, since two devices enabling sync in the same minute would
+-- otherwise mint two master keys and each would make the other's ciphertext
+-- unreadable. The same is true of the re-wrap that ends a recovery: the desktop
+-- that just opened `mk_under_src` still has no device row, so writing the new
+-- `mk_under_kwrap` is part of whatever service-role step hands it one.
+create policy key_wraps_master_key_is_desktop_only on public.key_wraps
+  as restrictive for all to authenticated
+  using (
+    kind <> 'mk_under_kwrap'
+    or exists (
+      select 1
+      from public.devices d
+      -- `user_id` restated rather than left to `devices`' own policies, for the
+      -- reason `private.nexus_session_is_live()` restates it: the tenancy of a
+      -- security predicate must not depend on another table's policies.
+      where d.user_id = key_wraps.user_id
+        and d.session_id = nullif((select auth.jwt()) ->> 'session_id', '')::uuid
+        and d.revoked_at is null
+        and d.platform = 'desktop'
+    )
+  )
+  with check (
+    kind = 'ck_under_mk'
+    or exists (
+      select 1
+      from public.devices d
+      where d.user_id = key_wraps.user_id
+        and d.session_id = nullif((select auth.jwt()) ->> 'session_id', '')::uuid
+        and d.revoked_at is null
+        and d.platform = 'desktop'
+    )
+  );
+
 -- ---------------------------------------------------------------------------
 -- devices
 -- ---------------------------------------------------------------------------
