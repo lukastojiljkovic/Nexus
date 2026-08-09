@@ -22,7 +22,7 @@ begin;
 
 set local search_path = public, extensions;
 
-select plan(19);
+select plan(20);
 
 select ok(
   (select rolsuper or rolbypassrls from pg_roles where rolname = current_user),
@@ -114,7 +114,7 @@ values
   ('c1000000-0000-4000-8000-000000000005', 'c0000000-0000-4000-8000-00000000000a',
    now(), now(), 'totp');
 
--- The wrap material, spelled once. Every call below is the same thirteen
+-- The wrap material, spelled once. Every call below is the same fourteen
 -- arguments with one thing changed, so a refusal cannot be an accident of a
 -- malformed payload.
 create function pg_temp.mint(uuid, uuid) returns text language sql as $$
@@ -126,7 +126,10 @@ create function pg_temp.mint(uuid, uuid) returns text language sql as $$
     '{"memoryKiB": 65536, "iterations": 3, "parallelism": 1}'::jsonb,
     decode(repeat('b1', 24), 'hex'), decode(repeat('b2', 48), 'hex'),
     decode(repeat('b3', 32), 'hex'), decode(repeat('b4', 16), 'hex'),
-    '{"memoryKiB": 65536, "iterations": 3, "parallelism": 1}'::jsonb);
+    '{"memoryKiB": 65536, "iterations": 3, "parallelism": 1}'::jsonb,
+    -- The device-registration proof (migration 013). Written by the same
+    -- transaction as the wraps, because nothing can add it afterwards.
+    decode(repeat('c1', 32), 'hex'));
 $$;
 
 -- ---------------------------------------------------------------------------
@@ -220,6 +223,19 @@ select set_eq(
   'have no recovery path and no way to acquire one'
 );
 
+-- AND THE DEVICE-REGISTRATION PROOF, for exactly the reason above. Nothing can
+-- write `private.mk_verifiers` except this function and the one that reads it,
+-- so an account minted without a verifier could never register a second desktop
+-- — and a desktop whose session dies would be stranded with the key on its own
+-- disk and no way to present it. The mint is a one-shot; everything a later
+-- recovery needs is written here or is never written.
+select is(
+  (select encode(m.verifier, 'hex') from private.mk_verifiers m
+    where m.user_id = 'aaaaaaaa-0000-4000-8000-000000000001'),
+  repeat('c1', 32),
+  'the master-key proof was stored by the same transaction as the wraps'
+);
+
 -- `platform` is the only place in the schema where „this client is a browser"
 -- is written down, and no client may state it. This is one of exactly two
 -- writers that may say `desktop`.
@@ -292,7 +308,8 @@ select throws_ok(
        decode(repeat('a1', 24), 'hex'), decode(repeat('a2', 48), 'hex'),
        decode(repeat('a3', 32), 'hex'), '{}'::jsonb,
        decode(repeat('b1', 24), 'hex'), decode(repeat('b2', 48), 'hex'),
-       decode(repeat('b3', 32), 'hex'), decode(repeat('b4', 16), 'hex'), '{}'::jsonb) $$,
+       decode(repeat('b3', 32), 'hex'), decode(repeat('b4', 16), 'hex'), '{}'::jsonb,
+       decode(repeat('c1', 32), 'hex')) $$,
   '42501'::char(5), NULL::text,
   'authenticated may not execute the mint'
 );
@@ -306,7 +323,8 @@ select throws_ok(
        decode(repeat('a1', 24), 'hex'), decode(repeat('a2', 48), 'hex'),
        decode(repeat('a3', 32), 'hex'), '{}'::jsonb,
        decode(repeat('b1', 24), 'hex'), decode(repeat('b2', 48), 'hex'),
-       decode(repeat('b3', 32), 'hex'), decode(repeat('b4', 16), 'hex'), '{}'::jsonb) $$,
+       decode(repeat('b3', 32), 'hex'), decode(repeat('b4', 16), 'hex'), '{}'::jsonb,
+       decode(repeat('c1', 32), 'hex')) $$,
   '42501'::char(5), NULL::text,
   'anon may not execute the mint'
 );
