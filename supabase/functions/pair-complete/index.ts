@@ -21,11 +21,10 @@
 // the moment of the first pairing the desktop has no session — that is the
 // problem being solved — so it cannot authenticate to anything. Something with
 // authority has to vouch for it, and that something has to hold a service-role
-// key. This is that something, and it is the ONLY place in the entire system
-// where a service-role key exists. A service-role key bypasses row level
-// security completely; it is the one credential for which every wall in
-// `migrations/` is transparent. It lives in one function's environment, is
-// never returned in a response, never logged, and never reaches a client.
+// key. A service-role key bypasses row level security completely; it is the one
+// credential for which every wall in `migrations/` is transparent. It lives in
+// the Edge Function environment, is never returned in a response, never logged,
+// and never reaches a client.
 //
 // WHAT THIS FUNCTION DELIBERATELY DOES NOT DO. It does not decide whether the
 // pairing was legitimate. It cannot: it never sees the handshake secret and
@@ -36,6 +35,22 @@
 // the answer to „should this pairing happen at all" belongs to the human.
 
 import { createClient } from "@supabase/supabase-js";
+
+import {
+  badRequest,
+  callerAddress,
+  decodeBounded,
+  decodeFixed,
+  declaredLengthOk,
+  fromBrowsingContext,
+  parseJsonObject,
+  readBounded,
+  sha256,
+  toHex,
+  toPgBytea,
+  unavailable,
+  unverifiedClaims,
+} from "../_shared/http.ts";
 
 // ---------------------------------------------------------------------------
 // Configuration.
@@ -64,15 +79,9 @@ const RATE_LIMIT_PER_TOKEN = 3;
 
 // A completion request is a handful of fixed-size fields; anything larger is not
 // a pairing. The cheapest denial-of-service against any JSON endpoint is a large
-// body, and there is exactly one way to refuse one: stop reading. Checking
-// `content-length` first is worth doing because it costs nothing and refuses the
-// honest oversized caller before a byte arrives — but it is a CLAIM, absent under
-// chunked encoding and free to be a lie, so it cannot be the control. The control
-// is `readBounded` below, which counts bytes off the stream and cancels the
-// moment the budget is spent. `await req.text()` cannot play that role no matter
-// what is asserted about its result: by the time it resolves, the whole body has
-// been received and decoded, and a length check there protects `JSON.parse` and
-// nothing else.
+// body, and there is exactly one way to refuse one: stop reading. See
+// `readBounded` in `_shared/http.ts` for why the `content-length` check beside
+// it is a courtesy and this is the control.
 const MAX_BODY_BYTES = 4096;
 
 const TOKEN_BYTES = 32;
@@ -102,231 +111,37 @@ function refuse(): Response {
   );
 }
 
-function badRequest(detail: string): Response {
-  return new Response(
-    JSON.stringify({ error: "bad_request", detail }),
-    { status: 400, headers: { "content-type": "application/json" } },
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Input decoding.
-// ---------------------------------------------------------------------------
-// Base64url, decoded to a fixed length that the caller does not get to choose.
-// Returning null rather than throwing keeps every validation failure on one path
-// — a thrown decode error inside a `try` that also wraps the database call would
-// be reported as a server fault, and a malformed field would look like an outage.
-function decodeFixed(value: unknown, expectedBytes: number): Uint8Array | null {
-  if (typeof value !== "string" || value.length === 0 || value.length > 4096) return null;
-  // Accept both alphabets: the desktop and the web build encode with different
-  // helpers, and rejecting `+`/`/` here would be a bug that only appears on one
-  // of the two clients, which is the kind that ships.
-  const normalised = value.replaceAll("-", "+").replaceAll("_", "/");
-  const padded = normalised + "=".repeat((4 - (normalised.length % 4)) % 4);
-  let binary: string;
-  try {
-    binary = atob(padded);
-  } catch {
-    return null;
-  }
-  if (binary.length !== expectedBytes) return null;
-  const out = new Uint8Array(expectedBytes);
-  for (let i = 0; i < expectedBytes; i += 1) out[i] = binary.charCodeAt(i);
-  return out;
-}
-
-function decodeBounded(value: unknown, min: number, max: number): Uint8Array | null {
-  if (typeof value !== "string" || value.length === 0 || value.length > 8192) return null;
-  const normalised = value.replaceAll("-", "+").replaceAll("_", "/");
-  const padded = normalised + "=".repeat((4 - (normalised.length % 4)) % 4);
-  let binary: string;
-  try {
-    binary = atob(padded);
-  } catch {
-    return null;
-  }
-  if (binary.length < min || binary.length > max) return null;
-  const out = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) out[i] = binary.charCodeAt(i);
-  return out;
-}
-
-function toHex(bytes: Uint8Array): string {
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-// PostgREST speaks `bytea` as a hex string with a leading backslash-x. Building
-// it here rather than sending base64 keeps the database from having to guess an
-// encoding, and a wrong guess would compare a digest against its own base64
-// text and never match — a failure that looks exactly like „token not found".
-function toPgBytea(bytes: Uint8Array): string {
-  return `\\x${toHex(bytes)}`;
-}
-
-async function sha256(...parts: Uint8Array[]): Promise<Uint8Array> {
-  let total = 0;
-  for (const part of parts) total += part.length;
-  const joined = new Uint8Array(total);
-  let offset = 0;
-  for (const part of parts) {
-    joined.set(part, offset);
-    offset += part.length;
-  }
-  return new Uint8Array(await crypto.subtle.digest("SHA-256", joined));
-}
-
-// The `session_id` claim, read out of a token this function just received from
-// its own auth server over the platform's internal network. Decoded WITHOUT
-// signature verification, and that is safe here for a reason worth stating: the
-// value is used only as an opaque identifier to write into `devices.session_id`,
-// never as an authorisation input, and the token did not come from a client. If
-// this value is ever used to decide anything, it must be verified first.
-function readSessionId(accessToken: string): string | null {
-  const parts = accessToken.split(".");
-  const payload = parts[1];
-  if (parts.length !== 3 || payload === undefined) return null;
-  try {
-    const normalised = payload.replaceAll("-", "+").replaceAll("_", "/");
-    const padded = normalised + "=".repeat((4 - (normalised.length % 4)) % 4);
-    const decoded: unknown = JSON.parse(atob(padded));
-    if (typeof decoded !== "object" || decoded === null) return null;
-    const sessionId = (decoded as Record<string, unknown>)["session_id"];
-    return typeof sessionId === "string" && sessionId.length > 0 ? sessionId : null;
-  } catch {
-    return null;
-  }
-}
-
-// Reads at most `maxBytes` off the request body and returns null the instant the
-// budget is exceeded, cancelling the stream rather than draining it. Returning
-// null instead of throwing keeps every rejection on the one refusal path.
-async function readBounded(req: Request, maxBytes: number): Promise<string | null> {
-  if (req.body === null) return "";
-  const reader = req.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (value === undefined) continue;
-      total += value.byteLength;
-      // Cancelled, not broken out of. `break` alone leaves the sender writing
-      // into a stream nobody is reading, which is the same transfer this limit
-      // exists to refuse — just with the cost moved to the socket.
-      if (total > maxBytes) {
-        await reader.cancel();
-        return null;
-      }
-      chunks.push(value);
-    }
-  } catch {
-    return null;
-  }
-  const joined = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    joined.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return new TextDecoder().decode(joined);
-}
-
-// The address this request came from, as the PLATFORM reports it — which is not
-// the same thing as what the caller says, and the difference is the whole of this
-// function.
-//
-// `x-forwarded-for` is a list that grows to the RIGHT: each proxy appends the
-// address it received the connection from. So the leftmost entry is whatever the
-// original client wrote, and it is writable by anyone — `x-forwarded-for:
-// 203.0.113.<random>` on every request yields a fresh rate-limit bucket every
-// time, and the per-address limiter below stops firing at all. Reading position
-// [0] is the standard shape of this bug and it disables the control silently:
-// the limiter still runs, still writes rows, still returns true.
-//
-// So: `cf-connecting-ip` first, because an edge that sets it overwrites whatever
-// the client sent, and only then the RIGHTMOST forwarded hop, which is the entry
-// the closest trusted proxy appended and therefore the only one the caller could
-// not choose.
-//
-// THE CAVEAT, WHICH MUST BE CHECKED ON THE REAL PLATFORM AND NOT ASSUMED. If more
-// than one proxy appends, the rightmost hop is an internal address shared by
-// every caller, and the per-address limiter collapses into one global bucket.
-// That fails in the safe direction — everyone is limited together rather than
-// nobody being limited — but it is an outage rather than a control, so the
-// deployment step in the README says to confirm which header actually carries the
-// client address before trusting this.
-function callerAddress(req: Request): string {
-  const direct = req.headers.get("cf-connecting-ip")?.trim();
-  if (direct !== undefined && direct.length > 0) return direct;
-
-  const forwarded = req.headers.get("x-forwarded-for");
-  if (forwarded !== null) {
-    const hops = forwarded.split(",").map((hop) => hop.trim()).filter((hop) => hop.length > 0);
-    const nearest = hops[hops.length - 1];
-    if (nearest !== undefined) return nearest;
-  }
-  // Not a fallback to „no limit": every caller the platform cannot identify
-  // shares this one bucket, so an unidentifiable flood limits itself.
-  return "unknown";
-}
-
 Deno.serve(async (req: Request): Promise<Response> => {
   // NO CORS HEADERS, AND NO `OPTIONS` HANDLER, DELIBERATELY. The only caller is
   // the desktop's Electron MAIN process, which issues a server-to-server fetch
   // and is not subject to the same-origin policy at all. Adding permissive CORS
   // would make this endpoint reachable from any web page the user happens to
   // have open — a page that could then replay a token it observed, or simply
-  // hammer it. The absence of these headers is the access-control decision.
+  // hammer it.
+  //
+  // Absent CORS headers stop a page READING the response; they do not stop the
+  // request, and this endpoint changes state. `fromBrowsingContext` is the part
+  // that refuses it, before anything is parsed.
   if (req.method !== "POST") return badRequest("POST only");
+  if (fromBrowsingContext(req)) return badRequest("not callable from a browser");
 
   if (!SUPABASE_URL || !SERVICE_ROLE_KEY || !ANON_KEY || !RATE_SALT) {
     // Refuse rather than run degraded. A missing rate-limit salt in particular
     // must never fall back to „no salt" or „no limit": a control that silently
     // turns itself off when misconfigured is worse than one that was never
     // written, because the deployment reports itself as protected.
-    //
-    // 503 rather than the uniform 401 below. The uniform refusal exists so the
-    // endpoint cannot be used as an oracle about somebody's pairing state, and a
-    // missing environment variable says nothing about any account — while a 401
-    // for a server misconfiguration sends whoever is debugging it to look at the
-    // client for as long as it takes them to give up.
     console.error("pair-complete: missing required environment configuration");
-    return new Response(
-      JSON.stringify({ error: "unavailable" }),
-      { status: 503, headers: { "content-type": "application/json" } },
-    );
+    return unavailable();
   }
 
-  // The cheap refusal first, and it FAILS CLOSED. The previous shape was
-  // `Number.isFinite(n) && n > MAX` — which skips the check whenever the header
-  // is absent (`Number("") === 0`) or unparseable (`Number("abc")` is NaN), i.e.
-  // exactly when the caller is not being straightforward. A guard whose condition
-  // is „the input was well-formed AND too big" declines to guard against
-  // malformed input, which is the input worth guarding against.
-  const declared = req.headers.get("content-length");
-  if (declared !== null) {
-    const declaredBytes = Number(declared);
-    if (!Number.isInteger(declaredBytes) || declaredBytes < 0 ||
-        declaredBytes > MAX_BODY_BYTES) {
-      return badRequest("body too large");
-    }
-  }
+  if (!declaredLengthOk(req, MAX_BODY_BYTES)) return badRequest("body too large");
 
   // The real limit. See MAX_BODY_BYTES for why this cannot be `req.text()`.
   const raw = await readBounded(req, MAX_BODY_BYTES);
   if (raw === null) return badRequest("body too large");
 
-  let body: Record<string, unknown>;
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-      return badRequest("body must be a JSON object");
-    }
-    body = parsed as Record<string, unknown>;
-  } catch {
-    return badRequest("body must be JSON");
-  }
+  const body = parseJsonObject(raw);
+  if (body === null) return badRequest("body must be a JSON object");
 
   // THE ONLY CREDENTIAL THIS ENDPOINT ACCEPTS. Note what is NOT in this list:
   // the pairing code, `code_id`, or any digest of either. If a future change
@@ -447,7 +262,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return refuse();
   }
 
-  const sessionId = readSessionId(session.access_token);
+  // Read out of a token this function just received from its own auth server
+  // over the platform's internal network — justification (1) on
+  // `unverifiedClaims`. The value is written into `devices.session_id` and is
+  // never an authorisation input here.
+  const sessionId = unverifiedClaims(session.access_token)?.sessionId ?? null;
   if (!sessionId) {
     console.error("pair-complete: minted token carries no session_id");
     return refuse();
