@@ -2,7 +2,14 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { COLLECTION_DERIVED, SYNC_MAP, classify, fieldColumns, parentFields } from "@nexus/sync";
+import {
+  COLLECTION_COUPLED,
+  COLLECTION_DERIVED,
+  SYNC_MAP,
+  classify,
+  fieldColumns,
+  parentFields,
+} from "@nexus/sync";
 import { openDatabase, RESTORE_WIPE_TABLES } from "../index.js";
 import type { NexusDatabase } from "../index.js";
 
@@ -265,6 +272,93 @@ describe("the sync map against the real schema", () => {
         table,
         classified: false,
       });
+    }
+  });
+});
+
+/**
+ * The second half of the same idea, one layer down.
+ *
+ * The block above proves the map names the right TABLES. This proves it knows
+ * which of their COLUMNS cannot be merged one at a time. A table-level CHECK
+ * that reads two synced columns is a rule field-level LWW cannot see: each
+ * column takes the newer stamp on its own, and the pair can land in a
+ * combination the database refuses — at which point the merged row cannot be
+ * written at all, which is a worse outcome than being wrong.
+ *
+ * `COLLECTION_COUPLED` is the ledger of those pairs and `@nexus/sync`'s header
+ * on it says what is still owed. What this test adds is that the ledger cannot
+ * fall behind the schema: a migration that introduces a coupled CHECK fails
+ * here, on the day it is written, rather than months later as a row that
+ * silently never applies on one device.
+ */
+describe("coupled CHECKs against the real schema", () => {
+  /** Every top-level `CHECK (...)` in a CREATE TABLE, scanned by balanced parens. */
+  function checkExpressions(table: string): string[] {
+    const row = db.raw
+      .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?")
+      .get(table) as { sql: string | null } | undefined;
+    const sql = row?.sql ?? "";
+    const out: string[] = [];
+    const opener = /\bCHECK\s*\(/gi;
+    let match: RegExpExecArray | null;
+    while ((match = opener.exec(sql)) !== null) {
+      let depth = 1;
+      let i = match.index + match[0].length;
+      for (; i < sql.length && depth > 0; i++) {
+        if (sql[i] === "(") depth++;
+        else if (sql[i] === ")") depth--;
+      }
+      out.push(sql.slice(match.index + match[0].length, i - 1).replace(/\s+/g, " ").trim());
+    }
+    return out;
+  }
+
+  /** The synced field columns one CHECK reads. String literals are blanked first,
+   *  so `metric IN ('reps', …)` is not read as naming the `reps` column. */
+  function coupledColumns(table: string, fields: ReadonlySet<string>, check: string): string[] {
+    const bare = check.replace(/'[^']*'/g, "''");
+    return columns(table)
+      .map((column) => column.name)
+      .filter((name) => fields.has(name))
+      .filter((name) => new RegExp("\\b" + name + "\\b").test(bare));
+  }
+
+  it("lists every CHECK that ties two synced columns together, and nothing that does not", () => {
+    const found: string[] = [];
+    for (const entry of SYNC_MAP) {
+      if (entry.kind !== "collection") continue;
+      const fields = new Set(fieldColumns(entry, columns(entry.table).map((c) => c.name)));
+      for (const check of checkExpressions(entry.table)) {
+        const coupled = coupledColumns(entry.table, fields, check);
+        if (coupled.length >= 2) found.push(`${entry.table}: ${coupled.join(" + ")}`);
+      }
+    }
+    const ledger = Object.entries(COLLECTION_COUPLED).flatMap(([table, entries]) =>
+      entries.map((entry) => `${table}: ${entry.columns.join(" + ")}`),
+    );
+    // Both directions. A CHECK missing from the ledger is a merge that can
+    // produce an unwritable row with nothing recording it; a ledger entry with
+    // no CHECK behind it is a rule that was relaxed, and the note explaining a
+    // constraint that no longer exists is how the next reader is misled.
+    expect(found.slice().sort()).toEqual(ledger.slice().sort());
+  });
+
+  it("names real columns, and explains each pair concretely enough to act on", () => {
+    for (const [table, entries] of Object.entries(COLLECTION_COUPLED)) {
+      const present = new Set(columns(table).map((column) => column.name));
+      for (const entry of entries) {
+        const ghosts = entry.columns.filter((column) => !present.has(column));
+        expect({ table, ghosts }).toEqual({ table, ghosts: [] });
+        expect(entry.columns.length).toBeGreaterThanOrEqual(2);
+        // The ledger is read by whoever builds the repair, so „two columns are
+        // coupled" is not an entry — the illegal combination has to be stated.
+        expect({ table, columns: entry.columns, explained: entry.why.length > 80 }).toEqual({
+          table,
+          columns: entry.columns,
+          explained: true,
+        });
+      }
     }
   });
 });

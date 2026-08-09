@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyEdit,
   emptyRowState,
   hlcSend,
   hlcZero,
@@ -12,8 +13,11 @@ import type { SyncCollection } from "./collections.js";
 import {
   COLLECTION_DERIVED,
   UNIVERSAL_DERIVED,
+  deriveColumns,
   fieldColumns,
+  newestStamp,
   projectRow,
+  stampToIso,
   sweepRow,
 } from "./projection.js";
 
@@ -396,5 +400,132 @@ describe("sweepRow", () => {
       now: T2,
     });
     expect(same).toBeNull();
+  });
+});
+
+describe("newestStamp", () => {
+  it("takes the newest of every field AND the tombstone", () => {
+    const swept = sweepRow({
+      collection: TASKS,
+      columns: TASK_COLUMNS,
+      row: taskRow({ title: "Prijava ispita" }),
+      previous: sweepRow({
+        collection: TASKS,
+        columns: TASK_COLUMNS,
+        row: taskRow(),
+        previous: null,
+        now: T1,
+      }),
+      now: T2,
+    });
+    expect(newestStamp(swept!)).toEqual(T2);
+
+    // A delete at T3 is newer than any field, and it counts — `updated_at` is
+    // „when did anything about this row last change", not „when was a field set".
+    const gone = sweepRow({
+      collection: TASKS,
+      columns: TASK_COLUMNS,
+      row: null,
+      previous: swept,
+      now: T3,
+    });
+    expect(newestStamp(gone!)).toEqual(T3);
+  });
+
+  it("is the definition of `updated_at`, so it never goes backwards on an older arrival", () => {
+    // The failure it exists to prevent: reaching for „the stamp of the field I
+    // just changed" gives a column that moves BACK when an older field arrives
+    // from another device and loses the merge.
+    const newer = applyEdit(emptyRowState(T1), { title: "novo" }, T3);
+    const withOlder = applyEdit(newer, { status: "todo" }, T2);
+    expect(newestStamp(withOlder)).toEqual(T3);
+  });
+});
+
+describe("stampToIso", () => {
+  it("keeps the wall clock and drops the counter and the node id", () => {
+    // The counter and node id are what make the ORDER total; they have no place
+    // in a column a human reads. Two writes in one millisecond therefore share
+    // an `updated_at`, which is correct — the column is not an ordering.
+    const first = hlcSend(hlcZero("device-a"), 1_000);
+    const second = hlcSend(first, 1_000);
+    expect(second.counter).toBe(first.counter + 1);
+    expect(stampToIso(second)).toBe(stampToIso(first));
+    expect(stampToIso(first)).toBe(new Date(1_000).toISOString());
+  });
+});
+
+describe("deriveColumns", () => {
+  /** A `tasks` row swept for the first time, at T1. */
+  function swept(row: Record<string, JsonValue>) {
+    return sweepRow({ collection: TASKS, columns: TASK_COLUMNS, row, previous: null, now: T1 })!;
+  }
+
+  it("puts back exactly what `projectRow` subtracted — no column is dropped from one side", () => {
+    const columns = Object.keys(deriveColumns(TASKS, swept(taskRow())));
+    expect(new Set([...columns, ...TASKS.identity, "profile_id"])).toEqual(new Set(TASK_COLUMNS));
+  });
+
+  it("writes `updated_at` from the newest stamp the merged row carries", () => {
+    const first = swept(taskRow());
+    const edited = sweepRow({
+      collection: TASKS,
+      columns: TASK_COLUMNS,
+      row: taskRow({ title: "Prijava ispita" }),
+      previous: first,
+      now: T2,
+    })!;
+    expect(deriveColumns(TASKS, edited)["updated_at"]).toBe(stampToIso(T2));
+  });
+
+  it("writes `deleted_at` from the TOMBSTONE's stamp, which a later edit must not move", () => {
+    const deleted = sweepRow({
+      collection: TASKS,
+      columns: TASK_COLUMNS,
+      row: null,
+      previous: swept(taskRow()),
+      now: T2,
+    })!;
+    // An edit that arrived afterwards from a device that had not seen the delete.
+    const later = applyEdit(deleted, { description: "stiglo posle" }, T3);
+
+    expect(deriveColumns(TASKS, later)["deleted_at"]).toBe(stampToIso(T2));
+    expect(deriveColumns(TASKS, later)["updated_at"]).toBe(stampToIso(T3));
+  });
+
+  it("writes a null `deleted_at` for a live row", () => {
+    expect(deriveColumns(TASKS, swept(taskRow()))["deleted_at"]).toBeNull();
+  });
+
+  it("derives `completed_at` from `status`, at the moment the winning `status` was stamped", () => {
+    // Migration 002: CHECK ((status = 'done') = (completed_at IS NOT NULL)). The
+    // two columns are one fact, so only `status` travels — merging them
+    // independently produces a row SQLite REFUSES, which would make the whole
+    // row unappliable rather than merely wrong.
+    const done = sweepRow({
+      collection: TASKS,
+      columns: TASK_COLUMNS,
+      row: taskRow({ status: "done" }),
+      previous: swept(taskRow()),
+      now: T2,
+    })!;
+    const derived = deriveColumns(TASKS, done);
+    expect(derived["status"]).toBe("done");
+    expect(derived["completed_at"]).toBe(stampToIso(T2));
+
+    const reopened = applyEdit(done, { status: "todo" }, T3);
+    expect(deriveColumns(TASKS, reopened)["completed_at"]).toBeNull();
+  });
+
+  it("gives a collection without that CHECK no `completed_at` at all", () => {
+    const columns = ["profile_id", "semester_start", "updated_at"];
+    const settings = sweepRow({
+      collection: SETTINGS,
+      columns,
+      row: { profile_id: "p1", semester_start: "2026-10-01", updated_at: "2026-08-08T10:00:00Z" },
+      previous: null,
+      now: T1,
+    })!;
+    expect(deriveColumns(SETTINGS, settings)).not.toHaveProperty("completed_at");
   });
 });
