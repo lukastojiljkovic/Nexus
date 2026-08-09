@@ -89,6 +89,14 @@ jobs:
       # Postgres disagrees". Both, because they are not the same claim.
       - run: pnpm check:rls
 
+      # And the mutation suite BEHIND that checker, which until now nothing ran
+      # — not `pnpm test`, not this workflow. `check:rls` proves the current
+      # migrations pass; it says nothing about whether a rule could ever fail,
+      # and a gate that has never been observed to fail is indistinguishable
+      # from one that cannot. These 38 break the real migrations one line at a
+      # time and demand the specific complaint. (Also reached by `pnpm test`.)
+      - run: pnpm test:wall
+
       - run: pnpm build
 
       - run: pnpm typecheck
