@@ -14,10 +14,13 @@
  * never constructs a port, and there is nothing in here that could go looking
  * for one.
  *
- * The eight pieces:
+ * The nine pieces:
  *
  *  - `http.ts`     the port seam, and `filterValue` — the measured rule that
  *                  keeps a PATCH from silently matching nothing.
+ *  - `enable.ts`   the one Edge Function call — minting the account's master key
+ *                  — and the byte comparison that proves the server stored what
+ *                  this desktop sent.
  *  - `bytea.ts`    hex `bytea` ↔ base64url, the one translation nobody else can do.
  *  - `rows.ts`     column names ↔ `PushRow`/`PulledRow`, and the explicit select list.
  *  - `outcome.ts`  every way a write can end, named, with the SQLSTATE map.
@@ -38,6 +41,8 @@ export {
   queryString,
 } from "./http.js";
 export type {
+  FunctionPort,
+  FunctionRequest,
   HttpMethod,
   HttpPort,
   HttpRequest,
@@ -45,6 +50,27 @@ export type {
   PostgrestFailure,
   QueryParam,
 } from "./http.js";
+
+// ── Turning sync on ─────────────────────────────────────────────────────────
+export {
+  AUTHORISING_TOKEN_HEADER,
+  KEY_WRAP_COLUMNS,
+  SYNC_ENABLE_FUNCTION,
+  enableSync,
+  keyWrapReadbackRequest,
+  parseSyncEnableResponse,
+  syncEnableBody,
+  syncEnableRequest,
+  syncEnableRoundTripProblem,
+} from "./enable.js";
+export type {
+  SealedKeyFields,
+  SealedNameFields,
+  SyncEnableBody,
+  SyncEnableInput,
+  SyncEnableRefusal,
+  SyncEnableResult,
+} from "./enable.js";
 
 // ── bytea ───────────────────────────────────────────────────────────────────
 export { base64urlToBytea, byteaToBase64url } from "./bytea.js";

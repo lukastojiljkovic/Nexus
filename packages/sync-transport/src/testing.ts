@@ -7,7 +7,7 @@
  * public seam is the port itself — anybody wiring a real one supplies it.
  */
 
-import type { HttpPort, HttpRequest, HttpResponse } from "./http.js";
+import type { FunctionPort, FunctionRequest, HttpPort, HttpRequest, HttpResponse } from "./http.js";
 
 export interface RecordedPort {
   readonly port: HttpPort;
@@ -32,6 +32,29 @@ export function recordingPort(responses: readonly HttpResponse[]): RecordedPort 
     index += 1;
     if (response === undefined) {
       throw new Error(`recordingPort: unexpected request ${request.method} ${request.path}`);
+    }
+    return response;
+  };
+  return { port, requests };
+}
+
+export interface RecordedFunctionPort {
+  readonly port: FunctionPort;
+  readonly requests: readonly FunctionRequest[];
+}
+
+/** The same, for the Edge Function seam. */
+export function recordingFunctionPort(
+  responses: readonly HttpResponse[],
+): RecordedFunctionPort {
+  const requests: FunctionRequest[] = [];
+  let index = 0;
+  const port: FunctionPort = async (request) => {
+    requests.push(request);
+    const response = responses[index];
+    index += 1;
+    if (response === undefined) {
+      throw new Error(`recordingFunctionPort: unexpected call to ${request.name}`);
     }
     return response;
   };

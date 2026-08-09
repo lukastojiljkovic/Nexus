@@ -58,6 +58,32 @@ export interface HttpResponse {
 
 export type HttpPort = (request: HttpRequest) => Promise<HttpResponse>;
 
+/**
+ * A call to an Edge Function, which is a different root and therefore a
+ * different seam.
+ *
+ * {@link HttpRequest.path} is documented as being under the PostgREST root, and
+ * an Edge Function is not: it lives at `/functions/v1/<name>`. Reusing the same
+ * type would mean either a port that inspects paths to decide which root to
+ * prepend, or a caller that writes `/functions/v1/…` into a field whose contract
+ * says it never contains one. Both are the shape of mistake that shows up as a
+ * 404 nobody can explain, so the two seams are two types.
+ *
+ * A port prepends the origin and `/functions/v1/`, and supplies `apikey` and
+ * `Authorization` — the long-lived credentials it owns, exactly as for
+ * {@link HttpRequest}. Anything in {@link headers} is a PARAMETER OF THE CALL:
+ * `sync-enable` carries a second, ephemeral token that authorises one mint and is
+ * signed out immediately afterwards, and no port could know it.
+ */
+export interface FunctionRequest {
+  /** The function's name — `sync-enable`. Never a path, never a URL. */
+  readonly name: string;
+  readonly headers: Readonly<Record<string, string>>;
+  readonly body: string;
+}
+
+export type FunctionPort = (request: FunctionRequest) => Promise<HttpResponse>;
+
 /** A PostgREST query parameter, value UNENCODED. */
 export type QueryParam = readonly [name: string, value: string];
 
