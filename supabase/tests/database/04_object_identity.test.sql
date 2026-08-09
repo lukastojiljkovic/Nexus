@@ -27,6 +27,25 @@ insert into auth.users (instance_id, id, aud, role, email, created_at, updated_a
 values ('00000000-0000-0000-0000-000000000000', 'dddddddd-0000-4000-8000-000000000004',
         'authenticated', 'authenticated', 'd@nexus.test', now(), now());
 
+-- A ROW MAY ONLY BE SEALED UNDER A GENERATION WHOSE KEY IS STORED (NX007), so
+-- both profiles used below need their `ck_under_mk` wrap before they can hold
+-- anything at all. Epoch 2 for the first profile is seeded here too — the
+-- rotation assertions further down raise a row into it.
+insert into public.key_wraps (user_id, kind, profile_id, epoch, nonce, wrapped, commit_tag)
+values
+  ('dddddddd-0000-4000-8000-000000000004', 'ck_under_mk',
+   '11111111-1111-4111-8111-111111111111', 1,
+   decode(repeat('f1', 24), 'hex'), decode(repeat('e1', 48), 'hex'),
+   decode(repeat('d1', 32), 'hex')),
+  ('dddddddd-0000-4000-8000-000000000004', 'ck_under_mk',
+   '11111111-1111-4111-8111-111111111111', 2,
+   decode(repeat('f2', 24), 'hex'), decode(repeat('e2', 48), 'hex'),
+   decode(repeat('d2', 32), 'hex')),
+  ('dddddddd-0000-4000-8000-000000000004', 'ck_under_mk',
+   '22222222-2222-4222-8222-222222222222', 1,
+   decode(repeat('f3', 24), 'hex'), decode(repeat('e3', 48), 'hex'),
+   decode(repeat('d3', 32), 'hex'));
+
 -- ---------------------------------------------------------------------------
 -- The six per-profile singletons.
 -- ---------------------------------------------------------------------------
@@ -134,7 +153,8 @@ select is(
 select lives_ok(
   $$ update public.sync_objects
         set ck_epoch = 2, version = version + 1,
-            nonce = decode(repeat('08', 24), 'hex')
+            nonce = decode(repeat('08', 24), 'hex'),
+            ciphertext = decode(repeat('81', 32), 'hex')
       where collection = 'fit_measurements' $$,
   're-encrypting under a new content key raises the epoch'
 );
@@ -142,9 +162,10 @@ select lives_ok(
 select throws_ok(
   $$ update public.sync_objects
         set ck_epoch = 1, version = version + 1,
-            nonce = decode(repeat('09', 24), 'hex')
+            nonce = decode(repeat('09', 24), 'hex'),
+            ciphertext = decode(repeat('91', 32), 'hex')
       where collection = 'fit_measurements' $$,
-  'NX007',
+  'NX006',
   null,
   'the epoch may not go backwards — a rollback hands the row to whoever holds '
   'the old key'
@@ -154,9 +175,9 @@ select throws_ok(
 -- key_wraps — the commitment tag has a column, and it is not optional.
 -- ---------------------------------------------------------------------------
 select throws_ok(
-  $$ insert into public.key_wraps (user_id, kind, profile_id, nonce, wrapped)
+  $$ insert into public.key_wraps (user_id, kind, profile_id, epoch, nonce, wrapped)
      values ('dddddddd-0000-4000-8000-000000000004', 'ck_under_mk',
-             '11111111-1111-4111-8111-111111111111',
+             '11111111-1111-4111-8111-111111111111', 3,
              decode(repeat('11', 24), 'hex'), decode(repeat('aa', 48), 'hex')) $$,
   '23502',
   null,

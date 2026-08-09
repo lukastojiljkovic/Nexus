@@ -92,9 +92,9 @@ app**. It does not learn *what*.
    `ck_under_mk` row can be brought into existence for a local-only profile by
    **re-pointing an existing one**, and that is an UPDATE of a single column. So
    `kind` and `profile_id` carry no UPDATE grant and the `key_wraps` guard
-   trigger refuses the move (`NX007`). Against the database's own operator only
+   trigger refuses the move (`NX102`). Against the database's own operator only
    the AEAD reaches that far, which is why the required associated data —
-   `"nexus/sync/key-wrap/v1" ‖ user_id ‖ kind ‖ profile_id` — is stated as a
+   `"nexus/sync/key-wrap/v2" ‖ user_id ‖ kind ‖ profile_id ‖ epoch` — is stated as a
    `comment on table` in migration 001 rather than left to a client.
 
 ---
@@ -267,17 +267,41 @@ The triggers' contract with the sync client is their SQLSTATEs:
 
 | Code | Table | Rule | What the client should do |
 | --- | --- | --- | --- |
-| `NX001` | `sync_objects` | version must strictly increase | **Retryable.** Re-read, merge, write `observed + 1`. This is the optimistic-concurrency conflict. |
-| `NX002` | `sync_objects` | version step ≤ 65 536, on INSERT as well as UPDATE | Bug or attack. Stop. |
-| `NX003` | `sync_objects` | a tombstone is terminal | Bug. Undo-delete is a *new* object with a new id. |
+| `NX001` | `sync_objects` | an update writes exactly `stored + 1` | **Retryable.** Re-read, merge, write `observed + 1`. This is the optimistic-concurrency conflict — and, after a lost response, a duplicate: if the server's row is byte-identical to what you sent, that push succeeded. |
+| `NX002` | `sync_objects` | a creation starts at version 1 | Bug or attack. The server has no row for this object; push it as a creation, or pull first. |
+| `NX003` | `sync_objects` | every version carries a new ciphertext | Bug or tampering. The version is in the AAD, so an unchanged ciphertext at a new version opens for nobody. |
 | `NX004` | `sync_objects` | identity columns are immutable | Bug. Those four columns are the AEAD associated data. |
 | `NX005` | `sync_objects` | every version needs a freshly drawn nonce | Bug, and a severe one — see below. Stop and fix the encryptor. |
-| `NX006` | `key_wraps` | a changed wrap needs a fresh nonce | Same class as `NX005`, on the rotation path. |
-| `NX007` | `key_wraps` | a wrap cannot change slot | Bug. Retire with `disabled_at` and insert the new row. |
-| `NX008` | `devices` | `revoked_at` is terminal | Bug. Pair again for a new session and a new row. |
-| `NX009` | `devices` | id/user/session/platform are immutable | Bug. Re-pointing a row vouches for a session nobody paired. |
+| `NX006` | `sync_objects` | `ck_epoch` never falls | Bug. A rotation only moves forward. |
+| `NX007` | `sync_objects` | `ck_epoch` names a stored `ck_under_mk` wrap | Bug. Store the wrapped content key for the epoch before sealing rows under it. |
+| `NX101` | `key_wraps` | a changed wrap needs a fresh nonce | Same class as `NX005`, on the rotation path. |
+| `NX102` | `key_wraps` | a wrap cannot change slot (`kind`/`profile_id`/`epoch`) | Bug. Retire with `disabled_at` and insert the new row. |
+| `NX201` | `devices` | `revoked_at` is terminal | Bug. Pair again for a new session and a new row. |
+| `NX202` | `devices` | id/user/session/platform are immutable | Bug. Re-pointing a row vouches for a session nobody paired. |
+| `NX301` | pairing RPC | rate-limit parameters must be positive | Bug in the Edge Function's own call. |
+| `NX302` | pairing RPC | a completion token digest is exactly 32 bytes | Bug in the Edge Function's own call. |
 
-`NX005`/`NX006` are worth a sentence of their own, because they are the one rule
+**The codes are banded by table** — `NX0xx` for `sync_objects`, `NX1xx` for
+`key_wraps`, `NX2xx` for `devices`, `NX3xx` for the pairing RPCs. That is not
+filing. These codes reach the client verbatim (PostgREST v14.16 maps an unknown
+SQLSTATE to HTTP 400 and passes `code`, `details` and `hint` straight through, so
+a guard violation is a non-retryable 4xx carrying a machine-readable rule id),
+which makes them the sync engine's error map. Before the banding, `NX007` meant
+both „a wrap cannot change slot" and „the epoch may not fall" — ambiguous exactly
+where the map decides between *re-read and merge* and *stop and tell the user*.
+
+**Two rules that used to be here are gone, and both removals are load-bearing.**
+The old `NX002` bounded a version step at 65 536; with `NX001` now an equality
+there is no step to bound, and — more importantly — the old rule permitted a
+silent lost update, because a client that observed version 5 and wrote 9 erased
+versions 6 to 8 with no error anywhere. The old `NX003` made a tombstone
+terminal. It contradicted restore-from-trash, which ships in the 1.0.0 desktop
+app; its stated defence was already provided by `deleted` and `version` being in
+the AAD; and it was a one-way ratchet pointed at the owner, since a stolen
+session could tombstone every row and the honest repair is precisely a write
+setting `deleted = false`. Migration 003's header carries the full argument.
+
+`NX005`/`NX101` are worth a sentence of their own, because they are the one rule
 here that is not about ordering or ownership. Reuse of a `(key, nonce)` pair under
 XChaCha20-Poly1305 is not a weakening, it is a break, twice over: the keystream
 depends on the key and the nonce alone, so two versions written at one nonce XOR
@@ -285,9 +309,15 @@ to the XOR of their plaintexts; and the Poly1305 one-time key repeats with it, s
 two messages under it are enough to solve for `r` and `s` and forge anything at
 all under that pair. **The associated data does not help** — `NX001` guarantees
 the AAD differs on every version, and associated data never reaches the
-keystream. `NX006` is the sharper case: a content key rotated under an unchanged
+keystream. `NX101` is the sharper case: a content key rotated under an unchanged
 `MK` at an unchanged nonce publishes `CK_old XOR CK_new`, handing the new key to
 exactly the party the rotation was performed to lock out.
+
+`NX005` is also only half the nonce policy. It compares against the nonce the row
+is replacing, which is one row deep; the `sync_objects_nonce_unique` index covers
+the complementary case — a nonce repeated across different rows of one
+`(profile, epoch)` — which is the shape a broken generator produces and the shape
+the trigger structurally cannot see.
 
 > PostgREST reports an unrecognised SQLSTATE class as HTTP 500 while still
 > returning the code in the response body's `code` field. **The sync client must
@@ -410,7 +440,7 @@ therefore so is every desktop session. The schema is ahead of the protocol.
 policies consult it on every statement. It does **not** invalidate the GoTrue
 session: the refresh token in that client's hands keeps working and keeps minting
 access tokens, which are simply refused by the wall. The trigger makes the column
-terminal (`NX008`) so the refusal cannot be undone, but the correct end state is
+terminal (`NX201`) so the refusal cannot be undone, but the correct end state is
 that revoking a device also calls the admin sign-out API for that `session_id`.
 That needs an authenticated Edge Function and is not built.
 

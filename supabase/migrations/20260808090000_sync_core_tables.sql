@@ -289,6 +289,33 @@ create index sync_objects_children
   on public.sync_objects (user_id, profile_id, parent_id)
   where parent_id is not null;
 
+-- A UNIQUE INDEX THAT IS A CRYPTOGRAPHIC CONTROL, NOT A PERFORMANCE ONE.
+--
+-- The scope is exactly the scope over which a repeated nonce is a break: one
+-- content key seals one profile at one epoch, so `(user_id, profile_id,
+-- ck_epoch, nonce)` is the tuple that must not repeat. A nonce reused across
+-- two DIFFERENT epochs is harmless — different key — and this correctly permits
+-- it, which a coarser index would not.
+--
+-- WHAT IT CATCHES THAT THE TRIGGER CANNOT. Migration 003's NX005 rule compares a
+-- row's new nonce against the one it is replacing, and that is one row deep: it
+-- sees a client that re-sent the nonce it just parsed, and nothing else. The
+-- dangerous real failure is a broken generator — a `randomBytes` returning
+-- zeros, a test double reaching a production build, a counter that resets after
+-- a reinstall — and that repeats ACROSS rows, where NX005 never looks. Two
+-- different objects sealed under one key at one nonce is the identical break as
+-- one object sealed twice: the keystream is a function of (key, nonce) alone,
+-- so their ciphertexts XOR to the XOR of their plaintexts, and the repeated
+-- Poly1305 one-time key forges either.
+--
+-- Neither mechanism proves global uniqueness, and this one cannot: the table
+-- holds only each row's CURRENT nonce, so history is structurally unavailable.
+-- What it converts is „we hope clients draw fresh bytes" into „a client that
+-- does not stops working on its second row", which is the strongest statement
+-- available to a server that holds no key.
+create unique index sync_objects_nonce_unique
+  on public.sync_objects (user_id, profile_id, ck_epoch, nonce);
+
 -- ---------------------------------------------------------------------------
 -- key_wraps — the key hierarchy, as ciphertext.
 -- ---------------------------------------------------------------------------
@@ -314,6 +341,28 @@ create table public.key_wraps (
   user_id     uuid        not null references auth.users (id) on delete cascade,
   kind        text        not null,
   profile_id  uuid,
+  -- WHICH GENERATION OF THE CONTENT KEY THIS WRAP HOLDS, and the reason this
+  -- table has more than one row per profile at all.
+  --
+  -- `sync_objects.ck_epoch` exists precisely so that two generations can be live
+  -- at once: a rotation re-encrypts a profile row by row, and until it finishes
+  -- the account holds rows on both. Without this column the slot key was
+  -- `(user_id, kind, profile_id)` — exactly ONE `ck_under_mk` per profile — so
+  -- storing CK at epoch 2 REPLACED CK at epoch 1, and every row the rotation had
+  -- not reached yet became permanently unopenable by every device. A rotation
+  -- that was interrupted, or merely slow, destroyed the data it was protecting.
+  -- The epoch turns a replacement into an append.
+  --
+  -- Null for the two `mk_*` slots, and that is not a spare field left empty: the
+  -- master key is not rotated by this mechanism, and a number sitting there would
+  -- imply a generation that nothing mints and nothing reads.
+  --
+  -- IT MUST ALSO BE IN THE CLIENT'S ASSOCIATED DATA, like `kind` and
+  -- `profile_id` and for the same reason — see the AAD note under this table. A
+  -- wrap moved between epochs still opens under MK and yields the WRONG content
+  -- key for the epoch it now claims, which the client cannot detect from the
+  -- bytes.
+  epoch       smallint,
   nonce       bytea       not null,
   wrapped     bytea       not null,
   -- THE KEY-COMMITMENT TAG, AND IT HAS TO BE A COLUMN OF ITS OWN.
@@ -358,6 +407,18 @@ create table public.key_wraps (
   constraint key_wraps_profile_presence check (
     (kind = 'ck_under_mk' and profile_id is not null)
     or (kind <> 'ck_under_mk' and profile_id is null)
+  ),
+
+  -- The epoch travels with `profile_id` and is bound by the same argument: a
+  -- content-key wrap belongs to one generation of one profile, and a master-key
+  -- wrap belongs to no generation at all. Written as its own constraint rather
+  -- than folded into the one above so a failure names which half is wrong.
+  --
+  -- The ceiling matches `sync_objects_ck_epoch_range`: both are `smallint`, and
+  -- a wrap at an epoch no row could ever carry is a wrap for nothing.
+  constraint key_wraps_epoch_presence check (
+    (kind = 'ck_under_mk' and epoch is not null and epoch >= 1)
+    or (kind <> 'ck_under_mk' and epoch is null)
   ),
 
   -- 24 bytes here for the same reason as `sync_objects`, and this one is a
@@ -422,13 +483,19 @@ create table public.key_wraps (
 -- index silently permits a SECOND master-key wrap per user — at which point
 -- „which one is current" is a question the schema no longer answers and a
 -- rotation that half-failed is indistinguishable from one that succeeded.
+-- `epoch` is part of the slot, so one profile holds one wrap PER GENERATION and
+-- a rotation appends rather than overwrites. The two `mk_*` slots carry a null
+-- epoch and are still one-per-user, which is what `nulls not distinct` keeps
+-- true across both of the nullable columns at once.
 create unique index key_wraps_one_per_slot
-  on public.key_wraps (user_id, kind, profile_id) nulls not distinct;
+  on public.key_wraps (user_id, kind, profile_id, epoch) nulls not distinct;
 
 comment on table public.key_wraps is
   'Wrapped keys. Every row is opaque; the server holds no unwrapping secret. '
-  'AEAD associated data MUST bind "nexus/sync/key-wrap/v1" || user_id || kind || '
-  'coalesce(profile_id, ''''), or a wrap can be moved between slots.';
+  'AEAD associated data MUST bind "nexus/sync/key-wrap/v2" || user_id || kind || '
+  'coalesce(profile_id, '''') || epoch, or a wrap can be moved between slots — '
+  'including between epochs of one profile, which yields the wrong content key '
+  'for the generation it claims.';
 
 -- THE AAD REQUIREMENT ABOVE IS NOT DECORATION, and it is the one rule in this
 -- table the database cannot enforce for itself. Without `profile_id` inside the
@@ -455,9 +522,14 @@ comment on column public.key_wraps.profile_id is
   'LEAKS: WHICH profiles are web-enabled. Its absence is the local-only '
   'guarantee: a profile with no ck_under_mk row can never be opened by a '
   'browser session, because there is nothing to send it.';
+comment on column public.key_wraps.epoch is
+  'LEAKS: how many times this profile''s content key has been rotated — the same '
+  'fact sync_objects.ck_epoch already concedes, and it is the join between them. '
+  'Null for the two mk_* slots, which are not rotated by this mechanism. Part of '
+  'the slot identity and therefore of the AEAD associated data.';
 comment on column public.key_wraps.nonce is
   'LEAKS: nothing. 24 random bytes, and fresh whenever `wrapped` changes — the '
-  'guard trigger refuses a re-wrap that keeps the old nonce (NX006). This is the '
+  'guard trigger refuses a re-wrap that keeps the old nonce (NX101). This is the '
   'rotation path: a NEW content key re-wrapped under the SAME MK at the SAME '
   'nonce publishes CK_old XOR CK_new to anyone who held CK_old, which is exactly '
   'the party a rotation is performed to lock out.';

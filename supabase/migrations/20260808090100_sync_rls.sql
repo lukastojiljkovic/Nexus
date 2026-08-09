@@ -254,6 +254,15 @@ revoke all on public.key_wraps from authenticated;
 -- silent confusion — but the AAD is a rule for the client, and this is a rule for
 -- the database. Both, in that order.
 --
+-- `epoch` IS ON THE SAME LIST, AND FOR A SHARPER VERSION OF THE SAME REASON. It
+-- is insertable — minting the next generation of a content key is exactly an
+-- INSERT — and never updatable. Moving a wrap between epochs would leave a row
+-- that opens under MK and yields the content key of a DIFFERENT generation than
+-- the one it claims, which is a client that decrypts nothing and cannot say why;
+-- and because migration 003 admits a `sync_objects.ck_epoch` only when a wrap
+-- exists at that epoch, an updatable epoch would also let one statement strand
+-- every row of a generation whose wrap had wandered off.
+--
 -- `rotated_at` and `disabled_at` stay writable: retiring and rotating are the
 -- only two lifecycle operations this table has, and no DELETE exists to express
 -- either.
@@ -262,7 +271,7 @@ grant select on public.key_wraps to authenticated;
 -- the tag is derived from the same KEK as the encryption subkey, so a wrap whose
 -- ciphertext moved and whose tag did not is a wrap that cannot be opened at all.
 -- Granting one without the other would only make that state reachable.
-grant insert (user_id, kind, profile_id, nonce, wrapped, commit_tag, kdf_salt, kdf_params)
+grant insert (user_id, kind, profile_id, epoch, nonce, wrapped, commit_tag, kdf_salt, kdf_params)
   on public.key_wraps to authenticated;
 grant update (nonce, wrapped, commit_tag, kdf_salt, kdf_params, rotated_at, disabled_at)
   on public.key_wraps to authenticated;

@@ -46,7 +46,7 @@ begin
   -- the session was ended.
   if old.revoked_at is not null and new.revoked_at is distinct from old.revoked_at then
     raise exception using
-      errcode = 'NX008',
+      errcode = 'NX201',
       message = 'devices.revoked_at is terminal — a revoked device stays revoked',
       detail  = format('device %s was revoked at %s', old.id, old.revoked_at),
       hint    = 'Pair the machine again to give it a new session and a new row; '
@@ -69,7 +69,7 @@ begin
      or new.session_id is distinct from old.session_id
      or new.platform is distinct from old.platform then
     raise exception using
-      errcode = 'NX009',
+      errcode = 'NX202',
       message = 'devices identity is immutable',
       detail  = format('device %s: id/user/session/platform may not change', old.id),
       hint    = 'A device row is the binding between one client and one auth '
@@ -82,8 +82,8 @@ end;
 $$;
 
 comment on function public.devices_guard() is
-  'BEFORE UPDATE guard: revoked_at is terminal (NX008), id/user/session/platform '
-  'are immutable (NX009), created_at survives. See the migration header.';
+  'BEFORE UPDATE guard: revoked_at is terminal (NX201), id/user/session/platform '
+  'are immutable (NX202), created_at survives. See the migration header.';
 
 revoke all on function public.devices_guard() from public;
 revoke all on function public.devices_guard() from anon;

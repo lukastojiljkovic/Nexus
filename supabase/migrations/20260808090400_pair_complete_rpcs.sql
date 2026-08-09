@@ -72,7 +72,7 @@ declare
 begin
   if p_limit < 1 or p_window <= interval '0' then
     raise exception using
-      errcode = 'NX010',
+      errcode = 'NX301',
       message = 'rate limit parameters must be positive';
   end if;
 
@@ -147,7 +147,7 @@ begin
   -- Function would report a wrong-but-plausible reason for the failure.
   if p_token_hash is null or octet_length(p_token_hash) <> 32 then
     raise exception using
-      errcode = 'NX011',
+      errcode = 'NX302',
       message = 'completion token digest must be exactly 32 bytes';
   end if;
 

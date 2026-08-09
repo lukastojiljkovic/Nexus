@@ -1,4 +1,4 @@
--- THE FOUR ILLEGAL UPDATES. Requires a live database:
+-- THE GUARD TRIGGER ON `sync_objects`. Requires a live database:
 --   supabase start && supabase db reset && supabase test db
 --
 -- WHY THIS FILE DOES NOT SWITCH TO `authenticated`. Migration 002 withholds the
@@ -11,20 +11,29 @@
 -- own SQLSTATE. `01_two_users.test.sql` covers the privilege wall separately;
 -- both walls exist, and each is proved from the position where only it applies.
 --
--- The SQLSTATEs are the trigger's contract with the sync client, not decoration:
--- NX001 is the optimistic-concurrency conflict, whose correct handling is
--- re-read and merge, and NX002/3/4 are „this write was never legal", whose
--- correct handling is to stop and report a bug. Asserting them by code is what
--- keeps the two from being collapsed into one retry loop.
+-- THE SQLSTATEs ARE THE TRIGGER'S CONTRACT WITH THE SYNC CLIENT, not decoration.
+-- They reach the client verbatim: PostgREST v14.16 maps an unknown SQLSTATE to
+-- HTTP 400 and passes `code`, `details` and `hint` straight through, so this
+-- suite is asserting the values a sync engine will branch on. NX001 is the
+-- optimistic-concurrency conflict, whose correct handling is re-read and merge;
+-- every other code is „this write was never legal", whose correct handling is to
+-- stop and report. Asserting them by code is what keeps the two from being
+-- collapsed into one retry loop.
+--
+-- EVERY SUCCESSFUL UPDATE BELOW CARRIES A NEW NONCE AND NEW CIPHERTEXT. That is
+-- not scaffolding to be worked around — it is the contract. A version's
+-- ciphertext is a fresh encryption; a fresh encryption under XChaCha20-Poly1305
+-- needs a fresh nonce or it publishes the XOR of the two plaintexts and the key
+-- that forges either of them.
 
 begin;
 
 set local search_path = public, extensions;
 
-select plan(19);
+select plan(28);
 
 -- ASSERTED FIRST, so a misconfigured runner produces one clear failure instead
--- of sixteen confusing ones. Every table here has FORCE row level security,
+-- of twenty-seven confusing ones. Every table here has FORCE row level security,
 -- which removes the OWNER's exemption too, and every policy is addressed `TO
 -- authenticated` — so a migration role that is neither superuser nor BYPASSRLS
 -- matches no policy at all and is denied everything. That is the wall working
@@ -38,97 +47,104 @@ insert into auth.users (instance_id, id, aud, role, email, created_at, updated_a
 values ('00000000-0000-0000-0000-000000000000', 'aaaaaaaa-0000-4000-8000-000000000001',
         'authenticated', 'authenticated', 'a@nexus.test', now(), now());
 
+-- THE CONTENT-KEY WRAP COMES FIRST, and a suite that seeds rows without it fails
+-- at the first insert. That ordering is the point of NX007: a row sealed under a
+-- generation whose key was never stored is a row nobody can ever open, so the
+-- database refuses to hold one.
+insert into public.key_wraps (user_id, kind, profile_id, epoch, nonce, wrapped, commit_tag)
+values ('aaaaaaaa-0000-4000-8000-000000000001', 'ck_under_mk',
+        '11111111-1111-4111-8111-111111111111', 1,
+        decode(repeat('f1', 24), 'hex'), decode(repeat('e1', 48), 'hex'),
+        decode(repeat('d1', 32), 'hex'));
+
 insert into public.sync_objects
   (user_id, profile_id, collection, object_id, version, nonce, ciphertext)
 values ('aaaaaaaa-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111',
-        'tasks', 'a0000000-0000-4000-8000-000000000001', 10,
-        decode(repeat('11', 24), 'hex'), decode(repeat('aa', 32), 'hex'));
+        'tasks', 'a0000000-0000-4000-8000-000000000001', 1,
+        decode(repeat('01', 24), 'hex'), decode(repeat('a1', 32), 'hex'));
 
 -- ---------------------------------------------------------------------------
--- RULE 1 — the version strictly increases.
+-- NX001 — the version is exactly one more than the stored one.
 -- ---------------------------------------------------------------------------
--- Equality is rejected along with regress. The version is bound into the AEAD
--- associated data, so a same-version write carrying different ciphertext is
--- either a forgery attempt or a client that has lost its counter, and there is
--- no reading under which the server should keep the newer bytes.
+-- A compare-and-swap, not a monotonicity check. Equality is refused because the
+-- version is in the AEAD associated data, so a same-version write carrying
+-- different ciphertext is either a forgery attempt or a client that has lost its
+-- counter.
 select throws_ok(
-  $$ update public.sync_objects set version = 10
+  $$ update public.sync_objects set version = 1
       where object_id = 'a0000000-0000-4000-8000-000000000001' $$,
   'NX001'::char(5), NULL::text,
   'a write at the same version is refused'
 );
 
+-- THE ASSERTION THAT THE OLD `>` RULE COULD NOT MAKE. A client that observed
+-- version 1 and writes 3 has skipped a version it never saw — under the previous
+-- rule the server accepted it and version 2's edit was erased with no error
+-- anywhere. That is a lost update, and it is the reason this rule is an equality.
 select throws_ok(
-  $$ update public.sync_objects set version = 9
+  $$ update public.sync_objects set version = 3
+      where object_id = 'a0000000-0000-4000-8000-000000000001' $$,
+  'NX001'::char(5), NULL::text,
+  'a write that SKIPS a version is refused — the silent lost update'
+);
+
+select lives_ok(
+  $$ update public.sync_objects
+        set version = 2, nonce = decode(repeat('02', 24), 'hex'),
+            ciphertext = decode(repeat('a2', 32), 'hex')
+      where object_id = 'a0000000-0000-4000-8000-000000000001' $$,
+  'the honest path — observed_version + 1, re-sealed — is accepted'
+);
+
+select throws_ok(
+  $$ update public.sync_objects set version = 1
       where object_id = 'a0000000-0000-4000-8000-000000000001' $$,
   'NX001'::char(5), NULL::text,
   'a write at a lower version is refused'
 );
 
 -- ---------------------------------------------------------------------------
--- RULE 2 — the step is bounded.
+-- THE UPSERT PATH, which is how a client actually pushes.
 -- ---------------------------------------------------------------------------
--- This is the lock-out defence. One statement writing `version = 2^53-1` with
--- garbage ciphertext would be latched by every honest client as that object's
--- anti-rollback high-water mark, and no real edit could ever win again — not
--- even after restoring the server, because the poison would already be inside
--- every device.
-select throws_ok(
-  $$ update public.sync_objects set version = 9007199254740991
-      where object_id = 'a0000000-0000-4000-8000-000000000001' $$,
-  'NX002'::char(5), NULL::text,
-  'a jump to the top of the version space is refused'
-);
-
-select throws_ok(
-  $$ update public.sync_objects set version = 10 + 65537
-      where object_id = 'a0000000-0000-4000-8000-000000000001' $$,
-  'NX002'::char(5), NULL::text,
-  'a step one past the bound is refused'
-);
-
--- Every successful update below carries a NEW nonce, because RULE 5 refuses one
--- that does not. That is not test scaffolding to be worked around: a version's
--- ciphertext is a fresh encryption, and a fresh encryption under XChaCha20-
--- Poly1305 needs a fresh nonce or it publishes the XOR of the two plaintexts and
--- the key that forges either of them.
+-- A REGRESSION TEST FOR A TRAP THAT WAS ALMOST SHIPPED. In `insert … on conflict
+-- do update`, PostgreSQL fires every BEFORE INSERT trigger BEFORE it detects the
+-- conflict — verified, not inferred. So the INSERT branch is handed the version
+-- of an UPDATE, and a flat „a creation is version 1" there would refuse every
+-- push of an existing object at version 2 or above. The trigger's first-version
+-- rule is therefore conditional on the row not already existing, and this is the
+-- assertion that keeps it that way.
 select lives_ok(
-  $$ update public.sync_objects
-        set version = 10 + 65536, nonce = decode(repeat('21', 24), 'hex')
-      where object_id = 'a0000000-0000-4000-8000-000000000001' $$,
-  'a step exactly at the bound is allowed — the boundary is not off by one'
+  $$ insert into public.sync_objects
+       (user_id, profile_id, collection, object_id, version, nonce, ciphertext)
+     values ('aaaaaaaa-0000-4000-8000-000000000001',
+             '11111111-1111-4111-8111-111111111111', 'tasks',
+             'a0000000-0000-4000-8000-000000000001', 3,
+             decode(repeat('03', 24), 'hex'), decode(repeat('a3', 32), 'hex'))
+     on conflict (user_id, profile_id, collection, object_id) do update
+       set version = excluded.version, nonce = excluded.nonce,
+           ciphertext = excluded.ciphertext $$,
+  'an upsert of an EXISTING object is judged by the update rule, not the creation rule'
 );
 
--- ---------------------------------------------------------------------------
--- RULE 3 — a tombstone is terminal.
--- ---------------------------------------------------------------------------
-select lives_ok(
-  $$ update public.sync_objects
-        set deleted = true, version = version + 1,
-            nonce = decode(repeat('31', 24), 'hex')
-      where object_id = 'a0000000-0000-4000-8000-000000000001' $$,
-  'an object can be tombstoned'
-);
-
--- Still editable after deletion: a compaction may rewrite the payload, and the
--- version must keep climbing. Only the bit is one-way.
-select lives_ok(
-  $$ update public.sync_objects
-        set ciphertext = decode(repeat('cc', 32), 'hex'), version = version + 1,
-            nonce = decode(repeat('41', 24), 'hex')
-      where object_id = 'a0000000-0000-4000-8000-000000000001' $$,
-  'a tombstone can still be compacted'
-);
-
+-- And the mirror: an upsert that claims version 1 for an object the server holds
+-- at version 3 must not be waved through by the INSERT branch just because 1 is
+-- what a creation looks like. It has to land on NX001.
 select throws_ok(
-  $$ update public.sync_objects set deleted = false, version = version + 1
-      where object_id = 'a0000000-0000-4000-8000-000000000001' $$,
-  'NX003'::char(5), NULL::text,
-  'a tombstone cannot be resurrected'
+  $$ insert into public.sync_objects
+       (user_id, profile_id, collection, object_id, version, nonce, ciphertext)
+     values ('aaaaaaaa-0000-4000-8000-000000000001',
+             '11111111-1111-4111-8111-111111111111', 'tasks',
+             'a0000000-0000-4000-8000-000000000001', 1,
+             decode(repeat('04', 24), 'hex'), decode(repeat('a4', 32), 'hex'))
+     on conflict (user_id, profile_id, collection, object_id) do update
+       set version = excluded.version, nonce = excluded.nonce,
+           ciphertext = excluded.ciphertext $$,
+  'NX001'::char(5), NULL::text,
+  'an upsert at version 1 over an existing object is a conflict, not a creation'
 );
 
 -- ---------------------------------------------------------------------------
--- RULE 4 — identity is immutable, in all four columns.
+-- NX004 — identity is immutable, in all four columns.
 -- ---------------------------------------------------------------------------
 -- Each is asserted separately. A single test that changes all four at once
 -- passes as long as ANY one of them is checked, so it would keep passing after
@@ -169,24 +185,151 @@ select throws_ok(
 );
 
 -- ---------------------------------------------------------------------------
--- RULE 5 — the nonce is fresh on every write.
+-- NX007 / NX006 — the content-key epoch names a real key, and only rises.
 -- ---------------------------------------------------------------------------
--- This assertion is placed AFTER the identity block deliberately, because the
--- trigger checks the rules in that order and an update that breaks two rules must
--- report the more specific one. Here nothing else is wrong: the version climbs by
--- one, the tombstone stays true, the identity is untouched, and the only defect is
--- that the ciphertext for this version would be encrypted at the nonce the
--- previous version used. Under XChaCha20-Poly1305 that is not a weakening — the
--- keystream is a function of (key, nonce) alone, so the two versions XOR to the
--- XOR of their plaintexts, and the Poly1305 one-time key repeats, which is enough
--- to forge anything at all under that pair. The AAD does not help: RULE 1 makes
--- the associated data differ on every version, and associated data never reaches
--- the keystream.
+-- THE RATCHET THIS CLOSES. `ck_epoch` is writable by any session on the account
+-- and may only rise, and `smallint` tops out at 32 767 — so without the
+-- wrap-existence rule one statement from a stolen session sets a row to the
+-- ceiling and no future rotation can ever bring a key up to meet it. The row is
+-- unopenable forever, by everyone, including the owner. Bounding the step would
+-- only have made that take a few thousand statements.
 select throws_ok(
-  $$ update public.sync_objects set version = version + 1
+  $$ update public.sync_objects
+        set ck_epoch = 2, version = version + 1,
+            nonce = decode(repeat('05', 24), 'hex'),
+            ciphertext = decode(repeat('a5', 32), 'hex')
+      where object_id = 'a0000000-0000-4000-8000-000000000001' $$,
+  'NX007'::char(5), NULL::text,
+  'an epoch with no content-key wrap is refused — the ratchet has nowhere to go'
+);
+
+insert into public.key_wraps (user_id, kind, profile_id, epoch, nonce, wrapped, commit_tag)
+values ('aaaaaaaa-0000-4000-8000-000000000001', 'ck_under_mk',
+        '11111111-1111-4111-8111-111111111111', 2,
+        decode(repeat('f2', 24), 'hex'), decode(repeat('e2', 48), 'hex'),
+        decode(repeat('d2', 32), 'hex'));
+
+select lives_ok(
+  $$ update public.sync_objects
+        set ck_epoch = 2, version = version + 1,
+            nonce = decode(repeat('05', 24), 'hex'),
+            ciphertext = decode(repeat('a5', 32), 'hex')
+      where object_id = 'a0000000-0000-4000-8000-000000000001' $$,
+  're-encrypting under a stored new content key raises the epoch'
+);
+
+select throws_ok(
+  $$ update public.sync_objects
+        set ck_epoch = 1, version = version + 1,
+            nonce = decode(repeat('06', 24), 'hex'),
+            ciphertext = decode(repeat('a6', 32), 'hex')
+      where object_id = 'a0000000-0000-4000-8000-000000000001' $$,
+  'NX006'::char(5), NULL::text,
+  'the epoch may not go backwards even though that wrap still exists — a '
+  'rollback hands the row to whoever holds the old key'
+);
+
+-- ---------------------------------------------------------------------------
+-- NX003 — the ciphertext is re-sealed for every version.
+-- ---------------------------------------------------------------------------
+-- This is what makes a whole family of key-free tampering unrepresentable rather
+-- than merely detectable: flipping `deleted`, re-pointing `parent_id` or raising
+-- `ck_epoch` are all one-column UPDATEs that silently brick a row, because all
+-- three are in the associated data. None of them can be done without producing a
+-- ciphertext the attacker cannot compute.
+select throws_ok(
+  $$ update public.sync_objects
+        set version = version + 1, nonce = decode(repeat('07', 24), 'hex')
+      where object_id = 'a0000000-0000-4000-8000-000000000001' $$,
+  'NX003'::char(5), NULL::text,
+  'a new version carrying the previous ciphertext is refused'
+);
+
+-- ---------------------------------------------------------------------------
+-- NX005 — the nonce is fresh on every write.
+-- ---------------------------------------------------------------------------
+-- Placed after NX003 deliberately: the trigger checks in that order, and an
+-- update that breaks two rules must report the more specific one. Here nothing
+-- else is wrong — the version climbs by one, the identity is untouched, the
+-- ciphertext is new — and the only defect is that this version would be
+-- encrypted at the nonce the previous version used. Under XChaCha20-Poly1305
+-- that is not a weakening: the keystream is a function of (key, nonce) alone, so
+-- the two versions XOR to the XOR of their plaintexts, and the Poly1305 one-time
+-- key repeats, which is enough to forge anything at all under that pair. The AAD
+-- does not help — associated data feeds the tag and never reaches the keystream.
+select throws_ok(
+  $$ update public.sync_objects
+        set version = version + 1, ciphertext = decode(repeat('a7', 32), 'hex')
       where object_id = 'a0000000-0000-4000-8000-000000000001' $$,
   'NX005'::char(5), NULL::text,
   'a new version at the previous nonce is refused'
+);
+
+-- The complementary half, which the trigger structurally cannot see: a nonce
+-- repeated across two DIFFERENT rows of one (profile, epoch). That is the shape
+-- a broken generator produces, and two objects sealed under one key at one nonce
+-- is the identical break as one object sealed twice.
+select throws_ok(
+  $$ insert into public.sync_objects
+       (user_id, profile_id, collection, object_id, version, ck_epoch, nonce, ciphertext)
+     values ('aaaaaaaa-0000-4000-8000-000000000001',
+             '11111111-1111-4111-8111-111111111111', 'tasks',
+             'b0000000-0000-4000-8000-00000000000b', 1, 2,
+             decode(repeat('05', 24), 'hex'), decode(repeat('b1', 32), 'hex')) $$,
+  '23505'::char(5), NULL::text,
+  'two rows of one profile and epoch cannot share a nonce'
+);
+
+-- And the case that must stay legal: the same nonce under a DIFFERENT key. The
+-- index is scoped by `ck_epoch` precisely so a rotation does not have to avoid
+-- every nonce the previous generation ever used.
+select lives_ok(
+  $$ insert into public.sync_objects
+       (user_id, profile_id, collection, object_id, version, ck_epoch, nonce, ciphertext)
+     values ('aaaaaaaa-0000-4000-8000-000000000001',
+             '11111111-1111-4111-8111-111111111111', 'tasks',
+             'c0000000-0000-4000-8000-00000000000c', 1, 1,
+             decode(repeat('05', 24), 'hex'), decode(repeat('c1', 32), 'hex')) $$,
+  'a nonce may repeat across epochs — it is a different key'
+);
+
+-- ---------------------------------------------------------------------------
+-- DELETION IS A TWO-WAY BIT, and this is the feature the old rule broke.
+-- ---------------------------------------------------------------------------
+-- There used to be a „a tombstone is terminal" rule here. It contradicted
+-- restore-from-trash, which ships in the 1.0.0 desktop app across canvas boards,
+-- documents, events, accounts and recurring rules; and its security argument did
+-- not hold, because `deleted` and `version` are both in the associated data, so
+-- an old ciphertext cannot be replayed to resurrect anything and only a party
+-- holding the content key can produce a valid un-delete — which needs no help
+-- from this bit. Worse, it was a one-way ratchet pointed at the owner: a stolen
+-- session could tombstone every row, and the honest repair is exactly a write
+-- with `deleted = false`. See the migration header.
+select lives_ok(
+  $$ update public.sync_objects
+        set deleted = true, version = version + 1,
+            nonce = decode(repeat('08', 24), 'hex'),
+            ciphertext = decode(repeat('a8', 32), 'hex')
+      where object_id = 'a0000000-0000-4000-8000-000000000001' $$,
+  'an object can be tombstoned'
+);
+
+select lives_ok(
+  $$ update public.sync_objects
+        set version = version + 1,
+            nonce = decode(repeat('09', 24), 'hex'),
+            ciphertext = decode(repeat('a9', 32), 'hex')
+      where object_id = 'a0000000-0000-4000-8000-000000000001' $$,
+  'a tombstone can still be compacted'
+);
+
+select lives_ok(
+  $$ update public.sync_objects
+        set deleted = false, version = version + 1,
+            nonce = decode(repeat('0a', 24), 'hex'),
+            ciphertext = decode(repeat('aa', 32), 'hex')
+      where object_id = 'a0000000-0000-4000-8000-000000000001' $$,
+  'and it can be RESTORED — the merge decides which write wins, not the server'
 );
 
 -- ---------------------------------------------------------------------------
@@ -205,7 +348,8 @@ create temporary table seq_probe as
 
 update public.sync_objects
    set version = version + 1,
-       nonce = decode(repeat('51', 24), 'hex'),
+       nonce = decode(repeat('0b', 24), 'hex'),
+       ciphertext = decode(repeat('ab', 32), 'hex'),
        updated_at = timestamptz '2000-01-01 00:00:00+00',
        created_at = timestamptz '2000-01-01 00:00:00+00'
  where object_id = 'a0000000-0000-4000-8000-000000000001';
@@ -232,23 +376,47 @@ select ok(
 );
 
 -- ---------------------------------------------------------------------------
--- The step bound applies to a CREATION too.
+-- NX002 — a creation starts at version 1.
 -- ---------------------------------------------------------------------------
--- The lock-out defence used to fire on UPDATE only, on the reasoning that a first
--- version was „bounded by the range CHECK" — which bounds it at 2^53-1, the exact
--- number the defence exists to refuse. So an object could be born frozen: one
--- INSERT at the top of the version space, and every honest client latches that as
--- the object's anti-rollback high-water mark forever. A creation is a step from an
--- implicit version 0 and is bounded by the same constant as any other step.
+-- The lock-out defence, and it is now an equality rather than a bound. One
+-- INSERT at the top of the version space used to be legal, and an object created
+-- that way is frozen forever: every honest client latches that number as the
+-- object's anti-rollback high-water mark, and with the update rule pinned to
+-- `old + 1` the next legal version would be past the column's ceiling. There is
+-- nothing left for a „large step" bound to refuse, because the version space
+-- cannot be jumped at all.
 select throws_ok(
   $$ insert into public.sync_objects
        (user_id, profile_id, collection, object_id, version, nonce, ciphertext)
      values ('aaaaaaaa-0000-4000-8000-000000000001',
              '11111111-1111-4111-8111-111111111111', 'tasks',
-             'f0000000-0000-4000-8000-00000000000f', 65537,
-             decode(repeat('11', 24), 'hex'), decode(repeat('aa', 32), 'hex')) $$,
+             'f0000000-0000-4000-8000-00000000000f', 5,
+             decode(repeat('0c', 24), 'hex'), decode(repeat('ac', 32), 'hex')) $$,
   'NX002'::char(5), NULL::text,
-  'an object cannot be CREATED above the step bound, only stepped up to it'
+  'an object the server has never seen cannot be created above version 1'
+);
+
+select lives_ok(
+  $$ insert into public.sync_objects
+       (user_id, profile_id, collection, object_id, version, nonce, ciphertext)
+     values ('aaaaaaaa-0000-4000-8000-000000000001',
+             '11111111-1111-4111-8111-111111111111', 'tasks',
+             'f0000000-0000-4000-8000-00000000000f', 1,
+             decode(repeat('0c', 24), 'hex'), decode(repeat('ac', 32), 'hex')) $$,
+  'and it is created at version 1'
+);
+
+-- The wrap-existence rule applies to creations too, or a row could simply be
+-- BORN at an epoch no key exists for.
+select throws_ok(
+  $$ insert into public.sync_objects
+       (user_id, profile_id, collection, object_id, version, nonce, ciphertext)
+     values ('aaaaaaaa-0000-4000-8000-000000000001',
+             '22222222-2222-4222-8222-222222222222', 'tasks',
+             'd0000000-0000-4000-8000-00000000000d', 1,
+             decode(repeat('0d', 24), 'hex'), decode(repeat('ad', 32), 'hex')) $$,
+  'NX007'::char(5), NULL::text,
+  'a profile with no content-key wrap cannot hold rows at all'
 );
 
 -- ---------------------------------------------------------------------------
@@ -260,8 +428,8 @@ select throws_ok(
 -- failing.
 --
 -- THE TRIGGER IS DISABLED FOR THIS ONE STATEMENT, AND THAT IS THE POINT OF THE
--- ASSERTION. With the trigger on, the step bound refuses this insert long before
--- the ceiling is consulted, so a test run against the live trigger would prove the
+-- ASSERTION. With the trigger on, NX002 refuses this insert long before the
+-- ceiling is consulted, so a test run against the live trigger would prove the
 -- trigger twice and the CHECK never — and would keep passing after the constraint
 -- was dropped. The ceiling exists precisely for the paths where the trigger does
 -- not run: `session_replication_role = 'replica'` during a logical restore
@@ -276,7 +444,7 @@ select throws_ok(
      values ('aaaaaaaa-0000-4000-8000-000000000001',
              '11111111-1111-4111-8111-111111111111', 'tasks',
              'e0000000-0000-4000-8000-00000000000e', 9007199254740992,
-             decode(repeat('11', 24), 'hex'), decode(repeat('aa', 32), 'hex')) $$,
+             decode(repeat('0e', 24), 'hex'), decode(repeat('ae', 32), 'hex')) $$,
   '23514'::char(5), NULL::text,
   'a version above 2^53-1 is refused by the range CHECK even with no trigger'
 );

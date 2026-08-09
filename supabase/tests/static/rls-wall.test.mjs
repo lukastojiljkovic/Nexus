@@ -367,7 +367,15 @@ test("catches a pgTAP assertion deleted without lowering the plan", () => {
     assert.notEqual(after, before, "mutation matched nothing — the test has drifted");
     writeFileSync(path, after);
     const problems = auditTestPlans(join(dir, "database"));
-    assertReports(problems, "plan(19) but 18 assertions");
+    // THE EXPECTED NUMBERS ARE DERIVED, NOT WRITTEN DOWN. This assertion used to
+    // read `plan(19) but 18 assertions`, which made a meta-test of the audit tool
+    // fail every time a real assertion was added to the suite it audits — and the
+    // repair for that failure is to edit this line, which is precisely how a
+    // guard stops guarding. The claim being made is „removing one assertion is
+    // reported", and that is what the arithmetic below says.
+    const planned = Number(/select plan\((\d+)\)/.exec(before)?.[1]);
+    assert.ok(Number.isInteger(planned), "02_guard_trigger.test.sql has no plan()");
+    assertReports(problems, `plan(${planned}) but ${planned - 1} assertions`);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

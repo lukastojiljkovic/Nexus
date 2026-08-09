@@ -21,7 +21,7 @@ begin;
 -- after each switch is four chances to forget one.
 set local search_path = public, extensions;
 
-select plan(21);
+select plan(22);
 
 -- ASSERTED FIRST, so a misconfigured runner produces one clear failure instead
 -- of fifteen confusing ones. The seeding below and the „as postgres" checks in
@@ -52,6 +52,17 @@ values
    'b5000000-0000-4000-8000-000000000002', 'web',
    decode(repeat('22', 24), 'hex'), decode(repeat('bb', 32), 'hex'));
 
+insert into public.key_wraps (user_id, kind, profile_id, epoch, nonce, wrapped, commit_tag)
+values
+  ('aaaaaaaa-0000-4000-8000-000000000001', 'ck_under_mk',
+   '11111111-1111-4111-8111-111111111111', 1,
+   decode(repeat('11', 24), 'hex'), decode(repeat('aa', 48), 'hex'),
+   decode(repeat('a1', 32), 'hex')),
+  ('bbbbbbbb-0000-4000-8000-000000000002', 'ck_under_mk',
+   '22222222-2222-4222-8222-222222222222', 1,
+   decode(repeat('22', 24), 'hex'), decode(repeat('bb', 48), 'hex'),
+   decode(repeat('b1', 32), 'hex'));
+
 insert into public.sync_objects
   (user_id, profile_id, collection, object_id, version, nonce, ciphertext)
 values
@@ -61,12 +72,6 @@ values
   ('bbbbbbbb-0000-4000-8000-000000000002', '22222222-2222-4222-8222-222222222222',
    'tasks', 'b0000000-0000-4000-8000-000000000002', 1,
    decode(repeat('22', 24), 'hex'), decode(repeat('bb', 32), 'hex'));
-
-insert into public.key_wraps (user_id, kind, profile_id, nonce, wrapped, commit_tag)
-values ('aaaaaaaa-0000-4000-8000-000000000001', 'ck_under_mk',
-        '11111111-1111-4111-8111-111111111111',
-        decode(repeat('11', 24), 'hex'), decode(repeat('aa', 48), 'hex'),
-        decode(repeat('a1', 32), 'hex'));
 
 insert into public.sync_state (user_id, device_id, profile_id, collection, last_seq)
 values ('aaaaaaaa-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-00000000000a',
@@ -100,8 +105,18 @@ select isnt_empty(
 );
 
 select is_empty(
-  $$ select id from public.key_wraps $$,
+  $$ select id from public.key_wraps
+      where user_id = 'aaaaaaaa-0000-4000-8000-000000000001' $$,
   'B sees none of A''s key wraps'
+);
+
+-- The positive control, for the same reason the one above `sync_objects` exists:
+-- B holds a content-key wrap of its own now — every profile that holds rows must
+-- — so an unscoped `is_empty` would have passed just as well if the gate denied
+-- every read to everybody.
+select isnt_empty(
+  $$ select id from public.key_wraps $$,
+  'B does see its own key wrap — the wall is a wall, not a brick'
 );
 
 select is_empty(
@@ -304,7 +319,7 @@ select lives_ok(
 select throws_ok(
   $$ update public.devices set revoked_at = null
       where id = 'd0000000-0000-4000-8000-00000000000a' $$,
-  'NX008'::char(5), NULL::text,
+  'NX201'::char(5), NULL::text,
   'even at aal2, a revoked device cannot be un-revoked'
 );
 

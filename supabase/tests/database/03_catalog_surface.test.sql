@@ -142,6 +142,14 @@ values ('d0000000-0000-4000-8000-00000000000c', 'cccccccc-0000-4000-8000-0000000
         'c5000000-0000-4000-8000-000000000003', 'desktop',
         decode(repeat('33', 24), 'hex'), decode(repeat('cc', 32), 'hex'));
 
+-- The content-key wrap first: a row may only name a generation whose key is
+-- stored (migration 003, NX007).
+insert into public.key_wraps (user_id, kind, profile_id, epoch, nonce, wrapped, commit_tag)
+values ('cccccccc-0000-4000-8000-000000000003', 'ck_under_mk',
+        '33333333-3333-4333-8333-333333333333', 1,
+        decode(repeat('c1', 24), 'hex'), decode(repeat('c2', 48), 'hex'),
+        decode(repeat('c4', 32), 'hex'));
+
 insert into public.sync_objects
   (user_id, profile_id, collection, object_id, version, nonce, ciphertext)
 values ('cccccccc-0000-4000-8000-000000000003', '33333333-3333-4333-8333-333333333333',
