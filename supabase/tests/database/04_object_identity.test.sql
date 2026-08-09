@@ -21,7 +21,7 @@ begin;
 
 set local search_path = public, extensions;
 
-select plan(14);
+select plan(16);
 
 insert into auth.users (instance_id, id, aud, role, email, created_at, updated_at)
 values ('00000000-0000-0000-0000-000000000000', 'dddddddd-0000-4000-8000-000000000004',
@@ -197,7 +197,7 @@ select throws_ok(
        (user_id, kind, nonce, wrapped, commit_tag, kdf_salt, kdf_params)
      values ('dddddddd-0000-4000-8000-000000000004', 'mk_under_kwrap',
              decode(repeat('12', 24), 'hex'), decode(repeat('ab', 48), 'hex'),
-             decode(repeat('d1', 32), 'hex'), decode(repeat('13', 16), 'hex'),
+             decode(repeat('d1', 32), 'hex'), null,
              '{"memoryKiB":8,"iterations":1,"parallelism":1}'::jsonb) $$,
   '23514',
   null,
@@ -213,7 +213,7 @@ select throws_ok(
        (user_id, kind, nonce, wrapped, commit_tag, kdf_salt, kdf_params)
      values ('dddddddd-0000-4000-8000-000000000004', 'mk_under_kwrap',
              decode(repeat('14', 24), 'hex'), decode(repeat('ac', 48), 'hex'),
-             decode(repeat('d2', 32), 'hex'), decode(repeat('15', 16), 'hex'),
+             decode(repeat('d2', 32), 'hex'), null,
              '{"m":262144,"t":4,"p":1}'::jsonb) $$,
   '23514',
   null,
@@ -225,9 +225,47 @@ select lives_ok(
        (user_id, kind, nonce, wrapped, commit_tag, kdf_salt, kdf_params)
      values ('dddddddd-0000-4000-8000-000000000004', 'mk_under_kwrap',
              decode(repeat('16', 24), 'hex'), decode(repeat('ad', 48), 'hex'),
-             decode(repeat('d3', 32), 'hex'), decode(repeat('17', 16), 'hex'),
+             decode(repeat('d3', 32), 'hex'), null,
              '{"memoryKiB":262144,"iterations":4,"parallelism":1}'::jsonb) $$,
   'the parameters the product actually uses are accepted'
+);
+
+-- ---------------------------------------------------------------------------
+-- key_wraps — a salt belongs to exactly one of the two password-derived slots.
+-- ---------------------------------------------------------------------------
+-- Migration 009. `mk_under_src`'s KEK is Argon2id over a printed recovery code
+-- and has no other source of salt, so the salt must be stored. `mk_under_kwrap`'s
+-- KEK is K_wrap, whose salt is SHA-256("nexus/web-kdf/v1" || email) — derived,
+-- 32 bytes, identical on every device, and deliberately never fetched. A stored
+-- salt there is not redundant, it is a per-attempt lever a hostile server would
+-- hold over a human-chosen password, and the next client to read the column
+-- would use it. Both directions are asserted, because a constraint that only
+-- ever refuses is indistinguishable from one that refuses everything.
+--
+-- The three inserts above are the positive control for the NULL half: they are
+-- `mk_under_kwrap` rows with no salt, and the last one lives.
+select throws_ok(
+  $$ insert into public.key_wraps
+       (user_id, kind, nonce, wrapped, commit_tag, kdf_salt, kdf_params)
+     values ('dddddddd-0000-4000-8000-000000000004', 'mk_under_kwrap',
+             decode(repeat('18', 24), 'hex'), decode(repeat('ae', 48), 'hex'),
+             decode(repeat('d4', 32), 'hex'), decode(repeat('19', 16), 'hex'),
+             '{"memoryKiB":262144,"iterations":4,"parallelism":1}'::jsonb) $$,
+  '23514',
+  null,
+  'a salt on the web-password slot is refused — that salt comes from the email'
+);
+
+select throws_ok(
+  $$ insert into public.key_wraps
+       (user_id, kind, nonce, wrapped, commit_tag, kdf_salt, kdf_params)
+     values ('dddddddd-0000-4000-8000-000000000004', 'mk_under_src',
+             decode(repeat('1a', 24), 'hex'), decode(repeat('af', 48), 'hex'),
+             decode(repeat('d5', 32), 'hex'), null,
+             '{"memoryKiB":262144,"iterations":4,"parallelism":1}'::jsonb) $$,
+  '23514',
+  null,
+  'and the recovery slot without one is refused too — that wrap would be a brick'
 );
 
 select * from finish();

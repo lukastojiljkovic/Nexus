@@ -165,7 +165,7 @@ insert into public.key_wraps (user_id, kind, nonce, wrapped, commit_tag, kdf_sal
 values ('cccccccc-0000-4000-8000-000000000003', 'mk_under_kwrap',
         decode(repeat('33', 24), 'hex'), decode(repeat('cc', 48), 'hex'),
         decode(repeat('c3', 32), 'hex'),
-        decode(repeat('33', 16), 'hex'),
+        null,
         '{"memoryKiB":262144,"iterations":4,"parallelism":1}'::jsonb);
 
 insert into public.sync_state (user_id, device_id, profile_id, collection, last_seq)

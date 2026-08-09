@@ -77,16 +77,22 @@ values
 -- `wrapped` differs from each account's content-key wrap byte for byte, so the
 -- „changed nothing" assertion further down cannot pass by comparing a row
 -- against itself.
+-- NOTE THE NULL SALTS ON THE `mk_under_kwrap` ROWS, and that they are not a
+-- shortcut: migration 009 forbids a salt there. That KEK is K_wrap, whose salt
+-- is SHA-256("nexus/web-kdf/v1" || email) — derived, 32 bytes, never fetched —
+-- so a stored one could only be a per-attempt lever a hostile server holds over
+-- a human-chosen password. `mk_under_src` keeps its 16 random bytes, because a
+-- printed recovery code has no other source of salt.
 insert into public.key_wraps
   (user_id, kind, nonce, wrapped, commit_tag, kdf_salt, kdf_params)
 values
   ('aaaaaaaa-0000-4000-8000-000000000001', 'mk_under_kwrap',
    decode(repeat('a2', 24), 'hex'), decode(repeat('a3', 48), 'hex'),
-   decode(repeat('a4', 32), 'hex'), decode(repeat('a5', 16), 'hex'),
+   decode(repeat('a4', 32), 'hex'), null,
    '{"memoryKiB": 65536, "iterations": 3, "parallelism": 1}'::jsonb),
   ('bbbbbbbb-0000-4000-8000-000000000002', 'mk_under_kwrap',
    decode(repeat('b2', 24), 'hex'), decode(repeat('b3', 48), 'hex'),
-   decode(repeat('b4', 32), 'hex'), decode(repeat('b5', 16), 'hex'),
+   decode(repeat('b4', 32), 'hex'), null,
    '{"memoryKiB": 65536, "iterations": 3, "parallelism": 1}'::jsonb),
   ('bbbbbbbb-0000-4000-8000-000000000002', 'mk_under_src',
    decode(repeat('b6', 24), 'hex'), decode(repeat('b7', 48), 'hex'),

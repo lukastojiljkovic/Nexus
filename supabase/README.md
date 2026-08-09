@@ -131,6 +131,7 @@ supabase/
     …090300_storage_realtime_rls  the same wall over storage.objects and realtime.messages
     …090400_pair_complete_rpcs    three service-role-only routines the Edge Function calls
     …120000_sync_state_touch      updated_at on sync_state becomes the server's clock, not a claim
+    …140000_key_wraps_salt_by_slot  a salt belongs to mk_under_src alone; the web slot derives its own
   functions/pair-complete/        the one Edge Function, and the only holder of a service-role key
   scripts/check-rls-wall.mjs      static drift guard — no database required
   tests/static/                   node:test suite; proves the guard can fail
@@ -192,6 +193,19 @@ this cursor row was created" while reading as „last synced". The revoke stops 
 being stated; a `BEFORE INSERT OR UPDATE` trigger makes it true. Both halves are
 needed, and both are asserted — the grant in `00_rls_enabled.test.sql`, the
 stamping in `02_guard_trigger.test.sql`.
+
+Migration `…140000` is the same question asked of `key_wraps.kdf_salt`, and the
+answer turned out to differ per slot. `mk_under_src`'s KEK is Argon2id over a
+printed recovery code, so its salt exists nowhere else and MUST be stored.
+`mk_under_kwrap`'s KEK is `K_wrap`, whose salt is
+`SHA-256("nexus/web-kdf/v1" ‖ lowercase(email))` — derived, 32 bytes, identical
+on every device, and deliberately never fetched, because a fetched salt is an
+account-existence oracle and a per-attempt lever a hostile server would hold
+over a human-chosen password. The old constraint required 16 bytes for **both**,
+so the web slot had to be given noise under a column comment calling it the
+salt — and the hazard was never the noise, it was the next client reading it and
+using it. A salt is now required for the recovery slot and forbidden for the
+other, with both directions asserted in `04_object_identity.test.sql`.
 
 ---
 
@@ -498,21 +512,26 @@ terminal (`NX201`) so the refusal cannot be undone, but the correct end state is
 that revoking a device also calls the admin sign-out API for that `session_id`.
 That needs an authenticated Edge Function and is not built.
 
-### 6.3 `mk_*` wraps are readable by any session that passes the gate
+### 6.3 `mk_*` wraps are readable by any session that passes the gate — CLOSED, with a stated limit
 
-See §1. `devices.platform` is now server-attested, which makes the restricting
-policy expressible; the recovery path that would be broken by it has to be
-designed first. Recorded here so the material and the missing piece stay
-together.
+**Closed.** `key_wraps_master_key_is_desktop_only` now confines reading
+`mk_under_kwrap`, and writing either `mk_*` kind, to a session a live `devices`
+row calls a `desktop`. The recovery path that this would have broken is what
+shapes the asymmetry: `mk_under_src` stays readable, because a brand-new desktop
+recovering an account has no device row and obtaining one is what it is trying
+to do. §1 has the full argument.
 
-### 6.4 Two things nobody has executed
+**The limit that remains, and it is not a defect of the policy.** This confines
+a *browser*; it does not confine an attacker who has the web password and is not
+using our bundle. Password ⟹ `K_wrap` ⟹ MK is the design, so anyone holding the
+password holds the account's contents once they also hold the wrap. What the
+policy buys is that the wrap is not served to a session that cannot show a
+desktop — which is the entire distance between „a phished password" and „a
+phished password plus a device the server attested". Write that down rather than
+letting the closed item read as more than it is.
 
-- **The pgTAP suite has never been run.** Plan counts, structural balance and the
-  SQL's shape are checked statically by `check-rls-wall.mjs` and its tests; that
-  `supabase test db` goes green is unproven, because the CLI is not installed on
-  the machine this was written on. Expect small first-run fixes — the likeliest
-  remain the minimal `auth.users` insert (GoTrue column defaults vary by version)
-  and `throws_ok` overload resolution, for which the argument types are pinned.
+### 6.4 One thing nobody has executed
+
 - **`nexus_pair_claim`, `nexus_pair_rate_limit_hit` and `nexus_sync_housekeeping`
   have no pgTAP coverage at all.** The single-use latch, the attempt ceiling and
   the fixed window are argued in comments and asserted nowhere. They are the
