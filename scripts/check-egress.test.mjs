@@ -101,10 +101,24 @@ describe("the rules do NOT fire on data", () => {
 
 describe("the allowlist is an allowlist", () => {
   it("exempts only the named rule, not the whole file", () => {
-    const file = "apps/desktop/src/main/net/offline.ts";
-    expect(ALLOWLIST.get(file)).toContain("absolute-url");
-    // The boundary file may name remote URLs; it may still not call `fetch`.
+    const file = "apps/desktop/src/main/net/offline.test.ts";
+    expect(ALLOWLIST.get(file)).toContain("websocket");
+    // The test of the blocker may construct a WebSocket; it may still not fetch.
     expect(ids(scanSource(file, 'await fetch("https://x/y")'))).toContain("fetch");
+    expect(scanSource(file, "new WebSocket(url)")).toEqual([]);
+  });
+
+  it("names only rules that exist, so an exemption cannot quietly mean nothing", () => {
+    // This used to be false: three entries exempted "absolute-url", a rule id
+    // split into four narrower ones long ago. An unknown id exempts nothing, so
+    // the gate stayed correct — but the file read as though something had been
+    // decided, and the day a rule took that name it would have started
+    // exempting three files nobody re-examined.
+    const known = new Set(EGRESS_RULES.map((rule) => rule.id));
+    const unknown = [...ALLOWLIST].flatMap(([path, exempt]) =>
+      exempt.filter((id) => !known.has(id)).map((id) => `${path}:${id}`),
+    );
+    expect(unknown).toEqual([]);
   });
 
   it("does not extend to a neighbouring file", () => {

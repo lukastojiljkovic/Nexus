@@ -111,21 +111,37 @@ export const EGRESS_RULES = [
  */
 export const ALLOWLIST = new Map([
   [
-    // The boundary itself has to name the things it blocks.
-    "apps/desktop/src/main/net/offline.ts",
-    ["absolute-url"],
-  ],
-  [
+    // The test asserts the blocker blocks, which means constructing the thing.
     "apps/desktop/src/main/net/offline.test.ts",
-    ["absolute-url", "websocket"],
-  ],
-  [
-    // The CSP declares the origins the page may talk to; writing them down is
-    // the entire content of the file.
-    "apps/web/src/app.css",
-    ["absolute-url"],
+    ["websocket"],
   ],
 ]);
+
+/**
+ * Every id in the allowlist has to be a rule that exists.
+ *
+ * The three entries this replaced all exempted `"absolute-url"`, a rule id no
+ * rule has ever carried — a leftover from the first version of the URL rule,
+ * which was split into `remote-import`/`css-remote`/`src-assign`/`load-remote`
+ * (see the comment above them) without the allowlist following. Nothing was
+ * unsafe: an unknown id exempts nothing, so the gate stayed fail-closed and the
+ * files were passing on their own merits. What was unsafe was the SHAPE — an
+ * exemption that silently means nothing today would silently mean something the
+ * day a rule is named `absolute-url`, and the reader of the file would have had
+ * no way to tell the two states apart. So the ids are checked instead of
+ * trusted, and a stale exemption is now a failure at startup rather than a
+ * sentence that reads true.
+ */
+for (const [path, ids] of ALLOWLIST) {
+  for (const id of ids) {
+    if (!EGRESS_RULES.some((rule) => rule.id === id)) {
+      throw new Error(
+        `check-egress: allowlist entry ${path} exempts "${id}", which is not a rule id. ` +
+          `Known ids: ${EGRESS_RULES.map((rule) => rule.id).join(", ")}.`,
+      );
+    }
+  }
+}
 
 function isIgnored(path) {
   return path.split(sep).some((segment) => IGNORED_DIRS.has(segment));
