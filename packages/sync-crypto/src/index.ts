@@ -13,7 +13,7 @@
  * with the capabilities a browser must not hold removed — see `web.ts` for what
  * is missing and why each one is.
  *
- * The seven pieces, and where the reasoning for each lives:
+ * The eight pieces, and where the reasoning for each lives:
  *
  *  - `kdf.ts`     the web password → K_auth / K_wrap split. Browser-safe: it has
  *                 no path to `wrap.ts`, which is what `rewrap.ts` exists for.
@@ -25,6 +25,9 @@
  *  - `pairing.ts` the desktop→browser handshake, as pure functions over an
  *                 injected transport, with a state machine in which a wrong
  *                 transition does not compile.
+ *  - `device-name.ts` what a device may be called — the highest-stakes string in
+ *                 the product, since a human reads it while authorising a key
+ *                 release — and how it is sealed under a subkey of MK.
  *  - `hlc.ts`     the hybrid logical clock and its 24-hour forward clamp.
  *  - `merge.ts`   field-level last-write-wins over that clock.
  *
@@ -105,6 +108,12 @@ export {
 } from "./recovery.js";
 export type { SyncRecoveryInput } from "./recovery.js";
 
+// Turning sync on. DESKTOP ONLY and absent from the web barrel by definition:
+// it mints the master key and derives K_wrap to wrap it, which are the two
+// capabilities `web.ts` exists to withhold.
+export { prepareSyncEnable } from "./enable.js";
+export type { SyncEnableInput, SyncEnableMaterial } from "./enable.js";
+
 // ── Key wrapping ────────────────────────────────────────────────────────────
 export {
   generateContentKey,
@@ -118,6 +127,20 @@ export type { SealedKey, WrapContext, WrapPurpose } from "./wrap.js";
 // ── Row encryption ──────────────────────────────────────────────────────────
 export { openRow, openRowFields, parseSealedRow, sealRow, sealRowFields } from "./row.js";
 export type { RowIdentity, SealedRow } from "./row.js";
+
+// ── Device names ────────────────────────────────────────────────────────────
+// The validator is shared with `pairing.ts`; the seal is DESKTOP ONLY and absent
+// from the web barrel, because it is under a subkey of MK and a browser never
+// holds MK. What that costs — a browser cannot render a device list's names —
+// is argued in `device-name.ts`'s header.
+export {
+  MAX_DEVICE_NAME_LENGTH,
+  assertDeviceName,
+  isAcceptableDeviceName,
+  openDeviceName,
+  sealDeviceName,
+} from "./device-name.js";
+export type { DeviceNameContext, DevicePlatform, SealedDeviceName } from "./device-name.js";
 
 // ── Pairing ─────────────────────────────────────────────────────────────────
 export {

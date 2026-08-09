@@ -133,6 +133,10 @@ import {
   utf8,
 } from "./bytes.js";
 import { encodeCrockford, groupCrockford, normalizeCrockford } from "./crockford.js";
+// The device-name rule lives in one file for both the paths that write it — the
+// consent screen here and the master-key mint — because a rule this exact,
+// copied by hand, diverges in whichever copy is edited second.
+import { assertDeviceName, isAcceptableDeviceName } from "./device-name.js";
 import { canonicalJson, isJsonObject, parseJsonValue, type JsonValue } from "./json.js";
 import { normalizeWebEmail } from "./kdf.js";
 import {
@@ -163,39 +167,6 @@ const PAIRING_NONCE_BYTES = 32;
 
 /** Six decimal digits — ~20 bits, read aloud or compared by eye. */
 export const PAIRING_SAS_DIGITS = 6;
-
-/** A device name has to fit on a consent screen and must not be a payload. */
-const MAX_DEVICE_NAME_LENGTH = 120;
-
-/**
- * Every Unicode control (`Cc`: C0, C1, DEL) and every Unicode FORMAT character
- * (`Cf`), which is the category the interesting attacks live in.
- *
- * A device name is rendered to a human who is about to authorise a key release.
- * It is the single highest-stakes string in the product, so what it may contain
- * is worth being exact about rather than approximate.
- *
- * `Cc` alone — a newline, a carriage return — only lets a peer break the layout.
- * `Cf` is the category that lets it change the MEANING:
- *
- *  - U+202E RIGHT-TO-LEFT OVERRIDE and friends (U+202A-U+202E, U+2066-U+2069)
- *    render the remainder of the string backwards, so the reassuring half of a
- *    sentence can be placed where the alarming half will be read.
- *  - U+200B ZERO WIDTH SPACE, U+FEFF and U+2060 WORD JOINER are invisible: they
- *    let two different names look identical, so "the device I recognise" and the
- *    one actually receiving the keys need not be the same device.
- *
- * Written as a Unicode property escape rather than a hand-kept range list,
- * because a hand-kept list is how U+202E was missed the first time: the comment
- * named "a bidi-adjacent control character" and the regex covered only C0, C1
- * and DEL, which is none of them.
- *
- * The known false positive, accepted deliberately: `Cf` also holds the Arabic
- * number signs (U+0600-U+0605) and U+00AD SOFT HYPHEN, so a device name
- * legitimately containing one is refused. Refusing a rare valid name costs a
- * rename; accepting an override on a consent dialog costs the keys.
- */
-const UNRENDERABLE_CHARACTERS = /[\p{Cc}\p{Cf}]/u;
 
 /**
  * The same OWASP baseline the rest of the product uses. Argon2id here defends
@@ -1216,36 +1187,6 @@ function readBytesField(value: unknown, expectedBytes: number): string | null {
   if (typeof value !== "string") return null;
   const bytes = base64urlToBytes(value);
   return bytes !== null && bytes.length === expectedBytes ? value : null;
-}
-
-/**
- * A device name is shown to a human on a consent screen. Bounded, visible, and
- * free of anything unrenderable — an unbounded string from a peer that ends up
- * in a dialog is how a "device name" becomes a paragraph of instructions
- * telling the user to click Allow.
- *
- * "Visible" is a separate condition from "non-empty", and it is the one that
- * matters: `"   "` is non-empty, carries no control characters, and puts a
- * blank line on the dialog exactly where the identity of the thing receiving
- * the keys is supposed to be. A consent screen that names nobody is worse than
- * no consent screen, because it still collects a click.
- */
-function isAcceptableDeviceName(value: unknown): value is string {
-  return (
-    typeof value === "string" &&
-    value.length <= MAX_DEVICE_NAME_LENGTH &&
-    value.trim().length > 0 &&
-    !UNRENDERABLE_CHARACTERS.test(value)
-  );
-}
-
-function assertDeviceName(value: string): void {
-  if (!isAcceptableDeviceName(value)) {
-    throw new TypeError(
-      `A device name must be 1–${MAX_DEVICE_NAME_LENGTH} visible characters, with no control ` +
-        "or format characters.",
-    );
-  }
 }
 
 function isPairingId(value: unknown): value is string {

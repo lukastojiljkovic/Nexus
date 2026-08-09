@@ -29,7 +29,13 @@ export type SyncCryptoErrorCode =
   /** A row's plaintext did not decode as the canonical JSON field map it must be. */
   | "row/bad-plaintext"
   /** An email or password could not be normalised into something derivable. */
-  | "kdf/bad-input";
+  | "kdf/bad-input"
+  /** A sealed device name is not the shape or size a sealed device name has. */
+  | "device-name/malformed"
+  /** A device name failed AEAD: wrong account key, edited bytes, or a moved row. */
+  | "device-name/aead-failed"
+  /** The wraps the server stored are not the wraps this device sent it. */
+  | "enable/round-trip-mismatch";
 
 /** Thrown by `wrap.ts`, `row.ts` and `kdf.ts`; never by `pairing.ts`, `hlc.ts` or `merge.ts`. */
 export class SyncCryptoError extends Error {
