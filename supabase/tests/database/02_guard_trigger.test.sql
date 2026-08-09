@@ -30,7 +30,7 @@ begin;
 
 set local search_path = public, extensions;
 
-select plan(41);
+select plan(47);
 
 -- ASSERTED FIRST, so a misconfigured runner produces one clear failure instead
 -- of twenty-seven confusing ones. Every table here has FORCE row level security,
@@ -564,6 +564,99 @@ select ok(
   (select k.created_at > timestamptz '2020-01-01 00:00:00+00'
      from public.key_wraps k where k.kind = 'mk_under_src'),
   'and it does not take — created_at survives every write'
+);
+
+-- ---------------------------------------------------------------------------
+-- `key_wraps_kdf_params_ceiling` — the bound migration 012 added.
+-- ---------------------------------------------------------------------------
+-- The floor was always there; the ceiling was not, and its absence was not a
+-- cosmetic gap. `kdf.ts` refuses to DERIVE outside the range because the
+-- parameters arrive from a server this design treats as hostile — so a wrap
+-- stored above the ceiling is one no client will ever open, and for the two
+-- `mk_*` slots that is a master key with no route back. Parallelism is the
+-- sharp case: raising `p` at fixed `m` leaves the honest cost alone and hands a
+-- many-core attacker a proportional speedup, so a large value WEAKENS the wrap
+-- while looking, in the row, like a stronger one.
+--
+-- Each refusal asserts the CONSTRAINT NAME and not merely 23514. Every one of
+-- these payloads violates something, so a bare sqlstate would pass just as
+-- happily if the ceiling had never been added and the floor were answering for
+-- it — which is precisely the state this section exists to distinguish.
+select throws_ok(
+  $$ insert into public.key_wraps
+       (user_id, kind, nonce, wrapped, commit_tag, kdf_salt, kdf_params)
+     values ('aaaaaaaa-0000-4000-8000-000000000001', 'mk_under_kwrap',
+             decode(repeat('d1', 24), 'hex'), decode(repeat('d2', 48), 'hex'),
+             decode(repeat('d3', 32), 'hex'), null,
+             '{"memoryKiB": 65536, "iterations": 3, "parallelism": 64}'::jsonb) $$,
+  '23514'::char(5),
+  'new row for relation "key_wraps" violates check constraint "key_wraps_kdf_params_ceiling"',
+  'parallelism above 4 lanes is refused — more lanes is a weaker wrap, not a stronger one'
+);
+
+select throws_ok(
+  $$ insert into public.key_wraps
+       (user_id, kind, nonce, wrapped, commit_tag, kdf_salt, kdf_params)
+     values ('aaaaaaaa-0000-4000-8000-000000000001', 'mk_under_kwrap',
+             decode(repeat('d1', 24), 'hex'), decode(repeat('d2', 48), 'hex'),
+             decode(repeat('d3', 32), 'hex'), null,
+             '{"memoryKiB": 1048577, "iterations": 3, "parallelism": 1}'::jsonb) $$,
+  '23514'::char(5),
+  'new row for relation "key_wraps" violates check constraint "key_wraps_kdf_params_ceiling"',
+  'memory above 1 GiB is refused'
+);
+
+select throws_ok(
+  $$ insert into public.key_wraps
+       (user_id, kind, nonce, wrapped, commit_tag, kdf_salt, kdf_params)
+     values ('aaaaaaaa-0000-4000-8000-000000000001', 'mk_under_kwrap',
+             decode(repeat('d1', 24), 'hex'), decode(repeat('d2', 48), 'hex'),
+             decode(repeat('d3', 32), 'hex'), null,
+             '{"memoryKiB": 65536, "iterations": 17, "parallelism": 1}'::jsonb) $$,
+  '23514'::char(5),
+  'new row for relation "key_wraps" violates check constraint "key_wraps_kdf_params_ceiling"',
+  'more than 16 passes is refused'
+);
+
+-- The floor still answers for its own half. Two constraints, two names, two
+-- opposite mistakes — which is why they were not folded into one.
+select throws_ok(
+  $$ insert into public.key_wraps
+       (user_id, kind, nonce, wrapped, commit_tag, kdf_salt, kdf_params)
+     values ('aaaaaaaa-0000-4000-8000-000000000001', 'mk_under_kwrap',
+             decode(repeat('d1', 24), 'hex'), decode(repeat('d2', 48), 'hex'),
+             decode(repeat('d3', 32), 'hex'), null,
+             '{"memoryKiB": 32768, "iterations": 3, "parallelism": 1}'::jsonb) $$,
+  '23514'::char(5),
+  'new row for relation "key_wraps" violates check constraint "key_wraps_kdf_params_floor"',
+  'below the floor is still the floor''s answer, not the ceiling''s'
+);
+
+-- The ceiling holds no opinion about input that is not three numbers, so this
+-- must come back from the FLOOR — and it must be a constraint violation rather
+-- than 22P02 from a cast, which is what the `CASE` in migration 012 buys.
+select throws_ok(
+  $$ insert into public.key_wraps
+       (user_id, kind, nonce, wrapped, commit_tag, kdf_salt, kdf_params)
+     values ('aaaaaaaa-0000-4000-8000-000000000001', 'mk_under_kwrap',
+             decode(repeat('d1', 24), 'hex'), decode(repeat('d2', 48), 'hex'),
+             decode(repeat('d3', 32), 'hex'), null,
+             '{"memoryKiB": "abc", "iterations": 3, "parallelism": 1}'::jsonb) $$,
+  '23514'::char(5),
+  'new row for relation "key_wraps" violates check constraint "key_wraps_kdf_params_floor"',
+  'a non-numeric cost is a floor violation, not a cast error'
+);
+
+-- Both bounds are inclusive, and the honest maximum has to be storable or the
+-- ceiling is off by one in the direction that locks somebody out.
+select lives_ok(
+  $$ insert into public.key_wraps
+       (user_id, kind, nonce, wrapped, commit_tag, kdf_salt, kdf_params)
+     values ('aaaaaaaa-0000-4000-8000-000000000001', 'mk_under_kwrap',
+             decode(repeat('d1', 24), 'hex'), decode(repeat('d2', 48), 'hex'),
+             decode(repeat('d3', 32), 'hex'), null,
+             '{"memoryKiB": 1048576, "iterations": 16, "parallelism": 4}'::jsonb) $$,
+  'a wrap exactly at the ceiling is accepted'
 );
 
 -- ---------------------------------------------------------------------------
