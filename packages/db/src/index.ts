@@ -660,3 +660,5 @@ export { ForeignImportStore } from "./imex/foreignImportStore.js";
 
 export { SyncJournal } from "./sync/syncJournal.js";
 export type { SweptObject } from "./sync/syncJournal.js";
+export { SyncAccountStore } from "./sync/syncAccount.js";
+export type { SyncAccount, SyncAccountInput } from "./sync/syncAccount.js";

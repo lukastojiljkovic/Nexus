@@ -1479,6 +1479,17 @@ describe("RestoreStore", () => {
     //    row. Leaving it is also what makes the restore travel CORRECTLY —
     //    the sweep diffs the restored rows against what was last sealed and
     //    sends the fields that really moved.
+    //  - sync_account (migration 064): DEVICE-LOCAL and singleton, on
+    //    `backup_settings`' terms and then some. It holds which Nexus account
+    //    THIS COMPUTER belongs to and its copy of the master key wrapped under
+    //    the local data key — none of which an archive carries, and none of
+    //    which a restore has any business changing: a restore replaces a
+    //    profile's content, while this row is a fact about the machine. Wiping
+    //    it would be worse than pointless. The mint is a singleton per account,
+    //    so there is no route back to the existing master key from a desktop
+    //    that has forgotten its wrap — „restore a backup" would silently become
+    //    „leave the sync account", which is the one operation on this table that
+    //    the settings card makes the user confirm by name.
     const allowlist = new Set<string>([
       "meta",
       "profiles",
@@ -1495,6 +1506,7 @@ describe("RestoreStore", () => {
       "search_history",
       "sync_journal",
       "sync_row_state",
+      "sync_account",
     ]);
 
     const wipeTables = new Set<string>(RESTORE_WIPE_TABLES);
