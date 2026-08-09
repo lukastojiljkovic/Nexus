@@ -33,6 +33,7 @@ const KEY_WRAPS = "20260808090250_key_wraps_guard_trigger.sql";
 const DEVICES = "20260808090260_devices_guard_trigger.sql";
 const STORAGE = "20260808090300_storage_realtime_rls.sql";
 const DESKTOP_ONLY = "20260809160000_key_wraps_writes_are_desktop_only.sql";
+const MK_MINT = "20260809180000_mk_mint.sql";
 
 /**
  * Copy the real migrations, apply one edit, audit the result. The mutation is
@@ -417,6 +418,20 @@ test("catches a function with a mutable search_path", () => {
   const problems = auditWithMutation(RLS, (sql) =>
     sql.replace("set search_path = ''\nas $$\n  select\n    coalesce", "as $$\n  select\n    coalesce"));
   assertReports(problems, "no `set search_path`");
+});
+
+test("catches a mutable search_path on a function with a long signature", () => {
+  // THE SAME RULE, ON THE SHAPE THAT USED TO SLIP PAST IT. The header was read
+  // as „everything up to the first `$`", and `stripComments` replaces dollar
+  // delimiters with spaces, so that search never matched and the rule fell back
+  // to a blind 400-character window from `create function`. Every function in
+  // the schema fitted inside it until `nexus_mk_mint`, whose thirteen parameters
+  // push `set search_path` past the window — where the old rule reported a false
+  // positive against correct SQL, and would equally have reported nothing at all
+  // had the window been wider. The header now ends where the body begins.
+  const problems = auditWithMutation(MK_MINT, (sql) =>
+    sql.replace("security invoker\nset search_path = ''\nas $$", "security invoker\nas $$"));
+  assertReports(problems, "public.nexus_mk_mint(): no `set search_path`");
 });
 
 test("catches storage.objects or realtime.messages left on stock settings", () => {

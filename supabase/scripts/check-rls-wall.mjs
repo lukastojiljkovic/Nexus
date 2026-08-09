@@ -337,8 +337,16 @@ function walk(dir, out = []) {
 
 // pgTAP assertion functions used by `tests/database/`. Longest names first, so
 // the alternation does not match `is` inside `is_empty`.
+//
+// A HELPER MISSING FROM THIS LIST COUNTS AS ZERO, which is the one direction
+// this check must not fail in: the plan then looks too high, the file looks
+// over-planned rather than under-counted, and the natural repair is to lower the
+// plan — deleting the promise instead of counting the assertion. `set_eq` was
+// absent until the mint suite used it. So: adding a pgTAP helper to a test file
+// means adding its name here, and the set-comparison family is listed now
+// whether or not every one of them is in use yet.
 const TAP_ASSERTIONS =
-  /\bselect\s+(isnt_empty|is_empty|has_trigger|throws_ok|lives_ok|isnt|is|ok)\s*\(/g;
+  /\bselect\s+(isnt_empty|is_empty|has_trigger|results_eq|set_hasnt|throws_ok|lives_ok|set_has|set_eq|bag_eq|matches|isnt|is|ok)\s*\(/g;
 
 /**
  * `plan(N)` must equal the number of assertions in the file.
@@ -652,11 +660,34 @@ export function auditWall(dir = MIGRATIONS, root = SUPABASE_ROOT) {
 
   // 10. A function with a mutable search_path that a policy calls is a
   //     privilege-escalation primitive: shadow the table it reads, own the gate.
+  //
+  //     THE HEADER ENDS AT `as`, AND IT USED TO END AT THE FIRST `$`. That was
+  //     wrong in a way that stayed invisible: `stripComments` replaces dollar-
+  //     quote delimiters with spaces, so no `$` survives into the text this rule
+  //     reads, the search always missed, and every function fell through to a
+  //     blind 400-character window from `create function`. Short signatures all
+  //     fit inside it, so the rule appeared to work for eight functions and then
+  //     reported a false positive against the first one whose parameter list ran
+  //     past the window. A gate that is right by coincidence is a gate that goes
+  //     wrong on the day something legitimate changes shape.
   const funcRe = /create\s+(?:or\s+replace\s+)?function\s+([a-z_]+\.[a-z0-9_]+)\s*\(/g;
   while ((match = funcRe.exec(all)) !== null) {
-    const end = all.indexOf("$", match.index);
-    const header = all.slice(match.index, end === -1 ? match.index + 400 : end);
-    if (!/set\s+search_path\s*=/.test(header)) {
+    const open = match.index + match[0].length - 1;
+    let depth = 0;
+    let close = -1;
+    for (let i = open; i < all.length; i += 1) {
+      if (all[i] === "(") depth += 1;
+      else if (all[i] === ")") {
+        depth -= 1;
+        if (depth === 0) { close = i; break; }
+      }
+    }
+    const bodyAt = close === -1 ? -1 : all.slice(close).search(/\bas\b/);
+    const semicolon = all.indexOf(";", match.index);
+    const stop = bodyAt === -1
+      ? (semicolon === -1 ? all.length : semicolon)
+      : close + bodyAt;
+    if (!/set\s+search_path\s*=/.test(all.slice(match.index, stop))) {
       problems.push(`${match[1]}(): no \`set search_path\` — shadowable by any schema`);
     }
   }
