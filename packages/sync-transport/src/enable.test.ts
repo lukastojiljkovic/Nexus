@@ -28,6 +28,7 @@ const INPUT: SyncEnableInput = {
   recoveryWrap: { nonce: b64(0x21, 24), ciphertext: b64(0x22, 48), commitment: b64(0x23, 32) },
   recoveryKdfParams: PARAMS,
   recoverySalt: b64(0x31, 16),
+  registerProof: b64(0x41, 32),
 };
 
 /** What PostgREST returns for the two rows a correct mint wrote. */

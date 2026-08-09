@@ -104,6 +104,7 @@ const NONCE_BYTES = 24;
 const WRAPPED_BYTES = 48;
 const COMMIT_TAG_BYTES = 32;
 const KDF_SALT_BYTES = 16;
+const MK_VERIFIER_BYTES = 32;
 const NAME_NONCE_BYTES = 24;
 const MIN_NAME_CIPHERTEXT_BYTES = 17;
 const MAX_NAME_CIPHERTEXT_BYTES = 1024;
@@ -287,7 +288,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
   // recovery wrap would have no recovery path and no way to acquire one.
   const kwrap = readUnsaltedWrap(body["kwrap"]);
   const src = readSaltedWrap(body["src"]);
-  if (!nameNonce || !nameCiphertext || !kwrap || !src) {
+  // THE DEVICE-REGISTRATION PROOF, AND IT IS REQUIRED (migration 013). Nothing
+  // can write `private.mk_verifiers` except the mint and the function that reads
+  // it, so an account minted without one could never register a second desktop —
+  // and a desktop whose session dies would be stranded with the key on its own
+  // disk and no way to present it. Same argument as `mk_under_src`: the mint is a
+  // one-shot, so everything a later recovery needs is written by it or never.
+  const mkVerifier = decodeFixed(body["mk_verifier"], MK_VERIFIER_BYTES);
+  if (!nameNonce || !nameCiphertext || !kwrap || !src || !mkVerifier) {
     return badRequest("malformed sync-enable request");
   }
 
@@ -338,6 +346,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     p_src_commit_tag: toPgBytea(src.commitTag),
     p_src_kdf_salt: toPgBytea(src.kdfSalt),
     p_src_kdf_params: src.kdfParams,
+    p_mk_verifier: toPgBytea(mkVerifier),
   });
 
   if (mintError) {

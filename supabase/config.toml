@@ -118,3 +118,11 @@ verify_jwt = false
 # is inside `sync-enable/index.ts` where it can be read and tested.
 [functions.sync-enable]
 verify_jwt = true
+
+# `true`, and worth exactly what it is worth on `sync-enable` above: a free
+# filter against unsigned noise, and nothing more. The real authentication is one
+# bearer handed back to the auth server, plus a proof of master-key possession
+# that the DATABASE checks against a value in a schema PostgREST does not expose.
+# See `device-register/index.ts` and migration 013.
+[functions.device-register]
+verify_jwt = true

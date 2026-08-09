@@ -197,6 +197,11 @@ function payload(overrides = {}) {
       kdf_salt: b64(16, 0x44),
       kdf_params: { ...KDF_PARAMS },
     },
+    // Migration 013. Required, and this fixture carrying it is the difference
+    // between „the schema refused the cost" and „this function refused the
+    // shape" — the endpoint validates the body before it constructs a
+    // service-role client at all.
+    mk_verifier: b64(32, 0x51),
     ...overrides,
   };
 }

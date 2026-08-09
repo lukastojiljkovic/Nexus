@@ -81,6 +81,16 @@ export interface SyncEnableInput {
   readonly recoveryKdfParams: Argon2idParams;
   /** The recovery salt, base64url, 16 bytes. Stored beside the recovery wrap. */
   readonly recoverySalt: string;
+  /**
+   * The device-registration proof, base64url, 32 bytes — HKDF over MK.
+   *
+   * It travels with the MINT and nowhere else, because the mint is the only
+   * transaction that can store it: `private.mk_verifiers` has no client grants,
+   * so nothing can add it afterwards. An account minted without one could never
+   * register a second desktop, and a desktop whose session died would be
+   * stranded with the key on its own disk. Migration 013 carries the argument.
+   */
+  readonly registerProof: string;
 }
 
 /** The JSON body, in the server's spelling. Exported so a test can read it. */
@@ -100,6 +110,7 @@ export interface SyncEnableBody {
     readonly kdf_salt: string;
     readonly kdf_params: Argon2idParams;
   };
+  readonly mk_verifier: string;
 }
 
 export function syncEnableBody(input: SyncEnableInput): SyncEnableBody {
@@ -122,6 +133,7 @@ export function syncEnableBody(input: SyncEnableInput): SyncEnableBody {
       kdf_salt: input.recoverySalt,
       kdf_params: input.recoveryKdfParams,
     },
+    mk_verifier: input.registerProof,
   };
 }
 

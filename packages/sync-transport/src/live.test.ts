@@ -454,6 +454,7 @@ describe.skipIf(!LIVE)("the transport against a real PostgREST", () => {
       },
       recoveryKdfParams: { memoryKiB: 65536, iterations: 3, parallelism: 1 },
       recoverySalt: filled(16, 0x31),
+      registerProof: filled(32, 0x41),
     };
     const body = syncEnableBody(input);
 

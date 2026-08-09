@@ -14,7 +14,7 @@
  * never constructs a port, and there is nothing in here that could go looking
  * for one.
  *
- * The eleven pieces:
+ * The twelve pieces:
  *
  *  - `http.ts`     the three port seams, and `filterValue` — the measured rule
  *                  that keeps a PATCH from silently matching nothing.
@@ -27,6 +27,10 @@
  *  - `devices.ts`  the two writes a desktop may make to its own device row, and
  *                  the one it may not — `session_id`, which is why a revoked
  *                  desktop cannot rescue itself.
+ *  - `register.ts` and therefore how it CAN: one call that costs the master key
+ *                  rather than a second factor, because a device row is
+ *                  authority over `mk_under_kwrap` and a step-up would strand
+ *                  every sibling.
  *  - `bytea.ts`    hex `bytea` ↔ base64url, the one translation nobody else can do.
  *  - `rows.ts`     column names ↔ `PushRow`/`PulledRow`, and the explicit select list.
  *  - `outcome.ts`  every way a write can end, named, with the SQLSTATE map.
@@ -101,6 +105,21 @@ export type {
   SyncEnableRefusal,
   SyncEnableResult,
 } from "./enable.js";
+
+// ── Getting a device row back ───────────────────────────────────────────────
+export {
+  DEVICE_REGISTER_FUNCTION,
+  deviceRegisterBody,
+  deviceRegisterRequest,
+  parseDeviceRegisterResponse,
+  registerDevice,
+} from "./register.js";
+export type {
+  DeviceRegisterBody,
+  DeviceRegisterInput,
+  DeviceRegisterRefusal,
+  DeviceRegisterResult,
+} from "./register.js";
 
 // ── This computer's device row ──────────────────────────────────────────────
 export { retireDeviceRequest, touchDeviceRequest } from "./devices.js";
