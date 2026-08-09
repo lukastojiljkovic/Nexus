@@ -14,7 +14,7 @@
  * never constructs a port, and there is nothing in here that could go looking
  * for one.
  *
- * The twelve pieces:
+ * The thirteen pieces:
  *
  *  - `http.ts`     the three port seams, and `filterValue` — the measured rule
  *                  that keeps a PATCH from silently matching nothing.
@@ -31,6 +31,9 @@
  *                  rather than a second factor, because a device row is
  *                  authority over `mk_under_kwrap` and a step-up would strand
  *                  every sibling.
+ *  - `adopt.ts`    how a machine that has never seen this account reaches its
+ *                  master key: a bootstrap device row it writes for itself, and
+ *                  the recovery wrap that row makes readable.
  *  - `bytea.ts`    hex `bytea` ↔ base64url, the one translation nobody else can do.
  *  - `rows.ts`     column names ↔ `PushRow`/`PulledRow`, and the explicit select list.
  *  - `outcome.ts`  every way a write can end, named, with the SQLSTATE map.
@@ -120,6 +123,16 @@ export type {
   DeviceRegisterRefusal,
   DeviceRegisterResult,
 } from "./register.js";
+
+// ── Reaching an account this computer has never seen ────────────────────────
+export {
+  parseInsertedDeviceId,
+  parseRecoveryWrapRows,
+  recoveryWrapRequest,
+  retireBootstrapDeviceRequest,
+  webDeviceInsertRequest,
+} from "./adopt.js";
+export type { RecoveryWrapRow, WebDeviceInput } from "./adopt.js";
 
 // ── This computer's device row ──────────────────────────────────────────────
 export { retireDeviceRequest, touchDeviceRequest } from "./devices.js";
