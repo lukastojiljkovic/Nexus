@@ -4,7 +4,7 @@ import type { SyncStatusView } from "../../shared/ipc.js";
  * What „Sinhronizacija" shows, decided as a value rather than as four
  * conditions inside JSX.
  *
- * The card's shape is a state machine over three booleans, a nullable account
+ * The card's shape is a state machine over four booleans, a nullable account
  * and one piece of component state, and the combinations are not obvious. Two
  * of them are the reason this is a function with tests instead of inline
  * conditions:
@@ -42,8 +42,20 @@ export type SyncCardState =
   | { kind: "cloud-off" }
   /** Cloud is on and this computer belongs to no account yet: the enable form. */
   | { kind: "enable" }
-  /** This computer is enrolled. `signedIn` decides whether a note says it is not signed in. */
-  | { kind: "enabled"; account: NonNullable<SyncStatusView["account"]>; signedIn: boolean };
+  /** This computer is enrolled. `signedIn` says whether main is holding its session. */
+  | {
+      kind: "enabled";
+      account: NonNullable<SyncStatusView["account"]>;
+      signedIn: boolean;
+      /**
+       * Whether to offer the way back onto the account — a password and a new
+       * device row. False for a computer that is already on its session (it has
+       * a good device row and reconnecting would mint a second) and false in a
+       * launch that cannot reach the server at all, which is the same trap the
+       * enable form has and is decided by the same predicate.
+       */
+      reconnectable: boolean;
+    };
 
 export interface SyncCardInput {
   readonly status: SyncStatusView;
@@ -58,9 +70,24 @@ export function syncCardState(input: SyncCardInput): SyncCardState {
   // launch with cloud off: „you are enrolled and cannot reach the server" is a
   // fact the user needs, and hiding it would read as „sync was never on here".
   const { account, signedIn } = status;
-  if (account !== null) return { kind: "enabled", account, signedIn };
+  if (account !== null) {
+    return { kind: "enabled", account, signedIn, reconnectable: !signedIn && reachable(status) };
+  }
 
   if (!status.configured) return { kind: "unconfigured" };
-  if (!status.cloudEnabled || status.cloudRestartRequired) return { kind: "cloud-off" };
+  if (!reachable(status)) return { kind: "cloud-off" };
   return { kind: "enable" };
+}
+
+/**
+ * Whether a form that ends in a network call may be OFFERED this launch.
+ *
+ * One predicate for both forms, because they share the trap: the ports were
+ * built — or not built — by `createCloudPorts` at startup, so a form drawn while
+ * the stored switch disagrees with the running process takes a password for a
+ * call main answers with `cloud_off`. Two surfaces asking the same question two
+ * ways is how one of them ends up asking it wrongly.
+ */
+function reachable(status: SyncStatusView): boolean {
+  return status.configured && status.cloudEnabled && !status.cloudRestartRequired;
 }

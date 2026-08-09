@@ -48,10 +48,12 @@ import { cloudRequiresRestart, readCloudSwitch, writeCloudSwitch } from "../net/
 import { cloudOrigins, parseCloudConfig, type CloudConfig } from "./config.js";
 import { enableSyncOnThisDevice } from "./enable.js";
 import { createCloudPorts, type CloudFetch, type CloudPorts } from "./port.js";
+import { reconnectSync, resumeSync } from "./reconnect.js";
 import { createSessionHolder, type SessionHolder } from "./session.js";
 import type {
   SyncEnableProblem,
   SyncEnableView,
+  SyncReconnectView,
   SyncStatusView,
 } from "../../shared/ipc.js";
 
@@ -80,9 +82,18 @@ export interface SyncService {
   readonly status: () => SyncStatusView;
   readonly setCloudEnabled: (enabled: boolean) => SyncStatusView;
   readonly enable: (input: SyncEnableRequest) => Promise<SyncEnableView>;
+  /** One request, no password: the stored refresh token, if it still works. */
+  readonly resume: () => Promise<SyncStatusView>;
+  /** The expensive way back, when the session is gone for good. */
+  readonly reconnect: (input: SyncReconnectRequest) => Promise<SyncReconnectView>;
   readonly disconnect: () => Promise<SyncStatusView>;
   /** The origins the cloud-off boundary must admit for this launch. */
   readonly allowedOrigins: () => readonly string[];
+}
+
+export interface SyncReconnectRequest {
+  readonly password: string;
+  readonly deviceName: string;
 }
 
 export interface SyncEnableRequest {
@@ -216,6 +227,90 @@ export function createSyncService(deps: SyncServiceDeps): SyncService {
       zeroize(result.masterKey);
 
       return { outcome: "enabled", recoveryCode: result.recoveryCode, status: status() };
+    },
+
+    /**
+     * The cheap half of „get back on the account", and the one that runs every
+     * time this screen is opened on a machine that is enrolled.
+     *
+     * A refresh keeps the SAME `session_id`, so the device row that names it is
+     * still the right one and nothing about the account changes. Failure is not
+     * an error state and is deliberately not reported as one: a session ending
+     * is the ordinary end of a session's life, and what it means for the screen
+     * is „offer the password", which the status view already says by way of
+     * `signedIn: false`.
+     */
+    resume: async () => {
+      const record = account();
+      if (ports === null || record === null) return status();
+      const resumed = await resumeSync(
+        { crypto, ports, holder },
+        { refreshToken: record.refreshToken },
+      );
+      if (resumed.kind === "resumed") {
+        // GoTrue rotates the refresh token on every use, so the stored one is
+        // spent the moment this succeeds. Not writing the new one back would
+        // make each launch the LAST launch that could resume.
+        deps.accountStore().setRefreshToken(resumed.session.refreshToken);
+      }
+      return status();
+    },
+
+    /**
+     * The expensive half: a fresh sign-in and a new device row, bought with a
+     * proof that this computer holds the account's master key.
+     *
+     * Every refusal is named rather than collapsed, because the sentences differ
+     * in what the user should do next: a wrong password is „try again", and
+     * `proof_rejected` or `master_key_unreadable` is „this machine no longer
+     * holds the key — pair it with one that does, or use the Recovery Kit".
+     */
+    reconnect: async (input) => {
+      if (ports === null) return { outcome: "refused", reason: "cloud_off" };
+
+      let dataKeyHex: string;
+      try {
+        dataKeyHex = deps.dataKeyHex();
+      } catch {
+        return { outcome: "refused", reason: "locked" };
+      }
+      const record = account();
+      if (record === null) return { outcome: "refused", reason: "not_enabled_here" };
+
+      const localDataKey = hexToBytes(dataKeyHex);
+      let result;
+      try {
+        result = await reconnectSync(
+          { crypto, ports, holder },
+          {
+            email: record.email,
+            password: input.password,
+            deviceName: input.deviceName,
+            localWrap: record.localWrap,
+            localDataKey,
+            userId: record.userId,
+          },
+        );
+      } catch (error) {
+        // `sealDeviceName` throws `TypeError` for a name this schema cannot
+        // store. Neither that nor a crypto-port fault is a server condition, and
+        // neither should reach the renderer as a stack.
+        console.error("sync: reconnect failed", error);
+        return { outcome: "refused", reason: "bad_request" };
+      } finally {
+        zeroize(localDataKey);
+      }
+
+      if (result.kind === "refused") {
+        if (result.detail !== null) console.error("sync: reconnect refused —", result.detail);
+        return { outcome: "refused", reason: result.reason };
+      }
+
+      // The row this desktop now owns, and the token that will resume it next
+      // launch. Both, or the machine is reconnected only until it is closed.
+      deps.accountStore().setDeviceId(result.deviceId);
+      deps.accountStore().setRefreshToken(result.session.refreshToken);
+      return { outcome: "reconnected", status: status() };
     },
 
     disconnect: async () => {

@@ -54,7 +54,7 @@ import type {
 // server and `nexus_mk_mint` actually answer, and a redeclared copy would drift
 // into naming a state the protocol cannot produce — or, worse, into omitting one
 // it can, which is a screen with no message for a case that happens.
-import type { AuthRefusal, SyncEnableRefusal } from "@nexus/sync-transport";
+import type { AuthRefusal, DeviceRegisterRefusal, SyncEnableRefusal } from "@nexus/sync-transport";
 
 /** The only channels the preload bridge and the main handlers agree on. */
 export const IpcChannel = {
@@ -835,6 +835,16 @@ export const IpcChannel = {
   syncStatus: "sync:status",
   syncSetCloud: "sync:set-cloud",
   syncEnable: "sync:enable",
+  // Getting back onto the account, in the two steps it actually takes.
+  // `sync:resume` is one request and no password — a refresh keeps the same
+  // `session_id`, so the device row that names it is still the right one, and
+  // this is what runs on an ordinary launch. `sync:reconnect` is for when that
+  // session is gone for good: a fresh sign-in and a NEW device row, bought with
+  // a proof that this computer holds the master key. Not with a second factor —
+  // a desktop row is authority over `mk_under_kwrap`, whose opener comes from
+  // the password, and a step-up would revoke every sibling desktop's session.
+  syncResume: "sync:resume",
+  syncReconnect: "sync:reconnect",
   syncDisconnect: "sync:disconnect",
   appInfo: "app:info",
 } as const;
@@ -7833,6 +7843,35 @@ export type SyncEnableProblem =
   /** A caller-side fault: a device name this schema cannot store, a bad key length. */
   | "bad_request";
 
+/**
+ * Why getting back onto the account failed.
+ *
+ * `AuthRefusal` and `DeviceRegisterRefusal` are the protocol's own and are
+ * IMPORTED, for the reason {@link SyncEnableProblem} imports its two: a
+ * redeclared copy drifts into naming a state the server cannot produce, or —
+ * worse — omitting one it can.
+ */
+export type SyncReconnectProblem =
+  | AuthRefusal
+  | DeviceRegisterRefusal
+  /** The stored wrap did not open. This machine no longer holds the master key. */
+  | "master_key_unreadable"
+  /** The sign-in produced a session for a different account than the stored one. */
+  | "account_mismatch"
+  /** Cloud is switched off for this launch, or this build has no project. */
+  | "cloud_off"
+  /** The database is locked, so the wrapped master key cannot be opened. */
+  | "locked"
+  /** Sync was never turned on here, so there is no account to get back onto. */
+  | "not_enabled_here"
+  /** A caller-side fault: a device name this schema cannot store. */
+  | "bad_request";
+
+/** Everything `reconnectSync` can answer. */
+export type SyncReconnectView =
+  | { outcome: "reconnected"; status: SyncStatusView }
+  | { outcome: "refused"; reason: SyncReconnectProblem };
+
 /** Everything `enableSync` can answer. */
 export type SyncEnableView =
   | {
@@ -9166,6 +9205,14 @@ export interface NexusApi {
     deviceName: string;
     factorId?: string;
   }): Promise<SyncEnableView>;
+  /** Tries the stored refresh token. One request, no password, and the same session id — so the device row stays valid. Failing is ordinary: the answer is `reconnectSync`. */
+  resumeSync(): Promise<SyncStatusView>;
+  /**
+   * Signs in afresh and buys a NEW device row with a proof that this computer
+   * holds the account's master key. For when the session is gone for good —
+   * which a second machine's step-up does to every other session on the account.
+   */
+  reconnectSync(request: { password: string; deviceName: string }): Promise<SyncReconnectView>;
   /** Retires this computer's device row, ends its session, and forgets its copy of the master key. Coming back needs pairing or the Recovery Kit. */
   disconnectSync(): Promise<SyncStatusView>;
   appInfo(): Promise<AppInfo>;

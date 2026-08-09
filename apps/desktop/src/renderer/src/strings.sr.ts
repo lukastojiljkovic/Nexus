@@ -42,6 +42,7 @@ import type {
   RestoreModuleCounts,
   RestoreProblemCode,
   SyncEnableProblem,
+  SyncReconnectProblem,
 } from "../../shared/ipc.js";
 import type { OnboardingOccupation } from "../../shared/onboardingPresets.js";
 import type { ClockPreference } from "./calendarPrefs.js";
@@ -6800,6 +6801,50 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       deviceLabel: "Uređaj",
       enabledAtLabel: "Uključeno",
       signedOut: "Ovaj računar trenutno nije prijavljen na nalog.",
+      connecting: "Povezivanje…",
+      reconnectTitle: "Poveži ovaj računar ponovo",
+      /**
+       * Says what happened, in the user's terms, and what it costs. „Prijava je
+       * istekla" rather than „sesija je opozvana": the most common cause is
+       * another računar uključivao sinhronizaciju, which ends every other
+       * prijava on the account, and none of that is the user's vocabulary.
+       */
+      reconnectIntro:
+        "Prijava ovog računara na nalog više ne važi — to se dešava kada se drugi uređaj poveže na nalog ili kada se odjaviš sa svih uređaja. Ključ je i dalje ovde; treba samo nova prijava.",
+      reconnectPasswordHint:
+        "Lozinka ostaje na ovom računaru. Šalje se vrednost izvedena iz nje, nikada sama lozinka.",
+      reconnectSubmit: "Poveži",
+      reconnectError: "Povezivanje nije uspelo. Pokušaj ponovo.",
+      reconnectErrors: {
+        invalid_credentials: "Pogrešna lozinka.",
+        email_not_confirmed: "Potvrdi imejl adresu u veb aplikaciji, pa pokušaj ponovo.",
+        invalid_code: "Kod za potvrdu nije prihvaćen. Sačekaj sledeći kod i pokušaj ponovo.",
+        mfa_not_enrolled: "Nalog nema potvrdu u dva koraka. Uključi je u veb aplikaciji, pa se vrati ovde.",
+        session_expired: "Prijava je istekla. Pokušaj ponovo.",
+        rate_limited: "Previše pokušaja. Sačekaj nekoliko minuta.",
+        unavailable: "Server trenutno ne odgovara. Pokušaj kasnije.",
+        unknown: "Nešto nije prošlo. Pokušaj ponovo.",
+        unauthenticated: "Prijava nije prošla. Pokušaj ponovo.",
+        session_not_live: "Prijava više ne važi. Pokušaj ponovo.",
+        session_not_aal1: "Prijava nije prošla kako treba. Pokušaj ponovo.",
+        not_enabled: "Ovaj nalog još nema ključ. Uključi sinhronizaciju.",
+        // The two that are NOT „try again", and whose sentences must say so:
+        // this machine no longer holds the account's key, and no number of
+        // attempts changes that.
+        proof_rejected:
+          "Ovaj računar nema ključ ovog naloga. Upari ga sa uređajem koji ključ ima ili upotrebi kod za oporavak.",
+        master_key_unreadable:
+          "Ključ sačuvan na ovom računaru ne može da se otvori. Upari računar sa uređajem koji ključ ima ili upotrebi kod za oporavak.",
+        too_many_devices:
+          "Nalog već ima najviše dozvoljenih računara. Odjavi jedan u veb aplikaciji, pa pokušaj ponovo.",
+        account_mismatch: "Prijava ne pripada nalogu sačuvanom na ovom računaru.",
+        register_failed: "Server nije uspeo da poveže ovaj računar. Pokušaj kasnije.",
+        rejected_by_schema: "Server je odbio podatke. Prijavi grešku.",
+        cloud_off: "Mrežni pristup je isključen za ovo pokretanje.",
+        locked: "Otključaj Nexus, pa pokušaj ponovo.",
+        not_enabled_here: "Sinhronizacija nije uključena na ovom računaru.",
+        bad_request: "Podaci nisu ispravni. Proveri ime računara.",
+      } satisfies Record<SyncReconnectProblem, string>,
       /** The account has a key this computer did not mint. Not an error — a fork in the road. */
       alreadyMinted:
         "Ovaj nalog već ima ključ, a ovaj računar ga nema. Upari ga sa uređajem koji ključ ima ili upotrebi kod za oporavak.",

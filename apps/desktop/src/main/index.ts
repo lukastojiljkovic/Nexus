@@ -664,6 +664,7 @@ import {
   type SubjectAttachmentsAddResult,
   type SubjectStudyLog,
   type SyncEnableView,
+  type SyncReconnectView,
   type SyncStatusView,
   type TaskAttachmentsAddResult,
   type TaskListsSnapshot,
@@ -11124,6 +11125,26 @@ function registerIpc(): void {
       totpCode,
       deviceName,
       ...(factorId === undefined ? {} : { factorId }),
+    });
+  });
+
+  // The cheap way back and the expensive one. `sync:resume` takes nothing and
+  // answers the status: a refresh that fails is the ordinary end of a session's
+  // life, not an error, and what it means for the screen is already in
+  // `signedIn: false`. `sync:reconnect` takes a password that stops here — it is
+  // put through Argon2id in main and never reaches a socket — and buys a new
+  // device row with a proof derived from the master key this machine holds.
+  ipcMain.handle(IpcChannel.syncResume, async (event): Promise<SyncStatusView> => {
+    assertTrustedSender(event);
+    return syncService().resume();
+  });
+
+  ipcMain.handle(IpcChannel.syncReconnect, async (event, payload): Promise<SyncReconnectView> => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    return syncService().reconnect({
+      password: asNonEmptyString(body.password, "password"),
+      deviceName: asNonEmptyString(body.deviceName, "deviceName"),
     });
   });
 

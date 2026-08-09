@@ -375,6 +375,16 @@ function shellEntries(): readonly ShellSettingsSearchEntry[] {
       ],
     },
     {
+      // Only ever visible on a computer whose session has ended, and that is
+      // exactly when somebody searches for it: the form appears by itself, so
+      // the person who comes to this page has usually come looking for „poveži"
+      // after seeing sync stop working.
+      id: "sync-reconnect",
+      section: "sync",
+      label: s.sync.reconnectTitle,
+      keywords: ["povezi", "ponovo", "prijava", "istekla", "sesija", "lozinka", "nalog"],
+    },
+    {
       // Its own entry because it is a BUTTON with consequences, and because the
       // word somebody reaches for („odjavi") appears nowhere else on the page.
       id: "sync-disconnect",

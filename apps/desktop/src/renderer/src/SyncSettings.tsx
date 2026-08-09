@@ -34,6 +34,18 @@ export interface SyncSectionProps {
  * the code down, and a page they can scroll past is a page they will scroll
  * past.
  *
+ * ─── Why the card tries to reconnect before it asks anything ───────────────
+ *
+ * A session lives in main's memory and does not survive a restart, so „enrolled
+ * and not signed in" is the state of every launch, not a fault. Its ordinary
+ * answer is the stored refresh token: `resumeSync` is one request, needs no
+ * password, and comes back with the SAME session id — which is what keeps this
+ * computer's existing device row valid. The effect below therefore tries it as
+ * soon as the status arrives, and only a failure brings the password form out.
+ * Behind a button, that request would be a chore the user has to discover; in
+ * front of one, the password would be asked for at every launch and each answer
+ * would mint a second device row for a machine that already has a good one.
+ *
  * ─── Why the switch answers `cloudRestartRequired` in both directions ───────
  *
  * The cloud boundary is read ONCE, at startup, when `createCloudPorts` decides
@@ -59,6 +71,7 @@ export function SyncSection({ hits }: SyncSectionProps) {
 
   const [status, setStatus] = useState<SyncStatusView | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
+  const [resuming, setResuming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recoveryCode, setRecoveryCode] = useState<string | null>(null);
@@ -73,15 +86,39 @@ export function SyncSection({ hits }: SyncSectionProps) {
 
   useEffect(() => {
     let cancelled = false;
-    window.nexus
-      .syncStatus()
-      .then((view) => {
-        if (!cancelled) setStatus(view);
-      })
-      .catch((loadError: unknown) => {
+    void (async () => {
+      let view: SyncStatusView;
+      try {
+        view = await window.nexus.syncStatus();
+      } catch (loadError) {
         if (!cancelled) setLoadFailed(true);
         console.error("Nexus: failed to read the sync status:", loadError);
-      });
+        return;
+      }
+      if (cancelled) return;
+      setStatus(view);
+
+      // A session lives in main's memory, so „enrolled and not signed in" is the
+      // ordinary state of every launch — and the stored refresh token is the
+      // ordinary answer to it: one request, no password, and the SAME session id,
+      // which is what keeps this computer's device row valid. Only when that
+      // fails is the reconnect form worth showing, so it is tried here rather
+      // than waited for behind a button the user should never have to find.
+      const loaded = syncCardState({ status: view, recoveryCode: null });
+      if (loaded.kind !== "enabled" || !loaded.reconnectable) return;
+      setResuming(true);
+      try {
+        const resumed = await window.nexus.resumeSync();
+        if (!cancelled) setStatus(resumed);
+      } catch (resumeError) {
+        // A resume that throws is a dead session with extra steps, and a dead
+        // session's answer is the form below. Nothing about the account is in
+        // doubt, so the card stays exactly as it is.
+        console.error("Nexus: resuming the sync session failed:", resumeError);
+      } finally {
+        if (!cancelled) setResuming(false);
+      }
+    })();
     return () => {
       cancelled = true;
     };
@@ -136,6 +173,34 @@ export function SyncSection({ hits }: SyncSectionProps) {
     } catch (enableError) {
       setError(s.error);
       console.error("Nexus: enabling sync failed:", enableError);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submitReconnect(event: FormEvent): Promise<void> {
+    event.preventDefault();
+    if (busy) return;
+    setError(null);
+    setBusy(true);
+    // Same hygiene as the enable form: read out, dropped from state before the
+    // await, never held across a refusal.
+    const submitted = password;
+    setPassword("");
+    try {
+      const view = await window.nexus.reconnectSync({
+        password: submitted,
+        deviceName: deviceName.trim(),
+      });
+      if (view.outcome === "reconnected") {
+        setStatus(view.status);
+        setDeviceName("");
+      } else {
+        setError(s.reconnectErrors[view.reason]);
+      }
+    } catch (reconnectError) {
+      setError(s.reconnectError);
+      console.error("Nexus: reconnecting this computer to its account failed:", reconnectError);
     } finally {
       setBusy(false);
     }
@@ -296,7 +361,54 @@ export function SyncSection({ hits }: SyncSectionProps) {
               <dd>{formatArchiveInstant(card.account.enabledAt)}</dd>
             </div>
           </dl>
-          {!card.signedIn && <p className="set__section-caption">{s.signedOut}</p>}
+          {resuming && <p className="set__section-caption">{s.connecting}</p>}
+          {!card.signedIn && !resuming && !card.reconnectable && (
+            <p className="set__section-caption">{s.signedOut}</p>
+          )}
+
+          {card.reconnectable && !resuming && (
+            <form
+              className="set__field set__field--stacked"
+              onSubmit={(event) => void submitReconnect(event)}
+            >
+              <h3
+                className={labelClass(
+                  "nx-eyebrow set__module-group-title",
+                  hits.has("sync-reconnect"),
+                )}
+              >
+                {s.reconnectTitle}
+              </h3>
+              <p className="app__description">{s.reconnectIntro}</p>
+              <div className="set__security-form">
+                <TextField
+                  type="password"
+                  autoComplete="off"
+                  label={s.passwordLabel}
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                />
+                {/* A new row, so it may legitimately carry a new name — and it has
+                    to be asked for, because the old one was sealed under the master
+                    key and this computer stores no readable copy of it. */}
+                <TextField
+                  label={s.deviceNameLabel}
+                  value={deviceName}
+                  onChange={(event) => setDeviceName(event.target.value)}
+                />
+              </div>
+              <p className="set__section-caption">{s.reconnectPasswordHint}</p>
+              <Button
+                type="submit"
+                size="sm"
+                variant="primary"
+                disabled={busy || password.length === 0 || deviceName.trim().length === 0}
+              >
+                {busy ? s.working : s.reconnectSubmit}
+              </Button>
+            </form>
+          )}
+
           <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("sync-disconnect"))}>
             {s.disconnectTitle}
           </h3>

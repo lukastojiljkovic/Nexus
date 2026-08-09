@@ -18,6 +18,7 @@ const USER = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
 const FACTOR = "6f2f4f5e-1b5c-4d3a-9a4e-2c7f0a1b2c3d";
 const CHALLENGE = "11111111-2222-4333-8444-555555555555";
 const DEVICE = "22222222-3333-4444-8555-666666666666";
+const SECOND_DEVICE = "33333333-4444-4555-8666-777777777777";
 const DATA_KEY_HEX = "ab".repeat(32);
 
 const configured = { [CLOUD_URL_VAR]: ORIGIN, [CLOUD_ANON_KEY_VAR]: KEY };
@@ -37,10 +38,19 @@ interface Wire {
  * The whole server as one URL-dispatching fake, so the ports, the protocol and
  * the service are exercised together rather than one layer at a time.
  */
-function wire(options: { retireStatus?: number; retireBody?: string } = {}): Wire {
+function wire(
+  options: {
+    retireStatus?: number;
+    retireBody?: string;
+    refreshStatus?: number;
+    registerStatus?: number;
+    registerBody?: string;
+  } = {},
+): Wire {
   const urls: string[] = [];
   const bodies: (string | null)[] = [];
   let signIns = 0;
+  let refreshes = 0;
   let mint: Record<string, Record<string, string>> | null = null;
 
   const fetch: CloudFetch = async (request) => {
@@ -55,6 +65,21 @@ function wire(options: { retireStatus?: number; retireBody?: string } = {}): Wir
         body: JSON.stringify({
           access_token: token(`session-${signIns}`, "aal1"),
           refresh_token: `refresh-${signIns}`,
+        }),
+      };
+    }
+    if (path === "/auth/v1/token?grant_type=refresh_token") {
+      if (options.refreshStatus !== undefined) {
+        return { status: options.refreshStatus, body: '{"error_code":"refresh_token_not_found"}' };
+      }
+      // GoTrue rotates the TOKEN and keeps the SESSION, which is the whole
+      // reason a resume is cheap: the device row names `session-2` either way.
+      refreshes += 1;
+      return {
+        status: 200,
+        body: JSON.stringify({
+          access_token: token("session-2", "aal1"),
+          refresh_token: `refresh-rotated-${refreshes}`,
         }),
       };
     }
@@ -84,6 +109,13 @@ function wire(options: { retireStatus?: number; retireBody?: string } = {}): Wir
     if (path === "/functions/v1/sync-enable") {
       mint = JSON.parse(request.body ?? "{}") as Record<string, Record<string, string>>;
       return { status: 200, body: JSON.stringify({ status: "minted", device_id: DEVICE }) };
+    }
+
+    if (path === "/functions/v1/device-register") {
+      return {
+        status: options.registerStatus ?? 200,
+        body: options.registerBody ?? JSON.stringify({ device_id: SECOND_DEVICE }),
+      };
     }
 
     if (path.startsWith("/rest/v1/key_wraps")) {
@@ -311,6 +343,126 @@ describe("enable", () => {
     // The name is refused after the step-up (it is validated where the material
     // is built) but before anything is minted.
     expect(net.urls.some((url) => url.includes("/functions/"))).toBe(false);
+  });
+});
+
+describe("resume", () => {
+  it("gets back on the same session with no password, and banks the rotated token", async () => {
+    const net = wire();
+    await service(configured, net).enable(enableInput);
+    net.urls.length = 0;
+
+    // A second service over the same store is what a relaunch looks like: the
+    // account row survives, the session in memory does not.
+    const relaunched = service(configured, net);
+    expect(relaunched.status()).toMatchObject({ signedIn: false, account: { deviceId: DEVICE } });
+
+    const after = await relaunched.resume();
+
+    expect(net.urls.map((url) => url.slice(ORIGIN.length))).toEqual([
+      "/auth/v1/token?grant_type=refresh_token",
+    ]);
+    expect(after).toMatchObject({ signedIn: true, account: { deviceId: DEVICE } });
+    // The stored token is spent the moment it is used. Not writing the new one
+    // back would make every launch the LAST one that could resume.
+    expect(store.read()?.refreshToken).toBe("refresh-rotated-1");
+  });
+
+  it("keeps the stored token when the refresh fails, because an outage is not a password", async () => {
+    const net = wire({ refreshStatus: 400 });
+    await service(configured, net).enable(enableInput);
+
+    const after = await service(configured, net).resume();
+
+    expect(after).toMatchObject({ signedIn: false, account: { deviceId: DEVICE } });
+    // A refused refresh and an unreachable server are the same answer here, and
+    // throwing the token away on the second would turn a five-minute outage into
+    // a password the user has to go and find.
+    expect(store.read()?.refreshToken).toBe("refresh-2");
+  });
+
+  it("asks nothing of the network on a computer that was never enrolled", async () => {
+    const net = wire();
+    const sync = service(configured, net);
+    expect(await sync.resume()).toMatchObject({ account: null, signedIn: false });
+    expect(net.urls).toEqual([]);
+  });
+});
+
+describe("reconnect", () => {
+  it("refuses before a packet when cloud is off, or the build has no project", async () => {
+    const request = { password: "a password nobody sends", deviceName: "Anin laptop" };
+    expect(await service(configured, wire(), false).reconnect(request)).toEqual({
+      outcome: "refused",
+      reason: "cloud_off",
+    });
+    expect(await service({}).reconnect(request)).toEqual({
+      outcome: "refused",
+      reason: "cloud_off",
+    });
+  });
+
+  it("refuses while the database is locked, because the wrap cannot be opened", async () => {
+    locked = true;
+    expect(
+      await service(configured).reconnect({ password: "x", deviceName: "Anin laptop" }),
+    ).toEqual({ outcome: "refused", reason: "locked" });
+  });
+
+  it("refuses on a computer that has no account to get back onto", async () => {
+    expect(
+      await service(configured).reconnect({ password: "x", deviceName: "Anin laptop" }),
+    ).toEqual({ outcome: "refused", reason: "not_enabled_here" });
+  });
+
+  it("signs in, buys a new device row, and stores both halves of it", async () => {
+    const net = wire();
+    await service(configured, net).enable(enableInput);
+    net.urls.length = 0;
+
+    const after = await service(configured, net).reconnect({
+      password: "a password nobody sends",
+      deviceName: "Anin laptop",
+    });
+
+    expect(net.urls.map((url) => url.slice(ORIGIN.length))).toEqual([
+      "/auth/v1/token?grant_type=password",
+      "/functions/v1/device-register",
+    ]);
+    expect(after).toMatchObject({
+      outcome: "reconnected",
+      status: { signedIn: true, account: { deviceId: SECOND_DEVICE } },
+    });
+    // The row this desktop now owns AND the token that will resume it next
+    // launch. Either one missing leaves a machine reconnected only until it is
+    // closed, which is the failure nobody reports because it looks like nothing.
+    expect(store.read()).toMatchObject({ deviceId: SECOND_DEVICE, refreshToken: "refresh-3" });
+  });
+
+  it("leaves the stored row alone when the server refuses the proof", async () => {
+    const net = wire({ registerStatus: 403, registerBody: '{"error":"proof_rejected"}' });
+    await service(configured, net).enable(enableInput);
+
+    const after = await service(configured, net).reconnect({
+      password: "a password nobody sends",
+      deviceName: "Anin laptop",
+    });
+
+    expect(after).toEqual({ outcome: "refused", reason: "proof_rejected" });
+    expect(store.read()).toMatchObject({ deviceId: DEVICE, refreshToken: "refresh-2" });
+  });
+
+  it("refuses a device name this schema cannot store, without signing in", async () => {
+    const net = wire();
+    await service(configured, net).enable(enableInput);
+    net.urls.length = 0;
+
+    const after = await service(configured, net).reconnect({
+      password: "a password nobody sends",
+      deviceName: "   ",
+    });
+    expect(after).toEqual({ outcome: "refused", reason: "bad_request" });
+    expect(net.urls).toEqual([]);
   });
 });
 

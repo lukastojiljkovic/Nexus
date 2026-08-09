@@ -810,6 +810,8 @@ const api: NexusApi = {
   syncStatus: () => ipcRenderer.invoke(IpcChannel.syncStatus),
   setCloudEnabled: (enabled) => ipcRenderer.invoke(IpcChannel.syncSetCloud, { enabled }),
   enableSync: (request) => ipcRenderer.invoke(IpcChannel.syncEnable, request),
+  resumeSync: () => ipcRenderer.invoke(IpcChannel.syncResume),
+  reconnectSync: (request) => ipcRenderer.invoke(IpcChannel.syncReconnect, request),
   disconnectSync: () => ipcRenderer.invoke(IpcChannel.syncDisconnect),
   appInfo: () => ipcRenderer.invoke(IpcChannel.appInfo),
 };

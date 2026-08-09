@@ -249,6 +249,11 @@ async function mint(
     recoveryWrap: material.recoveryWrap,
     recoveryKdfParams: material.recoveryKdfParams,
     recoverySalt: bytesToBase64url(material.recoverySalt),
+    // Travels with the MINT and nowhere else, because the mint is the only
+    // transaction that can store it. Without it this account could never
+    // register a second desktop, and this very machine could never come back
+    // from a dead session — see `device-register.ts` in `@nexus/sync-crypto`.
+    registerProof: bytesToBase64url(material.registerProof),
   };
 
   // ── 5. The mint ───────────────────────────────────────────────────────────

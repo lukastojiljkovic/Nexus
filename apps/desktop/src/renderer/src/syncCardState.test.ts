@@ -70,7 +70,12 @@ describe("syncCardState", () => {
       status: status({ configured: true, cloudEnabled: false, account: ACCOUNT, signedIn: false }),
       recoveryCode: null,
     });
-    expect(state).toEqual({ kind: "enabled", account: ACCOUNT, signedIn: false });
+    expect(state).toEqual({
+      kind: "enabled",
+      account: ACCOUNT,
+      signedIn: false,
+      reconnectable: false,
+    });
   });
 
   it("reports an enrolled computer even when the build has lost its project", () => {
@@ -78,6 +83,50 @@ describe("syncCardState", () => {
       status: status({ configured: false, cloudEnabled: true, account: ACCOUNT, signedIn: true }),
       recoveryCode: null,
     });
-    expect(state).toEqual({ kind: "enabled", account: ACCOUNT, signedIn: true });
+    expect(state).toEqual({
+      kind: "enabled",
+      account: ACCOUNT,
+      signedIn: true,
+      reconnectable: false,
+    });
+  });
+
+  it("offers the way back only when this computer is enrolled and off its session", () => {
+    const state = syncCardState({
+      status: status({ configured: true, cloudEnabled: true, account: ACCOUNT, signedIn: false }),
+      recoveryCode: null,
+    });
+    expect(state).toEqual({
+      kind: "enabled",
+      account: ACCOUNT,
+      signedIn: false,
+      reconnectable: true,
+    });
+  });
+
+  it("never offers the way back to a computer that is already on its session", () => {
+    // Reconnecting mints a SECOND device row for a machine that already has a
+    // good one, so a signed-in desktop must not be shown the door back in.
+    const state = syncCardState({
+      status: status({ configured: true, cloudEnabled: true, account: ACCOUNT, signedIn: true }),
+      recoveryCode: null,
+    });
+    expect(state).toMatchObject({ reconnectable: false });
+  });
+
+  it("withholds the way back while the switch is ON but waiting for a relaunch", () => {
+    // Same trap as the enable form, and the same rule decides both: the ports
+    // were built (or not) at startup, so a password taken now buys a `cloud_off`.
+    const state = syncCardState({
+      status: status({
+        configured: true,
+        cloudEnabled: true,
+        cloudRestartRequired: true,
+        account: ACCOUNT,
+        signedIn: false,
+      }),
+      recoveryCode: null,
+    });
+    expect(state).toMatchObject({ kind: "enabled", reconnectable: false });
   });
 });
