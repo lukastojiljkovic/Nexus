@@ -1,0 +1,57 @@
+# Configuration for the CI secret scan (.github/workflows/security.yml).
+#
+# Until 2026-08-10 this file did not exist, so the scan ran on gitleaks' stock
+# ruleset with nothing to say about this repository. Two of its findings are
+# reviewed non-secrets, and with no way to record that review the gate could
+# only ever be red or ignored — it was ignored, for ten days.
+#
+# THE SHAPE OF THIS FILE WAS MEASURED, NOT READ. Every allowlist mechanism the
+# current documentation suggests is silently inert in the pinned gitleaks
+# 8.24.3: `[[allowlists]]` (plural), `targetRules` and `matchCondition` are all
+# unknown keys, and TOML drops unknown keys without a word, so a config using
+# them scans exactly as if it were absent — measured against the real history,
+# which still reported both findings. What works is the singular `[allowlist]`,
+# whose conditions OR rather than AND. That last point is why there is no
+# `paths` key below: a path entry does not narrow an exemption to a rule, it
+# exempts EVERY rule inside that path, so `paths = ['.*\.test\.ts']` would have
+# quietly stopped the scan from ever reporting an AWS key or a GitHub token in
+# any test file. Proved by planting both and watching them vanish.
+#
+# So exemptions here name the literal itself. An entry is matched against the
+# secret gitleaks extracted, which makes each one as narrow as it can be: it
+# excuses one reviewed value and nothing that merely resembles it. The cost is
+# that a new fixture of the same kind fails CI once and needs a line here — and
+# that cost is the point, because it is a human looking at each high-entropy
+# constant exactly once, which is the same bargain `.github/scripts/
+# audit-toolchain.mjs` makes with its advisory allow-list.
+#
+# The counter-test lives with the change that introduced this file and is worth
+# re-running whenever an entry is added: plant a real key body in the file whose
+# PEM label is excused, and vendor credentials next to the excused vector. All
+# of them must still fail. They do.
+
+title = "Nexus"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Reviewed non-secrets, each named by the literal it excuses"
+regexes = [
+  # `packages/core/src/devtools/cryptoTools.ts` documents the two PEM fields of
+  # `PemKeyPair` by naming their armour lines inside a JSDoc code span. The
+  # `private-key` rule matches armour, not key material, so it opens on the
+  # first label and closes on the second — a three-line match that is entirely
+  # comment. The backtick immediately after the closing dashes is what separates
+  # a label from a key: a real PEM has a newline and base64 there, so a key
+  # pasted into that same file is still caught.
+  '''-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----`''',
+
+  # `packages/core/src/priv/privEnvelope.test.ts` — the known-answer vector for
+  # `derivePrivBlobKey`, i.e. HKDF over a DEK that the file next door defines as
+  # `bytes(32, (i) => i)`: the bytes 00,01,…,1f. Anyone can recompute it, it
+  # protects nothing, and the test's whole value is that the number is fixed
+  # somewhere other than in the implementation. It is flagged only because the
+  # identifier says KEY and 64 hex characters carry enough entropy.
+  '''^e33ced84f1f73597a2de8afa80349f9f38ab14460de0bc2488f17c71be15908c$''',
+]

@@ -11,19 +11,55 @@ permissions:
   contents: read
 
 jobs:
+  # Runs gitleaks directly rather than through gitleaks/gitleaks-action, and the
+  # reason is what the gate MEANS rather than a preference about actions.
+  #
+  # The action chooses its scan range from the event, and it exposes no input to
+  # change that: on `push` and `pull_request` it scans `base^..head`, and only on
+  # `schedule` does it scan the whole history (read out of the pinned action's
+  # own dist/index.js, not out of its docs, which do not say so). A range-scoped
+  # scan makes green mean „this push added nothing", while everyone reads it as
+  # „the repository is clean" — and those came apart here in the most literal way
+  # available: run 30624013396 failed on 2026-07-31 on a fixture in
+  # privEnvelope.test.ts, the next push went green because the window had moved
+  # past that commit, and the finding then sat in a green repository for ten
+  # days until the first scheduled full scan reported it again. A failure that
+  # is not acted on the same day should not be able to expire.
+  #
+  # So every event scans the same thing: all of it. It costs about seven seconds
+  # for this history, which is no reason to check less.
   secrets:
     name: Secret scan (gitleaks)
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read # gitleaks reads a PR's commits via the API on pull_request events
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          fetch-depth: 0 # scan the full history, not just the tip commit
-      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3
+          fetch-depth: 0 # the scan below reads every commit, so fetch every commit
+
+      # Pinned by version AND by the archive's digest. The action downloaded a
+      # release at run time and checked nothing, so this is strictly the
+      # stronger supply-chain position, not merely the same one by hand.
+      - name: Install gitleaks
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_VERSION: "8.24.3"
+          GITLEAKS_SHA256: "9991e0b2903da4c8f6122b5c3186448b927a5da4deef1fe45271c3793f4ee29c"
+        run: |
+          curl -sSfL -o "${RUNNER_TEMP}/gitleaks.tar.gz" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  ${RUNNER_TEMP}/gitleaks.tar.gz" | sha256sum --check --strict
+          tar -xzf "${RUNNER_TEMP}/gitleaks.tar.gz" -C "${RUNNER_TEMP}" gitleaks
+          "${RUNNER_TEMP}/gitleaks" version
+
+      # --config is passed explicitly on purpose. Auto-detection falls back to
+      # the stock ruleset when the path is wrong, and this tool's whole failure
+      # mode is being silently less configured than it looks; naming the file
+      # turns a typo into an error instead of into a weaker scan.
+      - name: Scan the whole history
+        run: >
+          "${RUNNER_TEMP}/gitleaks" detect --source . --config .gitleaks.toml
+          --redact -v --exit-code 1
 
   # SEC-SC-04 wants a dependency scan blocking the merge; SEC-VER-03 sets the
   # bar it blocks at — "any known-exploitable dependency vulnerability". Two
