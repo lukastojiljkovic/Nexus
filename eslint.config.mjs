@@ -3,6 +3,8 @@ import reactHooks from "eslint-plugin-react-hooks";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
+import { COLOUR_ALLOWLIST } from "./scripts/check-colours.mjs";
+
 /**
  * One flat config for the whole monorepo. Every package's `lint` script is a
  * bare `eslint .`, which walks up to this file — so the rules are decided here
@@ -17,6 +19,53 @@ import tseslint from "typescript-eslint";
  * stays the type authority. Turning the type-checked presets on later is a
  * separate, deliberate arc, not something to smuggle into a baseline.
  */
+
+/**
+ * The TS/TSX half of `check-colours.mjs`, keyed by THAT gate's rule ids so the
+ * two speak the same vocabulary — see the „Raw colour literals" block below.
+ */
+const COLOUR_SELECTORS = {
+  hex: [
+    {
+      selector: "Literal[value=/#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{4}|[0-9a-fA-F]{3})(?![0-9a-fA-F])/]",
+      message: "Raw hex colour literal — use a --nx-* design token from packages/tokens (see README.md 'Styling rules').",
+    },
+    {
+      selector:
+        "TemplateElement[value.raw=/#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{4}|[0-9a-fA-F]{3})(?![0-9a-fA-F])/]",
+      message: "Raw hex colour literal — use a --nx-* design token from packages/tokens (see README.md 'Styling rules').",
+    },
+  ],
+  "colour-fn": [
+    {
+      selector: "Literal[value=/\\b(?:rgba?|hsla?|oklch|lab|lch|color)\\(/]",
+      message: "Raw colour function — use a --nx-* design token from packages/tokens (see README.md 'Styling rules').",
+    },
+    {
+      selector: "TemplateElement[value.raw=/\\b(?:rgba?|hsla?|oklch|lab|lch|color)\\(/]",
+      message: "Raw colour function — use a --nx-* design token from packages/tokens (see README.md 'Styling rules').",
+    },
+  ],
+};
+
+/** Every package's own source, which is exactly the tree `check-colours.mjs` walks. */
+const COLOUR_SOURCES = ["apps/*/src/**/*.{ts,tsx}", "packages/*/src/**/*.{ts,tsx}"];
+
+/**
+ * The rule ENTRY — severity and selectors together — for a file exempted from
+ * `exemptIds`. It has to be the whole entry rather than a selector list: flat
+ * config merges rule options, and a later block that names only a severity
+ * (`["error"]`) KEEPS the earlier block's options instead of clearing them. So
+ * a file exempted from every id has to say `"off"`, or it silently inherits the
+ * full rule — which is exactly how `colour.test.ts` stayed red after being
+ * exempted, while `colour.ts` (exempted from one id of two) appeared to work.
+ */
+const colourRuleExcept = (exemptIds) => {
+  const selectors = Object.entries(COLOUR_SELECTORS)
+    .filter(([id]) => !exemptIds.includes(id))
+    .flatMap(([, entries]) => entries);
+  return selectors.length === 0 ? "off" : ["error", ...selectors];
+};
 
 /** Everything that renders: the two renderers and the design system. */
 const REACT_FILES = [
@@ -143,31 +192,25 @@ export default tseslint.config(
   // carries no `src/` directory for the positive globs to reach anyway.
   // A genuinely justified exception uses the same escape hatch ESLint always
   // has: `// eslint-disable-next-line no-restricted-syntax`.
+  //
+  // **The exemptions come from the gate itself, not from a second list here.**
+  // An echo with its own copy of the exceptions is not an echo — it is a second
+  // authority, and the two drift the moment one of them gains an entry. That
+  // already happened once: `packages/core/src/devtools/colour.ts` (a colour
+  // CONVERTER, whose output legitimately contains `rgb(`) was allowlisted in
+  // `check-colours.mjs` and nowhere else, so `pnpm check:colours` read clean
+  // while `pnpm lint` reported 250 errors on the same file. Importing
+  // `COLOUR_ALLOWLIST` keeps one list and gives the id split real meaning here
+  // too: a file exempted for `colour-fn` is still linted for `hex`.
   {
-    files: ["apps/*/src/**/*.{ts,tsx}", "packages/*/src/**/*.{ts,tsx}"],
+    files: COLOUR_SOURCES,
     ignores: ["packages/tokens/**"],
-    rules: {
-      "no-restricted-syntax": [
-        "error",
-        {
-          selector: "Literal[value=/#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{4}|[0-9a-fA-F]{3})(?![0-9a-fA-F])/]",
-          message: "Raw hex colour literal — use a --nx-* design token from packages/tokens (see README.md 'Styling rules').",
-        },
-        {
-          selector: "TemplateElement[value.raw=/#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{4}|[0-9a-fA-F]{3})(?![0-9a-fA-F])/]",
-          message: "Raw hex colour literal — use a --nx-* design token from packages/tokens (see README.md 'Styling rules').",
-        },
-        {
-          selector: "Literal[value=/\\b(?:rgba?|hsla?|oklch|lab|lch|color)\\(/]",
-          message: "Raw colour function — use a --nx-* design token from packages/tokens (see README.md 'Styling rules').",
-        },
-        {
-          selector: "TemplateElement[value.raw=/\\b(?:rgba?|hsla?|oklch|lab|lch|color)\\(/]",
-          message: "Raw colour function — use a --nx-* design token from packages/tokens (see README.md 'Styling rules').",
-        },
-      ],
-    },
+    rules: { "no-restricted-syntax": colourRuleExcept([]) },
   },
+  ...[...COLOUR_ALLOWLIST].map(([path, exemptIds]) => ({
+    files: [path],
+    rules: { "no-restricted-syntax": colourRuleExcept(exemptIds) },
+  })),
 
   // --- The AEAD library has exactly one import site ------------------------
   // `@nexus/sync-crypto` reaches every primitive through `CryptoPort`, and its

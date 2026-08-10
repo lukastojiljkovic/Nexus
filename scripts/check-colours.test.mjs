@@ -10,7 +10,15 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { findScanFiles, REPO_ROOT, scanSource, sourceRoots } from "./check-colours.mjs";
+import {
+  assertAllowlistIsSound,
+  COLOUR_ALLOWLIST,
+  COLOUR_RULES,
+  findScanFiles,
+  REPO_ROOT,
+  scanSource,
+  sourceRoots,
+} from "./check-colours.mjs";
 
 /** Violations only — the shape a caller checking "did this fail" wants. */
 function violations(filePath, text) {
@@ -269,5 +277,68 @@ describe("scanSource — escape hatch", () => {
     expect(hits).toHaveLength(1);
     expect(hits[0].status).toBe("allowed");
     expect(hits[0].reason).toBe("vendor chrome");
+  });
+});
+
+// The path allowlist. Four shapes, taken from `check-egress.test.mjs`, which is
+// where this mechanism was proved: a completeness assertion so a new rule cannot
+// arrive untested, and three that pin the exemption's edges — per rule, per file,
+// and only for things that exist.
+describe("scanSource — the path allowlist", () => {
+  const PARSER = "packages/core/src/devtools/colour.ts";
+  const FIXTURE = new Map([[PARSER, ["colour-fn"]]]);
+
+  /** One fixture per rule id — the matrix the completeness assertion is about. */
+  const ruleCases = [
+    ["hex", `const c = "#ff00aa";`],
+    ["colour-fn", `const c = "rgb(255, 0, 0)";`],
+  ];
+
+  it("has a case for every rule, so a new rule cannot arrive untested", () => {
+    expect([...new Set(ruleCases.map(([id]) => id))].sort()).toEqual(
+      COLOUR_RULES.map((rule) => rule.id).sort(),
+    );
+  });
+
+  // The assertion above compares two lists of strings, which stays true if a
+  // fixture stops firing the rule it is filed under. This one makes each fixture
+  // earn its id.
+  for (const [id, src] of ruleCases) {
+    it(`the ${id} fixture really fires ${id} and nothing else`, () => {
+      expect(violations("apps/desktop/src/renderer/src/x.ts", src).map((h) => h.rule)).toEqual([id]);
+    });
+  }
+
+  it("exempts only the named rule, not the whole file", () => {
+    const src = `const out = \`rgb(\${r}, \${g}, \${b})\`; const red = "#ff0000";`;
+    const hits = scanSource(PARSER, src, PARSER, FIXTURE);
+    expect(hits.filter((h) => h.status === "allowed").map((h) => h.rule)).toEqual(["colour-fn"]);
+    // The hex on the same line is still a violation. A file allowed to SERIALIZE
+    // a colour is not thereby allowed to hard-code one.
+    expect(hits.filter((h) => h.status === "violation").map((h) => h.text)).toEqual(["#ff0000"]);
+  });
+
+  it("does not extend to a neighbouring file", () => {
+    const neighbour = "packages/core/src/devtools/colourNames.ts";
+    const src = `const out = "rgb(1, 2, 3)";`;
+    expect(scanSource(neighbour, src, neighbour, FIXTURE)).toEqual([
+      expect.objectContaining({ status: "violation", rule: "colour-fn" }),
+    ]);
+  });
+
+  it("names only rules that exist, so an exemption cannot quietly mean nothing", () => {
+    expect(() =>
+      assertAllowlistIsSound(new Map([["scripts/check-colours.mjs", ["absolute-colour"]]])),
+    ).toThrow(/not a rule id/);
+  });
+
+  it("names only files that exist, so a renamed file cannot leave a live hole", () => {
+    expect(() =>
+      assertAllowlistIsSound(new Map([["packages/core/src/devtools/gone.ts", ["hex"]]])),
+    ).toThrow(/does not exist/);
+  });
+
+  it("the real allowlist is sound", () => {
+    expect(() => assertAllowlistIsSound(COLOUR_ALLOWLIST)).not.toThrow();
   });
 });

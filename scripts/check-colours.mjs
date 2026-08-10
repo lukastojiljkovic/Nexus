@@ -78,9 +78,28 @@
 // as a failure rather than silently accepted. Every use — allowed or
 // rejected — is printed. Nothing this script skips over is ever quiet about
 // it.
+//
+// ALLOWLIST. The line marker answers "this one value is deliberate". It does
+// not answer the case this gate met when the developer-tools drawer arrived: a
+// COLOUR CONVERTER, whose entire contract is that `parse("#aabbcc")` works and
+// that its serializer emits `rgb(...)`. There the literals are not a styling
+// decision at all — they are the subject matter — and there are dozens of them
+// in one parser and its test. Hundreds of line markers across such a file is
+// exactly how an allowlist becomes wallpaper (`check-egress.mjs`'s word for it),
+// and it would also bury the handful of real one-offs the marker exists for.
+//
+// So this file carries the same mechanism `check-egress.mjs` already proved,
+// with the same two properties that make it an allowlist and not a hole: it is
+// keyed by EXACT repo-relative path, so a new file never inherits an exemption;
+// and each entry names the RULE IDS it exempts, so a file allowed to parse a
+// hex literal is still not allowed to hand-write `rgb(12, 34, 56)` as a style.
+// Both halves are checked at startup — an id that names no rule, or a path that
+// names no file, throws rather than quietly exempting nothing. And an allowed
+// hit is still printed, exactly like a marker's, because this script's promise
+// is that nothing it passes over is silent.
 
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { extname, join, relative } from "node:path";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { extname, isAbsolute, join, relative } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import ts from "typescript";
 
@@ -99,16 +118,113 @@ export const SCANNED_EXTENSIONS = new Set([...TS_EXTENSIONS, ".css", ".html"]);
 
 // --- Colour-form patterns --------------------------------------------------
 
-// Exactly the four valid CSS hex lengths. The lookbehind/lookahead reject a
-// match that is only part of a longer hex-looking run — without them, an
-// invalid 7-digit run would still yield a spurious 6-digit "match".
-const HEX_RE =
-  /(?<![#0-9a-fA-F])#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{4}|[0-9a-fA-F]{3})(?![0-9a-fA-F])/g;
+/**
+ * The forms this gate detects, each with an id an allowlist entry can name.
+ *
+ * TWO IDS, AND THE SPLIT IS THE USEFUL ONE. A colour parser needs `colour-fn`
+ * in its serializers — `` `rgb(${r}, ${g}, ${b})` `` is the output format, not a
+ * style choice — while `hex` is needed almost only by its tests, because a hex
+ * string BUILT from parts (`` `#${digits}` ``) never matches in the first place.
+ * So a file can be allowed to emit `rgb(...)` and still be caught hard-coding
+ * `#ff0000`, which is the distinction worth being able to draw.
+ *
+ * `pattern` is a `g` regex and is `exec`ed in a loop, so every use must reset
+ * `lastIndex` first; `findColourMatches` is the one place that happens.
+ */
+export const COLOUR_RULES = [
+  {
+    id: "hex",
+    // Exactly the four valid CSS hex lengths. The lookbehind/lookahead reject a
+    // match that is only part of a longer hex-looking run — without them, an
+    // invalid 7-digit run would still yield a spurious 6-digit "match".
+    pattern:
+      /(?<![#0-9a-fA-F])#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{4}|[0-9a-fA-F]{3})(?![0-9a-fA-F])/g,
+    what: "a hex colour literal",
+  },
+  {
+    id: "colour-fn",
+    // Function-form colours. The leading `\b` is what keeps `recolor(` and
+    // `backgroundColor(` — both one contiguous identifier, no boundary before
+    // the tail — from matching `color(`.
+    pattern: /\b(?:rgba?|hsla?|oklch|lab|lch|color)\(/gi,
+    what: "a CSS colour function",
+  },
+];
 
-// Function-form colours. The leading `\b` is what keeps `recolor(` and
-// `backgroundColor(` — both one contiguous identifier, no boundary before the
-// tail — from matching `color(`.
-const FUNC_RE = /\b(?:rgba?|hsla?|oklch|lab|lch|color)\(/gi;
+/**
+ * Files allowed to contain an otherwise-forbidden colour form, each with the
+ * reason IN THIS FILE rather than in a comment at the site.
+ *
+ * Keyed by exact repo-relative POSIX path — never a directory, never a glob —
+ * so a new file beside an exempted one inherits nothing. See the ALLOWLIST
+ * paragraph in this file's header for why the line marker is the wrong tool at
+ * this scale, and `check-egress.mjs`'s equivalent for the shape.
+ */
+export const COLOUR_ALLOWLIST = new Map([
+  [
+    // The colour CONVERTER. Every hit is a `case` of `formatColour`, which
+    // writes the user's own colour back out in each CSS syntax — the strings
+    // `rgb(`, `hsl(`, `lab(`, `lch(`, `oklch(` are this tool's OUTPUT, the way
+    // a JSON formatter's output contains braces. The rule this gate enforces is
+    // „no styling value is chosen outside the token package", and a converter
+    // chooses nothing: it is handed a colour and prints it.
+    //
+    // It exempts `colour-fn` and NOT `hex`, and the distinction is real rather
+    // than tidy. The 148 CSS named colours live in this file as a
+    // whitespace-separated `name f0f8ff` table with no `#` in it, so the file
+    // genuinely holds zero hex literals today. Leaving `hex` unexempted keeps
+    // it that way: the day somebody writes a `#` here it will be a hard-coded
+    // colour — a default swatch, a placeholder — which is exactly the thing the
+    // gate exists to refuse, and the exemption must not cover it.
+    "packages/core/src/devtools/colour.ts",
+    ["colour-fn"],
+  ],
+  [
+    // Its tests, where the literals are the FIXTURES: „#3366cc on #ffffff is
+    // 4.56:1" cannot be asserted without writing both colours down, and a
+    // conversion test that named tokens instead would be testing the token
+    // package. Both rules, because the vectors come in both forms.
+    "packages/core/src/devtools/colour.test.ts",
+    ["colour-fn", "hex"],
+  ],
+]);
+
+/**
+ * Both halves of every allowlist entry have to be real.
+ *
+ * `check-egress.mjs` checks the rule ids, and its comment records why: three of
+ * its entries once exempted `"absolute-url"`, an id no rule ever carried, so
+ * they read as exemptions while exempting nothing — and would have silently
+ * become real the day some rule took that name. The same argument applies to the
+ * PATH, which that gate does not yet check: an entry naming a file that has been
+ * renamed or deleted is equally unreadable, and equally ready to spring back to
+ * life under a future file of the same name. Both are checked here, at module
+ * load, so a stale entry is a startup failure instead of a sentence that reads
+ * true.
+ *
+ * Exported so its own tests can hand it a bad map; called immediately below with
+ * the real one.
+ */
+export function assertAllowlistIsSound(allowlist, rules = COLOUR_RULES, repoRoot = REPO_ROOT) {
+  for (const [path, ids] of allowlist) {
+    for (const id of ids) {
+      if (!rules.some((rule) => rule.id === id)) {
+        throw new Error(
+          `check-colours: allowlist entry ${path} exempts "${id}", which is not a rule id. ` +
+            `Known ids: ${rules.map((rule) => rule.id).join(", ")}.`,
+        );
+      }
+    }
+    if (!existsSync(join(repoRoot, path))) {
+      throw new Error(
+        `check-colours: allowlist entry ${path} names a file that does not exist. ` +
+          "Delete the entry, or fix the path.",
+      );
+    }
+  }
+}
+
+assertAllowlistIsSound(COLOUR_ALLOWLIST);
 
 const CSS_BLOCK_COMMENT_RE = /\/\*[\s\S]*?\*\//g;
 const CSS_STRING_RE = /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g;
@@ -119,13 +235,13 @@ function blank(match) {
   return match.replace(/[^\n]/g, " ");
 }
 
-/** Every colour-form match in `text`, as `[offset, matchedText]` pairs, in source order. */
+/** Every colour-form match in `text`, as `[offset, matchedText, ruleId]`, in source order. */
 function findColourMatches(text) {
   const matches = [];
-  for (const re of [HEX_RE, FUNC_RE]) {
-    re.lastIndex = 0;
+  for (const rule of COLOUR_RULES) {
+    rule.pattern.lastIndex = 0;
     let m;
-    while ((m = re.exec(text))) matches.push([m.index, m[0]]);
+    while ((m = rule.pattern.exec(text))) matches.push([m.index, m[0], rule.id]);
   }
   return matches.sort((a, b) => a[0] - b[0]);
 }
@@ -175,8 +291,8 @@ function scanTypeScript(filePath, rawText, lineStarts) {
       // line numbers, and stray delimiter characters can never form a
       // colour pattern themselves.
       const slice = rawText.slice(start, node.end);
-      for (const [offset, matched] of findColourMatches(slice)) {
-        hits.push({ line: lineForOffset(lineStarts, start + offset), text: matched });
+      for (const [offset, matched, rule] of findColourMatches(slice)) {
+        hits.push({ line: lineForOffset(lineStarts, start + offset), text: matched, rule });
       }
     }
     ts.forEachChild(node, visit);
@@ -220,17 +336,19 @@ function restrictToDeclarationValues(text) {
 function scanCss(rawText, lineStarts) {
   const stripped = rawText.replace(CSS_BLOCK_COMMENT_RE, blank).replace(CSS_STRING_RE, blank);
   const scanText = restrictToDeclarationValues(stripped);
-  return findColourMatches(scanText).map(([offset, text]) => ({
+  return findColourMatches(scanText).map(([offset, text, rule]) => ({
     line: lineForOffset(lineStarts, offset),
     text,
+    rule,
   }));
 }
 
 function scanHtml(rawText, lineStarts) {
   const scanText = rawText.replace(HTML_COMMENT_RE, blank);
-  return findColourMatches(scanText).map(([offset, text]) => ({
+  return findColourMatches(scanText).map(([offset, text, rule]) => ({
     line: lineForOffset(lineStarts, offset),
     text,
+    rule,
   }));
 }
 
@@ -259,14 +377,42 @@ function escapeHatchReason(rawLineText) {
   return reason.trim();
 }
 
+/**
+ * The allowlist's key form: repo-relative, POSIX separators. One spelling of
+ * that conversion, so `main`'s reporting and `scanSource`'s lookup can never
+ * disagree about what a file is called. A path that is already relative is
+ * returned untouched — that is how a test names a file that does not exist.
+ */
+export function repoRelative(filePath, repoRoot = REPO_ROOT) {
+  return isAbsolute(filePath) ? relative(repoRoot, filePath).split("\\").join("/") : filePath;
+}
+
 // --- Per-file entry point (exported for tests) --------------------------
 
 /**
  * Scans one file's already-read text and returns every finding, each tagged
  * `status: "violation" | "invalid-escape" | "allowed"`. Files of a type this
  * script does not cover (see the module header) yield an empty array.
+ *
+ * `relPath` is what the allowlist is keyed by, and it is a SEPARATE parameter
+ * from `filePath` on purpose: `filePath` reaches `ts.createSourceFile`, which
+ * uses it only to pick TS vs TSX by extension, and the CLI hands it an absolute
+ * path. Keying the allowlist off that would mean an entry that never matches on
+ * one developer's machine and matches on another's.
+ *
+ * It defaults through `repoRelative` rather than to `filePath` itself, and the
+ * difference is not cosmetic: the plain default made a single-argument call over
+ * an ABSOLUTE path — which is what walking the real tree produces — look up a
+ * key the allowlist cannot contain, so every exemption silently evaporated and
+ * the whole-tree test read 258 deliberate entries as 258 violations. A default
+ * that quietly turns a safety list off is worse than no default.
  */
-export function scanSource(filePath, rawText) {
+export function scanSource(
+  filePath,
+  rawText,
+  relPath = repoRelative(filePath),
+  allowlist = COLOUR_ALLOWLIST,
+) {
   const ext = extname(filePath);
   const lineStarts = buildLineStarts(rawText);
 
@@ -276,8 +422,16 @@ export function scanSource(filePath, rawText) {
   else if (ext === ".html") rawHits = scanHtml(rawText, lineStarts);
   else return [];
 
+  const exemptRules = allowlist.get(relPath) ?? [];
   const rawLines = rawText.split("\n");
   return rawHits.map((hit) => {
+    // The allowlist is consulted BEFORE the line marker, so an allowlisted file
+    // does not also need markers — but a hit the allowlist does not cover falls
+    // straight through to the marker and then to a violation, which is what
+    // makes a per-rule exemption mean what it says.
+    if (exemptRules.includes(hit.rule)) {
+      return { ...hit, file: filePath, status: "allowed", reason: `allowlisted: ${hit.rule}` };
+    }
     const reason = escapeHatchReason(rawLines[hit.line - 1] ?? "");
     if (reason === null) return { ...hit, file: filePath, status: "violation" };
     if (reason === "") return { ...hit, file: filePath, status: "invalid-escape" };
@@ -348,11 +502,11 @@ function main() {
 
   for (const file of files) {
     const rawText = readFileSync(file, "utf8");
-    const relPath = relative(REPO_ROOT, file).split("\\").join("/");
+    const relPath = repoRelative(file);
 
     let hits;
     try {
-      hits = scanSource(file, rawText);
+      hits = scanSource(file, rawText, relPath);
     } catch (error) {
       console.log(`${relPath}: ERROR while scanning — ${error instanceof Error ? error.message : String(error)}`);
       violationCount++;
