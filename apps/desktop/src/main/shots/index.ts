@@ -142,7 +142,29 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     fanout: null,
   },
   { id: "focus", module: "focus" },
-  { id: "tools", module: "tools" },
+  {
+    id: "tools",
+    module: "tools",
+    // NOT the default `.nx-segmented__option`. „Alatke" switches surfaces from
+    // a RAIL, not from a segmented control, so the default matched nothing and
+    // the sweep photographed the empty state eight times over — the one frame
+    // of that module in which no tool is open. Every converter and calculator
+    // in the drawer went unphotographed for as long as the scene existed, and
+    // the run said nothing, because „the selector found nothing" and „this page
+    // has no sub-views" looked identical. The sweep now says so out loud (see
+    // the fan-out below), which is the half of this fix that generalises.
+    fanout: ".tool__item",
+  },
+  {
+    // „Programerske alatke" is the same rail with forty-eight rows on it, and
+    // it is the newest surface in the app — which makes it the one most worth
+    // photographing at every size. It is off by default, so it is here only
+    // because the demo profile turns it on; if the sweep reports „found nothing
+    // to fan out", that is the flag, not the page.
+    id: "devtools",
+    module: "devtools",
+    fanout: ".tool__item",
+  },
   { id: "canvas", module: "canvas" },
   { id: "search", module: "dashboard", prepare: OPEN_SEARCH_PAGE(), fanout: null },
   { id: "settings", module: "settings" },
@@ -604,6 +626,19 @@ export async function runShots(win: BrowserWindow, outDir: string): Promise<Shot
         const selector = scene.fanout === undefined ? DEFAULT_FANOUT : scene.fanout;
         if (selector !== null) {
           const labels = await fanoutLabels(win, selector);
+          // A fan-out that matches NOTHING is the quietest way for this sweep
+          // to be wrong: the scene still produces its one frame, the run still
+          // says „OK", and a whole module's sub-views are simply missing from
+          // the output. That is exactly how „Alatke" went unphotographed. A
+          // scene that genuinely has no switcher says so with `fanout: null`
+          // and never reaches this line, so an empty match here is always a
+          // selector that has gone stale.
+          if (labels.length === 0) {
+            process.stderr.write(
+              `shots: scene "${scene.id}" found nothing to fan out (${selector})
+`,
+            );
+          }
           // The first option is already on screen — it is what `shoot` above
           // just captured — so the sweep starts at the second.
           for (let index = 1; index < labels.length; index += 1) {
