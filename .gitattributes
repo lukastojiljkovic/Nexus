@@ -1,2 +1,8 @@
 # Store all text as LF in the repository; checkout per platform default.
 * text=auto
+
+# The Gentoo overlay is the one part of this repo that gets copied out of a
+# Windows checkout and executed on a Linux box, by bash and by portage. Both
+# treat a trailing CR as part of the token, so a CRLF ebuild fails with errors
+# about commands that do exist. Pin these to LF wherever they are checked out.
+apps/desktop/build/gentoo/** text eol=lf

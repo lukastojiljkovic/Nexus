@@ -141,6 +141,15 @@ try {
     }
 
     Write-Host "Wrote $icoPath ($($entries.Count) sizes: $($sizes -join ', '))"
+
+    # --- icon.png, for the Linux targets -----------------------------------
+    # electron-builder wants a single PNG of at least 256x256 for AppImage and
+    # for the .desktop entry's hicolor install; 512 is the size every desktop
+    # environment downsamples from cleanly. Same geometry, same tokens — it is
+    # generated here rather than exported by hand so the two icons cannot drift.
+    $pngPath = Join-Path $buildDir "icon.png"
+    New-StarPng -Size 512 -Path $pngPath
+    Write-Host "Wrote $pngPath (512x512)"
 }
 finally {
     Remove-Item -Recurse -Force $tempDir

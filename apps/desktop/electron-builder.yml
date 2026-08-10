@@ -19,6 +19,18 @@ appId: rs.stojiljkovic.nexus
 productName: Nexus
 copyright: Copyright © Luka Stojiljkovic
 
+# The product's one-line description, for every place the packaging layer shows
+# one: the NSIS installer's Windows file description (Explorer's properties
+# page and the SmartScreen prompt) and the `Comment` of the Linux .desktop
+# entry (the menu tooltip). It is overridden HERE rather than fixed in
+# package.json because that field's job is to tell a developer what the package
+# is, and electron-builder's job for it is to tell a user what the product is —
+# 1.1.0's installer shipped with „Electron main/preload/renderer … typed,
+# allowlisted IPC bridge (ADR-001, SEC-EL)" as its file description. Serbian,
+# like every other string a user reads.
+extraMetadata:
+  description: "Beleške, zadaci, kalendar, datoteke i finansije — sve na jednom mestu, lokalno i šifrovano."
+
 directories:
   output: release
   buildResources: build
@@ -26,7 +38,10 @@ directories:
 files:
   - out/**/*
   - package.json
+  # Both formats ship: the main process picks by platform, because Chromium's
+  # ICO decoder exists on Windows only (src/main/index.ts, `iconFile`).
   - build/icon.ico
+  - build/icon.png
 
 asarUnpack:
   - node_modules/better-sqlite3-multiple-ciphers/**/*
@@ -51,6 +66,72 @@ nsis:
   # of the user's local data ($APPDATA\Nexus + updater cache), default keep;
   # skipped entirely when the uninstall runs as part of an auto-update.
   include: build/installer.nsh
+
+linux:
+  # AppImage runs on any glibc desktop with no packaging at all — which is what
+  # makes it the honest answer for a distribution we do not build on. tar.gz is
+  # the payload the Gentoo ebuild (build/gentoo/) unpacks into /opt; a `-bin`
+  # ebuild is how a binary Electron app is packaged for Gentoo, since portage
+  # will not compile Chromium from our tree.
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: tar.gz
+      arch:
+        - x64
+  icon: build/icon.png
+  # freedesktop main category. „Utility" is the registry's own name for a tool
+  # the user runs directly and that is not an office suite or a game.
+  category: Utility
+  # deb/rpm short description. Serbian for the same reason `extraMetadata`
+  # above is: it is shown to whoever installs the package.
+  synopsis: Sve na jednom mestu — lokalno i šifrovano
+  # A lowercase, spaceless binary is the Linux convention and is also what the
+  # .desktop Exec/Icon keys and the ebuild's install paths are written against.
+  executableName: nexus
+  # Window association. Electron derives its app_id from `desktopName` in
+  # package.json; syncDesktopName makes electron-builder name the installed
+  # .desktop file and its StartupWMClass from the same string, so the running
+  # window is linked to its launcher instead of appearing as an unnamed second
+  # icon in the dock. The two must stay equal to `appId` above.
+  syncDesktopName: true
+  # tar.gz (and any other linux target without its own artifactName). `${ext}`
+  # is the target's own name, so this reads „tar.gz" here.
+  artifactName: "nexus-${version}-linux-${arch}.${ext}"
+  # A second copy of the icon, beside the executable rather than inside the
+  # asar. electron-builder only generates the .desktop entry and the hicolor
+  # icons for targets that install something (AppImage, deb, rpm) — a tar.gz is
+  # just the directory, so the Gentoo ebuild has to supply both, and it can only
+  # supply an icon it can read. Same generated file as `icon:` above, so the
+  # launcher icon and the window icon cannot disagree.
+  extraFiles:
+    - from: build/icon.png
+      to: icon.png
+
+toolsets:
+  # The AppImage runtime. electron-builder's default („0.0.0") is the FUSE2
+  # toolset, and its output cannot start without `libfuse.so.2` on the host —
+  # a library Ubuntu 22.04+, Fedora 38+ and Gentoo all stopped installing when
+  # they moved to FUSE 3. This is measured, not assumed: the first build here
+  # died on Ubuntu 24.04 with „dlopen(): error loading libfuse.so.2" before a
+  # line of app code ran. 1.0.3 embeds a static runtime and needs no FUSE at
+  # all, which is the only version of „runs anywhere with no packaging" that is
+  # actually true.
+  appimage: "1.0.3"
+
+appImage:
+  artifactName: "Nexus-${version}-${arch}.AppImage"
+  # Chromium's sandbox stays ON. The FUSE2 toolset defaults these to
+  # `["--no-sandbox"]`, which would be a real downgrade for this app in
+  # particular: the renderer displays user-supplied documents and attachments,
+  # which is exactly the case an OS sandbox exists for. The static runtime above
+  # already defaults to an empty list; stating it here keeps the guarantee
+  # independent of which toolset is selected, and an empty array IS honoured
+  # (`?? defaultArgs` only fires on undefined). The cost is a host with
+  # unprivileged user namespaces disabled — there the AppImage refuses to start
+  # instead of starting unprotected, and build/gentoo/README.md says what to do.
+  executableArgs: []
 
 publish:
   provider: github

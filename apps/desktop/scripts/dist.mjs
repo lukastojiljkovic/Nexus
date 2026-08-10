@@ -1,4 +1,14 @@
-// Builds the packaged Windows installer (NSIS x64, --publish never).
+// Builds the packaged app for the HOST platform (--publish never):
+//   Windows → NSIS x64 installer
+//   Linux   → AppImage x64 + tar.gz (the payload build/gentoo/ installs)
+//
+// It builds for the host and only the host, on purpose. electron-builder can be
+// told to emit a Linux target from Windows, but the native module underneath us
+// cannot: rebuild-native.mjs fetches the prebuild for `process.platform`, so a
+// cross-built archive would carry a Windows .node and fail at first query with
+// an error about the module — not about the build. Refusing is the honest
+// outcome; the Linux artifacts are built by running this script under Linux
+// (WSL is enough — see build/gentoo/README.md).
 //
 // Mirrors launch.mjs's ABI-restore guarantee: better-sqlite3-multiple-ciphers
 // must be the Electron-ABI prebuild while electron-builder packages the app
@@ -27,6 +37,18 @@ function restoreNodeAbi() {
   spawnSync(process.execPath, [rebuild, "node"], { stdio: "inherit" });
 }
 
+// Decided before anything is touched, so an unsupported host costs nothing —
+// the exit below happens while the repo is still on the Node ABI.
+const PLATFORM_FLAG = { win32: "--win", linux: "--linux" };
+const platformFlag = PLATFORM_FLAG[process.platform];
+if (platformFlag === undefined) {
+  console.error(
+    `Nexus is not packaged for ${process.platform}. Run this on Windows or Linux ` +
+      "(see the header for why the host platform is the only target).",
+  );
+  process.exit(1);
+}
+
 process.on("exit", restoreNodeAbi);
 
 run(process.execPath, [rebuild, "electron"]);
@@ -41,7 +63,7 @@ const electronViteBin = join(
 run(process.execPath, [electronViteBin, "build"]);
 
 const electronBuilderCli = require.resolve("electron-builder/cli.js");
-run(process.execPath, [electronBuilderCli, "--win", "--x64", "--publish", "never"]);
+run(process.execPath, [electronBuilderCli, platformFlag, "--x64", "--publish", "never"]);
 
 // restoreNodeAbi() runs automatically via the "exit" listener above, whether
 // we reach here or `run()` called process.exit() earlier.

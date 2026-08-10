@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+	<maintainer type="person">
+		<email>luka.d.stojiljkovic@gmail.com</email>
+		<name>Luka Stojiljkovic</name>
+	</maintainer>
+	<longdescription lang="en">
+		Nexus is an offline-first, all-in-one life management application:
+		notes, tasks, calendar, files, habits and finance in one encrypted
+		local database. Everything is stored on the device in SQLCipher-
+		encrypted SQLite; cloud sync is opt-in and end-to-end encrypted, and
+		a build that has never had it enabled makes no network calls at all.
+
+		This package installs the prebuilt x86_64 Electron bundle — portage
+		does not rebuild Chromium from the application source.
+	</longdescription>
+	<upstream>
+		<maintainer status="active">
+			<email>luka.d.stojiljkovic@gmail.com</email>
+			<name>Luka Stojiljkovic</name>
+		</maintainer>
+	</upstream>
+</pkgmetadata>

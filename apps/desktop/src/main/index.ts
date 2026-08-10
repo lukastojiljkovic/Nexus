@@ -804,8 +804,14 @@ if (shouldBlockResolver(app.getPath("userData"))) {
 // Interim brand glyph (four-pointed star, see build/make-icon.ps1). Resolved
 // via getAppPath() so the same relative path works unpacked (dev/smoke, app
 // root = apps/desktop) and packaged (app root = the asar root; electron-builder
-// ships build/icon.ico alongside out/, see electron-builder.yml `files`).
-const iconPath = join(app.getAppPath(), "build/icon.ico");
+// ships both icon files alongside out/, see electron-builder.yml `files`).
+//
+// The FORMAT is per-platform, not per-taste: Chromium's ICO decoder is compiled
+// in on Windows only, so on Linux `icon: …/icon.ico` is not a smaller icon — it
+// is no icon, silently, with the window falling back to the toolkit default.
+// Both files come out of the same generator so they cannot drift.
+const iconFile = process.platform === "win32" ? "build/icon.ico" : "build/icon.png";
+const iconPath = join(app.getAppPath(), iconFile);
 
 let db: NexusDatabase | null = null;
 let mainWindow: BrowserWindow | null = null;
