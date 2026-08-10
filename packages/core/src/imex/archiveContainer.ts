@@ -1,3 +1,5 @@
+import { base64ToBytes, bytesToBase64 } from "../bytes.js";
+
 /**
  * The `NXA1` encrypted-export container (ADR-022). The IMEX full export is a
  * `.nexus.zip` stream that can be very large — attachments are capped at 50 MB
@@ -241,35 +243,21 @@ function randomBytes(length: number) {
 }
 
 /**
- * Base64-encodes a `Uint8Array` with no `Buffer` (this package is
- * platform-free) — the same technique as `auth/keyChain.ts`'s `toBase64`,
- * duplicated rather than imported: see the file header on why this module
- * never reaches into `auth/`.
- */
-function toBase64(bytes: Uint8Array): string {
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary);
-}
-
-/**
- * The inverse of `toBase64`. `atob` throws a bare `SyntaxError` on malformed
- * input; caught and re-thrown as `ArchiveFormatError` because a header field
- * that isn't valid base64 is untrusted-input territory (see that class's
- * doc), never a bare DOM/WebCrypto exception the caller has to guess about.
+ * `base64ToBytes`, with the throw translated. The shared decoder lets `atob`'s
+ * bare `SyntaxError` out; a header field that isn't valid base64 is
+ * untrusted-input territory (see `ArchiveFormatError`'s doc), never a bare
+ * DOM/WebCrypto exception the caller has to guess about.
+ *
+ * This wrapper is the whole of what used to be a hand-written copy of the
+ * codec, kept here rather than pushed into `bytes.ts` because the translation
+ * is this module's policy, not the codec's.
  */
 function fromBase64(value: string) {
-  let binary: string;
   try {
-    binary = atob(value);
+    return base64ToBytes(value);
   } catch (error) {
     throw new ArchiveFormatError("Archive header contains invalid base64.", { cause: error });
   }
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
 }
 
 /**
@@ -591,8 +579,8 @@ export async function createArchiveWriter(
     version: ARCHIVE_FORMAT_VERSION,
     cipher: "AES-256-GCM",
     kdf,
-    salt: toBase64(salt),
-    noncePrefix: toBase64(noncePrefix),
+    salt: bytesToBase64(salt),
+    noncePrefix: bytesToBase64(noncePrefix),
     chunkBytes: ARCHIVE_CHUNK_BYTES,
   };
   const headerJsonBytes = textEncoder.encode(JSON.stringify(header));

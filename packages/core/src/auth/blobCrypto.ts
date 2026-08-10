@@ -1,3 +1,5 @@
+import { bytesToHex, hexToBytes } from "../bytes.js";
+
 /**
  * Attachment blob crypto (ADR-019): encryption and naming for the NOTE
  * attachment blob store, which lives on disk *outside* the encrypted SQLite
@@ -60,18 +62,6 @@ const SHA256_HEX_PATTERN = /^[0-9a-f]{64}$/;
 
 const textEncoder = new TextEncoder();
 
-function hexToBytes(hex: string): Uint8Array {
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16);
-  }
-  return bytes;
-}
-
-function bytesToHex(bytes: Uint8Array): string {
-  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
 function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {
@@ -97,20 +87,26 @@ function assertSha256Hex(sha256Hex: string): void {
 
 /**
  * Both subkeys derive from the same 256-bit data key via HKDF-SHA256, keyed
- * apart only by `info` so a leak of one never reveals the other. Hex case is
- * normalized before decoding because `@nexus/db`'s own key guard accepts either
- * case: two differently-cased spellings of one key must not derive two
- * different `nameKey`s, which would rename every blob and silently break
- * deduplication.
+ * apart only by `info` so a leak of one never reveals the other. Case is
+ * normalized inside `hexToBytes` — it has to be, because `@nexus/db`'s own key
+ * guard accepts either case: two differently-cased spellings of one key must
+ * not derive two different `nameKey`s, which would rename every blob and
+ * silently break deduplication.
  */
 export async function deriveBlobKeys(dataKeyHex: string): Promise<BlobKeys> {
-  if (!DATA_KEY_HEX_PATTERN.test(dataKeyHex)) {
+  // The pattern and the decode are one expression on purpose. The pattern is
+  // the format contract with `@nexus/db` — exactly 64 hex characters, no
+  // whitespace, which the shared decoder would otherwise tolerate — and the
+  // decode is the only thing that can produce the bytes. Written as two
+  // separate guards, the second would be a branch nothing can reach, which is
+  // the shape that rots the day the first one is loosened.
+  const dataKey = DATA_KEY_HEX_PATTERN.test(dataKeyHex) ? hexToBytes(dataKeyHex) : null;
+  if (dataKey === null) {
     throw new TypeError(
       `dataKeyHex must be 64 hex characters (the @nexus/db data key), got: ${JSON.stringify(dataKeyHex)}`,
     );
   }
 
-  const dataKey = hexToBytes(dataKeyHex.toLowerCase());
   const ikm = await crypto.subtle.importKey("raw", dataKey, "HKDF", false, ["deriveBits"]);
 
   const contentKeyBits = await crypto.subtle.deriveBits(

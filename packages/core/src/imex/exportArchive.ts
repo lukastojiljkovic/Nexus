@@ -44,6 +44,7 @@ import type { CanvasScene } from "../canvas/canvasScene.js";
 import type { HabitSchedule } from "../habits/habitSchedule.js";
 import type { RecurrenceRule } from "../recurrence/recurrence.js";
 import type { TaskViewConfig } from "../tasks/taskViewConfig.js";
+import { base64ToBytes } from "../bytes.js";
 import { claimUniqueName, sanitizePathSegment, UNTITLED_NOTE_NAME } from "./archivePaths.js";
 import { toCsv } from "./csv.js";
 import { buildIcsCalendar } from "./icsExport.js";
@@ -2281,19 +2282,18 @@ export interface ExportPrivateNotes {
 const EMPTY_PRIVATE_NOTES: ExportPrivateNotes = { notes: [], versions: [] };
 
 /**
- * The interchange's base64 codec for `yjsState`, WebCrypto-era platform-neutral
- * (no `node:` import, no `Buffer` — `privEnvelope.ts`'s discipline): `atob`
- * exists in every environment this package runs in. Throws on input that is not
- * base64 at all; the caller decides what that means (the reader refuses the
- * row, the builder never sees one — its input came out of an authenticated
- * envelope).
+ * The interchange's base64 codec for `yjsState`, re-exported from `../bytes.ts`
+ * rather than written here — it was the fourth hand-written copy in this
+ * package.
+ *
+ * It keeps this name and this home because `importArchive.ts` and the `.` barrel
+ * both reach for it here, and because what the doc has to say is about the
+ * INTERCHANGE rather than about base64: it throws on input that is not base64 at
+ * all, and the caller decides what that means — the reader refuses the row, the
+ * builder never sees one, its input having come out of an authenticated
+ * envelope.
  */
-export function base64ToBytes(value: string): Uint8Array {
-  const binary = atob(value);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
-}
+export { base64ToBytes };
 
 /**
  * A profile's picture as the manifest carries it (SET-001, migration 040): the

@@ -1,4 +1,5 @@
 import { argon2id } from "hash-wasm";
+import { base64ToBytes, bytesToBase64, bytesToHex } from "../bytes.js";
 import { normalizeArchivePassphrase } from "../imex/archivePassphrase.js";
 import { normalizePasscode } from "./passcode.js";
 
@@ -103,24 +104,7 @@ export function generateSalt(): Uint8Array {
 
 /** The 64-hex-character form `openDatabase` takes. */
 export function dataKeyToHex(dataKey: Uint8Array): string {
-  return Array.from(dataKey, (byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
-/** Base64-encodes a `Uint8Array` with no `Buffer` (this package is platform-free). */
-function toBase64(bytes: Uint8Array): string {
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary);
-}
-
-/** The inverse of `toBase64`. */
-function fromBase64(value: string): Uint8Array {
-  const binary = atob(value);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
+  return bytesToHex(dataKey);
 }
 
 async function runArgon2id(
@@ -206,7 +190,7 @@ export async function wrapDataKey(dataKey: Uint8Array, kek: Uint8Array): Promise
   const nonce = randomBytes(GCM_NONCE_BYTES);
   const key = await crypto.subtle.importKey("raw", kek, "AES-GCM", false, ["encrypt"]);
   const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv: nonce }, key, dataKey);
-  return { nonce: toBase64(nonce), ciphertext: toBase64(new Uint8Array(ciphertext)) };
+  return { nonce: bytesToBase64(nonce), ciphertext: bytesToBase64(new Uint8Array(ciphertext)) };
 }
 
 /**
@@ -221,9 +205,9 @@ export async function unwrapDataKey(wrapped: WrappedKey, kek: Uint8Array): Promi
   try {
     const key = await crypto.subtle.importKey("raw", kek, "AES-GCM", false, ["decrypt"]);
     const plaintext = await crypto.subtle.decrypt(
-      { name: "AES-GCM", iv: fromBase64(wrapped.nonce) },
+      { name: "AES-GCM", iv: base64ToBytes(wrapped.nonce) },
       key,
-      fromBase64(wrapped.ciphertext),
+      base64ToBytes(wrapped.ciphertext),
     );
     return new Uint8Array(plaintext);
   } catch (error) {
