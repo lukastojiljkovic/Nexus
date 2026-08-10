@@ -61,6 +61,20 @@ jobs:
           "${RUNNER_TEMP}/gitleaks" detect --source . --config .gitleaks.toml
           --redact -v --exit-code 1
 
+      # The second half, and not a duplicate of the first: `detect` reads commit
+      # PATCHES, so it only ever sees lines that were ADDED in a scanned commit,
+      # and it sees nothing at all for a file git classifies as binary — one raw
+      # NUL byte anywhere in the first 8 000 makes `git log -p` emit „Binary
+      # files … differ" forever, for that blob and for every diff against it.
+      # `--no-git` reads the files instead, so it covers the tree as it stands
+      # whatever git thinks of the bytes. The two answer different questions —
+      # „was a secret ever committed" and „is one here now" — and neither
+      # contains the other.
+      - name: Scan the working tree
+        run: >
+          "${RUNNER_TEMP}/gitleaks" detect --source . --no-git
+          --config .gitleaks.toml --redact -v --exit-code 1
+
   # SEC-SC-04 wants a dependency scan blocking the merge; SEC-VER-03 sets the
   # bar it blocks at — "any known-exploitable dependency vulnerability". Two
   # commands, because "exploitable" means something different on either side of
