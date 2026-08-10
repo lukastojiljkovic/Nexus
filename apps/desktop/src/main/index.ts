@@ -1522,12 +1522,16 @@ async function handleProfilesVerifySwitch(passcode: string): Promise<AuthResult>
   }
 }
 
+/**
+ * Build- and device-level facts only. Nothing here may reach for the active
+ * account: the title bar calls this at mount to print the version, and on a
+ * first run that is before any account exists — see `AppInfo` in shared/ipc.ts.
+ */
 function appInfo(): AppInfo {
   return {
     name: app.getName(),
     version: app.getVersion(),
     userDataPath: app.getPath("userData"),
-    databasePath: databasePath(),
     versions: {
       electron: process.versions.electron ?? "",
       chrome: process.versions.chrome ?? "",

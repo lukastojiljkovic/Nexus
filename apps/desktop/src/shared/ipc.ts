@@ -7781,12 +7781,23 @@ export const WINDOW_VIEW_COMMANDS = [
 
 export type WindowViewCommand = (typeof WINDOW_VIEW_COMMANDS)[number];
 
-/** Runtime and environment facts, proving the main-process path end to end. */
+/**
+ * Runtime and environment facts, proving the main-process path end to end.
+ *
+ * Every field here is a property of the BUILD and of the device, and none of
+ * them is a property of an account — deliberately, because the title bar asks
+ * for this at mount to print the version, which is before an account exists on
+ * a first run. It used to carry `databasePath` as well, and that one field
+ * needed a selected account, so the whole call rejected on the first screen a
+ * new user ever sees: the version line silently vanished from the menu and main
+ * logged „Internal error: no local account is selected" for a completely
+ * ordinary state. Nothing ever read the field. Anything account-scoped belongs
+ * on a call that is about an account.
+ */
 export interface AppInfo {
   name: string;
   version: string;
   userDataPath: string;
-  databasePath: string;
   versions: {
     electron: string;
     chrome: string;
