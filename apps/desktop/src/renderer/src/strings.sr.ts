@@ -14,6 +14,7 @@
  * of by hand.
  */
 import type { SmartListId } from "@nexus/core";
+import { devtoolsSr } from "./strings/devtools.js";
 import type {
   ApkgImportSkipCode,
   ApkgReadErrorCode,
@@ -171,6 +172,8 @@ export const sr = {
     occupationOptions: {
       student: "Student",
       zaposleni: "Zaposleni",
+      /** „Programer" and not „Developer": the app speaks Serbian, and this is the Serbian word. */
+      programer: "Programer",
       preduzetnik: "Preduzetnik",
       drugo: "Nešto drugo",
     } satisfies Record<OnboardingOccupation, string>,
@@ -179,6 +182,17 @@ export const sr = {
     modulesDescription:
       "Izaberi oblasti koje želiš u Nexusu. Uključuješ ih i isključuješ kad god poželiš, u Podešavanjima → Moduli.",
     /** Screen 4 — podsetnici; the three choices reuse `settings.notificationPresets`, so a word means the same set everywhere. */
+    /**
+     * The demo offer on the last screen — a personal first run only. Says what
+     * it is (a SECOND profile, not a change to this one), what is in it, and
+     * that it can be removed, because all three are what somebody needs in
+     * order to say yes without wondering what they just agreed to.
+     */
+    demoLabel: "Dodaj i „Demo“ profil",
+    demoHint:
+      "Drugi profil u ovom nalogu, pun primera — zadaci, beleške, finansije, učenje, " +
+      "navike i ishrana — da vidiš kako Nexus izgleda kada je pun. Tvoj profil ostaje " +
+      "prazan i netaknut, a „Demo“ možeš obrisati kad god poželiš.",
     remindersTitle: "Podsetnici",
     remindersDescription: "Koliko obaveštenja želiš od Nexusa?",
     /** Said out loud rather than left as a surprise: no pick here is a valid answer, and the one-time question (NTF-008) simply stays where it was. */
@@ -358,6 +372,12 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     businessLabel: "Posao",
     switcherLabel: "Promena profila",
     createBusiness: "Novi poslovni profil",
+    /**
+     * The second way to the demo profile — the first is a checkbox at the end
+     * of the first run. „Dodaj" rather than „Napravi": what makes it worth
+     * having is the data that comes with it, not the empty profile.
+     */
+    createDemo: "Dodaj demo profil",
     createError: "Pravljenje profila nije uspelo. Pokušaj ponovo.",
     /**
      * The passcode gate in front of EVERY switch (AUTH-024). The error map is
@@ -387,6 +407,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     fitness: "Fitnes",
     tools: "Alatke",
     canvas: "Tabla",
+    devtools: "Programerske alatke",
   } satisfies Record<string, string>,
 
   dashboard: {
@@ -3872,10 +3893,26 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     /** Nothing matched what was typed. Says what to do, and does not scold. */
     noMatches: "Nijedna alatka ne odgovara pretrazi.",
     clearSearch: "Poništi pretragu",
-    /** The two halves of the drawer — `ToolCategory` in Serbian. */
+    /**
+     * Every `ToolCategory` in Serbian, both drawers' worth, in one map.
+     *
+     * One map rather than one per drawer because a category belongs to a
+     * drawer through `TOOL_CATEGORY_DRAWER` and not through where its label
+     * happens to be stored — and a second map is how a category ends up
+     * labelled in one place and rendered as a raw id in the other.
+     */
     category: {
       conversion: "Pretvaranje",
       calculation: "Računanje",
+      numbers: "Brojevi i bitovi",
+      riscv: "RISC-V",
+      encoding: "Kodiranje",
+      data: "Podaci",
+      text: "Tekst",
+      design: "Boje i dizajn",
+      crypto: "Kriptografija",
+      system: "Mreža i sistem",
+      time: "Vreme",
     },
     /**
      * The right pane before a tool is picked. A title and a line under it, not
@@ -4046,6 +4083,23 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
    * page says about what these numbers are, said once and calmly, and it is the
    * honest one: a food diary is a record, not a nutritionist.
    */
+  /**
+   * „Programerske alatke" — the developer drawer's copy.
+   *
+   * Its own group rather than more keys under `tools`, because the two drawers
+   * are two products that happen to share a host: „Alatke" says „Izaberi
+   * alatku sa liste" to somebody converting a recipe, and this one is talking
+   * to a person who came looking for a specific instrument and knows its name.
+   * The CATEGORY labels are deliberately NOT duplicated here — they live in
+   * `tools.category`, one map for both drawers, for the reason stated there.
+   *
+   * `name` and `blurb` are keyed by tool id and are what `ToolRegistration`'s
+   * `titleKey` / `blurbKey` point at. Every id in `DEVTOOLS_TOOLS` has an entry
+   * in both, and `modules.test.ts` fails if one is missing — a tool whose name
+   * did not resolve would render its own id in the rail.
+   */
+  /* „Programerske alatke" — one file per category, see `strings/devtools.ts`. */
+  devtools: devtoolsSr,
   fitness: {
     loadErrorTitle: "Ishrana nije učitana",
     loadError: "Učitavanje dnevnika ishrane nije uspelo. Zatvori i ponovo otvori stranicu.",
@@ -5644,6 +5698,9 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       fitness:
         "Ishrana i trening — obroci i dnevni ciljevi, dnevnik treninga sa rutinama i katalogom vežbi.",
       tools: "Pretvarači jedinica i svakodnevni računi — procenat, PDV, kredit i cena po jedinici.",
+      canvas: "Beskonačna tabla za crtanje, dijagrame i skice — sa karticama koje vode na druge module.",
+      devtools:
+        "Alatke za programere — brojevi i bitovi, RISC-V, kodiranje, kriptografija, boje i vreme.",
     } satisfies Record<string, string>,
     /** Category-group headings above the module gallery, keyed by registry category. */
     moduleCategories: {
@@ -7288,8 +7345,16 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
 export type LocaleShape<T> = {
   readonly [K in keyof T]: T[K] extends string
     ? string
-    : T[K] extends (...args: infer A) => infer R
-      ? (...args: A) => R
+    : // A FUNCTION LEAF IS A CRASH, NOT A STYLE. The live table is
+      // `structuredClone(sr)`, and `structuredClone` throws `DataCloneError` on a
+      // function — so one function anywhere in this tree takes the whole module
+      // down at import time, before a single pixel. This arm used to map
+      // functions through unchanged, which meant the type invited exactly the
+      // thing the runtime cannot carry; `never` turns it into a compile error at
+      // the leaf that wrote it. Interpolated copy is a template plus
+      // `fill(template, values)` from `strings.ts`.
+      T[K] extends (...args: never[]) => unknown
+      ? never
       : LocaleShape<T[K]>;
 };
 

@@ -175,3 +175,31 @@ export function countUnit(count: number, one: string, few: string, many: string)
 export function lookup(table: Readonly<Record<string, string>>, key: string): string | undefined {
   return table[key];
 }
+
+/**
+ * Fill the `{name}` slots of a copy string.
+ *
+ * **Why the table cannot just hold a function.** A leaf that is
+ * `(n) => \`Linija ${n}\`` reads as the tidier answer and is a live defect: the
+ * live table is `structuredClone(sr)`, and `structuredClone` throws
+ * `DataCloneError` on a function — so ONE such leaf anywhere in the tree kills
+ * the module at import, which means a white window rather than a bad string.
+ * That is why `LocaleShape` refuses functions outright and why interpolation
+ * needs a data form. The app's older answer — `…Prefix` / `…Suffix` keys
+ * composed at the call site — stays right for a value at one end of a sentence
+ * and does not survive „{a} zahteva {b} {c}, a upisano je {d}", where a
+ * translator has to be able to move all four.
+ *
+ * An unknown placeholder is left standing rather than blanked: `{count}` in the
+ * UI names the key that was not supplied, where an empty gap says only that a
+ * sentence reads oddly.
+ */
+export function fill(
+  template: string,
+  values: Readonly<Record<string, string | number>>,
+): string {
+  return template.replace(/\{(\w+)\}/g, (whole: string, key: string) => {
+    const value = values[key];
+    return value === undefined ? whole : String(value);
+  });
+}

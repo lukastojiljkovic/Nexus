@@ -654,6 +654,548 @@ const TOOLS_TOOLS: ToolRegistration[] = [
 ];
 
 /**
+ * „Programerske alatke" (UTIL slice d) — the developer drawer's forty-eight
+ * tools, published through the SAME `ToolRegistration` contract as the eleven
+ * above and separated from them only by their categories, every one of which
+ * `TOOL_CATEGORY_DRAWER` routes to `"developer"`.
+ *
+ * That is the whole mechanism, and it was chosen over the shorter one on
+ * purpose. „A drawer shows the tools of its own module" would have been one
+ * filter instead of a table, and would have quietly retired the contract's
+ * standing promise that ANY module may publish a tool — NOTE contributing the
+ * Markdown table builder would then have had nowhere to put it. Routing by
+ * category keeps that open: a module says what its tool is about, and where it
+ * is shelved follows from that rather than from who wrote it.
+ *
+ * Every entry carries a `blurbKey`, which the eleven utilities do not. At eleven
+ * tools „Dužina" explains itself and a sentence under each would be noise; at
+ * forty-eight, a name like „Oblik zapisa" or „Mikroskalirani blokovi" does not,
+ * and the line under it is the difference between a list and a wall.
+ *
+ * The keywords are folded to plain ASCII, `SettingsControl.keywords`' rule
+ * exactly — with `đ` written `dj`, because it is the one Serbian letter with no
+ * canonical decomposition and stripping its stroke by algorithm yields `d`. A
+ * drawer this size is unusable without search, so the folding is not a nicety:
+ * it is what makes „sifrovanje" find the AES tool for somebody typing without
+ * diacritics, which is how everybody types into a search field.
+ */
+const DEVTOOLS_TOOLS: ToolRegistration[] = [
+  // numbers
+  {
+    id: "number-base",
+    titleKey: "devtools.name.number-base",
+    blurbKey: "devtools.blurb.number-base",
+    category: "numbers",
+    keywords: [
+      "base", "bigint", "bin", "binarno", "broj", "brojni sistemi", "cifre", "convert",
+      "decimalno", "heksadecimalno", "hex", "konverzija", "number base", "okt", "oktalno",
+      "osnova", "radix"
+    ],
+  },
+  {
+    id: "integer-inspector",
+    titleKey: "devtools.name.integer-inspector",
+    blurbKey: "devtools.blurb.integer-inspector",
+    category: "numbers",
+    keywords: [
+      "bajt", "bajtovi", "big endian", "binarno", "celobrojno", "ceo broj", "dvojni komplement",
+      "endian", "hex", "inspector", "int", "int16", "int32", "int64", "int8", "integer",
+      "little endian", "opseg", "overflow", "prekoracenje", "sirina", "twos complement", "uint",
+      "width"
+    ],
+  },
+  {
+    id: "bitwise",
+    titleKey: "devtools.name.bitwise",
+    blurbKey: "devtools.blurb.bitwise",
+    category: "numbers",
+    keywords: [
+      "and", "bit", "bitovi", "bitske operacije", "bitwise", "clz", "ctz", "mask", "maska", "nand",
+      "nor", "not", "nule", "or", "parity", "parnost", "pomeraj", "popcount", "rotacija", "rotate",
+      "sar", "shift", "shl", "shr", "sirina", "xnor", "xor"
+    ],
+  },
+  {
+    id: "data-unit",
+    titleKey: "devtools.name.data-unit",
+    blurbKey: "devtools.blurb.data-unit",
+    category: "numbers",
+    keywords: [
+      "bajt", "bajtovi", "bit", "bitovi", "bytes", "data", "disk", "gb", "gib", "gigabajt",
+      "gigabit", "jedinice", "kb", "kib", "kilobajt", "mb", "megabajt", "megabit", "memorija",
+      "mib", "pb", "petabajt", "pib", "size", "storage", "tb", "terabajt", "tib", "velicina"
+    ],
+  },
+  {
+    id: "float-convert",
+    titleKey: "devtools.name.float-convert",
+    blurbKey: "devtools.blurb.float-convert",
+    category: "numbers",
+    keywords: [
+      "beskonacno", "bf16", "bfloat", "bitovi", "denormal", "double", "e4m3", "e5m2", "e8m0",
+      "eksponent", "float", "floating point", "fnuz", "fp16", "fp32", "fp64", "fp8", "half", "hex",
+      "infinity", "mantisa", "mxfp4", "mxfp6", "nan", "pokretni zarez", "preciznost", "rounding",
+      "single", "subnormal", "tf32", "zaokruzivanje", "zarez"
+    ],
+  },
+  {
+    id: "mx-block",
+    titleKey: "devtools.name.mx-block",
+    blurbKey: "devtools.blurb.mx-block",
+    category: "numbers",
+    keywords: [
+      "bita po vrednosti", "bits per value", "block", "blok", "deljeni eksponent", "e8m0",
+      "kvantizacija", "microscaling", "mikroskaliranje", "mx", "mxfp", "mxfp4", "mxfp6", "mxfp8",
+      "ocp", "quantization", "scale", "shared exponent", "skala"
+    ],
+  },
+  // riscv
+  {
+    id: "riscv",
+    titleKey: "devtools.name.riscv",
+    blurbKey: "devtools.blurb.riscv",
+    category: "riscv",
+    keywords: [
+      "abi", "addi", "asembler", "assembler", "branch", "compressed", "csr", "decode",
+      "dekodiranje", "disasembler", "disassembler", "encode", "funct", "immediate", "instruction",
+      "instrukcija", "instrukcije", "jal", "kodiranje", "kompresovano", "li", "lui", "opcode",
+      "pseudo", "register", "registri", "risc-v", "riscv", "rv32", "rv32i", "rv64", "rv64i",
+      "zicsr"
+    ],
+  },
+  // encoding
+  {
+    id: "base64",
+    titleKey: "devtools.name.base64",
+    blurbKey: "devtools.blurb.base64",
+    category: "encoding",
+    keywords: [
+      "b64", "bajtovi", "base64", "bytes", "decode", "dekodiranje", "dopuna", "encode",
+      "kodiranje", "padding", "url-safe", "urlsafe"
+    ],
+  },
+  {
+    id: "url-encode",
+    titleKey: "devtools.name.url-encode",
+    blurbKey: "devtools.blurb.url-encode",
+    category: "encoding",
+    keywords: [
+      "dekodiranje", "encodeuri", "encodeuricomponent", "escape", "form", "forma", "kodiranje",
+      "percent", "procenat", "url", "urldecode", "urlencode"
+    ],
+  },
+  {
+    id: "url-parse",
+    titleKey: "devtools.name.url-parse",
+    blurbKey: "devtools.blurb.url-parse",
+    category: "encoding",
+    keywords: [
+      "delovi", "domen", "fragment", "host", "idn", "parametri", "parse", "port", "punycode",
+      "putanja", "query", "raspakuj", "upit", "url"
+    ],
+  },
+  {
+    id: "ascii-binary-hex",
+    titleKey: "devtools.name.ascii-binary-hex",
+    blurbKey: "devtools.blurb.ascii-binary-hex",
+    category: "encoding",
+    keywords: [
+      "ascii", "bajtovi", "binarno", "binary", "bytes", "decimalno", "heks", "heksadekadno", "hex",
+      "kodna", "tacka", "tekst", "text", "utf8"
+    ],
+  },
+  {
+    id: "unicode-inspector",
+    titleKey: "devtools.name.unicode-inspector",
+    blurbKey: "devtools.blurb.unicode-inspector",
+    category: "encoding",
+    keywords: [
+      "codepoint", "emoji", "grafema", "inspector", "inspektor", "kategorija", "kodna", "nfc",
+      "nfd", "nfkc", "nfkd", "normalizacija", "surogat", "tacka", "unicode", "utf16", "utf8"
+    ],
+  },
+  {
+    id: "html-entities",
+    titleKey: "devtools.name.html-entities",
+    blurbKey: "devtools.blurb.html-entities",
+    category: "encoding",
+    keywords: [
+      "amp", "dekodiranje", "entiteti", "entities", "escape", "html", "kodiranje", "markap",
+      "nbsp", "unescape", "znakovi"
+    ],
+  },
+  {
+    id: "hexdump",
+    titleKey: "devtools.name.hexdump",
+    blurbKey: "devtools.blurb.hexdump",
+    category: "encoding",
+    keywords: [
+      "ascii", "bajtovi", "bytes", "dump", "heks", "hex", "hexdump", "ispis", "offset", "ofset",
+      "xxd"
+    ],
+  },
+  // data
+  {
+    id: "json-editor",
+    titleKey: "devtools.name.json-editor",
+    blurbKey: "devtools.blurb.json-editor",
+    category: "data",
+    keywords: [
+      "beautify", "format", "formatiranje", "indent", "json", "jsonpath", "keys", "kljucevi",
+      "minifikacija", "minify", "pretty", "provera", "proveri", "putanja", "query", "smanji",
+      "sortiraj", "sortiranje", "upit", "uredi", "uvlacenje", "validacija"
+    ],
+  },
+  {
+    id: "yaml-editor",
+    titleKey: "devtools.name.yaml-editor",
+    blurbKey: "devtools.blurb.yaml-editor",
+    category: "data",
+    keywords: [
+      "alias", "anchor", "block", "blok", "citaj", "documents", "dokument", "flow", "indent",
+      "kljucevi", "komentar", "parse", "parsiranje", "pretvori", "provera", "serijalizacija",
+      "sidro", "sortiraj", "uvlacenje", "validacija", "yaml", "yml"
+    ],
+  },
+  {
+    id: "xml-editor",
+    titleKey: "devtools.name.xml-editor",
+    blurbKey: "devtools.blurb.xml-editor",
+    category: "data",
+    keywords: [
+      "atribut", "cdata", "entitet", "format", "formatiranje", "html", "indent", "ispravnost",
+      "komentar", "markup", "minifikacija", "minify", "pretty", "provera", "putanja", "tag",
+      "upit", "uvlacenje", "validacija", "xml", "xpath"
+    ],
+  },
+  {
+    id: "data-format",
+    titleKey: "devtools.name.data-format",
+    blurbKey: "devtools.blurb.data-format",
+    category: "data",
+    keywords: [
+      "convert", "csv", "delimiter", "format", "header", "izvoz", "json", "konvertuj",
+      "konverzija", "pretvori", "prevod", "razdvajac", "tabela", "toml", "uvoz", "yaml", "yml",
+      "zaglavlje"
+    ],
+  },
+  {
+    id: "json-to-types",
+    titleKey: "devtools.name.json-to-types",
+    blurbKey: "devtools.blurb.json-to-types",
+    category: "data",
+    keywords: [
+      "deklaracije", "dto", "generator", "interface", "json", "model", "schema", "sema", "tip",
+      "tipovi", "ts", "type", "types", "typescript", "u tipove", "zod"
+    ],
+  },
+  {
+    id: "uuid",
+    titleKey: "devtools.name.uuid",
+    blurbKey: "devtools.blurb.uuid",
+    category: "data",
+    keywords: [
+      "generator", "guid", "id", "identifikator", "kljuc", "nasumican", "random", "ulid", "uuid",
+      "v4", "v7", "vremenski"
+    ],
+  },
+  // text
+  {
+    id: "diff",
+    titleKey: "devtools.name.diff",
+    blurbKey: "devtools.blurb.diff",
+    category: "text",
+    keywords: [
+      "compare", "diff", "myers", "patch", "poredjenje", "promene", "razlika", "razlike", "tekst",
+      "unified", "uporedi"
+    ],
+  },
+  {
+    id: "markdown-table",
+    titleKey: "devtools.name.markdown-table",
+    blurbKey: "devtools.blurb.markdown-table",
+    category: "text",
+    keywords: [
+      "align", "csv", "gfm", "grid", "kolone", "markdown", "md", "poravnanje", "redovi", "tabela",
+      "table"
+    ],
+  },
+  {
+    id: "lorem",
+    titleKey: "devtools.name.lorem",
+    blurbKey: "devtools.blurb.lorem",
+    category: "text",
+    keywords: [
+      "dummy", "filler", "generator", "ipsum", "lorem", "maketa", "pasusi", "placeholder",
+      "popuna", "recenice", "tekst"
+    ],
+  },
+  {
+    id: "slug",
+    titleKey: "devtools.name.slug",
+    blurbKey: "devtools.blurb.slug",
+    category: "text",
+    keywords: [
+      "cirilica", "djordje", "latinica", "link", "naslov", "permalink", "putanja", "seo", "slug",
+      "transliteracija", "url"
+    ],
+  },
+  {
+    id: "case-convert",
+    titleKey: "devtools.name.case-convert",
+    blurbKey: "devtools.blurb.case-convert",
+    category: "text",
+    keywords: [
+      "camelcase", "case", "identifikator", "kebab", "konverzija", "naziv", "oblik", "pascalcase",
+      "screaming", "snakecase", "tokenizacija", "zapis"
+    ],
+  },
+  {
+    id: "line-tools",
+    titleKey: "devtools.name.line-tools",
+    blurbKey: "devtools.blurb.line-tools",
+    category: "text",
+    keywords: [
+      "dedupe", "duplikati", "izmesaj", "lines", "linije", "numerisi", "prefiks", "prelom",
+      "razdvoji", "redovi", "shuffle", "sort", "sortiraj", "spoji", "sufiks", "trim", "wrap"
+    ],
+  },
+  {
+    id: "regex",
+    titleKey: "devtools.name.regex",
+    blurbKey: "devtools.blurb.regex",
+    category: "text",
+    keywords: [
+      "flags", "groups", "grupe", "match", "pattern", "poklapanja", "regex", "regularni izrazi",
+      "replace", "sablon", "test", "zamena", "zastavice"
+    ],
+  },
+  // design
+  {
+    id: "color-convert",
+    titleKey: "devtools.name.color-convert",
+    blurbKey: "devtools.blurb.color-convert",
+    category: "design",
+    keywords: [
+      "boja", "boje", "color", "colour", "convert", "css", "hex", "hsl", "hwb", "konverzija",
+      "lab", "lch", "named", "naziv", "oklab", "oklch", "pretvarac", "pretvaranje", "rgb"
+    ],
+  },
+  {
+    id: "color-palette",
+    titleKey: "devtools.name.color-palette",
+    blurbKey: "devtools.blurb.color-palette",
+    category: "design",
+    keywords: [
+      "analogna", "boje", "harmonija", "harmony", "komplementarna", "monohromatska", "nijanse",
+      "oklch", "paleta", "palette", "ramp", "shades", "tetrada", "tints", "tonovi", "trijada"
+    ],
+  },
+  {
+    id: "gradient",
+    titleKey: "devtools.name.gradient",
+    blurbKey: "devtools.blurb.gradient",
+    category: "design",
+    keywords: [
+      "conic", "css", "gradient", "gradijent", "interpolacija", "konusni", "linear", "linearni",
+      "oklab", "preliv", "radial", "radijalni", "srgb", "stopovi", "stops", "tacke", "ugao",
+      "uzorci"
+    ],
+  },
+  {
+    id: "cubic-bezier",
+    titleKey: "devtools.name.cubic-bezier",
+    blurbKey: "devtools.blurb.cubic-bezier",
+    category: "design",
+    keywords: [
+      "animacija", "animation", "bezier", "bezije", "bezijeova", "css", "cubic", "curve", "ease",
+      "easing", "kriva", "odskok", "prelaz", "tajming", "transition", "ublazavanje"
+    ],
+  },
+  {
+    id: "contrast",
+    titleKey: "devtools.name.contrast",
+    blurbKey: "devtools.blurb.contrast",
+    category: "design",
+    keywords: [
+      "a11y", "aa", "aaa", "accessibility", "apca", "citljivost", "contrast", "kontrast", "lc",
+      "odnos", "pozadina", "pristupacnost", "ratio", "tekst", "wcag"
+    ],
+  },
+  {
+    id: "color-mixer",
+    titleKey: "devtools.name.color-mixer",
+    blurbKey: "devtools.blurb.color-mixer",
+    category: "design",
+    keywords: [
+      "alfa", "alpha", "blend", "boje", "composite", "kompozit", "linear", "mesalica", "mesanje",
+      "mix", "mixer", "oklab", "preklapanje", "providnost", "srgb", "tezina", "udeo"
+    ],
+  },
+  // crypto
+  {
+    id: "token-gen",
+    titleKey: "devtools.name.token-gen",
+    blurbKey: "devtools.blurb.token-gen",
+    category: "crypto",
+    keywords: [
+      "alfanumericki", "api", "base58", "base64", "base64url", "entropija", "entropy", "generator",
+      "hex", "key", "kljuc", "nasumicno", "random", "secret", "slucajno", "token", "tokeni"
+    ],
+  },
+  {
+    id: "password-gen",
+    titleKey: "devtools.name.password-gen",
+    blurbKey: "devtools.blurb.password-gen",
+    category: "crypto",
+    keywords: [
+      "cifre", "entropija", "entropy", "fraza", "generator", "jaka lozinka", "lozinka", "lozinke",
+      "nasumicno", "passphrase", "password", "random", "recnik", "sifra", "simboli", "wordlist"
+    ],
+  },
+  {
+    id: "jwt",
+    titleKey: "devtools.name.jwt",
+    blurbKey: "devtools.blurb.jwt",
+    category: "crypto",
+    keywords: [
+      "bearer", "claims", "es256", "exp", "hmac", "hs256", "iat", "json web token", "jwk", "jwt",
+      "nbf", "pem", "potpis", "provera", "rs256", "signature", "token", "tvrdnje", "verify"
+    ],
+  },
+  {
+    id: "hashing",
+    titleKey: "devtools.name.hashing",
+    blurbKey: "devtools.blurb.hashing",
+    category: "crypto",
+    keywords: [
+      "base64", "checksum", "digest", "hash", "hes", "hesiranje", "hex", "hmac", "md5", "otisak",
+      "sha", "sha1", "sha256", "sha384", "sha512"
+    ],
+  },
+  {
+    id: "aes",
+    titleKey: "devtools.name.aes",
+    blurbKey: "devtools.blurb.aes",
+    category: "crypto",
+    keywords: [
+      "aes", "cbc", "decrypt", "desifrovanje", "encrypt", "envelope", "gcm", "iv", "key", "kljuc",
+      "koverta", "kriptovanje", "lozinka", "nonce", "pbkdf2", "sifrovanje", "simetricno"
+    ],
+  },
+  {
+    id: "rsa-keygen",
+    titleKey: "devtools.name.rsa-keygen",
+    blurbKey: "devtools.blurb.rsa-keygen",
+    category: "crypto",
+    keywords: [
+      "2048", "4096", "generisanje", "javni", "key", "keygen", "keypair", "kljuc", "kljucevi",
+      "oaep", "par", "pem", "pkcs8", "privatni", "pss", "rsa", "spki"
+    ],
+  },
+  {
+    id: "rsa-crypt",
+    titleKey: "devtools.name.rsa-crypt",
+    blurbKey: "devtools.blurb.rsa-crypt",
+    category: "crypto",
+    keywords: [
+      "asimetricno", "decrypt", "desifrovanje", "encrypt", "javni kljuc", "kriptovanje", "oaep",
+      "pem", "privatni kljuc", "rsa", "sifrovanje"
+    ],
+  },
+  {
+    id: "signature",
+    titleKey: "devtools.name.signature",
+    blurbKey: "devtools.blurb.signature",
+    category: "crypto",
+    keywords: [
+      "ecdsa", "eliptic", "kljuc", "p256", "p384", "pem", "pkcs1", "potpis", "potpisivanje",
+      "provera", "pss", "rsa", "sign", "signature", "verify"
+    ],
+  },
+  // system
+  {
+    id: "http-status",
+    titleKey: "devtools.name.http-status",
+    blurbKey: "devtools.blurb.http-status",
+    category: "system",
+    keywords: [
+      "404", "500", "cloudflare", "error", "greska", "http", "iana", "kod", "kodovi", "odgovor",
+      "rfc", "status", "webdav"
+    ],
+  },
+  {
+    id: "path-convert",
+    titleKey: "devtools.name.path-convert",
+    blurbKey: "devtools.blurb.path-convert",
+    category: "system",
+    keywords: [
+      "disk", "escape", "file url", "linux", "mnt", "navodnici", "path", "putanja", "putanje",
+      "unc", "unix", "windows", "wsl"
+    ],
+  },
+  {
+    id: "cidr",
+    titleKey: "devtools.name.cidr",
+    blurbKey: "devtools.blurb.cidr",
+    category: "system",
+    keywords: [
+      "broadcast", "cidr", "ip", "ipv4", "ipv6", "maska", "mreza", "netmask", "opseg", "podmreza",
+      "prefiks", "subnet", "supernet", "wildcard"
+    ],
+  },
+  {
+    id: "semver",
+    titleKey: "devtools.name.semver",
+    blurbKey: "devtools.blurb.semver",
+    category: "system",
+    keywords: [
+      "caret", "compare", "npm", "opseg", "prerelease", "range", "semver", "sortiraj", "tilde",
+      "uporedi", "version", "verzija", "verzije"
+    ],
+  },
+  {
+    id: "qr",
+    titleKey: "devtools.name.qr",
+    blurbKey: "devtools.blurb.qr",
+    category: "system",
+    keywords: [
+      "barcode", "barkod", "email", "generator", "geo", "kod", "kontakt", "koordinate", "link",
+      "lokacija", "lozinka", "mailto", "mejl", "mreza", "poruka", "poziv", "qr", "qr code",
+      "qr kod", "slika", "sms", "svg", "tel", "telefon", "url", "vcard", "veza", "vizit karta",
+      "wi-fi", "wifi"
+    ],
+  },
+  // time
+  {
+    id: "datetime",
+    titleKey: "devtools.name.datetime",
+    blurbKey: "devtools.blurb.datetime",
+    category: "time",
+    keywords: [
+      "convert", "dan u godini", "datum", "day of year", "dotnet", "dst", "duration", "epoch",
+      "epoha", "filetime", "iana", "iso", "iso nedelja", "iso8601", "konverzija", "leap",
+      "letnje racunanje vremena", "milisekunde", "nanosekunde", "offset", "pomeraj", "pre",
+      "prestupna", "relativno", "rfc2822", "ticks", "tikovi", "timestamp", "timezone", "trajanje",
+      "trenutak", "unix", "utc", "vreme", "vremenska oznaka", "vremenska zona", "week", "windows",
+      "za", "zona"
+    ],
+  },
+  {
+    id: "cron",
+    titleKey: "devtools.name.cron",
+    blurbKey: "devtools.blurb.cron",
+    category: "time",
+    keywords: [
+      "cron", "crontab", "daily", "dan u mesecu", "dan u nedelji", "dst", "expression", "fields",
+      "hourly", "izraz", "job", "kvarc", "macro", "makro", "minut", "next run", "polja", "posao",
+      "quartz", "raspored", "rasporedjivanje", "reboot", "sat", "schedule", "scheduler", "sekunde",
+      "sledece paljenje", "timezone", "vixie", "vremenska zona", "weekly", "yearly", "zakazivanje"
+    ],
+  },
+];
+
+/**
  * UTIL slice c's card. ONE control, and the restraint is FIN's and DOC's
  * exactly: the drawer has no preferences to speak of — it stores nothing, reads
  * nothing and computes everything from what is typed into it — so the only
@@ -1047,6 +1589,36 @@ const V0_MODULES: ModuleManifest[] = [
     prefix: "CANV",
     category: "Professional & utilities",
     defaultEnabled: true,
+  },
+  // „Programerske alatke" (UTIL slice d) — the developer drawer. Forty-eight
+  // tools that answer questions only a programmer asks: what these bits are as
+  // an fp8, what this halfword decodes to on RV64, what this JWT actually says.
+  //
+  // FOURTH module in „Profesionalno i alati", and it shares UTIL with „Alatke"
+  // and „Fokus" for the reason the comment on „Alatke" already gives — one PRD
+  // section implemented more than once, with `modules.test.ts`'s explicit
+  // prefix→ids map stating the sharing on purpose so any OTHER duplicate still
+  // fails.
+  //
+  // OFF by default, and the only built module besides PRIV that is. Not
+  // caution: a person who does not write software should never be shown a
+  // RISC-V assembler, and a drawer they cannot use is worse than one they
+  // cannot see. The opening questionnaire turns it on for whoever says they
+  // are a programmer, which is the whole reason that questionnaire exists.
+  //
+  // FOUR contract slots stay empty, and none of them merely „not yet". No
+  // `settings`: the drawer stores nothing and computes everything from what is
+  // typed into it, so there is no preference to keep — „Alatke" has one only
+  // because a VAT rate is a fact about the country you are in. No `widgets`: a
+  // dashboard card draws a FACT about the profile and this module holds none.
+  // No `searchIndexers`: there is nothing here a query could find, because
+  // nothing a user writes is kept. No `imex`: nothing to export.
+  {
+    id: "devtools",
+    prefix: "UTIL",
+    category: "Professional & utilities",
+    defaultEnabled: false,
+    tools: DEVTOOLS_TOOLS,
   },
 ];
 

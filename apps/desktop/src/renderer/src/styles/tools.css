@@ -362,3 +362,212 @@
   line-height: var(--nx-font-leading-snug);
   color: var(--nx-danger);
 }
+
+/* --- Programerske alatke (UTIL slice d) --------------------------------------
+   The developer drawer is the SAME instrument as „Alatke" — same rail, same
+   layout, same field grammar — and differs in exactly one thing: density. A
+   converter has one answer and draws it as a display figure; a float inspector
+   answers with a sign bit, an exponent, a mantissa, four re-encodings and the
+   exact rounding it used. At display size that page is shouting. So the rows
+   are shared and `.tool--developer` retunes them, rather than a second class
+   family that would have to be kept in step with the first for ever. */
+
+/* Forty-eight tools cannot be told apart by name alone — „Mikroskalirani
+   blokovi" says nothing until a sentence says it. Secondary tier, measured, and
+   sitting under the title as a subtitle rather than as the first line of the
+   tool. */
+.tool__surface-blurb {
+  margin: 0;
+  max-width: 64ch;
+  font-size: var(--nx-font-size-body-sm);
+  line-height: var(--nx-font-leading-normal);
+  color: var(--nx-text-muted);
+}
+
+/* Anything read character by character — hex, base64, a key, a path. On a
+   `TextField` this class lands on the WRAPPER, which is what the component does
+   with `className`; the control picks the family up because
+   `.nx-textfield__input` declares `font: inherit`. */
+.tool__mono {
+  font-family: var(--nx-font-family-mono);
+}
+/* The multi-line input is the house's raw-textarea recipe — `nx-textfield__input`
+   for the box, a local class for the rest — the same pairing „Učenje" uses. It
+   is monospace by declaration and not by an added `.tool__mono`, so a surface
+   cannot produce a proportional one by forgetting a class. */
+.tool__textarea {
+  min-height: 96px;
+  resize: vertical;
+  font-family: var(--nx-font-family-mono);
+  line-height: var(--nx-font-leading-normal);
+}
+
+/*
+ * THE ANSWER, in the shape this drawer's answers take: a labelled well with the
+ * value in it and a way to take the value away.
+ *
+ * The same well as the converter's `.tool__figure` — a tinted panel that is
+ * plainly not an input — but the value is body-sized: what a developer does with
+ * a base64 blob is select it, and a display-sized wall of it would be neither
+ * more readable nor selectable.
+ */
+.tool__output {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-3) var(--nx-space-4);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border-subtle);
+  border-radius: var(--nx-radius-md);
+}
+.tool__output-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-3);
+}
+/* Single line by default and ELLIPSISED, not wrapped: a 64-character hash
+   folded onto three lines is harder to read than one that is visibly cut, and
+   the copy button beside it takes the whole value regardless of what is shown. */
+.tool__output-body {
+  display: block;
+  min-width: 0;
+  font-size: var(--nx-font-size-body-sm);
+  line-height: var(--nx-font-leading-snug);
+  color: var(--nx-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* The multi-line form: line breaks are content (a hexdump, a formatted JSON),
+   so they are kept, long tokens break anywhere rather than pushing the page
+   sideways, and the block scrolls at eighteen rems instead of growing without
+   limit. */
+.tool__output-body--block {
+  max-height: 18rem;
+  white-space: pre-wrap;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+/* The label swaps to „Kopirano" for a moment. Reserving the wider of the two
+   words is what stops the well's header twitching on every copy. */
+.tool__copy.nx-button {
+  flex: 0 0 auto;
+  min-width: 9ch;
+}
+
+/* A row of controls that belong together — „Kodiraj"/„Dekodiraj", a format
+   switch, a „Zameni strane". */
+.tool__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+
+/*
+ * A table of values. `overflow-x` lives on the wrapper and never on the page:
+ * a byte table that widens the window is a layout defect in every other module
+ * at once, which is why the scroll is contained here by construction.
+ */
+.tool__table-scroll {
+  overflow-x: auto;
+  /* The table may legitimately be wider than the pane; the SCROLLER may not.
+     Without this a grid/flex ancestor sizes to the table's min-content and the
+     whole tool grows past the window instead of the box scrolling. */
+  min-width: 0;
+  max-width: 100%;
+}
+.tool__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--nx-font-size-body-sm);
+}
+.tool__table th,
+.tool__table td {
+  padding: 6px var(--nx-space-3);
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--nx-border-subtle);
+}
+/* A sentence column. `nowrap` above is right for a hex word and wrong for
+   „Klijent nastavlja sa zahtevom." — see `ToolTable`'s `prose`. The width cap is
+   what actually keeps a five-column reference table inside the pane: a Serbian
+   explanation is the only cell here long enough to decide the table's width, so
+   giving it a ceiling and letting it wrap is what the other four columns need in
+   order to stay visible. */
+.tool__table td.tool__cell--prose {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  max-width: 22rem;
+  font-family: var(--nx-font-family-ui);
+}
+/* Flush with the field labels above it — a table that starts one gutter in
+   reads as a card that forgot its border. */
+.tool__table th:first-child,
+.tool__table td:first-child {
+  padding-left: 0;
+}
+.tool__table tr:last-child td {
+  border-bottom: 0;
+}
+
+/*
+ * A word, drawn as bits.
+ *
+ * Three tools show one (the integer inspector, the bitwise calculator, the
+ * float formats' sign/exponent/mantissa), and they show the same object, so
+ * they draw it with the same rule. The nibble grouping is markup — a
+ * `.tool__bits-group` per four — because „every fourth cell" is a fact about
+ * the number and not about the layout, and CSS that counted cells would get it
+ * wrong the moment a word is not a multiple of four bits wide.
+ */
+.tool__bits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+}
+.tool__bits-group {
+  display: flex;
+  gap: 2px;
+}
+.tool__bit {
+  display: grid;
+  place-items: center;
+  min-width: 1.5rem;
+  min-height: 1.5rem;
+  font-family: var(--nx-font-family-mono);
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-muted);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border-subtle);
+  border-radius: var(--nx-radius-xs);
+}
+/* A set bit is the accent's border and the primary ink — the drawer's own
+   „chosen" grammar, the same one the rail uses, and not a glow. */
+.tool__bit--set {
+  color: var(--nx-text);
+  background: var(--nx-surface-raised);
+  border-color: var(--nx-accent);
+}
+
+/* --- density: the developer drawer only ----------------------------------- */
+
+/* Wider than the utilities measure, because these answers are tables and
+   hexdumps rather than sentences — but still measured, so a maximised window
+   does not stretch a form across two feet of screen. */
+.tool--developer .tool__body {
+  max-width: 52rem;
+}
+/* A dozen of these stack in one surface, so the value is body-sized and regular
+   rather than the title-sized semibold a loan's single „Mesečna rata" earns. It
+   is monospace where the surface asks for it (`.tool__mono`), which is what
+   carries the emphasis instead of the size. */
+.tool--developer .tool__result-value {
+  min-width: 0;
+  font-size: var(--nx-font-size-body-sm);
+  line-height: var(--nx-font-leading-snug);
+  font-weight: var(--nx-font-weight-regular);
+  text-align: right;
+  overflow-wrap: anywhere;
+}
