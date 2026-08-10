@@ -16,7 +16,7 @@
     "@nexus/core": "workspace:*",
     "@nexus/sync": "workspace:*",
     "@nexus/sync-crypto": "workspace:*",
-    "better-sqlite3-multiple-ciphers": "^12.11.1",
+    "better-sqlite3-multiple-ciphers": "^13.0.3",
     "ts-fsrs": "^5.4.1"
   },
   "devDependencies": {
