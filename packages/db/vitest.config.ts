@@ -1,8 +1,10 @@
 import { defineConfig } from "vitest/config";
 
 /**
- * The only Vitest config in this repository. It exists for one fixed bug and one
- * standing warning.
+ * Vitest for `@nexus/db`. It exists for one fixed bug, one standing warning and
+ * one number that has to be chosen rather than inherited. (This header used to
+ * open „the only Vitest config in this repository"; `apps/desktop` and
+ * `apps/web` each have one too, and did when that line was written.)
  *
  * **The bug.** `pnpm test` failed roughly half its runs with
  * `Error: [vitest-worker]: Timeout calling "onTaskUpdate"` while reporting every
@@ -47,6 +49,19 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     setupFiles: ["./vitest.setup.ts"],
+    /**
+     * Vitest's default is 5 000 ms, and nobody in this repository ever chose it.
+     * These tests open a real encrypted SQLite database per case, so they are
+     * legitimately slow: the header above measures the worst at about 1.4 s on
+     * a developer machine, and CI run 31367258129 measured the same suite's
+     * worst at 4 332 ms — `RestoreStore > T10`, passing, with six more between
+     * 3.4 s and 4.2 s. That is 668 ms of headroom under the default, on a gate
+     * that runs on a shared runner whose speed is not ours to control, and a
+     * red build there says „a different test each time" rather than „something
+     * broke". 20 s is four times the slowest observed pass, which still fails a
+     * genuinely hung test inside a coffee break.
+     */
+    testTimeout: 20_000,
     /**
      * Bounded because turbo runs four packages' suites concurrently and vitest
      * defaults to one worker per core — about sixty forks on a sixteen-core

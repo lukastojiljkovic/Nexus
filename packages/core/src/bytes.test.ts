@@ -4,6 +4,27 @@ import { base64ToBytes, base64ToBytesOrNull, bytesToBase64, bytesToHex, hexToByt
 
 const ascii = (text: string): Uint8Array => Uint8Array.from(text, (char) => char.charCodeAt(0));
 
+/**
+ * The index of the first differing byte, or `null` when the two views agree.
+ *
+ * For the small vectors below `toEqual` is the right assertion and is used. It
+ * is the wrong one for a 300 000-byte view: structural equality walks the pair
+ * through vitest's own machinery at about 1.1 µs per element — measured at
+ * 370 ms of that test's 390 ms, against 14 ms for the codec it is supposed to
+ * be exercising. On a CI runner three times slower than a laptop that put the
+ * test over the 5 s default timeout, so a passing codec reported a red build.
+ * A test whose cost is dominated by its assertion rather than by the behaviour
+ * under test is a flake waiting for a slow machine.
+ *
+ * The failure message is the second reason. `toEqual` on 300 000 elements
+ * prints 300 000 elements; an index names the byte.
+ */
+const firstDifference = (actual: Uint8Array, expected: Uint8Array): number | null => {
+  const shared = Math.min(actual.length, expected.length);
+  for (let i = 0; i < shared; i += 1) if (actual[i] !== expected[i]) return i;
+  return null;
+};
+
 describe("base64 against RFC 4648 §10", () => {
   // The published test vectors, verbatim. An EXTERNAL authority rather than a
   // round trip: a codec that is wrong in both directions round-trips perfectly.
@@ -41,7 +62,9 @@ describe("base64 edges", () => {
     // An attachment is exactly this size, so the loop is not a style choice.
     const large = new Uint8Array(300_000);
     for (let i = 0; i < large.length; i += 1) large[i] = (i * 31) & 0xff;
-    expect(base64ToBytes(bytesToBase64(large))).toEqual(large);
+    const roundTripped = base64ToBytes(bytesToBase64(large));
+    expect(roundTripped.length).toBe(large.length);
+    expect(firstDifference(roundTripped, large)).toBeNull();
   });
 
   it("throws rather than returning something plausible for input that is not base64", () => {
