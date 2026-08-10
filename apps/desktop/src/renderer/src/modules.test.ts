@@ -1,7 +1,9 @@
 import {
   MODULE_CATEGORIES,
   TOOL_CATEGORIES,
+  TOOL_CATEGORY_DRAWER,
   UNIT_KINDS,
+  foldSearchText,
   parseWidgetConfig,
   resolveEnabled,
   unitsOfKind,
@@ -19,6 +21,7 @@ import { FILE_VIEWS } from "./filePrefs.js";
 import { MODULE_SETTINGS_PANELS } from "./moduleSettingsPanels.js";
 import { NOTE_WIDTHS } from "./notePrefs.js";
 import { BLOCKED_IN_TODAY_OPTIONS } from "./taskPrefs.js";
+import { DEV_TOOL_SURFACES } from "./devToolSurfaces.js";
 import { TOOL_SURFACES } from "./toolSurfaces.js";
 import {
   BUSINESS_DISABLED_MODULE_IDS,
@@ -56,6 +59,7 @@ describe("createModuleRegistry", () => {
       "focus",
       "tools",
       "canvas",
+      "devtools",
     ]);
   });
 
@@ -106,8 +110,11 @@ describe("createModuleRegistry", () => {
       FIN: ["finance"],
       HABIT: ["habits"],
       FIT: ["fitness"],
-      // The one deliberate sharing — see this test's own comment.
-      UTIL: ["focus", "tools"],
+      // The one deliberate sharing — see this test's own comment. Three
+      // modules now: „Programerske alatke" is a second drawer rather than a
+      // section of the first, because the two have different audiences and
+      // one of them is switched off for almost everybody.
+      UTIL: ["focus", "tools", "devtools"],
       CANV: ["canvas"],
     });
   });
@@ -117,10 +124,16 @@ describe("createModuleRegistry", () => {
       expect(MODULE_CATEGORIES, manifest.id).toContain(manifest.category);
       // Founder decision 2026-07-12: only BUILT modules are registered, so an
       // entry that shipped disabled would be an entry that leads nowhere.
-      // PRIV is the one deliberate exception (ADR-057): built AND registered,
-      // but OFF until the user enables it in the Moduli gallery — an opt-in
-      // section, not an unbuilt page.
-      expect(manifest.defaultEnabled, manifest.id).toBe(manifest.id !== "priv");
+      // Two deliberate exceptions, both built AND registered and both OFF
+      // until the user asks for them — an opt-in section is not an unbuilt
+      // page. PRIV is opt-in because of what it holds (ADR-057);
+      // „Programerske alatke" because of who it is for: a drawer of forty-eight
+      // instruments for reading a floating-point bit pattern is noise in the
+      // sidebar of somebody who does not write code, and the questionnaire's
+      // „Programer" answer is what turns it on.
+      expect(manifest.defaultEnabled, manifest.id).toBe(
+        manifest.id !== "priv" && manifest.id !== "devtools",
+      );
     }
   });
 
@@ -163,6 +176,7 @@ describe("createModuleRegistry", () => {
       "focus",
       "tools",
       "canvas",
+      "devtools",
     ]);
   });
 
@@ -178,7 +192,8 @@ describe("createModuleRegistry", () => {
 
   it("resolves to the default-on set with no flags, and honours explicit flags both ways", () => {
     const registry = createModuleRegistry();
-    // PRIV is absent by DEFAULT (ADR-057) — the one module the gallery turns on.
+    // PRIV and „Programerske alatke" are absent by DEFAULT — the two modules
+    // somebody has to ask for (ADR-057; and the questionnaire's „Programer").
     expect(resolveEnabled(registry, {})).toEqual([
       "dashboard",
       "tasks",
@@ -196,6 +211,7 @@ describe("createModuleRegistry", () => {
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");
+    expect(resolveEnabled(registry, { devtools: true })).toContain("devtools");
   });
 
   it("keeps PRIV free of every render-while-locked surface: no widgets, no search indexers", () => {
@@ -673,8 +689,8 @@ describe("the tools the registry publishes (PRD 29 UTIL)", () => {
         strings,
       );
 
-  it("publishes the drawer's eleven tools, and only „Alatke“ publishes any", () => {
-    expect(declared.map((tool) => tool.id)).toEqual([
+  it("publishes „Alatke“'s eleven tools, in the order the rail lists them", () => {
+    expect(registry.get("tools")?.tools?.map((tool) => tool.id)).toEqual([
       "duzina",
       "masa",
       "zapremina",
@@ -687,11 +703,30 @@ describe("the tools the registry publishes (PRD 29 UTIL)", () => {
       "kredit",
       "jedinicna-cena",
     ]);
-    // Nothing else contributes yet — but the drawer reads the whole registry,
-    // so the day something does, it appears without the drawer being edited.
-    for (const manifest of registry.all()) {
-      if (manifest.id === "tools") continue;
-      expect(manifest.tools, manifest.id).toBeUndefined();
+  });
+
+  /**
+   * TWO modules publish tools, and no third does — which is a fact about today
+   * rather than a rule. The drawer reads the whole registry, so the day NOTE
+   * contributes a Markdown table builder it appears without either drawer being
+   * edited; this pins that nothing has done so silently yet.
+   */
+  it("has exactly the two tool-publishing modules, and every tool lands in a real drawer", () => {
+    expect(
+      registry
+        .all()
+        .filter((manifest) => manifest.tools !== undefined)
+        .map((manifest) => manifest.id),
+    ).toEqual(["tools", "devtools"]);
+    // The seam the whole two-drawer design rests on: a tool reaches its drawer
+    // through its CATEGORY, never through which module declared it. Both halves
+    // are asserted, because „every category maps somewhere" is the compiler's
+    // job and „the mapping is the intended one" is not.
+    for (const tool of registry.get("tools")?.tools ?? []) {
+      expect(TOOL_CATEGORY_DRAWER[tool.category], tool.id).toBe("utilities");
+    }
+    for (const tool of registry.get("devtools")?.tools ?? []) {
+      expect(TOOL_CATEGORY_DRAWER[tool.category], tool.id).toBe("developer");
     }
   });
 
@@ -713,7 +748,19 @@ describe("the tools the registry publishes (PRD 29 UTIL)", () => {
   });
 
   it("pairs every declared tool with a surface, and every surface with a declaration", () => {
-    expect(declared.map((tool) => tool.id).sort()).toEqual(Object.keys(TOOL_SURFACES).sort());
+    // The union of BOTH maps, because a drawer is not allowed to have a surface
+    // for a tool nobody declares, nor a declaration nothing can draw — and the
+    // two maps are separate files only so that the developer drawer's
+    // forty-eight surfaces do not live in one unreadable module.
+    expect(declared.map((tool) => tool.id).sort()).toEqual(
+      [...Object.keys(TOOL_SURFACES), ...Object.keys(DEV_TOOL_SURFACES)].sort(),
+    );
+    // ...and the two maps do not overlap: a surface named in both would be
+    // drawn by whichever drawer asked first, which is not a decision anybody
+    // would have made on purpose.
+    for (const id of Object.keys(DEV_TOOL_SURFACES)) {
+      expect(TOOL_SURFACES, id).not.toHaveProperty(id);
+    }
   });
 
   it("keeps every tool id an ASCII slug, unique across the registry", () => {
@@ -725,16 +772,35 @@ describe("the tools the registry publishes (PRD 29 UTIL)", () => {
   it("names a string that really exists for every tool title, and a canonical category", () => {
     for (const tool of declared) {
       // `titleKey` is a strings KEY path, not Serbian copy (`ToolRegistration`).
-      expect(tool.titleKey, tool.id).toMatch(/^[a-zA-Z]+(?:\.[a-zA-Z-]+)+$/);
+      // Digits belong in a segment: half the developer drawer is named after
+      // things that are spelled with them — „base64", „fp8-e4m3", „sha256" —
+      // and a key is derived from the tool's id, which carries them.
+      expect(tool.titleKey, tool.id).toMatch(/^[a-zA-Z]+(?:\.[a-zA-Z0-9-]+)+$/);
       expect(typeof lookup(tool.titleKey), tool.titleKey).toBe("string");
       expect(TOOL_CATEGORIES, tool.id).toContain(tool.category);
     }
   });
 
-  it("gives every tool folded, lowercase keywords — they are search keys, never labels", () => {
+  /**
+   * A keyword must be its OWN folding — which is the property the drawer's
+   * search actually rests on, and which this test used to approximate with the
+   * character class `[a-z0-9 ]`.
+   *
+   * The approximation was wrong in one direction that matters: it excluded the
+   * hyphen, and the developer drawer is full of names that carry one. Under the
+   * old rule „risc-v" had to be written „risc v", which does not match the query
+   * a person actually types — `foldSearchText` keeps hyphens, so the needle
+   * „risc-v" would never be found in the keyword „risc v". Stating the invariant
+   * instead of a spelling makes the rule true for every alphabet the folding
+   * handles rather than for the Latin subset somebody happened to think of.
+   */
+  it("gives every tool keywords that are their own folding — they are search keys, never labels", () => {
     for (const tool of declared) {
       for (const keyword of tool.keywords ?? []) {
-        expect(keyword, `${tool.id}:${keyword}`).toMatch(/^[a-z0-9 ]+$/);
+        expect(foldSearchText(keyword), `${tool.id}:${keyword}`).toBe(keyword);
+        // No padding either: a keyword the field could never produce is dead.
+        expect(keyword.trim(), tool.id).toBe(keyword);
+        expect(keyword.length, tool.id).toBeGreaterThan(0);
       }
     }
   });

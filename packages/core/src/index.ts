@@ -47,8 +47,13 @@ export type {
   AutomationTrigger,
 } from "./contracts/automation.js";
 export type { ImexHandler } from "./contracts/imex.js";
-export { TOOL_CATEGORIES } from "./contracts/tools.js";
-export type { ToolCategory, ToolRegistration } from "./contracts/tools.js";
+export {
+  TOOL_CATEGORIES,
+  TOOL_CATEGORY_DRAWER,
+  TOOL_DRAWERS,
+  toolCategoriesIn,
+} from "./contracts/tools.js";
+export type { ToolCategory, ToolDrawer, ToolRegistration } from "./contracts/tools.js";
 
 export type {
   CollectionSchema,

@@ -123,7 +123,7 @@ function UnitConverter({ kind, from, to }: ConverterSpec) {
   const typedButUnreadable = text.trim() !== "" && value === null;
 
   return (
-    <div className="tool__body">
+    <>
       {kind === "data" && <p className="tool__note">{s.dataNote}</p>}
       <TextField
         label={s.convert.valueLabel}
@@ -157,7 +157,7 @@ function UnitConverter({ kind, from, to }: ConverterSpec) {
           <span className="tool__figure-unit">{unitName(toId)}</span>
         </p>
       ) : null}
-    </div>
+    </>
   );
 }
 
@@ -218,7 +218,7 @@ function PercentTool() {
   // the four rows instead of freezing them at import.
   const p = strings.tools.percent;
   return (
-    <div className="tool__body">
+    <>
       <PercentRow
         title={p.ofTitle}
         labelA={p.ofPercent}
@@ -247,7 +247,7 @@ function PercentTool() {
         compute={percentChange}
         format={formatToolPercent}
       />
-    </div>
+    </>
   );
 }
 
@@ -282,7 +282,7 @@ function PdvTool() {
     amount === null ? null : direction === "add" ? addVat(amount, rateValue) : extractVat(amount, rateValue);
 
   return (
-    <div className="tool__body">
+    <>
       <TextField
         label={s.pdv.amountLabel}
         value={text}
@@ -309,7 +309,7 @@ function PdvTool() {
         </div>
       )}
       <p className="tool__note">{s.pdv.note}</p>
-    </div>
+    </>
   );
 }
 
@@ -340,7 +340,7 @@ function LoanTool() {
   const allTyped = [principal, rate, months].every((text) => text.trim() !== "");
 
   return (
-    <div className="tool__body">
+    <>
       <TextField
         label={s.loan.principalLabel}
         value={principal}
@@ -380,7 +380,7 @@ function LoanTool() {
         <p className="tool__error">{s.loan.invalid}</p>
       ) : null}
       <p className="tool__note">{s.loan.caveat}</p>
-    </div>
+    </>
   );
 }
 
@@ -436,7 +436,7 @@ function UnitPriceTool() {
   const anyTyped = offers.some((offer) => offer.price.trim() !== "" || offer.quantity.trim() !== "");
 
   return (
-    <div className="tool__body">
+    <>
       {offers.map((offer, index) => (
         <div key={offer.key} className="tool__pair">
           <TextField
@@ -510,7 +510,7 @@ function UnitPriceTool() {
         <p className="tool__error">{s.unitPrice.invalid}</p>
       ) : null}
       <p className="tool__note">{s.unitPrice.note}</p>
-    </div>
+    </>
   );
 }
 

@@ -31,6 +31,7 @@ export type IconName =
   | "fitness"
   | "canvas"
   | "tools"
+  | "devtools"
   | "priv"
   | "settings"
   | "search"
@@ -219,6 +220,16 @@ const SHAPES: Record<IconName, ReactNode> = {
       <path d="M11 8.4v4.4" />
       <path d="M15 8.4v3" />
       <path d="M19 8.4v4.4" />
+    </>
+  ),
+  // Angle brackets around a slash — the one mark that means „source" in every
+  // editor, every terminal and every language. A ruler for „Alatke", because it
+  // measures; this for „Programerske alatke", because it does not.
+  devtools: (
+    <>
+      <path d="M8.4 7.6 3.6 12l4.8 4.4" />
+      <path d="M15.6 7.6 20.4 12l-4.8 4.4" />
+      <path d="M13.4 5.4 10.6 18.6" />
     </>
   ),
   priv: (
