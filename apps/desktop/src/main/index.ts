@@ -557,6 +557,7 @@ import {
   type DocAttachmentModule,
   type DocMimeFamily,
   type DocTextContent,
+  DEMO_PROFILE_NAME,
   type ExportResult,
   FIN_CSV_IMPORT_COLUMN_ROLES,
   FIN_CSV_IMPORT_SIGN_CONVENTIONS,
@@ -674,12 +675,7 @@ import {
   type WindowViewCommand,
 } from "../shared/ipc.js";
 import { businessProfileFlags, createModuleRegistry } from "../shared/modules.js";
-import {
-  DEMO_BUSINESS_PROFILE_NAME,
-  DEMO_PROFILE_NAME,
-  seedDemoBusiness,
-  seedDemoProfile,
-} from "./demo/index.js";
+import { DEMO_BUSINESS_PROFILE_NAME, seedDemoBusiness, seedDemoProfile } from "./demo/index.js";
 import { runShots } from "./shots/index.js";
 
 /**
@@ -1429,6 +1425,43 @@ async function handleProfilesCreate(kind: ProfileKind, name: string): Promise<Pr
       await flags.set(moduleId, enabled);
     }
   }
+  return created;
+}
+
+/**
+ * `profiles:create-demo`: the „Demo" profile, filled.
+ *
+ * **Why this is a handler and not a renderer loop.** Everything it writes is
+ * already reachable through the ordinary channels — a renderer could make a
+ * profile and then create every task, note and transaction one call at a time.
+ * It would take thousands of round trips, it would be a second implementation
+ * of the seeders, and it would drift from them the first time either changed.
+ * Main already owns `seedDemoProfile`, because `--shots` and `--demo` need it.
+ *
+ * **What bounds it.** Exactly one demo profile per account, ever: a second call
+ * is refused rather than being allowed to write another few hundred rows. The
+ * test is the NAME, which is what a user sees and what they would rename or
+ * delete if they wanted it gone — and either of those is a deliberate act that
+ * legitimately re-opens the offer. There is nothing here for a compromised
+ * renderer to widen: it writes into a NEW profile of the account it is already
+ * inside, reads nothing, and cannot name what gets written.
+ *
+ * The seed is synchronous and takes a moment; it runs at the end of first-run
+ * onboarding, where the user has just pressed a button and is expecting a
+ * pause, and never on a timer or at startup.
+ */
+function handleProfilesCreateDemo(): Profile {
+  const database = requireDb();
+  if (listProfiles(database).some((profile) => profile.name === DEMO_PROFILE_NAME)) {
+    throw new Error("Invalid IPC payload: this account already has a demo profile.");
+  }
+  const now = Date.now();
+  const created = new ProfileStore(database.raw).create(
+    "personal",
+    DEMO_PROFILE_NAME,
+    new Date(now).toISOString(),
+  );
+  seedDemoProfile(database.raw, created.id, now);
   return created;
 }
 
@@ -6582,6 +6615,13 @@ function registerIpc(): void {
     const kind = asProfileKind(body.kind, "kind");
     const name = asProfileCreateName(body.name, "name");
     return handleProfilesCreate(kind, name);
+  });
+
+  ipcMain.handle(IpcChannel.profilesCreateDemo, (event): Profile => {
+    assertTrustedSender(event);
+    // No payload at all — the renderer names nothing about what is written, so
+    // there is no field to validate and none to get wrong.
+    return handleProfilesCreateDemo();
   });
 
   ipcMain.handle(IpcChannel.profilesDelete, (event, payload): Promise<void> => {

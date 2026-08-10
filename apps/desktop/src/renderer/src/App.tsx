@@ -3,6 +3,7 @@ import { formatChord, matchesChord, moduleNavPosition, resolveEnabled } from "@n
 import type { CanvasRef } from "@nexus/core";
 import { Button, EmptyState, Icon, NavItem, StarField, type IconName } from "@nexus/ui";
 import type { ThemeName } from "@nexus/tokens";
+import { DEMO_PROFILE_NAME } from "../../shared/ipc.js";
 import type {
   AppInfo,
   AuthStatus,
@@ -161,6 +162,7 @@ const MODULE_ICONS: Record<string, IconName> = {
   habits: "habits",
   fitness: "fitness",
   tools: "tools",
+  devtools: "devtools",
   focus: "focus",
   canvas: "canvas",
 };
@@ -506,6 +508,32 @@ export function App() {
     seedAccent(created.id, defaultAccent("business"));
     setProfiles((previous) => (previous === null ? [created] : [...previous, created]));
     return created;
+  }
+
+  /**
+   * The switcher popover's „Dodaj demo profil…“.
+   *
+   * The SECOND way in, and the reason there is a second one: the first is a
+   * checkbox on the last screen of onboarding, which is a one-way door —
+   * somebody who did not tick it, or who has been using Nexus for a month and
+   * now wants to see what a full app looks like, would have no way to ask. The
+   * offer stands exactly while the account has no demo profile.
+   *
+   * Main both creates AND fills it in one call (`profiles:create-demo`): the
+   * data is the entire point, and a renderer loop writing it row by row would
+   * be a second copy of the seeders. It takes a moment, which is why the
+   * switch is offered only once the answer is back.
+   */
+  async function createDemoFromSwitcher(): Promise<void> {
+    setProfileActionError(null);
+    try {
+      const created = await window.nexus.createDemoProfile();
+      setProfiles((previous) => (previous === null ? [created] : [...previous, created]));
+      setSwitchTarget(created);
+    } catch (error) {
+      setProfileActionError(strings.profiles.createError);
+      console.error("Nexus: failed to add the demo profile:", error);
+    }
   }
 
   /** The switcher popover's „Novi poslovni profil…“: create, then offer the switch through the same passcode gate every switch passes. */
@@ -1122,12 +1150,15 @@ export function App() {
           theme={theme}
           onThemeChange={changePreference}
           onCancel={rerun ? () => setRerunOnboarding(false) : null}
-          onComplete={({ name, flags: nextFlags }) => {
-            setProfiles(
-              profiles.map((profile) =>
-                profile.id === onboardingProfile.id ? { ...profile, name } : profile,
-              ),
+          onComplete={({ name, flags: nextFlags, demoProfile }) => {
+            const renamed = profiles.map((profile) =>
+              profile.id === onboardingProfile.id ? { ...profile, name } : profile,
             );
+            // The demo profile onboarding just made, appended on the spot. The
+            // switcher lists this array and the „Dodaj demo profil" entry hides
+            // itself off it, so a profile missing here is one the user cannot
+            // reach and is still being offered.
+            setProfiles(demoProfile === null ? renamed : [...renamed, demoProfile]);
             setFlags(nextFlags);
             setRerunOnboarding(false);
           }}
@@ -1372,6 +1403,26 @@ export function App() {
                         </button>
                       </>
                     )}
+                    {/* One demo profile per account, on the same terms as the
+                        business one: the offer exists exactly while none does.
+                        The test is the NAME — renaming or deleting it is a
+                        deliberate act that legitimately brings the offer back. */}
+                    {!profiles.some((profile) => profile.name === DEMO_PROFILE_NAME) && (
+                      <>
+                        <div className="note__menu-sep" role="separator" />
+                        <button
+                          className="note__menu-item"
+                          role="menuitem"
+                          type="button"
+                          onClick={() => {
+                            close();
+                            void createDemoFromSwitcher();
+                          }}
+                        >
+                          {strings.profiles.createDemo}…
+                        </button>
+                      </>
+                    )}
                   </>
                 )}
               </NotePopover>
@@ -1538,7 +1589,14 @@ export function App() {
             // No `key={activeProfile.id}`: the drawer reads nothing profile-
             // shaped and stores nothing, so there is no per-profile state to
             // discard when the active profile changes.
-            <ToolsPage enabledModules={enabledIds} />
+            <ToolsPage drawer="utilities" enabledModules={enabledIds} />
+          ) : effectiveId === "devtools" && activeProfile ? (
+            // The same host, the other drawer. Which tools each one draws is
+            // decided by `TOOL_CATEGORY_DRAWER` rather than by this prop — the
+            // prop only says which drawer this page IS, so a module publishing
+            // a developer-category tool lands here without either page knowing
+            // about it.
+            <ToolsPage drawer="developer" enabledModules={enabledIds} />
           ) : effectiveId === "canvas" && activeProfile ? (
             // No `intent` pair, and that is still true in slice c: CANV
             // publishes no quick-create command (`searchCommands.ts`'s

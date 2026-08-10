@@ -57,6 +57,18 @@ import type {
 import type { AuthRefusal, DeviceRegisterRefusal, SyncEnableRefusal } from "@nexus/sync-transport";
 
 /** The only channels the preload bridge and the main handlers agree on. */
+/**
+ * The name `profiles:create-demo` gives the profile it makes.
+ *
+ * In `shared/` because THREE sides need the same word and none of them may
+ * import another's: main guards on it (one demo profile per account), the
+ * renderer decides whether to offer the action at all, and the seeders name
+ * it. It is a plain name and not a kind or a flag on purpose — a user can
+ * rename it or delete it, and either is a deliberate act that legitimately
+ * makes the offer available again.
+ */
+export const DEMO_PROFILE_NAME = "Demo";
+
 export const IpcChannel = {
   authStatus: "auth:status",
   authCreate: "auth:create",
@@ -71,6 +83,14 @@ export const IpcChannel = {
   authDeleteAccount: "auth:delete-account",
   profilesList: "profiles:list",
   profilesCreate: "profiles:create",
+  // The demo profile, offered once at first run and never again — a second
+  // profile in the SAME account, filled with a believable life, so somebody
+  // who has just installed Nexus can see what a full app looks like without
+  // typing five hundred rows. Its own channel rather than a flag on
+  // `profiles:create`, because it is a different authority: `profiles:create`
+  // makes an empty profile the user then fills, and this one writes hundreds
+  // of rows on the renderer's word. The handler is what bounds it.
+  profilesCreateDemo: "profiles:create-demo",
   profilesDelete: "profiles:delete",
   // Verifies the account passcode against the CURRENT unlocked session
   // (ADR-058): the gate in front of switching INTO a profile. Its own channel
@@ -7959,6 +7979,13 @@ export interface NexusApi {
   listProfiles(): Promise<Profile[]>;
   /** Creates a profile and seeds what it starts with (ADR-058); an empty `name` is the deliberate ONB-lite "not yet named" sentinel. */
   createProfile(kind: ProfileKind, name: string): Promise<Profile>;
+  /**
+   * Adds the „Demo" profile to THIS account and fills it (ADR-058 §profiles;
+   * the seeders in `main/demo/`). Offered at first run and refused once the
+   * account already has one, so it can never be used to write the database
+   * full. Answers with the created profile.
+   */
+  createDemoProfile(): Promise<Profile>;
   /** Deletes a profile and everything it owns, immediately and with no undo (ADR-058). Refused for the personal anchor and for the last remaining profile. */
   deleteProfile(id: string): Promise<void>;
   /** Proves the account passcode at the profile-switch gate (ADR-058), on the unlock's own throttle counter and `AuthResult` vocabulary — the session stays untouched either way. */

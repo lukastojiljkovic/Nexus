@@ -26,6 +26,7 @@ const api: NexusApi = {
   listProfiles: () => ipcRenderer.invoke(IpcChannel.profilesList),
   createProfile: (kind, name) =>
     ipcRenderer.invoke(IpcChannel.profilesCreate, { kind, name }),
+  createDemoProfile: () => ipcRenderer.invoke(IpcChannel.profilesCreateDemo),
   deleteProfile: (id) => ipcRenderer.invoke(IpcChannel.profilesDelete, { id }),
   verifyProfileSwitch: (passcode) =>
     ipcRenderer.invoke(IpcChannel.profilesVerifySwitch, { passcode }),

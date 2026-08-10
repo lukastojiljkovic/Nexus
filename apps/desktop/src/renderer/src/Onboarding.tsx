@@ -4,7 +4,7 @@ import { buildNoteUpdate, parseMarkdownNote } from "@nexus/core";
 import type { FlagState, ModuleRegistry } from "@nexus/core";
 import { Button, Card, Checkbox, Chip, StarField, TextField } from "@nexus/ui";
 import type { ThemeName } from "@nexus/tokens";
-import type { ProfileKind } from "../../shared/ipc.js";
+import type { Profile, ProfileKind } from "../../shared/ipc.js";
 import { LOCKED_MODULE_IDS } from "../../shared/modules.js";
 import {
   moduleFlagWrites,
@@ -66,6 +66,19 @@ export interface OnboardingResult {
   name: string;
   /** The profile's flags as they stand after the completion writes — read back from main, never assumed. */
   flags: FlagState;
+  /**
+   * The demo profile this run created, or `null` when it did not (not asked
+   * for, a rerun, a business profile, or the seed failed).
+   *
+   * It is REPORTED rather than left for the shell to discover, because the
+   * shell holds the profile list in its own state and only ever patches it. A
+   * profile created here and not handed back is a profile the switcher does not
+   * list until the next launch — and, worse, one the „Dodaj demo profil" entry
+   * keeps offering to create, because that entry's condition is „no profile
+   * named Demo in the cached list". The user would then press it and be told by
+   * main that the account already has one.
+   */
+  demoProfile: Profile | null;
 }
 
 export interface OnboardingProps {
@@ -162,6 +175,19 @@ export function Onboarding({
   // NTF-008 is asked ONCE, ever: no pick here is a real answer that leaves the
   // first-reminder-moment dialog armed, so this starts — and may stay — null.
   const [appetite, setAppetite] = useState<NotificationPresetKey | null>(null);
+  /**
+   * „Dodaj i „Demo" profil" — offered on the last screen of a personal first
+   * run and nowhere else in this flow.
+   *
+   * OFF by default, and that is the whole shape of the decision: a profile
+   * holding several hundred rows of somebody else's invented life is a real
+   * thing to put in an account, so it is something a person asks for rather
+   * than something they have to notice and refuse. It is deliberately NOT in
+   * the draft: the draft resumes an interrupted questionnaire, and a request
+   * to write half a thousand rows should be made by somebody who is looking at
+   * the screen at the time.
+   */
+  const [wantsDemo, setWantsDemo] = useState(false);
   const [state, setState] = useState<FlowState>(() => ({
     phase: "asking",
     step: resumeStep(steps, draft?.step),
@@ -246,8 +272,22 @@ export function Onboarding({
       if (!rerun && !business && (nextSelection["notes"] ?? false)) {
         await writeWelcomeNote(profileId);
       }
+      // BEST-EFFORT, on the welcome note's terms exactly: the demo profile is
+      // an extra, and failing to write one must never cost somebody the first
+      // run they have just finished. It is also the slowest thing this flow
+      // does — main writes several hundred rows synchronously — which is why
+      // it comes after everything the profile itself needs, and why the button
+      // is already showing its saving state by the time it starts.
+      let demoProfile: Profile | null = null;
+      if (wantsDemo && !rerun && !business) {
+        try {
+          demoProfile = await window.nexus.createDemoProfile();
+        } catch (error) {
+          console.error("Nexus: failed to add the demo profile:", error);
+        }
+      }
       clearOnboardingDraft(profileId);
-      onComplete({ name: trimmed, flags: stored });
+      onComplete({ name: trimmed, flags: stored, demoProfile });
     } catch (error) {
       // Nothing written so far is lost or half-applied: the flag rows and the
       // appetite answer are upserts, and the name — the gate — is the last
@@ -405,6 +445,22 @@ export function Onboarding({
                 ))}
               </div>
               <p className="onb__caption">{s.remindersNoChoice}</p>
+              {/* The last screen, because this is the only question here that
+                  is not about the profile being made — it offers a SECOND one.
+                  A personal first run only: a rerun is somebody adjusting a
+                  profile they already have, and a business profile's demo is
+                  its own account-level thing. */}
+              {!rerun && !business && (
+                <div className="onb__demo">
+                  <Checkbox
+                    checked={wantsDemo}
+                    onChange={(event) => setWantsDemo(event.target.checked)}
+                  >
+                    {s.demoLabel}
+                  </Checkbox>
+                  <p className="onb__caption">{s.demoHint}</p>
+                </div>
+              )}
             </>
           )}
 

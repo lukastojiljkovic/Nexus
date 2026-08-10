@@ -17,6 +17,7 @@
 import { SqliteFlagStore, TaskListStore } from "@nexus/db";
 import { BUSINESS_DISABLED_MODULE_IDS, createModuleRegistry } from "../../shared/modules.js";
 import { seedDemoBusinessProfile } from "./business.js";
+import { seedDemoCanvas } from "./canvas.js";
 import { createDemoContext, type DatabaseHandle, type DemoContext } from "./context.js";
 import { seedDemoTasks } from "./tasks.js";
 import { seedDemoCalendar } from "./calendar.js";
@@ -29,8 +30,14 @@ import { seedDemoFocus } from "./focus.js";
 import { seedDemoPeople } from "./people.js";
 import { seedDemoDocuments } from "./documents.js";
 
-/** The name the demo profile carries, so it is obvious in the switcher what it is. */
-export const DEMO_PROFILE_NAME = "Demo";
+/**
+ * The name the demo profile carries, re-exported from `shared/ipc.ts` where it
+ * has to live: the RENDERER needs it too, to know whether the switcher should
+ * still offer „Dodaj demo profil", and the renderer cannot import from `main/`.
+ * Re-exported rather than moved outright so this module still reads as the one
+ * place that describes what a demo profile is.
+ */
+export { DEMO_PROFILE_NAME } from "../../shared/ipc.js";
 
 /** The second kind ADR-058 gives the top layer to. Named for what it is, so the switcher states which profile you are standing in. */
 export const DEMO_BUSINESS_PROFILE_NAME = "Demo posao";
@@ -79,6 +86,9 @@ export function seedDemoProfile(db: DatabaseHandle, profileId: string, now: numb
   seedDemoTasks(db, ctx);
   seedDemoCalendar(db, ctx);
   seedDemoNotes(db, ctx);
+  // After TASK and NOTE: its two Nexus cards resolve their ids by reading the
+  // rows those two just wrote (`CanvasStore`'s own store, never a raw INSERT).
+  seedDemoCanvas(db, ctx);
   seedDemoFinance(db, ctx);
   seedDemoStudy(db, ctx);
   seedDemoHabits(db, ctx);

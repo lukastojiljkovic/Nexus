@@ -18,8 +18,23 @@ import { LOCKED_MODULE_IDS } from "./modules.js";
  * is precisely the failure mode this shape designs out.
  */
 
-/** The four answers the „Uloga“ screen offers, in the order it lists them. */
-export const ONBOARDING_OCCUPATIONS = ["student", "zaposleni", "preduzetnik", "drugo"] as const;
+/**
+ * The five answers the „Uloga“ screen offers, in the order it lists them.
+ *
+ * „Programer“ sits between the two work answers because that is what it is — a
+ * job, not a fifth kind of life — and it is here rather than as a checkbox on
+ * the next screen for one reason: it is the only answer that turns a module ON
+ * that nothing else would. Every other row of these tables decides between
+ * modules a user could equally well find in the gallery; „Programerske alatke“
+ * ships OFF and this is how somebody who writes code gets told it exists.
+ */
+export const ONBOARDING_OCCUPATIONS = [
+  "student",
+  "zaposleni",
+  "programer",
+  "preduzetnik",
+  "drugo",
+] as const;
 
 export type OnboardingOccupation = (typeof ONBOARDING_OCCUPATIONS)[number];
 
@@ -46,6 +61,9 @@ export const ESSENTIALS_MODULE_PRESET: ModulePreset = {
   fitness: true,
   tools: true,
   canvas: true,
+  // The developer drawer, off for everybody who does not say otherwise — see
+  // `OCCUPATION_MODULE_PRESETS.programer`, the one row that turns it on.
+  devtools: false,
 };
 
 /**
@@ -56,9 +74,19 @@ export const ESSENTIALS_MODULE_PRESET: ModulePreset = {
  * „Student“ and „Nešto drugo“ both land on „Osnovno“, deliberately and for
  * different reasons: the app's shipped defaults ARE the student set, and an
  * answer that says „ne uklapam se“ carries no information to act on, so it gets
- * the neutral preset rather than an invented one. The two work answers drop
+ * the neutral preset rather than an invented one. The three work answers drop
  * STUDY, which is the one module their day genuinely has no place for.
  * PRIV is false in every row — see `ESSENTIALS_MODULE_PRESET`.
+ *
+ * UTIL („Programerske alatke“) is the mirror image of every other line here,
+ * and the only asymmetric one: false in four rows and true in one. Every other
+ * module in these tables is on unless a role has no use for it, because the
+ * cost of a wrong guess is a sidebar entry somebody ignores. This one is off
+ * unless a role says otherwise, because the cost of a wrong guess is
+ * forty-eight instruments for reading bit patterns in the sidebar of somebody
+ * who has never seen a hex dump — and because, unlike „Alatke“, the answer to
+ * „is this for me“ is not obvious from the name. It is the one place in the
+ * flow where the ROLE question does real work rather than merely suggesting.
  *
  * FIN is true in every row, and that uniformity is a decision rather than a
  * default: „Uloga“ tells us how somebody's DAY is shaped, and money is the one
@@ -121,6 +149,35 @@ export const OCCUPATION_MODULE_PRESETS: Readonly<Record<OnboardingOccupation, Mo
     fitness: true,
     tools: true,
     canvas: true,
+    devtools: false,
+  },
+  /**
+   * „Zaposleni“ exactly, plus the one thing the answer actually tells us.
+   *
+   * It is written out rather than spread from `zaposleni`, because these tables
+   * are read by a person deciding what a role gets — a row that says
+   * „…and one more“ hides the other eleven decisions behind an operator. The
+   * test pins the relationship instead, which is where a machine-checkable
+   * claim belongs.
+   */
+  programer: {
+    tasks: true,
+    calendar: true,
+    notes: true,
+    priv: false,
+    files: true,
+    // As „Zaposleni“: somebody at work. „Učenje“ is for a course with a
+    // deadline, not for reading documentation, and a developer who is also a
+    // student ticks it on the very next screen.
+    study: false,
+    finance: true,
+    habits: true,
+    focus: true,
+    fitness: true,
+    tools: true,
+    canvas: true,
+    // The whole reason this answer exists.
+    devtools: true,
   },
   preduzetnik: {
     tasks: true,
@@ -135,6 +192,7 @@ export const OCCUPATION_MODULE_PRESETS: Readonly<Record<OnboardingOccupation, Mo
     fitness: true,
     tools: true,
     canvas: true,
+    devtools: false,
   },
   drugo: ESSENTIALS_MODULE_PRESET,
 };

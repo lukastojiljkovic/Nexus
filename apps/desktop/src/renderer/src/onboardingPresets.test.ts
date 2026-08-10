@@ -93,11 +93,40 @@ describe("OCCUPATION_MODULE_PRESETS", () => {
     }
   });
 
-  it("keeps STUDY for the two answers whose day has it, and drops it for the two that do not", () => {
+  it("keeps STUDY for the two answers whose day has it, and drops it for the three that do not", () => {
     expect(OCCUPATION_MODULE_PRESETS.student["study"]).toBe(true);
     expect(OCCUPATION_MODULE_PRESETS.drugo["study"]).toBe(true);
     expect(OCCUPATION_MODULE_PRESETS.zaposleni["study"]).toBe(false);
+    expect(OCCUPATION_MODULE_PRESETS.programer["study"]).toBe(false);
     expect(OCCUPATION_MODULE_PRESETS.preduzetnik["study"]).toBe(false);
+  });
+
+  /**
+   * The one asymmetric row in these tables, and the only place „Uloga“ decides
+   * something instead of suggesting it: every other module is pre-checked
+   * unless a role has no use for it, because a wrong guess costs a sidebar
+   * entry. „Programerske alatke“ is the reverse — off unless the answer asks
+   * for it — so this pins BOTH halves. A future role answer that quietly turned
+   * it on would fail here, and so would a „Programer“ that stopped doing so,
+   * which would leave the module with no way into a profile except the gallery.
+   */
+  it("turns the developer drawer on for „Programer“ and for nobody else", () => {
+    for (const occupation of ONBOARDING_OCCUPATIONS) {
+      expect(OCCUPATION_MODULE_PRESETS[occupation]["devtools"], occupation).toBe(
+        occupation === "programer",
+      );
+    }
+    expect(ESSENTIALS_MODULE_PRESET["devtools"]).toBe(false);
+  });
+
+  it("answers „Programer“ with „Zaposleni“ plus the drawer, and nothing else", () => {
+    // The relationship the table deliberately does not write as a spread — see
+    // `OCCUPATION_MODULE_PRESETS.programer`. A machine-checkable claim belongs
+    // in a test; a row a person reads should carry its own decisions.
+    expect(OCCUPATION_MODULE_PRESETS.programer).toEqual({
+      ...OCCUPATION_MODULE_PRESETS.zaposleni,
+      devtools: true,
+    });
   });
 
   it("pre-checks FIN for every answer — „Uloga“ asks about a day, and money is shaped the same in all four", () => {
@@ -158,6 +187,7 @@ describe("resolveModuleSelection", () => {
       focus: true,
       tools: true,
       canvas: true,
+      devtools: false,
     });
   });
 
@@ -188,6 +218,10 @@ describe("moduleFlagWrites", () => {
       { moduleId: "focus", enabled: true },
       { moduleId: "tools", enabled: true },
       { moduleId: "canvas", enabled: true },
+      // Written explicitly even though it matches the manifest default, which
+      // is the whole point of a first run: what modules a profile has is a
+      // stored fact of the profile, not an accident of this build's manifests.
+      { moduleId: "devtools", enabled: false },
     ]);
   });
 
