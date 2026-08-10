@@ -31,6 +31,19 @@ copyright: Copyright © Luka Stojiljkovic
 extraMetadata:
   description: "Beleške, zadaci, kalendar, datoteke i finansije — sve na jednom mestu, lokalno i šifrovano."
 
+# The vendor is NOT configured here — it is `author` in package.json, because
+# that is the only place electron-builder looks: `appInfo.companyName` is
+# `metadata.author.name`, and `winPackager` writes the executable's CompanyName
+# resource *only when that is non-null*. Left unset, the resource compiled into
+# the Electron binary survives verbatim, and 1.1.0 shipped a Nexus.exe whose
+# Explorer properties page named „GitHub, Inc." as the company; the same field
+# is the uninstall key's `Publisher`, so Windows' installed-apps list showed the
+# publisher column empty. Two symptoms, one absent field — and the same class as
+# the description above: nothing had ever read back what the packaging layer
+# actually wrote into the shipped binaries.
+# Object form in package.json, not the string shorthand — `.name` is read off
+# that value without npm's normalisation.
+
 directories:
   output: release
   buildResources: build

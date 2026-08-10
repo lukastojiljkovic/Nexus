@@ -5,6 +5,9 @@
   "description": "Nexus desktop shell — Electron main/preload/renderer with the real SQLite database in the main process behind a typed, allowlisted IPC bridge (ADR-001, SEC-EL).",
   "main": "./out/main/index.js",
   "desktopName": "rs.stojiljkovic.nexus.desktop",
+  "author": {
+    "name": "Luka Stojiljkovic"
+  },
   "scripts": {
     "dev": "node scripts/rebuild-native.mjs electron && electron-vite dev",
     "build": "electron-vite build",
