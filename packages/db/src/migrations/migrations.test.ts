@@ -27,8 +27,8 @@ import { CardStore, MIGRATIONS, NexusDatabase, openDatabase, runMigrations } fro
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 64 (this computer's sync account), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(64);
+  it("is at version 65 (professional toolkits), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(65);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -8768,5 +8768,141 @@ describe("migration 062 — every hand-orderable scope ranks instead of counting
     // are not agreeing with each other about something wrong.
     expect([...ranks].sort()).toEqual(ranks);
     db.close();
+  });
+});
+
+describe("migration 065 — the developer drawer becomes one toolkit of „Stručne alatke“", () => {
+  type Handle = Database.Database;
+  const T = "2026-08-13T09:00:00.000Z";
+
+  /** A connection held at exactly `version`, the `openAtVersion` recipe above. */
+  function openAt(path: string, version: number): Handle {
+    const raw = new Database(path);
+    raw.pragma("journal_mode = WAL");
+    raw.pragma("foreign_keys = ON");
+    raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
+      typeof value === "string" ? foldSearchText(value) : null,
+    );
+    runMigrations(
+      raw,
+      MIGRATIONS.filter((migration) => migration.version <= version),
+    );
+    return raw;
+  }
+
+  function seedProfile(raw: Handle, id: string): void {
+    raw
+      .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
+      .run(id, "personal", id, T);
+  }
+
+  function setFlag(raw: Handle, profileId: string, moduleId: string, enabled: boolean): void {
+    raw
+      .prepare(
+        "INSERT INTO feature_flags (profile_id, module_id, enabled, updated_at) VALUES (?, ?, ?, ?)",
+      )
+      .run(profileId, moduleId, enabled ? 1 : 0, T);
+  }
+
+  function flags(raw: Handle, profileId: string): Record<string, number> {
+    const rows = raw
+      .prepare("SELECT module_id, enabled FROM feature_flags WHERE profile_id = ? ORDER BY module_id")
+      .all(profileId) as { module_id: string; enabled: number }[];
+    return Object.fromEntries(rows.map((row) => [row.module_id, row.enabled]));
+  }
+
+  /** Runs 65 alone over a file already at 64 — so what is observed is this migration and nothing else. */
+  function upgrade(path: string): Handle {
+    const raw = new Database(path);
+    raw.pragma("foreign_keys = ON");
+    runMigrations(raw, MIGRATIONS);
+    return raw;
+  }
+
+  it("carries a YES across: the module is renamed and the toolkit inherits the answer", () => {
+    const path = join(dir, "065-yes.db");
+    const before = openAt(path, 64);
+    seedProfile(before, "p1");
+    setFlag(before, "p1", "devtools", true);
+    setFlag(before, "p1", "tasks", true);
+    before.close();
+
+    const after = upgrade(path);
+    // The whole point: the answer is still on record, under the id the registry
+    // now knows, AND the toolkit that carries its forty-eight tools exists —
+    // because `pro` with no pack is a drawer that opens onto an empty list.
+    expect(flags(after, "p1")).toEqual({ "pack:softver": 1, pro: 1, tasks: 1 });
+    // The old id is gone, not merely shadowed. A leftover `devtools` row would
+    // be a second, unreadable answer to the same question.
+    expect(flags(after, "p1")["devtools"]).toBeUndefined();
+    after.close();
+  });
+
+  it("carries a NO across without turning anything on — the migration never answers for the user", () => {
+    const path = join(dir, "065-no.db");
+    const before = openAt(path, 64);
+    seedProfile(before, "p1");
+    // Every business profile and every completed first run stores explicit
+    // `false` rows; forcing the pack to `true` would answer „yes" on behalf of
+    // somebody who had already said no.
+    setFlag(before, "p1", "devtools", false);
+    before.close();
+
+    const after = upgrade(path);
+    expect(flags(after, "p1")).toEqual({ "pack:softver": 0, pro: 0 });
+    after.close();
+  });
+
+  it("mints nothing for a profile that never had the row", () => {
+    const path = join(dir, "065-absent.db");
+    const before = openAt(path, 64);
+    seedProfile(before, "p1");
+    setFlag(before, "p1", "tasks", true);
+    before.close();
+
+    const after = upgrade(path);
+    // Absent is already the right answer under the new rules — a module falls
+    // through to `defaultEnabled` (false) and an absent pack row reads as off —
+    // so writing one would invent an answer to a question nobody was asked.
+    expect(flags(after, "p1")).toEqual({ tasks: 1 });
+    after.close();
+  });
+
+  it("leaves a pack row the user has since changed alone (ON CONFLICT DO NOTHING)", () => {
+    const path = join(dir, "065-rerun.db");
+    const before = openAt(path, 64);
+    seedProfile(before, "p1");
+    setFlag(before, "p1", "devtools", true);
+    before.close();
+
+    const once = upgrade(path);
+    // The user opens the picker after upgrading and switches the toolkit off.
+    once.prepare("UPDATE feature_flags SET enabled = 0 WHERE module_id = 'pack:softver'").run();
+    once.close();
+
+    // A second pass — what a restore from an older archive, or a re-run of the
+    // migration list, would do. The choice made AFTER the upgrade must survive.
+    const twice = upgrade(path);
+    expect(flags(twice, "p1")["pack:softver"]).toBe(0);
+    twice.close();
+  });
+
+  it("converts every profile independently, and touches no other module's row", () => {
+    const path = join(dir, "065-many.db");
+    const before = openAt(path, 64);
+    seedProfile(before, "p1");
+    seedProfile(before, "p2");
+    seedProfile(before, "p3");
+    setFlag(before, "p1", "devtools", true);
+    setFlag(before, "p2", "devtools", false);
+    setFlag(before, "p1", "priv", false);
+    setFlag(before, "p3", "canvas", true);
+    before.close();
+
+    const after = upgrade(path);
+    expect(flags(after, "p1")).toEqual({ "pack:softver": 1, priv: 0, pro: 1 });
+    expect(flags(after, "p2")).toEqual({ "pack:softver": 0, pro: 0 });
+    expect(flags(after, "p3")).toEqual({ canvas: 1 });
+    after.close();
   });
 });
