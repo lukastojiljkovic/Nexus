@@ -84,7 +84,7 @@ describe("isTextIndexableAttachment", () => {
 
 describe("extractAttachmentText", () => {
   it("decodes an eligible attachment's UTF-8, BOM stripped, diacritics intact", () => {
-    const bytes = encode("﻿Rešenje za Đorđa");
+    const bytes = encode("\ufeffRešenje za Đorđa");
     expect(extractAttachmentText(candidate(), bytes)).toBe("Rešenje za Đorđa");
   });
 

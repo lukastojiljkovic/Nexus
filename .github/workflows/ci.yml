@@ -56,7 +56,7 @@ jobs:
       # are seconds, so they run first and fail before the slower steps spend
       # any time.
       #
-      # ALL five, which is the point. For months this job invoked
+      # ALL of them, which is the point. For months this job invoked
       # `check:colours` alone while `check:contrast`, `check:css`,
       # `check:strings` and `check:tokens` were written, wired into
       # `package.json`, given their own unit tests — and run nowhere except on
@@ -77,6 +77,12 @@ jobs:
       - run: pnpm check:strings
 
       - run: pnpm check:tokens
+
+      # A character that renders as nothing, or as a character it is not. This
+      # one has to run here rather than in review, because review is exactly
+      # what it defeats: a non-breaking space is a space in every editor, in
+      # `git diff` and on GitHub, and the file compiles and typechecks around it.
+      - run: pnpm check:invisibles
 
       # The style half of the cloud-off boundary. The ASSERTION is
       # `apps/desktop/src/main/net/offline.ts` and its unit tests; this catches

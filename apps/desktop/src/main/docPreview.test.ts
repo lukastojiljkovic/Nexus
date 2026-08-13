@@ -43,8 +43,8 @@ describe("decodePreviewText", () => {
   });
 
   it("keeps a BOM that is not leading — only the byte-order mark is stripped", () => {
-    const bytes = new TextEncoder().encode("a﻿b");
-    expect(decodePreviewText(bytes)).toBe("a﻿b");
+    const bytes = new TextEncoder().encode("a\ufeffb");
+    expect(decodePreviewText(bytes)).toBe("a\ufeffb");
   });
 });
 

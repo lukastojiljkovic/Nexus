@@ -137,7 +137,7 @@ function DiffCell({ tokens, level }: { tokens: readonly string[]; level: DiffLev
   return (
     <>
       {tokens.map((line, index) => (
-        <div key={index}>{line === "" ? " " : line}</div>
+        <div key={index}>{line === "" ? "\u00a0" : line}</div>
       ))}
     </>
   );

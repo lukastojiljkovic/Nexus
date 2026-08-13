@@ -422,7 +422,7 @@ describe("the device name shown on the consent screen", () => {
     const blank = await offerAgainst(port, "   ");
     expect(blank.ok).toBe(false);
     await expect(
-      createPairingOffer(port, { deviceName: "  ", accountEmail: EMAIL, nowMs: NOW }),
+      createPairingOffer(port, { deviceName: "\u00a0 ", accountEmail: EMAIL, nowMs: NOW }),
     ).rejects.toThrow(TypeError);
   });
 

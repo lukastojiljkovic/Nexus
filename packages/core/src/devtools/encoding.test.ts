@@ -485,7 +485,7 @@ describe("html entities", () => {
     // The HTML 4.01 Latin-1 set names U+00A0…U+00FF in order, 96 entries with
     // no gaps; an off-by-one in that list would shift all 96, so the ends are
     // what the test holds down.
-    expect(expectOk(htmlUnescape("&nbsp;"))).toBe(" ");
+    expect(expectOk(htmlUnescape("&nbsp;"))).toBe("\u00a0");
     expect(expectOk(htmlUnescape("&frac12;"))).toBe("½");
     expect(expectOk(htmlUnescape("&times;"))).toBe("×");
     expect(expectOk(htmlUnescape("&divide;"))).toBe("÷");
