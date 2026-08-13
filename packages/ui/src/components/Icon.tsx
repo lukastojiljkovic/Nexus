@@ -31,7 +31,7 @@ export type IconName =
   | "fitness"
   | "canvas"
   | "tools"
-  | "devtools"
+  | "pro"
   | "priv"
   | "settings"
   | "search"
@@ -222,14 +222,22 @@ const SHAPES: Record<IconName, ReactNode> = {
       <path d="M19 8.4v4.4" />
     </>
   ),
-  // Angle brackets around a slash — the one mark that means „source" in every
-  // editor, every terminal and every language. A ruler for „Alatke", because it
-  // measures; this for „Programerske alatke", because it does not.
-  devtools: (
+  // A case with a handle. This mark used to be angle brackets around a slash —
+  // „source" in every editor and every terminal — and it was right for as long
+  // as the drawer behind it was „Programerske alatke". „Stručne alatke" holds an
+  // architect's quantity take-off and a baker's dough hydration beside the
+  // RISC-V assembler, and a source-code mark over that list would name one of
+  // the eighteen subjects and mislead about the other seventeen.
+  //
+  // A case rather than a wrench, because what the drawer holds is a KIT that
+  // belongs to a trade — which is exactly what a pack is — and because a wrench
+  // is the pictogram every other app already ships. A ruler for „Alatke",
+  // because it measures; this, because it is what you carry.
+  pro: (
     <>
-      <path d="M8.4 7.6 3.6 12l4.8 4.4" />
-      <path d="M15.6 7.6 20.4 12l-4.8 4.4" />
-      <path d="M13.4 5.4 10.6 18.6" />
+      <rect x="3.2" y="9" width="17.6" height="10.4" rx="1.8" />
+      <path d="M9.4 9V7.2a1.6 1.6 0 0 1 1.6-1.6h2a1.6 1.6 0 0 1 1.6 1.6V9" />
+      <path d="M10.4 13.4h3.2" />
     </>
   ),
   priv: (
