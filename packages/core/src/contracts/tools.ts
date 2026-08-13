@@ -339,9 +339,13 @@ export interface ToolRegistration {
    * host draws it, so a tool cannot ship without one and cannot ship with the
    * wrong one.
    *
-   * `check:risk` re-states this statically, because TypeScript only proves the
-   * field is present — not that its value was thought about, nor that the class
-   * has Serbian copy behind it.
+   * `check:risk` guards the two things TypeScript cannot see, both of which
+   * fail silently: that the HOST is still drawing the notice at all — a deleted
+   * `<ToolRiskNotice/>` renders nothing, which is exactly what a harmless tool
+   * renders — and that no tool forbidden a verdict has grown one, in its Serbian
+   * copy or as a boolean in its arithmetic. `modules.test.ts` covers the rest:
+   * that every class has its four pieces of copy, and that the categories whose
+   * failures land on somebody else may not call themselves harmless.
    */
   riskClass: ToolRiskClass;
   /**

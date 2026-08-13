@@ -84,6 +84,14 @@ jobs:
       # `git diff` and on GitHub, and the file compiles and typechecks around it.
       - run: pnpm check:invisibles
 
+      # The sentence the professional drawer rests on, made executable. Forty of
+      # its tools may compute a quantity and may never judge it, and both halves
+      # of that fail silently: a deleted `<ToolRiskNotice/>` renders nothing,
+      # which is what a harmless tool renders, and „u granicama" under a ratio
+      # looks like helpfulness. This is also the one gate whose red run is a
+      # legal exposure rather than a style complaint.
+      - run: pnpm check:risk
+
       # The style half of the cloud-off boundary. The ASSERTION is
       # `apps/desktop/src/main/net/offline.ts` and its unit tests; this catches
       # a new egress construct before it ever has to be caught at runtime.

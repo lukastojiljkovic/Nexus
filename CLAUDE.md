@@ -179,13 +179,20 @@ choice of backend**; whatever in them is about the data model still applies.
   re-run the db tests.
 - **Verification gates before any commit:** `pnpm typecheck` (7/7), `pnpm test`
   (all green), `pnpm build` (3/3), `pnpm --filter @nexus/desktop smoke` prints
-  `SMOKE OK`, and the four static gates pass — `check:colours` (no raw hex/rgb/
-  hsl outside `packages/tokens`), `check:contrast` (every token pair clears
-  WCAG AA, marks clear 3:1, hairlines sit inside the 1.2–2.4:1 band),
-  `check:strings` (no module-scope reads of the strings table) and
-  **`check:tokens`** (every `var(--nx-*)` resolves to a real token or a
-  declaration in source — CSS drops an undefined custom property silently, so
-  „uses a token" and „uses nothing" are otherwise indistinguishable).
+  `SMOKE OK`, and **all nine static gates** pass. They are cheap, they need no
+  build output, and CI runs each as its own step so a red check names the rule:
+  `check:colours` (no raw hex/rgb/hsl outside `packages/tokens`),
+  `check:contrast` (every token pair clears WCAG AA, marks clear 3:1, hairlines
+  sit inside the 1.2–2.4:1 band), `check:css`, `check:strings` (no module-scope
+  reads of the strings table), `check:tokens` (every `var(--nx-*)` resolves to a
+  real token or a declaration in source — CSS drops an undefined custom property
+  silently, so „uses a token" and „uses nothing" are otherwise
+  indistinguishable), `check:invisibles` (no character that renders as nothing,
+  or as a character it is not — the defence review itself cannot make),
+  **`check:risk`** (the professional drawer's notice wiring is intact, and no
+  tool forbidden a verdict has grown one in its copy or in its arithmetic),
+  `check:egress` (no new network construct in a build that must be able to make
+  none) and `check:rls` (the migration SQL states every policy the wall needs).
 - **Looking at the app is a command, not a chore.**
   `pnpm --filter @nexus/desktop shots` seeds a demo profile, drives the real
   renderer through every module and sub-view in both themes at three window
