@@ -49,11 +49,24 @@ export type {
 export type { ImexHandler } from "./contracts/imex.js";
 export {
   TOOL_CATEGORIES,
-  TOOL_CATEGORY_DRAWER,
+  TOOL_CONSTANT_TIERS,
   TOOL_DRAWERS,
-  toolCategoriesIn,
+  TOOL_PACKS,
+  TOOL_RISK_CLASSES,
+  enabledPacks,
+  packFlagKey,
+  toolDrawer,
+  toolForbidsVerdict,
+  toolVisibleToPacks,
 } from "./contracts/tools.js";
-export type { ToolCategory, ToolDrawer, ToolRegistration } from "./contracts/tools.js";
+export type {
+  ToolCategory,
+  ToolConstantTier,
+  ToolDrawer,
+  ToolPack,
+  ToolRegistration,
+  ToolRiskClass,
+} from "./contracts/tools.js";
 
 export type {
   CollectionSchema,
