@@ -54,7 +54,7 @@ import {
   ToolSelect,
   ToolTable,
   ToolTextArea,
-} from "./shared.js";
+} from "../pro/shared.js";
 
 /**
  * „Sistem i mreza" — the 5 surfaces of this group of the developer drawer: an

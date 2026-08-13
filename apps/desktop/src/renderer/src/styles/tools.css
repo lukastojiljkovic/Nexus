@@ -620,6 +620,36 @@
   font-size: var(--nx-font-size-caption);
   line-height: var(--nx-font-leading-normal);
 }
+/* The expression that ran, under the answer. Machine text at caption size, with
+   a hairline above it rather than a box — it is a footnote to the result, and a
+   panel would give it the weight of a second answer. */
+.tool__formula {
+  margin: var(--nx-space-3) 0 0;
+  padding-top: var(--nx-space-2);
+  border-top: 1px solid var(--nx-border-subtle);
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-caption);
+  /* The one place in the drawer a long line may wrap mid-token: a formula is
+     prose made of symbols, and a horizontal scrollbar under every regulated
+     answer would be worse than a wrapped subscript. */
+  overflow-wrap: anywhere;
+}
+/* The inputs, repeated beside the answer. Indented from the result rows by a
+   hairline rather than a fill, so it reads as a margin note on the answer and
+   not as a second result the reader has to reconcile with the first. */
+.tool__echo {
+  margin-top: var(--nx-space-3);
+  padding-left: var(--nx-space-3);
+  border-left: 1px solid var(--nx-border-subtle);
+}
+/* A computed value beside the user's own limit. Deliberately styled EXACTLY like
+   any other group of result rows — no tint, no rule, no emphasis on either side.
+   Anything that made one of the two numbers look like the important one would be
+   the verdict this component exists in order not to render. */
+.tool__limit {
+  display: contents;
+}
+
 /* Provenance under the answer: which edition of which table produced a number.
    Deliberately the same muted caption as the notice — it is a fact about the
    tool, not a claim about the result. */

@@ -42,7 +42,7 @@ import {
   ToolSelect,
   ToolTable,
   ToolTextArea,
-} from "./shared.js";
+} from "../pro/shared.js";
 
 /**
  * The encode/decode drawer: base64, percent-escaping, URL structure, the four

@@ -47,7 +47,7 @@ import {
   ToolSection,
   ToolSelect,
   ToolTable,
-} from "./shared.js";
+} from "../pro/shared.js";
 
 /**
  * „Boje i dizajn" — the 6 surfaces of this group of the developer drawer.

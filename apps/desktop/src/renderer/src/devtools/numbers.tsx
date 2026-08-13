@@ -67,7 +67,7 @@ import {
   ToolSelect,
   ToolTable,
   ToolTextArea,
-} from "./shared.js";
+} from "../pro/shared.js";
 
 /**
  * „Brojevi i bitovi" — the 6 surfaces of this group of the developer drawer.

@@ -37,7 +37,7 @@ import {
   ToolSection,
   ToolSelect,
   ToolTable,
-} from "./shared.js";
+} from "../pro/shared.js";
 
 /**
  * „Vreme" — the 2 surfaces of this group of the developer drawer: one INSTANT

@@ -12,19 +12,26 @@ import { fill, strings } from "../strings.js";
 import { useCopySuffix } from "../toolRisk.js";
 
 /**
- * The pieces every „Programerske alatke" surface is built from.
+ * The pieces every „Stručne alatke" surface is built from.
  *
  * **Why this file exists at all.** Forty-eight surfaces written independently
  * produce forty-eight spellings of „a labelled field", „a monospace answer with
  * a copy button" and „the tool refuses, and here is why" — and they drift on
  * every one. The drawer would then read as forty-eight small applications
  * sharing a rail, which is the „AI slop" the design rules exist to forbid. Every
- * component here is the ONE spelling of its shape.
+ * component here is the ONE spelling of its shape. At eighteen toolkits the
+ * argument is no longer about tidiness: a surface that invents its own shape is
+ * also free to invent its own idea of what it may assert.
+ *
+ * **It moved out of `devtools/` for that reason.** This is the DRAWER's kit, and
+ * `devtools/` is now one pack's surfaces (`softver`) rather than the whole room.
+ * A shared file sitting inside one pack's folder is how the next pack ends up
+ * with a second copy of it.
  *
  * **Nothing here holds a value.** These are presentational: a surface owns its
  * own state and passes text down. That is deliberate — the tools' logic lives in
- * `@nexus/core/devtools/*` and is exhaustively tested there, and a primitive
- * that quietly parsed or formatted would be a second, untested copy of it.
+ * `@nexus/core` and is exhaustively tested there, and a primitive that quietly
+ * parsed or formatted would be a second, untested copy of it.
  *
  * **Every string is read at render time**, never captured at module scope, so a
  * language switch relabels the drawer instead of freezing it at import. There
@@ -430,5 +437,104 @@ export function ToolTable({
         </p>
       )}
     </>
+  );
+}
+
+/**
+ * The expression a tool actually evaluated, written out under its answer.
+ *
+ * **This is a protection, not documentation, and it is the cheapest of the
+ * four.** A professional drawer's whole defensible position is „it computed what
+ * you asked from what you typed" — and that claim is only checkable if the
+ * reader can see the arithmetic. A civil engineer who can read `A = |Σ(xᵢyᵢ₊₁ −
+ * xᵢ₊₁yᵢ)|/2` knows in one glance whether this is the formula they wanted; the
+ * same person facing a bare number has to trust us instead, and trust is the
+ * thing we are trying not to ask for.
+ *
+ * It also settles a question the notices cannot: WHICH convention. Half the
+ * disputes in these trades are between two correct formulae — gross or net area,
+ * nominal or effective rate, chargeable weight at 5000 or 6000 — and printing
+ * the one that ran is how the user finds out they wanted the other.
+ *
+ * Set as machine text and never in a heading: it is a fact about the result,
+ * sitting where somebody checking the result is already looking.
+ */
+export function ToolFormula({ children }: { children: ReactNode }) {
+  return <p className="tool__formula tool__mono">{children}</p>;
+}
+
+/**
+ * The values the answer was computed FROM, repeated beside it.
+ *
+ * **Every regulated tool owes this, and the reason is that the answer leaves the
+ * window.** A number pasted into an email is a number with no inputs attached:
+ * nothing in „opterećenje: 4.8 kN/m" says which span, which load, or — the part
+ * that matters — that the partial factor came from the person who typed it and
+ * not from us. Echoing the inputs makes the paste self-contained, which is also
+ * what makes the copied disclaimer line honest rather than decorative.
+ *
+ * It is the mechanism behind the „regulated constants are inputs" rule. Moving a
+ * rate or a limit out of the code and into a field only helps if the answer then
+ * SAYS which rate produced it — otherwise the number is exactly as anonymous as
+ * it was when we embedded it, and the user has merely done our typing.
+ */
+export function ToolInputEcho({
+  title,
+  entries,
+}: {
+  /** Optional heading — omit inside a `ToolSection` that already has one. */
+  title?: string;
+  entries: readonly { readonly label: string; readonly value: ReactNode }[];
+}) {
+  if (entries.length === 0) return null;
+  return (
+    <div className="tool__echo">
+      {title !== undefined && <h4 className="nx-eyebrow tool__section-title">{title}</h4>}
+      {entries.map((entry) => (
+        <ResultRow key={entry.label} label={entry.label} value={entry.value} />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * A computed quantity beside a limit the USER supplied, and their ratio. Three
+ * numbers, and not one word about what they mean together.
+ *
+ * **This is what `toolForbidsVerdict` leaves a surface once it may not judge.**
+ * The tempting version colours the ratio, or writes „u granicama" under it, and
+ * both are the same act: choosing the limit's authority, asserting the input was
+ * the right one, and standing where the licensed professional stands. The
+ * honest version puts the two numbers next to each other and lets the person who
+ * knows which rule applies do the comparing — which they were always going to do
+ * anyway, and which they are the only party insured to do.
+ *
+ * No colour, no icon, no tone. Those would be a verdict in a form that is harder
+ * to argue about later, not an absence of one.
+ */
+export function ToolAgainstLimit({
+  label,
+  value,
+  limitLabel,
+  limit,
+  ratioLabel,
+  ratio,
+}: {
+  label: string;
+  value: ReactNode;
+  limitLabel: string;
+  /** The user's own figure. Absent — because they typed none — draws the value alone. */
+  limit: ReactNode | undefined;
+  ratioLabel: string;
+  ratio: ReactNode | undefined;
+}) {
+  return (
+    <div className="tool__limit">
+      <ResultRow label={label} value={value} />
+      {limit !== undefined && <ResultRow label={limitLabel} value={limit} />}
+      {limit !== undefined && ratio !== undefined && (
+        <ResultRow label={ratioLabel} value={ratio} />
+      )}
+    </div>
   );
 }

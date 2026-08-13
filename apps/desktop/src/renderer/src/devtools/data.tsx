@@ -50,7 +50,7 @@ import {
   ToolSelect,
   ToolTable,
   ToolTextArea,
-} from "./shared.js";
+} from "../pro/shared.js";
 import { strings } from "../strings.js";
 
 /**

@@ -29,7 +29,7 @@ import {
   ToolSection,
   ToolTable,
   ToolTextArea,
-} from "./shared.js";
+} from "../pro/shared.js";
 
 /**
  * „RISC-V" — the 1 surface of this group of the developer drawer.
