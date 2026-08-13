@@ -41,7 +41,7 @@
 // never to Serbian, never to a number, never to a hedge. A rule that fired on
 // ordinary copy is a rule somebody switches off.
 
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join, relative, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -186,6 +186,18 @@ function copyBlocks(text) {
   }));
 }
 
+/** Every toolkit's arithmetic module — the sources, not the tests. */
+function proModules(repoRoot) {
+  try {
+    return readdirSync(join(repoRoot, "packages/core/src/pro"))
+      .filter((name) => name.endsWith(".ts") && !name.endsWith(".test.ts"))
+      .sort()
+      .map((name) => `packages/core/src/pro/${name}`);
+  } catch {
+    return [];
+  }
+}
+
 export function auditAll(repoRoot = REPO_ROOT) {
   const findings = [];
   const add = (rule, file, line, detail) => findings.push({ rule, file, line, detail });
@@ -228,8 +240,13 @@ export function auditAll(repoRoot = REPO_ROOT) {
   }
 
   // Rule 3 — no verdict in the arithmetic, in any professional module.
-  for (const pack of [...packsSeen].sort()) {
-    const file = `packages/core/src/pro/${pack}.ts`;
+  //
+  // The DIRECTORY rather than the registered packs, deliberately. Scoping this
+  // to `packsSeen` would mean a toolkit whose arithmetic exists but whose
+  // registration has not landed yet escapes the rule entirely — which is the
+  // exact window in which a `passes: boolean` gets written, and the moment when
+  // nobody is looking for one.
+  for (const file of proModules(repoRoot)) {
     const text = read(repoRoot, file);
     if (text === undefined) continue;
     for (const [i, l] of text.split("\n").entries()) {
