@@ -9,6 +9,7 @@ import { DESIGN_SURFACES } from "./devtools/design.js";
 import { CRYPTO_SURFACES } from "./devtools/crypto.js";
 import { SYSTEM_SURFACES } from "./devtools/system.js";
 import { TIME_SURFACES } from "./devtools/time.js";
+import { GRADNJA_SURFACES } from "./pro/gradnja.js";
 
 /**
  * Every „Stručne alatke" surface, by tool id — the renderer half of the
@@ -42,4 +43,7 @@ export const PRO_TOOL_SURFACES: Readonly<Record<string, ComponentType>> = {
   ...CRYPTO_SURFACES,
   ...SYSTEM_SURFACES,
   ...TIME_SURFACES,
+  // The professional toolkits, one file each — see the header on why these are
+  // named after the PACK while the nine above are named after a category.
+  ...GRADNJA_SURFACES,
 };

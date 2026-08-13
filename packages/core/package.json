@@ -8,7 +8,9 @@
     ".": "./src/index.ts",
     "./auth": "./src/auth/index.ts",
     "./devtools/*": "./src/devtools/*.ts",
-    "./devtools/*.js": "./src/devtools/*.ts"
+    "./devtools/*.js": "./src/devtools/*.ts",
+    "./pro/*": "./src/pro/*.ts",
+    "./pro/*.js": "./src/pro/*.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",

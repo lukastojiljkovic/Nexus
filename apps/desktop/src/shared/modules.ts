@@ -717,7 +717,7 @@ const TOOLS_TOOLS: ToolRegistration[] = [
  * it is what makes „sifrovanje" find the AES tool for somebody typing without
  * diacritics, which is how everybody types into a search field.
  */
-const DEVTOOLS_TOOLS: ToolRegistration[] = [
+const PRO_DEV_TOOLS: ToolRegistration[] = [
   // numbers
   {
     id: "number-base",
@@ -1330,6 +1330,63 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
 ];
 
 /**
+ * „Gradnja i projektovanje" — the first toolkit that is not a programmer's.
+ *
+ * ONE array per pack from here on, and the reason is the file layout rather
+ * than taste: a toolkit is three files (`@nexus/core/pro/<pack>.ts` for the
+ * arithmetic, `renderer/pro/<pack>.tsx` for the surfaces, `strings/pro.<pack>.ts`
+ * for the copy) and this array is the fourth thing that must agree with them.
+ * Keeping the registrations of one subject together is what lets that agreement
+ * be read in one place instead of grepped for.
+ *
+ * A tool shared with a second pack is registered ONCE, in the array of the pack
+ * that comes first in `TOOL_PACKS`, and names the other in `packs` — the same
+ * rule the developer entries above already follow. `stair-geometry` is `zanat`'s
+ * as much as it is `gradnja`'s: a carpenter building a flight measures the same
+ * rise and divides it the same way.
+ *
+ * `life-safety`, and it is not a formality. A stair whose risers are not all the
+ * same height is the single most common cause of a fall on one, which is why the
+ * riser here is `H/n` carried to three decimals of a millimetre rather than
+ * rounded to something buildable: the rounding is the carpenter's decision and
+ * he must see what he is rounding. `toolForbidsVerdict` is therefore true for
+ * it, and nothing in the surface says whether a flight passes — it puts the
+ * computed riser beside the limit the user typed and prints the quotient.
+ *
+ * No `sourceKey`: the tool embeds no published table. Blondel's `2r + g` is
+ * arithmetic from 1675 and the pitch is a right triangle, both `physical` tier;
+ * the two maxima that WOULD need a citation are not embedded at all, because
+ * which one applies depends on the building, its use and the rule in force —
+ * so the user types them and the tool echoes them back.
+ */
+const PRO_GRADNJA_TOOLS: ToolRegistration[] = [
+  {
+    id: "stair-geometry",
+    titleKey: "pro.name.stair-geometry",
+    blurbKey: "pro.blurb.stair-geometry",
+    category: "geometry",
+    riskClass: "life-safety",
+    packs: ["gradnja", "zanat"],
+    keywords: [
+      "blondel", "broj stepenika", "gazenje", "gazista", "gaziste", "going", "hod", "krak",
+      "nagib", "penjanje", "podest", "riser", "spratna visina", "stair", "stepenice",
+      "stepenik", "stepeniste", "uspon", "visina stepenika"
+    ],
+  },
+];
+
+/**
+ * The professional drawer's contents, one array per subject.
+ *
+ * A single concatenation rather than a per-pack module list, because `packs`
+ * already carries everything the host needs to route a tool and a second
+ * grouping would be a second answer to the same question — the kind that drifts
+ * out of agreement with the first. The order here is the order the drawer draws
+ * within a category, and it is deliberately the order toolkits shipped in.
+ */
+const PRO_TOOLS: ToolRegistration[] = [...PRO_DEV_TOOLS, ...PRO_GRADNJA_TOOLS];
+
+/**
  * UTIL slice c's card. ONE control, and the restraint is FIN's and DOC's
  * exactly: the drawer has no preferences to speak of — it stores nothing, reads
  * nothing and computes everything from what is typed into it — so the only
@@ -1725,12 +1782,13 @@ const V0_MODULES: ModuleManifest[] = [
     defaultEnabled: true,
   },
   // „Stručne alatke" (UTIL slice d) — the professional drawer itself, host to
-  // forty-eight tools today and to every OTHER toolkit as its packs ship,
-  // rather than a drawer of its own kind. Questions only a programmer asks so
-  // far — what these bits are as an fp8, what this halfword decodes to on
-  // RV64, what this JWT actually says — but the drawer is the professional one
-  // full stop, not „the developer one"; whatever a geodeta's or a lekar's pack
-  // adds next lands in this same module.
+  // every toolkit as its pack ships rather than a drawer of its own kind. Its
+  // contents are `PRO_TOOLS`, which is one array per subject concatenated: the
+  // forty-eight a programmer asks (what these bits are as an fp8, what this
+  // halfword decodes to on RV64, what this JWT actually says) and, from now on,
+  // one array per profession beside them. The drawer is the professional one
+  // full stop, not „the developer one" — whatever a geodeta's or a lekar's pack
+  // adds next lands in this same module and needs nothing from it.
   //
   // FOURTH module in „Profesionalno i alati", and it takes its OWN prefix,
   // `PRO` (PRD 30, „Profession Toolkits"), rather than joining „Fokus" and
@@ -1765,7 +1823,7 @@ const V0_MODULES: ModuleManifest[] = [
     prefix: "PRO",
     category: "Professional & utilities",
     defaultEnabled: false,
-    tools: DEVTOOLS_TOOLS,
+    tools: PRO_TOOLS,
   },
 ];
 

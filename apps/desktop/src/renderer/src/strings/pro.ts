@@ -7,7 +7,7 @@
  * sat in `strings/devtools.ts` beside the forty-eight tool names, and that was
  * right for as long as the drawer and the toolkit were the same thing. They are
  * not any more — `devtools` is now the copy of ONE pack (`softver`), and this is
- * the copy of the drawer that hosts it and eighteen others. A pack's tool names
+ * the copy of the drawer that hosts it and seventeen others. A pack's tool names
  * stay with the pack; the search field, the empty state and „Kopirano" belong to
  * the room they are all standing in.
  *
@@ -20,6 +20,8 @@
  * and the locale switch rewrites these leaves exactly as it rewrites the rest. A
  * consumer reads `strings.pro.…` and never imports this file.
  */
+
+import { PRO_GRADNJA_SR } from "./pro.gradnja.js";
 
 export const proSr = {
   title: "Stručne alatke",
@@ -84,7 +86,7 @@ export const proSr = {
    * themselves wants to see their own word. `who` is that word, and it earns its
    * place three times over — it is read under the name in the pack picker, it is
    * what the questionnaire's cards say underneath, and its terms are folded into
-   * the search index, so typing „zubar" finds „Medicina i nega".
+   * the search index, so typing „geodeta" finds „Gradnja i projektovanje".
    *
    * There is deliberately NO description of what each pack contains. That line
    * exists on screen and is composed from the registry („14 alata: Zlatni čas,
@@ -291,4 +293,44 @@ export const proSr = {
     /** The one failure this surface can have: the flag row did not get written. Says what it cost, which is the press. */
     saveError: "Promena nije sačuvana. Pokušaj ponovo.",
   },
+
+  /**
+   * Every tool's NAME, across every toolkit, in one table — the rail needs it
+   * before any surface is opened, so it cannot live with the surface's own copy.
+   *
+   * The `softver` pack's forty-eight are not here: they are under `devtools`,
+   * because a tool names a string in its own family's group and that family did
+   * not change when its neighbours arrived (`./devtools.ts`).
+   */
+  name: {
+    "stair-geometry": "Stepenište",
+  },
+
+  /**
+   * The one line under each name. Says what the tool ANSWERS, never what it
+   * guarantees — „daje visinu stepenika", not „proverava da li stepenište
+   * zadovoljava", which would be a claim the tool is forbidden to make.
+   */
+  blurb: {
+    "stair-geometry":
+      "Iz spratne visine i broja podizanja daje visinu stepenika, broj gazišta, hod, nagib i 2r + g.",
+  },
+
+  /**
+   * Where a `published`-tier constant came from — source AND edition, rendered
+   * under the answer by the host (`ToolRegistration.sourceKey`).
+   *
+   * **This is provenance and never a compliance claim.** „Dimenzije listova
+   * prema ISO 216:2007" says which table produced the numbers; „u skladu sa ISO
+   * 216" would be a warranty that this app is in no position to give. The
+   * difference is one word and it is the whole point of the field.
+   *
+   * An edition or a year is mandatory — `modules.test.ts` fails a source line
+   * with no digit in it, because „ISO 216" alone names a family of standards
+   * rather than a citation somebody can go and check.
+   */
+  sources: {},
+
+  /* One group per TOOLKIT — see the header. */
+  gradnja: PRO_GRADNJA_SR,
 } as const;
