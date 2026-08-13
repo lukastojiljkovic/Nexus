@@ -37,7 +37,7 @@ import {
  * One file per category rather than one map for all forty-eight, because the
  * map is the seam every surface is added at: a single file would be the one
  * place every future tool has to touch, and the place two people writing two
- * unrelated tools collide. `devToolSurfaces.tsx` composes the nine.
+ * unrelated tools collide. `proToolSurfaces.tsx` composes the nine.
  *
  * Every id below is declared in `DEVTOOLS_TOOLS` (`shared/modules.ts`) and
  * `modules.test.ts` pins the two lists against each other in both directions —
@@ -524,7 +524,7 @@ function AssembleTool({ xlen }: { xlen: Xlen }) {
         <ToolOutput
           label={s.decoded.hexLabel}
           value=""
-          empty={strings.devtools.common.awaitingInput}
+          empty={strings.pro.common.awaitingInput}
         />
       ) : !outcome.ok ? (
         <ToolFailure>{translateReason(outcome.reason, s.errors)}</ToolFailure>
@@ -611,7 +611,7 @@ function DisassembleTool({ xlen }: { xlen: Xlen }) {
         <ToolOutput
           label={s.decoded.hexLabel}
           value=""
-          empty={strings.devtools.common.awaitingInput}
+          empty={strings.pro.common.awaitingInput}
         />
       ) : decoded === null ? null : !decoded.result.ok ? (
         <ToolFailure>{translateReason(decoded.result.reason, s.errors)}</ToolFailure>

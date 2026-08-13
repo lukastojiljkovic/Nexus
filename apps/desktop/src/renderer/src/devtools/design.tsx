@@ -55,7 +55,7 @@ import {
  * One file per category rather than one map for all forty-eight, because the
  * map is the seam every surface is added at: a single file would be the one
  * place every future tool has to touch, and the place two people writing two
- * unrelated tools collide. `devToolSurfaces.tsx` composes the nine.
+ * unrelated tools collide. `proToolSurfaces.tsx` composes the nine.
  *
  * Every id below is declared in `DEVTOOLS_TOOLS` (`shared/modules.ts`) and
  * `modules.test.ts` pins the two lists against each other in both directions —
@@ -254,7 +254,7 @@ function ColourNumberRow({
 
 function ColorConvertTool() {
   const s = strings.devtools.design["color-convert"];
-  const common = strings.devtools.common;
+  const common = strings.pro.common;
   const [text, setText] = useState("");
 
   const colour = useMemo(() => parseColour(text), [text]);
@@ -309,7 +309,7 @@ const DEFAULT_PALETTE_STEPS = "5";
 
 function ColorPaletteTool() {
   const s = strings.devtools.design["color-palette"];
-  const common = strings.devtools.common;
+  const common = strings.pro.common;
   const [baseText, setBaseText] = useState("");
   const [stepsText, setStepsText] = useState(DEFAULT_PALETTE_STEPS);
   const [harmonyKind, setHarmonyKind] = useState<HarmonyKind>(HARMONY_KINDS[0]);
@@ -414,7 +414,7 @@ function GradientBar({ samples }: { samples: readonly Srgb[] }) {
 
 function GradientTool() {
   const s = strings.devtools.design.gradient;
-  const common = strings.devtools.common;
+  const common = strings.pro.common;
   const [stops, setStops] = useState<ColourNumberDraft[]>(initialGradientStops);
   const [kind, setKind] = useState<GradientKind>(GRADIENT_KINDS[0]);
   const [space, setSpace] = useState<GradientSpace>(GRADIENT_SPACES[0]);
@@ -644,7 +644,7 @@ function EasingCurve({
 
 function CubicBezierTool() {
   const s = strings.devtools.design["cubic-bezier"];
-  const common = strings.devtools.common;
+  const common = strings.pro.common;
   const preset0 = CSS_EASINGS[DEFAULT_BEZIER_PRESET];
   const [presetId, setPresetId] = useState<CssEasingName | "custom">(DEFAULT_BEZIER_PRESET);
   const [x1Text, setX1Text] = useState(String(preset0.x1));
@@ -839,7 +839,7 @@ function ContrastTool() {
       </div>
 
       {!typed ? (
-        <p className="tool__note">{strings.devtools.common.awaitingInput}</p>
+        <p className="tool__note">{strings.pro.common.awaitingInput}</p>
       ) : text !== null && background !== null && report !== null ? (
         <>
           <div className="tool__output" style={{ background: formatColour(background, "hex") }}>
@@ -993,7 +993,7 @@ function ColorMixerTool() {
       </ToolSection>
 
       {!anyPartTyped ? (
-        <p className="tool__note">{strings.devtools.common.awaitingInput}</p>
+        <p className="tool__note">{strings.pro.common.awaitingInput}</p>
       ) : (
         mixResults !== null && (
           <div className="tool__results">

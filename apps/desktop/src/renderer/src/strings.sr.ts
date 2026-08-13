@@ -15,6 +15,7 @@
  */
 import type { SmartListId } from "@nexus/core";
 import { devtoolsSr } from "./strings/devtools.js";
+import { proSr } from "./strings/pro.js";
 import type {
   ApkgImportSkipCode,
   ApkgReadErrorCode,
@@ -45,7 +46,6 @@ import type {
   SyncEnableProblem,
   SyncReconnectProblem,
 } from "../../shared/ipc.js";
-import type { OnboardingOccupation } from "../../shared/onboardingPresets.js";
 import type { ClockPreference } from "./calendarPrefs.js";
 import type { CanvasStrokeWidthId, CanvasToolId } from "./canvasTools.js";
 import type { BlockedInToday } from "./taskPrefs.js";
@@ -165,18 +165,26 @@ export const sr = {
     nameLabel: "Ime profila",
     namePlaceholder: "Upiši ime",
     themeLabel: "Tema",
-    /** Screen 2 — uloga. Its only effect is which boxes the next screen opens ticked, and the description says exactly that. */
-    occupationTitle: "Šta te najbolje opisuje?",
-    occupationDescription:
-      "Na osnovu ovoga Nexus predlaže oblasti u sledećem koraku. To je predlog, ne pravilo — sve možeš da promeniš.",
-    occupationOptions: {
-      student: "Student",
-      zaposleni: "Zaposleni",
-      /** „Programer" and not „Developer": the app speaks Serbian, and this is the Serbian word. */
-      programer: "Programer",
-      preduzetnik: "Preduzetnik",
-      drugo: "Nešto drugo",
-    } satisfies Record<OnboardingOccupation, string>,
+    /**
+     * Screen 2 — „Tvoja nedelja". Which toolkits „Stručne alatke" carries.
+     *
+     * **It asks about the WEEK, not about the person, and that is the whole
+     * question.** „Šta te najbolje opisuje?" — five buttons, student to
+     * preduzetnik — is what stood here, and generalising it to the professions
+     * Nexus serves would have meant asking somebody to find their job title in a
+     * list of twenty-two. Serbian titles do not survive that: a „geodeta" or a
+     * „strukovni vaspitač" is on nobody's list and would land on „Nešto drugo",
+     * which carries no information at all. A subject fails open where a title
+     * fails closed — the geodeta reads „Gradnja i projektovanje" and knows.
+     *
+     * The description says what the answer does, on the old line's terms
+     * exactly: a suggestion, changeable, and reversible later.
+     */
+    packsTitle: "Šta se sve nađe u tvojoj nedelji?",
+    packsDescription:
+      "Izaberi koliko god hoćeš. Svaki izbor donosi skup alatki za taj posao — ništa ne menja tvoje podatke i sve možeš da promeniš kasnije.",
+    /** Said out loud, the „remindersNoChoice" idiom: picking nothing is a real answer here, not a skipped step. */
+    packsNoChoice: "Ako ništa ne izabereš, Nexus kreće bez stručnih alatki — dodaješ ih kad zatrebaju.",
     /** Screen 3 — oblasti. The module names and one-line descriptions are the gallery's own (`settings.moduleDescriptions`), never respelled. */
     modulesTitle: "Šta ti treba?",
     modulesDescription:
@@ -407,7 +415,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     fitness: "Fitnes",
     tools: "Alatke",
     canvas: "Tabla",
-    devtools: "Programerske alatke",
+    pro: "Stručne alatke",
   } satisfies Record<string, string>,
 
   dashboard: {
@@ -3913,6 +3921,13 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       crypto: "Kriptografija",
       system: "Mreža i sistem",
       time: "Vreme",
+      geometry: "Mere i geometrija",
+      materials: "Materijal i utrošak",
+      structure: "Opterećenje i nosivost",
+      electrical: "Struja",
+      media: "Slika, zvuk i video",
+      body: "Telo i trening",
+      finance: "Novac",
     },
     /**
      * The right pane before a tool is picked. A title and a line under it, not
@@ -4098,8 +4113,10 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
    * in both, and `modules.test.ts` fails if one is missing — a tool whose name
    * did not resolve would render its own id in the rail.
    */
-  /* „Programerske alatke" — one file per category, see `strings/devtools.ts`. */
+  /* The `softver` pack's forty-eight tools — one file per category, see `strings/devtools.ts`. */
   devtools: devtoolsSr,
+  /* „Stručne alatke" — the drawer that hosts every pack, see `strings/pro.ts`. */
+  pro: proSr,
   fitness: {
     loadErrorTitle: "Ishrana nije učitana",
     loadError: "Učitavanje dnevnika ishrane nije uspelo. Zatvori i ponovo otvori stranicu.",
@@ -5287,6 +5304,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       fitness: "Fitnes",
       tools: "Alatke",
       modules: "Moduli",
+      packs: "Paketi alatki",
+      risk: "Napomene uz stručne alatke",
       notifications: "Obaveštenja",
       backup: "Rezervna kopija",
       sync: "Sinhronizacija",
@@ -5699,8 +5718,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         "Ishrana i trening — obroci i dnevni ciljevi, dnevnik treninga sa rutinama i katalogom vežbi.",
       tools: "Pretvarači jedinica i svakodnevni računi — procenat, PDV, kredit i cena po jedinici.",
       canvas: "Beskonačna tabla za crtanje, dijagrame i skice — sa karticama koje vode na druge module.",
-      devtools:
-        "Alatke za programere — brojevi i bitovi, RISC-V, kodiranje, kriptografija, boje i vreme.",
+      pro:
+        "Alatke po strukama — uključuješ pakete koji ti trebaju, a fioka pokazuje samo njih.",
     } satisfies Record<string, string>,
     /** Category-group headings above the module gallery, keyed by registry category. */
     moduleCategories: {

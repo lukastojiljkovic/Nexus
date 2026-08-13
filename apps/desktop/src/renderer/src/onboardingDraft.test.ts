@@ -1,3 +1,4 @@
+import { TOOL_PACKS } from "@nexus/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -28,7 +29,10 @@ function stubStorage(seed: Readonly<Record<string, string>> = {}): Storage {
 const DRAFT: OnboardingDraft = {
   step: "oblasti",
   name: "Luka",
-  occupation: "student",
+  // Already in `TOOL_PACKS` order, so the plain round-trip test below needs no
+  // reordering of its own — the reordering property gets its own test further
+  // down, seeded deliberately out of order.
+  packs: ["softver", "dizajn"],
   modules: { tasks: true, calendar: true, notes: true, priv: false, study: true },
 };
 
@@ -74,12 +78,34 @@ describe("readOnboardingDraft", () => {
     expect(readOnboardingDraft("p1")).toBeNull();
   });
 
-  it("drops an occupation it does not know rather than the whole draft", () => {
+  it("drops a pack it does not know rather than the whole draft", () => {
     stubStorage({
-      "nexus.onb.p1": JSON.stringify({ ...DRAFT, occupation: "astronaut" }),
+      "nexus.onb.p1": JSON.stringify({ ...DRAFT, packs: ["softver", "nepostojeci-paket", "dizajn"] }),
     });
-    expect(readOnboardingDraft("p1")?.occupation).toBeNull();
+    // The unknown id is dropped, not the whole array and not the whole draft —
+    // exactly `readOnboardingDraft`'s rule for an occupation this build cannot
+    // place, applied to a pack it cannot place either.
+    expect(readOnboardingDraft("p1")?.packs).toEqual(["softver", "dizajn"]);
     expect(readOnboardingDraft("p1")?.step).toBe("oblasti");
+  });
+
+  it("yields no packs, rather than rejecting the draft, when the stored value is not an array", () => {
+    for (const notAnArray of ["softver", 7, null]) {
+      stubStorage({ "nexus.onb.p1": JSON.stringify({ ...DRAFT, packs: notAnArray }) });
+      expect(readOnboardingDraft("p1")?.packs).toEqual([]);
+      // The rest of the draft still comes back — a malformed `packs` is not
+      // a malformed draft.
+      expect(readOnboardingDraft("p1")?.step).toBe("oblasti");
+    }
+  });
+
+  it("returns the pack list in TOOL_PACKS order, whatever order it was stored in", () => {
+    // Any two distinct packs will do — what is under test is the ORDERING
+    // rule, not which two packs they are, so this stays true even if
+    // `TOOL_PACKS` is reordered or extended later.
+    const [first, second] = TOOL_PACKS;
+    stubStorage({ "nexus.onb.p1": JSON.stringify({ ...DRAFT, packs: [second, first] }) });
+    expect(readOnboardingDraft("p1")?.packs).toEqual([first, second]);
   });
 
   it("clamps a stored name to the field's own maximum", () => {

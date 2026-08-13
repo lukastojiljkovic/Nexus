@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { formatChord, matchesChord, moduleNavPosition, resolveEnabled } from "@nexus/core";
+import {
+  enabledPacks,
+  formatChord,
+  matchesChord,
+  moduleNavPosition,
+  resolveEnabled,
+} from "@nexus/core";
 import type { CanvasRef } from "@nexus/core";
 import { Button, EmptyState, Icon, NavItem, StarField, type IconName } from "@nexus/ui";
 import type { ThemeName } from "@nexus/tokens";
@@ -162,7 +168,7 @@ const MODULE_ICONS: Record<string, IconName> = {
   habits: "habits",
   fitness: "fitness",
   tools: "tools",
-  devtools: "devtools",
+  pro: "pro",
   focus: "focus",
   canvas: "canvas",
 };
@@ -1075,6 +1081,12 @@ export function App() {
   );
 
   const enabledIds = new Set(resolveEnabled(registry, flags));
+  // The profession toolkits, out of the same flag state and beside the modules
+  // for the same reason: one reader, one answer to „what does this profile
+  // have". A pack row is absent until somebody answers for it, and absent means
+  // off — there is no such thing as a pack that is on by default, because every
+  // pack is an answer to a question about the person (`enabledPacks`).
+  const enabledPackIds = new Set<string>(enabledPacks(flags));
   // `SEARCH_PAGE_ID` is a valid destination without being an enabled module:
   // the search page is a system surface like the palette (ADR-039 §1), so it
   // is deliberately NOT a `ModuleManifest` and never appears in the Settings
@@ -1589,14 +1601,30 @@ export function App() {
             // No `key={activeProfile.id}`: the drawer reads nothing profile-
             // shaped and stores nothing, so there is no per-profile state to
             // discard when the active profile changes.
-            <ToolsPage drawer="utilities" enabledModules={enabledIds} />
-          ) : effectiveId === "devtools" && activeProfile ? (
+            <ToolsPage drawer="utilities" enabledModules={enabledIds} packs={enabledPackIds} />
+          ) : effectiveId === "pro" && activeProfile ? (
             // The same host, the other drawer. Which tools each one draws is
-            // decided by `TOOL_CATEGORY_DRAWER` rather than by this prop — the
-            // prop only says which drawer this page IS, so a module publishing
-            // a developer-category tool lands here without either page knowing
-            // about it.
-            <ToolsPage drawer="developer" enabledModules={enabledIds} />
+            // decided by each tool's own `packs` declaration rather than by this
+            // prop — the prop only says which drawer this page IS, so a module
+            // publishing a tool for some profession lands here without either
+            // page knowing about it.
+            //
+            // `packs` is what narrows this one from „every professional tool" to
+            // „the ones this profile asked for". „Alatke" takes the same prop
+            // and ignores it, because an everyday tool declares no pack and is
+            // therefore visible to everybody — passing it to both is what keeps
+            // the two pages one component.
+            <ToolsPage
+              drawer="professional"
+              enabledModules={enabledIds}
+              packs={enabledPackIds}
+              // Only this drawer gets an editor, because only this drawer has
+              // toolkits. It writes through the same channel „Podešavanja" does
+              // and hands the re-read flags straight back to the shell, so the
+              // rail, the drawer and the module gallery never disagree about
+              // what this profile has.
+              packEditor={{ profileId: activeProfile.id, onFlagsChanged: setFlags }}
+            />
           ) : effectiveId === "canvas" && activeProfile ? (
             // No `intent` pair, and that is still true in slice c: CANV
             // publishes no quick-create command (`searchCommands.ts`'s

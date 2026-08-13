@@ -59,7 +59,7 @@ import { strings } from "../strings.js";
  * One file per category rather than one map for all forty-eight, because the
  * map is the seam every surface is added at: a single file would be the one
  * place every future tool has to touch, and the place two people writing two
- * unrelated tools collide. `devToolSurfaces.tsx` composes the nine.
+ * unrelated tools collide. `proToolSurfaces.tsx` composes the nine.
  *
  * Every id below is declared in `DEVTOOLS_TOOLS` (`shared/modules.ts`) and
  * `modules.test.ts` pins the two lists against each other in both directions —
@@ -281,16 +281,16 @@ function JsonEditorTool() {
     >
       {!hasSource ? (
         <ToolOutput
-          label={strings.devtools.common.result}
+          label={strings.pro.common.result}
           value=""
-          empty={strings.devtools.common.awaitingInput}
+          empty={strings.pro.common.awaitingInput}
         />
       ) : primary === null ? null : !primary.ok ? (
         <ToolFailure>{formatStructuredError(s.errors, s.position, primary.error)}</ToolFailure>
       ) : mode === "validate" ? (
         <p className="tool__note">{t.valid}</p>
       ) : (
-        <ToolOutput label={strings.devtools.common.result} value={primary.value} multiline />
+        <ToolOutput label={strings.pro.common.result} value={primary.value} multiline />
       )}
 
       <ToolSection title={t.pathTitle}>
@@ -389,16 +389,16 @@ function YamlEditorTool() {
       )}
       {!hasSource ? (
         <ToolOutput
-          label={strings.devtools.common.result}
+          label={strings.pro.common.result}
           value=""
-          empty={strings.devtools.common.awaitingInput}
+          empty={strings.pro.common.awaitingInput}
         />
       ) : parsed !== null && !parsed.ok ? (
         <ToolFailure>{formatStructuredError(s.errors, s.position, parsed.error)}</ToolFailure>
       ) : output !== null && !output.ok ? (
         <ToolFailure>{formatStructuredError(s.errors, s.position, output.error)}</ToolFailure>
       ) : output !== null ? (
-        <ToolOutput label={strings.devtools.common.result} value={output.value} multiline />
+        <ToolOutput label={strings.pro.common.result} value={output.value} multiline />
       ) : null}
     </TextToolBody>
   );
@@ -465,16 +465,16 @@ function XmlEditorTool() {
     >
       {!hasSource ? (
         <ToolOutput
-          label={strings.devtools.common.result}
+          label={strings.pro.common.result}
           value=""
-          empty={strings.devtools.common.awaitingInput}
+          empty={strings.pro.common.awaitingInput}
         />
       ) : primary === null ? null : !primary.ok ? (
         <ToolFailure>{formatStructuredError(s.errors, s.position, primary.error)}</ToolFailure>
       ) : mode === "validate" ? (
         <p className="tool__note">{t.valid}</p>
       ) : (
-        <ToolOutput label={strings.devtools.common.result} value={primary.value} multiline />
+        <ToolOutput label={strings.pro.common.result} value={primary.value} multiline />
       )}
 
       <ToolSection title={t.pathTitle}>
@@ -650,14 +650,14 @@ function DataFormatTool() {
 
       {!hasSource ? (
         <ToolOutput
-          label={strings.devtools.common.result}
+          label={strings.pro.common.result}
           value=""
-          empty={strings.devtools.common.awaitingInput}
+          empty={strings.pro.common.awaitingInput}
         />
       ) : result !== null && !result.ok ? (
         <ToolFailure>{formatStructuredError(s.errors, s.position, result.error)}</ToolFailure>
       ) : result !== null ? (
-        <ToolOutput label={strings.devtools.common.result} value={result.value} multiline />
+        <ToolOutput label={strings.pro.common.result} value={result.value} multiline />
       ) : null}
     </TextToolBody>
   );
@@ -739,7 +739,7 @@ function JsonToTypesTool() {
       )}
 
       {!hasSource ? (
-        <ToolOutput label={t.output} value="" empty={strings.devtools.common.awaitingInput} />
+        <ToolOutput label={t.output} value="" empty={strings.pro.common.awaitingInput} />
       ) : result === null ? null : !result.ok ? (
         <ToolFailure>{t.errors[result.reason]}</ToolFailure>
       ) : (
@@ -791,7 +791,7 @@ function UuidTool() {
           </Button>
         </div>
         <ToolOutput
-          label={strings.devtools.common.result}
+          label={strings.pro.common.result}
           value={generated}
           empty={t.generateEmpty}
         />

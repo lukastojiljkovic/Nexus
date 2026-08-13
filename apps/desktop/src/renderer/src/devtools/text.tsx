@@ -71,7 +71,7 @@ import { strings } from "../strings.js";
  * One file per category rather than one map for all forty-eight, because the
  * map is the seam every surface is added at: a single file would be the one
  * place every future tool has to touch, and the place two people writing two
- * unrelated tools collide. `devToolSurfaces.tsx` composes the nine.
+ * unrelated tools collide. `proToolSurfaces.tsx` composes the nine.
  *
  * Every id below is declared in `DEVTOOLS_TOOLS` (`shared/modules.ts`) and
  * `modules.test.ts` pins the two lists against each other in both directions —
@@ -145,7 +145,7 @@ function DiffCell({ tokens, level }: { tokens: readonly string[]; level: DiffLev
 
 function DiffTool() {
   const s = strings.devtools.text.diff;
-  const common = strings.devtools.common;
+  const common = strings.pro.common;
   const [leftText, setLeftText] = useState("");
   const [rightText, setRightText] = useState("");
   const [level, setLevel] = useState<DiffLevel>("lines");
@@ -509,7 +509,7 @@ type LoremUnit = "words" | "sentences" | "paragraphs";
 
 function LoremTool() {
   const s = strings.devtools.text.lorem;
-  const common = strings.devtools.common;
+  const common = strings.pro.common;
   const [unit, setUnit] = useState<LoremUnit>("paragraphs");
   const [countText, setCountText] = useState("3");
   const [vocabulary, setVocabulary] = useState<LoremVocabulary>("latin");
@@ -656,7 +656,7 @@ function SlugTool() {
 
 function CaseConvertTool() {
   const s = strings.devtools.text["case-convert"];
-  const common = strings.devtools.common;
+  const common = strings.pro.common;
   const [input, setInput] = useState("");
   const tokens = tokenizeIdentifier(input);
 
@@ -708,7 +708,7 @@ type TrimChoice = "none" | TrimSide;
 
 function LineToolsTool() {
   const s = strings.devtools.text["line-tools"];
-  const common = strings.devtools.common;
+  const common = strings.pro.common;
   const [input, setInput] = useState("");
   const [removeBlank, setRemoveBlank] = useState(false);
   const [trim, setTrim] = useState<TrimChoice>("none");
@@ -913,7 +913,7 @@ function LineToolsTool() {
 
 function RegexTool() {
   const s = strings.devtools.text.regex;
-  const common = strings.devtools.common;
+  const common = strings.pro.common;
   const [pattern, setPattern] = useState("");
   const [flags, setFlags] = useState("g");
   const [subject, setSubject] = useState("");

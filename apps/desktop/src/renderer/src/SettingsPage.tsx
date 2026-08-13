@@ -6,12 +6,15 @@ import {
   buildLlmPrompt,
   chordAccelerator,
   chordFromEvent,
+  enabledPacks,
   findChordConflict,
   formatChord,
   isModifierKey,
   MODULE_NAV_CONFLICT,
+  TOOL_RISK_CLASSES,
   validateArchivePassphrase,
   type ModuleRegistry,
+  type ToolRiskClass,
 } from "@nexus/core";
 import { ACCENT_IDS, type AccentId } from "@nexus/tokens";
 import {
@@ -78,6 +81,7 @@ import {
 import { Kbd } from "./ShortcutsDialog.js";
 import { clearStoredAccent, persistAccent, readStoredAccent } from "./accent.js";
 import { ProfileAvatar } from "./profileAvatar.js";
+import { ProPackList } from "./ProPacks.js";
 import { profileDisplayName } from "./profilePrefs.js";
 import {
   clearStoredWeekStart,
@@ -157,6 +161,16 @@ const SHELL_SECTIONS_BEFORE_MODULES = ["profile", "profiles", "security", "appea
 const SHELL_SECTIONS_AFTER_MODULES = [
   "shortcuts",
   "modules",
+  // Immediately after „Moduli", because the two answer the same question at two
+  // depths — which parts of Nexus this profile has, and which trades' tools the
+  // one drawer among them carries. A reader who has just decided „Stručne
+  // alatke" is on wants the next card to be what goes in it.
+  "packs",
+  // And right after the toolkits, because it is the long form of what those
+  // toolkits' tools say short. A reader deciding whether to switch „Gradnja i
+  // projektovanje" on meets the answer to „what does this app claim about
+  // regulated work" on the next card, not eight cards later.
+  "risk",
   "notifications",
   "backup",
   // Between „Rezervna kopija" and „Podaci i privatnost", because it is the third
@@ -5321,6 +5335,51 @@ export function SettingsPage({
             {strings.settings.onboardingRerunAction}
           </Button>
         </div>
+      </Card>
+
+      {/* The picker, inline rather than behind the drawer's dialog: this is the
+          page somebody opens to change what they have, and a card that only
+          holds a button to open a dialog is a card that wastes a click. The
+          component is the drawer's own, so the two surfaces cannot drift. */}
+      <Card
+        id={sectionDomId("packs")}
+        title={strings.settings.sectionTitle.packs}
+        className={sectionClass(sections.has("packs"))}
+      >
+        <ProPackList
+          profileId={profileId}
+          packs={new Set(enabledPacks(flags))}
+          onFlagsChanged={onFlagsChanged}
+        />
+      </Card>
+
+      {/* The long form of every notice the drawer shows short. It is the
+          cheapest of the four mechanisms and, on its own, the least protective
+          — a page nobody opens. It earns its place as the ANCHOR: the short
+          line on each tool is only honest if the full text exists somewhere a
+          person can actually read it, and this is that somewhere.
+
+          Every class is listed, including the ones this profile's toolkits do
+          not currently reach. „What does this app say about regulated work" is
+          a question somebody asks BEFORE switching a toolkit on, and a card that
+          answered it only for toolkits already enabled would be silent exactly
+          when it was being consulted. */}
+      <Card
+        id={sectionDomId("risk")}
+        title={strings.settings.sectionTitle.risk}
+        className={sectionClass(sections.has("risk"))}
+      >
+        <p className="set__hint">{strings.pro.riskSection.description}</p>
+        {TOOL_RISK_CLASSES.filter(
+          (riskClass): riskClass is Exclude<ToolRiskClass, "none"> => riskClass !== "none",
+        ).map((riskClass) => (
+          <div className="set__module-group" key={riskClass}>
+            <h3 className="nx-eyebrow set__module-group-title">
+              {strings.pro.risk[riskClass].label}
+            </h3>
+            <p className="set__module-desc">{strings.pro.risk[riskClass].note}</p>
+          </div>
+        ))}
       </Card>
 
       <Card

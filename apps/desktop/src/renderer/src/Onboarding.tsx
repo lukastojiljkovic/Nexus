@@ -7,11 +7,12 @@ import type { ThemeName } from "@nexus/tokens";
 import type { Profile, ProfileKind } from "../../shared/ipc.js";
 import { LOCKED_MODULE_IDS } from "../../shared/modules.js";
 import {
+  applyPackSelection,
   moduleFlagWrites,
-  OCCUPATION_MODULE_PRESETS,
-  ONBOARDING_OCCUPATIONS,
+  packFlagWrites,
+  packInventory,
   resolveModuleSelection,
-  type OnboardingOccupation,
+  resolvePackSelection,
 } from "../../shared/onboardingPresets.js";
 import { NOTIFICATION_PRESETS, type NotificationPresetKey } from "./notificationFormat.js";
 import {
@@ -19,24 +20,43 @@ import {
   readOnboardingDraft,
   writeOnboardingDraft,
 } from "./onboardingDraft.js";
-import { lookup, strings } from "./strings.js";
+import { fill, lookup, strings } from "./strings.js";
 
 /** Mirrors the main-process rule: 1–80 chars after trimming (UX-side only). */
 const NAME_MAX = 80;
 
 /** The questionnaire's screens, in order. */
-type OnboardingStep = "ime" | "uloga" | "oblasti" | "podsetnici";
+type OnboardingStep = "ime" | "nedelja" | "oblasti" | "podsetnici";
 
-const PERSONAL_STEPS: readonly OnboardingStep[] = ["ime", "uloga", "oblasti", "podsetnici"];
+const PERSONAL_STEPS: readonly OnboardingStep[] = ["ime", "nedelja", "oblasti", "podsetnici"];
 
 /**
- * The BUSINESS flow is three screens, not four, and that divergence is
- * deliberate: „Uloga“ exists only to pre-check „Oblasti“, and a business
- * profile's suggestion is its own creation-time preset (ADR-058) — asking a
- * profile that already knows what it is for would be a question with nothing
- * to do with the answer.
+ * The BUSINESS flow is the same four screens.
+ *
+ * **It used to be three, and dropping one was right for the question that used
+ * to be there.** „Uloga“ asked whether somebody was a student, an employee or a
+ * founder, and a business profile already knows: its module set is its own
+ * creation-time preset (ADR-058), so the answer had nothing to do with anything.
+ *
+ * „Tvoja nedelja“ asks something else entirely — which trades' toolkits this
+ * profile should carry — and a business profile is the one that most obviously
+ * has an answer. A caterer's business profile is exactly the profile that wants
+ * „Kuhinja i porcije“. Skipping it there would have hidden the feature from its
+ * best user in order to preserve a shape whose reason had already gone.
  */
-const BUSINESS_STEPS: readonly OnboardingStep[] = ["ime", "oblasti", "podsetnici"];
+const BUSINESS_STEPS: readonly OnboardingStep[] = PERSONAL_STEPS;
+
+/**
+ * The screens that answer with a LIST rather than with one field, and therefore
+ * get the wide card (`.onb__card--wide`).
+ *
+ * „Tvoja nedelja“ is what forced it: nineteen toolkits at the naming screen's
+ * 400px is a scroll where most of the answers start below the fold, and the
+ * screen only works if a person can see their trade without hunting for it.
+ * „Šta ti treba?“ is the same shape one screen later, so it goes with it rather
+ * than making the card change width twice in three screens.
+ */
+const WIDE_STEPS: ReadonlySet<OnboardingStep> = new Set<OnboardingStep>(["nedelja", "oblasti"]);
 
 /**
  * Where a resumed run picks up. The draft stores the step RAW, so this is where
@@ -163,8 +183,16 @@ export function Onboarding({
   const [draft] = useState(() => (rerun ? null : readOnboardingDraft(profileId)));
 
   const [name, setName] = useState(() => draft?.name ?? initialName);
-  const [occupation, setOccupation] = useState<OnboardingOccupation | null>(
-    () => draft?.occupation ?? null,
+  /**
+   * „Tvoja nedelja“ — the toolkits this profile carries.
+   *
+   * Opens on the profile's LIVE packs in every mode, which is the same honest
+   * merge „Šta ti treba?“ makes for modules: what you have is what you start
+   * from. For a fresh profile that is the empty set, because a pack is only ever
+   * something somebody asked for.
+   */
+  const [packs, setPacks] = useState<Set<string>>(() =>
+    draft === null ? resolvePackSelection(flags) : new Set(draft.packs),
   );
   // „Oblasti“ opens on the profile's live flags in every mode — the honest
   // merge (what you have is what you start from), which for a fresh personal
@@ -200,6 +228,10 @@ export function Onboarding({
   // idempotent, since a second pass would leave a second welcome note.
   const completing = useRef(false);
 
+  // The toolkits this build can honestly offer — derived from the registry, so
+  // a pack whose tools are not written yet simply has no card (`packInventory`).
+  const offeredPacks = packInventory(registry);
+
   const stepIndex = steps.indexOf(state.step);
   const saving = state.phase === "saving";
   const trimmed = name.trim();
@@ -213,24 +245,39 @@ export function Onboarding({
     writeOnboardingDraft(profileId, {
       step: state.step,
       name,
-      occupation,
+      packs: [...packs],
       modules: selection,
     });
-  }, [rerun, profileId, state.step, name, occupation, selection]);
+  }, [rerun, profileId, state.step, name, packs, selection]);
 
   function goTo(step: OnboardingStep): void {
     setState({ phase: "asking", step, error: null });
   }
 
   /**
-   * Answering „Uloga“ re-seeds the module selection from that role's table —
-   * at the moment of the answer rather than when „Oblasti“ mounts, so stepping
-   * back and forth never silently discards ticks the user made by hand. Only
-   * picking a different role does that, which is what picking one means.
+   * Ticking a card adds or removes one toolkit, and — through
+   * `applyPackSelection` — switches „Stručne alatke“ on with the first and off
+   * with the last.
+   *
+   * **It touches no other module, and the restraint is the whole point.** The
+   * screen this replaced re-seeded the ENTIRE module selection from the role's
+   * table on every answer, discarding hand-made ticks, and it could do that
+   * honestly because it asked what kind of life somebody had. „Tvoja nedelja“
+   * asks what their WORK is about, which says nothing about whether they keep
+   * habits or sit exams — so it decides the drawer it is asking about and
+   * leaves the next screen's answer alone.
    */
-  function pickOccupation(next: OnboardingOccupation): void {
-    setOccupation(next);
-    setSelection({ ...OCCUPATION_MODULE_PRESETS[next] });
+  function togglePack(pack: string, on: boolean): void {
+    // Computed here rather than inside a `setPacks` updater: the updater form
+    // would put a second `setState` inside a function React is free to call
+    // twice, and „free to call twice" is exactly what a reducer promises. One
+    // click is one render, so reading the current set from the closure is the
+    // honest version of the same thing.
+    const next = new Set(packs);
+    if (on) next.add(pack);
+    else next.delete(pack);
+    setPacks(next);
+    setSelection((selected) => applyPackSelection(selected, next));
   }
 
   function toggleModule(moduleId: string, enabled: boolean): void {
@@ -247,12 +294,28 @@ export function Onboarding({
    */
   async function complete(
     nextSelection: Readonly<Record<string, boolean>>,
+    nextPacks: ReadonlySet<string>,
     nextAppetite: NotificationPresetKey | null,
   ): Promise<void> {
     if (completing.current || !nameValid) return;
     completing.current = true;
     setState({ phase: "saving", step: state.step });
     try {
+      // The packs go through the SAME channel as the modules and obey the same
+      // first-run / rerun rule — they are `feature_flags` rows under a `pack:`
+      // key, not a store of their own (`packFlagKey`).
+      //
+      // **They are written FIRST, and the order is load-bearing.** „Stručne
+      // alatke" is switched on by this run exactly when a pack was chosen, so
+      // writing the modules first would mean a failure between the two loops
+      // leaves the drawer ON with nothing in it — the empty page this whole
+      // design exists to make unreachable. This way round, the worst a partial
+      // failure leaves is packs on record and the drawer still off, which is
+      // both harmless and exactly what the retry then fixes.
+      const currentPacks = rerun ? resolvePackSelection(flags) : null;
+      for (const { moduleId, enabled } of packFlagWrites(nextPacks, currentPacks)) {
+        await window.nexus.setFlag(profileId, moduleId, enabled);
+      }
       // First run writes every selectable module as an EXPLICIT row (the
       // `BUSINESS_DEFAULT_FLAGS` argument); a rerun upserts only what changed.
       const current = rerun ? resolveModuleSelection(registry, flags) : null;
@@ -308,7 +371,7 @@ export function Onboarding({
       goTo(next);
       return;
     }
-    void complete(selection, appetite);
+    void complete(selection, packs, appetite);
   }
 
   return (
@@ -317,7 +380,11 @@ export function Onboarding({
           first (`AuthGate`). The sky is permitted here by `StarField`'s own
           rule — a fixed, centred grid that never scrolls. */}
       <StarField />
-      <Card className="onb__card">
+      {/* The two screens that ask somebody to PICK from a list get the wider
+          card; the two that ask one question keep the 400px `.auth` mirrors.
+          Derived from the step rather than hard-coded per screen, so a screen
+          added to either list cannot end up with the wrong width by omission. */}
+      <Card className={`onb__card${WIDE_STEPS.has(state.step) ? " onb__card--wide" : ""}`}>
         <form className="onb__form" onSubmit={submit}>
           <span className="onb__brand" aria-hidden="true">✦</span>
           <p className="onb__steps">
@@ -362,23 +429,61 @@ export function Onboarding({
             </>
           )}
 
-          {state.step === "uloga" && (
+          {state.step === "nedelja" && (
             <>
-              <h1 className="onb__title">{s.occupationTitle}</h1>
-              <p className="onb__desc">{s.occupationDescription}</p>
-              <div className="onb__choices" role="group" aria-label={s.occupationTitle}>
-                {ONBOARDING_OCCUPATIONS.map((option) => (
-                  <Button
-                    key={option}
-                    className="onb__choice"
-                    variant={occupation === option ? "primary" : "ghost"}
-                    aria-pressed={occupation === option}
-                    onClick={() => pickOccupation(option)}
-                  >
-                    {s.occupationOptions[option]}
-                  </Button>
-                ))}
+              <h1 className="onb__title">{s.packsTitle}</h1>
+              <p className="onb__desc">{s.packsDescription}</p>
+              {/* One card per STOCKED pack, in `TOOL_PACKS` order. There is no
+                  card table to keep in step with the packs — a pack with no
+                  tools has nothing to put on a card, so „do not offer a toolkit
+                  that is not built yet" is a property here rather than a rule
+                  somebody has to remember (`packInventory`).
+
+                  Multi-select, uncapped, and nothing signals that one answer is
+                  normal and three are greedy: most people's working week is
+                  more than one subject, and the professor who also freelances
+                  is the ordinary case rather than the advanced one.
+
+                  The card is the DRAWER's block (`.pro-kit`, `tools.css`), not a
+                  local one: this screen and „Paketi…" show the same object, and
+                  a chosen toolkit has to look the same in both. */}
+              <div className="pro-kits pro-kits--capped" role="group" aria-label={s.packsTitle}>
+                {offeredPacks.map(({ pack, toolCount }) => {
+                  const chosen = packs.has(pack);
+                  const copy = strings.pro.packs[pack];
+                  return (
+                    <button
+                      key={pack}
+                      type="button"
+                      className={`pro-kit${chosen ? " pro-kit--on" : ""}`}
+                      aria-pressed={chosen}
+                      onClick={() => togglePack(pack, !chosen)}
+                    >
+                      <span className="pro-kit-name">{copy.name}</span>
+                      {/* The professions, under the subject. The packs are
+                          named after what the work IS, which is what lets a
+                          geodeta recognise „Gradnja i projektovanje" without
+                          being on anybody's list — but it costs the one thing a
+                          list of job titles gives away free, which is seeing
+                          your own word. This line is that word. */}
+                      <span className="pro-kit-who">{copy.who}</span>
+                      <span className="pro-kit-count">
+                        {fill(strings.pro.picker.contains, { count: toolCount })}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
+              {/* There is deliberately no „Nešto drugo" card. Picking nothing IS
+                  „nešto drugo", and it already means exactly what it should. */}
+              <p className="onb__caption">{s.packsNoChoice}</p>
+              {/* The same sentence the picker carries, on the screen where most
+                  people will actually choose their toolkits for the first time.
+                  Repeating it is the point: this and „Paketi…" are the two doors
+                  into the professional drawer, and a characterisation that only
+                  one door carries is a characterisation half the users never
+                  see. */}
+              <p className="onb__caption">{strings.pro.picker.responsibility}</p>
             </>
           )}
 
@@ -386,6 +491,36 @@ export function Onboarding({
             <>
               <h1 className="onb__title">{s.modulesTitle}</h1>
               <p className="onb__desc">{s.modulesDescription}</p>
+              {/* The receipt, and it lists only what is ON.
+                  A confirmation that draws all nineteen toolkits is a
+                  confirmation nobody reads; a person who ticked two cards
+                  changed two things and should see two rows. Everything else is
+                  reachable from the drawer's own „Paketi…" at any time, which is
+                  where a veto belongs after the questionnaire is over. */}
+              {packs.size > 0 && (
+                <div className="onb__module-group">
+                  <h2 className="onb__module-group-title">{strings.pro.picker.title}</h2>
+                  <div className="onb__module-list">
+                    {offeredPacks
+                      .filter(({ pack }) => packs.has(pack))
+                      .map(({ pack, toolCount }) => (
+                        <div className="onb__module-row" key={pack}>
+                          <div className="onb__module-info">
+                            <span className="onb__module-name">{strings.pro.packs[pack].name}</span>
+                            <span className="onb__module-desc">
+                              {fill(strings.pro.picker.contains, { count: toolCount })}
+                            </span>
+                          </div>
+                          <Checkbox
+                            checked
+                            aria-label={strings.pro.packs[pack].name}
+                            onChange={() => togglePack(pack, false)}
+                          />
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
               {/* The Settings gallery's own markup and its own copy: the two
                   screens ask the same question, and the locked pair is drawn
                   as an „Uvek uključeno“ chip in both. */}
@@ -506,7 +641,7 @@ export function Onboarding({
               type="button"
               className="onb__quiet"
               disabled={saving || !nameValid}
-              onClick={() => void complete(selection, null)}
+              onClick={() => void complete(selection, packs, null)}
             >
               {s.skip}
             </button>

@@ -1,33 +1,36 @@
-import { buildNoteUpdate, parseMarkdownNote, resolveEnabled } from "@nexus/core";
+import { TOOL_PACKS, buildNoteUpdate, packFlagKey, parseMarkdownNote } from "@nexus/core";
 import { describe, expect, it } from "vitest";
 
 import { NOTE_UPDATE_MAX_BYTES } from "../../shared/ipc.js";
 import { createModuleRegistry, LOCKED_MODULE_IDS } from "../../shared/modules.js";
 import {
   ESSENTIALS_MODULE_PRESET,
+  applyPackSelection,
   moduleFlagWrites,
-  OCCUPATION_MODULE_PRESETS,
-  ONBOARDING_OCCUPATIONS,
+  packFlagWrites,
+  packInventory,
   resolveModuleSelection,
+  resolvePackSelection,
   selectableModuleIds,
 } from "../../shared/onboardingPresets.js";
 import { strings } from "./strings.js";
 
 /**
- * ADR-065's declarative data: the two module tables, and the copy of the one
- * starter row the flow writes. Lives beside `modules.test.ts` (and not in
- * `src/shared/`) because that is where the desktop package's Vitest looks —
- * the same reason the module registry's own test lives here.
+ * ADR-065's declarative data: „Osnovno", the pack inventory the questionnaire's
+ * „Tvoja nedelja" screen offers, and the copy of the one starter row the flow
+ * writes. Lives beside `modules.test.ts` (and not in `src/shared/`) because
+ * that is where the desktop package's Vitest looks — the same reason the
+ * module registry's own test lives here.
  *
  * The load-bearing suite is the first one: every expectation derives the id set
  * from the LIVE registry rather than from a hardcoded copy, so registering a
- * module without deciding its „Osnovno“ place and its place in each of the four
- * role suggestions fails here rather than silently inheriting `defaultEnabled`
- * on somebody's first run.
+ * module without deciding its „Osnovno“ place fails here rather than silently
+ * inheriting `defaultEnabled` on somebody's first run.
  */
 
 const registry = createModuleRegistry();
 const SELECTABLE = selectableModuleIds(registry).sort();
+const DECLARED_TOOLS = registry.all().flatMap((manifest) => manifest.tools ?? []);
 
 describe("the questionnaire's module tables cover exactly the registry", () => {
   it("offers every registered module except the locked pair", () => {
@@ -42,133 +45,142 @@ describe("the questionnaire's module tables cover exactly the registry", () => {
   it("decides every selectable module in „Osnovno“ — a new module cannot inherit a silent default", () => {
     expect(Object.keys(ESSENTIALS_MODULE_PRESET).sort()).toEqual(SELECTABLE);
   });
-
-  it("decides every selectable module in every role suggestion", () => {
-    expect(Object.keys(OCCUPATION_MODULE_PRESETS).sort()).toEqual([...ONBOARDING_OCCUPATIONS].sort());
-    for (const occupation of ONBOARDING_OCCUPATIONS) {
-      expect(Object.keys(OCCUPATION_MODULE_PRESETS[occupation]).sort(), occupation).toEqual(
-        SELECTABLE,
-      );
-    }
-  });
-
-  it("names a Serbian label for every occupation", () => {
-    for (const occupation of ONBOARDING_OCCUPATIONS) {
-      expect(strings.onboarding.occupationOptions[occupation], occupation).toBeTruthy();
-    }
-  });
 });
 
 describe("ESSENTIALS_MODULE_PRESET", () => {
-  it("IS today's personal defaults, written out — the skip path and a fresh profile agree by construction", () => {
-    expect(ESSENTIALS_MODULE_PRESET).toEqual(resolveModuleSelection(registry, {}));
-    const on = Object.entries(ESSENTIALS_MODULE_PRESET)
-      .filter(([, enabled]) => enabled)
-      .map(([moduleId]) => moduleId);
-    expect(on.sort()).toEqual(
-      resolveEnabled(registry, {})
-        .filter((id) => !LOCKED_MODULE_IDS.has(id))
-        .sort(),
-    );
+  it("equals the live manifests' defaultEnabled for every selectable module — „Osnovno“ IS the shipped defaults", () => {
+    // Built independently of `resolveModuleSelection` (which this same preset
+    // feeds elsewhere): every selectable manifest's own `defaultEnabled`, walked
+    // straight off the registry, with no other reader in between.
+    const expected: Record<string, boolean> = {};
+    for (const manifest of registry.all()) {
+      if (LOCKED_MODULE_IDS.has(manifest.id)) continue;
+      expected[manifest.id] = manifest.defaultEnabled;
+    }
+    expect(ESSENTIALS_MODULE_PRESET).toEqual(expected);
   });
 
   it("leaves PRIV off — the opt-in section is never pre-chosen (ADR-057)", () => {
     expect(ESSENTIALS_MODULE_PRESET["priv"]).toBe(false);
   });
+
+  it("leaves PRO off — a drawer whose every tool needs a pack is empty until one is granted", () => {
+    expect(ESSENTIALS_MODULE_PRESET["pro"]).toBe(false);
+  });
 });
 
-describe("OCCUPATION_MODULE_PRESETS", () => {
-  it("never pre-checks PRIV, whatever the answer", () => {
-    for (const occupation of ONBOARDING_OCCUPATIONS) {
-      expect(OCCUPATION_MODULE_PRESETS[occupation]["priv"], occupation).toBe(false);
+describe("packInventory", () => {
+  it("counts each pack straight off the live registry", () => {
+    const inventory = packInventory(registry);
+    for (const { pack, toolCount } of inventory) {
+      expect(
+        toolCount,
+        pack,
+      ).toBe(DECLARED_TOOLS.filter((tool) => tool.packs?.includes(pack)).length);
+      // A pack with nothing to build a card out of has no business being
+      // offered — see the function's own comment — so every row here must be
+      // strictly positive, never merely non-negative.
+      expect(toolCount, pack).toBeGreaterThan(0);
     }
   });
 
-  it("pre-checks the three everyday modules for every answer", () => {
-    for (const occupation of ONBOARDING_OCCUPATIONS) {
-      const preset = OCCUPATION_MODULE_PRESETS[occupation];
-      expect(preset["tasks"], occupation).toBe(true);
-      expect(preset["calendar"], occupation).toBe(true);
-      expect(preset["notes"], occupation).toBe(true);
+  it("lists only packs that actually have a tool, in TOOL_PACKS order", () => {
+    const inventory = packInventory(registry);
+    const packsWithTools = TOOL_PACKS.filter((pack) =>
+      DECLARED_TOOLS.some((tool) => tool.packs?.includes(pack)),
+    );
+    expect(inventory.map((entry) => entry.pack)).toEqual(packsWithTools);
+  });
+
+  it("carries „softver“ with its real, live-counted total", () => {
+    // Concrete rather than derived only once: „softver" is the pack every
+    // reader can already count by hand from `DEVTOOLS_TOOLS`' own comment
+    // („the forty-eight tools of the softver pack"), so a regression here is
+    // one a person would notice on sight, not only a test.
+    const softver = packInventory(registry).find((entry) => entry.pack === "softver");
+    expect(softver?.toolCount).toBe(
+      DECLARED_TOOLS.filter((tool) => tool.packs?.includes("softver")).length,
+    );
+    expect(softver?.toolCount).toBe(48);
+  });
+
+  it("omits every pack nothing has claimed", () => {
+    // Derived, and deliberately NOT „gradnja is absent": naming a pack that is
+    // merely unstocked TODAY writes today's build order into a permanent
+    // assertion, and the test would then fail on the day that pack ships its
+    // first tool — reporting progress as a regression. What is permanent is the
+    // rule.
+    const unstocked = TOOL_PACKS.filter(
+      (pack) => !DECLARED_TOOLS.some((tool) => tool.packs?.includes(pack)),
+    );
+    const offered = packInventory(registry).map((entry) => entry.pack);
+    for (const pack of unstocked) expect(offered, pack).not.toContain(pack);
+  });
+});
+
+describe("applyPackSelection", () => {
+  it("turns PRO on with any pack chosen, off with none, and changes no other key", () => {
+    const base: Record<string, boolean> = { ...ESSENTIALS_MODULE_PRESET, pro: false };
+
+    const withPacks = applyPackSelection(base, new Set(["softver"]));
+    expect(withPacks["pro"]).toBe(true);
+    // Not merely „pro is right" — every OTHER key must still be the base's,
+    // which `pro: false` here restores before the whole-object comparison.
+    expect({ ...withPacks, pro: false }).toEqual(base);
+
+    expect(applyPackSelection(base, new Set())).toEqual(base);
+  });
+});
+
+describe("resolvePackSelection", () => {
+  it("reads pack:<id> keys only, off wherever the flag is absent or false", () => {
+    expect(resolvePackSelection({})).toEqual(new Set());
+    expect(resolvePackSelection({ [packFlagKey("softver")]: true, [packFlagKey("dizajn")]: false })).toEqual(
+      new Set(["softver"]),
+    );
+  });
+
+  it("ignores a key naming no real pack, and a bare unprefixed pack name", () => {
+    // An id this build does not know: not the same failure as a false flag,
+    // but the same result — it must not be admitted to the set.
+    expect(resolvePackSelection({ "pack:nepostojeci": true })).toEqual(new Set());
+    // `packFlagKey` always qualifies with "pack:" — a bare "softver" key is
+    // not the shape the writer ever produces, so it must not be read as one.
+    expect(resolvePackSelection({ softver: true })).toEqual(new Set());
+  });
+});
+
+describe("packFlagWrites", () => {
+  it("writes one row per TOOL_PACKS member on a first run, in TOOL_PACKS order", () => {
+    const chosen = new Set(["softver", "dizajn"]);
+    const writes = packFlagWrites(chosen, null);
+    expect(writes).toEqual(
+      TOOL_PACKS.map((pack) => ({ moduleId: packFlagKey(pack), enabled: chosen.has(pack) })),
+    );
+  });
+
+  it("writes only the packs whose value actually changed on a rerun", () => {
+    const current = new Set(["softver", "dizajn"]);
+    // „dizajn" turns off, „biznis" turns on, „softver" is untouched — and
+    // untouched must mean ABSENT from the writes, not merely correct in them.
+    const next = new Set(["softver", "biznis"]);
+    expect(packFlagWrites(next, current)).toEqual([
+      { moduleId: packFlagKey("dizajn"), enabled: false },
+      { moduleId: packFlagKey("biznis"), enabled: true },
+    ]);
+  });
+});
+
+describe("TOOL_PACKS has Serbian copy for every pack (strings.pro.packs)", () => {
+  it("names a non-empty subject and a non-empty audience for every pack, and nothing extra", () => {
+    // A pack added without Serbian copy would render a blank picker row rather
+    // than fail a build — this is the gate that catches it instead.
+    expect(Object.keys(strings.pro.packs).sort()).toEqual([...TOOL_PACKS].sort());
+    for (const pack of TOOL_PACKS) {
+      const copy = strings.pro.packs[pack];
+      expect(copy.name.trim().length, pack).toBeGreaterThan(0);
+      expect(copy.who.trim().length, pack).toBeGreaterThan(0);
     }
-  });
-
-  it("keeps STUDY for the two answers whose day has it, and drops it for the three that do not", () => {
-    expect(OCCUPATION_MODULE_PRESETS.student["study"]).toBe(true);
-    expect(OCCUPATION_MODULE_PRESETS.drugo["study"]).toBe(true);
-    expect(OCCUPATION_MODULE_PRESETS.zaposleni["study"]).toBe(false);
-    expect(OCCUPATION_MODULE_PRESETS.programer["study"]).toBe(false);
-    expect(OCCUPATION_MODULE_PRESETS.preduzetnik["study"]).toBe(false);
-  });
-
-  /**
-   * The one asymmetric row in these tables, and the only place „Uloga“ decides
-   * something instead of suggesting it: every other module is pre-checked
-   * unless a role has no use for it, because a wrong guess costs a sidebar
-   * entry. „Programerske alatke“ is the reverse — off unless the answer asks
-   * for it — so this pins BOTH halves. A future role answer that quietly turned
-   * it on would fail here, and so would a „Programer“ that stopped doing so,
-   * which would leave the module with no way into a profile except the gallery.
-   */
-  it("turns the developer drawer on for „Programer“ and for nobody else", () => {
-    for (const occupation of ONBOARDING_OCCUPATIONS) {
-      expect(OCCUPATION_MODULE_PRESETS[occupation]["devtools"], occupation).toBe(
-        occupation === "programer",
-      );
-    }
-    expect(ESSENTIALS_MODULE_PRESET["devtools"]).toBe(false);
-  });
-
-  it("answers „Programer“ with „Zaposleni“ plus the drawer, and nothing else", () => {
-    // The relationship the table deliberately does not write as a spread — see
-    // `OCCUPATION_MODULE_PRESETS.programer`. A machine-checkable claim belongs
-    // in a test; a row a person reads should carry its own decisions.
-    expect(OCCUPATION_MODULE_PRESETS.programer).toEqual({
-      ...OCCUPATION_MODULE_PRESETS.zaposleni,
-      devtools: true,
-    });
-  });
-
-  it("pre-checks FIN for every answer — „Uloga“ asks about a day, and money is shaped the same in all four", () => {
-    for (const occupation of ONBOARDING_OCCUPATIONS) {
-      expect(OCCUPATION_MODULE_PRESETS[occupation]["finance"], occupation).toBe(true);
-    }
-  });
-
-  it("pre-checks DOC for every answer — it holds nothing of its own, so switching it off spares nobody anything", () => {
-    for (const occupation of ONBOARDING_OCCUPATIONS) {
-      expect(OCCUPATION_MODULE_PRESETS[occupation]["files"], occupation).toBe(true);
-    }
-  });
-
-  it("pre-checks HABIT for every answer — a day's habits are shaped the same whoever is having the day", () => {
-    for (const occupation of ONBOARDING_OCCUPATIONS) {
-      expect(OCCUPATION_MODULE_PRESETS[occupation]["habits"], occupation).toBe(true);
-    }
-  });
-
-  // The strongest version of FIN's and HABIT's argument: „Fokus" is a TIMER.
-  // Sitting down to concentrate for half an hour is not shaped differently for a
-  // student and a founder, and the module holds nothing until somebody presses
-  // start. It is also the one module no answer could sensibly drop without also
-  // dropping STUDY, since the two share the timer.
-  it("pre-checks UTIL for every answer — a timer is shaped the same for everybody", () => {
-    for (const occupation of ONBOARDING_OCCUPATIONS) {
-      expect(OCCUPATION_MODULE_PRESETS[occupation]["focus"], occupation).toBe(true);
-    }
-  });
-
-  // HABIT's argument, with one more reason on top: a role question has no
-  // standing whatsoever to guess something about somebody's body, so „Uloga"
-  // decides nothing here. The module holds nothing until a first meal is logged.
-  it("pre-checks FIT for every answer — eating is shaped the same whoever is doing it", () => {
-    for (const occupation of ONBOARDING_OCCUPATIONS) {
-      expect(OCCUPATION_MODULE_PRESETS[occupation]["fitness"], occupation).toBe(true);
-    }
-  });
-
-  it("answers „Nešto drugo“ with the neutral preset rather than an invented one", () => {
-    expect(OCCUPATION_MODULE_PRESETS.drugo).toEqual(ESSENTIALS_MODULE_PRESET);
   });
 });
 
@@ -187,7 +199,7 @@ describe("resolveModuleSelection", () => {
       focus: true,
       tools: true,
       canvas: true,
-      devtools: false,
+      pro: false,
     });
   });
 
@@ -221,7 +233,7 @@ describe("moduleFlagWrites", () => {
       // Written explicitly even though it matches the manifest default, which
       // is the whole point of a first run: what modules a profile has is a
       // stored fact of the profile, not an accident of this build's manifests.
-      { moduleId: "devtools", enabled: false },
+      { moduleId: "pro", enabled: false },
     ]);
   });
 

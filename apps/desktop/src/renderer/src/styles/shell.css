@@ -767,8 +767,8 @@ body {
   font-size: var(--nx-font-size-caption);
   letter-spacing: var(--nx-font-tracking-label);
 }
-/* „Uloga“ and „Podsetnici“: a wrapping row of choices, the .set__preset-row
-   recipe — the picked one is the primary button, no glow and no fill trickery. */
+/* „Podsetnici“: a wrapping row of choices, the .set__preset-row recipe — the
+   picked one is the primary button, no glow and no fill trickery. */
 .onb__choices {
   display: flex;
   flex-wrap: wrap;
@@ -782,13 +782,45 @@ body {
   color: var(--nx-text-muted);
   font-size: var(--nx-font-size-caption);
 }
-/* „Oblasti“: the Settings module gallery's own rows. Capped and scrollable so a
-   growing registry can never push the card past the viewport — the shell is a
-   centred grid with no scroll of its own. */
-.onb__modules {
+/* The demo-profile offer: a checkbox with its own caption under it. The group
+   had no rule at all, so the label and the sentence explaining it sat flush
+   against each other while every other pair on these screens breathes. */
+.onb__demo {
   display: flex;
   flex-direction: column;
-  gap: var(--nx-space-2);
+  gap: var(--nx-space-1);
+}
+
+/* The two PICKING screens („Tvoja nedelja“ and „Šta ti treba?“) are wider than
+   the three that ask one question each.
+
+   The 400px above is the width the naming screen shares with `.auth`, and that
+   match is worth keeping for the screen where it is visible — the one a person
+   sees seconds after the lock screen. It is not a width to answer nineteen
+   toolkits in: two columns at 400px leave 160px a card, which is not enough for
+   a subject and the trades under it, and one column turns the most important
+   question in the flow into a nineteen-row scroll where most of the answers are
+   below the fold. The card is as wide as what it is holding; the step counter
+   at the top says the screen changed. */
+.onb__card--wide {
+  max-width: 720px;
+}
+/* „Tvoja nedelja“ draws the toolkit cards, and their rule is NOT here: the
+   picker in „Stručne alatke“ shows the same object, so `.pro-kit` lives in
+   `tools.css` and both screens wear it. A second copy under an `.onb__` name is
+   how the questionnaire and the drawer would end up disagreeing about what a
+   chosen toolkit looks like. */
+
+/* „Šta ti treba?“: the Settings module gallery's own rows. Capped and scrollable
+   so a growing registry can never push the card past the viewport — the shell is
+   a centred grid with no scroll of its own. The groups sit on a reflowing grid
+   for the reason the toolkits do, and `start` keeps a short group from stretching
+   its rows to the height of the tall one beside it. */
+.onb__modules {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  align-items: start;
+  gap: var(--nx-space-2) var(--nx-space-6);
   max-height: 46vh;
   overflow-y: auto;
 }

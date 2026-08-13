@@ -1,11 +1,14 @@
 import {
   MODULE_CATEGORIES,
   TOOL_CATEGORIES,
-  TOOL_CATEGORY_DRAWER,
+  TOOL_PACKS,
+  TOOL_RISK_CLASSES,
   UNIT_KINDS,
   foldSearchText,
   parseWidgetConfig,
   resolveEnabled,
+  toolDrawer,
+  toolForbidsVerdict,
   unitsOfKind,
 } from "@nexus/core";
 // The one place a renderer file names `@nexus/db`, and it is a TEST: the
@@ -21,7 +24,7 @@ import { FILE_VIEWS } from "./filePrefs.js";
 import { MODULE_SETTINGS_PANELS } from "./moduleSettingsPanels.js";
 import { NOTE_WIDTHS } from "./notePrefs.js";
 import { BLOCKED_IN_TODAY_OPTIONS } from "./taskPrefs.js";
-import { DEV_TOOL_SURFACES } from "./devToolSurfaces.js";
+import { PRO_TOOL_SURFACES } from "./proToolSurfaces.js";
 import { TOOL_SURFACES } from "./toolSurfaces.js";
 import {
   BUSINESS_DISABLED_MODULE_IDS,
@@ -59,7 +62,7 @@ describe("createModuleRegistry", () => {
       "focus",
       "tools",
       "canvas",
-      "devtools",
+      "pro",
     ]);
   });
 
@@ -110,29 +113,29 @@ describe("createModuleRegistry", () => {
       FIN: ["finance"],
       HABIT: ["habits"],
       FIT: ["fitness"],
-      // The one deliberate sharing — see this test's own comment. Three
-      // modules now: „Programerske alatke" is a second drawer rather than a
-      // section of the first, because the two have different audiences and
-      // one of them is switched off for almost everybody.
-      UTIL: ["focus", "tools", "devtools"],
+      // The one deliberate sharing — see this test's own comment. „Stručne
+      // alatke" does NOT join it: PRD 30 („Profession Toolkits") is its own
+      // entry, not a second reading of PRD 29 („Utility Belt"), so it takes
+      // its own prefix below rather than borrowing this one.
+      UTIL: ["focus", "tools"],
       CANV: ["canvas"],
+      PRO: ["pro"],
     });
   });
 
-  it("only uses canonical categories, and every registered module except PRIV is on by default", () => {
+  it("only uses canonical categories, and every registered module except PRIV and PRO is on by default", () => {
     for (const manifest of createModuleRegistry().all()) {
       expect(MODULE_CATEGORIES, manifest.id).toContain(manifest.category);
       // Founder decision 2026-07-12: only BUILT modules are registered, so an
       // entry that shipped disabled would be an entry that leads nowhere.
       // Two deliberate exceptions, both built AND registered and both OFF
       // until the user asks for them — an opt-in section is not an unbuilt
-      // page. PRIV is opt-in because of what it holds (ADR-057);
-      // „Programerske alatke" because of who it is for: a drawer of forty-eight
-      // instruments for reading a floating-point bit pattern is noise in the
-      // sidebar of somebody who does not write code, and the questionnaire's
-      // „Programer" answer is what turns it on.
+      // page. PRIV is opt-in because of what it holds (ADR-057); „Stručne
+      // alatke" because every tool inside it names a pack, so a profile that
+      // answered no questions on the way in would open it onto an empty page
+      // — the opening questionnaire's pack picker is what turns it on.
       expect(manifest.defaultEnabled, manifest.id).toBe(
-        manifest.id !== "priv" && manifest.id !== "devtools",
+        manifest.id !== "priv" && manifest.id !== "pro",
       );
     }
   });
@@ -168,15 +171,17 @@ describe("createModuleRegistry", () => {
     // „Fokus" is the first module in „Profesionalno i alati", and the category
     // is the honest one: „Životni centri" holds three subjects somebody HAS,
     // while a Pomodoro timer is a TOOL you use on whichever of them you are at.
-    // Three modules now: „Fokus" is a timer you run, „Alatke" a drawer you
-    // open, „Tabla" a surface you draw on — separate entries because they are
-    // separate errands. The first two share the UTIL prefix (one PRD section
-    // implemented twice); CANV has its own, because it is its own PRD entry.
+    // Four modules now: „Fokus" a timer you run, „Alatke" a drawer you open,
+    // „Tabla" a surface you draw on, „Stručne alatke" a second, pack-gated
+    // drawer — separate entries because they are separate errands. „Fokus" and
+    // „Alatke" share the UTIL prefix (one PRD section implemented twice);
+    // „Tabla" and „Stručne alatke" each take their own, because each is its
+    // own PRD entry (CANV, PRO).
     expect(grouped.get("Professional & utilities")?.map((manifest) => manifest.id)).toEqual([
       "focus",
       "tools",
       "canvas",
-      "devtools",
+      "pro",
     ]);
   });
 
@@ -192,8 +197,8 @@ describe("createModuleRegistry", () => {
 
   it("resolves to the default-on set with no flags, and honours explicit flags both ways", () => {
     const registry = createModuleRegistry();
-    // PRIV and „Programerske alatke" are absent by DEFAULT — the two modules
-    // somebody has to ask for (ADR-057; and the questionnaire's „Programer").
+    // PRIV and „Stručne alatke" are absent by DEFAULT — the two modules
+    // somebody has to ask for (ADR-057; and the questionnaire's pack picker).
     expect(resolveEnabled(registry, {})).toEqual([
       "dashboard",
       "tasks",
@@ -211,7 +216,7 @@ describe("createModuleRegistry", () => {
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");
-    expect(resolveEnabled(registry, { devtools: true })).toContain("devtools");
+    expect(resolveEnabled(registry, { pro: true })).toContain("pro");
   });
 
   it("keeps PRIV free of every render-while-locked surface: no widgets, no search indexers", () => {
@@ -665,17 +670,17 @@ describe("the per-widget configuration declarations (DASH-004 / ADR-059)", () =>
 });
 
 /**
- * UTIL slice c: the tools the registry publishes (`ToolRegistration`), and the
- * pairing „Alatke" rests on.
+ * UTIL slice c and PRO (UTIL slice d): the tools the registry publishes
+ * (`ToolRegistration`), and the pairing both drawers rest on.
  *
- * The drawer is a HOST — it collects `manifest.tools` across the registry and
- * renders whatever it finds — so it has no list of tools of its own and no
+ * Each drawer is a HOST — it collects `manifest.tools` across the registry and
+ * renders whatever it finds — so neither has a list of tools of its own and no
  * `switch`. That is only safe if the two halves agree, which is what these
  * pin: a declaration with no surface is a row that opens onto nothing, a
  * surface with no declaration is a tool nobody can reach. Neither fails loudly
  * in the app.
  */
-describe("the tools the registry publishes (PRD 29 UTIL)", () => {
+describe("the tools the registry publishes (PRD 29 UTIL, PRD 30 PRO)", () => {
   const registry = createModuleRegistry();
   const declared = registry.all().flatMap((manifest) => manifest.tools ?? []);
   const lookup = (path: string): unknown =>
@@ -710,23 +715,38 @@ describe("the tools the registry publishes (PRD 29 UTIL)", () => {
    * rather than a rule. The drawer reads the whole registry, so the day NOTE
    * contributes a Markdown table builder it appears without either drawer being
    * edited; this pins that nothing has done so silently yet.
+   *
+   * What routes a tool to ITS drawer is `packs` — through `toolDrawer`, never
+   * through which module declared it and never through `category` (`category`
+   * only says what the rail groups it under, per `TOOL_CATEGORIES`'s own
+   * comment). „Alatke" is the everyday case: no tool there may name a pack at
+   * all. „Stručne alatke" is the inverse, and an EMPTY `packs` array is
+   * deliberately as wrong as a missing one — it would declare a professional
+   * tool no profession can ever switch on, a tool that ships and is
+   * unreachable (`ToolRegistration.packs`'s own comment). `toBeGreaterThan(0)`
+   * below is what makes that failure mode fail loudly here rather than in the
+   * app.
    */
-  it("has exactly the two tool-publishing modules, and every tool lands in a real drawer", () => {
+  it("has exactly the two tool-publishing modules, and every tool's packs put it in the right drawer", () => {
     expect(
       registry
         .all()
         .filter((manifest) => manifest.tools !== undefined)
         .map((manifest) => manifest.id),
-    ).toEqual(["tools", "devtools"]);
-    // The seam the whole two-drawer design rests on: a tool reaches its drawer
-    // through its CATEGORY, never through which module declared it. Both halves
-    // are asserted, because „every category maps somewhere" is the compiler's
-    // job and „the mapping is the intended one" is not.
+    ).toEqual(["tools", "pro"]);
     for (const tool of registry.get("tools")?.tools ?? []) {
-      expect(TOOL_CATEGORY_DRAWER[tool.category], tool.id).toBe("utilities");
+      expect(tool.packs, tool.id).toBeUndefined();
+      expect(toolDrawer(tool), tool.id).toBe("utilities");
     }
-    for (const tool of registry.get("devtools")?.tools ?? []) {
-      expect(TOOL_CATEGORY_DRAWER[tool.category], tool.id).toBe("developer");
+    for (const tool of registry.get("pro")?.tools ?? []) {
+      expect(Array.isArray(tool.packs), tool.id).toBe(true);
+      // The empty-array case this comment argues against — a `packs: []` tool
+      // must fail exactly this line.
+      expect(tool.packs?.length ?? 0, tool.id).toBeGreaterThan(0);
+      for (const pack of tool.packs ?? []) {
+        expect(TOOL_PACKS, `${tool.id}:${pack}`).toContain(pack);
+      }
+      expect(toolDrawer(tool), tool.id).toBe("professional");
     }
   });
 
@@ -747,18 +767,25 @@ describe("the tools the registry publishes (PRD 29 UTIL)", () => {
     expect(declared.map((tool) => tool.id)).not.toContain("valuta");
   });
 
-  it("pairs every declared tool with a surface, and every surface with a declaration", () => {
-    // The union of BOTH maps, because a drawer is not allowed to have a surface
-    // for a tool nobody declares, nor a declaration nothing can draw — and the
-    // two maps are separate files only so that the developer drawer's
-    // forty-eight surfaces do not live in one unreadable module.
-    expect(declared.map((tool) => tool.id).sort()).toEqual(
-      [...Object.keys(TOOL_SURFACES), ...Object.keys(DEV_TOOL_SURFACES)].sort(),
-    );
+  it("splits the tools between the two surface maps exactly along `toolDrawer`, with no id in both", () => {
+    // A declaration with no surface is a row that opens onto nothing; a
+    // surface with no declaration is a tool nobody can reach — and the two
+    // maps are separate files only so that the professional drawer's
+    // forty-eight-plus surfaces do not live in one unreadable module.
+    const utilities = declared
+      .filter((tool) => toolDrawer(tool) === "utilities")
+      .map((tool) => tool.id)
+      .sort();
+    const professional = declared
+      .filter((tool) => toolDrawer(tool) === "professional")
+      .map((tool) => tool.id)
+      .sort();
+    expect(Object.keys(TOOL_SURFACES).sort()).toEqual(utilities);
+    expect(Object.keys(PRO_TOOL_SURFACES).sort()).toEqual(professional);
     // ...and the two maps do not overlap: a surface named in both would be
     // drawn by whichever drawer asked first, which is not a decision anybody
     // would have made on purpose.
-    for (const id of Object.keys(DEV_TOOL_SURFACES)) {
+    for (const id of Object.keys(PRO_TOOL_SURFACES)) {
       expect(TOOL_SURFACES, id).not.toHaveProperty(id);
     }
   });
@@ -769,15 +796,22 @@ describe("the tools the registry publishes (PRD 29 UTIL)", () => {
     for (const id of ids) expect(id, id).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
   });
 
-  it("names a string that really exists for every tool title, and a canonical category", () => {
+  it("names a real string for every tool title and declared blurb, and a canonical, labelled category", () => {
     for (const tool of declared) {
       // `titleKey` is a strings KEY path, not Serbian copy (`ToolRegistration`).
-      // Digits belong in a segment: half the developer drawer is named after
-      // things that are spelled with them — „base64", „fp8-e4m3", „sha256" —
-      // and a key is derived from the tool's id, which carries them.
+      // Digits belong in a segment: half the professional drawer is named
+      // after things that are spelled with them — „base64", „fp8-e4m3",
+      // „sha256" — and a key is derived from the tool's id, which carries them.
       expect(tool.titleKey, tool.id).toMatch(/^[a-zA-Z]+(?:\.[a-zA-Z0-9-]+)+$/);
       expect(typeof lookup(tool.titleKey), tool.titleKey).toBe("string");
+      // `blurbKey` is optional (only „Stručne alatke" carries one), but a
+      // declared one must resolve exactly as a `titleKey` does.
+      if (tool.blurbKey !== undefined) {
+        expect(typeof lookup(tool.blurbKey), tool.blurbKey).toBe("string");
+      }
       expect(TOOL_CATEGORIES, tool.id).toContain(tool.category);
+      // A category with no Serbian label would render its raw id in the rail.
+      expect(typeof strings.tools.category[tool.category], tool.id).toBe("string");
     }
   });
 
@@ -812,6 +846,107 @@ describe("the tools the registry publishes (PRD 29 UTIL)", () => {
       for (const unit of unitsOfKind(kind)) {
         expect(typeof stringFor(strings.tools.unit, unit.id), unit.id).toBe("string");
       }
+    }
+  });
+
+  /**
+   * The disclaimers, as invariants rather than as a habit.
+   *
+   * `riskClass` is a required field, so TypeScript already refuses a tool that
+   * declares none. What it cannot see is the half that matters: that the class
+   * a tool declares has Serbian copy behind it, and that a tool whose ANSWER can
+   * hurt somebody did not quietly ship as `"none"` because its author was
+   * thinking about the arithmetic rather than about the site.
+   */
+  it("gives every tool a known risk class, and every class the four pieces of copy it renders", () => {
+    for (const tool of declared) {
+      expect(TOOL_RISK_CLASSES, tool.id).toContain(tool.riskClass);
+    }
+    for (const riskClass of TOOL_RISK_CLASSES) {
+      if (riskClass === "none") {
+        // The one class with no copy, because it draws nothing. An entry here
+        // would be a notice waiting for somebody to render it by mistake.
+        expect(strings.pro.risk).not.toHaveProperty(riskClass);
+        continue;
+      }
+      const copy = strings.pro.risk[riskClass];
+      // `line` is the summary, `note` the long form behind it, `export` the
+      // line that leaves with a copied result, `label` the Settings heading.
+      for (const key of ["label", "line", "note", "export"] as const) {
+        expect(typeof copy[key], `${riskClass}.${key}`).toBe("string");
+        expect(copy[key].length, `${riskClass}.${key}`).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  /**
+   * The rule that keeps „forgot the notice" from being expressible.
+   *
+   * A category is what a tool DOES, and three of them describe doing something
+   * whose failure mode is not the user's own time: `structure` asks what an
+   * assembly can carry, `electrical` asks what a conductor can pass, and both
+   * end with a third party under the thing that failed. `body` is a person
+   * acting on a number about themselves, and `finance` is a figure that goes on
+   * somebody's invoice or return.
+   *
+   * So those four categories are not free to be `"none"`. This is deliberately
+   * a rule about the CATEGORY rather than the pack: a rigger's sling load and an
+   * electrician's cable drop are different trades and the same danger, and a
+   * rule keyed on the trade would have caught one of them.
+   */
+  it("refuses a harmless risk class to the categories whose failures land on somebody else", () => {
+    const REQUIRED = {
+      structure: ["life-safety"],
+      electrical: ["life-safety"],
+      body: ["wellness", "life-safety"],
+      finance: ["financial", "legal-procedure"],
+    } as const;
+    for (const tool of declared) {
+      const allowed = REQUIRED[tool.category as keyof typeof REQUIRED];
+      if (allowed === undefined) continue;
+      expect(allowed as readonly string[], `${tool.id} (${tool.category})`).toContain(
+        tool.riskClass,
+      );
+    }
+  });
+
+  /**
+   * The verdict ban, at the only place a static check can see it: the tool's own
+   * Serbian name and blurb.
+   *
+   * A `life-safety` or `food-safety` tool computes a quantity and never renders
+   * a judgement — „provera da li nosač zadovoljava" is a different product from
+   * „moment savijanja", and it is the product that needs an engineer's stamp.
+   * The surface cannot be scanned for this (its copy lives in a strings tree
+   * shared by fifty tools), but the NAME is where the promise is made, and a
+   * tool that promises a verdict in its title will keep it in its body.
+   */
+  it("keeps a verdict out of the name of every tool that is not allowed to render one", () => {
+    const VERDICT = /zadovoljav|bezbedn|ispravn|u skladu|dozvoljen|provera da li|da li je/i;
+    for (const tool of declared) {
+      if (!toolForbidsVerdict(tool.riskClass)) continue;
+      const title = lookup(tool.titleKey);
+      const blurb = tool.blurbKey === undefined ? "" : lookup(tool.blurbKey);
+      expect(`${String(title)} ${String(blurb)}`, tool.id).not.toMatch(VERDICT);
+    }
+  });
+
+  /**
+   * A published constant has to say whose it is.
+   *
+   * `sourceKey` is a strings path exactly as `titleKey` is, and an unresolved
+   * one renders nothing at all — which is indistinguishable on screen from a
+   * tool that invented its numbers.
+   */
+  it("resolves the source line of every tool that quotes a published table", () => {
+    for (const tool of declared) {
+      if (tool.sourceKey === undefined) continue;
+      expect(tool.sourceKey, tool.id).toMatch(/^[a-zA-Z]+(?:\.[a-zA-Z0-9-]+)+$/);
+      const line = lookup(tool.sourceKey);
+      expect(typeof line, `${tool.id}:${tool.sourceKey}`).toBe("string");
+      // A source names an edition or a year; „ISO 216" alone is a standard
+      // family, not a citation somebody can check.
+      expect(String(line), tool.id).toMatch(/\d/);
     }
   });
 });

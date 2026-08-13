@@ -235,6 +235,58 @@ function shellEntries(): readonly ShellSettingsSearchEntry[] {
       keywords: ["upitnik", "onboarding", "podesavanje", "ponovo", "pocetak", "moduli", "oblasti"],
     },
     {
+      // The toolkit picker. Its keywords are deliberately TRADES rather than
+      // features, because that is what somebody types here: a person looking for
+      // the dosing calculator searches „lekar", not „paket". The pack names
+      // themselves are already matched through the card, so this entry carries
+      // the words the names do not — the job titles the subjects were chosen to
+      // avoid putting on screen (`strings.pro.packs`' own note).
+      id: "packs",
+      section: "packs",
+      label: s.sectionTitle.packs,
+      keywords: [
+        "alatke",
+        "struka",
+        "zanimanje",
+        "posao",
+        "paket",
+        "programer",
+        "arhitekta",
+        "lekar",
+        "advokat",
+        "racunovoda",
+        "fotograf",
+        "trener",
+        "nastavnik",
+        "prevodilac",
+        "muzicar",
+        "vozac",
+        "poljoprivrednik",
+        "krojac",
+        "ugostitelj",
+        "agent",
+      ],
+    },
+    {
+      // The long-form notices. Searched for by the WORRY, not by the feature
+      // name — somebody types „odgovornost" or „garancija", never „napomene".
+      id: "risk",
+      section: "risk",
+      label: s.sectionTitle.risk,
+      keywords: [
+        "napomena",
+        "odgovornost",
+        "garancija",
+        "upozorenje",
+        "bezbednost",
+        "propis",
+        "zakon",
+        "savet",
+        "rok",
+        "porez",
+      ],
+    },
+    {
       id: "notifications-presets",
       section: "notifications",
       label: s.sectionTitle.notifications,

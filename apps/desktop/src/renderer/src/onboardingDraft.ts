@@ -1,4 +1,4 @@
-import { ONBOARDING_OCCUPATIONS, type OnboardingOccupation } from "../../shared/onboardingPresets.js";
+import { TOOL_PACKS } from "@nexus/core";
 
 /**
  * ADR-065: the questionnaire's IN-PROGRESS state — which screen the user is on
@@ -31,13 +31,23 @@ export interface OnboardingDraft {
   readonly step: string;
   /** What has been typed into the name field so far; deliberately NOT trimmed or committed — the rename is the completion act. */
   readonly name: string;
-  readonly occupation: OnboardingOccupation | null;
-  /** The „Oblasti“ checkbox state: one entry per selectable module. */
+  /**
+   * The toolkits ticked on „Tvoja nedelja“ so far.
+   *
+   * Stored as an array of pack ids and read back through the live `TOOL_PACKS`
+   * list, so a draft written by a build that offered a pack this one does not
+   * simply loses that id instead of resuming into a card that no longer exists.
+   */
+  readonly packs: readonly string[];
+  /** The „Šta ti treba?“ checkbox state: one entry per selectable module. */
   readonly modules: Readonly<Record<string, boolean>>;
 }
 
-function isOccupation(value: unknown): value is OnboardingOccupation {
-  return (ONBOARDING_OCCUPATIONS as readonly string[]).includes(value as string);
+/** The known pack ids out of a stored array, in `TOOL_PACKS` order — anything else is dropped, not rejected. */
+function asPacks(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const stored = new Set(value.filter((entry): entry is string => typeof entry === "string"));
+  return TOOL_PACKS.filter((pack) => stored.has(pack));
 }
 
 /** A `Record<string, boolean>` or nothing — anything with a non-boolean value is not a selection this app wrote. */
@@ -69,11 +79,10 @@ export function readOnboardingDraft(profileId: string): OnboardingDraft | null {
   if (typeof draft["step"] !== "string" || typeof draft["name"] !== "string" || modules === null) {
     return null;
   }
-  const occupation = draft["occupation"];
   return {
     step: draft["step"],
     name: draft["name"].slice(0, NAME_MAX),
-    occupation: isOccupation(occupation) ? occupation : null,
+    packs: asPacks(draft["packs"]),
     modules,
   };
 }

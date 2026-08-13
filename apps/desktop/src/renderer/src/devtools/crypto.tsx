@@ -82,7 +82,7 @@ import {
  * One file per category rather than one map for all forty-eight, because the
  * map is the seam every surface is added at: a single file would be the one
  * place every future tool has to touch, and the place two people writing two
- * unrelated tools collide. `devToolSurfaces.tsx` composes the nine.
+ * unrelated tools collide. `proToolSurfaces.tsx` composes the nine.
  *
  * Every id below is declared in `DEVTOOLS_TOOLS` (`shared/modules.ts`) and
  * `modules.test.ts` pins the two lists against each other in both directions —
@@ -485,7 +485,7 @@ function PasswordGenTool() {
             (passwordResult.ok ? (
               <>
                 <ToolOutput
-                  label={strings.devtools.common.result}
+                  label={strings.pro.common.result}
                   value={passwordResult.value.password}
                 />
                 <div className="tool__results">
@@ -527,7 +527,7 @@ function PasswordGenTool() {
             (passphraseResult.ok ? (
               <>
                 <ToolOutput
-                  label={strings.devtools.common.result}
+                  label={strings.pro.common.result}
                   value={passphraseResult.value.passphrase}
                 />
                 <div className="tool__results">
@@ -677,9 +677,9 @@ function JwtTool() {
       />
       {decoded === null ? (
         <ToolOutput
-          label={strings.devtools.common.output}
+          label={strings.pro.common.output}
           value=""
-          empty={strings.devtools.common.awaitingInput}
+          empty={strings.pro.common.awaitingInput}
         />
       ) : !decoded.ok ? (
         <ToolFailure>{describeJwtDecodeFailure(s, decoded.failure, subjectLabels)}</ToolFailure>
@@ -810,7 +810,7 @@ function HashingTool() {
   return (
     <>
       <ToolTextArea
-        label={strings.devtools.common.input}
+        label={strings.pro.common.input}
         value={inputText}
         onChange={setInputText}
         placeholder={s.inputPlaceholder}
@@ -1045,7 +1045,7 @@ function AesTool() {
           </Button>
           {decryptState.state.kind === "done" && decryptState.state.result.ok && (
             <ToolOutput
-              label={strings.devtools.common.output}
+              label={strings.pro.common.output}
               value={decryptState.state.result.value}
               multiline
             />

@@ -49,7 +49,7 @@ import {
  * views of a byte run, Unicode inspection, HTML entities and hexdumps.
  *
  * **One file per category rather than one map for all forty-eight** — see
- * `devToolSurfaces.tsx`. The tools this file owes:
+ * `proToolSurfaces.tsx`. The tools this file owes:
  *   - `base64`
  *   - `url-encode`
  *   - `url-parse`
@@ -142,7 +142,7 @@ function ModeSwitch<T extends string>({
 
 function Base64Tool() {
   const s = strings.devtools.encoding.base64;
-  const c = strings.devtools.common;
+  const c = strings.pro.common;
   const enc = strings.devtools.encoding.common;
 
   const [direction, setDirection] = useState<"encode" | "decode">("encode");
@@ -253,7 +253,7 @@ function Base64Tool() {
 
 function UrlEncodeTool() {
   const s = strings.devtools.encoding["url-encode"];
-  const c = strings.devtools.common;
+  const c = strings.pro.common;
   const enc = strings.devtools.encoding.common;
 
   const [direction, setDirection] = useState<"encode" | "decode">("encode");
@@ -328,7 +328,7 @@ function UrlEncodeTool() {
 
 function UrlParseTool() {
   const s = strings.devtools.encoding["url-parse"];
-  const c = strings.devtools.common;
+  const c = strings.pro.common;
 
   const [text, setText] = useState("");
   const parsed = useMemo(() => (text.trim() === "" ? null : parseUrl(text)), [text]);
@@ -447,7 +447,7 @@ function ReverseField({
 
 function AsciiBinaryHexTool() {
   const s = strings.devtools.encoding["ascii-binary-hex"];
-  const c = strings.devtools.common;
+  const c = strings.pro.common;
 
   const [text, setText] = useState("");
   const [hexDraft, setHexDraft] = useState("");
@@ -544,7 +544,7 @@ function formatUtf16Unit(unit: number): string {
 
 function UnicodeInspectorTool() {
   const s = strings.devtools.encoding["unicode-inspector"];
-  const c = strings.devtools.common;
+  const c = strings.pro.common;
 
   const [text, setText] = useState("");
   // Nothing is examined past the cap — not even to be thrown away. `subject`
@@ -612,7 +612,7 @@ function UnicodeInspectorTool() {
 
 function HtmlEntitiesTool() {
   const s = strings.devtools.encoding["html-entities"];
-  const c = strings.devtools.common;
+  const c = strings.pro.common;
   const enc = strings.devtools.encoding.common;
 
   const [direction, setDirection] = useState<"escape" | "unescape">("escape");
@@ -725,7 +725,7 @@ function layoutValue(text: string): number | null {
 
 function HexdumpTool() {
   const s = strings.devtools.encoding.hexdump;
-  const c = strings.devtools.common;
+  const c = strings.pro.common;
   const enc = strings.devtools.encoding.common;
 
   const [mode, setMode] = useState<"dump" | "parse">("dump");

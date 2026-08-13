@@ -66,6 +66,7 @@ import {
   shiftDayKey,
   sniffMime,
   toFtsMatchExpression,
+  TOOL_PACKS,
   validateArchivePassphrase,
   validateHabitSchedule,
   validateRecurrenceRule,
@@ -674,7 +675,7 @@ import {
   type WindowState,
   type WindowViewCommand,
 } from "../shared/ipc.js";
-import { businessProfileFlags, createModuleRegistry } from "../shared/modules.js";
+import { businessProfileFlags, createModuleRegistry, LOCKED_MODULE_IDS } from "../shared/modules.js";
 import { DEMO_BUSINESS_PROFILE_NAME, seedDemoBusiness, seedDemoProfile } from "./demo/index.js";
 import { runShots } from "./shots/index.js";
 
@@ -1743,6 +1744,40 @@ function asWindowViewCommand(value: unknown, field: string): WindowViewCommand {
     return value as WindowViewCommand;
   }
   throw new Error(`Invalid IPC payload: "${field}" is not a valid window view command.`);
+}
+
+/**
+ * A `feature_flags` key the renderer is allowed to write: a registered,
+ * unlockable module id, or `pack:<id>` for a pack in `TOOL_PACKS`.
+ *
+ * **This channel used to take any non-empty string**, and the table it writes to
+ * has no constraint of its own — it is a generic per-profile key→boolean store,
+ * which is exactly what made it the right home for packs and exactly why it
+ * needed a gate. Without one, a compromised renderer could fill a profile's flag
+ * table with rows nothing ever reads and nothing ever cleans up; more mundanely,
+ * one typo in a caller writes `pack:softwer` and the pack silently never turns
+ * on, with the row sitting in the file looking like an answer.
+ *
+ * SEC-EL's rule is that the store re-validates semantics, and „is this the name
+ * of something that exists" is the whole semantics of this payload. A closed
+ * domain checked here turns both of those into an error at the boundary.
+ *
+ * LOCKED modules are refused too, and that is not extra strictness: `dashboard`
+ * and `settings` cannot be switched off anywhere in the UI (`LOCKED_MODULE_IDS`,
+ * SET-007), so a row for one is a stored fact no surface can act on and no
+ * surface should be able to create.
+ */
+function asFlagKey(value: unknown): string {
+  if (typeof value === "string") {
+    const pack = value.startsWith("pack:") ? value.slice("pack:".length) : null;
+    if (pack !== null && (TOOL_PACKS as readonly string[]).includes(pack)) {
+      return value;
+    }
+    if (pack === null && moduleRegistry.get(value) != null && !LOCKED_MODULE_IDS.has(value)) {
+      return value;
+    }
+  }
+  throw new Error(`Invalid IPC payload: "moduleId" is not a settable module or pack.`);
 }
 
 /** The closed card-kind domain (ADR-042); anything else is rejected before it reaches the store. */
@@ -6714,9 +6749,9 @@ function registerIpc(): void {
     assertTrustedSender(event);
     const body = asRecord(payload);
     const profileId = asNonEmptyString(body.profileId, "profileId");
-    const moduleId = asNonEmptyString(body.moduleId, "moduleId");
+    const flagKey = asFlagKey(body.moduleId);
     const enabled = asBoolean(body.enabled, "enabled");
-    await new SqliteFlagStore(requireDb().raw, profileId).set(moduleId, enabled);
+    await new SqliteFlagStore(requireDb().raw, profileId).set(flagKey, enabled);
   });
 
   ipcMain.handle(IpcChannel.tasksList, (event, payload): Task[] => {

@@ -1,6 +1,8 @@
 /**
- * „Programerske alatke" — the drawer's Serbian copy, composed from one file per
- * category.
+ * The copy of the `softver` pack — the forty-eight developer tools — composed
+ * from one file per category. This is no longer the copy of a drawer: the
+ * drawer is „Stručne alatke", and its chrome and shared surface words live in
+ * `./pro.ts`.
  *
  * **Why this is not simply another group in `strings.sr.ts`.** Forty-eight
  * tools carry more copy than the eleven modules above them put together: field
@@ -9,6 +11,12 @@
  * the scroll. The split is by CATEGORY, which is also how the drawer groups its
  * rail, so „where does this label live" has the same answer as „where does this
  * tool live".
+ *
+ * **Why the group is still called `devtools`.** Tools register with
+ * `titleKey: "devtools.name.…"` and `blurbKey: "devtools.blurb.…"` — a tool
+ * names a string in its own family's group, and this family did not change
+ * when its neighbours arrived. Renaming it would have said the tools changed,
+ * when only the room did.
  *
  * Nothing here is a second copy layer. This is one leaf of the same table —
  * `strings.sr.ts` spreads it in as `devtools`, `strings.ts` clones the whole
@@ -26,35 +34,6 @@ import { DEVTOOLS_SYSTEM_SR } from "./devtools.system.js";
 import { DEVTOOLS_TIME_SR } from "./devtools.time.js";
 
 export const devtoolsSr = {
-  title: "Programerske alatke",
-  searchLabel: "Pretraži programerske alatke",
-  searchPlaceholder: "Pretraži po imenu ili pojmu…",
-  noMatches: "Nijedna alatka ne odgovara pretrazi.",
-  clearSearch: "Poništi pretragu",
-  emptyTitle: "Nijedna alatka nije otvorena",
-  /** Says how to find one, because with forty-eight tools the list is the hard part. */
-  empty: "Izaberi alatku sa liste ili je pronađi pretragom.",
-  /**
-   * Copy the surfaces share — the words that would otherwise be written
-   * forty-eight times and drift on about six of them.
-   */
-  common: {
-    copy: "Kopiraj",
-    /** Replaces „Kopiraj" for a moment after a copy. Past tense: it has happened. */
-    copied: "Kopirano",
-    result: "Rezultat",
-    input: "Ulaz",
-    output: "Izlaz",
-    /** Before anything has been typed — the output box says this instead of standing empty. */
-    awaitingInput: "Upiši nešto gore.",
-    /** The one refusal every surface can need: the text is not what this tool reads. */
-    invalid: "Ovo nije oblik koji ova alatka čita.",
-    bytes: "Bajtova",
-    characters: "Znakova",
-    lines: "Redova",
-    /** Under a table that stopped early — a table that stops silently misreports its input. */
-    tableCapped: "U tabeli je prvih {shown} od {total} redova.",
-  },
   name: {
     "number-base": "Brojni sistemi",
     "integer-inspector": "Inspektor celih brojeva",

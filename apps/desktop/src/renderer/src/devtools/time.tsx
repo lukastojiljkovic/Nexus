@@ -332,7 +332,7 @@ function CronTool() {
       <ToolInput label={s.input} hint={s.inputHint} value={text} onChange={setText} mono />
 
       {!typed ? (
-        <ToolOutput label={s.meaning} value="" empty={strings.devtools.common.awaitingInput} />
+        <ToolOutput label={s.meaning} value="" empty={strings.pro.common.awaitingInput} />
       ) : result === null ? null : !result.ok ? (
         <>
           <ToolFailure>{result.error.message}</ToolFailure>

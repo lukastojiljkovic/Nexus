@@ -113,7 +113,7 @@ function HttpStatusTool() {
 
 function PathConvertTool() {
   const s = strings.devtools.system["path-convert"];
-  const c = strings.devtools.common;
+  const c = strings.pro.common;
   const [text, setText] = useState("");
   const [target, setTarget] = useState<PathFlavour>("wsl");
 
@@ -545,7 +545,7 @@ const QR_PAYLOAD_KINDS: readonly QrPayloadKind[] = [
 
 function QrTool() {
   const s = strings.devtools.system.qr;
-  const c = strings.devtools.common;
+  const c = strings.pro.common;
 
   const [mode, setMode] = useState<QrPayloadKind>("text");
   const [ecLevel, setEcLevel] = useState<QrEcLevel>("M");

@@ -589,83 +589,121 @@ const TOOLS_TOOLS: ToolRegistration[] = [
     id: "duzina",
     titleKey: "tools.name.duzina",
     category: "conversion",
+    riskClass: "none",
     keywords: ["duzina", "rastojanje", "metar", "kilometar", "milja", "inc", "stopa", "jard"],
   },
   {
     id: "masa",
     titleKey: "tools.name.masa",
     category: "conversion",
+    riskClass: "none",
     keywords: ["masa", "tezina", "gram", "kilogram", "tona", "funta", "unca"],
   },
   {
     id: "zapremina",
     titleKey: "tools.name.zapremina",
     category: "conversion",
+    riskClass: "none",
     keywords: ["zapremina", "litar", "mililitar", "galon", "kubni", "decilitar"],
   },
   {
     id: "temperatura",
     titleKey: "tools.name.temperatura",
     category: "conversion",
+    riskClass: "none",
     keywords: ["temperatura", "celzijus", "farenhajt", "kelvin", "stepen"],
   },
   {
     id: "povrsina",
     titleKey: "tools.name.povrsina",
     category: "conversion",
+    riskClass: "none",
     keywords: ["povrsina", "kvadratni", "hektar", "ar", "aker", "plac"],
   },
   {
     id: "brzina",
     titleKey: "tools.name.brzina",
     category: "conversion",
+    riskClass: "none",
     keywords: ["brzina", "cvor", "milja na sat", "kilometar na sat"],
   },
   {
     id: "podaci",
     titleKey: "tools.name.podaci",
     category: "conversion",
+    riskClass: "none",
     keywords: ["podaci", "bajt", "bit", "kilobajt", "megabajt", "gigabajt", "terabajt", "disk", "memorija"],
   },
   {
     id: "procenat",
     titleKey: "tools.name.procenat",
     category: "calculation",
+    riskClass: "none",
     keywords: ["procenat", "posto", "popust", "povecanje", "smanjenje", "promena"],
   },
   {
     id: "pdv",
     titleKey: "tools.name.pdv",
     category: "calculation",
+    // The rate is typed, never embedded — but the answer is a figure somebody
+    // puts on an invoice, so the drawer says out loud that this is arithmetic
+    // and not tax advice, and echoes the rate that produced it.
+    riskClass: "financial",
     keywords: ["pdv", "porez", "osnovica", "racun", "faktura", "stopa"],
   },
   {
     id: "kredit",
     titleKey: "tools.name.kredit",
     category: "calculation",
+    // An annuity from a nominal rate is not the bank's offer: the effective
+    // rate, the fees and the insurance are not in it, and somebody comparing
+    // two loans on this number alone is comparing the wrong thing.
+    riskClass: "financial",
     keywords: ["kredit", "rata", "anuitet", "kamata", "zajam", "pozajmica", "nks"],
   },
   {
     id: "jedinicna-cena",
     titleKey: "tools.name.jedinicna-cena",
     category: "calculation",
+    riskClass: "none",
     keywords: ["cena", "pakovanje", "jeftinije", "poredjenje", "kilogram", "litar"],
   },
 ];
 
 /**
- * „Programerske alatke" (UTIL slice d) — the developer drawer's forty-eight
- * tools, published through the SAME `ToolRegistration` contract as the eleven
- * above and separated from them only by their categories, every one of which
- * `TOOL_CATEGORY_DRAWER` routes to `"developer"`.
+ * „Stručne alatke" (UTIL slice d) — the forty-eight tools of the `softver`
+ * pack, published through the SAME `ToolRegistration` contract as the eleven
+ * everyday tools above, and shelved in the professional drawer rather than in
+ * one of their own.
  *
- * That is the whole mechanism, and it was chosen over the shorter one on
- * purpose. „A drawer shows the tools of its own module" would have been one
- * filter instead of a table, and would have quietly retired the contract's
- * standing promise that ANY module may publish a tool — NOTE contributing the
- * Markdown table builder would then have had nowhere to put it. Routing by
- * category keeps that open: a module says what its tool is about, and where it
- * is shelved follows from that rather than from who wrote it.
+ * **What routes a tool to that drawer is `packs`, not its category, and the
+ * distinction matters.** Category still says what a tool DOES — `numbers`,
+ * `text`, `design`, and the rest — but never to whom, and „whom" is exactly the
+ * question a drawer has to answer. Every entry below carries `packs: ["softver"]`
+ * at minimum, which is the whole mechanism: a tool says who it is for, and
+ * where it is shelved follows from that declaration rather than from who wrote
+ * it. That is the same seam the contract has always offered — NOTE
+ * contributing the Markdown table builder would publish a tool exactly this
+ * way — so nothing here is a special case the host had to grow; `packs` merely
+ * gives that seam a name.
+ *
+ * **Fifteen of the forty-eight name a second pack, and that is the point of
+ * the field rather than an exception to it.** A colour converter is not a
+ * programmer's tool that a designer happens to be allowed to borrow — it is a
+ * tool both of them own outright, and giving it two entries would have been two
+ * hits for one screen, the very duplication the `TOOL_DRAWERS` comment above
+ * already refuses. Three of the overlaps are category-wide: all six `design`
+ * tools also carry `dizajn`, because a gradient editor is graphic-design
+ * equipment before it is developer equipment; four of the `numbers` tools also
+ * carry `inzenjering` (`number-base`, `integer-inspector`, `bitwise`,
+ * `float-convert`), because register widths and fixed-point formats are the
+ * same arithmetic on either side of the hardware boundary; and four of the
+ * `text` tools also carry `tekst` (`unicode-inspector`, `diff`, `slug`,
+ * `line-tools`), because a translator transliterating a title and diffing two
+ * drafts is doing exactly what these do. The QR generator overlaps differently
+ * rather than not at all: it names TWO second packs, `biznis` and `event`,
+ * because an invoice's payment QR and an invitation's check-in QR are the same
+ * code with a different payload.
  *
  * Every entry carries a `blurbKey`, which the eleven utilities do not. At eleven
  * tools „Dužina" explains itself and a sentence under each would be noise; at
@@ -686,6 +724,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.number-base",
     blurbKey: "devtools.blurb.number-base",
     category: "numbers",
+    riskClass: "none",
+    packs: ["softver", "inzenjering"],
     keywords: [
       "base", "bigint", "bin", "binarno", "broj", "brojni sistemi", "cifre", "convert",
       "decimalno", "heksadecimalno", "hex", "konverzija", "number base", "okt", "oktalno",
@@ -697,6 +737,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.integer-inspector",
     blurbKey: "devtools.blurb.integer-inspector",
     category: "numbers",
+    riskClass: "none",
+    packs: ["softver", "inzenjering"],
     keywords: [
       "bajt", "bajtovi", "big endian", "binarno", "celobrojno", "ceo broj", "dvojni komplement",
       "endian", "hex", "inspector", "int", "int16", "int32", "int64", "int8", "integer",
@@ -709,6 +751,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.bitwise",
     blurbKey: "devtools.blurb.bitwise",
     category: "numbers",
+    riskClass: "none",
+    packs: ["softver", "inzenjering"],
     keywords: [
       "and", "bit", "bitovi", "bitske operacije", "bitwise", "clz", "ctz", "mask", "maska", "nand",
       "nor", "not", "nule", "or", "parity", "parnost", "pomeraj", "popcount", "rotacija", "rotate",
@@ -720,6 +764,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.data-unit",
     blurbKey: "devtools.blurb.data-unit",
     category: "numbers",
+    riskClass: "none",
+    packs: ["softver"],
     keywords: [
       "bajt", "bajtovi", "bit", "bitovi", "bytes", "data", "disk", "gb", "gib", "gigabajt",
       "gigabit", "jedinice", "kb", "kib", "kilobajt", "mb", "megabajt", "megabit", "memorija",
@@ -731,6 +777,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.float-convert",
     blurbKey: "devtools.blurb.float-convert",
     category: "numbers",
+    riskClass: "none",
+    packs: ["softver", "inzenjering"],
     keywords: [
       "beskonacno", "bf16", "bfloat", "bitovi", "denormal", "double", "e4m3", "e5m2", "e8m0",
       "eksponent", "float", "floating point", "fnuz", "fp16", "fp32", "fp64", "fp8", "half", "hex",
@@ -743,6 +791,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.mx-block",
     blurbKey: "devtools.blurb.mx-block",
     category: "numbers",
+    riskClass: "none",
+    packs: ["softver"],
     keywords: [
       "bita po vrednosti", "bits per value", "block", "blok", "deljeni eksponent", "e8m0",
       "kvantizacija", "microscaling", "mikroskaliranje", "mx", "mxfp", "mxfp4", "mxfp6", "mxfp8",
@@ -755,6 +805,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.riscv",
     blurbKey: "devtools.blurb.riscv",
     category: "riscv",
+    riskClass: "none",
+    packs: ["softver"],
     keywords: [
       "abi", "addi", "asembler", "assembler", "branch", "compressed", "csr", "decode",
       "dekodiranje", "disasembler", "disassembler", "encode", "funct", "immediate", "instruction",
@@ -769,6 +821,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.base64",
     blurbKey: "devtools.blurb.base64",
     category: "encoding",
+    riskClass: "none",
+    packs: ["softver"],
     keywords: [
       "b64", "bajtovi", "base64", "bytes", "decode", "dekodiranje", "dopuna", "encode",
       "kodiranje", "padding", "url-safe", "urlsafe"
@@ -779,6 +833,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.url-encode",
     blurbKey: "devtools.blurb.url-encode",
     category: "encoding",
+    riskClass: "none",
+    packs: ["softver"],
     keywords: [
       "dekodiranje", "encodeuri", "encodeuricomponent", "escape", "form", "forma", "kodiranje",
       "percent", "procenat", "url", "urldecode", "urlencode"
@@ -789,6 +845,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.url-parse",
     blurbKey: "devtools.blurb.url-parse",
     category: "encoding",
+    riskClass: "none",
+    packs: ["softver"],
     keywords: [
       "delovi", "domen", "fragment", "host", "idn", "parametri", "parse", "port", "punycode",
       "putanja", "query", "raspakuj", "upit", "url"
@@ -799,6 +857,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.ascii-binary-hex",
     blurbKey: "devtools.blurb.ascii-binary-hex",
     category: "encoding",
+    riskClass: "none",
+    packs: ["softver"],
     keywords: [
       "ascii", "bajtovi", "binarno", "binary", "bytes", "decimalno", "heks", "heksadekadno", "hex",
       "kodna", "tacka", "tekst", "text", "utf8"
@@ -809,6 +869,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.unicode-inspector",
     blurbKey: "devtools.blurb.unicode-inspector",
     category: "encoding",
+    riskClass: "none",
+    packs: ["softver", "tekst"],
     keywords: [
       "codepoint", "emoji", "grafema", "inspector", "inspektor", "kategorija", "kodna", "nfc",
       "nfd", "nfkc", "nfkd", "normalizacija", "surogat", "tacka", "unicode", "utf16", "utf8"
@@ -819,6 +881,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.html-entities",
     blurbKey: "devtools.blurb.html-entities",
     category: "encoding",
+    riskClass: "none",
+    packs: ["softver"],
     keywords: [
       "amp", "dekodiranje", "entiteti", "entities", "escape", "html", "kodiranje", "markap",
       "nbsp", "unescape", "znakovi"
@@ -829,6 +893,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.hexdump",
     blurbKey: "devtools.blurb.hexdump",
     category: "encoding",
+    riskClass: "none",
+    packs: ["softver"],
     keywords: [
       "ascii", "bajtovi", "bytes", "dump", "heks", "hex", "hexdump", "ispis", "offset", "ofset",
       "xxd"
@@ -840,6 +906,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.json-editor",
     blurbKey: "devtools.blurb.json-editor",
     category: "data",
+    riskClass: "none",
+    packs: ["softver"],
     keywords: [
       "beautify", "format", "formatiranje", "indent", "json", "jsonpath", "keys", "kljucevi",
       "minifikacija", "minify", "pretty", "provera", "proveri", "putanja", "query", "smanji",
@@ -851,6 +919,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.yaml-editor",
     blurbKey: "devtools.blurb.yaml-editor",
     category: "data",
+    riskClass: "none",
+    packs: ["softver"],
     keywords: [
       "alias", "anchor", "block", "blok", "citaj", "documents", "dokument", "flow", "indent",
       "kljucevi", "komentar", "parse", "parsiranje", "pretvori", "provera", "serijalizacija",
@@ -862,6 +932,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.xml-editor",
     blurbKey: "devtools.blurb.xml-editor",
     category: "data",
+    riskClass: "none",
+    packs: ["softver"],
     keywords: [
       "atribut", "cdata", "entitet", "format", "formatiranje", "html", "indent", "ispravnost",
       "komentar", "markup", "minifikacija", "minify", "pretty", "provera", "putanja", "tag",
@@ -873,6 +945,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.data-format",
     blurbKey: "devtools.blurb.data-format",
     category: "data",
+    riskClass: "none",
+    packs: ["softver"],
     keywords: [
       "convert", "csv", "delimiter", "format", "header", "izvoz", "json", "konvertuj",
       "konverzija", "pretvori", "prevod", "razdvajac", "tabela", "toml", "uvoz", "yaml", "yml",
@@ -884,6 +958,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.json-to-types",
     blurbKey: "devtools.blurb.json-to-types",
     category: "data",
+    riskClass: "none",
+    packs: ["softver"],
     keywords: [
       "deklaracije", "dto", "generator", "interface", "json", "model", "schema", "sema", "tip",
       "tipovi", "ts", "type", "types", "typescript", "u tipove", "zod"
@@ -894,6 +970,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.uuid",
     blurbKey: "devtools.blurb.uuid",
     category: "data",
+    riskClass: "none",
+    packs: ["softver"],
     keywords: [
       "generator", "guid", "id", "identifikator", "kljuc", "nasumican", "random", "ulid", "uuid",
       "v4", "v7", "vremenski"
@@ -905,6 +983,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.diff",
     blurbKey: "devtools.blurb.diff",
     category: "text",
+    riskClass: "none",
+    packs: ["softver", "tekst"],
     keywords: [
       "compare", "diff", "myers", "patch", "poredjenje", "promene", "razlika", "razlike", "tekst",
       "unified", "uporedi"
@@ -915,6 +995,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.markdown-table",
     blurbKey: "devtools.blurb.markdown-table",
     category: "text",
+    riskClass: "none",
+    packs: ["softver"],
     keywords: [
       "align", "csv", "gfm", "grid", "kolone", "markdown", "md", "poravnanje", "redovi", "tabela",
       "table"
@@ -925,6 +1007,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.lorem",
     blurbKey: "devtools.blurb.lorem",
     category: "text",
+    riskClass: "none",
+    packs: ["softver"],
     keywords: [
       "dummy", "filler", "generator", "ipsum", "lorem", "maketa", "pasusi", "placeholder",
       "popuna", "recenice", "tekst"
@@ -935,6 +1019,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.slug",
     blurbKey: "devtools.blurb.slug",
     category: "text",
+    riskClass: "none",
+    packs: ["softver", "tekst"],
     keywords: [
       "cirilica", "djordje", "latinica", "link", "naslov", "permalink", "putanja", "seo", "slug",
       "transliteracija", "url"
@@ -945,6 +1031,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.case-convert",
     blurbKey: "devtools.blurb.case-convert",
     category: "text",
+    riskClass: "none",
+    packs: ["softver"],
     keywords: [
       "camelcase", "case", "identifikator", "kebab", "konverzija", "naziv", "oblik", "pascalcase",
       "screaming", "snakecase", "tokenizacija", "zapis"
@@ -955,6 +1043,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.line-tools",
     blurbKey: "devtools.blurb.line-tools",
     category: "text",
+    riskClass: "none",
+    packs: ["softver", "tekst"],
     keywords: [
       "dedupe", "duplikati", "izmesaj", "lines", "linije", "numerisi", "prefiks", "prelom",
       "razdvoji", "redovi", "shuffle", "sort", "sortiraj", "spoji", "sufiks", "trim", "wrap"
@@ -965,6 +1055,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.regex",
     blurbKey: "devtools.blurb.regex",
     category: "text",
+    riskClass: "none",
+    packs: ["softver"],
     keywords: [
       "flags", "groups", "grupe", "match", "pattern", "poklapanja", "regex", "regularni izrazi",
       "replace", "sablon", "test", "zamena", "zastavice"
@@ -976,6 +1068,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.color-convert",
     blurbKey: "devtools.blurb.color-convert",
     category: "design",
+    riskClass: "none",
+    packs: ["softver", "dizajn"],
     keywords: [
       "boja", "boje", "color", "colour", "convert", "css", "hex", "hsl", "hwb", "konverzija",
       "lab", "lch", "named", "naziv", "oklab", "oklch", "pretvarac", "pretvaranje", "rgb"
@@ -986,6 +1080,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.color-palette",
     blurbKey: "devtools.blurb.color-palette",
     category: "design",
+    riskClass: "none",
+    packs: ["softver", "dizajn"],
     keywords: [
       "analogna", "boje", "harmonija", "harmony", "komplementarna", "monohromatska", "nijanse",
       "oklch", "paleta", "palette", "ramp", "shades", "tetrada", "tints", "tonovi", "trijada"
@@ -996,6 +1092,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.gradient",
     blurbKey: "devtools.blurb.gradient",
     category: "design",
+    riskClass: "none",
+    packs: ["softver", "dizajn"],
     keywords: [
       "conic", "css", "gradient", "gradijent", "interpolacija", "konusni", "linear", "linearni",
       "oklab", "preliv", "radial", "radijalni", "srgb", "stopovi", "stops", "tacke", "ugao",
@@ -1007,6 +1105,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.cubic-bezier",
     blurbKey: "devtools.blurb.cubic-bezier",
     category: "design",
+    riskClass: "none",
+    packs: ["softver", "dizajn"],
     keywords: [
       "animacija", "animation", "bezier", "bezije", "bezijeova", "css", "cubic", "curve", "ease",
       "easing", "kriva", "odskok", "prelaz", "tajming", "transition", "ublazavanje"
@@ -1017,6 +1117,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.contrast",
     blurbKey: "devtools.blurb.contrast",
     category: "design",
+    riskClass: "none",
+    packs: ["softver", "dizajn"],
     keywords: [
       "a11y", "aa", "aaa", "accessibility", "apca", "citljivost", "contrast", "kontrast", "lc",
       "odnos", "pozadina", "pristupacnost", "ratio", "tekst", "wcag"
@@ -1027,6 +1129,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.color-mixer",
     blurbKey: "devtools.blurb.color-mixer",
     category: "design",
+    riskClass: "none",
+    packs: ["softver", "dizajn"],
     keywords: [
       "alfa", "alpha", "blend", "boje", "composite", "kompozit", "linear", "mesalica", "mesanje",
       "mix", "mixer", "oklab", "preklapanje", "providnost", "srgb", "tezina", "udeo"
@@ -1038,6 +1142,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.token-gen",
     blurbKey: "devtools.blurb.token-gen",
     category: "crypto",
+    riskClass: "none",
+    packs: ["softver"],
     keywords: [
       "alfanumericki", "api", "base58", "base64", "base64url", "entropija", "entropy", "generator",
       "hex", "key", "kljuc", "nasumicno", "random", "secret", "slucajno", "token", "tokeni"
@@ -1048,6 +1154,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.password-gen",
     blurbKey: "devtools.blurb.password-gen",
     category: "crypto",
+    riskClass: "none",
+    packs: ["softver"],
     keywords: [
       "cifre", "entropija", "entropy", "fraza", "generator", "jaka lozinka", "lozinka", "lozinke",
       "nasumicno", "passphrase", "password", "random", "recnik", "sifra", "simboli", "wordlist"
@@ -1058,6 +1166,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.jwt",
     blurbKey: "devtools.blurb.jwt",
     category: "crypto",
+    riskClass: "none",
+    packs: ["softver"],
     keywords: [
       "bearer", "claims", "es256", "exp", "hmac", "hs256", "iat", "json web token", "jwk", "jwt",
       "nbf", "pem", "potpis", "provera", "rs256", "signature", "token", "tvrdnje", "verify"
@@ -1068,6 +1178,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.hashing",
     blurbKey: "devtools.blurb.hashing",
     category: "crypto",
+    riskClass: "none",
+    packs: ["softver"],
     keywords: [
       "base64", "checksum", "digest", "hash", "hes", "hesiranje", "hex", "hmac", "md5", "otisak",
       "sha", "sha1", "sha256", "sha384", "sha512"
@@ -1078,6 +1190,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.aes",
     blurbKey: "devtools.blurb.aes",
     category: "crypto",
+    riskClass: "none",
+    packs: ["softver"],
     keywords: [
       "aes", "cbc", "decrypt", "desifrovanje", "encrypt", "envelope", "gcm", "iv", "key", "kljuc",
       "koverta", "kriptovanje", "lozinka", "nonce", "pbkdf2", "sifrovanje", "simetricno"
@@ -1088,6 +1202,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.rsa-keygen",
     blurbKey: "devtools.blurb.rsa-keygen",
     category: "crypto",
+    riskClass: "none",
+    packs: ["softver"],
     keywords: [
       "2048", "4096", "generisanje", "javni", "key", "keygen", "keypair", "kljuc", "kljucevi",
       "oaep", "par", "pem", "pkcs8", "privatni", "pss", "rsa", "spki"
@@ -1098,6 +1214,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.rsa-crypt",
     blurbKey: "devtools.blurb.rsa-crypt",
     category: "crypto",
+    riskClass: "none",
+    packs: ["softver"],
     keywords: [
       "asimetricno", "decrypt", "desifrovanje", "encrypt", "javni kljuc", "kriptovanje", "oaep",
       "pem", "privatni kljuc", "rsa", "sifrovanje"
@@ -1108,6 +1226,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.signature",
     blurbKey: "devtools.blurb.signature",
     category: "crypto",
+    riskClass: "none",
+    packs: ["softver"],
     keywords: [
       "ecdsa", "eliptic", "kljuc", "p256", "p384", "pem", "pkcs1", "potpis", "potpisivanje",
       "provera", "pss", "rsa", "sign", "signature", "verify"
@@ -1119,6 +1239,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.http-status",
     blurbKey: "devtools.blurb.http-status",
     category: "system",
+    riskClass: "none",
+    packs: ["softver"],
     keywords: [
       "404", "500", "cloudflare", "error", "greska", "http", "iana", "kod", "kodovi", "odgovor",
       "rfc", "status", "webdav"
@@ -1129,6 +1251,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.path-convert",
     blurbKey: "devtools.blurb.path-convert",
     category: "system",
+    riskClass: "none",
+    packs: ["softver"],
     keywords: [
       "disk", "escape", "file url", "linux", "mnt", "navodnici", "path", "putanja", "putanje",
       "unc", "unix", "windows", "wsl"
@@ -1139,6 +1263,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.cidr",
     blurbKey: "devtools.blurb.cidr",
     category: "system",
+    riskClass: "none",
+    packs: ["softver"],
     keywords: [
       "broadcast", "cidr", "ip", "ipv4", "ipv6", "maska", "mreza", "netmask", "opseg", "podmreza",
       "prefiks", "subnet", "supernet", "wildcard"
@@ -1149,6 +1275,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.semver",
     blurbKey: "devtools.blurb.semver",
     category: "system",
+    riskClass: "none",
+    packs: ["softver"],
     keywords: [
       "caret", "compare", "npm", "opseg", "prerelease", "range", "semver", "sortiraj", "tilde",
       "uporedi", "version", "verzija", "verzije"
@@ -1159,6 +1287,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.qr",
     blurbKey: "devtools.blurb.qr",
     category: "system",
+    riskClass: "none",
+    packs: ["softver", "biznis", "event"],
     keywords: [
       "barcode", "barkod", "email", "generator", "geo", "kod", "kontakt", "koordinate", "link",
       "lokacija", "lozinka", "mailto", "mejl", "mreza", "poruka", "poziv", "qr", "qr code",
@@ -1172,6 +1302,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.datetime",
     blurbKey: "devtools.blurb.datetime",
     category: "time",
+    riskClass: "none",
+    packs: ["softver"],
     keywords: [
       "convert", "dan u godini", "datum", "day of year", "dotnet", "dst", "duration", "epoch",
       "epoha", "filetime", "iana", "iso", "iso nedelja", "iso8601", "konverzija", "leap",
@@ -1186,6 +1318,8 @@ const DEVTOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "devtools.name.cron",
     blurbKey: "devtools.blurb.cron",
     category: "time",
+    riskClass: "none",
+    packs: ["softver"],
     keywords: [
       "cron", "crontab", "daily", "dan u mesecu", "dan u nedelji", "dst", "expression", "fields",
       "hourly", "izraz", "job", "kvarc", "macro", "makro", "minut", "next run", "polja", "posao",
@@ -1590,32 +1724,45 @@ const V0_MODULES: ModuleManifest[] = [
     category: "Professional & utilities",
     defaultEnabled: true,
   },
-  // „Programerske alatke" (UTIL slice d) — the developer drawer. Forty-eight
-  // tools that answer questions only a programmer asks: what these bits are as
-  // an fp8, what this halfword decodes to on RV64, what this JWT actually says.
+  // „Stručne alatke" (UTIL slice d) — the professional drawer itself, host to
+  // forty-eight tools today and to every OTHER toolkit as its packs ship,
+  // rather than a drawer of its own kind. Questions only a programmer asks so
+  // far — what these bits are as an fp8, what this halfword decodes to on
+  // RV64, what this JWT actually says — but the drawer is the professional one
+  // full stop, not „the developer one"; whatever a geodeta's or a lekar's pack
+  // adds next lands in this same module.
   //
-  // FOURTH module in „Profesionalno i alati", and it shares UTIL with „Alatke"
-  // and „Fokus" for the reason the comment on „Alatke" already gives — one PRD
-  // section implemented more than once, with `modules.test.ts`'s explicit
-  // prefix→ids map stating the sharing on purpose so any OTHER duplicate still
+  // FOURTH module in „Profesionalno i alati", and it takes its OWN prefix,
+  // `PRO` (PRD 30, „Profession Toolkits"), rather than joining „Fokus" and
+  // „Alatke" under `UTIL`. The sharing argument on „Alatke"'s comment — one PRD
+  // section implemented twice — does not apply here: PRD 30 is its own entry,
+  // not a second reading of PRD 29, so this module gets its own prefix rather
+  // than borrowing one. `modules.test.ts`'s explicit prefix→ids map still
+  // states the `UTIL` sharing that DOES remain (`focus`, `tools`) on purpose,
+  // so any other duplicate — this one included, had it kept `UTIL` — still
   // fails.
   //
-  // OFF by default, and the only built module besides PRIV that is. Not
-  // caution: a person who does not write software should never be shown a
-  // RISC-V assembler, and a drawer they cannot use is worse than one they
-  // cannot see. The opening questionnaire turns it on for whoever says they
-  // are a programmer, which is the whole reason that questionnaire exists.
+  // OFF by default, and the only built module besides PRIV that is — but the
+  // reason is stronger now than „a non-programmer should not see a RISC-V
+  // assembler". The drawer holds NOTHING until a pack is switched on, because
+  // every tool inside it declares one; a profile that answered no questions on
+  // the way in would open an empty page. The opening questionnaire is what
+  // turns the module on, together with whichever packs it grants — the module
+  // and its first contents arrive in the same write.
   //
   // FOUR contract slots stay empty, and none of them merely „not yet". No
   // `settings`: the drawer stores nothing and computes everything from what is
   // typed into it, so there is no preference to keep — „Alatke" has one only
-  // because a VAT rate is a fact about the country you are in. No `widgets`: a
-  // dashboard card draws a FACT about the profile and this module holds none.
-  // No `searchIndexers`: there is nothing here a query could find, because
-  // nothing a user writes is kept. No `imex`: nothing to export.
+  // because a VAT rate is a fact about the country you are in. Nor is the pack
+  // picker itself hiding in this slot: a pack decides what the drawer CONTAINS
+  // rather than how it behaves, so it belongs beside the tools it grants, not
+  // among behavioural preferences. No `widgets`: a dashboard card draws a FACT
+  // about the profile and this module holds none. No `searchIndexers`: there
+  // is nothing here a query could find, because nothing a user writes is kept.
+  // No `imex`: nothing to export.
   {
-    id: "devtools",
-    prefix: "UTIL",
+    id: "pro",
+    prefix: "PRO",
     category: "Professional & utilities",
     defaultEnabled: false,
     tools: DEVTOOLS_TOOLS,

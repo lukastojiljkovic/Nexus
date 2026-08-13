@@ -363,13 +363,13 @@
   color: var(--nx-danger);
 }
 
-/* --- Programerske alatke (UTIL slice d) --------------------------------------
-   The developer drawer is the SAME instrument as „Alatke" — same rail, same
+/* --- Stručne alatke (PRO slice a) --------------------------------------------
+   The professional drawer is the SAME instrument as „Alatke" — same rail, same
    layout, same field grammar — and differs in exactly one thing: density. A
    converter has one answer and draws it as a display figure; a float inspector
    answers with a sign bit, an exponent, a mantissa, four re-encodings and the
    exact rounding it used. At display size that page is shouting. So the rows
-   are shared and `.tool--developer` retunes them, rather than a second class
+   are shared and `.tool--professional` retunes them, rather than a second class
    family that would have to be kept in step with the first for ever. */
 
 /* Forty-eight tools cannot be told apart by name alone — „Mikroskalirani
@@ -556,18 +556,173 @@
 /* Wider than the utilities measure, because these answers are tables and
    hexdumps rather than sentences — but still measured, so a maximised window
    does not stretch a form across two feet of screen. */
-.tool--developer .tool__body {
+.tool--professional .tool__body {
   max-width: 52rem;
 }
 /* A dozen of these stack in one surface, so the value is body-sized and regular
    rather than the title-sized semibold a loan's single „Mesečna rata" earns. It
    is monospace where the surface asks for it (`.tool__mono`), which is what
    carries the emphasis instead of the size. */
-.tool--developer .tool__result-value {
+.tool--professional .tool__result-value {
   min-width: 0;
   font-size: var(--nx-font-size-body-sm);
   line-height: var(--nx-font-leading-snug);
   font-weight: var(--nx-font-weight-regular);
   text-align: right;
   overflow-wrap: anywhere;
+}
+
+/* --- The risk notice -------------------------------------------------------
+   Quiet, and in the same place on every affected tool. NOT a warning box: an
+   amber panel repeated across nineteen toolkits is banner blindness with a
+   border — the reader stops seeing it by the fourth surface, which is the exact
+   failure the notice exists to avoid — and it is also the look this app's design
+   rules ban outright. A hairline, muted type, always present. */
+.tool__risk {
+  margin-bottom: var(--nx-space-4);
+  padding: var(--nx-space-2) var(--nx-space-3);
+  border: 1px solid var(--nx-border-subtle);
+  border-radius: var(--nx-radius-md);
+  background: var(--nx-surface-sunken);
+}
+.tool__risk-line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--nx-space-2);
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-caption);
+  line-height: var(--nx-font-leading-normal);
+  cursor: pointer;
+  /* The UA marker is a filled triangle that reads as an error glyph at this
+     size and tone; the „Detaljnije" word carries the affordance instead. */
+  list-style: none;
+}
+.tool__risk-line::-webkit-details-marker {
+  display: none;
+}
+.tool__risk-line:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+/* Pushed to the end of the line and never wrapped away from it — it is the
+   control, and a control that lands under the sentence looks like a footnote. */
+.tool__risk-more {
+  margin-left: auto;
+  flex: none;
+  color: var(--nx-text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.tool__risk-note {
+  margin: var(--nx-space-2) 0 0;
+  max-width: 60ch;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-caption);
+  line-height: var(--nx-font-leading-normal);
+}
+/* Provenance under the answer: which edition of which table produced a number.
+   Deliberately the same muted caption as the notice — it is a fact about the
+   tool, not a claim about the result. */
+.tool__surface-source {
+  margin: var(--nx-space-3) 0 0;
+  color: var(--nx-text-subtle);
+  font-size: var(--nx-font-size-caption);
+}
+
+/* --- The toolkit card ------------------------------------------------------
+   One block, worn by three screens: the questionnaire's „Tvoja nedelja", the
+   drawer's own „Paketi…" dialog, and the Settings card. It lives here rather
+   than with the questionnaire because a toolkit is a fact about this drawer —
+   and because a chosen toolkit that looks like one thing while being picked and
+   another thing while being reviewed is the drift a shared block designs out.
+
+   The grid reflows rather than fixing a column count, so the same rule serves a
+   build offering six toolkits and one offering thirty. */
+.pro-kits {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(212px, 1fr));
+  gap: var(--nx-space-2);
+}
+/* Capped and scrollable — for a list inside something that cannot grow: the
+   onboarding card (a centred grid with no scroll of its own) and the picker
+   dialog. The Settings card omits it, because a nested scroller inside a page
+   that already scrolls is a trap for the wheel. */
+.pro-kits--capped {
+  max-height: 46vh;
+  overflow-y: auto;
+}
+/* A `<button>` wearing a card: `font: inherit` and the explicit colours are
+   what stop the UA stylesheet from making it 13px Arial and centre-aligned. */
+.pro-kit {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: var(--nx-space-3);
+  text-align: left;
+  font: inherit;
+  color: var(--nx-text);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+  cursor: pointer;
+  transition:
+    background var(--nx-motion-fast) var(--nx-motion-ease),
+    border-color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.pro-kit:hover {
+  border-color: var(--nx-border-strong);
+}
+/* Chosen = accent border + soft background, the house recipe for „this one"
+   (`.dash__widget--drop`). Never a glow, and never a tick that would be the only
+   thing carrying the answer. */
+.pro-kit--on {
+  border-color: var(--nx-accent);
+  background: var(--nx-accent-soft);
+}
+.pro-kit:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+.pro-kit-name {
+  font-weight: var(--nx-font-weight-medium);
+}
+/* The trades under the subject. Caption size and muted, because it is the line
+   somebody scans for their own word and then stops reading. */
+.pro-kit-who {
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-caption);
+  line-height: var(--nx-font-leading-normal);
+}
+/* How many tools the toolkit brings — the one number that separates „a name I
+   recognise" from „a name I recognise and it is worth switching on". Composed
+   from the registry (`packInventory`), never written by hand. */
+.pro-kit-count {
+  margin-top: 2px;
+  color: var(--nx-text-subtle);
+  font-size: var(--nx-font-size-caption);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- „Paketi…": the picker ------------------------------------------------- */
+
+.pro-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+.pro-picker__note,
+.pro-picker__error {
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+}
+.pro-picker__note {
+  color: var(--nx-text-muted);
+}
+.pro-picker__error {
+  color: var(--nx-danger);
+}
+/* The header control, beside the search field rather than in it. */
+.tool__packs {
+  align-self: flex-start;
 }

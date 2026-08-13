@@ -156,13 +156,14 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     fanout: ".tool__item",
   },
   {
-    // „Programerske alatke" is the same rail with forty-eight rows on it, and
+    // „Stručne alatke" is the same rail with every trade's toolkit on it, and
     // it is the newest surface in the app — which makes it the one most worth
-    // photographing at every size. It is off by default, so it is here only
-    // because the demo profile turns it on; if the sweep reports „found nothing
-    // to fan out", that is the flag, not the page.
-    id: "devtools",
-    module: "devtools",
+    // photographing at every size. It is off by default AND its rows are
+    // pack-gated, so it is here only because the demo profile turns on both the
+    // module and every `pack:*` row (`enableEverything`); if the sweep reports
+    // „found nothing to fan out", that is one of those two flags, not the page.
+    id: "pro",
+    module: "pro",
     fanout: ".tool__item",
   },
   { id: "canvas", module: "canvas" },

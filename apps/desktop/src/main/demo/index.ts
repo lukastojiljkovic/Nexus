@@ -14,6 +14,7 @@
  * means every row here is a row a person could have made.
  */
 
+import { TOOL_PACKS, packFlagKey } from "@nexus/core";
 import { SqliteFlagStore, TaskListStore } from "@nexus/db";
 import { BUSINESS_DISABLED_MODULE_IDS, createModuleRegistry } from "../../shared/modules.js";
 import { seedDemoBusinessProfile } from "./business.js";
@@ -43,6 +44,29 @@ export { DEMO_PROFILE_NAME } from "../../shared/ipc.js";
 export const DEMO_BUSINESS_PROFILE_NAME = "Demo posao";
 
 /**
+ * Every module on, and every TOOLKIT with it.
+ *
+ * The module half is PRIV's argument (see `seedDemoProfile`); the pack half is
+ * the same argument one level down, and it became load-bearing the moment the
+ * professional drawer's tools started being pack-gated. `pro: true` with no
+ * `pack:*` rows is a switched-on module whose page is empty — which is not just
+ * a poor demo, it is the exact state the screenshot sweep reports as „found
+ * nothing to fan out", i.e. a false alarm about a drawer that is working.
+ *
+ * `void` on the async `set` is safe here and only here, for the reason argued
+ * at length in `seedDemoProfile`: the store's body is one synchronous
+ * `better-sqlite3` `run`, so the row is on disk before the promise exists.
+ */
+function enableEverything(flags: SqliteFlagStore, disabledModules: ReadonlySet<string>): void {
+  for (const manifest of createModuleRegistry().all()) {
+    void flags.set(manifest.id, !disabledModules.has(manifest.id));
+  }
+  for (const pack of TOOL_PACKS) {
+    void flags.set(packFlagKey(pack), true);
+  }
+}
+
+/**
  * Fills `profileId` with a complete, believable life.
  *
  * Order matters in exactly one place — TASK before FOCUS, because a focus
@@ -65,17 +89,7 @@ export function seedDemoProfile(db: DatabaseHandle, profileId: string, now: numb
   // Through the store rather than a raw INSERT, on the same terms as everything
   // else here: the flag table is the store's, and a row written behind it is a
   // row the app did not make.
-  //
-  // `void` on an async call is safe here and only here: `SqliteFlagStore.set`
-  // is `async` for the platform-neutral `FlagStore` contract in `@nexus/core`,
-  // but its body is one synchronous `better-sqlite3` `run` — the row is on disk
-  // before the promise is even constructed. This function is synchronous
-  // because every other seeder is, and awaiting a promise that resolves after
-  // the work is already done would only make that harder to see.
-  const flags = new SqliteFlagStore(db, profileId);
-  for (const manifest of createModuleRegistry().all()) {
-    void flags.set(manifest.id, true);
-  }
+  enableEverything(new SqliteFlagStore(db, profileId), new Set());
 
   // `TaskStore` refuses to place a task without a list, exactly as
   // `seedFirstRunProfile` does for a fresh profile. A demo profile seeded into
@@ -121,10 +135,7 @@ export function seedDemoProfile(db: DatabaseHandle, profileId: string, now: numb
  * it is a demo of thirteen modules.
  */
 export function seedDemoBusiness(db: DatabaseHandle, profileId: string, now: number): void {
-  const flags = new SqliteFlagStore(db, profileId);
-  for (const manifest of createModuleRegistry().all()) {
-    void flags.set(manifest.id, !BUSINESS_DISABLED_MODULE_IDS.has(manifest.id));
-  }
+  enableEverything(new SqliteFlagStore(db, profileId), BUSINESS_DISABLED_MODULE_IDS);
   new TaskListStore(db, profileId).ensureInbox(new Date(now).toISOString());
   seedDemoBusinessProfile(db, createDemoContext(profileId, now));
 }

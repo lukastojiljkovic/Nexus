@@ -9,6 +9,7 @@ import {
 } from "react";
 
 import { fill, strings } from "../strings.js";
+import { useCopySuffix } from "../toolRisk.js";
 
 /**
  * The pieces every „Programerske alatke" surface is built from.
@@ -226,9 +227,13 @@ export function ToolSelect<T extends string>({
  * confirmation would otherwise set state on an unmounted component.
  */
 export function CopyButton({ value, label }: { value: string; label?: string }) {
-  const s = strings.devtools.common;
+  const s = strings.pro.common;
   const [copied, setCopied] = useState(false);
   const timer = useRef<number | null>(null);
+  // What the open tool's risk class adds to a copied result — empty for the
+  // tools that endanger nobody, which is most of them. Read here rather than
+  // passed in, so no surface can copy a regulated number without it.
+  const suffix = useCopySuffix();
 
   useEffect(
     () => () => {
@@ -244,7 +249,7 @@ export function CopyButton({ value, label }: { value: string; label?: string }) 
       disabled={value === ""}
       onClick={() => {
         navigator.clipboard
-          .writeText(value)
+          .writeText(value + suffix)
           .then(() => {
             setCopied(true);
             if (timer.current !== null) window.clearTimeout(timer.current);
@@ -418,7 +423,7 @@ export function ToolTable({
       </div>
       {rows.length > shown.length && (
         <p className="tool__note">
-          {fill(strings.devtools.common.tableCapped, {
+          {fill(strings.pro.common.tableCapped, {
             shown: shown.length,
             total: rows.length,
           })}
