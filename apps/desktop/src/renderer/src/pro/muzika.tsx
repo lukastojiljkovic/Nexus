@@ -1057,7 +1057,7 @@ export function NoteFrequencyTool() {
           : `${s.resultShiftedFrequency}: ${proUnit(proNum(result.shifted.frequency, 3), s.unitHz)}`,
         "",
         `${s.entryKind}: ${entryLabel}`,
-        `${s.referencePitch}: ${proUnit(proNum(proParse(referencePitchText) ?? 440, 1), s.unitHz)}`,
+        `${s.referencePitch}: ${proUnit(proNum(result.referencePitchUsed, 1), s.unitHz)}`,
         `${s.octaveConvention}: ${conventionLabel}`,
       ]
         .filter((line): line is string => line !== undefined)
@@ -1158,7 +1158,7 @@ export function NoteFrequencyTool() {
             title={s.inputs}
             entries={[
               { label: s.entryKind, value: entryLabel },
-              { label: s.referencePitch, value: proUnit(proNum(proParse(referencePitchText) ?? 440, 1), s.unitHz) },
+              { label: s.referencePitch, value: proUnit(proNum(result.referencePitchUsed, 1), s.unitHz) },
               { label: s.octaveConvention, value: conventionLabel },
             ]}
           />

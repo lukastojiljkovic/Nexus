@@ -250,7 +250,15 @@ export function AllocationRemainderTool() {
   );
 }
 
-/** `decimalsText` read back as the digit count it names, defaulting to 2 like the core function does. */
+/**
+ * `decimalsText` read back as the digit count it names, defaulting to 2.
+ *
+ * The default is the SURFACE's: every core function here takes `decimals` as a
+ * required field, so an empty box has to become a number before the call. That
+ * is precisely why it is written once — a surface-owned default restated at the
+ * echo is the same defect as a core-owned one restated there, and it is easier
+ * to make, because nothing outside this file can contradict it.
+ */
 function decimalsFromText(text: string): number {
   const parsed = proParse(text);
   return parsed === undefined ? 2 : parsed;
@@ -664,11 +672,16 @@ export function FxDifferenceTool() {
   // the assignment lists it as part of THIS tool's own input set and not as
   // a seventeenth id.
   const crossTyped = proParse(rateABText) !== undefined || proParse(rateSecondText) !== undefined;
+  // Six places is this surface's default for a cross rate, and it was written
+  // three times: once into the call, once into the copy text and once into the
+  // row. See `decimalsFromText` — the number decides what the reader SEES of an
+  // exchange rate, so three authors for it is three chances to disagree.
+  const crossDecimals = proParse(crossDecimalsText) ?? 6;
   const crossResult = crossRate({
     rateAB: proParse(rateABText) ?? Number.NaN,
     rateSecond: proParse(rateSecondText) ?? Number.NaN,
     direction: crossDirection,
-    rateDecimals: proParse(crossDecimalsText) ?? 6,
+    rateDecimals: crossDecimals,
   });
   const crossField = crossResult.ok ? undefined : reasonField(crossResult.reason);
   const crossFailure =
@@ -682,11 +695,12 @@ export function FxDifferenceTool() {
   const crossCopyText = !crossResult.ok
     ? ""
     : [
-        `${s.crossRate}: ${proNum(crossResult.rate, proParse(crossDecimalsText) ?? 6)}`,
+        `${s.crossRate}: ${proNum(crossResult.rate, crossDecimals)}`,
         "",
         `${s.rateAB}: ${proNum(proParse(rateABText) ?? 0, 6)}`,
         `${s.rateSecond}: ${proNum(proParse(rateSecondText) ?? 0, 6)}`,
         `${s.crossDirection}: ${crossDirection === "sameBase" ? s.crossDirectionSameBase : s.crossDirectionInverse}`,
+        `${s.crossDecimals}: ${proNum(crossDecimals, 0)}`,
       ].join("\n");
 
   const copyText = !result.ok
@@ -780,7 +794,7 @@ export function FxDifferenceTool() {
         {crossFailure !== undefined && <ToolFailure>{crossFailure}</ToolFailure>}
         {crossResult.ok && (
           <>
-            <ResultRow label={s.crossRate} value={proNum(crossResult.rate, proParse(crossDecimalsText) ?? 6)} />
+            <ResultRow label={s.crossRate} value={proNum(crossResult.rate, crossDecimals)} />
             <ToolFormula>{s.crossFormula}</ToolFormula>
             <ToolInputEcho
               entries={[
@@ -790,6 +804,10 @@ export function FxDifferenceTool() {
                   label: s.crossDirection,
                   value: crossDirection === "sameBase" ? s.crossDirectionSameBase : s.crossDirectionInverse,
                 },
+                // The precision the rate above is SHOWN at, which an empty box
+                // silently makes 6 — the reader cannot tell 1,234568 rounded
+                // from 1,234568 exact without being told which it is.
+                { label: s.crossDecimals, value: proNum(crossDecimals, 0) },
               ]}
             />
             <CopyButton value={crossCopyText} />

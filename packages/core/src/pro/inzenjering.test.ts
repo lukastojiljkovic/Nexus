@@ -2550,3 +2550,47 @@ describe("pistonForce returns the rod diameter it used", () => {
     expect(result.annulusAreaMm2).toBeCloseTo(2099.36929, 5);
   });
 });
+
+/**
+ * `atmosphericPa` defaults to the standard atmosphere, and the surface restated
+ * that 101325 beside its echo. See `ShelfSpacingResult.rasterUsed`.
+ *
+ * Here the restatement is worse than usual, because the atmosphere IS the
+ * difference between the two readings the tool exists to show side by side: a
+ * compressor stating 6 bar and a data sheet stating 7 bar can be the same
+ * pressure. A screen printing 101325 while the arithmetic used a measured
+ * 95 000 would contradict the pair of numbers directly above it.
+ */
+describe("convertPressure returns the atmosphere it used", () => {
+  const base = { value: 6, unit: "bar", kind: "gauge" } as const;
+
+  it("reports the standard atmosphere when none was given", () => {
+    const result = convertPressure(base);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.atmosphericPaUsed).toBe(101325);
+    // 6 bar = 600 000 Pa gauge; absolute is that plus the reported atmosphere.
+    expect(result.gaugePa).toBeCloseTo(600000, 6);
+    expect(result.absolutePa).toBeCloseTo(701325, 6);
+  });
+
+  it("reports a measured atmosphere, and it is the one in the arithmetic", () => {
+    // 950 mbar, roughly Belgrade in a deep low — the case the field exists for.
+    const result = convertPressure({ ...base, atmosphericPa: 95000 });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.atmosphericPaUsed).toBe(95000);
+    expect(result.gaugePa).toBeCloseTo(600000, 6);
+    expect(result.absolutePa).toBeCloseTo(695000, 6);
+  });
+
+  it("carries it on the absolute-entry direction too, where it is subtracted", () => {
+    const result = convertPressure({ value: 7, unit: "bar", kind: "absolute", atmosphericPa: 95000 });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.atmosphericPaUsed).toBe(95000);
+    // Entered absolute: gauge = 700 000 - 95 000 = 605 000.
+    expect(result.gaugePa).toBeCloseTo(605000, 6);
+    expect(result.absolutePa).toBeCloseTo(700000, 6);
+  });
+});

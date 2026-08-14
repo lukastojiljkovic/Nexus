@@ -1866,13 +1866,21 @@ export function SeedingRateTool() {
   const [pricePerUnit, setPricePerUnit] = useState("");
 
   const typed = [standValue, tkwGrams, germinationPercent].some((v) => proParse(v) !== undefined);
+  // Both fields are PRE-FILLED rather than optional, so „cleared" is a state the
+  // user can reach and these two lines are what it means. `seedingRate` takes
+  // both as required, so the default is this surface's — and it was written
+  // twice with two different values: the call used 100 and the echo below used
+  // `?? 0`, so clearing the purity box made the arithmetic use 100 while the
+  // screen said „0 %". One expression, read by both.
+  const purityUsed = proParse(purityPercent) ?? 100;
+  const fieldLossUsed = proParse(fieldLossPercent) ?? 0;
   const result = seedingRate({
     standMode,
     standValue: proParse(standValue) ?? Number.NaN,
     tkwGrams: proParse(tkwGrams) ?? Number.NaN,
     germinationPercent: proParse(germinationPercent) ?? Number.NaN,
-    purityPercent: proParse(purityPercent) ?? 100,
-    fieldLossPercent: proParse(fieldLossPercent) ?? 0,
+    purityPercent: purityUsed,
+    fieldLossPercent: fieldLossUsed,
     areaHa: proParse(areaHa) ?? Number.NaN,
     bagMassKg: proParse(bagMassKg) ?? Number.NaN,
     rowSpacingCm: proParse(rowSpacingCm),
@@ -1925,6 +1933,16 @@ export function SeedingRateTool() {
           : `${s.seedsPerLinearMeter}: ${proNum(result.seedsPerLinearMeter, 2)}   ${s.spacingInRowCm}: ${proUnit(proNum(result.spacingInRowCm ?? 0, 2), s.unitCm)}`,
         `${s.reverseStandCheckPerM2}: ${proNum(result.reverseStandCheckPerM2, 2)}`,
         result.totalCost === undefined ? undefined : `${s.totalCost}: ${proUnit(proNum(result.totalCost, 2), s.unitRsd)}`,
+        // The inputs, as every other tool in the drawer copies them and this one
+        // did not. A sowing rate pasted into an order with no germination,
+        // purity or field loss beside it is a kilogram figure nobody can check.
+        "",
+        `${s.standValue}: ${proNum(proParse(standValue) ?? 0, 2)}`,
+        `${s.tkwGrams}: ${proUnit(proNum(proParse(tkwGrams) ?? 0, 2), s.unitG)}`,
+        `${s.germinationPercent}: ${proNum(proParse(germinationPercent) ?? 0, 1)}${s.unitPercent}`,
+        `${s.purityPercent}: ${proNum(purityUsed, 1)}${s.unitPercent}`,
+        `${s.fieldLossPercent}: ${proNum(fieldLossUsed, 1)}${s.unitPercent}`,
+        `${s.areaHa}: ${proUnit(proNum(proParse(areaHa) ?? 0, 2), s.unitHa)}`,
       ]
         .filter((line): line is string => line !== undefined)
         .join("\n");
@@ -1999,7 +2017,11 @@ export function SeedingRateTool() {
                 label: s.germinationPercent,
                 value: `${proNum(proParse(germinationPercent) ?? 0, 1)}${s.unitPercent}`,
               },
-              { label: s.purityPercent, value: `${proNum(proParse(purityPercent) ?? 0, 1)}${s.unitPercent}` },
+              { label: s.purityPercent, value: `${proNum(purityUsed, 1)}${s.unitPercent}` },
+              // Field loss was in the arithmetic and nowhere on the screen. It
+              // scales the whole sowing rate, so a run at 8 % and a run at 0 %
+              // were two different answers with identical echoes.
+              { label: s.fieldLossPercent, value: `${proNum(fieldLossUsed, 1)}${s.unitPercent}` },
               { label: s.areaHa, value: proUnit(proNum(proParse(areaHa) ?? 0, 2), s.unitHa) },
             ]}
           />

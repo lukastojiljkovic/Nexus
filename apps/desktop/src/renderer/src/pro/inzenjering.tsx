@@ -1722,6 +1722,10 @@ export function PressurePistonForceTool() {
         "",
         `${s.value}: ${proUnit(proNum(proParse(value) ?? 0, 4), unitLabel(unit))}`,
         `${s.kind}: ${kind === "gauge" ? s.kindGauge : s.kindAbsolute}`,
+        // The atmosphere is the whole difference between the two readings
+        // above, so a copied answer without it is a pair of numbers whose
+        // relationship the reader cannot check.
+        `${s.atmospheric}: ${proUnit(proNum(conversion.atmosphericPaUsed, 0), "Pa")}`,
       ]
         .filter((line) => line !== "")
         .join("\n");
@@ -1758,7 +1762,7 @@ export function PressurePistonForceTool() {
               { label: s.kind, value: kind === "gauge" ? s.kindGauge : s.kindAbsolute },
               {
                 label: s.atmospheric,
-                value: proUnit(proNum(proParse(atmosphericPa) ?? 101325, 0), "Pa"),
+                value: proUnit(proNum(conversion.atmosphericPaUsed, 0), "Pa"),
               },
             ]}
           />

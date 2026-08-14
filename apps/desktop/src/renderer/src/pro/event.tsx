@@ -478,9 +478,17 @@ export function BudgetPerGuestTool() {
   });
 
   const revenueRows = proRows(revenueText);
+  /**
+   * „No table-based costing at all", which is what `eventBudget` documents 0 to
+   * mean. `tables` is REQUIRED there, so this default is the surface's own —
+   * which is exactly why it is written once and read three times rather than
+   * restated beside the echo. It also fixes what the echo printed: the raw text
+   * of the field, so „1.200" stayed „1.200" while the arithmetic used 1200.
+   */
+  const tablesUsed = proParse(tables) ?? 0;
   const result = eventBudget({
     guests: proParse(guests) ?? Number.NaN,
-    tables: proParse(tables) ?? 0,
+    tables: tablesUsed,
     lines,
     reservePct: proParse(reserve) ?? Number.NaN,
     taxRatePct: proParse(taxRate) ?? Number.NaN,
@@ -543,8 +551,8 @@ export function BudgetPerGuestTool() {
           ? undefined
           : `${s.breakEvenTicketPrice}: ${proNum(result.breakEvenTicketPriceCeil, 2)}`,
         "",
-        `${s.guests}: ${guests.trim()}`,
-        `${s.tables}: ${tables.trim() === "" ? "0" : tables.trim()}`,
+        `${s.guests}: ${proNum(proParse(guests) ?? 0, 0)}`,
+        `${s.tables}: ${proNum(tablesUsed, 0)}`,
         `${s.taxRate}: ${proNum(proParse(taxRate) ?? 0, 2)}%`,
       ]
         .filter((line): line is string => line !== undefined)
@@ -618,8 +626,8 @@ export function BudgetPerGuestTool() {
           <ToolInputEcho
             title={s.inputs}
             entries={[
-              { label: s.guests, value: guests.trim() },
-              { label: s.tables, value: tables.trim() === "" ? "0" : tables.trim() },
+              { label: s.guests, value: proNum(proParse(guests) ?? 0, 0) },
+              { label: s.tables, value: proNum(tablesUsed, 0) },
               { label: s.reserve, value: `${proNum(proParse(reserve) ?? 0, 1)}%` },
               { label: s.taxRate, value: `${proNum(proParse(taxRate) ?? 0, 1)}%` },
               {

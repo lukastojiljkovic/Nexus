@@ -598,6 +598,13 @@ export interface Pitch {
   readonly outsideMidiRange: boolean;
   /** Which octave numbering `octave` (and the two names) were written under. */
   readonly octaveConvention: OctaveConvention;
+  /**
+   * The tuning reference this pitch was spelled against, Hz — see
+   * `ShelfSpacingResult.rasterUsed`. Every frequency on the screen is directly
+   * proportional to it, and 440 is a default rather than a fact: an orchestra
+   * at 442 and a baroque ensemble at 415 both type their own.
+   */
+  readonly referencePitchUsed: number;
   /** The interval to `secondFrequency`, when it was given. */
   readonly intervalToSecond: CentsRatioResult | undefined;
   /** This pitch's frequency shifted by `pitchShiftCents` and spelled again, when it was given. */
@@ -624,8 +631,14 @@ interface BarePitch {
   readonly octave: number;
   readonly outsideMidiRange: boolean;
   readonly octaveConvention: OctaveConvention;
+  readonly referencePitchUsed: number;
 }
 
+/**
+ * Set here, in the one function every pitch in this module is built by, so that
+ * the three entry points and the shifted pitch cannot disagree about it — and
+ * so that adding a fourth entry point cannot forget it.
+ */
 function describeMidi(midi: number, reference: number, convention: OctaveConvention): BarePitch {
   const pitchClass = mod12(midi);
   const octave = Math.floor(midi / 12) - octaveOffset(convention);
@@ -638,6 +651,7 @@ function describeMidi(midi: number, reference: number, convention: OctaveConvent
     octave,
     outsideMidiRange: midi < 0 || midi > 127,
     octaveConvention: convention,
+    referencePitchUsed: reference,
   };
 }
 

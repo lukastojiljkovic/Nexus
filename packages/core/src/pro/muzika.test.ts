@@ -2008,3 +2008,74 @@ describe("the resolved air temperature is returned rather than restated", () => 
     );
   });
 });
+
+/**
+ * `referencePitch` defaults to 440 Hz, and the pitch surface restated that 440
+ * beside its echo. See `ShelfSpacingResult.rasterUsed`.
+ *
+ * This one is not a rounding detail: every frequency the tool prints is directly
+ * proportional to the reference, and 440 is a convention rather than a fact — a
+ * house orchestra at 442 and a baroque ensemble at 415 both type their own, and
+ * those are the users who look at this field at all.
+ *
+ * It is set inside `describeMidi`, which is the one function every pitch in this
+ * module is built by, so the three entry points and the shifted pitch cannot
+ * disagree about it. That is what the last two cases here are for.
+ */
+describe("the resolved tuning reference is returned rather than restated", () => {
+  it("midiToPitch reports 440 by default, and the reference given otherwise", () => {
+    const defaulted = midiToPitch({ midi: 69 });
+    expect(defaulted.ok).toBe(true);
+    if (!defaulted.ok) return;
+    expect(defaulted.referencePitchUsed).toBe(440);
+    // A4 IS the reference, so the two numbers are the same one at every setting.
+    expect(defaulted.frequency).toBeCloseTo(440, 12);
+
+    const baroque = midiToPitch({ midi: 69, referencePitch: 415 });
+    expect(baroque.ok).toBe(true);
+    if (!baroque.ok) return;
+    expect(baroque.referencePitchUsed).toBe(415);
+    expect(baroque.frequency).toBeCloseTo(415, 12);
+  });
+
+  it("pitchFromName reports it too", () => {
+    const defaulted = pitchFromName({ name: "A4" });
+    expect(defaulted.ok).toBe(true);
+    if (!defaulted.ok) return;
+    expect(defaulted.referencePitchUsed).toBe(440);
+
+    const sharp = pitchFromName({ name: "A4", referencePitch: 442 });
+    expect(sharp.ok).toBe(true);
+    if (!sharp.ok) return;
+    expect(sharp.referencePitchUsed).toBe(442);
+    expect(sharp.frequency).toBeCloseTo(442, 12);
+  });
+
+  it("pitchFromFrequency reports it, and the cents reading is measured against it", () => {
+    const measured = pitchFromFrequency({ frequency: 440, referencePitch: 442 });
+    expect(measured.ok).toBe(true);
+    if (!measured.ok) return;
+    expect(measured.referencePitchUsed).toBe(442);
+    // 440 Hz is A4 read against a 442 reference, so it is FLAT by
+    // 1200*log2(440/442) cents. 440/442 = 220/221, ln(1 - 1/221) = -0.00453516
+    // to eight places, /ln2 = -0.00654284, x1200 = -7.851414. That is the whole
+    // reading of the tool, and it is nonsense unless the screen says which
+    // reference it was taken from.
+    expect(measured.midiExact).toBeCloseTo(68.9214858, 6);
+    expect(measured.cents).toBeCloseTo(-7.851414, 5);
+    // `frequency` is the nearest NOTE's frequency, which at 442 is 442.
+    expect(measured.frequency).toBeCloseTo(442, 12);
+  });
+
+  it("the shifted pitch carries the same reference, not a second copy of the default", () => {
+    // `shifted` is built by `nearestPitchOf` on a different code path from the
+    // pitch itself. An octave up from A4 at 415 is 830, and if the shift had
+    // picked the default back up it would be 880.
+    const shifted = midiToPitch({ midi: 69, referencePitch: 415, pitchShiftCents: 1200 });
+    expect(shifted.ok).toBe(true);
+    if (!shifted.ok) return;
+    expect(shifted.shifted?.referencePitchUsed).toBe(415);
+    expect(shifted.shifted?.frequency).toBeCloseTo(830, 9);
+    expect(shifted.shifted?.midi).toBe(81);
+  });
+});

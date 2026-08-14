@@ -1352,6 +1352,14 @@ export interface PressureConversion {
   readonly absolutePa: number;
   readonly gauge: PressureInUnits;
   readonly absolute: PressureInUnits;
+  /**
+   * The atmospheric pressure this run used, Pa — see
+   * `ShelfSpacingResult.rasterUsed`. It is the ENTIRE difference between the
+   * two readings this tool exists to show side by side, so a screen echoing
+   * its own copy of the standard atmosphere while the arithmetic used a
+   * measured one would contradict the pair of numbers directly above it.
+   */
+  readonly atmosphericPaUsed: number;
 }
 
 const inEveryUnit = (pascals: number): PressureInUnits => ({
@@ -1396,6 +1404,7 @@ export function convertPressure(input: PressureInput): ProResult<PressureConvers
     absolutePa,
     gauge: inEveryUnit(gaugePa),
     absolute: inEveryUnit(absolutePa),
+    atmosphericPaUsed: atmosphericPa,
   };
 }
 
