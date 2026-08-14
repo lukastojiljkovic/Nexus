@@ -25,6 +25,32 @@ describe("checkCss", () => {
   color: red;
 }`;
     expect(kinds(css)).toContain("prose-at-top-level");
+    // And the stray `*/` the early close leaves behind, which is the half of
+    // the class that survives at any depth — see the case below.
+    expect(kinds(css)).toContain("stray-comment-end");
+  });
+
+  it("catches the same defect INSIDE a rule body, where the prose test cannot see it", () => {
+    // 2026-08-14: this exact shape shipped and this gate passed it. The prose
+    // check reads depth zero only, and here the loose text sits at depth one —
+    // so the one gate written for early-closed comments found nothing, and the
+    // production build was what refused the file. A `*/` outside a comment is
+    // unambiguous wherever it appears, which is why that is what is tested.
+    const css = `.scroll {
+  /* Why the height is bounded.
+
+     A second paragraph. */
+     A third paragraph that used to be inside the comment. */
+  max-height: 20rem;
+}`;
+    expect(kinds(css)).toContain("stray-comment-end");
+  });
+
+  it("does not report a stray end for a comment that closes exactly once", () => {
+    // The negative control the old check could never fail: it required a file
+    // with a `*/` and no `/*` at all, so it passed every real stylesheet.
+    expect(checkCss("/* a */\n.a { color: red; }\n/* b */\n.b { top: 0; }")).toEqual([]);
+    expect(kinds("/* /* not nested */\n.a { top: 0; }")).toEqual([]);
   });
 
   it("accepts an ordinary stylesheet", () => {

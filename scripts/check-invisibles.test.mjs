@@ -44,6 +44,24 @@ describe("scanText — what must trip the gate", () => {
   it("catches several in one file rather than stopping at the first", () => {
     expect(ids(`"${ch(0x00a0)}" + "${ch(0xfeff)}"`)).toEqual(["NBSP", "BOM / ZWNBSP"]);
   });
+
+  it("catches a file read as latin1 and written back — the 2026-08-14 corruption", () => {
+    // `packages/core/src/pro/biznis.test.ts` was read with the wrong encoding
+    // and rewritten: 58 lines of comments had every „—" turned into three
+    // characters and every „…" into three more. Nothing failed. Typecheck,
+    // 5 753 tests, the ten gates and the build were all green with the file in
+    // that state, and it was found by reading a diff stat that said 152 lines
+    // had changed in a file where 38 had been added.
+    //
+    // Built from BYTES here rather than pasted, because a fixture of mojibake
+    // pasted into a source file is a source file with mojibake in it.
+    const emDash = Buffer.from("—", "utf8").toString("latin1"); // U+00E2 U+0080 U+0094
+    const ellipsis = Buffer.from("…", "utf8").toString("latin1");
+    const serbianC = Buffer.from("č", "utf8").toString("latin1"); // U+00C4 U+008D
+    expect(ids(`// a comment ${emDash} and more`)).toEqual(["MOJIBAKE"]);
+    expect(ids(`// 0,4166${ellipsis}`)).toEqual(["MOJIBAKE"]);
+    expect(ids(`// ra${serbianC}un`)).toEqual(["MOJIBAKE"]);
+  });
 });
 
 describe("scanText — what must NOT trip it", () => {
@@ -62,6 +80,21 @@ describe("scanText — what must NOT trip it", () => {
 
   it("leaves an emoji and an astral code point alone — surrogate pairs are one character to the walk", () => {
     expect(ids(`const s = "✦ 𝔘 🙂";`)).toEqual([]);
+  });
+
+  it("leaves the three real texts that UTF-8's own continuation range would have failed", () => {
+    // The mojibake rule was first written with UTF-8's actual continuation
+    // range, 0x80–0xBF, and reported all three of these — every one correct.
+    // An accented Latin-1 letter is in the LEAD range, and a middle dot or an
+    // inverted exclamation is in the continuation range, so ordinary text puts
+    // the pair side by side. The narrowing to the C1 controls is what this
+    // pins; widening it back turns the gate against shipped copy.
+    expect(ids("// n = 128 + 745/6 = 252 = U+00FC, inserted -> b·ü·cher")).toEqual([]);
+    expect(ids("// n = 128 + 680/6 = 241 = U+00F1, at 2 -> ma·ñ·ana")).toEqual([]);
+    // And the drawer's own `mojibake-repair` tool, whose Serbian copy and test
+    // fixtures are mojibake ON PURPOSE — „Å¡" is how the user recognises the
+    // problem the tool solves, so it can never be „fixed" out of the strings.
+    expect(ids(`textHint: "Nalepi pokvaren tekst, na primer „Å¡\\" ili „Ä‡\\"."`)).toEqual([]);
   });
 });
 

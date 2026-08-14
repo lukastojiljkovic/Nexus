@@ -57,6 +57,41 @@ const BY_CODE = new Map(INVISIBLES.map((entry) => [entry.code, entry]));
 const CODES = new Set(INVISIBLES.map((entry) => entry.code));
 
 /**
+ * A UTF-8 LEAD byte followed immediately by a UTF-8 CONTINUATION byte, both
+ * decoded as single latin1 characters — the signature of a file that was read
+ * with the wrong encoding and written back out.
+ *
+ * `0xC2-0xF4` is the whole legal lead range, so the LEAD half of the test is
+ * the real UTF-8 rule rather than a list of the sequences seen once: an em dash
+ * (E2 80 94) and a „č" (C4 8D) corrupt through different leads, and a list
+ * written from the first would have missed every Serbian letter in `strings.ts`.
+ *
+ * The CONTINUATION half is deliberately NARROWER than UTF-8's own `0x80-0xBF`:
+ * only `0x80-0x9F`, the C1 controls, which no prose contains. The full range
+ * was tried first and produced three findings in this repository that are all
+ * correct text — „mañana·" and „bücher·" in a punycode comment, where an
+ * accented Latin-1 letter simply precedes a middle dot. A gate that reports
+ * shipped copy as broken is a gate somebody switches off (DC-01's inverse).
+ *
+ * What that costs: a file whose ONLY corrupted character is „š" (C5 A1) or „ž"
+ * (C5 BE) is not caught, because their second byte is above 0x9F. In practice
+ * corruption is never that selective — it hits every non-ASCII character in the
+ * file at once, and this codebase's prose cannot go a paragraph without a dash,
+ * a „ quote, an ellipsis, or a č/ć/đ, every one of which lands in 0x80-0x9F.
+ *
+ * The tool drawer ships a `mojibake-repair` tool, so mojibake also appears
+ * legitimately in its fixtures and in the Serbian copy that demonstrates it —
+ * all of it built from „Å¡"-shaped sequences, which this range does not match.
+ */
+const isMojibakeLead = (code) => code >= 0x00c2 && code <= 0x00f4;
+const isMojibakeContinuation = (code) => code >= 0x0080 && code <= 0x009f;
+
+const MOJIBAKE_WHY =
+  "a UTF-8 byte sequence decoded as latin1 — the file was read with the wrong " +
+  "encoding and written back, so every dash, quote and Serbian letter in it is " +
+  "now two or three characters that render as gibberish";
+
+/**
  * Every offending character in one file's text, as
  * `[{ line, column, id, why }]`.
  *
@@ -68,10 +103,12 @@ export function scanText(text) {
   const hits = [];
   let line = 1;
   let column = 1;
+  let previous;
   for (const char of text) {
     if (char === "\n") {
       line += 1;
       column = 1;
+      previous = undefined;
       continue;
     }
     const code = char.codePointAt(0);
@@ -85,6 +122,21 @@ export function scanText(text) {
         escape: `\\u${code.toString(16).padStart(4, "0")}`,
       });
     }
+    if (
+      code !== undefined &&
+      previous !== undefined &&
+      isMojibakeLead(previous) &&
+      isMojibakeContinuation(code)
+    ) {
+      hits.push({
+        line,
+        column: column - 1,
+        id: "MOJIBAKE",
+        why: MOJIBAKE_WHY,
+        escape: `\\u${previous.toString(16).padStart(4, "0")}\\u${code.toString(16).padStart(4, "0")}`,
+      });
+    }
+    previous = code;
     column += 1;
   }
   return hits;
@@ -109,7 +161,7 @@ if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.a
     process.exit(0);
   }
   console.error(
-    `check-invisibles: ${findings.length} invisible character(s) in source.\n` +
+    `check-invisibles: ${findings.length} finding(s) in source.\n` +
       "Each of these renders as nothing, or as a character it is not.\n",
   );
   for (const f of findings) {

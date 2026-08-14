@@ -80,11 +80,28 @@ export function checkCss(text) {
       index = end + 2;
       continue;
     }
+    // A `*/` reached OUTSIDE a comment is a comment that was closed early: the
+    // real close is still there, further down, with prose in between.
+    //
+    // This is the whole class, and this is the check that catches it wherever
+    // it happens. What stood here was `text.includes("*/") && !text.includes("/*")`
+    // — true only for a file with a comment end and NO comment start anywhere,
+    // which no real stylesheet is, so it never fired. On 2026-08-14 the exact
+    // defect this gate was written for happened again, ten lines into a comment
+    // INSIDE a rule body, and this gate passed it; the production build caught
+    // it. The prose check below only reads depth zero, and the original 2026-08-08
+    // instance happened to be at depth zero — so the gate's reach had been set
+    // by the one example it was written from. A `*/` is unambiguous at every
+    // depth, which is why the fix belongs here and not in the prose test.
+    if (text.startsWith("*/", index)) {
+      problems.push({ line, kind: "stray-comment-end" });
+      index += 2;
+      continue;
+    }
     if (text[index] === "\n") line += 1;
     depthlessText += text[index];
     index += 1;
   }
-  if (text.includes("*/") && !text.includes("/*")) problems.push({ line: 1, kind: "stray-comment-end" });
 
   // --- Braces, and what sits between them ----------------------------------
   let depth = 0;

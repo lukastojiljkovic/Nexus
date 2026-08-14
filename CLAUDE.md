@@ -177,10 +177,15 @@ choice of backend**; whatever in them is about the data model still applies.
   @nexus/desktop smoke` (flips to electron, runs, restores) and `… rebuild:node`
   (restores node). Never flip it by hand. After a smoke run, restore node ABI and
   re-run the db tests.
-- **Verification gates before any commit:** `pnpm typecheck` (7/7), `pnpm test`
-  (all green), `pnpm build` (3/3), `pnpm --filter @nexus/desktop smoke` prints
-  `SMOKE OK`, and **all ten static gates** pass. They are cheap, they need no
-  build output, and CI runs each as its own step so a red check names the rule:
+- **Verification gates before any commit:** `pnpm typecheck` (12/12), `pnpm lint`
+  (12/12), `pnpm test` (all green), `pnpm build` (4/4),
+  `pnpm --filter @nexus/desktop smoke` prints `SMOKE OK`, and **all ten static
+  gates** pass. **`pnpm lint` used to be missing from this line** even though CI
+  has always run it, and on 2026-08-14 six real errors shipped red because of
+  that — two of them display bugs the linter had named (DC-49, DC-50). Treat an
+  unused import as a question, not a nit: it is usually half a feature.
+  The static gates are cheap, they need no build output, and CI runs each as its
+  own step so a red check names the rule:
   `check:colours` (no raw hex/rgb/hsl outside `packages/tokens`),
   `check:contrast` (every token pair clears WCAG AA, marks clear 3:1, hairlines
   sit inside the 1.2–2.4:1 band), `check:css`, `check:strings` (no module-scope
