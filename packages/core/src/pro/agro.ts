@@ -536,15 +536,28 @@ export interface FertiliserBlendResult {
   readonly totalDeliveredNKg: number;
   readonly totalDeliveredP2o5Kg: number;
   readonly totalDeliveredK2oKg: number;
-  readonly targetNKgHa: number | undefined;
-  readonly targetP2o5KgHa: number | undefined;
-  readonly targetK2oKgHa: number | undefined;
-  readonly targetPElementKgHa: number | undefined;
-  readonly targetKElementKgHa: number | undefined;
+  readonly target: FertiliserTarget | undefined;
+}
+
+/**
+ * The target comparison, present exactly in „to a target" mode and absent in
+ * „dose given" mode, where the user supplied the dose himself and there is
+ * nothing to compare it against.
+ *
+ * One group rather than eight sibling optionals (DC-47). The old shape wrote
+ * them out as a block of eight `undefined`s in the dose-only branch, which is
+ * as plain a statement as there is that they are one thing.
+ */
+export interface FertiliserTarget {
+  readonly targetNKgHa: number;
+  readonly targetP2o5KgHa: number;
+  readonly targetK2oKgHa: number;
+  readonly targetPElementKgHa: number;
+  readonly targetKElementKgHa: number;
   /** „cilj − isporučeno", kg/ha — positive means below target, never called a verdict. */
-  readonly targetMinusDeliveredN: number | undefined;
-  readonly targetMinusDeliveredP2o5: number | undefined;
-  readonly targetMinusDeliveredK2o: number | undefined;
+  readonly targetMinusDeliveredN: number;
+  readonly targetMinusDeliveredP2o5: number;
+  readonly targetMinusDeliveredK2o: number;
 }
 
 function compositionPercent(c: FertiliserComposition, lead: LeadNutrient): number {
@@ -606,14 +619,7 @@ export function fertiliserNutrientBlend(input: FertiliserBlendInput): ProResult<
       totalDeliveredNKg: line.deliveredNKgHa * input.areaHa,
       totalDeliveredP2o5Kg: line.deliveredP2o5KgHa * input.areaHa,
       totalDeliveredK2oKg: line.deliveredK2oKgHa * input.areaHa,
-      targetNKgHa: undefined,
-      targetP2o5KgHa: undefined,
-      targetK2oKgHa: undefined,
-      targetPElementKgHa: undefined,
-      targetKElementKgHa: undefined,
-      targetMinusDeliveredN: undefined,
-      targetMinusDeliveredP2o5: undefined,
-      targetMinusDeliveredK2o: undefined,
+      target: undefined,
     };
   }
 
@@ -665,14 +671,16 @@ export function fertiliserNutrientBlend(input: FertiliserBlendInput): ProResult<
     totalDeliveredNKg: deliveredNKgHa * input.areaHa,
     totalDeliveredP2o5Kg: deliveredP2o5KgHa * input.areaHa,
     totalDeliveredK2oKg: deliveredK2oKgHa * input.areaHa,
-    targetNKgHa: input.targetN,
-    targetP2o5KgHa: targetP2o5,
-    targetK2oKgHa: targetK2o,
-    targetPElementKgHa: targetP2o5 * P2O5_TO_P,
-    targetKElementKgHa: targetK2o * K2O_TO_K,
-    targetMinusDeliveredN: input.targetN - deliveredNKgHa,
-    targetMinusDeliveredP2o5: targetP2o5 - deliveredP2o5KgHa,
-    targetMinusDeliveredK2o: targetK2o - deliveredK2oKgHa,
+    target: {
+      targetNKgHa: input.targetN,
+      targetP2o5KgHa: targetP2o5,
+      targetK2oKgHa: targetK2o,
+      targetPElementKgHa: targetP2o5 * P2O5_TO_P,
+      targetKElementKgHa: targetK2o * K2O_TO_K,
+      targetMinusDeliveredN: input.targetN - deliveredNKgHa,
+      targetMinusDeliveredP2o5: targetP2o5 - deliveredP2o5KgHa,
+      targetMinusDeliveredK2o: targetK2o - deliveredK2oKgHa,
+    },
   };
 }
 
@@ -1497,14 +1505,36 @@ export interface MachineCapacityResult {
   readonly daysNeeded: number;
   readonly capacityPerDayHa: number;
   readonly lastDayHours: number;
-  readonly fuelLPerHa: number | undefined;
-  readonly fuelTotalL: number | undefined;
-  readonly fuelCostPerHa: number | undefined;
-  readonly fuelCostTotal: number | undefined;
+  readonly fuel: MachineCapacityFuel | undefined;
+  readonly turns: MachineCapacityTurns | undefined;
+}
+
+/** The fuel figures, present exactly when `fuelLPerHour` was given. */
+export interface MachineCapacityFuel {
+  readonly fuelLPerHa: number;
+  readonly fuelTotalL: number;
+  /**
+   * What that fuel costs, present when a price was given as well. Nested
+   * rather than two more optionals beside the litres, because the two money
+   * figures are absent together and neither can exist without the litres.
+   */
+  readonly cost: MachineCapacityFuelCost | undefined;
+}
+
+export interface MachineCapacityFuelCost {
+  readonly fuelCostPerHa: number;
+  readonly fuelCostTotal: number;
+}
+
+/**
+ * The headland-turn figures, present exactly when both the field length and
+ * the seconds per turn were given.
+ */
+export interface MachineCapacityTurns {
   /** `passes − 1` turns — nothing follows the last pass. */
-  readonly turnCount: number | undefined;
-  readonly turnTimeHours: number | undefined;
-  readonly turnTimeSharePercent: number | undefined;
+  readonly turnCount: number;
+  readonly turnTimeHours: number;
+  readonly turnTimeSharePercent: number;
 }
 
 /**
@@ -1537,21 +1567,27 @@ export function machineFieldCapacity(input: MachineCapacityInput): ProResult<Mac
   const remainder = timeHours - fullDays * input.hoursPerDay;
   const lastDayHours = remainder > 0 ? remainder : input.hoursPerDay;
 
-  const fuelLPerHa = input.fuelLPerHour === undefined ? undefined : input.fuelLPerHour / effectiveCapacityHaH;
-  const fuelTotalL = fuelLPerHa === undefined ? undefined : fuelLPerHa * input.areaHa;
-  const fuelCostPerHa =
-    fuelLPerHa === undefined || input.fuelPricePerL === undefined ? undefined : fuelLPerHa * input.fuelPricePerL;
-  const fuelCostTotal =
-    fuelTotalL === undefined || input.fuelPricePerL === undefined ? undefined : fuelTotalL * input.fuelPricePerL;
+  let fuel: MachineCapacityFuel | undefined;
+  if (input.fuelLPerHour !== undefined) {
+    const fuelLPerHa = input.fuelLPerHour / effectiveCapacityHaH;
+    const fuelTotalL = fuelLPerHa * input.areaHa;
+    const pricePerL = input.fuelPricePerL;
+    fuel = {
+      fuelLPerHa,
+      fuelTotalL,
+      cost:
+        pricePerL === undefined
+          ? undefined
+          : { fuelCostPerHa: fuelLPerHa * pricePerL, fuelCostTotal: fuelTotalL * pricePerL },
+    };
+  }
 
-  let turnCount: number | undefined;
-  let turnTimeHours: number | undefined;
-  let turnTimeSharePercent: number | undefined;
+  let turns: MachineCapacityTurns | undefined;
   if (input.fieldLengthM !== undefined && input.turnSeconds !== undefined) {
     const passes = ceilSnapped((input.areaHa * HECTARE_M2) / (actualWidthM * input.fieldLengthM));
-    turnCount = Math.max(0, passes - 1);
-    turnTimeHours = (turnCount * input.turnSeconds) / 3600;
-    turnTimeSharePercent = (turnTimeHours / timeHours) * 100;
+    const turnCount = Math.max(0, passes - 1);
+    const turnTimeHours = (turnCount * input.turnSeconds) / 3600;
+    turns = { turnCount, turnTimeHours, turnTimeSharePercent: (turnTimeHours / timeHours) * 100 };
   }
 
   return {
@@ -1565,13 +1601,8 @@ export function machineFieldCapacity(input: MachineCapacityInput): ProResult<Mac
     daysNeeded,
     capacityPerDayHa: effectiveCapacityHaH * input.hoursPerDay,
     lastDayHours,
-    fuelLPerHa,
-    fuelTotalL,
-    fuelCostPerHa,
-    fuelCostTotal,
-    turnCount,
-    turnTimeHours,
-    turnTimeSharePercent,
+    fuel,
+    turns,
   };
 }
 
@@ -1755,19 +1786,35 @@ export interface PlantSpacingInput {
   readonly desiredDensityPerHa?: number | undefined;
 }
 
+/**
+ * The on-parcel count, present exactly for a rectangular pattern with both
+ * plot dimensions given. Seven figures from one branch, absent together.
+ */
+export interface PlantSpacingOnParcel {
+  readonly rowsCount: number;
+  readonly rowLengthM: number;
+  readonly plantsPerRow: number;
+  readonly totalPlants: number;
+  readonly plotAreaHa: number;
+  readonly usedAreaHa: number;
+  readonly actualDensityPerHa: number;
+}
+
+/**
+ * The spacing a desired density requires, present exactly for a rectangular
+ * pattern with `desiredDensityPerHa` given.
+ */
+export interface PlantSpacingDesired {
+  readonly requiredInRowSpacingM: number;
+  readonly requiredSpacingRoundedM: number;
+  readonly densityAtRoundedSpacing: number;
+}
+
 export interface PlantSpacingResult {
   readonly areaPerPlantM2: number;
   readonly theoreticalDensityPerHa: number;
-  readonly rowsCount: number | undefined;
-  readonly rowLengthM: number | undefined;
-  readonly plantsPerRow: number | undefined;
-  readonly totalPlants: number | undefined;
-  readonly plotAreaHa: number | undefined;
-  readonly usedAreaHa: number | undefined;
-  readonly actualDensityPerHa: number | undefined;
-  readonly requiredInRowSpacingM: number | undefined;
-  readonly requiredSpacingRoundedM: number | undefined;
-  readonly densityAtRoundedSpacing: number | undefined;
+  readonly onParcel: PlantSpacingOnParcel | undefined;
+  readonly desired: PlantSpacingDesired | undefined;
 }
 
 /**
@@ -1798,62 +1845,47 @@ export function plantSpacingDensity(input: PlantSpacingInput): ProResult<PlantSp
     input.pattern === "rectangular" ? input.rowSpacingM * input.spacingM : TRIANGULAR_FACTOR * input.spacingM ** 2;
   const theoreticalDensityPerHa = HECTARE_M2 / areaPerPlantM2;
 
-  let rowsCount: number | undefined;
-  let rowLengthM: number | undefined;
-  let plantsPerRow: number | undefined;
-  let totalPlants: number | undefined;
-  let plotAreaHa: number | undefined;
-  let usedAreaHa: number | undefined;
-  let actualDensityPerHa: number | undefined;
+  let onParcel: PlantSpacingOnParcel | undefined;
   if (input.pattern === "rectangular" && isPositive(input.lengthM) && isPositive(input.widthM)) {
     const widthAvailable = input.widthM - 2 * input.boundaryOffsetM;
     const rl = input.lengthM - 2 * input.headlandM;
-    if (widthAvailable < 0 || rl < 0) {
-      rowsCount = 0;
-      rowLengthM = Math.max(0, rl);
-      plantsPerRow = 0;
-      totalPlants = 0;
-    } else {
-      rowsCount = rowsAcrossWidth(widthAvailable, input.rowSpacingM);
-      rowLengthM = rl;
-      plantsPerRow = floorSnapped(rl / input.spacingM) + 1;
-      totalPlants = rowsCount * plantsPerRow;
-    }
-    plotAreaHa = (input.lengthM * input.widthM) / HECTARE_M2;
-    usedAreaHa = (rowsCount * input.rowSpacingM * rowLengthM) / HECTARE_M2;
-    actualDensityPerHa = totalPlants / plotAreaHa;
+    // A plot whose headlands or boundary offsets eat the whole parcel holds no
+    // rows and no plants; the row length is still reported, floored at zero.
+    const degenerate = widthAvailable < 0 || rl < 0;
+    const rowsCount = degenerate ? 0 : rowsAcrossWidth(widthAvailable, input.rowSpacingM);
+    const rowLengthM = degenerate ? Math.max(0, rl) : rl;
+    const plantsPerRow = degenerate ? 0 : floorSnapped(rl / input.spacingM) + 1;
+    const totalPlants = rowsCount * plantsPerRow;
+    const plotAreaHa = (input.lengthM * input.widthM) / HECTARE_M2;
+    onParcel = {
+      rowsCount,
+      rowLengthM,
+      plantsPerRow,
+      totalPlants,
+      plotAreaHa,
+      usedAreaHa: (rowsCount * input.rowSpacingM * rowLengthM) / HECTARE_M2,
+      actualDensityPerHa: totalPlants / plotAreaHa,
+    };
   }
 
-  let requiredInRowSpacingM: number | undefined;
-  let requiredSpacingRoundedM: number | undefined;
-  let densityAtRoundedSpacing: number | undefined;
+  let desired: PlantSpacingDesired | undefined;
   if (input.pattern === "rectangular" && input.desiredDensityPerHa !== undefined) {
-    requiredInRowSpacingM = HECTARE_M2 / (input.desiredDensityPerHa * input.rowSpacingM);
+    const requiredInRowSpacingM = HECTARE_M2 / (input.desiredDensityPerHa * input.rowSpacingM);
     // Rounded to the centimetre — the step a planter can actually be set to.
-    requiredSpacingRoundedM = Math.round(requiredInRowSpacingM * 100) / 100;
+    const requiredSpacingRoundedM = Math.round(requiredInRowSpacingM * 100) / 100;
     // A desired density so far beyond what the row spacing and a 1 cm planter
     // step can deliver rounds the required in-row spacing down to exactly
     // zero, which would otherwise divide by zero below and return Infinity
     // wrapped in `ok: true`.
     if (requiredSpacingRoundedM <= 0) return fail("desiredDensityPerHa");
-    densityAtRoundedSpacing = HECTARE_M2 / (input.rowSpacingM * requiredSpacingRoundedM);
+    desired = {
+      requiredInRowSpacingM,
+      requiredSpacingRoundedM,
+      densityAtRoundedSpacing: HECTARE_M2 / (input.rowSpacingM * requiredSpacingRoundedM),
+    };
   }
 
-  return {
-    ok: true,
-    areaPerPlantM2,
-    theoreticalDensityPerHa,
-    rowsCount,
-    rowLengthM,
-    plantsPerRow,
-    totalPlants,
-    plotAreaHa,
-    usedAreaHa,
-    actualDensityPerHa,
-    requiredInRowSpacingM,
-    requiredSpacingRoundedM,
-    densityAtRoundedSpacing,
-  };
+  return { ok: true, areaPerPlantM2, theoreticalDensityPerHa, onParcel, desired };
 }
 
 /* ---------------------------------------------------------------------------

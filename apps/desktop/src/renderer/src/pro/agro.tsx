@@ -1373,15 +1373,19 @@ export function MachineFieldCapacityTool() {
         `${s.daysNeeded}: ${proNum(result.daysNeeded, 0)}`,
         `${s.capacityPerDayHa}: ${proUnit(proNum(result.capacityPerDayHa, 2), s.unitHa)}`,
         `${s.lastDayHours}: ${proUnit(proNum(result.lastDayHours, 2), s.unitH)}`,
-        result.fuelLPerHa === undefined
+        result.fuel === undefined
           ? undefined
-          : `${s.fuelLPerHa}: ${proUnit(proNum(result.fuelLPerHa, 2), s.unitLHa)}   ${s.fuelTotalL}: ${proUnit(proNum(result.fuelTotalL ?? 0, 1), s.unitL)}`,
-        result.fuelCostPerHa === undefined
+          : `${s.fuelLPerHa}: ${proUnit(proNum(result.fuel.fuelLPerHa, 2), s.unitLHa)}   ` +
+            `${s.fuelTotalL}: ${proUnit(proNum(result.fuel.fuelTotalL, 1), s.unitL)}`,
+        result.fuel?.cost === undefined
           ? undefined
-          : `${s.fuelCostPerHa}: ${proUnit(proNum(result.fuelCostPerHa, 2), s.unitRsd)}   ${s.fuelCostTotal}: ${proUnit(proNum(result.fuelCostTotal ?? 0, 2), s.unitRsd)}`,
-        result.turnCount === undefined
+          : `${s.fuelCostPerHa}: ${proUnit(proNum(result.fuel.cost.fuelCostPerHa, 2), s.unitRsd)}   ` +
+            `${s.fuelCostTotal}: ${proUnit(proNum(result.fuel.cost.fuelCostTotal, 2), s.unitRsd)}`,
+        result.turns === undefined
           ? undefined
-          : `${s.turnCount}: ${proNum(result.turnCount, 0)}   ${s.turnTimeHours}: ${proUnit(proNum(result.turnTimeHours ?? 0, 2), s.unitH)}   ${s.turnTimeSharePercent}: ${proNum(result.turnTimeSharePercent ?? 0, 2)}${s.unitPercent}`,
+          : `${s.turnCount}: ${proNum(result.turns.turnCount, 0)}   ` +
+            `${s.turnTimeHours}: ${proUnit(proNum(result.turns.turnTimeHours, 2), s.unitH)}   ` +
+            `${s.turnTimeSharePercent}: ${proNum(result.turns.turnTimeSharePercent, 2)}${s.unitPercent}`,
       ]
         .filter((line): line is string => line !== undefined)
         .join("\n");
@@ -1418,25 +1422,31 @@ export function MachineFieldCapacityTool() {
           <ResultRow label={s.daysNeeded} value={proNum(result.daysNeeded, 0)} />
           <ResultRow label={s.capacityPerDayHa} value={proUnit(proNum(result.capacityPerDayHa, 2), s.unitHa)} />
           <ResultRow label={s.lastDayHours} value={proUnit(proNum(result.lastDayHours, 2), s.unitH)} />
-          {result.fuelLPerHa !== undefined && (
+          {result.fuel !== undefined && (
             <ToolSection title={s.fuel}>
-              <ResultRow label={s.fuelLPerHa} value={proUnit(proNum(result.fuelLPerHa, 2), s.unitLHa)} />
-              <ResultRow label={s.fuelTotalL} value={proUnit(proNum(result.fuelTotalL ?? 0, 1), s.unitL)} />
-              {result.fuelCostPerHa !== undefined && (
+              <ResultRow label={s.fuelLPerHa} value={proUnit(proNum(result.fuel.fuelLPerHa, 2), s.unitLHa)} />
+              <ResultRow label={s.fuelTotalL} value={proUnit(proNum(result.fuel.fuelTotalL, 1), s.unitL)} />
+              {result.fuel.cost !== undefined && (
                 <>
-                  <ResultRow label={s.fuelCostPerHa} value={proUnit(proNum(result.fuelCostPerHa, 2), s.unitRsd)} />
-                  <ResultRow label={s.fuelCostTotal} value={proUnit(proNum(result.fuelCostTotal ?? 0, 2), s.unitRsd)} />
+                  <ResultRow
+                    label={s.fuelCostPerHa}
+                    value={proUnit(proNum(result.fuel.cost.fuelCostPerHa, 2), s.unitRsd)}
+                  />
+                  <ResultRow
+                    label={s.fuelCostTotal}
+                    value={proUnit(proNum(result.fuel.cost.fuelCostTotal, 2), s.unitRsd)}
+                  />
                 </>
               )}
             </ToolSection>
           )}
-          {result.turnCount !== undefined && (
+          {result.turns !== undefined && (
             <ToolSection title={s.turns}>
-              <ResultRow label={s.turnCount} value={proNum(result.turnCount, 0)} />
-              <ResultRow label={s.turnTimeHours} value={proUnit(proNum(result.turnTimeHours ?? 0, 2), s.unitH)} />
+              <ResultRow label={s.turnCount} value={proNum(result.turns.turnCount, 0)} />
+              <ResultRow label={s.turnTimeHours} value={proUnit(proNum(result.turns.turnTimeHours, 2), s.unitH)} />
               <ResultRow
                 label={s.turnTimeSharePercent}
-                value={`${proNum(result.turnTimeSharePercent ?? 0, 2)}${s.unitPercent}`}
+                value={`${proNum(result.turns.turnTimeSharePercent, 2)}${s.unitPercent}`}
               />
             </ToolSection>
           )}
@@ -1688,15 +1698,21 @@ export function PlantSpacingDensityTool() {
     : [
         `${s.areaPerPlantM2}: ${proUnit(proNum(result.areaPerPlantM2, 4), s.unitM2)}`,
         `${s.theoreticalDensityPerHa}: ${proNum(result.theoreticalDensityPerHa, 2)}`,
-        result.rowsCount === undefined
+        result.onParcel === undefined
           ? undefined
-          : `${s.rowsCount}: ${proNum(result.rowsCount, 0)}   ${s.plantsPerRow}: ${proNum(result.plantsPerRow ?? 0, 0)}   ${s.totalPlants}: ${proNum(result.totalPlants ?? 0, 0)}`,
-        result.plotAreaHa === undefined
+          : `${s.rowsCount}: ${proNum(result.onParcel.rowsCount, 0)}   ` +
+            `${s.plantsPerRow}: ${proNum(result.onParcel.plantsPerRow, 0)}   ` +
+            `${s.totalPlants}: ${proNum(result.onParcel.totalPlants, 0)}`,
+        result.onParcel === undefined
           ? undefined
-          : `${s.plotAreaHa}: ${proUnit(proNum(result.plotAreaHa, 3), s.unitHa)}   ${s.usedAreaHa}: ${proUnit(proNum(result.usedAreaHa ?? 0, 3), s.unitHa)}   ${s.actualDensityPerHa}: ${proNum(result.actualDensityPerHa ?? 0, 2)}`,
-        result.requiredInRowSpacingM === undefined
+          : `${s.plotAreaHa}: ${proUnit(proNum(result.onParcel.plotAreaHa, 3), s.unitHa)}   ` +
+            `${s.usedAreaHa}: ${proUnit(proNum(result.onParcel.usedAreaHa, 3), s.unitHa)}   ` +
+            `${s.actualDensityPerHa}: ${proNum(result.onParcel.actualDensityPerHa, 2)}`,
+        result.desired === undefined
           ? undefined
-          : `${s.requiredInRowSpacingM}: ${proUnit(proNum(result.requiredInRowSpacingM, 4), s.unitM)}   ${s.requiredSpacingRoundedM}: ${proUnit(proNum(result.requiredSpacingRoundedM ?? 0, 2), s.unitM)}   ${s.densityAtRoundedSpacing}: ${proNum(result.densityAtRoundedSpacing ?? 0, 2)}`,
+          : `${s.requiredInRowSpacingM}: ${proUnit(proNum(result.desired.requiredInRowSpacingM, 4), s.unitM)}   ` +
+            `${s.requiredSpacingRoundedM}: ${proUnit(proNum(result.desired.requiredSpacingRoundedM, 2), s.unitM)}   ` +
+            `${s.densityAtRoundedSpacing}: ${proNum(result.desired.densityAtRoundedSpacing, 2)}`,
       ]
         .filter((line): line is string => line !== undefined)
         .join("\n");
@@ -1726,26 +1742,32 @@ export function PlantSpacingDensityTool() {
         <ToolSection title={s.results}>
           <ResultRow label={s.areaPerPlantM2} value={proUnit(proNum(result.areaPerPlantM2, 4), s.unitM2)} />
           <ResultRow label={s.theoreticalDensityPerHa} value={proNum(result.theoreticalDensityPerHa, 2)} />
-          {result.rowsCount !== undefined && (
+          {result.onParcel !== undefined && (
             <ToolSection title={s.onParcel}>
-              <ResultRow label={s.rowsCount} value={proNum(result.rowsCount, 0)} />
-              <ResultRow label={s.rowLengthM} value={proUnit(proNum(result.rowLengthM ?? 0, 2), s.unitM)} />
-              <ResultRow label={s.plantsPerRow} value={proNum(result.plantsPerRow ?? 0, 0)} />
-              <ResultRow label={s.totalPlants} value={proNum(result.totalPlants ?? 0, 0)} />
-              <ResultRow label={s.plotAreaHa} value={proUnit(proNum(result.plotAreaHa ?? 0, 3), s.unitHa)} />
-              <ResultRow label={s.usedAreaHa} value={proUnit(proNum(result.usedAreaHa ?? 0, 3), s.unitHa)} />
-              <ResultRow label={s.actualDensityPerHa} value={proNum(result.actualDensityPerHa ?? 0, 2)} />
+              <ResultRow label={s.rowsCount} value={proNum(result.onParcel.rowsCount, 0)} />
+              <ResultRow label={s.rowLengthM} value={proUnit(proNum(result.onParcel.rowLengthM, 2), s.unitM)} />
+              <ResultRow label={s.plantsPerRow} value={proNum(result.onParcel.plantsPerRow, 0)} />
+              <ResultRow label={s.totalPlants} value={proNum(result.onParcel.totalPlants, 0)} />
+              <ResultRow label={s.plotAreaHa} value={proUnit(proNum(result.onParcel.plotAreaHa, 3), s.unitHa)} />
+              <ResultRow label={s.usedAreaHa} value={proUnit(proNum(result.onParcel.usedAreaHa, 3), s.unitHa)} />
+              <ResultRow label={s.actualDensityPerHa} value={proNum(result.onParcel.actualDensityPerHa, 2)} />
             </ToolSection>
           )}
           {pattern === "triangular" && <p className="tool__note">{s.triangularNote}</p>}
-          {result.requiredInRowSpacingM !== undefined && (
+          {result.desired !== undefined && (
             <ToolSection title={s.reverse}>
-              <ResultRow label={s.requiredInRowSpacingM} value={proUnit(proNum(result.requiredInRowSpacingM, 4), s.unitM)} />
+              <ResultRow
+                label={s.requiredInRowSpacingM}
+                value={proUnit(proNum(result.desired.requiredInRowSpacingM, 4), s.unitM)}
+              />
               <ResultRow
                 label={s.requiredSpacingRoundedM}
-                value={proUnit(proNum(result.requiredSpacingRoundedM ?? 0, 2), s.unitM)}
+                value={proUnit(proNum(result.desired.requiredSpacingRoundedM, 2), s.unitM)}
               />
-              <ResultRow label={s.densityAtRoundedSpacing} value={proNum(result.densityAtRoundedSpacing ?? 0, 2)} />
+              <ResultRow
+                label={s.densityAtRoundedSpacing}
+                value={proNum(result.desired.densityAtRoundedSpacing, 2)}
+              />
             </ToolSection>
           )}
           <ToolFormula>{s.formula}</ToolFormula>
@@ -2544,16 +2566,17 @@ export function FertiliserNutrientBlendTool() {
     out.push(`${s.totalDeliveredN}: ${proUnit(proNum(result.totalDeliveredNKg, 1), s.unitKg)}`);
     out.push(`${s.totalDeliveredP2o5}: ${proUnit(proNum(result.totalDeliveredP2o5Kg, 1), s.unitKg)}`);
     out.push(`${s.totalDeliveredK2o}: ${proUnit(proNum(result.totalDeliveredK2oKg, 1), s.unitKg)}`);
-    if (result.targetNKgHa !== undefined) {
+    const target = result.target;
+    if (target !== undefined) {
       out.push("");
-      out.push(`${s.targetN}: ${proUnit(proNum(result.targetNKgHa, 2), s.unitKgHa)}`);
-      out.push(`${s.targetMinusDeliveredN}: ${proUnit(proNum(result.targetMinusDeliveredN ?? 0, 2), s.unitKgHa)}`);
-      out.push(`${s.targetP2o5}: ${proUnit(proNum(result.targetP2o5KgHa ?? 0, 2), s.unitKgHa)}`);
+      out.push(`${s.targetN}: ${proUnit(proNum(target.targetNKgHa, 2), s.unitKgHa)}`);
+      out.push(`${s.targetMinusDeliveredN}: ${proUnit(proNum(target.targetMinusDeliveredN, 2), s.unitKgHa)}`);
+      out.push(`${s.targetP2o5}: ${proUnit(proNum(target.targetP2o5KgHa, 2), s.unitKgHa)}`);
       out.push(
-        `${s.targetMinusDeliveredP2o5}: ${proUnit(proNum(result.targetMinusDeliveredP2o5 ?? 0, 2), s.unitKgHa)}`,
+        `${s.targetMinusDeliveredP2o5}: ${proUnit(proNum(target.targetMinusDeliveredP2o5, 2), s.unitKgHa)}`,
       );
-      out.push(`${s.targetK2o}: ${proUnit(proNum(result.targetK2oKgHa ?? 0, 2), s.unitKgHa)}`);
-      out.push(`${s.targetMinusDeliveredK2o}: ${proUnit(proNum(result.targetMinusDeliveredK2o ?? 0, 2), s.unitKgHa)}`);
+      out.push(`${s.targetK2o}: ${proUnit(proNum(target.targetK2oKgHa, 2), s.unitKgHa)}`);
+      out.push(`${s.targetMinusDeliveredK2o}: ${proUnit(proNum(target.targetMinusDeliveredK2o, 2), s.unitKgHa)}`);
     }
     return out;
   };
@@ -2668,30 +2691,30 @@ export function FertiliserNutrientBlendTool() {
             />
             <ResultRow label={s.totalDeliveredK2o} value={proUnit(proNum(result.totalDeliveredK2oKg, 1), s.unitKg)} />
           </ToolSection>
-          {result.targetNKgHa !== undefined && (
+          {result.target !== undefined && (
             <ToolSection title={s.balance}>
-              <ResultRow label={s.targetN} value={proUnit(proNum(result.targetNKgHa, 2), s.unitKgHa)} />
+              <ResultRow label={s.targetN} value={proUnit(proNum(result.target.targetNKgHa, 2), s.unitKgHa)} />
               <ResultRow
                 label={s.targetMinusDeliveredN}
-                value={proUnit(proNum(result.targetMinusDeliveredN ?? 0, 2), s.unitKgHa)}
+                value={proUnit(proNum(result.target.targetMinusDeliveredN, 2), s.unitKgHa)}
               />
-              <ResultRow label={s.targetP2o5} value={proUnit(proNum(result.targetP2o5KgHa ?? 0, 2), s.unitKgHa)} />
+              <ResultRow label={s.targetP2o5} value={proUnit(proNum(result.target.targetP2o5KgHa, 2), s.unitKgHa)} />
               <ResultRow
                 label={s.targetMinusDeliveredP2o5}
-                value={proUnit(proNum(result.targetMinusDeliveredP2o5 ?? 0, 2), s.unitKgHa)}
+                value={proUnit(proNum(result.target.targetMinusDeliveredP2o5, 2), s.unitKgHa)}
               />
-              <ResultRow label={s.targetK2o} value={proUnit(proNum(result.targetK2oKgHa ?? 0, 2), s.unitKgHa)} />
+              <ResultRow label={s.targetK2o} value={proUnit(proNum(result.target.targetK2oKgHa, 2), s.unitKgHa)} />
               <ResultRow
                 label={s.targetMinusDeliveredK2o}
-                value={proUnit(proNum(result.targetMinusDeliveredK2o ?? 0, 2), s.unitKgHa)}
+                value={proUnit(proNum(result.target.targetMinusDeliveredK2o, 2), s.unitKgHa)}
               />
               <ResultRow
                 label={s.targetPElement}
-                value={proUnit(proNum(result.targetPElementKgHa ?? 0, 3), s.unitKgHa)}
+                value={proUnit(proNum(result.target.targetPElementKgHa, 3), s.unitKgHa)}
               />
               <ResultRow
                 label={s.targetKElement}
-                value={proUnit(proNum(result.targetKElementKgHa ?? 0, 3), s.unitKgHa)}
+                value={proUnit(proNum(result.target.targetKElementKgHa, 3), s.unitKgHa)}
               />
             </ToolSection>
           )}

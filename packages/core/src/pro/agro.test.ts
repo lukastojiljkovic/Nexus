@@ -400,17 +400,18 @@ describe("fertiliserNutrientBlend", () => {
     expect(line2?.doseKgHa).toBeCloseTo(152.173913, 4);
     expect(line2?.deliveredNKgHa).toBeCloseTo(70, 6);
     // cilj - isporuceno: N=0, P2O5=0, K2O=90-80=+10
-    expect(r.targetMinusDeliveredN).toBeCloseTo(0, 6);
-    expect(r.targetMinusDeliveredP2o5).toBeCloseTo(0, 6);
-    expect(r.targetMinusDeliveredK2o).toBeCloseTo(10, 6);
+    expect(r.target).toBeDefined();
+    expect(r.target?.targetMinusDeliveredN).toBeCloseTo(0, 6);
+    expect(r.target?.targetMinusDeliveredP2o5).toBeCloseTo(0, 6);
+    expect(r.target?.targetMinusDeliveredK2o).toBeCloseTo(10, 6);
     // 533.3333*6.5 = 3466.667 -> /50 = 69.333 -> ceil 70
     expect(line1?.totalKg).toBeCloseTo(3466.6667, 3);
     expect(line1?.bagsCeil).toBe(70);
     // 152.173913*6.5 = 989.1304 -> /50 = 19.7826 -> ceil 20
     expect(line2?.bagsCeil).toBe(20);
     // elemental target: P = 80*0.436427 = 34.9142, K = 90*0.830151 = 74.7136
-    expect(r.targetPElementKgHa).toBeCloseTo(34.9142, 3);
-    expect(r.targetKElementKgHa).toBeCloseTo(74.7136, 3);
+    expect(r.target?.targetPElementKgHa).toBeCloseTo(34.9142, 3);
+    expect(r.target?.targetKElementKgHa).toBeCloseTo(74.7136, 3);
   });
 
   it("fertiliser -> nutrients, single dose over the whole farm — vector 2", () => {
@@ -475,12 +476,13 @@ describe("fertiliserNutrientBlend", () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     // targetP2o5 = 20*2.291335 = 45.8267 kg/ha
-    expect(r.targetP2o5KgHa).toBeCloseTo(45.8267, 4);
+    expect(r.target).toBeDefined();
+    expect(r.target?.targetP2o5KgHa).toBeCloseTo(45.8267, 4);
     // X1 = 100*45.8267/20 = 229.1335 kg/ha
     expect(r.lines[0]?.doseKgHa).toBeCloseTo(229.1335, 3);
     // delivered P2O5 = 229.1335*20/100 = 45.8267 = target, exactly by construction
     expect(r.deliveredP2o5KgHa).toBeCloseTo(45.8267, 3);
-    expect(r.targetMinusDeliveredP2o5).toBeCloseTo(0, 3);
+    expect(r.target?.targetMinusDeliveredP2o5).toBeCloseTo(0, 3);
   });
 
   it("never returns a negative secondary dose: a deficit at or below zero zeroes the line instead", () => {
@@ -1222,11 +1224,13 @@ describe("machineFieldCapacity", () => {
     expect(r.timeMinutesPart).toBe(20);
     expect(r.daysNeeded).toBe(2);
     // fuel: 18/3.6 = 5.00 l/ha; total 5*48 = 240.0 l
-    expect(r.fuelLPerHa).toBeCloseTo(5.0, 6);
-    expect(r.fuelTotalL).toBeCloseTo(240.0, 3);
+    expect(r.fuel).toBeDefined();
+    expect(r.fuel?.fuelLPerHa).toBeCloseTo(5.0, 6);
+    expect(r.fuel?.fuelTotalL).toBeCloseTo(240.0, 3);
     // cost: 240*175 = 42000 total, 875 RSD/ha
-    expect(r.fuelCostTotal).toBeCloseTo(42000, 1);
-    expect(r.fuelCostPerHa).toBeCloseTo(875, 1);
+    expect(r.fuel?.cost).toBeDefined();
+    expect(r.fuel?.cost?.fuelCostTotal).toBeCloseTo(42000, 1);
+    expect(r.fuel?.cost?.fuelCostPerHa).toBeCloseTo(875, 1);
   });
 
   it("sprayer with overlap, turns corrected to passes-1 — vector 2", () => {
@@ -1251,13 +1255,14 @@ describe("machineFieldCapacity", () => {
     expect(r.timeHoursPart).toBe(8);
     expect(r.timeMinutesPart).toBe(21);
     // fuel/ha = 12/14.364 = 0.8354; total = 100.25 l
-    expect(r.fuelLPerHa).toBeCloseTo(0.835457, 4);
-    expect(r.fuelTotalL).toBeCloseTo(100.25, 1);
+    expect(r.fuel?.fuelLPerHa).toBeCloseTo(0.835457, 4);
+    expect(r.fuel?.fuelTotalL).toBeCloseTo(100.25, 1);
     // passes = ceil(120*10000/(17.10*800)) = ceil(87.72) = 88 -> CORRECTED turns = 87
-    expect(r.turnCount).toBe(87);
+    expect(r.turns).toBeDefined();
+    expect(r.turns?.turnCount).toBe(87);
     // 87*45 = 3915 s = 1.0875 h; share = 1.0875/8.354207*100 = 13.018 %
-    expect(r.turnTimeHours).toBeCloseTo(1.0875, 4);
-    expect(r.turnTimeSharePercent).toBeCloseTo(13.018, 1);
+    expect(r.turns?.turnTimeHours).toBeCloseTo(1.0875, 4);
+    expect(r.turns?.turnTimeSharePercent).toBeCloseTo(13.018, 1);
   });
 
   it("refuses a zero field length used for the turn count, naming it explicitly", () => {
@@ -1437,15 +1442,16 @@ describe("plantSpacingDensity", () => {
     expect(r.areaPerPlantM2).toBeCloseTo(4.2, 6);
     expect(r.theoreticalDensityPerHa).toBeCloseTo(2380.952381, 3);
     // rows = floor((80-4)/3.5)+1 = floor(21.714)+1 = 22
-    expect(r.rowsCount).toBe(22);
+    expect(r.onParcel).toBeDefined();
+    expect(r.onParcel?.rowsCount).toBe(22);
     // row length = 120-4 = 116; plants/row = floor(116/1.2)+1 = 96+1 = 97
-    expect(r.rowLengthM).toBe(116);
-    expect(r.plantsPerRow).toBe(97);
+    expect(r.onParcel?.rowLengthM).toBe(116);
+    expect(r.onParcel?.plantsPerRow).toBe(97);
     // total = 22*97 = 2134
-    expect(r.totalPlants).toBe(2134);
+    expect(r.onParcel?.totalPlants).toBe(2134);
     // plot area = 0.96 ha -> actual density = 2134/0.96 = 2222.9167/ha
-    expect(r.plotAreaHa).toBeCloseTo(0.96, 6);
-    expect(r.actualDensityPerHa).toBeCloseTo(2222.916667, 2);
+    expect(r.onParcel?.plotAreaHa).toBeCloseTo(0.96, 6);
+    expect(r.onParcel?.actualDensityPerHa).toBeCloseTo(2222.916667, 2);
   });
 
   it("triangular walnut spacing and a reverse spacing-from-density calc — vector 2", () => {
@@ -1462,7 +1468,7 @@ describe("plantSpacingDensity", () => {
     expect(tri.areaPerPlantM2).toBeCloseTo(21.650635, 4);
     expect(tri.theoreticalDensityPerHa).toBeCloseTo(461.88, 1);
     // no on-parcel figures for triangular (correction 1)
-    expect(tri.totalPlants).toBeUndefined();
+    expect(tri.onParcel).toBeUndefined();
 
     const reverse = plantSpacingDensity({
       pattern: "rectangular",
@@ -1475,8 +1481,9 @@ describe("plantSpacingDensity", () => {
     expect(reverse.ok).toBe(true);
     if (!reverse.ok) return;
     // b = 10000/(5050*2.2) = 10000/11110 = 0.9001 -> rounded to the cm: 0.90 m
-    expect(reverse.requiredInRowSpacingM).toBeCloseTo(0.9001, 4);
-    expect(reverse.requiredSpacingRoundedM).toBeCloseTo(0.9, 6);
+    expect(reverse.desired).toBeDefined();
+    expect(reverse.desired?.requiredInRowSpacingM).toBeCloseTo(0.9001, 4);
+    expect(reverse.desired?.requiredSpacingRoundedM).toBeCloseTo(0.9, 6);
   });
 
   it("refuses a desired density so extreme that the required spacing rounds to zero at the planter's cm step", () => {
@@ -1535,7 +1542,7 @@ describe("plantSpacingDensity", () => {
     });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.rowsCount).toBe(0);
+    expect(r.onParcel?.rowsCount).toBe(0);
   });
 });
 
