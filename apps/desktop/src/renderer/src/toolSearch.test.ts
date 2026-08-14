@@ -61,6 +61,50 @@ describe("matchesToolQuery", () => {
     expect(matchesToolQuery(bare, "nesto")).toBe(true);
     expect(matchesToolQuery(bare, "porez")).toBe(false);
   });
+
+  /**
+   * The whole reason the query is split. Tested whole, a two-word query could
+   * only match a keyword that literally contained the space — so a tool was
+   * findable by a phrase exactly when an author had guessed that phrase and
+   * written it down. Every keyword below is a single word, and all three
+   * queries still land.
+   */
+  it("matches a multi-word query against words that are separate keywords", () => {
+    const stairs: SearchableTool = {
+      id: "stair-geometry",
+      name: "Geometrija stepeništa",
+      category: "geometry",
+      keywords: ["spratna", "visina", "stepenika", "broja", "uspon"],
+    };
+    expect(matchesToolQuery(stairs, "spratna visina")).toBe(true);
+    expect(matchesToolQuery(stairs, "visina spratna")).toBe(true);
+    // One term across the NAME and one across a keyword, which is the common case.
+    expect(matchesToolQuery(stairs, "geometrija uspon")).toBe(true);
+  });
+
+  it("requires EVERY term, so a second word narrows instead of widening", () => {
+    // „metar" alone finds Dužina; „metar porez" must find nothing, because a
+    // disjunctive matcher would have returned both tools and read as broken.
+    expect(matchesToolQuery(TOOLS[0]!, "metar")).toBe(true);
+    expect(matchesToolQuery(TOOLS[0]!, "metar porez")).toBe(false);
+    expect(matchesToolQuery(TOOLS[3]!, "metar porez")).toBe(false);
+    expect(filterTools(TOOLS, "metar porez")).toEqual([]);
+  });
+
+  it("still matches a phrase that IS a single keyword, so the 40 hand-written ones keep working", () => {
+    const qr: SearchableTool = {
+      id: "qr",
+      name: "QR kod",
+      category: "system",
+      keywords: ["qr code", "qr kod"],
+    };
+    expect(matchesToolQuery(qr, "qr kod")).toBe(true);
+    expect(matchesToolQuery(qr, "qr code")).toBe(true);
+  });
+
+  it("ignores the spacing of the query itself", () => {
+    expect(matchesToolQuery(TOOLS[4]!, "  rata   anuitet  ")).toBe(true);
+  });
 });
 
 describe("filterTools", () => {

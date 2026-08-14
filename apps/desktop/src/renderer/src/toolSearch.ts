@@ -11,6 +11,16 @@
  * Matching is a PREFIX-or-substring test over the tool's name and its declared
  * keywords, not a fuzzy score. A dozen entries do not need ranking, and a fuzzy
  * matcher over a short list mostly produces surprising near-misses.
+ *
+ * **The query is split into terms, and every term must land somewhere.** It used
+ * to be tested whole, which meant a two-word query could only ever match a
+ * keyword that literally contained the space — so „spratna visina" found the
+ * stair tool only because somebody had hand-written that exact phrase into its
+ * keyword list, and found nothing at all in a toolkit whose keywords were single
+ * words. That made findability depend on whether an author had guessed the
+ * user's phrasing, which is not a property a search should have at 274 tools.
+ * Conjunctive terms is also what `matchCommands` already does for the command
+ * palette, so the app now answers „does this text match" one way instead of two.
  */
 
 import { foldSearchText } from "@nexus/core";
@@ -27,10 +37,13 @@ export interface SearchableTool {
 
 /** Whether one tool answers a query. An empty query matches everything — a blank field is not a filter. */
 export function matchesToolQuery(tool: SearchableTool, query: string): boolean {
-  const needle = foldSearchText(query.trim());
-  if (needle.length === 0) return true;
-  if (foldSearchText(tool.name).includes(needle)) return true;
-  return (tool.keywords ?? []).some((keyword) => foldSearchText(keyword).includes(needle));
+  const terms = foldSearchText(query.trim()).split(/\s+/).filter((term) => term.length > 0);
+  if (terms.length === 0) return true;
+  const name = foldSearchText(tool.name);
+  const keywords = (tool.keywords ?? []).map((keyword) => foldSearchText(keyword));
+  return terms.every(
+    (term) => name.includes(term) || keywords.some((keyword) => keyword.includes(term)),
+  );
 }
 
 /**
