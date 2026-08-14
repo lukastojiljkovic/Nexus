@@ -761,10 +761,23 @@ describe("the tools the registry publishes (PRD 29 UTIL, PRD 30 PRO)", () => {
    * disabled entry and no seam awaiting one.
    */
   it("publishes no currency tool, and the conversions are all of physical quantities", () => {
+    // `deviz`, not `devi`: the stem is „devizni/devize", and `devi` also matches
+    // „deviation" — which refused `speedometer-tyre-deviation`, a tool about a
+    // tyre's rolling circumference and nothing to do with money. A guard that
+    // refuses the correct thing gets switched off by whoever it obstructs
+    // (DC-15), so it is made precise here rather than loosened.
+    const CURRENCY = /valut|kurs|currency|deviz/i;
     for (const tool of declared) {
-      expect(tool.id, tool.id).not.toMatch(/valut|kurs|currency|devi/i);
+      expect(tool.id, tool.id).not.toMatch(CURRENCY);
     }
     expect(declared.map((tool) => tool.id)).not.toContain("valuta");
+    // Proved on what it must still refuse, and on what it must let through.
+    for (const refused of ["valuta", "kurs-valuta", "devizni-kurs", "currency-convert"]) {
+      expect(refused, refused).toMatch(CURRENCY);
+    }
+    for (const allowed of ["speedometer-tyre-deviation", "standard-score", "delta-e"]) {
+      expect(allowed, allowed).not.toMatch(CURRENCY);
+    }
   });
 
   it("splits the tools between the two surface maps exactly along `toolDrawer`, with no id in both", () => {

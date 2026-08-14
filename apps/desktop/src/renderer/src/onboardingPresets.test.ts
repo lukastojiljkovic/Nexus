@@ -93,15 +93,28 @@ describe("packInventory", () => {
   });
 
   it("carries „softver“ with its real, live-counted total", () => {
-    // Concrete rather than derived only once: „softver" is the pack every
-    // reader can already count by hand from `DEVTOOLS_TOOLS`' own comment
-    // („the forty-eight tools of the softver pack"), so a regression here is
-    // one a person would notice on sight, not only a test.
     const softver = packInventory(registry).find((entry) => entry.pack === "softver");
     expect(softver?.toolCount).toBe(
       DECLARED_TOOLS.filter((tool) => tool.packs?.includes("softver")).length,
     );
-    expect(softver?.toolCount).toBe(48);
+
+    // The anchor is the DEVELOPER TOOLKIT, not the pack's total, and the two
+    // stopped being the same number the moment other toolkits started sharing
+    // into it — a CSS unit converter is a designer's and a front-end
+    // developer's, a mojibake repair is a translator's and a programmer's, and
+    // `packs` exists precisely so each of those is one tool rather than two.
+    // Asserting the pack total would therefore fail every time sharing worked
+    // as designed. `devtools.name.*` is the developer toolkit's own key
+    // namespace (the professional toolkits all use `pro.name.*`), so this
+    // counts the forty-eight the drawer shipped with and nothing else.
+    const developerToolkit = DECLARED_TOOLS.filter((tool) =>
+      tool.titleKey.startsWith("devtools.name."),
+    );
+    expect(developerToolkit).toHaveLength(48);
+    // …and every one of them is in the pack, which is the half a count cannot see.
+    for (const tool of developerToolkit) {
+      expect(tool.packs, tool.id).toContain("softver");
+    }
   });
 
   it("omits every pack nothing has claimed", () => {

@@ -73,3 +73,82 @@ export function proRatio(value: number | undefined): string | undefined {
 export function proUnit(value: string, unit: string): string {
   return `${value}\u00a0${unit}`;
 }
+
+/**
+ * A typed field read back as a number \u2014 and, above everything else, the exact
+ * INVERSE of `proNum`.
+ *
+ * **This is here because the drawer could not read what the drawer had just
+ * written.** `proNum` formats in `sr-Latn`, which groups with a full stop and
+ * separates decimals with a comma: 1 234 567,89 prints as \u201e1.234.567,89". The
+ * one-line parse every surface was about to copy \u2014 `text.replace(",", ".")` and
+ * `Number(...)` \u2014 turns that into \u201e1.234.567.89", which is `NaN`, which the
+ * surface reads as \u201ethe field is empty". Copy a result out of one tool, paste it
+ * into the next, and the second tool silently shows nothing. Nothing about that
+ * looks like a defect: an empty field renders exactly like an untouched one.
+ *
+ * So the rules are stated as the inverse of the formatter, not as a guess:
+ *
+ *  - **Both separators present** \u2014 the LAST one is the decimal separator and the
+ *    other is grouping. \u201e1.234,56" and \u201e1,234.56" are both 1234,56, which is
+ *    what every locale means by them.
+ *  - **One separator, repeated** \u2014 it is grouping. \u201e1.234.567" is 1234567.
+ *  - **A lone comma** \u2014 the decimal separator. This is what a Serbian keyboard
+ *    produces and what the app prints.
+ *  - **A lone full stop** \u2014 the decimal point, EXCEPT in the one shape that is
+ *    the formatter's own output for a whole number: one to three digits, a stop,
+ *    exactly three digits. \u201e1.234" is 1234 and \u201e1.23" is 1,23.
+ *
+ * That last case is genuinely ambiguous in any locale, and it is decided by
+ * asking which misreading is REACHABLE. \u201e1.234" is exactly what `proNum(1234, 0)`
+ * prints, so reading it as 1,234 is a thousandfold error a person can produce by
+ * copying a tile count out of one tool and pasting it into the next \u2014 inside this
+ * app, following its own convention. The opposite misreading needs a person to
+ * type a decimal point in a drawer where every number on screen uses a comma.
+ * The first is a bug in the product; the second is a habit the product corrects.
+ * And `ToolInputEcho`, which every tool renders, is what keeps the residual case
+ * harmless: the echo prints the number that was PARSED, so a value read a
+ * thousand times too large is visible in the result rather than hidden in the
+ * field.
+ *
+ * Whitespace goes first, including the non-breaking and thin spaces that arrive
+ * with a value pasted from a spreadsheet. Anything left that is not a digit, a
+ * separator or a leading sign refuses \u2014 no hex, no exponent, no \u201eInfinity",
+ * because a professional field receiving one of those is a paste that went
+ * wrong, and `Number` would accept all three.
+ */
+export function proParse(text: string): number | undefined {
+  const compact = text.replace(/[\s\u00a0\u202f\u2009]/g, "");
+  if (!/^[-+]?[\d.,]+$/.test(compact) || !/\d/.test(compact)) return undefined;
+
+  const negative = compact.startsWith("-");
+  const body = compact.replace(/^[-+]/, "");
+  const firstComma = body.indexOf(",");
+  const lastComma = body.lastIndexOf(",");
+  const firstDot = body.indexOf(".");
+  const lastDot = body.lastIndexOf(".");
+
+  let decimalAt = -1;
+  if (lastComma >= 0 && lastDot >= 0) {
+    // The last separator is the decimal one — and it must be the ONLY one of its
+    // kind. „1.234,56.7" has a last dot and two dots, which is not a number
+    // anybody meant; reading it as 123456,7 would be an invention.
+    decimalAt = Math.max(lastComma, lastDot);
+    const decimalIsComma = lastComma > lastDot;
+    if ((decimalIsComma ? firstComma : firstDot) !== decimalAt) return undefined;
+  } else if (lastComma >= 0) decimalAt = firstComma === lastComma ? lastComma : -1;
+  else if (lastDot >= 0) {
+    decimalAt = firstDot === lastDot && !/^\d{1,3}\.\d{3}$/.test(body) ? lastDot : -1;
+  }
+
+  const whole = (decimalAt < 0 ? body : body.slice(0, decimalAt)).replace(/[.,]/g, "");
+  const fraction = decimalAt < 0 ? "" : body.slice(decimalAt + 1);
+  // The fraction may not carry a separator of its own: \u201e1.234,56.7" is not a
+  // number anybody meant, and guessing at it is worse than declining it.
+  if (!/^\d*$/.test(whole) || !/^\d*$/.test(fraction)) return undefined;
+
+  const value = Number(`${whole === "" ? "0" : whole}.${fraction === "" ? "0" : fraction}`);
+  if (!Number.isFinite(value)) return undefined;
+  // Never \u22120: it survives the arithmetic and prints as \u201e\u22120,00".
+  return value === 0 ? 0 : negative ? -value : value;
+}

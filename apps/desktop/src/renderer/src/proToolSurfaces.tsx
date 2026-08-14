@@ -10,6 +10,22 @@ import { CRYPTO_SURFACES } from "./devtools/crypto.js";
 import { SYSTEM_SURFACES } from "./devtools/system.js";
 import { TIME_SURFACES } from "./devtools/time.js";
 import { GRADNJA_SURFACES } from "./pro/gradnja.js";
+import { INZENJERING_SURFACES } from "./pro/inzenjering.js";
+import { DIZAJN_SURFACES } from "./pro/dizajn.js";
+import { FOTO_SURFACES } from "./pro/foto.js";
+import { MUZIKA_SURFACES } from "./pro/muzika.js";
+import { PROSVETA_SURFACES } from "./pro/prosveta.js";
+import { TEKST_SURFACES } from "./pro/tekst.js";
+import { TRENING_SURFACES } from "./pro/trening.js";
+import { KUHINJA_SURFACES } from "./pro/kuhinja.js";
+import { PRAVO_SURFACES } from "./pro/pravo.js";
+import { RACUNOVODSTVO_SURFACES } from "./pro/racunovodstvo.js";
+import { BIZNIS_SURFACES } from "./pro/biznis.js";
+import { NEKRETNINE_SURFACES } from "./pro/nekretnine.js";
+import { TRANSPORT_SURFACES } from "./pro/transport.js";
+import { AGRO_SURFACES } from "./pro/agro.js";
+import { ZANAT_SURFACES } from "./pro/zanat.js";
+import { EVENT_SURFACES } from "./pro/event.js";
 
 /**
  * Every „Stručne alatke" surface, by tool id — the renderer half of the
@@ -46,4 +62,20 @@ export const PRO_TOOL_SURFACES: Readonly<Record<string, ComponentType>> = {
   // The professional toolkits, one file each — see the header on why these are
   // named after the PACK while the nine above are named after a category.
   ...GRADNJA_SURFACES,
+  ...INZENJERING_SURFACES,
+  ...DIZAJN_SURFACES,
+  ...FOTO_SURFACES,
+  ...MUZIKA_SURFACES,
+  ...PROSVETA_SURFACES,
+  ...TEKST_SURFACES,
+  ...TRENING_SURFACES,
+  ...KUHINJA_SURFACES,
+  ...PRAVO_SURFACES,
+  ...RACUNOVODSTVO_SURFACES,
+  ...BIZNIS_SURFACES,
+  ...NEKRETNINE_SURFACES,
+  ...TRANSPORT_SURFACES,
+  ...AGRO_SURFACES,
+  ...ZANAT_SURFACES,
+  ...EVENT_SURFACES,
 };

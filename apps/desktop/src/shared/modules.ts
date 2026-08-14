@@ -1361,6 +1361,166 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
  */
 const PRO_GRADNJA_TOOLS: ToolRegistration[] = [
   {
+    id: "angle-units",
+    titleKey: "pro.name.angle-units",
+    blurbKey: "pro.blurb.angle-units",
+    category: "conversion",
+    riskClass: "none",
+    packs: ["gradnja", "inzenjering"],
+    keywords: [
+      "angle", "decimalnih", "direkcioni", "gona", "jedinica", "krug", "mila", "minuta",
+      "minuti", "prevodi", "pun", "radijana", "sekunde", "sekundi", "stepeni", "svodi",
+      "svodjenje", "ugao", "ugla", "uglovi", "ulazna", "units"
+    ],
+  },
+  {
+    id: "bar-spacing",
+    titleKey: "pro.name.bar-spacing",
+    blurbKey: "pro.blurb.bar-spacing",
+    category: "geometry",
+    riskClass: "life-safety",
+    packs: ["gradnja", "inzenjering", "agro", "zanat", "event"],
+    keywords: [
+      "bar", "deli", "duzina", "duzinu", "jednake", "jednaki", "komada", "kraja", "maksimum",
+      "max", "najveci", "odstojanje", "pocetka", "pozicije", "prelaze", "raspored", "razmaci",
+      "razmak", "razmake", "spacing", "stvarni", "ukupna"
+    ],
+  },
+  {
+    id: "beam-check",
+    titleKey: "pro.name.beam-check",
+    blurbKey: "pro.blurb.beam-check",
+    category: "structure",
+    riskClass: "life-safety",
+    packs: ["gradnja", "inzenjering", "zanat"],
+    keywords: [
+      "beam", "cetiri", "check", "elasticnosti", "granicni", "greda", "inercije", "konzola",
+      "maksimalni", "modul", "moment", "napon", "odnos", "opterecenje", "osnovne", "otporni",
+      "prepust", "raspon", "reakcije", "sema", "seme", "sila", "staticka", "staticke", "ugib",
+      "unetih"
+    ],
+  },
+  {
+    id: "concrete-takeoff",
+    titleKey: "pro.name.concrete-takeoff",
+    blurbKey: "pro.blurb.concrete-takeoff",
+    category: "materials",
+    riskClass: "none",
+    packs: ["gradnja", "zanat"],
+    keywords: [
+      "armature", "betona", "concrete", "dimenzije", "elementa", "gredu", "gustina", "kolicina",
+      "komada", "kubatura", "mesalice", "odbitak", "oplata", "oplate", "otvora", "plocu",
+      "povrsinu", "rastur", "stub", "takeoff", "temelj", "tip", "tipu", "tura", "zapremina",
+      "zapreminu"
+    ],
+  },
+  {
+    id: "drawing-scale",
+    titleKey: "pro.name.drawing-scale",
+    blurbKey: "pro.blurb.drawing-scale",
+    category: "conversion",
+    riskClass: "none",
+    sourceKey: "pro.sources.iso-216-iso-5455",
+    packs: ["gradnja", "inzenjering", "dizajn", "nekretnine"],
+    keywords: [
+      "crteza", "drawing", "duzina", "duzinu", "format", "gabarit", "lista", "margina", "nazad",
+      "niza", "papira", "papiru", "predmeta", "prevodi", "razmera", "scale", "sirina", "staje",
+      "standardnog", "stvarna", "stvarnu", "visina"
+    ],
+  },
+  {
+    id: "earthwork-prismoidal",
+    titleKey: "pro.name.earthwork-prismoidal",
+    blurbKey: "pro.blurb.earthwork-prismoidal",
+    category: "materials",
+    riskClass: "none",
+    packs: ["gradnja", "inzenjering"],
+    keywords: [
+      "earthwork", "formuli", "iskopa", "metodi", "nasipa", "poprecnih", "povrsina", "preseka",
+      "prismoidal", "prizmoidnoj", "profila", "profili", "rastresitost", "sabira", "segmenta",
+      "sleganje", "srednja", "srednjih", "zapremina", "zapreminu"
+    ],
+  },
+  {
+    id: "level-run",
+    titleKey: "pro.name.level-run",
+    blurbKey: "pro.blurb.level-run",
+    category: "calculation",
+    riskClass: "none",
+    packs: ["gradnja", "inzenjering"],
+    keywords: [
+      "aritmeticku", "duzina", "kontrolu", "kota", "kote", "level", "nezatvaranje", "nivelira",
+      "nivelman", "ocitanja", "polaznog", "repera", "run", "stanici", "tacaka", "viza", "vlaka",
+      "zavrsnog"
+    ],
+  },
+  {
+    id: "rebar-weight",
+    titleKey: "pro.name.rebar-weight",
+    blurbKey: "pro.blurb.rebar-weight",
+    category: "materials",
+    riskClass: "none",
+    sourceKey: "pro.sources.steel-nominal-density",
+    packs: ["gradnja", "inzenjering", "zanat"],
+    keywords: [
+      "armature", "cele", "duzina", "duzinu", "jedne", "kilograme", "masa", "metre", "nazad",
+      "precnik", "pretvara", "rebar", "sipke", "sipki", "smer", "weight"
+    ],
+  },
+  {
+    id: "roof-pitch",
+    titleKey: "pro.name.roof-pitch",
+    blurbKey: "pro.blurb.roof-pitch",
+    category: "geometry",
+    riskClass: "none",
+    packs: ["gradnja", "zanat"],
+    keywords: [
+      "duzinu", "grbine", "grbinu", "horizontalne", "horizontalni", "krak", "krova", "krovne",
+      "nagib", "nagiba", "osnova", "osnove", "pitch", "povrsina", "povrsinu", "prepust",
+      "projekcije", "projekcioni", "ravni", "roga", "roof", "slemena", "strehe", "stvarnu",
+      "visinu"
+    ],
+  },
+  {
+    id: "room-surfaces",
+    titleKey: "pro.name.room-surfaces",
+    blurbKey: "pro.blurb.room-surfaces",
+    category: "geometry",
+    riskClass: "none",
+    packs: ["gradnja", "nekretnine", "zanat"],
+    keywords: [
+      "dubina", "duzina", "izdasnost", "kolicinu", "materijala", "mera", "neto", "odbijanje",
+      "otvora", "otvori", "plafon", "potrebnu", "povrsine", "povrsinu", "premaza", "prostorije",
+      "room", "sirina", "slojeva", "spaletne", "spiska", "surfaces", "svetla", "visina",
+      "zidne", "zidnu"
+    ],
+  },
+  {
+    id: "slope-grade",
+    titleKey: "pro.name.slope-grade",
+    blurbKey: "pro.blurb.slope-grade",
+    category: "geometry",
+    riskClass: "none",
+    packs: ["gradnja", "inzenjering", "transport", "agro", "zanat"],
+    keywords: [
+      "duzina", "duzine", "grade", "horizontalna", "kosa", "nagib", "nagiba", "odnosu", "pad",
+      "podatka", "poznata", "procentu", "promilu", "razlika", "razlike", "slope", "stepenu",
+      "visinska", "visinske"
+    ],
+  },
+  {
+    id: "square-check",
+    titleKey: "pro.name.square-check",
+    blurbKey: "pro.blurb.square-check",
+    category: "geometry",
+    riskClass: "none",
+    packs: ["gradnja", "zanat", "event"],
+    keywords: [
+      "check", "dijagonala", "dijagonale", "izmerena", "izmerene", "milimetrima", "odstupanje",
+      "pomeranje", "pravog", "pravouglosti", "square", "stranica", "stranice", "tacke", "ugla"
+    ],
+  },
+  {
     id: "stair-geometry",
     titleKey: "pro.name.stair-geometry",
     blurbKey: "pro.blurb.stair-geometry",
@@ -1371,6 +1531,3594 @@ const PRO_GRADNJA_TOOLS: ToolRegistration[] = [
       "blondel", "broj stepenika", "gazenje", "gazista", "gaziste", "going", "hod", "krak",
       "nagib", "penjanje", "podest", "riser", "spratna visina", "stair", "stepenice",
       "stepenik", "stepeniste", "uspon", "visina stepenika"
+    ],
+  },
+  {
+    id: "survey-bearing-distance",
+    titleKey: "pro.name.survey-bearing-distance",
+    blurbKey: "pro.blurb.survey-bearing-distance",
+    category: "geometry",
+    riskClass: "none",
+    packs: ["gradnja", "inzenjering"],
+    keywords: [
+      "bearing", "direkcioni", "distance", "duzina", "duzine", "duzinu", "geodetski",
+      "jedinica", "koordinate", "nove", "smer", "survey", "tacka", "tacke", "ugao", "ugla",
+      "zadatak"
+    ],
+  },
+  {
+    id: "tile-count",
+    titleKey: "pro.name.tile-count",
+    blurbKey: "pro.blurb.tile-count",
+    category: "materials",
+    riskClass: "none",
+    packs: ["gradnja", "zanat"],
+    keywords: [
+      "count", "format", "formata", "komada", "kutija", "kutiji", "kvadratu", "plocica",
+      "povrsina", "povrsine", "rastur", "rasturom", "sirina", "spojnice", "spojnicom", "tile"
+    ],
+  },
+  {
+    id: "trench-volume",
+    titleKey: "pro.name.trench-volume",
+    blurbKey: "pro.blurb.trench-volume",
+    category: "materials",
+    riskClass: "none",
+    packs: ["gradnja", "inzenjering", "agro", "zanat"],
+    keywords: [
+      "cevi", "debljina", "dna", "dubina", "dubine", "duzina", "horizontalno", "iskop",
+      "iskopa", "kosina", "kosine", "nagib", "nagiba", "odvoz", "posteljice", "precnik",
+      "rastresitost", "rova", "sirina", "sirine", "spoljni", "trench", "vertikalno", "viska",
+      "volume", "zapreminu", "zasipanja", "zemlje"
+    ],
+  },
+  {
+    id: "wall-u-value",
+    titleKey: "pro.name.wall-u-value",
+    blurbKey: "pro.blurb.wall-u-value",
+    category: "calculation",
+    riskClass: "none",
+    packs: ["gradnja", "inzenjering"],
+    keywords: [
+      "dodiru", "krova", "nevetrenog", "otpor", "otpore", "prelaza", "rse", "rsi", "sabira",
+      "sklopa", "sloja", "slojeva", "slojevi", "spolja", "spoljna", "svakom", "temperatura",
+      "temperaturu", "toplote", "ukupan", "unutra", "unutrasnja", "vazdusnog", "wall", "zida"
+    ],
+  },
+];
+
+const PRO_INZENJERING_TOOLS: ToolRegistration[] = [
+  {
+    id: "awg-to-mm2",
+    titleKey: "pro.name.awg-to-mm2",
+    blurbKey: "pro.blurb.awg-to-mm2",
+    category: "electrical",
+    riskClass: "life-safety",
+    sourceKey: "pro.sources.astm-b258-18-iec-60028-1925-iec-60889-1987",
+    packs: ["inzenjering", "muzika"],
+    keywords: [
+      "awg", "kilometru", "materijal", "mm2", "nazad", "otpornost", "precnik", "presek",
+      "prevodi", "smer"
+    ],
+  },
+  {
+    id: "battery-bank-runtime",
+    titleKey: "pro.name.battery-bank-runtime",
+    blurbKey: "pro.blurb.battery-bank-runtime",
+    category: "electrical",
+    riskClass: "life-safety",
+    packs: ["inzenjering", "foto", "transport"],
+    keywords: [
+      "autonomija", "bank", "baterija", "battery", "dod", "energiju", "iskoristivi",
+      "korekcijom", "napon", "opterecenje", "opterecenjem", "paketa", "pojkertovom", "rada",
+      "runtime", "unese", "vreme", "zadatim"
+    ],
+  },
+  {
+    id: "belt-and-gear-drive",
+    titleKey: "pro.name.belt-and-gear-drive",
+    blurbKey: "pro.blurb.belt-and-gear-drive",
+    category: "geometry",
+    riskClass: "life-safety",
+    packs: ["inzenjering", "agro", "zanat"],
+    keywords: [
+      "and", "belt", "brzinu", "drive", "duzinu", "gear", "izlazni", "kais", "kaisa", "obrtaja",
+      "obuhvata", "odnos", "osno", "otvorenog", "para", "prenos", "prenosni", "rastojanje",
+      "tacnu", "uglove", "zupcastog"
+    ],
+  },
+  {
+    id: "cable-cross-section",
+    titleKey: "pro.name.cable-cross-section",
+    blurbKey: "pro.blurb.cable-cross-section",
+    category: "electrical",
+    riskClass: "life-safety",
+    sourceKey: "pro.sources.iec-60028-1925-iec-60889-1987",
+    packs: ["gradnja", "inzenjering"],
+    keywords: [
+      "aluminijuma", "bakra", "cable", "cross", "dobija", "dop", "izabere", "izabrano",
+      "materijal", "najmanje", "napona", "pad", "pada", "presek", "preseku", "section",
+      "sistem", "stane", "zada"
+    ],
+  },
+  {
+    id: "induction-motor-rating",
+    titleKey: "pro.name.induction-motor-rating",
+    blurbKey: "pro.blurb.induction-motor-rating",
+    category: "electrical",
+    riskClass: "life-safety",
+    packs: ["inzenjering"],
+    keywords: [
+      "asinhroni", "brzinu", "cos", "induction", "klizanje", "moment", "motor", "natpisne",
+      "nazivnu", "obrtni", "plocice", "podataka", "polova", "rating", "sinhronu", "sistem",
+      "snagu", "struju", "ulaznu"
+    ],
+  },
+  {
+    id: "junction-temperature",
+    titleKey: "pro.name.junction-temperature",
+    blurbKey: "pro.blurb.junction-temperature",
+    category: "calculation",
+    riskClass: "none",
+    packs: ["inzenjering"],
+    keywords: [
+      "ambijenta", "dozvoljenu", "hladnjaka", "junction", "lanca", "max", "obrnuto", "otpor",
+      "otpora", "rth", "smer", "snage", "snagu", "spoja", "temperature", "temperaturu",
+      "termicki", "termickih"
+    ],
+  },
+  {
+    id: "metric-thread-strength",
+    titleKey: "pro.name.metric-thread-strength",
+    blurbKey: "pro.blurb.metric-thread-strength",
+    category: "structure",
+    riskClass: "life-safety",
+    sourceKey: "pro.sources.iso-68-1-1998-iso-898-1-2013",
+    packs: ["gradnja", "inzenjering", "zanat"],
+    keywords: [
+      "burgije", "cvrstoci", "jezgreni", "koraka", "metric", "metricki", "napona", "navoj",
+      "nominalnog", "odgovara", "precnik", "precnika", "presek", "silu", "srednji", "strength",
+      "thread", "unese", "unutrasnji"
+    ],
+  },
+  {
+    id: "ohms-law-power",
+    titleKey: "pro.name.ohms-law-power",
+    blurbKey: "pro.blurb.ohms-law-power",
+    category: "electrical",
+    riskClass: "life-safety",
+    packs: ["inzenjering"],
+    keywords: [
+      "cetiri", "law", "ohms", "omov", "par", "power", "preostale", "snaga", "velicine", "zakon"
+    ],
+  },
+  {
+    id: "pipe-flow-velocity",
+    titleKey: "pro.name.pipe-flow-velocity",
+    blurbKey: "pro.blurb.pipe-flow-velocity",
+    category: "calculation",
+    riskClass: "none",
+    packs: ["gradnja", "inzenjering", "agro"],
+    keywords: [
+      "brzinu", "cev", "cevi", "flow", "maseni", "pipe", "povezuje", "poznata", "precnik",
+      "protok", "rejnoldsov", "svojstava", "unese", "unutrasnji", "velicina", "velocity"
+    ],
+  },
+  {
+    id: "power-factor-correction",
+    titleKey: "pro.name.power-factor-correction",
+    blurbKey: "pro.blurb.power-factor-correction",
+    category: "electrical",
+    riskClass: "life-safety",
+    packs: ["inzenjering"],
+    keywords: [
+      "baterije", "ciljani", "correction", "cos", "factor", "faktor", "kapacitivnost",
+      "kompenzacija", "podigne", "postojeceg", "potrebne", "power", "reaktivne", "reaktivnu",
+      "sistem", "snage", "snagu", "sprega", "struju"
+    ],
+  },
+  {
+    id: "pressure-and-piston-force",
+    titleKey: "pro.name.pressure-and-piston-force",
+    blurbKey: "pro.blurb.pressure-and-piston-force",
+    category: "conversion",
+    riskClass: "life-safety",
+    packs: ["inzenjering", "transport", "agro", "zanat"],
+    keywords: [
+      "and", "apsolutnog", "atm", "bar", "cilindra", "force", "jedinica", "kgf", "klipa",
+      "klipnjace", "klipu", "metre", "mmhg", "nadpritisak", "piston", "precnik", "pressure",
+      "prevodi", "pritisak", "psi", "razlikuje", "sila", "silu", "strani", "stuba", "vodenog",
+      "vrsta"
+    ],
+  },
+  {
+    id: "resistor-colour-code",
+    titleKey: "pro.name.resistor-colour-code",
+    blurbKey: "pro.blurb.resistor-colour-code",
+    category: "conversion",
+    riskClass: "none",
+    sourceKey: "pro.sources.iec-60062-2016-iec-60063-2015",
+    packs: ["inzenjering"],
+    keywords: [
+      "boje", "cita", "code", "colour", "najblizom", "niz", "niza", "opsegom", "otpornika",
+      "prstenova", "prstenove", "prstenovi", "resistor", "smer", "tolerancija", "tolerancijom",
+      "vraca", "vrednoscu"
+    ],
+  },
+  {
+    id: "rlc-impedance",
+    titleKey: "pro.name.rlc-impedance",
+    blurbKey: "pro.blurb.rlc-impedance",
+    category: "electrical",
+    riskClass: "life-safety",
+    packs: ["inzenjering", "muzika"],
+    keywords: [
+      "fazni", "frekvenciji", "frekvenciju", "granicnu", "impedance", "impedansa", "impedansu",
+      "reaktanse", "rezonansa", "rezonantnu", "rlc", "ugao", "veza", "zadatoj"
+    ],
+  },
+  {
+    id: "section-modulus",
+    titleKey: "pro.name.section-modulus",
+    blurbKey: "pro.blurb.section-modulus",
+    category: "structure",
+    riskClass: "life-safety",
+    packs: ["gradnja", "inzenjering", "zanat"],
+    keywords: [
+      "cev", "dop", "inercije", "karakteristike", "krug", "modulus", "momente", "oblik",
+      "otporne", "polarne", "poluprecnike", "povrsinu", "pravougaonik", "pravougaonu",
+      "preseka", "profil", "section", "velicine"
+    ],
+  },
+  {
+    id: "series-parallel-network",
+    titleKey: "pro.name.series-parallel-network",
+    blurbKey: "pro.blurb.series-parallel-network",
+    category: "electrical",
+    riskClass: "life-safety",
+    packs: ["inzenjering", "muzika"],
+    keywords: [
+      "delilac", "elementa", "elementu", "kalemove", "kondenzatore", "naponski", "network",
+      "otpornike", "paralela", "paralelnoj", "parallel", "rednoj", "sabira", "series", "serija",
+      "snagom", "tip", "veza", "vezi"
+    ],
+  },
+  {
+    id: "three-phase-power",
+    titleKey: "pro.name.three-phase-power",
+    blurbKey: "pro.blurb.three-phase-power",
+    category: "electrical",
+    riskClass: "life-safety",
+    packs: ["gradnja", "inzenjering"],
+    keywords: [
+      "aktivnu", "cos", "faktora", "jednofaznoj", "linijsku", "mrezi", "phase", "povezuje",
+      "power", "poznata", "prividnu", "reaktivnu", "sistem", "snaga", "snage", "snagu",
+      "sprega", "struju", "three", "trofazna", "trofaznoj", "velicina"
+    ],
+  },
+  {
+    id: "torque-speed-power",
+    titleKey: "pro.name.torque-speed-power",
+    blurbKey: "pro.blurb.torque-speed-power",
+    category: "calculation",
+    riskClass: "life-safety",
+    packs: ["inzenjering", "transport", "agro", "zanat"],
+    keywords: [
+      "kgf", "lbf", "moment", "obrtaja", "obrtni", "par", "povezuje", "power", "snaga", "snagu",
+      "speed", "torque"
+    ],
+  },
+];
+
+const PRO_DIZAJN_TOOLS: ToolRegistration[] = [
+  {
+    id: "aspect-ratio-fit",
+    titleKey: "pro.name.aspect-ratio-fit",
+    blurbKey: "pro.blurb.aspect-ratio-fit",
+    category: "geometry",
+    riskClass: "none",
+    packs: ["softver", "dizajn", "foto", "event"],
+    keywords: [
+      "aspect", "celobrojni", "dimenzije", "fit", "mode", "odnos", "odnosno", "okvir", "okvira",
+      "popunjavanju", "ratio", "reza", "roundto", "sirini", "skraceni", "sourceheight",
+      "sourcewidth", "stranica", "targetheight", "targetwidth", "traka", "uklapanju",
+      "velicinom", "zadatoj"
+    ],
+  },
+  {
+    id: "baseline-rhythm",
+    titleKey: "pro.name.baseline-rhythm",
+    blurbKey: "pro.blurb.baseline-rhythm",
+    category: "design",
+    riskClass: "none",
+    packs: ["softver", "dizajn", "tekst"],
+    keywords: [
+      "baseline", "columnheight", "fontsize", "gridunit", "kolonu", "lineheight",
+      "lineheightunit", "mrezu", "osnovnu", "pada", "pikselima", "prored", "redova", "rhythm",
+      "ritam", "snapmode", "staje", "vertikalni", "visine"
+    ],
+  },
+  {
+    id: "book-spine",
+    titleKey: "pro.name.book-spine",
+    blurbKey: "pro.blurb.book-spine",
+    category: "geometry",
+    riskClass: "none",
+    packs: ["dizajn", "tekst"],
+    keywords: [
+      "book", "brojem", "bulk", "covercaliper", "coverheight", "coverwidth", "debljina",
+      "extraallowance", "gramaturom", "grammage", "hrbat", "hrbata", "knjige", "korica",
+      "measuredstack", "milimetara", "pagecount", "papercaliper", "papira", "razvijena",
+      "spine", "strana", "voluminoznoscu", "zadatim"
+    ],
+  },
+  {
+    id: "column-grid",
+    titleKey: "pro.name.column-grid",
+    blurbKey: "pro.blurb.column-grid",
+    category: "design",
+    riskClass: "none",
+    packs: ["softver", "dizajn"],
+    keywords: [
+      "column", "columns", "containerwidth", "grid", "gutter", "jedne", "kolona", "kolone",
+      "marginu", "mincolumnwidth", "mreza", "najmanju", "oluk", "outermargin", "raspona",
+      "sirina", "sirinu", "spancolumns", "staje"
+    ],
+  },
+  {
+    id: "copyfitting",
+    titleKey: "pro.name.copyfitting",
+    blurbKey: "pro.blurb.copyfitting",
+    category: "text",
+    riskClass: "none",
+    packs: ["dizajn", "prosveta", "tekst"],
+    keywords: [
+      "averagecharacterwidth", "charactercount", "charactersperline", "columnheight",
+      "columnsperpage", "columnwidth", "copyfitting", "kolona", "kolone", "lineheight",
+      "linespercolumn", "obima", "proracun", "red", "reda", "redova", "sirini", "staje",
+      "strana", "tacan", "targetpages", "tekst", "teksta", "visini", "zadatoj", "zauzeti",
+      "znakova"
+    ],
+  },
+  {
+    id: "css-typographic-units",
+    titleKey: "pro.name.css-typographic-units",
+    blurbKey: "pro.blurb.css-typographic-units",
+    category: "conversion",
+    riskClass: "none",
+    sourceKey: "pro.sources.css-units-and-android-dp",
+    packs: ["softver", "dizajn", "tekst"],
+    keywords: [
+      "assetscale", "css", "devicedpi", "drugu", "fromunit", "inc", "jedinice", "jednu",
+      "parentfontsize", "piku", "pretvara", "rem", "resursa", "rootfontsize", "tipografske",
+      "typographic", "units", "velicinu"
+    ],
+  },
+  {
+    id: "delta-e",
+    titleKey: "pro.name.delta-e",
+    blurbKey: "pro.blurb.delta-e",
+    category: "design",
+    riskClass: "none",
+    sourceKey: "pro.sources.cie-colour-difference",
+    packs: ["dizajn", "foto"],
+    keywords: [
+      "boja", "boje", "brojcano", "ciede2000", "colour1", "colour2", "de94application", "delta",
+      "e94", "formulama", "granicu", "postavlja", "prihvatljivosti", "razlika", "razlikuju",
+      "rgbilluminant", "tumaci"
+    ],
+  },
+  {
+    id: "ean-barcode",
+    titleKey: "pro.name.ean-barcode",
+    blurbKey: "pro.blurb.ean-barcode",
+    category: "data",
+    riskClass: "none",
+    sourceKey: "pro.sources.iso-iec-15420-ean-upc",
+    packs: ["dizajn", "biznis", "transport"],
+    keywords: [
+      "barcode", "barkod", "cifru", "digits", "dimenziji", "ean", "kontrolnu", "simbola",
+      "sirinu", "symbology", "upc", "verifydigits", "visinu", "xdimension", "zadatoj"
+    ],
+  },
+  {
+    id: "font-metrics-trim",
+    titleKey: "pro.name.font-metrics-trim",
+    blurbKey: "pro.blurb.font-metrics-trim",
+    category: "design",
+    riskClass: "none",
+    packs: ["softver", "dizajn"],
+    keywords: [
+      "ascender", "ascendera", "capheight", "descender", "descendera", "font", "fonta",
+      "fontsize", "legne", "linegap", "lineheight", "metrics", "metrike", "negativne", "odmake",
+      "okvir", "pikselima", "teksta", "trim", "unitsperem", "verzal", "verzala", "visinu",
+      "xheight"
+    ],
+  },
+  {
+    id: "iso-paper-sizes",
+    titleKey: "pro.name.iso-paper-sizes",
+    blurbKey: "pro.blurb.iso-paper-sizes",
+    category: "geometry",
+    riskClass: "none",
+    sourceKey: "pro.sources.iso-216-paper-series",
+    packs: ["dizajn", "prosveta", "tekst"],
+    keywords: [
+      "aparatu", "dimenzije", "formata", "formati", "iso", "kopir", "koverat", "list", "manjih",
+      "matchtolerance", "measuredheight", "measuredwidth", "milimetarske", "paper", "papira",
+      "prima", "procenat", "series", "sizes", "staje", "targetindex", "targetseries",
+      "uvecanja", "veci"
+    ],
+  },
+  {
+    id: "modular-type-scale",
+    titleKey: "pro.name.modular-type-scale",
+    blurbKey: "pro.blurb.modular-type-scale",
+    category: "design",
+    riskClass: "none",
+    packs: ["softver", "dizajn", "tekst"],
+    keywords: [
+      "basesize", "baseunit", "dobijen", "izabranim", "jedinicama", "mnozenjem", "modular",
+      "niz", "odnosom", "osnovne", "pikselima", "ratio", "rem", "rootfontsize", "rounding",
+      "scale", "skala", "slova", "stepsdown", "stepsup", "tackama", "tipografska", "velicina",
+      "velicine"
+    ],
+  },
+  {
+    id: "paper-weight",
+    titleKey: "pro.name.paper-weight",
+    blurbKey: "pro.blurb.paper-weight",
+    category: "materials",
+    riskClass: "none",
+    packs: ["dizajn", "tekst", "transport"],
+    keywords: [
+      "ceo", "gramatura", "gramaturi", "grammage", "izmerenog", "masa", "measuredmass", "paper",
+      "papira", "ris", "rollmass", "rollwidth", "sheetcount", "sheetheight", "sheetwidth",
+      "sveznja", "tabak", "tezi", "tiraz", "weight", "zadatoj"
+    ],
+  },
+  {
+    id: "print-resolution",
+    titleKey: "pro.name.print-resolution",
+    blurbKey: "pro.blurb.print-resolution",
+    category: "conversion",
+    riskClass: "none",
+    packs: ["dizajn", "foto", "tekst", "zanat", "event"],
+    keywords: [
+      "bitsperchannel", "bleed", "channels", "direction", "heightpx", "milimetara",
+      "nekomprimovana", "physicalheight", "physicalwidth", "piksela", "print", "resolution",
+      "rezolucija", "rezoluciji", "scaledenominator", "sirini", "slika", "stampu", "stvarna",
+      "velicina", "widthpx", "zadatoj", "zeljenoj"
+    ],
+  },
+  {
+    id: "roll-yield",
+    titleKey: "pro.name.roll-yield",
+    blurbKey: "pro.blurb.roll-yield",
+    category: "materials",
+    riskClass: "none",
+    packs: ["dizajn", "zanat", "event"],
+    keywords: [
+      "allowrotation", "duznih", "gutter", "iskoristivost", "isplati", "komad", "komada",
+      "leadtrailmargin", "metara", "odlazi", "okrenuti", "pieceheight", "piecewidth",
+      "pricepermetre", "quantity", "roll", "rolllength", "rollwidth", "rolne", "sidemargin",
+      "sirinu", "staje", "tiraz", "yield"
+    ],
+  },
+  {
+    id: "saddle-stitch-imposition",
+    titleKey: "pro.name.saddle-stitch-imposition",
+    blurbKey: "pro.blurb.saddle-stitch-imposition",
+    category: "geometry",
+    riskClass: "none",
+    packs: ["dizajn", "tekst", "event"],
+    keywords: [
+      "idu", "imposition", "klamovane", "knjizice", "kod", "ostaje", "pagecount", "praznih",
+      "saddle", "signaturesize", "slog", "startpage", "stitch", "strana", "strane", "stranu",
+      "tabaka"
+    ],
+  },
+  {
+    id: "sheet-imposition",
+    titleKey: "pro.name.sheet-imposition",
+    blurbKey: "pro.blurb.sheet-imposition",
+    category: "geometry",
+    riskClass: "none",
+    packs: ["gradnja", "dizajn", "zanat", "event"],
+    keywords: [
+      "allowrotation", "gutter", "imposition", "komada", "marginama", "marginbottom",
+      "marginleft", "marginright", "margintop", "otpad", "pieceheight", "piecewidth",
+      "polozaja", "razmakom", "requiredquantity", "rez", "sheet", "sheetheight", "sheetwidth",
+      "staje", "tabak", "uklapanje", "velicine"
+    ],
+  },
+];
+
+const PRO_FOTO_TOOLS: ToolRegistration[] = [
+  {
+    id: "angle-of-view",
+    titleKey: "pro.name.angle-of-view",
+    blurbKey: "pro.blurb.angle-of-view",
+    category: "geometry",
+    riskClass: "none",
+    packs: ["inzenjering", "foto", "zanat"],
+    keywords: [
+      "angle", "daljinu", "dijagonali", "dimenzije", "distance", "focal", "height", "kadar",
+      "length", "metara", "obuhvata", "polja", "rastojanju", "sensor", "senzora", "sirini",
+      "snimanja", "subject", "ugao", "unete", "vidnog", "view", "visini", "width", "ziznu"
+    ],
+  },
+  {
+    id: "crop-factor",
+    titleKey: "pro.name.crop-factor",
+    blurbKey: "pro.blurb.crop-factor",
+    category: "conversion",
+    riskClass: "none",
+    sourceKey: "pro.sources.iso-1007-135-format",
+    packs: ["foto"],
+    keywords: [
+      "blendu", "crop", "daljinu", "dimenzija", "ekvivalent", "factor", "faktor", "focal",
+      "format", "height", "kadar", "length", "number", "odnosu", "preracunava", "pun", "sensor",
+      "senzora", "unetih", "width", "ziznu"
+    ],
+  },
+  {
+    id: "depth-of-field",
+    titleKey: "pro.name.depth-of-field",
+    blurbKey: "pro.blurb.depth-of-field",
+    category: "geometry",
+    riskClass: "none",
+    packs: ["foto"],
+    keywords: [
+      "blendu", "blizu", "circle", "coc", "confusion", "daljinu", "dalju", "depth", "diagonal",
+      "distance", "dubinska", "focal", "focus", "fokusa", "granicu", "hiperfokalnu", "krug",
+      "length", "number", "ostrina", "ostrine", "rasipanja", "rastojanje", "sensor", "ziznu"
+    ],
+  },
+  {
+    id: "diffraction-limit",
+    titleKey: "pro.name.diffraction-limit",
+    blurbKey: "pro.blurb.diffraction-limit",
+    category: "calculation",
+    riskClass: "none",
+    packs: ["foto"],
+    keywords: [
+      "blendu", "count", "diffraction", "difrakcija", "disk", "diska", "dostigne", "erijevog",
+      "horizontal", "jednog", "lambda", "limit", "number", "piksela", "pixel", "precnik",
+      "sensor", "senzora", "velicinu", "wavelength", "width"
+    ],
+  },
+  {
+    id: "exposure-equivalent",
+    titleKey: "pro.name.exposure-equivalent",
+    blurbKey: "pro.blurb.exposure-equivalent",
+    category: "calculation",
+    riskClass: "none",
+    packs: ["foto"],
+    keywords: [
+      "blendama", "blende", "ekspozicija", "ekspoziciju", "ekvivalentna", "equivalent",
+      "exposure", "iso", "istu", "jedne", "kombinacije", "nalazi", "number", "razliku",
+      "reference", "sensitivity", "shutter", "target", "time", "trecu", "zatvaraca"
+    ],
+  },
+  {
+    id: "flash-guide-number",
+    titleKey: "pro.name.flash-guide-number",
+    blurbKey: "pro.blurb.flash-guide-number",
+    category: "calculation",
+    riskClass: "none",
+    packs: ["foto"],
+    keywords: [
+      "blendu", "blica", "broja", "distance", "flash", "guide", "iso", "number", "osvetljenja",
+      "preracunava", "promeni", "promenu", "rastojanja", "second", "sensitivity", "subject",
+      "vodeceg", "vodeci"
+    ],
+  },
+  {
+    id: "frame-rate-conform",
+    titleKey: "pro.name.frame-rate-conform",
+    blurbKey: "pro.blurb.frame-rate-conform",
+    category: "time",
+    riskClass: "none",
+    sourceKey: "pro.sources.ntsc-1000-1001-rates",
+    packs: ["foto", "muzika"],
+    keywords: [
+      "brzine", "brzinu", "capture", "clip", "conform", "count", "duration", "factor", "frame",
+      "jedne", "kadrova", "konform", "legne", "length", "motion", "novo", "odnosu", "original",
+      "pomeraj", "rate", "reprodukcije", "slow", "snimak", "tajmlajn", "target", "timeline",
+      "trajanje", "usporenje"
+    ],
+  },
+  {
+    id: "illuminance-to-aperture",
+    titleKey: "pro.name.illuminance-to-aperture",
+    blurbKey: "pro.blurb.illuminance-to-aperture",
+    category: "conversion",
+    riskClass: "none",
+    sourceKey: "pro.sources.international-foot-1959",
+    packs: ["gradnja", "inzenjering", "foto", "event"],
+    keywords: [
+      "aperture", "blendu", "calibration", "constant", "fut", "illuminance", "incident", "iso",
+      "its", "kalibracije", "kandele", "konstantu", "luks", "meter", "pretvara", "sensitivity",
+      "shutter", "svetlomera", "time", "tvog", "unit", "vreme", "with", "zatvaraca"
+    ],
+  },
+  {
+    id: "mired-shift",
+    titleKey: "pro.name.mired-shift",
+    blurbKey: "pro.blurb.mired-shift",
+    category: "conversion",
+    riskClass: "none",
+    packs: ["foto", "event"],
+    keywords: [
+      "apply", "boje", "colour", "dobija", "korekcija", "korekcije", "mired", "miredima",
+      "razliku", "shift", "source", "target", "temperature", "temperaturu"
+    ],
+  },
+  {
+    id: "motion-blur",
+    titleKey: "pro.name.motion-blur",
+    blurbKey: "pro.blurb.motion-blur",
+    category: "calculation",
+    riskClass: "none",
+    packs: ["foto"],
+    keywords: [
+      "acceptable", "blur", "broja", "count", "distance", "ekspozicije", "focal", "horizontal",
+      "length", "motion", "piksela", "pixel", "pokreta", "razmaze", "sensor", "shutter",
+      "speed", "subject", "subjekat", "time", "tokom", "unutar", "width", "zadatog", "zadrzava",
+      "zamucenje", "zatvarac"
+    ],
+  },
+  {
+    id: "nd-filter-exposure",
+    titleKey: "pro.name.nd-filter-exposure",
+    blurbKey: "pro.blurb.nd-filter-exposure",
+    category: "calculation",
+    riskClass: "none",
+    packs: ["foto"],
+    keywords: [
+      "additional", "base", "blendi", "density", "ekspozicije", "exactly", "exposure", "factor",
+      "faktora", "filter", "filtera", "filters", "given", "gustine", "jacinu", "one", "optical",
+      "opticke", "pretvara", "shutter", "stacked", "stops", "strength", "time", "vreme"
+    ],
+  },
+  {
+    id: "pq-nits",
+    titleKey: "pro.name.pq-nits",
+    blurbKey: "pro.blurb.pq-nits",
+    category: "conversion",
+    riskClass: "none",
+    sourceKey: "pro.sources.smpte-st-2084-pq",
+    packs: ["softver", "foto"],
+    keywords: [
+      "bit", "bitni", "code", "depth", "kod", "krivoj", "luminance", "luminanciju", "nazad",
+      "nitovi", "nitovima", "nits", "normalised", "opsegu", "pretvara", "punom", "range",
+      "signal", "suzenom"
+    ],
+  },
+  {
+    id: "raster-image-size",
+    titleKey: "pro.name.raster-image-size",
+    blurbKey: "pro.blurb.raster-image-size",
+    category: "media",
+    riskClass: "none",
+    packs: ["softver", "dizajn", "foto"],
+    keywords: [
+      "available", "average", "bit", "bita", "broja", "capacity", "channel", "channels",
+      "count", "depth", "dimenzija", "dubine", "fajlova", "file", "frame", "height", "image",
+      "kanala", "known", "layer", "nekompresovana", "per", "prostor", "raster", "rastera",
+      "size", "slike", "staje", "takvih", "velicina", "width"
+    ],
+  },
+  {
+    id: "smpte-timecode",
+    titleKey: "pro.name.smpte-timecode",
+    blurbKey: "pro.blurb.smpte-timecode",
+    category: "time",
+    riskClass: "none",
+    sourceKey: "pro.sources.smpte-st-12-1-timecode",
+    packs: ["foto", "muzika", "tekst", "event"],
+    keywords: [
+      "count", "drop", "frame", "kadrove", "notaciju", "oduzima", "operation", "pretvara",
+      "proteklo", "rate", "sabira", "smpte", "tajmkod", "timecode", "ukljucujuci", "vreme"
+    ],
+  },
+  {
+    id: "timelapse-planner",
+    titleKey: "pro.name.timelapse-planner",
+    blurbKey: "pro.blurb.timelapse-planner",
+    category: "time",
+    riskClass: "none",
+    sourceKey: "pro.sources.smpte-broadcast-frame-rates",
+    packs: ["gradnja", "foto", "event"],
+    keywords: [
+      "between", "clip", "count", "duration", "duzinu", "faktor", "fps", "frame", "frames",
+      "gotovog", "interval", "kadrova", "klipa", "length", "per", "planner", "povezuje", "rate",
+      "shooting", "shutter", "snimanja", "tajmlaps", "time", "timelapse", "timeline",
+      "trajanje", "ubrzanja"
+    ],
+  },
+  {
+    id: "video-bitrate-storage",
+    titleKey: "pro.name.video-bitrate-storage",
+    blurbKey: "pro.blurb.video-bitrate-storage",
+    category: "media",
+    riskClass: "none",
+    packs: ["softver", "foto", "muzika", "event"],
+    keywords: [
+      "audio", "bitrate", "bitrejt", "capacity", "card", "cards", "copies", "disk", "duration",
+      "fajla", "file", "kapaciteta", "kartica", "karticu", "number", "size", "snimka", "staje",
+      "storage", "trajanje", "velicinu", "veze", "video", "zadatog"
+    ],
+  },
+];
+
+const PRO_MUZIKA_TOOLS: ToolRegistration[] = [
+  {
+    id: "audio-level-reference",
+    titleKey: "pro.name.audio-level-reference",
+    blurbKey: "pro.blurb.audio-level-reference",
+    category: "conversion",
+    riskClass: "none",
+    packs: ["inzenjering", "muzika", "zanat", "event"],
+    keywords: [
+      "audio", "dbm", "dbu", "dbv", "efektivnog", "for", "impedance", "level", "linijskog",
+      "medjuvrsnog", "napona", "nivo", "peak", "prevodi", "reference", "rms", "signala",
+      "voltage", "volti", "vrsnog"
+    ],
+  },
+  {
+    id: "bar-duration",
+    titleKey: "pro.name.bar-duration",
+    blurbKey: "pro.blurb.bar-duration",
+    category: "time",
+    riskClass: "none",
+    packs: ["muzika"],
+    keywords: [
+      "bar", "bars", "denominator", "duration", "number", "numerator", "obrnuto", "signature",
+      "stane", "taktova", "taktu", "tempo", "tempu", "time", "trajanje", "traje"
+    ],
+  },
+  {
+    id: "bpm-delay-times",
+    titleKey: "pro.name.bpm-delay-times",
+    blurbKey: "pro.blurb.bpm-delay-times",
+    category: "time",
+    riskClass: "none",
+    packs: ["muzika"],
+    keywords: [
+      "bpm", "delay", "frekvenciju", "lfo", "milisekundama", "modifier", "note", "notnu",
+      "pravu", "pripadajucu", "svaku", "tackom", "tempo", "tempu", "times", "triolsku", "vreme",
+      "vremena"
+    ],
+  },
+  {
+    id: "cents-ratio",
+    titleKey: "pro.name.cents-ratio",
+    blurbKey: "pro.blurb.cents-ratio",
+    category: "conversion",
+    riskClass: "none",
+    packs: ["muzika", "prosveta"],
+    keywords: [
+      "cente", "centi", "cents", "frekvencija", "frekvencije", "frekvenciju", "frequency",
+      "interval", "odnos", "polutonove", "pretvara", "rastimavanja", "ratio", "razliku"
+    ],
+  },
+  {
+    id: "compressor-curve",
+    titleKey: "pro.name.compressor-curve",
+    blurbKey: "pro.blurb.compressor-curve",
+    category: "media",
+    riskClass: "none",
+    packs: ["muzika"],
+    keywords: [
+      "compressor", "curve", "desava", "gain", "izlazni", "knee", "koleno", "kompresora",
+      "kriva", "level", "makeup", "nivo", "nivoom", "odnos", "pojacanja", "pokazuje", "prag",
+      "ratio", "redukciju", "threshold", "ulaznim", "width"
+    ],
+  },
+  {
+    id: "decibel-ratio",
+    titleKey: "pro.name.decibel-ratio",
+    blurbKey: "pro.blurb.decibel-ratio",
+    category: "conversion",
+    riskClass: "none",
+    packs: ["gradnja", "inzenjering", "muzika"],
+    keywords: [
+      "amplitudu", "decibel", "decibele", "decibeli", "decibelima", "decibels", "levels",
+      "linear", "linearni", "list", "natrag", "nivoa", "odnos", "odnosi", "posebno", "pretvara",
+      "quantity", "ratio", "sabira", "snagu"
+    ],
+  },
+  {
+    id: "note-frequency",
+    titleKey: "pro.name.note-frequency",
+    blurbKey: "pro.blurb.note-frequency",
+    category: "conversion",
+    riskClass: "none",
+    sourceKey: "pro.sources.iso-16-1975",
+    packs: ["muzika", "prosveta"],
+    keywords: [
+      "centima", "for", "frekvencija", "frekvenciju", "frequency", "jednakoj", "midi",
+      "najblizu", "name", "nota", "notation", "note", "notu", "number", "octave", "odstupanje",
+      "oktavu", "pitch", "prevodi", "reference", "scientific", "temperaciji", "upisanu", "with"
+    ],
+  },
+  {
+    id: "pcm-file-size",
+    titleKey: "pro.name.pcm-file-size",
+    blurbKey: "pro.blurb.pcm-file-size",
+    category: "media",
+    riskClass: "none",
+    sourceKey: "pro.sources.riff-wave-1991",
+    packs: ["softver", "foto", "muzika"],
+    keywords: [
+      "bit", "broju", "byte", "channel", "count", "depth", "duration", "duzine", "estimate",
+      "file", "for", "frekvenciji", "header", "include", "kanala", "nekompresovan", "pcm",
+      "podataka", "protok", "rate", "rezoluciji", "sample", "session", "size", "snimak", "the",
+      "track", "velicina", "wav", "zadatoj", "zapisa", "zauzima"
+    ],
+  },
+  {
+    id: "reverb-time",
+    titleKey: "pro.name.reverb-time",
+    blurbKey: "pro.blurb.reverb-time",
+    category: "calculation",
+    riskClass: "none",
+    packs: ["gradnja", "inzenjering", "muzika", "event"],
+    keywords: [
+      "absorption", "air", "alpha", "apsorpcije", "area", "coefficient", "eyringovoj",
+      "formuli", "koeficijentima", "povrsina", "prostorije", "reverb", "reverberacije", "room",
+      "rows", "rt60", "sabineovoj", "surface", "temperature", "time", "upisanim", "volume",
+      "vreme", "zapremine"
+    ],
+  },
+  {
+    id: "room-modes",
+    titleKey: "pro.name.room-modes",
+    blurbKey: "pro.blurb.room-modes",
+    category: "calculation",
+    riskClass: "none",
+    packs: ["gradnja", "inzenjering", "dizajn", "muzika"],
+    keywords: [
+      "air", "aksijalne", "axis", "dimenzija", "frequency", "gomilaju", "height", "jednacini",
+      "kose", "length", "limit", "maximum", "mode", "modes", "modove", "modovi", "order", "per",
+      "pokazuje", "prostorije", "rejlijevoj", "room", "sopstvene", "tangencijalne",
+      "temperature", "upper", "width"
+    ],
+  },
+  {
+    id: "sample-buffer-latency",
+    titleKey: "pro.name.sample-buffer-latency",
+    blurbKey: "pro.blurb.sample-buffer-latency",
+    category: "media",
+    riskClass: "none",
+    packs: ["softver", "muzika"],
+    keywords: [
+      "bafera", "baferi", "buffer", "converter", "count", "driver", "duration", "extra",
+      "frekvenciji", "jednom", "kasnjenje", "latencija", "latency", "milisekunde", "odabiranja",
+      "odbirke", "pretvara", "rate", "sample", "size", "smera", "velicinu", "zadatoj"
+    ],
+  },
+  {
+    id: "scale-chord-speller",
+    titleKey: "pro.name.scale-chord-speller",
+    blurbKey: "pro.blurb.scale-chord-speller",
+    category: "data",
+    riskClass: "none",
+    packs: ["muzika", "prosveta"],
+    keywords: [
+      "accidental", "akorda", "akordi", "brojem", "chord", "intervalima", "ispisuje", "note",
+      "osnovni", "predznaka", "redosledu", "root", "scale", "skale", "slovnom", "speller",
+      "stupnjevima", "ton", "tonove", "trozvucima", "with"
+    ],
+  },
+  {
+    id: "sound-wavelength",
+    titleKey: "pro.name.sound-wavelength",
+    blurbKey: "pro.blurb.sound-wavelength",
+    category: "calculation",
+    riskClass: "none",
+    packs: ["gradnja", "inzenjering", "muzika"],
+    keywords: [
+      "air", "brzinu", "cetvrtinu", "distance", "duzina", "duzinu", "frekvenciju", "frequency",
+      "kasnjenje", "njenu", "predjenom", "rastojanju", "sound", "talasna", "talasnu",
+      "temperature", "temperaturu", "vazduha", "wavelength", "zvuka"
+    ],
+  },
+  {
+    id: "speaker-load",
+    titleKey: "pro.name.speaker-load",
+    blurbKey: "pro.blurb.speaker-load",
+    category: "electrical",
+    riskClass: "life-safety",
+    packs: ["inzenjering", "muzika", "zanat", "event"],
+    keywords: [
+      "amplifier", "assignment", "cabinet", "delivered", "dobija", "each", "for", "group",
+      "impedance", "impedansa", "impedansu", "into", "kutija", "load", "minimum", "paralelno",
+      "parallel", "power", "rated", "redno", "resulting", "series", "snaga", "snage", "speaker",
+      "the", "ukupnu", "vezane", "wiring", "zvucnika", "zvucnike"
+    ],
+  },
+  {
+    id: "spl-distance",
+    titleKey: "pro.name.spl-distance",
+    blurbKey: "pro.blurb.spl-distance",
+    category: "calculation",
+    riskClass: "life-safety",
+    packs: ["gradnja", "inzenjering", "muzika", "event"],
+    keywords: [
+      "applied", "difference", "distance", "for", "gubi", "half", "kutije", "level", "limit",
+      "nivo", "osetljivost", "power", "pritiska", "rastojanja", "reference", "second",
+      "sensitivity", "snagu", "sound", "spl", "the", "udaljenosti", "udvostrucavanjem",
+      "upisanu", "zadatoj", "zvucnog"
+    ],
+  },
+  {
+    id: "transposition",
+    titleKey: "pro.name.transposition",
+    blurbKey: "pro.blurb.transposition",
+    category: "conversion",
+    riskClass: "none",
+    packs: ["muzika", "prosveta"],
+    keywords: [
+      "akordske", "chord", "direction", "instrumenata", "instrument", "interval", "key",
+      "notes", "octave", "oznake", "pair", "realnog", "shift", "source", "stima", "symbols",
+      "tonove", "transponuje", "transponujucih", "transposition", "transpozicija", "upisane",
+      "zvuka"
+    ],
+  },
+  {
+    id: "varispeed-repitch",
+    titleKey: "pro.name.varispeed-repitch",
+    blurbKey: "pro.blurb.varispeed-repitch",
+    category: "media",
+    riskClass: "none",
+    packs: ["muzika"],
+    keywords: [
+      "brzina", "brzine", "centima", "dobijeni", "dobijeno", "frekvenciji", "jednoj", "length",
+      "odnos", "odsvira", "original", "pitch", "pomeraj", "promeni", "rastimovanje", "rate",
+      "ratio", "repitch", "sample", "semitones", "semplu", "shift", "snimak", "source", "speed",
+      "sviran", "target", "tempo", "trajanje", "varispeed", "visina"
+    ],
+  },
+];
+
+const PRO_PROSVETA_TOOLS: ToolRegistration[] = [
+  {
+    id: "average-to-target",
+    titleKey: "pro.name.average-to-target",
+    blurbKey: "pro.blurb.average-to-target",
+    category: "calculation",
+    riskClass: "none",
+    packs: ["prosveta"],
+    keywords: [
+      "average", "cilj", "cilja", "ciljni", "dodatne", "dostigao", "izdrzi", "jos", "ocena",
+      "ocene", "padne", "postojece", "prosek", "proseka", "slabijih", "target"
+    ],
+  },
+  {
+    id: "child-age",
+    titleKey: "pro.name.child-age",
+    blurbKey: "pro.blurb.child-age",
+    category: "time",
+    riskClass: "none",
+    packs: ["prosveta", "trening", "pravo"],
+    keywords: [
+      "age", "child", "dan", "dana", "danima", "datum", "deteta", "godina", "godinama",
+      "meseci", "mesecima", "navrsava", "navrsenih", "osoba", "rodjendana", "rodjenja", "trazi",
+      "ukupan", "uzrast"
+    ],
+  },
+  {
+    id: "combinatorics",
+    titleKey: "pro.name.combinatorics",
+    blurbKey: "pro.blurb.combinatorics",
+    category: "calculation",
+    riskClass: "none",
+    packs: ["softver", "prosveta"],
+    keywords: [
+      "aritmetici", "brojevi", "celobrojnoj", "combinatorics", "faktorijel", "kombinacije",
+      "kombinatorika", "permutacije", "ponavljanja", "ponavljanjem", "varijacije",
+      "zaokruzivanja"
+    ],
+  },
+  {
+    id: "fractions-decimals",
+    titleKey: "pro.name.fractions-decimals",
+    blurbKey: "pro.blurb.fractions-decimals",
+    category: "calculation",
+    riskClass: "none",
+    packs: ["prosveta", "kuhinja", "zanat"],
+    keywords: [
+      "aritmetici", "celobrojnoj", "decimale", "decimalni", "decimals", "decimalu", "deli",
+      "fractions", "mesovit", "mnozi", "nazad", "obelezenim", "oduzima", "operacija",
+      "periodicnu", "periodom", "razlomak", "razlomci", "razlomke", "sabira", "skracuje",
+      "vraca", "zapis"
+    ],
+  },
+  {
+    id: "grade-scale-points",
+    titleKey: "pro.name.grade-scale-points",
+    blurbKey: "pro.blurb.grade-scale-points",
+    category: "calculation",
+    riskClass: "none",
+    packs: ["prosveta"],
+    keywords: [
+      "bodova", "bodovanja", "bodovi", "bodovna", "grade", "korak", "maksimalan", "maksimumom",
+      "opseg", "osvojeni", "oznaku", "points", "pokazuje", "pragove", "pragovi", "pretvara",
+      "procentualne", "scale", "skala", "testa", "testu", "upise", "zadatim"
+    ],
+  },
+  {
+    id: "grade-statistics",
+    titleKey: "pro.name.grade-statistics",
+    blurbKey: "pro.blurb.grade-statistics",
+    category: "data",
+    riskClass: "none",
+    packs: ["prosveta", "trening", "biznis", "agro"],
+    keywords: [
+      "bodova", "devijaciju", "grade", "kvartile", "medijanu", "modu", "niz", "ocena", "prag",
+      "praga", "prolaznosti", "prosek", "raspodelu", "standardnu", "statistics", "statistika",
+      "udeo", "upise", "vrednostima"
+    ],
+  },
+  {
+    id: "guessing-correction",
+    titleKey: "pro.name.guessing-correction",
+    blurbKey: "pro.blurb.guessing-correction",
+    category: "calculation",
+    riskClass: "none",
+    packs: ["prosveta"],
+    keywords: [
+      "bodova", "cist", "correction", "doneo", "doprinos", "guessing", "izborom", "korekcija",
+      "neodgovorenih", "netacnih", "ocekivani", "odgovora", "pitanja", "pitanju", "pogadjanja",
+      "pogadjanje", "pogodak", "pokazuje", "ponudjenih", "proseku", "tacnih", "test", "ukupan",
+      "umanjen", "visestrukim"
+    ],
+  },
+  {
+    id: "item-analysis",
+    titleKey: "pro.name.item-analysis",
+    blurbKey: "pro.blurb.item-analysis",
+    category: "data",
+    riskClass: "none",
+    packs: ["prosveta"],
+    keywords: [
+      "analiza", "analysis", "bolje", "boljoj", "diskriminacije", "grupe", "grupi", "indeks",
+      "item", "lakoce", "odgovora", "razliku", "resili", "slabije", "slabijoj", "tacni",
+      "tacnih", "tacno", "testa", "ucenika", "udeo", "ukupan", "uspesnosti", "velicina",
+      "zadatak", "zadatka"
+    ],
+  },
+  {
+    id: "lesson-count-period",
+    titleKey: "pro.name.lesson-count-period",
+    blurbKey: "pro.blurb.lesson-count-period",
+    category: "time",
+    riskClass: "none",
+    sourceKey: "pro.sources.iso-8601-2019-weekday",
+    packs: ["prosveta", "trening", "biznis", "event"],
+    keywords: [
+      "brojem", "broji", "casa", "casova", "count", "dani", "danima", "datum", "datume",
+      "datumi", "fond", "izabranim", "izuzeti", "jednog", "krajnji", "lesson", "minute",
+      "nedelji", "neradne", "pada", "period", "pocetni", "predmeta", "pretvara", "rucno",
+      "sate", "termina", "trajanje", "upisane"
+    ],
+  },
+  {
+    id: "lesson-timeline",
+    titleKey: "pro.name.lesson-timeline",
+    blurbKey: "pro.blurb.lesson-timeline",
+    category: "time",
+    riskClass: "none",
+    packs: ["muzika", "prosveta", "trening", "event"],
+    keywords: [
+      "aktivnosti", "casa", "lesson", "minutu", "pocetka", "pojedinih", "pokazuje", "pravi",
+      "prekoracuje", "preostaje", "raspored", "satu", "tempo", "timeline", "trajanja",
+      "trajanje", "vreme", "vremena"
+    ],
+  },
+  {
+    id: "split-into-groups",
+    titleKey: "pro.name.split-into-groups",
+    blurbKey: "pro.blurb.split-into-groups",
+    category: "calculation",
+    riskClass: "none",
+    packs: ["prosveta", "trening", "event"],
+    keywords: [
+      "brojem", "deli", "groups", "grupa", "grupe", "into", "moguce", "najravnomernije",
+      "odeljenje", "podela", "poklopi", "split", "ucenika", "velicina", "velicine", "zbir"
+    ],
+  },
+  {
+    id: "standard-score",
+    titleKey: "pro.name.standard-score",
+    blurbKey: "pro.blurb.standard-score",
+    category: "data",
+    riskClass: "none",
+    sourceKey: "pro.sources.mccall-t-score-1922",
+    packs: ["prosveta", "trening"],
+    keywords: [
+      "aritmeticka", "bod", "ciljna", "devijacija", "devijaciji", "obrnuti", "pretvara",
+      "racun", "score", "sirov", "sredina", "sredini", "standard", "standardna", "standardni",
+      "standardnoj", "upise", "vraca"
+    ],
+  },
+  {
+    id: "test-printing",
+    titleKey: "pro.name.test-printing",
+    blurbKey: "pro.blurb.test-printing",
+    category: "materials",
+    riskClass: "financial",
+    packs: ["dizajn", "prosveta", "biznis", "event"],
+    keywords: [
+      "cena", "ceni", "dvostrano", "iznos", "lista", "listova", "listu", "ostaje", "otvara",
+      "pakovanja", "pakovanju", "papira", "poledjina", "prazno", "primeraka", "primerku",
+      "printing", "stampanje", "strana", "test", "testa", "testova", "umnozavanje", "upise"
+    ],
+  },
+  {
+    id: "topic-hour-allocation",
+    titleKey: "pro.name.topic-hour-allocation",
+    blurbKey: "pro.blurb.topic-hour-allocation",
+    category: "calculation",
+    riskClass: "none",
+    packs: ["prosveta", "racunovodstvo", "biznis", "event"],
+    keywords: [
+      "allocation", "brojevima", "casova", "celim", "fond", "hour", "nastavne", "raspodela",
+      "raspodeljuje", "sabiraju", "temama", "teme", "topic", "udelima", "ukupan", "zadatim"
+    ],
+  },
+  {
+    id: "weighted-grade",
+    titleKey: "pro.name.weighted-grade",
+    blurbKey: "pro.blurb.weighted-grade",
+    category: "calculation",
+    riskClass: "none",
+    packs: ["prosveta", "event"],
+    keywords: [
+      "bodova", "ciljni", "grade", "imaju", "komponenta", "komponente", "komponenti",
+      "maksimum", "nedostaje", "ocena", "ocenjivanja", "ponderisana", "preostala", "preostaloj",
+      "preslikava", "procenat", "razlicit", "razlicitu", "sabira", "tezinu", "ukupan",
+      "weighted", "zeljeni"
+    ],
+  },
+];
+
+const PRO_TEKST_TOOLS: ToolRegistration[] = [
+  {
+    id: "bracket-balance",
+    titleKey: "pro.name.bracket-balance",
+    blurbKey: "pro.blurb.bracket-balance",
+    category: "text",
+    riskClass: "none",
+    sourceKey: "pro.sources.unicode-16-code-charts",
+    packs: ["softver", "tekst", "pravo"],
+    keywords: [
+      "balance", "bracket", "koloni", "kom", "navodnici", "navodnik", "pokazuje", "redu",
+      "stoji", "tekst", "zagrada", "zagrade", "zatvoren"
+    ],
+  },
+  {
+    id: "glossary-check",
+    titleKey: "pro.name.glossary-check",
+    blurbKey: "pro.blurb.glossary-check",
+    category: "text",
+    riskClass: "none",
+    packs: ["tekst", "pravo"],
+    keywords: [
+      "celu", "check", "glossary", "mala", "nalepis", "original", "originala", "pojavio",
+      "pojmova", "prevod", "prevodu", "proverava", "puta", "razlikuj", "rec", "recnik", "slova",
+      "termin", "terminologije", "trazi", "velika"
+    ],
+  },
+  {
+    id: "hidden-characters",
+    titleKey: "pro.name.hidden-characters",
+    blurbKey: "pro.blurb.hidden-characters",
+    category: "text",
+    riskClass: "none",
+    sourceKey: "pro.sources.unicode-16-code-charts",
+    packs: ["softver", "dizajn", "tekst", "racunovodstvo"],
+    keywords: [
+      "characters", "cirilica", "cisti", "hidden", "kojima", "kontrolne", "latinica",
+      "nevidljive", "pomesane", "pronalazi", "reci", "skriveni", "tekst", "tekstu", "znakove",
+      "znakovi"
+    ],
+  },
+  {
+    id: "isbn-issn-check",
+    titleKey: "pro.name.isbn-issn-check",
+    blurbKey: "pro.blurb.isbn-issn-check",
+    category: "data",
+    riskClass: "none",
+    sourceKey: "pro.sources.isbn-issn-ismn-ean-check-digits",
+    packs: ["muzika", "prosveta", "tekst", "biznis"],
+    keywords: [
+      "broja", "check", "cifru", "ean", "isbn", "ismn", "issn", "kontrolnu", "nazad",
+      "pretvara", "proverava", "vrsta"
+    ],
+  },
+  {
+    id: "mojibake-repair",
+    titleKey: "pro.name.mojibake-repair",
+    blurbKey: "pro.blurb.mojibake-repair",
+    category: "conversion",
+    riskClass: "none",
+    sourceKey: "pro.sources.whatwg-encoding-standard",
+    packs: ["softver", "tekst", "racunovodstvo"],
+    keywords: [
+      "birajuci", "ispravna", "kodiranja", "kodiranjem", "mojibake", "pisan", "pisano",
+      "pokvarene", "popravka", "procitan", "procitano", "repair", "slova", "tekst", "tipa",
+      "vraca", "znakove"
+    ],
+  },
+  {
+    id: "number-check",
+    titleKey: "pro.name.number-check",
+    blurbKey: "pro.blurb.number-check",
+    category: "text",
+    riskClass: "financial",
+    packs: ["tekst", "pravo", "racunovodstvo"],
+    keywords: [
+      "brojeva", "brojeve", "check", "javlja", "nedostaje", "number", "original", "originalu",
+      "pogresno", "prepisan", "prevod", "prevodu", "uporedjuje"
+    ],
+  },
+  {
+    id: "number-to-serbian-words",
+    titleKey: "pro.name.number-to-serbian-words",
+    blurbKey: "pro.blurb.number-to-serbian-words",
+    category: "conversion",
+    riskClass: "financial",
+    sourceKey: "pro.sources.serbian-numerals-orthography",
+    packs: ["tekst", "pravo", "racunovodstvo", "biznis", "nekretnine"],
+    keywords: [
+      "decimale", "hiljadu", "ispisuje", "ispravnim", "milijardu", "milion", "number", "oblik",
+      "oblikom", "pismo", "recima", "serbian", "slovima", "srpskom", "words"
+    ],
+  },
+  {
+    id: "reading-time",
+    titleKey: "pro.name.reading-time",
+    blurbKey: "pro.blurb.reading-time",
+    category: "time",
+    riskClass: "none",
+    packs: ["prosveta", "tekst", "event"],
+    keywords: [
+      "citanja", "citanje", "naglas", "pasus", "pasusa", "pauza", "reading", "svakog", "tekst",
+      "teksta", "tempo", "tempu", "time", "trajanje", "traje", "ulaska", "upises", "vremenom"
+    ],
+  },
+  {
+    id: "sentence-length",
+    titleKey: "pro.name.sentence-length",
+    blurbKey: "pro.blurb.sentence-length",
+    category: "text",
+    riskClass: "none",
+    sourceKey: "pro.sources.unicode-16-code-charts",
+    packs: ["prosveta", "tekst"],
+    keywords: [
+      "broja", "deli", "duze", "duzina", "length", "napisanom", "pokazuje", "prag", "pravilu",
+      "recenica", "recenice", "reci", "sentence", "tekst", "zadatog"
+    ],
+  },
+  {
+    id: "serbian-transliteration",
+    titleKey: "pro.name.serbian-transliteration",
+    blurbKey: "pro.blurb.serbian-transliteration",
+    category: "text",
+    riskClass: "none",
+    sourceKey: "pro.sources.iso-9-1995-serbian",
+    packs: ["dizajn", "prosveta", "tekst", "pravo"],
+    keywords: [
+      "cirilice", "dvosmisleno", "kojima", "latinicu", "nazad", "prebacuje", "preslovljavanje",
+      "serbian", "smer", "srpski", "tekst", "transliteration"
+    ],
+  },
+  {
+    id: "subtitle-audit",
+    titleKey: "pro.name.subtitle-audit",
+    blurbKey: "pro.blurb.subtitle-audit",
+    category: "time",
+    riskClass: "none",
+    packs: ["foto", "tekst"],
+    keywords: [
+      "audit", "bloka", "bloku", "duzina", "granice", "izmerenu", "meri", "najduze", "najkrace",
+      "najmanji", "najvise", "oznake", "pokazuje", "pored", "razmak", "reda", "redova", "redu",
+      "sekundi", "sledeceg", "subtitle", "tipa", "titl", "titlova", "trajanje", "upisao",
+      "znakova", "znakove"
+    ],
+  },
+  {
+    id: "subtitle-retime",
+    titleKey: "pro.name.subtitle-retime",
+    blurbKey: "pro.blurb.subtitle-retime",
+    category: "time",
+    riskClass: "none",
+    sourceKey: "pro.sources.smpte-st-12-1-2014",
+    packs: ["foto", "tekst", "event"],
+    keywords: [
+      "blokove", "ciljni", "oznake", "polazni", "pomera", "pomeraj", "pomeranje", "prenumerisi",
+      "preracunava", "retime", "sekundi", "slika", "srt", "subtitle", "titl", "titlova",
+      "titlu", "vremenske", "vtt"
+    ],
+  },
+  {
+    id: "translation-volume",
+    titleKey: "pro.name.translation-volume",
+    blurbKey: "pro.blurb.translation-volume",
+    category: "text",
+    riskClass: "financial",
+    packs: ["tekst"],
+    keywords: [
+      "broji", "cena", "cenom", "jedinica", "jedinici", "mnozi", "nalepljenom", "naplate",
+      "obim", "prevoda", "prevodilacke", "reci", "strane", "strani", "tekst", "tekstu",
+      "translation", "upises", "volume", "znakova", "znakove"
+    ],
+  },
+  {
+    id: "typography-cleanup",
+    titleKey: "pro.name.typography-cleanup",
+    blurbKey: "pro.blurb.typography-cleanup",
+    category: "text",
+    riskClass: "none",
+    sourceKey: "pro.sources.unicode-16-code-charts",
+    packs: ["dizajn", "prosveta", "tekst"],
+    keywords: [
+      "ciscenje", "cleanup", "crte", "ispravlja", "izmenu", "nalepljenom", "navodnika",
+      "navodnike", "pravila", "pravilu", "prebrojava", "razmake", "stil", "svaku", "tacke",
+      "tekst", "tekstu", "tipografsko", "typography"
+    ],
+  },
+  {
+    id: "unwrap-paragraphs",
+    titleKey: "pro.name.unwrap-paragraphs",
+    blurbKey: "pro.blurb.unwrap-paragraphs",
+    category: "text",
+    riskClass: "none",
+    sourceKey: "pro.sources.unicode-16-code-charts",
+    packs: ["prosveta", "tekst", "pravo"],
+    keywords: [
+      "crticom", "kopiranjem", "kraju", "natrag", "novi", "paragraphs", "pasus", "pasuse",
+      "pdf", "postuj", "preloma", "prelomljene", "rastavljene", "recenice", "reci", "reda",
+      "redove", "sastavi", "sastavlja", "spaja", "spiska", "sredjivanje", "tekst", "unwrap",
+      "zavrsene"
+    ],
+  },
+  {
+    id: "word-frequency",
+    titleKey: "pro.name.word-frequency",
+    blurbKey: "pro.blurb.word-frequency",
+    category: "text",
+    riskClass: "none",
+    packs: ["prosveta", "tekst"],
+    keywords: [
+      "broji", "duzina", "fraza", "frequency", "mala", "najmanja", "najmanji", "pojavljivanja",
+      "ponavlja", "puta", "razlikuj", "rec", "reci", "slova", "tekst", "tekstu", "ucestalost",
+      "udeo", "velika", "word"
+    ],
+  },
+];
+
+const PRO_TRENING_TOOLS: ToolRegistration[] = [
+  {
+    id: "barbell-plate-loading",
+    titleKey: "pro.name.barbell-plate-loading",
+    blurbKey: "pro.blurb.barbell-plate-loading",
+    category: "calculation",
+    riskClass: "none",
+    packs: ["trening"],
+    keywords: [
+      "barbell", "diskova", "diskove", "diskovi", "ispisuje", "jedne", "loading", "masa",
+      "moguc", "najblize", "nalaganje", "opterecenje", "parova", "parovi", "plate", "promasuje",
+      "raspolozivi", "sipke", "staviti", "stezaljke", "strani", "tacan", "ukupno", "zbir",
+      "zeljeno"
+    ],
+  },
+  {
+    id: "body-fat-target-mass",
+    titleKey: "pro.name.body-fat-target-mass",
+    blurbKey: "pro.blurb.body-fat-target-mass",
+    category: "body",
+    riskClass: "wellness",
+    packs: ["trening"],
+    keywords: [
+      "body", "ciljni", "cista", "cistu", "fat", "imalo", "ista", "izmerenog", "kilograma",
+      "masa", "mase", "masnu", "mass", "masti", "masu", "ostane", "procenat", "procenta",
+      "procentu", "sastav", "target", "tela", "telesna", "telesne", "telo", "zeljenom"
+    ],
+  },
+  {
+    id: "body-indices",
+    titleKey: "pro.name.body-indices",
+    blurbKey: "pro.blurb.body-indices",
+    category: "body",
+    riskClass: "wellness",
+    packs: ["trening"],
+    keywords: [
+      "bmi", "body", "ijedne", "indeks", "indeksi", "indices", "kategorije", "kuk", "kukova",
+      "masa", "mera", "obim", "odnose", "ponderalni", "struk", "struka", "tabele", "telesna",
+      "telesni", "unetih", "visina"
+    ],
+  },
+  {
+    id: "cadence-stride-length",
+    titleKey: "pro.name.cadence-stride-length",
+    blurbKey: "pro.blurb.cadence-stride-length",
+    category: "calculation",
+    riskClass: "none",
+    packs: ["trening"],
+    keywords: [
+      "brzina", "brzinu", "cadence", "duzina", "duzinu", "kadenca", "kadencu", "kilometar",
+      "korak", "koraka", "length", "povezuje", "stride", "treci"
+    ],
+  },
+  {
+    id: "erg-split-watts",
+    titleKey: "pro.name.erg-split-watts",
+    blurbKey: "pro.blurb.erg-split-watts",
+    category: "conversion",
+    riskClass: "none",
+    sourceKey: "pro.sources.concept2-pace-watts",
+    packs: ["trening"],
+    keywords: [
+      "concept2", "distanca", "distancu", "erg", "metara", "nazad", "objavljenoj", "pretvara",
+      "relaciji", "snaga", "split", "splitu", "tom", "vate", "vati", "vreme", "watts"
+    ],
+  },
+  {
+    id: "heart-rate-zones-karvonen",
+    titleKey: "pro.name.heart-rate-zones-karvonen",
+    blurbKey: "pro.blurb.heart-rate-zones-karvonen",
+    category: "body",
+    riskClass: "wellness",
+    packs: ["trening"],
+    keywords: [
+      "ciljni", "heart", "izmereni", "izmerenog", "karvonen", "karvonenu", "maksimalni",
+      "maksimalnog", "maksimuma", "mirovanju", "neki", "obrnuto", "procenat", "procenata",
+      "procentu", "puls", "pulsa", "rate", "zone", "zones"
+    ],
+  },
+  {
+    id: "interval-session-timing",
+    titleKey: "pro.name.interval-session-timing",
+    blurbKey: "pro.blurb.interval-session-timing",
+    category: "time",
+    riskClass: "wellness",
+    packs: ["trening"],
+    keywords: [
+      "broja", "interval", "intervalni", "odmor", "odmora", "odnos", "odnosa", "ponavljanja",
+      "rad", "rada", "serija", "serije", "seriji", "session", "smirivanje", "stvarni", "timing",
+      "trajanja", "trajanje", "trening", "treninga", "ukupno", "vreme", "zagrevanje"
+    ],
+  },
+  {
+    id: "jump-height-flight-time",
+    titleKey: "pro.name.jump-height-flight-time",
+    blurbKey: "pro.blurb.jump-height-flight-time",
+    category: "calculation",
+    riskClass: "none",
+    packs: ["trening"],
+    keywords: [
+      "flight", "gravitacija", "height", "indeks", "jump", "kontakta", "leta", "nazad",
+      "podlogom", "pretvara", "reaktivne", "skoka", "snage", "time", "visina", "visine",
+      "visinu", "vreme", "vremena"
+    ],
+  },
+  {
+    id: "limb-symmetry-index",
+    titleKey: "pro.name.limb-symmetry-index",
+    blurbKey: "pro.blurb.limb-symmetry-index",
+    category: "body",
+    riskClass: "wellness",
+    packs: ["trening"],
+    keywords: [
+      "ciljni", "dostigne", "ispitivanoj", "limb", "odnos", "posto", "procentima", "razlika",
+      "referentnoj", "simetrija", "slabija", "strana", "strane", "strani", "symmetry", "tela",
+      "zada"
+    ],
+  },
+  {
+    id: "one-rep-max-table",
+    titleKey: "pro.name.one-rep-max-table",
+    blurbKey: "pro.blurb.one-rep-max-table",
+    category: "calculation",
+    riskClass: "wellness",
+    sourceKey: "pro.sources.one-rep-max-formulas",
+    packs: ["trening"],
+    keywords: [
+      "1rm", "bzicki", "epli", "formula", "formuli", "jedne", "kilogrami", "korak", "max",
+      "one", "opterecenja", "ponavljanja", "poznat", "procenjeni", "procenti", "procentima",
+      "rep", "serije", "tabelu", "table", "tegova", "tezina", "zaokruzenu", "zaokruzivanja"
+    ],
+  },
+  {
+    id: "running-pace-splits",
+    titleKey: "pro.name.running-pace-splits",
+    blurbKey: "pro.blurb.running-pace-splits",
+    category: "calculation",
+    riskClass: "wellness",
+    packs: ["trening"],
+    keywords: [
+      "distanca", "distance", "kilometru", "korak", "medjuvremena", "metara", "milji", "pace",
+      "podatka", "ravnomernih", "running", "splits", "tabele", "tabelom", "tempa", "tempo",
+      "tempom", "treci", "trke", "vreme", "vremena"
+    ],
+  },
+  {
+    id: "set-tempo-tut",
+    titleKey: "pro.name.set-tempo-tut",
+    blurbKey: "pro.blurb.set-tempo-tut",
+    category: "time",
+    riskClass: "wellness",
+    packs: ["trening"],
+    keywords: [
+      "bloka", "broja", "cetiri", "dole", "ekscentricna", "faza", "gore", "koncentricna", "npr",
+      "opterecenjem", "pauza", "pauzama", "ponavljanja", "serija", "serije", "seriji", "set",
+      "tempa", "tempo", "trajanje", "tut", "ukupno", "vreme"
+    ],
+  },
+  {
+    id: "split-times-fatigue",
+    titleKey: "pro.name.split-times-fatigue",
+    blurbKey: "pro.blurb.split-times-fatigue",
+    category: "calculation",
+    riskClass: "none",
+    packs: ["trening"],
+    keywords: [
+      "fatigue", "indeks", "izmerenih", "medijanu", "najbolje", "najslabije", "pada",
+      "ponovljene", "procenat", "prosek", "redu", "spiska", "split", "sprintove", "times",
+      "vremena", "zamor", "zamora", "zbir"
+    ],
+  },
+  {
+    id: "sweat-rate-hydration",
+    titleKey: "pro.name.sweat-rate-hydration",
+    blurbKey: "pro.blurb.sweat-rate-hydration",
+    category: "body",
+    riskClass: "wellness",
+    packs: ["trening"],
+    keywords: [
+      "gubitak", "hydration", "izgubljene", "izmereni", "izmokreno", "masa", "mase",
+      "nadoknade", "planira", "popijena", "popijene", "procenat", "rate", "satu", "stopa",
+      "stopu", "sweat", "tecnost", "tecnosti", "telesne", "trajanja", "trajanje", "treninga",
+      "znojem", "znojenja"
+    ],
+  },
+  {
+    id: "training-volume-load",
+    titleKey: "pro.name.training-volume-load",
+    blurbKey: "pro.blurb.training-volume-load",
+    category: "calculation",
+    riskClass: "wellness",
+    packs: ["trening"],
+    keywords: [
+      "1rm", "intenzitet", "kilogrami", "load", "opterecenje", "ponavljanja", "ponavljanju",
+      "procentima", "programa", "prosecan", "prosecno", "redova", "redovi", "sabira", "serije",
+      "tonaza", "tonazu", "training", "unet", "volume"
+    ],
+  },
+  {
+    id: "weight-class-cut",
+    titleKey: "pro.name.weight-class-cut",
+    blurbKey: "pro.blurb.weight-class-cut",
+    category: "body",
+    riskClass: "wellness",
+    packs: ["trening"],
+    keywords: [
+      "class", "cut", "dana", "danu", "deli", "granica", "granice", "kategorije", "kilograma",
+      "masa", "mase", "nedelji", "procenata", "prosecno", "takmicara", "telesna", "telesne",
+      "trenutna", "unete", "vaganja", "weight"
+    ],
+  },
+];
+
+const PRO_KUHINJA_TOOLS: ToolRegistration[] = [
+  {
+    id: "backwards-timeline",
+    titleKey: "pro.name.backwards-timeline",
+    blurbKey: "pro.blurb.backwards-timeline",
+    category: "time",
+    riskClass: "none",
+    packs: ["gradnja", "kuhinja", "biznis", "transport", "event"],
+    keywords: [
+      "backwards", "ceo", "datum", "koraci", "korak", "osa", "pocinje", "pocne", "posao",
+      "pripreme", "rezerva", "sata", "sati", "serviranja", "timeline", "unazad", "vreme",
+      "vremenska"
+    ],
+  },
+  {
+    id: "bakers-percentage",
+    titleKey: "pro.name.bakers-percentage",
+    blurbKey: "pro.blurb.bakers-percentage",
+    category: "materials",
+    riskClass: "none",
+    packs: ["kuhinja"],
+    keywords: [
+      "bakers", "bakerski", "brasna", "ciljanu", "ciljna", "gubitak", "komada", "masa", "masu",
+      "nazad", "pecenjem", "pecenog", "percentage", "prevodi", "procenat", "procente", "recept",
+      "recepta", "reda", "sastojaka", "testa", "tezine", "uloga"
+    ],
+  },
+  {
+    id: "brine-salt",
+    titleKey: "pro.name.brine-salt",
+    blurbKey: "pro.blurb.brine-salt",
+    category: "materials",
+    riskClass: "food-safety",
+    packs: ["kuhinja", "agro"],
+    keywords: [
+      "brine", "ciljni", "masa", "mesa", "osnova", "osnove", "povrca", "procenat", "racunanja",
+      "salamura", "salamuri", "salamuru", "salt", "secera", "soli", "soljenje", "suvo",
+      "uobicajene", "vode"
+    ],
+  },
+  {
+    id: "coffee-extraction",
+    titleKey: "pro.name.coffee-extraction",
+    blurbKey: "pro.blurb.coffee-extraction",
+    category: "calculation",
+    riskClass: "none",
+    packs: ["kuhinja"],
+    keywords: [
+      "ciljni", "coffee", "doza", "doze", "dozi", "ekstrakcija", "ekstrakcije", "extraction",
+      "izmerenog", "kafe", "kuvanja", "kuvanje", "masa", "mase", "mlevene", "napitka",
+      "obrnuto", "odnos", "odnose", "procenat", "solji", "tds", "voda", "vode"
+    ],
+  },
+  {
+    id: "dough-water-temp",
+    titleKey: "pro.name.dough-water-temp",
+    blurbKey: "pro.blurb.dough-water-temp",
+    category: "calculation",
+    riskClass: "none",
+    packs: ["kuhinja"],
+    keywords: [
+      "bojleru", "brasna", "dough", "faktor", "imalo", "izmerena", "izmerene", "izvlaci",
+      "mesalice", "mesenja", "najvisa", "obrnuto", "predfermenta", "prostorije", "sarze",
+      "slavini", "temp", "temperatura", "temperaturu", "testa", "testo", "trenja", "vode",
+      "water", "zeljena", "zeljenu"
+    ],
+  },
+  {
+    id: "ice-cream-overrun",
+    titleKey: "pro.name.ice-cream-overrun",
+    blurbKey: "pro.blurb.ice-cream-overrun",
+    category: "calculation",
+    riskClass: "none",
+    packs: ["kuhinja"],
+    keywords: [
+      "ciljni", "cream", "gotovim", "gustina", "ice", "masa", "mase", "naduv", "napunjene",
+      "overrun", "overruna", "pakovanja", "posude", "sladoleda", "sladoledom", "smese",
+      "smesom", "tara", "tezinu", "zadatog", "zapremina", "zapreminu"
+    ],
+  },
+  {
+    id: "lamination-layers",
+    titleKey: "pro.name.lamination-layers",
+    blurbKey: "pro.blurb.lamination-layers",
+    category: "geometry",
+    riskClass: "none",
+    packs: ["kuhinja", "zanat"],
+    keywords: [
+      "debljina", "debljini", "debljinu", "duzina", "jednog", "laminacije", "lamination",
+      "layers", "masti", "niz", "niza", "pocetna", "pocetni", "presavijanja", "razvijenog",
+      "sloja", "slojeva", "slojevi", "tacan", "testa", "zavrsna", "zavrsnoj"
+    ],
+  },
+  {
+    id: "levain-hydration",
+    titleKey: "pro.name.levain-hydration",
+    blurbKey: "pro.blurb.levain-hydration",
+    category: "materials",
+    riskClass: "none",
+    packs: ["kuhinja"],
+    keywords: [
+      "brasna", "brasno", "celo", "ciljna", "dodati", "gotovom", "hidratacija", "hidrataciju",
+      "hydration", "imalo", "jos", "levain", "masa", "njegova", "ono", "predfermenta",
+      "predfermentu", "razdvaja", "starter", "startera", "starteru", "testo", "testu",
+      "ukljucujuci", "ukupna", "ukupno", "vode", "vodu", "zametka", "zeljenu"
+    ],
+  },
+  {
+    id: "nutrition-per-portion",
+    titleKey: "pro.name.nutrition-per-portion",
+    blurbKey: "pro.blurb.nutrition-per-portion",
+    category: "conversion",
+    riskClass: "wellness",
+    packs: ["trening", "kuhinja"],
+    keywords: [
+      "dnevni", "energija", "hranljive", "hranljivih", "kilodzule", "kilokalorije", "masa",
+      "materije", "materiji", "nazad", "nutrition", "pakovanja", "pakovanju", "per", "porcija",
+      "porcije", "porciji", "portion", "prevodi", "referentni", "smer", "tabelu", "tacno"
+    ],
+  },
+  {
+    id: "pan-area-volume",
+    titleKey: "pro.name.pan-area-volume",
+    blurbKey: "pro.blurb.pan-area-volume",
+    category: "geometry",
+    riskClass: "none",
+    packs: ["kuhinja", "agro", "zanat"],
+    keywords: [
+      "area", "cetvrtastih", "ciljna", "dimenzije", "kalupa", "kalupi", "kalupu", "kolicine",
+      "lonaca", "masa", "njegove", "oblik", "oblika", "okruglih", "pan", "posude", "povrsina",
+      "pravougaonih", "preracun", "promeni", "punjenja", "smese", "vencastih", "visina",
+      "volume", "zapremina", "zapreminu"
+    ],
+  },
+  {
+    id: "plate-cost",
+    titleKey: "pro.name.plate-cost",
+    blurbKey: "pro.blurb.plate-cost",
+    category: "finance",
+    riskClass: "financial",
+    packs: ["kuhinja", "racunovodstvo", "biznis", "zanat"],
+    keywords: [
+      "cenu", "ciljni", "cost", "costa", "dodatni", "food", "jednog", "jela", "kalkulacija",
+      "kalom", "kostanja", "plate", "porcija", "porcije", "porciji", "procenat", "prodajnu",
+      "recept", "sabira", "sastojaka", "sastojku", "trosak", "uracunatim"
+    ],
+  },
+  {
+    id: "portions-from-pack",
+    titleKey: "pro.name.portions-from-pack",
+    blurbKey: "pro.blurb.portions-from-pack",
+    category: "materials",
+    riskClass: "financial",
+    packs: ["kuhinja", "biznis", "agro", "zanat", "event"],
+    keywords: [
+      "cena", "cenom", "from", "gubitak", "jedinica", "kilogramu", "kolicina", "litru",
+      "ostatkom", "pack", "pakovanja", "pakovanju", "porcija", "porcije", "portions", "velicina"
+    ],
+  },
+  {
+    id: "ratio-split",
+    titleKey: "pro.name.ratio-split",
+    blurbKey: "pro.blurb.ratio-split",
+    category: "materials",
+    riskClass: "none",
+    packs: ["gradnja", "kuhinja", "agro", "zanat"],
+    keywords: [
+      "celini", "deli", "delova", "delove", "jedinica", "jednak", "kolicina", "kolicinu",
+      "korak", "nazivi", "odnos", "odnosu", "ostane", "podela", "ratio", "split", "tacno",
+      "ukupna", "ukupnu", "zaokruzivanja", "zaokruzuje", "zbir"
+    ],
+  },
+  {
+    id: "recipe-scale",
+    titleKey: "pro.name.recipe-scale",
+    blurbKey: "pro.blurb.recipe-scale",
+    category: "materials",
+    riskClass: "none",
+    packs: ["kuhinja"],
+    keywords: [
+      "ceo", "ciljanu", "ciljna", "ciljni", "citanje", "faktor", "korak", "masa", "masu",
+      "polazni", "porcija", "preracunava", "razlomaka", "recepta", "recipe", "sastojaka",
+      "scale", "skaliranje", "ukupna", "ukupnu", "zaokruzivanja", "zaokruzivanje"
+    ],
+  },
+  {
+    id: "solution-concentration",
+    titleKey: "pro.name.solution-concentration",
+    blurbKey: "pro.blurb.solution-concentration",
+    category: "calculation",
+    riskClass: "life-safety",
+    packs: ["inzenjering", "foto", "kuhinja", "agro", "zanat"],
+    keywords: [
+      "bilans", "cetiri", "ciljane", "ciljna", "cistog", "concentration", "dodavanje",
+      "komponente", "koncentracija", "koncentracije", "masa", "mase", "masi", "mesanje",
+      "pitanja", "procentima", "rastvora", "razblazivanje", "sastojka", "smese", "solution",
+      "ukupna", "ukuvavanje"
+    ],
+  },
+  {
+    id: "us-customary-kitchen-units",
+    titleKey: "pro.name.us-customary-kitchen-units",
+    blurbKey: "pro.blurb.us-customary-kitchen-units",
+    category: "conversion",
+    riskClass: "none",
+    sourceKey: "pro.sources.us-imperial-unit-definitions",
+    packs: ["inzenjering", "kuhinja", "zanat"],
+    keywords: [
+      "americke", "celzijusa", "ciljna", "customary", "farenhajta", "funte", "grame", "gustine",
+      "jedinica", "kasicice", "kasike", "kitchen", "masu", "mere", "mililitre", "odbija",
+      "pinte", "polazna", "pretvara", "pretvori", "recepata", "soljice", "stepene", "stranih",
+      "unce", "units", "zapremina", "zapreminu"
+    ],
+  },
+  {
+    id: "yield-trim-cook",
+    titleKey: "pro.name.yield-trim-cook",
+    blurbKey: "pro.blurb.yield-trim-cook",
+    category: "materials",
+    riskClass: "financial",
+    packs: ["kuhinja", "agro"],
+    keywords: [
+      "bruto", "cena", "cenu", "ciscenja", "cook", "kalo", "kilogramu", "kupiti", "kuvano",
+      "masa", "nabavke", "nabavna", "obrade", "obrnuto", "porcija", "porcije", "randman",
+      "sirovine", "termicke", "trim", "yield"
+    ],
+  },
+];
+
+const PRO_PRAVO_TOOLS: ToolRegistration[] = [
+  {
+    id: "anuitet-otplatni-plan",
+    titleKey: "pro.name.anuitet-otplatni-plan",
+    blurbKey: "pro.blurb.anuitet-otplatni-plan",
+    category: "finance",
+    riskClass: "financial",
+    packs: ["pravo", "racunovodstvo", "biznis", "nekretnine", "transport"],
+    keywords: [
+      "anuitet", "brojrata", "deli", "dug", "glavnica", "glavnicu", "godisnjastopa",
+      "isplacuje", "jednak", "jednakih", "kamatu", "konverzijastope", "obrok", "otplatni",
+      "plan", "rata", "ratagodisnje"
+    ],
+  },
+  {
+    id: "iznos-slovima",
+    titleKey: "pro.name.iznos-slovima",
+    blurbKey: "pro.blurb.iznos-slovima",
+    category: "conversion",
+    riskClass: "financial",
+    sourceKey: "pro.sources.serbian-numerals",
+    packs: ["pravo", "racunovodstvo", "biznis", "nekretnine", "transport"],
+    keywords: [
+      "imenice", "ispisuje", "iznos", "novcani", "obliciglavnejedinice", "oblicipodjedinice",
+      "oblikom", "recima", "slovima", "srpskom", "stilzapisa", "tacnim", "valuta",
+      "velikapocetnaslova"
+    ],
+  },
+  {
+    id: "jmbg-provera",
+    titleKey: "pro.name.jmbg-provera",
+    blurbKey: "pro.blurb.jmbg-provera",
+    category: "data",
+    riskClass: "none",
+    sourceKey: "pro.sources.jmbg-check-digit",
+    packs: ["prosveta", "pravo", "racunovodstvo", "biznis"],
+    keywords: [
+      "cifra", "datum", "dvanaest", "jmbg", "kontrolna", "oznaku", "provera", "registarski",
+      "zapis"
+    ],
+  },
+  {
+    id: "katastarska-povrsina",
+    titleKey: "pro.name.katastarska-povrsina",
+    blurbKey: "pro.blurb.katastarska-povrsina",
+    category: "conversion",
+    riskClass: "none",
+    packs: ["gradnja", "inzenjering", "pravo", "nekretnine", "agro"],
+    keywords: [
+      "ari", "hektara", "kakav", "katastarska", "kvadratnih", "kvadratnimetri", "listu",
+      "m2ostatak", "metara", "nepokretnosti", "povrsina", "povrsine", "prevod", "smer", "smera",
+      "stoji", "zapisu"
+    ],
+  },
+  {
+    id: "kazna-i-pritvor",
+    titleKey: "pro.name.kazna-i-pritvor",
+    blurbKey: "pro.blurb.kazna-i-pritvor",
+    category: "time",
+    riskClass: "legal-procedure",
+    packs: ["pravo"],
+    keywords: [
+      "dani", "datuma", "datumpocetka", "deozaproveru", "istice", "kalendarski", "kazna",
+      "kaznadana", "kaznagodina", "kaznameseci", "kazne", "lisenja", "odbiju",
+      "odnosuracunavanja", "pada", "posto", "pritvor", "racun", "racunajprvidan", "razlomak",
+      "slobode", "tog", "trajanja", "trajanje", "uracunatidani", "uracunavanje"
+    ],
+  },
+  {
+    id: "nominalna-efektivna-stopa",
+    titleKey: "pro.name.nominalna-efektivna-stopa",
+    blurbKey: "pro.blurb.nominalna-efektivna-stopa",
+    category: "finance",
+    riskClass: "financial",
+    packs: ["pravo", "racunovodstvo", "biznis", "nekretnine"],
+    keywords: [
+      "brojobracunagodisnje", "efektivna", "godisnja", "godisnje", "nominalna", "obracuna",
+      "obrnuto", "smer", "stopa", "vredi"
+    ],
+  },
+  {
+    id: "obracun-kamate",
+    titleKey: "pro.name.obracun-kamate",
+    blurbKey: "pro.blurb.obracun-kamate",
+    category: "finance",
+    riskClass: "financial",
+    packs: ["pravo", "racunovodstvo", "biznis", "nekretnine", "agro"],
+    keywords: [
+      "dana", "datumdo", "datumod", "glavnica", "glavnicu", "kamata", "kamate",
+      "kapitalizacija", "konformnom", "metoda", "metodom", "obracun", "osnovadana", "period",
+      "periodistope", "proporcionalnom", "stopama", "ukljuciposlednjidan"
+    ],
+  },
+  {
+    id: "podela-iznosa",
+    titleKey: "pro.name.podela-iznosa",
+    blurbKey: "pro.blurb.podela-iznosa",
+    category: "finance",
+    riskClass: "financial",
+    packs: ["pravo", "racunovodstvo", "biznis", "nekretnine", "event"],
+    keywords: [
+      "celini", "deli", "delova", "izgubljene", "iznos", "iznosa", "jednak", "lica",
+      "najmanjajedinica", "pare", "podela", "raspodelaostatka", "tacno", "udeli", "udelima",
+      "ukupaniznos", "zadatim", "zbir"
+    ],
+  },
+  {
+    id: "racun-iban-provera",
+    titleKey: "pro.name.racun-iban-provera",
+    blurbKey: "pro.blurb.racun-iban-provera",
+    category: "data",
+    riskClass: "financial",
+    sourceKey: "pro.sources.iso-7064-13616",
+    packs: ["pravo", "racunovodstvo", "biznis", "nekretnine", "transport"],
+    keywords: [
+      "brojzakontrolu", "cifara", "drzavazaiban", "iban", "kontrolni", "modulu", "niz",
+      "njegov", "otkucanog", "provera", "racun"
+    ],
+  },
+  {
+    id: "radni-dani",
+    titleKey: "pro.name.radni-dani",
+    blurbKey: "pro.blurb.radni-dani",
+    category: "time",
+    riskClass: "legal-procedure",
+    packs: ["gradnja", "prosveta", "pravo", "racunovodstvo", "biznis", "transport", "event"],
+    keywords: [
+      "dana", "dani", "datuma", "dodatuma", "kalendarskih", "neradnidani",
+      "neradnidaniunedelji", "neradnih", "oddatuma", "radni", "radnih", "spisku",
+      "ukljuciposlednjidan"
+    ],
+  },
+  {
+    id: "rok-poslednji-dan",
+    titleKey: "pro.name.rok-poslednji-dan",
+    blurbKey: "pro.blurb.rok-poslednji-dan",
+    category: "time",
+    riskClass: "legal-procedure",
+    packs: ["gradnja", "pravo", "racunovodstvo", "biznis", "nekretnine"],
+    keywords: [
+      "dan", "dana", "datuma", "duzina", "duzine", "jedinica", "neradnidani",
+      "neradnidaniunedelji", "neradnog", "pocetnidatum", "pocetnog", "pomeranja", "pomeranje",
+      "poslednji", "pravilo", "racunajpocetnidan", "rok", "roka", "smer", "unete"
+    ],
+  },
+  {
+    id: "strane-teksta",
+    titleKey: "pro.name.strane-teksta",
+    blurbKey: "pro.blurb.strane-teksta",
+    category: "text",
+    riskClass: "financial",
+    sourceKey: "pro.sources.unicode-white-space",
+    packs: ["prosveta", "tekst", "pravo", "biznis"],
+    keywords: [
+      "broju", "cenapostrani", "ceni", "iznos", "karaktera", "karakterapostrani", "obracun",
+      "obracunskih", "racunajrazmake", "strana", "strane", "strani", "tekst", "teksta",
+      "unetoj", "unetom", "zaokruzivanje"
+    ],
+  },
+  {
+    id: "suvlasnicki-udeli",
+    titleKey: "pro.name.suvlasnicki-udeli",
+    blurbKey: "pro.blurb.suvlasnicki-udeli",
+    category: "calculation",
+    riskClass: "financial",
+    packs: ["gradnja", "pravo", "nekretnine", "agro"],
+    keywords: [
+      "celinu", "ciljniimenilac", "delovi", "idealni", "imeniocu", "kvadrata", "suvlasnicki",
+      "tacno", "udeli", "ukupnapovrsina", "zajednickom"
+    ],
+  },
+  {
+    id: "troskovi-srazmerno-uspehu",
+    titleKey: "pro.name.troskovi-srazmerno-uspehu",
+    blurbKey: "pro.blurb.troskovi-srazmerno-uspehu",
+    category: "finance",
+    riskClass: "financial",
+    packs: ["pravo"],
+    keywords: [
+      "iznosa", "odnos", "odnosu", "srazmerni", "srazmerno", "strana", "svojih", "tom",
+      "trazeniznos", "trazenog", "troskova", "troskovi", "troskovidrugestrane",
+      "troskoviprvestrane", "uspehu", "usvojeniznos", "usvojenog"
+    ],
+  },
+  {
+    id: "ugovorna-kazna",
+    titleKey: "pro.name.ugovorna-kazna",
+    blurbKey: "pro.blurb.ugovorna-kazna",
+    category: "finance",
+    riskClass: "financial",
+    packs: ["gradnja", "inzenjering", "pravo", "biznis", "transport", "event"],
+    keywords: [
+      "dana", "danadocnje", "dane", "dnevnastopa", "dnevnoj", "docnje", "dostize", "kazna",
+      "ogranicenje", "osnovica", "penal", "stopi", "stvarnoispunjenje", "ugovorenirok",
+      "ugovorna", "ukljucidanispunjenja", "unetoj"
+    ],
+  },
+  {
+    id: "zbir-perioda",
+    titleKey: "pro.name.zbir-perioda",
+    blurbKey: "pro.blurb.zbir-perioda",
+    category: "time",
+    riskClass: "legal-procedure",
+    packs: ["prosveta", "pravo", "racunovodstvo", "biznis"],
+    keywords: [
+      "dana", "dane", "godine", "konvencijarazlaganja", "mesece", "niz", "perioda", "periodi",
+      "preklapaju", "razlaze", "ukljuciposlednjidan", "ukupno", "zbir"
+    ],
+  },
+];
+
+const PRO_RACUNOVODSTVO_TOOLS: ToolRegistration[] = [
+  {
+    id: "allocation-remainder",
+    titleKey: "pro.name.allocation-remainder",
+    blurbKey: "pro.blurb.allocation-remainder",
+    category: "finance",
+    riskClass: "financial",
+    packs: ["gradnja", "racunovodstvo", "biznis", "nekretnine", "transport", "event"],
+    keywords: [
+      "allocation", "celini", "decimala", "deli", "delova", "izgubi", "iznos", "jednak",
+      "kljucu", "ostatka", "pare", "raspodela", "remainder", "tacno", "ukupan", "valute",
+      "zaokruzivanju", "zbir"
+    ],
+  },
+  {
+    id: "amount-in-words",
+    titleKey: "pro.name.amount-in-words",
+    blurbKey: "pro.blurb.amount-in-words",
+    category: "text",
+    riskClass: "financial",
+    sourceKey: "pro.sources.sr-numerals-pravopis-2010",
+    packs: ["pravo", "racunovodstvo", "biznis", "nekretnine", "transport", "zanat"],
+    keywords: [
+      "amount", "broju", "dinare", "ispisuje", "iznos", "novcani", "oblikom", "odgovara",
+      "para", "pare", "reci", "slova", "slovima", "srpskom", "valute", "velicina", "words",
+      "zapis"
+    ],
+  },
+  {
+    id: "bank-account-iban",
+    titleKey: "pro.name.bank-account-iban",
+    blurbKey: "pro.blurb.bank-account-iban",
+    category: "data",
+    riskClass: "financial",
+    sourceKey: "pro.sources.iso-13616-iban",
+    packs: ["softver", "pravo", "racunovodstvo", "biznis"],
+    keywords: [
+      "account", "aritmetici", "bank", "cifre", "domaceg", "iban", "istoj", "izracunava",
+      "kontrolne", "mod", "nedostaju", "proverava", "racun", "tekuceg"
+    ],
+  },
+  {
+    id: "benford-first-digit",
+    titleKey: "pro.name.benford-first-digit",
+    blurbKey: "pro.blurb.benford-first-digit",
+    category: "data",
+    riskClass: "none",
+    packs: ["pravo", "racunovodstvo", "biznis"],
+    keywords: [
+      "benford", "benfordov", "benfordovom", "cifara", "cifre", "cifri", "decimalni", "digit",
+      "first", "iznosa", "koloni", "kvadrat", "mad", "nalepljenoj", "negativnim", "prve",
+      "raspodelom", "raspodelu", "separator", "test", "ulaza", "vrednostima"
+    ],
+  },
+  {
+    id: "breakeven-cvp",
+    titleKey: "pro.name.breakeven-cvp",
+    blurbKey: "pro.blurb.breakeven-cvp",
+    category: "finance",
+    riskClass: "financial",
+    packs: ["kuhinja", "racunovodstvo", "biznis", "zanat", "event"],
+    keywords: [
+      "breakeven", "cena", "ciljna", "ciljnu", "cvp", "dobit", "fiksne", "fiksni", "gubitka",
+      "jedinici", "komada", "obim", "padne", "period", "planirani", "pokrivaju", "prelomna",
+      "prodajna", "promet", "rentabiliteta", "tacka", "trosak", "troskove", "troskovi",
+      "varijabilni"
+    ],
+  },
+  {
+    id: "check-digits-id",
+    titleKey: "pro.name.check-digits-id",
+    blurbKey: "pro.blurb.check-digits-id",
+    category: "data",
+    riskClass: "financial",
+    sourceKey: "pro.sources.iso-7064-jmbg",
+    packs: ["pravo", "racunovodstvo", "biznis"],
+    keywords: [
+      "broja", "check", "cifru", "digits", "dokument", "greska", "jmbg", "kontrolnu",
+      "maticnog", "ode", "pib", "prekucavanju", "proverava", "vidi", "vrsta"
+    ],
+  },
+  {
+    id: "depreciation-schedule",
+    titleKey: "pro.name.depreciation-schedule",
+    blurbKey: "pro.blurb.depreciation-schedule",
+    category: "finance",
+    riskClass: "financial",
+    packs: ["gradnja", "racunovodstvo", "biznis", "transport", "agro", "zanat"],
+    keywords: [
+      "aktiviranja", "amortizacija", "amortizacije", "datum", "degresije", "degresivnom",
+      "depreciation", "funkcionalnom", "godina", "godinama", "godine", "godinu", "kapacitet",
+      "koeficijent", "linearnom", "metod", "metodu", "nabavna", "osnovnih", "ostatak", "plan",
+      "pravi", "prve", "rezidualna", "schedule", "srazmera", "srazmerom", "sredstava",
+      "trajanja", "ucinak", "ukupan", "vek", "zbira"
+    ],
+  },
+  {
+    id: "financial-ratios",
+    titleKey: "pro.name.financial-ratios",
+    blurbKey: "pro.blurb.financial-ratios",
+    category: "finance",
+    riskClass: "financial",
+    sourceKey: "pro.sources.isda-2006-daycount",
+    packs: ["racunovodstvo", "biznis"],
+    keywords: [
+      "aktiva", "bilansa", "ciklus", "dani", "dobavljacima", "dobitak", "ebit", "ekvivalenti",
+      "financial", "godini", "gotovina", "gotovine", "gotovinski", "imovina", "kamata",
+      "kapital", "konverzije", "kratkorocne", "kupaca", "likvidnosti", "nabavna", "neto",
+      "obaveze", "obrta", "obrtna", "pokazatelje", "pokazatelji", "poslovni", "potrazivanja",
+      "pozicija", "prihod", "prinosa", "prodate", "prodatog", "rashodi", "ratios", "robe",
+      "stanja", "troskovi", "ukljucujuci", "ukupna", "ukupne", "unetih", "uspeha",
+      "zaduzenosti", "zalihe"
+    ],
+  },
+  {
+    id: "fx-difference",
+    titleKey: "pro.name.fx-difference",
+    blurbKey: "pro.blurb.fx-difference",
+    category: "finance",
+    riskClass: "financial",
+    packs: ["racunovodstvo", "biznis", "nekretnine", "transport"],
+    keywords: [
+      "dan", "decimala", "devizni", "difference", "iznos", "iznosa", "izvodi", "kurs", "kursa",
+      "kursne", "kursnu", "kursu", "nastanka", "obracuna", "odnosa", "placanja", "preracunava",
+      "razlike", "razliku", "stranoj", "unakrsni", "valuti", "vrsta"
+    ],
+  },
+  {
+    id: "gross-up",
+    titleKey: "pro.name.gross-up",
+    blurbKey: "pro.blurb.gross-up",
+    category: "finance",
+    riskClass: "financial",
+    packs: ["dizajn", "foto", "tekst", "pravo", "racunovodstvo", "biznis"],
+    keywords: [
+      "bruto", "doprinosa", "gross", "isplatioca", "iznos", "iznosa", "izvodi", "jednacinu",
+      "kontrolu", "linearnu", "model", "neoporezivi", "neta", "neto", "normirani", "poreza",
+      "primaoca", "resava", "stopa", "teret", "troskovi", "unazad", "vraca"
+    ],
+  },
+  {
+    id: "interest-periods",
+    titleKey: "pro.name.interest-periods",
+    blurbKey: "pro.blurb.interest-periods",
+    category: "finance",
+    riskClass: "financial",
+    sourceKey: "pro.sources.isda-2006-daycount",
+    packs: ["pravo", "racunovodstvo", "biznis", "nekretnine"],
+    keywords: [
+      "brojanje", "dana", "dane", "decimala", "glavnica", "glavnicu", "interest", "izabranoj",
+      "kamata", "kamate", "kamatu", "metod", "osnova", "osnovi", "perioda", "periodi",
+      "periodima", "periods", "periodu", "prikaza", "prikazom", "razlicitim", "redova",
+      "stopama", "svakom"
+    ],
+  },
+  {
+    id: "inventory-costing",
+    titleKey: "pro.name.inventory-costing",
+    blurbKey: "pro.blurb.inventory-costing",
+    category: "finance",
+    riskClass: "financial",
+    packs: ["gradnja", "kuhinja", "racunovodstvo", "biznis", "agro", "zanat"],
+    keywords: [
+      "ceni", "costing", "decimala", "fifo", "inventory", "izlaza", "liste", "metod", "metodi",
+      "nabavnu", "pocetno", "ponderisanoj", "prikaza", "prodate", "promene", "prosecnoj",
+      "prosek", "proseka", "redovi", "robe", "stanje", "ulaza", "zaliha", "zalihe"
+    ],
+  },
+  {
+    id: "loan-schedule",
+    titleKey: "pro.name.loan-schedule",
+    blurbKey: "pro.blurb.loan-schedule",
+    category: "finance",
+    riskClass: "financial",
+    packs: ["racunovodstvo", "biznis", "nekretnine"],
+    keywords: [
+      "anuitetski", "decimala", "glavnicom", "glavnicu", "godisnja", "godisnje", "iznos",
+      "jednakom", "kamatu", "kredita", "loan", "nominalna", "obracun", "otplatni", "periodicne",
+      "plan", "plana", "podelom", "pravi", "rata", "ratama", "rate", "schedule", "stopa",
+      "stope", "svake", "tip"
+    ],
+  },
+  {
+    id: "rate-conversion",
+    titleKey: "pro.name.rate-conversion",
+    blurbKey: "pro.blurb.rate-conversion",
+    category: "finance",
+    riskClass: "financial",
+    packs: ["racunovodstvo", "biznis", "nekretnine"],
+    keywords: [
+      "ciljni", "conversion", "efektivna", "efektivne", "godisnje", "kamatnu", "konformne",
+      "nominalna", "nominalne", "obracuna", "obracunskih", "period", "perioda", "periodicne",
+      "pokazuje", "prevodi", "proporcionalne", "rate", "razliku", "stopa", "stope", "stopu",
+      "unete", "vrsta"
+    ],
+  },
+  {
+    id: "rebate-chain",
+    titleKey: "pro.name.rebate-chain",
+    blurbKey: "pro.blurb.rebate-chain",
+    category: "finance",
+    riskClass: "financial",
+    packs: ["racunovodstvo", "biznis", "nekretnine"],
+    keywords: [
+      "cena", "ceni", "cenu", "chain", "efektivni", "lancani", "marza", "nabavke", "nabavna",
+      "nabavnu", "neto", "niz", "par", "poznati", "prodajna", "prodajnu", "rabata", "rabati",
+      "razlika", "rebate", "sklapa", "troskovi", "uzastopnih", "zavisni"
+    ],
+  },
+  {
+    id: "trial-balance-check",
+    titleKey: "pro.name.trial-balance-check",
+    blurbKey: "pro.blurb.trial-balance-check",
+    category: "finance",
+    riskClass: "financial",
+    packs: ["racunovodstvo", "biznis"],
+    keywords: [
+      "aritmeticki", "balance", "check", "dale", "decimala", "dugovna", "dugovnu", "greske",
+      "kontrola", "nabraja", "potrazna", "potraznu", "razlika", "razliku", "sabira", "strana",
+      "stranu", "tacno", "trial", "valute", "zbira"
+    ],
+  },
+  {
+    id: "tvm-solver",
+    titleKey: "pro.name.tvm-solver",
+    blurbKey: "pro.blurb.tvm-solver",
+    category: "finance",
+    riskClass: "financial",
+    packs: ["racunovodstvo", "biznis", "nekretnine"],
+    keywords: [
+      "buduca", "cetiri", "novca", "perioda", "periodicna", "petu", "placanja", "pmt",
+      "poznate", "rata", "sadasnja", "solver", "stopa", "tip", "tvm", "velicina", "velicine",
+      "vremenska"
+    ],
+  },
+];
+
+const PRO_BIZNIS_TOOLS: ToolRegistration[] = [
+  {
+    id: "billable-hours",
+    titleKey: "pro.name.billable-hours",
+    blurbKey: "pro.blurb.billable-hours",
+    category: "time",
+    riskClass: "financial",
+    packs: ["dizajn", "foto", "tekst", "pravo", "biznis", "zanat"],
+    keywords: [
+      "billable", "hours", "interval", "liste", "mnozi", "obracun", "pravilo", "sabira", "sati",
+      "satnica", "satnicom", "ugovoreni", "vremena", "zaokruzivanja", "zaokruzuje"
+    ],
+  },
+  {
+    id: "break-even",
+    titleKey: "pro.name.break-even",
+    blurbKey: "pro.blurb.break-even",
+    category: "finance",
+    riskClass: "financial",
+    packs: ["kuhinja", "racunovodstvo", "biznis", "agro", "zanat", "event"],
+    keywords: [
+      "break", "cena", "dobit", "even", "fiksne", "fiksni", "komada", "komadu", "period",
+      "planirana", "pokrica", "pokrivaju", "prihod", "prodaja", "prodajna", "tacka", "trosak",
+      "troskove", "troskovi", "varijabilni", "zeljena", "zeljenu"
+    ],
+  },
+  {
+    id: "chained-discount",
+    titleKey: "pro.name.chained-discount",
+    blurbKey: "pro.blurb.chained-discount",
+    category: "finance",
+    riskClass: "financial",
+    packs: ["gradnja", "racunovodstvo", "biznis", "zanat"],
+    keywords: [
+      "cena", "cenu", "chained", "dao", "discount", "doplata", "istu", "kaskadni", "niz",
+      "osnovna", "popust", "popusta", "popusti"
+    ],
+  },
+  {
+    id: "deposit-instalments",
+    titleKey: "pro.name.deposit-instalments",
+    blurbKey: "pro.blurb.deposit-instalments",
+    category: "finance",
+    riskClass: "financial",
+    packs: ["gradnja", "racunovodstvo", "biznis", "nekretnine", "event"],
+    keywords: [
+      "avans", "datum", "datumima", "deli", "deposit", "instalments", "jedinica", "jednake",
+      "najmanja", "prve", "rata", "rate", "razlike", "razmak", "ugovorena", "ugovorenu",
+      "zaokruzivanja", "zbiru"
+    ],
+  },
+  {
+    id: "hourly-rate-target",
+    titleKey: "pro.name.hourly-rate-target",
+    blurbKey: "pro.blurb.hourly-rate-target",
+    category: "finance",
+    riskClass: "financial",
+    packs: ["dizajn", "foto", "tekst", "biznis", "zanat"],
+    keywords: [
+      "broja", "cena", "cenu", "dana", "danu", "godisnja", "godisnje", "godisnji", "hourly",
+      "naplativih", "naplativost", "nedelja", "nedeljno", "poreza", "poslovni", "radnih",
+      "radnom", "rate", "sata", "sati", "target", "troskova", "troskovi", "zarada", "zarade",
+      "zeljena", "zeljene"
+    ],
+  },
+  {
+    id: "iban-check",
+    titleKey: "pro.name.iban-check",
+    blurbKey: "pro.blurb.iban-check",
+    category: "data",
+    riskClass: "financial",
+    sourceKey: "pro.sources.iso-13616-1-2020",
+    packs: ["racunovodstvo", "biznis", "nekretnine", "transport"],
+    keywords: [
+      "bban", "broja", "check", "cifre", "domaceg", "drzave", "iban", "kontrolne", "oznaka",
+      "oznake", "proverava", "sastavlja"
+    ],
+  },
+  {
+    id: "margin-markup",
+    titleKey: "pro.name.margin-markup",
+    blurbKey: "pro.blurb.margin-markup",
+    category: "finance",
+    riskClass: "financial",
+    packs: ["gradnja", "kuhinja", "racunovodstvo", "biznis", "agro", "zanat", "event"],
+    keywords: [
+      "cena", "cenu", "margin", "markup", "marza", "marze", "marzu", "min", "nabavna",
+      "nabavnu", "najmanja", "najveci", "popust", "povezuje", "prodajna", "prodajnu"
+    ],
+  },
+  {
+    id: "payment-due-date",
+    titleKey: "pro.name.payment-due-date",
+    blurbKey: "pro.blurb.payment-due-date",
+    category: "time",
+    riskClass: "legal-procedure",
+    packs: ["pravo", "racunovodstvo", "biznis", "nekretnine", "transport"],
+    keywords: [
+      "dan", "dana", "dani", "date", "datum", "datuma", "dospeca", "due", "izdavanja",
+      "nedelji", "neradni", "neradnog", "payment", "placanja", "pomeranje", "prijema",
+      "racunanja", "razlike", "referentni", "referentnog", "rok", "roka", "unosis"
+    ],
+  },
+  {
+    id: "payment-reference-97",
+    titleKey: "pro.name.payment-reference-97",
+    blurbKey: "pro.blurb.payment-reference-97",
+    category: "data",
+    riskClass: "financial",
+    sourceKey: "pro.sources.iso-iec-7064-2003",
+    packs: ["prosveta", "pravo", "racunovodstvo", "biznis", "nekretnine", "zanat"],
+    keywords: [
+      "dvocifru", "kontrolnu", "mod", "payment", "poziv", "poziva", "referenca", "reference"
+    ],
+  },
+  {
+    id: "share-allocation",
+    titleKey: "pro.name.share-allocation",
+    blurbKey: "pro.blurb.share-allocation",
+    category: "finance",
+    riskClass: "financial",
+    packs: ["pravo", "racunovodstvo", "biznis", "nekretnine", "event"],
+    keywords: [
+      "allocation", "celini", "deli", "delova", "iznos", "jedinica", "jednak", "najmanja",
+      "pare", "poslednje", "raspodela", "share", "tacno", "udeli", "udelima", "ukupan", "zbir"
+    ],
+  },
+  {
+    id: "simple-interest-days",
+    titleKey: "pro.name.simple-interest-days",
+    blurbKey: "pro.blurb.simple-interest-days",
+    category: "finance",
+    riskClass: "financial",
+    sourceKey: "pro.sources.isda-2006-day-count",
+    packs: ["pravo", "racunovodstvo", "biznis", "nekretnine"],
+    keywords: [
+      "brojanja", "dana", "danima", "datum", "datuma", "days", "glavnica", "godisnja",
+      "interest", "iznos", "kamata", "osnova", "osnovi", "prosta", "simple", "stopa", "stopi",
+      "unosis"
+    ],
+  },
+  {
+    id: "tax-id-check",
+    titleKey: "pro.name.tax-id-check",
+    blurbKey: "pro.blurb.tax-id-check",
+    category: "data",
+    riskClass: "financial",
+    sourceKey: "pro.sources.iso-iec-7064-2003",
+    packs: ["pravo", "racunovodstvo", "biznis"],
+    keywords: [
+      "broja", "check", "cifara", "cifrom", "cifru", "kontrolnu", "maticni", "mod", "pib",
+      "poslednjom", "tax", "ukupan"
+    ],
+  },
+  {
+    id: "tiered-commission",
+    titleKey: "pro.name.tiered-commission",
+    blurbKey: "pro.blurb.tiered-commission",
+    category: "finance",
+    riskClass: "financial",
+    packs: ["racunovodstvo", "biznis", "nekretnine", "transport"],
+    keywords: [
+      "ceo", "commission", "iznos", "jednom", "marginalno", "najmanja", "najveca", "osnovica",
+      "pragovi", "pragovima", "provizija", "proviziju", "skali", "stope", "stopom", "tiered",
+      "transama", "unosis"
+    ],
+  },
+];
+
+const PRO_NEKRETNINE_TOOLS: ToolRegistration[] = [
+  {
+    id: "cashflow-npv-irr",
+    titleKey: "pro.name.cashflow-npv-irr",
+    blurbKey: "pro.blurb.cashflow-npv-irr",
+    category: "finance",
+    riskClass: "financial",
+    packs: ["racunovodstvo", "biznis", "nekretnine", "transport", "agro"],
+    keywords: [
+      "cashflow", "diskontna", "internu", "irr", "neto", "niza", "novcani", "npv", "odliva",
+      "oznaka", "perioda", "periodima", "periodu", "priliva", "prinosa", "sadasnju", "stopa",
+      "stopu", "tok", "tokovi"
+    ],
+  },
+  {
+    id: "cost-allocation",
+    titleKey: "pro.name.cost-allocation",
+    blurbKey: "pro.blurb.cost-allocation",
+    category: "finance",
+    riskClass: "financial",
+    packs: ["pravo", "racunovodstvo", "biznis", "nekretnine", "event"],
+    keywords: [
+      "allocation", "celinu", "ciji", "cost", "deli", "delove", "delovi", "iznos", "kljuc",
+      "korak", "naziv", "povrsini", "raspodela", "raspodele", "raspodelu", "redovi", "saberu",
+      "tacno", "trosak", "troskova", "udelu", "ukupan", "zajednicki", "zaokruzivanja",
+      "zaokruzivanjem"
+    ],
+  },
+  {
+    id: "late-payment-interest",
+    titleKey: "pro.name.late-payment-interest",
+    blurbKey: "pro.blurb.late-payment-interest",
+    category: "finance",
+    riskClass: "financial",
+    packs: ["pravo", "racunovodstvo", "biznis", "nekretnine", "transport"],
+    keywords: [
+      "datum", "docnju", "dospeca", "duga", "godine", "godisnja", "godisnjoj", "interest",
+      "iznos", "kamata", "kamatna", "kamatu", "late", "metod", "metodu", "osnovica", "osnovici",
+      "payment", "placanja", "placanje", "sami", "stopa", "stopi", "unesete", "zakasnelo"
+    ],
+  },
+  {
+    id: "lease-term-dates",
+    titleKey: "pro.name.lease-term-dates",
+    blurbKey: "pro.blurb.lease-term-dates",
+    category: "time",
+    riskClass: "legal-procedure",
+    packs: ["pravo", "racunovodstvo", "biznis", "nekretnine", "transport", "event"],
+    keywords: [
+      "dan", "dates", "datum", "datuma", "datume", "dospeca", "isteka", "lease", "mesecu",
+      "otkaz", "otkazni", "pocetka", "poslednji", "rata", "rate", "rok", "rokovi", "roku",
+      "term", "trajanja", "trajanje", "ugovora", "unesete"
+    ],
+  },
+  {
+    id: "loan-amortization",
+    titleKey: "pro.name.loan-amortization",
+    blurbKey: "pro.blurb.loan-amortization",
+    category: "finance",
+    riskClass: "financial",
+    packs: ["racunovodstvo", "biznis", "nekretnine", "transport", "agro"],
+    keywords: [
+      "amortization", "anuitetnog", "duga", "efekat", "godisnja", "iznos", "kamatna", "kredita",
+      "loan", "mesec", "mesecima", "mesecnih", "nks", "nominalna", "ostatak", "otplate", "plan",
+      "prevremene", "rata", "stopa", "trazi", "uplate"
+    ],
+  },
+  {
+    id: "ownership-shares",
+    titleKey: "pro.name.ownership-shares",
+    blurbKey: "pro.blurb.ownership-shares",
+    category: "calculation",
+    riskClass: "legal-procedure",
+    packs: ["pravo", "racunovodstvo", "nekretnine", "agro"],
+    keywords: [
+      "brojilac", "imenilac", "kvadrate", "nazad", "obrnuti", "ownership", "povrsina",
+      "prevodi", "razlomak", "razlomke", "redovi", "sabira", "shares", "smer", "suvlasnicke",
+      "suvlasnicki", "tacne", "udele", "udeli", "udeo", "ukupna"
+    ],
+  },
+  {
+    id: "parcel-polygon-area",
+    titleKey: "pro.name.parcel-polygon-area",
+    blurbKey: "pro.blurb.parcel-polygon-area",
+    category: "geometry",
+    riskClass: "none",
+    packs: ["gradnja", "inzenjering", "nekretnine", "agro"],
+    keywords: [
+      "area", "drzavna", "formulom", "gausovom", "koordinata", "koordinate", "metarskom",
+      "moraju", "niza", "npr", "obim", "parcel", "parcele", "polygon", "povrsina", "povrsinu",
+      "pravouglom", "prelomnih", "projekcija", "redu", "sistemu", "surveyor", "tacaka", "tacke"
+    ],
+  },
+  {
+    id: "plot-density-index",
+    titleKey: "pro.name.plot-density-index",
+    blurbKey: "pro.blurb.plot-density-index",
+    category: "calculation",
+    riskClass: "legal-procedure",
+    packs: ["gradnja", "inzenjering", "nekretnine"],
+    keywords: [
+      "brgp", "bruto", "density", "gradjevinska", "indeks", "indeksu", "izgradjenosti",
+      "objektom", "parcele", "plana", "plot", "povrsina", "povrsine", "povrsinu", "razvijena",
+      "unesete", "zauzetosti"
+    ],
+  },
+  {
+    id: "pro-rata-days",
+    titleKey: "pro.name.pro-rata-days",
+    blurbKey: "pro.blurb.pro-rata-days",
+    category: "finance",
+    riskClass: "financial",
+    sourceKey: "pro.sources.isda-2006-30e-360",
+    packs: ["pravo", "racunovodstvo", "biznis", "nekretnine", "event"],
+    keywords: [
+      "brojanja", "broju", "celinu", "dan", "dana", "danima", "datum", "days", "deli", "iznos",
+      "korisniku", "kraja", "osnovica", "period", "perioda", "pocetka", "primopredaje",
+      "pripada", "pro", "rata", "saberu", "tacno", "ukljucivo", "ukupan"
+    ],
+  },
+  {
+    id: "rent-escalation",
+    titleKey: "pro.name.rent-escalation",
+    blurbKey: "pro.blurb.rent-escalation",
+    category: "finance",
+    riskClass: "financial",
+    packs: ["pravo", "racunovodstvo", "biznis", "nekretnine", "event"],
+    keywords: [
+      "diskontna", "escalation", "indeks", "indeksacija", "iznos", "period", "perioda",
+      "periodu", "pocetna", "primenjuje", "rent", "sadasnju", "stopa", "unesete", "zakupa",
+      "zakupnina", "zakupnine", "zakupninu", "zbir"
+    ],
+  },
+  {
+    id: "rent-gross-net",
+    titleKey: "pro.name.rent-gross-net",
+    blurbKey: "pro.blurb.rent-gross-net",
+    category: "finance",
+    riskClass: "financial",
+    packs: ["pravo", "racunovodstvo", "biznis", "nekretnine"],
+    keywords: [
+      "bruto", "gross", "iznos", "nazad", "net", "neto", "normiranih", "ostaje", "preracunava",
+      "priznatih", "procenat", "procentu", "rent", "sami", "stopa", "stopi", "troskova",
+      "ugovoreni", "unosite", "zakupnina"
+    ],
+  },
+  {
+    id: "rental-yield",
+    titleKey: "pro.name.rental-yield",
+    blurbKey: "pro.blurb.rental-yield",
+    category: "finance",
+    riskClass: "financial",
+    packs: ["racunovodstvo", "biznis", "nekretnine", "transport", "agro"],
+    keywords: [
+      "bruto", "cena", "cene", "godisnji", "kapitalizaciona", "mesecna", "mesecni",
+      "nekretnine", "neto", "obrnuti", "period", "popunjenost", "povracaja", "prihod", "prinos",
+      "rental", "smer", "stopa", "stope", "troskova", "troskovi", "unesete", "yield", "zakupa",
+      "zakupnina", "zakupnine"
+    ],
+  },
+  {
+    id: "room-quad-area",
+    titleKey: "pro.name.room-quad-area",
+    blurbKey: "pro.blurb.room-quad-area",
+    category: "geometry",
+    riskClass: "none",
+    packs: ["gradnja", "inzenjering", "dizajn", "nekretnine", "zanat"],
+    keywords: [
+      "area", "cetiri", "dijagonala", "dijagonale", "izmerene", "jedne", "povrsina", "povrsinu",
+      "pravougaonik", "prostorije", "quad", "retko", "room", "soba", "stranica", "stranice",
+      "ugao", "uglu"
+    ],
+  },
+  {
+    id: "wall-ceiling-area",
+    titleKey: "pro.name.wall-ceiling-area",
+    blurbKey: "pro.blurb.wall-ceiling-area",
+    category: "materials",
+    riskClass: "none",
+    packs: ["gradnja", "dizajn", "nekretnine", "zanat"],
+    keywords: [
+      "area", "ceiling", "duzina", "izdasnost", "izdasnosti", "kolicinu", "komada",
+      "materijala", "neto", "odbitak", "otvora", "otvori", "plafon", "plafona", "povrsinu",
+      "prostorije", "sirina", "slojeva", "ukljuciti", "unesete", "visina", "wall", "zidova",
+      "zidovi"
+    ],
+  },
+  {
+    id: "weighted-area",
+    titleKey: "pro.name.weighted-area",
+    blurbKey: "pro.blurb.weighted-area",
+    category: "geometry",
+    riskClass: "financial",
+    packs: ["gradnja", "pravo", "nekretnine"],
+    keywords: [
+      "area", "cena", "cenu", "delova", "duzina", "koeficijent", "koeficijentima", "kvadraturu",
+      "naziv", "obracunska", "obracunske", "obracunsku", "pomnozene", "povrsina", "povrsine",
+      "redu", "sabira", "sirina", "stana", "umesto", "unesete", "weighted"
+    ],
+  },
+];
+
+const PRO_TRANSPORT_TOOLS: ToolRegistration[] = [
+  {
+    id: "axle-load-distribution",
+    titleKey: "pro.name.axle-load-distribution",
+    blurbKey: "pro.blurb.axle-load-distribution",
+    category: "structure",
+    riskClass: "life-safety",
+    packs: ["transport"],
+    keywords: [
+      "axle", "ciljno", "distribution", "granica", "grupa", "grupe", "kraljicnog", "load",
+      "mase", "medjuosovinsko", "medjuosovinskog", "opterecenje", "osovina", "osovine",
+      "osovinske", "osovinsko", "pogonske", "polozaja", "poluprikolice", "prazna", "prazne",
+      "prednja", "prednje", "rastojanja", "rastojanje", "sedla", "sredine", "tara", "tegljac",
+      "tegljaca", "tereta", "teziste", "ukupne", "vage", "zadnja", "zadnje"
+    ],
+  },
+  {
+    id: "cargo-centre-of-gravity",
+    titleKey: "pro.name.cargo-centre-of-gravity",
+    blurbKey: "pro.blurb.cargo-centre-of-gravity",
+    category: "structure",
+    riskClass: "life-safety",
+    packs: ["transport"],
+    keywords: [
+      "cargo", "centre", "dimenzije", "duzini", "gravity", "komada", "masa", "masom", "moment",
+      "momente", "njegove", "nula", "poda", "polozajem", "prikolice", "prostora", "razmak",
+      "referentna", "sirina", "sirini", "spiska", "tacka", "tereta", "tezista", "teziste",
+      "tla", "tockova", "tovarnog", "trag", "umesto", "unutrasnja", "uzeti", "visina", "visini",
+      "vozila"
+    ],
+  },
+  {
+    id: "chargeable-weight",
+    titleKey: "pro.name.chargeable-weight",
+    blurbKey: "pro.blurb.chargeable-weight",
+    category: "calculation",
+    riskClass: "financial",
+    packs: ["transport"],
+    keywords: [
+      "celu", "cena", "chargeable", "delilac", "deliocu", "dimenzija", "fakturise", "kilogramu",
+      "komadu", "korak", "masa", "mase", "masu", "mestu", "metar", "metru", "obracunska",
+      "obracunsku", "paletnih", "paletnom", "posiljke", "posiljku", "prostora", "sirina",
+      "stvarne", "tovarni", "tovarnog", "tovarnom", "umesto", "weight", "zadat",
+      "zaokruzivanja", "zaokruzivati", "zapreminsku"
+    ],
+  },
+  {
+    id: "cost-per-km-transport",
+    titleKey: "pro.name.cost-per-km-transport",
+    blurbKey: "pro.blurb.cost-per-km-transport",
+    category: "finance",
+    riskClass: "financial",
+    packs: ["transport"],
+    keywords: [
+      "adblue", "cena", "cenu", "ciljna", "cost", "dana", "dizela", "fiksni", "fiksnih",
+      "godisnje", "godisnji", "godisnjih", "goriva", "guma", "hoda", "interval", "kilometra",
+      "kilometri", "kilometru", "kompleta", "kostanja", "marza", "marze", "marziranje",
+      "obracuna", "per", "popravke", "potrosnja", "praznog", "predjeni", "radnih", "redovnog",
+      "rezerva", "servisa", "servisni", "teretom", "transport", "trosak", "troskova",
+      "troskovi", "udeo", "vek"
+    ],
+  },
+  {
+    id: "driving-hours-planner",
+    titleKey: "pro.name.driving-hours-planner",
+    blurbKey: "pro.blurb.driving-hours-planner",
+    category: "time",
+    riskClass: "life-safety",
+    packs: ["transport"],
+    keywords: [
+      "blokove", "brzina", "deljenje", "dnevna", "dnevne", "dnevnog", "driving", "granica",
+      "hours", "istovar", "neprekidne", "odmora", "odmorima", "odvozena", "ostalo", "pauzama",
+      "pauze", "planirana", "planiranu", "planner", "polaska", "poslednje", "prosecna", "radno",
+      "rasporedjuje", "rastojanje", "satnicu", "trajanje", "unese", "utovar", "voznja",
+      "voznje", "voznju", "vreme"
+    ],
+  },
+  {
+    id: "eta-with-breaks",
+    titleKey: "pro.name.eta-with-breaks",
+    blurbKey: "pro.blurb.eta-with-breaks",
+    category: "time",
+    riskClass: "none",
+    packs: ["transport"],
+    keywords: [
+      "breaks", "brzina", "brzine", "brzinu", "cekanje", "ciljno", "ciljnog", "datum",
+      "dolaska", "eta", "granici", "istovar", "pauze", "planirane", "planiranih", "polaska",
+      "procena", "prosecna", "prosecne", "prosecnu", "rastojanja", "rastojanje", "rezerva",
+      "trajektu", "utovar", "voznji", "vrata", "vreme", "with", "zastoja"
+    ],
+  },
+  {
+    id: "fuel-consumption-cost",
+    titleKey: "pro.name.fuel-consumption-cost",
+    blurbKey: "pro.blurb.fuel-consumption-cost",
+    category: "calculation",
+    riskClass: "none",
+    packs: ["transport"],
+    keywords: [
+      "cena", "cenu", "consumption", "cost", "fuel", "goriva", "gorivo", "kilometraze",
+      "kilometru", "kraju", "masa", "pocetku", "potrosnja", "potrosnju", "predjeni",
+      "predjenog", "preostalo", "put", "puta", "rezervoaru", "stanje", "tereta", "tona",
+      "utroseno", "utrosenog"
+    ],
+  },
+  {
+    id: "gear-ratio-road-speed",
+    titleKey: "pro.name.gear-ratio-road-speed",
+    blurbKey: "pro.blurb.gear-ratio-road-speed",
+    category: "calculation",
+    riskClass: "none",
+    packs: ["transport"],
+    keywords: [
+      "brzina", "brzinom", "gear", "gume", "kojima", "kotrljajni", "menja", "menjaca", "mosta",
+      "motora", "obim", "obrtaje", "obrtaji", "odnos", "povezuje", "prenosni", "ratio",
+      "razdelnika", "reduktora", "road", "speed", "stepen", "stepena", "vozila", "zadnjeg",
+      "zeljena"
+    ],
+  },
+  {
+    id: "gvw-payload",
+    titleKey: "pro.name.gvw-payload",
+    blurbKey: "pro.blurb.gvw-payload",
+    category: "structure",
+    riskClass: "life-safety",
+    sourceKey: "pro.sources.fuel-fluid-densities",
+    packs: ["transport"],
+    keywords: [
+      "adblue", "alat", "ambalaze", "goriva", "gorivo", "granica", "granicama", "gustina",
+      "gvw", "licni", "masa", "mase", "masu", "nadogradnjom", "nosivost", "oprema", "opremu",
+      "paleta", "payload", "poluprikolice", "posada", "posadu", "prikolice", "prtljag",
+      "rezervoaru", "sabira", "skupa", "tara", "taru", "teret", "ukupna", "ukupne", "ukupnu",
+      "unese", "vozac", "vozila"
+    ],
+  },
+  {
+    id: "load-lashing-force",
+    titleKey: "pro.name.load-lashing-force",
+    blurbKey: "pro.blurb.load-lashing-force",
+    category: "structure",
+    riskClass: "life-safety",
+    packs: ["transport"],
+    keywords: [
+      "drugu", "etikete", "faktor", "force", "horizontalni", "koeficijenata", "koeficijent",
+      "lashing", "load", "masa", "mase", "obezbedjenja", "postavci", "postavka", "prenosa",
+      "sila", "silu", "smer", "stf", "stranu", "tereta", "trenja", "ubrzanja", "ugao", "unese",
+      "vertikalni", "vezica", "vezicama", "vezice", "zatezanja"
+    ],
+  },
+  {
+    id: "loading-space-utilisation",
+    titleKey: "pro.name.loading-space-utilisation",
+    blurbKey: "pro.blurb.loading-space-utilisation",
+    category: "geometry",
+    riskClass: "none",
+    packs: ["transport"],
+    keywords: [
+      "duzina", "iskoriscenje", "loading", "metar", "metre", "osnovici", "podnu", "posiljke",
+      "povrsinu", "prostora", "prostorom", "raspolozivim", "sirina", "space", "svakoj",
+      "tovarne", "tovarni", "tovarnog", "ugovorna", "unutrasnja", "utilisation", "visina",
+      "zapreminu"
+    ],
+  },
+  {
+    id: "pallet-load-plan",
+    titleKey: "pro.name.pallet-load-plan",
+    blurbKey: "pro.blurb.pallet-load-plan",
+    category: "geometry",
+    riskClass: "none",
+    sourceKey: "pro.sources.pallet-footprints",
+    packs: ["transport"],
+    keywords: [
+      "date", "dozvoljeno", "duzina", "load", "mere", "najvise", "natovarene", "okretanje",
+      "paleta", "palete", "pallet", "plan", "podu", "proizvoljna", "prostora", "raspored",
+      "rasporedu", "sirina", "slaganje", "slaganjem", "slojeva", "staje", "svakom", "tip",
+      "tovarnog", "unutrasnja", "unutrasnje", "visina", "visinu"
+    ],
+  },
+  {
+    id: "reefer-fuel-consumption",
+    titleKey: "pro.name.reefer-fuel-consumption",
+    blurbKey: "pro.blurb.reefer-fuel-consumption",
+    category: "calculation",
+    riskClass: "none",
+    packs: ["transport"],
+    keywords: [
+      "agregata", "cena", "cenu", "consumption", "fuel", "goriva", "gorivo", "hladnjace",
+      "neprekidnom", "paleta", "pokriva", "potrosnja", "potrosnje", "rada", "reefer",
+      "rezervoaru", "rezimu", "sate", "sati", "spustanju", "start", "stop", "temperature",
+      "trajanje", "ture", "utroseno", "vucu"
+    ],
+  },
+  {
+    id: "service-interval-km-hours",
+    titleKey: "pro.name.service-interval-km-hours",
+    blurbKey: "pro.blurb.service-interval-km-hours",
+    category: "time",
+    riskClass: "none",
+    packs: ["transport"],
+    keywords: [
+      "danasnji", "datum", "datuma", "dnevno", "hours", "interval", "istice", "kilometara",
+      "kilometraza", "kilometrima", "mesecima", "motocasova", "motocasovi", "motocasovima",
+      "poslednjeg", "poslednjem", "prosecno", "service", "servisa", "servisni", "servisu",
+      "trenutna", "trenutni"
+    ],
+  },
+  {
+    id: "speedometer-tyre-deviation",
+    titleKey: "pro.name.speedometer-tyre-deviation",
+    blurbKey: "pro.blurb.speedometer-tyre-deviation",
+    category: "conversion",
+    riskClass: "none",
+    packs: ["transport"],
+    keywords: [
+      "brzina", "brzinomera", "brzinomeru", "brzinu", "deviation", "dimenzije", "faktor",
+      "gresku", "guma", "gume", "izmereni", "kilometraze", "kotrljajni", "nova", "nove", "obim",
+      "odstupanje", "opterecenjem", "postojeca", "postojece", "predjeno", "promeni", "promenu",
+      "putnom", "racunaru", "speedometer", "stvarnu", "tyre", "ugiba", "visine", "vozila"
+    ],
+  },
+  {
+    id: "tank-volume-by-level",
+    titleKey: "pro.name.tank-volume-by-level",
+    blurbKey: "pro.blurb.tank-volume-by-level",
+    category: "geometry",
+    riskClass: "none",
+    sourceKey: "pro.sources.fuel-fluid-densities",
+    packs: ["transport"],
+    keywords: [
+      "cena", "ciljna", "dna", "dubina", "duzina", "gustina", "ispupcenog", "izmereni",
+      "izmerenog", "level", "lezecem", "litru", "masu", "nivo", "nivoa", "oblik", "popunjenost",
+      "precnik", "rezervoara", "rezervoaru", "sirina", "stojecem", "tank", "tecnosti", "visina",
+      "volume", "zapremina", "zapreminu"
+    ],
+  },
+  {
+    id: "trip-cost-quote",
+    titleKey: "pro.name.trip-cost-quote",
+    blurbKey: "pro.blurb.trip-cost-quote",
+    category: "finance",
+    riskClass: "financial",
+    packs: ["transport"],
+    keywords: [
+      "cekanja", "cekanje", "cena", "cenu", "cost", "dana", "dnevnica", "dnevnice", "istovaru",
+      "kilometrazu", "kilometri", "kilometru", "kostanja", "marza", "marze", "marziranje",
+      "masa", "naknade", "nocenja", "obracuna", "pdv", "prazni", "prevoza", "pristupni",
+      "putarine", "putu", "quote", "sabira", "sata", "sati", "stopa", "tereta", "teretom",
+      "trajekt", "trip", "trosak", "troskovi", "tunel", "ture", "utovaru", "vinjeta"
+    ],
+  },
+];
+
+const PRO_AGRO_TOOLS: ToolRegistration[] = [
+  {
+    id: "bale-count-storage",
+    titleKey: "pro.name.bale-count-storage",
+    blurbKey: "pro.blurb.bale-count-storage",
+    category: "materials",
+    riskClass: "none",
+    packs: ["agro"],
+    keywords: [
+      "bala", "bale", "baliranju", "count", "dimenzije", "duzina", "geometriji", "gubitak",
+      "gustina", "jedne", "korisna", "masa", "mase", "nadstresnicu", "oblik", "one",
+      "orijentacija", "pokosena", "povrsina", "precnik", "prikolicu", "prinos", "role", "rolo",
+      "sirina", "skladista", "skladiste", "slaganja", "slaganju", "staje", "storage", "visina",
+      "zadavanja", "zapremine", "zauzimaju"
+    ],
+  },
+  {
+    id: "bee-syrup-mix",
+    titleKey: "pro.name.bee-syrup-mix",
+    blurbKey: "pro.blurb.bee-syrup-mix",
+    category: "materials",
+    riskClass: "none",
+    packs: ["agro"],
+    keywords: [
+      "bee", "gustina", "izabranom", "kolicina", "kolicinu", "koncentracija", "kosnica",
+      "kosnice", "kosnici", "masa", "mix", "odnos", "odnosa", "odnosu", "osnova", "pcele",
+      "racunata", "secer", "secera", "sirup", "sirupa", "syrup", "voda", "vode", "vrece"
+    ],
+  },
+  {
+    id: "cadastral-area-units",
+    titleKey: "pro.name.cadastral-area-units",
+    blurbKey: "pro.blurb.cadastral-area-units",
+    category: "conversion",
+    riskClass: "none",
+    sourceKey: "pro.sources.austrian-metrication-1871",
+    packs: ["gradnja", "pravo", "nekretnine", "agro"],
+    keywords: [
+      "are", "area", "cadastral", "hektare", "hvate", "jedinica", "jutra", "katastarska",
+      "katastarske", "kvadratne", "mere", "metre", "obrnuto", "polazna", "pretvara", "units"
+    ],
+  },
+  {
+    id: "fertiliser-nutrient-blend",
+    titleKey: "pro.name.fertiliser-nutrient-blend",
+    blurbKey: "pro.blurb.fertiliser-nutrient-blend",
+    category: "materials",
+    riskClass: "life-safety",
+    packs: ["agro"],
+    keywords: [
+      "azota", "blend", "ciljana", "ciljanih", "djubriva", "djubrivo", "donosi", "dopunsko",
+      "dopunskog", "fertiliser", "fosfora", "hektaru", "hraniva", "hranivo", "kalijuma",
+      "kilograme", "kolicina", "masa", "npk", "nutrient", "osnovno", "osnovnog", "povrsina",
+      "preracun", "procentima", "sastav", "sastava", "smer", "svakog", "ukupno", "unetih",
+      "vodece", "vrece"
+    ],
+  },
+  {
+    id: "grain-moisture-shrink",
+    titleKey: "pro.name.grain-moisture-shrink",
+    blurbKey: "pro.blurb.grain-moisture-shrink",
+    category: "materials",
+    riskClass: "financial",
+    packs: ["agro"],
+    keywords: [
+      "bruto", "cena", "ciljana", "grain", "izaslo", "izmerena", "izmerene", "kalo",
+      "kilograma", "kilogramu", "korisna", "masa", "moisture", "odbitaka", "odbitka", "ostane",
+      "padne", "primesa", "primese", "redosled", "shrink", "susare", "susenja", "toplota",
+      "ugovora", "ugovorena", "vlaga", "vlage", "vlagu", "vode", "zrna", "zrno"
+    ],
+  },
+  {
+    id: "growing-degree-days",
+    titleKey: "pro.name.growing-degree-days",
+    blurbKey: "pro.blurb.growing-degree-days",
+    category: "calculation",
+    riskClass: "none",
+    packs: ["agro"],
+    keywords: [
+      "bazna", "bazne", "ciljana", "days", "degree", "dnevne", "dostize", "gornja", "granica",
+      "growing", "istom", "izabrao", "metod", "nakupljeno", "period", "pokazuje", "projekciji",
+      "prosek", "sabira", "suma", "sume", "temperatura", "temperature", "temperaturne", "tempu"
+    ],
+  },
+  {
+    id: "honey-mass-moisture",
+    titleKey: "pro.name.honey-mass-moisture",
+    blurbKey: "pro.blurb.honey-mass-moisture",
+    category: "materials",
+    riskClass: "financial",
+    packs: ["agro"],
+    keywords: [
+      "bruto", "cena", "ciljana", "deklarisana", "gustina", "gustine", "honey", "izmerene",
+      "kilogramu", "kolicine", "masa", "mass", "masu", "materije", "med", "meda", "merenje",
+      "moisture", "neto", "nizu", "odnos", "posude", "posudi", "prazne", "refraktometar",
+      "susenja", "suve", "tara", "tegle", "uzorka", "vlaga", "vlage", "vlagu", "vode",
+      "zadavanja", "zapremina"
+    ],
+  },
+  {
+    id: "irrigation-depth-volume",
+    titleKey: "pro.name.irrigation-depth-volume",
+    blurbKey: "pro.blurb.irrigation-depth-volume",
+    category: "materials",
+    riskClass: "none",
+    packs: ["agro"],
+    keywords: [
+      "biljci", "depth", "dnevno", "efikasnost", "hektaru", "intenzitet", "irrigation",
+      "jednog", "jednoj", "kapaljke", "kapaljki", "kise", "kubike", "milimetrima", "norma",
+      "normu", "povrsina", "pretvara", "pripada", "protok", "protoku", "rada", "raspoloziv",
+      "rasprskivaca", "razmak", "redova", "redu", "sati", "sistema", "volume", "vreme",
+      "zalivanja", "zalivna", "zalivnu"
+    ],
+  },
+  {
+    id: "livestock-ration-dm",
+    titleKey: "pro.name.livestock-ration-dm",
+    blurbKey: "pro.blurb.livestock-ration-dm",
+    category: "materials",
+    riskClass: "none",
+    packs: ["agro"],
+    keywords: [
+      "dana", "dnevnu", "grla", "grlu", "gubitak", "hraniva", "jaslama", "kilograme",
+      "livestock", "masa", "materije", "materiji", "obrok", "potrebnu", "potrosnju", "pretvara",
+      "prosecna", "rastur", "ration", "stada", "suve", "suvoj", "svakog", "sveze", "telesna",
+      "ukupnu", "zadat", "zalihu"
+    ],
+  },
+  {
+    id: "machine-field-capacity",
+    titleKey: "pro.name.machine-field-capacity",
+    blurbKey: "pro.blurb.machine-field-capacity",
+    category: "calculation",
+    riskClass: "none",
+    packs: ["agro"],
+    keywords: [
+      "brzina", "brzine", "capacity", "celu", "cena", "dnevno", "duzina", "goriva", "hektare",
+      "hektaru", "iskoriscenja", "iskoriscenje", "jednog", "machine", "masine", "okretanja",
+      "parcele", "parcelu", "potrosnja", "potrosnju", "povrsina", "pravcu", "preklop", "rada",
+      "radna", "radni", "radnih", "radnog", "sat", "sati", "ucinak", "uvratini", "vreme",
+      "vremena", "zahvat", "zahvata"
+    ],
+  },
+  {
+    id: "orchard-trellis-layout",
+    titleKey: "pro.name.orchard-trellis-layout",
+    blurbKey: "pro.blurb.orchard-trellis-layout",
+    category: "materials",
+    riskClass: "none",
+    packs: ["agro"],
+    keywords: [
+      "dimenzija", "dodatak", "duzina", "duzinu", "kraju", "layout", "masu", "medje", "naslon",
+      "odstojanje", "orchard", "parcele", "pravac", "precnik", "prvog", "razmak", "reda",
+      "redova", "redovi", "redu", "sadnica", "sidara", "sirina", "stubova", "svakom", "trellis",
+      "uvratina", "vezivanje", "zadatih", "zasad", "zatezanje", "zice", "zicu"
+    ],
+  },
+  {
+    id: "plant-spacing-density",
+    titleKey: "pro.name.plant-spacing-density",
+    blurbKey: "pro.blurb.plant-spacing-density",
+    category: "geometry",
+    riskClass: "none",
+    packs: ["agro"],
+    keywords: [
+      "biljaka", "bocne", "density", "duzina", "hektaru", "kraju", "medje", "obrnuto",
+      "odstojanje", "parcele", "parceli", "plant", "raspored", "razmak", "razmaka", "reda",
+      "redova", "redu", "sadnica", "sadnje", "sirina", "sklop", "spacing", "stvaran",
+      "uvratina", "uvratinama", "zeljeni"
+    ],
+  },
+  {
+    id: "polygon-area",
+    titleKey: "pro.name.polygon-area",
+    blurbKey: "pro.blurb.polygon-area",
+    category: "geometry",
+    riskClass: "none",
+    packs: ["gradnja", "inzenjering", "nekretnine", "agro"],
+    keywords: [
+      "area", "jedinica", "kolona", "koordinata", "obilaska", "obim", "parcele", "poligona",
+      "polygon", "povrsina", "povrsine", "povrsinu", "prikaza", "redosled", "smer", "spiska",
+      "temena", "teziste"
+    ],
+  },
+  {
+    id: "seeding-rate",
+    titleKey: "pro.name.seeding-rate",
+    blurbKey: "pro.blurb.seeding-rate",
+    category: "materials",
+    riskClass: "none",
+    packs: ["agro"],
+    keywords: [
+      "biljaka", "celu", "cistoca", "cistoci", "gubitak", "hektaru", "izmerenoj", "kilograma",
+      "klijavost", "klijavosti", "masa", "masi", "norma", "parcelu", "poljski", "povrsina",
+      "rate", "razmak", "redova", "seeding", "semena", "setvena", "setvu", "sklop", "tkw",
+      "vrece", "zeljeni", "zrna"
+    ],
+  },
+  {
+    id: "sprayer-calibration",
+    titleKey: "pro.name.sprayer-calibration",
+    blurbKey: "pro.blurb.sprayer-calibration",
+    category: "materials",
+    riskClass: "life-safety",
+    packs: ["agro"],
+    keywords: [
+      "brzina", "brzine", "calibration", "ciljana", "dizne", "dizni", "gredi", "hektaru",
+      "hvatanja", "izmerenog", "jedne", "kalibracija", "kretanja", "litrima", "merenje",
+      "norma", "normu", "obrnuto", "predjen", "protok", "protoka", "prskalice", "prskanja",
+      "put", "razmak", "razmaka", "rezervoara", "sprayer", "trazi", "uneo", "vreme",
+      "zahvacena", "zapremina"
+    ],
+  },
+  {
+    id: "tank-mix-dose",
+    titleKey: "pro.name.tank-mix-dose",
+    blurbKey: "pro.blurb.tank-mix-dose",
+    category: "materials",
+    riskClass: "life-safety",
+    packs: ["agro"],
+    keywords: [
+      "dose", "doza", "doze", "dozu", "hektara", "jedinica", "kolicine", "male", "mix", "norma",
+      "povrsina", "povrsinu", "preparata", "preracunava", "prikaza", "prskanja", "punjenje",
+      "rezervoara", "rezervoaru", "tank", "tretiranje", "ukupne", "unosa", "vode", "zapremina"
+    ],
+  },
+  {
+    id: "yield-estimate-samples",
+    titleKey: "pro.name.yield-estimate-samples",
+    blurbKey: "pro.blurb.yield-estimate-samples",
+    category: "materials",
+    riskClass: "none",
+    packs: ["agro"],
+    keywords: [
+      "biljaka", "biljci", "brojanja", "estimate", "hektaru", "klasova", "klasu", "klipova",
+      "klipu", "kvadratu", "masa", "mase", "metod", "odmerenog", "parcele", "plodova",
+      "povrsina", "poznjevenog", "preracun", "prinos", "prinosa", "procena", "procenjen",
+      "rasipanje", "referentna", "samples", "tkw", "uzoraka", "uzorcima", "uzorka", "uzorku",
+      "vlaga", "yield", "zrna"
+    ],
+  },
+];
+
+const PRO_ZANAT_TOOLS: ToolRegistration[] = [
+  {
+    id: "fabric-yardage-repeat",
+    titleKey: "pro.name.fabric-yardage-repeat",
+    blurbKey: "pro.blurb.fabric-yardage-repeat",
+    category: "materials",
+    riskClass: "none",
+    packs: ["zanat"],
+    keywords: [
+      "dodatak", "duznih", "fabric", "horizontalni", "ivici", "komada", "komade", "metara",
+      "obavezan", "raport", "raportu", "rastur", "repeat", "rolne", "sare", "sav", "savovima",
+      "sirina", "sirini", "smer", "tkanina", "tkanine", "tkanja", "vertikalni", "yardage"
+    ],
+  },
+  {
+    id: "glass-pane-weight",
+    titleKey: "pro.name.glass-pane-weight",
+    blurbKey: "pro.blurb.glass-pane-weight",
+    category: "materials",
+    riskClass: "life-safety",
+    packs: ["zanat"],
+    keywords: [
+      "debljina", "debljine", "dimenzija", "dimenzije", "folije", "glass", "gustina", "izo",
+      "jednog", "komada", "komadu", "laminiranog", "masa", "monolitnog", "paketa", "paketu",
+      "pane", "pvb", "sastav", "sastava", "sirina", "sloja", "slojeva", "stakala", "stakla",
+      "ukupno", "visina", "weight"
+    ],
+  },
+  {
+    id: "iso-286-fits",
+    titleKey: "pro.name.iso-286-fits",
+    blurbKey: "pro.blurb.iso-286-fits",
+    category: "geometry",
+    riskClass: "none",
+    sourceKey: "pro.sources.iso-286-1-2010",
+    packs: ["zanat"],
+    keywords: [
+      "286", "fits", "granicne", "iso", "mera", "mere", "naleganja", "naleganje", "nominalna",
+      "odstupanja", "osovine", "oznaka", "oznaku", "rupe", "slovo", "stepen", "tolerancije",
+      "zazor", "zazorom"
+    ],
+  },
+  {
+    id: "linear-cutting-stock",
+    titleKey: "pro.name.linear-cutting-stock",
+    blurbKey: "pro.blurb.linear-cutting-stock",
+    category: "materials",
+    riskClass: "none",
+    packs: ["zanat"],
+    keywords: [
+      "cutting", "cuva", "duzina", "duzine", "idu", "kerf", "komada", "komadi", "kraju",
+      "krojenje", "linear", "magacina", "najmanji", "ostatak", "otpad", "pada", "pocetku",
+      "potrebnih", "reza", "sipke", "sipki", "sipku", "sirina", "sirine", "spiska", "stock"
+    ],
+  },
+  {
+    id: "mitre-angles",
+    titleKey: "pro.name.mitre-angles",
+    blurbKey: "pro.blurb.mitre-angles",
+    category: "geometry",
+    riskClass: "none",
+    packs: ["zanat"],
+    keywords: [
+      "angle", "angles", "duzina", "gerung", "komada", "lajsne", "lista", "mitre", "nagib",
+      "nagnuta", "naslona", "podesavanja", "ram", "reza", "sirina", "slozeni", "spring",
+      "stranica", "stranice", "svetla", "testere", "ugao", "unutrasnja", "vertikale"
+    ],
+  },
+  {
+    id: "mortar-mix-quantity",
+    titleKey: "pro.name.mortar-mix-quantity",
+    blurbKey: "pro.blurb.mortar-mix-quantity",
+    category: "materials",
+    riskClass: "none",
+    packs: ["zanat"],
+    keywords: [
+      "agregat", "agregata", "brojem", "debljina", "debljine", "faktor", "gotove", "gustina",
+      "kilogramu", "kolicina", "lepak", "malter", "maltera", "masa", "mesanje", "mix", "mortar",
+      "nasipna", "odnos", "potrosnja", "povrsina", "povrsine", "quantity", "rastur", "rasturom",
+      "sastojaka", "sloja", "smese", "svezeg", "veziva", "vezivo", "voda", "vodom",
+      "vodovezivni", "vreca", "vrece", "zapremina", "zapremini", "zbijanja", "zbir"
+    ],
+  },
+  {
+    id: "panel-cutting-yield",
+    titleKey: "pro.name.panel-cutting-yield",
+    blurbKey: "pro.blurb.panel-cutting-yield",
+    category: "materials",
+    riskClass: "none",
+    packs: ["zanat"],
+    keywords: [
+      "cutting", "format", "formata", "ivica", "ivice", "jedne", "kerf", "komada", "obavezan",
+      "obrezivanje", "otpad", "panel", "ploca", "ploce", "raskroj", "reza", "sirina", "sirinu",
+      "smer", "teksture", "yield", "zadatog"
+    ],
+  },
+  {
+    id: "sheet-metal-bend",
+    titleKey: "pro.name.sheet-metal-bend",
+    blurbKey: "pro.blurb.sheet-metal-bend",
+    category: "geometry",
+    riskClass: "none",
+    packs: ["zanat"],
+    keywords: [
+      "bend", "debljina", "duzina", "faktor", "faktora", "izmerena", "izmerenog", "krakova",
+      "krakovi", "lima", "linija", "mera", "metal", "obrnuti", "polozaji", "pravca", "racun",
+      "radijus", "radijusa", "razvijena", "savijanja", "sheet", "skretanje", "spoljnih", "ugao",
+      "unutrasnji", "uzorka", "zadavanja"
+    ],
+  },
+  {
+    id: "shelf-deflection",
+    titleKey: "pro.name.shelf-deflection",
+    blurbKey: "pro.blurb.shelf-deflection",
+    category: "structure",
+    riskClass: "life-safety",
+    packs: ["zanat"],
+    keywords: [
+      "debljina", "deflection", "elasticnosti", "granica", "granicom", "koncentrisana", "modul",
+      "modulu", "napon", "napona", "opterecenje", "opterecenju", "oslonaca", "oslonca",
+      "police", "polici", "preseku", "raspon", "raspona", "ravnomerno", "shelf", "sila",
+      "sirina", "sredini", "svetlo", "ugib", "ugiba", "unese", "unetom"
+    ],
+  },
+  {
+    id: "shelf-spacing",
+    titleKey: "pro.name.shelf-spacing",
+    blurbKey: "pro.blurb.shelf-spacing",
+    category: "geometry",
+    riskClass: "none",
+    sourceKey: "pro.sources.cabinet-hole-raster-system-32",
+    packs: ["zanat"],
+    keywords: [
+      "busenja", "debljina", "debljinom", "donje", "donjeg", "ivice", "jednaki", "korpusa",
+      "najblizi", "otvor", "otvora", "otvori", "polica", "police", "polozaji", "raspored",
+      "raster", "rasteru", "shelf", "snap", "spacing", "svetli", "unutrasnja", "uracunatom",
+      "visina"
+    ],
+  },
+  {
+    id: "tap-drill-size",
+    titleKey: "pro.name.tap-drill-size",
+    blurbKey: "pro.blurb.tap-drill-size",
+    category: "geometry",
+    riskClass: "none",
+    sourceKey: "pro.sources.iso-metric-thread-261-273-68",
+    packs: ["zanat"],
+    keywords: [
+      "burgije", "burgiju", "busenje", "drill", "korak", "navoj", "navoja", "nominalni",
+      "precnik", "procenat", "procentu", "prolazne", "rupe", "serija", "size", "tap",
+      "urezivanje", "zahvata"
+    ],
+  },
+  {
+    id: "timber-volume",
+    titleKey: "pro.name.timber-volume",
+    blurbKey: "pro.blurb.timber-volume",
+    category: "materials",
+    riskClass: "none",
+    packs: ["zanat"],
+    keywords: [
+      "datoj", "debljem", "debljina", "drveta", "duzina", "gradje", "gustina", "gustini",
+      "huberu", "koeficijent", "komada", "komadu", "kore", "kraju", "kubikaza", "kubni", "masa",
+      "metar", "obracuna", "precnici", "precnik", "preracun", "presek", "prm", "prostornog",
+      "prostornosti", "rezane", "sirina", "smalianu", "srednji", "tanjem", "timber", "trupca",
+      "ukupno", "unetoj", "vlaznosti", "volume", "zapremina"
+    ],
+  },
+  {
+    id: "wallpaper-rolls",
+    titleKey: "pro.name.wallpaper-rolls",
+    blurbKey: "pro.blurb.wallpaper-rolls",
+    category: "materials",
+    riskClass: "none",
+    packs: ["zanat"],
+    keywords: [
+      "dole", "duzina", "duzinu", "gore", "jedne", "korak", "lepe", "lepljenja", "obim",
+      "obima", "odbijaju", "otvora", "pune", "raport", "raporta", "rezerva", "rezervne",
+      "rolls", "rolne", "rolni", "sare", "sirina", "sirine", "slaganja", "tapeta", "traci",
+      "traka", "trake", "vertikalni", "visina", "visine", "vrata", "vrsta", "wallpaper",
+      "zajedno", "zida", "zidova"
+    ],
+  },
+  {
+    id: "weld-consumable",
+    titleKey: "pro.name.weld-consumable",
+    blurbKey: "pro.blurb.weld-consumable",
+    category: "materials",
+    riskClass: "none",
+    packs: ["zanat"],
+    keywords: [
+      "brojem", "consumable", "debljina", "dodatnog", "duzina", "duzine", "duzinom",
+      "elektroda", "elektrode", "gustina", "iskoriscenje", "iskoristivi", "istih", "jedne",
+      "katet", "korena", "korenskog", "lima", "masa", "materijala", "metala", "nadvisenje",
+      "navara", "njen", "nosa", "otvor", "potrebnog", "potrosnja", "precnik", "preseka",
+      "rastur", "sava", "savova", "ugao", "ugaonog", "visina", "vrsta", "weld", "zavarivanje",
+      "zice", "zleba"
+    ],
+  },
+  {
+    id: "wood-moisture-movement",
+    titleKey: "pro.name.wood-moisture-movement",
+    blurbKey: "pro.blurb.wood-moisture-movement",
+    category: "materials",
+    riskClass: "none",
+    sourceKey: "pro.sources.usda-wood-handbook-2021",
+    packs: ["zanat"],
+    keywords: [
+      "alternativno", "apsolutno", "dimenzija", "drveta", "elementa", "koeficijent", "krajnja",
+      "max", "min", "moisture", "movement", "ocekivani", "ostaje", "polazna", "promeni",
+      "prostoriji", "rad", "raspon", "sirina", "sirovog", "skupljanja", "skupljanje", "suvog",
+      "tacka", "tzv", "ugradnji", "ukupno", "vlage", "vlakana", "vlazi", "vlaznost",
+      "vlaznosti", "wood", "zasicenja", "zazor"
+    ],
+  },
+];
+
+const PRO_EVENT_TOOLS: ToolRegistration[] = [
+  {
+    id: "beam-spot-diameter",
+    titleKey: "pro.name.beam-spot-diameter",
+    blurbKey: "pro.blurb.beam-spot-diameter",
+    category: "geometry",
+    riskClass: "none",
+    packs: ["event"],
+    keywords: [
+      "beam", "centru", "diameter", "duzina", "horizontalno", "jacina", "jacine", "kosi",
+      "kruga", "mete", "odstojanje", "osvetljenog", "osvetljenost", "pokriva", "polja",
+      "precnik", "preklapanje", "rastojanja", "rastojanje", "razmak", "reflektora", "snop",
+      "snopa", "snopova", "spot", "susednih", "svetlosti", "ugao", "ugla", "ukljucujuci",
+      "upad", "vesanja", "visina"
+    ],
+  },
+  {
+    id: "budget-per-guest",
+    titleKey: "pro.name.budget-per-guest",
+    blurbKey: "pro.blurb.budget-per-guest",
+    category: "finance",
+    riskClass: "financial",
+    packs: ["event"],
+    keywords: [
+      "budget", "budzet", "cena", "cenu", "fiksne", "gostiju", "gostu", "guest", "karte",
+      "nuli", "osnovica", "per", "plativih", "poreska", "porez", "prihodi", "procentualne",
+      "rezerva", "rezervu", "sabira", "stolova", "stolu", "stopa", "troskove", "troskovi"
+    ],
+  },
+  {
+    id: "catering-per-guest",
+    titleKey: "pro.name.catering-per-guest",
+    blurbKey: "pro.blurb.catering-per-guest",
+    category: "materials",
+    riskClass: "none",
+    packs: ["event"],
+    keywords: [
+      "catering", "gostiju", "gostu", "guest", "hrana", "kolicine", "kolicinu", "pakovanja",
+      "per", "pice", "porcije", "rezerve", "stavci", "stavku", "svakoj", "tocenje", "udela",
+      "ukupnu", "uzimaju", "velicina", "visak", "zaokruzivanje"
+    ],
+  },
+  {
+    id: "generator-sizing",
+    titleKey: "pro.name.generator-sizing",
+    blurbKey: "pro.blurb.generator-sizing",
+    category: "electrical",
+    riskClass: "life-safety",
+    packs: ["event"],
+    keywords: [
+      "agregata", "faktor", "faktorom", "generator", "goriva", "istovremenoscu", "motora",
+      "nadmorska", "najveceg", "nazivni", "polaska", "polasku", "potrosace", "potrosaci",
+      "potrosnja", "prividna", "prividnu", "rada", "radnu", "rezerva", "sabira", "sizing",
+      "smanjenje", "snaga", "snage", "snagu", "specificna", "startna", "temperatura",
+      "trajanje", "trenutku", "visina", "vrsnu"
+    ],
+  },
+  {
+    id: "ice-and-chilling",
+    titleKey: "pro.name.ice-and-chilling",
+    blurbKey: "pro.blurb.ice-and-chilling",
+    category: "materials",
+    riskClass: "food-safety",
+    packs: ["event"],
+    keywords: [
+      "ambalaze", "and", "chilling", "ciljna", "ciljnu", "dotok", "drzanja", "ice", "istopi",
+      "jednog", "kilograma", "led", "leda", "masa", "masi", "odvede", "okoline", "pakovanja",
+      "pica", "pocetna", "pocetne", "rashladjivanje", "specificna", "temperatura",
+      "temperaturu", "toplota", "toplote", "toplotu", "vreme", "zadatoj"
+    ],
+  },
+  {
+    id: "led-wall-pitch-viewing",
+    titleKey: "pro.name.led-wall-pitch-viewing",
+    blurbKey: "pro.blurb.led-wall-pitch-viewing",
+    category: "media",
+    riskClass: "life-safety",
+    packs: ["event"],
+    keywords: [
+      "broja", "daljinu", "dimenziju", "faktor", "kapacitet", "korak", "koraka", "led",
+      "maksimalna", "napajanja", "napon", "ostrine", "panela", "piksela", "pikseli", "pitch",
+      "porta", "portova", "procesora", "prosecna", "razlikuju", "rezoluciju", "sirina",
+      "sirinu", "snaga", "snage", "struju", "ugao", "ukupnu", "vidne", "viewing", "visina",
+      "visinu", "wall", "zid", "zida"
+    ],
+  },
+  {
+    id: "parking-cloakroom",
+    titleKey: "pro.name.parking-cloakroom",
+    blurbKey: "pro.blurb.parking-cloakroom",
+    category: "calculation",
+    riskClass: "none",
+    packs: ["event"],
+    keywords: [
+      "autobusom", "autobusu", "automobilom", "automobilu", "broja", "brzina", "cloakroom",
+      "dolazi", "duzina", "duzinu", "garderoba", "garderobi", "garderobom", "gostiju", "gostu",
+      "kolima", "komada", "manevarskim", "mestu", "osoba", "parking", "parkinga",
+      "popunjenosti", "povrsina", "povrsinu", "prijema", "prosecno", "prostorom", "prozor",
+      "radnika", "radniku", "raspoloziva", "razmak", "sipki", "udela", "udeo", "usluge",
+      "vesalica", "vozila"
+    ],
+  },
+  {
+    id: "projector-throw-screen",
+    titleKey: "pro.name.projector-throw-screen",
+    blurbKey: "pro.blurb.projector-throw-screen",
+    category: "media",
+    riskClass: "none",
+    packs: ["event"],
+    keywords: [
+      "ambijentalna", "ambijentalnom", "dijagonalu", "fluks", "gain", "gledalaca", "kontrast",
+      "odnos", "odnosa", "osvetljenost", "platna", "platno", "platnu", "pojacanje", "poznata",
+      "projector", "projekcija", "projekcioni", "projekcionog", "projektora", "rastojanja",
+      "rastojanje", "reda", "screen", "sirinu", "slike", "stranica", "svetlosni", "svetlu",
+      "throw", "unese", "velicina", "visinu"
+    ],
+  },
+  {
+    id: "rigging-sling-angle-force",
+    titleKey: "pro.name.rigging-sling-angle-force",
+    blurbKey: "pro.blurb.rigging-sling-angle-force",
+    category: "structure",
+    riskClass: "life-safety",
+    packs: ["event"],
+    keywords: [
+      "alternativno", "angle", "dinamicki", "faktor", "force", "granica", "horizontalno",
+      "horizontalnu", "komponentu", "krakova", "kraku", "masa", "masu", "nesimetrican",
+      "odstojanje", "plocice", "razmak", "rigging", "sila", "silu", "sling", "tacaka", "tacke",
+      "tereta", "tezista", "ugao", "ugla", "ukljucujuci", "vesanja", "visina", "wll",
+      "zadavanja", "zahvat"
+    ],
+  },
+  {
+    id: "run-of-show",
+    titleKey: "pro.name.run-of-show",
+    blurbKey: "pro.blurb.run-of-show",
+    category: "time",
+    riskClass: "none",
+    packs: ["event"],
+    keywords: [
+      "dogadjaja", "dogovoru", "kraj", "krajnji", "objektom", "pocetka", "pokazuje", "pravi",
+      "praznine", "prekoracenje", "prelaz", "prelaza", "prikaz", "rok", "run", "sat", "satnica",
+      "satnicu", "show", "tacaka", "tacan", "tacke", "trajanja", "unapred", "unazad", "vreme",
+      "zakovanih"
+    ],
+  },
+  {
+    id: "seating-tables",
+    titleKey: "pro.name.seating-tables",
+    blurbKey: "pro.blurb.seating-tables",
+    category: "geometry",
+    riskClass: "none",
+    packs: ["event"],
+    keywords: [
+      "broja", "celima", "duzina", "gostiju", "gostu", "koliku", "mere", "ploce", "povrsina",
+      "povrsinu", "precnik", "prolazom", "prostor", "raspoloziva", "raspored", "seating",
+      "sedenje", "sirina", "slobodan", "staje", "stola", "stolicama", "stolova", "stolove",
+      "stolovi", "tables", "tip", "zauzimaju"
+    ],
+  },
+  {
+    id: "stage-deck-layout",
+    titleKey: "pro.name.stage-deck-layout",
+    blurbKey: "pro.blurb.stage-deck-layout",
+    category: "structure",
+    riskClass: "life-safety",
+    packs: ["event"],
+    keywords: [
+      "bina", "bine", "bini", "deck", "dubina", "duzina", "granica", "gustina", "layout",
+      "lica", "masa", "mera", "modula", "obim", "obimu", "opterecenja", "opterecenje",
+      "orijentacije", "podesta", "podijum", "podijumu", "povrsinu", "proizvodjaca", "rampi",
+      "ravnomerno", "ravnomernog", "sirina", "stage", "stepenika", "stepenisnih", "tabele",
+      "ukupna", "visina", "zavesa", "zavesom"
+    ],
+  },
+  {
+    id: "tent-bay-layout",
+    titleKey: "pro.name.tent-bay-layout",
+    blurbKey: "pro.blurb.tent-bay-layout",
+    category: "geometry",
+    riskClass: "none",
+    packs: ["event"],
+    keywords: [
+      "bay", "duzina", "duzinu", "gabarit", "krova", "layout", "modul", "modula", "nagib",
+      "natkrivena", "natkrivene", "pojas", "polja", "potrebne", "povrsina", "povrsine",
+      "povrsinu", "satora", "sidrenje", "sirina", "slobodan", "stranica", "stranice", "strehe",
+      "tent", "umesto", "velicina", "visina", "zategama", "zatege"
+    ],
+  },
+  {
+    id: "three-phase-load-balance",
+    titleKey: "pro.name.three-phase-load-balance",
+    blurbKey: "pro.blurb.three-phase-load-balance",
+    category: "electrical",
+    riskClass: "life-safety",
+    packs: ["event"],
+    keywords: [
+      "balance", "balans", "faza", "fazama", "faze", "fazi", "fazni", "linijski", "load",
+      "napon", "nazivna", "nesimetriju", "nule", "osiguraca", "phase", "potrosaca", "potrosaci",
+      "prividnu", "rasporedjenih", "snagu", "spiska", "struja", "struju", "svake", "three",
+      "zbirnu"
+    ],
+  },
+  {
+    id: "truss-hoist-reactions",
+    titleKey: "pro.name.truss-hoist-reactions",
+    blurbKey: "pro.blurb.truss-hoist-reactions",
+    category: "structure",
+    riskClass: "life-safety",
+    packs: ["event"],
+    keywords: [
+      "duzina", "hoist", "kraja", "moguce", "motora", "nosivost", "obesenu", "opterecenje",
+      "podizanje", "pojedinacnih", "polozaj", "ravnomerno", "reactions", "silu", "sopstvene",
+      "svakoj", "tacke", "tacki", "tereta", "tereti", "tezina", "tezine", "tezista", "trase",
+      "trasu", "truss"
+    ],
+  },
+  {
+    id: "venue-occupancy-area",
+    titleKey: "pro.name.venue-occupancy-area",
+    blurbKey: "pro.blurb.venue-occupancy-area",
+    category: "geometry",
+    riskClass: "life-safety",
+    packs: ["event"],
+    keywords: [
+      "area", "bruto", "dokumentacije", "gostiju", "gustinu", "kapacitet", "lica", "neto",
+      "objekta", "occupancy", "oduzete", "oduzetih", "oduzeto", "osoba", "posebno", "povrsina",
+      "povrsine", "povrsinu", "procenat", "prostora", "rasporedi", "rasporedu", "svakom",
+      "unese", "venue", "zona", "zone"
+    ],
+  },
+  {
+    id: "voltage-drop",
+    titleKey: "pro.name.voltage-drop",
+    blurbKey: "pro.blurb.voltage-drop",
+    category: "electrical",
+    riskClass: "life-safety",
+    sourceKey: "pro.sources.iec-60228-60287-conductor-constants",
+    packs: ["gradnja", "inzenjering", "transport", "event"],
+    keywords: [
+      "drop", "duzina", "duzinu", "granica", "gubitak", "jednom", "materijal", "napon",
+      "napona", "nazivni", "otpornost", "pad", "pada", "presek", "primenjuje", "procentima",
+      "provodnika", "sistem", "smeru", "snage", "struja", "struju", "temperatura", "trase",
+      "voda", "vodu", "voltage", "voltima"
     ],
   },
 ];
@@ -1384,7 +5132,26 @@ const PRO_GRADNJA_TOOLS: ToolRegistration[] = [
  * out of agreement with the first. The order here is the order the drawer draws
  * within a category, and it is deliberately the order toolkits shipped in.
  */
-const PRO_TOOLS: ToolRegistration[] = [...PRO_DEV_TOOLS, ...PRO_GRADNJA_TOOLS];
+const PRO_TOOLS: ToolRegistration[] = [
+  ...PRO_DEV_TOOLS,
+  ...PRO_GRADNJA_TOOLS,
+  ...PRO_INZENJERING_TOOLS,
+  ...PRO_DIZAJN_TOOLS,
+  ...PRO_FOTO_TOOLS,
+  ...PRO_MUZIKA_TOOLS,
+  ...PRO_PROSVETA_TOOLS,
+  ...PRO_TEKST_TOOLS,
+  ...PRO_TRENING_TOOLS,
+  ...PRO_KUHINJA_TOOLS,
+  ...PRO_PRAVO_TOOLS,
+  ...PRO_RACUNOVODSTVO_TOOLS,
+  ...PRO_BIZNIS_TOOLS,
+  ...PRO_NEKRETNINE_TOOLS,
+  ...PRO_TRANSPORT_TOOLS,
+  ...PRO_AGRO_TOOLS,
+  ...PRO_ZANAT_TOOLS,
+  ...PRO_EVENT_TOOLS,
+];
 
 /**
  * UTIL slice c's card. ONE control, and the restraint is FIN's and DOC's

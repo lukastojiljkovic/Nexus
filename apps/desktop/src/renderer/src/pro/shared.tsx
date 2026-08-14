@@ -67,6 +67,14 @@ const TABLE_MAX_ROWS = 512;
  * under the control and is for a rule the user needs BEFORE typing; `error` is
  * for a refusal after, and the two never show at once — an error that appears
  * beside a hint reads as a second hint.
+ *
+ * **`hint` is `string | undefined`, not `string`, exactly as `error` already
+ * was.** Under `exactOptionalPropertyTypes` those are different types, and a
+ * hint that depends on which mode a tool is in is written `hint={mode === "x" ?
+ * s.hint : undefined}` at every one of its call sites. Declared `hint?: string`
+ * the primitive refused all of them, and the repair each caller reaches for is
+ * a conditional spread — three copies of a workaround for a prop that should
+ * have accepted the value.
  */
 export function ToolField({
   label,
@@ -75,7 +83,7 @@ export function ToolField({
   children,
 }: {
   label: string;
-  hint?: string;
+  hint?: string | undefined;
   error?: string | undefined;
   children: (id: string) => ReactNode;
 }) {
@@ -109,13 +117,13 @@ export function ToolInput({
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
-  hint?: string;
+  hint?: string | undefined;
   error?: string | undefined;
   /** Monospace, for anything the user reads character by character — hex, base64, a path. */
   mono?: boolean;
 }) {
   return (
-    <ToolField label={label} {...(hint === undefined ? {} : { hint })} error={error}>
+    <ToolField label={label} hint={hint} error={error}>
       {(id) => (
         <TextField
           id={id}
@@ -151,12 +159,12 @@ export function ToolTextArea({
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
-  hint?: string;
+  hint?: string | undefined;
   error?: string | undefined;
   rows?: number;
 }) {
   return (
-    <ToolField label={label} {...(hint === undefined ? {} : { hint })} error={error}>
+    <ToolField label={label} hint={hint} error={error}>
       {(id) => (
         <textarea
           id={id}
@@ -186,6 +194,26 @@ export function ToolTextArea({
  * does not go through `ToolField`: two `<label for>` elements pointing at one
  * control is precisely the labelling mess that component was written to end.
  * The wrapper is here only to hang a hint under the control.
+ *
+ * It is also the one select every professional tool branches on — and the one
+ * place the branch value is proved to be a member of its own union.
+ *
+ * **This used to end `onChange(event.target.value as T)`, and that cast was the
+ * whole class.** A `DOMString` is not a `T`; the assertion said it was, once, in
+ * the file every one of the 274 surfaces imports. An audit of the toolkits found
+ * 129 places where an unrecognised selector value does not fail but silently
+ * picks a branch — copper instead of aluminium, compound instead of simple
+ * interest, a cantilever instead of a simply supported beam — because a
+ * `===` chain always ends somewhere and a `Record<Union, T>` index is believed
+ * by TypeScript to be defined. The renderer is where those values are born, so
+ * the renderer is where the claim can actually be checked.
+ *
+ * It is not a theoretical hole. A controlled select whose `options` narrow while
+ * `value` still holds the old selection shows the browser's fallback — the first
+ * option — while the state keeps the stale one; the user then reads one branch
+ * off the screen and gets another. Resolving the emitted string against the
+ * options this select actually rendered is what makes the value returned a value
+ * that was really on offer.
  */
 export function ToolSelect<T extends string>({
   label,
@@ -198,7 +226,7 @@ export function ToolSelect<T extends string>({
   value: T;
   options: readonly { readonly id: T; readonly label: string }[];
   onChange: (value: T) => void;
-  hint?: string;
+  hint?: string | undefined;
 }) {
   return (
     <div className="tool__field">
@@ -207,7 +235,8 @@ export function ToolSelect<T extends string>({
         className="tool__select"
         value={value}
         onChange={(event: ChangeEvent<HTMLSelectElement>) => {
-          onChange(event.target.value as T);
+          const chosen = options.find((option) => option.id === event.target.value);
+          if (chosen !== undefined) onChange(chosen.id);
         }}
       >
         {options.map((option) => (
@@ -348,7 +377,7 @@ export function ToolSection({ title, children }: { title?: string; children: Rea
  * The one way a surface says „no".
  *
  * Every tool in this drawer refuses rather than repairs — that is the discipline
- * the whole `@nexus/core/devtools` layer is built on — so every surface needs
+ * every `@nexus/core` toolkit behind it is built on — so every surface needs
  * exactly this and none needs its own. `role="status"` rather than `"alert"`:
  * a refusal while somebody is still typing is not an emergency, and an assertive
  * live region would interrupt them on every keystroke.
