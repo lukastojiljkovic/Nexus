@@ -113,6 +113,35 @@ describe("rule 2 — no absolute epsilon inside a rounding call", () => {
   it("ignores an exponent too large to be a nudge — 1e-3 is a milli-anything", () => {
     expect(rules("  const mm = Math.round(metres * 1e-3);")).toEqual([]);
   });
+
+  // The shape that got through. The rule read only a rounding call's ARGUMENTS,
+  // and the surface put the epsilon outside every parenthesis while doing the
+  // identical job — a whole-number test on `amount × 100`. It refused about one
+  // legal two-decimal amount in eight above 10^8, because `1e-6` is an absolute
+  // tolerance on a value whose ulp grows with its magnitude.
+  it("fires on the nudge written OUTSIDE the rounding call, which is how it shipped", () => {
+    expect(
+      rules("    raw !== undefined && Math.abs(raw - Math.round(raw)) > 1e-6;"),
+    ).toEqual(["absolute-nudge"]);
+  });
+
+  it("fires at 1e-6 and 1e-5, which the first spelling of the rule did not reach", () => {
+    expect(rules("  const n = Math.round(x + 1e-6);")).toEqual(["absolute-nudge"]);
+    expect(rules("  const n = Math.floor(x + 1e-5);")).toEqual(["absolute-nudge"]);
+  });
+
+  it("still leaves a tolerance with no rounding in sight alone", () => {
+    // `inzenjering.tsx` really has this: two thread-form constants 0,27 apart,
+    // told apart by an epsilon twelve orders of magnitude smaller than the gap.
+    expect(rules('  const kLabel = (k) => (Math.abs(k - 2) < 1e-9 ? "2" : "sqrt3");')).toEqual([]);
+  });
+
+  it("does not fire on a COMMENT describing the defect it prevents", () => {
+    // A gate that objects to its own explanation is a gate somebody deletes the
+    // explanation for, and the explanation is the more useful half.
+    expect(rules(" * by hand, as `Math.abs(a*100 - Math.round(a*100)) > 1e-6`. That")).toEqual([]);
+    expect(rules("  // was Math.ceil(x - 1e-9) before the kit existed")).toEqual([]);
+  });
 });
 
 describe("rule 3 — no division by an unguarded input field", () => {
@@ -137,8 +166,11 @@ describe("rule 3 — no division by an unguarded input field", () => {
 
 describe("the real repository", () => {
   it("has no private helper copy, no absolute nudge and no unguarded divisor", () => {
-    const { findings, moduleCount } = auditAll();
+    const { findings, moduleCount, surfaceCount } = auditAll();
     expect(findings, JSON.stringify(findings, null, 1)).toEqual([]);
     expect(moduleCount).toBeGreaterThanOrEqual(17);
+    // The surfaces are scanned too, and that is not decoration: the one defect
+    // of this class that reached a user lived in a `.tsx`.
+    expect(surfaceCount).toBeGreaterThanOrEqual(17);
   });
 });

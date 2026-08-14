@@ -8,6 +8,7 @@ import {
   isIntegerIn,
   isNonNegative,
   isPositive,
+  minorUnits,
   quotient,
   ratioAgainst,
   roundHalfUp,
@@ -223,5 +224,61 @@ describe("roundHalfUp — money's rounding, with a nudge that scales", () => {
     expect(roundHalfUp(2 ** 48 + 0.7, 0)).toBe(2 ** 48 + 1);
     // And the low end is untouched: this is the case the nudge exists for.
     expect(roundHalfUp(1.005, 2)).toBe(1.01);
+  });
+});
+
+describe("minorUnits — the money bridge, and the absolute epsilon it replaces", () => {
+  it("converts an ordinary amount to whole minor units", () => {
+    expect(minorUnits(1234.56, 2)).toBe(123456);
+    expect(minorUnits(-1234.56, 2)).toBe(-123456);
+    expect(minorUnits(0, 2)).toBe(0);
+    // The classic representation error, in both directions: 1,13 lands just
+    // under its whole number of minor units and 8,22 just over.
+    expect(1.13 * 100).toBeLessThan(113);
+    expect(8.22 * 100).toBeGreaterThan(822);
+    expect(minorUnits(1.13, 2)).toBe(113);
+    expect(minorUnits(8.22, 2)).toBe(822);
+    // Other scales, since `digits` is a user field in the trial balance.
+    expect(minorUnits(12.3456, 4)).toBe(123456);
+    expect(minorUnits(1234, 0)).toBe(1234);
+  });
+
+  it("refuses an amount carrying more decimals than the scale allows", () => {
+    expect(minorUnits(1.005, 2)).toBeUndefined();
+    expect(minorUnits(0.005, 2)).toBeUndefined();
+    expect(minorUnits(1234.5678, 2)).toBeUndefined();
+    expect(minorUnits(2.5, 0)).toBeUndefined();
+    expect(minorUnits(-2.5, 0)).toBeUndefined();
+  });
+
+  // The defect this function exists to make unrepresentable. `amount-in-words`
+  // and `trial-balance-check` each wrote `Math.abs(x*100 - Math.round(x*100)) >
+  // 1e-6`, which is an absolute tolerance on a value whose ulp grows with its
+  // magnitude. It is exact up to 2^27 and then starts refusing real money.
+  it("accepts a legal two-decimal amount that an absolute 1e-6 refuses", () => {
+    const failing = 612068388.17;
+    expect(Math.abs(failing * 100 - Math.round(failing * 100))).toBeGreaterThan(1e-6);
+    expect(minorUnits(failing, 2)).toBe(61206838817);
+    // 2^27 + 0,11 is where the old spelling first goes wrong, measured.
+    expect(minorUnits(134217728.11, 2)).toBe(13421772811);
+    expect(minorUnits(999999999.99, 2)).toBe(99999999999);
+  });
+
+  it("refuses rather than rounding — the „strane su izjednačene\" on an unbalanced book", () => {
+    // `Math.round(-0.5)` is `-0`, so a difference of half a unit at zero
+    // decimals used to compare equal to zero and print „balanced".
+    expect(Object.is(Math.round(-0.5), -0)).toBe(true);
+    expect(minorUnits(-0.5, 0)).toBeUndefined();
+  });
+
+  it("refuses a scale, an amount or a count it cannot answer for", () => {
+    expect(minorUnits(Number.NaN, 2)).toBeUndefined();
+    expect(minorUnits(Number.POSITIVE_INFINITY, 2)).toBeUndefined();
+    expect(minorUnits(1.5, 2.5)).toBeUndefined();
+    expect(minorUnits(1.5, -1)).toBeUndefined();
+    expect(minorUnits(1.5, 13)).toBeUndefined();
+    // Past 2^53 the minor-unit count is no longer exactly representable, and a
+    // figure that cannot be counted must not be reported as if it could.
+    expect(minorUnits(1e15, 2)).toBeUndefined();
   });
 });

@@ -883,6 +883,18 @@ export interface BenfordRow {
   /** observedShare − expectedShare, signed. */
   readonly difference: number;
   readonly z: number;
+  /**
+   * The same three quantities as percentages.
+   *
+   * Here rather than in the surface, which had written `100 * row.observedShare`
+   * at four places. The multiplication is trivial and that is the point: a
+   * figure the arithmetic never produced is a figure no test covers, and
+   * `allocateWithoutRemainder` in this same module already returns its shares
+   * pre-suffixed — so the pack was inconsistent about who owns the ×100.
+   */
+  readonly observedSharePercent: number;
+  readonly expectedSharePercent: number;
+  readonly differencePercent: number;
 }
 
 export interface BenfordAnalysis {
@@ -994,6 +1006,9 @@ export function benfordDigits(input: BenfordInput): ProResult<BenfordAnalysis> {
       expected,
       difference: observedShare - expectedShare,
       z: (deviation - applied) / Math.sqrt((expectedShare * (1 - expectedShare)) / usable),
+      observedSharePercent: observedShare * 100,
+      expectedSharePercent: expectedShare * 100,
+      differencePercent: (observedShare - expectedShare) * 100,
     });
   }
 
@@ -2260,6 +2275,8 @@ export interface LoanSchedule {
   /** The level instalment, or undefined on an equal-principal plan. */
   readonly annuity: number | undefined;
   readonly periodicRate: number;
+  /** The same rate as a percentage — see `BenfordRow` on why the ×100 lives here. */
+  readonly periodicRatePercent: number;
   readonly totalPaid: number;
   readonly totalInterest: number;
 }
@@ -2366,6 +2383,7 @@ export function loanSchedule(input: LoanInput): ProResult<LoanSchedule> {
     rows,
     annuity: plan === "annuity" ? roundedAnnuity : undefined,
     periodicRate,
+    periodicRatePercent: periodicRate * 100,
     totalPaid: roundHalfUp(totalPaid, decimals),
     totalInterest: roundHalfUp(totalInterest, decimals),
   };
@@ -2649,6 +2667,14 @@ export interface TransposedDigits {
 export interface BalanceDiagnostics {
   readonly difference: number;
   readonly magnitude: number;
+  /**
+   * Whether the two sides came out equal — a field and not a comparison the
+   * surface makes, because the surface used to branch on `magnitude === 0` to
+   * decide between „strane su izjednačene" and the diagnostics block. That is
+   * the one decision in this tool with a consequence, and a decision belongs
+   * where the arithmetic is tested.
+   */
+  readonly balanced: boolean;
   /** An item of this amount posted on the wrong side gives exactly this difference. */
   readonly reversedItem: number | undefined;
   readonly transpositions: readonly TransposedDigits[];
@@ -2714,6 +2740,7 @@ function diagnose(differenceMinor: number, unit: number, maxPosition: number): B
     return {
       difference: 0,
       magnitude: 0,
+      balanced: true,
       reversedItem: undefined,
       transpositions: [],
       shiftedByTen: undefined,
@@ -2753,6 +2780,7 @@ function diagnose(differenceMinor: number, unit: number, maxPosition: number): B
   return {
     difference: differenceMinor / unit,
     magnitude: magnitude / unit,
+    balanced: false,
     reversedItem: magnitude % 2 === 0 ? magnitude / 2 / unit : undefined,
     transpositions,
     // 10x − x = 9x and 100x − x = 99x: the same divisibility, one place further.

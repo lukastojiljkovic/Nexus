@@ -1573,6 +1573,13 @@ export interface ShelfSpacingResult {
   /** One per opening (shelfCount + 1), unsnapped — the bottom gap, every gap between shelves, the top gap. */
   readonly clearOpenings: readonly number[];
   readonly snappedClearOpenings: readonly number[] | undefined;
+  /**
+   * The drilling raster the snap ACTUALLY used, or `undefined` when nothing was
+   * snapped — returned rather than left to the surface, which had written its
+   * own `?? 32` beside the echo. Two copies of a default agree until one moves,
+   * and this one is a number a joiner drills to.
+   */
+  readonly rasterUsed: number | undefined;
 }
 
 /**
@@ -1654,6 +1661,7 @@ export function shelfSpacing(input: ShelfSpacingInput): ProResult<ShelfSpacingRe
   }
 
   let snappedClearOpenings: number[] | undefined;
+  let rasterUsed: number | undefined;
   const shelves: ShelfPosition[] = positions.map((y) => ({
     bottomEdge: y,
     topEdgeDistance: H - y - t,
@@ -1669,6 +1677,7 @@ export function shelfSpacing(input: ShelfSpacingInput): ProResult<ShelfSpacingRe
     }
     const raster = input.raster ?? 32;
     if (!isInRange(raster, 1, 100)) return fail("raster");
+    rasterUsed = raster;
     const o = input.firstHoleFromBottom;
 
     const snapped: number[] = [];
@@ -1709,7 +1718,15 @@ export function shelfSpacing(input: ShelfSpacingInput): ProResult<ShelfSpacingRe
     snappedClearOpenings = snappedOpenings;
   }
 
-  return { ok: true, shelfCount: n, usableHeight: U, shelves, clearOpenings: openings, snappedClearOpenings };
+  return {
+    ok: true,
+    shelfCount: n,
+    usableHeight: U,
+    shelves,
+    clearOpenings: openings,
+    snappedClearOpenings,
+    rasterUsed,
+  };
 }
 
 /* =============================================================================

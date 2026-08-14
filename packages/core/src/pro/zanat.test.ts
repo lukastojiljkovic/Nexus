@@ -1060,6 +1060,37 @@ describe("shelfSpacing", () => {
     snapped.shelves.forEach((s, i) => expect(s.deviation).toBeCloseTo(expectedDeviations[i]!, 9));
     expect(snapped.snappedClearOpenings).toEqual([357, 334, 334, 366, 337]);
     expect(snapped.snappedClearOpenings?.reduce((a, b) => a + b, 0)).toBeCloseTo(1728, 6);
+    expect(snapped.rasterUsed).toBe(32);
+  });
+
+  // The surface prints the raster beside the drilling positions, and it used to
+  // print `proParse(rasterText) ?? 32` — its own copy of this default. Two
+  // copies agree until one moves, and this is a number somebody drills to.
+  it("returns the raster it applied, including the one the caller never typed", () => {
+    const base = {
+      innerHeight: 1800,
+      shelfCount: 4,
+      thickness: 18,
+      mode: "equal-clear",
+      firstHoleFromBottom: 37,
+      snap: true,
+    } as const;
+    const defaulted = shelfSpacing(base);
+    expect(defaulted.ok).toBe(true);
+    if (!defaulted.ok) return;
+    expect(defaulted.rasterUsed).toBe(32);
+
+    const explicit = shelfSpacing({ ...base, raster: 25 });
+    expect(explicit.ok).toBe(true);
+    if (!explicit.ok) return;
+    expect(explicit.rasterUsed).toBe(25);
+
+    // Nothing snapped, nothing to state — and `undefined` rather than 32, which
+    // would be a raster the arithmetic never touched.
+    const unsnapped = shelfSpacing({ ...base, snap: false });
+    expect(unsnapped.ok).toBe(true);
+    if (!unsnapped.ok) return;
+    expect(unsnapped.rasterUsed).toBeUndefined();
   });
 
   it("derives shelf count from the user's own maximum clear opening: 5 shelves at 350 mm max", () => {

@@ -238,3 +238,41 @@ export function roundHalfUp(value: number, digits: number): number {
   // `-0`, which every formatter in the app then prints as „−0,00".
   return magnitude === 0 ? 0 : Math.sign(value) * magnitude;
 }
+
+/**
+ * A typed decimal amount as whole minor units — or `undefined` when the amount
+ * carries more precision than `digits` allows.
+ *
+ * **Every money tool in this drawer needs this, and the two that wrote it
+ * themselves both got it wrong in the same way.** A surface takes „1.234,56"
+ * and the core function takes 123456, so somewhere a multiplication by 100 and
+ * a whole-number check have to happen. Written by hand it comes out as
+ * `Math.abs(x * 100 - Math.round(x * 100)) > 1e-6`, and that literal is an
+ * ABSOLUTE tolerance on a value whose representation error grows with its
+ * magnitude. Measured: at two decimals it works perfectly up to 2^27 and then
+ * starts refusing ordinary money — 612 068 388,17 gives 61206838816.99999,
+ * which is 7,6e−6 away from a whole number, and the tool answers „najviše dve
+ * decimale" to an amount that has exactly two. Above 10^8 it refuses about one
+ * legal amount in eight.
+ *
+ * The tolerance here scales with the value, for the same reason `roundHalfUp`'s
+ * nudge does. Eight ulps: comfortably above the error a decimal literal times a
+ * power of ten can accumulate, and vastly below the half-unit that would let a
+ * genuine third decimal through — 1,005 is 0,5 minor units away from whole and
+ * is refused at every magnitude where it can be typed.
+ *
+ * **`undefined` is a refusal and not a rounding.** Both call sites used to round
+ * silently, and one of them then compared the result against zero to decide
+ * whether a trial balance was in balance: `Math.round(-0.5)` is `-0`, so half a
+ * dinar out printed as „strane su izjednačene". A tool in this drawer refuses
+ * rather than repairs, and money is where that matters most.
+ */
+export function minorUnits(amount: number, digits: number): number | undefined {
+  if (!Number.isFinite(amount)) return undefined;
+  if (!Number.isInteger(digits) || digits < 0 || digits > 12) return undefined;
+  const scaled = amount * 10 ** digits;
+  const whole = roundHalfUp(scaled, 0);
+  if (!Number.isSafeInteger(whole)) return undefined;
+  const tolerance = Math.max(Math.abs(scaled), 1) * 8 * Number.EPSILON;
+  return Math.abs(scaled - whole) <= tolerance ? whole : undefined;
+}

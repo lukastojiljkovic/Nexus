@@ -729,6 +729,14 @@ describe("benfordDigits", () => {
     expect(result.rows[0]?.expectedShare).toBeCloseTo(0.301030, 6);
     expect(result.rows[8]?.expectedShare).toBeCloseTo(0.045757, 6);
     expect(result.rows.reduce((sum, row) => sum + row.expectedShare, 0)).toBeCloseTo(1, 12);
+    // The percent forms are returned rather than multiplied on the surface,
+    // which had written `100 * row.observedShare` at four places.
+    expect(result.rows[0]?.expectedSharePercent).toBeCloseTo(30.1030, 4);
+    expect(result.rows[8]?.expectedSharePercent).toBeCloseTo(4.5757, 4);
+    for (const row of result.rows) {
+      expect(row.observedSharePercent).toBeCloseTo(row.observedShare * 100, 12);
+      expect(row.differencePercent).toBeCloseTo(row.difference * 100, 12);
+    }
     // e_1 = 9 × 0.301030 = 2.70927, e_9 = 9 × 0.045757 = 0.41182
     expect(result.rows[0]?.expected).toBeCloseTo(2.70927, 5);
     expect(result.minExpected).toBeCloseTo(0.411817, 6);
@@ -2329,6 +2337,8 @@ describe("loanSchedule", () => {
     // i = 12/(100 × 12) = 0.01; 1.01^12 = 1.12682503, so 1.01^(−12) =
     // 0.88744923 and A = 10000/0.11255077 = 88848.7887.
     expect(result.periodicRate).toBeCloseTo(0.01, 12);
+    // Returned, not multiplied on the surface — see `BenfordRow`.
+    expect(result.periodicRatePercent).toBeCloseTo(1, 12);
     expect(result.annuity).toBe(88_848.79);
     // Row 1: interest 1000000 × 0.01 = 10000.00, principal 78848.79,
     // balance 921151.21.
@@ -2823,6 +2833,24 @@ describe("trialBalanceDiagnostics", () => {
     expect(result.transpositions).toEqual([]);
     expect(result.reversedItem).toBeUndefined();
     expect(result.shiftedByTen).toBeUndefined();
+    // `balanced` is the field the surface renders „strane su izjednačene" from.
+    // It used to compare `magnitude === 0` itself, which is the one decision in
+    // this tool with a consequence.
+    expect(result.balanced).toBe(true);
+  });
+
+  it("is NOT balanced for any difference, however small the minor unit", () => {
+    for (const [minor, decimals] of [
+      [1, 2],
+      [-1, 2],
+      [1, 0],
+      [-63_000, 2],
+    ] as const) {
+      const result = trialBalanceDiagnostics(minor, decimals);
+      expect(result.ok, `${minor}/${decimals}`).toBe(true);
+      if (!result.ok) return;
+      expect(result.balanced, `${minor}/${decimals}`).toBe(false);
+    }
   });
 
   it("refuses a difference that is not a whole number of minor units", () => {

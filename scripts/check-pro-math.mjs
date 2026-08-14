@@ -62,6 +62,23 @@ export const REPO_ROOT = join(HERE, "..");
 
 const PRO_DIR = "packages/core/src/pro";
 
+/**
+ * The SURFACES, scanned for the same two style rules — and the reason they are
+ * here is that the first thing this gate missed was a defect it was written to
+ * catch.
+ *
+ * `amount-in-words` bridged a typed decimal into whole minor units with
+ * `Math.abs(x*100 − Math.round(x*100)) > 1e-6`: an absolute epsilon inside a
+ * rounding comparison, which is rule 2 exactly, sitting in a `.tsx` this gate
+ * did not read. It refused about one legal two-decimal amount in eight above
+ * 10^8, and no test caught it because a surface has none. Reach was the real
+ * finding, not the literal.
+ *
+ * Rule 3 stays behind: `input.foo` is the core's parameter shape, and a surface
+ * divides by React state whose guard is three lines of JSX away.
+ */
+const SURFACE_DIR = "apps/desktop/src/renderer/src/pro";
+
 /** The kit itself. It is where these helpers are SUPPOSED to be declared. */
 const KIT = "result.ts";
 
@@ -98,8 +115,19 @@ const DECLARATION = (name) =>
 /** The rounding calls that a hand-rolled epsilon hides inside. */
 const ROUNDERS = ["Math.floor", "Math.ceil", "Math.round", "Math.trunc"];
 
-/** An absolute epsilon, in either of the two spellings that shipped. */
-const EPSILON = /\b\d(?:\.\d+)?e-(?:[7-9]|1[0-9])\b|\bNumber\.EPSILON\b/;
+/**
+ * An absolute epsilon, in the spellings that shipped.
+ *
+ * The range starts at `e-4` and not at `e-7`, because it started at `e-7` and
+ * the defect that got through was spelled `1e-6`. There is no magnitude at
+ * which a hand-written absolute tolerance beside a rounding call is the right
+ * tool; the number chosen only decides how large the value has to be before it
+ * misbehaves.
+ */
+const EPSILON = /\b\d(?:\.\d+)?e-(?:[4-9]|1[0-9]|2[0-9])\b|\bNumber\.EPSILON\b/;
+
+/** A line that is only a comment says nothing about what the code does. */
+const COMMENT = /^\s*(?:\/\/|\/\*|\*)/;
 
 /** The guards that make a divisor safe, plus the quotient that needs none. */
 const GUARDS = "isPositive|isNonNegative|isInRange|isIntegerIn|quotient|ratioAgainst";
@@ -205,15 +233,26 @@ export function auditFile(file, text) {
       }
     }
 
-    // Rule 2 — a hand-rolled nudge inside a rounding call.
-    for (const call of roundingArguments(line)) {
-      const m = EPSILON.exec(call.args);
+    // Rule 2 — a hand-rolled nudge beside a rounding call.
+    //
+    // BESIDE and not merely inside, which is the correction the surfaces
+    // forced. The nudge has two spellings: `Math.ceil(x - 1e-9)` puts it in the
+    // arguments, and `Math.abs(x - Math.round(x)) > 1e-6` puts it outside every
+    // parenthesis while doing exactly the same job. Reading only the arguments
+    // caught the first and was silent on the second, which is the one that
+    // shipped. Co-occurrence on one line catches both and, measured over this
+    // tree, matches nothing else.
+    const calls = roundingArguments(line);
+    if (calls.length > 0 && !COMMENT.test(line)) {
+      const m = EPSILON.exec(line);
       if (m !== null) {
+        const inArgs = calls.some((call) => EPSILON.test(call.args));
         add(
           "absolute-nudge",
           i + 1,
-          `\`${call.rounder}(…${m[0]}…)\` — use floorSnapped / ceilSnapped / roundHalfUp, ` +
-            "whose nudge scales with the magnitude",
+          `\`${calls[0].rounder}\` ${inArgs ? "with" : "on a line with"} \`${m[0]}\` — use ` +
+            "floorSnapped / ceilSnapped / roundHalfUp / minorUnits, whose tolerance scales " +
+            "with the magnitude",
         );
       }
     }
@@ -241,22 +280,41 @@ export function auditFile(file, text) {
   return findings;
 }
 
+/** Every toolkit's SURFACE — the renderer half, where the same nudge reappeared. */
+export function proSurfaces(repoRoot = REPO_ROOT) {
+  try {
+    return readdirSync(join(repoRoot, SURFACE_DIR))
+      .filter((name) => name.endsWith(".tsx") && name !== "shared.tsx")
+      .sort();
+  } catch {
+    return [];
+  }
+}
+
 export function auditAll(repoRoot = REPO_ROOT) {
   const modules = proModules(repoRoot);
+  const surfaces = proSurfaces(repoRoot);
   const findings = [];
   for (const name of modules) {
     const file = `${PRO_DIR}/${name}`;
     findings.push(...auditFile(file, readFileSync(join(repoRoot, file), "utf8")));
   }
-  return { findings, moduleCount: modules.length };
+  // Rules 1 and 2 only: a surface has no `input.foo` to divide by, and rule 3
+  // reads that shape. `auditFile` finds none there, so it is simply quiet.
+  for (const name of surfaces) {
+    const file = `${SURFACE_DIR}/${name}`;
+    findings.push(...auditFile(file, readFileSync(join(repoRoot, file), "utf8")));
+  }
+  return { findings, moduleCount: modules.length, surfaceCount: surfaces.length };
 }
 
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const { findings, moduleCount } = auditAll();
+  const { findings, moduleCount, surfaceCount } = auditAll();
   if (findings.length === 0) {
     console.log(
-      `check-pro-math: ${moduleCount} professional modules — no private copy of a shared ` +
-        "helper, no absolute epsilon inside a rounding call, no division by an unguarded input.",
+      `check-pro-math: ${moduleCount} professional modules and ${surfaceCount} surfaces — no ` +
+        "private copy of a shared helper, no absolute epsilon beside a rounding call, no " +
+        "division by an unguarded input.",
     );
     process.exit(0);
   }
