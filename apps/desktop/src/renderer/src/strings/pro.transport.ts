@@ -25,14 +25,15 @@ export const PRO_TRANSPORT_SR = {
     items: "Stavke tereta",
     itemsHint:
       "Jedan red po stavci: masa kg, rastojanje m. U režimu krutog vozila rastojanje se meri od " +
-      "prednje osovine unazad (ispred prednje osovine je negativno). U režimu tegljača od kraljičnog " +
-      "čepa unazad.",
+      "prednje osovine unazad (ispred prednje osovine je negativno). U režimu tegljača od " +
+      "kraljičnog čepa unazad.",
     fifthWheel: "Rastojanje sedla od prednje osovine tegljača",
     kingpinToBogie: "Rastojanje kraljičnog čepa do sredine osovinske grupe poluprikolice",
     trailerTare: "Tara poluprikolice",
     trailerTareCentre: "Težište prazne poluprikolice od kraljičnog čepa",
     frontLimit: "Granica prednje osovine",
-    limitHint: "Iz propisa koji primenjuješ i iz saobraćajne dozvole. Nexus ih ne zna i ne nudi vrednost.",
+    limitHint:
+      "Iz propisa koji primenjuješ i iz saobraćajne dozvole. Nexus ih ne zna i ne nudi vrednost.",
     rearLimit: "Granica zadnje osovine",
     driveLimit: "Granica pogonske osovine",
     bogieLimit: "Granica osovinske grupe poluprikolice",
@@ -58,14 +59,15 @@ export const PRO_TRANSPORT_SR = {
 
     formulaRigid: "Rt = Σ(mⱼ·xⱼ)/b     Ft = Σmⱼ − Rt     F = F0 + Ft     R = R0 + Rt",
     formulaTractor:
-      "B = mt·c/s + Σ(mⱼ·dⱼ)/s     K = (mt + Σmⱼ) − B     D = R0 + K·u/btr     F = F0 + K·(1 − u/btr)",
+      "B = mt·c/s + Σ(mⱼ·dⱼ)/s     K = (mt + Σmⱼ) − B     D = R0 + K·u/btr     F = F0 + K·(1 − " +
+      "u/btr)",
     inputs: "Uneseno",
 
     targetTitle: "Obrnuti račun: rastojanje za ciljno opterećenje",
     targetHint:
-      "Na kom rastojanju bi izabrana stavka dala ciljno opterećenje. Premeštanje jedne stavke menja " +
-      "obe osovine (i sedlo u režimu tegljača) — izračunata vrednost je rastojanje, ne uputstvo šta " +
-      "uraditi.",
+      "Na kom rastojanju bi izabrana stavka dala ciljno opterećenje. Premeštanje jedne stavke " +
+      "menja obe osovine (i sedlo u režimu tegljača) — izračunata vrednost je rastojanje, ne " +
+      "uputstvo šta uraditi.",
     itemIndex: "Redni broj stavke koja se pomera",
     itemIndexHint: "Broj reda u spisku stavki tereta iznad, počev od 1.",
     targetRear: "Ciljno opterećenje zadnje osovine",
@@ -88,7 +90,8 @@ export const PRO_TRANSPORT_SR = {
     errorTrailerTare: "Tara poluprikolice je broj od 0 do 20000 kg.",
     errorTrailerTareCentre: "Težište prazne poluprikolice je broj od 0 do 15 m.",
     errorFifthWheel: "Rastojanje sedla je broj od 0 do 12 m.",
-    errorTarget: "Redni broj stavke mora postojati u spisku, a stavka mora imati masu veću od nule.",
+    errorTarget:
+      "Redni broj stavke mora postojati u spisku, a stavka mora imati masu veću od nule.",
 
     unitKg: "kg",
     unitKgm: "kg·m",
@@ -99,8 +102,8 @@ export const PRO_TRANSPORT_SR = {
     items: "Stavke",
     itemsHint:
       "Jedan red po komadu: masa kg, x m, y m, z m (bez dimenzija) ili masa kg, x m, y m, z m, " +
-      "dužina m, širina m, visina m (sa dimenzijama). x je uzdužno od izabrane nule unazad, y bočno " +
-      "od ose vozila (desno je plus), z visina težišta komada iznad poda.",
+      "dužina m, širina m, visina m (sa dimenzijama). x je uzdužno od izabrane nule unazad, y " +
+      "bočno od ose vozila (desno je plus), z visina težišta komada iznad poda.",
     zeroChoice: "Nula za x",
     zeroFront: "Prednja osovina",
     zeroWall: "Čeoni zid tovarnog prostora",
@@ -108,8 +111,8 @@ export const PRO_TRANSPORT_SR = {
     useDims: "Uzeti dimenzije komada umesto težišta",
     useDimsHint:
       "Kad je uključeno, redovi nose i dužinu, širinu i visinu komada, a težište se uzima u " +
-      "geometrijskom središtu — pod pretpostavkom ravnomerne gustine unutar komada, računato od ugla " +
-      "sa najmanjim x, y i z.",
+      "geometrijskom središtu — pod pretpostavkom ravnomerne gustine unutar komada, računato od " +
+      "ugla sa najmanjim x, y i z.",
     yes: "Da",
     no: "Ne",
     floorHeight: "Visina poda iznad tla",
@@ -119,7 +122,8 @@ export const PRO_TRANSPORT_SR = {
     vehicleMass: "Masa vozila ili prikolice",
     vehicleMassHint: "0 znači da se zajedničko težište sa vozilom ne računa.",
     vehicleCentre: "Težište vozila ili prikolice",
-    vehicleCentreHint: "x m, y m, z m, odvojeno zapetama. z je već iznad tla, iz podatka proizvođača.",
+    vehicleCentreHint:
+      "x m, y m, z m, odvojeno zapetama. z je već iznad tla, iz podatka proizvođača.",
 
     results: "Rezultat",
     totalMass: "Ukupna masa",
@@ -154,10 +158,12 @@ export const PRO_TRANSPORT_SR = {
   "chargeable-weight": {
     items: "Stavke pošiljke",
     itemsHint:
-      "Jedan red po stavci: dužina cm, širina cm, visina cm, komada, masa po komadu kg, broj slojeva " +
-      "u koje se stavka slaže (prazno ili 0 se čita kao 1).",
+      "Jedan red po stavci: dužina cm, širina cm, visina cm, komada, masa po komadu kg, broj " +
+      "slojeva u koje se stavka slaže (prazno ili 0 se čita kao 1).",
     divisor: "Delilac",
-    divisorHint: "Broj iz ugovora sa prevoznikom u cm³/kg, npr. 4000, 5000 ili 6000. Alatka ga ne pretpostavlja.",
+    divisorHint:
+      "Broj iz ugovora sa prevoznikom u cm³/kg, npr. 4000, 5000 ili 6000. Alatka ga ne " +
+      "pretpostavlja.",
     densityDivisor: "Delilac zadat kao kg/m³",
     densityDivisorHint: "Alternativa deliocu iznad — koristi se ako je delilac u cm³/kg prazan.",
     ldmWidth: "Širina tovarnog prostora za tovarni metar",
@@ -194,7 +200,8 @@ export const PRO_TRANSPORT_SR = {
     colLdm: "Tovarni metri",
     colChargeable: "Merodavno",
 
-    formula: "mv = V/d     ldm = (L·W·q)/(10000·Bw·t)     obračunska = max(stvarna, mv, ldm·kldm, ...)",
+    formula:
+      "mv = V/d     ldm = (L·W·q)/(10000·Bw·t)     obračunska = max(stvarna, mv, ldm·kldm, ...)",
     inputs: "Uneseno",
 
     errorItems: "Unesi bar jedan red stavke, do 200 redova.",
@@ -213,8 +220,8 @@ export const PRO_TRANSPORT_SR = {
   "cost-per-km-transport": {
     fixedAnnual: "Fiksni godišnji troškovi",
     fixedAnnualHint:
-      "Zbir godišnjih fiksnih stavki koje sam sabereš van alatke: lizing ili amortizacija, osiguranje, " +
-      "registracija, parking, knjigovodstvo, plata vozača, ostalo.",
+      "Zbir godišnjih fiksnih stavki koje sam sabereš van alatke: lizing ili amortizacija, " +
+      "osiguranje, registracija, parking, knjigovodstvo, plata vozača, ostalo.",
     annualKm: "Pređeni kilometri godišnje",
     annualKmHint: "Planska pretpostavka, ne podatak alatke.",
     emptyShare: "Udeo praznog hoda",
@@ -250,7 +257,9 @@ export const PRO_TRANSPORT_SR = {
     priceAtMarkup: "Cena pri maržiranju troška",
     markupEquivalent: "Ekvivalentno maržiranje troška (%)",
 
-    formula: "f = FIX/Kt     v = gorivo + gume + servis + popravke + AdBlue     c = f + v     cl = c/(1 − e)",
+    formula:
+      "f = FIX/Kt     v = gorivo + gume + servis + popravke + AdBlue     c = f + v     cl = c/(1 " +
+      "− e)",
     inputs: "Uneseno",
 
     errorFixedAnnual: "Fiksni godišnji troškovi su broj od 0 do 1000000000 RSD.",
@@ -271,7 +280,9 @@ export const PRO_TRANSPORT_SR = {
     distance: "Rastojanje",
     averageSpeed: "Prosečna brzina",
     continuousLimit: "Granica neprekidne vožnje (h:mm)",
-    limitHint: "Granicu propisuju propisi o radnom vremenu vozača i menjaju je. Nexus je ne zna i ne nudi vrednost.",
+    limitHint:
+      "Granicu propisuju propisi o radnom vremenu vozača i menjaju je. Nexus je ne zna i ne nudi " +
+      "vrednost.",
     breakMinutes: "Trajanje pauze (min)",
     splitBreak: "Deljenje pauze na dva dela",
     yes: "Da",
@@ -307,8 +318,11 @@ export const PRO_TRANSPORT_SR = {
     ratio: "Odnos prema granici",
     continuousLimitReachedAt: "Sat dostizanja granice neprekidne vožnje",
     dailyLimitReachedAt: "Sat dostizanja granice dnevne vožnje",
-    truncatedNote: "Plan je duži od prikaza (dostignuto je 200 blokova) — prikazano je koliko je izračunato.",
-    unplacedNote: "Neki unosi ostalog radnog vremena imaju prag veći od ukupne planirane vožnje i nisu ubačeni.",
+    truncatedNote:
+      "Plan je duži od prikaza (dostignuto je 200 blokova) — prikazano je koliko je izračunato.",
+    unplacedNote:
+      "Neki unosi ostalog radnog vremena imaju prag veći od ukupne planirane vožnje i nisu " +
+      "ubačeni.",
 
     formula: "s = min(Rc, Rd, Dl, ...)     t += s     Rc −= s     Rd −= s",
     inputs: "Uneseno",
@@ -351,7 +365,9 @@ export const PRO_TRANSPORT_SR = {
     available: "Raspoloživo vreme",
     minutesAvailableForDriving: "Vreme raspoloživo za vožnju",
     requiredSpeed: "Potrebna prosečna brzina u vožnji",
-    noRequiredSpeed: "Pri unetim zastojima i rezervi, takva brzina ne postoji — zastoji premašuju raspoloživo vreme.",
+    noRequiredSpeed:
+      "Pri unetim zastojima i rezervi, takva brzina ne postoji — zastoji premašuju raspoloživo " +
+      "vreme.",
 
     formula: "tv = 60·D/v     tuk = (tv + Z)·(1 + r)     dolazak = polazak + tuk",
     inputs: "Uneseno",
@@ -465,14 +481,16 @@ export const PRO_TRANSPORT_SR = {
     vehicleTare: "Tara vozila sa nadogradnjom",
     tareIncludes: "Tara već sadrži gorivo, AdBlue i posadu",
     tareIncludesHint:
-      "Uključi ako je tara iz saobraćajne dozvole već masa u voznom stanju — tada se gorivo, AdBlue i " +
-      "posada ne dodaju drugi put.",
+      "Uključi ako je tara iz saobraćajne dozvole već masa u voznom stanju — tada se gorivo, " +
+      "AdBlue i posada ne dodaju drugi put.",
     yes: "Da",
     no: "Ne",
     trailerTare: "Tara prikolice ili poluprikolice",
     fuelLitres: "Gorivo u rezervoaru",
     fuelDensity: "Gustina goriva",
-    fuelDensityHint: "Važi na 15 °C. Unete litre su zapremina na temperaturi u rezervoaru — bez temperaturne korekcije.",
+    fuelDensityHint:
+      "Važi na 15 °C. Unete litre su zapremina na temperaturi u rezervoaru — bez temperaturne " +
+      "korekcije.",
     adBlueLitres: "AdBlue u rezervoaru",
     adBlueDensity: "Gustina AdBlue",
     adBlueDensityHint: "Važi na 20 °C.",
@@ -527,7 +545,8 @@ export const PRO_TRANSPORT_SR = {
     methodBlocking: "Blokiranje",
     mass: "Masa tereta",
     forwardC: "Koeficijent ubrzanja napred",
-    coefficientHint: "Broj iz standarda obezbeđenja tereta koji primenjuješ. Nexus ga ne zna i ne nudi vrednost.",
+    coefficientHint:
+      "Broj iz standarda obezbeđenja tereta koji primenjuješ. Nexus ga ne zna i ne nudi vrednost.",
     backwardC: "Koeficijent ubrzanja nazad",
     lateralC: "Koeficijent ubrzanja bočno",
     friction: "Koeficijent trenja μ",
@@ -581,7 +600,8 @@ export const PRO_TRANSPORT_SR = {
     innerWidth: "Unutrašnja širina",
     innerHeight: "Unutrašnja visina",
     items: "Stavke",
-    itemsHint: "Jedan red po stavci: dužina m, širina m, visina m, komada, broj slojeva u koje se slaže.",
+    itemsHint:
+      "Jedan red po stavci: dužina m, širina m, visina m, komada, broj slojeva u koje se slaže.",
     ldmWidth: "Ugovorna širina za tovarni metar",
     ldmWidthHint: "Broj iz ugovora korisnika.",
 
@@ -604,7 +624,9 @@ export const PRO_TRANSPORT_SR = {
     basisVolume: "zapremina",
     basisFloor: "podna površina",
     basisLoadingMetre: "tovarni metar",
-    widerNote: "Bar jedna stavka je šira od unutrašnje širine tovarnog prostora — za nju izraz ne opisuje ništa što staje u prostor.",
+    widerNote:
+      "Bar jedna stavka je šira od unutrašnje širine tovarnog prostora — za nju izraz ne opisuje " +
+      "ništa što staje u prostor.",
     tallerNote: "Bar jedna stavka sa slaganjem prelazi unutrašnju visinu.",
 
     formula: "ηV = Vu/Vr     ηA = Au/Ar     ηLDM = LDMu/LDMr",
@@ -644,14 +666,16 @@ export const PRO_TRANSPORT_SR = {
     results: "Rezultat",
     geometryOnlyNote:
       "Alatka računa samo geometriju. Masa, raspored po osovinama, nosivost paleta i obezbeđenje " +
-      "tereta su druge alatke i ovde se ne prikazuju — broj mesta nije tvrdnja da se toliko sme natovariti.",
+      "tereta su druge alatke i ovde se ne prikazuju — broj mesta nije tvrdnja da se toliko sme " +
+      "natovariti.",
     lengthwise: "Uzdužni raspored",
     crosswise: "Poprečni raspored",
     combined: "Najbolja kombinacija pojaseva",
     combinedBands: "Sastav kombinacije (uzdužnih + poprečnih pojaseva)",
     combinedNote:
-      "Tačan maksimum je izračunat nad pojasnim rasporedima — svaki pojas jedne orijentacije. Mešane " +
-      "orijentacije unutar jednog pojasa mogu dati više mesta, ali to ova alatka ne pretražuje.",
+      "Tačan maksimum je izračunat nad pojasnim rasporedima — svaki pojas jedne orijentacije. " +
+      "Mešane orijentacije unutar jednog pojasa mogu dati više mesta, ali to ova alatka ne " +
+      "pretražuje.",
     perFloor: "Paleta po podu",
     usedLength: "Iskorišćena dužina",
     remainingLength: "Preostala dužina",
@@ -661,7 +685,8 @@ export const PRO_TRANSPORT_SR = {
     layers: "Slojeva po visini",
     zeroLayersNote: "Natovarena paleta ne prolazi po unutrašnjoj visini prostora.",
 
-    formula: "n = floor(Wv/q)     r = floor(Lv/p)     N = n·r     t = min(najviše slojeva, floor(Hv/hn))",
+    formula:
+      "n = floor(Wv/q)     r = floor(Lv/p)     N = n·r     t = min(najviše slojeva, floor(Hv/hn))",
     inputs: "Uneseno",
 
     errorInnerLength: "Unutrašnja dužina je broj od 0,5 do 30 m.",
@@ -719,7 +744,8 @@ export const PRO_TRANSPORT_SR = {
     formula: "L = Σhᵢ·qᵢ     H = Σhᵢ     q̄ = L/H     T = L·P     A = Vr/q̄",
     inputs: "Uneseno",
 
-    errorHours: "Sati rada su broj u dozvoljenom opsegu (0 do 2000, ili 0 do 200 za spuštanje temperature).",
+    errorHours:
+      "Sati rada su broj u dozvoljenom opsegu (0 do 2000, ili 0 do 200 za spuštanje temperature).",
     errorPricePerLitre: "Cena goriva je broj od 0 do 100000 RSD/l.",
     errorTankLitres: "Gorivo u rezervoaru agregata je broj od 0 do 1000 l.",
     errorTractionLitres: "Gorivo za vuču je broj od 0 do 5000 l.",
@@ -738,7 +764,8 @@ export const PRO_TRANSPORT_SR = {
     currentKm: "Trenutna kilometraža",
     lastServiceKm: "Kilometraža na poslednjem servisu",
     distanceInterval: "Interval po kilometrima",
-    intervalHint: "Broj iz servisne knjižice konkretnog vozila. Prazno ili 0 isključuje tu osnovicu.",
+    intervalHint:
+      "Broj iz servisne knjižice konkretnog vozila. Prazno ili 0 isključuje tu osnovicu.",
     currentHours: "Trenutni motočasovi",
     lastServiceHours: "Motočasovi na poslednjem servisu",
     hoursInterval: "Interval po motočasovima",
@@ -764,14 +791,17 @@ export const PRO_TRANSPORT_SR = {
     distanceIntervalInHours: "Kilometarski interval izražen u motočasovima",
     hoursIntervalInKm: "Motočasovni interval izražen u kilometrima",
     averagesNote:
-      "Datumi su procena iz prosečnih dnevnih vrednosti koje si uneo, ne iz stvarnog rasporeda vožnje.",
+      "Datumi su procena iz prosečnih dnevnih vrednosti koje si uneo, ne iz stvarnog rasporeda " +
+      "vožnje.",
 
     formula: "Δk = trenutna − poslednja     Rk = Ik − Δk     dana = Rk / km dnevno",
     inputs: "Uneseno",
 
-    errorCurrentKm: "Trenutna kilometraža mora biti veća ili jednaka kilometraži na poslednjem servisu.",
+    errorCurrentKm:
+      "Trenutna kilometraža mora biti veća ili jednaka kilometraži na poslednjem servisu.",
     errorLastServiceKm: "Kilometraža na poslednjem servisu je broj od 0 do 9999999.",
-    errorCurrentHours: "Trenutni motočasovi moraju biti veći ili jednaki motočasovima na poslednjem servisu.",
+    errorCurrentHours:
+      "Trenutni motočasovi moraju biti veći ili jednaki motočasovima na poslednjem servisu.",
     errorKmPerDay: "Prosečno kilometara dnevno je broj od 0 do 3000.",
     errorHoursPerDay: "Prosečno motočasova dnevno je broj od 0 do 24.",
     errorLastServiceDate: "Datum poslednjeg servisa je ispravan datum u formatu DD.MM.GGGG.",
@@ -800,7 +830,8 @@ export const PRO_TRANSPORT_SR = {
     indicatedDistance: "Pređeno po putnom računaru",
     desiredTrueSpeed: "Željena stvarna brzina",
     characteristicCoefficient: "Karakteristični koeficijent w",
-    characteristicCoefficientHint: "Tahografska konstanta odštampana na vozilu, ako postoji (imp/km).",
+    characteristicCoefficientHint:
+      "Tahografska konstanta odštampana na vozilu, ako postoji (imp/km).",
 
     results: "Rezultat",
     currentDiameter: "Spoljni prečnik postojeće",
@@ -810,8 +841,8 @@ export const PRO_TRANSPORT_SR = {
     sourceMeasured: "izmereno",
     sourceGeometry: "iz geometrije",
     mixedSourceNote:
-      "Jedan obim je izmeren a drugi iz geometrije — geometrijski obim je po pravilu veći za nekoliko " +
-      "procenata, pa je odnos ispod mešavina dva izvora.",
+      "Jedan obim je izmeren a drugi iz geometrije — geometrijski obim je po pravilu veći za " +
+      "nekoliko procenata, pa je odnos ispod mešavina dva izvora.",
     currentRevsPerKm: "Obrtaji na kilometar — postojeća",
     replacementRevsPerKm: "Obrtaji na kilometar — nova",
     circumferenceRatio: "Odnos obima (k = C₂/C₁)",
@@ -824,7 +855,8 @@ export const PRO_TRANSPORT_SR = {
     errorPer100Km: "Greška na 100 km",
     wOverRatio: "w ÷ k (aritmetika, ne baždarenje uređaja)",
     calibrationNote:
-      "Ovo je razlika koju donosi promena dimenzije gume, ne apsolutna tačnost brzinomera u vozilu.",
+      "Ovo je razlika koju donosi promena dimenzije gume, ne apsolutna tačnost brzinomera u " +
+      "vozilu.",
 
     formula: "D = felna·25,4 + 2·širina·profil/100     C = π·D·f     k = C₂/C₁     vs = vp·k",
     inputs: "Uneseno",
@@ -852,7 +884,8 @@ export const PRO_TRANSPORT_SR = {
     width: "Širina",
     height: "Visina",
     domeDepth: "Dubina kupe dna",
-    domeDepthHint: "0 za ravno dno. Meri se za jedno dno; iznad polovine prečnika se ne uzima u obzir.",
+    domeDepthHint:
+      "0 za ravno dno. Meri se za jedno dno; iznad polovine prečnika se ne uzima u obzir.",
     level: "Očitavanje mernog štapa",
     density: "Gustina tečnosti",
     densityHint: "Sa otpremnice, ne pretpostavljena vrednost.",
@@ -869,7 +902,8 @@ export const PRO_TRANSPORT_SR = {
     value: "Vrednost sadržaja",
     sensitivity: "Osetljivost očitavanja",
     levelForTarget: "Nivo za ciljanu zapreminu",
-    levelAboveCapacityNote: "Uneti nivo je iznad kapaciteta rezervoara — zapremina je ograničena na punu.",
+    levelAboveCapacityNote:
+      "Uneti nivo je iznad kapaciteta rezervoara — zapremina je ograničena na punu.",
     calibrationNote:
       "Gustina je na 15°C, bez korekcije za temperaturu tečnosti u rezervoaru.",
 
@@ -902,12 +936,14 @@ export const PRO_TRANSPORT_SR = {
     emptyKm: "Prazni i pristupni kilometri",
     costPerKmKind: "Uneta stopa je po",
     costPerKmKindHint:
-      "Ako je stopa preuzeta iz alatke „Trošak po kilometru\", proveri da li je to trošak po ukupnom " +
-      "ili po kilometru pod teretom — pomnožena sa pogrešnom kilometražom, prazan hod se naplati dvaput.",
+      "Ako je stopa preuzeta iz alatke „Trošak po kilometru\", proveri da li je to trošak po " +
+      "ukupnom ili po kilometru pod teretom — pomnožena sa pogrešnom kilometražom, prazan hod se " +
+      "naplati dvaput.",
     costPerKmKindTotal: "ukupnom kilometru",
     costPerKmKindLaden: "kilometru pod teretom",
     costPerKm: "Trošak po kilometru",
-    costPerKmHint: "Ne sme sadržati putarine, dnevnice ni čekanje ako se te stavke unose posebno ispod.",
+    costPerKmHint:
+      "Ne sme sadržati putarine, dnevnice ni čekanje ako se te stavke unose posebno ispod.",
     tolls: "Putarine",
     ferriesAndVignettes: "Trajekt, tunel, vinjeta",
     terminalCharges: "Naknade na utovaru i istovaru",
@@ -930,8 +966,8 @@ export const PRO_TRANSPORT_SR = {
 
     results: "Rezultat",
     doubleCountingNote:
-      "Proveri stavku po stavku iznad — ako je bilo koji trošak sadržan i u ceni po kilometru i u " +
-      "posebnom redu ovde, ta stavka je naplaćena dvaput.",
+      "Proveri stavku po stavku iznad — ako je bilo koji trošak sadržan i u ceni po kilometru i " +
+      "u posebnom redu ovde, ta stavka je naplaćena dvaput.",
     totalKm: "Ukupna kilometraža",
     colGroup: "Grupa troška",
     colAmount: "Iznos",
@@ -944,8 +980,8 @@ export const PRO_TRANSPORT_SR = {
     priceAtMargin: "Cena pri marži na cenu",
     priceAtMarkup: "Cena pri maržiranju troška",
     marginEquivalenceNote:
-      "Ista stopa daje različitu cenu po ova dva načina — veza je u = m/(1 − m). Cena ispod je uvek " +
-      "po odabranom načinu obračuna.",
+      "Ista stopa daje različitu cenu po ova dva načina — veza je u = m/(1 − m). Cena ispod je " +
+      "uvek po odabranom načinu obračuna.",
     priceBeforeVat: "Cena bez PDV (odabrani način)",
     vat: "PDV",
     priceWithVat: "Cena sa PDV",

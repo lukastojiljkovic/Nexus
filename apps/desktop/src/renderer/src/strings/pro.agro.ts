@@ -35,20 +35,23 @@ export const PRO_AGRO_SR = {
     massModeDensity: "Gustina bale",
     measuredMassKg: "Masa jedne bale",
     densityKgM3: "Gustina bale",
-    densityKgM3Hint: "Izmerena za konkretan materijal i presu, 30 do 400 kg/m³. Nexus je ne pretpostavlja.",
+    densityKgM3Hint:
+      "Izmerena za konkretan materijal i presu, 30 do 400 kg/m³. Nexus je ne pretpostavlja.",
     quantityMode: "Način zadavanja prinosa",
     quantityModeYield: "Prinos po hektaru",
     quantityModeTotal: "Ukupna masa",
     yieldTHa: "Prinos",
     totalMassT: "Ukupna masa",
     areaHa: "Površina",
-    areaHaHint: "Obavezno pri prinosu po hektaru; opciono pri ukupnoj masi, za broj bala po hektaru.",
+    areaHaHint:
+      "Obavezno pri prinosu po hektaru; opciono pri ukupnoj masi, za broj bala po hektaru.",
     balingLossPercent: "Gubitak pri baliranju",
     storage: "Skladište (opciono)",
     storageLengthM: "Dužina skladišta",
     storageWidthM: "Širina skladišta",
     storageHeightM: "Korisna visina slaganja",
-    storageHeightMHint: "Tvoj unos — Nexus je ne određuje i ne proverava nosivost ni stabilnost slaganja.",
+    storageHeightMHint:
+      "Tvoj unos — Nexus je ne određuje i ne proverava nosivost ni stabilnost slaganja.",
 
     results: "Rezultat",
     baleVolume: "Zapremina jedne bale",
@@ -70,10 +73,14 @@ export const PRO_AGRO_SR = {
     unusedWidth: "Neiskorišćena širina",
     shortfall: "Potrebno naspram kapaciteta (razlika)",
     stackingNote:
-      "Samo geometrijsko slaganje po unetim merama. Stabilnost slaganja, opterećenje poda i dozvoljena visina nisu deo ovog računa. Šestougaono (piramidalno) slaganje rolo bala se ne računa.",
+      "Samo geometrijsko slaganje po unetim merama. Stabilnost slaganja, opterećenje poda i " +
+      "dozvoljena visina nisu deo ovog računa. Šestougaono (piramidalno) slaganje rolo bala se " +
+      "ne računa.",
 
     inputs: "Uneseno",
-    formula: "V = π·(D/2)²·B (rolo) ili d·š·v (kvadratna)     n = M / m_b     kapacitet = po_sloju × slojeva",
+    formula:
+      "V = π·(D/2)²·B (rolo) ili d·š·v (kvadratna)     n = M / m_b     kapacitet = po_sloju × " +
+      "slojeva",
 
     errorShape: "Unesi dimenzije za izabrani oblik bale.",
     errorDiameterM: "Prečnik role mora biti između 0,5 i 2,5 m.",
@@ -125,7 +132,8 @@ export const PRO_AGRO_SR = {
     densityKgL: "Gustina sirupa",
     densityEstimated: "izračunato",
     densityNote:
-      "Izračunata iz prividne zapremine rastvorene saharoze (0,63 l/kg), ne izmerena. Vrednosti važe za oko 20 °C.",
+      "Izračunata iz prividne zapremine rastvorene saharoze (0,63 l/kg), ne izmerena. Vrednosti " +
+      "važe za oko 20 °C.",
     concentrationPercent: "Koncentracija (maseni %)",
     bagsExact: "Broj vreća (tačno)",
     bagsCeil: "Broj vreća (zaokruženo naviše)",
@@ -159,7 +167,8 @@ export const PRO_AGRO_SR = {
     fromUnit: "Polazna jedinica",
     jutroM2Override: "Vrednost katastarskog jutra u m² (opciono)",
     jutroM2OverrideHint:
-      "Stariji listovi nepokretnosti u Srbiji nekad nose lokalno jutro drugačije veličine. Prazno polje koristi objavljenih 5754,6425 m².",
+      "Stariji listovi nepokretnosti u Srbiji nekad nose lokalno jutro drugačije veličine. " +
+      "Prazno polje koristi objavljenih 5754,6425 m².",
 
     results: "Rezultat",
     resultM2: "Kvadratni metri",
@@ -169,10 +178,12 @@ export const PRO_AGRO_SR = {
     resultJutro: "Katastarska jutra",
     jutroUsed: "Upotrebljena vrednost jutra",
     sourceNote:
-      "Austrougarska metrikacija (Austrija: zakon iz 1871, u primeni od 1876): 1 bečki hvat = 1,896484 m, 1 katastarsko jutro = 1600 kvadratnih hvati = 5754,6425 m².",
+      "Austrougarska metrikacija (Austrija: zakon iz 1871, u primeni od 1876): 1 bečki hvat = " +
+      "1,896484 m, 1 katastarsko jutro = 1600 kvadratnih hvati = 5754,6425 m².",
 
     inputs: "Uneseno",
-    formula: "sve preko m²: m² = vrednost × faktor(jedinica); rezultat = m² ÷ faktor(ciljana jedinica)",
+    formula:
+      "sve preko m²: m² = vrednost × faktor(jedinica); rezultat = m² ÷ faktor(ciljana jedinica)",
 
     errorValue: "Vrednost mora biti nula ili veća, i ne veća od 1×10¹² m².",
     errorJutroM2Override: "Vrednost katastarskog jutra u m² mora biti veća od nule.",
@@ -193,7 +204,8 @@ export const PRO_AGRO_SR = {
     targetFormOxide: "Oksid (P₂O₅, K₂O)",
     targetFormElement: "Element (P, K)",
     targetN: "Ciljana količina azota (N)",
-    targetHint: "Iz preporuke na osnovu analize zemljišta ili propisanog ograničenja unosa. Tvoj unos.",
+    targetHint:
+      "Iz preporuke na osnovu analize zemljišta ili propisanog ograničenja unosa. Tvoj unos.",
     targetP2o5: "Ciljana količina P₂O₅",
     targetK2o: "Ciljana količina K₂O",
     targetPElement: "Ciljana količina P",
@@ -233,10 +245,12 @@ export const PRO_AGRO_SR = {
     targetMinusDeliveredP2o5: "Cilj − isporučeno (P₂O₅)",
     targetMinusDeliveredK2o: "Cilj − isporučeno (K₂O)",
     userInputNote:
-      "Ciljane količine i sastav đubriva su tvoj unos sa deklaracije i preporuke. Nexus ih ne poznaje, ne pamti i ne predlaže.",
+      "Ciljane količine i sastav đubriva su tvoj unos sa deklaracije i preporuke. Nexus ih ne " +
+      "poznaje, ne pamti i ne predlaže.",
 
     inputs: "Uneseno",
-    formula: "X = 100·cilj / procenat_vodećeg     isporučeno_j = X·procenat_j/100     cilj − isporučeno",
+    formula:
+      "X = 100·cilj / procenat_vodećeg     isporučeno_j = X·procenat_j/100     cilj − isporučeno",
 
     errorAreaHa: "Površina mora biti veća od nule.",
     errorBagMassKg: "Masa vreće mora biti veća od nule.",
@@ -245,8 +259,10 @@ export const PRO_AGRO_SR = {
     errorTargetN: "Ciljana količina azota je između 0 i 500 kg/ha.",
     errorTargetP: "Ciljana količina fosfora je između 0 i 500 kg/ha.",
     errorTargetK: "Ciljana količina kalijuma je između 0 i 500 kg/ha.",
-    errorPrimary: "Sastav osnovnog đubriva mora biti u opsegu 0–100 % po hranivu, sa zbirom do 100 %.",
-    errorSecondary: "Sastav dopunskog đubriva mora biti u opsegu 0–100 % po hranivu, sa zbirom do 100 %.",
+    errorPrimary:
+      "Sastav osnovnog đubriva mora biti u opsegu 0–100 % po hranivu, sa zbirom do 100 %.",
+    errorSecondary:
+      "Sastav dopunskog đubriva mora biti u opsegu 0–100 % po hranivu, sa zbirom do 100 %.",
     errorPrimaryLead: "Izabrano vodeće hranivo osnovnog đubriva mora imati procenat veći od nule.",
     errorGeneric: "Proveri unete vrednosti.",
 
@@ -262,7 +278,8 @@ export const PRO_AGRO_SR = {
     targetMoisturePercentHint: "Iz ugovora o otkupu. Nexus ga ne zna i ne predlaže.",
     impuritiesPercent: "Primese",
     impuritiesFreeLimitPercent: "Primese bez odbitka",
-    impuritiesFreeLimitPercentHint: "Iz ugovora o otkupu ili pravilnika otkupljivača. Nexus ga ne zna i ne predlaže.",
+    impuritiesFreeLimitPercentHint:
+      "Iz ugovora o otkupu ili pravilnika otkupljivača. Nexus ga ne zna i ne predlaže.",
     order: "Redosled odbitaka",
     orderImpuritiesFirst: "Prvo primese pa vlaga",
     orderMoistureFirst: "Prvo vlaga pa primese",
@@ -278,7 +295,10 @@ export const PRO_AGRO_SR = {
     shrinkPercent: "Kalo (od bruto mase)",
     shrinkPercentMassIndependent: "Kalo (kontrola, nezavisno od mase)",
     physicalModelNote:
-      "Fizički model gubitka samo vode: bez gubitka suve materije i bez gubitka na manipulaciji i prašini u sušari. Razlika prema kolskoj vagi može poticati odatle. Gornja masa i voda su bazne vrednosti pri gubitku samo od vlage, bez primesa — stvarno izdvojena voda pri sušenju je u granama ispod, po izabranom redosledu.",
+      "Fizički model gubitka samo vode: bez gubitka suve materije i bez gubitka na manipulaciji " +
+      "i prašini u sušari. Razlika prema kolskoj vagi može poticati odatle. Gornja masa i voda " +
+      "su bazne vrednosti pri gubitku samo od vlage, bez primesa — stvarno izdvojena voda pri " +
+      "sušenju je u granama ispod, po izabranom redosledu.",
     impuritiesFirst: "Prvo primese pa vlaga",
     moistureFirst: "Prvo vlaga pa primese",
     impurityDeductionKg: "Odbitak primesa",
@@ -295,7 +315,8 @@ export const PRO_AGRO_SR = {
     actualEnergyKWh: "Pri unetoj korisnoj toploti",
 
     inputs: "Uneseno",
-    formula: "m₂ = m₁·(100−w₁)/(100−w₂)     kalo % = (w₁−w₂)/(100−w₂)×100     odbitak = m·(p−p₀)/100",
+    formula:
+      "m₂ = m₁·(100−w₁)/(100−w₂)     kalo % = (w₁−w₂)/(100−w₂)×100     odbitak = m·(p−p₀)/100",
 
     errorGrossMassKg: "Bruto masa mora biti veća od nule.",
     errorMeasuredMoisturePercent: "Izmerena vlaga je između 0 i 60 %.",
@@ -316,9 +337,11 @@ export const PRO_AGRO_SR = {
   "growing-degree-days": {
     rowsText: "Dnevne temperature",
     rowsTextHint:
-      "Nalepi jedan red po danu: datum;maksimalna °C;minimalna °C. Razdvajač je tabulator, tačka-zarez ili zarez, datum u obliku DD.MM.GGGG.",
+      "Nalepi jedan red po danu: datum;maksimalna °C;minimalna °C. Razdvajač je tabulator, " +
+      "tačka-zarez ili zarez, datum u obliku DD.MM.GGGG.",
     baseTempC: "Bazna temperatura",
-    baseTempCHint: "Tvoj izbor prema kulturi. Nexus ne bira kulturu i ne tvrdi da je 10 °C tačna za bilo koju.",
+    baseTempCHint:
+      "Tvoj izbor prema kulturi. Nexus ne bira kulturu i ne tvrdi da je 10 °C tačna za bilo koju.",
     upperLimitC: "Gornja granica (modifikovani metod)",
     targetSum: "Ciljana suma",
     averageWindowDays: "Period za prosek pri projekciji",
@@ -343,7 +366,9 @@ export const PRO_AGRO_SR = {
 
     inputs: "Uneseno",
     rowCount: "Broj dana u nizu",
-    formula: "prosti: max(0, (Tmax+Tmin)/2 − baza)     modifikovani: seče Tmin odozdo i Tmax odozgo pre proseka",
+    formula:
+      "prosti: max(0, (Tmax+Tmin)/2 − baza)     modifikovani: seče Tmin odozdo i Tmax odozgo pre " +
+      "proseka",
 
     errorParse: "Nalepljeni red mora biti datum;maksimalna;minimalna, datum u obliku DD.MM.GGGG.",
     errorReadings: "Niz mora imati od 1 do 400 dana.",
@@ -369,7 +394,8 @@ export const PRO_AGRO_SR = {
     containerVolumeL: "Zapremina posude",
     densityKgL: "Gustina meda",
     densityKgLHint:
-      "Izmerena, 1,35 do 1,50 kg/l — merenjem mase poznate zapremine ili iz tabele koju imaš. Nije izvedena iz vlage.",
+      "Izmerena, 1,35 do 1,50 kg/l — merenjem mase poznate zapremine ili iz tabele koju imaš. " +
+      "Nije izvedena iz vlage.",
     sampleMassKg: "Merenje gustine: masa uzorka (opciono)",
     sampleHint: "Za nezavisnu proveru gustine — masa i zapremina uzorka zajedno.",
     sampleVolumeL: "Merenje gustine: zapremina uzorka",
@@ -509,7 +535,8 @@ export const PRO_AGRO_SR = {
     intakeValueHint: "Tvoj izbor — Nexus ga ne predlaže.",
     feedsText: "Hraniva",
     feedsTextHint:
-      "Nalepi jedan red po hranivu: naziv;sadržaj SM %;udeo u obroku po SM %;cena po kg sveže mase (opciono);masa pakovanja u kg (opciono).",
+      "Nalepi jedan red po hranivu: naziv;sadržaj SM %;udeo u obroku po SM %;cena po kg sveže " +
+      "mase (opciono);masa pakovanja u kg (opciono).",
     feedsTextPlaceholder: "silaža kukuruza;33;50;;250\nseno;86;20;;250\nsmeša;88;30;40;25",
     days: "Broj dana",
     wastePercent: "Gubitak (rastur) na jaslama",
@@ -538,11 +565,13 @@ export const PRO_AGRO_SR = {
 
     inputs: "Uneseno",
     formula:
-      "SM_grlo = masa·unos/100     SM_i = SM_stado·udeo/100     sveže = 100·SM_i/sadržaj_SM     izdato = sveže/(1−rastur/100)",
+      "SM_grlo = masa·unos/100     SM_i = SM_stado·udeo/100     sveže = 100·SM_i/sadržaj_SM     " +
+      "izdato = sveže/(1−rastur/100)",
 
     errorHeadCount: "Broj grla je ceo broj od 1 do 100000.",
     errorAvgBodyMassKg: "Prosečna telesna masa mora biti veća od nule.",
-    errorIntakeValue: "Unos suve materije je 0,5 do 6 % telesne mase ili veći od nule u kg/grlu/dan.",
+    errorIntakeValue:
+      "Unos suve materije je 0,5 do 6 % telesne mase ili veći od nule u kg/grlu/dan.",
     errorFeeds: "Unesi od 1 do 20 hraniva.",
     errorDays: "Broj dana je ceo broj od 1 do 730.",
     errorWastePercent: "Gubitak na jaslama je između 0 i 30 %.",
@@ -550,7 +579,8 @@ export const PRO_AGRO_SR = {
     errorShareOfDmPercent: "Udeo hraniva u obroku je između 0 i 100 %.",
     errorPricePerKgFresh: "Cena po kg sveže mase ne može biti negativna.",
     errorPackageMassKg: "Masa pakovanja mora biti veća od nule.",
-    errorFeedParse: "Svaki red hraniva je naziv;sadržaj SM %;udeo %;cena (opciono);masa pakovanja (opciono).",
+    errorFeedParse:
+      "Svaki red hraniva je naziv;sadržaj SM %;udeo %;cena (opciono);masa pakovanja (opciono).",
     errorGeneric: "Proveri unete vrednosti.",
 
     unitKg: "kg",
@@ -563,7 +593,8 @@ export const PRO_AGRO_SR = {
     overlapPercent: "Preklop",
     speedKmh: "Radna brzina",
     utilizationPercent: "Iskorišćenje vremena",
-    utilizationPercentHint: "Odnos čistog rada prema ukupnom vremenu, svojstvo konkretnog posla. Tvoj unos.",
+    utilizationPercentHint:
+      "Odnos čistog rada prema ukupnom vremenu, svojstvo konkretnog posla. Tvoj unos.",
     areaHa: "Površina",
     fuelLPerHour: "Potrošnja goriva",
     fuelPricePerL: "Cena goriva",
@@ -590,7 +621,9 @@ export const PRO_AGRO_SR = {
     turnTimeSharePercent: "Udeo u radnom vremenu",
 
     inputs: "Uneseno",
-    formula: "W = W_n·(1−preklop/100)     C_t = W·v/10     C_e = C_t·η     t = A/C_e     prohodi−1 okretanja",
+    formula:
+      "W = W_n·(1−preklop/100)     C_t = W·v/10     C_e = C_t·η     t = A/C_e     prohodi−1 " +
+      "okretanja",
 
     errorNominalWidthM: "Radni zahvat je između 0,5 i 60 m.",
     errorOverlapPercent: "Preklop je između 0 i 30 %.",
@@ -635,12 +668,14 @@ export const PRO_AGRO_SR = {
     plantAtBothEndsYes: "Na oba kraja (floor + 1)",
     plantAtBothEndsNo: "Pomerena za pola razmaka (floor)",
     wireMassPerKmOverride: "Deklarisana masa žice po km (opciono)",
-    wireMassPerKmOverrideHint: "Sa deklaracije pocinkovane žice — kada je uneta, koristi se umesto gustine čelika.",
+    wireMassPerKmOverrideHint:
+      "Sa deklaracije pocinkovane žice — kada je uneta, koristi se umesto gustine čelika.",
 
     results: "Rezultat",
     rowsCount: "Broj redova",
     zeroRowsNote:
-      "Uvratina ili odstojanje od međe su veći od raspoložive dužine ili širine — nema mesta ni za jedan red.",
+      "Uvratina ili odstojanje od međe su veći od raspoložive dužine ili širine — nema mesta ni " +
+      "za jedan red.",
     rowLengthM: "Dužina jednog reda",
     totalRowLengthM: "Ukupna dužina redova",
     postsPerRow: "Stubova po redu",
@@ -660,10 +695,13 @@ export const PRO_AGRO_SR = {
     densityPerHa: "Stvarna gustina",
     theoreticalDensityPerHa: "Teorijska gustina",
     geometryNote:
-      "Samo pravougaono slaganje po unetim merama. Šestougaono (piramidalno) slaganje se ne računa; presek, dubina i nosivost stubova, žice i sidara nisu deo ovog računa.",
+      "Samo pravougaono slaganje po unetim merama. Šestougaono (piramidalno) slaganje se ne " +
+      "računa; presek, dubina i nosivost stubova, žice i sidara nisu deo ovog računa.",
 
     inputs: "Uneseno",
-    formula: "n_r = floor((W−2·e_b)/a)+1     stubova/red = ceil(L_r/p)+1     žica = n_r·L_r·k·(1+dodatak/100)",
+    formula:
+      "n_r = floor((W−2·e_b)/a)+1     stubova/red = ceil(L_r/p)+1     žica = " +
+      "n_r·L_r·k·(1+dodatak/100)",
 
     errorLengthM: "Dužina parcele mora biti veća od nule.",
     errorWidthM: "Širina parcele mora biti veća od nule.",
@@ -710,7 +748,8 @@ export const PRO_AGRO_SR = {
     usedAreaHa: "Iskorišćena površina",
     actualDensityPerHa: "Stvarna gustina",
     triangularNote:
-      "Broj sadnica na parceli se prikazuje samo za pravougaoni raspored — kod trougaonog svaki drugi red je pomeren za pola razmaka, što ovaj račun ne modeluje.",
+      "Broj sadnica na parceli se prikazuje samo za pravougaoni raspored — kod trougaonog svaki " +
+      "drugi red je pomeren za pola razmaka, što ovaj račun ne modeluje.",
     reverse: "Obrnut račun (iz željenog sklopa)",
     requiredInRowSpacingM: "Potreban razmak u redu (tačno)",
     requiredSpacingRoundedM: "Zaokruženo na santimetar",
@@ -723,7 +762,8 @@ export const PRO_AGRO_SR = {
     errorSpacingM: "Razmak u redu je između 0,05 i 50 m.",
     errorHeadlandM: "Uvratina je između 0 i 50 m.",
     errorBoundaryOffsetM: "Odstojanje od međe je između 0 i 50 m.",
-    errorDesiredDensityPerHa: "Željeni sklop mora biti veći od nule i dostižan pri unetom razmaku redova.",
+    errorDesiredDensityPerHa:
+      "Željeni sklop mora biti veći od nule i dostižan pri unetom razmaku redova.",
     errorLengthM: "Dužina parcele mora biti veća od nule.",
     errorWidthM: "Širina parcele mora biti veća od nule.",
     errorGeneric: "Proveri unete vrednosti.",
@@ -736,7 +776,8 @@ export const PRO_AGRO_SR = {
   "polygon-area": {
     verticesText: "Temena",
     verticesTextHint:
-      "Nalepi jedno teme po redu, dve vrednosti razdvojene razmakom, tabulatorom ili tačkom-zarezom (decimalni zarez je dozvoljen unutar broja). Od 3 do 512 temena.",
+      "Nalepi jedno teme po redu, dve vrednosti razdvojene razmakom, tabulatorom ili " +
+      "tačkom-zarezom (decimalni zarez je dozvoljen unutar broja). Od 3 do 512 temena.",
     columnOrder: "Redosled kolona",
     columnOrderYX: "Y, X (geodetski)",
     columnOrderXY: "X, Y (matematički)",
@@ -813,7 +854,8 @@ export const PRO_AGRO_SR = {
 
     errorStandValue: "Željeni sklop mora biti u dozvoljenom opsegu za izabranu jedinicu.",
     errorTkwGrams: "Masa 1000 zrna je između 0,05 i 2000 g.",
-    errorGerminationPercent: "Klijavost je procenat od 1 do 100 — vrednost ispod 1 se odbija kao verovatna greška.",
+    errorGerminationPercent:
+      "Klijavost je procenat od 1 do 100 — vrednost ispod 1 se odbija kao verovatna greška.",
     errorPurityPercent: "Čistoća je procenat od 1 do 100.",
     errorFieldLossPercent: "Poljski gubitak je između 0 i 60 %.",
     errorAreaHa: "Površina za setvu mora biti veća od nule.",
@@ -822,7 +864,8 @@ export const PRO_AGRO_SR = {
     errorSeedsPerUnit: "Broj zrna u setvenoj jedinici mora biti veći od nule.",
     errorPricePerKg: "Cena po kilogramu ne može biti negativna.",
     errorPricePerUnit: "Cena po setvenoj jedinici ne može biti negativna.",
-    errorGeneric: "Proveri unete vrednosti — jedan od činilaca (klijavost, čistoća, gubitak) daje nulu.",
+    errorGeneric:
+      "Proveri unete vrednosti — jedan od činilaca (klijavost, čistoća, gubitak) daje nulu.",
 
     unitKg: "kg",
     unitKgHa: "kg/ha",
@@ -844,7 +887,8 @@ export const PRO_AGRO_SR = {
     nozzleSpacingM: "Razmak dizni na gredi",
     nozzleCount: "Broj dizni",
     workingWidthM: "Radni zahvat (izmeren)",
-    workingWidthMHint: "Nezavisno izmeren zahvat — poredi se sa brojem dizni × razmakom, ne zamenjuje ga tiho.",
+    workingWidthMHint:
+      "Nezavisno izmeren zahvat — poredi se sa brojem dizni × razmakom, ne zamenjuje ga tiho.",
     speedKmh: "Brzina kretanja",
     targetRateLHa: "Ciljana norma prskanja (sa etikete)",
     limitHint: "Iz propisa koji primenjuješ. Nexus ne zna koji je to propis i ne nudi vrednost.",
@@ -892,7 +936,9 @@ export const PRO_AGRO_SR = {
   "tank-mix-dose": {
     productsText: "Preparati u rezervoaru",
     productsTextHint:
-      "Nalepi jedan preparat po redu: naziv;l ili kg;način doze (ha, % ili ml);vrednost. Način „ha\" je doza po hektaru, „%\" je koncentracija u procentima, „ml\" je doza po litru škropiva (ml ili g na litar). Do 10 preparata.",
+      "Nalepi jedan preparat po redu: naziv;l ili kg;način doze (ha, % ili ml);vrednost. Način " +
+      "„ha\" je doza po hektaru, „%\" je koncentracija u procentima, „ml\" je doza po litru " +
+      "škropiva (ml ili g na litar). Do 10 preparata.",
     productsTextPlaceholder: "Preparat A;l;ha;1,5\nPreparat B;kg;%;0,625",
     sprayRateLHa: "Norma prskanja (utrošak vode)",
     limitHint: "Iz propisa koji primenjuješ. Nexus ne zna koji je to propis i ne nudi vrednost.",
@@ -920,15 +966,15 @@ export const PRO_AGRO_SR = {
     fullTankCarrierL: "Vode po punom rezervoaru (posle dodavanja preparata)",
     totalCarrierL: "Ukupno vode za celu površinu",
     labelNote:
-      "Škropivo je voda plus svi dodati preparati — zapremina vode je zapremina rezervoara umanjena za tečne " +
-      "preparate koje sadrži, ne cela zapremina rezervoara. Dozu i normu prskanja uneo si sa etikete preparata; " +
-      "Nexus ih ne poznaje, ne pamti i ne predlaže.",
+      "Škropivo je voda plus svi dodati preparati — zapremina vode je zapremina rezervoara " +
+      "umanjena za tečne preparate koje sadrži, ne cela zapremina rezervoara. Dozu i normu " +
+      "prskanja uneo si sa etikete preparata; Nexus ih ne poznaje, ne pamti i ne predlaže.",
 
     inputs: "Uneseno",
     productCount: "Broj preparata",
     formula:
-      "A_r = V/Q     P_r = D·A_r     V_uk = Q·A     P_uk = D·A     n = V_uk/V     " +
-      "n_p = floor(n)     V_o = V_uk − n_p·V     P_o = D·(V_o/Q)     voda = V_uk − P_uk (tečni preparati)",
+      "A_r = V/Q     P_r = D·A_r     V_uk = Q·A     P_uk = D·A     n = V_uk/V     n_p = floor(n) " +
+      "    V_o = V_uk − n_p·V     P_o = D·(V_o/Q)     voda = V_uk − P_uk (tečni preparati)",
 
     errorParse: "Svaki red preparata je naziv;l ili kg;ha, % ili ml;vrednost.",
     errorProducts: "Unesi od 1 do 10 preparata.",
@@ -954,18 +1000,21 @@ export const PRO_AGRO_SR = {
     samplesTextHintSmallGrain:
       "Nalepi jedan uzorak po redu: klasova po m²;zrna po klasu. Od 1 do 50 uzoraka.",
     samplesTextHintRowCrop:
-      "Nalepi jedan uzorak po redu: biljaka po hektaru;klipova (plodova) po biljci;zrna po klipu. Ako se zrna " +
-      "broje kao redovi × zrna u redu, unesi njihov proizvod kao treću vrednost. Od 1 do 50 uzoraka.",
+      "Nalepi jedan uzorak po redu: biljaka po hektaru;klipova (plodova) po biljci;zrna po " +
+      "klipu. Ako se zrna broje kao redovi × zrna u redu, unesi njihov proizvod kao treću " +
+      "vrednost. Od 1 do 50 uzoraka.",
     samplesTextHintMeasuredArea:
-      "Nalepi jedan uzorak po redu: površina uzorka u m²;masa požnjevenog uzorka u kg. Od 1 do 50 uzoraka.",
+      "Nalepi jedan uzorak po redu: površina uzorka u m²;masa požnjevenog uzorka u kg. Od 1 do " +
+      "50 uzoraka.",
     tkwGrams: "Masa 1000 zrna (TKW)",
     tkwMoisturePercent: "Vlaga na kojoj je izmerena TKW",
     tkwMoisturePercentHint:
-      "Vlaga uzorka zrna od kog je izmerena masa 1000 zrna — osnova sa koje preračun na referentnu vlagu polazi " +
-      "za ovaj metod. Nije vlaga požnjevenog uzorka.",
+      "Vlaga uzorka zrna od kog je izmerena masa 1000 zrna — osnova sa koje preračun na " +
+      "referentnu vlagu polazi za ovaj metod. Nije vlaga požnjevenog uzorka.",
     sampleMoisturePercent: "Vlaga u uzorku",
     sampleMoisturePercentHint:
-      "Vlaga požnjevenog i izmerenog uzorka — osnova sa koje preračun na referentnu vlagu polazi za ovaj metod.",
+      "Vlaga požnjevenog i izmerenog uzorka — osnova sa koje preračun na referentnu vlagu polazi " +
+      "za ovaj metod.",
     referenceMoisturePercent: "Referentna vlaga za preračun",
     limitHint: "Iz ugovora o otkupu ili pravilnika otkupljivača. Nexus ga ne zna i ne predlaže.",
     harvestLossPercent: "Gubitak pri žetvi (opciono)",
@@ -988,16 +1037,17 @@ export const PRO_AGRO_SR = {
     inputs: "Uneseno",
     sampleCount: "Broj uzoraka",
     formula:
-      "strna žita: t/ha = K·Z·TKW/100000     okopavine: t/ha = biljaka/ha·(plodova·zrna·TKW/1000)/1000000     " +
-      "odmerena površina: t/ha = masa/površina×10     x̄ = Σxᵢ/n     s = √(Σ(xᵢ−x̄)²/(n−1))     " +
-      "m_ref = m·(100−w₁)/(100−w₂)",
+      "strna žita: t/ha = K·Z·TKW/100000     okopavine: t/ha = " +
+      "biljaka/ha·(plodova·zrna·TKW/1000)/1000000     odmerena površina: t/ha = masa/površina×10 " +
+      "    x̄ = Σxᵢ/n     s = √(Σ(xᵢ−x̄)²/(n−1))     m_ref = m·(100−w₁)/(100−w₂)",
 
     errorParse: "Svaki red uzorka mora imati onoliko vrednosti koliko traži izabrani metod.",
     errorSamples: "Unesi od 1 do 50 uzoraka.",
     errorTkwGrams: "Masa 1000 zrna je između 0,05 i 2000 g.",
     errorTkwMoisturePercent: "Vlaga na kojoj je izmerena TKW je između 0 i 60 %.",
     errorSampleMoisturePercent: "Vlaga u uzorku je između 0 i 60 %.",
-    errorReferenceMoisturePercent: "Referentna vlaga za preračun je između 0 i 60 % i ne sme biti jednaka 100.",
+    errorReferenceMoisturePercent:
+      "Referentna vlaga za preračun je između 0 i 60 % i ne sme biti jednaka 100.",
     errorHarvestLossPercent: "Gubitak pri žetvi je između 0 i 100 %.",
     errorPlotAreaHa: "Površina parcele mora biti veća od nule.",
     errorEarsPerM2: "Klasova po m² je između 1 i 2000, u svakom uzorku.",

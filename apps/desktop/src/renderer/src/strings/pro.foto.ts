@@ -198,8 +198,9 @@ export const PRO_FOTO_SR = {
     secondFNumber: "Blenda na drugom rastojanju",
     distanceStops: "Promena osvetljenja (blende)",
     modelNote:
-      "Model je goli tačkasti izvor u slobodnom prostoru. Reflektori, modifikatori, zum-glava " +
-      "i odbijena svetlost menjaju stvarni broj — vodeći broj je tvoj, alat ga ne bira i ne proverava.",
+      "Model je goli tačkasti izvor u slobodnom prostoru. Reflektori, modifikatori, zum-glava i " +
+      "odbijena svetlost menjaju stvarni broj — vodeći broj je tvoj, alat ga ne bira i ne " +
+      "proverava.",
 
     inputs: "Uneseno",
     formula: "N = GN_S / d     GN_S = GN₁₀₀·√(S/100)     Δstops = 2·log2(d₂/d₁)",
@@ -285,9 +286,12 @@ export const PRO_FOTO_SR = {
   "mired-shift": {
     sourceTemperature: "Izvorna temperatura boje",
     targetTemperature: "Ciljna temperatura",
-    targetTemperatureHint: "Koliko su dve temperature udaljene u miredima — koristi ovo ili pomak ispod.",
+    targetTemperatureHint:
+      "Koliko su dve temperature udaljene u miredima — koristi ovo ili pomak ispod.",
     shift: "Mired pomak",
-    shiftHint: "Gde pomak od unetog broja mireda dovodi izvornu temperaturu. Negativno hladi, pozitivno greje.",
+    shiftHint:
+      "Gde pomak od unetog broja mireda dovodi izvornu temperaturu. Negativno hladi, pozitivno " +
+      "greje.",
 
     results: "Rezultat",
     sourceMired: "Izvor u miredima",
@@ -416,7 +420,8 @@ export const PRO_FOTO_SR = {
     capacityHint: "Opciono — koliko ovakvih fajlova staje na dati prostor.",
     capacityUnit: "Jedinica prostora",
     averageFileSizeMb: "Poznata prosečna veličina fajla (MB)",
-    averageFileSizeMbHint: "Opciono — koristi se umesto izračunate veličine pri brojanju koliko staje.",
+    averageFileSizeMbHint:
+      "Opciono — koristi se umesto izračunate veličine pri brojanju koliko staje.",
 
     results: "Rezultat",
     bytes: "Bajtova",
@@ -550,7 +555,8 @@ export const PRO_FOTO_SR = {
       "Oba načina brojanja bajtova (GB i GiB) prikazana su jedno pored drugog.",
 
     inputs: "Uneseno",
-    formula: "ukupno = video + audio     bajtova = ukupno·trajanje/8     trajanje = bajtova·8/ukupno",
+    formula:
+      "ukupno = video + audio     bajtova = ukupno·trajanje/8     trajanje = bajtova·8/ukupno",
 
     errorVideoBitrateMbps: "Video bitrejt mora biti između 0,01 i 20000 Mbit/s.",
     errorAudioBitrateMbps: "Audio bitrejt mora biti između 0 i 100 Mbit/s.",

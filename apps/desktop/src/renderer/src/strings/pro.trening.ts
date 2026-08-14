@@ -22,7 +22,8 @@ export const PRO_TRENING_SR = {
     targetHint: "Ukupna masa sa šipkom i svim diskovima, u kilogramima.",
     bar: "Masa šipke",
     barHint:
-      "Masa šipke koju imaš pred sobom. Muške šipke su obično 20 kg, ženske 15 kg — proveri ako nisi siguran.",
+      "Masa šipke koju imaš pred sobom. Muške šipke su obično 20 kg, ženske 15 kg — proveri ako " +
+      "nisi siguran.",
     collar: "Masa jedne stezaljke",
     collarHint: "Masa jedne stezaljke — obe se računaju. Ostavi 0 ako ih ne koristiš.",
     plates: "Raspoloživi diskovi",
@@ -41,14 +42,17 @@ export const PRO_TRENING_SR = {
     achieved: "Postignuto ukupno opterećenje",
     difference: "Razlika u odnosu na traženo",
 
-    formula: "R = cilj − šipka − 2·stezaljka     bira se s koje minimizuje |R − 2s|     ukupno = šipka + 2·stezaljka + 2s",
+    formula:
+      "R = cilj − šipka − 2·stezaljka     bira se s koje minimizuje |R − 2s|     ukupno = šipka " +
+      "+ 2·stezaljka + 2s",
     inputs: "Uneseno",
 
     errorTarget: "Željeno ukupno opterećenje mora biti veće od nule.",
     errorBar: "Masa šipke ne sme biti negativna.",
     errorCollar: "Masa stezaljke ne sme biti negativna.",
     errorPlates:
-      "Proveri spisak diskova — svaka masa mora biti veća od nule, a broj pari ceo broj nula ili više.",
+      "Proveri spisak diskova — svaka masa mora biti veća od nule, a broj pari ceo broj nula ili " +
+      "više.",
     errorBelowBar: "Traženo opterećenje je manje od same šipke sa stezaljkama — odgovora nema.",
     errorTooManyOperations:
       "Ovaj inventar je previše fin za ovo opterećenje da bi se pretražio u razumnom vremenu.",
@@ -61,7 +65,8 @@ export const PRO_TRENING_SR = {
     massHint: "U kilogramima.",
     bodyFat: "Procenat masti",
     bodyFatHint:
-      "Izmerena vrednost — kaliper, bioimpedansa ili DEXA. Alatka ne procenjuje procenat masti sama.",
+      "Izmerena vrednost — kaliper, bioimpedansa ili DEXA. Alatka ne procenjuje procenat masti " +
+      "sama.",
     target: "Ciljni procenat masti",
     targetHint: "Procenat masti koji želiš da dostigneš.",
 
@@ -76,7 +81,9 @@ export const PRO_TRENING_SR = {
     leanMass: "Čista masa",
     targetFatMass: "Masna masa na cilju",
 
-    formula: "masna = m × p/100     čista = m − masna     cilj = čista / (1 − pT/100)     promena = cilj − m",
+    formula:
+      "masna = m × p/100     čista = m − masna     cilj = čista / (1 − pT/100)     promena = " +
+      "cilj − m",
     inputs: "Uneseno",
 
     errorMass: "Telesna masa mora biti veća od nule.",
@@ -102,7 +109,9 @@ export const PRO_TRENING_SR = {
     waistToHeight: "Odnos struk / visina",
     waistToHip: "Odnos struk / kuk",
 
-    formula: "BMI = m / v²     Rohrerov indeks = m / v³     struk/visina = struk / visina     struk/kuk = struk / kuk",
+    formula:
+      "BMI = m / v²     Rohrerov indeks = m / v³     struk/visina = struk / visina     struk/kuk " +
+      "= struk / kuk",
     inputs: "Uneseno",
 
     errorMass: "Telesna masa mora biti veća od nule.",
@@ -120,14 +129,16 @@ export const PRO_TRENING_SR = {
     cadence: "Kadenca",
     cadenceHint: "Koraci u minutu, obe noge. Ostavi prazno da se izračuna.",
     stepLength: "Dužina koraka",
-    stepLengthHint: "Dužina JEDNOG koraka u metrima, ne celog ciklusa. Ostavi prazno da se izračuna.",
+    stepLengthHint:
+      "Dužina JEDNOG koraka u metrima, ne celog ciklusa. Ostavi prazno da se izračuna.",
     speedUnit: "Jedinica brzine",
     speedUnitMps: "m/s",
     speedUnitKmh: "km/h",
     speedUnitPace: "tempo (mm:ss / km)",
     speedValue: "Brzina",
     speedValueHint:
-      "Broj za m/s ili km/h, ili tempo kao mm:ss za sekunde po kilometru. Ostavi prazno da se izračuna.",
+      "Broj za m/s ili km/h, ili tempo kao mm:ss za sekunde po kilometru. Ostavi prazno da se " +
+      "izračuna.",
     fieldsHint: "Popuni tačno dva od tri polja — kadencu, dužinu koraka i brzinu. Treće se računa.",
 
     results: "Rezultat",
@@ -139,7 +150,9 @@ export const PRO_TRENING_SR = {
     pacePerKm: "Tempo",
     stepsPerKm: "Koraka na kilometar",
 
-    formula: "v = kadenca × korak / 60     kadenca = 60v/korak     korak = 60v/kadenca     koraka/km = 1000/korak",
+    formula:
+      "v = kadenca × korak / 60     kadenca = 60v/korak     korak = 60v/kadenca     koraka/km = " +
+      "1000/korak",
     inputs: "Uneseno",
 
     errorFields: "Popuni tačno dva od tri polja — kadencu, dužinu koraka i brzinu.",
@@ -170,12 +183,17 @@ export const PRO_TRENING_SR = {
     pace: "Tempo",
     projected: "Projektovano vreme na unetoj distanci",
     projectedNote:
-      "Projektovano vreme nije prognoza rezultata, nego aritmetika zadržanog splita na celoj distanci.",
+      "Projektovano vreme nije prognoza rezultata, nego aritmetika zadržanog splita na celoj " +
+      "distanci.",
     coefficientNote:
-      "Koeficijent {coefficient} je Concept2-ova objavljena relacija za prikaz na monitoru, ne merenje potrošnje.",
-    referenceNote: "Split je na {reference} m — RowErg/SkiErg prikaz. Split sa monitora na 1000 m mora se prvo prevesti u sekunde po metru.",
+      "Koeficijent {coefficient} je Concept2-ova objavljena relacija za prikaz na monitoru, ne " +
+      "merenje potrošnje.",
+    referenceNote:
+      "Split je na {reference} m — RowErg/SkiErg prikaz. Split sa monitora na 1000 m mora se " +
+      "prvo prevesti u sekunde po metru.",
 
-    formula: "vati = 2,80 / tempo³     tempo = split / 500     projektovano vreme = distanca × tempo",
+    formula:
+      "vati = 2,80 / tempo³     tempo = split / 500     projektovano vreme = distanca × tempo",
     inputs: "Uneseno",
 
     errorFields: "Unesi tačno jedno od dva polja — split ili snagu.",
@@ -190,12 +208,15 @@ export const PRO_TRENING_SR = {
 
   "heart-rate-zones-karvonen": {
     hrMax: "Maksimalni puls",
-    hrMaxHint: "Izmerena vrednost, otkucaja u minutu. Ovde nema formule iz godina — 220 minus godine i slično su populacioni prosek, ne tvoj puls.",
+    hrMaxHint:
+      "Izmerena vrednost, otkucaja u minutu. Ovde nema formule iz godina — 220 minus godine i " +
+      "slično su populacioni prosek, ne tvoj puls.",
     hrRest: "Puls u mirovanju",
     hrRestHint: "Otkucaja u minutu.",
     percents: "Procenti za tabelu",
     percentsHint:
-      "Razdvoj tačka-zapetom (npr. „60; 70; 80\"). Prazno polje daje podrazumevanu lestvicu 50–100 % u koracima od 5 %.",
+      "Razdvoj tačka-zapetom (npr. „60; 70; 80\"). Prazno polje daje podrazumevanu lestvicu " +
+      "50–100 % u koracima od 5 %.",
     measuredHr: "Izmereni puls, za obrnut smer",
     measuredHrHint: "Opciono. Puls čiji procenat rezerve i maksimuma želiš da vidiš.",
 
@@ -232,7 +253,8 @@ export const PRO_TRENING_SR = {
     pauseBottom: "Pauza dole",
     concentric: "Koncentrična faza",
     pauseTop: "Pauza gore",
-    tempoHint: "Cele sekunde po fazi. Oznaka „X\" se ne prihvata — upiši broj sekundi na koji misliš.",
+    tempoHint:
+      "Cele sekunde po fazi. Oznaka „X\" se ne prihvata — upiši broj sekundi na koji misliš.",
     restMode: "Način unosa odmora",
     restModeSeconds: "Sekunde",
     restModeRatio: "Odnos rad:odmor",
@@ -257,8 +279,8 @@ export const PRO_TRENING_SR = {
     repRatio: "Zadati odnos rad:odmor",
     sessionRatio: "Odnos kroz ceo trening",
     ratioNote:
-      "Zadati odnos važi za jedno ponavljanje. Odnos kroz ceo trening uključuje i odmor između serija, " +
-      "pa je to druga veličina.",
+      "Zadati odnos važi za jedno ponavljanje. Odnos kroz ceo trening uključuje i odmor između " +
+      "serija, pa je to druga veličina.",
 
     formula:
       "trajanje serije = ponavljanja×rad + (ponavljanja−1)×odmor     " +
@@ -270,7 +292,8 @@ export const PRO_TRENING_SR = {
     errorRestBetweenSets: "Odmor između serija ne sme biti negativan.",
     errorWarmup: "Zagrevanje ne sme biti negativno.",
     errorCooldown: "Smirivanje ne sme biti negativno.",
-    errorTempo: "Svaka faza tempa je ceo broj sekundi nula ili više, a zbir mora biti veći od nule.",
+    errorTempo:
+      "Svaka faza tempa je ceo broj sekundi nula ili više, a zbir mora biti veći od nule.",
     errorWork: "Trajanje rada mora biti veće od nule.",
     errorRest: "Odmor mora biti unet.",
     errorRestRatio: "Oba člana odnosa rad:odmor moraju biti veća od nule.",
@@ -292,7 +315,8 @@ export const PRO_TRENING_SR = {
     results: "Rezultat",
     condition: "Uslov računa",
     conditionNote:
-      "Let mora biti simetričan oko najviše tačke, sa odrazom i doskokom na istoj visini — inače broj opisuje nešto drugo.",
+      "Let mora biti simetričan oko najviše tačke, sa odrazom i doskokom na istoj visini — inače " +
+      "broj opisuje nešto drugo.",
     height2: "Visina skoka",
     flightTime2: "Vreme leta",
     takeoff: "Brzina u trenutku odraza",
@@ -320,16 +344,20 @@ export const PRO_TRENING_SR = {
     reference: "Vrednost na referentnoj strani",
     referenceHint: "U istoj jedinici kao ispitivana vrednost.",
     target: "Ciljni odnos",
-    targetHint: "Iz kriterijuma koji primenjuješ. Nexus ne zna koji je to kriterijum i ne nudi vrednost.",
+    targetHint:
+      "Iz kriterijuma koji primenjuješ. Nexus ne zna koji je to kriterijum i ne nudi vrednost.",
     unit: "Jedinica",
-    unitHint: "Slobodan tekst (kg, cm, N, °…). Jedinice se ne pretvaraju — obe vrednosti moraju biti u istoj.",
+    unitHint:
+      "Slobodan tekst (kg, cm, N, °…). Jedinice se ne pretvaraju — obe vrednosti moraju biti u " +
+      "istoj.",
 
     results: "Rezultat",
     ratio: "Odnos ispitivana ÷ referentna",
     shortfall: "Razlika do 100 %",
     needed: "Potrebna vrednost na ispitivanoj strani, pri unetom cilju",
     gap: "Razlika između potrebne i izmerene vrednosti",
-    unitNote: "Jedinice se ne pretvaraju — oba unosa se računaju kao goli brojevi u istoj jedinici.",
+    unitNote:
+      "Jedinice se ne pretvaraju — oba unosa se računaju kao goli brojevi u istoj jedinici.",
 
     formula:
       "odnos = 100×ispitivana/referentna     razlika do 100 = 100 − odnos     " +
@@ -366,7 +394,9 @@ export const PRO_TRENING_SR = {
     headExact: "Tačno",
     headLoadable: "Zaokruženo na korak",
 
-    formula: "Epli: w×(1 + r/30)     Bžicki: w×36/(37 − r)     tabela: baza × procenat, zaokruženo na korak",
+    formula:
+      "Epli: w×(1 + r/30)     Bžicki: w×36/(37 − r)     tabela: baza × procenat, zaokruženo na " +
+      "korak",
     inputs: "Uneseno",
 
     errorLoad: "Težina serije mora biti veća od nule.",
@@ -433,7 +463,8 @@ export const PRO_TRENING_SR = {
     pauseBottom: "Pauza dole",
     concentric: "Koncentrična faza",
     pauseTop: "Pauza gore",
-    tempoHint: "Cele sekunde po fazi. Oznaka „X\" se ne prihvata — upiši broj sekundi na koji misliš.",
+    tempoHint:
+      "Cele sekunde po fazi. Oznaka „X\" se ne prihvata — upiši broj sekundi na koji misliš.",
     reps: "Ponavljanja po seriji",
     sets: "Broj serija",
     restBetweenSets: "Pauza između serija",
@@ -445,7 +476,8 @@ export const PRO_TRENING_SR = {
     totalTut: "Ukupno vreme pod opterećenjem",
     block: "Ukupno trajanje bloka",
     definitionNote:
-      "Vreme pod opterećenjem je zbir sve četiri faze — obe koncentrične i obe pauze, ne samo pokret.",
+      "Vreme pod opterećenjem je zbir sve četiri faze — obe koncentrične i obe pauze, ne samo " +
+      "pokret.",
 
     formula:
       "ponavljanje = ekscentrična + pauza dole + koncentrična + pauza gore     " +
@@ -476,8 +508,8 @@ export const PRO_TRENING_SR = {
     decrement: "Procenat pada (Sdec)",
 
     formula:
-      "indeks zamora = 100×(najsporije − najbrže)/najbrže     Sdec = 100×(zbir/(n×najbrže) − 1)     " +
-      "medijana = srednja vrednost sortiranog spiska",
+      "indeks zamora = 100×(najsporije − najbrže)/najbrže     Sdec = 100×(zbir/(n×najbrže) − 1)  " +
+      "   medijana = srednja vrednost sortiranog spiska",
     inputs: "Uneseno",
 
     errorTimes: "Unesi najmanje dva vremena, svako veće od nule.",
@@ -493,7 +525,8 @@ export const PRO_TRENING_SR = {
     drunk: "Popijena tečnost",
     drunkHint: "U mililitrima.",
     food: "Unesena hrana",
-    foodHint: "Hrana i gelovi progutani tokom treninga, u gramima — ulaze u bilans isto kao tečnost.",
+    foodHint:
+      "Hrana i gelovi progutani tokom treninga, u gramima — ulaze u bilans isto kao tečnost.",
     urine: "Izmokreno i ostali izmereni gubitak",
     urineHint: "U mililitrima.",
     duration: "Trajanje treninga",
@@ -551,11 +584,13 @@ export const PRO_TRENING_SR = {
     headMeanIntensity: "Prosečan intenzitet (tonažom ponderisan)",
 
     formula:
-      "ponavljanja reda = serije×ponavljanja po seriji     tonaža reda = ponavljanja×opterećenje     " +
-      "prosečno opterećenje = ukupna tonaža/ukupna ponavljanja     intenzitet = 100×prosečno opterećenje/1RM",
+      "ponavljanja reda = serije×ponavljanja po seriji     tonaža reda = ponavljanja×opterećenje " +
+      "    prosečno opterećenje = ukupna tonaža/ukupna ponavljanja     intenzitet = 100×prosečno " +
+      "opterećenje/1RM",
     inputs: "Uneseno",
 
-    errorRows: "Svaki red mora imati cele serije i ponavljanja veće od nule, i opterećenje nula ili više.",
+    errorRows:
+      "Svaki red mora imati cele serije i ponavljanja veće od nule, i opterećenje nula ili više.",
 
     unitKg: "kg",
     unitPercent: "%",
@@ -565,7 +600,9 @@ export const PRO_TRENING_SR = {
     mass: "Trenutna telesna masa",
     massHint: "U kilogramima.",
     limit: "Granica kategorije",
-    limitHint: "Iz propozicija takmičenja koje primenjuješ. Nexus ne zna koje su to propozicije i ne nudi vrednost.",
+    limitHint:
+      "Iz propozicija takmičenja koje primenjuješ. Nexus ne zna koje su to propozicije i ne nudi " +
+      "vrednost.",
     days: "Broj dana do vaganja",
     daysHint: "Ceo broj dana. Dan vaganja se ne računa u podelu.",
 
@@ -578,9 +615,12 @@ export const PRO_TRENING_SR = {
     perWeek: "Razlika po nedelji, ravnomerno do vaganja",
     daysUsed: "Broj dana korišćen u podeli",
     extrapolatedNote:
-      "Nedeljna vrednost je preračun preko unetog horizonta — do vaganja ostaje manje od sedam dana.",
+      "Nedeljna vrednost je preračun preko unetog horizonta — do vaganja ostaje manje od sedam " +
+      "dana.",
 
-    formula: "razlika = masa − granica     procenat = 100×razlika/masa     dnevno = razlika/dani     nedeljno = 7×razlika/dani",
+    formula:
+      "razlika = masa − granica     procenat = 100×razlika/masa     dnevno = razlika/dani     " +
+      "nedeljno = 7×razlika/dani",
     inputs: "Uneseno",
 
     errorMass: "Trenutna telesna masa mora biti veća od nule.",

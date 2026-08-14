@@ -21,7 +21,8 @@ export const PRO_PROSVETA_SR = {
     target: "Ciljni prosek",
     targetHint: "Prosek koji se želi dostići, na istoj skali kao ocene.",
     extraGrade: "Vrednost dodatne ocene",
-    extraGradeHint: "Skalu ocenjivanja propisuje ustanova (1–5, 5–10, procenti); nema podrazumevane vrednosti.",
+    extraGradeHint:
+      "Skalu ocenjivanja propisuje ustanova (1–5, 5–10, procenti); nema podrazumevane vrednosti.",
 
     results: "Rezultat",
     currentAverage: "Trenutni prosek",
@@ -83,7 +84,8 @@ export const PRO_PROSVETA_SR = {
     kHint: "Ceo broj ≥ 0.",
     repeats: "Brojevi ponavljanja (za permutacije sa ponavljanjem)",
     repeatsHint:
-      "Opciono — celi brojevi ≥ 1 čiji je zbir ≤ n, razdvojeni razmakom ili zarezom. U ovom režimu se k zanemaruje.",
+      "Opciono — celi brojevi ≥ 1 čiji je zbir ≤ n, razdvojeni razmakom ili zarezom. U ovom " +
+      "režimu se k zanemaruje.",
 
     results: "Rezultat",
     factorial: "n!",
@@ -112,7 +114,8 @@ export const PRO_PROSVETA_SR = {
     c: "Brojilac c",
     d: "Imenilac d",
     decimalInput: "Decimalni zapis",
-    decimalInputHint: "Ceo deo, zapeta, neperiodične cifre, period u zagradi — npr. 0,1(6) ili 3,75.",
+    decimalInputHint:
+      "Ceo deo, zapeta, neperiodične cifre, period u zagradi — npr. 0,1(6) ili 3,75.",
 
     results: "Rezultat",
     reducedFraction: "Skraćen razlomak",
@@ -141,7 +144,8 @@ export const PRO_PROSVETA_SR = {
     stepHint: "Tipično 1 ili 0,5. Prazno polje računa sa korakom 1.",
     thresholds: "Pragovi (oznaka; prag u %)",
     thresholdsHint:
-      "Jedan red po pragu — oznaka i procenat razdvojeni tačkom-zarezom, npr. „5; 91\". Pragove propisuje pravilnik ustanove ili ministarstva; Nexus nema ugrađenu skalu.",
+      "Jedan red po pragu — oznaka i procenat razdvojeni tačkom-zarezom, npr. „5; 91\". Pragove " +
+      "propisuje pravilnik ustanove ili ministarstva; Nexus nema ugrađenu skalu.",
     scoredPoints: "Osvojeni bodovi",
     scoredPointsHint: "Opciono — bodovi za koje se traži oznaka iz skale.",
 
@@ -159,11 +163,13 @@ export const PRO_PROSVETA_SR = {
     unitPoints: "bod.",
 
     inputs: "Uneseno",
-    formula: "m = ceilDiv(prag·B, 100·k)     minBodovi = m·k     procenat minimuma = 100·minBodovi/B",
+    formula:
+      "m = ceilDiv(prag·B, 100·k)     minBodovi = m·k     procenat minimuma = 100·minBodovi/B",
 
     errorMaxPoints: "Maksimalan broj bodova mora biti veći od nule.",
     errorStep: "Korak bodovanja mora biti veći od nule i ne veći od maksimuma.",
-    errorThresholds: "Pragovi moraju biti brojevi iz [0, 100], svaki upisan kao „oznaka; procenat\".",
+    errorThresholds:
+      "Pragovi moraju biti brojevi iz [0, 100], svaki upisan kao „oznaka; procenat\".",
     errorTooManyRows: "Previše redova pragova u jednom unosu.",
     errorDuplicateThreshold: "Dva praga imaju istu vrednost — opseg između njih ne postoji.",
     errorScoredPoints: "Osvojeni bodovi moraju biti iz [0, B].",
@@ -172,9 +178,11 @@ export const PRO_PROSVETA_SR = {
   "grade-statistics": {
     values: "Vrednosti",
     valuesHint:
-      "Ocene ili bodovi, razdvojeni razmakom, tačkom-zarezom ili novim redom. Zarez je decimalni znak — „3,5\" je jedna vrednost.",
+      "Ocene ili bodovi, razdvojeni razmakom, tačkom-zarezom ili novim redom. Zarez je decimalni " +
+      "znak — „3,5\" je jedna vrednost.",
     passThreshold: "Prag prolaznosti",
-    passThresholdHint: "Opciono. Granicu propisuje ustanova ili ministarstvo; Nexus je ne pretpostavlja.",
+    passThresholdHint:
+      "Opciono. Granicu propisuje ustanova ili ministarstvo; Nexus je ne pretpostavlja.",
 
     results: "Rezultat",
     count: "n",
@@ -187,7 +195,8 @@ export const PRO_PROSVETA_SR = {
     q1: "Q1",
     q3: "Q3",
     iqr: "IQR",
-    quartilesDegenerateNote: "Kvartili se ne prikazuju — niz je prekratak za isključivu metodu (n < 4).",
+    quartilesDegenerateNote:
+      "Kvartili se ne prikazuju — niz je prekratak za isključivu metodu (n < 4).",
     quartileMethodNote: "Kvartili: isključiva metoda (Moore–McCabe).",
     populationVariance: "Populaciona varijansa",
     populationDeviation: "Populaciona standardna devijacija",
@@ -267,8 +276,10 @@ export const PRO_PROSVETA_SR = {
     errorCorrect: "Broj tačnih odgovora mora biti ceo broj od 0 do N.",
     errorUnansweredTreatment: "Izaberi kako se neodgovoreni računaju.",
     errorUnanswered: "Broj neodgovorenih mora biti ceo broj ≥ 0.",
-    errorUpper: "Bolja grupa: tačni i veličina moraju biti celi brojevi, tačni ≤ veličina i ≤ N, C.",
-    errorLower: "Slabija grupa: tačni i veličina moraju biti celi brojevi, tačni ≤ veličina i ≤ N, C.",
+    errorUpper:
+      "Bolja grupa: tačni i veličina moraju biti celi brojevi, tačni ≤ veličina i ≤ N, C.",
+    errorLower:
+      "Slabija grupa: tačni i veličina moraju biti celi brojevi, tačni ≤ veličina i ≤ N, C.",
     errorGroups: "Zbir grupa ne sme premašiti ukupan broj učenika ni tačnih odgovora.",
   },
 
@@ -278,13 +289,16 @@ export const PRO_PROSVETA_SR = {
     dateHint: "Format DD.MM.GGGG.",
     weekdays: "Dani u nedelji sa brojem časova",
     weekdaysHint:
-      "Jedan red po danu: broj dana u nedelji (1 = ponedeljak … 7 = nedelja, ISO 8601) i broj časova, razdvojeni tačkom-zarezom — npr. „2; 1\".",
+      "Jedan red po danu: broj dana u nedelji (1 = ponedeljak … 7 = nedelja, ISO 8601) i broj " +
+      "časova, razdvojeni tačkom-zarezom — npr. „2; 1\".",
     excludedDates: "Izuzeti datumi",
     excludedDatesHint:
-      "Jedan datum po redu, format DD.MM.GGGG. Nexus nema ugrađen kalendar praznika — računaju se samo datumi upisani ovde.",
+      "Jedan datum po redu, format DD.MM.GGGG. Nexus nema ugrađen kalendar praznika — računaju " +
+      "se samo datumi upisani ovde.",
     makeupDays: "Dani koji rade po rasporedu drugog dana",
     makeupDaysHint:
-      "Jedan red po danu: datum i dan u nedelji čiji se raspored primenjuje, razdvojeni tačkom-zarezom — npr. „15.10.2026; 1\".",
+      "Jedan red po danu: datum i dan u nedelji čiji se raspored primenjuje, razdvojeni " +
+      "tačkom-zarezom — npr. „15.10.2026; 1\".",
     lessonMinutes: "Trajanje časa (minuta)",
     prescribedHours: "Propisan fond časova",
     prescribedHoursHint: "Opciono — godišnji fond iz nastavnog plana; Nexus ga ne zna.",
@@ -312,11 +326,14 @@ export const PRO_PROSVETA_SR = {
     prescribedHoursLabel: "Propisan fond časova",
     hoursDifferenceLabel: "Razlika izračunato − propisano",
     hoursRatioLabel: "Odnos izračunato/propisano",
-    noHolidayNote: "Nexus nema ugrađen kalendar praznika — oduzeti su samo datumi koje si sam upisao.",
+    noHolidayNote:
+      "Nexus nema ugrađen kalendar praznika — oduzeti su samo datumi koje si sam upisao.",
     weekdayNames: ["Ponedeljak", "Utorak", "Sreda", "Četvrtak", "Petak", "Subota", "Nedelja"],
 
     inputs: "Uneseno",
-    formula: "prvi = start + ((w − isoDan(start)+7) mod 7)     termini = max(0, broj − izuzeto − nadU + nadIz)",
+    formula:
+      "prvi = start + ((w − isoDan(start)+7) mod 7)     termini = max(0, broj − izuzeto − nadU + " +
+      "nadIz)",
 
     errorStart: "Početni datum nije ispravan datum gregorijanskog kalendara.",
     errorEnd: "Krajnji datum nije ispravan ili je raniji od početnog.",
@@ -326,14 +343,17 @@ export const PRO_PROSVETA_SR = {
     errorPrescribedHours: "Propisan fond časova mora biti veći od nule.",
     errorTooManyRows: "Previše redova u jednom unosu.",
     errorExcludedDates: "Svaki izuzeti datum mora biti ispravan datum gregorijanskog kalendara.",
-    errorMakeupDays: "Svaki red nadoknade mora imati ispravan datum unutar perioda i dan u nedelji 1–7, bez sudara sa izuzetim ili drugim nadoknadama.",
+    errorMakeupDays:
+      "Svaki red nadoknade mora imati ispravan datum unutar perioda i dan u nedelji 1–7, bez " +
+      "sudara sa izuzetim ili drugim nadoknadama.",
   },
 
   "lesson-timeline": {
     start: "Vreme početka",
     startHint: "Format HH:MM, 24-časovni zapis, npr. 08:00.",
     activities: "Aktivnosti (naziv; trajanje u minutima)",
-    activitiesHint: "Jedan red po aktivnosti, naziv i trajanje razdvojeni tačkom-zarezom — npr. „Uvod; 5\".",
+    activitiesHint:
+      "Jedan red po aktivnosti, naziv i trajanje razdvojeni tačkom-zarezom — npr. „Uvod; 5\".",
     lessonMinutes: "Trajanje časa (minuta)",
     lessonMinutesHint: "Opciono — okvir u koji se aktivnosti smeštaju.",
     dayUnit: "dan",
@@ -399,7 +419,9 @@ export const PRO_PROSVETA_SR = {
     deviationPopulation: "Populaciona (deljeno sa n)",
     deviationSample: "Uzoračka (deljeno sa n−1)",
     targetMean: "Ciljna sredina M",
-    targetHint: "Opciono — proizvoljna skala, npr. sredina 100, devijacija 15. Oba polja se upisuju zajedno.",
+    targetHint:
+      "Opciono — proizvoljna skala, npr. sredina 100, devijacija 15. Oba polja se upisuju " +
+      "zajedno.",
     targetDeviation: "Ciljna devijacija S",
     zForRaw: "z-vrednost za obrnut račun",
     reverseHint: "Opciono — vraća sirov bod iz z, T-boda ili vrednosti na ciljnoj skali.",
@@ -409,7 +431,9 @@ export const PRO_PROSVETA_SR = {
     results: "Rezultat",
     z: "z",
     tScore: "T-bod",
-    tScoreSource: "T-skala (sredina 50, standardna devijacija 10) po: W. A. McCall, How to Measure in Education, 1922.",
+    tScoreSource:
+      "T-skala (sredina 50, standardna devijacija 10) po: W. A. McCall, How to Measure in " +
+      "Education, 1922.",
     targetScore: "Vrednost na ciljnoj skali",
     rawFromZ: "Sirov bod iz z",
     rawFromTScore: "Sirov bod iz T-boda",
@@ -426,7 +450,8 @@ export const PRO_PROSVETA_SR = {
     errorTargetDeviation: "Ciljna devijacija mora biti veća od nule — upiši i ciljnu sredinu.",
     errorZForRaw: "z-vrednost za obrnut račun nije čitljiv broj.",
     errorTScoreForRaw: "T-bod za obrnut račun nije čitljiv broj.",
-    errorTargetScoreForRaw: "Za obrnut račun sa ciljne skale prvo upiši ciljnu sredinu i devijaciju.",
+    errorTargetScoreForRaw:
+      "Za obrnut račun sa ciljne skale prvo upiši ciljnu sredinu i devijaciju.",
   },
 
   "test-printing": {
@@ -449,10 +474,13 @@ export const PRO_PROSVETA_SR = {
     leftInLastPack: "Preostalo u poslednjem pakovanju",
     amount: "Iznos",
     impositionNote:
-      "Pretpostavka: jedna strana testa po odštampanoj strani lista (bez brošure/imposicije). Iznos je prost proizvod broja listova i upisane cene, bez poreza i bez konverzije valuta.",
+      "Pretpostavka: jedna strana testa po odštampanoj strani lista (bez brošure/imposicije). " +
+      "Iznos je prost proizvod broja listova i upisane cene, bez poreza i bez konverzije valuta.",
 
     inputs: "Uneseno",
-    formula: "listova/primerku = dvostrano ? ceil(strana/2) : strana     pakovanja = ceil(listova/pakovanje)",
+    formula:
+      "listova/primerku = dvostrano ? ceil(strana/2) : strana     pakovanja = " +
+      "ceil(listova/pakovanje)",
 
     errorPages: "Broj strana po primerku mora biti ceo broj veći od nule.",
     errorCopies: "Broj primeraka mora biti ceo broj veći od nule.",
@@ -464,7 +492,8 @@ export const PRO_PROSVETA_SR = {
     totalHours: "Ukupan broj časova T",
     topics: "Teme (naziv; težina)",
     topicsHint:
-      "Jedan red po temi, naziv i težina razdvojeni tačkom-zarezom — npr. „Uvod; 20\". Težine ne moraju da daju 100.",
+      "Jedan red po temi, naziv i težina razdvojeni tačkom-zarezom — npr. „Uvod; 20\". Težine ne " +
+      "moraju da daju 100.",
 
     results: "Rezultat",
     colName: "Tema",
@@ -480,7 +509,9 @@ export const PRO_PROSVETA_SR = {
     no: "Ne",
 
     inputs: "Uneseno",
-    formula: "kvota_i = T·w_i/Σw     a_i = floor(kvota_i)     preostalih T−Σa_i časova ide najvećim ostacima",
+    formula:
+      "kvota_i = T·w_i/Σw     a_i = floor(kvota_i)     preostalih T−Σa_i časova ide najvećim " +
+      "ostacima",
 
     errorTotalHours: "Ukupan broj časova mora biti ceo broj veći od nule.",
     errorWeights: "Unesi bar jedan red sa težinom > 0; sve težine moraju biti ≥ 0.",
@@ -490,7 +521,8 @@ export const PRO_PROSVETA_SR = {
   "weighted-grade": {
     components: "Komponente (naziv; osvojeno; maksimum; težina)",
     componentsHint:
-      "Jedan red po komponenti, razdvojeno tačkom-zarezom — npr. „Kolokvijum 1; 18; 25; 20\". Bar jedan red mora imati težinu > 0.",
+      "Jedan red po komponenti, razdvojeno tačkom-zarezom — npr. „Kolokvijum 1; 18; 25; 20\". " +
+      "Bar jedan red mora imati težinu > 0.",
     totalPoints: "Ukupan broj bodova T",
     totalPointsHint: "Opciono — skala na koju se rezultat preslikava.",
     targetPercent: "Ciljni ukupan procenat",
@@ -504,7 +536,8 @@ export const PRO_PROSVETA_SR = {
     colWeight: "Normalizovana težina",
     weight: "težina",
     totalPercent: "Ponderisan procenat",
-    lowerBoundNote: "Preostala komponenta još nema ocenu — ovo je donja granica, ne konačan rezultat.",
+    lowerBoundNote:
+      "Preostala komponenta još nema ocenu — ovo je donja granica, ne konačan rezultat.",
     mappedPoints: "Preslikano na T bodova",
     targetOutcome: "Ishod",
     outcomeReachable: "Potrebno bodova na preostaloj komponenti",

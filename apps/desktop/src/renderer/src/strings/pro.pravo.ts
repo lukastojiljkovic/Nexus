@@ -49,8 +49,8 @@ export const PRO_PRAVO_SR = {
     noticeExact: "Tačan anuitet (6 decimala)",
     noticeShortfall: "Razlika prema kamati na stanje (6 decimala)",
     noticeNote:
-      "Zaokruživanje na 2 decimale ne pokazuje ostatak koji dug stvarno otplaćuje. Dug se i dalje " +
-      "otplaćuje — dva zaokružena broja su se samo poklopila.",
+      "Zaokruživanje na 2 decimale ne pokazuje ostatak koji dug stvarno otplaćuje. Dug se i " +
+      "dalje otplaćuje — dva zaokružena broja su se samo poklopila.",
 
     colIndex: "#",
     colDate: "Datum",
@@ -61,7 +61,8 @@ export const PRO_PRAVO_SR = {
 
     inputs: "Uneseno",
     formula:
-      "i > 0: A = G·i / (1 − (1+i)^(−n))     i = 0: A = G/n     poslednja rata = preostalo stanje + kamata",
+      "i > 0: A = G·i / (1 − (1+i)^(−n))     i = 0: A = G/n     poslednja rata = preostalo " +
+      "stanje + kamata",
 
     errorPrincipal: "Glavnica mora biti veća od nule, najviše 10^12.",
     errorRate: "Nominalna stopa mora biti između −99 % i 1000 %.",
@@ -106,11 +107,12 @@ export const PRO_PRAVO_SR = {
 
     inputs: "Uneseno",
     formula:
-      "klasa(n): o=1 ∧ t≠11 → jednina; o∈{2,3,4} ∧ t∉{12,13,14} → paukal; inače množina " +
-      "(t = n mod 100, o = n mod 10); grupa hiljada = 1 → „hiljadu\"; nulta grupa se preskače sa skalom",
+      "klasa(n): o=1 ∧ t≠11 → jednina; o∈{2,3,4} ∧ t∉{12,13,14} → paukal; inače množina (t = n " +
+      "mod 100, o = n mod 10); grupa hiljada = 1 → „hiljadu\"; nulta grupa se preskače sa skalom",
 
     errorAmount:
-      "Iznos mora biti nenegativan broj sa najviše 8 decimala i celim delom do 999 999 999 999 999.",
+      "Iznos mora biti nenegativan broj sa najviše 8 decimala i celim delom do 999 999 999 999 " +
+      "999.",
     errorMainUnit: "Za sopstvenu valutu unesi sva tri oblika glavne jedinice.",
     errorSubUnitsPerUnit: "Podjedinica po jedinici mora biti 0 ili stepen broja deset.",
     errorSubUnit: "Za sopstvenu valutu sa podjedinicom unesi sva tri oblika podjedinice.",
@@ -119,8 +121,8 @@ export const PRO_PRAVO_SR = {
   "jmbg-provera": {
     digitsInput: "JMBG",
     digitsHint:
-      "13 cifara za proveru, ili 12 cifara za izračun kontrolne cifre. Razmaci, crtice i tačke se " +
-      "uklanjaju pre obrade.",
+      "13 cifara za proveru, ili 12 cifara za izračun kontrolne cifre. Razmaci, crtice i tačke " +
+      "se uklanjaju pre obrade.",
     mode: "Režim",
     modeCheck: "Proveri 13 cifara",
     modeCompute: "Izračunaj kontrolnu cifru iz 12",
@@ -135,8 +137,8 @@ export const PRO_PRAVO_SR = {
     checkDigit: "Izračunata kontrolna cifra",
     matches: "Kontrolna cifra se slaže sa unetom",
     matchesNote:
-      "Slaganje kontrolne cifre znači samo da zapis odgovara sopstvenoj kontrolnoj aritmetici — ne " +
-      "da je broj ikada izdat, ni kome.",
+      "Slaganje kontrolne cifre znači samo da zapis odgovara sopstvenoj kontrolnoj aritmetici — " +
+      "ne da je broj ikada izdat, ni kome.",
     digits: "Pun trinaestocifreni zapis",
 
     dateTitle: "Datum iz zapisa",
@@ -154,8 +156,8 @@ export const PRO_PRAVO_SR = {
     centuryPast: "GGG ≥ 800 → 1000 + GGG",
     centuryPresent: "GGG < 800 → 2000 + GGG",
     centuryNote:
-      "Pretvaranje trocifrene godine u zapisu je konvencija, ne podatak iz zapisa — pri niskom GGG " +
-      "izvedena godina može pasti u budućnost.",
+      "Pretvaranje trocifrene godine u zapisu je konvencija, ne podatak iz zapisa — pri niskom " +
+      "GGG izvedena godina može pasti u budućnost.",
 
     otherTitle: "Ostali elementi zapisa",
     region: "Registarski broj (RR)",
@@ -166,8 +168,8 @@ export const PRO_PRAVO_SR = {
 
     inputs: "Uneseno",
     formula:
-      "s = Σ ponder·cifra (ponderi 7,6,5,4,3,2 dvaput preko prvih 12 cifara)     m = 11 − (s mod 11)" +
-      "     K = m ako je 1 ≤ m ≤ 9, inače 0",
+      "s = Σ ponder·cifra (ponderi 7,6,5,4,3,2 dvaput preko prvih 12 cifara)     m = 11 − (s mod " +
+      "11)     K = m ako je 1 ≤ m ≤ 9, inače 0",
 
     errorDigits: "Unos mora imati tačno 13 (odnosno 12) cifara, posle uklanjanja razmaka i crtica.",
   },
@@ -188,8 +190,8 @@ export const PRO_PRAVO_SR = {
     unitA: "a",
     unitM2: "m²",
     wasNormalisedNote:
-      "Uneti zapis nije bio normalizovan (ari preko 99 ili ostatak preko 100 m²) — prikazani zapis " +
-      "je normalizovan oblik iste površine.",
+      "Uneti zapis nije bio normalizovan (ari preko 99 ili ostatak preko 100 m²) — prikazani " +
+      "zapis je normalizovan oblik iste površine.",
     roundedNote: "Uneta vrednost je imala više od 4 decimale i zaokružena je na 4 decimale.",
 
     inputs: "Uneseno",
@@ -218,7 +220,8 @@ export const PRO_PRAVO_SR = {
     countFirstDay: "Računaj prvi dan",
     countFirstDayHint: "Konvencija brojanja, ne propis — bira se izričito.",
     fracNum: "Razlomak za proveru — brojilac",
-    fractionHint: "Deo trajanja koji se proverava, npr. 1/2 ili 2/3. Ostavi prazno ako nije potrebno.",
+    fractionHint:
+      "Deo trajanja koji se proverava, npr. 1/2 ili 2/3. Ostavi prazno ako nije potrebno.",
     fracDen: "Razlomak za proveru — imenilac",
     fraction: "Razlomak za proveru",
     noFraction: "nije unet",
@@ -247,8 +250,9 @@ export const PRO_PRAVO_SR = {
 
     inputs: "Uneseno",
     formula:
-      "kraj = početak + (godine·12 + meseci) meseci + dana     poslednji dan = kraj − (računajPrviDan ? 1 : 0)" +
-      "     odbijeno = floor(uračunatiDani · odnos)     danaZaDeo = ceil(ukupno · brojilac / imenilac)",
+      "kraj = početak + (godine·12 + meseci) meseci + dana     poslednji dan = kraj − " +
+      "(računajPrviDan ? 1 : 0)     odbijeno = floor(uračunatiDani · odnos)     danaZaDeo = " +
+      "ceil(ukupno · brojilac / imenilac)",
 
     errorStartDate: "Datum početka nije ispravan kalendarski datum.",
     errorYears: "Broj godina je ceo broj od 0 do 100.",
@@ -295,8 +299,8 @@ export const PRO_PRAVO_SR = {
     principal: "Glavnica",
     rates: "Periodi i stope",
     ratesHint:
-      "Jedan red po periodu, u obliku GGGG-MM-DD; stopa — datum od kog stopa važi i godišnja stopa " +
-      "u procentima. Nijedna stopa nije ugrađena, sve su tvoj unos.",
+      "Jedan red po periodu, u obliku GGGG-MM-DD; stopa — datum od kog stopa važi i godišnja " +
+      "stopa u procentima. Nijedna stopa nije ugrađena, sve su tvoj unos.",
     from: "Datum od",
     to: "Datum do",
     dateHint: "Format GGGG-MM-DD.",
@@ -342,8 +346,9 @@ export const PRO_PRAVO_SR = {
     errorPrincipal: "Glavnica mora biti veća od nule, najviše 10^12.",
     errorFrom: "Datum od nije ispravan kalendarski datum.",
     errorTo: "Datum do nije ispravan kalendarski datum, i mora biti posle datuma od.",
-    errorRates: "Redovi stope moraju imati ispravan datum i stopu od −99 % do 1000 %, prvi red mora " +
-      "početi na datumu od ili pre njega.",
+    errorRates:
+      "Redovi stope moraju imati ispravan datum i stopu od −99 % do 1000 %, prvi red mora početi " +
+      "na datumu od ili pre njega.",
     errorDayBasis: "Osnova dana nije prepoznata.",
     errorCapBoundary: "Za godišnju kapitalizaciju izaberi granicu kapitalizacije.",
   },
@@ -352,8 +357,8 @@ export const PRO_PRAVO_SR = {
     totalAmount: "Ukupan iznos",
     weights: "Udeli",
     weightsHint:
-      "Jedna težina po redu — ceo broj, razlomak b/i (npr. 1/3), ili procenat (npr. 25%). Zapisi se " +
-      "mogu mešati.",
+      "Jedna težina po redu — ceo broj, razlomak b/i (npr. 1/3), ili procenat (npr. 25%). Zapisi " +
+      "se mogu mešati.",
     smallestUnit: "Najmanja jedinica",
     unit001: "0,01",
     unit1: "1",
@@ -418,11 +423,12 @@ export const PRO_PRAVO_SR = {
     remainder: "Ostatak pri deljenju sa 97",
     matches: "Kontrolni broj se slaže",
     matchesNote:
-      "Slaganje po modulu 97 znači samo da se niz slaže sa sopstvenom kontrolnom aritmetikom — ne da " +
-      "račun postoji, da je otvoren, ni čiji je.",
+      "Slaganje po modulu 97 znači samo da se niz slaže sa sopstvenom kontrolnom aritmetikom — " +
+      "ne da račun postoji, da je otvoren, ni čiji je.",
 
     inputs: "Uneseno",
-    formula: "r = 0; za svaku cifru c: r = (r·10 + c) mod 97     kontrolni = 98 − mod97(niz ‖ „00\")",
+    formula:
+      "r = 0; za svaku cifru c: r = (r·10 + c) mod 97     kontrolni = 98 − mod97(niz ‖ „00\")",
 
     errorAccount: "Broj računa mora imati tačno 18 (provera) ili 16 (izračunavanje) cifara.",
     errorIban: "IBAN mora imati dva slova države, dve kontrolne cifre u opsegu 02–98, i BBAN.",
@@ -440,7 +446,8 @@ export const PRO_PRAVO_SR = {
       "Brojevi 1–7 odvojeni zapetom (1 = ponedeljak … 7 = nedelja). Nijedan dan nije ugrađen kao " +
       "neradan.",
     dates: "Neradni datumi",
-    datesHint: "Jedan datum po redu, GGGG-MM-DD. Alatka ne nosi nijedan datum — spisak je tvoj unos.",
+    datesHint:
+      "Jedan datum po redu, GGGG-MM-DD. Alatka ne nosi nijedan datum — spisak je tvoj unos.",
     yes: "Da",
     no: "Ne",
 
@@ -452,7 +459,8 @@ export const PRO_PRAVO_SR = {
     listedInRange: "Unetih datuma u opsegu",
     fullWeeks: "Punih sedmica",
     remainderDays: "Ostatak dana",
-    reversedNote: "Uneti datumi su bili obrnuti — granice su zamenjene, broj dana je i dalje pozitivan.",
+    reversedNote:
+      "Uneti datumi su bili obrnuti — granice su zamenjene, broj dana je i dalje pozitivan.",
     effectiveLastDate: "Poslednji dan opsega posle eventualne zamene",
     firstWorkingDay: "Prvi radni dan",
     lastWorkingDay: "Poslednji radni dan",
@@ -460,8 +468,8 @@ export const PRO_PRAVO_SR = {
 
     inputs: "Uneseno",
     formula:
-      "za svaki dan x u opsegu: neradanPoNedelji || unetNeradan || radan — redosled je bitan, dan se " +
-      "broji jednom",
+      "za svaki dan x u opsegu: neradanPoNedelji || unetNeradan || radan — redosled je bitan, " +
+      "dan se broji jednom",
 
     errorFrom: "Datum od nije ispravan kalendarski datum.",
     errorTo: "Datum do nije ispravan kalendarski datum.",
@@ -556,8 +564,9 @@ export const PRO_PRAVO_SR = {
 
     inputs: "Uneseno",
     formula:
-      "osnova = računajRazmake ? saRazmacima : bezRazmaka     straneTačno = osnova / karakteraPoStrani" +
-      "     straneNaviše = ceil(straneTačno)     stranePola = ceil(straneTačno·2)/2",
+      "osnova = računajRazmake ? saRazmacima : bezRazmaka     straneTačno = osnova / " +
+      "karakteraPoStrani     straneNaviše = ceil(straneTačno)     stranePola = " +
+      "ceil(straneTačno·2)/2",
 
     errorText: "Tekst sme imati najviše 2 000 000 karaktera.",
     errorCharactersPerPage: "Karaktera po strani je ceo broj od 1 do 100000.",
@@ -570,7 +579,8 @@ export const PRO_PRAVO_SR = {
     totalArea: "Ukupna površina",
     totalAreaHint: "U m². Opciono — bez nje kolona površine se ne prikazuje.",
     targetDenominator: "Ciljni imenilac",
-    targetDenominatorHint: "Opciono. Bez njega se koristi najmanji zajednički sadržalac unetih imenilaca.",
+    targetDenominatorHint:
+      "Opciono. Bez njega se koristi najmanji zajednički sadržalac unetih imenilaca.",
     yes: "Da",
     no: "Ne",
 
@@ -641,7 +651,8 @@ export const PRO_PRAVO_SR = {
     actualDate: "Stvarno ispunjenje",
     dateHint: "Format GGGG-MM-DD.",
     capPercent: "Ograničenje (procenat osnovice)",
-    capPercentHint: "Iz ugovora ili propisa. Opciono — bez njega penal nije ograničen. Nexus ne nudi vrednost.",
+    capPercentHint:
+      "Iz ugovora ili propisa. Opciono — bez njega penal nije ograničen. Nexus ne nudi vrednost.",
     includeCompletionDay: "Uključi dan ispunjenja",
     yes: "Da",
     no: "Ne",
@@ -657,8 +668,8 @@ export const PRO_PRAVO_SR = {
 
     inputs: "Uneseno",
     formula:
-      "penal = osnovica·(dnevnaStopa/100)·danaDocnje     granica = osnovica·(ograničenje/100)     " +
-      "danGranice = ceil(ograničenje/dnevnaStopa)",
+      "penal = osnovica·(dnevnaStopa/100)·danaDocnje     granica = osnovica·(ograničenje/100)    " +
+      " danGranice = ceil(ograničenje/dnevnaStopa)",
 
     errorBase: "Osnovica mora biti veća od nule, najviše 10^12.",
     errorDailyRate: "Dnevna stopa mora biti između 0 % i 100 %.",
@@ -695,8 +706,8 @@ export const PRO_PRAVO_SR = {
     overlapsTitle: "Preklapanja",
     noOverlaps: "Nema preklapanja među unetim periodima.",
     overlapsNote:
-      "Alatka preklapanje samo pokazuje — da li se dvostruko računa zavisi od toga šta se sabira, a " +
-      "to alatka ne zna.",
+      "Alatka preklapanje samo pokazuje — da li se dvostruko računa zavisi od toga šta se " +
+      "sabira, a to alatka ne zna.",
     colFirst: "Prvi period",
     colSecond: "Drugi period",
     colFrom: "Od",

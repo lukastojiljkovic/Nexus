@@ -48,10 +48,12 @@ export const PRO_BIZNIS_SR = {
 
     inputs: "Uneseno",
     formula:
-      "m = 60·H + MM (ili round(x·60) za decimalni zapis)     zaokruženo po izabranom pravilu i mestu     iznos = zaokruženo/60 · satnica",
+      "m = 60·H + MM (ili round(x·60) za decimalni zapis)     zaokruženo po izabranom pravilu i " +
+      "mestu     iznos = zaokruženo/60 · satnica",
 
     errorEntries:
-      "Svaka stavka mora biti vreme u obliku „1:45\", „1h 45min\" ili decimalno „1,75\" — bez praznih redova između stavki.",
+      "Svaka stavka mora biti vreme u obliku „1:45\", „1h 45min\" ili decimalno „1,75\" — bez " +
+      "praznih redova između stavki.",
     errorInterval: "Interval zaokruživanja je ceo broj minuta od 1 do 120, ili prazno.",
     errorRate: "Satnica ne sme biti negativna.",
 
@@ -65,7 +67,8 @@ export const PRO_BIZNIS_SR = {
     variableCost: "Varijabilni trošak po komadu",
     targetProfit: "Željena dobit za period",
     targetProfitHint:
-      "Za ISTI period za koji su uneti fiksni troškovi — inače se sabiraju dve različite vremenske osnove. Prazno znači da cilj nije postavljen.",
+      "Za ISTI period za koji su uneti fiksni troškovi — inače se sabiraju dve različite " +
+      "vremenske osnove. Prazno znači da cilj nije postavljen.",
     plannedUnits: "Planirana prodaja",
     plannedUnitsHint: "Neobavezno, samo za sigurnosnu marginu — u komadima.",
 
@@ -86,7 +89,8 @@ export const PRO_BIZNIS_SR = {
 
     inputs: "Uneseno",
     formula:
-      "km = cena − varijabilni trošak     komada = ⌈fiksni / km⌉     prihod = komada · cena     sigurnosna margina = (planirano − fiksni/km) / planirano",
+      "km = cena − varijabilni trošak     komada = ⌈fiksni / km⌉     prihod = komada · cena     " +
+      "sigurnosna margina = (planirano − fiksni/km) / planirano",
 
     errorFixedCosts: "Fiksni troškovi ne smeju biti negativni.",
     errorPrice: "Prodajna cena mora biti veća od nule.",
@@ -94,9 +98,11 @@ export const PRO_BIZNIS_SR = {
     errorTargetProfit: "Željena dobit ne sme biti negativna.",
     errorPlannedUnits: "Planirana prodaja mora biti broj.",
     errorMarginZero:
-      "Kontribuciona marža je tačno nula — svaki dodatni komad ostavlja gubitak jednak fiksnim troškovima, tačka pokrića ne postoji.",
+      "Kontribuciona marža je tačno nula — svaki dodatni komad ostavlja gubitak jednak fiksnim " +
+      "troškovima, tačka pokrića ne postoji.",
     errorMarginNegative:
-      "Kontribuciona marža je negativna — svaki dodatni komad povećava gubitak, tačka pokrića ne postoji.",
+      "Kontribuciona marža je negativna — svaki dodatni komad povećava gubitak, tačka pokrića ne " +
+      "postoji.",
 
     unitPieces: "kom",
   },
@@ -105,7 +111,8 @@ export const PRO_BIZNIS_SR = {
     basePrice: "Osnovna cena",
     steps: "Niz popusta",
     stepsHint:
-      "Procenat po stavci, jedan po redu ili razdvojeno zarezom. Negativna stavka je doplata i nema donju granicu; nijedna stavka ne sme preći 100 %.",
+      "Procenat po stavci, jedan po redu ili razdvojeno zarezom. Negativna stavka je doplata i " +
+      "nema donju granicu; nijedna stavka ne sme preći 100 %.",
 
     results: "Rezultat",
     tableStep: "Korak",
@@ -117,9 +124,11 @@ export const PRO_BIZNIS_SR = {
     equivalent: "Ekvivalentan jedinstven popust",
     equivalentSurcharge: "Ekvivalentna jedinstvena doplata",
     orderNote:
-      "Konačna cena ne zavisi od redosleda stavki — proizvod činilaca je komutativan. Cena posle svakog POJEDINAČNOG koraka zavisi.",
+      "Konačna cena ne zavisi od redosleda stavki — proizvod činilaca je komutativan. Cena posle " +
+      "svakog POJEDINAČNOG koraka zavisi.",
     fullStepNote:
-      "Stavka od 100 % svodi cenu na 0 — nijedna naredna stavka, popust ili doplata, više nema dejstvo.",
+      "Stavka od 100 % svodi cenu na 0 — nijedna naredna stavka, popust ili doplata, više nema " +
+      "dejstvo.",
 
     inputs: "Uneseno",
     formula:
@@ -158,7 +167,9 @@ export const PRO_BIZNIS_SR = {
 
     inputs: "Uneseno",
     formula:
-      "N = round(ostatak / jedinica)     osnovna = ⌊N / broj rata⌋     prve R rata dobijaju po jednu jedinicu više, R = N − osnovna · broj rata     datum(i) = prva rata + (i−1) · razmak, meren od PRVOG datuma",
+      "N = round(ostatak / jedinica)     osnovna = ⌊N / broj rata⌋     prve R rata dobijaju po " +
+      "jednu jedinicu više, R = N − osnovna · broj rata     datum(i) = prva rata + (i−1) · " +
+      "razmak, meren od PRVOG datuma",
 
     errorContractValue:
       "Ugovorena vrednost mora biti veća od nule i mora biti ceo umnožak jedinice zaokruživanja.",
@@ -167,13 +178,15 @@ export const PRO_BIZNIS_SR = {
     errorInstalments: "Broj rata je ceo broj od 1 do 600.",
     errorFirstDate: "Datum prve rate mora biti ispravan kalendarski datum.",
     errorStepMonths: "Razmak između rata je ceo broj meseci od 1 do 120.",
-    errorSchedule: "Ovim brojem rata i razmakom raspored izlazi van kalendara koji alatka podržava.",
+    errorSchedule:
+      "Ovim brojem rata i razmakom raspored izlazi van kalendara koji alatka podržava.",
   },
 
   "hourly-rate-target": {
     targetEarnings: "Željena godišnja zarada pre poreza",
     targetEarningsHint:
-      "Ovo je prihod koji treba fakturisati, a ne zarada koja ostaje posle poreza i doprinosa — alatka nijednu poresku stopu ne poznaje.",
+      "Ovo je prihod koji treba fakturisati, a ne zarada koja ostaje posle poreza i doprinosa — " +
+      "alatka nijednu poresku stopu ne poznaje.",
     businessCosts: "Godišnji poslovni troškovi",
     workWeeks: "Radnih nedelja godišnje",
     workWeeksHint: "1–53. Godišnji odmor i praznici su tvoj izbor, ne pretpostavka alatke.",
@@ -193,7 +206,8 @@ export const PRO_BIZNIS_SR = {
 
     inputs: "Uneseno",
     formula:
-      "naplativi sati = nedelja · sati/nedeljno · naplativost     cena sata = (zarada + troškovi) / naplativi sati     cena dana = cena sata · sati/dan",
+      "naplativi sati = nedelja · sati/nedeljno · naplativost     cena sata = (zarada + " +
+      "troškovi) / naplativi sati     cena dana = cena sata · sati/dan",
 
     errorTargetEarnings: "Željena zarada ne sme biti negativna.",
     errorBusinessCosts: "Poslovni troškovi ne smeju biti negativni.",
@@ -236,10 +250,12 @@ export const PRO_BIZNIS_SR = {
 
     inputs: "Uneseno",
     formula:
-      "premesti prva 4 znaka na kraj, slova A=10…Z=35, r = niz mod 97     provera: r = 1     sastavljanje: K = 98 − (BBAN + država + „00\") mod 97",
+      "premesti prva 4 znaka na kraj, slova A=10…Z=35, r = niz mod 97     provera: r = 1     " +
+      "sastavljanje: K = 98 − (BBAN + država + „00\") mod 97",
 
     errorIban:
-      "IBAN mora imati 5–34 znaka, prva dva slova A–Z, sledeća dva cifre, i samo cifre i velika slova posle toga.",
+      "IBAN mora imati 5–34 znaka, prva dva slova A–Z, sledeća dva cifre, i samo cifre i velika " +
+      "slova posle toga.",
     errorCountryCode: "Oznaka države su tačno dva slova, A–Z.",
     errorBban: "BBAN je 1–30 cifara i velikih slova.",
   },
@@ -252,7 +268,9 @@ export const PRO_BIZNIS_SR = {
     minMarginPercent: "Najmanja marža koju treba zadržati — % prodajne cene",
     minMarginHint: "Popuni ovo polje, uz nabavnu i prodajnu cenu, za najveći dozvoljeni popust.",
     fieldsHint:
-      "Popuni tačno DVA od četiri polja iznad (nabavna cena, prodajna cena, marža, markup) — treće i četvrto se izvode. Za najveći popust popuni nabavnu cenu, prodajnu cenu i najmanju maržu.",
+      "Popuni tačno DVA od četiri polja iznad (nabavna cena, prodajna cena, marža, markup) — " +
+      "treće i četvrto se izvode. Za najveći popust popuni nabavnu cenu, prodajnu cenu i " +
+      "najmanju maržu.",
 
     results: "Rezultat",
     resultCost: "Nabavna cena",
@@ -266,11 +284,13 @@ export const PRO_BIZNIS_SR = {
     priceAfterDiscount: "Cena posle tog popusta",
     marginAfterDiscountPercent: "Marža koja ostaje posle tog popusta",
     belowNote:
-      "Prodajna cena je već ispod zadate najmanje marže — nezaokrugla vrednost popusta izlazi negativna, pa je prikazani popust 0,00 %.",
+      "Prodajna cena je već ispod zadate najmanje marže — nezaokrugla vrednost popusta izlazi " +
+      "negativna, pa je prikazani popust 0,00 %.",
 
     inputs: "Uneseno",
     formula:
-      "Z = P − C     markup = Z/C     marža = Z/P     najveći popust: d = 1 − C / (P · (1 − g_min))",
+      "Z = P − C     markup = Z/C     marža = Z/P     najveći popust: d = 1 − C / (P · (1 − " +
+      "g_min))",
 
     errorCost: "Nabavna cena mora biti veća od nule.",
     errorPrice: "Prodajna cena mora biti veća od nule.",
@@ -278,7 +298,8 @@ export const PRO_BIZNIS_SR = {
     errorMarkupPercent: "Markup mora biti veći od −100 %.",
     errorMinMarginPercent: "Najmanja marža mora biti manja od 100 %.",
     errorAmbiguous:
-      "Popuni tačno dva od polja nabavna cena / prodajna cena / marža / markup, ili nabavnu cenu, prodajnu cenu i najmanju maržu za najveći popust.",
+      "Popuni tačno dva od polja nabavna cena / prodajna cena / marža / markup, ili nabavnu " +
+      "cenu, prodajnu cenu i najmanju maržu za najveći popust.",
 
     unitPercent: "%",
   },
@@ -304,7 +325,8 @@ export const PRO_BIZNIS_SR = {
     shiftBackward: "Nazad, na prethodni radni dan",
     weekendDays: "Neradni dani u nedelji",
     weekendDaysHint:
-      "Brojevi 0–6 razdvojeni zarezom; 0 je ponedeljak, 6 je nedelja. Prazno znači da nijedan dan u nedelji nije neradan po ovom pravilu.",
+      "Brojevi 0–6 razdvojeni zarezom; 0 je ponedeljak, 6 je nedelja. Prazno znači da nijedan " +
+      "dan u nedelji nije neradan po ovom pravilu.",
     nonWorkingDays: "Neradni dani (praznici)",
     nonWorkingDaysHint:
       "Po jedan datum u redu, u obliku DD.MM.GGGG. Nexus nema ugrađen kalendar praznika.",
@@ -319,11 +341,14 @@ export const PRO_BIZNIS_SR = {
     dueDateBeforeShift: "Datum dospeća pre pomeranja",
     shiftedDays: "Koliko dana je pomeranje dodalo",
     capReachedNote:
-      "Pomeranje je dostiglo granicu od 30 uzastopnih koraka bez radnog dana; prikazani datum je poslednji ispitani.",
+      "Pomeranje je dostiglo granicu od 30 uzastopnih koraka bez radnog dana; prikazani datum je " +
+      "poslednji ispitani.",
     totalDays: "Ukupno dana od izdavanja do dospeća",
     daysLate: "Dana kašnjenja prema referentnom datumu",
     daysUntilDue: "Dana do dospeća prema referentnom datumu",
-    note: "Rok, pravilo pomeranja i spisak neradnih dana su tvoji uneti podaci — Nexus ne zna koji rok važi ni da li je neko pravo isteklo.",
+    note:
+      "Rok, pravilo pomeranja i spisak neradnih dana su tvoji uneti podaci — Nexus ne zna koji " +
+      "rok važi ni da li je neko pravo isteklo.",
 
     weekdayNames: [
       "ponedeljak",
@@ -337,7 +362,8 @@ export const PRO_BIZNIS_SR = {
 
     inputs: "Uneseno",
     formula:
-      "dospeće = izdato + N (dana, od kraja meseca, ili meseci uz zadržan dan i pravilo za kraj meseca)     pomeranje: dok je dospeće neradno, +1/−1 dan, najviše 30 koraka",
+      "dospeće = izdato + N (dana, od kraja meseca, ili meseci uz zadržan dan i pravilo za kraj " +
+      "meseca)     pomeranje: dok je dospeće neradno, +1/−1 dan, najviše 30 koraka",
 
     errorIssueDate: "Datum izdavanja mora biti ispravan kalendarski datum.",
     errorReferenceDate: "Referentni datum mora biti ispravan kalendarski datum.",
@@ -366,7 +392,8 @@ export const PRO_BIZNIS_SR = {
     yes: "da",
     no: "ne",
     overTwentyNote:
-      "Referenca ima više od 20 cifara — preko polja koje dozvoljava NBS-ov obrazac naloga za plaćanje. MOD 97-10 sam po sebi nema ograničenje dužine.",
+      "Referenca ima više od 20 cifara — preko polja koje dozvoljava NBS-ov obrazac naloga za " +
+      "plaćanje. MOD 97-10 sam po sebi nema ograničenje dužine.",
 
     inputs: "Uneseno",
     formula: "r = referenca mod 97 (cifra po cifru)     K = 98 − ((r · 100) mod 97)",
@@ -379,7 +406,8 @@ export const PRO_BIZNIS_SR = {
     total: "Ukupan iznos",
     shares: "Udeli",
     sharesHint:
-      "Brojevi ili procenti, jedan po redu — svaki ≥ 0, bar jedan veći od nule. Ne moraju se sabirati u 100.",
+      "Brojevi ili procenti, jedan po redu — svaki ≥ 0, bar jedan veći od nule. Ne moraju se " +
+      "sabirati u 100.",
     unit: "Najmanja jedinica",
     unit001: "0,01",
     unit1: "1",
@@ -398,19 +426,23 @@ export const PRO_BIZNIS_SR = {
 
     inputs: "Uneseno",
     formula:
-      "N = round(ukupno / jedinica)     osnovni deo = ⌊N · udeoᵢ / zbir udela⌋     najveći ostaci dobijaju po jednu jedinicu više, ranije uneta stavka ima prednost kod izjednačenog ostatka",
+      "N = round(ukupno / jedinica)     osnovni deo = ⌊N · udeoᵢ / zbir udela⌋     najveći " +
+      "ostaci dobijaju po jednu jedinicu više, ranije uneta stavka ima prednost kod izjednačenog " +
+      "ostatka",
 
     errorTotal: "Ukupan iznos ne sme biti negativan.",
     errorUnit: "Najmanja jedinica mora biti veća od nule.",
     errorShares:
-      "Mora postojati bar jedan udeo, svaki ≥ 0 i bar jedan veći od nule; nijedan ne sme biti negativan.",
+      "Mora postojati bar jedan udeo, svaki ≥ 0 i bar jedan veći od nule; nijedan ne sme biti " +
+      "negativan.",
   },
 
   "simple-interest-days": {
     principal: "Glavnica",
     annualRatePercent: "Godišnja stopa",
     annualRatePercentHint:
-      "Zakonska ili ugovorena stopa koju biraš i unosiš ti — Nexus nijednu stopu ne poznaje i nijednu ne nudi.",
+      "Zakonska ili ugovorena stopa koju biraš i unosiš ti — Nexus nijednu stopu ne poznaje i " +
+      "nijednu ne nudi.",
     fromDay: "Datum od — dan",
     fromMonth: "Datum od — mesec",
     fromYear: "Datum od — godina",
@@ -434,11 +466,14 @@ export const PRO_BIZNIS_SR = {
     dailyInterest: "Dnevna kamata",
     total: "Glavnica + kamata",
     note:
-      "Kamata je PROSTA, bez kapitalisanja. Stopa je ona koju si uneo — Nexus je ne bira i ne izriče da li potraživanje postoji.",
+      "Kamata je PROSTA, bez kapitalisanja. Stopa je ona koju si uneo — Nexus je ne bira i ne " +
+      "izriče da li potraživanje postoji.",
 
     inputs: "Uneseno",
     formula:
-      "ACT/365, ACT/360: dani = JDN(do) − JDN(od) (+1 ako se broje oba kraja)     30E/360: dani = 360·Δgodina + 30·Δmesec + (D2−D1), D = min(dan, 30)     kamata = glavnica · stopa/100 · dani / delilac",
+      "ACT/365, ACT/360: dani = JDN(do) − JDN(od) (+1 ako se broje oba kraja)     30E/360: dani " +
+      "= 360·Δgodina + 30·Δmesec + (D2−D1), D = min(dan, 30)     kamata = glavnica · stopa/100 · " +
+      "dani / delilac",
 
     errorPrincipal: "Glavnica ne sme biti negativna.",
     errorAnnualRatePercent: "Godišnja stopa ne sme biti negativna.",
@@ -455,11 +490,14 @@ export const PRO_BIZNIS_SR = {
     modeCompute: "Izračunaj kontrolnu cifru iz prefiksa",
     totalDigits: "Ukupan broj cifara",
     totalDigitsHint:
-      "Za PIB se kuca 9, za matični broj pravnog lica 8. Nexus ne pretpostavlja nijednu dužinu. U režimu izračunavanja ovo je ukupna dužina GOTOVOG broja, dakle prefiks ima jednu cifru manje.",
+      "Za PIB se kuca 9, za matični broj pravnog lica 8. Nexus ne pretpostavlja nijednu dužinu. " +
+      "U režimu izračunavanja ovo je ukupna dužina GOTOVOG broja, dakle prefiks ima jednu cifru " +
+      "manje.",
     value: "Broj",
     valueHint: "Onoliko cifara koliko je uneto gore. Razmaci se uklanjaju.",
     prefix: "Prefiks",
-    prefixHint: "Za jednu cifru kraći od ukupnog broja cifara — kontrolna cifra se dopisuje na kraj.",
+    prefixHint:
+      "Za jednu cifru kraći od ukupnog broja cifara — kontrolna cifra se dopisuje na kraj.",
 
     results: "Rezultat",
     checkDigit: "Izračunata kontrolna cifra",
@@ -473,7 +511,8 @@ export const PRO_BIZNIS_SR = {
 
     inputs: "Uneseno",
     formula:
-      "p = 10; za svaku cifru d: s = (p+d) mod 10, s=0 → s=10, p = 2s mod 11     kontrolna cifra = (11 − p) mod 10",
+      "p = 10; za svaku cifru d: s = (p+d) mod 10, s=0 → s=10, p = 2s mod 11     kontrolna cifra " +
+      "= (11 − p) mod 10",
 
     errorTotalDigits: "Ukupan broj cifara je od 2 do 40.",
     errorNumber: "Broj mora sadržati samo cifre, tačno onoliko koliko je uneto kao ukupna dužina.",
@@ -485,7 +524,8 @@ export const PRO_BIZNIS_SR = {
     base: "Osnovica",
     tiers: "Pragovi i stope",
     tiersHint:
-      "Jedan red po pragu, u obliku „donja granica; stopa %\". Prva donja granica mora biti 0, granice se ne smeju ponavljati.",
+      "Jedan red po pragu, u obliku „donja granica; stopa %\". Prva donja granica mora biti 0, " +
+      "granice se ne smeju ponavljati.",
     mode: "Način",
     modeMarginal: "Marginalno (po tranšama)",
     modeFlat: "Ravno (jedna stopa na ceo iznos)",
@@ -507,11 +547,14 @@ export const PRO_BIZNIS_SR = {
 
     inputs: "Uneseno",
     formula:
-      "marginalno: provizija = Σ (deo osnovice u tranši) · stopa/100     ravno: provizija = osnovica · stopa poslednjeg praga ≤ osnovica     zatim: max(., najmanja), pa min(., najveća)",
+      "marginalno: provizija = Σ (deo osnovice u tranši) · stopa/100     ravno: provizija = " +
+      "osnovica · stopa poslednjeg praga ≤ osnovica     zatim: max(., najmanja), pa min(., " +
+      "najveća)",
 
     errorBase: "Osnovica ne sme biti negativna.",
     errorTiers:
-      "Skala mora imati bar jedan red, prva donja granica mora biti 0, granice se ne smeju ponavljati i ne smeju biti negativne.",
+      "Skala mora imati bar jedan red, prva donja granica mora biti 0, granice se ne smeju " +
+      "ponavljati i ne smeju biti negativne.",
     errorMinCommission: "Najmanja provizija ne sme biti negativna.",
     errorMaxCommission:
       "Najveća provizija ne sme biti negativna i ne sme biti manja od najmanje provizije.",

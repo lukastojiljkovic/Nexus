@@ -23,12 +23,17 @@ export const PRO_RACUNOVODSTVO_SR = {
   "allocation-remainder": {
     total: "Ukupan iznos",
     mode: "Režim",
-    modeHint: "Po ključu deli srazmerno unetim ključevima; na jednake delove ignoriše ključeve i deli na uneti broj delova.",
+    modeHint:
+      "Po ključu deli srazmerno unetim ključevima; na jednake delove ignoriše ključeve i deli na " +
+      "uneti broj delova.",
     modeByKey: "Po ključu",
     modeEqual: "Na jednake delove",
     items: "Stavke",
-    itemsHint: "Jedan red po stavci: naziv i ključ, odvojeni tačkom-zarezom. Naziv može ostati prazan.",
-    itemsHintEqual: "U ovom režimu je dovoljan naziv po redu — ključ se ne koristi, broj delova zadaje se posebno.",
+    itemsHint:
+      "Jedan red po stavci: naziv i ključ, odvojeni tačkom-zarezom. Naziv može ostati prazan.",
+    itemsHintEqual:
+      "U ovom režimu je dovoljan naziv po redu — ključ se ne koristi, broj delova zadaje se " +
+      "posebno.",
     itemsPlaceholder: "Kupac A; 3\nKupac B; 5\nKupac V; 2",
     parts: "Broj delova",
     partsHint: "Koliko jednakih delova. Ceo broj od 1 do 200.",
@@ -52,12 +57,14 @@ export const PRO_RACUNOVODSTVO_SR = {
 
     inputs: "Uneseno",
     formula:
-      "Metoda najvećeg ostatka: Tu = round(T·10^d); ei = Tu·wi/W; bi = floor(ei); ostatak R = Tu − Σbi ide prvih R stavki po opadajućem ostatku.",
+      "Metoda najvećeg ostatka: Tu = round(T·10^d); ei = Tu·wi/W; bi = floor(ei); ostatak R = Tu " +
+      "− Σbi ide prvih R stavki po opadajućem ostatku.",
 
     errorTotal: "Ukupan iznos mora biti realan broj.",
     errorDecimals: "Broj decimala je ceo broj od 0 do 4.",
     errorParts: "Broj delova je ceo broj od 1 do 200.",
-    errorItems: "Potrebna je bar jedna stavka sa ključem većim od nule; ključ ne sme biti negativan.",
+    errorItems:
+      "Potrebna je bar jedna stavka sa ključem većim od nule; ključ ne sme biti negativan.",
   },
 
   "amount-in-words": {
@@ -67,7 +74,8 @@ export const PRO_RACUNOVODSTVO_SR = {
     modeWithCurrency: "Sa valutom",
     modePlain: "Bez valute (samo broj slovima)",
     currencySingular: "Valuta — jednina",
-    currencySingularHint: "Na primer „dinar\", „evro\". Oblik za broj koji se slaže sa jedninom (1, 21, 31…).",
+    currencySingularHint:
+      "Na primer „dinar\", „evro\". Oblik za broj koji se slaže sa jedninom (1, 21, 31…).",
     currencyPaucal: "Valuta — paukal",
     currencyPlural: "Valuta — množina",
     currencyGender: "Rod imenice valute",
@@ -75,7 +83,8 @@ export const PRO_RACUNOVODSTVO_SR = {
     paraStyleWords: "Slovima",
     paraStyleFraction: "Razlomak xx/100",
     subunitSingular: "Podjedinica — jednina",
-    subunitSingularHint: "Na primer „para\", „cent\". Koristi se samo kad je podjedinica zapisana slovima.",
+    subunitSingularHint:
+      "Na primer „para\", „cent\". Koristi se samo kad je podjedinica zapisana slovima.",
     subunitPaucal: "Podjedinica — paukal",
     subunitPlural: "Podjedinica — množina",
     subunitGender: "Rod imenice podjedinice",
@@ -96,8 +105,11 @@ export const PRO_RACUNOVODSTVO_SR = {
 
     inputs: "Uneseno",
     formula:
-      "cents = celi minor iznos; D = floor(cents/100), P = cents mod 100; slaganje po jednina/paukal/množina iz u = n mod 10, l = n mod 100.",
-    source: "Brojevne reči i slaganje po rodu i broju: Pravopis srpskoga jezika, Matica srpska, izmenjeno i dopunjeno izdanje (2010).",
+      "cents = celi minor iznos; D = floor(cents/100), P = cents mod 100; slaganje po " +
+      "jednina/paukal/množina iz u = n mod 10, l = n mod 100.",
+    source:
+      "Brojevne reči i slaganje po rodu i broju: Pravopis srpskoga jezika, Matica srpska, " +
+      "izmenjeno i dopunjeno izdanje (2010).",
 
     errorAmountDecimals: "Iznos sme imati najviše dve decimale.",
     errorCurrency: "Sva tri oblika imena valute (jednina, paukal, množina) moraju biti popunjena.",
@@ -111,7 +123,8 @@ export const PRO_RACUNOVODSTVO_SR = {
     groupBalance: "Bilans stanja",
     currentAssets: "Obrtna imovina",
     inventory: "Zalihe",
-    inventoryHint: "Stanje na dan ili prosek — unesi ono što imaš, i to piše u napomeni uz rezultat.",
+    inventoryHint:
+      "Stanje na dan ili prosek — unesi ono što imaš, i to piše u napomeni uz rezultat.",
     cash: "Gotovina i gotovinski ekvivalenti",
     receivables: "Potraživanja od kupaca",
     currentLiabilities: "Kratkoročne obaveze",
@@ -151,10 +164,15 @@ export const PRO_RACUNOVODSTVO_SR = {
     ebitMarginPercent: "Poslovna (EBIT) marža",
 
     averageNote:
-      "Pozicija koja nije uneta ostavlja svoj pokazatelj praznim; deljenje nulom takođe ostavlja prazno polje umesto broja. Alat ne pravi proseke sam — koristi tačno one iznose koje si uneo.",
+      "Pozicija koja nije uneta ostavlja svoj pokazatelj praznim; deljenje nulom takođe ostavlja " +
+      "prazno polje umesto broja. Alat ne pravi proseke sam — koristi tačno one iznose koje si " +
+      "uneo.",
     inputs: "Uneseno",
     formula:
-      "Likvidnost = obrtna imovina/kratkoročne obaveze (brza: bez zaliha, novčana: samo gotovina). DIO = dani/obrt zaliha. DSO = potraživanja/prihod·dani. DPO = obaveze/NVPR·dani. CCC = DIO + DSO − DPO. ROA = neto dobitak/aktiva. ROE = neto dobitak/kapital.",
+      "Likvidnost = obrtna imovina/kratkoročne obaveze (brza: bez zaliha, novčana: samo " +
+      "gotovina). DIO = dani/obrt zaliha. DSO = potraživanja/prihod·dani. DPO = " +
+      "obaveze/NVPR·dani. CCC = DIO + DSO − DPO. ROA = neto dobitak/aktiva. ROE = neto " +
+      "dobitak/kapital.",
 
     errorDays: "Dani u godini su 365 ili 360.",
   },
@@ -164,7 +182,9 @@ export const PRO_RACUNOVODSTVO_SR = {
     rateOrigin: "Kurs na dan nastanka",
     rateSettlement: "Kurs na dan obračuna ili plaćanja",
     rateUnit: "Jedinica kursa",
-    rateUnitHint: "Neki kursevi se objavljuju za 100 ili 1.000 jedinica strane valute — izaberi tačno onu koju si uneo.",
+    rateUnitHint:
+      "Neki kursevi se objavljuju za 100 ili 1.000 jedinica strane valute — izaberi tačno onu " +
+      "koju si uneo.",
     rateUnit1: "za 1 jedinicu",
     rateUnit100: "za 100 jedinica",
     rateUnit1000: "za 1.000 jedinica",
@@ -186,7 +206,8 @@ export const PRO_RACUNOVODSTVO_SR = {
     exactDifference: "Nezaokružena kursna razlika",
     exactDifferenceRaw: "Nezaokružena razlika (puna preciznost)",
     roundingNote:
-      "Za knjiženje se koristi razlika ZAOKRUŽENIH protivvrednosti — ona može odstupati od nezaokružene razlike prikazane pored nje.",
+      "Za knjiženje se koristi razlika ZAOKRUŽENIH protivvrednosti — ona može odstupati od " +
+      "nezaokružene razlike prikazane pored nje.",
     magnitude: "Iznos (apsolutna vrednost)",
     effect: "Efekat",
     effectIncome: "Pozitivna kursna razlika (prihod)",
@@ -196,7 +217,9 @@ export const PRO_RACUNOVODSTVO_SR = {
 
     inputs: "Uneseno",
     formula:
-      "V1 = iznos·kurs1, V2 = iznos·kurs2; knjižena razlika = round(V2) − round(V1). Potraživanje: rast kursa je prihod. Obaveza: rast kursa je rashod (isti iznos, suprotan naziv).",
+      "V1 = iznos·kurs1, V2 = iznos·kurs2; knjižena razlika = round(V2) − round(V1). " +
+      "Potraživanje: rast kursa je prihod. Obaveza: rast kursa je rashod (isti iznos, suprotan " +
+      "naziv).",
 
     errorAmount: "Iznos mora biti realan broj.",
     errorRateOrigin: "Kurs na dan nastanka mora biti veći od nule.",
@@ -209,13 +232,15 @@ export const PRO_RACUNOVODSTVO_SR = {
     rateAB: "Kurs valute X (jedinice Y za 1 X)",
     rateABHint: "Na primer EUR/RSD — koliko RSD za 1 EUR.",
     rateSecond: "Kurs valute Z",
-    rateSecondHint: "Prema istoj bazi Y (na primer USD/RSD), ili obrnuto (RSD/USD) — izaberi smer pored.",
+    rateSecondHint:
+      "Prema istoj bazi Y (na primer USD/RSD), ili obrnuto (RSD/USD) — izaberi smer pored.",
     crossDirection: "Smer drugog kursa",
     crossDirectionSameBase: "Prema istoj bazi (Z/Y)",
     crossDirectionInverse: "Obrnuto (Y/Z)",
     crossDecimals: "Broj decimala unakrsnog kursa",
     crossRate: "Unakrsni kurs (X/Z)",
-    crossFormula: "Ista baza: (Y po X)/(Y po Z) = Z po X. Obrnut drugi kurs: (Y po X)·(Y po Z) = Z po X.",
+    crossFormula:
+      "Ista baza: (Y po X)/(Y po Z) = Z po X. Obrnut drugi kurs: (Y po X)·(Y po Z) = Z po X.",
 
     errorRateAB: "Kurs valute X mora biti veći od nule.",
     errorRateSecond: "Kurs valute Z mora biti veći od nule.",
@@ -228,7 +253,8 @@ export const PRO_RACUNOVODSTVO_SR = {
     kindMaticni: "Matični broj (8 cifara)",
     kindJmbg: "JMBG (13 cifara)",
     mode: "Režim",
-    modeHint: "Provera traži ceo broj sa kontrolnom cifrom; izračunavanje traži samo osnovu, bez nje.",
+    modeHint:
+      "Provera traži ceo broj sa kontrolnom cifrom; izračunavanje traži samo osnovu, bez nje.",
     modeVerify: "Provera celog broja",
     modeCompute: "Izračunavanje kontrolne cifre",
     value: "Broj",
@@ -244,11 +270,17 @@ export const PRO_RACUNOVODSTVO_SR = {
     jmbgRawRemainder: "Sirovi ostatak m (pre pravila m > 9 → 0)",
     jmbgTenBranch: "Grana m = 10",
     jmbgNote:
-      "Alat kaže samo da li se kontrolna cifra slaže sa ostatkom broja — ne tvrdi da broj postoji u ijednom registru, kome pripada, niti da je aktivan. JMBG ima slepu tačku: zamena cifara na pozicijama i i i+6 ne menja kontrolnu cifru.",
+      "Alat kaže samo da li se kontrolna cifra slaže sa ostatkom broja — ne tvrdi da broj " +
+      "postoji u ijednom registru, kome pripada, niti da je aktivan. JMBG ima slepu tačku: " +
+      "zamena cifara na pozicijama i i i+6 ne menja kontrolnu cifru.",
 
     inputs: "Uneseno",
-    formulaMod1110: "ISO 7064 MOD 11,10: p = 10; za svaku cifru d: s = (p+d) mod 10 (0 → 10); p = 2s mod 11; k = (11 − p) mod 10.",
-    formulaJmbg: "S = 7(a1+a7) + 6(a2+a8) + 5(a3+a9) + 4(a4+a10) + 3(a5+a11) + 2(a6+a12); m = 11 − (S mod 11); m > 9 → 0.",
+    formulaMod1110:
+      "ISO 7064 MOD 11,10: p = 10; za svaku cifru d: s = (p+d) mod 10 (0 → 10); p = 2s mod 11; k " +
+      "= (11 − p) mod 10.",
+    formulaJmbg:
+      "S = 7(a1+a7) + 6(a2+a8) + 5(a3+a9) + 4(a4+a10) + 3(a5+a11) + 2(a6+a12); m = 11 − (S mod " +
+      "11); m > 9 → 0.",
 
     errorLength: "Broj cifara ne odgovara izabranoj vrsti i režimu.",
     errorValue: "Broj sme sadržati samo cifre, razmake i crtice.",
@@ -266,7 +298,8 @@ export const PRO_RACUNOVODSTVO_SR = {
     decliningFactor: "Koeficijent degresije",
     decliningFactorHint: "Veći od 1 do 5 — na primer 2 za dvostruko degresivni metod.",
     displayYears: "Broj godina prikaza",
-    displayYearsHint: "Degresivni metod nikad ne stiže tačno do ostatka — odredi koliko redova plan prikazuje.",
+    displayYearsHint:
+      "Degresivni metod nikad ne stiže tačno do ostatka — odredi koliko redova plan prikazuje.",
     usage: "Učinak po godinama",
     usageHint: "Jedan red po godini, u jedinicama učinka.",
     usagePlaceholder: "1200\n1500\n1100",
@@ -292,11 +325,13 @@ export const PRO_RACUNOVODSTVO_SR = {
     firstYearFactor: "Faktor srazmere prve godine",
     writtenOff: "Ukupno otpisano",
     noRateNote:
-      "Vek trajanja i koeficijent degresije su tvoj izbor — alat ne poznaje nijednu poresku amortizacionu grupu i nijednu propisanu stopu.",
+      "Vek trajanja i koeficijent degresije su tvoj izbor — alat ne poznaje nijednu poresku " +
+      "amortizacionu grupu i nijednu propisanu stopu.",
 
     inputs: "Uneseno",
     formula:
-      "Linearni: A = (C−S)/n. SYD: A_k = (C−S)·(n−k+1)/(n(n+1)/2). Degresivni: A_k = min(B_(k−1)·f/n, B_(k−1)−S). Funkcionalni: A_k = (C−S)·u_k/U.",
+      "Linearni: A = (C−S)/n. SYD: A_k = (C−S)·(n−k+1)/(n(n+1)/2). Degresivni: A_k = " +
+      "min(B_(k−1)·f/n, B_(k−1)−S). Funkcionalni: A_k = (C−S)·u_k/U.",
 
     errorCost: "Nabavna vrednost mora biti veća od nule.",
     errorResidual: "Ostatak mora biti od nule do nabavne vrednosti.",
@@ -338,7 +373,8 @@ export const PRO_RACUNOVODSTVO_SR = {
 
     inputs: "Uneseno",
     formula:
-      "p_d = log10(1 + 1/d). Hi-kvadrat = Σ(n_d − e_d)²/e_d. MAD = (1/k)Σ|n_d/N − p_d|. z_d = (|n_d/N − p_d| − 1/(2N))/√(p_d(1−p_d)/N).",
+      "p_d = log10(1 + 1/d). Hi-kvadrat = Σ(n_d − e_d)²/e_d. MAD = (1/k)Σ|n_d/N − p_d|. z_d = " +
+      "(|n_d/N − p_d| − 1/(2N))/√(p_d(1−p_d)/N).",
 
     errorTooManyRows: "Najviše 100.000 redova.",
     errorValues: "Nije pronađen nijedan upotrebljiv broj.",
@@ -360,7 +396,8 @@ export const PRO_RACUNOVODSTVO_SR = {
     breakevenRevenue: "Prelomni promet (tačan)",
     breakevenRevenueAtWholeUnits: "Prelomni promet pri zaokruženom broju komada",
     revenueNote:
-      "Prelomni promet i broj komada se računaju iz različitih brojeva — tačne vrednosti i zaokruženog broja komada — zato se oba prikazuju, svako označeno.",
+      "Prelomni promet i broj komada se računaju iz različitih brojeva — tačne vrednosti i " +
+      "zaokruženog broja komada — zato se oba prikazuju, svako označeno.",
     targetUnits: "Obim za ciljnu dobit",
     targetRevenue: "Promet za ciljnu dobit",
     marginOfSafetyPercent: "Margina sigurnosti",
@@ -370,14 +407,16 @@ export const PRO_RACUNOVODSTVO_SR = {
 
     inputs: "Uneseno",
     formula:
-      "MP = P − V. Q0 = FT/MP. R0 = FT/(MP/P). Qd = (FT+D)/MP. MS = 100·(Qp−Q0)/Qp. DOL = (Qp·MP)/(Qp·MP−FT).",
+      "MP = P − V. Q0 = FT/MP. R0 = FT/(MP/P). Qd = (FT+D)/MP. MS = 100·(Qp−Q0)/Qp. DOL = " +
+      "(Qp·MP)/(Qp·MP−FT).",
 
     errorFixedCost: "Fiksni troškovi ne smeju biti negativni.",
     errorPrice: "Prodajna cena mora biti veća od nule.",
     errorVariableCost: "Varijabilni trošak ne sme biti negativan.",
     errorTargetProfit: "Ciljna dobit ne sme biti negativna.",
     errorPlannedVolume: "Planirani obim mora biti veći od nule.",
-    errorContribution: "Marža pokrića mora biti veća od nule — prodajna cena mora premašiti varijabilni trošak.",
+    errorContribution:
+      "Marža pokrića mora biti veća od nule — prodajna cena mora premašiti varijabilni trošak.",
   },
 
   "bank-account-iban": {
@@ -395,7 +434,8 @@ export const PRO_RACUNOVODSTVO_SR = {
     domesticCheck: "Kontrolne cifre",
     iban: "IBAN",
     ibanHintVerify: "Slova i cifre, 5 do 34 znaka. Razmaci se ignorišu.",
-    ibanHintCompute: "Oznaka zemlje (2 slova) + BBAN. Kontrolne cifre 3–4 se zanemaruju ako su unete.",
+    ibanHintCompute:
+      "Oznaka zemlje (2 slova) + BBAN. Kontrolne cifre 3–4 se zanemaruju ako su unete.",
 
     results: "Rezultat",
     formatted: "Formatiran zapis",
@@ -406,13 +446,19 @@ export const PRO_RACUNOVODSTVO_SR = {
     remainder: "Ostatak po modulu 97",
 
     inputs: "Uneseno",
-    formulaDomestic: "N = 3 cifre banke + 13 cifara partije; K = 98 − ((N·100) mod 97); ispravno akko (N·100+K) mod 97 = 1.",
-    formulaIban: "Prva 4 znaka na kraj, slova A=10…Z=35; n mod 97 = 1 je ispravno; K = 98 − (n mod 97) za izračunavanje.",
+    formulaDomestic:
+      "N = 3 cifre banke + 13 cifara partije; K = 98 − ((N·100) mod 97); ispravno akko (N·100+K) " +
+      "mod 97 = 1.",
+    formulaIban:
+      "Prva 4 znaka na kraj, slova A=10…Z=35; n mod 97 = 1 je ispravno; K = 98 − (n mod 97) za " +
+      "izračunavanje.",
 
     errorBank: "Šifra banke mora imati tačno 3 cifre.",
     errorPartyNumber: "Broj partije mora imati 1 do 13 cifara.",
     errorCheckDigits: "Kontrolne cifre moraju imati tačno 2 cifre.",
-    errorConfusable: "Ćirilični znakovi (na primer РС, ВА) ne mapiraju se isto kao latinični — unesi IBAN latinicom.",
+    errorConfusable:
+      "Ćirilični znakovi (na primer РС, ВА) ne mapiraju se isto kao latinični — unesi IBAN " +
+      "latinicom.",
     errorLength: "Dužina IBAN-a mora biti 5 do 34 znaka.",
     errorAlreadyIban: "Unet je ceo IBAN, a ne oznaka zemlje i BBAN za izračunavanje.",
     errorIban: "IBAN sme sadržati samo slova A–Z i cifre.",
@@ -421,7 +467,9 @@ export const PRO_RACUNOVODSTVO_SR = {
   "gross-up": {
     net: "Neto iznos",
     model: "Model",
-    modelHint: "A: porez na osnovicu umanjenu za neoporezivi iznos, doprinosi na bruto. B: porez i doprinosi na bruto umanjen za normirane troškove.",
+    modelHint:
+      "A: porez na osnovicu umanjenu za neoporezivi iznos, doprinosi na bruto. B: porez i " +
+      "doprinosi na bruto umanjen za normirane troškove.",
     modelA: "A (neoporezivi iznos)",
     modelB: "B (normirani troškovi)",
     taxPercent: "Stopa poreza",
@@ -440,10 +488,14 @@ export const PRO_RACUNOVODSTVO_SR = {
     contributions: "Doprinosi na teret primaoca",
     netCheck: "Kontrolni neto",
     totalCost: "Ukupan trošak isplatioca",
-    rateNote: "Sve stope i neoporezivi iznos su tvoj unos — alat ne poznaje nijednu stopu, ne bira model i ne tvrdi da je obračun po bilo kom propisu.",
+    rateNote:
+      "Sve stope i neoporezivi iznos su tvoj unos — alat ne poznaje nijednu stopu, ne bira model " +
+      "i ne tvrdi da je obračun po bilo kom propisu.",
 
     inputs: "Uneseno",
-    formulaA: "Grana bez poreza: bruto = neto/(1−d/100), prihvata se ako je bruto ≤ A. Grana sa porezom: bruto = (neto − (p/100)A)/(1 − d/100 − p/100).",
+    formulaA:
+      "Grana bez poreza: bruto = neto/(1−d/100), prihvata se ako je bruto ≤ A. Grana sa porezom: " +
+      "bruto = (neto − (p/100)A)/(1 − d/100 − p/100).",
     formulaB: "bruto = neto/(1 − ((p+d)/100)·(1 − k/100)).",
 
     errorNet: "Neto iznos mora biti veći od nule.",
@@ -458,12 +510,15 @@ export const PRO_RACUNOVODSTVO_SR = {
   "rate-conversion": {
     ratePercent: "Stopa",
     kind: "Vrsta unete stope",
-    kindHint: "Određuje kako se stopa čita — kao nominalna sa m obračuna, efektivna godišnja ili periodična.",
+    kindHint:
+      "Određuje kako se stopa čita — kao nominalna sa m obračuna, efektivna godišnja ili " +
+      "periodična.",
     kindNominal: "Nominalna godišnja (m obračuna)",
     kindEffective: "Efektivna godišnja",
     kindPeriodic: "Periodična",
     compoundingsPerYear: "Broj obračunskih perioda godišnje (m)",
-    compoundingsPerYearHint: "12 mesečno, 4 kvartalno, 365 dnevno — obračunska konvencija stope, ne ciljni period.",
+    compoundingsPerYearHint:
+      "12 mesečno, 4 kvartalno, 365 dnevno — obračunska konvencija stope, ne ciljni period.",
     target: "Ciljni period",
     targetHint: "Period za koji se traži periodična stopa.",
     targetYear: "Godina",
@@ -477,13 +532,16 @@ export const PRO_RACUNOVODSTVO_SR = {
     nominalPercent: "Nominalna godišnja stopa",
     proportionalPeriodicPercent: "Proporcionalna periodična stopa",
     conformalPeriodicPercent: "Konformna periodična stopa",
-    periodicNote: "Proporcionalna i konformna periodična stopa su dva različita broja za isti period — razlika je cela svrha ovog alata.",
+    periodicNote:
+      "Proporcionalna i konformna periodična stopa su dva različita broja za isti period — " +
+      "razlika je cela svrha ovog alata.",
     continuousEffectivePercent: "Granica neprekidnog ukamaćivanja (m → ∞)",
     periodsPerYear: "Broj ciljnih perioda godišnje (k)",
 
     inputs: "Uneseno",
     formula:
-      "EGS = (1 + r/(100m))^m − 1. i_prop = r/(100k). i_konf = (1+EGS)^(1/k) − 1. Granica: EGS = e^(r/100) − 1.",
+      "EGS = (1 + r/(100m))^m − 1. i_prop = r/(100k). i_konf = (1+EGS)^(1/k) − 1. Granica: EGS = " +
+      "e^(r/100) − 1.",
 
     errorRatePercent: "Stopa mora biti veća od −100 %.",
     errorCompoundingsPerYear: "Broj obračunskih perioda godišnje je ceo broj od 1 do 365.",
@@ -493,7 +551,8 @@ export const PRO_RACUNOVODSTVO_SR = {
   "interest-periods": {
     principal: "Glavnica",
     periods: "Periodi",
-    periodsHint: "Jedan red po periodu: datum od; datum do; godišnja stopa u %. Datum u obliku DD.MM.GGGG.",
+    periodsHint:
+      "Jedan red po periodu: datum od; datum do; godišnja stopa u %. Datum u obliku DD.MM.GGGG.",
     periodsPlaceholder: "01.01.2025.; 01.04.2025.; 10\n01.04.2025.; 01.07.2025.; 12",
     dayCount: "Osnova za dane",
     dayCountAct365: "ACT/365",
@@ -505,7 +564,9 @@ export const PRO_RACUNOVODSTVO_SR = {
     methodSimple: "Prost (linearni)",
     methodCompound: "Konformni",
     capitalize: "Pripis kamate glavnici na kraju perioda",
-    capitalizeHint: "Bez pripisa svaki period se računa na istu glavnicu; sa pripisom se obračunata kamata dodaje glavnici narednog perioda.",
+    capitalizeHint:
+      "Bez pripisa svaki period se računa na istu glavnicu; sa pripisom se obračunata kamata " +
+      "dodaje glavnici narednog perioda.",
     capitalizeYes: "Da",
     capitalizeNo: "Ne",
     decimals: "Broj decimala prikaza",
@@ -519,7 +580,9 @@ export const PRO_RACUNOVODSTVO_SR = {
     totalDays: "Zbir dana svih perioda",
     totalInterestRows: "Ukupna kamata (zbir prikazanih redova)",
     totalInterestExact: "Ukupna kamata (nezaokružena)",
-    totalsNote: "Prikazana su oba zbira, svaki označen — tabela čija se kolona ne sabira u sopstveni zaokruženi zbir bila bi greška u ispisu.",
+    totalsNote:
+      "Prikazana su oba zbira, svaki označen — tabela čija se kolona ne sabira u sopstveni " +
+      "zaokruženi zbir bila bi greška u ispisu.",
     totalDue: "Ukupno dugovanje (glavnica + kamata)",
     earliestFrom: "Najraniji datum „od\"",
     latestTo: "Najkasniji datum „do\"",
@@ -529,12 +592,16 @@ export const PRO_RACUNOVODSTVO_SR = {
 
     inputs: "Uneseno",
     formula:
-      "DCF: ACT/365 → d/365; ACT/360 → d/360; ACT/ACT (ISDA) deli interval na 1. januaru; 30/360 i 30E/360 po ISDA 4.16(f)/(g). Prost: I = P·(r/100)·DCF. Konformni: I = P·((1+r/100)^DCF − 1).",
+      "DCF: ACT/365 → d/365; ACT/360 → d/360; ACT/ACT (ISDA) deli interval na 1. januaru; 30/360 " +
+      "i 30E/360 po ISDA 4.16(f)/(g). Prost: I = P·(r/100)·DCF. Konformni: I = P·((1+r/100)^DCF " +
+      "− 1).",
 
     errorPrincipal: "Glavnica mora biti veća od nule.",
     errorDecimals: "Broj decimala prikaza je ceo broj od 0 do 6.",
     errorPeriod: "Datum do mora biti posle datuma od u svakom periodu.",
-    errorRatePercent: "Stopa u svakom periodu mora biti veća od −100 % (i različita od −100 % kod konformnog metoda).",
+    errorRatePercent:
+      "Stopa u svakom periodu mora biti veća od −100 % (i različita od −100 % kod konformnog " +
+      "metoda).",
     errorPeriods: "Potreban je bar jedan period.",
   },
 
@@ -542,10 +609,13 @@ export const PRO_RACUNOVODSTVO_SR = {
     openingQuantity: "Početna količina",
     openingUnitCost: "Početna jedinična cena",
     movements: "Promene",
-    movementsHint: "Jedan red po promeni: tip (ulaz/izlaz); količina; jedinična cena (samo za ulaz).",
+    movementsHint:
+      "Jedan red po promeni: tip (ulaz/izlaz); količina; jedinična cena (samo za ulaz).",
     movementsPlaceholder: "ulaz; 100; 100\nulaz; 100; 120\nizlaz; 150",
     averageMode: "Metod proseka",
-    averageModeHint: "Kontinuirani preračunava prosek posle svakog ulaza; periodični računa jedan prosek za ceo period (prosečna ponderisana cena na kraju perioda).",
+    averageModeHint:
+      "Kontinuirani preračunava prosek posle svakog ulaza; periodični računa jedan prosek za ceo " +
+      "period (prosečna ponderisana cena na kraju perioda).",
     averageModeMoving: "Kontinuirani",
     averageModePeriodic: "Periodični",
     decimals: "Broj decimala prikaza",
@@ -571,11 +641,15 @@ export const PRO_RACUNOVODSTVO_SR = {
     costDifference: "Razlika NVPR-a (prosek − FIFO)",
     closingDifference: "Razlika završnog stanja (prosek − FIFO)",
     purchaseValue: "Ukupna nabavka perioda",
-    policyNote: "Metode nisu rangirane — prikazane su obe i njihova razlika; izbor metode je tvoja računovodstvena politika.",
+    policyNote:
+      "Metode nisu rangirane — prikazane su obe i njihova razlika; izbor metode je tvoja " +
+      "računovodstvena politika.",
 
     inputs: "Uneseno",
     formula:
-      "FIFO troši najstarije slojeve prvi. Kontinuirani prosek: cena = V/Q posle svakog ulaza. Periodični prosek: cena = (početna vrednost + Σulaza)/(početna količina + Σulaza), primenjena na sve izlaze.",
+      "FIFO troši najstarije slojeve prvi. Kontinuirani prosek: cena = V/Q posle svakog ulaza. " +
+      "Periodični prosek: cena = (početna vrednost + Σulaza)/(početna količina + Σulaza), " +
+      "primenjena na sve izlaze.",
 
     errorMovementType: "Tip promene mora biti „ulaz\" ili „izlaz\".",
     errorOpeningQuantity: "Početna količina ne sme biti negativna.",
@@ -614,11 +688,14 @@ export const PRO_RACUNOVODSTVO_SR = {
     periodicRate: "Periodična stopa",
     totalPaid: "Ukupno plaćeno",
     totalInterest: "Ukupna kamata",
-    notAprNote: "Plan je čist obračun po unetim uslovima — nema naknada, grejsa, valutne klauzule ni osiguranja, pa ovo nije EKS.",
+    notAprNote:
+      "Plan je čist obračun po unetim uslovima — nema naknada, grejsa, valutne klauzule ni " +
+      "osiguranja, pa ovo nije EKS.",
 
     inputs: "Uneseno",
     formula:
-      "i = r/(100m) ili (1+r/100)^(1/m) − 1. Anuitet: A = P·i/(1 − (1+i)^(−n)); za i = 0, A = P/n. Poslednja rata nosi razliku zaokruživanja, tako da završno stanje bude tačno nula.",
+      "i = r/(100m) ili (1+r/100)^(1/m) − 1. Anuitet: A = P·i/(1 − (1+i)^(−n)); za i = 0, A = " +
+      "P/n. Poslednja rata nosi razliku zaokruživanja, tako da završno stanje bude tačno nula.",
 
     errorPrincipal: "Iznos kredita mora biti veći od nule.",
     errorAnnualRatePercent: "Nominalna godišnja stopa je od 0 do 1000 %.",
@@ -644,7 +721,9 @@ export const PRO_RACUNOVODSTVO_SR = {
     marginOnCostPercentHint: "% — veće od −100.",
     cost: "Nabavna vrednost (sa zavisnim troškovima)",
     difference: "Razlika u ceni",
-    formulaMargin: "m = 100(P−C)/P na prodajnu cenu; u = 100(P−C)/C na nabavnu cenu (razlika u ceni). Prevodi: u = 100m/(100−m); m = 100u/(100+u).",
+    formulaMargin:
+      "m = 100(P−C)/P na prodajnu cenu; u = 100(P−C)/C na nabavnu cenu (razlika u ceni). " +
+      "Prevodi: u = 100m/(100−m); m = 100u/(100+u).",
 
     groupChain: "Lančani rabati",
     listPrice: "Cenovnik (bruto cena pre rabata)",
@@ -658,7 +737,9 @@ export const PRO_RACUNOVODSTVO_SR = {
     colRemaining: "Ostatak posle koraka",
     netPrice: "Neto cena posle svih rabata",
     effectiveRebatePercent: "Efektivni rabat",
-    effectiveNote: "Efektivni rabat je proizvod, nikad zbir pojedinačnih rabata — 10 % pa 5 % je 14,5 %, ne 15 %.",
+    effectiveNote:
+      "Efektivni rabat je proizvod, nikad zbir pojedinačnih rabata — 10 % pa 5 % je 14,5 %, ne " +
+      "15 %.",
     formulaChain: "neto = cenovnik·Π(1 − d_i/100). efektivni rabat = 100·(1 − Π(1 − d_i/100)).",
 
     inputs: "Uneseno",
@@ -674,12 +755,15 @@ export const PRO_RACUNOVODSTVO_SR = {
 
   "trial-balance-check": {
     mode: "Način unosa",
-    modeHint: "Kolone sabiraju obe strane; jedan iznos je za dijagnostiku kad je razlika već poznata.",
+    modeHint:
+      "Kolone sabiraju obe strane; jedan iznos je za dijagnostiku kad je razlika već poznata.",
     modeColumns: "Dugovna i potražna kolona",
     modeDifferenceOnly: "Samo razlika",
     debits: "Dugovna strana",
     credits: "Potražna strana",
-    listHint: "Nalepljena kolona iznosa, jedan po redu (ili razdvojeni tačkom-zarezom ili tabom). Do 5.000 redova.",
+    listHint:
+      "Nalepljena kolona iznosa, jedan po redu (ili razdvojeni tačkom-zarezom ili tabom). Do " +
+      "5.000 redova.",
     differenceAmount: "Razlika",
     decimals: "Broj decimala valute",
 
@@ -691,7 +775,9 @@ export const PRO_RACUNOVODSTVO_SR = {
     difference: "Razlika",
     magnitude: "Iznos razlike (apsolutna vrednost)",
     balancedNote: "Strane su izjednačene — dijagnostika se ne prikazuje.",
-    necessaryNote: "Ovo su aritmetički mogući uzroci, ne nalaz — alat ne bira među njima i ne tvrdi da je uzrok pronašao.",
+    necessaryNote:
+      "Ovo su aritmetički mogući uzroci, ne nalaz — alat ne bira među njima i ne tvrdi da je " +
+      "uzrok pronašao.",
     reversedItem: "Stavka na pogrešnoj strani (proknjižena obrnuto)",
     shiftedByTen: "Iznos upisan deset puta veći",
     shiftedByHundred: "Iznos upisan sto puta veći",
@@ -703,7 +789,9 @@ export const PRO_RACUNOVODSTVO_SR = {
 
     inputs: "Uneseno",
     formula:
-      "R = Σduguje − Σpotražuje, u celim minor jedinicama. Zamena cifara a,b na pozicijama i<j menja iznos za (a−b)(10^j−10^i); deljivost sa 9 je nužan uslov. Pomerena decimala: m/9 ili m/99.",
+      "R = Σduguje − Σpotražuje, u celim minor jedinicama. Zamena cifara a,b na pozicijama i<j " +
+      "menja iznos za (a−b)(10^j−10^i); deljivost sa 9 je nužan uslov. Pomerena decimala: m/9 " +
+      "ili m/99.",
 
     errorDecimals: "Broj decimala valute je ceo broj od 0 do 4.",
     errorDifference: "Razlika mora biti broj, sa najviše onoliko decimala koliko je izabrano.",
@@ -724,7 +812,9 @@ export const PRO_RACUNOVODSTVO_SR = {
     fv: "Buduća vrednost (FV)",
     fvHint: "Isti znakovni dogovor kao PV. Zanemareno kad je ovo tražena veličina.",
     pmt: "Rata (PMT)",
-    pmtHint: "Novčana jedinica po periodu, isti znakovni dogovor. Zanemareno kad je ovo tražena veličina.",
+    pmtHint:
+      "Novčana jedinica po periodu, isti znakovni dogovor. Zanemareno kad je ovo tražena " +
+      "veličina.",
     periods: "Broj perioda (n)",
     ratePercent: "Periodična stopa (i)",
     ratePercentHint: "% po periodu, veće od −100 %. Zanemareno kad je ovo tražena veličina.",
@@ -737,14 +827,18 @@ export const PRO_RACUNOVODSTVO_SR = {
     residual: "Rezidual osnovne jednačine",
 
     inputs: "Uneseno",
-    formula: "PV + PMT·k·(1 − (1+i)^(−n))/i + FV·(1+i)^(−n) = 0, k = 1 na kraju perioda, k = 1+i na početku. Za i = 0: PV + PMT·n + FV = 0.",
+    formula:
+      "PV + PMT·k·(1 − (1+i)^(−n))/i + FV·(1+i)^(−n) = 0, k = 1 na kraju perioda, k = 1+i na " +
+      "početku. Za i = 0: PV + PMT·n + FV = 0.",
 
     errorPv: "Sadašnja vrednost mora biti realan broj.",
     errorFv: "Buduća vrednost mora biti realan broj.",
     errorPmt: "Rata mora biti realan broj.",
     errorPeriods: "Broj perioda je od 0 do 1200.",
     errorRate: "Periodična stopa mora biti veća od −100 %.",
-    errorRateOutOfRange: "Rešenje po stopi nije u pretraživanom opsegu (−99,9999 % do 1000 % po periodu).",
-    errorCashflows: "Rešenje ne postoji ili nije jedinstveno — tokovi moraju promeniti znak tačno jednom.",
+    errorRateOutOfRange:
+      "Rešenje po stopi nije u pretraživanom opsegu (−99,9999 % do 1000 % po periodu).",
+    errorCashflows:
+      "Rešenje ne postoji ili nije jedinstveno — tokovi moraju promeniti znak tačno jednom.",
   },
 } as const;

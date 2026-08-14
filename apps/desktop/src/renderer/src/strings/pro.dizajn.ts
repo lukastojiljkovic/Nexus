@@ -56,7 +56,8 @@ export const PRO_DIZAJN_SR = {
 
     inputs: "Uneseno",
     formula:
-      "uklopi: s = min(tw/w, th/h)   popuni: s = max(tw/w, th/h)   tačna širina: s = tw/w   tačna visina: s = th/h   razvuci: sx = tw/w, sy = th/h",
+      "uklopi: s = min(tw/w, th/h)   popuni: s = max(tw/w, th/h)   tačna širina: s = tw/w   " +
+      "tačna visina: s = th/h   razvuci: sx = tw/w, sy = th/h",
 
     errorSourceWidth: "Širina izvora mora biti veća od nule.",
     errorSourceHeight: "Visina izvora mora biti veća od nule.",
@@ -102,7 +103,8 @@ export const PRO_DIZAJN_SR = {
 
     inputs: "Uneseno",
     formula:
-      "lh = množilac×veličina ili px   ostatak = lh mod mreža (u milihiljaditim delovima px)   nalepljeno = naviše/najbliže/naniže(lh/mreža)×mreža   redova = floor(visinaKolone/lh)",
+      "lh = množilac×veličina ili px   ostatak = lh mod mreža (u milihiljaditim delovima px)   " +
+      "nalepljeno = naviše/najbliže/naniže(lh/mreža)×mreža   redova = floor(visinaKolone/lh)",
 
     errorFontSize: "Veličina slova mora biti veća od nule.",
     errorLineHeight: "Prored mora biti veći od nule.",
@@ -115,26 +117,33 @@ export const PRO_DIZAJN_SR = {
   "book-spine": {
     pageCount: "Broj strana",
     paperCaliper: "Debljina lista (upisano ručno)",
-    paperCaliperHint: "U milimetrima, izmereno mikrometrom na JEDNOM listu. Ima prednost nad ostala dva izvora.",
+    paperCaliperHint:
+      "U milimetrima, izmereno mikrometrom na JEDNOM listu. Ima prednost nad ostala dva izvora.",
     grammage: "Gramatura",
     grammageHint: "Masa papira u g/m² — nije debljina.",
     bulk: "Volumen (cm³/g)",
     bulkHint:
-      "Podatak proizvođača papira — NIJE debljina lista. Ako ovde upišeš debljinu (npr. 0,10 umesto 1,25), hrbat izlazi i do 12,5 puta tanji: proveri red „Debljina lista (iz gramature)\" ispod.",
+      "Podatak proizvođača papira — NIJE debljina lista. Ako ovde upišeš debljinu (npr. 0,10 " +
+      "umesto 1,25), hrbat izlazi i do 12,5 puta tanji: proveri red „Debljina lista (iz " +
+      "gramature)\" ispod.",
     measuredStack: "Izmerena visina bloka",
-    measuredStackHint: "U milimetrima, za ceo izmereni blok — treći izvor debljine lista, ako prva dva nisu poznata.",
+    measuredStackHint:
+      "U milimetrima, za ceo izmereni blok — treći izvor debljine lista, ako prva dva nisu " +
+      "poznata.",
     coverCaliper: "Debljina jedne korice",
     extraAllowance: "Dodatak (lepak, forzec, kartoni)",
     extraAllowanceHint: "Sve što povez dodaje hrbatu mimo blok i korice.",
     coverWidth: "Širina jedne korice",
     coverHeight: "Visina korice",
     edgeWrap: "Napust korice (po ivici)",
-    edgeWrapHint: "Za korice koje omotavaju preko ivice bloka — primenjuje se na sve spoljne ivice.",
+    edgeWrapHint:
+      "Za korice koje omotavaju preko ivice bloka — primenjuje se na sve spoljne ivice.",
     bindingStyle: "Vrsta poveza",
     bindingSoft: "Meki",
     bindingHard: "Tvrdi",
     hingeGroove: "Žleb (jedan, tvrd povez)",
-    hingeGrooveHint: "Širina jednog žleba — primenjuje se samo kod tvrdog poveza, sa obe strane hrbata.",
+    hingeGrooveHint:
+      "Širina jednog žleba — primenjuje se samo kod tvrdog poveza, sa obe strane hrbata.",
 
     results: "Rezultat",
     leaves: "Broj listova",
@@ -149,7 +158,10 @@ export const PRO_DIZAJN_SR = {
 
     inputs: "Uneseno",
     formula:
-      "listovi = ceil(strane/2)   debljinaLista = upisano | gramatura×volumen/1000 | izmerenoBlok/listovi   blok = listovi×debljinaLista   hrbat = blok + 2×korica + dodatak   razvijenaŠirina = 2×širinaKorice + hrbat + 2×napust (+ 2×žleb za tvrd povez)   razvijenaVisina = visinaKorice + 2×napust",
+      "listovi = ceil(strane/2)   debljinaLista = upisano | gramatura×volumen/1000 | " +
+      "izmerenoBlok/listovi   blok = listovi×debljinaLista   hrbat = blok + 2×korica + dodatak   " +
+      "razvijenaŠirina = 2×širinaKorice + hrbat + 2×napust (+ 2×žleb za tvrd povez)   " +
+      "razvijenaVisina = visinaKorice + 2×napust",
 
     errorPageCount: "Broj strana je ceo broj od 1 do 20000.",
     errorCoverCaliper: "Debljina korice ne sme biti negativna.",
@@ -161,7 +173,9 @@ export const PRO_DIZAJN_SR = {
     errorGrammage: "Gramatura mora biti veća od nule.",
     errorBulk: "Volumen mora biti veći od nule.",
     errorMeasuredStack: "Izmerena visina bloka mora biti veća od nule.",
-    errorCaliper: "Potreban je bar jedan izvor debljine lista: upisana debljina, gramatura i volumen, ili izmereni blok.",
+    errorCaliper:
+      "Potreban je bar jedan izvor debljine lista: upisana debljina, gramatura i volumen, ili " +
+      "izmereni blok.",
     errorCoverWidth: "Širina korice mora biti veća od nule.",
     errorCoverHeight: "Visina korice mora biti veća od nule.",
   },
@@ -189,7 +203,9 @@ export const PRO_DIZAJN_SR = {
 
     inputs: "Uneseno",
     formula:
-      "sadržaj = sadržalac − 2×margina   kolona = (sadržaj − (n−1)×razmak)/n   raspon(k) = k×kolona + (k−1)×razmak   levaIvica(i) = margina + (i−1)×(kolona+razmak)   maxKolona = floor((sadržaj+razmak)/(min+razmak))",
+      "sadržaj = sadržalac − 2×margina   kolona = (sadržaj − (n−1)×razmak)/n   raspon(k) = " +
+      "k×kolona + (k−1)×razmak   levaIvica(i) = margina + (i−1)×(kolona+razmak)   maxKolona = " +
+      "floor((sadržaj+razmak)/(min+razmak))",
 
     errorContainerWidth: "Širina sadržaoca mora biti veća od nule.",
     errorColumns: "Broj kolona je ceo broj od 1 do 24.",
@@ -202,7 +218,8 @@ export const PRO_DIZAJN_SR = {
   copyfitting: {
     characterCount: "Broj znakova",
     charactersPerLine: "Znakova u redu",
-    charactersPerLineHint: "Upiši direktno, ili ostavi prazno i popuni širinu kolone i prosečnu širinu znaka ispod.",
+    charactersPerLineHint:
+      "Upiši direktno, ili ostavi prazno i popuni širinu kolone i prosečnu širinu znaka ispod.",
     columnWidth: "Širina kolone",
     averageCharacterWidth: "Prosečna širina znaka",
     averageCharacterWidthHint: "Izmereno na stvarnom slogu, u milimetrima.",
@@ -212,9 +229,12 @@ export const PRO_DIZAJN_SR = {
     lineHeight: "Prored",
     columnsPerPage: "Kolona po strani",
     targetPages: "Ciljani broj strana",
-    targetPagesHint: "Opciono — obrnuto pitanje: koliko znakova u redu bi upakovalo tekst na tačno ovoliko strana.",
+    targetPagesHint:
+      "Opciono — obrnuto pitanje: koliko znakova u redu bi upakovalo tekst na tačno ovoliko " +
+      "strana.",
     paragraphs: "Broj pasusa",
-    paragraphsHint: "Opciono — svaki pasus posle prvog može ostaviti do jedan ceo red prazan na svom prelomu.",
+    paragraphsHint:
+      "Opciono — svaki pasus posle prvog može ostaviti do jedan ceo red prazan na svom prelomu.",
 
     results: "Rezultat",
     totalLines: "Ukupno redova (donja granica)",
@@ -227,14 +247,22 @@ export const PRO_DIZAJN_SR = {
 
     inputs: "Uneseno",
     formula:
-      "cpl = upisano ili floor(širinaKolone/prosečnaŠirinaZnaka)   redovaPoKoloni = upisano ili floor(visinaKolone/prored)   ukupnoRedova = ceil(znakova/cpl)   gornjaGranica = ukupnoRedova + pasusa − 1   redovaPoStrani = redovaPoKoloni×kolonaPoStrani   strana = ceil(ukupnoRedova/redovaPoStrani)   potrebnoCPL = ceil(znakova/(ciljanihStrana×redovaPoStrani))",
+      "cpl = upisano ili floor(širinaKolone/prosečnaŠirinaZnaka)   redovaPoKoloni = upisano ili " +
+      "floor(visinaKolone/prored)   ukupnoRedova = ceil(znakova/cpl)   gornjaGranica = " +
+      "ukupnoRedova + pasusa − 1   redovaPoStrani = redovaPoKoloni×kolonaPoStrani   strana = " +
+      "ceil(ukupnoRedova/redovaPoStrani)   potrebnoCPL = " +
+      "ceil(znakova/(ciljanihStrana×redovaPoStrani))",
 
     errorCharacterCount: "Broj znakova je ceo broj od 1 naviše.",
     errorColumnsPerPage: "Broj kolona po strani je ceo broj od 1 do 12.",
-    errorCharactersPerLine: "Znakova u redu mora biti ceo broj od 1 do 1000, ili ga izvedi iz širine kolone i prosečne širine znaka.",
+    errorCharactersPerLine:
+      "Znakova u redu mora biti ceo broj od 1 do 1000, ili ga izvedi iz širine kolone i prosečne " +
+      "širine znaka.",
     errorColumnWidth: "Širina kolone mora biti veća od nule.",
     errorAverageCharacterWidth: "Prosečna širina znaka mora biti veća od nule.",
-    errorLinesPerColumn: "Redova po koloni mora biti ceo broj od 1 do 1000, ili ga izvedi iz visine kolone i proreda.",
+    errorLinesPerColumn:
+      "Redova po koloni mora biti ceo broj od 1 do 1000, ili ga izvedi iz visine kolone i " +
+      "proreda.",
     errorColumnHeight: "Visina kolone mora biti veća od nule.",
     errorLineHeight: "Prored mora biti veći od nule.",
     errorTargetPages: "Ciljani broj strana je ceo broj od 1 do 100000.",
@@ -266,7 +294,8 @@ export const PRO_DIZAJN_SR = {
 
     inputs: "Uneseno",
     formula:
-      "in = px/96 = pt/72 = pc×12/72 = mm/25,4 = Q/101,6   rem = px/koren   em = px/roditelj   uređajniPx = px×gustina/96   izvoz = round(px×razmera)",
+      "in = px/96 = pt/72 = pc×12/72 = mm/25,4 = Q/101,6   rem = px/koren   em = px/roditelj   " +
+      "uređajniPx = px×gustina/96   izvoz = round(px×razmera)",
 
     errorValue: "Vrednost mora biti konačan broj.",
     errorRootFontSize: "Korenska veličina mora biti veća od nule.",
@@ -300,7 +329,8 @@ export const PRO_DIZAJN_SR = {
 
     inputs: "Uneseno",
     formula:
-      "ΔE*ab = √(ΔL²+Δa²+Δb²)   ΔE94 = √((ΔL/kL94)² + (ΔC*/(kC·SC))² + (ΔH*/(kH·SH))²)   ΔE00 = √((ΔL'/(kL·SL))² + (ΔC'/(kC·SC))² + (ΔH'/(kH·SH))² + RT·termC·termH)",
+      "ΔE*ab = √(ΔL²+Δa²+Δb²)   ΔE94 = √((ΔL/kL94)² + (ΔC*/(kC·SC))² + (ΔH*/(kH·SH))²)   ΔE00 = " +
+      "√((ΔL'/(kL·SL))² + (ΔC'/(kC·SC))² + (ΔH'/(kH·SH))² + RT·termC·termH)",
 
     errorColour1: "L* mora biti između 0 i 100, a* i b* moraju biti konačni brojevi.",
     errorColour2: "L* mora biti između 0 i 100, a* i b* moraju biti konačni brojevi.",
@@ -317,7 +347,8 @@ export const PRO_DIZAJN_SR = {
     xDimension: "X-dimenzija",
     xDimensionHint: "Modul u milimetrima. Upiši ovo ILI uvećanje ispod, nikad oba.",
     magnificationPercent: "Uvećanje (%)",
-    magnificationHint: "Procenat nominalne X-dimenzije od 0,33 mm. Upiši ovo ILI X-dimenziju iznad, nikad oba.",
+    magnificationHint:
+      "Procenat nominalne X-dimenzije od 0,33 mm. Upiši ovo ILI X-dimenziju iznad, nikad oba.",
     verifyDigits: "Kod za proveru (sa kontrolnom cifrom)",
     verifyDigitsHint: "Ceo odštampani kod — dužina mora odgovarati izabranoj simbologiji.",
 
@@ -342,12 +373,18 @@ export const PRO_DIZAJN_SR = {
 
     inputs: "Uneseno",
     formula:
-      "kontrolnaCifra: težina 3 na krajnjoj cifri zdesna, naizmenično 1,3,…   zbir = Σ cifra×težina   kontrolnaCifra = (10 − (zbir mod 10)) mod 10   simbol = (kodiranihModula+levaTiha+desnaTiha)×X   visinaCrta = nominalnaVisina×uvećanje/100",
+      "kontrolnaCifra: težina 3 na krajnjoj cifri zdesna, naizmenično 1,3,…   zbir = Σ " +
+      "cifra×težina   kontrolnaCifra = (10 − (zbir mod 10)) mod 10   simbol = " +
+      "(kodiranihModula+levaTiha+desnaTiha)×X   visinaCrta = nominalnaVisina×uvećanje/100",
 
-    errorDigits: "Broj cifara mora tačno odgovarati izabranoj simbologiji (12, 7 ili 11), samo cifre.",
+    errorDigits:
+      "Broj cifara mora tačno odgovarati izabranoj simbologiji (12, 7 ili 11), samo cifre.",
     errorXDimension: "X-dimenzija mora biti veća od nule. Upiši nju ili uvećanje, ne oba.",
-    errorMagnificationPercent: "Uvećanje mora biti veće od nule. Upiši njega ili X-dimenziju, ne oba.",
-    errorVerifyDigits: "Kod za proveru mora sadržati samo cifre, u dužini koju izabrana simbologija zahteva (sa kontrolnom cifrom).",
+    errorMagnificationPercent:
+      "Uvećanje mora biti veće od nule. Upiši njega ili X-dimenziju, ne oba.",
+    errorVerifyDigits:
+      "Kod za proveru mora sadržati samo cifre, u dužini koju izabrana simbologija zahteva (sa " +
+      "kontrolnom cifrom).",
     errorSymbology: "Neispravna simbologija.",
   },
 
@@ -357,13 +394,17 @@ export const PRO_DIZAJN_SR = {
     descender: "Descender",
     descenderHint: "Obično upisan negativan u fontu — ovde se uzima apsolutna vrednost.",
     lineGap: "Razmak reda (lineGap)",
-    lineGapHint: "Kod ove alatke se skraćuje iz oba odmaka — ne pomera margine, samo prikazani sadržajni okvir.",
+    lineGapHint:
+      "Kod ove alatke se skraćuje iz oba odmaka — ne pomera margine, samo prikazani sadržajni " +
+      "okvir.",
     capHeight: "Visina verzala (capHeight)",
     xHeight: "Visina malog x (xHeight)",
     fontSize: "Veličina slova",
     lineHeight: "Prored (CSS line-height)",
     metricSource: "Izvor metrika",
-    metricSourceHint: "Koju tabelu fonta si ukucao — hhea, OS/2 sTypo ili OS/2 usWin. Utiče na to ČIJI je ovaj rezultat, ne na ono što će prikazivač uraditi.",
+    metricSourceHint:
+      "Koju tabelu fonta si ukucao — hhea, OS/2 sTypo ili OS/2 usWin. Utiče na to ČIJI je ovaj " +
+      "rezultat, ne na ono što će prikazivač uraditi.",
     sourceHhea: "hhea",
     sourceOs2Typo: "OS/2 sTypo",
     sourceOs2Win: "OS/2 usWin",
@@ -383,11 +424,14 @@ export const PRO_DIZAJN_SR = {
     marginBottom: "Donja margina za primenu",
     metricSourceLabel: "Izvor metrika (ovog rezultata)",
     gapCancelsNote:
-      "Razmak reda se skraćuje iz oba odmaka — dva suparnička shvatanja sadržajnog okvira daju isti odmak; menja se samo prikazani sadržajni okvir.",
+      "Razmak reda se skraćuje iz oba odmaka — dva suparnička shvatanja sadržajnog okvira daju " +
+      "isti odmak; menja se samo prikazani sadržajni okvir.",
 
     inputs: "Uneseno",
     formula:
-      "s = veličina/jedinicaFonta   sadržajniOkvir = (ascender+|descender|+razmakReda)×s   poluVišak = (prored−sadržajniOkvir)/2   odmakVrh = poluVišak + razmakReda×s/2 + (ascender−verzal)×s   odmakDno = poluVišak + razmakReda×s/2 + |descender|×s",
+      "s = veličina/jedinicaFonta   sadržajniOkvir = (ascender+|descender|+razmakReda)×s   " +
+      "poluVišak = (prored−sadržajniOkvir)/2   odmakVrh = poluVišak + razmakReda×s/2 + " +
+      "(ascender−verzal)×s   odmakDno = poluVišak + razmakReda×s/2 + |descender|×s",
 
     errorUnitsPerEm: "Jedinica fonta je ceo broj od 1 do 16384.",
     errorAscender: "Ascender mora biti veći od nule.",
@@ -429,7 +473,9 @@ export const PRO_DIZAJN_SR = {
 
     inputs: "Uneseno",
     formula:
-      "kratka(n) = floor(duga(n−1)/2), duga(n) = kratka(n−1), počev od sidra serije   površina = kratka×duga/1e6   dijagonala = √(kratka²+duga²)   uvećanje = min(ciljKratka/kratka, ciljDuga/duga)×100",
+      "kratka(n) = floor(duga(n−1)/2), duga(n) = kratka(n−1), počev od sidra serije   površina = " +
+      "kratka×duga/1e6   dijagonala = √(kratka²+duga²)   uvećanje = min(ciljKratka/kratka, " +
+      "ciljDuga/duga)×100",
 
     errorSeries: "Neispravna serija.",
     errorIndex: "Indeks formata je ceo broj od 0 do 10.",
@@ -470,7 +516,8 @@ export const PRO_DIZAJN_SR = {
 
     inputs: "Uneseno",
     formula:
-      "veličina(n) = osnovnaPx × odnos^n   rem = veličina/koren   pt = veličina×0,75   zaokruživanje se primenjuje samo na prikazanu px kolonu, nikad na sledeći korak",
+      "veličina(n) = osnovnaPx × odnos^n   rem = veličina/koren   pt = veličina×0,75   " +
+      "zaokruživanje se primenjuje samo na prikazanu px kolonu, nikad na sledeći korak",
 
     errorBaseSize: "Osnovna veličina mora biti veća od nule.",
     errorRatio: "Odnos mora biti broj veći od 1.",
@@ -502,7 +549,9 @@ export const PRO_DIZAJN_SR = {
 
     inputs: "Uneseno",
     formula:
-      "površina = širina×visina/1e6   masaTabaka = gramatura×površina   ukupnaMasa = masaTabaka×broj   gramaturaIzMase = izmerenaMasa/(broj×površina)   dužinaRolne = masaRolne[kg]×1e6/(gramatura×širinaRolne[mm])",
+      "površina = širina×visina/1e6   masaTabaka = gramatura×površina   ukupnaMasa = " +
+      "masaTabaka×broj   gramaturaIzMase = izmerenaMasa/(broj×površina)   dužinaRolne = " +
+      "masaRolne[kg]×1e6/(gramatura×širinaRolne[mm])",
 
     errorGrammage: "Gramatura mora biti veća od nule.",
     errorSheetWidth: "Širina tabaka mora biti veća od nule.",
@@ -555,11 +604,14 @@ export const PRO_DIZAJN_SR = {
     bytes: "Bajtova (sirovo)",
     mebibytes: "MiB (sirovo)",
     bytesNote:
-      "Sirovi uzorci — bez alfa kanala, ICC profila, slojeva ili dopune reda. Sačuvan fajl će uvek biti veći od ovog broja.",
+      "Sirovi uzorci — bez alfa kanala, ICC profila, slojeva ili dopune reda. Sačuvan fajl će " +
+      "uvek biti veći od ovog broja.",
 
     inputs: "Uneseno",
     formula:
-      "mm = px×25,4/ppi   px = round(mm×ppi/25,4)   ppi = px×25,4/mm   radnaPovršina = otisak + 2×napust (px zaokruženo NAVIŠE)   konačnaVeličina = otisak×s   bajtovi = širina×visina×kanali×bitovaPoKanalu/8",
+      "mm = px×25,4/ppi   px = round(mm×ppi/25,4)   ppi = px×25,4/mm   radnaPovršina = otisak + " +
+      "2×napust (px zaokruženo NAVIŠE)   konačnaVeličina = otisak×s   bajtovi = " +
+      "širina×visina×kanali×bitovaPoKanalu/8",
 
     errorBleed: "Napust ne sme biti negativan.",
     errorScaleDenominator: "Imenilac razmere mora biti 1 ili veći.",
@@ -586,7 +638,9 @@ export const PRO_DIZAJN_SR = {
     yes: "Da",
     no: "Ne",
     rollLength: "Dužina jedne rolne",
-    rollLengthHint: "Opciono — za broj potrebnih rolni. Broj se gradi iz celih redova po rolni, nikad iz proste podele dužine.",
+    rollLengthHint:
+      "Opciono — za broj potrebnih rolni. Broj se gradi iz celih redova po rolni, nikad iz " +
+      "proste podele dužine.",
     pricePerMetre: "Cena po dužnom metru",
 
     results: "Rezultat",
@@ -605,7 +659,9 @@ export const PRO_DIZAJN_SR = {
 
     inputs: "Uneseno",
     formula:
-      "preko = floor((iskoristivo+razmak)/(komad+razmak))   redova = ceil(tiraž/preko)   dužina = redova×(visina+razmak) − razmak + 2×početnaKrajnjaMargina   redovaPoRolni = floor((dužinaRolne+razmak)/(visina+razmak))   rolni = ceil(redova/redovaPoRolni)",
+      "preko = floor((iskoristivo+razmak)/(komad+razmak))   redova = ceil(tiraž/preko)   dužina " +
+      "= redova×(visina+razmak) − razmak + 2×početnaKrajnjaMargina   redovaPoRolni = " +
+      "floor((dužinaRolne+razmak)/(visina+razmak))   rolni = ceil(redova/redovaPoRolni)",
 
     errorRollWidth: "Širina rolne mora biti veća od nule.",
     errorPieceWidth: "Širina komada mora biti veća od nule.",
@@ -642,7 +698,8 @@ export const PRO_DIZAJN_SR = {
 
     inputs: "Uneseno",
     formula:
-      "P4 = ceil(strana/4)×4   PS = ceil(P4/tabačić)×tabačić   prazne = PS−strana   tabak k: prednja = (PS−2k+2 | 2k−1), zadnja = (2k | PS−2k+1), pomereno za (početnaStrana−1)",
+      "P4 = ceil(strana/4)×4   PS = ceil(P4/tabačić)×tabačić   prazne = PS−strana   tabak k: " +
+      "prednja = (PS−2k+2 | 2k−1), zadnja = (2k | PS−2k+1), pomereno za (početnaStrana−1)",
 
     errorPageCount: "Broj strana je ceo broj od 1 do 4000.",
     errorSignatureSize: "Strana po tabačiću je 4, 8, 16 ili 32.",
@@ -687,7 +744,10 @@ export const PRO_DIZAJN_SR = {
 
     inputs: "Uneseno",
     formula:
-      "iskoristivaŠirina = tabak − leva − desna   iskoristivaVisina = tabak − gornja − donja   preko = floor((iskoristivaŠirina+razmak)/(širina+razmak))   dole = floor((iskoristivaVisina+razmak)/(visina+razmak))   otpad% = (1 − komada×površinaKomada/površinaTabaka)×100",
+      "iskoristivaŠirina = tabak − leva − desna   iskoristivaVisina = tabak − gornja − donja   " +
+      "preko = floor((iskoristivaŠirina+razmak)/(širina+razmak))   dole = " +
+      "floor((iskoristivaVisina+razmak)/(visina+razmak))   otpad% = (1 − " +
+      "komada×površinaKomada/površinaTabaka)×100",
 
     errorSheetWidth: "Širina tabaka mora biti veća od nule.",
     errorSheetHeight: "Visina tabaka mora biti veća od nule.",

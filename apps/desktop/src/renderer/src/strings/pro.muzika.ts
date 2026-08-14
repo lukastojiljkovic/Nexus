@@ -44,7 +44,8 @@ export const PRO_MUZIKA_SR = {
     calibrationDbfsAtPlus4: "dBFS pri +4 dBu",
     calibrationValue: "Vrednost poravnanja",
     calibrationHint:
-      "Kućna konvencija: +4 dBu na −18 dBFS je EBU/SMPTE muzička konvencija, −20 dBFS je filmska konvencija SMPTE. Nexus ne pretpostavlja nijednu.",
+      "Kućna konvencija: +4 dBu na −18 dBFS je EBU/SMPTE muzička konvencija, −20 dBFS je filmska " +
+      "konvencija SMPTE. Nexus ne pretpostavlja nijednu.",
 
     results: "Rezultat",
     resultDbu: "dBu",
@@ -56,11 +57,13 @@ export const PRO_MUZIKA_SR = {
     resultDbfs: "dBFS",
     dbmNote: "dBm i dBu se poklapaju samo pri 600 Ω — van te impedanse su različite skale.",
     peakNote:
-      "Vršne i međuvršne vrednosti važe za sinusni signal; kod programskog materijala krest faktor je svojstvo samog signala.",
+      "Vršne i međuvršne vrednosti važe za sinusni signal; kod programskog materijala krest " +
+      "faktor je svojstvo samog signala.",
 
     inputs: "Uneseno",
     formula:
-      "dBu = 20·log₁₀(Vrms / √0,6)     dBV = 20·log₁₀(Vrms)     dBm = 10·log₁₀((Vrms²/R) / 0,001)     Vpeak = Vrms·√2     dBFS = dBu − dBu(0 dBFS)",
+      "dBu = 20·log₁₀(Vrms / √0,6)     dBV = 20·log₁₀(Vrms)     dBm = 10·log₁₀((Vrms²/R) / " +
+      "0,001)     Vpeak = Vrms·√2     dBFS = dBu − dBu(0 dBFS)",
 
     errorDbu: "dBu je broj od −100 do +60.",
     errorDbv: "dBV je broj od −100 do +60.",
@@ -87,7 +90,8 @@ export const PRO_MUZIKA_SR = {
     bpmRefDottedQuarter: "Četvrtinu sa tačkom",
     bpmRefDenominatorUnit: "Notnu vrednost imenioca",
     bpmReferenceHint:
-      "U složenim taktovima kao 6/8 tempo se često navodi u četvrtinama sa tačkom — ova alatka to ne pretpostavlja.",
+      "U složenim taktovima kao 6/8 tempo se često navodi u četvrtinama sa tačkom — ova alatka " +
+      "to ne pretpostavlja.",
     numerator: "Brojilac takta",
     denominator: "Imenilac takta",
     bars: "Broj taktova",
@@ -107,7 +111,9 @@ export const PRO_MUZIKA_SR = {
 
     inputs: "Uneseno",
     formula:
-      "sekPoJedinici = (60/BPM)·(4/imenilac)   [ili /1,5 za četvrtinu sa tačkom, ili 60/BPM za jedinicu imenioca]     sekPoTaktu = brojilac·sekPoJedinici     trajanje = taktovi·sekPoTaktu     taktovi = floor(trajanje/sekPoTaktu)",
+      "sekPoJedinici = (60/BPM)·(4/imenilac)   [ili /1,5 za četvrtinu sa tačkom, ili 60/BPM za " +
+      "jedinicu imenioca]     sekPoTaktu = brojilac·sekPoJedinici     trajanje = " +
+      "taktovi·sekPoTaktu     taktovi = floor(trajanje/sekPoTaktu)",
 
     errorBpm: "Tempo je broj od 1 do 999.",
     errorNumerator: "Brojilac takta je ceo broj od 1 do 64.",
@@ -149,7 +155,8 @@ export const PRO_MUZIKA_SR = {
 
     inputs: "Uneseno",
     formula:
-      "ms = (60000/BPM)·(4/imenilac)·modifikator     modifikator: prava=1, sa tačkom=3/2, triolska=2/3     Hz = 1000/ms     obrnuto: BPM = 240000·modifikator/(imenilac·izmerenoMs)",
+      "ms = (60000/BPM)·(4/imenilac)·modifikator     modifikator: prava=1, sa tačkom=3/2, " +
+      "triolska=2/3     Hz = 1000/ms     obrnuto: BPM = 240000·modifikator/(imenilac·izmerenoMs)",
 
     errorBpm: "Tempo je broj od 1 do 999.",
     errorDenominator: "Notna vrednost za isticanje mora biti 1, 2, 4, 8, 16, 32 ili 64.",
@@ -183,7 +190,8 @@ export const PRO_MUZIKA_SR = {
     resultFrequency: "Rezultujuća frekvencija",
     resultBeatHz: "Brzina udara",
     beatNote:
-      "Brzina udara je razlika u hercima, ne u centima — istih 7,85 centi je 3,6 Hz na 440 Hz i 90 Hz na 11 kHz.",
+      "Brzina udara je razlika u hercima, ne u centima — istih 7,85 centi je 3,6 Hz na 440 Hz i " +
+      "90 Hz na 11 kHz.",
     signNote: "Znak se čuva: B ispod A daje negativne cente i odnos manji od jedan.",
 
     inputs: "Uneseno",
@@ -212,7 +220,8 @@ export const PRO_MUZIKA_SR = {
     makeupHint: "Podrazumevano 0.",
     makeupReferenceLevel: "Referentni nivo za makeup",
     makeupReferenceLevelHint:
-      "Programski nivo na koji se pojačanje vraća. Mastering se vraća na programski nivo, ne na pun opseg, pa ovo nema podrazumevanu vrednost.",
+      "Programski nivo na koji se pojačanje vraća. Mastering se vraća na programski nivo, ne na " +
+      "pun opseg, pa ovo nema podrazumevanu vrednost.",
 
     results: "Rezultat",
     resultOutputLevel: "Izlazni nivo y",
@@ -220,11 +229,13 @@ export const PRO_MUZIKA_SR = {
     resultOutputWithMakeup: "Izlaz posle makeup pojačanja",
     resultMakeupToReference: "Makeup koji referentni nivo vraća na sebe",
     scopeNote:
-      "Ovo je samo statička prenosna kriva pojačanja — bez napada, otpuštanja, tipa detektora (vršni ili RMS) i bez unapredne najave.",
+      "Ovo je samo statička prenosna kriva pojačanja — bez napada, otpuštanja, tipa detektora " +
+      "(vršni ili RMS) i bez unapredne najave.",
 
     inputs: "Uneseno",
     formula:
-      "ispod kolena: y=x     u kolenu: y = x + (1/n − 1)·(x − T + W/2)²/(2W)     iznad kolena: y = T + (x − T)/n     GR = x − y",
+      "ispod kolena: y=x     u kolenu: y = x + (1/n − 1)·(x − T + W/2)²/(2W)     iznad kolena: y " +
+      "= T + (x − T)/n     GR = x − y",
 
     errorThreshold: "Prag je broj od −80 do 0 dBFS.",
     errorRatio: "Odnos je broj od 1 do 1000.",
@@ -256,13 +267,15 @@ export const PRO_MUZIKA_SR = {
     resultsSum: "Nekoherentan zbir",
     resultSum: "Zbir",
     sumNote:
-      "Zbir je nekoherentan (po snazi) bez obzira na izabranu vrstu veličine — koherentni izvori se sabiraju po amplitudi, što je drugo pitanje.",
+      "Zbir je nekoherentan (po snazi) bez obzira na izabranu vrstu veličine — koherentni izvori " +
+      "se sabiraju po amplitudi, što je drugo pitanje.",
     colLevel: "Nivo (dB)",
     colShare: "Udeo u energiji (%)",
 
     inputs: "Uneseno",
     formula:
-      "amplituda: dB = 20·log₁₀(odnos)     snaga: dB = 10·log₁₀(odnos)     zbir: Lsum = 10·log₁₀(Σ 10^(Li/10))",
+      "amplituda: dB = 20·log₁₀(odnos)     snaga: dB = 10·log₁₀(odnos)     zbir: Lsum = " +
+      "10·log₁₀(Σ 10^(Li/10))",
 
     errorDecibels: "Decibeli su broj od −200 do +200.",
     errorRatio: "Linearni odnos mora biti veći od nule.",
@@ -285,7 +298,8 @@ export const PRO_MUZIKA_SR = {
     frequency: "Frekvencija",
     referencePitch: "Referentni ton A4",
     referencePitchHint:
-      "Podrazumevano 440 Hz po ISO 16:1975. 415 Hz je barokni štim, 442/443 Hz su česti orkestarski.",
+      "Podrazumevano 440 Hz po ISO 16:1975. 415 Hz je barokni štim, 442/443 Hz su česti " +
+      "orkestarski.",
     octaveConvention: "Numeracija oktava",
     octaveConventionScientific: "Naučna / MIDI (MIDI 60 = C4)",
     octaveConventionYamaha: "Yamaha (MIDI 60 = C3)",
@@ -317,7 +331,8 @@ export const PRO_MUZIKA_SR = {
 
     inputs: "Uneseno",
     formula:
-      "f(m) = A4·2^((m−69)/12)     mTačno = 69 + 12·log₂(f/A4)     centi = 1200·log₂(fB/fA)     pomak: f' = f·2^(centi/1200)",
+      "f(m) = A4·2^((m−69)/12)     mTačno = 69 + 12·log₂(f/A4)     centi = 1200·log₂(fB/fA)     " +
+      "pomak: f' = f·2^(centi/1200)",
 
     errorMidi: "MIDI broj je ceo broj od 0 do 127.",
     errorName: "Ime note nije prepoznato u naučnoj notaciji.",
@@ -364,20 +379,24 @@ export const PRO_MUZIKA_SR = {
     resultBytesPerSecond: "Protok (B/s)",
     resultBitrate: "Protok",
     exceedsNote:
-      "Ukupna veličina prelazi ono što 32-bitno RIFF polje veličine može da adresira — potreban je RF64 ili W64.",
+      "Ukupna veličina prelazi ono što 32-bitno RIFF polje veličine može da adresira — potreban " +
+      "je RF64 ili W64.",
     resultSeconds: "Trajanje",
     resultFormatted: "Trajanje (HH:MM:SS)",
 
     inputs: "Uneseno",
     formula:
-      "bajtiPoSekundi = frekvencija·(rezolucija/8)·kanali     bajtovi = bajtiPoSekundi·trajanje·trake + 44·trake (sa zaglavljem)     protok[kbit/s] = frekvencija·rezolucija·kanali/1000",
+      "bajtiPoSekundi = frekvencija·(rezolucija/8)·kanali     bajtovi = " +
+      "bajtiPoSekundi·trajanje·trake + 44·trake (sa zaglavljem)     protok[kbit/s] = " +
+      "frekvencija·rezolucija·kanali/1000",
 
     errorSampleRate: "Frekvencija odabiranja je broj od 1000 do 768000 Hz.",
     errorBitDepth: "Rezolucija mora biti 8, 16, 24 ili 32 bita.",
     errorChannels: "Broj kanala je ceo broj od 1 do 256.",
     errorTracks: "Broj traka je ceo broj od 1 do 1000.",
     errorSeconds: "Trajanje ne sme biti negativno.",
-    errorBytes: "Veličina mora biti veća od nule i mora sadržati bar zaglavlje kad je ono uključeno.",
+    errorBytes:
+      "Veličina mora biti veća od nule i mora sadržati bar zaglavlje kad je ono uključeno.",
 
     unitB: "B",
     unitMb: "MB",
@@ -395,10 +414,13 @@ export const PRO_MUZIKA_SR = {
     temperatureHint: "Podrazumevano 20 °C. Hrani brzinu zvuka.",
     surfaces: "Površine",
     surfacesHint:
-      "Jedan red po površini: površina;α125;α250;α500;α1000;α2000;α4000. Koeficijenti su sa deklaracije konkretnog proizvoda, po oktavnom pojasu, i važe za taj opseg — Nexus ih ne ugrađuje.",
+      "Jedan red po površini: površina;α125;α250;α500;α1000;α2000;α4000. Koeficijenti su sa " +
+      "deklaracije konkretnog proizvoda, po oktavnom pojasu, i važe za taj opseg — Nexus ih ne " +
+      "ugrađuje.",
     airAbsorption: "Apsorpcija vazduha po pojasu (opciono)",
     airAbsorptionHint:
-      "m po metru, po oktavnom pojasu — zavisi od vlažnosti i temperature. Iznad otprilike 2 kHz u velikoj prostoriji preovlađuje.",
+      "m po metru, po oktavnom pojasu — zavisi od vlažnosti i temperature. Iznad otprilike 2 kHz " +
+      "u velikoj prostoriji preovlađuje.",
     air125: "125 Hz",
     air250: "250 Hz",
     air500: "500 Hz",
@@ -417,18 +439,22 @@ export const PRO_MUZIKA_SR = {
     speedOfSound: "Brzina zvuka",
     noValue: "nema vrednosti",
     sabineLimitNote:
-      "Sabin pretpostavlja difuzno polje i nepouzdan je iznad otprilike ᾱ = 0,2 — zato Eyring stoji pored njega.",
+      "Sabin pretpostavlja difuzno polje i nepouzdan je iznad otprilike ᾱ = 0,2 — zato Eyring " +
+      "stoji pored njega.",
     divergenceNote:
-      "Pri ᾱ = 1 Sabine i dalje daje konačan broj, a Eyring nema vrednost — ta razlika je pošten odgovor, ne greška.",
+      "Pri ᾱ = 1 Sabine i dalje daje konačan broj, a Eyring nema vrednost — ta razlika je pošten " +
+      "odgovor, ne greška.",
 
     inputs: "Uneseno",
     formula:
-      "A = Σ(Sᵢ·αᵢ)     Sabine: RT60 = 24·ln(10)·V/(c·A)     Eyring: RT60 = 24·ln(10)·V/(−c·S·ln(1−ᾱ))     sa vazduhom: RT60 = 24·ln(10)·V/(c·(A + 4mV))",
+      "A = Σ(Sᵢ·αᵢ)     Sabine: RT60 = 24·ln(10)·V/(c·A)     Eyring: RT60 = " +
+      "24·ln(10)·V/(−c·S·ln(1−ᾱ))     sa vazduhom: RT60 = 24·ln(10)·V/(c·(A + 4mV))",
 
     errorTemperature: "Temperatura je broj od −50 do +60 °C.",
     errorVolume: "Zapremina prostorije mora biti veća od nule.",
     errorSurfaces:
-      "Potreban je bar jedan i najviše 64 reda; površina mora biti veća od nule, svaki α je broj od 0 do 1.",
+      "Potreban je bar jedan i najviše 64 reda; površina mora biti veća od nule, svaki α je broj " +
+      "od 0 do 1.",
     errorAirAbsorption: "Apsorpcija vazduha ne sme biti negativna.",
 
     unitS: "s",
@@ -447,7 +473,8 @@ export const PRO_MUZIKA_SR = {
     temperature: "Temperatura vazduha",
     temperatureHint: "Podrazumevano 20 °C.",
     frequencyLimit: "Gornja granica frekvencije",
-    frequencyLimitHint: "Podrazumevano 300 Hz — modovi imaju značaj tamo gde prostorija nije difuzna.",
+    frequencyLimitHint:
+      "Podrazumevano 300 Hz — modovi imaju značaj tamo gde prostorija nije difuzna.",
     maxOrder: "Najviši red moda po osi",
     maxOrderHint: "Podrazumevano 4.",
 
@@ -461,10 +488,13 @@ export const PRO_MUZIKA_SR = {
     typeOblique: "kosi",
     speedOfSound: "Brzina zvuka",
     idealizationNote:
-      "Modovi za pravougaonu prostoriju sa krutim zidovima — idealizacija, ne konkretna prostorija sa vratima, prozorima i nameštajem.",
+      "Modovi za pravougaonu prostoriju sa krutim zidovima — idealizacija, ne konkretna " +
+      "prostorija sa vratima, prozorima i nameštajem.",
 
     inputs: "Uneseno",
-    formula: "f(p,q,r) = (c/2)·√((p/L)² + (q/W)² + (r/H)²)     tip: 1 osa = aksijalni, 2 = tangencijalni, 3 = kosi",
+    formula:
+      "f(p,q,r) = (c/2)·√((p/L)² + (q/W)² + (r/H)²)     tip: 1 osa = aksijalni, 2 = " +
+      "tangencijalni, 3 = kosi",
 
     errorLength: "Dužina prostorije je broj od 0,5 do 100 m.",
     errorWidth: "Širina prostorije je broj od 0,5 do 100 m.",
@@ -493,20 +523,24 @@ export const PRO_MUZIKA_SR = {
     resultOneWayOutMs: "U jednom smeru, izlaz",
     resultRoundTripMs: "U oba smera, ukupno",
     theoreticalNote:
-      "Ovo je teorijski minimum. Sigurnosni baferi drajvera i pomeraj USB/Thunderbolt prenosa se ne izvode i ostaju van modela.",
+      "Ovo je teorijski minimum. Sigurnosni baferi drajvera i pomeraj USB/Thunderbolt prenosa se " +
+      "ne izvode i ostaju van modela.",
 
     msToSamples: "Trajanje",
-    msToSamplesHint: "U milisekundama. Poslednje uneto polje — ovo ili broj odbiraka — vodi računicu.",
+    msToSamplesHint:
+      "U milisekundama. Poslednje uneto polje — ovo ili broj odbiraka — vodi računicu.",
     samplesInput: "Broj odbiraka",
     samplesInputHint: "Poslednje uneto polje — ovo ili trajanje — vodi računicu.",
     resultsConvert: "Odbirci i trajanje",
     resultSamples: "Odbiraka",
-    wholeSamplesNote: "Trajanje ne pada tačno na granicu odbirka — prikazan je razlomljen broj, ne zaokružen.",
+    wholeSamplesNote:
+      "Trajanje ne pada tačno na granicu odbirka — prikazan je razlomljen broj, ne zaokružen.",
     resultMilliseconds: "Trajanje",
 
     inputs: "Uneseno",
     formula:
-      "jednosmerno = bafer/frekvencija·1000     oba smera = 2·jednosmerno + dodatnoUlaz + dodatnoIzlaz     odbirci = ms/1000·frekvencija     ms = odbirci/frekvencija·1000",
+      "jednosmerno = bafer/frekvencija·1000     oba smera = 2·jednosmerno + dodatnoUlaz + " +
+      "dodatnoIzlaz     odbirci = ms/1000·frekvencija     ms = odbirci/frekvencija·1000",
 
     errorSampleRate: "Frekvencija odabiranja je broj od 1000 do 768000 Hz.",
     errorBufferSamples: "Veličina bafera je ceo broj od 1 do 65536.",
@@ -564,7 +598,8 @@ export const PRO_MUZIKA_SR = {
     colNote: "Ton",
     colSemitones: "Polustepeni od osnove",
     unspellableCell: "neispisivo",
-    unspellableNote: "Neispisiv u ovom zapisu bez enharmonijske zamene — nije prikazan kao drugo ime.",
+    unspellableNote:
+      "Neispisiv u ovom zapisu bez enharmonijske zamene — nije prikazan kao drugo ime.",
 
     keySignatureTitle: "Predznaci ključa",
     resultSharps: "Povisilica",
@@ -585,7 +620,9 @@ export const PRO_MUZIKA_SR = {
 
     inputs: "Uneseno",
     formula:
-      "pc = mod12(rootPc + polustepeni_i)     slovo_i = koren + korakSlova_i     predznak = mod12(pc − prirodnaVK + 6) − 6     trozvuk: kvaliteti iz razmaka (4,3) dur, (3,4) mol, (3,3) umanjen, (4,4) uvećan",
+      "pc = mod12(rootPc + polustepeni_i)     slovo_i = koren + korakSlova_i     predznak = " +
+      "mod12(pc − prirodnaVK + 6) − 6     trozvuk: kvaliteti iz razmaka (4,3) dur, (3,4) mol, " +
+      "(3,3) umanjen, (4,4) uvećan",
 
     errorRoot: "Osnovni ton nije prepoznat — slovo C–B, uz najviše dva #, ## ili b, bb.",
     errorScale: "Vrsta skale mora biti izabrana vrednost.",
@@ -598,11 +635,13 @@ export const PRO_MUZIKA_SR = {
     entryWavelength: "Talasna dužina",
     value: "Vrednost",
     temperature: "Temperatura vazduha",
-    temperatureHint: "Podrazumevano 20 °C. Model je suv vazduh — vlažnost pomera brzinu zvuka za manje od 1 %.",
+    temperatureHint:
+      "Podrazumevano 20 °C. Model je suv vazduh — vlažnost pomera brzinu zvuka za manje od 1 %.",
     distance: "Rastojanje",
     distanceHint: "Opciono — daje kašnjenje na tom rastojanju.",
     speedOverride: "Izmerena brzina zvuka",
-    speedOverrideHint: "Opciono — zamenjuje model suvog vazduha, za onoga ko je izmerio svoju sredinu.",
+    speedOverrideHint:
+      "Opciono — zamenjuje model suvog vazduha, za onoga ko je izmerio svoju sredinu.",
 
     results: "Rezultat",
     resultSpeedOfSound: "Brzina zvuka",
@@ -615,7 +654,8 @@ export const PRO_MUZIKA_SR = {
     resultDelay: "Kašnjenje na rastojanju",
 
     inputs: "Uneseno",
-    formula: "c(T) = 331,3·√(1 + T/273,15)     λ = c/f     f = c/λ     kašnjenje = rastojanje/c·1000",
+    formula:
+      "c(T) = 331,3·√(1 + T/273,15)     λ = c/f     f = c/λ     kašnjenje = rastojanje/c·1000",
 
     errorFrequency: "Frekvencija mora biti veća od nule.",
     errorWavelength: "Talasna dužina mora biti veća od nule.",
@@ -634,7 +674,8 @@ export const PRO_MUZIKA_SR = {
   "speaker-load": {
     cabinets: "Zvučnici",
     cabinetsHint:
-      "Jedan red po zvučniku: impedansa;grupa. Grupa je obavezna samo za redno-paralelno vezivanje, brojevi 1–8.",
+      "Jedan red po zvučniku: impedansa;grupa. Grupa je obavezna samo za redno-paralelno " +
+      "vezivanje, brojevi 1–8.",
     wiring: "Vezivanje",
     wiringParallel: "Paralelno",
     wiringSeries: "Redno",
@@ -642,7 +683,8 @@ export const PRO_MUZIKA_SR = {
     power: "Snaga pojačavača u dobijeno opterećenje",
     powerHint: "Iz tabele snage pojačavača za dobijenu impedansu. Nikad se ne pretpostavlja.",
     minimumLoad: "Najmanja impedansa koju pojačavač trpi",
-    minimumLoadHint: "Sa deklaracije tvog pojačavača. Nexus ne zna koji je to broj i ne nudi vrednost.",
+    minimumLoadHint:
+      "Sa deklaracije tvog pojačavača. Nexus ne zna koji je to broj i ne nudi vrednost.",
 
     results: "Rezultat",
     resultTotalImpedance: "Ukupna impedansa",
@@ -654,11 +696,14 @@ export const PRO_MUZIKA_SR = {
     limitLabel: "Najmanja impedansa koju si uneo",
     ratioLabel: "Ukupna impedansa ÷ tvoja granica",
     modelNote:
-      "Model je nominalna otporna impedansa sa deklaracije kutije, ne stvarna reaktivna kriva zvučnika — koju niko ne može da otkuca.",
+      "Model je nominalna otporna impedansa sa deklaracije kutije, ne stvarna reaktivna kriva " +
+      "zvučnika — koju niko ne može da otkuca.",
 
     inputs: "Uneseno",
     formula:
-      "paralelno: 1/Zuk = Σ(1/Zᵢ)     redno: Zuk = ΣZᵢ     redno-paralelno: sabiranje unutar grupe, pa paralelno preko grupa     V = √(P·Zuk)     paralelna grana: Pᵢ = V²/Zᵢ     redna grana: Pᵢ = I²·Zᵢ, I = V/Zuk",
+      "paralelno: 1/Zuk = Σ(1/Zᵢ)     redno: Zuk = ΣZᵢ     redno-paralelno: sabiranje unutar " +
+      "grupe, pa paralelno preko grupa     V = √(P·Zuk)     paralelna grana: Pᵢ = V²/Zᵢ     " +
+      "redna grana: Pᵢ = I²·Zᵢ, I = V/Zuk",
 
     errorCabinets: "Potreban je bar jedan i najviše 32 zvučnika.",
     errorImpedance: "Impedansa svakog zvučnika mora biti veća od nule.",
@@ -698,11 +743,14 @@ export const PRO_MUZIKA_SR = {
     resultLimitDifference: "Razlika u dB",
     ratioLabel: "Odnos pritisaka",
     freeFieldNote:
-      "Model je tačkasti izvor u slobodnom polju. Unutra reverberantno polje zaustavlja zakon obrnutog kvadrata posle kritičnog rastojanja; usmerenost, sprega niza, apsorpcija vazduha i kompresija snage kutije su van modela.",
+      "Model je tačkasti izvor u slobodnom polju. Unutra reverberantno polje zaustavlja zakon " +
+      "obrnutog kvadrata posle kritičnog rastojanja; usmerenost, sprega niza, apsorpcija vazduha " +
+      "i kompresija snage kutije su van modela.",
 
     inputs: "Uneseno",
     formula:
-      "SPL(d) = osetljivost + 10·log₁₀(P) − 20·log₁₀(d/dref)     razlika = −20·log₁₀(d2/d1)     osetljivost_1W = osetljivost_2,83V − 10·log₁₀(8/Z)",
+      "SPL(d) = osetljivost + 10·log₁₀(P) − 20·log₁₀(d/dref)     razlika = −20·log₁₀(d2/d1)     " +
+      "osetljivost_1W = osetljivost_2,83V − 10·log₁₀(8/Z)",
 
     errorSensitivity: "Osetljivost je broj od 70 do 120 dB SPL.",
     errorSensitivityReference: "Referenca osetljivosti mora biti izabrana vrednost.",
@@ -722,12 +770,15 @@ export const PRO_MUZIKA_SR = {
     modePitch: "Jedan ton sa oktavom",
     text: "Tekst",
     textHint:
-      "Jedan ili više redova, do 5000 znakova. Razmaci i taktne crte (|) se čuvaju. Samo osnova akorda i bas posle kose crte se transponuju — nastavak akorda (m7, sus4...) se prepisuje bez izmene.",
+      "Jedan ili više redova, do 5000 znakova. Razmaci i taktne crte (|) se čuvaju. Samo osnova " +
+      "akorda i bas posle kose crte se transponuju — nastavak akorda (m7, sus4...) se prepisuje " +
+      "bez izmene.",
     pitchName: "Ton",
     pitchNameHint: "Naučna notacija sa oktavom, npr. C4, Bb-1, F##3.",
     octaveShift: "Oktavni pomak",
     octaveShiftHint:
-      "Podrazumevano 0. Za članove porodice pomerene za oktavu — kontrabasklarinet, bariton saksofon i slično.",
+      "Podrazumevano 0. Za članove porodice pomerene za oktavu — kontrabasklarinet, bariton " +
+      "saksofon i slično.",
     byKind: "Način transpozicije",
     byKindInterval: "Interval",
     byKindInstrument: "Par instrumenata",
@@ -762,17 +813,20 @@ export const PRO_MUZIKA_SR = {
     resultsText: "Transponovano",
     resultText: "Tekst",
     resultUnspellable: "Neispisivih tonova",
-    unspellableNote: "Tonovi koji bi tražili više od dvostrukog predznaka ostaju zapisani kao u izvorniku.",
+    unspellableNote:
+      "Tonovi koji bi tražili više od dvostrukog predznaka ostaju zapisani kao u izvorniku.",
 
     resultsPitch: "Rezultat",
     resultName: "Nova nota",
     resultOctave: "Oktava",
     resultMidi: "MIDI broj",
-    pitchUnspellableNote: "Traži više od dvostrukog predznaka — neispisivo bez enharmonijske zamene.",
+    pitchUnspellableNote:
+      "Traži više od dvostrukog predznaka — neispisivo bez enharmonijske zamene.",
 
     sourceKeyTitle: "Polazni tonalitet (opciono)",
     sourceKey: "Toničar",
-    sourceKeyHint: "Bez oktave, npr. Es ili Fis. Samo kad je unet, prikazuje se dobijeni tonalitet.",
+    sourceKeyHint:
+      "Bez oktave, npr. Es ili Fis. Samo kad je unet, prikazuje se dobijeni tonalitet.",
     sourceKeyMode: "Vrsta",
     sourceKeyModeMajor: "Dur",
     sourceKeyModeMinor: "Mol",
@@ -787,7 +841,9 @@ export const PRO_MUZIKA_SR = {
 
     inputs: "Uneseno",
     formula:
-      "gore: novoSlovo = slovo + korakIntervala, novaVK = mod12(vk + polustepeni)     dole: obrnuto     predznak = mod12(novaVK − prirodnaVK + 6) − 6     instrument: zapisano zvuči niže ili više za interval instrumenta, zavisno od instrumenta",
+      "gore: novoSlovo = slovo + korakIntervala, novaVK = mod12(vk + polustepeni)     dole: " +
+      "obrnuto     predznak = mod12(novaVK − prirodnaVK + 6) − 6     instrument: zapisano zvuči " +
+      "niže ili više za interval instrumenta, zavisno od instrumenta",
 
     errorText: "Tekst mora imati od 1 do 5000 znakova.",
     errorInterval: "Interval mora biti izabrana vrednost.",
@@ -810,7 +866,8 @@ export const PRO_MUZIKA_SR = {
     recordedAtHz: "Snimljeno na",
     playedBackAtHz: "Reprodukuje se na",
     recordedAtHzHint:
-      "r = reprodukuje/snimljeno. Fajl snimljen na 48000 Hz pušten u sesiji od 44100 Hz je čest studijski slučaj.",
+      "r = reprodukuje/snimljeno. Fajl snimljen na 48000 Hz pušten u sesiji od 44100 Hz je čest " +
+      "studijski slučaj.",
     originalTempo: "Izvorni tempo",
     originalTempoHint: "Opciono — daje dobijeni tempo.",
     originalLength: "Izvorna dužina",
@@ -826,7 +883,9 @@ export const PRO_MUZIKA_SR = {
     speedNote: "Visina i brzina idu zajedno — ovo je preuzorkovanje, ne vremensko rastezanje.",
 
     inputs: "Uneseno",
-    formula: "r = 2^(polustepeni/12) = 2^(centi/1200) = reprodukuje/snimljeno     noviTempo = tempo·r     novaDužina = dužina/r",
+    formula:
+      "r = 2^(polustepeni/12) = 2^(centi/1200) = reprodukuje/snimljeno     noviTempo = tempo·r   " +
+      "  novaDužina = dužina/r",
 
     errorSemitones: "Pomak je broj od −48 do +48 polustepeni.",
     errorCents: "Pomak je broj od −12000 do +12000 centi.",

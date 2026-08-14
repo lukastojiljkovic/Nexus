@@ -22,7 +22,8 @@ export const PRO_GRADNJA_SR = {
     rise: "Spratna visina",
     riseHint: "Od gotovog poda do gotovog poda, u milimetrima.",
     risers: "Broj visina stepenika",
-    risersHint: "Broj podizanja, ne broj gazišta — gazišta ima jedno manje kad krak izlazi u ravan poda.",
+    risersHint:
+      "Broj podizanja, ne broj gazišta — gazišta ima jedno manje kad krak izlazi u ravan poda.",
     going: "Gazište",
     goingHint: "Dubina gazišta u milimetrima.",
     top: "Izlaz kraka",
@@ -41,7 +42,8 @@ export const PRO_GRADNJA_SR = {
     pitch: "Nagib",
     blondel: "2r + g",
     blondelNote:
-      "Blondelov izraz iz 1675. je definisana veličina, ne propis — prikazuje se kao broj i ne poredi se ni sa čim.",
+      "Blondelov izraz iz 1675. je definisana veličina, ne propis — prikazuje se kao broj i ne " +
+      "poredi se ni sa čim.",
     ratio: "Odnos prema tvojoj granici",
     riserRatio: "Visina ÷ tvoja granica",
     goingRatio: "Gazište ÷ tvoja granica",
@@ -61,7 +63,8 @@ export const PRO_GRADNJA_SR = {
      * broj podizanja, pomeriti kotu poda — is the designer's posao.
      */
     remainderNote:
-      "Razlika između tražene i dobijene spratne visine. Ceo iznos pada na jedan stepenik, obično poslednji uz gornji pod.",
+      "Razlika između tražene i dobijene spratne visine. Ceo iznos pada na jedan stepenik, " +
+      "obično poslednji uz gornji pod.",
 
     inputs: "Uneseno",
     formula: "r = H / n     θ = arctg(r / g)     B = 2r + g",
@@ -111,7 +114,8 @@ export const PRO_GRADNJA_SR = {
 
     inputs: "Uneseno",
     formula:
-      "DMS: |x| = D + M/60 + S/3600     ° → rad: x·π/180     gon → rad: x·π/200     svođenje: x − k·krug",
+      "DMS: |x| = D + M/60 + S/3600     ° → rad: x·π/180     gon → rad: x·π/200     svođenje: x " +
+      "− k·krug",
 
     errorDegrees: "Stepeni moraju biti nula ili više.",
     errorMinutes: "Minuti su broj u [0, 60).",
@@ -152,7 +156,8 @@ export const PRO_GRADNJA_SR = {
 
     inputs: "Uneseno",
     formula:
-      "U = L − e₁ − e₂     k = ceil(U/s_max), n = k+1 (oba kraja)     n = ceil(U/s_max) (sredina polja)     n = ceil((U−g)/(w+g)) (ispuna)     s = U/k ili U/n",
+      "U = L − e₁ − e₂     k = ceil(U/s_max), n = k+1 (oba kraja)     n = ceil(U/s_max) (sredina " +
+      "polja)     n = ceil((U−g)/(w+g)) (ispuna)     s = U/k ili U/n",
 
     errorLength: "Ukupna dužina mora biti veća od nule.",
     errorStartCover: "Odstojanje od početka ne sme biti negativno.",
@@ -205,7 +210,8 @@ export const PRO_GRADNJA_SR = {
 
     inputs: "Uneseno",
     formula:
-      "prosta+UDL: R=qL/2, M=qL²/8, f=5qL⁴/384EI     prosta+sila: R=P/2, M=PL/4, f=PL³/48EI     konzola+UDL: R=qL, M=qL²/2, f=qL⁴/8EI     konzola+sila: R=P, M=PL, f=PL³/3EI",
+      "prosta+UDL: R=qL/2, M=qL²/8, f=5qL⁴/384EI     prosta+sila: R=P/2, M=PL/4, f=PL³/48EI     " +
+      "konzola+UDL: R=qL, M=qL²/2, f=qL⁴/8EI     konzola+sila: R=P, M=PL, f=PL³/3EI",
 
     errorSpan: "Raspon ili prepust mora biti veći od nule.",
     errorLoad: "Opterećenje ne sme biti negativno.",
@@ -237,7 +243,9 @@ export const PRO_GRADNJA_SR = {
     length: "Dužina L",
     pieces: "Broj komada",
     openings: "Odbitak otvora",
-    openingsHint: "Ukupna površina otvora u ploči. Umanjuje zapreminu, ne i oplatu — otvor se opšalva sa strane.",
+    openingsHint:
+      "Ukupna površina otvora u ploči. Umanjuje zapreminu, ne i oplatu — otvor se opšalva sa " +
+      "strane.",
     waste: "Rastur",
     wasteHint: "Zavisi od gradilišta i načina ugradnje.",
     mixerVolume: "Zapremina mešalice",
@@ -251,14 +259,16 @@ export const PRO_GRADNJA_SR = {
     grossVolume: "Zapremina sa rasturom",
     formwork: "Površina oplate",
     formworkNote:
-      "Greda ispod ploče: oplata (2h + b)·L broji dve bočne strane i sopstveni plafon grede u celini — ako je taj plafon deo trake koju već broji ploča, ne dodavati ga i tamo.",
+      "Greda ispod ploče: oplata (2h + b)·L broji dve bočne strane i sopstveni plafon grede u " +
+      "celini — ako je taj plafon deo trake koju već broji ploča, ne dodavati ga i tamo.",
     concreteMass: "Masa betona",
     rebarMass: "Masa armature",
     batches: "Broj tura mešalice",
 
     inputs: "Uneseno",
     formula:
-      "ploča: V=(a·b−ΣA_otv)·d·n, opl=(a·b+2(a+b)d)·n     greda: V=bhLn, opl=(2h+b)Ln     stub/samac: V=abhn, opl=2(a+b)hn     traka: V=bhLn, opl=2hLn     V_rastur=V·(1+r/100)",
+      "ploča: V=(a·b−ΣA_otv)·d·n, opl=(a·b+2(a+b)d)·n     greda: V=bhLn, opl=(2h+b)Ln     " +
+      "stub/samac: V=abhn, opl=2(a+b)hn     traka: V=bhLn, opl=2hLn     V_rastur=V·(1+r/100)",
 
     errorPieces: "Broj komada je ceo broj od 1 naviše.",
     errorWaste: "Rastur je broj od 0 do 100 %.",
@@ -321,7 +331,8 @@ export const PRO_GRADNJA_SR = {
 
     inputs: "Uneseno",
     formula:
-      "L_stvarno[m] = L_papir[mm]·M/1000     L_papir[mm] = L_stvarno[m]·1000/M     A_stvarno = A_papir[cm²]·10⁻⁴·M²     w,h = W,H·1000/M",
+      "L_stvarno[m] = L_papir[mm]·M/1000     L_papir[mm] = L_stvarno[m]·1000/M     A_stvarno = " +
+      "A_papir[cm²]·10⁻⁴·M²     w,h = W,H·1000/M",
     source: "Formati lista: ISO 216:2007, A-serija. Niz razmera: ISO 5455:1979.",
 
     errorDenominator: "Imenilac M mora biti veći od nule.",
@@ -339,7 +350,9 @@ export const PRO_GRADNJA_SR = {
   "earthwork-prismoidal": {
     profiles: "Profili",
     profilesHint:
-      "Jedan red po profilu: stacionaža;površina iskopa;površina nasipa;srednja površina iskopa;srednja površina nasipa. Poslednja dva su opciona i pripadaju segmentu koji ovaj red počinje.",
+      "Jedan red po profilu: stacionaža;površina iskopa;površina nasipa;srednja površina " +
+      "iskopa;srednja površina nasipa. Poslednja dva su opciona i pripadaju segmentu koji ovaj " +
+      "red počinje.",
     bulking: "Rastresitost",
     bulkingHint: "Osobina tla koju znaš sa terena. Primenjuje se samo na iskop koji se odvozi.",
     settlement: "Sleganje nasipa",
@@ -361,7 +374,8 @@ export const PRO_GRADNJA_SR = {
     fillWithSettlement: "Nasip posle sleganja",
     balanceAdjusted: "Bilans u prilagođenim stanjima",
     balanceNote:
-      "Rastresitost se primenjuje samo na iskop, sleganje samo na nasip — ove dve linije su u različitim mernim stanjima i ne sabiraju se sa bilansom u tlu.",
+      "Rastresitost se primenjuje samo na iskop, sleganje samo na nasip — ove dve linije su u " +
+      "različitim mernim stanjima i ne sabiraju se sa bilansom u tlu.",
 
     inputs: "Uneseno",
     formula:
@@ -383,7 +397,9 @@ export const PRO_GRADNJA_SR = {
     startElevation: "Kota polaznog repera",
     readings: "Očitanja",
     readingsHint:
-      "Jedan red po tački: naziv;nazad(BS);međuočitanje(IS);napred(FS);dužina viza. Prazna ćelija znači da te vrste očitanja nema; dužina viza pripada stanici koju red otvara backsightom.",
+      "Jedan red po tački: naziv;nazad(BS);međuočitanje(IS);napred(FS);dužina viza. Prazna " +
+      "ćelija znači da te vrste očitanja nema; dužina viza pripada stanici koju red otvara " +
+      "backsightom.",
     closingElevation: "Kota završnog repera",
     closingElevationHint: "Opciono. Bez nje se ne prikazuje nezatvaranje.",
 
@@ -406,7 +422,8 @@ export const PRO_GRADNJA_SR = {
     readingCount: "Broj redova očitanja",
 
     inputs: "Uneseno",
-    formula: "HI = H(BS) + BS     H = HI − IS     H = HI − FS     popravka_i = −f·(težina_i/težina_uk)",
+    formula:
+      "HI = H(BS) + BS     H = HI − IS     H = HI − FS     popravka_i = −f·(težina_i/težina_uk)",
 
     errorStartElevation: "Kota polaznog repera mora biti realan broj.",
     errorRows: "Potreban je bar jedan red očitanja.",
@@ -440,7 +457,8 @@ export const PRO_GRADNJA_SR = {
     wholeBars: "Broj celih šipki",
     remainder: "Ostatak",
     densityNote:
-      "ρ = 7850 kg/m³ je konvencija nominalne mase po EN 10080 i ISO 6935-2, ne izmerena gustina neke šarže.",
+      "ρ = 7850 kg/m³ je konvencija nominalne mase po EN 10080 i ISO 6935-2, ne izmerena gustina " +
+      "neke šarže.",
 
     inputs: "Uneseno",
     formula: "m′ = (π/4)·(Ø/1000)²·7850     L = dužina·broj     M = m′·L     (obrnuto: L = M/m′)",
@@ -479,7 +497,9 @@ export const PRO_GRADNJA_SR = {
     hipAngle: "Nagib grbine",
 
     inputs: "Uneseno",
-    formula: "h = b·tanθ     rog = b/cosθ     površina = projekcija/cosθ     grbina: b_g=√(b₁²+b₂²), dužina=√(b_g²+h²)",
+    formula:
+      "h = b·tanθ     rog = b/cosθ     površina = projekcija/cosθ     grbina: b_g=√(b₁²+b₂²), " +
+      "dužina=√(b_g²+h²)",
 
     errorPitch: "Nagib mora biti u opsegu 0° do 90° (isključivo).",
     errorBase: "Osnova mora biti veća od nule.",
@@ -502,7 +522,8 @@ export const PRO_GRADNJA_SR = {
     height: "Svetla visina",
     openings: "Otvori",
     openingsHint:
-      "Jedan red po otvoru: širina;visina;broj komada;vrata ili prozor;uključi parapet(da/ne, opciono — prazno prati konvenciju: uključeno za prozor, isključeno za vrata).",
+      "Jedan red po otvoru: širina;visina;broj komada;vrata ili prozor;uključi parapet(da/ne, " +
+      "opciono — prazno prati konvenciju: uključeno za prozor, isključeno za vrata).",
     deductOpenings: "Odbijanje otvora od zidne površine",
     yes: "Uključeno",
     no: "Isključeno",
@@ -514,7 +535,8 @@ export const PRO_GRADNJA_SR = {
     includeReveals: "Uračunaj špaletne u zbirnu površinu",
     includeCeiling: "Uračunaj plafon u zbirnu površinu",
     coverage: "Izdašnost materijala",
-    coverageHint: "Sa deklaracije proizvoda. Ista brojka znači različitu količinu u druga dva režima ispod.",
+    coverageHint:
+      "Sa deklaracije proizvoda. Ista brojka znači različitu količinu u druga dva režima ispod.",
     coverageMode: "Vrsta izdašnosti",
     coverageAreaPerLitre: "m² po litru",
     coverageMassPerArea: "kg po m²",
@@ -532,15 +554,19 @@ export const PRO_GRADNJA_SR = {
 
     inputs: "Uneseno",
     formula:
-      "O=2(L+Š) ili unet     bruto=O·H     A_otv=Σ(š·v·n)     neto=O·H−A_otv     špaletna: 2v+s (bez parapeta) ili 2v+2s (sa parapetom)     količina=zbir·premazi/izdašnost ili zbir·premazi·izdašnost",
+      "O=2(L+Š) ili unet     bruto=O·H     A_otv=Σ(š·v·n)     neto=O·H−A_otv     špaletna: 2v+s " +
+      "(bez parapeta) ili 2v+2s (sa parapetom)     količina=zbir·premazi/izdašnost ili " +
+      "zbir·premazi·izdašnost",
 
     errorHeight: "Svetla visina mora biti veća od nule.",
     errorLength: "Dužina prostorije mora biti veća od nule.",
     errorWidth: "Širina prostorije mora biti veća od nule.",
     errorPerimeter: "Obim mora biti veći od nule.",
-    errorRevealDepth: "Dubina špaletne je obavezna kad su špaletne uključene, i ne sme biti negativna.",
+    errorRevealDepth:
+      "Dubina špaletne je obavezna kad su špaletne uključene, i ne sme biti negativna.",
     errorOpening: "Svaki otvor mora imati širinu, visinu i ceo broj komada veći od nule.",
-    errorCeilingArea: "Površina plafona je obavezna kad je plafon uključen i osnova je uneta kao obim.",
+    errorCeilingArea:
+      "Površina plafona je obavezna kad je plafon uključen i osnova je uneta kao obim.",
     errorCoverage: "Izdašnost mora biti veća od nule.",
     errorCoverageMode: "Vrsta izdašnosti mora biti izabrana kad je izdašnost uneta.",
     errorCoats: "Broj premaza je ceo broj od 1 do 20.",
@@ -582,7 +608,8 @@ export const PRO_GRADNJA_SR = {
 
     inputs: "Uneseno",
     formula:
-      "p[%]=100h/L   p[‰]=1000h/L   θ=atan(h/L)   1:n=L/h   s=√(L²+h²)   obrnuto: h=L·p/100; L=s·cosθ, h=s·sinθ; L=n·h; h=L/n",
+      "p[%]=100h/L   p[‰]=1000h/L   θ=atan(h/L)   1:n=L/h   s=√(L²+h²)   obrnuto: h=L·p/100; " +
+      "L=s·cosθ, h=s·sinθ; L=n·h; h=L/n",
 
     errorRun: "Horizontalna dužina mora biti veća od nule.",
     errorRise: "Visinska razlika mora biti realan broj.",
@@ -600,7 +627,8 @@ export const PRO_GRADNJA_SR = {
     sideB: "Stranica b",
     measuredDiagonal: "Izmerena dijagonala",
     secondDiagonal: "Druga dijagonala",
-    secondDiagonalHint: "Opciono, za proveru četvorougla. Predikcija važi samo ako je oblik paralelogram.",
+    secondDiagonalHint:
+      "Opciono, za proveru četvorougla. Predikcija važi samo ako je oblik paralelogram.",
 
     results: "Rezultat",
     expectedDiagonal: "Tražena dijagonala (pravougli ugao)",
@@ -614,7 +642,8 @@ export const PRO_GRADNJA_SR = {
 
     inputs: "Uneseno",
     formula:
-      "d₀=√(a²+b²)     cosα=(a²+b²−d²)/(2ab)     α=acos(cosα)     pomak=b·cosα     q=√(2(a²+b²)−p²) (samo paralelogram)",
+      "d₀=√(a²+b²)     cosα=(a²+b²−d²)/(2ab)     α=acos(cosα)     pomak=b·cosα     " +
+      "q=√(2(a²+b²)−p²) (samo paralelogram)",
 
     errorSideA: "Stranica a mora biti veća od nule.",
     errorSideB: "Stranica b mora biti veća od nule.",
@@ -659,7 +688,8 @@ export const PRO_GRADNJA_SR = {
 
     inputs: "Uneseno",
     formula:
-      "drugi zadatak: ΔY=Yb−Ya, ΔX=Xb−Xa, d=√(ΔY²+ΔX²), ν=atan2(ΔY,ΔX)     prvi zadatak: Yb=Ya+d·sinν, Xb=Xa+d·cosν     suprotno: ν±200 gon (±180°)",
+      "drugi zadatak: ΔY=Yb−Ya, ΔX=Xb−Xa, d=√(ΔY²+ΔX²), ν=atan2(ΔY,ΔX)     prvi zadatak: " +
+      "Yb=Ya+d·sinν, Xb=Xa+d·cosν     suprotno: ν±200 gon (±180°)",
 
     errorPointA: "Koordinate tačke A moraju biti realni brojevi.",
     errorPointB: "Koordinate tačke B moraju biti realni brojevi.",
@@ -690,11 +720,13 @@ export const PRO_GRADNJA_SR = {
     surplusPieces: "Višak iz poslednje kutije (komada)",
     surplusArea: "Višak iz poslednje kutije (nominalna površina)",
     gridNote:
-      "Formula (a+s)(b+s) važi za pravu mrežu. Pomereni i riblja-kost raspored ostavljaju istu površinu, ali drugačiji otpad na rezanju — zato je rastur uvek tvoj unos.",
+      "Formula (a+s)(b+s) važi za pravu mrežu. Pomereni i riblja-kost raspored ostavljaju istu " +
+      "površinu, ali drugačiji otpad na rezanju — zato je rastur uvek tvoj unos.",
 
     inputs: "Uneseno",
     formula:
-      "komad_eff=(a+s)(b+s)     kom/m²=10⁶/eff     A_rastur=A·(1+r/100)     n=ceil(A_rastur·10⁶/eff)     kutije=ceil(n/perKutiji) ili ceil(A_rastur/pArKutiji)",
+      "komad_eff=(a+s)(b+s)     kom/m²=10⁶/eff     A_rastur=A·(1+r/100)     " +
+      "n=ceil(A_rastur·10⁶/eff)     kutije=ceil(n/perKutiji) ili ceil(A_rastur/pArKutiji)",
 
     errorArea: "Površina mora biti veća od nule.",
     errorTileWidth: "Širina komada mora biti veća od nule.",
@@ -718,7 +750,9 @@ export const PRO_GRADNJA_SR = {
     workingSpaceHint: "Širina dna se izvodi kao prečnik cevi + 2 × radni prostor.",
     depth: "Dubina h",
     batter: "Nagib kosine m",
-    limitHint: "Horizontalno po jedinici visine, na svakoj strani. Propisana i projektna veličina — nula je vertikalna strana.",
+    limitHint:
+      "Horizontalno po jedinici visine, na svakoj strani. Propisana i projektna veličina — nula " +
+      "je vertikalna strana.",
     pipeDiameter: "Spoljni prečnik cevi",
     beddingThickness: "Debljina posteljice",
     bulking: "Rastresitost",
@@ -740,15 +774,19 @@ export const PRO_GRADNJA_SR = {
 
     inputs: "Uneseno",
     formula:
-      "A=h(b+mh)     vrh=b+2mh     V=A·L     V_posteljice=b·t·L     V_cevi=(π/4)d²L     zasip=V−posteljica−cev (ako se vraća) inače 0     višak(1+bulk/100)",
+      "A=h(b+mh)     vrh=b+2mh     V=A·L     V_posteljice=b·t·L     V_cevi=(π/4)d²L     " +
+      "zasip=V−posteljica−cev (ako se vraća) inače 0     višak(1+bulk/100)",
 
     errorLength: "Dužina rova mora biti veća od nule.",
     errorDepth: "Dubina mora biti veća od nule.",
     errorBatter: "Nagib kosine ne sme biti negativan.",
     errorBulking: "Rastresitost je broj od 0 do 100 %.",
     errorPipeDiameter: "Prečnik cevi mora biti veći od nule i ne veći od širine dna.",
-    errorBottomWidth: "Širina dna mora biti veća od nule, ili je izvedena iz prečnika cevi i radnog prostora.",
-    errorBeddingThickness: "Debljina posteljice ne sme biti negativna, i zajedno sa prečnikom cevi mora stati u dubinu.",
+    errorBottomWidth:
+      "Širina dna mora biti veća od nule, ili je izvedena iz prečnika cevi i radnog prostora.",
+    errorBeddingThickness:
+      "Debljina posteljice ne sme biti negativna, i zajedno sa prečnikom cevi mora stati u " +
+      "dubinu.",
 
     unitM: "m",
     unitM2: "m²",
@@ -758,7 +796,9 @@ export const PRO_GRADNJA_SR = {
   "wall-u-value": {
     layers: "Slojevi",
     layersHint:
-      "Jedan red po sloju, iznutra ka spolja: naziv;debljina u cm;λ u W/(m·K);otpor u m²K/W. Poslednja ćelija je za nevetreni vazdušni sloj — kad je popunjena, koristi se direktno i pobeđuje debljinu i λ.",
+      "Jedan red po sloju, iznutra ka spolja: naziv;debljina u cm;λ u W/(m·K);otpor u m²K/W. " +
+      "Poslednja ćelija je za nevetreni vazdušni sloj — kad je popunjena, koristi se direktno i " +
+      "pobeđuje debljinu i λ.",
     rsi: "Otpor prelaza toplote unutra Rsi",
     rsiHint: "Zavisi od smera toplotnog toka, iz standarda koji primenjuješ.",
     rse: "Otpor prelaza toplote spolja Rse",
@@ -775,11 +815,14 @@ export const PRO_GRADNJA_SR = {
     innerSurfaceTemperature: "Unutrašnja površinska temperatura",
     outerSurfaceTemperature: "Spoljna površinska temperatura",
     scopeNote:
-      "Jednodimenzionalno stacionarno stanje, samo homogeni slojevi. Bez toplotnih mostova, bez ΔU za mehaničke spojnice, bez usrednjavanja nehomogenog sloja i bez dobro provetravanog vazdušnog sloja.",
+      "Jednodimenzionalno stacionarno stanje, samo homogeni slojevi. Bez toplotnih mostova, bez " +
+      "ΔU za mehaničke spojnice, bez usrednjavanja nehomogenog sloja i bez dobro provetravanog " +
+      "vazdušnog sloja.",
 
     inputs: "Uneseno",
     formula:
-      "R_sloja=d/λ     R_uk=Rsi+ΣR+Rse     U=1/R_uk     udeo=R_sloja/R_uk     θ_k=θi−((Rsi+ΣR do k)/R_uk)·(θi−θe)",
+      "R_sloja=d/λ     R_uk=Rsi+ΣR+Rse     U=1/R_uk     udeo=R_sloja/R_uk     θ_k=θi−((Rsi+ΣR do " +
+      "k)/R_uk)·(θi−θe)",
 
     errorLayers: "Potreban je bar jedan i najviše dvadeset slojeva.",
     errorRsi: "Rsi je broj od 0 do 1 m²K/W.",

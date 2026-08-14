@@ -86,23 +86,34 @@ export const devtoolsSr = {
   },
   blurb: {
     "number-base": "Pretvara ceo broj između osnova od 2 do 36, bez gubitka i jednog bita.",
-    "integer-inspector": "Isti broj kao int8/16/32/64 i uint8/16/32/64 — sa dvojnim komplementom, opsegom i redosledom bajtova.",
+    "integer-inspector":
+      "Isti broj kao int8/16/32/64 i uint8/16/32/64 — sa dvojnim komplementom, opsegom i " +
+      "redosledom bajtova.",
     bitwise: "AND, OR, XOR, negacije, pomeraji i rotacije na 8, 16, 32 ili 64 bita.",
-    "data-unit": "Bajtovi i bitovi kroz decimalne (1000) i binarne (1024) jedinice — bez mešanja kB i KiB.",
-    "float-convert": "Isti broj kroz fp64, fp32, tf32, bf16, fp16, fp8 (e5m2/e4m3, i fnuz), mxfp6, mxfp4 i e8m0 — bit po bit, tačno.",
-    "mx-block": "OCP MX blok od 32 elementa: zajednički E8M0 eksponent, po element mxfp4/6/8, i koliko bita to zaista košta.",
-    riscv: "Sastavlja i rastavlja RV32/RV64 instrukcije — I, M, A, Zicsr i sažeti C oblik, sa poljima bit po bit.",
+    "data-unit":
+      "Bajtovi i bitovi kroz decimalne (1000) i binarne (1024) jedinice — bez mešanja kB i KiB.",
+    "float-convert":
+      "Isti broj kroz fp64, fp32, tf32, bf16, fp16, fp8 (e5m2/e4m3, i fnuz), mxfp6, mxfp4 i e8m0 " +
+      "— bit po bit, tačno.",
+    "mx-block":
+      "OCP MX blok od 32 elementa: zajednički E8M0 eksponent, po element mxfp4/6/8, i koliko " +
+      "bita to zaista košta.",
+    riscv:
+      "Sastavlja i rastavlja RV32/RV64 instrukcije — I, M, A, Zicsr i sažeti C oblik, sa poljima " +
+      "bit po bit.",
     base64: "Kodiranje i dekodiranje Base64 — oba alfabeta, sa dopunom i bez nje.",
     "url-encode": "Tri različita procenat-kodiranja i zašto se razlikuju.",
     "url-parse": "Razlaže URL na šemu, host, port, putanju, parametre i fragment.",
     "ascii-binary-hex": "Tekst kao kodne tačke, heks bajtovi, binarni bajtovi i znakovi — i nazad.",
-    "unicode-inspector": "Svaka kodna tačka, njeni bajtovi i kategorija, plus četiri normalizacije.",
+    "unicode-inspector":
+      "Svaka kodna tačka, njeni bajtovi i kategorija, plus četiri normalizacije.",
     "html-entities": "Kodiranje i dekodiranje entiteta, sa tabelom imenovanih zapisa.",
     hexdump: "Kanonski heks ispis sa ASCII kolonom, i čitanje ispisa nazad u bajtove.",
     "json-editor": "Formatiranje, provera i pretraga JSON-a — sa tačnim mestom greške.",
     "yaml-editor": "Čita i piše YAML, a ono što ne podržava odbija po imenu.",
     "xml-editor": "Uređuje XML i HTML, proverava ispravnost i pretražuje XPath-om.",
-    "data-format": "Pretvara JSON, YAML, TOML i CSV jedan u drugi — i unapred kaže šta ne može da prenese.",
+    "data-format":
+      "Pretvara JSON, YAML, TOML i CSV jedan u drugi — i unapred kaže šta ne može da prenese.",
     "json-to-types": "Pretvara JSON uzorak u TypeScript tipove ili Zod šemu.",
     uuid: "Napravi UUID v4, v7 ili ULID i pročitaj šta piše u postojećem.",
     diff: "Uporedi dva teksta red po red ili reč po reč.",
@@ -113,16 +124,19 @@ export const devtoolsSr = {
     "line-tools": "Sortiraj, očisti, numeriši i prelomi redove.",
     regex: "Testiraj šablon, vidi poklapanja i pripremi zamenu.",
     "color-convert": "Pretvara boju između hex, rgb, hsl, hwb, lab, lch, oklab i oklch zapisa.",
-    "color-palette": "Pravi svetlije i tamnije nijanse i harmonije od jedne boje, u OKLCH prostoru.",
+    "color-palette":
+      "Pravi svetlije i tamnije nijanse i harmonije od jedne boje, u OKLCH prostoru.",
     gradient: "Sastavlja linearni, radijalni ili konusni gradijent i uzorkuje ga bez pregledača.",
     "cubic-bezier": "Računa CSS cubic-bezier krivu ublažavanja i crta je iz uzoraka.",
     contrast: "Meri kontrast para boja po WCAG 2.1 i po APCA Lc.",
-    "color-mixer": "Meša boje po udelu u sRGB, linearnom RGB i Oklab prostoru, i preklapa ih po alfi.",
+    "color-mixer":
+      "Meša boje po udelu u sRGB, linearnom RGB i Oklab prostoru, i preklapa ih po alfi.",
     "token-gen": "Nasumični tokeni u hex, base64url, base58 ili sopstvenoj azbuci.",
     "password-gen": "Lozinke po grupama znakova ili fraze iz rečnika, sa entropijom u bitima.",
     jwt: "Rastavlja token, imenuje tvrdnje i proverava potpis — alg: none nikad ne prolazi.",
     hashing: "SHA-1, SHA-256, SHA-384 i SHA-512 nad tekstom, sa HMAC-om i izlazom u hex i base64.",
-    aes: "AES-GCM i AES-CBC sa direktnim ključem ili lozinkom preko PBKDF2, u koverti koja nosi IV.",
+    aes:
+      "AES-GCM i AES-CBC sa direktnim ključem ili lozinkom preko PBKDF2, u koverti koja nosi IV.",
     "rsa-keygen": "Pravi RSA-OAEP ili RSA-PSS par na 2048, 3072 ili 4096 bita, kao PEM.",
     "rsa-crypt": "RSA-OAEP nad nalepljenim PEM ključem, sa jasno navedenom granicom dužine poruke.",
     signature: "Potpisuje i proverava preko RSA-PSS, RSASSA-PKCS1-v1_5 i ECDSA na P-256 i P-384.",
@@ -132,7 +146,8 @@ export const devtoolsSr = {
     semver: "Uporedi verzije i proveri da li verzija upada u opseg.",
     qr: "Pravi QR kod od teksta, linka, Wi-Fi mreže ili kontakta.",
     datetime: "Jedan trenutak u svakom zapisu — Unix, ISO, RFC 2822, FILETIME i .NET tikovi.",
-    cron: "Objašnjava crontab na srpskom i računa sledeća paljenja, sa pravim Vixie pravilom za dane.",
+    cron:
+      "Objašnjava crontab na srpskom i računa sledeća paljenja, sa pravim Vixie pravilom za dane.",
   },
 
   /* One group per category of the rail — see the header. */

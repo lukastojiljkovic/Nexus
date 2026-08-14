@@ -32,9 +32,12 @@ export const PRO_INZENJERING_SR = {
     areaMm2: "Presek",
     resistance: "Otpornost punog provodnika na 20 °C",
     resistanceNote:
-      "Ovo je otpornost PUNOG provodnika tačno te geometrije. Uže istog AWG broja ide oko 2 % više, i stvarna vrednost za uže dolazi sa deklaracije proizvođača.",
+      "Ovo je otpornost PUNOG provodnika tačno te geometrije. Uže istog AWG broja ide oko 2 % " +
+      "više, i stvarna vrednost za uže dolazi sa deklaracije proizvođača.",
     tableNote:
-      "Ovo je definišuća formula AWG niza, izračunata direktno. Objavljene tablice su ista formula zaokružena na četiri decimale inča, pa se poslednja cifra ponekad razlikuje — to je formula tačnija od zaokružene tablice, ne greška.",
+      "Ovo je definišuća formula AWG niza, izračunata direktno. Objavljene tablice su ista " +
+      "formula zaokružena na četiri decimale inča, pa se poslednja cifra ponekad razlikuje — to " +
+      "je formula tačnija od zaokružene tablice, ne greška.",
     fractionalGauge: "Razlomljeni AWG broj",
     nearestGauge: "Najbliži ceo AWG broj",
     nearestDiameter: "Prečnik najbližeg celog broja",
@@ -45,7 +48,8 @@ export const PRO_INZENJERING_SR = {
     outsideSeriesNote: "Najbliži ceo AWG broj pada van opsega 40 … 4/0, pa nije prikazan.",
     results: "Rezultat",
     formula:
-      "d(n) = 0,127 · 92^((36−n)/39) mm     S = πd²/4     R/km = 1000·ρ₂₀/S     (obrnuto: n = 36 − 39·ln(d/0,127)/ln 92)",
+      "d(n) = 0,127 · 92^((36−n)/39) mm     S = πd²/4     R/km = 1000·ρ₂₀/S     (obrnuto: n = 36 " +
+      "− 39·ln(d/0,127)/ln 92)",
     inputs: "Uneseno",
     errorGauge: "AWG broj je ceo broj od 40 do 0000 (unesi 00, 000 i 0000 kao −1, −2, −3).",
     errorDiameter: "Prečnik mora biti između 0 i 20 mm.",
@@ -67,19 +71,26 @@ export const PRO_INZENJERING_SR = {
     parallelHint: "Prazno polje znači 1.",
     depthOfDischarge: "Dozvoljena dubina pražnjenja",
     depthOfDischargeHint:
-      "Podatak o hemiji ćelije i garanciji proizvođača — Nexus ga ne pogađa. Bez unosa nema rezultata.",
+      "Podatak o hemiji ćelije i garanciji proizvođača — Nexus ga ne pogađa. Bez unosa nema " +
+      "rezultata.",
     loadKind: "Vrsta opterećenja",
     loadPower: "snaga [W]",
     loadCurrent: "struja [A]",
     load: "Opterećenje",
     efficiency: "Stepen korisnosti pretvarača",
-    efficiencyHint: "Prazno polje znači 100 % — dok ne kažeš da pretvarač postoji, gubitak se ne pretpostavlja.",
+    efficiencyHint:
+      "Prazno polje znači 100 % — dok ne kažeš da pretvarač postoji, gubitak se ne pretpostavlja.",
     efficiencyNote:
-      "Stepen korisnosti ulazi u račun samo kada je opterećenje uneto u vatima — struja izmerena na priključcima baterije već ga sadrži, pa se tu ne primenjuje drugi put.",
+      "Stepen korisnosti ulazi u račun samo kada je opterećenje uneto u vatima — struja izmerena " +
+      "na priključcima baterije već ga sadrži, pa se tu ne primenjuje drugi put.",
     peukert: "Pojkertov eksponent k",
-    peukertHint: "Od 1 do 2. Prazno polje znači 1, što je bez korekcije — neutralna vrednost, ne pretpostavka o ćeliji.",
+    peukertHint:
+      "Od 1 do 2. Prazno polje znači 1, što je bez korekcije — neutralna vrednost, ne " +
+      "pretpostavka o ćeliji.",
     peukertNote:
-      "Pojkertova korekcija je primenjena na puno pražnjenje, a dubina pražnjenja je zatim primenjena na to vreme linearno — to je uobičajena konvencija, ne posledica samog Pojkertovog zakona.",
+      "Pojkertova korekcija je primenjena na puno pražnjenje, a dubina pražnjenja je zatim " +
+      "primenjena na to vreme linearno — to je uobičajena konvencija, ne posledica samog " +
+      "Pojkertovog zakona.",
     ratedHours: "Nazivni režim pražnjenja H",
     ratedHoursHint: "Broj sati na koji se uneti kapacitet odnosi. Obavezno samo kada je k > 1.",
     results: "Rezultat",
@@ -91,9 +102,11 @@ export const PRO_INZENJERING_SR = {
     hours: "Vreme rada",
     hoursWithoutPeukert: "Vreme rada bez Pojkertove korekcije",
     modelNote:
-      "Model je konstantno opterećenje na nazivnoj temperaturi, bez starenja ćelije i bez pada napona.",
+      "Model je konstantno opterećenje na nazivnoj temperaturi, bez starenja ćelije i bez pada " +
+      "napona.",
     formula:
-      "U = s·U_ćelije     C = p·C_ćelije     E = U·C     E_isk = E·DoD·η     t = E_isk/P  ili  t = C·DoD/I",
+      "U = s·U_ćelije     C = p·C_ćelije     E = U·C     E_isk = E·DoD·η     t = E_isk/P  ili  t " +
+      "= C·DoD/I",
     inputs: "Uneseno",
     errorCapacity: "Kapacitet mora biti veći od nule.",
     errorVoltage: "Napon ćelije mora biti veći od nule.",
@@ -103,7 +116,8 @@ export const PRO_INZENJERING_SR = {
     errorEfficiency: "Stepen korisnosti mora biti između 0 i 100 %.",
     errorPeukert: "Pojkertov eksponent je između 1 i 2.",
     errorLoad: "Opterećenje mora biti veće od nule.",
-    errorRatedHours: "Nazivni režim pražnjenja je obavezan kada je k > 1, i mora biti između 0 i 100 h.",
+    errorRatedHours:
+      "Nazivni režim pražnjenja je obavezan kada je k > 1, i mora biti između 0 i 100 h.",
     unitV: "V",
     unitAh: "Ah",
     unitWh: "Wh",
@@ -127,7 +141,8 @@ export const PRO_INZENJERING_SR = {
     errorDrivenDiameter: "Prečnik gonjene remenice mora biti između 0 i 10000 mm.",
     errorSpeed: "Broj obrtaja mora biti u opsegu 0 do 1 000 000 min⁻¹.",
     errorCentreDistance:
-      "Osno rastojanje mora biti veće od nule i dovoljno veliko da male remenice ne upadnu jedna u drugu.",
+      "Osno rastojanje mora biti veće od nule i dovoljno veliko da male remenice ne upadnu jedna " +
+      "u drugu.",
     errorEfficiency: "Stepen korisnosti mora biti između 0 i 100 %.",
     errorTorque: "Moment mora biti u opsegu 0 do 1e9 N·m.",
     errorDrivingTeeth: "Broj zuba pogonskog zupčanika je ceo broj od 1 do 10000.",
@@ -142,7 +157,8 @@ export const PRO_INZENJERING_SR = {
     wrapLarge: "Ugao obuhvata velike remenice",
     drivenTorque: "Moment na gonjenoj",
     beltPitchNote:
-      "Prečnici u ovom računu su diobeni (računski). Kod klinastog kaiša to nisu spoljni prečnici koje meriš pomičnim merilom.",
+      "Prečnici u ovom računu su diobeni (računski). Kod klinastog kaiša to nisu spoljni " +
+      "prečnici koje meriš pomičnim merilom.",
     beltFormula: "i = d₂/d₁     v = πd₁n₁/60000     L = √(4C²−(D−d)²) + (D/2)(π+2γ) + (d/2)(π−2γ)",
     inputs: "Uneseno",
     drivingTeeth: "Broj zuba pogonskog",
@@ -153,7 +169,8 @@ export const PRO_INZENJERING_SR = {
     drivenPitchDiameter: "Podeoni prečnik gonjenog",
     gearCentreDistance: "Osno rastojanje",
     gearCentreDistanceNote:
-      "Osno rastojanje a = m·(z₁+z₂)/2 važi samo za standardan SPOLJAŠNJI par cilindričnih zupčanika bez pomeraja profila. Za unutrašnji par ili pomeren profil ova formula ne važi.",
+      "Osno rastojanje a = m·(z₁+z₂)/2 važi samo za standardan SPOLJAŠNJI par cilindričnih " +
+      "zupčanika bez pomeraja profila. Za unutrašnji par ili pomeren profil ova formula ne važi.",
     gearFormula: "i = z₂/z₁     d = m·z     a = m·(z₁+z₂)/2",
     unitRpm: "min⁻¹",
     unitMs: "m/s",
@@ -168,18 +185,23 @@ export const PRO_INZENJERING_SR = {
     materialCopper: "bakar",
     materialAluminium: "aluminijum",
     length: "Dužina trase L",
-    lengthHint: "Dužina u JEDNOM smeru. Faktor k već sadrži povratni provodnik — ne udvostručuj ovde.",
+    lengthHint:
+      "Dužina u JEDNOM smeru. Faktor k već sadrži povratni provodnik — ne udvostručuj ovde.",
     current: "Struja I",
     voltage: "Nazivni napon U",
     voltageHint:
-      "U trofaznom sistemu ovo je LINIJSKI napon uravnoteženog opterećenja. Jednofazni potrošač sa trofazne table računa se u jednofaznom sistemu, faznim naponom.",
+      "U trofaznom sistemu ovo je LINIJSKI napon uravnoteženog opterećenja. Jednofazni potrošač " +
+      "sa trofazne table računa se u jednofaznom sistemu, faznim naponom.",
     permittedDrop: "Dozvoljeni pad napona ΔU_dop",
-    permittedDropHint: "Iz propisa koji primenjuješ. Nexus ne zna koji je to propis i ne nudi vrednost.",
+    permittedDropHint:
+      "Iz propisa koji primenjuješ. Nexus ne zna koji je to propis i ne nudi vrednost.",
     temperature: "Temperatura provodnika θ",
     temperatureHint:
-      "Temperatura PROVODNIKA pod opterećenjem, ne okoline. Prazno polje znači 20 °C, referentna temperatura na kojoj je otpornost definisana — daje najmanji mogući rezultat.",
+      "Temperatura PROVODNIKA pod opterećenjem, ne okoline. Prazno polje znači 20 °C, referentna " +
+      "temperatura na kojoj je otpornost definisana — daje najmanji mogući rezultat.",
     temperatureNote:
-      "Na 70 °C je otpornost bakra veća 1,1965 puta nego na 20 °C, i potreban presek raste za isti činilac.",
+      "Na 70 °C je otpornost bakra veća 1,1965 puta nego na 20 °C, i potreban presek raste za " +
+      "isti činilac.",
     chosenArea: "Presek koji si sam izabrao",
     chosenAreaHint: "Opciono — za red o padu napona na tom preseku.",
     errorLength: "Dužina trase mora biti između 0 i 100000 m.",
@@ -193,16 +215,23 @@ export const PRO_INZENJERING_SR = {
     maxDrop: "Dozvoljeni pad ΔU_max",
     minimumArea: "Potreban presek S_min",
     roundUpNote:
-      "S_min je najmanji presek koji drži pad unutar granice. Pri izboru stvarnog kabla ovaj broj se zaokružuje NAVIŠE na najbliži standardni presek, nikad naniže.",
+      "S_min je najmanji presek koji drži pad unutar granice. Pri izboru stvarnog kabla ovaj " +
+      "broj se zaokružuje NAVIŠE na najbliži standardni presek, nikad naniže.",
     dropAtChosenPct: "Pad na izabranom preseku",
     dropAtChosenV: "Pad na izabranom preseku, u voltima",
     dropRatio: "Pad ÷ tvoja granica",
     reactanceNote:
-      "Model je čisto omski (X = 0, cos φ = 1). Kod velikih preseka induktivna reaktansa postaje uporediva sa otporom, pa je stvarni pad VEĆI od izračunatog i S_min može biti manji nego što je potrebno.",
-    lengthNote: "S_min je presek PO JEDNOM provodniku. Račun ne poznaje paralelne provodnike po fazi.",
+      "Model je čisto omski (X = 0, cos φ = 1). Kod velikih preseka induktivna reaktansa postaje " +
+      "uporediva sa otporom, pa je stvarni pad VEĆI od izračunatog i S_min može biti manji nego " +
+      "što je potrebno.",
+    lengthNote:
+      "S_min je presek PO JEDNOM provodniku. Račun ne poznaje paralelne provodnike po fazi.",
     systemNote:
-      "Ista trasa uneta kao trofazna umesto jednofazna daje drugačiji presek — jednofazni potrošač sa trofazne table treba jednofaznu granu.",
-    formula: "S_min = k·ρ(θ)·L·I/ΔU_max     ρ(θ) = ρ₂₀·(1+α₂₀·(θ−20))     k = 2 (DC/1-fazno) ili √3 (3-fazno)",
+      "Ista trasa uneta kao trofazna umesto jednofazna daje drugačiji presek — jednofazni " +
+      "potrošač sa trofazne table treba jednofaznu granu.",
+    formula:
+      "S_min = k·ρ(θ)·L·I/ΔU_max     ρ(θ) = ρ₂₀·(1+α₂₀·(θ−20))     k = 2 (DC/1-fazno) ili √3 " +
+      "(3-fazno)",
     results: "Rezultat",
     inputs: "Uneseno",
     unitOhmMmM: "Ω·mm²/m",
@@ -226,7 +255,8 @@ export const PRO_INZENJERING_SR = {
     polesHint: "Paran ceo broj, najmanje 2.",
     frequency: "Frekvencija f",
     measuredSpeed: "Izmereni broj obrtaja n",
-    measuredSpeedHint: "Opciono — bez njega nema klizanja, a moment se računa pri sinhronoj brzini.",
+    measuredSpeedHint:
+      "Opciono — bez njega nema klizanja, a moment se računa pri sinhronoj brzini.",
     errorPower: "Snaga mora biti veća od nule.",
     errorVoltage: "Napon mora biti veći od nule.",
     errorPowerFactor: "Faktor snage mora biti između 0 i 1.",
@@ -244,7 +274,8 @@ export const PRO_INZENJERING_SR = {
     atSynchronous: "pri sinhronoj brzini",
     atMeasured: "pri izmerenoj brzini",
     currentNote:
-      "Struja je ULAZNA struja motora — stepen korisnosti je u njoj, jer je nazivna snaga na pločici snaga na vratilu, a motor iz mreže vuče više od toga.",
+      "Struja je ULAZNA struja motora — stepen korisnosti je u njoj, jer je nazivna snaga na " +
+      "pločici snaga na vratilu, a motor iz mreže vuče više od toga.",
     formula: "I = 1000P/(f₃·U·cos φ·η)     n_s = 120f/p     s = (n_s−n)/n_s     M = 30000P/(πn)",
     inputs: "Uneseno",
     unitA: "A",
@@ -266,7 +297,8 @@ export const PRO_INZENJERING_SR = {
     caseToSink: "Rth kućište–hladnjak",
     caseToSinkHint: "Podatak o montaži, pasti i podlošci.",
     sinkToAmbient: "Rth hladnjak–okolina",
-    sinkToAmbientHint: "Potreban u pravom smeru; u obrnutim smerovima je ono što se traži ili proverava.",
+    sinkToAmbientHint:
+      "Potreban u pravom smeru; u obrnutim smerovima je ono što se traži ili proverava.",
     dissipation: "Disipirana snaga P",
     maxJunction: "Najviša temperatura spoja T_j_max",
     maxJunctionHint: "Iz kataloškog lista.",
@@ -276,17 +308,22 @@ export const PRO_INZENJERING_SR = {
     errorCaseToSink: "Rth kućište–hladnjak mora biti između 0 i 1000 K/W.",
     errorSinkToAmbient: "Rth hladnjak–okolina mora biti između 0 i 1000 K/W.",
     errorMaxJunction: "Najviša temperatura spoja je van opsega 0 … 400 °C.",
-    errorAmbientAtOrAboveLimit: "Temperatura okoline je već na nivou najviše temperature spoja ili iznad nje.",
+    errorAmbientAtOrAboveLimit:
+      "Temperatura okoline je već na nivou najviše temperature spoja ili iznad nje.",
     errorChainOverBudget:
-      "Zbir postojećih otpora (spoj–kućište, kućište–hladnjak) sam po sebi premašuje raspoloživi temperaturni budžet — nijedan hladnjak te montaže ne može da to nadoknadi.",
+      "Zbir postojećih otpora (spoj–kućište, kućište–hladnjak) sam po sebi premašuje raspoloživi " +
+      "temperaturni budžet — nijedan hladnjak te montaže ne može da to nadoknadi.",
     results: "Rezultat",
     totalRth: "Ukupan Rth",
     junctionTemp: "Temperatura spoja T_j",
     caseTemp: "Temperatura kućišta",
     sinkTemp: "Temperatura hladnjaka",
     modelNote:
-      "Statički jednodimenzionalni model: ustaljeno stanje, jedan toplotni put, bez sprege sa susednim delovima i bez prelaznog režima.",
-    formula: "T_j = T_a + P·ΣRth     T_kućišta = T_j − P·Rth(j-c)     T_hladnjaka = T_j − P·(Rth(j-c)+Rth(c-h))",
+      "Statički jednodimenzionalni model: ustaljeno stanje, jedan toplotni put, bez sprege sa " +
+      "susednim delovima i bez prelaznog režima.",
+    formula:
+      "T_j = T_a + P·ΣRth     T_kućišta = T_j − P·Rth(j-c)     T_hladnjaka = T_j − " +
+      "P·(Rth(j-c)+Rth(c-h))",
     sinkFormula: "Rth(h-a) = (T_j_max−T_a)/P − Rth(j-c) − Rth(c-h)",
     powerFormula: "P_max = (T_j_max−T_a)/ΣRth",
     inputs: "Uneseno",
@@ -304,13 +341,16 @@ export const PRO_INZENJERING_SR = {
     pitchHint: "Krupan ili sitan korak — bira ga korisnik, tablica koraka nije potrebna.",
     strength: "Granica tečenja ili zatezna čvrstoća R",
     strengthHint:
-      "Vrednost razreda čvrstoće kojim je spojni element kupljen (npr. 8.8 → R_p0,2 = 640 MPa). Nexus razred ne bira.",
+      "Vrednost razreda čvrstoće kojim je spojni element kupljen (npr. 8.8 → R_p0,2 = 640 MPa). " +
+      "Nexus razred ne bira.",
     drill: "Prečnik burgije",
-    drillHint: "Za red o procentu zahvata navoja. Mora biti između unutrašnjeg prečnika D₁ i nominalnog d.",
+    drillHint:
+      "Za red o procentu zahvata navoja. Mora biti između unutrašnjeg prečnika D₁ i nominalnog d.",
     errorDiameter: "Nominalni prečnik mora biti između 0 i 200 mm.",
     errorPitch: "Korak mora biti veći od nule i manji od prečnika podeljenog sa 1,226869.",
     errorStrength: "Čvrstoća mora biti između 0 i 3000 MPa.",
-    errorDrill: "Prečnik burgije mora biti između unutrašnjeg prečnika navrtke D₁ i nominalnog prečnika d.",
+    errorDrill:
+      "Prečnik burgije mora biti između unutrašnjeg prečnika navrtke D₁ i nominalnog prečnika d.",
     results: "Rezultat",
     fundamentalHeight: "Visina osnovnog trougla H",
     pitchDiameter: "Srednji prečnik d₂",
@@ -319,13 +359,19 @@ export const PRO_INZENJERING_SR = {
     stressArea: "Presek napona A_s",
     force: "Sila F = A_s·R",
     forceNote:
-      "Ovo je sila pri kojoj napon u preseku A_s dostiže unetu čvrstoću — ne dozvoljeno opterećenje spoja. Bez prednaprezanja, trenja, ekscentričnosti, dužine zahvata, zamora i broja vijaka.",
+      "Ovo je sila pri kojoj napon u preseku A_s dostiže unetu čvrstoću — ne dozvoljeno " +
+      "opterećenje spoja. Bez prednaprezanja, trenja, ekscentričnosti, dužine zahvata, zamora i " +
+      "broja vijaka.",
     engagement: "Procenat zahvata (prema H₁ = 5/8·H)",
-    engagementNote: "Konvencija ISO 898-1: 100 % znači pun oblik unutrašnjeg navoja prema H₁ = (5/8)H.",
+    engagementNote:
+      "Konvencija ISO 898-1: 100 % znači pun oblik unutrašnjeg navoja prema H₁ = (5/8)H.",
     engagementWorkshop: "Procenat zahvata (radionička konvencija)",
     engagementWorkshopNote:
-      "Starija konvencija sa radioničke tablice, merena prema drugoj referentnoj dubini. Za isti prečnik burgije daje drugačiji broj od reda iznad — obe su tačne u svom sistemu.",
-    formula: "H = P·√3/2     d₂ = d−(3/4)H     d₃ = d−(17/12)H     D₁ = d−(5/4)H     A_s = (π/4)((d₂+d₃)/2)²",
+      "Starija konvencija sa radioničke tablice, merena prema drugoj referentnoj dubini. Za isti " +
+      "prečnik burgije daje drugačiji broj od reda iznad — obe su tačne u svom sistemu.",
+    formula:
+      "H = P·√3/2     d₂ = d−(3/4)H     d₃ = d−(17/12)H     D₁ = d−(5/4)H     A_s = " +
+      "(π/4)((d₂+d₃)/2)²",
     inputs: "Uneseno",
     unitMm: "mm",
     unitMm2: "mm²",
@@ -342,7 +388,8 @@ export const PRO_INZENJERING_SR = {
     errorPair: "Unesi tačno dve od četiri veličine.",
     errorVoltage: "Napon mora biti u opsegu 0 do 1e9 V.",
     errorCurrent: "Struja mora biti u opsegu 0 do 1e6 A, i ne sme biti nula uz uneti napon.",
-    errorResistance: "Otpornost mora biti u opsegu 0 do 1e12 Ω, i ne sme biti nula uz uneti napon ili snagu.",
+    errorResistance:
+      "Otpornost mora biti u opsegu 0 do 1e12 Ω, i ne sme biti nula uz uneti napon ili snagu.",
     errorPower: "Snaga mora biti u opsegu 0 do 1e9 W, i ne sme biti nula uz uneti napon.",
     results: "Rezultat",
     entered: "uneto",
@@ -366,7 +413,8 @@ export const PRO_INZENJERING_SR = {
     velocity: "Brzina v",
     velocityNote: "Srednja brzina preko celog preseka — ne lokalna ni osna vrednost.",
     viscosity: "Kinematička viskoznost ν",
-    viscosityHint: "Svojstvo fluida na temperaturi koju stvarno imaš — bez toga nema Rejnoldsovog broja.",
+    viscosityHint:
+      "Svojstvo fluida na temperaturi koju stvarno imaš — bez toga nema Rejnoldsovog broja.",
     density: "Gustina ρ",
     densityHint: "Bez nje nema masenog protoka.",
     errorDiameter: "Prečnik mora biti između 0 i 10000 mm.",
@@ -385,7 +433,8 @@ export const PRO_INZENJERING_SR = {
     reynoldsHint: "Bez unete viskoznosti Rejnoldsov broj se ne prikazuje.",
     massFlowKgS: "Maseni protok",
     massFlowKgH: "Maseni protok u kg/h",
-    roundDuctNote: "Prečnik je UNUTRAŠNJI prečnik kružne cevi — ništa ovde ne važi za nekružni kanal.",
+    roundDuctNote:
+      "Prečnik je UNUTRAŠNJI prečnik kružne cevi — ništa ovde ne važi za nekružni kanal.",
     formula: "A = πD²/4     v = Q/A     Re = vD/ν     ṁ = ρQ",
     inputs: "Uneseno",
     unitMm: "mm",
@@ -408,13 +457,15 @@ export const PRO_INZENJERING_SR = {
     frequency: "Frekvencija mreže f",
     system: "Sistem",
     connection: "Sprega baterije",
-    connectionHint: "Baterija u zvezdi traži TRI PUTA veću kapacitivnost od baterije u trouglu za isti Qc.",
+    connectionHint:
+      "Baterija u zvezdi traži TRI PUTA veću kapacitivnost od baterije u trouglu za isti Qc.",
     connectionDelta: "trougao",
     connectionStar: "zvezda",
     errorPower: "Aktivna snaga mora biti veća od nule.",
     errorPresentPowerFactor: "Postojeći faktor snage mora biti između 0 i 1.",
     errorTargetPowerFactor:
-      "Ciljani faktor snage mora biti između 0 i 1 i ne sme biti manji od postojećeg — to ne bi bila kompenzacija.",
+      "Ciljani faktor snage mora biti između 0 i 1 i ne sme biti manji od postojećeg — to ne bi " +
+      "bila kompenzacija.",
     errorVoltage: "Napon mora biti veći od nule.",
     errorFrequency: "Frekvencija mora biti veća od nule.",
     results: "Rezultat",
@@ -424,10 +475,14 @@ export const PRO_INZENJERING_SR = {
     capacitance: "Kapacitivnost po fazi C",
     currentBefore: "Struja pre kompenzacije I₁",
     currentAfter: "Struja posle kompenzacije I₂",
-    starDeltaNote: "Baterija u zvezdi traži tri puta veću kapacitivnost od baterije u trouglu za isti Qc.",
+    starDeltaNote:
+      "Baterija u zvezdi traži tri puta veću kapacitivnost od baterije u trouglu za isti Qc.",
     harmonicsNote:
-      "Ovo je proračun na osnovnom harmoniku, uz uravnoteženo opterećenje. Viši harmonici i rezonansa sa mrežnim transformatorom nisu obuhvaćeni.",
-    formula: "tan φ = √(1−cos²φ)/cos φ     Qc = P(tan φ₁−tan φ₂)     C = Qc/(3ωU²) trougao, Qc/(ωU²) zvezda",
+      "Ovo je proračun na osnovnom harmoniku, uz uravnoteženo opterećenje. Viši harmonici i " +
+      "rezonansa sa mrežnim transformatorom nisu obuhvaćeni.",
+    formula:
+      "tan φ = √(1−cos²φ)/cos φ     Qc = P(tan φ₁−tan φ₂)     C = Qc/(3ωU²) trougao, Qc/(ωU²) " +
+      "zvezda",
     inputs: "Uneseno",
     unitKvar: "kvar",
     unitUf: "µF",
@@ -444,12 +499,17 @@ export const PRO_INZENJERING_SR = {
     kindAbsolute: "apsolutni",
     atmospheric: "Atmosferski pritisak",
     atmosphericHint:
-      "Prazno polje znači standardnu atmosferu (101325 Pa). Na nadmorskoj visini ili pri drugom vremenu unesi očitanje barometra.",
+      "Prazno polje znači standardnu atmosferu (101325 Pa). Na nadmorskoj visini ili pri drugom " +
+      "vremenu unesi očitanje barometra.",
     bore: "Prečnik cilindra",
     rod: "Prečnik klipnjače",
-    rodHint: "Opciono. Prazno polje ili nula znači plunžer (cela površina klipa radi u oba smera osim uvlačenja).",
+    rodHint:
+      "Opciono. Prazno polje ili nula znači plunžer (cela površina klipa radi u oba smera osim " +
+      "uvlačenja).",
     errorAtmospheric: "Atmosferski pritisak mora biti između 0 i 200000 Pa.",
-    errorValue: "Uneta vrednost pritiska je van dozvoljenog opsega, ili bi apsolutni pritisak ispao negativan.",
+    errorValue:
+      "Uneta vrednost pritiska je van dozvoljenog opsega, ili bi apsolutni pritisak ispao " +
+      "negativan.",
     errorBore: "Prečnik cilindra mora biti između 0 i 5000 mm.",
     errorRod: "Prečnik klipnjače mora biti nenegativan i manji od prečnika cilindra.",
     results: "Pritisak u svim jedinicama",
@@ -461,7 +521,8 @@ export const PRO_INZENJERING_SR = {
     extendForce: "Sila pri izvlačenju",
     retractForce: "Sila pri uvlačenju",
     theoreticalForceNote:
-      "Ovo je TEORIJSKA sila — proizvod pritiska i površine, bez trenja zaptivki i bez protivpritiska na suprotnoj strani. Stvarna isporučena sila je nekoliko procenata manja.",
+      "Ovo je TEORIJSKA sila — proizvod pritiska i površine, bez trenja zaptivki i bez " +
+      "protivpritiska na suprotnoj strani. Stvarna isporučena sila je nekoliko procenata manja.",
     formula: "p_apsolutno = p_nadpritisak + p_atm",
     forceFormula: "A = πD²/4     A' = π(D²−d²)/4     F = p_nadpritisak·A",
     inputs: "Uneseno",
@@ -503,11 +564,14 @@ export const PRO_INZENJERING_SR = {
     errorToleranceBand: "Izabrana boja nema značenje kao tolerancija.",
     errorTempCoefficientBand: "Izabrana boja nema značenje kao temperaturni koeficijent.",
     errorValue: "Vrednost mora biti veća od nule.",
-    errorMultiplierRange: "Vrednost se ne može zapisati ovim brojem prstenova — množilac pada van opsega 10⁻² … 10⁹.",
+    errorMultiplierRange:
+      "Vrednost se ne može zapisati ovim brojem prstenova — množilac pada van opsega 10⁻² … 10⁹.",
     errorPrecision:
-      "Vrednost se ne može zapisati tačno ovim brojem prstenova bez prećutnog zaokruživanja na drugu vrednost.",
+      "Vrednost se ne može zapisati tačno ovim brojem prstenova bez prećutnog zaokruživanja na " +
+      "drugu vrednost.",
     errorToleranceValue: "Uneta tolerancija ne odgovara nijednoj boji iz IEC 60062 tabele.",
-    errorTempCoefficientValue: "Uneti temperaturni koeficijent ne odgovara nijednoj boji iz IEC 60062 tabele.",
+    errorTempCoefficientValue:
+      "Uneti temperaturni koeficijent ne odgovara nijednoj boji iz IEC 60062 tabele.",
     results: "Rezultat",
     value: "Vrednost",
     valueHint: "U omima, bez prefiksa (npr. 4700, ne 4,7k).",
@@ -521,7 +585,8 @@ export const PRO_INZENJERING_SR = {
     preferred: "Najbliža vrednost izabranog niza",
     bands: "Prstenovi",
     formula: "vrednost = cifre · množilac",
-    reverseFormula: "cifre i množilac iz vrednosti normalizovane na broj prstenova; boja iz IEC 60062 tabele",
+    reverseFormula:
+      "cifre i množilac iz vrednosti normalizovane na broj prstenova; boja iz IEC 60062 tabele",
     inputs: "Uneseno",
     unitOhm: "Ω",
     unitPpmK: "ppm/K",
@@ -531,10 +596,13 @@ export const PRO_INZENJERING_SR = {
     frequency: "Frekvencija f",
     resistance: "Otpornost R",
     inductance: "Induktivnost L",
-    inductanceHint: "U henrijima. Za milihenrije podeli sa 1000, za mikrohenrije sa 1 000 000. Prazno polje znači da kalema nema.",
+    inductanceHint:
+      "U henrijima. Za milihenrije podeli sa 1000, za mikrohenrije sa 1 000 000. Prazno polje " +
+      "znači da kalema nema.",
     capacitance: "Kapacitivnost C",
     capacitanceHint:
-      "U faradima. Za mikrofarade podeli sa 1e6, za nanofarade sa 1e9, za pikofarade sa 1e12. Prazno polje znači da kondenzatora nema.",
+      "U faradima. Za mikrofarade podeli sa 1e6, za nanofarade sa 1e9, za pikofarade sa 1e12. " +
+      "Prazno polje znači da kondenzatora nema.",
     connection: "Veza",
     connectionSeries: "redna",
     connectionParallel: "paralelna",
@@ -550,15 +618,22 @@ export const PRO_INZENJERING_SR = {
     susceptance: "Susceptansa B",
     impedance: "Impedansa |Z|",
     phase: "Fazni ugao φ",
-    phaseSignNote: "Pozitivan ugao znači induktivno opterećenje — to je jedina oznaka karaktera u ovom rezultatu.",
+    phaseSignNote:
+      "Pozitivan ugao znači induktivno opterećenje — to je jedina oznaka karaktera u ovom " +
+      "rezultatu.",
     resonance: "Rezonantna frekvencija f₀",
     qualityFactor: "Faktor dobrote Q",
     bandwidth: "Širina propusnog opsega",
     cornerRc: "Granična frekvencija RC grane",
     cornerRl: "Granična frekvencija RL grane",
-    absentNote: "Prikazuju se samo veličine koje uneti elementi definišu — ništa se ne popunjava pretpostavkom.",
-    formulaSeries: "X = X_L−X_C     |Z| = √(R²+X²)     φ = atan2(X,R)     f₀ = 1/(2π√(LC))     Q = (1/R)√(L/C)",
-    formulaParallel: "B = ωC−1/(ωL)     |Z| = 1/√(G²+B²)     φ = −atan2(B,G)     Q = R√(C/L)     ŠPO = f₀/Q = 1/(2πRC)",
+    absentNote:
+      "Prikazuju se samo veličine koje uneti elementi definišu — ništa se ne popunjava " +
+      "pretpostavkom.",
+    formulaSeries:
+      "X = X_L−X_C     |Z| = √(R²+X²)     φ = atan2(X,R)     f₀ = 1/(2π√(LC))     Q = (1/R)√(L/C)",
+    formulaParallel:
+      "B = ωC−1/(ωL)     |Z| = 1/√(G²+B²)     φ = −atan2(B,G)     Q = R√(C/L)     ŠPO = f₀/Q = " +
+      "1/(2πRC)",
     inputs: "Uneseno",
     unitOhm: "Ω",
     unitS: "S",
@@ -589,12 +664,17 @@ export const PRO_INZENJERING_SR = {
     depth: "Ukupna visina h",
     flangeThickness: "Debljina pojasa t_f",
     webThickness: "Debljina rebra t_r",
-    iSectionNote: "Pretpostavljeni su pravi uglovi između pojasa i rebra, bez zaobljenja korena — valjani profil ima nešto veću površinu i I od ovog računa.",
+    iSectionNote:
+      "Pretpostavljeni su pravi uglovi između pojasa i rebra, bez zaobljenja korena — valjani " +
+      "profil ima nešto veću površinu i I od ovog računa.",
     allowableStress: "Dozvoljeni napon σ_dop",
-    allowableStressHint: "Bira ga standard materijala i propis po kom se računa. Nexus ga ne predlaže.",
+    allowableStressHint:
+      "Bira ga standard materijala i propis po kom se računa. Nexus ga ne predlaže.",
     bendingMoment: "Moment savijanja M",
     torsionMoment: "Moment torzije T",
-    torsionHint: "Samo za krug i cev — kod ostalih oblika torziona konstanta nije 2I i ovaj račun je ne daje.",
+    torsionHint:
+      "Samo za krug i cev — kod ostalih oblika torziona konstanta nije 2I i ovaj račun je ne " +
+      "daje.",
     errorDimensions: "Unete dimenzije nisu geometrijski moguće za izabrani oblik.",
     errorAllowableStress: "Dozvoljeni napon mora biti između 0 i 3000 MPa.",
     errorBendingMoment: "Moment savijanja mora biti u opsegu 0 do 1e9 N·m.",
@@ -610,18 +690,24 @@ export const PRO_INZENJERING_SR = {
     polarMoment: "Polarni moment inercije I_p",
     polarModulus: "Polarni otporni moment W_p",
     noPolarNote:
-      "Polarne veličine se prikazuju samo za krug i cev. Kod pravougaonika, pravougaone cevi i I-profila torziona konstanta zavisi od oblika i I_p = 2I ovde ne važi, pa se taj red ne prikazuje.",
+      "Polarne veličine se prikazuju samo za krug i cev. Kod pravougaonika, pravougaone cevi i " +
+      "I-profila torziona konstanta zavisi od oblika i I_p = 2I ovde ne važi, pa se taj red ne " +
+      "prikazuje.",
     allowableMoment: "Moment pri dozvoljenom naponu M_dop",
     bendingStress: "Napon savijanja σ",
     stressRatio: "Napon ÷ tvoja granica",
     torsionalStress: "Napon torzije τ",
-    modelNote: "Model ne obuhvata izvijanje, bočno-torziono izvijanje, lokalnu stabilnost ni zamor.",
+    modelNote:
+      "Model ne obuhvata izvijanje, bočno-torziono izvijanje, lokalnu stabilnost ni zamor.",
     formulaRectangle: "A = bh     I_x = bh³/12     I_y = hb³/12     W_x = bh²/6     W_y = hb²/6",
-    formulaCircle: "A = πd²/4     I_x = I_y = πd⁴/64     W_x = W_y = πd³/32     I_p = 2I     W_p = 2W",
+    formulaCircle:
+      "A = πd²/4     I_x = I_y = πd⁴/64     W_x = W_y = πd³/32     I_p = 2I     W_p = 2W",
     formulaTube: "A = π(D²−d²)/4     I = π(D⁴−d⁴)/64     W = 2I/D     I_p = 2I     W_p = 2W",
-    formulaRectangularTube: "A = BH−bh     I_x = (BH³−bh³)/12     W_x = 2I_x/H     I_y = (HB³−hb³)/12     W_y = 2I_y/B",
+    formulaRectangularTube:
+      "A = BH−bh     I_x = (BH³−bh³)/12     W_x = 2I_x/H     I_y = (HB³−hb³)/12     W_y = 2I_y/B",
     formulaISection:
-      "A = 2bt_f+(h−2t_f)t_r     I_x = [bh³−(b−t_r)(h−2t_f)³]/12     W_x = 2I_x/h     I_y = [2t_fb³+(h−2t_f)t_r³]/12     W_y = 2I_y/b",
+      "A = 2bt_f+(h−2t_f)t_r     I_x = [bh³−(b−t_r)(h−2t_f)³]/12     W_x = 2I_x/h     I_y = " +
+      "[2t_fb³+(h−2t_f)t_r³]/12     W_y = 2I_y/b",
     inputs: "Uneseno",
     unitMm: "mm",
     unitMm2: "mm²",
@@ -643,7 +729,8 @@ export const PRO_INZENJERING_SR = {
     connectionSeries: "redna",
     connectionParallel: "paralelna",
     values: "Vrednosti",
-    valuesHint: "Jedna vrednost po redu, u Ω, H ili F bez prefiksa (npr. 470, ne 470k). Od 1 do 32 unosa.",
+    valuesHint:
+      "Jedna vrednost po redu, u Ω, H ili F bez prefiksa (npr. 470, ne 470k). Od 1 do 32 unosa.",
     errorValues: "Svaka vrednost mora biti nenegativna, i mora postojati bar jedna.",
     errorTooMany: "Najviše 32 vrednosti.",
     errorInputVoltage: "Ulazni napon mora biti u opsegu 0 do 1e6 V.",
@@ -653,20 +740,26 @@ export const PRO_INZENJERING_SR = {
     results: "Rezultat",
     equivalent: "Ekvivalentna vrednost",
     zeroNote:
-      "Nula u paralelnoj grupi otpornika ili kalemova kratko spaja mrežu (rezultat je tačno 0). Nula u rednom nizu kondenzatora blokira mrežu (rezultat je tačno 0). Van tih slučajeva nula prosto ne doprinosi ničim.",
-    formula: "redno: zbir     paralelno: recipročni zbir recipročnih vrednosti     (kondenzatori obrnuto)",
+      "Nula u paralelnoj grupi otpornika ili kalemova kratko spaja mrežu (rezultat je tačno 0). " +
+      "Nula u rednom nizu kondenzatora blokira mrežu (rezultat je tačno 0). Van tih slučajeva " +
+      "nula prosto ne doprinosi ničim.",
+    formula:
+      "redno: zbir     paralelno: recipročni zbir recipročnih vrednosti     (kondenzatori " +
+      "obrnuto)",
     inputs: "Uneseno",
     inputVoltage: "Ulazni napon U_ul",
     upper: "Gornji otpornik R1",
     lower: "Donji otpornik R2",
     outputVoltage: "Izlazni napon U_izl",
-    unloadedNote: "Ovo je NEOPTEREĆEN napon — čim nešto povuče struju sa izlaza, ova vrednost više ne važi.",
+    unloadedNote:
+      "Ovo je NEOPTEREĆEN napon — čim nešto povuče struju sa izlaza, ova vrednost više ne važi.",
     current: "Struja kroz delilac",
     upperPower: "Snaga na R1",
     lowerPower: "Snaga na R2",
     totalPower: "Ukupna snaga",
     theveninResistance: "Tevenenov otpor delioca R1‖R2",
-    dividerFormula: "U_izl = U_ul·R2/(R1+R2)     I = U_ul/(R1+R2)     P_i = I²·R_i     R_th = R1·R2/(R1+R2)",
+    dividerFormula:
+      "U_izl = U_ul·R2/(R1+R2)     I = U_ul/(R1+R2)     P_i = I²·R_i     R_th = R1·R2/(R1+R2)",
     unitV: "V",
     unitA: "A",
     unitW: "W",
@@ -683,7 +776,8 @@ export const PRO_INZENJERING_SR = {
     knownApparentPower: "prividna snaga S",
     powerFactor: "Faktor snage cos φ",
     connection: "Sprega potrošača",
-    connectionHint: "Utiče samo na fazni napon i faznu struju — linijske vrednosti su iste u oba slučaja.",
+    connectionHint:
+      "Utiče samo na fazni napon i faznu struju — linijske vrednosti su iste u oba slučaja.",
     connectionStar: "zvezda",
     connectionDelta: "trougao",
     errorVoltage: "Napon mora biti veći od nule.",
@@ -701,7 +795,8 @@ export const PRO_INZENJERING_SR = {
     tanPhi: "tan φ",
     phaseVoltage: "Fazni napon U_f",
     phaseCurrent: "Fazna struja I_f",
-    inductiveNote: "sin φ je uzet nenegativno — pretpostavlja se induktivno (zaostalo) opterećenje.",
+    inductiveNote:
+      "sin φ je uzet nenegativno — pretpostavlja se induktivno (zaostalo) opterećenje.",
     balancedNote: "Pretpostavlja se uravnotežena simetrična mreža i sinusni oblik napona i struje.",
     formula: "S = f₃·U·I     P = S·cos φ     Q = S·sin φ     U_f zvezda = U/√3, trougao = U",
     inputs: "Uneseno",
@@ -720,12 +815,15 @@ export const PRO_INZENJERING_SR = {
     angularVelocity: "Ugaona brzina ω",
     power: "Snaga P",
     pairHint: "Unesi tačno dve od tri veličine (moment, brzina, snaga) — treća se računa.",
-    errorSpeed: "Popuni ili broj obrtaja ili ugaonu brzinu, ne oba, i vrednost mora biti veća od nule.",
+    errorSpeed:
+      "Popuni ili broj obrtaja ili ugaonu brzinu, ne oba, i vrednost mora biti veća od nule.",
     errorTorque: "Moment mora biti u opsegu 0 do 1e9 N·m.",
     errorPower: "Snaga mora biti u opsegu 0 do 1e9 W.",
     errorPair: "Unesi tačno dve od tri veličine — moment, brzinu (n ili ω) i snagu.",
     results: "Rezultat",
-    hpNote: "KS je metrička konjska snaga (735,49875 W), hp je mehanička/imperijalna konjska snaga (745,69987 W).",
+    hpNote:
+      "KS je metrička konjska snaga (735,49875 W), hp je mehanička/imperijalna konjska snaga " +
+      "(745,69987 W).",
     formula: "P = M·ω     ω = 2πn/60     M = 30000·P[kW]/(πn)",
     inputs: "Uneseno",
     computed: "izračunato",

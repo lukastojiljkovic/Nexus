@@ -39,8 +39,9 @@ export const PRO_TEKST_SR = {
 
     inputs: "Uneseno",
     formula:
-      "stek: otvarač → gurni; zatvarač → skini ako se poklapa sa vrhom, inače prijavi i ne diraj stek     " +
-      "„ i ' se razrešavaju po vrhu steka; pravi navodnici \" i ' se broje po parnosti unutar pasusa",
+      "stek: otvarač → gurni; zatvarač → skini ako se poklapa sa vrhom, inače prijavi i ne diraj " +
+      "stek     „ i ' se razrešavaju po vrhu steka; pravi navodnici \" i ' se broje po parnosti " +
+      "unutar pasusa",
 
     errorText: "Tekst sme imati najviše 500000 kodnih tačaka.",
   },
@@ -52,7 +53,8 @@ export const PRO_TEKST_SR = {
     translationHint: "Prevedeni tekst, nalepljen.",
     glossary: "Rečnik pojmova",
     glossaryHint:
-      "Jedan par po redu, izvor i prevod razdvojeni tabulatorom ili znakom |. Ništa se ne pamti između otvaranja.",
+      "Jedan par po redu, izvor i prevod razdvojeni tabulatorom ili znakom |. Ništa se ne pamti " +
+      "između otvaranja.",
     caseSensitive: "Razlikuj velika i mala slova",
     wholeWord: "Traži celu reč",
     wholeWordHint: "Isključeno hvata i srpsku promenu po padežima preko osnove termina.",
@@ -77,21 +79,25 @@ export const PRO_TEKST_SR = {
 
     inputs: "Uneseno",
     formula:
-      "a = pojavljivanja izvornog termina u originalu, b = pojavljivanja zadatog prevoda u prevodu     " +
-      "a=0,b=0 → NEMA; a>0,b=0 → NEDOSTAJE; a=0,b>0 → VIŠAK; a=b → U REDU; a≠b → RAZLIKA",
+      "a = pojavljivanja izvornog termina u originalu, b = pojavljivanja zadatog prevoda u " +
+      "prevodu     a=0,b=0 → NEMA; a>0,b=0 → NEDOSTAJE; a=0,b>0 → VIŠAK; a=b → U REDU; a≠b → " +
+      "RAZLIKA",
 
     errorOriginal: "Original sme imati najviše 500000 kodnih tačaka.",
     errorTranslation: "Prevod sme imati najviše 500000 kodnih tačaka.",
-    errorGlossary: "Rečnik mora imati između 1 i 2000 redova sa parom razdvojenim tabulatorom ili znakom |.",
+    errorGlossary:
+      "Rečnik mora imati između 1 i 2000 redova sa parom razdvojenim tabulatorom ili znakom |.",
   },
 
   "hidden-characters": {
     text: "Tekst",
     textHint: "Nalepi tekst. Ništa se ne pamti između otvaranja alatke.",
     removeInvisible: "Ukloni nevidljive",
-    removeInvisibleHint: "Briše kontrolne, znakove širine nula i dvosmerne upravljače. Ne dira razmake ni crticu.",
+    removeInvisibleHint:
+      "Briše kontrolne, znakove širine nula i dvosmerne upravljače. Ne dira razmake ni crticu.",
     normalizeSpaces: "NBSP i slični razmaci → običan razmak",
-    normalizeSpacesHint: "Menja svaki neobičan razmak jedan za jedan, nikad ga ne briše — brisanje bi spojilo reči.",
+    normalizeSpacesHint:
+      "Menja svaki neobičan razmak jedan za jedan, nikad ga ne briše — brisanje bi spojilo reči.",
     removeSoftHyphen: "Ukloni meku (uslovnu) crticu",
     on: "Uključeno",
     off: "Isključeno",
@@ -126,8 +132,8 @@ export const PRO_TEKST_SR = {
 
     inputs: "Uneseno",
     formula:
-      "nalaz = kodna tačka sa spiska nevidljivih/kontrolnih; pomešano pismo = reč čiji skup pisama ima ≥ 2 člana " +
-      "(Common i Inherited se ne broje)",
+      "nalaz = kodna tačka sa spiska nevidljivih/kontrolnih; pomešano pismo = reč čiji skup " +
+      "pisama ima ≥ 2 člana (Common i Inherited se ne broje)",
 
     errorText: "Tekst sme imati najviše 500000 kodnih tačaka.",
   },
@@ -158,10 +164,11 @@ export const PRO_TEKST_SR = {
 
     inputs: "Uneseno",
     formula:
-      "ISBN-10: Σ dᵢ×(11−i) ≡ 0 (mod 11)     ISBN-13 / ISMN / EAN-13: GS1, težine 1,3, mod 10     " +
-      "ISSN: težine 8..2, mod 11 — crtice se ne postavljaju",
+      "ISBN-10: Σ dᵢ×(11−i) ≡ 0 (mod 11)     ISBN-13 / ISMN / EAN-13: GS1, težine 1,3, mod 10    " +
+      " ISSN: težine 8..2, mod 11 — crtice se ne postavljaju",
 
-    errorNumber: "Broj mora imati 8, 10 ili 13 cifara (X dozvoljeno kao poslednja cifra kod ISBN-10 i ISSN).",
+    errorNumber:
+      "Broj mora imati 8, 10 ili 13 cifara (X dozvoljeno kao poslednja cifra kod ISBN-10 i ISSN).",
     errorKind: "Dužina broja ne odgovara izabranoj vrsti.",
   },
 
@@ -234,7 +241,8 @@ export const PRO_TEKST_SR = {
   "number-to-serbian-words": {
     value: "Broj",
     valueHint:
-      "Decimalni razdvajač je isključivo zapeta, na primer −1234,56. Do 18 cifara u celom delu, do 6 decimala.",
+      "Decimalni razdvajač je isključivo zapeta, na primer −1234,56. Do 18 cifara u celom delu, " +
+      "do 6 decimala.",
     script: "Pismo",
     scriptLatinOpt: "Latinica",
     scriptCyrillicOpt: "Ćirilica",
@@ -254,10 +262,11 @@ export const PRO_TEKST_SR = {
 
     inputs: "Uneseno",
     formula:
-      "hiljada/milion/milijarda/bilion po grupama od tri cifre, zdesna nalevo; slaganje: 11–14 → množina druga, " +
-      "…1 (osim 11) → jednina, …2–4 (osim 12–14) → paukal, ostalo → množina druga",
+      "hiljada/milion/milijarda/bilion po grupama od tri cifre, zdesna nalevo; slaganje: 11–14 → " +
+      "množina druga, …1 (osim 11) → jednina, …2–4 (osim 12–14) → paukal, ostalo → množina druga",
 
-    errorValue: "Broj mora biti ceo ili decimalni sa zapetom, do 18 cifara u celom delu i do 6 decimala.",
+    errorValue:
+      "Broj mora biti ceo ili decimalni sa zapetom, do 18 cifara u celom delu i do 6 decimala.",
   },
 
   "reading-time": {
@@ -274,8 +283,8 @@ export const PRO_TEKST_SR = {
     words: "Ukupan broj reči",
     displayedSum: "Zbir prikazanih trajanja",
     sumNote:
-      "Vreme ulaska se seče nadole, trajanje i ukupno se zaokružuju — zbir prikazanih trajanja zato sme da se " +
-      "razlikuje od ukupnog za jednu sekundu.",
+      "Vreme ulaska se seče nadole, trajanje i ukupno se zaokružuju — zbir prikazanih trajanja " +
+      "zato sme da se razlikuje od ukupnog za jednu sekundu.",
     colParagraph: "Pasus",
     colWords: "Reči",
     colDuration: "Trajanje",
@@ -283,7 +292,8 @@ export const PRO_TEKST_SR = {
 
     inputs: "Uneseno",
     formula:
-      "trajanjePasusa = reči / tempo × 60     vremeUlaska(i+1) = vremeUlaska(i) + trajanjePasusa(i) + pauza",
+      "trajanjePasusa = reči / tempo × 60     vremeUlaska(i+1) = vremeUlaska(i) + " +
+      "trajanjePasusa(i) + pauza",
 
     errorText: "Tekst sme imati najviše 500000 kodnih tačaka.",
     errorPace: "Tempo mora biti veći od nule, do 1000 reči u minutu.",
@@ -341,7 +351,8 @@ export const PRO_TEKST_SR = {
     inputs: "Uneseno",
     formula:
       "ćirilica → latinica: zamena po tabeli od 30 parova, veličina dvoslova po kontekstu     " +
-      "latinica → ćirilica: lj/nj/dž pohlepno, svako poklapanje se prijavljuje; „dj\" se nikad ne čita kao đ",
+      "latinica → ćirilica: lj/nj/dž pohlepno, svako poklapanje se prijavljuje; „dj\" se nikad " +
+      "ne čita kao đ",
 
     errorText: "Tekst sme imati najviše 500000 kodnih tačaka.",
   },
@@ -375,8 +386,8 @@ export const PRO_TEKST_SR = {
     colGap: "Razmak (ms)",
     colGapRatio: "Razmak ÷ tvoja granica",
     ratioNote:
-      "Za najkraće trajanje odnos je obrnut (granica ÷ trajanje), da veći broj uvek znači „dalje od granice\". " +
-      "Prazna kolona znači da ta granica nije upisana.",
+      "Za najkraće trajanje odnos je obrnut (granica ÷ trajanje), da veći broj uvek znači „dalje " +
+      "od granice\". Prazna kolona znači da ta granica nije upisana.",
 
     nonPositiveDuration: "Blokovi sa nultim ili negativnim trajanjem",
     outOfOrder: "Blokovi van redosleda",
@@ -384,7 +395,9 @@ export const PRO_TEKST_SR = {
     listNone: "nema",
 
     inputs: "Uneseno",
-    formula: "trajanje = izlaz − ulaz     zn/s = znakova / (trajanje / 1000)     odnos = izmereno ÷ tvoja granica",
+    formula:
+      "trajanje = izlaz − ulaz     zn/s = znakova / (trajanje / 1000)     odnos = izmereno ÷ " +
+      "tvoja granica",
 
     errorSubtitle: "Titl mora imati između 1 i 20000 validnih blokova.",
     errorMaxLineChars: "Najviše znakova u redu je ceo broj od 1 do 200.",
@@ -418,8 +431,8 @@ export const PRO_TEKST_SR = {
 
     inputs: "Uneseno",
     formula:
-      "preračun: novo = round(ms × ulazniBrojilac × ciljniImenilac / (ulazniImenilac × ciljniBrojilac))     " +
-      "pomeraj: konačno = max(0, preračunato + pomerajMs)",
+      "preračun: novo = round(ms × ulazniBrojilac × ciljniImenilac / (ulazniImenilac × " +
+      "ciljniBrojilac))     pomeraj: konačno = max(0, preračunato + pomerajMs)",
 
     errorSubtitle: "Titl mora imati između 1 i 20000 validnih blokova.",
     errorOffset: "Pomeraj je HH:MM:SS,mmm ili broj milisekundi, od −86400000 do +86400000.",
@@ -431,9 +444,12 @@ export const PRO_TEKST_SR = {
     text: "Tekst",
     textHint: "Nalepi tekst čiji se obim meri. Ništa se ne pamti između otvaranja alatke.",
     charsPerPage: "Znakova po strani",
-    charsPerPageHint: "Broj koji propisuje naručilac ili udruženje (često 1800 ili 1500). Menja se od posla do posla.",
+    charsPerPageHint:
+      "Broj koji propisuje naručilac ili udruženje (često 1800 ili 1500). Menja se od posla do " +
+      "posla.",
     price: "Cena po jedinici",
-    priceHint: "Valuta se ne pretpostavlja i ne prikazuje. Prazno polje znači da se iznosi ne prikazuju.",
+    priceHint:
+      "Valuta se ne pretpostavlja i ne prikazuje. Prazno polje znači da se iznosi ne prikazuju.",
     priceEmpty: "prazno",
     unit: "Jedinica naplate",
     unitPage: "Strana",
@@ -445,8 +461,9 @@ export const PRO_TEKST_SR = {
     charactersWithSpaces: "Znakova sa razmacima",
     charactersWithLineBreaks: "Znakova sa razmacima i prelomima reda",
     lineBreakNote:
-      "Znakova sa razmacima NE broji prelom reda — to je isti broj koji pokazuje MS Word i s njim se upoređuje " +
-      "faktura. Druga vrednost broji i prelome, radi poređenja sa dužinom samog pasta.",
+      "Znakova sa razmacima NE broji prelom reda — to je isti broj koji pokazuje MS Word i s " +
+      "njim se upoređuje faktura. Druga vrednost broji i prelome, radi poređenja sa dužinom " +
+      "samog pasta.",
     charactersWithoutSpaces: "Znakova bez razmaka",
     wordsBySpaces: "Reči (razdvojenih razmakom)",
     wordsByLetters: "Reči (nizovi slova)",
@@ -491,18 +508,20 @@ export const PRO_TEKST_SR = {
 
     inputs: "Uneseno",
     formula:
-      "poredak: navodnici → tri tačke → crte → razmaci → NBSP     crta dužine 1 samo između razmaka ili cifara, " +
-      "dužine 2 → –, dužine 3 → —",
+      "poredak: navodnici → tri tačke → crte → razmaci → NBSP     crta dužine 1 samo između " +
+      "razmaka ili cifara, dužine 2 → –, dužine 3 → —",
 
     errorText: "Tekst sme imati najviše 500000 kodnih tačaka.",
   },
 
   "unwrap-paragraphs": {
     text: "Tekst",
-    textHint: "Nalepi tekst prelomljen kopiranjem iz PDF-a. Ništa se ne pamti između otvaranja alatke.",
+    textHint:
+      "Nalepi tekst prelomljen kopiranjem iz PDF-a. Ništa se ne pamti između otvaranja alatke.",
     joinHyphenated: "Sastavi reči rastavljene crticom",
     respectListItems: "Poštuj stavke spiska",
-    respectListItemsHint: "Red koji počinje sa -, –, •, * ili brojem i tačkom/zagradom ostaje svoj red.",
+    respectListItemsHint:
+      "Red koji počinje sa -, –, •, * ili brojem i tačkom/zagradom ostaje svoj red.",
     splitOnSentenceEnd: "Novi pasus posle završene rečenice",
     splitOnSentenceEndHint: "Za tekstove iz kojih su prazni redovi ispali.",
     on: "Uključeno",
@@ -530,7 +549,8 @@ export const PRO_TEKST_SR = {
     minCount: "Najmanji broj pojavljivanja",
     minCountHint: "Filtrira samo prikaz — imenilac udela ostaje pun. Ceo broj od 1 do 1000.",
     minWordLength: "Najmanja dužina reči",
-    minWordLengthHint: "Primenjuje se samo kad je dužina fraze 1. Filtrira samo prikaz. Ceo broj od 1 do 50.",
+    minWordLengthHint:
+      "Primenjuje se samo kad je dužina fraze 1. Filtrira samo prikaz. Ceo broj od 1 do 50.",
     caseSensitive: "Razlikuj velika i mala slova",
     on: "Uključeno",
     off: "Isključeno",
@@ -545,7 +565,9 @@ export const PRO_TEKST_SR = {
     colShare: "Udeo",
 
     inputs: "Uneseno",
-    formula: "udeo = pojavljivanja / ukupnoNTorki × 100     oba praga filtriraju samo prikaz, ne i imenilac",
+    formula:
+      "udeo = pojavljivanja / ukupnoNTorki × 100     oba praga filtriraju samo prikaz, ne i " +
+      "imenilac",
 
     errorText: "Tekst sme imati najviše 500000 kodnih tačaka.",
     errorN: "Dužina fraze je ceo broj od 1 do 10.",

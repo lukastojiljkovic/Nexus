@@ -21,7 +21,8 @@ export const PRO_EVENT_SR = {
     beamAngle: "Ugao snopa (beam, 50 % jačine)",
     beamAngleHint: "Sa kataloga reflektora.",
     fieldAngle: "Ugao polja (field, 10 % jačine)",
-    fieldAngleHint: "Opciono, sa kataloga. Ne prikazuje se pri kosom upadu — vidi napomenu uz elipsu.",
+    fieldAngleHint:
+      "Opciono, sa kataloga. Ne prikazuje se pri kosom upadu — vidi napomenu uz elipsu.",
     mode: "Način zadavanja rastojanja",
     modeNormal: "Upravno rastojanje D",
     modeOblique: "Visina vešanja h i horizontalno odstojanje mete",
@@ -48,16 +49,20 @@ export const PRO_EVENT_SR = {
     fixtureCount: "Potreban broj reflektora",
     coveredLength: "Stvarno pokrivena dužina",
     axisNote:
-      "Razmak i broj važe samo duž ose niza — dva susedna kružna snopa preklapaju se u sočivastom preseku, pa je pokrivenost izvan te ose manja.",
+      "Razmak i broj važe samo duž ose niza — dva susedna kružna snopa preklapaju se u " +
+      "sočivastom preseku, pa je pokrivenost izvan te ose manja.",
 
     inputs: "Uneseno",
     formula:
-      "upravno: d=2D·tan(θ/2)     kosi upad: β=atan(x/h), Ds=√(h²+x²), b=2h·sin(θ/2)/√(cos(β−θ/2)cos(β+θ/2)), a=h(tan(β+θ/2)−tan(β−θ/2))     E=I·cosβ/Ds²     s=d_eff(1−preklapanje/100), n=max(1, ceil((L−d_eff)/s)+1)",
+      "upravno: d=2D·tan(θ/2)     kosi upad: β=atan(x/h), Ds=√(h²+x²), " +
+      "b=2h·sin(θ/2)/√(cos(β−θ/2)cos(β+θ/2)), a=h(tan(β+θ/2)−tan(β−θ/2))     E=I·cosβ/Ds²     " +
+      "s=d_eff(1−preklapanje/100), n=max(1, ceil((L−d_eff)/s)+1)",
 
     errorBeamAngle: "Ugao snopa je broj od 1° do 120°.",
     errorFieldAngle: "Ugao polja je broj od 1° do 160°, i ne prikazuje se uz kosi upad.",
     errorAmbiguousDistance:
-      "Uneto je i upravno rastojanje i visina vešanja — izaberi jedan način, inače nije jasno koje rastojanje koristi osvetljenost.",
+      "Uneto je i upravno rastojanje i visina vešanja — izaberi jedan način, inače nije jasno " +
+      "koje rastojanje koristi osvetljenost.",
     errorDistance: "Upravno rastojanje je broj od 0,5 do 200 m.",
     errorHeight: "Visina vešanja je broj od 0,5 do 60 m.",
     errorOffset: "Horizontalno odstojanje je broj od 0 do 100 m.",
@@ -77,12 +82,17 @@ export const PRO_EVENT_SR = {
     tablesHint: "Prazno polje se čita kao 0 — nema stavki po stolu.",
     lines: "Troškovi",
     linesHint:
-      "Jedan red po stavci: naziv;tip;iznos;osnovica;oporezivo. Tip je fiksno, gost, sto ili procenat. Osnovica važi samo za procenat — brojevi redova (od 1) razdvojeni zapetom na koje se procenat primenjuje; prazno znači svi neprocentualni redovi. Oporezivo je da ili ne, koristi se samo uz osnovicu poreza „samo označene stavke\".",
+      "Jedan red po stavci: naziv;tip;iznos;osnovica;oporezivo. Tip je fiksno, gost, sto ili " +
+      "procenat. Osnovica važi samo za procenat — brojevi redova (od 1) razdvojeni zapetom na " +
+      "koje se procenat primenjuje; prazno znači svi neprocentualni redovi. Oporezivo je da ili " +
+      "ne, koristi se samo uz osnovicu poreza „samo označene stavke\".",
     reserve: "Rezerva",
     taxRate: "Poreska stopa",
-    taxRateHint: "Korisnikov unos — Nexus ne drži nijednu poresku stopu i ne zna koja se primenjuje.",
+    taxRateHint:
+      "Korisnikov unos — Nexus ne drži nijednu poresku stopu i ne zna koja se primenjuje.",
     taxBaseMode: "Osnovica za porez",
-    taxBaseModeHint: "Rezerva nikad ne ulazi u osnovicu „samo označene stavke\" — markup je na ceo budžet.",
+    taxBaseModeHint:
+      "Rezerva nikad ne ulazi u osnovicu „samo označene stavke\" — markup je na ceo budžet.",
     taxBaseModeTotal: "Ceo iznos",
     taxBaseModeMarked: "Samo označene stavke",
     revenueLines: "Prihodi",
@@ -119,14 +129,18 @@ export const PRO_EVENT_SR = {
 
     inputs: "Uneseno",
     formula:
-      "osnovica=Σ(fiksno+gost·G+sto·T)     procenat_i=(%ᵢ/100)·osnovica_i     međuzbir=osnovica+Σprocenat     rezerva=međuzbir·r/100     porez=osnovica_poreza·t/100     ukupno=međuzbir+rezerva+porez     cena_karte_na_nuli=ceil_na_cent((ukupno−ostali_prihodi)/plativih)",
+      "osnovica=Σ(fiksno+gost·G+sto·T)     procenat_i=(%ᵢ/100)·osnovica_i     " +
+      "međuzbir=osnovica+Σprocenat     rezerva=međuzbir·r/100     porez=osnovica_poreza·t/100    " +
+      " ukupno=međuzbir+rezerva+porez     " +
+      "cena_karte_na_nuli=ceil_na_cent((ukupno−ostali_prihodi)/plativih)",
 
     errorGuests: "Broj gostiju je ceo broj od 1 do 100 000.",
     errorTables: "Broj stolova je ceo broj od 0 do 10 000.",
     errorLines: "Potreban je bar jedan red troškova.",
     errorLineType: "Svaki red mora imati tip fiksno, gost, sto ili procenat.",
     errorLineAmount: "Iznos ili procenat u redu mora biti broj, nula ili veći.",
-    errorPercentOfLines: "Osnovica procentualnog reda mora upućivati na postojeće neprocentualne redove.",
+    errorPercentOfLines:
+      "Osnovica procentualnog reda mora upućivati na postojeće neprocentualne redove.",
     errorReserve: "Rezerva je broj od 0 do 50 %.",
     errorTaxRate: "Poreska stopa je broj od 0 do 100 %.",
 
@@ -137,7 +151,10 @@ export const PRO_EVENT_SR = {
     guests: "Broj gostiju",
     lines: "Stavke",
     linesHint:
-      "Jedan red po stavci: naziv;jedinica;količina po gostu;udeo koji uzima (%);rezerva (%);veličina pakovanja;jedinica pakovanja;cena pakovanja;porcija za točenje (ml). Jedinica je g, ml ili kom. Jedinica pakovanja je g, kg, ml, l ili kom — kg/l se čita kao ×1000. Cena i porcija su opcione.",
+      "Jedan red po stavci: naziv;jedinica;količina po gostu;udeo koji uzima (%);rezerva " +
+      "(%);veličina pakovanja;jedinica pakovanja;cena pakovanja;porcija za točenje (ml). " +
+      "Jedinica je g, ml ili kom. Jedinica pakovanja je g, kg, ml, l ili kom — kg/l se čita kao " +
+      "×1000. Cena i porcija su opcione.",
     packRounding: "Zaokruživanje pakovanja",
     packRoundingUp: "Naviše",
     packRoundingExact: "Tačno",
@@ -161,17 +178,22 @@ export const PRO_EVENT_SR = {
 
     inputs: "Uneseno",
     formula:
-      "neto=G·q·(udeo/100)     bruto=neto·(1+rezerva/100)     pakovanja=ceil(bruto/veličina_pakovanja) (naviše) ili bruto/veličina_pakovanja (tačno)     višak=pakovanja·veličina−bruto     porcije_potreba=floor(bruto/porcija)     porcije_kupljeno=floor(pakovanja·veličina/porcija)",
+      "neto=G·q·(udeo/100)     bruto=neto·(1+rezerva/100)     " +
+      "pakovanja=ceil(bruto/veličina_pakovanja) (naviše) ili bruto/veličina_pakovanja (tačno)    " +
+      " višak=pakovanja·veličina−bruto     porcije_potreba=floor(bruto/porcija)     " +
+      "porcije_kupljeno=floor(pakovanja·veličina/porcija)",
 
     errorGuests: "Broj gostiju je ceo broj od 1 do 5000.",
     errorLines: "Potreban je bar jedan red stavki.",
     errorUnitToken:
-      "Jedinica stavke mora biti g, ml ili kom, a jedinica pakovanja g, kg, ml, l ili kom, iste dimenzije kao stavka.",
+      "Jedinica stavke mora biti g, ml ili kom, a jedinica pakovanja g, kg, ml, l ili kom, iste " +
+      "dimenzije kao stavka.",
     errorQuantity: "Količina po gostu mora biti veća od nule.",
     errorUptake: "Udeo koji uzima je broj od 0 do 100 %.",
     errorReserve: "Rezerva je broj od 0 do 100 %.",
     errorPackSize: "Veličina pakovanja mora biti veća od nule.",
-    errorPackUnit: "Jedinica pakovanja mora biti iste dimenzije (masa/zapremina/komad) kao jedinica stavke.",
+    errorPackUnit:
+      "Jedinica pakovanja mora biti iste dimenzije (masa/zapremina/komad) kao jedinica stavke.",
     errorPourSize: "Porcija za točenje mora biti veća od nule, i važi samo za tečne stavke.",
     errorPrice: "Cena pakovanja ne sme biti negativna.",
 
@@ -181,7 +203,9 @@ export const PRO_EVENT_SR = {
   "generator-sizing": {
     consumers: "Potrošači",
     consumersHint:
-      "Jedan red po potrošaču: naziv;snaga u kW;cos φ;istovremenost (%, prazno = 100);motor (da/ne);startna kVA po kW (samo za motor, sa pločice);cos φ u polasku (samo za motor). Negativan cos φ znači prednjačeći (kapacitivni) teret — LED napajanja, filteri.",
+      "Jedan red po potrošaču: naziv;snaga u kW;cos φ;istovremenost (%, prazno = 100);motor " +
+      "(da/ne);startna kVA po kW (samo za motor, sa pločice);cos φ u polasku (samo za motor). " +
+      "Negativan cos φ znači prednjačeći (kapacitivni) teret — LED napajanja, filteri.",
     reserve: "Rezerva",
     derate: "Smanjenje snage",
     derateHint: "Nadmorska visina i temperatura, iz tabele proizvođača agregata.",
@@ -207,11 +231,16 @@ export const PRO_EVENT_SR = {
     fuelTotal: "Ukupna potrošnja za uneto trajanje",
     loadPct: "Procenat opterećenja agregata",
     fuelNote:
-      "Model potrošnje je linearan po isporučenoj aktivnoj snazi i ne sadrži potrošnju u praznom hodu.",
+      "Model potrošnje je linearan po isporučenoj aktivnoj snazi i ne sadrži potrošnju u praznom " +
+      "hodu.",
 
     inputs: "Uneseno",
     formula:
-      "P=ΣkW·ist/100     Q=ΣP·tanφ (sa predznakom)     S=√(P²+Q²)     polazak: S_start=kW_motor·kVA/kW     S_vrh=√((P−P_motor+S_start·cosφ_p)²+(Q−Q_motor+S_start·sinφ_p)²)     S_potrebno=max(S,S_vrh)·(1+rezerva/100)/(1−smanjenje/100)     P_potrebno=S_potrebno·cosφ_agregata",
+      "P=ΣkW·ist/100     Q=ΣP·tanφ (sa predznakom)     S=√(P²+Q²)     polazak: " +
+      "S_start=kW_motor·kVA/kW     " +
+      "S_vrh=√((P−P_motor+S_start·cosφ_p)²+(Q−Q_motor+S_start·sinφ_p)²)     " +
+      "S_potrebno=max(S,S_vrh)·(1+rezerva/100)/(1−smanjenje/100)     " +
+      "P_potrebno=S_potrebno·cosφ_agregata",
 
     errorConsumers: "Potreban je bar jedan red potrošača.",
     errorReserve: "Rezerva je broj od 0 do 100 %.",
@@ -224,7 +253,8 @@ export const PRO_EVENT_SR = {
     errorCosPhi: "Cos φ je broj čija je apsolutna vrednost od 0,1 do 1,0.",
     errorSimultaneity: "Istovremenost je broj od 0 do 100 %.",
     errorStartingKva: "Startna kVA po kW je broj od 1,0 do 10,0, obavezan za motor.",
-    errorStartingCosPhi: "Cos φ u polasku je broj čija je apsolutna vrednost od 0,1 do 1,0, obavezan za motor.",
+    errorStartingCosPhi:
+      "Cos φ u polasku je broj čija je apsolutna vrednost od 0,1 do 1,0, obavezan za motor.",
 
     unitKw: "kW",
     unitKvar: "kvar",
@@ -247,10 +277,12 @@ export const PRO_EVENT_SR = {
     packagingMass: "Masa ambalaže",
     packagingMassHint: "Staklo i limenke koje se hlade zajedno sa sadržajem. Prazno polje je 0.",
     packagingSpecificHeat: "Specifična toplota ambalaže",
-    packagingSpecificHeatHint: "Prazno polje koristi vrednost za staklo, 0,84 kJ/(kg·K); za aluminijum 0,897.",
+    packagingSpecificHeatHint:
+      "Prazno polje koristi vrednost za staklo, 0,84 kJ/(kg·K); za aluminijum 0,897.",
     startTemp: "Početna temperatura pića T1",
     targetTemp: "Ciljna temperatura T2",
-    targetTempHint: "Ciljnu temperaturu bira korisnik — alatka ne kaže da li je nešto dovoljno rashlađeno.",
+    targetTempHint:
+      "Ciljnu temperaturu bira korisnik — alatka ne kaže da li je nešto dovoljno rashlađeno.",
     iceTemp: "Temperatura leda Ti",
     iceTempHint: "Prazno polje je 0 °C. Za led iz zamrzivača unesi negativnu vrednost.",
     holdMode: "Dotok toplote pri držanju",
@@ -266,7 +298,8 @@ export const PRO_EVENT_SR = {
     bagMassHint: "Prazno polje je 5 kg.",
     bulkFraction: "Nasipni koeficijent leda",
     bulkFractionHint:
-      "Udeo čvrstog leda u zapremini nasute kade, 0 do 1 — kocke i ljuspice nose 35 do 45 % šupljina. Opciono; bez njega se prikazuje samo zapremina čvrstog leda.",
+      "Udeo čvrstog leda u zapremini nasute kade, 0 do 1 — kocke i ljuspice nose 35 do 45 % " +
+      "šupljina. Opciono; bez njega se prikazuje samo zapremina čvrstog leda.",
     meltsIntoDrink: "Led se topi direktno u piću",
     meltsIntoDrinkHint: "Uključi za bowlu i punč; isključi za hlađenje zatvorene ambalaže u kadi.",
     yes: "Da",
@@ -284,11 +317,15 @@ export const PRO_EVENT_SR = {
     dilution: "Razblaženje pića istopljenim ledom",
     iceToDrinkRatio: "Odnos kg leda po kg pića",
     boundsNote:
-      "Masa za hlađenje je idealna donja granica pri potpunom topljenju sveg leda; dodatno topljenje pri držanju računa samo latentnu toplotu i zato je gornja granica. Ovo je jedan korak do ravnotežnog stanja, ne kriva hlađenja — nema vremensku osu i ne govori koliko brzo piće dostiže temperaturu.",
+      "Masa za hlađenje je idealna donja granica pri potpunom topljenju sveg leda; dodatno " +
+      "topljenje pri držanju računa samo latentnu toplotu i zato je gornja granica. Ovo je jedan " +
+      "korak do ravnotežnog stanja, ne kriva hlađenja — nema vremensku osu i ne govori koliko " +
+      "brzo piće dostiže temperaturu.",
 
     inputs: "Uneseno",
     formula:
-      "Q=(m·c+m_amb·c_amb)·(T1−T2)     h=c_led·(0−Ti)+333,55+4,184·max(T2,0)     m_led=Q/h     m_topi=Q̇·t·3600/1000/333,55     V_čvrsto=m_uk/917·1000",
+      "Q=(m·c+m_amb·c_amb)·(T1−T2)     h=c_led·(0−Ti)+333,55+4,184·max(T2,0)     m_led=Q/h     " +
+      "m_topi=Q̇·t·3600/1000/333,55     V_čvrsto=m_uk/917·1000",
 
     errorDrinkMass: "Masa pića mora biti veća od nule.",
     errorDrinkVolume: "Zapremina pića mora biti veća od nule.",
@@ -354,21 +391,30 @@ export const PRO_EVENT_SR = {
     currentMax: "Struja pri maksimalnoj snazi",
     currentAvg: "Struja pri prosečnoj snazi",
     inrushNote:
-      "Struja i prividna snaga su ustaljeno (steady-state) opterećenje — udarna struja pri uključenju zida nije modelirana.",
+      "Struja i prividna snaga su ustaljeno (steady-state) opterećenje — udarna struja pri " +
+      "uključenju zida nije modelirana.",
 
     inputs: "Uneseno",
     formula:
-      "px=panel/korak     zid=broj_panela·panel/1000     d(θ)=korak/(θ·0,0002908882)/1000     paneli_po_portu=floor(kapacitet/px_panela), portovi=ceil(broj_panela/paneli_po_portu)     S=P/PF     I=P·1000/(U·PF)",
+      "px=panel/korak     zid=broj_panela·panel/1000     d(θ)=korak/(θ·0,0002908882)/1000     " +
+      "paneli_po_portu=floor(kapacitet/px_panela), portovi=ceil(broj_panela/paneli_po_portu)     " +
+      "S=P/PF     I=P·1000/(U·PF)",
 
-    errorPitch: "Korak piksela mora biti veći od nule, i mora deliti dimenzije panela na ceo broj piksela.",
+    errorPitch:
+      "Korak piksela mora biti veći od nule, i mora deliti dimenzije panela na ceo broj piksela.",
     errorPanelWidth: "Širina panela je broj od 100 do 2000 mm.",
     errorPanelHeight: "Visina panela je broj od 100 do 2000 mm.",
     errorAcuity: "Ugao vidne oštrine je broj od 0,5 do 10 lučnih minuta.",
-    errorPanelsWide: "Broj panela u širinu je ceo broj od 1 do 200 — unesi ili ovo, ili ciljnu veličinu, nikad oboje.",
+    errorPanelsWide:
+      "Broj panela u širinu je ceo broj od 1 do 200 — unesi ili ovo, ili ciljnu veličinu, nikad " +
+      "oboje.",
     errorPanelsHigh: "Broj panela u visinu je ceo broj od 1 do 100.",
-    errorTargetWidth: "Ciljna širina zida mora biti veća od nule i dati broj panela u dozvoljenom opsegu.",
-    errorTargetHeight: "Ciljna visina zida mora biti veća od nule i dati broj panela u dozvoljenom opsegu.",
-    errorPortCapacity: "Kapacitet porta je broj od 10 000 do 2 000 000 piksela, dovoljan za bar jedan panel.",
+    errorTargetWidth:
+      "Ciljna širina zida mora biti veća od nule i dati broj panela u dozvoljenom opsegu.",
+    errorTargetHeight:
+      "Ciljna visina zida mora biti veća od nule i dati broj panela u dozvoljenom opsegu.",
+    errorPortCapacity:
+      "Kapacitet porta je broj od 10 000 do 2 000 000 piksela, dovoljan za bar jedan panel.",
     errorPanelMaxW: "Maksimalna snaga panela je broj od 10 do 2000 W.",
     errorPanelAvgW: "Prosečna snaga panela je broj od 5 do 2000 W.",
     errorVoltage: "Napon je broj od 100 do 400 V.",
@@ -395,7 +441,9 @@ export const PRO_EVENT_SR = {
     itemsPerGuest: "Komada po gostu",
     hangerPitch: "Razmak vešalica",
     railSegments: "Raspoložive šipke",
-    railSegmentsHint: "Jedan red po fizičkoj šipki, dužina u m. Kapacitet se računa po šipki i sabira, ne po zbirnoj dužini.",
+    railSegmentsHint:
+      "Jedan red po fizičkoj šipki, dužina u m. Kapacitet se računa po šipki i sabira, ne po " +
+      "zbirnoj dužini.",
     checkInWindow: "Prozor prijema",
     checkInRate: "Brzina usluge po radniku",
     rateHint: "Komada po minuti, po radniku — jedinica rada je komad, ne gost.",
@@ -429,11 +477,14 @@ export const PRO_EVENT_SR = {
     checkOutClearTime: "Vreme obrade sa unetim brojem radnika",
     checkOutClearDiff: "Razlika prema prozoru",
     throughputNote:
-      "Protok pretpostavlja da dolasci ravnomerno pokrivaju ceo prozor — nagli navala u jednom trenutku nije njime obuhvaćena.",
+      "Protok pretpostavlja da dolasci ravnomerno pokrivaju ceo prozor — nagli navala u jednom " +
+      "trenutku nije njime obuhvaćena.",
 
     inputs: "Uneseno",
     formula:
-      "G_kolima=round(G·udeo/100)     automobila=ceil(G_kolima/popunjenost)     komada=ceil(G_garderoba·kom/gostu)     dužina=komada·razmak     radnika=ceil(komada/(prozor·brzina))     t=komada/(radnika·brzina)",
+      "G_kolima=round(G·udeo/100)     automobila=ceil(G_kolima/popunjenost)     " +
+      "komada=ceil(G_garderoba·kom/gostu)     dužina=komada·razmak     " +
+      "radnika=ceil(komada/(prozor·brzina))     t=komada/(radnika·brzina)",
 
     errorGuests: "Broj gostiju je ceo broj od 1 do 100 000.",
     errorCarShare: "Udeo koji dolazi automobilom je broj od 0 do 100 %.",
@@ -468,7 +519,9 @@ export const PRO_EVENT_SR = {
     knownDistance: "Rastojanje D",
     knownWidth: "Širina slike W",
     knownDiagonal: "Dijagonala",
-    knownZoomHint: "Uz zum objektiv poznata veličina ne sme biti rastojanje — opseg daje raspon rastojanja, ne jedno.",
+    knownZoomHint:
+      "Uz zum objektiv poznata veličina ne sme biti rastojanje — opseg daje raspon rastojanja, " +
+      "ne jedno.",
     knownValue: "Vrednost",
     aspect: "Odnos stranica",
     aspectCustom: "Proizvoljno",
@@ -482,7 +535,9 @@ export const PRO_EVENT_SR = {
     ambientLux: "Ambijentalna osvetljenost na platnu",
     diffuseReflectance: "Difuzna refleksija platna za ambijentalno svetlo",
     diffuseReflectanceHint:
-      "Poseban podatak od pojačanja (gain) — gain važi za usmereni snop projektora, ne za svetlo koje pada sa svih strana. Bez ovoga se kontrast računa preko gain-a i precenjuje pri gain > 1.",
+      "Poseban podatak od pojačanja (gain) — gain važi za usmereni snop projektora, ne za svetlo " +
+      "koje pada sa svih strana. Bez ovoga se kontrast računa preko gain-a i precenjuje pri gain " +
+      "> 1.",
     seatingDistance: "Rastojanje reda gledalaca",
     targetLuminanceFl: "Ciljna luminansa (obrnut smer)",
     targetLuminanceHint: "U fL — daje potreban fluks projektora za tu luminansu, umesto obrnuto.",
@@ -500,13 +555,17 @@ export const PRO_EVENT_SR = {
     requiredLumens: "Potreban fluks za ciljnu luminansu",
     viewingAngle: "Horizontalni ugao gledanja",
     gainApproxNote:
-      "Difuzna refleksija platna nije uneta — kontrast je izračunat preko pojačanja (gain), koje je usmerena veličina za snop projektora, pa je ovaj broj precenjen za platno sa gain > 1.",
+      "Difuzna refleksija platna nije uneta — kontrast je izračunat preko pojačanja (gain), koje " +
+      "je usmerena veličina za snop projektora, pa je ovaj broj precenjen za platno sa gain > 1.",
     axisNote:
-      "Geometrija pretpostavlja osu upravnu na sredinu platna, bez pomeraja objektiva — pod trapeznim izobličenjem nijedna od ovih brojki više ne važi.",
+      "Geometrija pretpostavlja osu upravnu na sredinu platna, bez pomeraja objektiva — pod " +
+      "trapeznim izobličenjem nijedna od ovih brojki više ne važi.",
 
     inputs: "Uneseno",
     formula:
-      "TR=D/W     W=D/TR ili D=W·TR     H=W/a     dijagonala=W√(1+1/a²)     E=lm/(W·H)     L=E·gain/π     L_fL=lm·gain/(W·H u ft²)     kontrast=(L_belo+L_amb)/(L_crno+L_amb)     θ=2·atan((W/2)/D_reda)",
+      "TR=D/W     W=D/TR ili D=W·TR     H=W/a     dijagonala=W√(1+1/a²)     E=lm/(W·H)     " +
+      "L=E·gain/π     L_fL=lm·gain/(W·H u ft²)     kontrast=(L_belo+L_amb)/(L_crno+L_amb)     " +
+      "θ=2·atan((W/2)/D_reda)",
 
     errorGain: "Pojačanje platna je broj od 0,4 do 4,0.",
     errorAspectRatio: "Odnos stranica mora biti veći od nule.",
@@ -548,9 +607,11 @@ export const PRO_EVENT_SR = {
     span: "Razmak tačaka zahvata L",
     cogFromA: "Odstojanje težišta od tačke A",
     hookHeight: "Visina kuke iznad tačaka zahvata h",
-    hookHeightHint: "Oba ugla slede iz ove visine — nisu slobodan izbor, jer jedna kuka stoji iznad oba kraka.",
+    hookHeightHint:
+      "Oba ugla slede iz ove visine — nisu slobodan izbor, jer jedna kuka stoji iznad oba kraka.",
     dynamicFactor: "Dinamički faktor",
-    dynamicFactorHint: "Iz pravila posla. Bez unosa se prikazuje samo statička (nefaktorisana) sila.",
+    dynamicFactorHint:
+      "Iz pravila posla. Bez unosa se prikazuje samo statička (nefaktorisana) sila.",
     dynamicFactorNone: "nije unet",
     wllPerLeg: "Granica sa pločice (WLL) po kraku",
     wllHint: "Sa pločice ugice. Nexus ne drži nijednu tabelu nosivosti.",
@@ -566,7 +627,9 @@ export const PRO_EVENT_SR = {
     angleFactor: "Faktor ugla 1/cos β",
     fourLegShare: "Idealna podela na 4 kraka",
     twoLegShare: "Podela na 2 kraka (konzervativna)",
-    fourLegNote: "Kruti teret na četiri kraka nije statički određen — idealna podela na sve 4 je jedna moguća pretpostavka.",
+    fourLegNote:
+      "Kruti teret na četiri kraka nije statički određen — idealna podela na sve 4 je jedna " +
+      "moguća pretpostavka.",
     twoPointBetaA: "Ugao β u tački A",
     twoPointBetaB: "Ugao β u tački B",
     twoPointForceA: "Sila u tački A",
@@ -575,19 +638,22 @@ export const PRO_EVENT_SR = {
     twoPointLegLengthB: "Dužina kraka do tačke B",
     horizontal: "Horizontalna komponenta",
     horizontalNote:
-      "Horizontalna komponenta pritiska teret ka unutra — brojčano jednaka sili pritiska koju bi preuzela raspornica.",
+      "Horizontalna komponenta pritiska teret ka unutra — brojčano jednaka sili pritiska koju bi " +
+      "preuzela raspornica.",
     legLength: "Dužina kraka",
     wllRatio: "Sila po kraku (faktorisana) ÷ granica sa pločice",
 
     inputs: "Uneseno",
     formula:
-      "W=m·g     β iz ugla, ili β=atan(r/h)     F=W/(n·cosβ)     H=F·sinβ     V=W/n     zahvat u dve tačke: V_A=W(L−a)/L, V_B=Wa/L, β_A=atan(a/h), β_B=atan((L−a)/h), F=V/cosβ",
+      "W=m·g     β iz ugla, ili β=atan(r/h)     F=W/(n·cosβ)     H=F·sinβ     V=W/n     zahvat u " +
+      "dve tačke: V_A=W(L−a)/L, V_B=Wa/L, β_A=atan(a/h), β_B=atan((L−a)/h), F=V/cosβ",
 
     errorMass: "Masa tereta je broj od 0,1 do 100 000 kg.",
     errorLegs: "Broj krakova je ceo broj od 1 do 4.",
     errorDynamicFactor: "Dinamički faktor je broj od 1,0 do 5,0.",
     errorSpan: "Razmak tačaka zahvata mora biti veći od nule.",
-    errorCogFromA: "Odstojanje težišta od tačke A ne sme biti negativno niti veće od razmaka tačaka.",
+    errorCogFromA:
+      "Odstojanje težišta od tačke A ne sme biti negativno niti veće od razmaka tačaka.",
     errorHookHeight: "Visina kuke mora biti veća od nule i dovoljna da oba ugla ostanu ispod 90°.",
     errorWllPerLeg: "Granica sa pločice mora biti veća od nule.",
     errorAngleValue: "Ugao mora biti unet za izabrani način zadavanja.",
@@ -606,8 +672,8 @@ export const PRO_EVENT_SR = {
     startHint: "HH:MM, 00:00 do 23:59.",
     items: "Tačke satnice",
     itemsHint:
-      "Po jedan red: naziv; trajanje u minutima ili H:MM (npr. 1:30 = 90 min); opciono fiksno vreme HH:MM. " +
-      "U smeru „unazad\" fiksno vreme sme da nosi samo poslednji red.",
+      "Po jedan red: naziv; trajanje u minutima ili H:MM (npr. 1:30 = 90 min); opciono fiksno " +
+      "vreme HH:MM. U smeru „unazad\" fiksno vreme sme da nosi samo poslednji red.",
     changeover: "Prelaz između tačaka",
     changeoverHint: "Minuti, isti za sve tačke, 0 do 240.",
     curfew: "Krajnji rok",
@@ -641,9 +707,9 @@ export const PRO_EVENT_SR = {
 
     inputs: "Uneseno",
     formula:
-      "napred: početak_i = kraj_{i−1} + prelaz (ili fiksno vreme); kraj_i = početak_i + trajanje_i     " +
-      "unazad: potreban_početak = zakovano_vreme − Σ(trajanje + prelaz) − rezerva     " +
-      "praznina = fiksno − kursor (> 0)     preklapanje = kursor − fiksno (> 0)",
+      "napred: početak_i = kraj_{i−1} + prelaz (ili fiksno vreme); kraj_i = početak_i + " +
+      "trajanje_i     unazad: potreban_početak = zakovano_vreme − Σ(trajanje + prelaz) − rezerva " +
+      "    praznina = fiksno − kursor (> 0)     preklapanje = kursor − fiksno (> 0)",
 
     rowLabel: "red",
     errorItems: "Unesi bar jednu tačku, najviše 200.",
@@ -673,12 +739,13 @@ export const PRO_EVENT_SR = {
     seatWidth: "Širina mesta po gostu",
     clearance: "Slobodan prostor oko stola",
     clearanceHint:
-      "Korisnikova planska mera za stolice i prolaz, po strani stola. Nexus je ne nudi kao preporuku — nije " +
-      "širina evakuacionog puta i alatka je tako ne imenuje.",
+      "Korisnikova planska mera za stolice i prolaz, po strani stola. Nexus je ne nudi kao " +
+      "preporuku — nije širina evakuacionog puta i alatka je tako ne imenuje.",
     availableArea: "Raspoloživa površina za stolove",
     availableAreaHint: "Opciono, samo za poređenje sa potrebnom površinom.",
     availableWidth: "Raspoloživ prostor — širina",
-    availableSpaceHint: "Opciono, alternativa površini — daje broj stolova koji stanu u mrežu, ne u tečnost.",
+    availableSpaceHint:
+      "Opciono, alternativa površini — daje broj stolova koji stanu u mrežu, ne u tečnost.",
     availableDepth: "Raspoloživ prostor — dubina",
 
     results: "Rezultat",
@@ -698,8 +765,9 @@ export const PRO_EVENT_SR = {
 
     inputs: "Uneseno",
     formula:
-      "okrugli: P=π·D, n=floor(P/s), A_ćelija=(D+2c)²     dugački: n=2·floor(L/s)+2·floor(W/s)·[čela], " +
-      "A_ćelija=(L+2c)(W+2c)     T=ceil(G/n)     A_ukupno=T·A_ćelija     mreža: floor(širina/(D+2c))·floor(dubina/(D+2c))",
+      "okrugli: P=π·D, n=floor(P/s), A_ćelija=(D+2c)²     dugački: " +
+      "n=2·floor(L/s)+2·floor(W/s)·[čela], A_ćelija=(L+2c)(W+2c)     T=ceil(G/n)     " +
+      "A_ukupno=T·A_ćelija     mreža: floor(širina/(D+2c))·floor(dubina/(D+2c))",
 
     errorGuests: "Broj gostiju je ceo broj od 1 do 5000.",
     errorSeatWidth: "Širina mesta po gostu je broj od 0,45 do 1,00 m.",
@@ -707,7 +775,8 @@ export const PRO_EVENT_SR = {
     errorDiameter: "Prečnik ploče je broj od 0,80 do 3,00 m.",
     errorLength: "Dužina stola je broj od 0,80 do 6,00 m.",
     errorWidth: "Širina stola je broj od 0,60 do 2,00 m.",
-    errorTooFewSeats: "Sa ovom širinom mesta sto ne prima ni dva gosta — smanji širinu mesta ili poveći sto.",
+    errorTooFewSeats:
+      "Sa ovom širinom mesta sto ne prima ni dva gosta — smanji širinu mesta ili poveći sto.",
     errorAvailableArea: "Raspoloživa površina ne sme biti negativna.",
     errorAvailableSpace: "Širina i dubina raspoloživog prostora moraju biti veće od nule.",
 
@@ -732,13 +801,15 @@ export const PRO_EVENT_SR = {
     totalMassHint: "Ljudi, beklajn i oprema zajedno.",
     udlLimit: "Granica ravnomernog opterećenja iz tabele proizvođača podesta",
     occupancyDensity: "Gustina lica na podijumu",
-    regulatedHint: "Iz propisa koji primenjuješ. Nexus ne zna koji je to propis i ne nudi vrednost.",
+    regulatedHint:
+      "Iz propisa koji primenjuješ. Nexus ne zna koji je to propis i ne nudi vrednost.",
 
     results: "Rezultat",
     requiredArea: "Tražena površina bine",
     perimeter: "Obim bine",
     skirtArea: "Površina zavese",
-    mixedNote: "Obe orijentacije modula su ispisane u celini — mešovita orijentacija nije razmatrana.",
+    mixedNote:
+      "Obe orijentacije modula su ispisane u celini — mešovita orijentacija nije razmatrana.",
     positionA: "Položaj A",
     positionB: "Položaj B",
     decksWide: "podesta po širini",
@@ -751,7 +822,8 @@ export const PRO_EVENT_SR = {
     massPerLeg: "masa po nozi pri ravnomernoj raspodeli",
     fewerDecks: "Manje podesta koristi",
     fewerDecksEqual: "podjednako",
-    udlAreaNote: "Opterećenje je izračunato nad nominalnom površinom bine (širina × dubina), ne nad većom " +
+    udlAreaNote:
+      "Opterećenje je izračunato nad nominalnom površinom bine (širina × dubina), ne nad većom " +
       "preklopljenom površinom koju podesti stvarno pokrivaju.",
     udl: "Izračunato ravnomerno opterećenje",
     udlRatio: "Izračunato opterećenje ÷ granica proizvođača",
@@ -759,8 +831,9 @@ export const PRO_EVENT_SR = {
 
     inputs: "Uneseno",
     formula:
-      "A=Š·D     obim=2(Š+D)     položaj: n_š=ceil(Š/l), n_d=ceil(D/w), podesti=n_š·n_d, pokriveno=n_š·l·n_d·w     " +
-      "noge=(n_š+1)(n_d+1)     opterećenje=masa/A     lica=floor(A/gustina)",
+      "A=Š·D     obim=2(Š+D)     položaj: n_š=ceil(Š/l), n_d=ceil(D/w), podesti=n_š·n_d, " +
+      "pokriveno=n_š·l·n_d·w     noge=(n_š+1)(n_d+1)     opterećenje=masa/A     " +
+      "lica=floor(A/gustina)",
 
     errorWidth: "Širina bine je broj od 0,5 do 100 m.",
     errorDepth: "Dubina bine je broj od 0,5 do 100 m.",
@@ -785,7 +858,8 @@ export const PRO_EVENT_SR = {
     requiredLength: "Zadata dužina umesto površine",
     width: "Širina šatora",
     bayLength: "Dužina polja (modul)",
-    bayLengthHint: "Uobičajen modul proizvođača — proveri kod proizvođača pre nego što se osloniš na njega.",
+    bayLengthHint:
+      "Uobičajen modul proizvođača — proveri kod proizvođača pre nego što se osloniš na njega.",
     eaveHeight: "Visina strehe",
     roofPitch: "Nagib krova",
     margin: "Slobodan pojas oko šatora",
@@ -812,24 +886,27 @@ export const PRO_EVENT_SR = {
     gableEndsArea: "Površina čela",
     totalSheeting: "Zbirna površina cerada",
     sheetingNote:
-      "Geometrijska neto površina — bez preklopa na šavovima, bez otvora za vrata, bez isključenog čela. Nije " +
-      "količina za poručivanje materijala.",
+      "Geometrijska neto površina — bez preklopa na šavovima, bez otvora za vrata, bez " +
+      "isključenog čela. Nije količina za poručivanje materijala.",
     legs: "Broj nogu",
     usableWidth: "Korisna širina na traženoj visini glave",
 
     inputs: "Uneseno",
     formula:
-      "n=ceil(A/(w·b)) ili ceil(L/b)     L=n·b     A=w·L     sleme: r=(w/2)tan α, h_sleme=h_streha+r     " +
-      "krov=w·L/cos α     bočne=2·L·h     čela=2(w·h+w·r/2)     noge=2(n+1)",
+      "n=ceil(A/(w·b)) ili ceil(L/b)     L=n·b     A=w·L     sleme: r=(w/2)tan α, " +
+      "h_sleme=h_streha+r     krov=w·L/cos α     bočne=2·L·h     čela=2(w·h+w·r/2)     " +
+      "noge=2(n+1)",
 
-    errorRequiredArea: "Unesi tačno jedno od dvoje — traženu površinu ili zadatu dužinu, ne oboje niti nijedno.",
+    errorRequiredArea:
+      "Unesi tačno jedno od dvoje — traženu površinu ili zadatu dužinu, ne oboje niti nijedno.",
     errorRequiredLength: "Zadata dužina mora biti veća od nule.",
     errorWidth: "Širina šatora je broj od 3 do 60 m.",
     errorBayLength: "Dužina polja je broj od 1 do 10 m.",
     errorEaveHeight: "Visina strehe je broj od 1,5 do 8 m.",
     errorRoofPitch: "Nagib krova je broj od 5° do 45°.",
     errorMargin: "Slobodan pojas ne sme biti negativan.",
-    errorRequiredHeadHeight: "Tražena visina glave mora biti veća od nule i manja od visine slemena.",
+    errorRequiredHeadHeight:
+      "Tražena visina glave mora biti veća od nule i manja od visine slemena.",
 
     unitM: "m",
     unitM2: "m²",
@@ -841,12 +918,13 @@ export const PRO_EVENT_SR = {
     lineVoltageHint: "Nazivni napon instalacije. Prazno polje računa se kao 400 V.",
     phaseVoltage: "Fazni napon (direktno)",
     phaseVoltageHint:
-      "Samo za jednofazni sistem gde se fazni napon ne izvodi iz linijskog (npr. 230 V). Prepisuje ga i vraća " +
-      "linijski napon.",
+      "Samo za jednofazni sistem gde se fazni napon ne izvodi iz linijskog (npr. 230 V). " +
+      "Prepisuje ga i vraća linijski napon.",
     consumers: "Potrošači",
     consumersHint:
-      "Po jedan red: naziv; snaga u W ili kW; priključak (L1 / L2 / L3 / trofazni / L1L2 / L2L3 / L3L1); " +
-      "faktor snage cos φ (0,1 do 1,0, negativan za potrošač koji prednjači); istovremenost u % (podrazumevano 100).",
+      "Po jedan red: naziv; snaga u W ili kW; priključak (L1 / L2 / L3 / trofazni / L1L2 / L2L3 " +
+      "/ L3L1); faktor snage cos φ (0,1 do 1,0, negativan za potrošač koji prednjači); " +
+      "istovremenost u % (podrazumevano 100).",
     ratedBreaker: "Nazivna struja osigurača po fazi",
     regulatedHint: "Prepisana sa razvodnog ormana. Nexus nema spisak osigurača i ne nudi vrednost.",
 
@@ -870,13 +948,13 @@ export const PRO_EVENT_SR = {
     avgCurrent: "Srednja struja po fazi",
     imbalance: "Nesimetrija",
     modelNote:
-      "Harmonici i zaletni udar motora nisu modelirani — struja nule nelinearnog opterećenja nije fazorski zbir " +
-      "osnovnih harmonika.",
+      "Harmonici i zaletni udar motora nisu modelirani — struja nule nelinearnog opterećenja " +
+      "nije fazorski zbir osnovnih harmonika.",
 
     inputs: "Uneseno",
     formula:
-      "U_LN=U/√3     P=P_nazivna·(istovremenost/100)     Q=P·tanφ     S_faza=√(P²+Q²)     I_faza=S_faza/U_LN     " +
-      "I_N=|ΣI_faza (fazorski)|     nesimetrija=max|I_k−I_sr|/I_sr",
+      "U_LN=U/√3     P=P_nazivna·(istovremenost/100)     Q=P·tanφ     S_faza=√(P²+Q²)     " +
+      "I_faza=S_faza/U_LN     I_N=|ΣI_faza (fazorski)|     nesimetrija=max|I_k−I_sr|/I_sr",
 
     rowLabel: "red",
     errorConsumers: "Unesi bar jednog potrošača.",
@@ -887,7 +965,8 @@ export const PRO_EVENT_SR = {
     errorCosPhi: "Faktor snage (po apsolutnoj vrednosti) je broj od 0,1 do 1,0.",
     errorSimultaneity: "Istovremenost je broj od 0 do 100%.",
     errorConnectionFormat: "Priključak nije prepoznat — L1, L2, L3, trofazni, L1L2, L2L3 ili L3L1.",
-    errorConnectionRange: "Kod direktno unetog faznog napona (jednofazni sistem) priključak mora biti L1.",
+    errorConnectionRange:
+      "Kod direktno unetog faznog napona (jednofazni sistem) priključak mora biti L1.",
 
     unitV: "V",
     unitA: "A",
@@ -916,7 +995,9 @@ export const PRO_EVENT_SR = {
     totalMass: "Ukupna masa na trasi",
     pointMass: "Masa tereta",
     distributedMass: "Sopstvena i dodatna ravnomerna masa",
-    swappedNote: "Tačke A i B su zamenjene mestima jer je A uneta desno od B — proračun ide sa manjom koordinatom kao A.",
+    swappedNote:
+      "Tačke A i B su zamenjene mestima jer je A uneta desno od B — proračun ide sa manjom " +
+      "koordinatom kao A.",
     reactionA: "Sila u tački A",
     reactionB: "Sila u tački B",
     uplift: "podizanje",
@@ -929,7 +1010,8 @@ export const PRO_EVENT_SR = {
     ratioA: "Sila u A ÷ nosivost motora A",
     ratioB: "Sila u B ÷ nosivost motora B",
     legTensionNote:
-      "Sila u kraku pod uglom zahvata — reakcija je vertikalna komponenta, a motor preko bridla vuče veću silu.",
+      "Sila u kraku pod uglom zahvata — reakcija je vertikalna komponenta, a motor preko bridla " +
+      "vuče veću silu.",
     legTensionA: "Sila u kraku, tačka A",
     legTensionB: "Sila u kraku, tačka B",
 
@@ -962,14 +1044,14 @@ export const PRO_EVENT_SR = {
     grossArea: "Bruto površina",
     zones: "Oduzete zone",
     zonesHint:
-      "Po jedan red: naziv; površina u m² (bina, šank, plesni podijum, tehnika, prolazi). Isključivo sa " +
-      "poljem „oduzeto kao procenat\".",
+      "Po jedan red: naziv; površina u m² (bina, šank, plesni podijum, tehnika, prolazi). " +
+      "Isključivo sa poljem „oduzeto kao procenat\".",
     deductPct: "Oduzeto kao procenat",
     deductPctHint: "Umesto pojedinačnih zona, ne uz njih.",
     layouts: "Rasporedi",
     layoutsHint:
-      "Po jedan red: naziv rasporeda; gustina u m²/osobi; bruto ili neto (na koju površinu se gustina " +
-      "primenjuje); opciono broj lica iz dokumentacije objekta.",
+      "Po jedan red: naziv rasporeda; gustina u m²/osobi; bruto ili neto (na koju površinu se " +
+      "gustina primenjuje); opciono broj lica iz dokumentacije objekta.",
     guests: "Broj gostiju",
     guestsHint: "Opciono — za obrnut račun, površina po osobi i potrebna površina.",
 
@@ -988,12 +1070,14 @@ export const PRO_EVENT_SR = {
     personsUnit: "osoba",
 
     inputs: "Uneseno",
-    formula: "A_neto=A_bruto−oduzeto (zone ili %)     N=floor(površina/gustina)     A_potrebno=G·gustina",
+    formula:
+      "A_neto=A_bruto−oduzeto (zone ili %)     N=floor(površina/gustina)     A_potrebno=G·gustina",
 
     rowLabel: "red",
     errorGrossArea: "Bruto površina je broj od 1 do 100 000 m².",
     errorDeduction: "Unesi ili zone, ili procenat oduzimanja — ne oboje.",
-    errorNetArea: "Oduzete zone i procenat prevazilaze bruto površinu — neto površina mora biti veća od nule.",
+    errorNetArea:
+      "Oduzete zone i procenat prevazilaze bruto površinu — neto površina mora biti veća od nule.",
     errorLayouts: "Unesi bar jedan raspored.",
     errorGuests: "Broj gostiju mora biti veći od nule.",
     errorDeductPct: "Oduzeto kao procenat je broj od 0 do 90%.",
@@ -1018,9 +1102,11 @@ export const PRO_EVENT_SR = {
     modeForward: "Zadat presek → pad napona",
     modeReverse: "Zadat pad napona → potreban presek",
     crossSection: "Presek provodnika",
-    crossSectionHint: "Prepisan sa kabla, mm². Obavezan osim ako je uneta otpornost sa deklaracije.",
+    crossSectionHint:
+      "Prepisan sa kabla, mm². Obavezan osim ako je uneta otpornost sa deklaracije.",
     customResistance: "Otpornost sa deklaracije kabla",
-    customResistanceHint: "Ω/km — kada je uneta, zaobilazi računanje iz preseka i materijala u potpunosti.",
+    customResistanceHint:
+      "Ω/km — kada je uneta, zaobilazi računanje iz preseka i materijala u potpunosti.",
     length: "Dužina trase u jednom smeru",
     current: "Struja",
     nominalVoltage: "Nazivni napon",
@@ -1028,7 +1114,8 @@ export const PRO_EVENT_SR = {
     conductorTemp: "Temperatura provodnika",
     conductorTempHint: "Prazno polje računa se kao 20 °C, referentna temperatura otpornosti.",
     dropLimit: "Granica pada napona koju primenjuješ",
-    regulatedHint: "Iz propisa, projekta ili uslova posla. Nexus je ne nudi ni kao podrazumevanu vrednost.",
+    regulatedHint:
+      "Iz propisa, projekta ili uslova posla. Nexus je ne nudi ni kao podrazumevanu vrednost.",
 
     results: "Rezultat",
     resistance: "Otpornost voda",
@@ -1045,15 +1132,17 @@ export const PRO_EVENT_SR = {
 
     inputs: "Uneseno",
     formula:
-      "ρ(θ)=ρ₂₀(1+α(θ−20))     R₁=ρ(θ)·L/S     jednosmerni/jednofazni: ΔU=2·I·R₁     trofazni: ΔU=√3·I·R₁ " +
-      "(međufazni), ΔU_faza=ΔU/√3     ΔU%=ΔU/U·100     obrnuto: S=ρ(θ)·L/R₁_cilj, R₁_cilj=ΔU_cilj/(k·I)",
+      "ρ(θ)=ρ₂₀(1+α(θ−20))     R₁=ρ(θ)·L/S     jednosmerni/jednofazni: ΔU=2·I·R₁     trofazni: " +
+      "ΔU=√3·I·R₁ (međufazni), ΔU_faza=ΔU/√3     ΔU%=ΔU/U·100     obrnuto: S=ρ(θ)·L/R₁_cilj, " +
+      "R₁_cilj=ΔU_cilj/(k·I)",
 
     errorLength: "Dužina trase je broj od 0,1 do 5000 m.",
     errorCurrent: "Struja je broj od 0,01 do 2000 A.",
     errorConductorTemp: "Temperatura provodnika je broj od −20 do 120 °C.",
     errorNominalVoltage: "Nazivni napon je broj od 12 do 1000 V — obavezan u obrnutom smeru.",
     errorDropLimit: "Granica pada napona je broj od 0,1 do 20% — obavezna u obrnutom smeru.",
-    errorCrossSection: "Presek provodnika je broj od 0,5 do 630 mm², ili unesi otpornost sa deklaracije kabla.",
+    errorCrossSection:
+      "Presek provodnika je broj od 0,5 do 630 mm², ili unesi otpornost sa deklaracije kabla.",
     errorCustomResistance: "Otpornost sa deklaracije kabla mora biti veća od nule.",
 
     unitOhm: "Ω",

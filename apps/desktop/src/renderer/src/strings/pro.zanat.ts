@@ -55,9 +55,11 @@ export const PRO_ZANAT_SR = {
 
     inputs: "Uneseno",
     formula:
-      "š_k = š+2d   v_k = v+2d   š_k′ = ceil(š_k/R_h)·R_h   n_a = floor(Š_r/š_k′)   red = ceil(kol/n_a)   l = ceil(v_k/R_v)·R_v   L = Σ(red·l + R_v)·(1+rastur/100)",
+      "š_k = š+2d   v_k = v+2d   š_k′ = ceil(š_k/R_h)·R_h   n_a = floor(Š_r/š_k′)   red = " +
+      "ceil(kol/n_a)   l = ceil(v_k/R_v)·R_v   L = Σ(red·l + R_v)·(1+rastur/100)",
 
-    errorRows: "Spisak komada je red po red, 1 do 500 redova; svaki red nosi širinu, visinu i broj komada.",
+    errorRows:
+      "Spisak komada je red po red, 1 do 500 redova; svaki red nosi širinu, visinu i broj komada.",
     errorRollWidth: "Širina rolne je broj od 50 do 320 cm.",
     errorSeamAllowance: "Dodatak na šav je broj od 0 do 20 cm.",
     errorVerticalRepeat: "Vertikalni raport je broj od 0 do 120 cm.",
@@ -84,7 +86,8 @@ export const PRO_ZANAT_SR = {
     compositionInsulated: "Izo-staklo",
     plyThicknesses: "Debljine stakala u paketu",
     plyThicknessesHint:
-      "Red po red, debljina svakog stakla u paketu, u milimetrima. Kod izo-stakla se međuprostor ne unosi.",
+      "Red po red, debljina svakog stakla u paketu, u milimetrima. Kod izo-stakla se međuprostor " +
+      "ne unosi.",
     pvbLayers: "Broj slojeva PVB folije",
     pvbLayerThickness: "Debljina jednog sloja PVB folije",
     pvbLayerThicknessHint: "U milimetrima. Podrazumevano 0,38 mm.",
@@ -104,18 +107,22 @@ export const PRO_ZANAT_SR = {
     glassThicknessSum: "Zbir debljina stakala (Σ t_staklo)",
     pvbThicknessSum: "Zbir debljina PVB folije (Σ t_PVB)",
     temperingNote:
-      "Debljine iznad su nominalne. Kaljenje ne menja gustinu stakla, pa je masa ista za kaljeno i nekaljeno staklo istih mera. Alatka ne procenjuje nijednu granicu mase, klasu rukovanja ni broj ljudi.",
+      "Debljine iznad su nominalne. Kaljenje ne menja gustinu stakla, pa je masa ista za kaljeno " +
+      "i nekaljeno staklo istih mera. Alatka ne procenjuje nijednu granicu mase, klasu rukovanja " +
+      "ni broj ljudi.",
 
     inputs: "Uneseno",
     formula:
-      "A = (š/1000)·(v/1000)   m_A = ρ_staklo·10⁻³·Σt_staklo + ρ_PVB·10⁻³·Σt_PVB   m = A·m_A   O = 2·(š+v)/1000",
+      "A = (š/1000)·(v/1000)   m_A = ρ_staklo·10⁻³·Σt_staklo + ρ_PVB·10⁻³·Σt_PVB   m = A·m_A   O " +
+      "= 2·(š+v)/1000",
 
     errorWidth: "Širina je broj od 50 do 6000 mm.",
     errorHeight: "Visina je broj od 50 do 6000 mm.",
     errorDensity: "Gustina je broj od 2200 do 3000 kg/m³.",
     errorPieces: "Broj komada je ceo broj od 1 do 1000.",
     errorPlyThicknesses:
-      "Debljine stakala: svaka vrednost 2–25 mm, spisak ne sme biti prazan ni nulti, a za monolitno staklo unosi se tačno jedna vrednost.",
+      "Debljine stakala: svaka vrednost 2–25 mm, spisak ne sme biti prazan ni nulti, a za " +
+      "monolitno staklo unosi se tačno jedna vrednost.",
     errorPvbLayers: "Broj slojeva PVB folije je ceo broj od 0 do 8, i moguć je samo kod laminata.",
     errorPvbLayerThickness: "Debljina jednog sloja PVB folije je broj od 0,1 do 2 mm.",
 
@@ -165,15 +172,18 @@ export const PRO_ZANAT_SR = {
     minClearance: "Najmanji zazor",
     meanClearance: "Srednji zazor",
     signedNote:
-      "Zazor je prikazan sa znakom. Kod sopstvenih odstupanja negativna vrednost znači preklop, ne zazor — alatka to ne ocenjuje.",
+      "Zazor je prikazan sa znakom. Kod sopstvenih odstupanja negativna vrednost znači preklop, " +
+      "ne zazor — alatka to ne ocenjuje.",
 
     inputs: "Uneseno",
     formula:
-      "ES = +IT(rupa)   ei(osovina) = es − IT(osovina)   D_max/min = D + ES/EI÷1000   Z_max = ES − ei   Z_min = EI − es",
+      "ES = +IT(rupa)   ei(osovina) = es − IT(osovina)   D_max/min = D + ES/EI÷1000   Z_max = ES " +
+      "− ei   Z_min = EI − es",
 
     errorNominalSize: "Nominalna mera je broj od 1 do 500 mm.",
     errorHoleGrade: "Stepen tolerancije rupe je ceo broj od IT5 do IT12.",
-    errorHoleDeviations: "Sopstvena odstupanja rupe: gornje mora biti veće ili jednako donjem, oba realni brojevi.",
+    errorHoleDeviations:
+      "Sopstvena odstupanja rupe: gornje mora biti veće ili jednako donjem, oba realni brojevi.",
     errorShaftLetter: "Slovo osovine mora biti izabrano (d, e, f, g ili h).",
     errorShaftGrade: "Stepen tolerancije osovine je ceo broj od IT5 do IT12.",
     errorShaftDeviations:
@@ -217,7 +227,9 @@ export const PRO_ZANAT_SR = {
     usableRemnantLength: "Ukupno upotrebljivih ostataka",
     lowerBoundBars: "Donja granica broja šipki",
     lowerBoundNote:
-      "Donja granica važi u okviru ovog modela — svaki komad troši dužinu plus jedan rez, a svaka šipka nudi korisnu dužinu. Kad je broj šipki jednak donjoj granici, raspored je u okviru modela optimalan.",
+      "Donja granica važi u okviru ovog modela — svaki komad troši dužinu plus jedan rez, a " +
+      "svaka šipka nudi korisnu dužinu. Kad je broj šipki jednak donjoj granici, raspored je u " +
+      "okviru modela optimalan.",
 
     inputs: "Uneseno",
     formula: "trošak(d) = d + w   red first-fit-decreasing   LB = ceil(Σ(d+w) / U)",
@@ -268,18 +280,21 @@ export const PRO_ZANAT_SR = {
     centeredMeasureNote: "Formula centrira meru:",
     centeredOutsideWidth: "spoljašnja širina komada",
     lengthsCautionNote:
-      "m₀ je 85° ili više — tan m₀ brzo raste, pa je dobijena dužina osetljiva na malu grešku merenja. Broj je tačan, ali ga treba čitati s tim na umu.",
+      "m₀ je 85° ili više — tan m₀ brzo raste, pa je dobijena dužina osetljiva na malu grešku " +
+      "merenja. Broj je tačan, ali ga treba čitati s tim na umu.",
     tanM0: "tan m₀",
 
     inputs: "Uneseno",
     formula:
-      "θ = (N−2)·180/N   m₀ = 90 − θ/2   M = atan(cos B · tan m₀)   T = asin(sin B · cos m₀)   s_s = s_u + 2·w·cos B·tan m₀",
+      "θ = (N−2)·180/N   m₀ = 90 − θ/2   M = atan(cos B · tan m₀)   T = asin(sin B · cos m₀)   " +
+      "s_s = s_u + 2·w·cos B·tan m₀",
 
     errorSides: "Broj stranica je ceo broj od 3 do 48.",
     errorBaseAngle: "Ugao u osnovi je broj od 1 do 179°.",
     errorSlope: "Nagib od vertikale je broj od 0 do 89°.",
     errorSpringAngle: "Ugao naslona je broj od 1 do 89°.",
-    errorPieceWidth: "Širina komada je broj od 5 do 500 mm — unosi se zajedno sa unutrašnjom dužinom.",
+    errorPieceWidth:
+      "Širina komada je broj od 5 do 500 mm — unosi se zajedno sa unutrašnjom dužinom.",
     errorInsideLength:
       "Unutrašnja svetla dužina je broj od 10 do 10000 mm — unosi se zajedno sa širinom komada.",
 
@@ -310,7 +325,8 @@ export const PRO_ZANAT_SR = {
     onsiteVolumeModeVolume: "Zapremina direktno",
     packingFactor: "Faktor zbijanja",
     packingFactorHint:
-      "Zbir zapremina sastojaka prema zapremini svežeg maltera. Cementno testo popunjava šupljine peska, pa je faktor uvek veći od 1 — vrednost unosi korisnik.",
+      "Zbir zapremina sastojaka prema zapremini svežeg maltera. Cementno testo popunjava " +
+      "šupljine peska, pa je faktor uvek veći od 1 — vrednost unosi korisnik.",
     ratio: "Odnos vezivo : agregat (1 : n)",
     ratioHint: "Odnos po zapremini. Alatka ga ne predlaže.",
     binderDensity: "Nasipna gustina veziva",
@@ -345,7 +361,8 @@ export const PRO_ZANAT_SR = {
     inputs: "Uneseno",
     formulaPremixed: "m = A·(1+rastur/100)·q·d   vreće = ceil(m / m_vreće)   voda = m·v",
     formulaOnsite:
-      "V_s = V·k   V_vezivo = V_s/(1+n)   V_agregat = V_s·n/(1+n)   voda = w·m_vezivo − m_agregat·vlaga/100 (≥ 0)",
+      "V_s = V·k   V_vezivo = V_s/(1+n)   V_agregat = V_s·n/(1+n)   voda = w·m_vezivo − " +
+      "m_agregat·vlaga/100 (≥ 0)",
 
     errorWaste: "Rastur je broj od 0 do 30 %.",
     errorVolume: "Zapremina mora biti veća od nule.",
@@ -397,20 +414,24 @@ export const PRO_ZANAT_SR = {
     cutLength: "Dužina reza po ploči",
     totalCutLength: "Ukupna dužina reza",
     guillotineNote:
-      "Ovo je giljotinski raskroj jednog formata komada. Iskorišćenje se računa prema punom formatu ploče, jer se obrezivanje ivice plaća.",
+      "Ovo je giljotinski raskroj jednog formata komada. Iskorišćenje se računa prema punom " +
+      "formatu ploče, jer se obrezivanje ivice plaća.",
 
     inputs: "Uneseno",
     formula:
-      "A′ = A−2t   B′ = B−2t   n = floor((A′+w)/(a+w))   m = floor((B′+w)/(b+w))   N = max preko oba položaja i obe trake",
+      "A′ = A−2t   B′ = B−2t   n = floor((A′+w)/(a+w))   m = floor((B′+w)/(b+w))   N = max preko " +
+      "oba položaja i obe trake",
 
     errorPanelWidth: "Format ploče — širina je broj od 100 do 6000 mm.",
     errorPanelHeight: "Format ploče — visina je broj od 100 do 6000 mm.",
     errorPieceWidth:
-      "Format komada — širina je broj od 10 do 6000 mm, ili komad ne staje u korisnu ploču ni u jednom položaju.",
+      "Format komada — širina je broj od 10 do 6000 mm, ili komad ne staje u korisnu ploču ni u " +
+      "jednom položaju.",
     errorPieceHeight: "Format komada — visina je broj od 10 do 6000 mm.",
     errorPiecesNeeded: "Potreban broj komada je ceo broj od 1 do 100000.",
     errorKerf: "Širina reza je broj od 0 do 15 mm.",
-    errorEdgeTrim: "Obrezivanje ivice je broj od 0 do 100 mm po strani, i mora ostaviti korisnu ploču.",
+    errorEdgeTrim:
+      "Obrezivanje ivice je broj od 0 do 100 mm po strani, i mora ostaviti korisnu ploču.",
 
     unitMm: "mm",
     unitM: "m",
@@ -450,7 +471,8 @@ export const PRO_ZANAT_SR = {
     kFactorFromSample: "Izračunat K-faktor",
     radiusToThickness: "Odnos R/T",
     kFactorScopeNote:
-      "Izmereni K-faktor važi samo za ovu kombinaciju alata i materijala (T, R i A iznad) — ne prenosi se na drugi posao.",
+      "Izmereni K-faktor važi samo za ovu kombinaciju alata i materijala (T, R i A iznad) — ne " +
+      "prenosi se na drugi posao.",
 
     inputs: "Uneseno",
     formula: "BA = (π/180)·A·(R+K·T)   OSSB = (R+T)·tan(A/2)   BD = 2·OSSB − BA",
@@ -461,7 +483,8 @@ export const PRO_ZANAT_SR = {
     errorAngle: "Ugao savijanja je broj od 1 do 179°.",
     errorKFactor: "K-faktor je broj od 0 do 0,5.",
     errorLegs:
-      "Krakova mora biti 2 do 50, svaki veći od nule, i svaki mora dati tangentnu dužinu veću od nule (spoljna mera mora biti veća od odmaka koji joj pripada).",
+      "Krakova mora biti 2 do 50, svaki veći od nule, i svaki mora dati tangentnu dužinu veću od " +
+      "nule (spoljna mera mora biti veća od odmaka koji joj pripada).",
     errorMeasuredLength: "Izmerena razvijena dužina uzorka je broj od 1 do 6000 mm.",
 
     unitMm: "mm",
@@ -475,9 +498,11 @@ export const PRO_ZANAT_SR = {
     udlMass: "Ravnomerno opterećenje",
     pointLoadMass: "Koncentrisana sila u sredini raspona",
     modulus: "Modul elastičnosti E",
-    modulusHint: "Podatak iz deklaracije ploče. Za istu debljinu se između proizvoda razlikuje višestruko.",
+    modulusHint:
+      "Podatak iz deklaracije ploče. Za istu debljinu se između proizvoda razlikuje višestruko.",
     weightMode: "Sopstvena težina police",
-    weightModeHint: "Polica nosi i sebe. Ako se ne unese ni gustina ni masa, sopstvena težina se ne računa.",
+    weightModeHint:
+      "Polica nosi i sebe. Ako se ne unese ni gustina ni masa, sopstvena težina se ne računa.",
     weightModeNone: "Ne računa se",
     weightModeDensity: "Iz gustine ploče",
     weightModeMass: "Masa police direktno",
@@ -506,11 +531,14 @@ export const PRO_ZANAT_SR = {
     deflectionRatio: "Ugib ÷ tvoja granica",
     stressRatio: "Napon ÷ tvoja granica",
     modelNote:
-      "Model je prosta greda na dva oslonca. Polica uklještena u bokove ili oslonjena po celoj dužini nije ovaj model. Prikazan ugib je trenutni — puzanje pri dugotrajnom opterećenju nije obuhvaćeno.",
+      "Model je prosta greda na dva oslonca. Polica uklještena u bokove ili oslonjena po celoj " +
+      "dužini nije ovaj model. Prikazan ugib je trenutni — puzanje pri dugotrajnom opterećenju " +
+      "nije obuhvaćeno.",
 
     inputs: "Uneseno",
     formula:
-      "q = m·g/L   δ_q = 5·q·L⁴/(384·E·I)   δ_F = F·L³/(48·E·I)   M = q·L²/8 + F·L/4   σ = M/W   R = (q·L+F)/2",
+      "q = m·g/L   δ_q = 5·q·L⁴/(384·E·I)   δ_F = F·L³/(48·E·I)   M = q·L²/8 + F·L/4   σ = M/W   " +
+      "R = (q·L+F)/2",
 
     errorSpan: "Raspon je broj od 50 do 5000 mm.",
     errorWidth: "Širina police je broj od 10 do 2000 mm.",
@@ -572,14 +600,18 @@ export const PRO_ZANAT_SR = {
 
     inputs: "Uneseno",
     formula:
-      "U = H − n·t   s = U/(n+1)   y_i = i·s + (i−1)·t   [osni: p = H/(n+1), y_i = i·p − t/2]   snap: j = round((y−o)/R)",
+      "U = H − n·t   s = U/(n+1)   y_i = i·s + (i−1)·t   [osni: p = H/(n+1), y_i = i·p − t/2]   " +
+      "snap: j = round((y−o)/R)",
 
     errorInnerHeight: "Unutrašnja visina je broj od 50 do 5000 mm.",
     errorThickness: "Debljina police je broj od 3 do 100 mm.",
     errorShelfCount: "Broj polica je ceo broj od 0 do 30.",
-    errorMaxClearOpening: "Najveći svetli otvor mora biti veći od nule i dati broj polica u opsegu 0–30.",
-    errorUsableHeight: "Police ne staju — zbir njihovih debljina je veći ili jednak unutrašnjoj visini.",
-    errorFirstOpeningHeight: "Visina donjeg otvora mora biti veća od nule i manja od ukupne svetle visine.",
+    errorMaxClearOpening:
+      "Najveći svetli otvor mora biti veći od nule i dati broj polica u opsegu 0–30.",
+    errorUsableHeight:
+      "Police ne staju — zbir njihovih debljina je veći ili jednak unutrašnjoj visini.",
+    errorFirstOpeningHeight:
+      "Visina donjeg otvora mora biti veća od nule i manja od ukupne svetle visine.",
     errorFirstHoleFromBottom: "Prvi otvor od donje ivice je broj od 0 do 200 mm.",
     errorRaster: "Raster otvora je broj od 1 do 100 mm.",
     errorSnap:
@@ -592,7 +624,8 @@ export const PRO_ZANAT_SR = {
     nominalDiameter: "Nominalni prečnik D",
     nominalDiameterHint: "U milimetrima — bira se oznaka navoja, npr. M8.",
     pitch: "Korak P",
-    pitchHint: "Prazno polje uzima krupni korak iz ISO 261 za uneti prečnik. Sitni korak se unosi ručno.",
+    pitchHint:
+      "Prazno polje uzima krupni korak iz ISO 261 za uneti prečnik. Sitni korak se unosi ručno.",
     desiredEngagement: "Traženi procenat zahvata",
     desiredEngagementHint: "Radionička konvencija, nije zahtev standarda. Prazno polje znači 75 %.",
     ownDrillDiameter: "Prečnik postojeće burgije",
@@ -602,7 +635,8 @@ export const PRO_ZANAT_SR = {
     passHoleSeriesMedium: "Srednja",
     passHoleSeriesCoarse: "Gruba",
     chamferedThreads: "Broj zahodnih navoja ureznika",
-    chamferedThreadsHint: "Opciono, uz dubinu navoja, za najmanju dubinu slepe rupe. Zavisi od ureznika.",
+    chamferedThreadsHint:
+      "Opciono, uz dubinu navoja, za najmanju dubinu slepe rupe. Zavisi od ureznika.",
     threadDepth: "Dubina navoja (aksijalna)",
 
     results: "Rezultat",
@@ -622,16 +656,20 @@ export const PRO_ZANAT_SR = {
 
     inputs: "Uneseno",
     formula:
-      "D₁ = D − 1.082532·P   d = D − (h/100)·1.299038·P   h(d) = 100·(D−d)/(1.299038·P)   dubina/strana = (D−d)/2",
+      "D₁ = D − 1.082532·P   d = D − (h/100)·1.299038·P   h(d) = 100·(D−d)/(1.299038·P)   " +
+      "dubina/strana = (D−d)/2",
 
     errorNominalDiameter: "Nominalni prečnik je broj od 1,6 do 30 mm.",
     errorPitch:
-      "Korak je broj od 0,2 do 3,5 mm; ako je polje prazno a prečnik nema krupni korak u tabeli, korak se mora uneti.",
+      "Korak je broj od 0,2 do 3,5 mm; ako je polje prazno a prečnik nema krupni korak u tabeli, " +
+      "korak se mora uneti.",
     errorDesiredEngagement: "Traženi procenat zahvata je broj od 50 do 100.",
     errorOwnDrillDiameter:
       "Prečnik burgije je broj od 0,5 do 30 mm i mora biti manji od nominalnog prečnika.",
-    errorChamferedThreads: "Broj zahodnih navoja mora biti veći od nule — unosi se zajedno sa dubinom navoja.",
-    errorThreadDepth: "Dubina navoja mora biti veća od nule — unosi se zajedno sa brojem zahodnih navoja.",
+    errorChamferedThreads:
+      "Broj zahodnih navoja mora biti veći od nule — unosi se zajedno sa dubinom navoja.",
+    errorThreadDepth:
+      "Dubina navoja mora biti veća od nule — unosi se zajedno sa brojem zahodnih navoja.",
 
     unitMm: "mm",
   },
@@ -689,7 +727,8 @@ export const PRO_ZANAT_SR = {
 
     inputs: "Uneseno",
     formula:
-      "Huber: V = L·π·(Dsr/2)²   Smalian: V = L·π·((d1²+d2²)/2)/4   rezana: V = t·š·L·broj komada   prm → puna: V = prm·koeficijent",
+      "Huber: V = L·π·(Dsr/2)²   Smalian: V = L·π·((d1²+d2²)/2)/4   rezana: V = t·š·L·broj " +
+      "komada   prm → puna: V = prm·koeficijent",
 
     errorBarkThickness: "Debljina kore je broj, manji od srednjeg prečnika.",
     errorDensity: "Gustina je broj veći od nule.",
@@ -716,7 +755,8 @@ export const PRO_ZANAT_SR = {
   "wallpaper-rolls": {
     walls: "Zidovi (širina;otvor pune visine — po jedan zid u redu)",
     wallsHint:
-      "Jedan zid po redu, širina i tačkom-zarezom odvojena širina otvora pune visine (vrata) koja se odbija; bez otvora unesi 0.",
+      "Jedan zid po redu, širina i tačkom-zarezom odvojena širina otvora pune visine (vrata) " +
+      "koja se odbija; bez otvora unesi 0.",
     height: "Visina lepljenja",
     rollWidth: "Širina rolne",
     rollLength: "Dužina rolne",
@@ -746,7 +786,8 @@ export const PRO_ZANAT_SR = {
 
     inputs: "Uneseno",
     formula:
-      "n po zidu = ⌈(širina − otvori pune visine)/širina rolne⌉ + rezervne trake; svaka traka seče se sekvencijalno sa tekuće rolne, u fazi šare koju traži raspored",
+      "n po zidu = ⌈(širina − otvori pune visine)/širina rolne⌉ + rezervne trake; svaka traka " +
+      "seče se sekvencijalno sa tekuće rolne, u fazi šare koju traži raspored",
 
     errorWalls: "Unesi bar jedan zid, širinu i po potrebi otvor pune visine.",
     errorHeight: "Visina lepljenja je broj od 0,5 do 10 m.",
@@ -785,7 +826,8 @@ export const PRO_ZANAT_SR = {
     density: "Gustina metala",
     densityHint: "Podrazumevano 7850 kg/m³ za nelegirani čelik; za aluminijum unosi korisnik.",
     efficiency: "Iskorišćenje dodatnog materijala",
-    efficiencyHint: "Podatak proizvođača za postupak i prečnik — deo istopljenog materijala koji ostane u šavu.",
+    efficiencyHint:
+      "Podatak proizvođača za postupak i prečnik — deo istopljenog materijala koji ostane u šavu.",
     waste: "Rastur",
 
     wireDiameter: "Prečnik žice",
@@ -809,7 +851,8 @@ export const PRO_ZANAT_SR = {
 
     inputs: "Uneseno",
     formula:
-      "ugaoni: A = z²/2   V žleb: A = b·t + (t−c)²·tan(α/2)   X žleb: A = b·t + 2·((t−c)/2)²·tan(α/2)   m_navar = V·ρ   m_dodatni = m_navar/η·(1+rastur)",
+      "ugaoni: A = z²/2   V žleb: A = b·t + (t−c)²·tan(α/2)   X žleb: A = b·t + " +
+      "2·((t−c)/2)²·tan(α/2)   m_navar = V·ρ   m_dodatni = m_navar/η·(1+rastur)",
 
     errorReinforcement: "Nadvišenje šava je broj od 0 do 30 %.",
     errorWeldLength: "Dužina šava je broj od 0,01 do 10000 m.",
@@ -825,7 +868,8 @@ export const PRO_ZANAT_SR = {
     errorRootFaceHeight:
       "Visina korenskog nosa je broj od 0 do 10 mm i mora biti manja od debljine lima.",
     errorWireDiameter: "Prečnik žice je broj od 0,6 do 2,4 mm.",
-    errorElectrodeMass: "Masa elektrode je broj od 10 do 500 g — unosi se zajedno sa iskoristivim delom.",
+    errorElectrodeMass:
+      "Masa elektrode je broj od 10 do 500 g — unosi se zajedno sa iskoristivim delom.",
     errorElectrodeUsableFraction:
       "Iskoristivi deo elektrode je broj od 50 do 95 % — unosi se zajedno sa masom elektrode.",
     errorSpoolMass: "Masa koluta žice je broj veći od nule.",
@@ -853,18 +897,22 @@ export const PRO_ZANAT_SR = {
     shrinkageModeTotalShrinkage: "ukupno skupljanje sirovo → apsolutno suvo",
     shrinkageCoefficient: "Koeficijent skupljanja c",
     shrinkageCoefficientHint:
-      "Procenat promene dimenzije po 1 % vlažnosti, za tu vrstu i taj pravac — radijalno i tangencijalno se razlikuju i do dva puta.",
+      "Procenat promene dimenzije po 1 % vlažnosti, za tu vrstu i taj pravac — radijalno i " +
+      "tangencijalno se razlikuju i do dva puta.",
     totalShrinkage: "Ukupno skupljanje S (sirovo → apsolutno suvo)",
-    totalShrinkageHint: "Koeficijent se izvodi kao S / tačka zasićenja vlakana, uz linearnu pretpostavku.",
+    totalShrinkageHint:
+      "Koeficijent se izvodi kao S / tačka zasićenja vlakana, uz linearnu pretpostavku.",
 
     fiberSaturationPoint: "Tačka zasićenja vlakana",
-    fiberSaturationPointHint: "Iznad ove vlažnosti dimenzija se dalje ne menja. Podrazumevano 30 %.",
+    fiberSaturationPointHint:
+      "Iznad ove vlažnosti dimenzija se dalje ne menja. Podrazumevano 30 %.",
 
     elementWidth: "Širina elementa za zazor W",
     installMoisture: "Vlažnost drveta pri ugradnji",
     installMoistureHint: "Procenat vlage drveta, ne vlažnost vazduha.",
     roomMoistureMin: "Očekivana vlažnost prostorije, minimum",
-    roomMoistureHint: "Procenat vlage drveta u ravnoteži sa prostorijom, ne relativna vlažnost vazduha.",
+    roomMoistureHint:
+      "Procenat vlage drveta u ravnoteži sa prostorijom, ne relativna vlažnost vazduha.",
     roomMoistureMax: "Očekivana vlažnost prostorije, maksimum",
 
     results: "Rezultat",
@@ -879,14 +927,16 @@ export const PRO_ZANAT_SR = {
 
     inputs: "Uneseno",
     formula:
-      "MC* = min(MC, TZV)   ΔD = D₀·(c/100)·(MC*₁−MC*₀)   ΔW⁺ = W·(c/100)·(MC*max−MC*ugradnja)   ΔW⁻ = W·(c/100)·(MC*ugradnja−MC*min)",
+      "MC* = min(MC, TZV)   ΔD = D₀·(c/100)·(MC*₁−MC*₀)   ΔW⁺ = W·(c/100)·(MC*max−MC*ugradnja)   " +
+      "ΔW⁻ = W·(c/100)·(MC*ugradnja−MC*min)",
 
     errorInitialDimension: "Polazna dimenzija je broj od 1 do 5000 mm.",
     errorInitialMoisture: "Polazna vlažnost je broj od 0 do 40 %.",
     errorFinalMoisture: "Krajnja vlažnost je broj od 0 do 40 %.",
     errorFiberSaturationPoint: "Tačka zasićenja vlakana je broj od 25 do 35 %.",
     errorShrinkageCoefficient:
-      "Koeficijent skupljanja je broj od 0,01 do 0,6 — unosi se ili on ili ukupno skupljanje, ne oba.",
+      "Koeficijent skupljanja je broj od 0,01 do 0,6 — unosi se ili on ili ukupno skupljanje, ne " +
+      "oba.",
     errorTotalShrinkage: "Ukupno skupljanje je broj od 1 do 20 %.",
     errorElementWidth: "Širina elementa je broj veći od nule.",
     errorInstallMoisture: "Vlažnost pri ugradnji je broj od 3 do 25 %.",

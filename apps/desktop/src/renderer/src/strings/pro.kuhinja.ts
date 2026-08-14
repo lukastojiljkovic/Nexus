@@ -21,12 +21,16 @@ export const PRO_KUHINJA_SR = {
     serviceTimeHint: "Sat u koji jelo mora biti na stolu, HH:MM, 24-časovni zapis.",
     serviceDate: "Datum serviranja",
     serviceDateHint:
-      "Opciono — samo da bi oznaka dana bila konkretan datum, a ne „−1 dan\". Bez ovog polja današnji dan se ne pretpostavlja.",
+      "Opciono — samo da bi oznaka dana bila konkretan datum, a ne „−1 dan\". Bez ovog polja " +
+      "današnji dan se ne pretpostavlja.",
     steps: "Koraci pripreme",
     stepsHint:
-      "Jedan red po koraku, redom kojim se izvode: naziv;trajanje. Trajanje kao „12\" je 12 minuta, a „12:00\" je 12 sati — dvotačka bira sate i minute, go broj bira minute.",
+      "Jedan red po koraku, redom kojim se izvode: naziv;trajanje. Trajanje kao „12\" je 12 " +
+      "minuta, a „12:00\" je 12 sati — dvotačka bira sate i minute, go broj bira minute.",
     buffer: "Rezerva pre serviranja",
-    bufferHint: "Minuti slobodnog vremena između poslednjeg koraka i serviranja. Prazno polje znači da rezerve nema.",
+    bufferHint:
+      "Minuti slobodnog vremena između poslednjeg koraka i serviranja. Prazno polje znači da " +
+      "rezerve nema.",
 
     results: "Rezultat",
     colStep: "Korak",
@@ -37,19 +41,24 @@ export const PRO_KUHINJA_SR = {
     totalLabel: "Ukupno trajanje pripreme",
     jobStart: "Ceo posao počinje",
     wallClockNote:
-      "Alat računa u zidnom vremenu. Ne pomera ništa zbog prelaska na letnje ili zimsko računanje vremena.",
+      "Alat računa u zidnom vremenu. Ne pomera ništa zbog prelaska na letnje ili zimsko " +
+      "računanje vremena.",
     dayWordOne: "dan",
     dayWordMany: "dana",
 
     inputs: "Uneseno",
-    formula: "pomak_i = −(rezerva + Σd_j, j=i..n)     trenutak = ((serviranje + pomak) mod 1440), podno deljenje",
+    formula:
+      "pomak_i = −(rezerva + Σd_j, j=i..n)     trenutak = ((serviranje + pomak) mod 1440), podno " +
+      "deljenje",
 
     errorServiceTime: "Vreme serviranja mora biti u obliku HH:MM, 24-časovni zapis.",
-    errorServiceDate: "Datum serviranja mora biti u obliku GGGG-MM-DD i mora postojati u kalendaru.",
+    errorServiceDate:
+      "Datum serviranja mora biti u obliku GGGG-MM-DD i mora postojati u kalendaru.",
     errorSteps: "Unesi bar jedan korak.",
     errorBuffer: "Rezerva je ceo broj minuta, nula ili više.",
     errorStepDuration:
-      "Trajanje koraka nije prepoznato. Dvotačka bira sate i minute (12:00 = 12 sati), go broj bira minute (12 = 12 minuta).",
+      "Trajanje koraka nije prepoznato. Dvotačka bira sate i minute (12:00 = 12 sati), go broj " +
+      "bira minute (12 = 12 minuta).",
   },
 
   "bakers-percentage": {
@@ -58,7 +67,10 @@ export const PRO_KUHINJA_SR = {
     modePercentToWeights: "Procenti → težine",
     lines: "Stavke recepta",
     linesHint:
-      "Jedan red po sastojku: naziv;uloga;vrednost. Uloga je jedna od reči „brašno\", „voda\", „ostalo\" ili „predferment\" — vrednost je masa u gramima (režim 1) ili procenat od brašna (režim 2). Predferment se ne deli ovde: alat ga odbija i uputi na „Hidratacija i starter\".",
+      "Jedan red po sastojku: naziv;uloga;vrednost. Uloga je jedna od reči „brašno\", „voda\", " +
+      "„ostalo\" ili „predferment\" — vrednost je masa u gramima (režim 1) ili procenat od " +
+      "brašna (režim 2). Predferment se ne deli ovde: alat ga odbija i uputi na „Hidratacija i " +
+      "starter\".",
     targetMode: "Cilj",
     targetModeMass: "Ciljna masa testa",
     targetModePieces: "Broj komada",
@@ -81,16 +93,20 @@ export const PRO_KUHINJA_SR = {
     doughMass: "Masa testa",
     hydration: "Hidratacija",
     hydrationNote:
-      "Uračunati su isključivo redovi koje si označio kao vodu — mleko, jaja i ulje ulaze samo ako si ih tako obeležio.",
+      "Uračunati su isključivo redovi koje si označio kao vodu — mleko, jaja i ulje ulaze samo " +
+      "ako si ih tako obeležio.",
     rawPieceMass: "Masa sirovog komada",
 
     inputs: "Uneseno",
-    formula: "režim 1: p_i = w_i/F·100, D=Σw_i     režim 2: F=D/(Σp/100), w_i=F·p_i/100     komadi: sirov=pečen/(1−L/100)",
+    formula:
+      "režim 1: p_i = w_i/F·100, D=Σw_i     režim 2: F=D/(Σp/100), w_i=F·p_i/100     komadi: " +
+      "sirov=pečen/(1−L/100)",
 
     errorLines: "Unesi bar jedan sastojak.",
     errorLineValue: "Vrednost svakog sastojka mora biti nula ili više.",
     errorPreferment:
-      "Predferment nije ni brašno ni voda — podeli ga alatom „Hidratacija i starter\" pa unesi dobijeno brašno i vodu kao zasebne redove.",
+      "Predferment nije ni brašno ni voda — podeli ga alatom „Hidratacija i starter\" pa unesi " +
+      "dobijeno brašno i vodu kao zasebne redove.",
     errorFlour: "Bar jedan red mora biti označen kao brašno, sa masom ili procentom većim od nule.",
     errorDoughMass: "Ciljna masa testa mora biti veća od nule.",
     errorPieces: "Broj komada je ceo broj, 1 ili više.",
@@ -118,7 +134,8 @@ export const PRO_KUHINJA_SR = {
     sugarPercent: "Ciljni procenat šećera",
     sugarPercentHint: "Opciono, na istoj osnovi kao so. Računa se nezavisno od soli.",
     percentLimit: "Granica koju si uneo",
-    percentLimitHint: "Iz propisa koji primenjuješ. Nexus ne zna koji je to propis i ne nudi vrednost.",
+    percentLimitHint:
+      "Iz propisa koji primenjuješ. Nexus ne zna koji je to propis i ne nudi vrednost.",
 
     results: "Rezultat",
     saltMass: "Masa soli",
@@ -131,13 +148,16 @@ export const PRO_KUHINJA_SR = {
 
     inputs: "Uneseno",
     formula:
-      "% od mesa i vode: S=(M+W)·p/100     % od ukupnog sa solju: S=(M+W)·p/(100−p)     koncentracija: p=S/(S+W)·100",
+      "% od mesa i vode: S=(M+W)·p/100     % od ukupnog sa solju: S=(M+W)·p/(100−p)     " +
+      "koncentracija: p=S/(S+W)·100",
 
     errorWaterMass: "Masa vode mora biti veća od nule.",
     errorDissolvedSalt: "So već rastvorena u salamuri ne sme biti negativna.",
     errorFoodMass: "Masa mesa ili povrća mora biti veća od nule.",
     errorSaltPercent: "Ciljni procenat soli je broj strogo između 0 i 100.",
-    errorSugarPercent: "Ciljni procenat šećera je broj od 0 do ispod 100, a zbir sa procentom soli ne sme dostići 100 na osnovi „% od ukupnog\".",
+    errorSugarPercent:
+      "Ciljni procenat šećera je broj od 0 do ispod 100, a zbir sa procentom soli ne sme dostići " +
+      "100 na osnovi „% od ukupnog\".",
 
     unitG: "g",
   },
@@ -159,12 +179,14 @@ export const PRO_KUHINJA_SR = {
     retained: "Voda zadržana u talogu",
     weighingShortfall: "Razlika koju merenja ne objašnjavaju",
     weighingShortfallNote:
-      "Napitak je teži od upotrebljene vode za kuvanje — dva merenja se ne slažu, pa zadržana voda nije prikazana.",
+      "Napitak je teži od upotrebljene vode za kuvanje — dva merenja se ne slažu, pa zadržana " +
+      "voda nije prikazana.",
     waterForTarget: "Voda za zadati odnos",
 
     inputs: "Uneseno",
     formula:
-      "voda÷doza = voda/doza     napitak÷doza = napitak/doza     ekstrakcija% = napitak·TDS/doza     zadržano = voda−napitak",
+      "voda÷doza = voda/doza     napitak÷doza = napitak/doza     ekstrakcija% = napitak·TDS/doza " +
+      "    zadržano = voda−napitak",
 
     errorDose: "Doza mlevene kafe mora biti veća od nule.",
     errorBeverageMass: "Masa napitka u šolji mora biti veća od nule.",
@@ -190,7 +212,8 @@ export const PRO_KUHINJA_SR = {
     frictionFactorHint: "Meri ga pekar za svoju mešalicu, svoju šaržu i svoje vreme mešenja.",
     frictionN: "N pri kome je faktor trenja izmeren",
     frictionNHint:
-      "Faktor trenja važi samo za onaj N pri kome je izmeren — sa istom mešalicom, veličinom šarže i vremenom mešenja. N=3 je brašno+prostorija, N=4 dodaje predferment.",
+      "Faktor trenja važi samo za onaj N pri kome je izmeren — sa istom mešalicom, veličinom " +
+      "šarže i vremenom mešenja. N=3 je brašno+prostorija, N=4 dodaje predferment.",
     frictionN3: "N=3 (bez predfermenta)",
     frictionN4: "N=4 (sa predfermentom)",
     availableWaterTemp: "Najviša temperatura vode koju imaš",
@@ -202,11 +225,14 @@ export const PRO_KUHINJA_SR = {
     components: "Sabrane temperature",
     waterTemp: "Potrebna temperatura vode",
     belowFreezingNote:
-      "Voda na ovoj temperaturi pri atmosferskom pritisku nije tečna — ova šarža se ne može voditi samo vodom.",
+      "Voda na ovoj temperaturi pri atmosferskom pritisku nije tečna — ova šarža se ne može " +
+      "voditi samo vodom.",
     availableDelta: "Razlika (potrebna − raspoloživa)",
 
     inputs: "Uneseno",
-    formula: "voda = N·željena_temp − Σ(komponente + trenje)     trenje = N·izmereno_testo − Σ(komponente + izmerena_voda)",
+    formula:
+      "voda = N·željena_temp − Σ(komponente + trenje)     trenje = N·izmereno_testo − " +
+      "Σ(komponente + izmerena_voda)",
 
     errorFlourTemp: "Temperatura brašna je broj od −10 do 60 °C.",
     errorRoomTemp: "Temperatura prostorije je broj od −10 do 60 °C.",
@@ -214,7 +240,8 @@ export const PRO_KUHINJA_SR = {
     errorDesiredDoughTemp: "Željena temperatura testa je broj od −10 do 60 °C.",
     errorFrictionFactor: "Faktor trenja je broj od 0 do 40 °C.",
     errorFrictionFactorMeasuredAtN:
-      "N pri kome je faktor trenja izmeren mora odgovarati ovoj šarži — sa predfermentom N=4, bez njega N=3.",
+      "N pri kome je faktor trenja izmeren mora odgovarati ovoj šarži — sa predfermentom N=4, " +
+      "bez njega N=3.",
     errorAvailableWaterTemp: "Najviša temperatura vode koju imaš je broj od −10 do 60 °C.",
     errorMeasuredDoughTemp: "Izmerena temperatura testa je broj od −10 do 60 °C.",
     errorMeasuredWaterTemp: "Izmerena temperatura vode je broj od −10 do 60 °C.",
@@ -230,7 +257,8 @@ export const PRO_KUHINJA_SR = {
     grossFrozenMass: "Masa posude sa gotovim sladoledom",
     tare: "Tara posude",
     tareHint:
-      "Obavezno polje — sa tarom u obe mase izračunati overrun bude tiho manji od stvarnog. Oba punjenja moraju dosezati isti nivo u istoj posudi.",
+      "Obavezno polje — sa tarom u obe mase izračunati overrun bude tiho manji od stvarnog. Oba " +
+      "punjenja moraju dosezati isti nivo u istoj posudi.",
     targetOverrun: "Ciljni overrun",
     mixVolume: "Zapremina smese",
     mixDensity: "Gustina smese",
@@ -245,7 +273,9 @@ export const PRO_KUHINJA_SR = {
     tubNetWeight: "Neto težina pakovanja",
 
     inputs: "Uneseno",
-    formula: "overrun% = (m_smesa−m_smrznuto)/m_smrznuto·100     V_izlaz = V_ulaz·(1+OR/100)     gustina_gotovog = gustina_smese/(1+OR/100)",
+    formula:
+      "overrun% = (m_smesa−m_smrznuto)/m_smrznuto·100     V_izlaz = V_ulaz·(1+OR/100)     " +
+      "gustina_gotovog = gustina_smese/(1+OR/100)",
 
     errorGrossMixMass: "Masa posude sa smesom mora biti veća od nule.",
     errorGrossFrozenMass: "Masa posude sa gotovim sladoledom mora biti veća od nule.",
@@ -263,7 +293,9 @@ export const PRO_KUHINJA_SR = {
   "lamination-layers": {
     folds: "Niz presavijanja",
     foldsHint:
-      "Jedan red po presavijanju, redom kojim se izvode: vrsta ili vrsta;debljina posle valjanja u mm. Vrsta je jedna od reči „jednostruko\" (×3), „knjiga\" (×4) ili „napola\" (×2). Debljina posle valjanja je opciona — bez nje red ostaje samo presavijen, bez razvijanja.",
+      "Jedan red po presavijanju, redom kojim se izvode: vrsta ili vrsta;debljina posle valjanja " +
+      "u mm. Vrsta je jedna od reči „jednostruko\" (×3), „knjiga\" (×4) ili „napola\" (×2). " +
+      "Debljina posle valjanja je opciona — bez nje red ostaje samo presavijen, bez razvijanja.",
     startingFatLayers: "Početni broj slojeva masti",
     startingFatLayersHint: "Prazno polje znači 1 — jedan blok masti zatvoren u testo.",
     fatMass: "Masa masti",
@@ -289,16 +321,23 @@ export const PRO_KUHINJA_SR = {
 
     inputs: "Uneseno",
     formula:
-      "B=B₀·Πf_i     D=B+1     φ=masa_masti/(masa_masti+masa_testa)     t_mast=t·φ/B     t_testo=t·(1−φ)/D",
+      "B=B₀·Πf_i     D=B+1     φ=masa_masti/(masa_masti+masa_testa)     t_mast=t·φ/B     " +
+      "t_testo=t·(1−φ)/D",
 
-    errorFolds: "Unesi bar jedno presavijanje, svako prepoznato kao „jednostruko\", „knjiga\" ili „napola\".",
+    errorFolds:
+      "Unesi bar jedno presavijanje, svako prepoznato kao „jednostruko\", „knjiga\" ili " +
+      "„napola\".",
     errorStartingFatLayers: "Početni broj slojeva masti je ceo broj, 1 ili više.",
-    errorFinalThickness: "Završna debljina mora biti veća od nule i ne veća od debljine dostignute na kraju niza presavijanja i valjanja.",
+    errorFinalThickness:
+      "Završna debljina mora biti veća od nule i ne veća od debljine dostignute na kraju niza " +
+      "presavijanja i valjanja.",
     errorFatMass: "Masa masti mora biti veća od nule.",
     errorDoughMass: "Masa testa oko masti mora biti veća od nule.",
     errorStartThickness: "Početna debljina mora biti veća od nule.",
     errorStartLength: "Početna dužina mora biti veća od nule.",
-    errorRollThickness: "Debljina posle valjanja mora biti veća od nule i manja od debljine odmah posle tog presavijanja.",
+    errorRollThickness:
+      "Debljina posle valjanja mora biti veća od nule i manja od debljine odmah posle tog " +
+      "presavijanja.",
 
     unitMm: "mm",
     unitCm: "cm",
@@ -329,7 +368,9 @@ export const PRO_KUHINJA_SR = {
     achievedHydration: "Postignuta ukupna hidratacija",
 
     inputs: "Uneseno",
-    formula: "f=masa/(1+h/100), w=masa−f     dodato_brašno=F_ukupno−f_starter     dodata_voda=W_ukupno−w_starter",
+    formula:
+      "f=masa/(1+h/100), w=masa−f     dodato_brašno=F_ukupno−f_starter     " +
+      "dodata_voda=W_ukupno−w_starter",
 
     errorTotalFlour: "Ukupno brašno u gotovom testu mora biti veće od nule.",
     errorTargetHydration: "Ciljna ukupna hidratacija mora biti veća od nule.",
@@ -339,8 +380,12 @@ export const PRO_KUHINJA_SR = {
     errorSeedHydration: "Hidratacija zametka mora biti veća od nule.",
     errorTargetLevainMass: "Ciljna masa startera mora biti veća od mase zametka.",
     errorTargetLevainHydration: "Ciljna hidratacija startera mora biti veća od nule.",
-    errorFlourOver: "Starter već nosi više brašna nego što formula dozvoljava — smanji njegovu masu ili hidrataciju.",
-    errorWaterOver: "Starter već nosi više vode nego što ciljna hidratacija dozvoljava — smanji njegovu masu ili hidrataciju.",
+    errorFlourOver:
+      "Starter već nosi više brašna nego što formula dozvoljava — smanji njegovu masu ili " +
+      "hidrataciju.",
+    errorWaterOver:
+      "Starter već nosi više vode nego što ciljna hidratacija dozvoljava — smanji njegovu masu " +
+      "ili hidrataciju.",
 
     unitG: "g",
   },
@@ -360,12 +405,15 @@ export const PRO_KUHINJA_SR = {
     salt: "So",
     portionMass: "Masa porcije",
     packageMass: "Masa pakovanja",
-    packageMassHint: "Opciono. Ako je i broj porcija u pakovanju unet, dva podatka moraju da se slažu.",
+    packageMassHint:
+      "Opciono. Ako je i broj porcija u pakovanju unet, dva podatka moraju da se slažu.",
     portionsPerPackage: "Broj porcija u pakovanju",
     referencePrefix: "Referentni dnevni unos —",
     referenceHint: "Iz propisa koji primenjuješ. Nexus nema nikakvu tabelu i ne nudi vrednost.",
     digits: "Broj decimala za prikaz",
-    digitsHint: "Izbor prikaza, ne zaokruživanje zakonske deklaracije — šta i kako mora da stoji na pakovanju određuje propis koji ovaj alat ne poznaje.",
+    digitsHint:
+      "Izbor prikaza, ne zaokruživanje zakonske deklaracije — šta i kako mora da stoji na " +
+      "pakovanju određuje propis koji ovaj alat ne poznaje.",
 
     results: "Rezultat",
     energyKJ: "Energija (kJ) — na 100 g / po porciji",
@@ -376,10 +424,14 @@ export const PRO_KUHINJA_SR = {
     colPerPackage: "Po pakovanju",
     colReferencePercent: "% reference",
     notADeclarationNote:
-      "Ovo je pomoćni preračun, ne gotova deklaracija. Nijedna vrednost ne dolazi iz alata — sve je uneo korisnik, a alat ih samo preračunava. Šta mora da stoji na pakovanju određuje propis koji ovaj alat ne poznaje i ne proverava.",
+      "Ovo je pomoćni preračun, ne gotova deklaracija. Nijedna vrednost ne dolazi iz alata — sve " +
+      "je uneo korisnik, a alat ih samo preračunava. Šta mora da stoji na pakovanju određuje " +
+      "propis koji ovaj alat ne poznaje i ne proverava.",
 
     inputs: "Uneseno",
-    formula: "po_porciji = na_100g·masa_porcije/100     kcal = kJ/4,184     % reference = po_porciji/referenca·100",
+    formula:
+      "po_porciji = na_100g·masa_porcije/100     kcal = kJ/4,184     % reference = " +
+      "po_porciji/referenca·100",
 
     errorPortionMass: "Masa porcije mora biti veća od nule.",
     errorEnergy: "Energija ne sme biti negativna.",
@@ -424,7 +476,9 @@ export const PRO_KUHINJA_SR = {
     volumeAtHeight: "Zapremina pri visini punjenja",
     heightForVolume: "Visina punjenja za ciljnu zapreminu",
     straightWalledNote:
-      "Zapremina = površina × visina tretira posudu kao pravostranu. Za venac važi samo ako cev ide punom visinom, a za konusan ili sužen kalup (kuglof) koristi preračun zarubljene kupe ispod.",
+      "Zapremina = površina × visina tretira posudu kao pravostranu. Za venac važi samo ako cev " +
+      "ide punom visinom, a za konusan ili sužen kalup (kuglof) koristi preračun zarubljene kupe " +
+      "ispod.",
 
     frustumTitle: "Zarubljena kupa — kalup sa sužavanjem",
     topDiameter: "Prečnik pri vrhu",
@@ -434,7 +488,9 @@ export const PRO_KUHINJA_SR = {
     frustumFormula: "V = π·h·(R²+R·r+r²)/3",
 
     inputs: "Uneseno",
-    formula: "krug: A=π(d/2)²     kvadrat: A=a²     pravougaonik: A=a·b     venac: A=π((D/2)²−(d/2)²)     V=A·h     h=1000·V/A",
+    formula:
+      "krug: A=π(d/2)²     kvadrat: A=a²     pravougaonik: A=a·b     venac: A=π((D/2)²−(d/2)²)   " +
+      "  V=A·h     h=1000·V/A",
 
     errorDiameter: "Prečnik mora biti veći od nule.",
     errorSide: "Stranica mora biti veća od nule.",
@@ -457,7 +513,9 @@ export const PRO_KUHINJA_SR = {
   "plate-cost": {
     lines: "Stavke jela",
     linesHint:
-      "Jedan red po sastojku: naziv;količina;jedinica;nabavna cena po kg/l/kom;randman %. Jedinica je g, ml ili kom. Randman je isti složeni randman (čišćenje × termička obrada) koji daje „Randman i kalo\".",
+      "Jedan red po sastojku: naziv;količina;jedinica;nabavna cena po kg/l/kom;randman %. " +
+      "Jedinica je g, ml ili kom. Randman je isti složeni randman (čišćenje × termička obrada) " +
+      "koji daje „Randman i kalo\".",
     portions: "Broj porcija koje recept daje",
     targetFoodCost: "Ciljni food-cost",
     extraPerPortion: "Dodatni trošak po porciji",
@@ -472,11 +530,15 @@ export const PRO_KUHINJA_SR = {
     costPerPortion: "Trošak po porciji",
     sellingPrice: "Prodajna cena",
     netPriceNote:
-      "Neto iznos, bez ijednog poreza. Alat ne primenjuje PDV niti bilo koju drugu stopu — stope propisuje država i menjaju se; ako ih želiš u računu, unesi ih sam u zaseban alat za procente.",
+      "Neto iznos, bez ijednog poreza. Alat ne primenjuje PDV niti bilo koju drugu stopu — stope " +
+      "propisuje država i menjaju se; ako ih želiš u računu, unesi ih sam u zaseban alat za " +
+      "procente.",
     margin: "Marža po porciji",
 
     inputs: "Uneseno",
-    formula: "trošak_reda = (količina/randman%)·cena     trošak_porcije = Σtrošak_reda/porcije+dodatak     prodajna=trošak_porcije/(fc/100)",
+    formula:
+      "trošak_reda = (količina/randman%)·cena     trošak_porcije = Σtrošak_reda/porcije+dodatak  " +
+      "   prodajna=trošak_porcije/(fc/100)",
 
     errorLines: "Unesi bar jednu stavku.",
     errorPortions: "Broj porcija je ceo broj, 1 ili više.",
@@ -513,17 +575,22 @@ export const PRO_KUHINJA_SR = {
     unitPrice: "Cena po kg, l ili komadu",
 
     inputs: "Uneseno",
-    formula: "upotrebljivo=pakovanje·(1−gubitak/100)     porcije=floor(upotrebljivo/porcija)     pakovanja=ceil(potrebno/porcije)",
+    formula:
+      "upotrebljivo=pakovanje·(1−gubitak/100)     porcije=floor(upotrebljivo/porcija)     " +
+      "pakovanja=ceil(potrebno/porcije)",
 
     errorPackUnit: "Jedinica pakovanja je g, kg, ml, l ili kom.",
     errorPortionUnit: "Jedinica porcije je g, kg, ml, l ili kom.",
-    errorUnitMismatch: "Pakovanje i porcija moraju biti iste dimenzije — masa se ne pretvara u zapreminu ni obrnuto.",
+    errorUnitMismatch:
+      "Pakovanje i porcija moraju biti iste dimenzije — masa se ne pretvara u zapreminu ni " +
+      "obrnuto.",
     errorPackQuantity: "Količina u pakovanju mora biti veća od nule.",
     errorPortionQuantity: "Veličina porcije mora biti veća od nule.",
     errorLossPercent: "Gubitak u pakovanju je procenat od 0 do ispod 100.",
     errorPortionsNeeded: "Potreban broj porcija je ceo broj, 1 ili više.",
     errorPackPrice: "Cena pakovanja ne sme biti negativna.",
-    errorPortionLargerThanPack: "Porcija je veća od upotrebljivog sadržaja pakovanja — nijedna cela porcija ne staje.",
+    errorPortionLargerThanPack:
+      "Porcija je veća od upotrebljivog sadržaja pakovanja — nijedna cela porcija ne staje.",
 
     unitCurrency: "RSD",
     unitG: "g",
@@ -538,7 +605,8 @@ export const PRO_KUHINJA_SR = {
     unit: "Jedinica",
     unitHint: "Slobodan tekst, npr. g, kg, ml, l — ispisuje se uz svaku vrednost.",
     ratio: "Odnos",
-    ratioHint: "Dva ili više članova odvojena dvotačkom, npr. 3:2:1. Svaki član ≥ 0, bar jedan > 0.",
+    ratioHint:
+      "Dva ili više članova odvojena dvotačkom, npr. 3:2:1. Svaki član ≥ 0, bar jedan > 0.",
     names: "Nazivi delova",
     namesHint: "Opciono, po jedan naziv u redu, istim redosledom kao članovi odnosa.",
     step: "Korak zaokruživanja",
@@ -554,9 +622,13 @@ export const PRO_KUHINJA_SR = {
     unallocated: "Neraspoređeni ostatak",
 
     inputs: "Uneseno",
-    formula: "deo_i = ukupno·r_i/Σr, zaokruženo po najvećem ostatku (Hare) na broj koraka = floor(ukupno/korak)",
+    formula:
+      "deo_i = ukupno·r_i/Σr, zaokruženo po najvećem ostatku (Hare) na broj koraka = " +
+      "floor(ukupno/korak)",
 
-    errorRatio: "Odnos mora imati bar dva broja odvojena dvotačkom, svaki nula ili veći, bar jedan veći od nule.",
+    errorRatio:
+      "Odnos mora imati bar dva broja odvojena dvotačkom, svaki nula ili veći, bar jedan veći od " +
+      "nule.",
     errorTotal: "Ukupna količina mora biti veća od nule.",
     errorStep: "Korak zaokruživanja mora biti veći od nule i ne veći od ukupne količine.",
 
@@ -570,7 +642,9 @@ export const PRO_KUHINJA_SR = {
     modeTargetMass: "Ciljna ukupna masa",
     lines: "Stavke recepta",
     linesHint:
-      "Jedan red po sastojku: količina;jedinica;naziv;korak (poslednji opcionalan). Količina može biti decimalna („1,5\"), razlomak („1/2\") ili mešovita („1 1/2\"). Jedinica je g, kg, ml, l, kom ili ostalo.",
+      "Jedan red po sastojku: količina;jedinica;naziv;korak (poslednji opcionalan). Količina " +
+      "može biti decimalna („1,5\"), razlomak („1/2\") ili mešovita („1 1/2\"). Jedinica je g, " +
+      "kg, ml, l, kom ili ostalo.",
     originalPortions: "Polazni broj porcija",
     targetPortions: "Ciljni broj porcija",
     factor: "Faktor",
@@ -585,7 +659,9 @@ export const PRO_KUHINJA_SR = {
     totalMass: "Zbir masa",
 
     inputs: "Uneseno",
-    formula: "faktor=cilj/polazno ili ciljna_masa/Σmasa     količina'=količina·faktor, zaokruženo po najvećem ostatku",
+    formula:
+      "faktor=cilj/polazno ili ciljna_masa/Σmasa     količina'=količina·faktor, zaokruženo po " +
+      "najvećem ostatku",
 
     errorLines: "Unesi bar jednu stavku.",
     errorLineQuantity: "Količina svakog reda ne sme biti negativna.",
@@ -595,8 +671,10 @@ export const PRO_KUHINJA_SR = {
     errorOriginalPortions: "Polazni broj porcija je ceo broj, 1 ili više.",
     errorTargetPortions: "Ciljni broj porcija je ceo broj, 1 ili više.",
     errorFactor: "Faktor mora biti veći od nule.",
-    errorTargetMass: "Ciljna ukupna masa mora biti veća od nule, a svi redovi moraju biti u jedinicama mase.",
-    errorUnitMismatch: "Ciljna ukupna masa važi samo kad su svi redovi u jedinicama mase (g ili kg).",
+    errorTargetMass:
+      "Ciljna ukupna masa mora biti veća od nule, a svi redovi moraju biti u jedinicama mase.",
+    errorUnitMismatch:
+      "Ciljna ukupna masa važi samo kad su svi redovi u jedinicama mase (g ili kg).",
 
     unitG: "g",
     unitKg: "kg",
@@ -617,7 +695,9 @@ export const PRO_KUHINJA_SR = {
     modeAddSolute: "Dodaj čist sastojak",
     c1: "Koncentracija komponente 1",
     c2: "Koncentracija komponente 2",
-    massBasisHint: "Procenat po masi. Alat odbija procenat po zapremini (npr. ABV) — za to je potrebna gustina koju alat nema.",
+    massBasisHint:
+      "Procenat po masi. Alat odbija procenat po zapremini (npr. ABV) — za to je potrebna " +
+      "gustina koju alat nema.",
     targetConcentration: "Ciljna koncentracija",
     mass: "Masa komponente 1",
     targetMass: "Ciljna ukupna masa",
@@ -634,15 +714,19 @@ export const PRO_KUHINJA_SR = {
     achievedConcentration: "Postignuta koncentracija",
     concentrationRatio: "Odnos prema maksimumu",
     concentrationSpread: "Razlika koncentracija komponenti (c1 − c2)",
-    formula: "očuvanje mase rastvorene materije, rešeno po nepoznatoj za odabrani režim; kontrola = ukupna rastvorena materija / ukupna masa",
+    formula:
+      "očuvanje mase rastvorene materije, rešeno po nepoznatoj za odabrani režim; kontrola = " +
+      "ukupna rastvorena materija / ukupna masa",
     inputs: "Uneseno",
     errorC1: "Koncentracija komponente 1 mora biti između 0 i 100.",
     errorC2: "Koncentracija komponente 2 mora biti između 0 i 100.",
     errorTargetConcentration: "Ciljna koncentracija mora biti između 0 i 100.",
     errorMass: "Masa mora biti veća od nule.",
     errorTargetMass: "Ciljna ukupna masa mora biti veća od nule.",
-    errorEqualConcentrations: "Koncentracije komponenti su jednake — nijedna mešavina ne daje drugu vrednost.",
-    errorTargetOutOfRange: "Ciljna koncentracija je van dometa koji ove komponente mogu da dostignu.",
+    errorEqualConcentrations:
+      "Koncentracije komponenti su jednake — nijedna mešavina ne daje drugu vrednost.",
+    errorTargetOutOfRange:
+      "Ciljna koncentracija je van dometa koji ove komponente mogu da dostignu.",
     unitG: "g",
   },
 
@@ -679,11 +763,14 @@ export const PRO_KUHINJA_SR = {
     results: "Rezultat",
     result: "Rezultat",
     relationPrefix: "Odnos:",
-    relationTemperature: "Temperaturna razmera nema jedinstven množilac — pretvaranje ide po formuli, ne po odnosu.",
+    relationTemperature:
+      "Temperaturna razmera nema jedinstven množilac — pretvaranje ide po formuli, ne po odnosu.",
     formula: "zapremina→zapremina i masa→masa: množilac po jedinici     °F→°C: (°F − 32)·5/9",
     inputs: "Uneseno",
     errorFrom: "Izaberi izvornu jedinicu.",
-    errorTargetUnit: "Ova izvorna jedinica ne može da se pretvori u izabranu ciljnu jedinicu — zapremina se ne pretvara u masu bez gustine.",
+    errorTargetUnit:
+      "Ova izvorna jedinica ne može da se pretvori u izabranu ciljnu jedinicu — zapremina se ne " +
+      "pretvara u masu bez gustine.",
     errorValue: "Vrednost mora biti prepoznata kao broj.",
     errorTablespoonMl: "Zapremina kašike mora biti veća od nule.",
     errorTeaspoonMl: "Zapremina kašičice mora biti veća od nule.",
@@ -710,13 +797,16 @@ export const PRO_KUHINJA_SR = {
     cookedMass: "Kuvana masa",
     combinedYield: "Ukupan randman",
     combinedLossPercent: "Ukupan kalo",
-    yieldLossPairNote: "Randman i kalo su isto merenje, prikazana kao vezan par — jedno se ne unosi u drugo.",
+    yieldLossPairNote:
+      "Randman i kalo su isto merenje, prikazana kao vezan par — jedno se ne unosi u drugo.",
     portions: "Broj porcija",
     leftover: "Ostatak",
     apNeeded: "Bruto masu treba kupiti",
     pricePerKgCooked: "Cena po kilogramu kuvanog proizvoda",
     pricePerPortion: "Cena porcije",
-    formula: "randman=randman_čišćenja·randman_obrade     porcije=floor(kuvano/porcija)     obrnuto: bruto=porcije·porcija/randman",
+    formula:
+      "randman=randman_čišćenja·randman_obrade     porcije=floor(kuvano/porcija)     obrnuto: " +
+      "bruto=porcije·porcija/randman",
     inputs: "Uneseno",
     errorApMass: "Bruto masa mora biti veća od nule.",
     errorCleaningYield: "Randman čišćenja mora biti veći od nule i ne veći od 100%.",
