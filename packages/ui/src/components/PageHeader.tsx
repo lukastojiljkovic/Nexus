@@ -45,8 +45,15 @@ export interface PageHeaderProps {
  * have one declared place to sit.
  */
 export function PageHeader({ title, subtitle, sigil, actions, className }: PageHeaderProps) {
+  // The modifier is what keeps the actions clear of the mark — see the rule in
+  // `styles.css`. Set from `sigil` rather than from a prop, so a page cannot
+  // supply one and forget the other.
+  const classes = ["nx-page-header"];
+  if (sigil != null) classes.push("nx-page-header--sigil");
+  if (className != null) classes.push(className);
+
   return (
-    <header className={className == null ? "nx-page-header" : `nx-page-header ${className}`}>
+    <header className={classes.join(" ")}>
       {sigil != null && (
         // Behind the header only, never behind body content, and never over
         // anything a reader has to hit: it is `aria-hidden` and takes no
@@ -57,7 +64,10 @@ export function PageHeader({ title, subtitle, sigil, actions, className }: PageH
         // so it fits by construction — a mark that had to be clipped would be a
         // mark that is partly missing, which is what the first attempt shipped
         // (a 132px sigil bled off a 50px header showed a 26px slice and read as
-        // a rendering fault). If this ever grows, the header grows with it.
+        // a rendering fault). If this ever grows, the header grows with it —
+        // `styles.css` names the same 72 once, as
+        // `--nx-page-header-sigil-size`, and both the header's floor and the
+        // column the actions keep clear of the mark are written from it.
         <span className="nx-page-header__sigil" aria-hidden="true">
           <Icon name={sigil} size={72} />
         </span>

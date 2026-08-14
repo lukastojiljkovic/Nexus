@@ -319,8 +319,14 @@ samp {
      produced: a 26px slice of a rounded shape, hanging 2px outside the window.
      A partial glyph reads as a rendering fault, not as identity. So the header
      is given the height the mark needs and the mark is sized to fit it whole —
-     which also gives the title itself the air a page opening was short of. */
-  min-height: 72px;
+     which also gives the title itself the air a page opening was short of.
+
+     The size is named once because two rules depend on it: the floor below, and
+     the column the actions leave clear of it further down. They are the same
+     72px and they have to move together. (`PageHeader.tsx` passes the same
+     number to `<Icon size>`; the comment there says so.) */
+  --nx-page-header-sigil-size: 72px;
+  min-height: var(--nx-page-header-sigil-size);
 }
 /* The module's mark, at the largest of its four scales. It is a GROUND, not a
    figure: `text-faint` is the tier held to the 3:1 non-text floor rather than
@@ -377,6 +383,32 @@ samp {
   gap: var(--nx-space-2);
   flex-wrap: wrap;
   margin-left: auto;
+}
+/* The mark's own column, kept clear of the actions.
+
+   The sigil is absolutely positioned at `top: 0; right: 0` and the actions
+   right-align to the same corner one layer above it — so on every page that has
+   both, an OPAQUE button was drawn across the mark and cut it in half. On
+   „Stručne alatke" the „Paketi…" button covered the briefcase's handle and left
+   a bare rounded rectangle; on „Beleške" the „Fascikle" button took the top of
+   the document. A partial glyph reads as a rendering fault, which is exactly
+   the failure the sigil's own comment above records having already fixed once —
+   fixed for the header's HEIGHT, while the same corner was being claimed twice
+   horizontally.
+
+   Nothing in the gate set could see it. The layout audit reports text overlaps
+   and undersized targets; this mark is neither — it is an `aria-hidden` SVG at
+   `pointer-events: none`. It was found by looking at the screenshots.
+
+   Margin on the actions, deliberately not padding on the header: `right: 0`
+   resolves against the padding box, so padding would move the mark left by
+   exactly as much as it moved the button, and the two would still meet.
+
+   `space-2` is the gap that keeps a button from touching the mark. Only pages
+   that HAVE a mark pay for the column, and the modifier is set from `sigil`
+   inside the component, so the two can never disagree. */
+.nx-page-header--sigil .nx-page-header__actions {
+  margin-right: calc(var(--nx-page-header-sigil-size) + var(--nx-space-2));
 }
 
 /* --- Button ----------------------------------------------------------- */
