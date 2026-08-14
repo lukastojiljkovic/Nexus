@@ -92,6 +92,16 @@ jobs:
       # legal exposure rather than a style complaint.
       - run: pnpm check:risk
 
+      # The other half of the same drawer: not what the tools SAY, but what
+      # their arithmetic does when an input is missing. Two verification rounds
+      # over the 274 tools produced 63 correctness findings and 36 of them were
+      # one shape — a divisor that reached the division unguarded, printing
+      # „∞ mm" on a surface where it reads as a rendering bug. Every hand-rolled
+      # copy of the fix was written by somebody who needed a rounding helper and
+      # could not see one, which is what will happen again on the day an
+      # eighteenth toolkit is added.
+      - run: pnpm check:pro-math
+
       # The style half of the cloud-off boundary. The ASSERTION is
       # `apps/desktop/src/main/net/offline.ts` and its unit tests; this catches
       # a new egress construct before it ever has to be caught at runtime.
