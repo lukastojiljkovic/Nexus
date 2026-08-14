@@ -161,8 +161,7 @@ export const AUDIT_SCRIPT = `(() => {
   }
 
   /** True when a clipping ancestor has scrolled this element out of sight. */
-  function isClippedAway(el, rect) {
-    const visible = visibleRect(el, rect);
+  function isClippedAway(rect, visible) {
     // Half of each axis has to survive the clip. A row peeking under a fade is
     // genuinely on screen and its geometry still counts; one entirely past the
     // edge is not being looked at by anyone.
@@ -177,10 +176,37 @@ export const AUDIT_SCRIPT = `(() => {
 
   for (const el of all) {
     const style = getComputedStyle(el);
-    if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") continue;
+    // \`checkVisibility\` and not three named properties, because the three named
+    // properties were \`display\`, \`visibility\` and \`opacity\`, and a fourth
+    // exists. Chromium hides a closed \`<details>\`'s contents with
+    // \`content-visibility\` on \`::details-content\` — the subtree is not painted,
+    // but it keeps a layout box, and \`getComputedStyle\` on a descendant still
+    // answers \`display: block; visibility: visible; opacity: 1\`. So every
+    // collapsed risk notice in the professional drawer measured as a paragraph
+    // sitting on top of the first field below it: 726 overlap findings in one
+    // sweep, all of them the design working exactly as drawn.
+    //
+    // This is DC-01's inverse for the second time, and the lesson is the same
+    // one: an audit that reports the app working is an audit nobody finishes
+    // reading, which costs more than the findings it buys. Enumerating the ways
+    // a box can be invisible is the mistake — the platform already has the
+    // predicate, it accounts for \`content-visibility\`, and it also catches an
+    // ANCESTOR at \`opacity: 0\`, which the property test never did.
+    if (
+      !el.checkVisibility({
+        contentVisibilityAuto: true,
+        opacityProperty: true,
+        visibilityProperty: true,
+      })
+    ) {
+      continue;
+    }
     const rect = el.getBoundingClientRect();
     if (rect.width < 1 || rect.height < 1) continue;
-    if (isClippedAway(el, rect)) continue;
+    // The box as it is actually PAINTED — \`rect\` trimmed by every clipping
+    // ancestor. Both the clip test and the offscreen test below read it.
+    const painted = visibleRect(el, rect);
+    if (isClippedAway(rect, painted)) continue;
 
     // Recorded HERE, above every later \`continue\`, so a pinned bar that is
     // itself skipped by one of them (a visually-hidden one, say) still shields
@@ -191,9 +217,21 @@ export const AUDIT_SCRIPT = `(() => {
     // Only the leading edges and the right edge: a page that scrolls vertically
     // legitimately has content below the fold, and flagging it would flag
     // every long list in the app.
-    const overRight = rect.right - viewWidth;
+    //
+    // Measured on the CLIPPED box, not the raw one. An element inside a
+    // horizontal scroller is wider than its scroller by design — that is what
+    // the scroller is for — and comparing its own rect against the window
+    // reported the HTTP registry's table as 104px offscreen when it was in fact
+    // 104px into a box built to scroll it. What genuinely paints outside the
+    // window is the SCROLLER, and the scroller is in this same loop, so nothing
+    // real is lost: the finding just moves to the element that can actually be
+    // fixed. (The registry table has a separate, real problem at the narrowest
+    // window — no visible affordance saying a fifth column exists — but that is
+    // a design decision, not a geometric fact, and an audit that conflates the
+    // two teaches nobody anything.)
+    const overRight = painted.right - viewWidth;
     if (overRight > 1) add("offscreen", el, null, overRight);
-    if (rect.left < -1) add("offscreen", el, null, -rect.left);
+    if (painted.left < -1) add("offscreen", el, null, -painted.left);
     if (rect.top < -1 && style.position === "fixed") add("offscreen", el, null, -rect.top);
     if (style.position === "fixed" && rect.bottom - viewHeight > 1) {
       add("offscreen", el, null, rect.bottom - viewHeight);
