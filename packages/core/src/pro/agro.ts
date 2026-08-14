@@ -302,9 +302,8 @@ export interface BeeSyrupResult {
   readonly concentrationPercent: number;
   readonly bagsExact: number;
   readonly bagsCeil: number;
-  /** floor(syrupVolumeL / literPerHive) — undefined without `literPerHive`. */
-  readonly hivesCovered: number | undefined;
-  readonly hivesRemainderL: number | undefined;
+  /** Present exactly when `literPerHive` was given; the two figures are one branch. */
+  readonly hives: { readonly hivesCovered: number; readonly hivesRemainderL: number } | undefined;
   /** hiveCount × literPerHive routed back through the `targetVolume` path. */
   readonly apiary: { readonly volumeL: number; readonly sugarKg: number; readonly bagsCeil: number } | undefined;
 }
@@ -353,15 +352,14 @@ export function beeSyrupMix(input: BeeSyrupInput): ProResult<BeeSyrupResult> {
   const syrupVolumeL = waterVolumeL + SUGAR_APPARENT_VOLUME_L_PER_KG * sugarKg;
   const bagsExact = sugarKg / input.bagMassKg;
 
-  let hivesCovered: number | undefined;
-  let hivesRemainderL: number | undefined;
+  let hives: BeeSyrupResult["hives"];
   if (isPositive(input.literPerHive)) {
     // floorSnapped: syrupVolumeL is built from two divisions and a
     // multiplication, so an exact multiple of literPerHive frequently lands
     // one ULP below the whole number and a bare floor would silently drop an
     // entire hive's dose.
-    hivesCovered = floorSnapped(syrupVolumeL / input.literPerHive);
-    hivesRemainderL = syrupVolumeL - hivesCovered * input.literPerHive;
+    const hivesCovered = floorSnapped(syrupVolumeL / input.literPerHive);
+    hives = { hivesCovered, hivesRemainderL: syrupVolumeL - hivesCovered * input.literPerHive };
   }
 
   let apiary: BeeSyrupResult["apiary"];
@@ -383,8 +381,7 @@ export function beeSyrupMix(input: BeeSyrupInput): ProResult<BeeSyrupResult> {
     concentrationPercent: (sugarKg / syrupMassKg) * 100,
     bagsExact,
     bagsCeil: Math.ceil(bagsExact),
-    hivesCovered,
-    hivesRemainderL,
+    hives,
     apiary,
   };
 }
@@ -1402,8 +1399,8 @@ export interface RationResult {
    * mass is zero (every share was 0%) — never NaN; the spec forbids silently
    * normalising the shares, so this stays unset rather than dividing by zero. */
   readonly rationDmPercentAsIssued: number | undefined;
-  readonly totalDailyCost: number | undefined;
-  readonly totalPeriodCost: number | undefined;
+  /** Present exactly when at least one feed carried a price; the two totals are one branch. */
+  readonly cost: { readonly totalDailyCost: number; readonly totalPeriodCost: number } | undefined;
 }
 
 /**
@@ -1473,8 +1470,13 @@ export function livestockRationDm(input: RationInput): ProResult<RationResult> {
     totalFreshIssuedKgDay,
     totalFreshEatenPerHeadKgDay: totalFreshEatenKgDay / input.headCount,
     rationDmPercentAsIssued: totalFreshEatenKgDay > 0 ? (totalDmKgDay / totalFreshEatenKgDay) * 100 : undefined,
-    totalDailyCost: pricedDaily.length === 0 ? undefined : pricedDaily.reduce((s, f) => s + (f.dailyCost ?? 0), 0),
-    totalPeriodCost: pricedDaily.length === 0 ? undefined : pricedDaily.reduce((s, f) => s + (f.periodCost ?? 0), 0),
+    cost:
+      pricedDaily.length === 0
+        ? undefined
+        : {
+            totalDailyCost: pricedDaily.reduce((s, f) => s + (f.dailyCost ?? 0), 0),
+            totalPeriodCost: pricedDaily.reduce((s, f) => s + (f.periodCost ?? 0), 0),
+          },
   };
 }
 
@@ -1632,6 +1634,11 @@ export interface TrellisInput {
   readonly wireMassPerKmOverride?: number | undefined;
 }
 
+export interface TrellisCoils {
+  readonly coilsCeil: number;
+  readonly kgPerCoil: number | undefined;
+}
+
 export interface TrellisResult {
   readonly zeroRows: boolean;
   readonly rowsCount: number;
@@ -1646,8 +1653,14 @@ export interface TrellisResult {
   readonly anchors: number;
   readonly wireLengthM: number;
   readonly wireMassKg: number | undefined;
-  readonly coilsCeil: number | undefined;
-  readonly kgPerCoil: number | undefined;
+  /**
+   * Present exactly when a coil length was given. Not a clean pair, and that is
+   * why it nests rather than sitting flat beside `wireMassKg`: the coil COUNT
+   * needs only the coil length, while what one coil WEIGHS needs a wire mass as
+   * well. Two flat optionals said the two could vary independently in either
+   * direction, which is false in one of them.
+   */
+  readonly coils: TrellisCoils | undefined;
   readonly plantsPerRow: number;
   readonly totalPlants: number;
   readonly plotAreaHa: number;
@@ -1709,8 +1722,7 @@ export function orchardTrellisLayout(input: TrellisInput): ProResult<TrellisResu
       anchors: 0,
       wireLengthM: 0,
       wireMassKg: undefined,
-      coilsCeil: undefined,
-      kgPerCoil: undefined,
+      coils: undefined,
       plantsPerRow: 0,
       totalPlants: 0,
       plotAreaHa,
@@ -1734,8 +1746,14 @@ export function orchardTrellisLayout(input: TrellisInput): ProResult<TrellisResu
         ? undefined
         : Math.PI * (input.wireDiameterMm / 2000) ** 2 * STEEL_DENSITY;
   const wireMassKg = massPerM === undefined ? undefined : wireLengthM * massPerM;
-  const coilsCeil = input.coilLengthM === undefined ? undefined : Math.ceil(wireLengthM / input.coilLengthM);
-  const kgPerCoil = input.coilLengthM === undefined || massPerM === undefined ? undefined : input.coilLengthM * massPerM;
+  const coilLengthM = input.coilLengthM;
+  const coils: TrellisCoils | undefined =
+    coilLengthM === undefined
+      ? undefined
+      : {
+          coilsCeil: Math.ceil(wireLengthM / coilLengthM),
+          kgPerCoil: massPerM === undefined ? undefined : coilLengthM * massPerM,
+        };
 
   const plantsPerRow = floorSnapped(rowLengthM / input.plantSpacingM) + (input.plantAtBothEnds ? 1 : 0);
   const totalPlants = rowsCount * plantsPerRow;
@@ -1755,8 +1773,7 @@ export function orchardTrellisLayout(input: TrellisInput): ProResult<TrellisResu
     anchors,
     wireLengthM,
     wireMassKg,
-    coilsCeil,
-    kgPerCoil,
+    coils,
     plantsPerRow,
     totalPlants,
     plotAreaHa,
@@ -2083,10 +2100,10 @@ export interface SeedingRateResult {
   readonly bagsExact: number;
   readonly bagsCeil: number;
   readonly totalSeeds: number;
-  readonly unitsExact: number | undefined;
-  readonly unitsCeil: number | undefined;
-  readonly seedsPerLinearMeter: number | undefined;
-  readonly spacingInRowCm: number | undefined;
+  /** Present exactly when the seeds-per-unit figure was given. */
+  readonly units: { readonly unitsExact: number; readonly unitsCeil: number } | undefined;
+  /** Present exactly when the row spacing was given. */
+  readonly perRow: { readonly seedsPerLinearMeter: number; readonly spacingInRowCm: number } | undefined;
   /** The same formula applied to the norm just computed — informational, not an independent check. */
   readonly reverseStandCheckPerM2: number;
   readonly totalCost: number | undefined;
@@ -2126,12 +2143,12 @@ export function seedingRate(input: SeedingRateInput): ProResult<SeedingRateResul
   const bagsExact = totalSeedKg / input.bagMassKg;
   const totalSeeds = seedsPerHa * input.areaHa;
   const unitsExact = input.seedsPerUnit === undefined ? undefined : totalSeeds / input.seedsPerUnit;
+  const units = unitsExact === undefined ? undefined : { unitsExact, unitsCeil: Math.ceil(unitsExact) };
 
-  let seedsPerLinearMeter: number | undefined;
-  let spacingInRowCm: number | undefined;
+  let perRow: SeedingRateResult["perRow"];
   if (input.rowSpacingCm !== undefined) {
-    seedsPerLinearMeter = seedsPerM2 * (input.rowSpacingCm / 100);
-    spacingInRowCm = 100 / seedsPerLinearMeter;
+    const seedsPerLinearMeter = seedsPerM2 * (input.rowSpacingCm / 100);
+    perRow = { seedsPerLinearMeter, spacingInRowCm: 100 / seedsPerLinearMeter };
   }
 
   let totalCost: number | undefined;
@@ -2150,10 +2167,8 @@ export function seedingRate(input: SeedingRateInput): ProResult<SeedingRateResul
     bagsExact,
     bagsCeil: Math.ceil(bagsExact),
     totalSeeds,
-    unitsExact,
-    unitsCeil: unitsExact === undefined ? undefined : Math.ceil(unitsExact),
-    seedsPerLinearMeter,
-    spacingInRowCm,
+    units,
+    perRow,
     reverseStandCheckPerM2: (normKgHa * 100 * f) / input.tkwGrams,
     totalCost,
   };
@@ -2178,19 +2193,29 @@ export interface SprayerCalibrationInput {
   readonly tankVolumeL?: number | undefined;
 }
 
-export interface SprayerCalibrationResult {
-  readonly nozzleFlowLMin: number;
-  readonly rateFromSpacingLHa: number;
-  readonly totalFlowLMin: number | undefined;
-  readonly widthFromCountM: number | undefined;
-  /** workingWidthM − nozzleCount·nozzleSpacingM, m — undefined unless both are
-   * entered. A plain difference, not a verdict: this is a `life-safety` tool,
-   * so no pass/fail threshold is baked in here — the surface decides what
-   * counts as a mismatch worth flagging. */
+/**
+ * The three figures the boom itself yields, present exactly when a nozzle count
+ * was entered. `rateFromCountWidthLHa` reads as though it needed a width too,
+ * and that is what made it look like a fourth independent optional — but a
+ * nozzle count always produces `widthFromCountM`, so the width it falls back to
+ * can never be missing once the count is here. The old declaration said
+ * otherwise and every surface wrote a fallback for it.
+ */
+export interface SprayerFromCount {
+  readonly totalFlowLMin: number;
+  readonly widthFromCountM: number;
+  readonly rateFromCountWidthLHa: number;
+  /** workingWidthM − nozzleCount·nozzleSpacingM, m — undefined unless a working
+   * width was measured as well. A plain difference, not a verdict: this is a
+   * `life-safety` tool, so no pass/fail threshold is baked in here — the surface
+   * decides what counts as a mismatch worth flagging. */
   readonly widthDifferenceM: number | undefined;
-  readonly rateFromCountWidthLHa: number | undefined;
-  readonly requiredNozzleFlowLMin: number | undefined;
-  readonly expectedCatchVolumeMl: number | undefined;
+}
+
+/** What a label rate asks for — the three figures arrive with `targetRateLHa`. */
+export interface SprayerTarget {
+  readonly requiredNozzleFlowLMin: number;
+  readonly expectedCatchVolumeMl: number;
   /**
    * Measured rate ÷ the label rate, as a PLAIN quotient — the same shape every
    * other limit-bearing tool in the drawer returns, and for the reason
@@ -2199,10 +2224,26 @@ export interface SprayerCalibrationResult {
    * This field used to be `ratioPercent` and multiplied by 100 — the only
    * `ratioAgainst` result in the whole drawer that did — under a label that
    * says „Izmereno ÷ ciljano". The label was right and the number was not.
+   *
+   * Optional inside the group, unlike its two siblings: `ratioAgainst` withholds
+   * a quotient of a value that is not finite, so this one can be absent while
+   * the other two are present.
    */
   readonly ratio: number | undefined;
-  readonly coverageHaPerTank: number | undefined;
+}
+
+/** What one tankful covers — needs a tank volume, and the distance needs a width. */
+export interface SprayerTank {
+  readonly coverageHaPerTank: number;
   readonly distancePerTankM: number | undefined;
+}
+
+export interface SprayerCalibrationResult {
+  readonly nozzleFlowLMin: number;
+  readonly rateFromSpacingLHa: number;
+  readonly fromCount: SprayerFromCount | undefined;
+  readonly target: SprayerTarget | undefined;
+  readonly tank: SprayerTank | undefined;
 }
 
 /**
@@ -2237,47 +2278,43 @@ export function sprayerCalibration(input: SprayerCalibrationInput): ProResult<Sp
 
   const rateFromSpacingLHa = (600 * nozzleFlowLMin) / (input.speedKmh * input.nozzleSpacingM);
 
-  const totalFlowLMin = input.nozzleCount === undefined ? undefined : input.nozzleCount * nozzleFlowLMin;
   const widthFromCountM = input.nozzleCount === undefined ? undefined : input.nozzleCount * input.nozzleSpacingM;
-  const widthDifferenceM =
-    input.workingWidthM !== undefined && widthFromCountM !== undefined
-      ? input.workingWidthM - widthFromCountM
-      : undefined;
   const effectiveWidthM = input.workingWidthM ?? widthFromCountM;
-  const rateFromCountWidthLHa =
-    totalFlowLMin === undefined || effectiveWidthM === undefined
-      ? undefined
-      : (600 * totalFlowLMin) / (input.speedKmh * effectiveWidthM);
 
-  let requiredNozzleFlowLMin: number | undefined;
-  let expectedCatchVolumeMl: number | undefined;
-  let ratio: number | undefined;
-  if (input.targetRateLHa !== undefined) {
-    requiredNozzleFlowLMin = (input.targetRateLHa * input.speedKmh * input.nozzleSpacingM) / 600;
-    expectedCatchVolumeMl = (requiredNozzleFlowLMin * input.catchTimeS * 1000) / 60;
-    ratio = ratioAgainst(rateFromSpacingLHa, input.targetRateLHa);
+  let fromCount: SprayerFromCount | undefined;
+  if (input.nozzleCount !== undefined && widthFromCountM !== undefined) {
+    const totalFlowLMin = input.nozzleCount * nozzleFlowLMin;
+    fromCount = {
+      totalFlowLMin,
+      widthFromCountM,
+      rateFromCountWidthLHa:
+        (600 * totalFlowLMin) / (input.speedKmh * (input.workingWidthM ?? widthFromCountM)),
+      widthDifferenceM:
+        input.workingWidthM === undefined ? undefined : input.workingWidthM - widthFromCountM,
+    };
   }
 
-  const coverageHaPerTank = input.tankVolumeL === undefined ? undefined : input.tankVolumeL / rateFromSpacingLHa;
-  const distancePerTankM =
-    coverageHaPerTank === undefined || effectiveWidthM === undefined
-      ? undefined
-      : (coverageHaPerTank * HECTARE_M2) / effectiveWidthM;
+  let target: SprayerTarget | undefined;
+  if (input.targetRateLHa !== undefined) {
+    const requiredNozzleFlowLMin = (input.targetRateLHa * input.speedKmh * input.nozzleSpacingM) / 600;
+    target = {
+      requiredNozzleFlowLMin,
+      expectedCatchVolumeMl: (requiredNozzleFlowLMin * input.catchTimeS * 1000) / 60,
+      ratio: ratioAgainst(rateFromSpacingLHa, input.targetRateLHa),
+    };
+  }
 
-  return {
-    ok: true,
-    nozzleFlowLMin,
-    rateFromSpacingLHa,
-    totalFlowLMin,
-    widthFromCountM,
-    widthDifferenceM,
-    rateFromCountWidthLHa,
-    requiredNozzleFlowLMin,
-    expectedCatchVolumeMl,
-    ratio,
-    coverageHaPerTank,
-    distancePerTankM,
-  };
+  let tank: SprayerTank | undefined;
+  if (input.tankVolumeL !== undefined) {
+    const coverageHaPerTank = input.tankVolumeL / rateFromSpacingLHa;
+    tank = {
+      coverageHaPerTank,
+      distancePerTankM:
+        effectiveWidthM === undefined ? undefined : (coverageHaPerTank * HECTARE_M2) / effectiveWidthM,
+    };
+  }
+
+  return { ok: true, nozzleFlowLMin, rateFromSpacingLHa, fromCount, target, tank };
 }
 
 /* ---------------------------------------------------------------------------
@@ -2434,9 +2471,18 @@ export interface YieldEstimateResult {
   readonly meanTHa: number;
   readonly minTHa: number;
   readonly maxTHa: number;
-  readonly stdDevTHa: number | undefined;
-  readonly coefficientOfVariationPercent: number | undefined;
-  readonly standardErrorTHa: number | undefined;
+  /**
+   * Present exactly when there are at least two samples — a single plot has no
+   * spread to report. The coefficient of variation stays optional INSIDE the
+   * group: it needs a non-zero mean, which two samples do not guarantee.
+   */
+  readonly spread:
+    | {
+        readonly stdDevTHa: number;
+        readonly standardErrorTHa: number;
+        readonly coefficientOfVariationPercent: number | undefined;
+      }
+    | undefined;
   readonly meanAtReferenceMoistureTHa: number | undefined;
   readonly meanAfterLossTHa: number;
   readonly totalYieldT: number;
@@ -2500,14 +2546,15 @@ export function yieldEstimateSamples(input: YieldEstimateInput): ProResult<Yield
   const min = Math.min(...yields);
   const max = Math.max(...yields);
 
-  let stdDevTHa: number | undefined;
-  let coefficientOfVariationPercent: number | undefined;
-  let standardErrorTHa: number | undefined;
+  let spread: YieldEstimateResult["spread"];
   if (n >= 2) {
     const sumSq = yields.reduce((s, v) => s + (v - mean) ** 2, 0);
-    stdDevTHa = Math.sqrt(sumSq / (n - 1));
-    standardErrorTHa = stdDevTHa / Math.sqrt(n);
-    coefficientOfVariationPercent = mean === 0 ? undefined : (stdDevTHa / mean) * 100;
+    const stdDevTHa = Math.sqrt(sumSq / (n - 1));
+    spread = {
+      stdDevTHa,
+      standardErrorTHa: stdDevTHa / Math.sqrt(n),
+      coefficientOfVariationPercent: mean === 0 ? undefined : (stdDevTHa / mean) * 100,
+    };
   }
 
   let meanAtReferenceMoistureTHa: number | undefined;
@@ -2536,9 +2583,7 @@ export function yieldEstimateSamples(input: YieldEstimateInput): ProResult<Yield
     meanTHa: mean,
     minTHa: min,
     maxTHa: max,
-    stdDevTHa,
-    coefficientOfVariationPercent,
-    standardErrorTHa,
+    spread,
     meanAtReferenceMoistureTHa,
     meanAfterLossTHa,
     totalYieldT: meanAfterLossTHa * input.plotAreaHa,

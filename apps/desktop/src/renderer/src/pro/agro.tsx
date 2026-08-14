@@ -1221,9 +1221,10 @@ export function LivestockRationDmTool() {
           result.rationDmPercentAsIssued === undefined
             ? undefined
             : `${s.rationDmPercentAsIssued}: ${proNum(result.rationDmPercentAsIssued, 2)}${s.unitPercent}`,
-          result.totalDailyCost === undefined
+          result.cost === undefined
             ? undefined
-            : `${s.totalDailyCost}: ${proUnit(proNum(result.totalDailyCost, 2), s.unitRsd)}   ${s.totalPeriodCost}: ${proUnit(proNum(result.totalPeriodCost ?? 0, 2), s.unitRsd)}`,
+            : `${s.totalDailyCost}: ${proUnit(proNum(result.cost.totalDailyCost, 2), s.unitRsd)}   ` +
+              `${s.totalPeriodCost}: ${proUnit(proNum(result.cost.totalPeriodCost, 2), s.unitRsd)}`,
         ]
           .filter((line): line is string => line !== undefined)
           .join("\n");
@@ -1288,10 +1289,13 @@ export function LivestockRationDmTool() {
               value={`${proNum(result.rationDmPercentAsIssued, 2)}${s.unitPercent}`}
             />
           )}
-          {result.totalDailyCost !== undefined && (
+          {result.cost !== undefined && (
             <ToolSection title={s.cost}>
-              <ResultRow label={s.totalDailyCost} value={proUnit(proNum(result.totalDailyCost, 2), s.unitRsd)} />
-              <ResultRow label={s.totalPeriodCost} value={proUnit(proNum(result.totalPeriodCost ?? 0, 2), s.unitRsd)} />
+              <ResultRow label={s.totalDailyCost} value={proUnit(proNum(result.cost.totalDailyCost, 2), s.unitRsd)} />
+              <ResultRow
+                label={s.totalPeriodCost}
+                value={proUnit(proNum(result.cost.totalPeriodCost, 2), s.unitRsd)}
+              />
             </ToolSection>
           )}
           <ToolFormula>{s.formula}</ToolFormula>
@@ -1550,9 +1554,12 @@ export function OrchardTrellisLayoutTool() {
         `${s.anchors}: ${proNum(result.anchors, 0)}`,
         `${s.wireLengthM}: ${proUnit(proNum(result.wireLengthM, 1), s.unitM)}`,
         result.wireMassKg === undefined ? undefined : `${s.wireMassKg}: ${proUnit(proNum(result.wireMassKg, 2), s.unitKg)}`,
-        result.coilsCeil === undefined
+        result.coils === undefined
           ? undefined
-          : `${s.coilsCeil}: ${proNum(result.coilsCeil, 0)}   ${s.kgPerCoil}: ${proUnit(proNum(result.kgPerCoil ?? 0, 2), s.unitKg)}`,
+          : `${s.coilsCeil}: ${proNum(result.coils.coilsCeil, 0)}` +
+            (result.coils.kgPerCoil === undefined
+              ? ""
+              : `   ${s.kgPerCoil}: ${proUnit(proNum(result.coils.kgPerCoil, 2), s.unitKg)}`),
         `${s.plantsPerRow}: ${proNum(result.plantsPerRow, 0)}`,
         `${s.totalPlants}: ${proNum(result.totalPlants, 0)}`,
         `${s.plotAreaHa}: ${proUnit(proNum(result.plotAreaHa, 3), s.unitHa)}`,
@@ -1620,10 +1627,15 @@ export function OrchardTrellisLayoutTool() {
           {result.wireMassKg !== undefined && (
             <ResultRow label={s.wireMassKg} value={proUnit(proNum(result.wireMassKg, 2), s.unitKg)} />
           )}
-          {result.coilsCeil !== undefined && (
+          {result.coils !== undefined && (
             <>
-              <ResultRow label={s.coilsCeil} value={proNum(result.coilsCeil, 0)} />
-              <ResultRow label={s.kgPerCoil} value={proUnit(proNum(result.kgPerCoil ?? 0, 2), s.unitKg)} />
+              <ResultRow label={s.coilsCeil} value={proNum(result.coils.coilsCeil, 0)} />
+              {result.coils.kgPerCoil !== undefined && (
+                <ResultRow
+                  label={s.kgPerCoil}
+                  value={proUnit(proNum(result.coils.kgPerCoil, 2), s.unitKg)}
+                />
+              )}
             </>
           )}
           <ResultRow label={s.plantsPerRow} value={proNum(result.plantsPerRow, 0)} />
@@ -1996,12 +2008,14 @@ export function SeedingRateTool() {
         `${s.totalSeedKg}: ${proUnit(proNum(result.totalSeedKg, 2), s.unitKg)}`,
         `${s.bagsExact}: ${proNum(result.bagsExact, 2)}   ${s.bagsCeil}: ${proNum(result.bagsCeil, 0)}`,
         `${s.totalSeeds}: ${proNum(result.totalSeeds, 0)}`,
-        result.unitsExact === undefined
+        result.units === undefined
           ? undefined
-          : `${s.unitsExact}: ${proNum(result.unitsExact, 2)}   ${s.unitsCeil}: ${proNum(result.unitsCeil ?? 0, 0)}`,
-        result.seedsPerLinearMeter === undefined
+          : `${s.unitsExact}: ${proNum(result.units.unitsExact, 2)}   ` +
+            `${s.unitsCeil}: ${proNum(result.units.unitsCeil, 0)}`,
+        result.perRow === undefined
           ? undefined
-          : `${s.seedsPerLinearMeter}: ${proNum(result.seedsPerLinearMeter, 2)}   ${s.spacingInRowCm}: ${proUnit(proNum(result.spacingInRowCm ?? 0, 2), s.unitCm)}`,
+          : `${s.seedsPerLinearMeter}: ${proNum(result.perRow.seedsPerLinearMeter, 2)}   ` +
+            `${s.spacingInRowCm}: ${proUnit(proNum(result.perRow.spacingInRowCm, 2), s.unitCm)}`,
         `${s.reverseStandCheckPerM2}: ${proNum(result.reverseStandCheckPerM2, 2)}`,
         result.totalCost === undefined ? undefined : `${s.totalCost}: ${proUnit(proNum(result.totalCost, 2), s.unitRsd)}`,
         // The inputs, as every other tool in the drawer copies them and this one
@@ -2062,16 +2076,19 @@ export function SeedingRateTool() {
           <ResultRow label={s.bagsExact} value={proNum(result.bagsExact, 2)} />
           <ResultRow label={s.bagsCeil} value={proNum(result.bagsCeil, 0)} />
           <ResultRow label={s.totalSeeds} value={proNum(result.totalSeeds, 0)} />
-          {result.unitsExact !== undefined && (
+          {result.units !== undefined && (
             <>
-              <ResultRow label={s.unitsExact} value={proNum(result.unitsExact, 2)} />
-              <ResultRow label={s.unitsCeil} value={proNum(result.unitsCeil ?? 0, 0)} />
+              <ResultRow label={s.unitsExact} value={proNum(result.units.unitsExact, 2)} />
+              <ResultRow label={s.unitsCeil} value={proNum(result.units.unitsCeil, 0)} />
             </>
           )}
-          {result.seedsPerLinearMeter !== undefined && (
+          {result.perRow !== undefined && (
             <ToolSection title={s.rowSetting}>
-              <ResultRow label={s.seedsPerLinearMeter} value={proNum(result.seedsPerLinearMeter, 2)} />
-              <ResultRow label={s.spacingInRowCm} value={proUnit(proNum(result.spacingInRowCm ?? 0, 2), s.unitCm)} />
+              <ResultRow label={s.seedsPerLinearMeter} value={proNum(result.perRow.seedsPerLinearMeter, 2)} />
+              <ResultRow
+                label={s.spacingInRowCm}
+                value={proUnit(proNum(result.perRow.spacingInRowCm, 2), s.unitCm)}
+              />
             </ToolSection>
           )}
           <ResultRow label={s.reverseStandCheckPerM2} value={proNum(result.reverseStandCheckPerM2, 2)} />
@@ -2172,24 +2189,34 @@ export function SprayerCalibrationTool() {
     : [
         `${s.nozzleFlowLMin}: ${proUnit(proNum(result.nozzleFlowLMin, 3), s.unitLMin)}`,
         `${s.rateFromSpacingLHa}: ${proUnit(proNum(result.rateFromSpacingLHa, 1), s.unitLHa)}`,
-        result.totalFlowLMin === undefined
+        result.fromCount === undefined
           ? undefined
-          : `${s.totalFlowLMin}: ${proUnit(proNum(result.totalFlowLMin, 2), s.unitLMin)}   ${s.widthFromCountM}: ${proUnit(proNum(result.widthFromCountM ?? 0, 2), s.unitM)}`,
-        result.widthDifferenceM === undefined
+          : `${s.totalFlowLMin}: ${proUnit(proNum(result.fromCount.totalFlowLMin, 2), s.unitLMin)}` +
+            `   ${s.widthFromCountM}: ${proUnit(proNum(result.fromCount.widthFromCountM, 2), s.unitM)}`,
+        result.fromCount?.widthDifferenceM === undefined
           ? undefined
-          : `${s.widthDifferenceM}: ${proUnit(proNum(result.widthDifferenceM, 2), s.unitM)}`,
-        result.rateFromCountWidthLHa === undefined
+          : `${s.widthDifferenceM}: ${proUnit(proNum(result.fromCount.widthDifferenceM, 2), s.unitM)}`,
+        result.fromCount === undefined
           ? undefined
-          : `${s.rateFromCountWidthLHa}: ${proUnit(proNum(result.rateFromCountWidthLHa, 1), s.unitLHa)}`,
-        result.requiredNozzleFlowLMin === undefined
+          : `${s.rateFromCountWidthLHa}: ` +
+            `${proUnit(proNum(result.fromCount.rateFromCountWidthLHa, 1), s.unitLHa)}`,
+        result.target === undefined
           ? undefined
-          : `${s.requiredNozzleFlowLMin}: ${proUnit(proNum(result.requiredNozzleFlowLMin, 3), s.unitLMin)}   ${s.expectedCatchVolumeMl}: ${proUnit(proNum(result.expectedCatchVolumeMl ?? 0, 1), s.unitMl)}`,
-        result.ratio === undefined
+          : `${s.requiredNozzleFlowLMin}: ` +
+            `${proUnit(proNum(result.target.requiredNozzleFlowLMin, 3), s.unitLMin)}` +
+            `   ${s.expectedCatchVolumeMl}: ` +
+            `${proUnit(proNum(result.target.expectedCatchVolumeMl, 1), s.unitMl)}`,
+        result.target?.ratio === undefined
           ? undefined
-          : `${s.rateFromSpacingLHa}: ${proUnit(proNum(result.rateFromSpacingLHa, 1), s.unitLHa)}   ${s.targetRateLHa}: ${proUnit(proNum(proParse(targetRateLHa) ?? 0, 1), s.unitLHa)}   ${s.ratio}: ${proRatio(result.ratio)}`,
-        result.coverageHaPerTank === undefined
+          : `${s.rateFromSpacingLHa}: ${proUnit(proNum(result.rateFromSpacingLHa, 1), s.unitLHa)}` +
+            `   ${s.targetRateLHa}: ${proUnit(proNum(proParse(targetRateLHa) ?? 0, 1), s.unitLHa)}` +
+            `   ${s.ratio}: ${proRatio(result.target.ratio)}`,
+        result.tank === undefined
           ? undefined
-          : `${s.coverageHaPerTank}: ${proUnit(proNum(result.coverageHaPerTank, 3), s.unitHa)}   ${s.distancePerTankM}: ${proUnit(proNum(result.distancePerTankM ?? 0, 1), s.unitM)}`,
+          : `${s.coverageHaPerTank}: ${proUnit(proNum(result.tank.coverageHaPerTank, 3), s.unitHa)}` +
+            (result.tank.distancePerTankM === undefined
+              ? ""
+              : `   ${s.distancePerTankM}: ${proUnit(proNum(result.tank.distancePerTankM, 1), s.unitM)}`),
       ]
         .filter((line): line is string => line !== undefined)
         .join("\n");
@@ -2229,30 +2256,37 @@ export function SprayerCalibrationTool() {
         <ToolSection title={s.results}>
           <ResultRow label={s.nozzleFlowLMin} value={proUnit(proNum(result.nozzleFlowLMin, 3), s.unitLMin)} />
           <ResultRow label={s.rateFromSpacingLHa} value={proUnit(proNum(result.rateFromSpacingLHa, 1), s.unitLHa)} />
-          {result.totalFlowLMin !== undefined && (
+          {result.fromCount !== undefined && (
             <ToolSection title={s.boomCheck}>
-              <ResultRow label={s.totalFlowLMin} value={proUnit(proNum(result.totalFlowLMin, 2), s.unitLMin)} />
-              <ResultRow label={s.widthFromCountM} value={proUnit(proNum(result.widthFromCountM ?? 0, 2), s.unitM)} />
-              {result.widthDifferenceM !== undefined && (
-                <ResultRow label={s.widthDifferenceM} value={proUnit(proNum(result.widthDifferenceM, 2), s.unitM)} />
-              )}
-              {result.rateFromCountWidthLHa !== undefined && (
+              <ResultRow
+                label={s.totalFlowLMin}
+                value={proUnit(proNum(result.fromCount.totalFlowLMin, 2), s.unitLMin)}
+              />
+              <ResultRow
+                label={s.widthFromCountM}
+                value={proUnit(proNum(result.fromCount.widthFromCountM, 2), s.unitM)}
+              />
+              {result.fromCount.widthDifferenceM !== undefined && (
                 <ResultRow
-                  label={s.rateFromCountWidthLHa}
-                  value={proUnit(proNum(result.rateFromCountWidthLHa, 1), s.unitLHa)}
+                  label={s.widthDifferenceM}
+                  value={proUnit(proNum(result.fromCount.widthDifferenceM, 2), s.unitM)}
                 />
               )}
+              <ResultRow
+                label={s.rateFromCountWidthLHa}
+                value={proUnit(proNum(result.fromCount.rateFromCountWidthLHa, 1), s.unitLHa)}
+              />
             </ToolSection>
           )}
-          {result.requiredNozzleFlowLMin !== undefined && (
+          {result.target !== undefined && (
             <ToolSection title={s.fromLabel}>
               <ResultRow
                 label={s.requiredNozzleFlowLMin}
-                value={proUnit(proNum(result.requiredNozzleFlowLMin, 3), s.unitLMin)}
+                value={proUnit(proNum(result.target.requiredNozzleFlowLMin, 3), s.unitLMin)}
               />
               <ResultRow
                 label={s.expectedCatchVolumeMl}
-                value={proUnit(proNum(result.expectedCatchVolumeMl ?? 0, 1), s.unitMl)}
+                value={proUnit(proNum(result.target.expectedCatchVolumeMl, 1), s.unitMl)}
               />
               <ToolAgainstLimit
                 label={s.rateFromSpacingLHa}
@@ -2260,14 +2294,22 @@ export function SprayerCalibrationTool() {
                 limitLabel={s.targetRateLHa}
                 limit={proUnit(proNum(proParse(targetRateLHa) ?? 0, 1), s.unitLHa)}
                 ratioLabel={s.ratio}
-                ratio={proRatio(result.ratio)}
+                ratio={proRatio(result.target.ratio)}
               />
             </ToolSection>
           )}
-          {result.coverageHaPerTank !== undefined && (
+          {result.tank !== undefined && (
             <ToolSection title={s.tank}>
-              <ResultRow label={s.coverageHaPerTank} value={proUnit(proNum(result.coverageHaPerTank, 3), s.unitHa)} />
-              <ResultRow label={s.distancePerTankM} value={proUnit(proNum(result.distancePerTankM ?? 0, 1), s.unitM)} />
+              <ResultRow
+                label={s.coverageHaPerTank}
+                value={proUnit(proNum(result.tank.coverageHaPerTank, 3), s.unitHa)}
+              />
+              {result.tank.distancePerTankM !== undefined && (
+                <ResultRow
+                  label={s.distancePerTankM}
+                  value={proUnit(proNum(result.tank.distancePerTankM, 1), s.unitM)}
+                />
+              )}
             </ToolSection>
           )}
           <ToolFormula>{s.formula}</ToolFormula>
@@ -3006,9 +3048,10 @@ export function BeeSyrupMixTool() {
         `${s.concentrationPercent}: ${proNum(result.concentrationPercent, 2)}${s.unitPercent}`,
         `${s.bagsExact}: ${proNum(result.bagsExact, 2)}`,
         `${s.bagsCeil}: ${proNum(result.bagsCeil, 0)}`,
-        result.hivesCovered === undefined
+        result.hives === undefined
           ? undefined
-          : `${s.hivesCovered}: ${proNum(result.hivesCovered, 0)}   ${s.hivesRemainderL}: ${proUnit(proNum(result.hivesRemainderL ?? 0, 3), s.unitL)}`,
+          : `${s.hivesCovered}: ${proNum(result.hives.hivesCovered, 0)}   ` +
+            `${s.hivesRemainderL}: ${proUnit(proNum(result.hives.hivesRemainderL, 3), s.unitL)}`,
         result.apiary === undefined
           ? undefined
           : `${s.apiaryVolumeL}: ${proUnit(proNum(result.apiary.volumeL, 2), s.unitL)}   ${s.apiarySugarKg}: ${proUnit(proNum(result.apiary.sugarKg, 3), s.unitKg)}   ${s.apiaryBagsCeil}: ${proNum(result.apiary.bagsCeil, 0)}`,
@@ -3084,12 +3127,12 @@ export function BeeSyrupMixTool() {
           />
           <ResultRow label={s.bagsExact} value={proNum(result.bagsExact, 2)} />
           <ResultRow label={s.bagsCeil} value={proNum(result.bagsCeil, 0)} />
-          {result.hivesCovered !== undefined && (
+          {result.hives !== undefined && (
             <>
-              <ResultRow label={s.hivesCovered} value={proNum(result.hivesCovered, 0)} />
+              <ResultRow label={s.hivesCovered} value={proNum(result.hives.hivesCovered, 0)} />
               <ResultRow
                 label={s.hivesRemainderL}
-                value={proUnit(proNum(result.hivesRemainderL ?? 0, 3), s.unitL)}
+                value={proUnit(proNum(result.hives.hivesRemainderL, 3), s.unitL)}
               />
             </>
           )}
@@ -3226,9 +3269,15 @@ export function YieldEstimateSamplesTool() {
       : [
           `${s.meanTHa}: ${proUnit(proNum(result.meanTHa, 3), s.unitTHa)}`,
           `${s.minTHa} / ${s.maxTHa}: ${proNum(result.minTHa, 3)} / ${proNum(result.maxTHa, 3)} ${s.unitTHa}`,
-          result.stdDevTHa === undefined
+          result.spread === undefined
             ? s.singleSampleNote
-            : `${s.stdDevTHa}: ${proUnit(proNum(result.stdDevTHa, 3), s.unitTHa)}   ${s.standardErrorTHa}: ${proUnit(proNum(result.standardErrorTHa ?? 0, 3), s.unitTHa)}${result.coefficientOfVariationPercent === undefined ? "" : `   ${s.coefficientOfVariationPercent}: ${proNum(result.coefficientOfVariationPercent, 1)}${s.unitPercent}`}`,
+            : `${s.stdDevTHa}: ${proUnit(proNum(result.spread.stdDevTHa, 3), s.unitTHa)}   ` +
+              `${s.standardErrorTHa}: ${proUnit(proNum(result.spread.standardErrorTHa, 3), s.unitTHa)}` +
+              `${
+                result.spread.coefficientOfVariationPercent === undefined
+                  ? ""
+                  : `   ${s.coefficientOfVariationPercent}: ${proNum(result.spread.coefficientOfVariationPercent, 1)}${s.unitPercent}`
+              }`,
           result.meanAtReferenceMoistureTHa === undefined
             ? ""
             : `${s.meanAtReferenceMoistureTHa}: ${proUnit(proNum(result.meanAtReferenceMoistureTHa, 3), s.unitTHa)}`,
@@ -3304,19 +3353,22 @@ export function YieldEstimateSamplesTool() {
           <ResultRow label={s.meanTHa} value={proUnit(proNum(result.meanTHa, 3), s.unitTHa)} />
           <ResultRow label={s.minTHa} value={proUnit(proNum(result.minTHa, 3), s.unitTHa)} />
           <ResultRow label={s.maxTHa} value={proUnit(proNum(result.maxTHa, 3), s.unitTHa)} />
-          {result.stdDevTHa === undefined ? (
+          {result.spread === undefined ? (
             <p className="tool__note">{s.singleSampleNote}</p>
           ) : (
             <>
-              <ResultRow label={s.stdDevTHa} value={proUnit(proNum(result.stdDevTHa, 3), s.unitTHa)} />
+              <ResultRow
+                label={s.stdDevTHa}
+                value={proUnit(proNum(result.spread.stdDevTHa, 3), s.unitTHa)}
+              />
               <ResultRow
                 label={s.standardErrorTHa}
-                value={proUnit(proNum(result.standardErrorTHa ?? 0, 3), s.unitTHa)}
+                value={proUnit(proNum(result.spread.standardErrorTHa, 3), s.unitTHa)}
               />
-              {result.coefficientOfVariationPercent !== undefined && (
+              {result.spread.coefficientOfVariationPercent !== undefined && (
                 <ResultRow
                   label={s.coefficientOfVariationPercent}
-                  value={`${proNum(result.coefficientOfVariationPercent, 1)}${s.unitPercent}`}
+                  value={`${proNum(result.spread.coefficientOfVariationPercent, 1)}${s.unitPercent}`}
                 />
               )}
             </>

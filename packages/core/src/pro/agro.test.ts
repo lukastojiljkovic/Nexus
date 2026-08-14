@@ -26,6 +26,29 @@ import {
  * running anything, exactly as `gradnja.test.ts` does.
  */
 
+/**
+ * Every key on a result, including the ones inside its groups.
+ *
+ * The life-safety tools below assert that no field is named after a verdict,
+ * and that check used to read `Object.keys(r)` — which was the whole result
+ * back when every field was flat. Grouping the correlated optionals moved
+ * fields one level down, so the flat read would now pass over a `passes` that
+ * had grown inside `target` or `fromCount`. A check whose reach shrinks when
+ * the data moves is the shape DC-45 named; it walks now.
+ */
+function allKeys(value: unknown, out: string[] = []): string[] {
+  if (value === null || typeof value !== "object") return out;
+  if (Array.isArray(value)) {
+    for (const item of value) allKeys(item, out);
+    return out;
+  }
+  for (const [key, child] of Object.entries(value)) {
+    out.push(key);
+    allKeys(child, out);
+  }
+  return out;
+}
+
 describe("baleCountStorage", () => {
   it("round bales, density-derived mass, yield×area, rectangular storage on-end — vector 1", () => {
     const r = baleCountStorage({
@@ -237,8 +260,9 @@ describe("beeSyrupMix", () => {
     expect(r.apiary?.volumeL).toBeCloseTo(200, 9);
     expect(r.apiary?.sugarKg).toBeCloseTo(176.99115, 5);
     // floor(200/5) = 40 hives, 0 remainder
-    expect(r.hivesCovered).toBe(40);
-    expect(r.hivesRemainderL).toBeCloseTo(0, 6);
+    expect(r.hives).toBeDefined();
+    expect(r.hives?.hivesCovered).toBe(40);
+    expect(r.hives?.hivesRemainderL).toBeCloseTo(0, 6);
   });
 
   it("1:1 by mass, 10 kg of sugar available — vector 2", () => {
@@ -261,8 +285,8 @@ describe("beeSyrupMix", () => {
     expect(r.densityKgL).toBeCloseTo(1.226994, 5);
     expect(r.concentrationPercent).toBeCloseTo(50, 6);
     // floor(16.30/2) = 8, remainder 0.30 l
-    expect(r.hivesCovered).toBe(8);
-    expect(r.hivesRemainderL).toBeCloseTo(0.3, 6);
+    expect(r.hives?.hivesCovered).toBe(8);
+    expect(r.hives?.hivesRemainderL).toBeCloseTo(0.3, 6);
   });
 
   it("regression: an exact hive count is not dropped a ULP below the whole number", () => {
@@ -281,8 +305,8 @@ describe("beeSyrupMix", () => {
     // exactly 245 on paper — and floor() without round9 would report 48 hives
     // instead of 49, with a whole hive's dose sitting in the remainder.
     expect(r.syrupVolumeL).toBeCloseTo(245, 6);
-    expect(r.hivesCovered).toBe(49);
-    expect(r.hivesRemainderL).toBeCloseTo(0, 6);
+    expect(r.hives?.hivesCovered).toBe(49);
+    expect(r.hives?.hivesRemainderL).toBeCloseTo(0, 6);
   });
 
   it("refuses a typed 0 on hiveCount or literPerHive — both optional, both must not be indistinguishable from an empty field", () => {
@@ -516,7 +540,7 @@ describe("fertiliserNutrientBlend", () => {
     });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    const keys = Object.keys(r);
+    const keys = allKeys(r);
     for (const banned of ["passes", "compliant", "safe", "withinLimit", "status", "verdict"]) {
       expect(keys).not.toContain(banned);
     }
@@ -1360,6 +1384,58 @@ describe("orchardTrellisLayout", () => {
     expect(r.densityPerHa).toBeCloseTo(4265.625, 2);
   });
 
+  it("counts coils from the coil length alone, and withholds the per-coil mass when no wire mass is known", () => {
+    const base = {
+      lengthM: 80,
+      widthM: 40,
+      rowSpacingM: 2.5,
+      headlandM: 4,
+      boundaryOffsetM: 2,
+      postSpacingM: 5,
+      wireRows: 4,
+      wireSlackPercent: 5,
+      plantSpacingM: 0.8,
+      anchorsPerEnd: 1,
+      plantAtBothEnds: true,
+      coilLengthM: 500,
+    };
+
+    // Same 4536 m of wire as vector 2, and no diameter and no declared mass per
+    // km: the coil COUNT is knowable, what one coil WEIGHS is not. The two used
+    // to be flat optionals side by side, and the surface guarded on the count
+    // and printed `kgPerCoil ?? 0` — „0,00 kg" for a mass nobody can compute.
+    const noMass = orchardTrellisLayout(base);
+    expect(noMass.ok).toBe(true);
+    if (!noMass.ok) return;
+    // ceil(4536/500) = ceil(9.072) = 10
+    expect(noMass.coils?.coilsCeil).toBe(10);
+    expect(noMass.coils?.kgPerCoil).toBeUndefined();
+    expect(noMass.wireMassKg).toBeUndefined();
+
+    // With a 2.4 mm wire: mass/m = pi*0.0012^2*7850 = 0.035512563 kg/m,
+    // so a 500 m coil weighs 500*0.035512563 = 17.756 kg.
+    const withMass = orchardTrellisLayout({ ...base, wireDiameterMm: 2.4 });
+    expect(withMass.ok).toBe(true);
+    if (!withMass.ok) return;
+    expect(withMass.coils?.coilsCeil).toBe(10);
+    expect(withMass.coils?.kgPerCoil).toBeCloseTo(17.756282, 5);
+
+    // A declared 200 kg/km label overrides the density estimate: 0.2 kg/m,
+    // so the same 500 m coil weighs 100 kg exactly.
+    const declared = orchardTrellisLayout({ ...base, wireMassPerKmOverride: 200 });
+    expect(declared.ok).toBe(true);
+    if (!declared.ok) return;
+    expect(declared.coils?.kgPerCoil).toBeCloseTo(100, 6);
+
+    // No coil length at all: the whole group is absent, count included.
+    const noCoils = orchardTrellisLayout({ ...base, coilLengthM: undefined, wireDiameterMm: 2.4 });
+    expect(noCoils.ok).toBe(true);
+    if (!noCoils.ok) return;
+    expect(noCoils.coils).toBeUndefined();
+    // 4536 * 0.035512563 = 161.084987 kg of wire, still reported without coils
+    expect(noCoils.wireMassKg).toBeCloseTo(161.084987, 5);
+  });
+
   it("reports zero rows, not a negative count, when the boundary offset exceeds the width", () => {
     const r = orchardTrellisLayout({
       lengthM: 50,
@@ -1705,8 +1781,9 @@ describe("seedingRate", () => {
     expect(r.totalSeedKg).toBeCloseTo(6148.44, 1);
     expect(r.bagsCeil).toBe(246);
     // 609.9644*0.125 = 76.2456 seeds/linear metre; 100/76.2456 = 1.3116 cm
-    expect(r.seedsPerLinearMeter).toBeCloseTo(76.2456, 3);
-    expect(r.spacingInRowCm).toBeCloseTo(1.3116, 3);
+    expect(r.perRow).toBeDefined();
+    expect(r.perRow?.seedsPerLinearMeter).toBeCloseTo(76.2456, 3);
+    expect(r.perRow?.spacingInRowCm).toBeCloseTo(1.3116, 3);
     // reverse check reproduces the 500 seeds/m2 starting point
     expect(r.reverseStandCheckPerM2).toBeCloseTo(500, 1);
   });
@@ -1733,10 +1810,11 @@ describe("seedingRate", () => {
     expect(r.totalSeedKg).toBeCloseTo(743.38, 1);
     // seeds/ha ~ 77,435 -> *30 ha = 2,323,064 seeds -> /50000 = 46.46 -> ceil 47
     expect(r.totalSeeds).toBeCloseTo(2323064, -1);
-    expect(r.unitsCeil).toBe(47);
+    expect(r.units).toBeDefined();
+    expect(r.units?.unitsCeil).toBe(47);
     // 70 cm row: seeds/linear metre = 7.743547*0.70 = 5.4205; spacing = 100/5.4205 = 18.4485 cm
-    expect(r.seedsPerLinearMeter).toBeCloseTo(5.4205, 3);
-    expect(r.spacingInRowCm).toBeCloseTo(18.4485, 2);
+    expect(r.perRow?.seedsPerLinearMeter).toBeCloseTo(5.4205, 3);
+    expect(r.perRow?.spacingInRowCm).toBeCloseTo(18.4485, 2);
   });
 
   it("refuses germination/purity below 1 (a likely fraction-vs-percent mistake) and a fully lost field", () => {
@@ -1770,12 +1848,14 @@ describe("sprayerCalibration", () => {
     // Q = 600*0.8/(6*0.5) = 480/3 = 160.0 l/ha
     expect(r.rateFromSpacingLHa).toBeCloseTo(160.0, 6);
     // q_uk = 24*0.8 = 19.2, W = 24*0.5 = 12 -> 600*19.2/(6*12) = 160.0 l/ha, same
-    expect(r.rateFromCountWidthLHa).toBeCloseTo(160.0, 6);
+    expect(r.fromCount).toBeDefined();
+    expect(r.fromCount?.rateFromCountWidthLHa).toBeCloseTo(160.0, 6);
     // no separately measured workingWidthM was entered, so there is nothing to compare
-    expect(r.widthDifferenceM).toBeUndefined();
+    expect(r.fromCount?.widthDifferenceM).toBeUndefined();
     // 400/160 = 2.50 ha per tank; 2.50*10000/12 = 2083.33 m
-    expect(r.coverageHaPerTank).toBeCloseTo(2.5, 6);
-    expect(r.distancePerTankM).toBeCloseTo(2083.33, 1);
+    expect(r.tank).toBeDefined();
+    expect(r.tank?.coverageHaPerTank).toBeCloseTo(2.5, 6);
+    expect(r.tank?.distancePerTankM).toBeCloseTo(2083.33, 1);
   });
 
   it("catch-measured flow against a label target rate — vector 2", () => {
@@ -1793,11 +1873,12 @@ describe("sprayerCalibration", () => {
     // Q = 600*1.40/(5*0.5) = 840/2.5 = 336.0 l/ha
     expect(r.rateFromSpacingLHa).toBeCloseTo(336.0, 6);
     // required q for 300 l/ha = 300*5*0.5/600 = 1.25 l/min
-    expect(r.requiredNozzleFlowLMin).toBeCloseTo(1.25, 6);
+    expect(r.target).toBeDefined();
+    expect(r.target?.requiredNozzleFlowLMin).toBeCloseTo(1.25, 6);
     // expected catch volume for 30 s = 1.25*30*1000/60 = 625 ml
-    expect(r.expectedCatchVolumeMl).toBeCloseTo(625, 6);
+    expect(r.target?.expectedCatchVolumeMl).toBeCloseTo(625, 6);
     // ratio = 336/300 = 1.12 — a quotient, not 112 %
-    expect(r.ratio).toBeCloseTo(1.12, 6);
+    expect(r.target?.ratio).toBeCloseTo(1.12, 6);
   });
 
   it("this is a life-safety tool: no field named passes/compliant/safe/status appears on the result", () => {
@@ -1809,7 +1890,7 @@ describe("sprayerCalibration", () => {
     });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    const keys = Object.keys(r);
+    const keys = allKeys(r);
     for (const banned of ["passes", "compliant", "safe", "withinLimit", "status", "verdict"]) {
       expect(keys).not.toContain(banned);
     }
@@ -1826,12 +1907,12 @@ describe("sprayerCalibration", () => {
     });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.widthFromCountM).toBeCloseTo(12, 6);
+    expect(r.fromCount?.widthFromCountM).toBeCloseTo(12, 6);
     // 10 - 12 = -2 m: a plain difference, not a boolean pass/fail — this is a
     // life-safety tool, so no tolerance threshold is baked in here.
-    expect(r.widthDifferenceM).toBeCloseTo(-2, 6);
+    expect(r.fromCount?.widthDifferenceM).toBeCloseTo(-2, 6);
     // both rates are shown side by side rather than one being silently picked
-    expect(r.rateFromCountWidthLHa).toBeDefined();
+    expect(r.fromCount?.rateFromCountWidthLHa).toBeDefined();
     expect(r.rateFromSpacingLHa).toBeDefined();
   });
 
@@ -1971,7 +2052,7 @@ describe("tankMixDose", () => {
     });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    const keys = Object.keys(r);
+    const keys = allKeys(r);
     for (const banned of ["passes", "compliant", "safe", "withinLimit", "status", "verdict"]) {
       expect(keys).not.toContain(banned);
     }
@@ -2013,8 +2094,7 @@ describe("yieldEstimateSamples", () => {
     expect(r.sampleYieldsTHa[0]).toBeCloseTo(5.76, 6);
     expect(r.meanTHa).toBeCloseTo(5.76, 6);
     // single sample -> no dispersion
-    expect(r.stdDevTHa).toBeUndefined();
-    expect(r.coefficientOfVariationPercent).toBeUndefined();
+    expect(r.spread).toBeUndefined();
     // 5.760*84/86 = 5.62605 t/ha
     expect(r.meanAtReferenceMoistureTHa).toBeCloseTo(5.62605, 3);
     // 5.62605*18.5 = 104.08 t
@@ -2052,9 +2132,10 @@ describe("yieldEstimateSamples", () => {
     expect(measured.sampleYieldsTHa[3]).toBeCloseTo(9.6, 9);
     expect(measured.meanTHa).toBeCloseTo(10.8, 6);
     // deviations 1.2,-0.4,0.4,-1.2 -> squares sum 3.20 -> s = sqrt(3.20/3) = 1.0328
-    expect(measured.stdDevTHa).toBeCloseTo(1.032796, 3);
+    expect(measured.spread).toBeDefined();
+    expect(measured.spread?.stdDevTHa).toBeCloseTo(1.032796, 3);
     // CV = 1.0328/10.80*100 = 9.5629 %
-    expect(measured.coefficientOfVariationPercent).toBeCloseTo(9.5629, 2);
+    expect(measured.spread?.coefficientOfVariationPercent).toBeCloseTo(9.5629, 2);
     expect(measured.minTHa).toBeCloseTo(9.6, 6);
     expect(measured.maxTHa).toBeCloseTo(12.0, 6);
   });
@@ -2111,9 +2192,9 @@ describe("yieldEstimateSamples", () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.meanTHa).toBeGreaterThan(0);
-    expect(r.stdDevTHa).toBeCloseTo(0, 9);
+    expect(r.spread?.stdDevTHa).toBeCloseTo(0, 9);
     // stdDev is ~0 but not undefined at n>=2; CV only refuses on an exact zero mean
-    expect(r.coefficientOfVariationPercent).toBeCloseTo(0, 6);
+    expect(r.spread?.coefficientOfVariationPercent).toBeCloseTo(0, 6);
   });
 });
 
