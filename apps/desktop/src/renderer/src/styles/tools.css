@@ -477,6 +477,53 @@
      whole tool grows past the window instead of the box scrolling. */
   min-width: 0;
   max-width: 100%;
+  /* BOUNDED, and that is the whole fix.
+
+     The HTTP registry is why. It is five columns, two of them Serbian
+     sentences, and at the narrowest window the pane is about 365px — the fixed
+     columns and their padding eat 240px of that, so the two prose columns are
+     bidding for 125px. No amount of wrapping fits it, and two previous attempts
+     to make it fit by naming more columns as prose moved the overflow from
+     180px to 212px to 104px without ever reaching zero. That is the shape of a
+     wrong approach rather than a wrong number: the table cannot fit, and
+     scrolling is the honest answer.
+
+     But the scroll was already here and it still read as a table with three
+     columns and no fourth. The reason is that this box was as tall as the whole
+     table — five hundred rows for the HTTP registry — so its horizontal
+     scrollbar sat at the bottom of all of them, hundreds of rows below the
+     fold. The affordance existed at a place nobody would ever arrive at, which
+     is the same as not existing. Capping the height puts the scrollbar back on
+     screen, and gives a long reference table a viewport instead of letting it
+     push the rest of the tool off the page.
+
+     `scrollbar-color` names the colours from tokens, which also opts the box
+     out of Chromium's overlay scrollbars — so the bar occupies layout and stays
+     visible rather than fading in on hover.
+
+     The height is `100vh` less the chrome above the box rather than a fraction
+     of the window, because a fraction does not know where the box STARTS. At
+     the smallest window a tool table begins around 23rem down — title bar, page
+     header, tool name, description, risk notice, search field — so `60vh` was
+     360px of box in 230px of remaining screen and the bottom edge, with the
+     horizontal scrollbar on it, stayed exactly where it had been. Subtracting
+     the offset makes the box end on screen at every height; the floor keeps it
+     from collapsing to nothing on a very short window. */
+  max-height: max(12rem, calc(100vh - 24rem));
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--nx-border-strong) transparent;
+}
+/* Pinned inside that viewport, because a column header that scrolls away turns
+   the rest of the rows into unlabelled columns — the exact complaint that
+   started this. Opaque on purpose: a translucent header shows the rows sliding
+   under it. `sticky` also keeps the layout audit quiet by construction, which
+   already exempts pinned subtrees from the overlap check. */
+.tool__table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--nx-surface);
 }
 .tool__table {
   width: 100%;
