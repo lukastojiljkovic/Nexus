@@ -1673,6 +1673,14 @@ export interface PlateCostInput {
 
 export interface PlateCostRow {
   readonly name: string;
+  /**
+   * The unit BOTH quantities below are in — echoed from the line rather than
+   * left for the caller to pair back up by index. A surface that prints the
+   * quantity without it prints a number in whichever unit it assumed, and the
+   * assumption is invisible: 200 ml of stock read as 200 g is not an obviously
+   * wrong figure on the screen, it is just the wrong one.
+   */
+  readonly unit: PlateUnit;
   /** What reaches the plate — the quantity as typed. */
   readonly usedQuantity: number;
   /** What has to be bought for it: quantity ÷ yield. */
@@ -1741,6 +1749,7 @@ export function plateCost(input: PlateCostInput): ProResult<PlateCost> {
 
   const rows: PlateCostRow[] = lines.map((line, index) => ({
     name: line.name,
+    unit: line.unit,
     usedQuantity: line.quantity,
     purchasedQuantity: purchased[index] ?? 0,
     cost: costs[index] ?? 0,

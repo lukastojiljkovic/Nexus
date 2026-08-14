@@ -410,6 +410,13 @@ export interface BillableHoursResult {
   /** What the time actually spent would come to, for comparison. */
   readonly actualAmount: number;
   readonly amount: number;
+  /**
+   * The billing interval this run applied, minutes — 0 meaning „bill the exact
+   * time". See `ShelfSpacingResult.rasterUsed`: the echo restated its own `"0"`
+   * for an empty field while the arithmetic applied this one, and this is the
+   * number that decides every rounded entry above it.
+   */
+  readonly intervalMinutesUsed: number;
   /** Billed minus actual: positive when rounding added time, negative when it took some. */
   readonly deltaMinutes: number;
   readonly deltaAmount: number;
@@ -463,6 +470,7 @@ export function billableHours(input: BillableHoursInput): ProResult<BillableHour
     amount,
     deltaMinutes: billedMinutes - actualMinutes,
     deltaAmount: amount - actualAmount,
+    intervalMinutesUsed: interval,
   };
 }
 

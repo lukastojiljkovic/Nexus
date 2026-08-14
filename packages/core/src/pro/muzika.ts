@@ -1154,6 +1154,16 @@ export interface SoundWavelengthResult {
   readonly quarterWavelength: number;
   readonly delayPerMetreMs: number;
   readonly delayMs: number | undefined;
+  /**
+   * The air temperature this run used, °C — see `ShelfSpacingResult.rasterUsed`.
+   * All three room-acoustics tools in this module default it to 20 and all three
+   * return it, so no screen has to keep its own copy of a number that moves
+   * every wavelength on it by 3.6 % between a warm room and a cold one.
+   *
+   * `undefined` when `speedOverride` was given: that path derives the speed from
+   * no temperature at all, so there is none to report.
+   */
+  readonly temperatureUsed: number | undefined;
 }
 
 /**
@@ -1167,6 +1177,10 @@ export function soundWavelength(input: SoundWavelengthInput): ProResult<SoundWav
   const { distance, speedOverride } = input;
   if (distance !== undefined && !isNonNegative(distance)) return fail("distance");
   let speed: number;
+  // `undefined` on the override path, and that is the honest answer rather than
+  // a tidier one: a speed typed in directly was not derived from any
+  // temperature, so there is no temperature for the screen to echo.
+  let temperatureUsed: number | undefined;
   if (speedOverride !== undefined) {
     if (!isPositive(speedOverride)) return fail("speedOverride");
     speed = speedOverride;
@@ -1174,6 +1188,7 @@ export function soundWavelength(input: SoundWavelengthInput): ProResult<SoundWav
     const temperature = input.temperature ?? 20;
     if (!isInRange(temperature, -50, 60)) return fail("temperature");
     speed = speedOfSound(temperature);
+    temperatureUsed = temperature;
   }
 
   const { entry } = input;
@@ -1197,6 +1212,7 @@ export function soundWavelength(input: SoundWavelengthInput): ProResult<SoundWav
     quarterWavelength: wavelength / 4,
     delayPerMetreMs: 1000 / speed,
     delayMs: distance === undefined ? undefined : (distance / speed) * 1000,
+    temperatureUsed,
   };
 }
 
@@ -1279,6 +1295,8 @@ export interface ReverbTimeResult {
   readonly speedOfSound: number;
   readonly totalArea: number;
   readonly bands: readonly ReverbBandResult[];
+  /** The air temperature this run used, °C — see `SoundWavelengthResult.temperatureUsed`. */
+  readonly temperatureUsed: number;
 }
 
 const REVERB_ALPHA_FIELD: Record<ReverbBand, keyof AbsorptionSurface> = {
@@ -1360,7 +1378,7 @@ export function reverbTime(input: ReverbTimeInput): ProResult<ReverbTimeResult> 
     };
   });
 
-  return { ok: true, speedOfSound: speed, totalArea, bands };
+  return { ok: true, speedOfSound: speed, totalArea, bands, temperatureUsed: temperature };
 }
 
 /** How many of p, q, r are non-zero: one axis, two, or all three. */
@@ -1393,6 +1411,8 @@ export interface RoomMode {
 export interface RoomModesResult {
   readonly speedOfSound: number;
   readonly modes: readonly RoomMode[];
+  /** The air temperature this run used, °C — see `SoundWavelengthResult.temperatureUsed`. */
+  readonly temperatureUsed: number;
 }
 
 /**
@@ -1444,6 +1464,7 @@ export function roomModes(input: RoomModesInput): ProResult<RoomModesResult> {
       ...mode,
       spacing: index === 0 ? undefined : mode.frequency - (found[index - 1]?.frequency ?? 0),
     })),
+    temperatureUsed: temperature,
   };
 }
 

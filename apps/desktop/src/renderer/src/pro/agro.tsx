@@ -2091,9 +2091,9 @@ export function SprayerCalibrationTool() {
         result.requiredNozzleFlowLMin === undefined
           ? undefined
           : `${s.requiredNozzleFlowLMin}: ${proUnit(proNum(result.requiredNozzleFlowLMin, 3), s.unitLMin)}   ${s.expectedCatchVolumeMl}: ${proUnit(proNum(result.expectedCatchVolumeMl ?? 0, 1), s.unitMl)}`,
-        result.ratioPercent === undefined
+        result.ratio === undefined
           ? undefined
-          : `${s.rateFromSpacingLHa}: ${proUnit(proNum(result.rateFromSpacingLHa, 1), s.unitLHa)}   ${s.targetRateLHa}: ${proUnit(proNum(proParse(targetRateLHa) ?? 0, 1), s.unitLHa)}   ${s.ratioPercent}: ${proNum(result.ratioPercent, 1)}${s.unitPercent}`,
+          : `${s.rateFromSpacingLHa}: ${proUnit(proNum(result.rateFromSpacingLHa, 1), s.unitLHa)}   ${s.targetRateLHa}: ${proUnit(proNum(proParse(targetRateLHa) ?? 0, 1), s.unitLHa)}   ${s.ratio}: ${proRatio(result.ratio)}`,
         result.coverageHaPerTank === undefined
           ? undefined
           : `${s.coverageHaPerTank}: ${proUnit(proNum(result.coverageHaPerTank, 3), s.unitHa)}   ${s.distancePerTankM}: ${proUnit(proNum(result.distancePerTankM ?? 0, 1), s.unitM)}`,
@@ -2166,8 +2166,8 @@ export function SprayerCalibrationTool() {
                 value={proUnit(proNum(result.rateFromSpacingLHa, 1), s.unitLHa)}
                 limitLabel={s.targetRateLHa}
                 limit={proUnit(proNum(proParse(targetRateLHa) ?? 0, 1), s.unitLHa)}
-                ratioLabel={s.ratioPercent}
-                ratio={result.ratioPercent === undefined ? undefined : `${proNum(result.ratioPercent, 1)}${s.unitPercent}`}
+                ratioLabel={s.ratio}
+                ratio={proRatio(result.ratio)}
               />
             </ToolSection>
           )}

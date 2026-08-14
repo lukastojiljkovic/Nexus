@@ -273,6 +273,16 @@ export interface BatteryBankRuntime {
   /** `hours` split for display; 59.6 minutes rolls up into the next whole hour. */
   readonly wholeHours: number;
   readonly minutes: number;
+  /**
+   * The three optional inputs as this run RESOLVED them — see
+   * `ShelfSpacingResult.rasterUsed` for why they are returned rather than left
+   * for the screen to restate. This tool had all three restated at once, two of
+   * them in string clothing (`series.trim() === "" ? "1"`), which is the same
+   * defect wearing something the `??` grep does not match.
+   */
+  readonly seriesUsed: number;
+  readonly parallelUsed: number;
+  readonly efficiencyPctUsed: number;
 }
 
 const splitHours = (hours: number): { readonly wholeHours: number; readonly minutes: number } => {
@@ -348,6 +358,9 @@ export function batteryBankRuntime(input: BatteryBankInput): ProResult<BatteryBa
       hours: hoursWithoutPeukert,
       hoursWithoutPeukert,
       peukertFullHours: undefined,
+      seriesUsed: series,
+      parallelUsed: parallel,
+      efficiencyPctUsed: efficiencyPct,
       ...splitHours(hoursWithoutPeukert),
     };
   }
@@ -371,6 +384,9 @@ export function batteryBankRuntime(input: BatteryBankInput): ProResult<BatteryBa
     hours,
     hoursWithoutPeukert,
     peukertFullHours,
+    seriesUsed: series,
+    parallelUsed: parallel,
+    efficiencyPctUsed: efficiencyPct,
     ...splitHours(hours),
   };
 }
@@ -553,6 +569,13 @@ export interface CableCrossSection {
   readonly dropAtChosenPct?: number | undefined;
   /** Drop at the chosen section over the user's own limit. Undefined without one. */
   readonly dropRatio?: number | undefined;
+  /**
+   * The conductor temperature this run corrected the resistivity to — see
+   * `ShelfSpacingResult.rasterUsed`. It is the assumption the whole answer
+   * rests on, so the screen must echo the one the arithmetic used rather than
+   * its own copy of the same 20.
+   */
+  readonly conductorTempCUsed: number;
 }
 
 /**
@@ -616,6 +639,7 @@ export function cableCrossSection(input: CableCrossSectionInput): ProResult<Cabl
     dropAtChosenPct,
     dropRatio:
       dropAtChosenPct === undefined ? undefined : ratioAgainst(dropAtChosenPct, permittedDropPct),
+    conductorTempCUsed: tempC,
   };
 }
 
@@ -652,6 +676,13 @@ export interface InductionMotorRating {
   readonly torqueNm: number;
   /** The speed the torque was evaluated at — synchronous when none was measured. */
   readonly torqueSpeedRpm: number;
+  /**
+   * The supply frequency this run assumed — see `ShelfSpacingResult.rasterUsed`.
+   * Synchronous speed is directly proportional to it, so an echo that says 50
+   * from its own literal while the arithmetic used something else would misstate
+   * every speed on the screen.
+   */
+  readonly frequencyHzUsed: number;
 }
 
 /**
@@ -700,6 +731,7 @@ export function inductionMotorRating(
     // P = M*omega with omega = 2*pi*n/60 reduces to 30000*P[kW]/(pi*n).
     torqueNm: (30000 * shaftPowerKw) / (Math.PI * torqueSpeedRpm),
     torqueSpeedRpm,
+    frequencyHzUsed: frequencyHz,
   };
 }
 
@@ -1389,6 +1421,12 @@ export interface PistonForce {
   readonly annulusAreaMm2: number;
   readonly extendForceN: number;
   readonly retractForceN: number;
+  /**
+   * The rod diameter this run used, mm — 0 for a cylinder with no rod on the
+   * return side. See `ShelfSpacingResult.rasterUsed`: the echo restated its own
+   * `"0"` for an empty field while the arithmetic applied this one.
+   */
+  readonly rodMmUsed: number;
 }
 
 /**
@@ -1427,6 +1465,7 @@ export function pistonForce(input: PistonForceInput): ProResult<PistonForce> {
     // mm2 to m2 is 1e-6; Pa times m2 is newtons.
     extendForceN: gaugePressurePa * boreAreaMm2 * 1e-6,
     retractForceN: gaugePressurePa * annulusAreaMm2 * 1e-6,
+    rodMmUsed: rodMm,
   };
 }
 

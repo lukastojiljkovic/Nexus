@@ -595,7 +595,7 @@ export const PRO_ZANAT_SR = {
     pitchHint: "Prazno polje uzima krupni korak iz ISO 261 za uneti prečnik. Sitni korak se unosi ručno.",
     desiredEngagement: "Traženi procenat zahvata",
     desiredEngagementHint: "Radionička konvencija, nije zahtev standarda. Prazno polje znači 75 %.",
-    ownDrillDiameter: "Prečnik burgije koju imate",
+    ownDrillDiameter: "Prečnik postojeće burgije",
     ownDrillDiameterHint: "Opciono, za obrnuti račun procenta zahvata.",
     passHoleSeries: "Serija prolazne rupe",
     passHoleSeriesFine: "Fina",

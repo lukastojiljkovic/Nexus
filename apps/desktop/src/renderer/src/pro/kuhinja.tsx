@@ -1,3 +1,4 @@
+import { foldSearchText } from "@nexus/core";
 import {
   backwardsTimeline,
   type TimelineStep,
@@ -52,6 +53,8 @@ import { strings } from "../strings.js";
 import { proNum, proParse, proRatio, proUnit } from "./format.js";
 import {
   CopyButton,
+  proRows,
+  reasonField,
   ResultRow,
   ToolAgainstLimit,
   ToolFailure,
@@ -77,25 +80,6 @@ import {
  * enough, appropriate or safe — the host draws the notice, and what is left here
  * is to never grow an opinion in the copy.
  */
-
-/**
- * The drawer's one row shape for a list: one row per line, cells separated by
- * `;`. This SPLITS text — it computes nothing — and every cell still goes
- * through `proParse` before a tool ever sees it, exactly like a single field.
- */
-function proRows(text: string): readonly (readonly string[])[] {
-  return text
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line !== "")
-    .map((line) => line.split(";").map((cell) => cell.trim()));
-}
-
-/** The field name a core refusal names, with a `:row` or `:index` suffix stripped. */
-function reasonField(reason: string): string {
-  const at = reason.indexOf(":");
-  return at === -1 ? reason : reason.slice(0, at);
-}
 
 /* -------------------------------------------------------------------------- */
 /* backwards-timeline                                                          */
@@ -221,13 +205,41 @@ export function BackwardsTimelineTool() {
 /* bakers-percentage                                                           */
 /* -------------------------------------------------------------------------- */
 
-/** Row role tokens, matched against the Serbian words the user types. */
-const BAKERS_ROLE_WORDS: Record<string, BakersRole> = {
-  brašno: "flour",
-  voda: "water",
-  ostalo: "other",
-  predferment: "preferment",
-};
+/**
+ * The role a typed word means — read from the SAME strings the labels are drawn
+ * from, and folded before comparison.
+ *
+ * Both halves of that were defects. This used to be a module-level map holding
+ * a second copy of „brašno" / „voda" / „ostalo" / „predferment", while the hint
+ * telling the user which words to type read them out of `strings`. One
+ * vocabulary with two authors: change the hint and the tool silently stops
+ * recognising the word it now asks for, and „silently" is exact — an
+ * unrecognised role falls through to „other", which changes the percentage base
+ * every other number on the screen is computed against. Nothing on the screen
+ * says so.
+ *
+ * And the map was keyed on the diacritic spelling alone, so a user typing
+ * „brasno" — which is most of them, and which the app's own search has always
+ * accepted — had their flour classified as „other". `foldSearchText` is the
+ * answer this app already gives to „compare two pieces of Serbian loosely", so
+ * it is the answer here too rather than a second one.
+ */
+export function bakersRoleFromWord(
+  word: string,
+  s: (typeof strings.pro.kuhinja)["bakers-percentage"],
+): BakersRole {
+  // Trimmed here and not left to the caller. `proRows` happens to trim its
+  // cells today, so relying on that would make this function correct by
+  // coincidence — and the coincidence is in a different file.
+  const folded = foldSearchText(word.trim());
+  return folded === foldSearchText(s.roleFlour)
+    ? "flour"
+    : folded === foldSearchText(s.roleWater)
+      ? "water"
+      : folded === foldSearchText(s.rolePreferment)
+        ? "preferment"
+        : "other";
+}
 
 function bakersRoleLabel(
   role: BakersRole,
@@ -260,10 +272,9 @@ export function BakersPercentageTool() {
   const rows = proRows(linesText);
   const typed = rows.length > 0;
   const lines: BakersLine[] = rows.map((cells) => {
-    const roleWord = (cells[1] ?? "").toLowerCase();
     return {
       name: cells[0] ?? "",
-      role: BAKERS_ROLE_WORDS[roleWord] ?? "other",
+      role: bakersRoleFromWord(cells[1] ?? "", s),
       value: proParse(cells[2] ?? "") ?? Number.NaN,
     };
   });
@@ -938,11 +949,27 @@ export function IceCreamOverrunTool() {
 /* lamination-layers                                                           */
 /* -------------------------------------------------------------------------- */
 
-const FOLD_WORDS: Record<string, FoldKind> = {
-  jednostruko: "letter",
-  knjiga: "book",
-  napola: "half",
-};
+/**
+ * The fold word the user typed, or `undefined` when it is not one of the three.
+ *
+ * Same shape as {@link bakersRoleFromWord} and for the same reason: the words
+ * this accepts and the words `foldLabel` prints are now one vocabulary with one
+ * author, and the comparison is folded so that case and diacritics do not
+ * decide whether a fold is recognised.
+ */
+export function foldFromWord(
+  word: string,
+  s: (typeof strings.pro.kuhinja)["lamination-layers"],
+): FoldKind | undefined {
+  const folded = foldSearchText(word.trim());
+  return folded === foldSearchText(s.foldLetter)
+    ? "letter"
+    : folded === foldSearchText(s.foldBook)
+      ? "book"
+      : folded === foldSearchText(s.foldHalf)
+        ? "half"
+        : undefined;
+}
 
 function foldLabel(fold: FoldKind, s: (typeof strings.pro.kuhinja)["lamination-layers"]): string {
   return fold === "letter" ? s.foldLetter : fold === "book" ? s.foldBook : s.foldHalf;
@@ -966,10 +993,9 @@ export function LaminationLayersTool() {
   const typed = rows.length > 0;
   // Any row whose fold word is not recognised forces an empty `folds` array,
   // which the core function itself refuses — the surface never guesses a fold.
-  const allRecognised = rows.every((cells) => FOLD_WORDS[(cells[0] ?? "").toLowerCase()] !== undefined);
-  const folds: FoldKind[] = allRecognised
-    ? rows.map((cells) => FOLD_WORDS[(cells[0] ?? "").toLowerCase()] ?? "letter")
-    : [];
+  const parsedFolds = rows.map((cells) => foldFromWord(cells[0] ?? "", s));
+  const allRecognised = parsedFolds.every((fold) => fold !== undefined);
+  const folds: FoldKind[] = allRecognised ? parsedFolds.filter((fold) => fold !== undefined) : [];
   const rollThicknesses = allRecognised
     ? rows.map((cells) => (cells[1] === undefined || cells[1].trim() === "" ? undefined : proParse(cells[1])))
     : undefined;
@@ -1700,7 +1726,28 @@ export function PanAreaVolumeTool() {
 /* plate-cost                                                                  */
 /* -------------------------------------------------------------------------- */
 
-const PLATE_UNIT_WORDS: Record<string, PlateUnit> = { g: "g", ml: "ml", kom: "piece" };
+/**
+ * The unit word the user typed, or `undefined` when it is none of the three.
+ *
+ * The `undefined` is the point. This used to be a map with a `?? "g"` fallback,
+ * so „200;ml" was silently costed as 200 g — priced per kilogram instead of per
+ * litre, printed as „200 g", and wrong by whatever the two prices differ by.
+ * `errorUnit` was written for exactly this case and no input could ever reach
+ * it, because a `PlateUnit` field cannot carry „not a unit".
+ */
+export function plateUnitFromWord(
+  word: string,
+  s: (typeof strings.pro.kuhinja)["plate-cost"],
+): PlateUnit | undefined {
+  const folded = foldSearchText(word.trim());
+  return folded === foldSearchText(s.unitG)
+    ? "g"
+    : folded === foldSearchText(s.unitMl)
+      ? "ml"
+      : folded === foldSearchText(s.unitPiece)
+        ? "piece"
+        : undefined;
+}
 
 function plateUnitLabel(unit: PlateUnit, s: (typeof strings.pro.kuhinja)["plate-cost"]): string {
   return unit === "g" ? s.unitG : unit === "ml" ? s.unitMl : s.unitPiece;
@@ -1719,10 +1766,14 @@ export function PlateCostTool() {
 
   const rows = proRows(linesText);
   const typed = rows.length > 0;
-  const lines: PlateLine[] = rows.map((cells) => ({
+  const units = rows.map((cells) => plateUnitFromWord(cells[2] ?? "", s));
+  const unitUnknown = units.some((unit) => unit === undefined);
+  const lines: PlateLine[] = rows.map((cells, index) => ({
     name: cells[0] ?? "",
     quantity: proParse(cells[1] ?? "") ?? Number.NaN,
-    unit: PLATE_UNIT_WORDS[(cells[2] ?? "").toLowerCase()] ?? "g",
+    // Only ever reached for a row this tool refuses to cost, so the „g" is a
+    // placeholder in an unread result, not an assumption about that row.
+    unit: units[index] ?? "g",
     unitPrice: proParse(cells[3] ?? "") ?? Number.NaN,
     yieldPercent: proParse(cells[4] ?? "") ?? Number.NaN,
   }));
@@ -1736,23 +1787,25 @@ export function PlateCostTool() {
 
   const field = result.ok ? undefined : reasonField(result.reason);
   const failure =
-    result.ok || !typed
+    !typed || (result.ok && !unitUnknown)
       ? undefined
-      : field === "lines"
-        ? s.errorLines
-        : field === "portions"
-          ? s.errorPortions
-          : field === "targetFoodCost"
-            ? s.errorTargetFoodCost
-            : field === "extraPerPortion"
-              ? s.errorExtraPerPortion
-              : field === "quantity"
-                ? s.errorQuantity
-                : field === "unitPrice"
-                  ? s.errorUnitPrice
-                  : field === "yieldPercent"
-                    ? s.errorYieldPercent
-                    : s.errorUnit;
+      : unitUnknown
+        ? s.errorUnit
+        : field === "lines"
+          ? s.errorLines
+          : field === "portions"
+            ? s.errorPortions
+            : field === "targetFoodCost"
+              ? s.errorTargetFoodCost
+              : field === "extraPerPortion"
+                ? s.errorExtraPerPortion
+                : field === "quantity"
+                  ? s.errorQuantity
+                  : field === "unitPrice"
+                    ? s.errorUnitPrice
+                    : field === "yieldPercent"
+                      ? s.errorYieldPercent
+                      : s.errorUnit;
 
   const copyText = !result.ok
     ? ""
@@ -1777,13 +1830,13 @@ export function PlateCostTool() {
 
       {failure !== undefined && <ToolFailure>{failure}</ToolFailure>}
 
-      {result.ok && typed && (
+      {result.ok && typed && !unitUnknown && (
         <ToolSection title={s.results}>
           <ToolTable
             head={[s.colName, s.colUsed, s.colCost, s.colShare]}
             rows={result.rows.map((row) => [
               row.name,
-              proUnit(proNum(row.usedQuantity, 3), s.unitG),
+              proUnit(proNum(row.usedQuantity, 3), plateUnitLabel(row.unit, s)),
               proUnit(proNum(row.cost, 2), s.unitCurrency),
               row.share === undefined ? "—" : `${proNum(row.share, 1)}%`,
             ])}
@@ -2025,14 +2078,35 @@ export function RatioSplitTool() {
 /* recipe-scale                                                                */
 /* -------------------------------------------------------------------------- */
 
-const RECIPE_UNIT_WORDS: Record<string, RecipeUnit> = {
-  g: "g",
-  kg: "kg",
-  ml: "ml",
-  l: "l",
-  kom: "piece",
-  ostalo: "other",
-};
+/**
+ * The unit word the user typed. Unlike {@link plateUnitFromWord} this one has
+ * an honest total answer: „other" is a member of `RecipeUnit`, meaning „a unit
+ * I do not convert, just scale the number", so a spoon or a „dl" lands there by
+ * design rather than by accident — and `displayUnitLabel` echoes back the word
+ * as written so nothing the user typed is erased.
+ *
+ * The vocabulary is still read out of `strings` rather than restated here. It
+ * was restated, and the two copies had already drifted: the map's own key for
+ * „other" was „ostalo" while the label read „drugo" — invisible only because
+ * every unrecognised word ends at „other" anyway.
+ */
+export function recipeUnitFromWord(
+  word: string,
+  s: (typeof strings.pro.kuhinja)["recipe-scale"],
+): RecipeUnit {
+  const folded = foldSearchText(word.trim());
+  return folded === foldSearchText(s.unitG)
+    ? "g"
+    : folded === foldSearchText(s.unitKg)
+      ? "kg"
+      : folded === foldSearchText(s.unitMl)
+        ? "ml"
+        : folded === foldSearchText(s.unitL)
+          ? "l"
+          : folded === foldSearchText(s.unitPiece)
+            ? "piece"
+            : "other";
+}
 
 function recipeUnitLabel(unit: RecipeUnit, s: (typeof strings.pro.kuhinja)["recipe-scale"]): string {
   return unit === "g"
@@ -2079,7 +2153,7 @@ export function RecipeScaleTool() {
     return {
       name: cells[2] ?? "",
       quantity: parsed !== undefined && parsed.ok ? parsed.value : Number.NaN,
-      unit: RECIPE_UNIT_WORDS[(cells[1] ?? "").toLowerCase()] ?? "other",
+      unit: recipeUnitFromWord(cells[1] ?? "", s),
       step: step === "" ? undefined : proParse(step),
     };
   });

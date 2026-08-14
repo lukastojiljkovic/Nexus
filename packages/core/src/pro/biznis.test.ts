@@ -2281,3 +2281,41 @@ describe("tieredCommission", () => {
     ).toEqual({ ok: false, reason: "maxCommission" });
   });
 });
+
+/**
+ * `intervalMinutes` defaults to 0 — „bill the exact time" — and the surface
+ * restated that 0 beside the echo as `intervalText.trim() === "" ? "0"`. See
+ * `ShelfSpacingResult.rasterUsed`. This one hid from the `??` grep entirely,
+ * because the restatement was a string, and it is the number that decides every
+ * rounded entry printed above it.
+ */
+describe("billableHours returns the interval it applied", () => {
+  // 1:10 = 70 min, 0:35 = 35, 2:05 = 125 — the same three the suite above uses.
+  const entries = ["1:10", "0:35", "2:05"];
+
+  it("reports 0 when none was given, and bills the exact minutes", () => {
+    const result = billableHours({ entries, rule: "up", place: "perItem", rate: 3000 });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.intervalMinutesUsed).toBe(0);
+    // No interval means no rounding: 70 + 35 + 125 = 230 minutes, unchanged.
+    expect(result.billedMinutes).toBe(230);
+    expect(result.actualMinutes).toBe(230);
+    expect(result.deltaMinutes).toBe(0);
+  });
+
+  it("reports the interval given, and it is the one in the arithmetic", () => {
+    const result = billableHours({
+      entries,
+      intervalMinutes: 15,
+      rule: "up",
+      place: "perItem",
+      rate: 3000,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.intervalMinutesUsed).toBe(15);
+    // 75 + 45 + 135 = 255, the rounding the reported interval produces.
+    expect(result.billedMinutes).toBe(255);
+  });
+});

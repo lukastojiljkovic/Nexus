@@ -82,6 +82,7 @@ import { strings } from "../strings.js";
 import { proNum, proParse, proRatio, proUnit } from "./format.js";
 import {
   CopyButton,
+  proRows,
   ResultRow,
   ToolAgainstLimit,
   ToolFailure,
@@ -93,21 +94,6 @@ import {
   ToolTable,
   ToolTextArea,
 } from "./shared.js";
-
-/**
- * The drawer's one row shape for a list — one row per line, cells separated
- * by `;`. This SPLITS text and computes nothing; every cell still goes
- * through `proParse` before a tool ever sees it. Copied from `pro/gradnja.tsx`
- * rather than shared, exactly as that file's own copy explains it should be:
- * a file-local helper, not a second export off the kit.
- */
-function proRows(text: string): readonly (readonly string[])[] {
-  return text
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line !== "")
-    .map((line) => line.split(";").map((cell) => cell.trim()));
-}
 
 /** Time-signature denominator select options — a numeric union, so the id and the value differ. */
 const DENOMINATOR_OPTIONS = ["1", "2", "4", "8", "16", "32"] as const;
@@ -138,8 +124,6 @@ const NOTE_DENOMINATOR_VALUES: Record<NoteDenominatorOption, NoteDenominator> = 
 const BIT_DEPTH_OPTIONS = ["8", "16", "24", "32"] as const;
 type BitDepthOption = (typeof BIT_DEPTH_OPTIONS)[number];
 const BIT_DEPTH_VALUES: Record<BitDepthOption, BitDepth> = { "8": 8, "16": 16, "24": 24, "32": 32 };
-
-const REVERB_BANDS: readonly ReverbBand[] = [125, 250, 500, 1000, 2000, 4000];
 
 /**
  * „Muzika i produkcija" — this toolkit's surfaces.
@@ -188,7 +172,11 @@ export function AudioLevelReferenceTool() {
       ? undefined
       : { kind: calibrationKind, value: proParse(calibrationValueText) ?? Number.NaN };
 
-  const result = audioLevel({ entry, impedance: proParse(impedanceText), calibration });
+  const result = audioLevel({
+    entry,
+    impedance: proParse(impedanceText),
+    calibration,
+  } satisfies AudioLevelInput);
 
   const failure =
     result.ok || !typed
@@ -1411,7 +1399,7 @@ export function ReverbTimeTool() {
         ),
         "",
         `${s.volume}: ${proUnit(proNum(proParse(volumeText) ?? 0, 3), s.unitM3)}`,
-        `${s.temperature}: ${proUnit(proNum(proParse(temperatureText) ?? 20, 1), s.unitC)}`,
+        `${s.temperature}: ${proUnit(proNum(result.temperatureUsed, 1), s.unitC)}`,
       ].join("\n");
 
   return (
@@ -1450,7 +1438,7 @@ export function ReverbTimeTool() {
             title={s.inputs}
             entries={[
               { label: s.volume, value: proUnit(proNum(proParse(volumeText) ?? 0, 3), s.unitM3) },
-              { label: s.temperature, value: proUnit(proNum(proParse(temperatureText) ?? 20, 1), s.unitC) },
+              { label: s.temperature, value: proUnit(proNum(result.temperatureUsed, 1), s.unitC) },
             ]}
           />
           <CopyButton value={copyText} />
@@ -1694,12 +1682,26 @@ export function SampleBufferLatencyTool() {
             <ResultRow label={s.resultMilliseconds} value={proUnit(proNum(convertResult.milliseconds, 4), s.unitMs)} />
           )}
           <ToolFormula>{s.formula}</ToolFormula>
+          {/* The converter reads the sample rate typed at the top of the tool,
+              which is nowhere in this section. Without it „4410 odbiraka" is a
+              number with no unit of time attached, on screen and in the copy. */}
+          <ToolInputEcho
+            title={s.inputs}
+            entries={[
+              { label: s.sampleRate, value: sampleRateText.trim() },
+              {
+                label: direction === "ms" ? s.msToSamples : s.samplesInput,
+                value: (direction === "ms" ? msText : samplesText).trim(),
+              },
+            ]}
+          />
           <CopyButton
-            value={
+            value={[
               "samples" in convertResult
                 ? `${s.resultSamples}: ${proNum(convertResult.samples, 4)}`
-                : `${s.resultMilliseconds}: ${proUnit(proNum(convertResult.milliseconds, 4), s.unitMs)}`
-            }
+                : `${s.resultMilliseconds}: ${proUnit(proNum(convertResult.milliseconds, 4), s.unitMs)}`,
+              `${s.sampleRate}: ${sampleRateText.trim()}`,
+            ].join("\n")}
           />
         </ToolSection>
       )}
@@ -2037,7 +2039,21 @@ export function SoundWavelengthTool() {
             entries={[
               { label: s.entryKind, value: entryLabel },
               { label: s.value, value: valueText.trim() },
-              { label: s.temperature, value: proUnit(proNum(proParse(temperatureText) ?? 20, 1), s.unitC) },
+              // Omitted, not defaulted: a speed typed in directly came from no
+              // temperature, and the echo used to print 20 °C beside it anyway.
+              ...(result.temperatureUsed === undefined
+                ? [
+                    {
+                      label: s.speedOverride,
+                      value: proUnit(proNum(result.speedOfSound, 2), s.unitMps),
+                    },
+                  ]
+                : [
+                    {
+                      label: s.temperature,
+                      value: proUnit(proNum(result.temperatureUsed, 1), s.unitC),
+                    },
+                  ]),
             ]}
           />
           <CopyButton value={copyText} />

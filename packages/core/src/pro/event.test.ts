@@ -934,6 +934,35 @@ describe("projectorThrowScreen", () => {
     expect(r.distanceM).toBeCloseTo(9.0, 6);
   });
 
+  it("the two luminance figures are the same quantity: cd/m² ÷ fL is the foot-lambert", () => {
+    // `avgLuminanceCdM2` and `avgLuminanceFl` are derived INDEPENDENTLY, each
+    // from its own unit system's primitive definition — a nit is lux·gain/π, a
+    // foot-lambert is lumens per square foot. Nothing in the code makes one
+    // follow from the other, so nothing in the code notices if one of the two
+    // lines is edited alone. This does: their quotient must be the defined
+    // 1 fL = 3.4262591 cd/m², at every gain and every screen size.
+    const FOOT_LAMBERT_CD_M2 = 3.4262591;
+    for (const [lumens, gain, aspectRatio, knownValueM] of [
+      [12000, 1.0, 16 / 9, 9.0],
+      [3500, 1.8, 4 / 3, 4.25],
+      [30000, 0.6, 2.39, 14.0],
+    ] as const) {
+      const r = projectorThrowScreen({
+        throwRatio: 1.5,
+        known: "distance",
+        knownValueM,
+        aspectRatio,
+        lumens,
+        gain,
+      });
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      expect(r.avgLuminanceCdM2).toBeDefined();
+      expect(r.avgLuminanceFl).toBeDefined();
+      expect((r.avgLuminanceCdM2 ?? 0) / (r.avgLuminanceFl ?? 1)).toBeCloseTo(FOOT_LAMBERT_CD_M2, 6);
+    }
+  });
+
   it("solves the FORWARD direction, D = W*TR: a 1.5 TR lens on a 4.000m-wide image puts the projector at 6.000m", () => {
     const r = projectorThrowScreen({
       throwRatio: 1.5,
@@ -1914,5 +1943,33 @@ describe("voltageDrop", () => {
     // R1 = 8 * 50/1000 = 0.4; loop = 0.8; dU = 16*0.8 = 12.8
     expect(r.resistanceOhm).toBeCloseTo(0.8, 6);
     expect(r.dropVolts).toBeCloseTo(12.8, 6);
+  });
+});
+
+/**
+ * `lineVoltage` defaults to 400 V, and the surface restated that 400 beside the
+ * echo. See `ShelfSpacingResult.rasterUsed`. Every current on that screen is
+ * inversely proportional to it, and 400 is a default precisely because a touring
+ * rig also meets 380 and 415.
+ */
+describe("threePhaseLoadBalance returns the line voltage it used", () => {
+  const consumers = [{ kw: 5.0, cosPhi: 1.0, connection: "L1" }] as const;
+
+  it("reports 400 when none was given", () => {
+    const r = threePhaseLoadBalance({ consumers: [...consumers] });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.lineVoltageUsed).toBe(400);
+    // U_LN = 400/sqrt(3) = 230.9401; I = 5000/230.9401 = 21.6506 A at cos phi 1.
+    expect(r.phases[0].currentA).toBeCloseTo(21.6506, 3);
+  });
+
+  it("reports the voltage given, and the current follows it", () => {
+    const r = threePhaseLoadBalance({ lineVoltage: 230, consumers: [...consumers] });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.lineVoltageUsed).toBe(230);
+    // U_LN = 230/sqrt(3) = 132.7906; I = 5000/132.7906 = 37.6533 A.
+    expect(r.phases[0].currentA).toBeCloseTo(37.6533, 3);
   });
 });

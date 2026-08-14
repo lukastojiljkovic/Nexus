@@ -35,6 +35,8 @@ import { strings } from "../strings.js";
 import { proNum, proParse, proRatio, proUnit } from "./format.js";
 import {
   CopyButton,
+  proRows,
+  reasonField,
   ResultRow,
   ToolAgainstLimit,
   ToolFailure,
@@ -47,26 +49,6 @@ import {
   ToolTable,
   ToolTextArea,
 } from "./shared.js";
-
-/**
- * The drawer's one row shape for a list, since the kit has no table-input
- * primitive: one row per line, cells separated by `;`. This SPLITS text — it
- * does not compute anything — and every cell still goes through `proParse`
- * before a tool ever sees it, exactly like a single-field input does.
- */
-function proRows(text: string): readonly (readonly string[])[] {
-  return text
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line !== "")
-    .map((line) => line.split(";").map((cell) => cell.trim()));
-}
-
-/** The field name a core refusal names, with a `:row` suffix stripped. */
-function reasonField(reason: string): string {
-  const at = reason.indexOf(":");
-  return at === -1 ? reason : reason.slice(0, at);
-}
 
 /**
  * „Zanat" — this toolkit's surfaces.
@@ -762,6 +744,14 @@ export function LinearCuttingStockTool() {
                 value: proUnit(proNum(proParse(startWasteText) ?? 0, 1), s.unitMm),
               },
               { label: s.endWaste, value: proUnit(proNum(proParse(endWasteText) ?? 0, 1), s.unitMm) },
+              // Four of the figures above are decided by this threshold —
+              // „ostatak upotrebljiv", both „bez upotrebljivog" wastes and the
+              // usable-remnant total — and it was the one input the echo left
+              // out, so a reader could not tell which run they were looking at.
+              {
+                label: s.minUsableRemnant,
+                value: proUnit(proNum(proParse(minUsableRemnantText) ?? 0, 1), s.unitMm),
+              },
             ]}
           />
           <CopyButton value={copyText} />

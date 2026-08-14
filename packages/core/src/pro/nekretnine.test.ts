@@ -1850,3 +1850,33 @@ describe("weightedArea", () => {
     });
   });
 });
+
+/**
+ * `occupancy` defaults to 100 %, and the surface restated that 100 beside the
+ * echo. See `ShelfSpacingResult.rasterUsed`: a default is a fact about the
+ * calculation, so the calculation reports it — the more so here, where the
+ * number IS the difference between the two income figures printed above it.
+ */
+describe("rentalYield returns the occupancy it applied", () => {
+  const base = { price: 120000, monthlyRent: 550, monthlyCosts: 40, annualCosts: 300 } as const;
+
+  it("reports 100 when none was given, and the effective income equals the potential", () => {
+    const result = rentalYield(base);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.occupancyUsed).toBe(100);
+    // 550*12 = 6600, and at full occupancy the two incomes are the same number.
+    expect(result.grossPotentialIncome).toBeCloseTo(6600, 6);
+    expect(result.effectiveGrossIncome).toBeCloseTo(6600, 6);
+  });
+
+  it("reports the occupancy given, and it is the one in the arithmetic", () => {
+    const result = rentalYield({ ...base, occupancy: 90 });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.occupancyUsed).toBe(90);
+    expect(result.effectiveGrossIncome).toBeCloseTo(5940, 6);
+    // Costs are NOT scaled by occupancy — 40*12 + 300 = 780 at either figure.
+    expect(result.netOperatingIncome).toBeCloseTo(5160, 6);
+  });
+});

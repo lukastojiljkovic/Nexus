@@ -861,7 +861,7 @@ export const PRO_AGRO_SR = {
     fromLabel: "Prema ciljanoj normi sa etikete",
     requiredNozzleFlowLMin: "Potreban protok dizne za ciljanu normu",
     expectedCatchVolumeMl: "Očekivana zahvaćena zapremina",
-    ratioPercent: "Izmereno ÷ ciljano",
+    ratio: "Izmereno ÷ ciljano",
     tank: "Rezervoar",
     coverageHaPerTank: "Površina po punom rezervoaru",
     distancePerTankM: "Dužina puta po punom rezervoaru",

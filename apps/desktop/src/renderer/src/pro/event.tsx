@@ -46,6 +46,8 @@ import { strings } from "../strings.js";
 import { proNum, proParse, proRatio, proUnit } from "./format.js";
 import {
   CopyButton,
+  proRows,
+  reasonField,
   ResultRow,
   ToolAgainstLimit,
   ToolFailure,
@@ -57,26 +59,6 @@ import {
   ToolTable,
   ToolTextArea,
 } from "./shared.js";
-
-/**
- * The drawer's one row shape for a list, since the kit has no table-input
- * primitive: one row per line, cells separated by `;`. This SPLITS text — it
- * does not compute anything — and every cell still goes through `proParse`
- * before a tool ever sees it, exactly like a single-field input does.
- */
-function proRows(text: string): readonly (readonly string[])[] {
-  return text
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line !== "")
-    .map((line) => line.split(";").map((cell) => cell.trim()));
-}
-
-/** The field name a core refusal names, with a `:row` suffix stripped. */
-function reasonField(reason: string): string {
-  const at = reason.indexOf(":");
-  return at === -1 ? reason : reason.slice(0, at);
-}
 
 /**
  * „Event i produkcija" — this toolkit's surfaces.
@@ -2199,6 +2181,17 @@ export function ThreePhaseLoadBalanceTool() {
   const names = rows.map((cells) => cells[0] ?? "");
   const connectionErrorIndex = rows.findIndex((cells) => mapPhaseConnection(cells[2] ?? "") === undefined);
 
+  /**
+   * How a refused row is named back to the user: by the name they gave the
+   * load, falling back to „red N" for a row typed without one. „red 7" is a
+   * position in a text box the user has to count down to; „rashladna vitrina"
+   * is the thing on the floor that is wrong.
+   */
+  const rowRef = (oneBased: number | undefined): string => {
+    const name = oneBased === undefined ? "" : (names[oneBased - 1] ?? "").trim();
+    return name !== "" ? name : `${s.rowLabel} ${oneBased ?? "?"}`;
+  };
+
   const consumers: ThreePhaseConsumer[] = rows.map((cells) => ({
     kw: parseKw(cells[1] ?? "") ?? Number.NaN,
     connection: mapPhaseConnection(cells[2] ?? "") ?? "L1",
@@ -2217,7 +2210,7 @@ export function ThreePhaseLoadBalanceTool() {
   const idx = result.ok ? undefined : rowNumber(result.reason);
   const failure =
     connectionErrorIndex !== -1
-      ? `${s.errorConnectionFormat} (${s.rowLabel} ${connectionErrorIndex + 1})`
+      ? `${s.errorConnectionFormat} (${rowRef(connectionErrorIndex + 1)})`
       : result.ok || !typed
         ? undefined
         : field === "consumers"
@@ -2229,13 +2222,13 @@ export function ThreePhaseLoadBalanceTool() {
               : field === "ratedBreakerA"
                 ? s.errorRatedBreaker
                 : field === "kw"
-                  ? `${s.errorKw} (${s.rowLabel} ${idx ?? "?"})`
+                  ? `${s.errorKw} (${rowRef(idx)})`
                   : field === "cosPhi"
-                    ? `${s.errorCosPhi} (${s.rowLabel} ${idx ?? "?"})`
+                    ? `${s.errorCosPhi} (${rowRef(idx)})`
                     : field === "simultaneityPct"
-                      ? `${s.errorSimultaneity} (${s.rowLabel} ${idx ?? "?"})`
+                      ? `${s.errorSimultaneity} (${rowRef(idx)})`
                       : field === "connection"
-                        ? `${s.errorConnectionRange} (${s.rowLabel} ${idx ?? "?"})`
+                        ? `${s.errorConnectionRange} (${rowRef(idx)})`
                         : field === "phases"
                           ? s.errorConsumers
                           : s.errorConsumers;
@@ -2313,7 +2306,7 @@ export function ThreePhaseLoadBalanceTool() {
           <ToolInputEcho
             title={s.inputs}
             entries={[
-              { label: s.lineVoltage, value: proUnit(proNum(proParse(lineVoltage) ?? 400, 0), s.unitV) },
+              { label: s.lineVoltage, value: proUnit(proNum(result.lineVoltageUsed, 0), s.unitV) },
               { label: s.consumers, value: `${proNum(consumers.length, 0)}` },
             ]}
           />

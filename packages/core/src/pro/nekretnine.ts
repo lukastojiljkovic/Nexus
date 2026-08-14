@@ -294,9 +294,8 @@ function payback(
 ): number | undefined {
   if (signChanges === 0) return undefined;
   let cumulative = 0;
-  let previous = 0;
   for (let t = 0; t < flows.length; t += 1) {
-    previous = cumulative;
+    const previous = cumulative;
     cumulative += flows[t] ?? 0;
     if (cumulative >= -zeroBand) {
       if (t === 0) return 0;
@@ -1927,6 +1926,13 @@ export interface RentalYieldResult {
   readonly grossRentMultiplier?: number | undefined;
   readonly paybackYears?: number | undefined;
   readonly valueAtCapRate?: number | undefined;
+  /**
+   * The occupancy this run applied, % — see `ShelfSpacingResult.rasterUsed`. It
+   * is the difference between the potential and the effective income, so an
+   * echo printing its own 100 while the arithmetic used something else would
+   * contradict the two figures directly above it.
+   */
+  readonly occupancyUsed: number;
 }
 
 /**
@@ -1975,6 +1981,7 @@ export function rentalYield(input: RentalYieldInput): ProResult<RentalYieldResul
       capRate === undefined || netOperatingIncome <= 0
         ? undefined
         : netOperatingIncome / (capRate / 100),
+    occupancyUsed: occupancy,
   };
 }
 

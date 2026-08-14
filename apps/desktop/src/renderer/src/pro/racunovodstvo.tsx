@@ -62,6 +62,8 @@ import { strings } from "../strings.js";
 import { proNum, proParse, proUnit } from "./format.js";
 import {
   CopyButton,
+  proRows,
+  reasonField,
   ResultRow,
   ToolFailure,
   ToolFormula,
@@ -90,19 +92,6 @@ import {
  * tool is the other three: the formula, the inputs echoed back, and a copy
  * button carrying both.
  */
-
-/**
- * The drawer's one row shape for a list: one row per line, cells separated by
- * `;`. This SPLITS text — it computes nothing — and every cell still goes
- * through `proParse` before a tool ever sees it, exactly like a single field.
- */
-function proRows(text: string): readonly (readonly string[])[] {
-  return text
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line !== "")
-    .map((line) => line.split(";").map((cell) => cell.trim()));
-}
 
 /**
  * A flat pasted list of amounts, one per line (or split on `;`/tab) — the
@@ -135,12 +124,6 @@ function proDate(text: string): CivilDate | undefined {
   const year = proParse(cells[2] ?? "");
   if (day === undefined || month === undefined || year === undefined) return undefined;
   return { day, month, year };
-}
-
-/** The field name a core refusal names, with a `:row` suffix stripped. */
-function reasonField(reason: string): string {
-  const at = reason.indexOf(":");
-  return at === -1 ? reason : reason.slice(0, at);
 }
 
 /** A value the user may not have typed yet, formatted or shown as an em dash. */

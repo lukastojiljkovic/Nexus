@@ -1371,7 +1371,7 @@ export function RentalYieldTool() {
         "",
         price.trim() === "" ? undefined : `${s.price}: ${proNum(proParse(price) ?? 0, 2)}`,
         `${s.monthlyRent}: ${proNum(proParse(monthlyRent) ?? 0, 2)}`,
-        `${s.occupancy}: ${proNum(proParse(occupancy) ?? 100, 2)}%`,
+        `${s.occupancy}: ${proNum(result.occupancyUsed, 2)}%`,
         `${s.monthlyCosts}: ${proNum(proParse(monthlyCosts) ?? 0, 2)}`,
         `${s.annualCosts}: ${proNum(proParse(annualCosts) ?? 0, 2)}`,
         capRate.trim() === "" ? undefined : `${s.capRate}: ${proNum(proParse(capRate) ?? 0, 2)}%`,
@@ -1420,7 +1420,7 @@ export function RentalYieldTool() {
             entries={[
               price.trim() === "" ? undefined : { label: s.price, value: proNum(proParse(price) ?? 0, 2) },
               { label: s.monthlyRent, value: proNum(proParse(monthlyRent) ?? 0, 2) },
-              { label: s.occupancy, value: `${proNum(proParse(occupancy) ?? 100, 2)}%` },
+              { label: s.occupancy, value: `${proNum(result.occupancyUsed, 2)}%` },
               { label: s.monthlyCosts, value: proNum(proParse(monthlyCosts) ?? 0, 2) },
               { label: s.annualCosts, value: proNum(proParse(annualCosts) ?? 0, 2) },
               capRate.trim() === "" ? undefined : { label: s.capRate, value: `${proNum(proParse(capRate) ?? 0, 2)}%` },

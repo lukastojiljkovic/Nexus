@@ -2095,7 +2095,16 @@ export interface SprayerCalibrationResult {
   readonly rateFromCountWidthLHa: number | undefined;
   readonly requiredNozzleFlowLMin: number | undefined;
   readonly expectedCatchVolumeMl: number | undefined;
-  readonly ratioPercent: number | undefined;
+  /**
+   * Measured rate ÷ the label rate, as a PLAIN quotient — the same shape every
+   * other limit-bearing tool in the drawer returns, and for the reason
+   * `ratioAgainst` is documented with: „1,12" is a number the sprayer operator
+   * reads, „112 %" of a label rate is an overrun that has already been judged.
+   * This field used to be `ratioPercent` and multiplied by 100 — the only
+   * `ratioAgainst` result in the whole drawer that did — under a label that
+   * says „Izmereno ÷ ciljano". The label was right and the number was not.
+   */
+  readonly ratio: number | undefined;
   readonly coverageHaPerTank: number | undefined;
   readonly distancePerTankM: number | undefined;
 }
@@ -2146,12 +2155,11 @@ export function sprayerCalibration(input: SprayerCalibrationInput): ProResult<Sp
 
   let requiredNozzleFlowLMin: number | undefined;
   let expectedCatchVolumeMl: number | undefined;
-  let ratioPercent: number | undefined;
+  let ratio: number | undefined;
   if (input.targetRateLHa !== undefined) {
     requiredNozzleFlowLMin = (input.targetRateLHa * input.speedKmh * input.nozzleSpacingM) / 600;
     expectedCatchVolumeMl = (requiredNozzleFlowLMin * input.catchTimeS * 1000) / 60;
-    const ratio = ratioAgainst(rateFromSpacingLHa, input.targetRateLHa);
-    ratioPercent = ratio === undefined ? undefined : ratio * 100;
+    ratio = ratioAgainst(rateFromSpacingLHa, input.targetRateLHa);
   }
 
   const coverageHaPerTank = input.tankVolumeL === undefined ? undefined : input.tankVolumeL / rateFromSpacingLHa;
@@ -2170,7 +2178,7 @@ export function sprayerCalibration(input: SprayerCalibrationInput): ProResult<Sp
     rateFromCountWidthLHa,
     requiredNozzleFlowLMin,
     expectedCatchVolumeMl,
-    ratioPercent,
+    ratio,
     coverageHaPerTank,
     distancePerTankM,
   };

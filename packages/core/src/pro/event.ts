@@ -1225,8 +1225,6 @@ export function parkingCloakroom(input: ParkingCloakroomInput): ProResult<Parkin
  * projector-throw-screen — „Projekcija i platno"
  * ------------------------------------------------------------------------ */
 
-/** 1 fL = 3.4262591 cd/m² — definition of the foot-lambert. */
-const FOOT_LAMBERT_CD_M2 = 3.4262591;
 /** 1 m² = 10.76391… ft² — definition of the unit. */
 const SQ_M_IN_SQ_FT = 10.763910416709722;
 
@@ -1342,6 +1340,13 @@ export function projectorThrowScreen(input: ProjectorInput): ProResult<Projector
   if (input.lumens !== undefined) {
     if (!isInRange(input.lumens, 100, 100000)) return fail("lumens");
     avgIlluminanceLx = input.lumens / areaM2;
+    // The SAME luminance, each from its own unit system's primitive definition
+    // rather than one converted into the other: a nit is lux·gain/π for a
+    // Lambertian screen, a foot-lambert IS lumens per square foot. That they
+    // agree is the foot-lambert's definition (10.76391…/π = 3.4262591 cd/m²
+    // per fL) — a relation this file used to hold as an unused constant and
+    // `event.test.ts` now holds as an assertion, which is the only form of it
+    // that can notice if one of the two lines is ever edited alone.
     avgLuminanceCdM2 = (avgIlluminanceLx * gain) / Math.PI;
     avgLuminanceFl = (input.lumens * gain) / areaFt2;
   }
@@ -2269,6 +2274,12 @@ export interface ThreePhaseLoadBalanceResult {
   readonly avgCurrentA: number;
   /** `undefined` when the average current is 0 — an imbalance ratio against nothing is not defined. */
   readonly imbalancePct: number | undefined;
+  /**
+   * The line voltage this run used, V — see `ShelfSpacingResult.rasterUsed`.
+   * Every current on this screen is inversely proportional to it, and 400 is a
+   * default precisely because a touring rig meets 380 and 415 as well.
+   */
+  readonly lineVoltageUsed: number;
 }
 
 /** Phase reference angles for L1/L2/L3, 120° apart. */
@@ -2410,6 +2421,7 @@ export function threePhaseLoadBalance(
     neutralCurrentA,
     avgCurrentA,
     imbalancePct,
+    lineVoltageUsed: lineVoltage,
   };
 }
 

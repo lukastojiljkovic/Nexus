@@ -173,7 +173,7 @@ export function BillableHoursTool() {
         `${s.deltaAmount}: ${proNum(result.deltaAmount, 2)}`,
         "",
         `${s.rate}: ${proNum(proParse(rateText) ?? 0, 2)}`,
-        `${s.intervalMinutes}: ${intervalText.trim() === "" ? "0" : intervalText.trim()}`,
+        `${s.intervalMinutes}: ${proNum(result.intervalMinutesUsed, 0)}`,
         `${s.rule}: ${ruleLabel}`,
         `${s.place}: ${placeLabel}`,
       ].join("\n");
@@ -246,7 +246,7 @@ export function BillableHoursTool() {
               { label: s.rate, value: proNum(proParse(rateText) ?? 0, 2) },
               {
                 label: s.intervalMinutes,
-                value: intervalText.trim() === "" ? "0" : intervalText.trim(),
+                value: proNum(result.intervalMinutesUsed, 0),
               },
               { label: s.rule, value: ruleLabel },
               { label: s.place, value: placeLabel },

@@ -1776,8 +1776,8 @@ describe("sprayerCalibration", () => {
     expect(r.requiredNozzleFlowLMin).toBeCloseTo(1.25, 6);
     // expected catch volume for 30 s = 1.25*30*1000/60 = 625 ml
     expect(r.expectedCatchVolumeMl).toBeCloseTo(625, 6);
-    // ratio = 336/300*100 = 112.0 %
-    expect(r.ratioPercent).toBeCloseTo(112.0, 4);
+    // ratio = 336/300 = 1.12 — a quotient, not 112 %
+    expect(r.ratio).toBeCloseTo(1.12, 6);
   });
 
   it("this is a life-safety tool: no field named passes/compliant/safe/status appears on the result", () => {

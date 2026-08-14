@@ -863,7 +863,9 @@ export interface CadastralArea {
 export function cadastralArea(input: CadastralAreaInput): ProResult<CadastralArea> {
   let total: bigint;
   let wasNormalised = false;
-  let rounded = false;
+  // No initialiser: both directions assign it, and a `false` here would be a
+  // default nothing ever reads — the shape that hides a branch which forgot to.
+  let rounded: boolean;
 
   if (input.direction === "toParts") {
     const value = input.squareMetres;

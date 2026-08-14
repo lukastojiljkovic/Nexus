@@ -1686,6 +1686,17 @@ function dayBasisOf(option: DayBasisOption): DayBasis {
   return option === "actual" ? "actual" : option === "365" ? 365 : 366;
 }
 
+function dayBasisLabel(
+  option: DayBasisOption,
+  s: (typeof strings.pro.pravo)["obracun-kamate"],
+): string {
+  return option === "actual" ? s.dayBasisActual : option === "365" ? s.dayBasis365 : s.dayBasis366;
+}
+
+/** The select's options, so the three bases are listed once rather than beside every use. */
+const dayBasisOptions = (s: (typeof strings.pro.pravo)["obracun-kamate"]) =>
+  DAY_BASIS_OPTIONS.map((id) => ({ id, label: dayBasisLabel(id, s) }));
+
 export function InterestAccrualTool() {
   const s = strings.pro.pravo["obracun-kamate"];
   const [principal, setPrincipal] = useState("");
@@ -1765,11 +1776,7 @@ export function InterestAccrualTool() {
         label={s.dayBasis}
         value={dayBasis}
         onChange={setDayBasis}
-        options={[
-          { id: "365", label: s.dayBasis365 },
-          { id: "366", label: s.dayBasis366 },
-          { id: "actual", label: s.dayBasisActual },
-        ]}
+        options={dayBasisOptions(s)}
       />
       <ToolSelect<"none" | "annual">
         label={s.capitalisation}
@@ -1841,7 +1848,7 @@ export function InterestAccrualTool() {
               { label: s.method, value: method === "conformal" ? s.methodConformal : s.methodProportional },
               {
                 label: s.dayBasis,
-                value: dayBasis === "actual" ? s.dayBasisActual : dayBasis === "365" ? s.dayBasis365 : s.dayBasis366,
+                value: dayBasisLabel(dayBasis, s),
               },
               {
                 label: s.capitalisation,

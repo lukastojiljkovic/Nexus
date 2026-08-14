@@ -603,7 +603,9 @@ export const PRO_KUHINJA_SR = {
     unitMl: "ml",
     unitL: "l",
     unitPiece: "kom",
-    unitOther: "drugo",
+    // The word `linesHint` above tells the user to type. It read „drugo" while
+    // the hint asked for „ostalo" — one vocabulary, two spellings.
+    unitOther: "ostalo",
   },
 
   "solution-concentration": {

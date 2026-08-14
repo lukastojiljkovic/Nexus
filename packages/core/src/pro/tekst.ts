@@ -1011,9 +1011,12 @@ function utf8Decode(bytes: readonly number[]): {
       i += 1;
       continue;
     }
-    let need = 0;
-    let min = 0;
-    let value = 0;
+    // No initialisers: every branch below either assigns all three or
+    // `continue`s, and a zero default would silently mean „1-byte sequence,
+    // minimum 0" for any lead byte a future branch forgot to handle.
+    let need: number;
+    let min: number;
+    let value: number;
     if (lead >= 0xc2 && lead <= 0xdf) {
       need = 1;
       min = 0x80;

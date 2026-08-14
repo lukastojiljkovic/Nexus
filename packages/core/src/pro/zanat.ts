@@ -2252,14 +2252,15 @@ export function wallpaperRolls(input: WallpaperRollsInput): ProResult<WallpaperR
   for (const phi of phases) {
     let roll = rolls[rolls.length - 1];
     if (roll === undefined) return fail("rollLength");
-    let phaseAtP = repeatMm > 0 ? ((roll.used % repeatMm) + repeatMm) % repeatMm : 0;
+    const phaseAtP = repeatMm > 0 ? ((roll.used % repeatMm) + repeatMm) % repeatMm : 0;
     let d = repeatMm > 0 ? (((phi - phaseAtP) % repeatMm) + repeatMm) % repeatMm : 0;
     let needed = d + heightMm;
     if (rollLengthMm - roll.used < needed) {
       rolls.push({ used: 0, strips: 0, waste: 0 });
       roll = rolls[rolls.length - 1];
       if (roll === undefined) return fail("rollLength");
-      phaseAtP = 0;
+      // A fresh roll is cut at phase 0, which is the whole reason `d` collapses
+      // to `phi % repeat` here rather than being measured from `phaseAtP`.
       d = repeatMm > 0 ? phi % repeatMm : 0;
       needed = d + heightMm;
       if (needed > rollLengthMm) return fail("rollLength");

@@ -582,7 +582,7 @@ export const PRO_RACUNOVODSTVO_SR = {
     errorOpeningUnitCost: "Početna jedinična cena ne sme biti negativna.",
     errorUnitCost: "Jedinična cena ulaza mora biti nula ili veća.",
     errorDecimals: "Broj decimala prikaza je ceo broj od 0 do 6.",
-    errorMovements: "Izlaz veći od raspoložive količine — provera unosa reda po red.",
+    errorMovements: "Izlaz je veći od raspoložive količine — proveri unos red po red.",
   },
 
   "loan-schedule": {

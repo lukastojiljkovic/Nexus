@@ -250,8 +250,8 @@ describe("hiddenCharacters", () => {
     // to the space switch, so U+2003 EM SPACE and U+3000 IDEOGRAPHIC SPACE were
     // found and counted under kind "space" but no combination of switches could
     // clean them. Both are kind "space" in HIDDEN_TABLE, exactly like NBSP.
-    // "a b　c" is 5 code points: a, EM SPACE, b, IDEOGRAPHIC SPACE, c.
-    const text = "a b　c";
+    // "a\u2003b\u3000c" is 5 code points: a, EM SPACE, b, IDEOGRAPHIC SPACE, c.
+    const text = "a\u2003b\u3000c";
     const untouched = hiddenCharacters({
       text,
       removeInvisible: false,
@@ -300,14 +300,14 @@ describe("hiddenCharacters", () => {
     // deleting it would glue two words together, a new defect rather than a
     // cleanup. U+200B ZERO WIDTH SPACE (kind zeroWidth) IS deleted.
     const result = hiddenCharacters({
-      text: "a\u200bb c",
+      text: "a\u200bb\u2003c",
       removeInvisible: true,
       normalizeSpaces: false,
       removeSoftHyphen: false,
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.cleaned).toBe("ab c");
+    expect(result.cleaned).toBe("ab\u2003c");
     expect(result.countByKind).toEqual({ control: 0, space: 1, zeroWidth: 1, softHyphen: 0, bidi: 0 });
   });
 

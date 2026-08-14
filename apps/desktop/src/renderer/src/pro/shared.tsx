@@ -567,3 +567,34 @@ export function ToolAgainstLimit({
     </div>
   );
 }
+
+/**
+ * The drawer's one row shape for a list, since the kit has no table-input
+ * primitive: one row per line, cells separated by `;`. This SPLITS text — it
+ * does not compute anything — and every cell still goes through `proParse`
+ * before a tool ever sees it, exactly like a single-field input does.
+ *
+ * Here rather than in each pack, because it was in six of them, byte for byte.
+ * A helper copied by hand is a defect wherever it was copied to the moment it
+ * needs changing — and this one has an obvious pending change in it, since a
+ * cell containing a `;` cannot be expressed at all.
+ */
+export function proRows(text: string): readonly (readonly string[])[] {
+  return text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "")
+    .map((line) => line.split(";").map((cell) => cell.trim()));
+}
+
+/**
+ * The field name a core refusal names, with a `:row` suffix stripped.
+ *
+ * Five identical copies before this one — see `proRows`. The suffix exists
+ * because a row-wise refusal has to say WHICH row, and a surface choosing an
+ * error message only cares which field.
+ */
+export function reasonField(reason: string): string {
+  const at = reason.indexOf(":");
+  return at === -1 ? reason : reason.slice(0, at);
+}

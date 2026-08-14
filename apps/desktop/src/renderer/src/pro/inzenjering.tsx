@@ -324,8 +324,8 @@ export function BatteryBankRuntimeTool() {
         "",
         `${s.cellCapacity}: ${proUnit(proNum(proParse(cellCapacityAh) ?? 0, 2), s.unitAh)}`,
         `${s.cellVoltage}: ${proUnit(proNum(proParse(cellVoltage) ?? 0, 2), s.unitV)}`,
-        `${s.series}: ${series.trim() === "" ? "1" : series.trim()}`,
-        `${s.parallel}: ${parallel.trim() === "" ? "1" : parallel.trim()}`,
+        `${s.series}: ${proNum(result.seriesUsed, 0)}`,
+        `${s.parallel}: ${proNum(result.parallelUsed, 0)}`,
         `${s.depthOfDischarge}: ${proNum(proParse(depthOfDischargePct) ?? 0, 1)} %`,
         `${s.load}: ${loadKind === "power" ? s.loadPower : s.loadCurrent} = ${loadValue.trim()}`,
       ]
@@ -407,11 +407,11 @@ export function BatteryBankRuntimeTool() {
             entries={[
               { label: s.cellCapacity, value: proUnit(proNum(proParse(cellCapacityAh) ?? 0, 2), s.unitAh) },
               { label: s.cellVoltage, value: proUnit(proNum(proParse(cellVoltage) ?? 0, 2), s.unitV) },
-              { label: s.series, value: series.trim() === "" ? "1" : series.trim() },
-              { label: s.parallel, value: parallel.trim() === "" ? "1" : parallel.trim() },
+              { label: s.series, value: proNum(result.seriesUsed, 0) },
+              { label: s.parallel, value: proNum(result.parallelUsed, 0) },
               { label: s.depthOfDischarge, value: `${proNum(proParse(depthOfDischargePct) ?? 0, 1)} %` },
               { label: s.loadKind, value: loadKind === "power" ? s.loadPower : s.loadCurrent },
-              { label: s.efficiency, value: `${proNum(proParse(efficiencyPct) ?? 100, 1)} %` },
+              { label: s.efficiency, value: `${proNum(result.efficiencyPctUsed, 1)} %` },
             ]}
           />
           <CopyButton value={copyText} />
@@ -745,7 +745,7 @@ export function CableCrossSectionTool() {
         `${s.current}: ${proUnit(proNum(proParse(currentA) ?? 0, 2), s.unitA)}`,
         `${s.voltage}: ${proUnit(proNum(proParse(voltageV) ?? 0, 1), s.unitV)}`,
         `${s.permittedDrop}: ${proNum(proParse(permittedDropPct) ?? 0, 2)} %`,
-        `${s.temperature}: ${proNum(proParse(conductorTempC) ?? 20, 1)}${s.unitDeg}`,
+        `${s.temperature}: ${proNum(result.conductorTempCUsed, 1)}${s.unitDeg}`,
       ]
         .filter((line) => line !== "")
         .join("\n");
@@ -817,7 +817,7 @@ export function CableCrossSectionTool() {
               { label: s.current, value: proUnit(proNum(proParse(currentA) ?? 0, 2), s.unitA) },
               { label: s.voltage, value: proUnit(proNum(proParse(voltageV) ?? 0, 1), s.unitV) },
               { label: s.permittedDrop, value: `${proNum(proParse(permittedDropPct) ?? 0, 2)} %` },
-              { label: s.temperature, value: `${proNum(proParse(conductorTempC) ?? 20, 1)}${s.unitDeg}` },
+              { label: s.temperature, value: `${proNum(result.conductorTempCUsed, 1)}${s.unitDeg}` },
             ]}
           />
           <CopyButton value={copyText} />
@@ -954,7 +954,7 @@ export function InductionMotorTool() {
               { label: s.powerFactor, value: proNum(proParse(powerFactor) ?? 0, 3) },
               { label: s.efficiency, value: `${proNum(proParse(efficiencyPct) ?? 0, 1)} %` },
               { label: s.poles, value: poles.trim() },
-              { label: s.frequency, value: proUnit(proNum(proParse(frequencyHz) ?? 50, 1), s.unitHz) },
+              { label: s.frequency, value: proUnit(proNum(result.frequencyHzUsed, 1), s.unitHz) },
             ]}
           />
           <CopyButton value={copyText} />
@@ -1782,10 +1782,7 @@ export function PressurePistonForceTool() {
                 title={s.inputs}
                 entries={[
                   { label: s.bore, value: proUnit(proNum(proParse(boreMm) ?? 0, 2), s.unitMm) },
-                  {
-                    label: s.rod,
-                    value: rodMm.trim() === "" ? "0" : proUnit(proNum(proParse(rodMm) ?? 0, 2), s.unitMm),
-                  },
+                  { label: s.rod, value: proUnit(proNum(force.rodMmUsed, 2), s.unitMm) },
                 ]}
               />
             </ToolSection>

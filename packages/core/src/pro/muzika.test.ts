@@ -1916,3 +1916,95 @@ describe("transposeKey", () => {
     ).toEqual({ ok: false, reason: "enharmonicPreference" });
   });
 });
+
+/**
+ * All three room-acoustics tools default the air temperature to 20 °C, and two
+ * of their surfaces restated that 20 beside the echo. See
+ * `ShelfSpacingResult.rasterUsed`: the calculation reports the value it used.
+ *
+ * The speed of sound is `331.3 * sqrt(1 + t/273.15)`, so 20 °C is
+ * `331.3 * sqrt(1.0732198) = 343.2146 m/s` — the constant every other test in
+ * this file is written against, which is what makes it the right thing to pin
+ * the reported temperature to.
+ */
+describe("the resolved air temperature is returned rather than restated", () => {
+  const uniform = (area: number, alpha: number) => ({
+    area,
+    alpha125: alpha,
+    alpha250: alpha,
+    alpha500: alpha,
+    alpha1000: alpha,
+    alpha2000: alpha,
+    alpha4000: alpha,
+  });
+
+  it("soundWavelength reports 20 °C by default and the temperature given otherwise", () => {
+    const defaulted = soundWavelength({ entry: { kind: "frequency", value: 100 } });
+    expect(defaulted.ok).toBe(true);
+    if (!defaulted.ok) return;
+    expect(defaulted.temperatureUsed).toBe(20);
+    expect(defaulted.speedOfSound).toBeCloseTo(343.2146, 4);
+
+    const explicit = soundWavelength({ entry: { kind: "frequency", value: 100 }, temperature: 0 });
+    expect(explicit.ok).toBe(true);
+    if (!explicit.ok) return;
+    expect(explicit.temperatureUsed).toBe(0);
+    expect(explicit.speedOfSound).toBeCloseTo(331.3, 10);
+  });
+
+  it("soundWavelength reports NO temperature when the speed was given directly", () => {
+    // The one case the old surface got visibly wrong: it printed „20 °C" beside
+    // a speed the user had measured themselves, which no temperature produced.
+    const overridden = soundWavelength({
+      entry: { kind: "frequency", value: 100 },
+      speedOverride: 350,
+    });
+    expect(overridden.ok).toBe(true);
+    if (!overridden.ok) return;
+    expect(overridden.temperatureUsed).toBeUndefined();
+    expect(overridden.speedOfSound).toBe(350);
+    expect(overridden.wavelength).toBeCloseTo(3.5, 12);
+  });
+
+  it("reverbTime reports the temperature it used", () => {
+    const base = { volume: 100, surfaces: [uniform(100, 0.2)] };
+
+    const defaulted = reverbTime(base);
+    expect(defaulted.ok).toBe(true);
+    if (!defaulted.ok) return;
+    expect(defaulted.temperatureUsed).toBe(20);
+    expect(defaulted.speedOfSound).toBeCloseTo(343.2146, 4);
+    // Same answer as the explicit-20 case above it in this file, which is the
+    // point: the default and the stated value are one number, not two.
+    expect(defaulted.bands[0]?.sabine).toBeCloseTo(0.805, 3);
+
+    const explicit = reverbTime({ ...base, temperature: 0 });
+    expect(explicit.ok).toBe(true);
+    if (!explicit.ok) return;
+    expect(explicit.temperatureUsed).toBe(0);
+    expect(explicit.speedOfSound).toBeCloseTo(331.3, 10);
+  });
+
+  it("roomModes reports the temperature it used", () => {
+    const base = { length: 5, width: 4, height: 2.8, frequencyLimit: 100 } as const;
+
+    const defaulted = roomModes(base);
+    expect(defaulted.ok).toBe(true);
+    if (!defaulted.ok) return;
+    expect(defaulted.temperatureUsed).toBe(20);
+    // f(1,0,0) = c/2L = 343.2146/10.
+    expect(defaulted.modes.find((m) => m.p === 1 && m.q === 0 && m.r === 0)?.frequency).toBeCloseTo(
+      34.32146,
+      4,
+    );
+
+    const explicit = roomModes({ ...base, temperature: 0 });
+    expect(explicit.ok).toBe(true);
+    if (!explicit.ok) return;
+    expect(explicit.temperatureUsed).toBe(0);
+    expect(explicit.modes.find((m) => m.p === 1 && m.q === 0 && m.r === 0)?.frequency).toBeCloseTo(
+      33.13,
+      10,
+    );
+  });
+});

@@ -1235,6 +1235,27 @@ describe("plateCost", () => {
     expect(result.rows[2]?.share).toBeCloseTo(1.7, 1);
   });
 
+  it("every row carries the unit its quantities are in", () => {
+    // Not decoration. `usedQuantity` and `purchasedQuantity` are in the LINE's
+    // unit, and a surface that prints them without it prints whichever unit it
+    // assumed: 20 ml of oil rendered as „20 g" is not an obviously wrong figure
+    // on a costing sheet, it is just the wrong one. It was rendered that way.
+    const result = plateCost({
+      lines: [
+        { name: "meso", quantity: 180, unit: "g", unitPrice: 1200, yieldPercent: 82 },
+        { name: "ulje", quantity: 20, unit: "ml", unitPrice: 250, yieldPercent: 100 },
+        { name: "jaje", quantity: 2, unit: "piece", unitPrice: 25, yieldPercent: 100 },
+      ],
+      portions: 1,
+      targetFoodCost: 30,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.rows.map((row) => row.unit)).toEqual(["g", "ml", "piece"]);
+    // And a piece is priced per piece, not per kilogram: 2 × 25 = 50.
+    expect(result.rows[2]?.cost).toBeCloseTo(50, 6);
+  });
+
   it("10 portions, a single 4500 line, no extra cost, 25% target -> 1800.00 selling price", () => {
     const result = plateCost({
       lines: [{ name: "sastojci", quantity: 4500, unit: "g", unitPrice: 1000, yieldPercent: 100 }],

@@ -2428,3 +2428,125 @@ describe("a union value is a claim, not a fact — the table is asked at runtime
     expect(pipeFlow(good).ok).toBe(true);
   });
 });
+
+/**
+ * The screen must not be the second author of a number the arithmetic chose.
+ *
+ * Each of these three tools defaults an input the user may leave empty, and each
+ * of their surfaces used to restate that default beside the echo — twice in
+ * string clothing (`series.trim() === "" ? "1"`), which is why a grep for `??`
+ * did not find them. Two copies of a default agree until one moves, and then the
+ * screen reports a value the arithmetic did not use.
+ */
+describe("the resolved defaults are returned rather than restated", () => {
+  it("batteryBankRuntime reports the series, parallel and efficiency it used", () => {
+    const base = {
+      cellCapacityAh: 100,
+      cellVoltage: 3.2,
+      depthOfDischargePct: 80,
+      load: { kind: "power", watts: 200 },
+    } as const;
+
+    const defaulted = batteryBankRuntime(base);
+    expect(defaulted.ok).toBe(true);
+    if (!defaulted.ok) return;
+    expect(defaulted.seriesUsed).toBe(1);
+    expect(defaulted.parallelUsed).toBe(1);
+    expect(defaulted.efficiencyPctUsed).toBe(100);
+
+    const explicit = batteryBankRuntime({
+      ...base,
+      series: 16,
+      parallel: 2,
+      converterEfficiencyPct: 92,
+    });
+    expect(explicit.ok).toBe(true);
+    if (!explicit.ok) return;
+    expect(explicit.seriesUsed).toBe(16);
+    expect(explicit.parallelUsed).toBe(2);
+    expect(explicit.efficiencyPctUsed).toBe(92);
+    // And the reported efficiency is the one actually in the arithmetic: the
+    // pack current is P/(U*eta) = 200/(51.2*0.92), not P/U.
+    expect(explicit.packCurrentA).toBeCloseTo(200 / (16 * 3.2 * 0.92), 12);
+
+    // The Peukert branch is a second return statement, and it carries them too.
+    const peukert = batteryBankRuntime({ ...base, peukertExponent: 1.1, ratedDischargeHours: 20 });
+    expect(peukert.ok).toBe(true);
+    if (!peukert.ok) return;
+    expect(peukert.seriesUsed).toBe(1);
+    expect(peukert.parallelUsed).toBe(1);
+    expect(peukert.efficiencyPctUsed).toBe(100);
+  });
+
+  it("cableCrossSection reports the conductor temperature it corrected to", () => {
+    const base = {
+      lengthM: 30,
+      currentA: 16,
+      voltageV: 230,
+      permittedDropPct: 3,
+      material: "copper",
+      system: "single",
+    } as const;
+
+    const defaulted = cableCrossSection(base);
+    expect(defaulted.ok).toBe(true);
+    if (!defaulted.ok) return;
+    expect(defaulted.conductorTempCUsed).toBe(20);
+    // 20 °C is the reference, so the correction factor is exactly 1 and the
+    // resistivity is the IEC copper value 1/58 ohm*mm2/m unchanged.
+    expect(defaulted.resistivity).toBeCloseTo(1 / 58, 12);
+
+    const explicit = cableCrossSection({ ...base, conductorTempC: 70 });
+    expect(explicit.ok).toBe(true);
+    if (!explicit.ok) return;
+    expect(explicit.conductorTempCUsed).toBe(70);
+    expect(explicit.resistivity).toBeCloseTo((1 / 58) * 1.1965, 12);
+  });
+
+  it("inductionMotorRating reports the supply frequency it assumed", () => {
+    const base = {
+      shaftPowerKw: 7.5,
+      lineVoltageV: 400,
+      powerFactor: 0.86,
+      efficiencyPct: 90,
+      poles: 4,
+    } as const;
+
+    const defaulted = inductionMotorRating(base);
+    expect(defaulted.ok).toBe(true);
+    if (!defaulted.ok) return;
+    expect(defaulted.frequencyHzUsed).toBe(50);
+    expect(defaulted.synchronousSpeedRpm).toBe(1500);
+
+    const explicit = inductionMotorRating({ ...base, frequencyHz: 60 });
+    expect(explicit.ok).toBe(true);
+    if (!explicit.ok) return;
+    expect(explicit.frequencyHzUsed).toBe(60);
+    expect(explicit.synchronousSpeedRpm).toBe(1800);
+  });
+});
+
+/**
+ * `rodMm` defaults to 0 — a cylinder with no rod on the return side — and the
+ * surface restated that 0 beside the echo. See `ShelfSpacingResult.rasterUsed`.
+ */
+describe("pistonForce returns the rod diameter it used", () => {
+  it("reports 0 when no rod was given, and the annulus equals the bore", () => {
+    const result = pistonForce({ gaugePressurePa: 1.6e7, boreMm: 63 });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.rodMmUsed).toBe(0);
+    // No rod: the return side sees the full bore, so the two forces are equal.
+    expect(result.annulusAreaMm2).toBeCloseTo(result.boreAreaMm2, 12);
+    expect(result.retractForceN).toBeCloseTo(result.extendForceN, 9);
+  });
+
+  it("reports the rod given, and it is the one the annulus was taken from", () => {
+    const result = pistonForce({ gaugePressurePa: 1.6e7, boreMm: 63, rodMm: 36 });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.rodMmUsed).toBe(36);
+    // pi x (63^2 - 36^2)/4 = pi x (3969 - 1296)/4 = pi x 668.25 = 2099.36929 mm2
+    expect(result.annulusAreaMm2).toBeCloseTo(2099.36929, 5);
+  });
+});
