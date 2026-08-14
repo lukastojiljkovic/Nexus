@@ -576,8 +576,9 @@ describe("grainMoistureShrink", () => {
     expect(r.minimumEnergyMJ).toBeCloseTo(1049.767442, 3);
     expect(r.minimumEnergyKWh).toBeCloseTo(291.602067, 3);
     // at 60% efficiency: 1049.767442/0.6 = 1749.612403 MJ = 486.003 kWh
-    expect(r.actualEnergyMJ).toBeCloseTo(1749.612403, 3);
-    expect(r.actualEnergyKWh).toBeCloseTo(486.003445, 3);
+    expect(r.actualEnergy).toBeDefined();
+    expect(r.actualEnergy?.actualEnergyMJ).toBeCloseTo(1749.612403, 3);
+    expect(r.actualEnergy?.actualEnergyKWh).toBeCloseTo(486.003445, 3);
   });
 
   it("corn, impurities-first vs moisture-first deduction genuinely differ, 24.5% -> 13% with 3%/2% impurities — vector 2", () => {
@@ -640,8 +641,9 @@ describe("grainMoistureShrink", () => {
     expect(r.minimumEnergyMJ).toBeCloseTo(7472.4989, 2);
     expect(r.minimumEnergyKWh).toBeCloseTo(2075.6942, 2);
     // at 70% efficiency: 7472.4989/0.7 = 10674.9985 MJ = 2965.2774 kWh
-    expect(r.actualEnergyMJ).toBeCloseTo(10674.9985, 2);
-    expect(r.actualEnergyKWh).toBeCloseTo(2965.2774, 2);
+    expect(r.actualEnergy).toBeDefined();
+    expect(r.actualEnergy?.actualEnergyMJ).toBeCloseTo(10674.9985, 2);
+    expect(r.actualEnergy?.actualEnergyKWh).toBeCloseTo(2965.2774, 2);
   });
 
   it("refuses a non-positive gross mass and an out-of-range target moisture (61, above the 0-60 input band — the shared moistureAdjust helper's own w2=100 guard sits behind this range check and is unreachable through it, by design)", () => {
@@ -801,10 +803,11 @@ describe("honeyMassMoisture", () => {
     // measured density = 1.4237/1.0 = 1.4237 kg/l (informational, not fed back into netMass)
     expect(r.measuredDensityKgL).toBeCloseTo(1.4237, 4);
     // mass per jar = 0.720 * 1.4237 = 1.025064 kg
-    expect(r.massPerJarKg).toBeCloseTo(1.025064, 5);
+    expect(r.jars).toBeDefined();
+    expect(r.jars?.massPerJarKg).toBeCloseTo(1.025064, 5);
     // floor(35.45/1.025064) = 34; remainder = 35.45 - 34*1.025064 = 0.597824 kg
-    expect(r.fullJars).toBe(34);
-    expect(r.jarRemainderKg).toBeCloseTo(0.597824, 4);
+    expect(r.jars?.fullJars).toBe(34);
+    expect(r.jars?.jarRemainderKg).toBeCloseTo(0.597824, 4);
   });
 
   it("regression: an exact jar count is not dropped a ULP below the whole number", () => {
@@ -823,9 +826,10 @@ describe("honeyMassMoisture", () => {
     // on paper, but 14.999999999999998 in raw double arithmetic — floor()
     // without round9 would report 14 jars with a whole jar in the remainder.
     expect(r.netMassKg).toBeCloseTo(9.45, 9);
-    expect(r.massPerJarKg).toBeCloseTo(0.63, 9);
-    expect(r.fullJars).toBe(15);
-    expect(r.jarRemainderKg).toBeCloseTo(0, 6);
+    expect(r.jars).toBeDefined();
+    expect(r.jars?.massPerJarKg).toBeCloseTo(0.63, 9);
+    expect(r.jars?.fullJars).toBe(15);
+    expect(r.jars?.jarRemainderKg).toBeCloseTo(0, 6);
     // same identity via the declared-net-mass path (630 g = 0.63 kg)
     expect(r.jarsFromDeclaredMass).toBe(15);
   });
@@ -844,13 +848,15 @@ describe("honeyMassMoisture", () => {
     if (!r.ok) return;
     expect(r.netMassKg).toBeCloseTo(100, 9);
     // m2 = 100*80.5/82.5 = 97.5758 kg
-    expect(r.driedMassKg).toBeCloseTo(97.575758, 4);
+    expect(r.drying).toBeDefined();
+    expect(r.drying?.driedMassKg).toBeCloseTo(97.575758, 4);
     // water removed = 2.424242 kg; shrink = 2.4242 %
-    expect(r.waterRemovedKg).toBeCloseTo(2.424242, 4);
-    expect(r.shrinkPercent).toBeCloseTo(2.424242, 3);
+    expect(r.drying?.waterRemovedKg).toBeCloseTo(2.424242, 4);
+    expect(r.drying?.shrinkPercent).toBeCloseTo(2.424242, 3);
     // gross value 100*900 = 90000; dried value 97.575758*900 = 87818.18
-    expect(r.grossValue).toBeCloseTo(90000, 2);
-    expect(r.driedValue).toBeCloseTo(87818.18, 1);
+    expect(r.value).toBeDefined();
+    expect(r.value?.grossValue).toBeCloseTo(90000, 2);
+    expect(r.value?.driedValue).toBeCloseTo(87818.18, 1);
   });
 
   it("densityKgL and measuredDensityKgL are never derived from one another — jar mass uses the ENTERED density, not the sample-measured one", () => {
@@ -873,11 +879,12 @@ describe("honeyMassMoisture", () => {
     expect(r.volumeFromMassL).toBeCloseTo(7.142857, 4);
     // mass/jar uses densityKgL (1.4): 0.500*1.4 = 0.70 kg = 700 g — a version
     // that used measuredDensityKgL (1.45) here would print 0.725 kg instead.
-    expect(r.massPerJarKg).toBeCloseTo(0.7, 9);
-    expect(r.massPerJarG).toBeCloseTo(700, 6);
+    expect(r.jars).toBeDefined();
+    expect(r.jars?.massPerJarKg).toBeCloseTo(0.7, 9);
+    expect(r.jars?.massPerJarG).toBeCloseTo(700, 6);
     // floor(10/0.70) = 14; remainder = 10 - 14*0.70 = 0.2 kg
-    expect(r.fullJars).toBe(14);
-    expect(r.jarRemainderKg).toBeCloseTo(0.2, 6);
+    expect(r.jars?.fullJars).toBe(14);
+    expect(r.jars?.jarRemainderKg).toBeCloseTo(0.2, 6);
   });
 
   it("refuses a gross mass at or below its own tare, and a sample volume of zero", () => {
@@ -963,11 +970,14 @@ describe("irrigationDepthVolume", () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     // I = 1500/(18*18) = 1500/324 = 4.62963 mm/h
-    expect(r.intensityMmH).toBeCloseTo(4.62963, 4);
+    expect(r.sprinkler).toBeDefined();
+    expect(r.sprinkler?.intensityMmH).toBeCloseTo(4.62963, 4);
     // net t_p = 30/4.62963 = 6.48 h
-    expect(r.netTimePerPositionH).toBeCloseTo(6.48, 2);
+    expect(r.sprinkler?.netTimePerPositionH).toBeCloseTo(6.48, 2);
+    // the two method groups are mutually exclusive, and now say so
+    expect(r.drip).toBeUndefined();
 
-    const drip = irrigationDepthVolume({
+    const dripRun = irrigationDepthVolume({
       normMm: 6,
       areaHa: 1,
       efficiencyPercent: 100,
@@ -979,11 +989,13 @@ describe("irrigationDepthVolume", () => {
       areaPerPlantM2: 11.25,
       hoursPerDay: 24,
     });
-    expect(drip.ok).toBe(true);
-    if (!drip.ok) return;
+    expect(dripRun.ok).toBe(true);
+    if (!dripRun.ok) return;
     // liters/plant (net) = 6*11.25 = 67.5 l; duration = 67.5/(4*2) = 8.4375 h
-    expect(drip.netLitersPerPlant).toBeCloseTo(67.5, 6);
-    expect(drip.netDripDurationH).toBeCloseTo(8.4375, 4);
+    expect(dripRun.drip).toBeDefined();
+    expect(dripRun.drip?.netLitersPerPlant).toBeCloseTo(67.5, 6);
+    expect(dripRun.drip?.netDripDurationH).toBeCloseTo(8.4375, 4);
+    expect(dripRun.sprinkler).toBeUndefined();
   });
 
   it("positionsPerDay is driven by the GROSS per-position time, not the net one — the pump must run that long", () => {
@@ -1005,9 +1017,10 @@ describe("irrigationDepthVolume", () => {
     });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.netTimePerPositionH).toBeCloseTo(6.48, 2);
-    expect(r.grossTimePerPositionH).toBeCloseTo(8.64, 2);
-    expect(r.positionsPerDay).toBe(2);
+    expect(r.sprinkler).toBeDefined();
+    expect(r.sprinkler?.netTimePerPositionH).toBeCloseTo(6.48, 2);
+    expect(r.sprinkler?.grossTimePerPositionH).toBeCloseTo(8.64, 2);
+    expect(r.sprinkler?.positionsPerDay).toBe(2);
   });
 
   it("refuses a zero flow value, and a typed zero (not merely an absent field) on any drip or sprinkler divisor", () => {

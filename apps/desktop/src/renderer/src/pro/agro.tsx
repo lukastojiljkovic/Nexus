@@ -509,12 +509,16 @@ export function GrainMoistureShrinkTool() {
         branchText(s.impuritiesFirst, result.impuritiesFirst),
         branchText(s.moistureFirst, result.moistureFirst),
         `${s.selected}: ${order === "impuritiesFirst" ? s.orderImpuritiesFirst : s.orderMoistureFirst}`,
-        result.grossValue === undefined
+        result.value === undefined
           ? undefined
-          : `${s.grossValue}: ${proUnit(proNum(result.grossValue, 2), s.unitRsd)}   ${s.netValue}: ${proUnit(proNum(result.netValue ?? 0, 2), s.unitRsd)}   ${s.valueDifference}: ${proUnit(proNum(result.valueDifference ?? 0, 2), s.unitRsd)}`,
-        result.actualEnergyMJ === undefined
-          ? `${s.minimumEnergyMJ}: ${proUnit(proNum(result.minimumEnergyMJ ?? 0, 2), s.unitMj)}   ${s.minimumEnergyKWh}: ${proUnit(proNum(result.minimumEnergyKWh ?? 0, 2), s.unitKwh)}`
-          : `${s.actualEnergyMJ}: ${proUnit(proNum(result.actualEnergyMJ, 2), s.unitMj)}   ${s.actualEnergyKWh}: ${proUnit(proNum(result.actualEnergyKWh ?? 0, 2), s.unitKwh)}`,
+          : `${s.grossValue}: ${proUnit(proNum(result.value.grossValue, 2), s.unitRsd)}   ` +
+            `${s.netValue}: ${proUnit(proNum(result.value.netValue, 2), s.unitRsd)}   ` +
+            `${s.valueDifference}: ${proUnit(proNum(result.value.valueDifference, 2), s.unitRsd)}`,
+        result.actualEnergy === undefined
+          ? `${s.minimumEnergyMJ}: ${proUnit(proNum(result.minimumEnergyMJ, 2), s.unitMj)}   ` +
+            `${s.minimumEnergyKWh}: ${proUnit(proNum(result.minimumEnergyKWh, 2), s.unitKwh)}`
+          : `${s.actualEnergyMJ}: ${proUnit(proNum(result.actualEnergy.actualEnergyMJ, 2), s.unitMj)}   ` +
+            `${s.actualEnergyKWh}: ${proUnit(proNum(result.actualEnergy.actualEnergyKWh, 2), s.unitKwh)}`,
       ]
         .filter((line): line is string => line !== undefined)
         .join("\n");
@@ -593,23 +597,29 @@ export function GrainMoistureShrinkTool() {
             label={s.selected}
             value={order === "impuritiesFirst" ? s.orderImpuritiesFirst : s.orderMoistureFirst}
           />
-          {result.grossValue !== undefined && (
+          {result.value !== undefined && (
             <ToolSection title={s.value}>
-              <ResultRow label={s.grossValue} value={proUnit(proNum(result.grossValue, 2), s.unitRsd)} />
-              <ResultRow label={s.netValue} value={proUnit(proNum(result.netValue ?? 0, 2), s.unitRsd)} />
-              <ResultRow label={s.valueDifference} value={proUnit(proNum(result.valueDifference ?? 0, 2), s.unitRsd)} />
+              <ResultRow label={s.grossValue} value={proUnit(proNum(result.value.grossValue, 2), s.unitRsd)} />
+              <ResultRow label={s.netValue} value={proUnit(proNum(result.value.netValue, 2), s.unitRsd)} />
+              <ResultRow
+                label={s.valueDifference}
+                value={proUnit(proNum(result.value.valueDifference, 2), s.unitRsd)}
+              />
             </ToolSection>
           )}
           <ToolSection title={s.energy}>
-            <ResultRow label={s.minimumEnergyMJ} value={proUnit(proNum(result.minimumEnergyMJ ?? 0, 2), s.unitMj)} />
-            <ResultRow
-              label={s.minimumEnergyKWh}
-              value={proUnit(proNum(result.minimumEnergyKWh ?? 0, 2), s.unitKwh)}
-            />
-            {result.actualEnergyMJ !== undefined && (
+            <ResultRow label={s.minimumEnergyMJ} value={proUnit(proNum(result.minimumEnergyMJ, 2), s.unitMj)} />
+            <ResultRow label={s.minimumEnergyKWh} value={proUnit(proNum(result.minimumEnergyKWh, 2), s.unitKwh)} />
+            {result.actualEnergy !== undefined && (
               <>
-                <ResultRow label={s.actualEnergyMJ} value={proUnit(proNum(result.actualEnergyMJ, 2), s.unitMj)} />
-                <ResultRow label={s.actualEnergyKWh} value={proUnit(proNum(result.actualEnergyKWh ?? 0, 2), s.unitKwh)} />
+                <ResultRow
+                  label={s.actualEnergyMJ}
+                  value={proUnit(proNum(result.actualEnergy.actualEnergyMJ, 2), s.unitMj)}
+                />
+                <ResultRow
+                  label={s.actualEnergyKWh}
+                  value={proUnit(proNum(result.actualEnergy.actualEnergyKWh, 2), s.unitKwh)}
+                />
               </>
             )}
           </ToolSection>
@@ -725,24 +735,29 @@ export function HoneyMassMoistureTool() {
           : `${s.measuredDensityKgL}: ${proUnit(proNum(result.measuredDensityKgL, 4), s.unitKgL)}`,
         `${s.waterMassKg}: ${proUnit(proNum(result.waterMassKg, 3), s.unitKg)}`,
         `${s.dryMatterMassKg}: ${proUnit(proNum(result.dryMatterMassKg, 3), s.unitKg)}`,
-        result.driedMassKg === undefined
+        result.drying === undefined
           ? undefined
-          : `${s.driedMassKg}: ${proUnit(proNum(result.driedMassKg, 3), s.unitKg)}   ${s.waterRemovedKg}: ${proUnit(proNum(result.waterRemovedKg ?? 0, 3), s.unitKg)}   ${s.shrinkPercent}: ${proNum(result.shrinkPercent ?? 0, 4)}${s.unitPercent}`,
-        result.massPerJarKg === undefined
+          : `${s.driedMassKg}: ${proUnit(proNum(result.drying.driedMassKg, 3), s.unitKg)}   ` +
+            `${s.waterRemovedKg}: ${proUnit(proNum(result.drying.waterRemovedKg, 3), s.unitKg)}   ` +
+            `${s.shrinkPercent}: ${proNum(result.drying.shrinkPercent, 4)}${s.unitPercent}`,
+        result.jars === undefined
           ? undefined
-          : `${s.massPerJarKg}: ${proUnit(proNum(result.massPerJarKg, 4), s.unitKg)} (${proUnit(proNum(result.massPerJarG ?? 0, 1), s.unitG)})   ${s.fullJars}: ${proNum(result.fullJars ?? 0, 0)}   ${s.jarRemainderKg}: ${proUnit(proNum(result.jarRemainderKg ?? 0, 4), s.unitKg)}`,
+          : `${s.massPerJarKg}: ${proUnit(proNum(result.jars.massPerJarKg, 4), s.unitKg)} ` +
+            `(${proUnit(proNum(result.jars.massPerJarG, 1), s.unitG)})   ` +
+            `${s.fullJars}: ${proNum(result.jars.fullJars, 0)}   ` +
+            `${s.jarRemainderKg}: ${proUnit(proNum(result.jars.jarRemainderKg, 4), s.unitKg)}`,
         result.jarsFromDeclaredMass === undefined
           ? undefined
           : `${s.jarsFromDeclaredMass}: ${proNum(result.jarsFromDeclaredMass, 0)}`,
-        result.fillMassVsDeclaredG === undefined
+        result.jars?.fillMassVsDeclaredG === undefined
           ? undefined
-          : `${s.fillMassVsDeclaredG}: ${proUnit(proNum(result.fillMassVsDeclaredG, 2), s.unitG)}`,
-        result.grossValue === undefined
+          : `${s.fillMassVsDeclaredG}: ${proUnit(proNum(result.jars.fillMassVsDeclaredG, 2), s.unitG)}`,
+        result.value === undefined
           ? undefined
-          : `${s.grossValue}: ${proUnit(proNum(result.grossValue, 2), s.unitRsd)}`,
-        result.driedValue === undefined
+          : `${s.grossValue}: ${proUnit(proNum(result.value.grossValue, 2), s.unitRsd)}`,
+        result.value?.driedValue === undefined
           ? undefined
-          : `${s.driedValue}: ${proUnit(proNum(result.driedValue, 2), s.unitRsd)}`,
+          : `${s.driedValue}: ${proUnit(proNum(result.value.driedValue, 2), s.unitRsd)}`,
         "",
         `${s.densityKgL}: ${proUnit(proNum(proParse(densityKgL) ?? 0, 4), s.unitKgL)}`,
         `${s.moisturePercent}: ${proNum(proParse(moisturePercent) ?? 0, 2)}${s.unitPercent}`,
@@ -812,32 +827,53 @@ export function HoneyMassMoistureTool() {
           <p className="tool__note">{s.independenceNote}</p>
           <ResultRow label={s.waterMassKg} value={proUnit(proNum(result.waterMassKg, 3), s.unitKg)} />
           <ResultRow label={s.dryMatterMassKg} value={proUnit(proNum(result.dryMatterMassKg, 3), s.unitKg)} />
-          {result.driedMassKg !== undefined && (
+          {result.drying !== undefined && (
             <ToolSection title={s.drying}>
-              <ResultRow label={s.driedMassKg} value={proUnit(proNum(result.driedMassKg, 3), s.unitKg)} />
-              <ResultRow label={s.waterRemovedKg} value={proUnit(proNum(result.waterRemovedKg ?? 0, 3), s.unitKg)} />
-              <ResultRow label={s.shrinkPercent} value={`${proNum(result.shrinkPercent ?? 0, 4)}${s.unitPercent}`} />
+              <ResultRow
+                label={s.driedMassKg}
+                value={proUnit(proNum(result.drying.driedMassKg, 3), s.unitKg)}
+              />
+              <ResultRow
+                label={s.waterRemovedKg}
+                value={proUnit(proNum(result.drying.waterRemovedKg, 3), s.unitKg)}
+              />
+              <ResultRow
+                label={s.shrinkPercent}
+                value={`${proNum(result.drying.shrinkPercent, 4)}${s.unitPercent}`}
+              />
             </ToolSection>
           )}
-          {result.massPerJarKg !== undefined && (
+          {result.jars !== undefined && (
             <ToolSection title={s.jars}>
-              <ResultRow label={s.massPerJarKg} value={proUnit(proNum(result.massPerJarKg, 4), s.unitKg)} />
-              <ResultRow label={s.massPerJarG} value={proUnit(proNum(result.massPerJarG ?? 0, 1), s.unitG)} />
-              <ResultRow label={s.fullJars} value={proNum(result.fullJars ?? 0, 0)} />
-              <ResultRow label={s.jarRemainderKg} value={proUnit(proNum(result.jarRemainderKg ?? 0, 4), s.unitKg)} />
-              {result.fillMassVsDeclaredG !== undefined && (
-                <ResultRow label={s.fillMassVsDeclaredG} value={proUnit(proNum(result.fillMassVsDeclaredG, 2), s.unitG)} />
+              <ResultRow
+                label={s.massPerJarKg}
+                value={proUnit(proNum(result.jars.massPerJarKg, 4), s.unitKg)}
+              />
+              <ResultRow label={s.massPerJarG} value={proUnit(proNum(result.jars.massPerJarG, 1), s.unitG)} />
+              <ResultRow label={s.fullJars} value={proNum(result.jars.fullJars, 0)} />
+              <ResultRow
+                label={s.jarRemainderKg}
+                value={proUnit(proNum(result.jars.jarRemainderKg, 4), s.unitKg)}
+              />
+              {result.jars.fillMassVsDeclaredG !== undefined && (
+                <ResultRow
+                  label={s.fillMassVsDeclaredG}
+                  value={proUnit(proNum(result.jars.fillMassVsDeclaredG, 2), s.unitG)}
+                />
               )}
             </ToolSection>
           )}
           {result.jarsFromDeclaredMass !== undefined && (
             <ResultRow label={s.jarsFromDeclaredMass} value={proNum(result.jarsFromDeclaredMass, 0)} />
           )}
-          {result.grossValue !== undefined && (
+          {result.value !== undefined && (
             <ToolSection title={s.value}>
-              <ResultRow label={s.grossValue} value={proUnit(proNum(result.grossValue, 2), s.unitRsd)} />
-              {result.driedValue !== undefined && (
-                <ResultRow label={s.driedValue} value={proUnit(proNum(result.driedValue, 2), s.unitRsd)} />
+              <ResultRow label={s.grossValue} value={proUnit(proNum(result.value.grossValue, 2), s.unitRsd)} />
+              {result.value.driedValue !== undefined && (
+                <ResultRow
+                  label={s.driedValue}
+                  value={proUnit(proNum(result.value.driedValue, 2), s.unitRsd)}
+                />
               )}
             </ToolSection>
           )}
@@ -933,21 +969,25 @@ export function IrrigationDepthVolumeTool() {
         `${s.flowM3h}: ${proUnit(proNum(result.flowM3h, 3), s.unitM3h)}`,
         `${s.timeHours}: ${proNum(result.timeHoursPart, 0)} ${s.unitH} ${proNum(result.timeMinutesPart, 0)} ${s.unitMin}`,
         `${s.daysNeeded}: ${proNum(result.daysNeeded, 0)}`,
-        result.intensityMmH === undefined
+        result.sprinkler === undefined
           ? undefined
-          : `${s.intensityMmH}: ${proUnit(proNum(result.intensityMmH, 3), s.unitMmH)}`,
-        result.netTimePerPositionH === undefined
+          : `${s.intensityMmH}: ${proUnit(proNum(result.sprinkler.intensityMmH, 3), s.unitMmH)}`,
+        result.sprinkler === undefined
           ? undefined
-          : `${s.netTimePerPositionH}: ${proUnit(proNum(result.netTimePerPositionH, 2), s.unitH)}   ${s.grossTimePerPositionH}: ${proUnit(proNum(result.grossTimePerPositionH ?? 0, 2), s.unitH)}`,
-        result.positions === undefined
+          : `${s.netTimePerPositionH}: ${proUnit(proNum(result.sprinkler.netTimePerPositionH, 2), s.unitH)}   ` +
+            `${s.grossTimePerPositionH}: ${proUnit(proNum(result.sprinkler.grossTimePerPositionH, 2), s.unitH)}`,
+        result.sprinkler === undefined
           ? undefined
-          : `${s.positions}: ${proNum(result.positions, 2)}   ${s.positionsPerDay}: ${proNum(result.positionsPerDay ?? 0, 0)}`,
-        result.netLitersPerPlant === undefined
+          : `${s.positions}: ${proNum(result.sprinkler.positions, 2)}   ` +
+            `${s.positionsPerDay}: ${proNum(result.sprinkler.positionsPerDay, 0)}`,
+        result.drip === undefined
           ? undefined
-          : `${s.netLitersPerPlant}: ${proUnit(proNum(result.netLitersPerPlant, 2), s.unitL)}   ${s.netDripDurationH}: ${proUnit(proNum(result.netDripDurationH ?? 0, 2), s.unitH)}`,
-        result.grossLitersPerPlant === undefined
+          : `${s.netLitersPerPlant}: ${proUnit(proNum(result.drip.netLitersPerPlant, 2), s.unitL)}   ` +
+            `${s.netDripDurationH}: ${proUnit(proNum(result.drip.netDripDurationH, 2), s.unitH)}`,
+        result.drip === undefined
           ? undefined
-          : `${s.grossLitersPerPlant}: ${proUnit(proNum(result.grossLitersPerPlant, 2), s.unitL)}   ${s.grossDripDurationH}: ${proUnit(proNum(result.grossDripDurationH ?? 0, 2), s.unitH)}`,
+          : `${s.grossLitersPerPlant}: ${proUnit(proNum(result.drip.grossLitersPerPlant, 2), s.unitL)}   ` +
+            `${s.grossDripDurationH}: ${proUnit(proNum(result.drip.grossDripDurationH, 2), s.unitH)}`,
       ]
         .filter((line): line is string => line !== undefined)
         .join("\n");
@@ -1018,32 +1058,41 @@ export function IrrigationDepthVolumeTool() {
             value={`${proNum(result.timeHoursPart, 0)} ${s.unitH} ${proNum(result.timeMinutesPart, 0)} ${s.unitMin}`}
           />
           <ResultRow label={s.daysNeeded} value={proNum(result.daysNeeded, 0)} />
-          {result.intensityMmH !== undefined && (
+          {result.sprinkler !== undefined && (
             <ToolSection title={s.sprinklerResults}>
-              <ResultRow label={s.intensityMmH} value={proUnit(proNum(result.intensityMmH, 3), s.unitMmH)} />
+              <ResultRow
+                label={s.intensityMmH}
+                value={proUnit(proNum(result.sprinkler.intensityMmH, 3), s.unitMmH)}
+              />
               <ResultRow
                 label={s.netTimePerPositionH}
-                value={proUnit(proNum(result.netTimePerPositionH ?? 0, 2), s.unitH)}
+                value={proUnit(proNum(result.sprinkler.netTimePerPositionH, 2), s.unitH)}
               />
               <ResultRow
                 label={s.grossTimePerPositionH}
-                value={proUnit(proNum(result.grossTimePerPositionH ?? 0, 2), s.unitH)}
+                value={proUnit(proNum(result.sprinkler.grossTimePerPositionH, 2), s.unitH)}
               />
-              <ResultRow label={s.positions} value={proNum(result.positions ?? 0, 2)} />
-              <ResultRow label={s.positionsPerDay} value={proNum(result.positionsPerDay ?? 0, 0)} />
+              <ResultRow label={s.positions} value={proNum(result.sprinkler.positions, 2)} />
+              <ResultRow label={s.positionsPerDay} value={proNum(result.sprinkler.positionsPerDay, 0)} />
             </ToolSection>
           )}
-          {result.netLitersPerPlant !== undefined && (
+          {result.drip !== undefined && (
             <ToolSection title={s.dripResults}>
-              <ResultRow label={s.netLitersPerPlant} value={proUnit(proNum(result.netLitersPerPlant, 2), s.unitL)} />
-              <ResultRow label={s.netDripDurationH} value={proUnit(proNum(result.netDripDurationH ?? 0, 2), s.unitH)} />
+              <ResultRow
+                label={s.netLitersPerPlant}
+                value={proUnit(proNum(result.drip.netLitersPerPlant, 2), s.unitL)}
+              />
+              <ResultRow
+                label={s.netDripDurationH}
+                value={proUnit(proNum(result.drip.netDripDurationH, 2), s.unitH)}
+              />
               <ResultRow
                 label={s.grossLitersPerPlant}
-                value={proUnit(proNum(result.grossLitersPerPlant ?? 0, 2), s.unitL)}
+                value={proUnit(proNum(result.drip.grossLitersPerPlant, 2), s.unitL)}
               />
               <ResultRow
                 label={s.grossDripDurationH}
-                value={proUnit(proNum(result.grossDripDurationH ?? 0, 2), s.unitH)}
+                value={proUnit(proNum(result.drip.grossDripDurationH, 2), s.unitH)}
               />
             </ToolSection>
           )}

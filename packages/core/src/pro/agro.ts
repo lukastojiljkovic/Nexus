@@ -719,13 +719,33 @@ export interface GrainShrinkResult {
   readonly impuritiesFirst: DeductionBranch;
   readonly moistureFirst: DeductionBranch;
   readonly selected: DeductionOrder;
-  readonly grossValue: number | undefined;
-  readonly netValue: number | undefined;
-  readonly valueDifference: number | undefined;
-  readonly minimumEnergyMJ: number | undefined;
-  readonly minimumEnergyKWh: number | undefined;
-  readonly actualEnergyMJ: number | undefined;
-  readonly actualEnergyKWh: number | undefined;
+  readonly value: GrainShrinkValue | undefined;
+  /**
+   * The theoretical minimum, ALWAYS computed — it needs nothing the caller may
+   * omit. It used to be declared optional, which is DC-47's second sub-shape:
+   * a field the arithmetic cannot fail to produce, typed as though it could,
+   * so every surface wrote a fallback for a case that does not exist.
+   */
+  readonly minimumEnergyMJ: number;
+  readonly minimumEnergyKWh: number;
+  readonly actualEnergy: GrainShrinkActualEnergy | undefined;
+}
+
+/** The money figures, present exactly when `pricePerKg` was given. */
+export interface GrainShrinkValue {
+  readonly grossValue: number;
+  readonly netValue: number;
+  readonly valueDifference: number;
+}
+
+/**
+ * The dryer's real energy draw, present exactly when `dryerEfficiencyPercent`
+ * was given. Both figures are the same quantity in two units, so neither can
+ * exist without the other.
+ */
+export interface GrainShrinkActualEnergy {
+  readonly actualEnergyMJ: number;
+  readonly actualEnergyKWh: number;
 }
 
 /**
@@ -816,15 +836,21 @@ export function grainMoistureShrink(input: GrainShrinkInput): ProResult<GrainShr
   const selected = branches[input.order];
   const selectedFinal = selected.finalMassKg;
 
-  const grossValue = input.pricePerKg === undefined ? undefined : m1 * input.pricePerKg;
-  const netValue = input.pricePerKg === undefined ? undefined : selectedFinal * input.pricePerKg;
+  let value: GrainShrinkValue | undefined;
+  if (input.pricePerKg !== undefined) {
+    const grossValue = m1 * input.pricePerKg;
+    const netValue = selectedFinal * input.pricePerKg;
+    value = { grossValue, netValue, valueDifference: netValue - grossValue };
+  }
 
   // Energy is drawn from the SELECTED order's own water-out, not the
   // top-level moisture-only baseline — see the doc comment above.
   const minimumEnergyMJ = (selected.waterOutKg * WATER_VAPORISATION_KJ_PER_KG) / 1000;
-  const minimumEnergyKWh = minimumEnergyMJ / 3.6;
-  const actualEnergyMJ =
-    input.dryerEfficiencyPercent === undefined ? undefined : minimumEnergyMJ / (input.dryerEfficiencyPercent / 100);
+  let actualEnergy: GrainShrinkActualEnergy | undefined;
+  if (input.dryerEfficiencyPercent !== undefined) {
+    const actualEnergyMJ = minimumEnergyMJ / (input.dryerEfficiencyPercent / 100);
+    actualEnergy = { actualEnergyMJ, actualEnergyKWh: actualEnergyMJ / 3.6 };
+  }
 
   return {
     ok: true,
@@ -835,13 +861,10 @@ export function grainMoistureShrink(input: GrainShrinkInput): ProResult<GrainShr
     impuritiesFirst: branches.impuritiesFirst,
     moistureFirst: branches.moistureFirst,
     selected: input.order,
-    grossValue,
-    netValue,
-    valueDifference: grossValue === undefined || netValue === undefined ? undefined : netValue - grossValue,
+    value,
     minimumEnergyMJ,
-    minimumEnergyKWh,
-    actualEnergyMJ,
-    actualEnergyKWh: actualEnergyMJ === undefined ? undefined : actualEnergyMJ / 3.6,
+    minimumEnergyKWh: minimumEnergyMJ / 3.6,
+    actualEnergy,
   };
 }
 
@@ -1017,25 +1040,53 @@ export interface HoneyInput {
   readonly pricePerKg?: number | undefined;
 }
 
+/**
+ * The drying figures, present exactly when `targetMoisturePercent` was given.
+ *
+ * A group rather than three sibling optionals (DC-47): they are computed in one
+ * branch and are absent together, and a type that does not say so forces the
+ * surface to guard on one of them and write `?? 0` for the other two — a
+ * fallback that is dead where the guard is right and prints a false zero where
+ * it is not.
+ */
+export interface HoneyDrying {
+  readonly driedMassKg: number;
+  readonly waterRemovedKg: number;
+  readonly shrinkPercent: number;
+}
+
+/** The jar figures, present exactly when `jarVolumeMl` was given. */
+export interface HoneyJars {
+  readonly massPerJarKg: number;
+  /** Same figure in grams — jar labels are printed in g, never kg. */
+  readonly massPerJarG: number;
+  readonly fullJars: number;
+  readonly jarRemainderKg: number;
+  /**
+   * Genuinely independent inside the group: it needs a declared net mass as
+   * well, so it stays optional after `jars` has been opened.
+   */
+  readonly fillMassVsDeclaredG: number | undefined;
+}
+
+/** The money figures, present exactly when `pricePerKg` was given. */
+export interface HoneyValue {
+  readonly grossValue: number;
+  /** Independent inside the group: it needs a drying target as well. */
+  readonly driedValue: number | undefined;
+}
+
 export interface HoneyResult {
   readonly netMassKg: number;
   readonly volumeFromMassL: number;
   readonly measuredDensityKgL: number | undefined;
   readonly waterMassKg: number;
   readonly dryMatterMassKg: number;
-  readonly driedMassKg: number | undefined;
-  readonly waterRemovedKg: number | undefined;
-  readonly shrinkPercent: number | undefined;
-  readonly massPerJarKg: number | undefined;
-  /** Same figure in grams — jar labels are printed in g, never kg. */
-  readonly massPerJarG: number | undefined;
-  readonly fullJars: number | undefined;
-  readonly jarRemainderKg: number | undefined;
+  readonly drying: HoneyDrying | undefined;
+  readonly jars: HoneyJars | undefined;
   readonly jarsFromDeclaredMass: number | undefined;
-  readonly fillMassVsDeclaredG: number | undefined;
   readonly jarToleranceG: number | undefined;
-  readonly grossValue: number | undefined;
-  readonly driedValue: number | undefined;
+  readonly value: HoneyValue | undefined;
 }
 
 /**
@@ -1077,32 +1128,34 @@ export function honeyMassMoisture(input: HoneyInput): ProResult<HoneyResult> {
   const waterMassKg = netMassKg * (input.moisturePercent / 100);
   const dryMatterMassKg = netMassKg - waterMassKg;
 
-  let driedMassKg: number | undefined;
-  let waterRemovedKg: number | undefined;
-  let shrinkPercent: number | undefined;
+  let drying: HoneyDrying | undefined;
   if (input.targetMoisturePercent !== undefined) {
-    driedMassKg = moistureAdjust(netMassKg, input.moisturePercent, input.targetMoisturePercent);
+    const driedMassKg = moistureAdjust(netMassKg, input.moisturePercent, input.targetMoisturePercent);
     if (driedMassKg === undefined) return fail("targetMoisturePercent");
-    waterRemovedKg = netMassKg - driedMassKg;
-    shrinkPercent = (waterRemovedKg / netMassKg) * 100;
+    const waterRemovedKg = netMassKg - driedMassKg;
+    drying = { driedMassKg, waterRemovedKg, shrinkPercent: (waterRemovedKg / netMassKg) * 100 };
   }
 
-  let massPerJarKg: number | undefined;
-  let fullJars: number | undefined;
-  let jarRemainderKg: number | undefined;
-  let fillMassVsDeclaredG: number | undefined;
+  let jars: HoneyJars | undefined;
   if (input.jarVolumeMl !== undefined) {
     if (!isPositive(input.jarVolumeMl)) return fail("jarVolumeMl");
-    massPerJarKg = (input.jarVolumeMl / 1000) * input.densityKgL;
+    const massPerJarKg = (input.jarVolumeMl / 1000) * input.densityKgL;
     // floorSnapped: an exact multiple of massPerJarKg routinely lands one ULP
     // below the whole number after this chain of divisions, and a bare floor
     // would drop a full jar into the remainder.
-    fullJars = floorSnapped(netMassKg / massPerJarKg);
-    jarRemainderKg = netMassKg - fullJars * massPerJarKg;
+    const fullJars = floorSnapped(netMassKg / massPerJarKg);
+    let fillMassVsDeclaredG: number | undefined;
     if (input.jarDeclaredNetMassG !== undefined) {
       if (!isPositive(input.jarDeclaredNetMassG)) return fail("jarDeclaredNetMassG");
       fillMassVsDeclaredG = massPerJarKg * 1000 - input.jarDeclaredNetMassG;
     }
+    jars = {
+      massPerJarKg,
+      massPerJarG: massPerJarKg * 1000,
+      fullJars,
+      jarRemainderKg: netMassKg - fullJars * massPerJarKg,
+      fillMassVsDeclaredG,
+    };
   }
   let jarsFromDeclaredMass: number | undefined;
   if (input.jarDeclaredNetMassG !== undefined) {
@@ -1111,9 +1164,14 @@ export function honeyMassMoisture(input: HoneyInput): ProResult<HoneyResult> {
   }
   if (input.jarToleranceG !== undefined && !isNonNegative(input.jarToleranceG)) return fail("jarToleranceG");
 
-  const grossValue = input.pricePerKg === undefined ? undefined : netMassKg * input.pricePerKg;
-  const driedValue =
-    input.pricePerKg === undefined || driedMassKg === undefined ? undefined : driedMassKg * input.pricePerKg;
+  const pricePerKg = input.pricePerKg;
+  const value: HoneyValue | undefined =
+    pricePerKg === undefined
+      ? undefined
+      : {
+          grossValue: netMassKg * pricePerKg,
+          driedValue: drying === undefined ? undefined : drying.driedMassKg * pricePerKg,
+        };
 
   return {
     ok: true,
@@ -1122,18 +1180,11 @@ export function honeyMassMoisture(input: HoneyInput): ProResult<HoneyResult> {
     measuredDensityKgL,
     waterMassKg,
     dryMatterMassKg,
-    driedMassKg,
-    waterRemovedKg,
-    shrinkPercent,
-    massPerJarKg,
-    massPerJarG: massPerJarKg === undefined ? undefined : massPerJarKg * 1000,
-    fullJars,
-    jarRemainderKg,
+    drying,
+    jars,
     jarsFromDeclaredMass,
-    fillMassVsDeclaredG,
     jarToleranceG: input.jarToleranceG,
-    grossValue,
-    driedValue,
+    value,
   };
 }
 
@@ -1161,6 +1212,35 @@ export interface IrrigationInput {
   readonly hoursPerDay: number;
 }
 
+/**
+ * The sprinkler figures, present exactly when the method is „sprinkler" and
+ * both spacings and the nozzle flow were all given. One group rather than five
+ * sibling optionals (DC-47): they are computed in one branch, they are absent
+ * together, and the two method groups below are mutually exclusive — which a
+ * row of independent optionals cannot say at all.
+ */
+export interface IrrigationSprinkler {
+  readonly intensityMmH: number;
+  /** Time per sprinkler position for the NET norm — see `grossTimePerPositionH`. */
+  readonly netTimePerPositionH: number;
+  readonly grossTimePerPositionH: number;
+  readonly positions: number;
+  /** floor(hoursPerDay / grossTimePerPositionH) — GROSS, because that is the
+   * time the system must actually run at one position. */
+  readonly positionsPerDay: number;
+}
+
+/**
+ * The drip figures, present exactly when the method is „drip" and the emitters
+ * per plant, the emitter flow and the area per plant were all given.
+ */
+export interface IrrigationDrip {
+  readonly netLitersPerPlant: number;
+  readonly netDripDurationH: number;
+  readonly grossLitersPerPlant: number;
+  readonly grossDripDurationH: number;
+}
+
 export interface IrrigationResult {
   readonly netVolumeM3: number;
   readonly netVolumeL: number;
@@ -1170,18 +1250,8 @@ export interface IrrigationResult {
   readonly timeHoursPart: number;
   readonly timeMinutesPart: number;
   readonly daysNeeded: number;
-  readonly intensityMmH: number | undefined;
-  /** Time per sprinkler position for the NET norm — see `grossTimePerPositionH`. */
-  readonly netTimePerPositionH: number | undefined;
-  readonly grossTimePerPositionH: number | undefined;
-  readonly positions: number | undefined;
-  /** floor(hoursPerDay / grossTimePerPositionH) — GROSS, because that is the
-   * time the system must actually run at one position. */
-  readonly positionsPerDay: number | undefined;
-  readonly netLitersPerPlant: number | undefined;
-  readonly netDripDurationH: number | undefined;
-  readonly grossLitersPerPlant: number | undefined;
-  readonly grossDripDurationH: number | undefined;
+  readonly sprinkler: IrrigationSprinkler | undefined;
+  readonly drip: IrrigationDrip | undefined;
 }
 
 /**
@@ -1223,36 +1293,37 @@ export function irrigationDepthVolume(input: IrrigationInput): ProResult<Irrigat
   const { h, min } = hoursAndMinutes(timeHours);
   const daysNeeded = Math.ceil(timeHours / input.hoursPerDay);
 
-  let intensityMmH: number | undefined;
-  let netTimePerPositionH: number | undefined;
-  let grossTimePerPositionH: number | undefined;
-  let positions: number | undefined;
-  let positionsPerDay: number | undefined;
+  let sprinkler: IrrigationSprinkler | undefined;
   if (input.method === "sprinkler") {
     if (isPositive(input.sprinklerSpacingInRowM) && isPositive(input.sprinklerSpacingBetweenRowsM) && isPositive(input.nozzleFlowLh)) {
       const w = input.sprinklerSpacingInRowM * input.sprinklerSpacingBetweenRowsM;
-      intensityMmH = input.nozzleFlowLh / w;
-      netTimePerPositionH = input.normMm / intensityMmH;
-      grossTimePerPositionH = grossNormMm / intensityMmH;
-      positions = (input.areaHa * HECTARE_M2) / w;
-      // The system must actually RUN the gross time at a position to leave
-      // the net depth behind after losses — using the net time here would
-      // schedule more positions into a day than the pump can really cover.
-      positionsPerDay = Math.floor(input.hoursPerDay / grossTimePerPositionH);
+      const intensityMmH = input.nozzleFlowLh / w;
+      const grossTimePerPositionH = grossNormMm / intensityMmH;
+      sprinkler = {
+        intensityMmH,
+        netTimePerPositionH: input.normMm / intensityMmH,
+        grossTimePerPositionH,
+        positions: (input.areaHa * HECTARE_M2) / w,
+        // The system must actually RUN the gross time at a position to leave
+        // the net depth behind after losses — using the net time here would
+        // schedule more positions into a day than the pump can really cover.
+        positionsPerDay: Math.floor(input.hoursPerDay / grossTimePerPositionH),
+      };
     }
   }
 
-  let netLitersPerPlant: number | undefined;
-  let netDripDurationH: number | undefined;
-  let grossLitersPerPlant: number | undefined;
-  let grossDripDurationH: number | undefined;
+  let drip: IrrigationDrip | undefined;
   if (input.method === "drip") {
     if (isPositive(input.dripsPerPlant) && isPositive(input.dripFlowLh) && isPositive(input.areaPerPlantM2)) {
       const q = input.dripsPerPlant * input.dripFlowLh;
-      netLitersPerPlant = input.normMm * input.areaPerPlantM2;
-      netDripDurationH = netLitersPerPlant / q;
-      grossLitersPerPlant = grossNormMm * input.areaPerPlantM2;
-      grossDripDurationH = grossLitersPerPlant / q;
+      const netLitersPerPlant = input.normMm * input.areaPerPlantM2;
+      const grossLitersPerPlant = grossNormMm * input.areaPerPlantM2;
+      drip = {
+        netLitersPerPlant,
+        netDripDurationH: netLitersPerPlant / q,
+        grossLitersPerPlant,
+        grossDripDurationH: grossLitersPerPlant / q,
+      };
     }
   }
 
@@ -1266,15 +1337,8 @@ export function irrigationDepthVolume(input: IrrigationInput): ProResult<Irrigat
     timeHoursPart: h,
     timeMinutesPart: min,
     daysNeeded,
-    intensityMmH,
-    netTimePerPositionH,
-    grossTimePerPositionH,
-    positions,
-    positionsPerDay,
-    netLitersPerPlant,
-    netDripDurationH,
-    grossLitersPerPlant,
-    grossDripDurationH,
+    sprinkler,
+    drip,
   };
 }
 
