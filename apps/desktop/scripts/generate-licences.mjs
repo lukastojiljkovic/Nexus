@@ -392,7 +392,56 @@ const payload = {
 };
 
 mkdirSync(dirname(OUTPUT), { recursive: true });
-writeFileSync(OUTPUT, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+const rendered = `${JSON.stringify(payload, null, 2)}\n`;
+
+// `--check` is the freshness half of the obligation, and it is a SEPARATE
+// question from the one `licences.test.ts` answers. That suite asks whether the
+// committed file is fit to ship — every entry carries a notice, nothing is
+// UNKNOWN, the fonts are all present. It cannot ask whether the file still
+// describes THIS tree, because it only ever reads the file.
+//
+// Nothing did, and the file went stale exactly where it mattered: on 2026-08-15
+// it credited dompurify 3.4.12, js-yaml 4.3.0, mermaid 11.16.0 and nanoid
+// 3.3.16 while the installer shipped 3.4.13, 4.3.1, 11.16.1 and 3.3.18. Three
+// of those four are the packages the security overrides in
+// `pnpm-workspace.yaml` moved — so the screen was naming the OLD, vulnerable
+// version of a dependency the product had already patched, which is a defective
+// attribution as well as a misleading one.
+//
+// This is sound only because the generator is deterministic (see DETERMINISM
+// above) — same node_modules in, byte-identical file out, path separators
+// normalised to `/` so a Windows run and a Linux run agree.
+if (process.argv.includes("--check")) {
+  const committed = readFileSync(OUTPUT, "utf8");
+  if (committed === rendered) {
+    console.log(
+      `check-licences: ${within(REPO_ROOT, OUTPUT)} is what this tree produces ` +
+        `(${payload.packages.length} packages, ${payload.fonts.length} font families).`,
+    );
+    process.exit(0);
+  }
+  const versionOf = (text) => {
+    const found = new Map();
+    for (const entry of [...JSON.parse(text).packages, ...JSON.parse(text).fonts]) {
+      found.set(entry.name, entry.version);
+    }
+    return found;
+  };
+  const was = versionOf(committed);
+  const now = versionOf(rendered);
+  console.error(
+    `check-licences: ${within(REPO_ROOT, OUTPUT)} does not describe this tree. ` +
+      "Run `pnpm --filter @nexus/desktop licences` and commit the result.",
+  );
+  for (const [name, version] of now) {
+    const before = was.get(name);
+    if (before !== version) console.error(`  ${name}: ${before ?? "(absent)"} -> ${version}`);
+  }
+  for (const name of was.keys()) if (!now.has(name)) console.error(`  ${name}: removed`);
+  process.exit(1);
+}
+
+writeFileSync(OUTPUT, rendered, "utf8");
 
 const unresolved = [...payload.packages, ...payload.fonts].filter(
   (entry) => entry.status !== "file",

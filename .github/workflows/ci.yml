@@ -113,6 +113,20 @@ jobs:
       # is a line that is not there.
       - run: pnpm check:pro-flags
 
+      # The third-party notices are a GENERATED file that is committed, and
+      # nothing regenerated it when the dependency tree moved. `licences.test.ts`
+      # asks whether the committed file is fit to ship — every entry carries a
+      # notice, nothing is UNKNOWN — and cannot ask whether it still describes
+      # this tree, because it only ever reads the file. On 2026-08-15 it did
+      # not: it credited dompurify 3.4.12, js-yaml 4.3.0, mermaid 11.16.0 and
+      # nanoid 3.3.16 while the installer shipped 3.4.13, 4.3.1, 11.16.1 and
+      # 3.3.18 — and three of those four are the packages the security
+      # overrides moved, so the „Licence" card was naming the OLD, vulnerable
+      # version of a dependency the product had already patched. This runs the
+      # generator and compares bytes; it is sound because the generator is
+      # deterministic on the same node_modules and normalises path separators.
+      - run: pnpm check:licences
+
       # The style half of the cloud-off boundary. The ASSERTION is
       # `apps/desktop/src/main/net/offline.ts` and its unit tests; this catches
       # a new egress construct before it ever has to be caught at runtime.
