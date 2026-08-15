@@ -421,9 +421,9 @@ describe("mitreAngles", () => {
     expect(result.sawMitreAngle).toBeCloseTo(30.0, 3);
     expect(result.sawMitreComplement).toBeCloseTo(60.0, 3);
     expect(result.sawBevelAngle).toBeCloseTo(0.0, 6);
-    expect(result.outsideLength).toBeCloseTo(246.19, 2);
-    expect(result.lengthToShortPoint).toBe(200);
-    expect(result.centeredMeasure).toBe("outside width");
+    expect(result.lengths?.toLongPoint).toBeCloseTo(246.19, 2);
+    expect(result.lengths?.toShortPoint).toBe(200);
+    expect(result.lengths?.centeredMeasure).toBe("outside width");
   });
 
   it("crown moulding, 90° corner, 38° spring angle: B = 52°, mitre 31.62°, bevel 33.86°", () => {
@@ -433,6 +433,9 @@ describe("mitreAngles", () => {
     expect(result.slopeUsed).toBe(52);
     expect(result.sawMitreAngle).toBeCloseTo(31.62, 2);
     expect(result.sawBevelAngle).toBeCloseTo(33.86, 2);
+    // No piece width and no inside length: all three length figures are absent
+    // together, because they are one field rather than three.
+    expect(result.lengths).toBeUndefined();
   });
 
   it("a leaning side needs the width PROJECTED through the slope — cos(B), not w alone", () => {
@@ -444,8 +447,8 @@ describe("mitreAngles", () => {
     if (!result.ok) return;
     expect(result.sawMitreAngle).toBeCloseTo(44.01, 2);
     expect(result.sawBevelAngle).toBeCloseTo(10.55, 2);
-    expect(result.outsideLength).toBeCloseTo(277.27, 1);
-    expect(result.outsideLength).not.toBeCloseTo(280.0, 1);
+    expect(result.lengths?.toLongPoint).toBeCloseTo(277.27, 1);
+    expect(result.lengths?.toLongPoint).not.toBeCloseTo(280.0, 1);
   });
 
   it("spring angle 45° is its own worked check: M=35.26°, T=30.00° — the 38/52 mix-up this guards against", () => {
@@ -467,8 +470,8 @@ describe("mitreAngles", () => {
     if (!result.ok) return;
     expect(result.lengthsAvailable).toBe(false);
     expect(result.tanM0).toBeGreaterThan(20); // tan(87.5°) ≈ 22.90
-    expect(result.outsideLength).toBeCloseTo(2032.3, 0);
-    expect(result.lengthToShortPoint).toBe(200);
+    expect(result.lengths?.toLongPoint).toBeCloseTo(2032.3, 0);
+    expect(result.lengths?.toShortPoint).toBe(200);
   });
 
   it("refuses ONE of pieceWidth/insideLength given alone, even past m0 ≥ 85° where lengths used to be skipped", () => {
@@ -625,9 +628,35 @@ describe("mortarMixQuantity", () => {
     });
     expect(result.ok).toBe(true);
     if (!result.ok || result.mode !== "onsite") return;
-    expect(result.batches).toBe(4);
-    expect(result.batchBinderMass).toBeCloseTo(180.18 / 4, 3);
-    expect(result.batchAggregateVolume).toBeCloseTo(0.5148 / 4, 4);
+    const batch = result.batch;
+    if (batch === undefined) throw new Error("expected a batch");
+    expect(batch.count).toBe(4);
+    expect(batch.binderMass).toBeCloseTo(180.18 / 4, 3);
+    expect(batch.aggregateVolume).toBeCloseTo(0.5148 / 4, 4);
+    // The rest of the load, so the whole recipe is pinned rather than two of
+    // its five figures: aggregate 772.2 kg and water 99.099 l over 4 batches.
+    expect(batch.aggregateMass).toBeCloseTo(772.2 / 4, 3);
+    expect(batch.water).toBeCloseTo((0.55 * 180.18) / 4, 4);
+  });
+
+  it("omits the whole per-batch recipe when no mixer volume was given", () => {
+    const result = mortarMixQuantity({
+      mode: "onsite",
+      area: 18,
+      thickness: 25,
+      waste: 10,
+      packingFactor: 1.3,
+      ratio: 4,
+      binderDensity: 1400,
+      aggregateDensity: 1500,
+      waterCementRatio: 0.55,
+      bagMass: 25,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok || result.mode !== "onsite") return;
+    // Five figures absent together: „how many batches" without „what goes into
+    // one" is not a partial answer, it is a different question.
+    expect(result.batch).toBeUndefined();
   });
 
   it("refuses neither area/thickness nor a direct volume, and a packing factor below 1", () => {
@@ -1055,9 +1084,16 @@ describe("shelfSpacing", () => {
     });
     expect(snapped.ok).toBe(true);
     if (!snapped.ok) return;
-    expect(snapped.shelves.map((s) => s.snappedBottomEdge)).toEqual([357, 709, 1061, 1445]);
+    expect(snapped.shelves.map((s) => s.snapped?.bottomEdge)).toEqual([357, 709, 1061, 1445]);
     const expectedDeviations = [11.4, -0.2, -11.8, 8.6];
-    snapped.shelves.forEach((s, i) => expect(s.deviation).toBeCloseTo(expectedDeviations[i]!, 9));
+    snapped.shelves.forEach((s, i) =>
+      expect(s.snapped?.deviation).toBeCloseTo(expectedDeviations[i]!, 9),
+    );
+    // The snapped edge's own distance from the top, which is what the shelf
+    // actually leaves once it has moved: 1800 − y' − 18.
+    expect(snapped.shelves.map((s) => s.snapped?.topEdgeDistance)).toEqual([1425, 1073, 721, 337]);
+    // Hole numbers count from `firstHoleFromBottom`: (y' − 37)/32.
+    expect(snapped.shelves.map((s) => s.snapped?.holeIndex)).toEqual([10, 21, 32, 44]);
     expect(snapped.snappedClearOpenings).toEqual([357, 334, 334, 366, 337]);
     expect(snapped.snappedClearOpenings?.reduce((a, b) => a + b, 0)).toBeCloseTo(1728, 6);
     expect(snapped.rasterUsed).toBe(32);
@@ -1201,9 +1237,12 @@ describe("tapDrillSize", () => {
     expect(result.coreDiameter).toBeCloseTo(6.6468, 4);
     // Own drill 6.8 mm: h = 100×1.2/1.6237975 = 73.90%; depth = 0.600 mm.
     const withOwn = tapDrillSize({ nominalDiameter: 8, desiredEngagement: 75, ownDrillDiameter: 6.8 });
-    expect(withOwn.ok && withOwn.ownDrillEngagement).toBeCloseTo(73.9, 1);
-    expect(withOwn.ok && withOwn.ownDrillThreadDepth).toBeCloseTo(0.6, 3);
+    expect(withOwn.ok && withOwn.ownDrill?.engagement).toBeCloseTo(73.9, 1);
+    expect(withOwn.ok && withOwn.ownDrill?.threadDepth).toBeCloseTo(0.6, 3);
     expect(withOwn.ok && withOwn.passHoleDiameter).toBe(9.0); // medium series, D=8
+    // No drill of one's own: both figures absent together, since „73.9 %" with
+    // no depth beside it, or a depth with no engagement, is half an answer.
+    expect(result.ownDrill).toBeUndefined();
   });
 
   it("a drill diameter not below the core, at exactly 100% engagement, is D1 exactly", () => {
@@ -1310,7 +1349,10 @@ describe("timberVolume", () => {
     if (!result.ok) return;
     expect(result.huberVolume).toBeCloseTo(0.4763283, 5);
     expect(result.smalianVolume).toBeCloseTo(0.4816061, 5);
-    expect(result.volumeDifferencePercent).toBeCloseTo(1.11, 1);
+    expect(result.volumeGap?.percent).toBeCloseTo(1.11, 1);
+    // 0.4816061 − 0.4763283 = 0.0052778 m³, the same gap in absolute terms —
+    // one subtraction, so the two figures come back together or not at all.
+    expect(result.volumeGap?.absolute).toBeCloseTo(0.0052778, 6);
     expect(result.smalianVolume).toBeGreaterThan(result.huberVolume ?? 0);
   });
 

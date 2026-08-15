@@ -817,9 +817,15 @@ export function MitreAnglesTool() {
         `${s.sawMitreAngle}: ${proNum(result.sawMitreAngle, 2)}${s.unitDeg}`,
         `${s.sawMitreComplement}: ${proNum(result.sawMitreComplement, 2)}${s.unitDeg}`,
         `${s.sawBevelAngle}: ${proNum(result.sawBevelAngle, 2)}${s.unitDeg}`,
-        result.outsideLength === undefined
+        result.lengths === undefined
           ? undefined
-          : `${s.outsideLength}: ${proUnit(proNum(result.outsideLength, 2), s.unitMm)}`,
+          : `${s.lengthToLongPoint}: ${proUnit(proNum(result.lengths.toLongPoint, 2), s.unitMm)}`,
+        // The short point used to be on the screen and not in the copied text,
+        // so a pasted cut list was missing one of the two figures a carpenter
+        // takes to the saw.
+        result.lengths === undefined
+          ? undefined
+          : `${s.lengthToShortPoint}: ${proUnit(proNum(result.lengths.toShortPoint, 2), s.unitMm)}`,
         "",
         `${s.angleMode}: ${angleMode === "sides" ? s.angleModeSides : s.angleModeBaseAngle}`,
         `${s.slopeMode}: ${slopeMode === "slope" ? s.slopeModeSlope : s.slopeModeSpring}`,
@@ -885,20 +891,20 @@ export function MitreAnglesTool() {
           />
           <ResultRow label={s.sawBevelAngle} value={`${proNum(result.sawBevelAngle, 2)}${s.unitDeg}`} />
           <p className="tool__note">{s.scaleConventionNote}</p>
-          {result.outsideLength !== undefined && (
+          {result.lengths !== undefined && (
             <>
-              <ResultRow label={s.outsideLength} value={proUnit(proNum(result.outsideLength, 2), s.unitMm)} />
+              {/* Two rows, not three. „Spoljašnja mera" and „mera do duge
+                  tačke" were the same number under two labels, which reads as
+                  two measurements that happen to agree. */}
               <ResultRow
                 label={s.lengthToLongPoint}
-                value={proUnit(proNum(result.lengthToLongPoint ?? 0, 2), s.unitMm)}
+                value={proUnit(proNum(result.lengths.toLongPoint, 2), s.unitMm)}
               />
               <ResultRow
                 label={s.lengthToShortPoint}
-                value={proUnit(proNum(result.lengthToShortPoint ?? 0, 2), s.unitMm)}
+                value={proUnit(proNum(result.lengths.toShortPoint, 2), s.unitMm)}
               />
-              {result.centeredMeasure !== undefined && (
-                <p className="tool__note">{`${s.centeredMeasureNote} ${s.centeredOutsideWidth}`}</p>
-              )}
+              <p className="tool__note">{`${s.centeredMeasureNote} ${s.centeredOutsideWidth}`}</p>
               {!result.lengthsAvailable && <p className="tool__note">{s.lengthsCautionNote}</p>}
             </>
           )}
@@ -1045,7 +1051,19 @@ export function MortarMixQuantityTool() {
           `${s.binderBags}: ${result.binderBags}`,
           `${s.binderBagSurplus}: ${proUnit(proNum(result.binderBagSurplus, 2), s.unitKg)}`,
           `${s.water}: ${proUnit(proNum(result.water, 2), s.unitL)}`,
-          result.batches === undefined ? undefined : `${s.batches}: ${result.batches}`,
+          // The whole per-batch recipe, not just how many batches there are.
+          // The screen showed four figures here and the clipboard carried one,
+          // so a pasted mix sheet said „4 šarže" and nothing about what goes
+          // into one.
+          ...(result.batch === undefined
+            ? []
+            : [
+                `${s.batches}: ${result.batch.count}`,
+                `${s.batchBinderMass}: ${proUnit(proNum(result.batch.binderMass, 2), s.unitKg)}`,
+                `${s.batchAggregateMass}: ${proUnit(proNum(result.batch.aggregateMass, 2), s.unitKg)}`,
+                `${s.batchAggregateVolume}: ${proUnit(proNum(result.batch.aggregateVolume, 4), s.unitM3)}`,
+                `${s.batchWater}: ${proUnit(proNum(result.batch.water, 2), s.unitL)}`,
+              ]),
           "",
           `${s.mode}: ${s.modeOnsite}`,
           `${s.ratio}: 1:${ratioText.trim()}`,
@@ -1193,18 +1211,22 @@ export function MortarMixQuantityTool() {
             />
           )}
           <ResultRow label={s.water} value={proUnit(proNum(result.water, 2), s.unitL)} />
-          {result.batches !== undefined && (
+          {result.batch !== undefined && (
             <>
-              <ResultRow label={s.batches} value={result.batches} />
+              <ResultRow label={s.batches} value={result.batch.count} />
               <ResultRow
                 label={s.batchBinderMass}
-                value={proUnit(proNum(result.batchBinderMass ?? 0, 2), s.unitKg)}
+                value={proUnit(proNum(result.batch.binderMass, 2), s.unitKg)}
               />
               <ResultRow
                 label={s.batchAggregateMass}
-                value={proUnit(proNum(result.batchAggregateMass ?? 0, 2), s.unitKg)}
+                value={proUnit(proNum(result.batch.aggregateMass, 2), s.unitKg)}
               />
-              <ResultRow label={s.batchWater} value={proUnit(proNum(result.batchWater ?? 0, 2), s.unitL)} />
+              <ResultRow
+                label={s.batchAggregateVolume}
+                value={proUnit(proNum(result.batch.aggregateVolume, 4), s.unitM3)}
+              />
+              <ResultRow label={s.batchWater} value={proUnit(proNum(result.batch.water, 2), s.unitL)} />
             </>
           )}
           <ToolFormula>{s.formulaOnsite}</ToolFormula>
@@ -1839,9 +1861,10 @@ export function ShelfSpacingTool() {
         ...result.shelves.map(
           (sh, i) =>
             `${s.shelf} ${i + 1}: ${s.bottomEdge} ${proUnit(proNum(sh.bottomEdge, 1), s.unitMm)}` +
-            (sh.snappedBottomEdge === undefined
+            (sh.snapped === undefined
               ? ""
-              : `, ${s.snappedBottomEdge} ${proUnit(proNum(sh.snappedBottomEdge, 1), s.unitMm)} (${s.deviation} ${proUnit(proNum(sh.deviation ?? 0, 1), s.unitMm)})`),
+              : `, ${s.snappedBottomEdge} ${proUnit(proNum(sh.snapped.bottomEdge, 1), s.unitMm)}` +
+                ` (${s.deviation} ${proUnit(proNum(sh.snapped.deviation, 1), s.unitMm)})`),
         ),
         "",
         `${s.clearOpenings}: ${result.clearOpenings.map((o) => proNum(o, 1)).join(", ")}`,
@@ -1924,7 +1947,19 @@ export function ShelfSpacingTool() {
           <ToolTable
             head={
               snap === "yes"
-                ? [s.colShelf, s.colBottomEdge, s.colTopDistance, s.colHoleIndex, s.colSnapped, s.colDeviation]
+                ? [
+                    s.colShelf,
+                    s.colBottomEdge,
+                    s.colTopDistance,
+                    s.colHoleIndex,
+                    s.colSnapped,
+                    // The snapped edge's own distance from the top. The core
+                    // computed it from the start and no column showed it, so
+                    // the „od vrha" figure on screen belonged to the ideal
+                    // position while the shelf goes at the snapped one.
+                    s.colSnappedTopDistance,
+                    s.colDeviation,
+                  ]
                 : [s.colShelf, s.colBottomEdge, s.colTopDistance]
             }
             rows={result.shelves.map((sh, i) =>
@@ -1933,9 +1968,16 @@ export function ShelfSpacingTool() {
                     `${i + 1}`,
                     proUnit(proNum(sh.bottomEdge, 1), s.unitMm),
                     proUnit(proNum(sh.topEdgeDistance, 1), s.unitMm),
-                    sh.holeIndex === undefined ? "—" : `${sh.holeIndex}`,
-                    sh.snappedBottomEdge === undefined ? "—" : proUnit(proNum(sh.snappedBottomEdge, 1), s.unitMm),
-                    sh.deviation === undefined ? "—" : proUnit(proNum(sh.deviation, 1), s.unitMm),
+                    sh.snapped === undefined ? "—" : `${sh.snapped.holeIndex}`,
+                    sh.snapped === undefined
+                      ? "—"
+                      : proUnit(proNum(sh.snapped.bottomEdge, 1), s.unitMm),
+                    sh.snapped === undefined
+                      ? "—"
+                      : proUnit(proNum(sh.snapped.topEdgeDistance, 1), s.unitMm),
+                    sh.snapped === undefined
+                      ? "—"
+                      : proUnit(proNum(sh.snapped.deviation, 1), s.unitMm),
                   ]
                 : [
                     `${i + 1}`,
@@ -2037,9 +2079,13 @@ export function TapDrillSizeTool() {
         `${s.drillDiameter}: ${proUnit(proNum(result.drillDiameter, 3), s.unitMm)}`,
         `${s.coreDiameter}: ${proUnit(proNum(result.coreDiameter, 4), s.unitMm)}`,
         `${s.threadDepthPerSide}: ${proUnit(proNum(result.threadDepthPerSide, 3), s.unitMm)}`,
-        result.ownDrillEngagement === undefined
+        result.ownDrill === undefined
           ? undefined
-          : `${s.ownDrillEngagement}: ${proNum(result.ownDrillEngagement, 2)} %`,
+          : `${s.ownDrillEngagement}: ${proNum(result.ownDrill.engagement, 2)} %`,
+        // The depth that drill leaves was on the screen and not in the copy.
+        result.ownDrill === undefined
+          ? undefined
+          : `${s.ownDrillThreadDepth}: ${proUnit(proNum(result.ownDrill.threadDepth, 3), s.unitMm)}`,
         result.passHoleDiameter === undefined
           ? undefined
           : `${s.passHoleDiameter}: ${proUnit(proNum(result.passHoleDiameter, 1), s.unitMm)}`,
@@ -2103,12 +2149,15 @@ export function TapDrillSizeTool() {
             label={s.threadDepthPerSide}
             value={proUnit(proNum(result.threadDepthPerSide, 3), s.unitMm)}
           />
-          {result.ownDrillEngagement !== undefined && (
+          {result.ownDrill !== undefined && (
             <>
-              <ResultRow label={s.ownDrillEngagement} value={`${proNum(result.ownDrillEngagement, 2)} %`} />
+              <ResultRow
+                label={s.ownDrillEngagement}
+                value={`${proNum(result.ownDrill.engagement, 2)} %`}
+              />
               <ResultRow
                 label={s.ownDrillThreadDepth}
-                value={proUnit(proNum(result.ownDrillThreadDepth ?? 0, 3), s.unitMm)}
+                value={proUnit(proNum(result.ownDrill.threadDepth, 3), s.unitMm)}
               />
             </>
           )}
@@ -2309,9 +2358,9 @@ export function TimberVolumeTool() {
         result.smalianVolume === undefined
           ? undefined
           : `${s.smalianVolume}: ${proUnit(proNum(result.smalianVolume, 4), s.unitM3)}`,
-        result.volumeDifference === undefined
+        result.volumeGap === undefined
           ? undefined
-          : `${s.volumeDifference}: ${proUnit(proNum(result.volumeDifference, 4), s.unitM3)} (${proNum(result.volumeDifferencePercent ?? 0, 2)} %)`,
+          : `${s.volumeDifference}: ${proUnit(proNum(result.volumeGap.absolute, 4), s.unitM3)} (${proNum(result.volumeGap.percent, 2)} %)`,
         result.taper === undefined ? undefined : `${s.taper}: ${proNum(result.taper, 3)} ${s.unitCmM}`,
         result.totalLogVolume === undefined
           ? undefined
@@ -2426,10 +2475,10 @@ export function TimberVolumeTool() {
           {result.smalianVolume !== undefined && (
             <ResultRow label={s.smalianVolume} value={proUnit(proNum(result.smalianVolume, 4), s.unitM3)} />
           )}
-          {result.volumeDifference !== undefined && (
+          {result.volumeGap !== undefined && (
             <ResultRow
               label={s.volumeDifference}
-              value={`${proUnit(proNum(result.volumeDifference, 4), s.unitM3)} (${proNum(result.volumeDifferencePercent ?? 0, 2)} %)`}
+              value={`${proUnit(proNum(result.volumeGap.absolute, 4), s.unitM3)} (${proNum(result.volumeGap.percent, 2)} %)`}
             />
           )}
           {result.taper !== undefined && (

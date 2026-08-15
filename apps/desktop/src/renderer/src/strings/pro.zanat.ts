@@ -274,9 +274,11 @@ export const PRO_ZANAT_SR = {
     sawMitreComplement: "Dopunsko očitavanje (90° − gerung)",
     sawBevelAngle: "Podešavanje testere — nagib lista",
     scaleConventionNote: "Konvencija skale: 0° je pravi ugao (uspravna, neuvrnuta stranica).",
-    outsideLength: "Spoljašnja mera komada",
-    lengthToLongPoint: "Mera do duge tačke",
-    lengthToShortPoint: "Mera do kratke tačke",
+    // Both names on one row: the long point of a mitre IS the outside corner,
+    // so „spoljašnja mera" and „mera do duge tačke" were the same figure shown
+    // twice, which reads as two measurements that happen to agree.
+    lengthToLongPoint: "Mera do duge tačke (spoljašnja)",
+    lengthToShortPoint: "Mera do kratke tačke (unutrašnja)",
     centeredMeasureNote: "Formula centrira meru:",
     centeredOutsideWidth: "spoljašnja širina komada",
     lengthsCautionNote:
@@ -355,6 +357,10 @@ export const PRO_ZANAT_SR = {
     batches: "Broj šarži",
     batchBinderMass: "Vezivo po šarži",
     batchAggregateMass: "Agregat po šarži",
+    // The whole-job block above gives the aggregate in both volume and mass;
+    // the per-batch block gave only the mass, so the one figure a worker
+    // measures at the mixer — buckets of sand — was the one missing.
+    batchAggregateVolume: "Zapremina agregata po šarži",
     batchWater: "Voda po šarži",
     consumptionUnitUsed: "Upotrebljena potrošnja",
 
@@ -590,6 +596,7 @@ export const PRO_ZANAT_SR = {
     colTopDistance: "Od gornje ivice",
     colHoleIndex: "Redni broj otvora",
     colSnapped: "Stvarni položaj",
+    colSnappedTopDistance: "Stvarno od gornje ivice",
     colDeviation: "Odstupanje",
     shelf: "Polica",
     bottomEdge: "donja ivica",

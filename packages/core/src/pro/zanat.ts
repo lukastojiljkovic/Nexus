@@ -726,15 +726,39 @@ export interface MitreResult {
   readonly sawBevelAngle: number;
   readonly tanM0: number;
   /**
-   * False once m0 ≥ 85° — a caution, not a withholding. `outsideLength` is
-   * still computed and returned; this only flags that tan(m0) has grown large
-   * enough that the resulting length is impractical to cut to.
+   * False once m0 ≥ 85° — a caution, not a withholding. `lengths` is still
+   * computed and returned; this only flags that tan(m0) has grown large enough
+   * that the resulting figure is impractical to cut to.
    */
   readonly lengthsAvailable: boolean;
-  readonly outsideLength: number | undefined;
-  readonly lengthToLongPoint: number | undefined;
-  readonly lengthToShortPoint: number | undefined;
-  readonly centeredMeasure: "outside width" | "outside height" | undefined;
+  /** Present exactly when a piece width and an inside length were both given. */
+  readonly lengths: MitreLengths | undefined;
+}
+
+/**
+ * The lengths of one mitred side, present together or not at all.
+ *
+ * `toLongPoint` used to be returned TWICE — once under that name and once as
+ * `outsideLength`, assigned from the same variable — so the screen laid one
+ * measurement out on two rows under two labels and, by making them siblings,
+ * asserted they were different figures that happened to agree. They cannot
+ * disagree: the long point of a mitre IS the outside corner. No test ever
+ * asserted `lengthToLongPoint`, which is what a field indistinguishable from
+ * its neighbour looks like from the outside.
+ */
+export interface MitreLengths {
+  /** The side measured at the long point — the outside corner of the mitre. */
+  readonly toLongPoint: number;
+  /** The short point, at the piece's inner face: the inside length itself. */
+  readonly toShortPoint: number;
+  /**
+   * Which outside dimension the formula centres the measure on. One value and
+   * not a union, because the formula centres on the width and has no branch
+   * that does anything else — the surface prints the word „width" from its own
+   * copy table, so a second member here would be a state the screen renders
+   * wrongly rather than a state it handles.
+   */
+  readonly centeredMeasure: "outside width";
 }
 
 /**
@@ -787,17 +811,18 @@ export function mitreAngles(input: MitreInput): ProResult<MitreResult> {
   const tanM0 = Math.tan(m0Rad);
   const lengthsAvailable = m0 < 85;
 
-  let outsideLength: number | undefined;
-  let centeredMeasure: "outside width" | "outside height" | undefined;
+  let lengths: MitreLengths | undefined;
   const wantsLengths = input.pieceWidth !== undefined || input.insideLength !== undefined;
   if (wantsLengths) {
     if (input.pieceWidth === undefined) return fail("pieceWidth");
     if (input.insideLength === undefined) return fail("insideLength");
     if (!isInRange(input.pieceWidth, 5, 500)) return fail("pieceWidth");
     if (!isInRange(input.insideLength, 10, 10000)) return fail("insideLength");
-    outsideLength =
-      input.insideLength + 2 * input.pieceWidth * Math.cos(slopeRad) * tanM0;
-    centeredMeasure = "outside width";
+    lengths = {
+      toLongPoint: input.insideLength + 2 * input.pieceWidth * Math.cos(slopeRad) * tanM0,
+      toShortPoint: input.insideLength,
+      centeredMeasure: "outside width",
+    };
   }
 
   return {
@@ -811,10 +836,7 @@ export function mitreAngles(input: MitreInput): ProResult<MitreResult> {
     sawBevelAngle,
     tanM0,
     lengthsAvailable,
-    outsideLength,
-    lengthToLongPoint: outsideLength,
-    lengthToShortPoint: outsideLength === undefined ? undefined : input.insideLength,
-    centeredMeasure,
+    lengths,
   };
 }
 
@@ -901,11 +923,25 @@ export interface MortarOnsiteResult {
   readonly aggregateMoistureWater: number | undefined;
   /** Water actually to add, floored at zero — never negative. */
   readonly water: number;
-  readonly batches: number | undefined;
-  readonly batchBinderMass: number | undefined;
-  readonly batchAggregateMass: number | undefined;
-  readonly batchAggregateVolume: number | undefined;
-  readonly batchWater: number | undefined;
+  /** Present exactly when a mixer volume was given; five figures or none. */
+  readonly batch: MortarBatch | undefined;
+}
+
+/**
+ * One mixer load, and how many of them the job takes.
+ *
+ * Five figures under one field because they answer one question — „what goes
+ * into the drum each time" — and every one of them is `total / batches`. As
+ * five separate optionals a screen could show a per-batch water without the
+ * count of batches beside it, which is a recipe for one mix rather than for
+ * the job.
+ */
+export interface MortarBatch {
+  readonly count: number;
+  readonly binderMass: number;
+  readonly aggregateMass: number;
+  readonly aggregateVolume: number;
+  readonly water: number;
 }
 
 export type MortarResult = MortarPremixedResult | MortarOnsiteResult;
@@ -975,17 +1011,16 @@ export function mortarMixQuantity(input: MortarInput): ProResult<MortarResult> {
       : aggregateMass * (input.aggregateMoisture / 100);
   const water = Math.max(0, waterTheoretical - (aggregateMoistureWater ?? 0));
 
-  let batches: number | undefined;
-  let batchBinderMass: number | undefined;
-  let batchAggregateMass: number | undefined;
-  let batchAggregateVolume: number | undefined;
-  let batchWater: number | undefined;
+  let batch: MortarBatch | undefined;
   if (input.mixerVolume !== undefined) {
-    batches = Math.ceil((compactedVolume * 1000) / input.mixerVolume);
-    batchBinderMass = binderMass / batches;
-    batchAggregateMass = aggregateMass / batches;
-    batchAggregateVolume = aggregateVolume / batches;
-    batchWater = water / batches;
+    const count = Math.ceil((compactedVolume * 1000) / input.mixerVolume);
+    batch = {
+      count,
+      binderMass: binderMass / count,
+      aggregateMass: aggregateMass / count,
+      aggregateVolume: aggregateVolume / count,
+      water: water / count,
+    };
   }
 
   return {
@@ -1002,11 +1037,7 @@ export function mortarMixQuantity(input: MortarInput): ProResult<MortarResult> {
     waterTheoretical,
     aggregateMoistureWater,
     water,
-    batches,
-    batchBinderMass,
-    batchAggregateMass,
-    batchAggregateVolume,
-    batchWater,
+    batch,
   };
 }
 
@@ -1560,10 +1591,26 @@ export interface ShelfSpacingInput {
 export interface ShelfPosition {
   readonly bottomEdge: number;
   readonly topEdgeDistance: number;
-  readonly holeIndex: number | undefined;
-  readonly snappedBottomEdge: number | undefined;
-  readonly snappedTopEdgeDistance: number | undefined;
-  readonly deviation: number | undefined;
+  /** Present exactly when the snap ran; four figures about one hole, or none. */
+  readonly snapped: ShelfSnap | undefined;
+}
+
+/**
+ * Where one shelf actually lands once it is moved to the nearest drilled hole.
+ *
+ * One field rather than four, because the deviation is only readable NEXT TO
+ * the position it is a deviation from: „+3 mm" beside no snapped edge, or a
+ * snapped edge beside no hole number, is half of a drilling instruction. They
+ * are produced in one assignment and they were declared as four independent
+ * optionals, so the surface guarded on one and wrote `?? 0` under the rest.
+ */
+export interface ShelfSnap {
+  /** Which hole of the raster, counted from `firstHoleFromBottom`. */
+  readonly holeIndex: number;
+  readonly bottomEdge: number;
+  readonly topEdgeDistance: number;
+  /** Snapped minus unsnapped, mm — signed, so the direction of the move is visible. */
+  readonly deviation: number;
 }
 
 export interface ShelfSpacingResult {
@@ -1665,10 +1712,7 @@ export function shelfSpacing(input: ShelfSpacingInput): ProResult<ShelfSpacingRe
   const shelves: ShelfPosition[] = positions.map((y) => ({
     bottomEdge: y,
     topEdgeDistance: H - y - t,
-    holeIndex: undefined,
-    snappedBottomEdge: undefined,
-    snappedTopEdgeDistance: undefined,
-    deviation: undefined,
+    snapped: undefined,
   }));
 
   if (input.snap) {
@@ -1694,10 +1738,12 @@ export function shelfSpacing(input: ShelfSpacingInput): ProResult<ShelfSpacingRe
       if (row === undefined) return fail("shelfCount");
       shelves[i] = {
         ...row,
-        holeIndex: j,
-        snappedBottomEdge: yPrime,
-        snappedTopEdgeDistance: H - yPrime - t,
-        deviation: yPrime - y,
+        snapped: {
+          holeIndex: j,
+          bottomEdge: yPrime,
+          topEdgeDistance: H - yPrime - t,
+          deviation: yPrime - y,
+        },
       };
     }
 
@@ -1804,10 +1850,18 @@ export interface TapDrillResult {
   readonly coreDiameter: number;
   readonly drillDiameter: number;
   readonly threadDepthPerSide: number;
-  readonly ownDrillEngagement: number | undefined;
-  readonly ownDrillThreadDepth: number | undefined;
+  /** What the drill already in the drawer would give — both figures, or neither. */
+  readonly ownDrill: OwnDrillResult | undefined;
   readonly passHoleDiameter: number | undefined;
   readonly minBlindHoleDepth: number | undefined;
+}
+
+/** The engagement a drill the user already has produces, and the thread depth per side it leaves. */
+export interface OwnDrillResult {
+  /** Percent; above 100 means the drill is smaller than the thread's own core. */
+  readonly engagement: number;
+  /** Radial half-height of the profile that drill leaves, `(D − d)/2`, mm. */
+  readonly threadDepth: number;
 }
 
 /**
@@ -1854,13 +1908,14 @@ export function tapDrillSize(input: TapDrillInput): ProResult<TapDrillResult> {
   const drillDiameter = D - (engagement / 100) * THREAD_FULL_DROP_FACTOR * pitch;
   const threadDepthPerSide = (D - drillDiameter) / 2;
 
-  let ownDrillEngagement: number | undefined;
-  let ownDrillThreadDepth: number | undefined;
+  let ownDrill: OwnDrillResult | undefined;
   if (input.ownDrillDiameter !== undefined) {
     if (!isInRange(input.ownDrillDiameter, 0.5, 30)) return fail("ownDrillDiameter");
     if (input.ownDrillDiameter >= D) return fail("ownDrillDiameter");
-    ownDrillEngagement = (100 * (D - input.ownDrillDiameter)) / (THREAD_FULL_DROP_FACTOR * pitch);
-    ownDrillThreadDepth = (D - input.ownDrillDiameter) / 2;
+    ownDrill = {
+      engagement: (100 * (D - input.ownDrillDiameter)) / (THREAD_FULL_DROP_FACTOR * pitch),
+      threadDepth: (D - input.ownDrillDiameter) / 2,
+    };
   }
 
   const series = input.passHoleSeries ?? "medium";
@@ -1881,8 +1936,7 @@ export function tapDrillSize(input: TapDrillInput): ProResult<TapDrillResult> {
     coreDiameter,
     drillDiameter,
     threadDepthPerSide,
-    ownDrillEngagement,
-    ownDrillThreadDepth,
+    ownDrill,
     passHoleDiameter,
     minBlindHoleDepth,
   };
@@ -1931,8 +1985,8 @@ export interface TimberVolumeInput {
 export interface TimberVolumeResult {
   readonly huberVolume: number | undefined;
   readonly smalianVolume: number | undefined;
-  readonly volumeDifference: number | undefined;
-  readonly volumeDifferencePercent: number | undefined;
+  /** The gap between the two formulae, when both were computed. */
+  readonly volumeGap: VolumeGap | undefined;
   readonly taper: number | undefined;
   readonly logCount: number | undefined;
   /** Undefined for `huber-smalian` — see `totalLogVolumeHuber`/`totalLogVolumeSmalian`. */
@@ -1953,6 +2007,22 @@ export interface TimberVolumeResult {
   readonly massHuber: number | undefined;
   /** `huber-smalian` only: mass from the Smalian total, offered alongside Huber's. */
   readonly massSmalian: number | undefined;
+}
+
+/**
+ * How far Smalian's formula lands from Huber's on the same log.
+ *
+ * The absolute gap and the same gap as a percentage of the Huber volume — one
+ * subtraction, written twice. As two optionals a surface could print „+0.014
+ * m³" with no scale beside it, or a percentage with no size, and the whole
+ * reason both formulae are offered is that the reader has to judge whether the
+ * disagreement matters for this log.
+ */
+export interface VolumeGap {
+  /** Smalian − Huber, m³. Signed: Smalian reads high on a tapered log. */
+  readonly absolute: number;
+  /** The same gap as a percentage of the Huber volume. */
+  readonly percent: number;
 }
 
 function huberVolumeOf(diameterCm: number, lengthM: number): number {
@@ -1994,8 +2064,7 @@ export function timberVolume(input: TimberVolumeInput): ProResult<TimberVolumeRe
   const empty: TimberVolumeResult = {
     huberVolume: undefined,
     smalianVolume: undefined,
-    volumeDifference: undefined,
-    volumeDifferencePercent: undefined,
+    volumeGap: undefined,
     taper: undefined,
     logCount: undefined,
     totalLogVolume: undefined,
@@ -2059,9 +2128,10 @@ export function timberVolume(input: TimberVolumeInput): ProResult<TimberVolumeRe
       ...empty,
       huberVolume: huber,
       smalianVolume: smalian,
-      volumeDifference: huber !== undefined && smalian !== undefined ? smalian - huber : undefined,
-      volumeDifferencePercent:
-        huber !== undefined && smalian !== undefined ? ((smalian - huber) / huber) * 100 : undefined,
+      volumeGap:
+        huber === undefined || smalian === undefined
+          ? undefined
+          : { absolute: smalian - huber, percent: ((smalian - huber) / huber) * 100 },
       taper,
       logCount: mode.logCount,
       totalLogVolume,
