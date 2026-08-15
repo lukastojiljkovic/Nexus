@@ -139,34 +139,36 @@ export function BeamSpotTool() {
   const copyText = !result.ok
     ? ""
     : [
-        result.beamDiameterM === undefined
-          ? undefined
-          : `${s.beamDiameter}: ${proUnit(proNum(result.beamDiameterM, 3), s.unitM)}`,
-        result.fieldDiameterM === undefined
-          ? undefined
-          : `${s.fieldDiameter}: ${proUnit(proNum(result.fieldDiameterM, 3), s.unitM)}`,
+        result.spot.kind === "normal"
+          ? `${s.beamDiameter}: ${proUnit(proNum(result.spot.beamDiameterM, 3), s.unitM)}`
+          : undefined,
+        result.spot.kind === "normal" && result.spot.fieldDiameterM !== undefined
+          ? `${s.fieldDiameter}: ${proUnit(proNum(result.spot.fieldDiameterM, 3), s.unitM)}`
+          : undefined,
         `${s.slantDistance}: ${proUnit(proNum(result.slantDistanceM, 3), s.unitM)}`,
-        result.minorAxisM === undefined
-          ? undefined
-          : `${s.minorAxis}: ${proUnit(proNum(result.minorAxisM, 3), s.unitM)}`,
-        result.majorAxisM === undefined
-          ? undefined
-          : `${s.majorAxis}: ${proUnit(proNum(result.majorAxisM, 3), s.unitM)}`,
-        result.tiltDeg === undefined ? undefined : `${s.tilt}: ${proNum(result.tiltDeg, 2)}${s.unitDeg}`,
-        result.nearEdgeM === undefined
-          ? undefined
-          : `${s.nearEdge}: ${proUnit(proNum(result.nearEdgeM, 3), s.unitM)}`,
-        result.farEdgeM === undefined ? undefined : `${s.farEdge}: ${proUnit(proNum(result.farEdgeM, 3), s.unitM)}`,
+        result.spot.kind === "oblique"
+          ? `${s.minorAxis}: ${proUnit(proNum(result.spot.minorAxisM, 3), s.unitM)}`
+          : undefined,
+        result.spot.kind === "oblique"
+          ? `${s.majorAxis}: ${proUnit(proNum(result.spot.majorAxisM, 3), s.unitM)}`
+          : undefined,
+        result.spot.kind === "oblique" ? `${s.tilt}: ${proNum(result.spot.tiltDeg, 2)}${s.unitDeg}` : undefined,
+        result.spot.kind === "oblique"
+          ? `${s.nearEdge}: ${proUnit(proNum(result.spot.nearEdgeM, 3), s.unitM)}`
+          : undefined,
+        result.spot.kind === "oblique"
+          ? `${s.farEdge}: ${proUnit(proNum(result.spot.farEdgeM, 3), s.unitM)}`
+          : undefined,
         result.illuminanceAtAimPointLx === undefined
           ? undefined
           : `${s.illuminance}: ${proUnit(proNum(result.illuminanceAtAimPointLx, 1), s.unitLx)}`,
-        result.spacingM === undefined
+        result.array === undefined
           ? undefined
-          : `${s.spacing}: ${proUnit(proNum(result.spacingM, 3), s.unitM)}`,
-        result.fixtureCount === undefined ? undefined : `${s.fixtureCount}: ${result.fixtureCount}`,
-        result.coveredLengthM === undefined
+          : `${s.spacing}: ${proUnit(proNum(result.array.spacingM, 3), s.unitM)}`,
+        result.array === undefined ? undefined : `${s.fixtureCount}: ${result.array.fixtureCount}`,
+        result.array === undefined
           ? undefined
-          : `${s.coveredLength}: ${proUnit(proNum(result.coveredLengthM, 3), s.unitM)}`,
+          : `${s.coveredLength}: ${proUnit(proNum(result.array.coveredLengthM, 3), s.unitM)}`,
         "",
         `${s.beamAngle}: ${proNum(proParse(beamAngle) ?? 0, 1)}${s.unitDeg}`,
       ]
@@ -202,27 +204,29 @@ export function BeamSpotTool() {
 
       {result.ok && (
         <ToolSection title={s.results}>
-          {result.beamDiameterM !== undefined && (
-            <ResultRow label={s.beamDiameter} value={proUnit(proNum(result.beamDiameterM, 3), s.unitM)} />
-          )}
-          {result.fieldDiameterM !== undefined && (
-            <ResultRow label={s.fieldDiameter} value={proUnit(proNum(result.fieldDiameterM, 3), s.unitM)} />
+          {result.spot.kind === "normal" && (
+            <>
+              <ResultRow
+                label={s.beamDiameter}
+                value={proUnit(proNum(result.spot.beamDiameterM, 3), s.unitM)}
+              />
+              {result.spot.fieldDiameterM !== undefined && (
+                <ResultRow
+                  label={s.fieldDiameter}
+                  value={proUnit(proNum(result.spot.fieldDiameterM, 3), s.unitM)}
+                />
+              )}
+            </>
           )}
           <ResultRow label={s.slantDistance} value={proUnit(proNum(result.slantDistanceM, 3), s.unitM)} />
-          {result.minorAxisM !== undefined && (
-            <ResultRow label={s.minorAxis} value={proUnit(proNum(result.minorAxisM, 3), s.unitM)} />
-          )}
-          {result.majorAxisM !== undefined && (
-            <ResultRow label={s.majorAxis} value={proUnit(proNum(result.majorAxisM, 3), s.unitM)} />
-          )}
-          {result.tiltDeg !== undefined && (
-            <ResultRow label={s.tilt} value={`${proNum(result.tiltDeg, 2)}${s.unitDeg}`} />
-          )}
-          {result.nearEdgeM !== undefined && (
-            <ResultRow label={s.nearEdge} value={proUnit(proNum(result.nearEdgeM, 3), s.unitM)} />
-          )}
-          {result.farEdgeM !== undefined && (
-            <ResultRow label={s.farEdge} value={proUnit(proNum(result.farEdgeM, 3), s.unitM)} />
+          {result.spot.kind === "oblique" && (
+            <>
+              <ResultRow label={s.minorAxis} value={proUnit(proNum(result.spot.minorAxisM, 3), s.unitM)} />
+              <ResultRow label={s.majorAxis} value={proUnit(proNum(result.spot.majorAxisM, 3), s.unitM)} />
+              <ResultRow label={s.tilt} value={`${proNum(result.spot.tiltDeg, 2)}${s.unitDeg}`} />
+              <ResultRow label={s.nearEdge} value={proUnit(proNum(result.spot.nearEdgeM, 3), s.unitM)} />
+              <ResultRow label={s.farEdge} value={proUnit(proNum(result.spot.farEdgeM, 3), s.unitM)} />
+            </>
           )}
           {result.illuminanceAtAimPointLx !== undefined && (
             <ResultRow
@@ -230,13 +234,13 @@ export function BeamSpotTool() {
               value={proUnit(proNum(result.illuminanceAtAimPointLx, 1), s.unitLx)}
             />
           )}
-          {result.spacingM !== undefined && (
+          {result.array !== undefined && (
             <>
-              <ResultRow label={s.spacing} value={proUnit(proNum(result.spacingM, 3), s.unitM)} />
-              <ResultRow label={s.fixtureCount} value={result.fixtureCount ?? 0} />
+              <ResultRow label={s.spacing} value={proUnit(proNum(result.array.spacingM, 3), s.unitM)} />
+              <ResultRow label={s.fixtureCount} value={result.array.fixtureCount} />
               <ResultRow
                 label={s.coveredLength}
-                value={proUnit(proNum(result.coveredLengthM ?? 0, 3), s.unitM)}
+                value={proUnit(proNum(result.array.coveredLengthM, 3), s.unitM)}
               />
               <p className="tool__note">{s.axisNote}</p>
             </>
@@ -333,10 +337,10 @@ export function CateringPerGuestTool() {
           (lr, i) =>
             `${rows[i]?.[0] ?? "—"}: ${proNum(lr.grossQuantity, 1)} ${lines[i]?.unit ?? ""} · ${s.packs} ${lr.packs} · ${s.surplus} ${proNum(lr.surplus, 3)}`,
         ),
-        result.totalCost === undefined ? undefined : `${s.totalCost}: ${proNum(result.totalCost, 2)}`,
-        result.totalCostPerGuest === undefined
+        result.cost === undefined ? undefined : `${s.totalCost}: ${proNum(result.cost.totalCost, 2)}`,
+        result.cost === undefined
           ? undefined
-          : `${s.totalCostPerGuest}: ${proNum(result.totalCostPerGuest, 2)}`,
+          : `${s.totalCostPerGuest}: ${proNum(result.cost.totalCostPerGuest, 2)}`,
         "",
         `${s.guests}: ${guests.trim()}`,
       ]
@@ -390,10 +394,13 @@ export function CateringPerGuestTool() {
             ])}
             prose={[0]}
           />
-          {result.totalCost !== undefined && (
+          {result.cost !== undefined && (
             <>
-              <ResultRow label={s.totalCost} value={proNum(result.totalCost, 2)} />
-              <ResultRow label={s.totalCostPerGuest} value={proNum(result.totalCostPerGuest ?? 0, 2)} />
+              <ResultRow label={s.totalCost} value={proNum(result.cost.totalCost, 2)} />
+              <ResultRow
+                label={s.totalCostPerGuest}
+                value={proNum(result.cost.totalCostPerGuest, 2)}
+              />
             </>
           )}
           <ToolFormula>{s.formula}</ToolFormula>
@@ -540,13 +547,15 @@ export function BudgetPerGuestTool() {
         `${s.grandTotal}: ${proNum(result.grandTotal, 2)}`,
         `${s.costPerGuestWithTax}: ${proNum(result.costPerGuestWithTax, 2)}`,
         `${s.costPerGuestWithoutTax}: ${proNum(result.costPerGuestWithoutTax, 2)}`,
-        result.costPerTableWithTax === undefined
+        result.perTable === undefined
           ? undefined
-          : `${s.costPerTableWithTax}: ${proNum(result.costPerTableWithTax, 2)}`,
-        result.revenueTotal === undefined ? undefined : `${s.revenueTotal}: ${proNum(result.revenueTotal, 2)}`,
-        result.revenueDifference === undefined
+          : `${s.costPerTableWithTax}: ${proNum(result.perTable.costPerTableWithTax, 2)}`,
+        result.revenue === undefined
           ? undefined
-          : `${s.revenueDifference}: ${proNum(result.revenueDifference, 2)}`,
+          : `${s.revenueTotal}: ${proNum(result.revenue.revenueTotal, 2)}`,
+        result.revenue === undefined
+          ? undefined
+          : `${s.revenueDifference}: ${proNum(result.revenue.revenueDifference, 2)}`,
         result.breakEvenTicketPriceCeil === undefined
           ? undefined
           : `${s.breakEvenTicketPrice}: ${proNum(result.breakEvenTicketPriceCeil, 2)}`,
@@ -604,16 +613,25 @@ export function BudgetPerGuestTool() {
           <ResultRow label={s.grandTotal} value={proNum(result.grandTotal, 2)} />
           <ResultRow label={s.costPerGuestWithTax} value={proNum(result.costPerGuestWithTax, 2)} />
           <ResultRow label={s.costPerGuestWithoutTax} value={proNum(result.costPerGuestWithoutTax, 2)} />
-          {result.costPerTableWithTax !== undefined && (
-            <ResultRow label={s.costPerTableWithTax} value={proNum(result.costPerTableWithTax, 2)} />
-          )}
-          {result.costPerTableWithoutTax !== undefined && (
-            <ResultRow label={s.costPerTableWithoutTax} value={proNum(result.costPerTableWithoutTax, 2)} />
-          )}
-          {result.revenueTotal !== undefined && (
+          {result.perTable !== undefined && (
             <>
-              <ResultRow label={s.revenueTotal} value={proNum(result.revenueTotal, 2)} />
-              <ResultRow label={s.revenueDifference} value={proNum(result.revenueDifference ?? 0, 2)} />
+              <ResultRow
+                label={s.costPerTableWithTax}
+                value={proNum(result.perTable.costPerTableWithTax, 2)}
+              />
+              <ResultRow
+                label={s.costPerTableWithoutTax}
+                value={proNum(result.perTable.costPerTableWithoutTax, 2)}
+              />
+            </>
+          )}
+          {result.revenue !== undefined && (
+            <>
+              <ResultRow label={s.revenueTotal} value={proNum(result.revenue.revenueTotal, 2)} />
+              <ResultRow
+                label={s.revenueDifference}
+                value={proNum(result.revenue.revenueDifference, 2)}
+              />
             </>
           )}
           {result.breakEvenTicketPriceCeil !== undefined && (
@@ -1304,14 +1322,16 @@ export function ParkingCloakroomTool() {
         `${s.carGuests}: ${result.carGuests}`,
         `${s.cars}: ${result.cars}`,
         `${s.parkingArea}: ${proUnit(proNum(result.parkingAreaM2, 1), s.unitM2)}`,
-        result.buses === undefined ? undefined : `${s.buses}: ${result.buses} (${s.busGuests} ${result.busGuests})`,
+        result.buses === undefined
+          ? undefined
+          : `${s.buses}: ${result.buses.buses} (${s.busGuests} ${result.buses.busGuests})`,
         `${s.coatGuests}: ${result.coatGuests}`,
         `${s.items}: ${result.items}`,
         `${s.railLengthNeeded}: ${proUnit(proNum(result.railLengthNeededM, 2), s.unitM)}`,
         `${s.checkInAttendantsNeeded}: ${result.checkIn.attendantsNeeded}`,
-        result.checkIn.clearTimeMinutes === undefined
+        result.checkIn.clear === undefined
           ? undefined
-          : `${s.checkInClearTime}: ${proUnit(proNum(result.checkIn.clearTimeMinutes, 1), s.unitMin)}`,
+          : `${s.checkInClearTime}: ${proUnit(proNum(result.checkIn.clear.clearTimeMinutes, 1), s.unitMin)}`,
       ]
         .filter((line): line is string => line !== undefined)
         .join("\n");
@@ -1362,20 +1382,20 @@ export function ParkingCloakroomTool() {
           <ResultRow label={s.carGuests} value={result.carGuests} />
           <ResultRow label={s.cars} value={result.cars} />
           <ResultRow label={s.parkingArea} value={proUnit(proNum(result.parkingAreaM2, 1), s.unitM2)} />
-          {result.stallRatio !== undefined || result.stallDiff !== undefined ? (
+          {result.stalls !== undefined && (
             <ToolAgainstLimit
               label={s.cars}
               value={result.cars}
               limitLabel={s.availableStalls}
               limit={proParse(availableStalls) === undefined ? undefined : proNum(proParse(availableStalls) ?? 0, 0)}
               ratioLabel={s.stallRatio}
-              ratio={proRatio(result.stallRatio)}
+              ratio={proRatio(result.stalls.stallRatio)}
             />
-          ) : null}
+          )}
           {result.buses !== undefined && (
             <>
-              <ResultRow label={s.busGuests} value={result.busGuests ?? 0} />
-              <ResultRow label={s.buses} value={result.buses} />
+              <ResultRow label={s.busGuests} value={result.buses.busGuests} />
+              <ResultRow label={s.buses} value={result.buses.buses} />
             </>
           )}
           <ResultRow label={s.coatGuests} value={result.coatGuests} />
@@ -1384,21 +1404,21 @@ export function ParkingCloakroomTool() {
             label={s.railLengthNeeded}
             value={proUnit(proNum(result.railLengthNeededM, 2), s.unitM)}
             limitLabel={s.railCapacity}
-            limit={result.railCapacityItems === undefined ? undefined : `${result.railCapacityItems} ${s.pieces}`}
+            limit={result.rail === undefined ? undefined : `${result.rail.railCapacityItems} ${s.pieces}`}
             ratioLabel={s.railRatio}
-            ratio={proRatio(result.railRatio)}
+            ratio={proRatio(result.rail?.railRatio)}
           />
           <ToolSection title={s.checkInSection}>
             <ResultRow label={s.checkInAttendantsNeeded} value={result.checkIn.attendantsNeeded} />
-            {result.checkIn.clearTimeMinutes !== undefined && (
+            {result.checkIn.clear !== undefined && (
               <>
                 <ResultRow
                   label={s.checkInClearTime}
-                  value={proUnit(proNum(result.checkIn.clearTimeMinutes, 1), s.unitMin)}
+                  value={proUnit(proNum(result.checkIn.clear.clearTimeMinutes, 1), s.unitMin)}
                 />
                 <ResultRow
                   label={s.checkInClearDiff}
-                  value={proUnit(proNum(result.checkIn.clearTimeDiffMinutes ?? 0, 1), s.unitMin)}
+                  value={proUnit(proNum(result.checkIn.clear.clearTimeDiffMinutes, 1), s.unitMin)}
                 />
               </>
             )}
@@ -1406,15 +1426,15 @@ export function ParkingCloakroomTool() {
           {result.checkOut !== undefined && (
             <ToolSection title={s.checkOutSection}>
               <ResultRow label={s.checkOutAttendantsNeeded} value={result.checkOut.attendantsNeeded} />
-              {result.checkOut.clearTimeMinutes !== undefined && (
+              {result.checkOut.clear !== undefined && (
                 <>
                   <ResultRow
                     label={s.checkOutClearTime}
-                    value={proUnit(proNum(result.checkOut.clearTimeMinutes, 1), s.unitMin)}
+                    value={proUnit(proNum(result.checkOut.clear.clearTimeMinutes, 1), s.unitMin)}
                   />
                   <ResultRow
                     label={s.checkOutClearDiff}
-                    value={proUnit(proNum(result.checkOut.clearTimeDiffMinutes ?? 0, 1), s.unitMin)}
+                    value={proUnit(proNum(result.checkOut.clear.clearTimeDiffMinutes, 1), s.unitMin)}
                   />
                 </>
               )}
@@ -1523,16 +1543,17 @@ export function ProjectorThrowScreenTool() {
         `${s.height}: ${proUnit(proNum(result.heightM, 3), s.unitM)}`,
         `${s.diagonal}: ${proUnit(proNum(result.diagonalM, 3), s.unitM)} (${proNum(result.diagonalIn, 1)} ${s.unitIn})`,
         `${s.area}: ${proUnit(proNum(result.areaM2, 3), s.unitM2)}`,
-        result.distanceM === undefined ? undefined : `${s.distance}: ${proUnit(proNum(result.distanceM, 2), s.unitM)}`,
-        result.zoomDistanceMinM === undefined
+        result.lens.kind === "fixed"
+          ? `${s.distance}: ${proUnit(proNum(result.lens.distanceM, 2), s.unitM)}`
+          : `${s.zoomRange}: ${proUnit(proNum(result.lens.zoomDistanceMinM, 2), s.unitM)} – ` +
+            `${proUnit(proNum(result.lens.zoomDistanceMaxM, 2), s.unitM)}`,
+        result.brightness === undefined
           ? undefined
-          : `${s.zoomRange}: ${proUnit(proNum(result.zoomDistanceMinM, 2), s.unitM)} – ${proUnit(proNum(result.zoomDistanceMaxM ?? 0, 2), s.unitM)}`,
-        result.avgIlluminanceLx === undefined
+          : `${s.avgIlluminance}: ${proUnit(proNum(result.brightness.avgIlluminanceLx, 1), s.unitLx)}`,
+        result.brightness === undefined
           ? undefined
-          : `${s.avgIlluminance}: ${proUnit(proNum(result.avgIlluminanceLx, 1), s.unitLx)}`,
-        result.avgLuminanceCdM2 === undefined
-          ? undefined
-          : `${s.avgLuminance}: ${proUnit(proNum(result.avgLuminanceCdM2, 2), s.unitCdm2)} (${proNum(result.avgLuminanceFl ?? 0, 2)} ${s.unitFl})`,
+          : `${s.avgLuminance}: ${proUnit(proNum(result.brightness.avgLuminanceCdM2, 2), s.unitCdm2)} ` +
+            `(${proNum(result.brightness.avgLuminanceFl, 2)} ${s.unitFl})`,
         result.onScreenContrast === undefined
           ? undefined
           : `${s.onScreenContrast}: ${proNum(result.onScreenContrast, 2)}:1`,
@@ -1616,23 +1637,31 @@ export function ProjectorThrowScreenTool() {
             value={`${proUnit(proNum(result.diagonalM, 3), s.unitM)} (${proNum(result.diagonalIn, 1)} ${s.unitIn})`}
           />
           <ResultRow label={s.area} value={proUnit(proNum(result.areaM2, 3), s.unitM2)} />
-          {result.distanceM !== undefined && (
-            <ResultRow label={s.distance} value={proUnit(proNum(result.distanceM, 2), s.unitM)} />
-          )}
-          {result.zoomDistanceMinM !== undefined && (
+          {result.lens.kind === "fixed" ? (
+            <ResultRow label={s.distance} value={proUnit(proNum(result.lens.distanceM, 2), s.unitM)} />
+          ) : (
             <ResultRow
               label={s.zoomRange}
-              value={`${proUnit(proNum(result.zoomDistanceMinM, 2), s.unitM)} – ${proUnit(proNum(result.zoomDistanceMaxM ?? 0, 2), s.unitM)}`}
+              value={
+                `${proUnit(proNum(result.lens.zoomDistanceMinM, 2), s.unitM)} – ` +
+                `${proUnit(proNum(result.lens.zoomDistanceMaxM, 2), s.unitM)}`
+              }
             />
           )}
-          {result.avgIlluminanceLx !== undefined && (
-            <ResultRow label={s.avgIlluminance} value={proUnit(proNum(result.avgIlluminanceLx, 1), s.unitLx)} />
-          )}
-          {result.avgLuminanceCdM2 !== undefined && (
-            <ResultRow
-              label={s.avgLuminance}
-              value={`${proUnit(proNum(result.avgLuminanceCdM2, 2), s.unitCdm2)} (${proNum(result.avgLuminanceFl ?? 0, 2)} ${s.unitFl})`}
-            />
+          {result.brightness !== undefined && (
+            <>
+              <ResultRow
+                label={s.avgIlluminance}
+                value={proUnit(proNum(result.brightness.avgIlluminanceLx, 1), s.unitLx)}
+              />
+              <ResultRow
+                label={s.avgLuminance}
+                value={
+                  `${proUnit(proNum(result.brightness.avgLuminanceCdM2, 2), s.unitCdm2)} ` +
+                  `(${proNum(result.brightness.avgLuminanceFl, 2)} ${s.unitFl})`
+                }
+              />
+            </>
           )}
           {result.onScreenContrast !== undefined && (
             <>
@@ -1736,8 +1765,10 @@ export function SlingForceTool() {
                           ? s.errorRadius
                           : s.errorAngle;
 
-  const isTwoPoint = result.ok && result.twoPointForceAKgf !== undefined;
-
+  // Every figure below reads `result.hang.kind` directly. That used to be a
+  // derived boolean — „a two-point force came back, so it must have been a
+  // two-point pick" — which narrowed nothing, so every figure under it needed
+  // a `?? 0` that would have printed a zero force had the guess ever been wrong.
   const copyText = !result.ok
     ? ""
     : [
@@ -1745,10 +1776,13 @@ export function SlingForceTool() {
         result.dynamicFactor === undefined
           ? undefined
           : `${s.weightFactored}: ${proUnit(proNum(result.weightKnFactored, 4), s.unitKn)}`,
-        isTwoPoint
-          ? `${s.twoPointForceA}: ${proNum(result.twoPointForceAKgf ?? 0, 2)} ${s.unitKgf}`
-          : `${s.forceLeg}: ${proUnit(proNum(result.forceLegKn ?? 0, 4), s.unitKn)} (${proNum(result.forceLegKgf ?? 0, 2)} ${s.unitKgf})`,
-        isTwoPoint ? `${s.twoPointForceB}: ${proNum(result.twoPointForceBKgf ?? 0, 2)} ${s.unitKgf}` : undefined,
+        result.hang.kind === "twoPoint"
+          ? `${s.twoPointForceA}: ${proNum(result.hang.forceAKgf, 2)} ${s.unitKgf}`
+          : `${s.forceLeg}: ${proUnit(proNum(result.hang.forceLegKn, 4), s.unitKn)} ` +
+            `(${proNum(result.hang.forceLegKgf, 2)} ${s.unitKgf})`,
+        result.hang.kind === "twoPoint"
+          ? `${s.twoPointForceB}: ${proNum(result.hang.forceBKgf, 2)} ${s.unitKgf}`
+          : undefined,
         `${s.horizontal}: ${proNum(result.horizontalKgf, 2)} ${s.unitKgf}`,
         result.wllRatio === undefined ? undefined : `${s.wllRatio}: ${proRatio(result.wllRatio)}`,
       ]
@@ -1817,46 +1851,62 @@ export function SlingForceTool() {
             label={s.weight}
             value={`${proUnit(proNum(result.weightKn, 4), s.unitKn)} (${proNum(result.weightKgf, 2)} ${s.unitKgf})`}
           />
-          {!isTwoPoint && (
+          {result.hang.kind === "single" && (
             <>
-              <ResultRow label={s.beta} value={`${proNum(result.betaDeg ?? 0, 2)}${s.unitDeg}`} />
+              <ResultRow label={s.beta} value={`${proNum(result.hang.betaDeg, 2)}${s.unitDeg}`} />
               <ResultRow
                 label={s.forceLeg}
-                value={`${proUnit(proNum(result.forceLegKn ?? 0, 4), s.unitKn)} (${proNum(result.forceLegKgf ?? 0, 2)} ${s.unitKgf})`}
+                value={
+                  `${proUnit(proNum(result.hang.forceLegKn, 4), s.unitKn)} ` +
+                  `(${proNum(result.hang.forceLegKgf, 2)} ${s.unitKgf})`
+                }
               />
-              <ResultRow label={s.vertical} value={`${proNum(result.verticalKgf ?? 0, 2)} ${s.unitKgf}`} />
-              <ResultRow label={s.angleFactor} value={proNum(result.angleFactor ?? 0, 4)} />
-              {result.fourLegShareKgf !== undefined && (
+              <ResultRow label={s.vertical} value={`${proNum(result.hang.verticalKgf, 2)} ${s.unitKgf}`} />
+              <ResultRow label={s.angleFactor} value={proNum(result.hang.angleFactor, 4)} />
+              {result.hang.fourLeg !== undefined && (
                 <>
-                  <ResultRow label={s.fourLegShare} value={`${proNum(result.fourLegShareKgf, 2)} ${s.unitKgf}`} />
-                  <ResultRow label={s.twoLegShare} value={`${proNum(result.twoLegShareKgf ?? 0, 2)} ${s.unitKgf}`} />
+                  <ResultRow
+                    label={s.fourLegShare}
+                    value={`${proNum(result.hang.fourLeg.fourLegShareKgf, 2)} ${s.unitKgf}`}
+                  />
+                  <ResultRow
+                    label={s.twoLegShare}
+                    value={`${proNum(result.hang.fourLeg.twoLegShareKgf, 2)} ${s.unitKgf}`}
+                  />
                   <p className="tool__note">{s.fourLegNote}</p>
                 </>
               )}
             </>
           )}
-          {isTwoPoint && (
+          {result.hang.kind === "twoPoint" && (
             <>
-              <ResultRow label={s.twoPointBetaA} value={`${proNum(result.twoPointBetaADeg ?? 0, 2)}${s.unitDeg}`} />
-              <ResultRow label={s.twoPointBetaB} value={`${proNum(result.twoPointBetaBDeg ?? 0, 2)}${s.unitDeg}`} />
-              <ResultRow label={s.twoPointForceA} value={`${proNum(result.twoPointForceAKgf ?? 0, 2)} ${s.unitKgf}`} />
-              <ResultRow label={s.twoPointForceB} value={`${proNum(result.twoPointForceBKgf ?? 0, 2)} ${s.unitKgf}`} />
-              <ResultRow label={s.twoPointLegLengthA} value={proUnit(proNum(result.twoPointLegLengthAM ?? 0, 3), s.unitM)} />
-              <ResultRow label={s.twoPointLegLengthB} value={proUnit(proNum(result.twoPointLegLengthBM ?? 0, 3), s.unitM)} />
+              <ResultRow label={s.twoPointBetaA} value={`${proNum(result.hang.betaADeg, 2)}${s.unitDeg}`} />
+              <ResultRow label={s.twoPointBetaB} value={`${proNum(result.hang.betaBDeg, 2)}${s.unitDeg}`} />
+              <ResultRow label={s.twoPointForceA} value={`${proNum(result.hang.forceAKgf, 2)} ${s.unitKgf}`} />
+              <ResultRow label={s.twoPointForceB} value={`${proNum(result.hang.forceBKgf, 2)} ${s.unitKgf}`} />
+              <ResultRow
+                label={s.twoPointLegLengthA}
+                value={proUnit(proNum(result.hang.legLengthAM, 3), s.unitM)}
+              />
+              <ResultRow
+                label={s.twoPointLegLengthB}
+                value={proUnit(proNum(result.hang.legLengthBM, 3), s.unitM)}
+              />
             </>
           )}
           <ResultRow label={s.horizontal} value={`${proNum(result.horizontalKgf, 2)} ${s.unitKgf}`} />
           <p className="tool__note">{s.horizontalNote}</p>
-          {result.legLengthM !== undefined && (
-            <ResultRow label={s.legLength} value={proUnit(proNum(result.legLengthM, 3), s.unitM)} />
+          {result.hang.kind === "single" && result.hang.legLengthM !== undefined && (
+            <ResultRow label={s.legLength} value={proUnit(proNum(result.hang.legLengthM, 3), s.unitM)} />
           )}
           {proParse(wllPerLeg) !== undefined ? (
             <ToolAgainstLimit
               label={s.forceLegFactored}
               value={
-                isTwoPoint
-                  ? `${proNum(Math.max(result.twoPointForceAKgfFactored ?? 0, result.twoPointForceBKgfFactored ?? 0), 2)} ${s.unitKgf}`
-                  : `${proNum(result.forceLegKgfFactored ?? 0, 2)} ${s.unitKgf}`
+                result.hang.kind === "twoPoint"
+                  ? `${proNum(Math.max(result.hang.forceAKgfFactored, result.hang.forceBKgfFactored), 2)} ` +
+                    `${s.unitKgf}`
+                  : `${proNum(result.hang.forceLegKgfFactored, 2)} ${s.unitKgf}`
               }
               limitLabel={s.wllPerLeg}
               limit={proParse(wllPerLeg) === undefined ? undefined : `${proNum(proParse(wllPerLeg) ?? 0, 2)} ${wllUnit}`}
@@ -2390,10 +2440,10 @@ export function TentBayLayoutTool() {
         `${s.bays}: ${proNum(result.bays, 0)}`,
         `${s.length}: ${proUnit(proNum(result.lengthM, 2), s.unitM)}`,
         `${s.area}: ${proUnit(proNum(result.areaM2, 2), s.unitM2)}`,
-        result.wasteM2 === undefined
-          ? undefined
-          : `${s.waste}: ${proUnit(proNum(result.wasteM2, 2), s.unitM2)} (${proNum(result.wastePct ?? 0, 1)}%)`,
-        result.lengthDiffM === undefined ? undefined : `${s.lengthDiff}: ${proUnit(proNum(result.lengthDiffM, 2), s.unitM)}`,
+        result.sizedFrom.kind === "area"
+          ? `${s.waste}: ${proUnit(proNum(result.sizedFrom.wasteM2, 2), s.unitM2)} ` +
+            `(${proNum(result.sizedFrom.wastePct, 1)}%)`
+          : `${s.lengthDiff}: ${proUnit(proNum(result.sizedFrom.lengthDiffM, 2), s.unitM)}`,
         `${s.footprint}: ${proUnit(proNum(result.footprintWidthM, 2), s.unitM)} × ${proUnit(proNum(result.footprintLengthM, 2), s.unitM)} (${proUnit(proNum(result.footprintAreaM2, 2), s.unitM2)})`,
         `${s.tentPerimeter}: ${proUnit(proNum(result.tentPerimeterM, 1), s.unitM)}`,
         `${s.footprintPerimeter}: ${proUnit(proNum(result.footprintPerimeterM, 1), s.unitM)}`,
@@ -2450,14 +2500,19 @@ export function TentBayLayoutTool() {
           <ResultRow label={s.bays} value={proNum(result.bays, 0)} />
           <ResultRow label={s.length} value={proUnit(proNum(result.lengthM, 2), s.unitM)} />
           <ResultRow label={s.area} value={proUnit(proNum(result.areaM2, 2), s.unitM2)} />
-          {result.wasteM2 !== undefined && (
+          {result.sizedFrom.kind === "area" ? (
             <ResultRow
               label={s.waste}
-              value={`${proUnit(proNum(result.wasteM2, 2), s.unitM2)} (${proNum(result.wastePct ?? 0, 1)}%)`}
+              value={
+                `${proUnit(proNum(result.sizedFrom.wasteM2, 2), s.unitM2)} ` +
+                `(${proNum(result.sizedFrom.wastePct, 1)}%)`
+              }
             />
-          )}
-          {result.lengthDiffM !== undefined && (
-            <ResultRow label={s.lengthDiff} value={proUnit(proNum(result.lengthDiffM, 2), s.unitM)} />
+          ) : (
+            <ResultRow
+              label={s.lengthDiff}
+              value={proUnit(proNum(result.sizedFrom.lengthDiffM, 2), s.unitM)}
+            />
           )}
           <ResultRow
             label={s.footprint}
@@ -2777,8 +2832,12 @@ export function TrussHoistReactionsTool() {
         `${s.equivalentUdl}: ${proUnit(proNum(result.equivalentUdlKgM, 2), s.unitKgPerM)}`,
         result.ratioA === undefined ? undefined : `${s.ratioA}: ${proRatio(result.ratioA)}`,
         result.ratioB === undefined ? undefined : `${s.ratioB}: ${proRatio(result.ratioB)}`,
-        result.legTensionAKg === undefined ? undefined : `${s.legTensionA}: ${proUnit(proNum(result.legTensionAKg, 2), s.unitKg)}`,
-        result.legTensionBKg === undefined ? undefined : `${s.legTensionB}: ${proUnit(proNum(result.legTensionBKg, 2), s.unitKg)}`,
+        result.legTension === undefined
+          ? undefined
+          : `${s.legTensionA}: ${proUnit(proNum(result.legTension.legTensionAKg, 2), s.unitKg)}`,
+        result.legTension === undefined
+          ? undefined
+          : `${s.legTensionB}: ${proUnit(proNum(result.legTension.legTensionBKg, 2), s.unitKg)}`,
       ]
         .filter((line): line is string => line !== undefined)
         .join("\n");
@@ -2840,11 +2899,17 @@ export function TrussHoistReactionsTool() {
               ratio={result.ratioB === undefined ? undefined : proRatio(result.ratioB)}
             />
           )}
-          {result.legTensionAKg !== undefined && (
+          {result.legTension !== undefined && (
             <>
               <p className="tool__note">{s.legTensionNote}</p>
-              <ResultRow label={s.legTensionA} value={proUnit(proNum(result.legTensionAKg, 2), s.unitKg)} />
-              <ResultRow label={s.legTensionB} value={proUnit(proNum(result.legTensionBKg ?? 0, 2), s.unitKg)} />
+              <ResultRow
+                label={s.legTensionA}
+                value={proUnit(proNum(result.legTension.legTensionAKg, 2), s.unitKg)}
+              />
+              <ResultRow
+                label={s.legTensionB}
+                value={proUnit(proNum(result.legTension.legTensionBKg, 2), s.unitKg)}
+              />
             </>
           )}
           <ToolFormula>{s.formula}</ToolFormula>
@@ -3286,12 +3351,12 @@ export function SeatingTablesTool() {
         `${s.lastTableGuests}: ${proNum(result.lastTableGuests, 0)}`,
         `${s.cellArea}: ${proUnit(proNum(result.cellAreaM2, 2), s.unitM2)}`,
         `${s.totalCellArea}: ${proUnit(proNum(result.totalCellAreaM2, 2), s.unitM2)}`,
-        result.circularFootprintM2 === undefined
-          ? undefined
-          : `${s.totalCircularFootprint}: ${proUnit(proNum(result.totalCircularFootprintM2 ?? 0, 2), s.unitM2)}`,
-        result.continuousSegments === undefined
-          ? undefined
-          : `${s.continuous}: ${proNum(result.continuousSegments, 0)} × ${proUnit(proNum(result.continuousLengthM ?? 0, 2), s.unitM)}, ${proNum(result.continuousCapacity ?? 0, 0)} ${s.guestsUnit}`,
+        result.shape.kind === "round"
+          ? `${s.totalCircularFootprint}: ` +
+            `${proUnit(proNum(result.shape.totalCircularFootprintM2, 2), s.unitM2)}`
+          : `${s.continuous}: ${proNum(result.shape.continuousSegments, 0)} × ` +
+            `${proUnit(proNum(result.shape.continuousLengthM, 2), s.unitM)}, ` +
+            `${proNum(result.shape.continuousCapacity, 0)} ${s.guestsUnit}`,
         result.areaRatio === undefined ? undefined : `${s.areaRatio}: ${proRatio(result.areaRatio)}`,
         result.gridFitTables === undefined ? undefined : `${s.gridFitTables}: ${proNum(result.gridFitTables, 0)}`,
       ]
@@ -3347,20 +3412,26 @@ export function SeatingTablesTool() {
           <ResultRow label={s.lastTableGuests} value={proNum(result.lastTableGuests, 0)} />
           <ResultRow label={s.cellArea} value={proUnit(proNum(result.cellAreaM2, 2), s.unitM2)} />
           <ResultRow label={s.totalCellArea} value={proUnit(proNum(result.totalCellAreaM2, 2), s.unitM2)} />
-          {result.circularFootprintM2 !== undefined && (
+          {result.shape.kind === "round" && (
             <ResultRow
               label={s.totalCircularFootprint}
-              value={proUnit(proNum(result.totalCircularFootprintM2 ?? 0, 2), s.unitM2)}
+              value={proUnit(proNum(result.shape.totalCircularFootprintM2, 2), s.unitM2)}
             />
           )}
-          {result.continuousSegments !== undefined && (
+          {result.shape.kind === "long" && (
             <>
-              <ResultRow label={s.continuousSegments} value={proNum(result.continuousSegments, 0)} />
+              <ResultRow
+                label={s.continuousSegments}
+                value={proNum(result.shape.continuousSegments, 0)}
+              />
               <ResultRow
                 label={s.continuousLength}
-                value={proUnit(proNum(result.continuousLengthM ?? 0, 2), s.unitM)}
+                value={proUnit(proNum(result.shape.continuousLengthM, 2), s.unitM)}
               />
-              <ResultRow label={s.continuousCapacity} value={proNum(result.continuousCapacity ?? 0, 0)} />
+              <ResultRow
+                label={s.continuousCapacity}
+                value={proNum(result.shape.continuousCapacity, 0)}
+              />
             </>
           )}
           {result.areaRatio !== undefined && (

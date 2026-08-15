@@ -57,32 +57,60 @@ export interface BeamSpotInput {
   readonly coverageLengthM?: number | undefined;
 }
 
-export interface BeamSpotResult {
-  /** Circular spot diameter, m — normal incidence only. */
-  readonly beamDiameterM: number | undefined;
+/** Normal incidence — the spot is a circle. */
+export interface BeamNormalSpot {
+  readonly kind: "normal";
+  readonly beamDiameterM: number;
   readonly fieldDiameterM: number | undefined;
-  /** Distance to the aim point, m — `distanceM` itself, or the oblique slant distance. */
-  readonly slantDistanceM: number;
+}
+
+/** Oblique incidence — the spot is an ellipse, and all five figures come together. */
+export interface BeamObliqueSpot {
+  readonly kind: "oblique";
   /** Ellipse minor axis, m — exact closed form, not the small-angle approximation. */
-  readonly minorAxisM: number | undefined;
-  readonly majorAxisM: number | undefined;
-  readonly tiltDeg: number | undefined;
+  readonly minorAxisM: number;
+  readonly majorAxisM: number;
+  readonly tiltDeg: number;
   /** Near edge of the oblique spot, measured from directly below the fixture, m. */
-  readonly nearEdgeM: number | undefined;
-  readonly farEdgeM: number | undefined;
-  /** Illuminance AT THE AIM POINT — not at the ellipse's geometric centre. */
-  readonly illuminanceAtAimPointLx: number | undefined;
-  /** The diameter actually used for spacing: `beamDiameterM` normal, `majorAxisM` oblique. */
-  readonly effectiveDiameterM: number | undefined;
+  readonly nearEdgeM: number;
+  readonly farEdgeM: number;
+}
+
+/** The array along one axis — present exactly when an overlap and a run length were given. */
+export interface BeamArray {
   /** Exact, unrounded spacing — see the comment on `coveredLengthM`. */
-  readonly spacingM: number | undefined;
-  readonly fixtureCount: number | undefined;
+  readonly spacingM: number;
+  readonly fixtureCount: number;
   /**
    * `(n-1) * spacing + effectiveDiameter`, from the UNROUNDED spacing and
    * diameter. Computing it from numbers already rounded to 3 decimals is the
    * defect the review caught: it moves the last millimetres of the answer.
    */
-  readonly coveredLengthM: number | undefined;
+  readonly coveredLengthM: number;
+}
+
+export interface BeamSpotResult {
+  /**
+   * Circle or ellipse — the two incidences are mutually exclusive, and this is
+   * the field that says so. They used to be seven flat optionals, three from
+   * one branch and four from the other, which is why the surface tested each
+   * one separately: nothing in the type connected `minorAxisM` to `tiltDeg`,
+   * even though neither can exist without the other.
+   */
+  readonly spot: BeamNormalSpot | BeamObliqueSpot;
+  /** Distance to the aim point, m — `distanceM` itself, or the oblique slant distance. */
+  readonly slantDistanceM: number;
+  /** Illuminance AT THE AIM POINT — not at the ellipse's geometric centre. */
+  readonly illuminanceAtAimPointLx: number | undefined;
+  /**
+   * The diameter actually used for spacing: the beam diameter under normal
+   * incidence, the major axis under oblique. Required — both branches set it
+   * and neither can fail to. It was declared optional, which is the other half
+   * of DC-47: a field the arithmetic always produces, typed as though it might
+   * not be there.
+   */
+  readonly effectiveDiameterM: number;
+  readonly array: BeamArray | undefined;
 }
 
 /**
@@ -128,14 +156,10 @@ export function beamSpot(input: BeamSpotInput): ProResult<BeamSpotResult> {
   }
 
   const theta = input.beamAngleDeg * RAD_PER_DEG;
-  let beamDiameterM: number | undefined;
-  let fieldDiameterM: number | undefined;
+  // hasD||hasH is always true here — the guard above already refuses when
+  // neither is given, so exactly one of the two branches below runs.
+  let spot: BeamNormalSpot | BeamObliqueSpot;
   let slantDistanceM: number;
-  let minorAxisM: number | undefined;
-  let majorAxisM: number | undefined;
-  let tiltDeg: number | undefined;
-  let nearEdgeM: number | undefined;
-  let farEdgeM: number | undefined;
   let illuminanceAtAimPointLx: number | undefined;
   let effectiveDiameterM: number;
 
@@ -143,11 +167,15 @@ export function beamSpot(input: BeamSpotInput): ProResult<BeamSpotResult> {
     const D = input.distanceM as number;
     if (!isInRange(D, 0.5, 200)) return fail("distanceM");
     slantDistanceM = D;
-    beamDiameterM = 2 * D * Math.tan(theta / 2);
-    fieldDiameterM =
-      input.fieldAngleDeg === undefined
-        ? undefined
-        : 2 * D * Math.tan((input.fieldAngleDeg * RAD_PER_DEG) / 2);
+    const beamDiameterM = 2 * D * Math.tan(theta / 2);
+    spot = {
+      kind: "normal",
+      beamDiameterM,
+      fieldDiameterM:
+        input.fieldAngleDeg === undefined
+          ? undefined
+          : 2 * D * Math.tan((input.fieldAngleDeg * RAD_PER_DEG) / 2),
+    };
     illuminanceAtAimPointLx = input.intensityCd === undefined ? undefined : input.intensityCd / D ** 2;
     effectiveDiameterM = beamDiameterM;
   } else {
@@ -159,47 +187,36 @@ export function beamSpot(input: BeamSpotInput): ProResult<BeamSpotResult> {
     if (gamma + theta / 2 >= Math.PI / 2) return fail("grazing");
     const Ds = Math.hypot(h, x);
     slantDistanceM = Ds;
-    tiltDeg = gamma * DEG_PER_RAD;
     const near = gamma - theta / 2;
     const far = gamma + theta / 2;
-    minorAxisM = (2 * h * Math.sin(theta / 2)) / Math.sqrt(Math.cos(near) * Math.cos(far));
-    majorAxisM = h * (Math.tan(far) - Math.tan(near));
-    nearEdgeM = h * Math.tan(near);
-    farEdgeM = h * Math.tan(far);
+    const majorAxisM = h * (Math.tan(far) - Math.tan(near));
+    spot = {
+      kind: "oblique",
+      minorAxisM: (2 * h * Math.sin(theta / 2)) / Math.sqrt(Math.cos(near) * Math.cos(far)),
+      majorAxisM,
+      tiltDeg: gamma * DEG_PER_RAD,
+      nearEdgeM: h * Math.tan(near),
+      farEdgeM: h * Math.tan(far),
+    };
     illuminanceAtAimPointLx =
       input.intensityCd === undefined ? undefined : (input.intensityCd * Math.cos(gamma)) / Ds ** 2;
     effectiveDiameterM = majorAxisM;
   }
 
-  let spacingM: number | undefined;
-  let fixtureCount: number | undefined;
-  let coveredLengthM: number | undefined;
+  let array: BeamArray | undefined;
   if (hasOverlap && hasCoverage) {
     const overlap = input.overlapPct as number;
     const L = input.coverageLengthM as number;
-    spacingM = effectiveDiameterM * (1 - overlap / 100);
-    const raw = (L - effectiveDiameterM) / spacingM;
-    fixtureCount = Math.max(1, ceilSnapped(raw) + 1);
-    coveredLengthM = (fixtureCount - 1) * spacingM + effectiveDiameterM;
+    const spacingM = effectiveDiameterM * (1 - overlap / 100);
+    const fixtureCount = Math.max(1, ceilSnapped((L - effectiveDiameterM) / spacingM) + 1);
+    array = {
+      spacingM,
+      fixtureCount,
+      coveredLengthM: (fixtureCount - 1) * spacingM + effectiveDiameterM,
+    };
   }
 
-  return {
-    ok: true,
-    beamDiameterM,
-    fieldDiameterM,
-    slantDistanceM,
-    minorAxisM,
-    majorAxisM,
-    tiltDeg,
-    nearEdgeM,
-    farEdgeM,
-    illuminanceAtAimPointLx,
-    // hasD||hasH is always true here — line 108 already refuses when neither is given.
-    effectiveDiameterM,
-    spacingM,
-    fixtureCount,
-    coveredLengthM,
-  };
+  return { ok: true, spot, slantDistanceM, illuminanceAtAimPointLx, effectiveDiameterM, array };
 }
 
 /* ---------------------------------------------------------------------------
@@ -251,6 +268,18 @@ export interface CostLineResult {
   readonly percentBaseAmount: number | undefined;
 }
 
+export interface EventBudgetPerTable {
+  readonly costPerTableWithTax: number;
+  readonly costPerTableWithoutTax: number;
+}
+
+export interface EventBudgetRevenue {
+  /** Sum of `revenueLines` plus ticket revenue when both `ticketPrice` and `payingGuests` are given. */
+  readonly revenueTotal: number;
+  /** Revenue minus the grand total: positive is a surplus, negative is the shortfall. */
+  readonly revenueDifference: number;
+}
+
 export interface EventBudgetResult {
   readonly lines: readonly CostLineResult[];
   /** Sum of fixed + per-guest + per-table lines — the base a `percent` line may reference. */
@@ -265,12 +294,11 @@ export interface EventBudgetResult {
   readonly grandTotal: number;
   readonly costPerGuestWithTax: number;
   readonly costPerGuestWithoutTax: number;
-  readonly costPerTableWithTax: number | undefined;
-  readonly costPerTableWithoutTax: number | undefined;
-  /** Sum of `revenueLines` plus ticket revenue when both `ticketPrice` and `payingGuests` are given. */
-  readonly revenueTotal: number | undefined;
-  readonly revenueDifference: number | undefined;
-  /** Ticket price at which `revenueDifference` is exactly zero, rounded UP to a cent — see the note below. */
+  /** Present exactly when there is at least one table — dividing by zero of them says nothing. */
+  readonly perTable: EventBudgetPerTable | undefined;
+  /** Present exactly when revenue was entered at all. */
+  readonly revenue: EventBudgetRevenue | undefined;
+  /** Ticket price at which `revenue.revenueDifference` is exactly zero, rounded UP to a cent. */
   readonly breakEvenTicketPriceCeil: number | undefined;
   readonly ticketRevenue: number | undefined;
 }
@@ -397,10 +425,14 @@ export function eventBudget(input: EventBudgetInput): ProResult<EventBudgetResul
     grandTotal,
     costPerGuestWithTax: grandTotal / guests,
     costPerGuestWithoutTax: preTaxTotal / guests,
-    costPerTableWithTax: tables > 0 ? grandTotal / tables : undefined,
-    costPerTableWithoutTax: tables > 0 ? preTaxTotal / tables : undefined,
-    revenueTotal,
-    revenueDifference: revenueTotal === undefined ? undefined : revenueTotal - grandTotal,
+    perTable:
+      tables > 0
+        ? { costPerTableWithTax: grandTotal / tables, costPerTableWithoutTax: preTaxTotal / tables }
+        : undefined,
+    revenue:
+      revenueTotal === undefined
+        ? undefined
+        : { revenueTotal, revenueDifference: revenueTotal - grandTotal },
     breakEvenTicketPriceCeil,
     ticketRevenue:
       input.ticketPrice !== undefined && input.payingGuests !== undefined
@@ -460,10 +492,15 @@ export interface CateringLineResult {
   readonly actualReservePct: number | undefined;
 }
 
+/** Present exactly when at least one line carried a price. */
+export interface CateringCost {
+  readonly totalCost: number;
+  readonly totalCostPerGuest: number;
+}
+
 export interface CateringResult {
   readonly lines: readonly CateringLineResult[];
-  readonly totalCost: number | undefined;
-  readonly totalCostPerGuest: number | undefined;
+  readonly cost: CateringCost | undefined;
 }
 
 /**
@@ -542,8 +579,7 @@ export function cateringPerGuest(input: CateringInput): ProResult<CateringResult
   return {
     ok: true,
     lines: results,
-    totalCost: anyCost ? totalCost : undefined,
-    totalCostPerGuest: anyCost ? totalCost / guests : undefined,
+    cost: anyCost ? { totalCost, totalCostPerGuest: totalCost / guests } : undefined,
   };
 }
 
@@ -1077,26 +1113,47 @@ export interface ParkingCloakroomInput {
   readonly checkOutAttendants?: number | undefined;
 }
 
+/** How long the desk takes with the attendants actually rostered, and by how
+ * much that misses the window. Both need `attendantsGiven`, so both or neither. */
+export interface ThroughputClear {
+  readonly clearTimeMinutes: number;
+  readonly clearTimeDiffMinutes: number;
+}
+
 export interface ThroughputResult {
   readonly attendantsNeeded: number;
-  readonly clearTimeMinutes: number | undefined;
-  readonly clearTimeDiffMinutes: number | undefined;
+  readonly clear: ThroughputClear | undefined;
+}
+
+/** Present exactly when a bus share was entered. */
+export interface ParkingBuses {
+  readonly busGuests: number;
+  readonly buses: number;
+}
+
+/** Present exactly when a stall count was entered — the ratio needs it non-zero as well. */
+export interface ParkingStalls {
+  readonly stallDiff: number;
+  readonly stallRatio: number | undefined;
+}
+
+/** Present exactly when rail segments were entered — the ratio needs a non-zero capacity. */
+export interface CloakroomRail {
+  readonly railCapacityItems: number;
+  readonly railDiff: number;
+  readonly railRatio: number | undefined;
 }
 
 export interface ParkingCloakroomResult {
   readonly carGuests: number;
   readonly cars: number;
   readonly parkingAreaM2: number;
-  readonly busGuests: number | undefined;
-  readonly buses: number | undefined;
-  readonly stallRatio: number | undefined;
-  readonly stallDiff: number | undefined;
+  readonly buses: ParkingBuses | undefined;
+  readonly stalls: ParkingStalls | undefined;
   readonly coatGuests: number;
   readonly items: number;
   readonly railLengthNeededM: number;
-  readonly railCapacityItems: number | undefined;
-  readonly railRatio: number | undefined;
-  readonly railDiff: number | undefined;
+  readonly rail: CloakroomRail | undefined;
   readonly checkIn: ThroughputResult;
   readonly checkOut: ThroughputResult | undefined;
 }
@@ -1136,39 +1193,40 @@ export function parkingCloakroom(input: ParkingCloakroomInput): ProResult<Parkin
   const cars = ceilSnapped(carGuests / input.occupancyPerCar);
   const parkingAreaM2 = cars * input.areaPerStallM2;
 
-  let busGuests: number | undefined;
-  let buses: number | undefined;
+  let buses: ParkingBuses | undefined;
   if (input.busSharePct !== undefined) {
     if (!isPositive(input.seatsPerBus) || !isInRange(input.seatsPerBus, 10, 100)) return fail("seatsPerBus");
-    busGuests = roundHalfUp(guests * (input.busSharePct / 100), 0);
-    buses = ceilSnapped(busGuests / input.seatsPerBus);
+    const busGuests = roundHalfUp(guests * (input.busSharePct / 100), 0);
+    buses = { busGuests, buses: ceilSnapped(busGuests / input.seatsPerBus) };
   }
 
-  let stallRatio: number | undefined;
-  let stallDiff: number | undefined;
+  let stalls: ParkingStalls | undefined;
   if (input.availableStalls !== undefined) {
     if (!isNonNegative(input.availableStalls)) return fail("availableStalls");
-    stallRatio = input.availableStalls > 0 ? cars / input.availableStalls : undefined;
-    stallDiff = cars - input.availableStalls;
+    stalls = {
+      stallDiff: cars - input.availableStalls,
+      stallRatio: input.availableStalls > 0 ? cars / input.availableStalls : undefined,
+    };
   }
 
   const coatGuests = roundHalfUp(guests * (input.coatSharePct / 100), 0);
   const items = ceilSnapped(coatGuests * input.itemsPerGuest);
   const railLengthNeededM = items * input.hangerPitchM;
 
-  let railCapacityItems: number | undefined;
-  let railRatio: number | undefined;
-  let railDiff: number | undefined;
+  let rail: CloakroomRail | undefined;
   if (input.availableRailSegmentsM !== undefined) {
     for (const [i, seg] of input.availableRailSegmentsM.entries()) {
       if (!isNonNegative(seg)) return fail(`availableRailSegmentsM:${i}`);
     }
-    railCapacityItems = input.availableRailSegmentsM.reduce(
+    const railCapacityItems = input.availableRailSegmentsM.reduce(
       (sum, seg) => sum + floorSnapped(seg / input.hangerPitchM),
       0,
     );
-    railRatio = railCapacityItems > 0 ? items / railCapacityItems : undefined;
-    railDiff = items - railCapacityItems;
+    rail = {
+      railCapacityItems,
+      railDiff: items - railCapacityItems,
+      railRatio: railCapacityItems > 0 ? items / railCapacityItems : undefined,
+    };
   }
 
   const throughput = (
@@ -1180,12 +1238,12 @@ export function parkingCloakroom(input: ParkingCloakroomInput): ProResult<Parkin
     if (!isPositive(windowMinutes) || !isPositive(ratePerMinute)) return fail("rate");
     if (attendantsGiven !== undefined && !isIntegerIn(attendantsGiven, 1, 100)) return fail("attendants");
     const attendantsNeeded = ceilSnapped(items / (windowMinutes * ratePerMinute));
-    const clearTimeMinutes = attendantsGiven === undefined ? undefined : items / (attendantsGiven * ratePerMinute);
+    if (attendantsGiven === undefined) return { ok: true, attendantsNeeded, clear: undefined };
+    const clearTimeMinutes = items / (attendantsGiven * ratePerMinute);
     return {
       ok: true,
       attendantsNeeded,
-      clearTimeMinutes,
-      clearTimeDiffMinutes: clearTimeMinutes === undefined ? undefined : clearTimeMinutes - windowMinutes,
+      clear: { clearTimeMinutes, clearTimeDiffMinutes: clearTimeMinutes - windowMinutes },
     };
   };
 
@@ -1206,16 +1264,12 @@ export function parkingCloakroom(input: ParkingCloakroomInput): ProResult<Parkin
     carGuests,
     cars,
     parkingAreaM2,
-    busGuests,
     buses,
-    stallRatio,
-    stallDiff,
+    stalls,
     coatGuests,
     items,
     railLengthNeededM,
-    railCapacityItems,
-    railRatio,
-    railDiff,
+    rail,
     checkIn,
     checkOut,
   };
@@ -1249,6 +1303,30 @@ export interface ProjectorInput {
   readonly targetLuminanceFl?: number | undefined;
 }
 
+/** A single fixed lens: `width × throwRatio` — the D = W·TR direction. */
+export interface ProjectorFixedLens {
+  readonly kind: "fixed";
+  readonly distanceM: number;
+}
+
+/** A zoom lens: the same product taken at both ends of the ratio range. */
+export interface ProjectorZoomLens {
+  readonly kind: "zoom";
+  readonly zoomDistanceMinM: number;
+  readonly zoomDistanceMaxM: number;
+}
+
+/**
+ * One brightness, in the three units the trade quotes it in. They are computed
+ * from a single `lumens` input and can never disagree about being present.
+ */
+export interface ProjectorBrightness {
+  /** lm ÷ (W×H) — the ANSI NINE-POINT AVERAGE, not the brighter centre of the image. */
+  readonly avgIlluminanceLx: number;
+  readonly avgLuminanceCdM2: number;
+  readonly avgLuminanceFl: number;
+}
+
 export interface ProjectorResult {
   readonly widthM: number;
   readonly heightM: number;
@@ -1256,17 +1334,13 @@ export interface ProjectorResult {
   readonly diagonalIn: number;
   readonly areaM2: number;
   /**
-   * A single fixed lens only: `width × throwRatio` — the D = W·TR direction.
-   * `undefined` for a zoom lens, which has a RANGE instead — see
-   * `zoomDistanceMinM`/`zoomDistanceMaxM`.
+   * Where the projector goes. A fixed lens gives ONE distance and a zoom gives
+   * a RANGE, and the input refuses both or neither — so the result is a union
+   * of two, not three optionals of which some combination is nonsense.
    */
-  readonly distanceM: number | undefined;
-  readonly zoomDistanceMinM: number | undefined;
-  readonly zoomDistanceMaxM: number | undefined;
-  /** lm ÷ (W×H) — the ANSI NINE-POINT AVERAGE, not the brighter centre of the image. */
-  readonly avgIlluminanceLx: number | undefined;
-  readonly avgLuminanceCdM2: number | undefined;
-  readonly avgLuminanceFl: number | undefined;
+  readonly lens: ProjectorFixedLens | ProjectorZoomLens;
+  /** Present exactly when a lumen figure was entered — one measurement in three units. */
+  readonly brightness: ProjectorBrightness | undefined;
   readonly ambientUsesGainApproximation: boolean;
   readonly onScreenContrast: number | undefined;
   readonly requiredLumensForTarget: number | undefined;
@@ -1330,16 +1404,14 @@ export function projectorThrowScreen(input: ProjectorInput): ProResult<Projector
   // derived as knownValueM / throwRatio, so multiplying back out returns
   // knownValueM exactly); for "width"/"diagonal" it is the actual answer to
   // "where does a fixed lens of this ratio put the projector".
-  const distanceM = hasSingle ? width * (input.throwRatio as number) : undefined;
-  const zoomDistanceMinM = hasZoom ? width * (trMin as number) : undefined;
-  const zoomDistanceMaxM = hasZoom ? width * (trMax as number) : undefined;
+  const lens: ProjectorFixedLens | ProjectorZoomLens = hasSingle
+    ? { kind: "fixed", distanceM: width * (input.throwRatio as number) }
+    : { kind: "zoom", zoomDistanceMinM: width * (trMin as number), zoomDistanceMaxM: width * (trMax as number) };
 
-  let avgIlluminanceLx: number | undefined;
-  let avgLuminanceCdM2: number | undefined;
-  let avgLuminanceFl: number | undefined;
+  let brightness: ProjectorBrightness | undefined;
   if (input.lumens !== undefined) {
     if (!isInRange(input.lumens, 100, 100000)) return fail("lumens");
-    avgIlluminanceLx = input.lumens / areaM2;
+    const avgIlluminanceLx = input.lumens / areaM2;
     // The SAME luminance, each from its own unit system's primitive definition
     // rather than one converted into the other: a nit is lux·gain/π for a
     // Lambertian screen, a foot-lambert IS lumens per square foot. That they
@@ -1347,20 +1419,23 @@ export function projectorThrowScreen(input: ProjectorInput): ProResult<Projector
     // per fL) — a relation this file used to hold as an unused constant and
     // `event.test.ts` now holds as an assertion, which is the only form of it
     // that can notice if one of the two lines is ever edited alone.
-    avgLuminanceCdM2 = (avgIlluminanceLx * gain) / Math.PI;
-    avgLuminanceFl = (input.lumens * gain) / areaFt2;
+    brightness = {
+      avgIlluminanceLx,
+      avgLuminanceCdM2: (avgIlluminanceLx * gain) / Math.PI,
+      avgLuminanceFl: (input.lumens * gain) / areaFt2,
+    };
   }
 
   let onScreenContrast: number | undefined;
   const ambientUsesGainApproximation = input.diffuseReflectance === undefined;
-  if (input.contrastRatio !== undefined && input.ambientLux !== undefined && avgLuminanceCdM2 !== undefined) {
+  if (input.contrastRatio !== undefined && input.ambientLux !== undefined && brightness !== undefined) {
     if (!isInRange(input.contrastRatio, 100, 2000000)) return fail("contrastRatio");
     if (!isInRange(input.ambientLux, 0, 2000)) return fail("ambientLux");
     if (input.diffuseReflectance !== undefined && !isInRange(input.diffuseReflectance, 0, 1)) {
       return fail("diffuseReflectance");
     }
     const reflectance = input.diffuseReflectance ?? gain;
-    const lWhite = avgLuminanceCdM2;
+    const lWhite = brightness.avgLuminanceCdM2;
     const lBlack = lWhite / input.contrastRatio;
     const lAmbient = (input.ambientLux * reflectance) / Math.PI;
     onScreenContrast = (lWhite + lAmbient) / (lBlack + lAmbient);
@@ -1385,12 +1460,8 @@ export function projectorThrowScreen(input: ProjectorInput): ProResult<Projector
     diagonalM,
     diagonalIn: diagonalM / 0.0254,
     areaM2,
-    distanceM,
-    zoomDistanceMinM,
-    zoomDistanceMaxM,
-    avgIlluminanceLx,
-    avgLuminanceCdM2,
-    avgLuminanceFl,
+    lens,
+    brightness,
     ambientUsesGainApproximation,
     onScreenContrast,
     requiredLumensForTarget,
@@ -1429,32 +1500,60 @@ export interface SlingForceInput {
   readonly wllUnit?: WllUnit | undefined;
 }
 
+/** 4-leg rig only — the four figures arrive and depart together. */
+export interface SlingFourLeg {
+  /** The statically-indeterminate ideal split across all 4, UNFACTORED. */
+  readonly fourLegShareKgf: number;
+  readonly fourLegShareKgfFactored: number;
+  /** The conservative 2-leg share, since 4 legs are not statically determinate. UNFACTORED. */
+  readonly twoLegShareKgf: number;
+  readonly twoLegShareKgfFactored: number;
+}
+
+/** One hook, `legs` legs at one hang angle. */
+export interface SlingSingleHang {
+  readonly kind: "single";
+  readonly betaDeg: number;
+  /** UNFACTORED — see `forceLegKnFactored`/`forceLegKgfFactored` for the design figure. */
+  readonly forceLegKn: number;
+  readonly forceLegKgf: number;
+  readonly forceLegKnFactored: number;
+  readonly forceLegKgfFactored: number;
+  readonly verticalKgf: number;
+  readonly verticalKgfFactored: number;
+  readonly angleFactor: number;
+  readonly fourLeg: SlingFourLeg | undefined;
+  /** `heightRadius` mode only: the other three modes give an angle, not a geometry. */
+  readonly legLengthM: number | undefined;
+}
+
+/** Two pick points to a single hook — both angles follow from the hook height. */
+export interface SlingTwoPointHang {
+  readonly kind: "twoPoint";
+  readonly betaADeg: number;
+  readonly betaBDeg: number;
+  /** UNFACTORED — see the `Factored` pair for the design figures. */
+  readonly forceAKgf: number;
+  readonly forceBKgf: number;
+  readonly forceAKgfFactored: number;
+  readonly forceBKgfFactored: number;
+  readonly verticalAKgf: number;
+  readonly verticalBKgf: number;
+  readonly verticalAKgfFactored: number;
+  readonly verticalBKgfFactored: number;
+  readonly legLengthAM: number;
+  readonly legLengthBM: number;
+}
+
 export interface SlingForceResult {
   /** UNFACTORED — the load's own weight is a fact independent of any dynamic factor. */
   readonly weightKn: number;
   readonly weightKgf: number;
   readonly weightKnFactored: number;
   readonly weightKgfFactored: number;
-  /** Single-hang modes only — see `twoPointBetaADeg`/`twoPointBetaBDeg` for a two-point pick. */
-  readonly betaDeg: number | undefined;
-  /** UNFACTORED — see `forceLegKnFactored`/`forceLegKgfFactored` for the design figure. */
-  readonly forceLegKn: number | undefined;
-  readonly forceLegKgf: number | undefined;
-  readonly forceLegKnFactored: number | undefined;
-  readonly forceLegKgfFactored: number | undefined;
   /** Presses the load INWARD — the compression a spreader bar would carry. UNFACTORED. */
   readonly horizontalKgf: number;
   readonly horizontalKgfFactored: number;
-  readonly verticalKgf: number | undefined;
-  readonly verticalKgfFactored: number | undefined;
-  readonly angleFactor: number | undefined;
-  /** 4-leg rig only: the statically-indeterminate ideal split across all 4, UNFACTORED. */
-  readonly fourLegShareKgf: number | undefined;
-  readonly fourLegShareKgfFactored: number | undefined;
-  /** 4-leg rig only: the conservative 2-leg share, since 4 legs are not statically determinate. UNFACTORED. */
-  readonly twoLegShareKgf: number | undefined;
-  readonly twoLegShareKgfFactored: number | undefined;
-  readonly legLengthM: number | undefined;
   /**
    * The user's own dynamic factor, exactly as entered. `undefined` means none
    * was typed — distinct from an entered `1.0` — which the FACTORED fields
@@ -1463,18 +1562,20 @@ export interface SlingForceResult {
   readonly dynamicFactor: number | undefined;
   /** Compares the FACTORED force (the one actually carried) against the WLL. */
   readonly wllRatio: number | undefined;
-  readonly twoPointBetaADeg: number | undefined;
-  readonly twoPointBetaBDeg: number | undefined;
-  readonly twoPointForceAKgf: number | undefined;
-  readonly twoPointForceBKgf: number | undefined;
-  readonly twoPointForceAKgfFactored: number | undefined;
-  readonly twoPointForceBKgfFactored: number | undefined;
-  readonly twoPointVerticalAKgf: number | undefined;
-  readonly twoPointVerticalBKgf: number | undefined;
-  readonly twoPointVerticalAKgfFactored: number | undefined;
-  readonly twoPointVerticalBKgfFactored: number | undefined;
-  readonly twoPointLegLengthAM: number | undefined;
-  readonly twoPointLegLengthBM: number | undefined;
+  /**
+   * Which rig this is, and everything that only that rig has.
+   *
+   * The two hangs used to be 23 flat optionals side by side: eleven that only a
+   * single hang produces, twelve that only a two-point pick does, and each
+   * branch wrote out the other's field names as `undefined`. Nothing in the
+   * type stopped a caller reading a two-point force out of a single-leg result,
+   * so the surface derived its own `isTwoPoint` boolean from one representative
+   * field and then wrote `?? 0` for every sibling — the guard and the values it
+   * was meant to protect connected by nothing the compiler could check. On a
+   * `life-safety` tool, a leg force of „0,00 kgf" from the wrong branch is not
+   * a display bug.
+   */
+  readonly hang: SlingSingleHang | SlingTwoPointHang;
 }
 
 /**
@@ -1535,36 +1636,26 @@ export function slingForce(input: SlingForceInput): ProResult<SlingForceResult> 
       weightKgf,
       weightKnFactored: weightKn * factor,
       weightKgfFactored: weightKgf * factor,
-      betaDeg: undefined,
-      forceLegKn: undefined,
-      forceLegKgf: undefined,
-      forceLegKnFactored: undefined,
-      forceLegKgfFactored: undefined,
       // Equal on both sides by construction — see the function's own doc comment.
       horizontalKgf: fAKgf * Math.sin(betaA),
       horizontalKgfFactored: fAKgfFactored * Math.sin(betaA),
-      verticalKgf: undefined,
-      verticalKgfFactored: undefined,
-      angleFactor: undefined,
-      fourLegShareKgf: undefined,
-      fourLegShareKgfFactored: undefined,
-      twoLegShareKgf: undefined,
-      twoLegShareKgfFactored: undefined,
-      legLengthM: undefined,
       dynamicFactor: input.dynamicFactor,
       wllRatio,
-      twoPointBetaADeg: betaA * DEG_PER_RAD,
-      twoPointBetaBDeg: betaB * DEG_PER_RAD,
-      twoPointForceAKgf: fAKgf,
-      twoPointForceBKgf: fBKgf,
-      twoPointForceAKgfFactored: fAKgfFactored,
-      twoPointForceBKgfFactored: fBKgfFactored,
-      twoPointVerticalAKgf: vAKgf,
-      twoPointVerticalBKgf: vBKgf,
-      twoPointVerticalAKgfFactored: vAKgf * factor,
-      twoPointVerticalBKgfFactored: vBKgf * factor,
-      twoPointLegLengthAM: hookHeightM / Math.cos(betaA),
-      twoPointLegLengthBM: hookHeightM / Math.cos(betaB),
+      hang: {
+        kind: "twoPoint",
+        betaADeg: betaA * DEG_PER_RAD,
+        betaBDeg: betaB * DEG_PER_RAD,
+        forceAKgf: fAKgf,
+        forceBKgf: fBKgf,
+        forceAKgfFactored: fAKgfFactored,
+        forceBKgfFactored: fBKgfFactored,
+        verticalAKgf: vAKgf,
+        verticalBKgf: vBKgf,
+        verticalAKgfFactored: vAKgf * factor,
+        verticalBKgfFactored: vBKgf * factor,
+        legLengthAM: hookHeightM / Math.cos(betaA),
+        legLengthBM: hookHeightM / Math.cos(betaB),
+      },
     };
   }
 
@@ -1594,8 +1685,17 @@ export function slingForce(input: SlingForceInput): ProResult<SlingForceResult> 
   const forceLegKgfFactored = forceLegKgf * factor;
   const verticalKgfFactored = verticalKgf * factor;
   const horizontalKgfFactored = horizontalKgf * factor;
-  const fourLegShareKgf = n === 4 ? input.massKg / (4 * cosBeta) : undefined;
-  const twoLegShareKgf = n === 4 ? input.massKg / (2 * cosBeta) : undefined;
+  let fourLeg: SlingFourLeg | undefined;
+  if (n === 4) {
+    const fourLegShareKgf = input.massKg / (4 * cosBeta);
+    const twoLegShareKgf = input.massKg / (2 * cosBeta);
+    fourLeg = {
+      fourLegShareKgf,
+      fourLegShareKgfFactored: fourLegShareKgf * factor,
+      twoLegShareKgf,
+      twoLegShareKgfFactored: twoLegShareKgf * factor,
+    };
+  }
 
   let wllRatio: number | undefined;
   if (input.wllPerLeg !== undefined) {
@@ -1611,35 +1711,23 @@ export function slingForce(input: SlingForceInput): ProResult<SlingForceResult> 
     weightKgf,
     weightKnFactored: weightKn * factor,
     weightKgfFactored: weightKgf * factor,
-    betaDeg,
-    forceLegKn: (forceLegKgf * STANDARD_GRAVITY) / 1000,
-    forceLegKgf,
-    forceLegKnFactored: (forceLegKgfFactored * STANDARD_GRAVITY) / 1000,
-    forceLegKgfFactored,
     horizontalKgf,
     horizontalKgfFactored,
-    verticalKgf,
-    verticalKgfFactored,
-    angleFactor: 1 / cosBeta,
-    fourLegShareKgf,
-    fourLegShareKgfFactored: fourLegShareKgf === undefined ? undefined : fourLegShareKgf * factor,
-    twoLegShareKgf,
-    twoLegShareKgfFactored: twoLegShareKgf === undefined ? undefined : twoLegShareKgf * factor,
-    legLengthM,
     dynamicFactor: input.dynamicFactor,
     wllRatio,
-    twoPointBetaADeg: undefined,
-    twoPointBetaBDeg: undefined,
-    twoPointForceAKgf: undefined,
-    twoPointForceBKgf: undefined,
-    twoPointForceAKgfFactored: undefined,
-    twoPointForceBKgfFactored: undefined,
-    twoPointVerticalAKgf: undefined,
-    twoPointVerticalBKgf: undefined,
-    twoPointVerticalAKgfFactored: undefined,
-    twoPointVerticalBKgfFactored: undefined,
-    twoPointLegLengthAM: undefined,
-    twoPointLegLengthBM: undefined,
+    hang: {
+      kind: "single",
+      betaDeg,
+      forceLegKn: (forceLegKgf * STANDARD_GRAVITY) / 1000,
+      forceLegKgf,
+      forceLegKnFactored: (forceLegKgfFactored * STANDARD_GRAVITY) / 1000,
+      forceLegKgfFactored,
+      verticalKgf,
+      verticalKgfFactored,
+      angleFactor: 1 / cosBeta,
+      fourLeg,
+      legLengthM,
+    },
   };
 }
 
@@ -1844,6 +1932,21 @@ export interface SeatingInput {
   readonly availableSpace?: SeatingSpace | undefined;
 }
 
+/** Round tables — the circular zone of influence, `π(D/2+c)²`. */
+export interface SeatingRoundShape {
+  readonly kind: "round";
+  readonly circularFootprintM2: number;
+  readonly totalCircularFootprintM2: number;
+}
+
+/** Long tables: a continuous run's true seat count — ends count only at the TWO FAR ends. */
+export interface SeatingLongShape {
+  readonly kind: "long";
+  readonly continuousSegments: number;
+  readonly continuousLengthM: number;
+  readonly continuousCapacity: number;
+}
+
 export interface SeatingResult {
   readonly seatsPerTable: number;
   readonly tables: number;
@@ -1856,13 +1959,14 @@ export interface SeatingResult {
    */
   readonly cellAreaM2: number;
   readonly totalCellAreaM2: number;
-  /** Round tables only — the circular zone of influence, `π(D/2+c)²`. */
-  readonly circularFootprintM2: number | undefined;
-  readonly totalCircularFootprintM2: number | undefined;
-  /** Long tables only: a continuous run's true seat count — ends count only at the TWO FAR ends. */
-  readonly continuousSegments: number | undefined;
-  readonly continuousLengthM: number | undefined;
-  readonly continuousCapacity: number | undefined;
+  /**
+   * The figures that only one table shape has — round or long, never both and
+   * never neither. Five flat optionals before, in two groups of two and three
+   * that the input's own `table.kind` already decided; the result simply did
+   * not carry the decision, so a surface reading `continuousLengthM` off a
+   * round-table result got `undefined` and printed the `?? 0` beneath it.
+   */
+  readonly shape: SeatingRoundShape | SeatingLongShape;
   readonly areaRatio: number | undefined;
   /**
    * From `availableSpace`: tables that fit in a grid, `floor(w/cell) ×
@@ -1899,10 +2003,16 @@ export function seatingTables(input: SeatingInput): ProResult<SeatingResult> {
 
   let seatsPerTable: number;
   let cellAreaM2: number;
-  let circularFootprintM2: number | undefined;
-  let continuousSegments: number | undefined;
-  let continuousLengthM: number | undefined;
-  let continuousCapacity: number | undefined;
+  /**
+   * The shape-specific half, before `tables` is known — the round total is
+   * `tables × footprint`, and `tables` needs the seat count both branches
+   * produce. Discriminated rather than „a footprint or a long shape, one of
+   * which must be set": that phrasing would need a cast at the join, which is
+   * the same unchecked assumption this whole pass exists to delete.
+   */
+  let pending:
+    | { readonly kind: "round"; readonly circularFootprintM2: number }
+    | { readonly kind: "long"; readonly shape: SeatingLongShape };
 
   if (table.kind === "round") {
     if (!isPositive(table.diameterM) || !isInRange(table.diameterM, 0.8, 3.0)) return fail("diameterM");
@@ -1910,7 +2020,7 @@ export function seatingTables(input: SeatingInput): ProResult<SeatingResult> {
     seatsPerTable = floorSnapped(perimeter / input.seatWidthM);
     if (seatsPerTable < 2) return fail("tooFewSeats");
     cellAreaM2 = (table.diameterM + 2 * c) ** 2;
-    circularFootprintM2 = Math.PI * (table.diameterM / 2 + c) ** 2;
+    pending = { kind: "round", circularFootprintM2: Math.PI * (table.diameterM / 2 + c) ** 2 };
   } else {
     if (!isPositive(table.lengthM) || !isInRange(table.lengthM, 0.8, 6.0)) return fail("lengthM");
     if (!isPositive(table.widthM) || !isInRange(table.widthM, 0.6, 2.0)) return fail("widthM");
@@ -1923,15 +2033,30 @@ export function seatingTables(input: SeatingInput): ProResult<SeatingResult> {
     // Continuous run: both long sides always seated, ends only at the two
     // far ends of the WHOLE run — never re-added at every internal join.
     const neededLength = guests * input.seatWidthM * 0.5;
-    continuousSegments = Math.max(1, ceilSnapped(neededLength / table.lengthM));
-    continuousLengthM = continuousSegments * table.lengthM;
-    continuousCapacity = 2 * floorSnapped(continuousLengthM / input.seatWidthM) + endsSeats;
+    const continuousSegments = Math.max(1, ceilSnapped(neededLength / table.lengthM));
+    const continuousLengthM = continuousSegments * table.lengthM;
+    pending = {
+      kind: "long",
+      shape: {
+        kind: "long",
+        continuousSegments,
+        continuousLengthM,
+        continuousCapacity: 2 * floorSnapped(continuousLengthM / input.seatWidthM) + endsSeats,
+      },
+    };
   }
 
   const tables = ceilSnapped(guests / seatsPerTable);
   const lastTableGuests = guests - (tables - 1) * seatsPerTable;
   const totalCellAreaM2 = tables * cellAreaM2;
-  const totalCircularFootprintM2 = circularFootprintM2 === undefined ? undefined : tables * circularFootprintM2;
+  const shape: SeatingRoundShape | SeatingLongShape =
+    pending.kind === "long"
+      ? pending.shape
+      : {
+          kind: "round",
+          circularFootprintM2: pending.circularFootprintM2,
+          totalCircularFootprintM2: tables * pending.circularFootprintM2,
+        };
 
   let areaRatio: number | undefined;
   if (input.availableAreaM2 !== undefined) {
@@ -1957,11 +2082,7 @@ export function seatingTables(input: SeatingInput): ProResult<SeatingResult> {
     lastTableGuests,
     cellAreaM2,
     totalCellAreaM2,
-    circularFootprintM2,
-    totalCircularFootprintM2,
-    continuousSegments,
-    continuousLengthM,
-    continuousCapacity,
+    shape,
     areaRatio,
     gridFitTables,
   };
@@ -2116,15 +2237,30 @@ export interface TentBayInput {
   readonly requiredHeadHeightM?: number | undefined;
 }
 
+/** Sized from a required AREA — waste is measured against that area. */
+export interface TentSizedFromArea {
+  readonly kind: "area";
+  readonly wasteM2: number;
+  readonly wastePct: number;
+}
+
+/** Sized from a required LENGTH — achieved minus requested, m. */
+export interface TentSizedFromLength {
+  readonly kind: "length";
+  readonly lengthDiffM: number;
+}
+
 export interface TentBayResult {
   readonly bays: number;
   readonly lengthM: number;
   readonly areaM2: number;
-  /** Only when sized from `requiredAreaM2`. */
-  readonly wasteM2: number | undefined;
-  readonly wastePct: number | undefined;
-  /** Only when sized from `requiredLengthM`: achieved minus requested, m. */
-  readonly lengthDiffM: number | undefined;
+  /**
+   * Which direction the tent was sized from, and the overshoot in that
+   * direction's own units. The input already refuses both and neither, so this
+   * is a union of exactly two — not three optionals, one of which the surface
+   * had to guard while writing `?? 0` for its partner.
+   */
+  readonly sizedFrom: TentSizedFromArea | TentSizedFromLength;
   readonly footprintWidthM: number;
   readonly footprintLengthM: number;
   readonly footprintAreaM2: number;
@@ -2160,24 +2296,32 @@ export function tentBayLayout(input: TentBayInput): ProResult<TentBayResult> {
   if (!isInRange(input.roofPitchDeg, 5, 45)) return fail("roofPitchDeg");
   if (!isNonNegative(input.marginM)) return fail("marginM");
 
+  // The requirement is carried forward as a discriminated local rather than
+  // re-read after the branch behind an `as number`. Those two casts were the
+  // same missing link the result type had — the compiler could not see that
+  // the branch already decided which of the two inputs exists.
   let bays: number;
-  let wasteM2: number | undefined;
-  let wastePct: number | undefined;
-  let lengthDiffM: number | undefined;
-  if (hasArea) {
+  let sizing:
+    | { readonly kind: "area"; readonly requiredAreaM2: number }
+    | { readonly kind: "length"; readonly requiredLengthM: number };
+  if (input.requiredAreaM2 !== undefined) {
     if (!isPositive(input.requiredAreaM2)) return fail("requiredAreaM2");
+    sizing = { kind: "area", requiredAreaM2: input.requiredAreaM2 };
     bays = ceilSnapped(input.requiredAreaM2 / (input.widthM * input.bayLengthM));
   } else {
     if (!isPositive(input.requiredLengthM)) return fail("requiredLengthM");
+    sizing = { kind: "length", requiredLengthM: input.requiredLengthM };
     bays = ceilSnapped(input.requiredLengthM / input.bayLengthM);
   }
   const lengthM = bays * input.bayLengthM;
   const areaM2 = input.widthM * lengthM;
-  if (hasArea) {
-    wasteM2 = areaM2 - (input.requiredAreaM2 as number);
-    wastePct = (wasteM2 / (input.requiredAreaM2 as number)) * 100;
+
+  let sizedFrom: TentSizedFromArea | TentSizedFromLength;
+  if (sizing.kind === "area") {
+    const wasteM2 = areaM2 - sizing.requiredAreaM2;
+    sizedFrom = { kind: "area", wasteM2, wastePct: (wasteM2 / sizing.requiredAreaM2) * 100 };
   } else {
-    lengthDiffM = lengthM - (input.requiredLengthM as number);
+    sizedFrom = { kind: "length", lengthDiffM: lengthM - sizing.requiredLengthM };
   }
 
   const footprintWidthM = input.widthM + 2 * input.marginM;
@@ -2211,9 +2355,7 @@ export function tentBayLayout(input: TentBayInput): ProResult<TentBayResult> {
     bays,
     lengthM,
     areaM2,
-    wasteM2,
-    wastePct,
-    lengthDiffM,
+    sizedFrom,
     footprintWidthM,
     footprintLengthM,
     footprintAreaM2: footprintWidthM * footprintLengthM,
@@ -2467,8 +2609,13 @@ export interface TrussHoistResult {
   readonly equivalentUdlKgM: number;
   readonly ratioA: number | undefined;
   readonly ratioB: number | undefined;
-  readonly legTensionAKg: number | undefined;
-  readonly legTensionBKg: number | undefined;
+  /** Present exactly when a bridle angle was given — both legs or neither. */
+  readonly legTension: TrussLegTension | undefined;
+}
+
+export interface TrussLegTension {
+  readonly legTensionAKg: number;
+  readonly legTensionBKg: number;
 }
 
 /**
@@ -2561,13 +2708,14 @@ export function trussHoistReactions(input: TrussHoistInput): ProResult<TrussHois
   const span = xB - xA;
   const equivalentUdlKgM = (8 * Math.abs(maxMomentKgM)) / span ** 2;
 
-  let legTensionAKg: number | undefined;
-  let legTensionBKg: number | undefined;
+  let legTension: TrussLegTension | undefined;
   if (input.slingAngleDeg !== undefined) {
     if (!isInRange(input.slingAngleDeg, 0, 89)) return fail("slingAngleDeg");
     const cosB = Math.cos(input.slingAngleDeg * RAD_PER_DEG);
-    legTensionAKg = Math.abs(reactionAKg) / cosB;
-    legTensionBKg = Math.abs(reactionBKg) / cosB;
+    legTension = {
+      legTensionAKg: Math.abs(reactionAKg) / cosB,
+      legTensionBKg: Math.abs(reactionBKg) / cosB,
+    };
   }
 
   return {
@@ -2589,8 +2737,7 @@ export function trussHoistReactions(input: TrussHoistInput): ProResult<TrussHois
     equivalentUdlKgM,
     ratioA: input.hoistCapacityAKg === undefined ? undefined : ratioAgainst(Math.abs(reactionAKg), input.hoistCapacityAKg),
     ratioB: input.hoistCapacityBKg === undefined ? undefined : ratioAgainst(Math.abs(reactionBKg), input.hoistCapacityBKg),
-    legTensionAKg,
-    legTensionBKg,
+    legTension,
   };
 }
 

@@ -37,15 +37,18 @@ describe("beamSpot", () => {
     });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
+    expect(r.spot.kind).toBe("normal");
+    if (r.spot.kind !== "normal") return;
     // 2*8*tan(13°) = 16*0.2308681911... = 3.693891058...
-    expect(r.beamDiameterM).toBeCloseTo(3.693891, 6);
+    expect(r.spot.beamDiameterM).toBeCloseTo(3.693891, 6);
     expect(r.illuminanceAtAimPointLx).toBeCloseTo(1875.0, 6);
+    expect(r.array).toBeDefined();
     // spacing = 3.693891058 * 0.70 = 2.585723741
-    expect(r.spacingM).toBeCloseTo(2.585724, 6);
+    expect(r.array?.spacingM).toBeCloseTo(2.585724, 6);
     // (20 - 3.693891)/2.585724 = 6.30621 -> ceil 7 -> n = 8
-    expect(r.fixtureCount).toBe(8);
+    expect(r.array?.fixtureCount).toBe(8);
     // (8-1)*2.585724 + 3.693891 = 21.79396, NOT 21.796 (the pre-rounded-input answer)
-    expect(r.coveredLengthM).toBeCloseTo(21.793957, 5);
+    expect(r.array?.coveredLengthM).toBeCloseTo(21.793957, 5);
   });
 
   it("oblique incidence uses the EXACT minor axis, not the small-angle approximation (2.4286m, not 2.413m)", () => {
@@ -53,11 +56,13 @@ describe("beamSpot", () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.slantDistanceM).toBeCloseTo(7.211103, 6); // sqrt(52)
-    expect(r.tiltDeg).toBeCloseTo(33.690068, 5); // atan(4/6)
-    expect(r.minorAxisM).toBeCloseTo(2.428610, 5); // exact closed form — the corrected figure
-    expect(r.majorAxisM).toBeCloseTo(2.937161, 5);
-    expect(r.nearEdgeM).toBeCloseTo(2.695257, 5); // h*tan(gamma - theta/2)
-    expect(r.farEdgeM).toBeCloseTo(5.632418, 5); // h*tan(gamma + theta/2)
+    expect(r.spot.kind).toBe("oblique");
+    if (r.spot.kind !== "oblique") return;
+    expect(r.spot.tiltDeg).toBeCloseTo(33.690068, 5); // atan(4/6)
+    expect(r.spot.minorAxisM).toBeCloseTo(2.428610, 5); // exact closed form — the corrected figure
+    expect(r.spot.majorAxisM).toBeCloseTo(2.937161, 5);
+    expect(r.spot.nearEdgeM).toBeCloseTo(2.695257, 5); // h*tan(gamma - theta/2)
+    expect(r.spot.farEdgeM).toBeCloseTo(5.632418, 5); // h*tan(gamma + theta/2)
     // illuminance AT THE AIM POINT, not the ellipse centre
     expect(r.illuminanceAtAimPointLx).toBeCloseTo(960.058, 2);
   });
@@ -66,8 +71,10 @@ describe("beamSpot", () => {
     const r = beamSpot({ beamAngleDeg: 10, fieldAngleDeg: 20, distanceM: 15 });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.beamDiameterM).toBeCloseTo(2.624660, 5);
-    expect(r.fieldDiameterM).toBeCloseTo(5.289809, 5);
+    expect(r.spot.kind).toBe("normal");
+    if (r.spot.kind !== "normal") return;
+    expect(r.spot.beamDiameterM).toBeCloseTo(2.624660, 5);
+    expect(r.spot.fieldDiameterM).toBeCloseTo(5.289809, 5);
   });
 
   it("refuses entering both a perpendicular distance and a height/offset — ambiguous which distance the illuminance used", () => {
@@ -100,7 +107,7 @@ describe("beamSpot", () => {
     const r = beamSpot({ beamAngleDeg: 1, distanceM: 5, overlapPct: 0, coverageLengthM: 8 * d });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.fixtureCount).toBe(8);
+    expect(r.array?.fixtureCount).toBe(8);
   });
 });
 
@@ -131,7 +138,7 @@ describe("eventBudget", () => {
     expect(r.tax).toBeCloseTo(147955.5, 6); // 739777.5*0.20
     expect(r.grandTotal).toBeCloseTo(887733, 6);
     expect(r.costPerGuestWithTax).toBeCloseTo(7397.775, 6);
-    expect(r.costPerTableWithTax).toBeCloseTo(59182.2, 6);
+    expect(r.perTable?.costPerTableWithTax).toBeCloseTo(59182.2, 6);
     expect(r.costPerGuestWithoutTax).toBeCloseTo(6164.8125, 6);
   });
 
@@ -156,8 +163,8 @@ describe("eventBudget", () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.ticketRevenue).toBeCloseTo(540000, 6); // 90*6000
-    expect(r.revenueTotal).toBeCloseTo(740000, 6); // 540000+200000
-    expect(r.revenueDifference).toBeCloseTo(-147733, 6); // 740000-887733
+    expect(r.revenue?.revenueTotal).toBeCloseTo(740000, 6); // 540000+200000
+    expect(r.revenue?.revenueDifference).toBeCloseTo(-147733, 6); // 740000-887733
     expect(r.breakEvenTicketPriceCeil).toBeCloseTo(7641.48, 2);
   });
 
@@ -210,8 +217,8 @@ describe("eventBudget", () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.ticketRevenue).toBeCloseTo(540000, 6); // 90*6000
-    expect(r.revenueTotal).toBeCloseTo(540000, 6); // no other revenue lines
-    expect(r.revenueDifference).toBeCloseTo(540000 - 887733, 6);
+    expect(r.revenue?.revenueTotal).toBeCloseTo(540000, 6); // no other revenue lines
+    expect(r.revenue?.revenueDifference).toBeCloseTo(540000 - 887733, 6);
   });
 
   it("sharePct is undefined, not 0, when the grand total is 0 — a share of nothing is not a number", () => {
@@ -316,6 +323,21 @@ describe("cateringPerGuest", () => {
     expect(line?.costPerGuest).toBeCloseTo(210, 6);
     // net need = 150*250*0.80 = 30000; purchased 35000 -> reserve after rounding = 16.667%, not the entered 10%
     expect(line?.actualReservePct).toBeCloseTo(16.666667, 5);
+    // the only priced line, so the roll-up is that line's own cost
+    expect(r.cost?.totalCost).toBeCloseTo(31500, 6);
+    expect(r.cost?.totalCostPerGuest).toBeCloseTo(210, 6); // 31500/150
+  });
+
+  it("no line carries a price, so there is no cost roll-up at all — not a roll-up of zero", () => {
+    const r = cateringPerGuest({
+      guests: 150,
+      packRounding: "up",
+      lines: [{ unit: "g", quantityPerGuest: 250, uptakePct: 80, reservePct: 10, packSize: 5, packUnit: "kg" }],
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.lines[0]?.packs).toBe(7);
+    expect(r.cost).toBeUndefined();
   });
 
   it("wine: reports pours from the NEED and from what was actually PURCHASED (238 vs 240 glasses)", () => {
@@ -771,8 +793,9 @@ describe("parkingCloakroom", () => {
     expect(r.carGuests).toBe(210); // round(300*0.70)
     expect(r.cars).toBe(84); // ceil(210/2.5)
     expect(r.parkingAreaM2).toBeCloseTo(2100.0, 6);
-    expect(r.stallRatio).toBeCloseTo(1.4, 6);
-    expect(r.stallDiff).toBe(24);
+    expect(r.stalls).toBeDefined();
+    expect(r.stalls?.stallRatio).toBeCloseTo(1.4, 6);
+    expect(r.stalls?.stallDiff).toBe(24);
   });
 
   it("rail capacity is PER SEGMENT: 3 rails of 2.5m at 0.06m pitch give 3*floor(2.5/0.06)=123, not floor(7.5/0.06)=125", () => {
@@ -790,7 +813,7 @@ describe("parkingCloakroom", () => {
     });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.railCapacityItems).toBe(123);
+    expect(r.rail?.railCapacityItems).toBe(123);
   });
 
   it("garderoba: 90% of 300 with 1.2 items/guest = 324 items, 16.20m of rail; throughput uses PIECES per minute", () => {
@@ -812,13 +835,14 @@ describe("parkingCloakroom", () => {
     expect(r.coatGuests).toBe(270);
     expect(r.items).toBe(324); // ceil(270*1.2)
     expect(r.railLengthNeededM).toBeCloseTo(16.2, 6);
-    expect(r.railCapacityItems).toBe(150); // 3 * floor(2.5/0.05)
-    expect(r.railRatio).toBeCloseTo(2.16, 6);
+    expect(r.rail?.railCapacityItems).toBe(150); // 3 * floor(2.5/0.05)
+    expect(r.rail?.railRatio).toBeCloseTo(2.16, 6);
     // attendants needed = ceil(324/(30*3)) = ceil(3.6) = 4 (PIECES, not guests — a design choice, see the report)
     expect(r.checkIn.attendantsNeeded).toBe(4);
     // with 2 attendants: 324/(2*3) = 54min, i.e. 24min over the 30min window
-    expect(r.checkIn.clearTimeMinutes).toBeCloseTo(54, 6);
-    expect(r.checkIn.clearTimeDiffMinutes).toBeCloseTo(24, 6);
+    expect(r.checkIn.clear).toBeDefined();
+    expect(r.checkIn.clear?.clearTimeMinutes).toBeCloseTo(54, 6);
+    expect(r.checkIn.clear?.clearTimeDiffMinutes).toBeCloseTo(24, 6);
   });
 
   it("buses are counted separately from cars, and the two shares may leave a remainder walking/by taxi", () => {
@@ -840,8 +864,8 @@ describe("parkingCloakroom", () => {
     expect(r.carGuests).toBe(320);
     expect(r.cars).toBe(160);
     expect(r.parkingAreaM2).toBeCloseTo(4480, 6);
-    expect(r.busGuests).toBe(160);
-    expect(r.buses).toBe(4); // ceil(160/50)
+    expect(r.buses?.busGuests).toBe(160);
+    expect(r.buses?.buses).toBe(4); // ceil(160/50)
   });
 
   it("refuses a non-positive attendant count instead of dividing by it (Infinity/negative clear time)", () => {
@@ -927,11 +951,13 @@ describe("projectorThrowScreen", () => {
     expect(r.diagonalM).toBeCloseTo(6.884085, 5);
     expect(r.diagonalIn).toBeCloseTo(271.026965, 3);
     expect(r.areaM2).toBeCloseTo(20.25, 6);
-    expect(r.avgIlluminanceLx).toBeCloseTo(592.592593, 4);
+    expect(r.brightness?.avgIlluminanceLx).toBeCloseTo(592.592593, 4);
     // via lm/(area in ft^2)*gain — the cross-check route named in the spec
-    expect(r.avgLuminanceFl).toBeCloseTo(55.053653, 3);
+    expect(r.brightness?.avgLuminanceFl).toBeCloseTo(55.053653, 3);
     // known: "distance" — distanceM is an identity: it returns knownValueM exactly
-    expect(r.distanceM).toBeCloseTo(9.0, 6);
+    expect(r.lens.kind).toBe("fixed");
+    if (r.lens.kind !== "fixed") return;
+    expect(r.lens.distanceM).toBeCloseTo(9.0, 6);
   });
 
   it("the two luminance figures are the same quantity: cd/m² ÷ fL is the foot-lambert", () => {
@@ -957,9 +983,12 @@ describe("projectorThrowScreen", () => {
       });
       expect(r.ok).toBe(true);
       if (!r.ok) return;
-      expect(r.avgLuminanceCdM2).toBeDefined();
-      expect(r.avgLuminanceFl).toBeDefined();
-      expect((r.avgLuminanceCdM2 ?? 0) / (r.avgLuminanceFl ?? 1)).toBeCloseTo(FOOT_LAMBERT_CD_M2, 6);
+      expect(r.brightness).toBeDefined();
+      if (r.brightness === undefined) return;
+      expect(r.brightness.avgLuminanceCdM2 / r.brightness.avgLuminanceFl).toBeCloseTo(
+        FOOT_LAMBERT_CD_M2,
+        6,
+      );
     }
   });
 
@@ -973,7 +1002,9 @@ describe("projectorThrowScreen", () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     // D = W*TR = 4.0*1.5 = 6.000
-    expect(r.distanceM).toBeCloseTo(6.0, 6);
+    expect(r.lens.kind).toBe("fixed");
+    if (r.lens.kind !== "fixed") return;
+    expect(r.lens.distanceM).toBeCloseTo(6.0, 6);
   });
 
   it("also solves from a known DIAGONAL: at 4:3, 1+1/AR²=25/16 so sqrt is exactly 5/4 — 2.5m diag gives W=2.0m, D=3.0m", () => {
@@ -989,7 +1020,9 @@ describe("projectorThrowScreen", () => {
     expect(r.widthM).toBeCloseTo(2.0, 6);
     expect(r.heightM).toBeCloseTo(1.5, 6); // 2.0/(4/3)
     // D = W*TR = 2.0*1.5 = 3.000
-    expect(r.distanceM).toBeCloseTo(3.0, 6);
+    expect(r.lens.kind).toBe("fixed");
+    if (r.lens.kind !== "fixed") return;
+    expect(r.lens.distanceM).toBeCloseTo(3.0, 6);
   });
 
   it("contrast with ambient light, no diffuse-reflectance given: uses gain as the approximation and flags it", () => {
@@ -1007,7 +1040,7 @@ describe("projectorThrowScreen", () => {
     if (!r.ok) return;
     expect(r.heightM).toBeCloseTo(2.25, 6);
     expect(r.areaM2).toBeCloseTo(9.0, 6);
-    expect(r.avgIlluminanceLx).toBeCloseTo(888.888889, 4);
+    expect(r.brightness?.avgIlluminanceLx).toBeCloseTo(888.888889, 4);
     expect(r.onScreenContrast).toBeCloseTo(18.612335, 3);
     expect(r.ambientUsesGainApproximation).toBe(true);
   });
@@ -1023,11 +1056,12 @@ describe("projectorThrowScreen", () => {
     });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.zoomDistanceMinM).toBeCloseTo(4.8, 6);
-    expect(r.zoomDistanceMaxM).toBeCloseTo(7.2, 6);
+    // a zoom lens has a RANGE, not a single distance — and the union says so
+    expect(r.lens.kind).toBe("zoom");
+    if (r.lens.kind !== "zoom") return;
+    expect(r.lens.zoomDistanceMinM).toBeCloseTo(4.8, 6);
+    expect(r.lens.zoomDistanceMaxM).toBeCloseTo(7.2, 6);
     expect(r.viewingAngleDeg).toBeCloseTo(18.924644, 4);
-    // a zoom lens has a RANGE, not a single distance
-    expect(r.distanceM).toBeUndefined();
   });
 
   it("refuses giving both a single throw ratio and a zoom range, and a zoom range with only a known distance", () => {
@@ -1168,9 +1202,11 @@ describe("seatingTables", () => {
     expect(r.lastTableGuests).toBe(8);
     expect(r.cellAreaM2).toBeCloseTo(10.89, 6); // (1.8+1.5)^2
     expect(r.totalCellAreaM2).toBeCloseTo(163.35, 6);
+    expect(r.shape.kind).toBe("round");
+    if (r.shape.kind !== "round") return;
     // pi*(0.9+0.75)^2 = pi*2.7225 = 8.5530
-    expect(r.circularFootprintM2).toBeCloseTo(8.552986, 4);
-    expect(r.totalCircularFootprintM2).toBeCloseTo(128.294798, 3);
+    expect(r.shape.circularFootprintM2).toBeCloseTo(8.552986, 4);
+    expect(r.shape.totalCircularFootprintM2).toBeCloseTo(128.294798, 3);
   });
 
   it("long tables with ends: 8 seats/table, 6 tables, continuous run needs 7 segments (not per-table floor division)", () => {
@@ -1188,8 +1224,13 @@ describe("seatingTables", () => {
     expect(r.lastTableGuests).toBe(8);
     expect(r.cellAreaM2).toBeCloseTo(8.88, 6); // (2.2+1.5)*(0.9+1.5)
     expect(r.totalCellAreaM2).toBeCloseTo(53.28, 6);
+    expect(r.shape.kind).toBe("long");
+    if (r.shape.kind !== "long") return;
     // L_total = 48*0.6/2 = 14.4; segments = ceil(14.4/2.2) = ceil(6.545) = 7
-    expect(r.continuousSegments).toBe(7);
+    expect(r.shape.continuousSegments).toBe(7);
+    // 7 * 2.2 = 15.4 m of run; 2*floor(15.4/0.6) + 2 ends = 2*25 + 2 = 52 seats
+    expect(r.shape.continuousLengthM).toBeCloseTo(15.4, 6);
+    expect(r.shape.continuousCapacity).toBe(52);
   });
 
   it("refuses a seat width so wide a long table's own side seats nobody", () => {
@@ -1228,18 +1269,20 @@ describe("slingForce", () => {
     if (!r.ok) return;
     expect(r.weightKn).toBeCloseTo(4.903325, 5);
     expect(r.weightKgf).toBeCloseTo(500, 6);
+    expect(r.hang.kind).toBe("single");
+    if (r.hang.kind !== "single") return;
     // 500/(2*cos30°) = 250/0.8660254 = 288.675 kgf
-    expect(r.forceLegKgf).toBeCloseTo(288.675135, 3);
-    expect(r.forceLegKn).toBeCloseTo(2.830936, 4);
-    expect(r.verticalKgf).toBeCloseTo(250.0, 3);
+    expect(r.hang.forceLegKgf).toBeCloseTo(288.675135, 3);
+    expect(r.hang.forceLegKn).toBeCloseTo(2.830936, 4);
+    expect(r.hang.verticalKgf).toBeCloseTo(250.0, 3);
     expect(r.horizontalKgf).toBeCloseTo(144.337567, 3);
-    expect(r.angleFactor).toBeCloseTo(1.154701, 5);
-    // vertical(250) + horizontal-derived checks against the weight per leg pair
-    expect(r.verticalKgf).toBeCloseTo(250, 3);
+    expect(r.hang.angleFactor).toBeCloseTo(1.154701, 5);
+    // 2 legs, so there is no 4-leg share to report at all
+    expect(r.hang.fourLeg).toBeUndefined();
     // no dynamicFactor entered: the STATIC and FACTORED figures coincide, and
     // the raw entered value (undefined) is returned as-is, not defaulted to 1
     expect(r.dynamicFactor).toBeUndefined();
-    expect(r.forceLegKgfFactored).toBeCloseTo(288.675135, 3);
+    expect(r.hang.forceLegKgfFactored).toBeCloseTo(288.675135, 3);
     expect(r.weightKgfFactored).toBeCloseTo(500, 6);
   });
 
@@ -1252,17 +1295,19 @@ describe("slingForce", () => {
     });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
+    expect(r.hang.kind).toBe("twoPoint");
+    if (r.hang.kind !== "twoPoint") return;
     // beta_A = atan(2/4) = 26.565°, beta_B = atan(4/4) = 45.000°
-    expect(r.twoPointBetaADeg).toBeCloseTo(26.565051, 4);
-    expect(r.twoPointBetaBDeg).toBeCloseTo(45.0, 6);
+    expect(r.hang.betaADeg).toBeCloseTo(26.565051, 4);
+    expect(r.hang.betaBDeg).toBeCloseTo(45.0, 6);
     // V_A=300*4/6=200kgf, V_B=300*2/6=100kgf
     // F_A = 200/cos(26.565°) = 223.607 kgf = 2192.83 N
-    expect(r.twoPointForceAKgf).toBeCloseTo(223.606798, 3);
-    expect(r.twoPointForceBKgf).toBeCloseTo(141.421356, 3);
+    expect(r.hang.forceAKgf).toBeCloseTo(223.606798, 3);
+    expect(r.hang.forceBKgf).toBeCloseTo(141.421356, 3);
     // horizontal is EQUAL on both sides by construction: F_A*sin(beta_A) = F_B*sin(beta_B) = 100 kgf
     expect(r.horizontalKgf).toBeCloseTo(100.0, 3);
-    expect(r.twoPointLegLengthAM).toBeCloseTo(4.472136, 4); // h/cos(beta_A)
-    expect(r.twoPointLegLengthBM).toBeCloseTo(5.656854, 4);
+    expect(r.hang.legLengthAM).toBeCloseTo(4.472136, 4); // h/cos(beta_A)
+    expect(r.hang.legLengthBM).toBeCloseTo(5.656854, 4);
   });
 
   it("two-point pick with a dynamic factor: STATIC (223.61/141.42kgf) and FACTORED (313.05/197.99kgf) are both printed", () => {
@@ -1275,10 +1320,12 @@ describe("slingForce", () => {
     });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.twoPointForceAKgf).toBeCloseTo(223.606798, 3);
-    expect(r.twoPointForceBKgf).toBeCloseTo(141.421356, 3);
-    expect(r.twoPointForceAKgfFactored).toBeCloseTo(223.606798 * 1.4, 3);
-    expect(r.twoPointForceBKgfFactored).toBeCloseTo(141.421356 * 1.4, 3);
+    expect(r.hang.kind).toBe("twoPoint");
+    if (r.hang.kind !== "twoPoint") return;
+    expect(r.hang.forceAKgf).toBeCloseTo(223.606798, 3);
+    expect(r.hang.forceBKgf).toBeCloseTo(141.421356, 3);
+    expect(r.hang.forceAKgfFactored).toBeCloseTo(223.606798 * 1.4, 3);
+    expect(r.hang.forceBKgfFactored).toBeCloseTo(141.421356 * 1.4, 3);
     expect(r.horizontalKgf).toBeCloseTo(100.0, 3); // STATIC, unfactored
     expect(r.horizontalKgfFactored).toBeCloseTo(140.0, 3);
   });
@@ -1293,13 +1340,16 @@ describe("slingForce", () => {
     });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
+    expect(r.hang.kind).toBe("single");
+    if (r.hang.kind !== "single") return;
+    expect(r.hang.fourLeg).toBeDefined();
     // 500/(4*cos45°) = 125/0.7071068 = 176.7767 kgf — STATIC, unfactored
-    expect(r.fourLegShareKgf).toBeCloseTo(176.776695, 3);
-    expect(r.fourLegShareKgfFactored).toBeCloseTo(247.487373, 3); // *1.4
+    expect(r.hang.fourLeg?.fourLegShareKgf).toBeCloseTo(176.776695, 3);
+    expect(r.hang.fourLeg?.fourLegShareKgfFactored).toBeCloseTo(247.487373, 3); // *1.4
     // 500/(2*cos45°) = 250/0.7071068 = 353.5534 kgf — STATIC, unfactored
-    expect(r.twoLegShareKgf).toBeCloseTo(353.553391, 3);
-    expect(r.twoLegShareKgfFactored).toBeCloseTo(494.974747, 3); // *1.4
-    expect(r.angleFactor).toBeCloseTo(1.414214, 5);
+    expect(r.hang.fourLeg?.twoLegShareKgf).toBeCloseTo(353.553391, 3);
+    expect(r.hang.fourLeg?.twoLegShareKgfFactored).toBeCloseTo(494.974747, 3); // *1.4
+    expect(r.hang.angleFactor).toBeCloseTo(1.414214, 5);
     // the load's own weight is a fact — untouched by the dynamic factor
     expect(r.weightKgf).toBeCloseTo(500, 6);
     expect(r.weightKgfFactored).toBeCloseTo(700, 6);
@@ -1437,7 +1487,9 @@ describe("tentBayLayout", () => {
     expect(r.bays).toBe(6);
     expect(r.lengthM).toBeCloseTo(30.0, 6);
     expect(r.areaM2).toBeCloseTo(300.0, 6);
-    expect(r.wasteM2).toBeCloseTo(0, 6);
+    expect(r.sizedFrom.kind).toBe("area");
+    if (r.sizedFrom.kind !== "area") return;
+    expect(r.sizedFrom.wasteM2).toBeCloseTo(0, 6);
     expect(r.footprintWidthM).toBeCloseTo(13.0, 6);
     expect(r.footprintLengthM).toBeCloseTo(33.0, 6);
     expect(r.footprintAreaM2).toBeCloseTo(429.0, 4);
@@ -1468,8 +1520,10 @@ describe("tentBayLayout", () => {
     expect(r.bays).toBe(8);
     expect(r.lengthM).toBeCloseTo(24.0, 6);
     expect(r.areaM2).toBeCloseTo(192.0, 6);
-    expect(r.wasteM2).toBeCloseTo(12.0, 4);
-    expect(r.wastePct).toBeCloseTo(6.666667, 3);
+    expect(r.sizedFrom.kind).toBe("area");
+    if (r.sizedFrom.kind !== "area") return;
+    expect(r.sizedFrom.wasteM2).toBeCloseTo(12.0, 4);
+    expect(r.sizedFrom.wastePct).toBeCloseTo(6.666667, 3);
     expect(r.legs).toBe(18);
     expect(r.tentPerimeterM).toBeCloseTo(64.0, 6);
   });
@@ -1488,8 +1542,10 @@ describe("tentBayLayout", () => {
     if (!r.ok) return;
     expect(r.bays).toBe(8);
     expect(r.lengthM).toBeCloseTo(40.0, 6);
-    expect(r.wasteM2).toBeUndefined();
-    expect(r.lengthDiffM).toBeCloseTo(0, 6); // divides exactly
+    // sized from a length, so there is no waste FIELD at all — not a waste of 0
+    expect(r.sizedFrom.kind).toBe("length");
+    if (r.sizedFrom.kind !== "length") return;
+    expect(r.sizedFrom.lengthDiffM).toBeCloseTo(0, 6); // divides exactly
     expect(r.roofAreaM2).toBeCloseTo(662.026751, 2);
     expect(r.sideWallAreaM2).toBeCloseTo(240.0, 4);
     expect(r.gableEndsAreaM2).toBeCloseTo(142.459612, 3);
