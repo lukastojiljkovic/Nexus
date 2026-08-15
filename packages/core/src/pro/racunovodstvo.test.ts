@@ -307,9 +307,7 @@ describe("amountInWords", () => {
     // trideset četiri". D mod 100 = 34 → u = 4, l = 34 → paucal → „dinara".
     // P = 56 → u = 6 → plural → „para".
     expect(result.text).toBe("hiljadu dvesta trideset četiri dinara i pedeset šest para");
-    expect(result.whole).toBe(1234);
-    expect(result.subunits).toBe(56);
-    expect(result.negative).toBe(false);
+    expect(result.figures).toEqual({ negative: false, whole: 1234, subunits: 56 });
   });
 
   it("puts the thousands in the feminine — 21000,00 is „dvadeset jedna hiljada", () => {
@@ -399,9 +397,25 @@ describe("amountInWords", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.text).toBe("minus dvadeset jedan dinar i nula para");
-    expect(result.negative).toBe(true);
-    // whole/subunits report the magnitude, not the signed value.
-    expect(result.whole).toBe(21);
+    // The two magnitudes are UNSIGNED, and the sign rides with them so the
+    // screen printing the figures beside the words cannot lose it.
+    expect(result.figures).toEqual({ negative: true, whole: 21, subunits: 0 });
+  });
+
+  it("keeps the sign on an amount between −1 and 0, where the whole part cannot carry it", () => {
+    // −0,50: the whole part is ZERO, so a „signed whole" would print „0" and
+    // the reader would see +0,50 beside words that say minus. This is why the
+    // sign is a field of its own and travels inside `figures`.
+    const result = amountInWords({
+      ...withCurrency,
+      cents: -50,
+      paraStyle: "words",
+      letterCase: "lower",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.text).toBe("minus nula dinara i pedeset para");
+    expect(result.figures).toEqual({ negative: true, whole: 0, subunits: 50 });
   });
 
   it("writes the para as a fraction, drops the currency, and changes case on request", () => {

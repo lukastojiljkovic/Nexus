@@ -911,6 +911,7 @@ export function IceChillingTool() {
     ? ""
     : [
         `${s.heatToRemove}: ${proUnit(proNum(result.heatToRemoveKj, 1), s.unitKj)}`,
+        result.noCoolingNeeded ? s.noCoolingNeededNote : undefined,
         `${s.icePulldown}: ${proUnit(proNum(result.icePulldownKg, 3), s.unitKg)}`,
         result.iceHoldingMeltKg === undefined
           ? undefined
@@ -1000,6 +1001,7 @@ export function IceChillingTool() {
         <ToolSection title={s.results}>
           <ResultRow label={s.heatToRemove} value={proUnit(proNum(result.heatToRemoveKj, 1), s.unitKj)} />
           <ResultRow label={s.icePulldown} value={proUnit(proNum(result.icePulldownKg, 3), s.unitKg)} />
+          {result.noCoolingNeeded && <p className="tool__note">{s.noCoolingNeededNote}</p>}
           {result.iceHoldingMeltKg !== undefined && (
             <ResultRow label={s.iceHoldingMelt} value={proUnit(proNum(result.iceHoldingMeltKg, 3), s.unitKg)} />
           )}

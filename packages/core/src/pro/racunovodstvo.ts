@@ -521,12 +521,28 @@ export interface AmountWordsInput {
   readonly letterCase: LetterCase;
 }
 
+/**
+ * The amount as figures, so a reader can check the words against numerals.
+ *
+ * The sign travels WITH the two magnitudes because it cannot be recovered from
+ * them: −0,50 has a whole part of zero, and a zero that has lost its minus
+ * reads as +0,50. The three used to be flat siblings on the result, `negative`
+ * beside a `whole` whose name did not admit it was unsigned — and the surface
+ * printed the two magnitudes and never read the sign, so „minus jedna hiljada
+ * dinara" appeared above the figure „1.000" on a payment order.
+ */
+export interface AmountFigures {
+  /** True when the amount is below zero. `whole`/`subunits` are UNSIGNED. */
+  readonly negative: boolean;
+  /** Whole units, always at or above zero — `negative` carries the sign. */
+  readonly whole: number;
+  /** Minor units, 0..99, always at or above zero. */
+  readonly subunits: number;
+}
+
 export interface AmountWords {
   readonly text: string;
-  readonly negative: boolean;
-  /** Whole units, so the surface can print the figures next to the words. */
-  readonly whole: number;
-  readonly subunits: number;
+  readonly figures: AmountFigures;
 }
 
 function applyCase(text: string, letterCase: LetterCase): string {
@@ -624,9 +640,7 @@ export function amountInWords(input: AmountWordsInput): ProResult<AmountWords> {
   return {
     ok: true,
     text: applyCase(negative ? `minus ${text}` : text, letterCase),
-    negative,
-    whole,
-    subunits,
+    figures: { negative, whole, subunits },
   };
 }
 

@@ -307,6 +307,9 @@ export const PRO_EVENT_SR = {
 
     results: "Rezultat",
     heatToRemove: "Odvedena toplota",
+    noCoolingNeededNote:
+      "Ciljna temperatura je već dostignuta ili viša od početne — nema šta da se odvede, " +
+      "pa su nule iznad tačan odgovor, a ne rezultat proračuna koji je pao na nulu.",
     icePulldown: "Masa leda za hlađenje (idealna donja granica)",
     iceHoldingMelt: "Dodatno istopljen led pri držanju (gornja granica)",
     totalIce: "Zbirna masa leda",

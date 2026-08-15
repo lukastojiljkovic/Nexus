@@ -3,6 +3,7 @@ import {
   type AllocationItem,
   type AllocationMode,
   amountInWords,
+  type AmountFigures,
   type AmountWordsMode,
   type CurrencyNoun,
   type LetterCase,
@@ -265,6 +266,20 @@ function decimalsFromText(text: string): number {
 }
 
 /**
+ * The whole part with its sign put back on.
+ *
+ * `AmountFigures` carries two unsigned magnitudes and the sign apart from them,
+ * because a whole part of zero cannot hold one: −0,50 is `{negative: true,
+ * whole: 0, subunits: 50}`. Negating before formatting hands `Intl` a −0, which
+ * it renders „-0" — so the minus survives the one case that would otherwise
+ * drop it. This screen used to print the magnitudes alone, and „minus jedna
+ * hiljada dinara" sat above the figure „1.000".
+ */
+function wholeFigure(figures: AmountFigures): string {
+  return proNum(figures.negative ? -figures.whole : figures.whole, 0);
+}
+
+/**
  * An amount spelled out in Serbian, with a currency (and, in `"words"` mode,
  * a subunit) supplied as three agreement forms and a gender rather than
  * assumed to be dinars — see `amountInWords`'s own note on why „dinar/para"
@@ -355,8 +370,8 @@ export function AmountInWordsTool() {
     ? ""
     : [
         `${s.resultText}: ${result.text}`,
-        `${s.resultWhole}: ${proNum(result.whole, 0)}`,
-        `${s.resultSubunits}: ${proNum(result.subunits, 0)}`,
+        `${s.resultWhole}: ${wholeFigure(result.figures)}`,
+        `${s.resultSubunits}: ${proNum(result.figures.subunits, 0)}`,
         "",
         `${s.amount}: ${proNum(parsedAmount ?? 0, 2)}`,
         `${s.mode}: ${mode === "withCurrency" ? s.modeWithCurrency : s.modePlain}`,
@@ -433,8 +448,8 @@ export function AmountInWordsTool() {
       {result !== undefined && result.ok && (
         <ToolSection title={s.results}>
           <ToolOutput label={s.resultText} value={result.text} multiline />
-          <ResultRow label={s.resultWhole} value={proNum(result.whole, 0)} />
-          <ResultRow label={s.resultSubunits} value={proNum(result.subunits, 0)} />
+          <ResultRow label={s.resultWhole} value={wholeFigure(result.figures)} />
+          <ResultRow label={s.resultSubunits} value={proNum(result.figures.subunits, 0)} />
           <ToolFormula>{s.formula}</ToolFormula>
           <p className="tool__note">{s.source}</p>
           <ToolInputEcho
