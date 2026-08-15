@@ -70,7 +70,17 @@ overrides:
   # caret resolution, but the lockfile had already settled on 3.3.16 and a
   # range that still matches is never re-resolved — which is the quiet way an
   # override goes stale while still looking correct.
-  nanoid: ^3.3.17
+  #
+  # 2026-08-15 — RAISED again, to 3.3.18, for THE SAME advisory. Nothing about
+  # this tree changed: GHSA-2v37-7h3g-55p8 was re-cut upstream, from
+  # „patched in 3.3.17" to „patched in 3.3.18", and the version that was the
+  # fix a week ago is the vulnerable version today. Worth stating plainly,
+  # because the note above reads as if 3.3.17 settled it — an advisory's range
+  # is a moving claim about somebody else's code, and an override pinned to
+  # yesterday's edge of it goes red without anything here being touched. Same
+  # mechanism as before: `^3.3.17` already admitted 3.3.18 by caret, and the
+  # lockfile still would not have moved.
+  nanoid: ^3.3.18
   # GHSA-55q2-fjhq-7xh7 — removing an IN_PLACE hook leaves the detached
   # subtree executable, i.e. XSS. SHIPPED, through excalidraw >
   # mermaid-to-excalidraw > mermaid > dompurify, which is precisely the path

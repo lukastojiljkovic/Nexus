@@ -54,4 +54,35 @@ regexes = [
   # somewhere other than in the implementation. It is flagged only because the
   # identifier says KEY and 64 hex characters carry enough entropy.
   '''^e33ced84f1f73597a2de8afa80349f9f38ab14460de0bc2488f17c71be15908c$''',
+
+  # THE NEXT THREE ARE NOT SECRETS OF ANY KIND. They are TypeScript property
+  # reads, and they are here because a rule and this codebase's oldest naming
+  # convention describe the same 26 characters.
+  #
+  # `vault-service-token` matches a legacy HashiCorp Vault token: the letter s,
+  # a dot, then 24 base62 characters, above an entropy floor and followed by a
+  # quote, a backtick, a semicolon, whitespace or end of line. Every surface in
+  # this app opens with `const s = strings.<module>`, so `s.someStringKey` is
+  # the single most common expression in the renderer — and a string key that
+  # happens to be exactly 24 characters long produces that exact shape. There
+  # are 64 such reads today across 47 distinct keys; three of them clear the
+  # entropy floor because they carry digits, and those three are below.
+  #
+  # Measured, both ways, at gitleaks 8.24.3: history scan 6 findings, working
+  # tree 6 findings, the same three literals in each. `s.targetMinusDelivered
+  # P2o5` is a fourth key of the same shape and entropy that does NOT fire,
+  # only because every one of its call sites is followed by `}` rather than by
+  # a delimiter the rule accepts — which is worth writing down, because it
+  # means the population that can fire is „24-character key with a digit,
+  # before a space or a quote", not „24-character key".
+  #
+  # Naming the literal keeps the rule armed: a real Vault token in this
+  # repository is still a failure, and so is a fourth string key of this shape
+  # until somebody reads it and adds it here. That last part is the cost, and
+  # it is a copy change failing a security gate, which is not a good trade —
+  # it is recorded in docs/STATUS.md as a question for the founder rather than
+  # settled here by disabling the rule.
+  '''^s\.directionPer100ToPortion$''',
+  '''^s\.directionPortionToPer100$''',
+  '''^s\.sensitivityReference283v$''',
 ]
