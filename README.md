@@ -75,6 +75,49 @@ run the test suite is runnable again. Never rebuild the module by hand.
 Electron is pinned to **^42** (ABI 146) because 43 (ABI 148) has no prebuild for
 that native module; Dependabot is configured to ignore Electron majors.
 
+## Building a release
+
+`dist` builds for the **host platform only**. The packaged app carries a
+platform-specific build of `better-sqlite3-multiple-ciphers`, fetched for
+`process.platform` — a Linux archive cross-built from Windows would ship the
+wrong `.node` and die at the first database query, with an error about the
+native module rather than about the build. `dist.mjs` refuses a host it cannot
+package for before it touches that module.
+
+A root [`Makefile`](Makefile) wraps this. It adds nothing the pnpm scripts do
+not do; what it adds is **order** — `pnpm build` before `dist` is not optional
+in a fresh tree, and skipping it fails inside Vite with „failed to resolve
+entry for package" and no hint that a workspace package simply was not built
+yet — and **refusal**, so the cross-build above is caught up front rather than
+at the first query.
+
+```sh
+make                 # the target list, and the host it detected
+make linux           # AppImage + tar.gz   (refuses a non-Linux host)
+make windows         # NSIS installer      (refuses a non-Windows host)
+make verify          # typecheck, lint, test, build, and all twelve static gates
+make artifacts       # what is currently in apps/desktop/release/
+```
+
+`make linux` writes both Linux artifacts into `apps/desktop/release/`:
+
+| | |
+| --- | --- |
+| `Nexus-<version>-x86_64.AppImage` | any glibc desktop, no packaging step |
+| `nexus-<version>-linux-x64.tar.gz` | the payload the Gentoo ebuild installs |
+
+**Building the Linux artifacts from a Windows machine: use WSL.** It is a real
+Linux userspace, so what it produces are ordinary Linux artifacts — no Docker,
+no VM. Run `make linux` from the WSL shell.
+
+The Makefile needs GNU make and a POSIX shell, which on Windows means Git Bash
+or WSL, not cmd.exe. Nothing depends on it: every target is one documented pnpm
+script, and `pnpm --filter @nexus/desktop dist` remains the direct route.
+
+The full Linux guide — the AppImage's sandbox and FUSE behaviour, the keyring
+requirement, and installing the Gentoo overlay — is in
+[apps/desktop/build/gentoo/README.md](apps/desktop/build/gentoo/README.md).
+
 ## Layout
 
 ```text

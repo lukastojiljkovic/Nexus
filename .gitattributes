@@ -6,3 +6,10 @@
 # treat a trailing CR as part of the token, so a CRLF ebuild fails with errors
 # about commands that do exist. Pin these to LF wherever they are checked out.
 apps/desktop/build/gentoo/** text eol=lf
+
+# Same rule, same reason. make also keeps a trailing CR as part of the command,
+# and a recipe line continued with `\` breaks outright when a CR sits between
+# the backslash and the newline. The Linux build is normally driven from WSL
+# against this Windows checkout, so without this the file arrives broken in
+# exactly the situation it exists for.
+Makefile text eol=lf

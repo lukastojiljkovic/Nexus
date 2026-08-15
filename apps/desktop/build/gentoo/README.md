@@ -38,6 +38,17 @@ resolve through their built `dist/`, and `dist.mjs` calls electron-vite directly
 rather than going through turbo, so it does not build them for you. Skipping it
 fails with a Vite „failed to resolve entry for package" and no other clue.
 
+The repo root has a `Makefile` that runs exactly those three commands in that
+order, and refuses a non-Linux host up front with the reason above rather than
+letting you find out at the first query:
+
+```sh
+make linux
+```
+
+It is a convenience, not a requirement — it wraps the same pnpm scripts, and
+needs GNU make and a POSIX shell.
+
 Both artifacts land in `apps/desktop/release/`.
 
 Nothing has to be installed system-wide to build the AppImage: electron-builder
