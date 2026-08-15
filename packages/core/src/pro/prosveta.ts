@@ -275,20 +275,38 @@ export interface ChildAgeInput {
   readonly milestoneYears?: number | undefined;
 }
 
+/** The day borrow, present exactly when the day-of-month subtraction went negative. */
+export interface ChildAgeBorrow {
+  /** 1..12 — the month whose length paid for the borrow. */
+  readonly fromMonth: number;
+  readonly fromMonthDays: number;
+  /** True when the birth day-of-month does not exist in that month. */
+  readonly clamped: boolean;
+}
+
+/** The dated birthday, present exactly when `milestoneYears` was asked for. */
+export interface ChildAgeMilestone {
+  readonly date: CalendarDate;
+  /** True when it fell on 29 February in a common year and moved to 1 March. */
+  readonly shifted: boolean;
+}
+
 export interface ChildAgeResult {
   readonly years: number;
   readonly months: number;
   readonly days: number;
   readonly totalMonths: number;
   readonly totalDays: number;
-  /** 1..12 — the month whose length paid for the day borrow, undefined when none. */
-  readonly borrowedFromMonth: number | undefined;
-  readonly borrowedFromMonthDays: number | undefined;
-  /** True when the birth day-of-month does not exist in the borrowed month. */
-  readonly borrowClamped: boolean;
-  readonly milestone: CalendarDate | undefined;
-  /** True when the milestone fell on 29 February in a common year and moved. */
-  readonly milestoneShifted: boolean;
+  /**
+   * Undefined when no borrow was needed. The month, its length and whether the
+   * birth day had to be clamped into it are one fact with three parts: the
+   * clamp is a statement ABOUT the borrowed month, and as a flat sibling it
+   * defaulted to `false`, which reads „a borrow happened and was clean" in
+   * exactly the case where no borrow happened at all.
+   */
+  readonly borrow: ChildAgeBorrow | undefined;
+  /** Undefined when no milestone was asked for — and then nothing shifted either. */
+  readonly milestone: ChildAgeMilestone | undefined;
   /** Days from `on` to the next anniversary of `birth`, 0 when `on` IS that day. */
   readonly daysUntilNextBirthday: number;
 }
@@ -341,18 +359,14 @@ export function childAge(input: ChildAgeInput): ProResult<ChildAgeResult> {
   let years = on.year - birth.year;
   let months = on.month - birth.month;
   let days = on.day - birth.day;
-  let borrowedFromMonth: number | undefined;
-  let borrowedFromMonthDays: number | undefined;
-  let borrowClamped = false;
+  let borrow: ChildAgeBorrow | undefined;
   if (days < 0) {
     months -= 1;
     const borrowYear = on.month === 1 ? on.year - 1 : on.year;
     const borrowMonth = on.month === 1 ? 12 : on.month - 1;
     const length = daysInMonth(borrowYear, borrowMonth);
     const anchorDay = Math.min(birth.day, length);
-    borrowClamped = anchorDay !== birth.day;
-    borrowedFromMonth = borrowMonth;
-    borrowedFromMonthDays = length;
+    borrow = { fromMonth: borrowMonth, fromMonthDays: length, clamped: anchorDay !== birth.day };
     days = on.day + (length - anchorDay);
   }
   if (months < 0) {
@@ -360,16 +374,17 @@ export function childAge(input: ChildAgeInput): ProResult<ChildAgeResult> {
     years -= 1;
   }
 
-  let milestone: CalendarDate | undefined;
-  let milestoneShifted = false;
+  let milestone: ChildAgeMilestone | undefined;
   if (milestoneYears !== undefined) {
     const year = birth.year + milestoneYears;
-    milestone = anniversaryDate(birth, year);
     // 29 February exists in one year out of four; the same borrow rule that
     // governs the age governs the birthday, and it lands on 1 March. Checked
     // on the BIRTH date, not on the shape of the result — a real 1 March
     // birthday returns the same {month: 3, day: 1} without having shifted.
-    milestoneShifted = birth.month === 2 && birth.day === 29 && !isLeapYear(year);
+    milestone = {
+      date: anniversaryDate(birth, year),
+      shifted: birth.month === 2 && birth.day === 29 && !isLeapYear(year),
+    };
   }
 
   // The next anniversary is this year's unless it has already passed — and
@@ -386,11 +401,8 @@ export function childAge(input: ChildAgeInput): ProResult<ChildAgeResult> {
     days,
     totalMonths: 12 * years + months,
     totalDays: onDay - birthDay,
-    borrowedFromMonth,
-    borrowedFromMonthDays,
-    borrowClamped,
+    borrow,
     milestone,
-    milestoneShifted,
     daysUntilNextBirthday: dayNumber(nextBirthday) - onDay,
   };
 }
@@ -815,6 +827,19 @@ export interface GradeScaleInput {
   readonly scoredPoints?: number | undefined;
 }
 
+/**
+ * A band of points, inclusive at both ends.
+ *
+ * Two thresholds that land on the same step leave the lower one an EMPTY band,
+ * and it comes back with `from` above `to` — the arithmetic saying so rather
+ * than a tool hiding it. An empty band is still a band; a row that takes no
+ * range at all has no `GradeScaleBand` instead.
+ */
+export interface GradeScaleBand {
+  readonly from: number;
+  readonly to: number;
+}
+
 export interface GradeScaleRow {
   /** Index into the input `thresholds`, so the surface can find its label. */
   readonly index: number;
@@ -823,28 +848,29 @@ export interface GradeScaleRow {
   /** What that minimum actually carries, as a percent of the maximum. */
   readonly minPercent: number;
   /**
-   * False when the minimum overshoots the maximum, which a step that does not
-   * divide the maximum can produce. Such a row takes no range.
+   * Undefined when the minimum overshoots the maximum, which a step that does
+   * not divide the maximum can produce — such a row takes no range.
+   *
+   * „Is this row reachable" and „what band does it cover" used to be three
+   * fields: a boolean plus two ends set from that same boolean. One question
+   * asked once cannot answer itself two different ways.
    */
-  readonly reachable: boolean;
-  /**
-   * The band this row covers. Two thresholds that land on the same step leave
-   * the lower one an EMPTY band, and it comes back with `rangeFrom` above
-   * `rangeTo` — the arithmetic saying so rather than a tool hiding it.
-   */
-  readonly rangeFrom: number | undefined;
-  readonly rangeTo: number | undefined;
+  readonly band: GradeScaleBand | undefined;
+}
+
+/** What the scored points came to; present exactly when `scoredPoints` was given. */
+export interface GradeScaleScored {
+  readonly percent: number;
+  /** Index of the row the points reach, undefined when below every row. */
+  readonly index: number | undefined;
 }
 
 export interface GradeScaleResult {
   /** Descending by threshold percent. */
   readonly rows: readonly GradeScaleRow[];
   /** The band under the lowest row, which carries no grade; undefined when none. */
-  readonly unlabelledFrom: number | undefined;
-  readonly unlabelledTo: number | undefined;
-  readonly scoredPercent: number | undefined;
-  /** Index of the row the scored points reach, undefined when below every row. */
-  readonly scoredIndex: number | undefined;
+  readonly unlabelled: GradeScaleBand | undefined;
+  readonly scored: GradeScaleScored | undefined;
 }
 
 /**
@@ -912,45 +938,42 @@ export function gradeScalePoints(input: GradeScaleInput): ProResult<GradeScaleRe
       percent: row.percent,
       minPoints: minC / 100,
       minPercent: (100 * minC) / maxC,
-      reachable,
-      rangeFrom: reachable ? minC / 100 : undefined,
-      rangeTo: reachable ? (aboveC === undefined ? maxC : aboveC - stepC) / 100 : undefined,
+      band: reachable
+        ? { from: minC / 100, to: (aboveC === undefined ? maxC : aboveC - stepC) / 100 }
+        : undefined,
     });
   }
 
-  let unlabelledFrom: number | undefined;
-  let unlabelledTo: number | undefined;
+  let unlabelled: GradeScaleBand | undefined;
   if (lowestReachableC === undefined) {
-    unlabelledFrom = 0;
-    unlabelledTo = maxC / 100;
+    unlabelled = { from: 0, to: maxC / 100 };
   } else if (lowestReachableC > 0) {
-    unlabelledFrom = 0;
-    unlabelledTo = (lowestReachableC - stepC) / 100;
+    unlabelled = { from: 0, to: (lowestReachableC - stepC) / 100 };
   }
 
-  let scoredPercent: number | undefined;
-  let scoredIndex: number | undefined;
+  let scored: GradeScaleScored | undefined;
   const { scoredPoints } = input;
   if (scoredPoints !== undefined) {
     const scoredC = hundredths(scoredPoints);
     if (scoredC === undefined || scoredC < 0 || scoredC > maxC) return fail("scoredPoints");
-    scoredPercent = (100 * scoredC) / maxC;
+    let index: number | undefined;
     for (let i = 0; i < scaled.length; i += 1) {
       const row = scaled[i];
       const minC = minima[i];
       if (row === undefined || minC === undefined) return fail("thresholds");
-      // A row whose own minimum overshoots B took no band at all — see
-      // `reachable` above — so scored points can never land IN a band that
-      // does not exist, whatever the raw percent product says on its own.
+      // A row whose own minimum overshoots B took no band at all — it has no
+      // `band` above — so scored points can never land IN a band that does not
+      // exist, whatever the raw percent product says on its own.
       if (minC > maxC) continue;
       if (10000 * scoredC >= row.percentC * maxC) {
-        scoredIndex = row.index;
+        index = row.index;
         break;
       }
     }
+    scored = { percent: (100 * scoredC) / maxC, index };
   }
 
-  return { ok: true, rows, unlabelledFrom, unlabelledTo, scoredPercent, scoredIndex };
+  return { ok: true, rows, unlabelled, scored };
 }
 
 /* -------------------------------------------------------- grade statistics -- */
@@ -1010,6 +1033,40 @@ export interface FrequencyRow {
   readonly share: number;
 }
 
+/**
+ * The three quartile figures and how far to trust them, which is one fact.
+ *
+ * `degenerate` is true below n = 4, where the exclusive method's split is too
+ * thin to mean what „quartile" usually means: n = 2 puts a single value on each
+ * side, and n = 3 splits 1/1/1 with the middle excluded from both. (n = 1
+ * leaves both halves empty, and then there is no `GradeQuartiles` at all.) The
+ * numbers ARE the method's own for n = 2 and n = 3 — the flag says whether to
+ * read them as quartiles rather than hiding them.
+ *
+ * It used to sit beside `q1`/`q3`/`iqr` as a fourth independent field, and the
+ * surface answered only „do they exist" — so a teacher with three marks got a
+ * quartile spread with no caveat at all, under copy that claimed quartiles are
+ * not shown below n = 4. Inside the group it cannot be read without them.
+ */
+export interface GradeQuartiles {
+  readonly q1: number;
+  readonly q3: number;
+  readonly iqr: number;
+  readonly degenerate: boolean;
+}
+
+/** The n−1 pair, which exists or does not exist together. */
+export interface GradeSampleSpread {
+  readonly variance: number;
+  readonly deviation: number;
+}
+
+/** How many values reached the pass threshold, present exactly when one was given. */
+export interface GradeAtOrAbove {
+  readonly count: number;
+  readonly percent: number;
+}
+
 export interface GradeStatisticsResult {
   readonly count: number;
   readonly sum: number;
@@ -1019,23 +1076,11 @@ export interface GradeStatisticsResult {
   readonly range: number;
   readonly median: number;
   /** Undefined for a single value, where neither half exists. */
-  readonly q1: number | undefined;
-  readonly q3: number | undefined;
-  readonly iqr: number | undefined;
-  /**
-   * True below n = 4, where the exclusive method's split is too thin to mean
-   * what „quartile" usually means: n = 1 leaves both halves empty (q1/q3 are
-   * `undefined` above), n = 2 puts a single value on each side, and n = 3
-   * splits 1/1/1 with the middle excluded from both. q1/q3 above are still the
-   * method's own numbers for n = 2 and n = 3 — this says whether to trust them
-   * as quartiles rather than hiding them.
-   */
-  readonly quartilesDegenerate: boolean;
+  readonly quartiles: GradeQuartiles | undefined;
   readonly populationVariance: number;
   readonly populationDeviation: number;
   /** Undefined for a single value: n-1 is zero. */
-  readonly sampleVariance: number | undefined;
-  readonly sampleDeviation: number | undefined;
+  readonly sample: GradeSampleSpread | undefined;
   /**
    * Every value tied for the highest frequency, ascending. EMPTY when all
    * distinct values occur equally often — a list with no mode, not a list whose
@@ -1044,8 +1089,7 @@ export interface GradeStatisticsResult {
   readonly modes: readonly number[];
   readonly frequencies: readonly FrequencyRow[];
   readonly quartileMethod: typeof QUARTILE_METHOD;
-  readonly atOrAbove: number | undefined;
-  readonly atOrAbovePercent: number | undefined;
+  readonly atOrAbove: GradeAtOrAbove | undefined;
 }
 
 /** Median of a half-open slice of an already sorted list; undefined when empty. */
@@ -1098,8 +1142,19 @@ export function gradeStatistics(input: GradeStatisticsInput): ProResult<GradeSta
 
   const q1 = medianOf(sorted, 0, Math.floor(count / 2));
   const q3 = medianOf(sorted, Math.ceil(count / 2), count);
+  // Both halves are empty only at n = 1; from n = 2 up, `floor(n/2) >= 1` and
+  // `ceil(n/2) < n`, so the two are absent together and never one without the
+  // other. The group says that; two separate optionals only implied it.
+  const quartiles: GradeQuartiles | undefined =
+    q1 === undefined || q3 === undefined
+      ? undefined
+      : { q1, q3, iqr: q3 - q1, degenerate: count < 4 };
   const populationVariance = squares / count;
   const sampleVariance = count > 1 ? squares / (count - 1) : undefined;
+  const sample: GradeSampleSpread | undefined =
+    sampleVariance === undefined
+      ? undefined
+      : { variance: sampleVariance, deviation: Math.sqrt(sampleVariance) };
 
   const tally = new Map<number, number>();
   for (const value of values) tally.set(value, (tally.get(value) ?? 0) + 1);
@@ -1118,11 +1173,10 @@ export function gradeStatistics(input: GradeStatisticsInput): ProResult<GradeSta
   const modes =
     highest === 1 ? [] : frequencies.filter((row) => row.count === highest).map((row) => row.value);
 
-  let atOrAbove: number | undefined;
-  let atOrAbovePercent: number | undefined;
+  let atOrAbove: GradeAtOrAbove | undefined;
   if (passThreshold !== undefined) {
-    atOrAbove = values.filter((value) => value >= passThreshold).length;
-    atOrAbovePercent = (100 * atOrAbove) / count;
+    const reached = values.filter((value) => value >= passThreshold).length;
+    atOrAbove = { count: reached, percent: (100 * reached) / count };
   }
 
   return {
@@ -1134,19 +1188,14 @@ export function gradeStatistics(input: GradeStatisticsInput): ProResult<GradeSta
     max,
     range: max - min,
     median,
-    q1,
-    q3,
-    iqr: q1 === undefined || q3 === undefined ? undefined : q3 - q1,
-    quartilesDegenerate: count < 4,
+    quartiles,
     populationVariance,
     populationDeviation: Math.sqrt(populationVariance),
-    sampleVariance,
-    sampleDeviation: sampleVariance === undefined ? undefined : Math.sqrt(sampleVariance),
+    sample,
     modes,
     frequencies,
     quartileMethod: QUARTILE_METHOD,
     atOrAbove,
-    atOrAbovePercent,
   };
 }
 
@@ -1445,12 +1494,22 @@ export interface LessonCountResult {
   readonly appliedExclusions: readonly AppliedExclusion[];
   /** Every typed exclusion that changed nothing, and which of the three reasons why. */
   readonly ignoredExclusions: readonly IgnoredExclusion[];
+  /**
+   * The syllabus comparison, present exactly when `prescribedHours` was given.
+   * The figure, the difference and the ratio are one answer to one question,
+   * and the input is validated positive, so none of the three can go missing
+   * on its own once the question has been asked.
+   */
+  readonly prescribed: PrescribedHours | undefined;
+}
+
+export interface PrescribedHours {
   /** The syllabus figure, echoed back. */
-  readonly prescribedHours: number | undefined;
+  readonly hours: number;
   /** totalLessons − prescribedHours. */
-  readonly hoursDifference: number | undefined;
+  readonly difference: number;
   /** totalLessons / prescribedHours. */
-  readonly hoursRatio: number | undefined;
+  readonly ratio: number;
 }
 
 /**
@@ -1583,9 +1642,14 @@ export function lessonCountPeriod(input: LessonCountInput): ProResult<LessonCoun
     ignoredOffPeriod,
     appliedExclusions,
     ignoredExclusions,
-    prescribedHours,
-    hoursDifference: prescribedHours === undefined ? undefined : totalLessons - prescribedHours,
-    hoursRatio: prescribedHours === undefined ? undefined : totalLessons / prescribedHours,
+    prescribed:
+      prescribedHours === undefined
+        ? undefined
+        : {
+            hours: prescribedHours,
+            difference: totalLessons - prescribedHours,
+            ratio: totalLessons / prescribedHours,
+          },
   };
 }
 
@@ -1746,18 +1810,28 @@ export interface SplitIntoGroupsResult {
   readonly emptyGroups: number;
   /** groups − emptyGroups, the other half of the same count. */
   readonly groupsWithMembers: number;
-  /** By size only: groups of exactly the requested size if nothing is evened out. */
-  readonly fullGroups: number | undefined;
-  /** By size only: people left over from that uneven split. */
-  readonly remainder: number | undefined;
   /**
-   * By size only: `fullGroups·g + remainder`, which equals the roll by
-   * construction. This is a DIFFERENT split from `tally` above (nothing is
-   * evened out here) and carries its own check for exactly that reason.
+   * The four figures that only a split BY SIZE has. „By size only" was written
+   * on four separate optionals, and two of them were assigned in two different
+   * `split.kind === "bySize"` blocks — the same condition established twice,
+   * with nothing tying the two halves together.
    */
-  readonly fullCheckSum: number | undefined;
-  /** By size only: whether the evened-out split kept every group at or under `g`. */
-  readonly largestGroupWithinSize: boolean | undefined;
+  readonly bySize: SplitBySize | undefined;
+}
+
+export interface SplitBySize {
+  /** Groups of exactly the requested size if nothing is evened out. */
+  readonly fullGroups: number;
+  /** People left over from that uneven split. */
+  readonly remainder: number;
+  /**
+   * `fullGroups·g + remainder`, which equals the roll by construction. This is
+   * a DIFFERENT split from `tally` above (nothing is evened out here) and
+   * carries its own check for exactly that reason.
+   */
+  readonly fullCheckSum: number;
+  /** Whether the evened-out split kept every group at or under `g`. */
+  readonly largestGroupWithinSize: boolean;
 }
 
 /**
@@ -1791,19 +1865,12 @@ export function splitIntoGroups(input: SplitIntoGroupsInput): ProResult<SplitInt
   }
 
   let groups: number;
-  let fullGroups: number | undefined;
-  let remainder: number | undefined;
-  let fullCheckSum: number | undefined;
-  let largestGroupWithinSize: boolean | undefined;
   if (split.kind === "byGroups") {
     if (!isIntegerIn(split.groups, 1, 100000)) return fail("groups");
     groups = split.groups;
   } else {
     if (!isIntegerIn(split.size, 1, 100000)) return fail("size");
     groups = ceilDiv(students, split.size);
-    fullGroups = Math.floor(students / split.size);
-    remainder = students % split.size;
-    fullCheckSum = fullGroups * split.size + remainder;
   }
 
   const base = Math.floor(students / groups);
@@ -1814,8 +1881,20 @@ export function splitIntoGroups(input: SplitIntoGroupsInput): ProResult<SplitInt
   if (input.minGroupSize !== undefined && base < input.minGroupSize) {
     return fail("minGroupSize");
   }
+
+  // Assembled in ONE place, after `base`/`larger` are known — the three
+  // arithmetic figures used to be built in the branch above and the fourth
+  // here, which is why they were four optionals rather than one group.
+  let bySize: SplitBySize | undefined;
   if (split.kind === "bySize") {
-    largestGroupWithinSize = base + (larger > 0 ? 1 : 0) <= split.size;
+    const fullGroups = Math.floor(students / split.size);
+    const remainder = students % split.size;
+    bySize = {
+      fullGroups,
+      remainder,
+      fullCheckSum: fullGroups * split.size + remainder,
+      largestGroupWithinSize: base + (larger > 0 ? 1 : 0) <= split.size,
+    };
   }
 
   const tally: GroupTallyRow[] = [];
@@ -1833,10 +1912,7 @@ export function splitIntoGroups(input: SplitIntoGroupsInput): ProResult<SplitInt
     checkSum,
     emptyGroups,
     groupsWithMembers: groups - emptyGroups,
-    fullGroups,
-    remainder,
-    fullCheckSum,
-    largestGroupWithinSize,
+    bySize,
   };
 }
 
@@ -2219,14 +2295,31 @@ export interface WeightedGradeResult {
    */
   readonly totalPercent: number;
   readonly mappedPoints: number | undefined;
-  readonly pendingWeight: number | undefined;
+  /**
+   * The component still to come, present exactly when one was entered. The
+   * target hangs off it rather than beside it: there is no „points needed on
+   * the pending component" when there is no pending component, and nesting is
+   * what stops that pair being asked about separately.
+   */
+  readonly pending: PendingResult | undefined;
+}
+
+/** The result side of the pending component; `PendingComponent` is its input. */
+export interface PendingResult {
+  /** 100·weight/Σweight, where Σ INCLUDES this component. */
+  readonly weightPercent: number;
+  /** Undefined when no `targetPercent` was asked for. */
+  readonly target: PendingTarget | undefined;
+}
+
+export interface PendingTarget {
   /**
    * Points needed on the pending component, UNCLAMPED — negative when the
-   * target is already met, above its maximum when it cannot be. `targetOutcome`
-   * says which of the three it is.
+   * target is already met, above its maximum when it cannot be. `outcome` says
+   * which of the three it is.
    */
-  readonly requiredPoints: number | undefined;
-  readonly targetOutcome: TargetOutcome | undefined;
+  readonly requiredPoints: number;
+  readonly outcome: TargetOutcome;
 }
 
 /**
@@ -2283,18 +2376,24 @@ export function weightedGrade(input: WeightedGradeInput): ProResult<WeightedGrad
     return fail("targetPercent");
   }
 
-  let requiredPoints: number | undefined;
-  let targetOutcome: TargetOutcome | undefined;
-  if (pending !== undefined && targetPercent !== undefined) {
-    // From (Σ_{i≠t} w_i·r_i + w_t·a_t/m_t)/Σw = P/100.
-    requiredPoints =
-      (((targetPercent / 100) * weightSum - weightedRatio) * pending.max) / pending.weight;
-    targetOutcome =
-      requiredPoints < 0
-        ? "alreadyMet"
-        : requiredPoints > pending.max
-          ? "unreachable"
-          : "reachable";
+  let pendingResult: PendingResult | undefined;
+  if (pending !== undefined) {
+    let target: PendingTarget | undefined;
+    if (targetPercent !== undefined) {
+      // From (Σ_{i≠t} w_i·r_i + w_t·a_t/m_t)/Σw = P/100.
+      const requiredPoints =
+        (((targetPercent / 100) * weightSum - weightedRatio) * pending.max) / pending.weight;
+      target = {
+        requiredPoints,
+        outcome:
+          requiredPoints < 0
+            ? "alreadyMet"
+            : requiredPoints > pending.max
+              ? "unreachable"
+              : "reachable",
+      };
+    }
+    pendingResult = { weightPercent: (100 * pending.weight) / weightSum, target };
   }
 
   return {
@@ -2302,8 +2401,6 @@ export function weightedGrade(input: WeightedGradeInput): ProResult<WeightedGrad
     rows,
     totalPercent: (100 * weightedRatio) / weightSum,
     mappedPoints: totalPoints === undefined ? undefined : (totalPoints * weightedRatio) / weightSum,
-    pendingWeight: pending === undefined ? undefined : (100 * pending.weight) / weightSum,
-    requiredPoints,
-    targetOutcome,
+    pending: pendingResult,
   };
 }

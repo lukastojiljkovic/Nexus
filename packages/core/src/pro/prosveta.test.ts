@@ -199,15 +199,12 @@ describe("childAge", () => {
     expect(result.months).toBe(5);
     expect(result.days).toBe(15);
     expect(result.totalMonths).toBe(77);
-    expect(result.borrowedFromMonth).toBe(7);
-    expect(result.borrowedFromMonthDays).toBe(31);
-    expect(result.borrowClamped).toBe(false);
+    expect(result.borrow).toEqual({ fromMonth: 7, fromMonthDays: 31, clamped: false });
     // 306 days left of 2020 after 29.02 (366 − 60) + 1826 for 2021..2025
     // (365+365+365+366+365) + 225 days into 2026 (31+28+31+30+31+30+31+13).
     expect(result.totalDays).toBe(2357);
     // The sixth birthday: 29.02.2026 does not exist, so it lands on 1 March.
-    expect(result.milestone).toEqual({ year: 2026, month: 3, day: 1 });
-    expect(result.milestoneShifted).toBe(true);
+    expect(result.milestone).toEqual({ date: { year: 2026, month: 3, day: 1 }, shifted: true });
     // Next anniversary: 2026 is not leap, so 2026's turn is already 1 March —
     // which is BEFORE 13 August, so the next one is 1 March 2027 (also not
     // leap). Day numbers: 01.09.2026 = 20697 (Hinnant, worked in the
@@ -234,9 +231,8 @@ describe("childAge", () => {
     expect(result.totalMonths).toBe(83);
     // 121 days left of 2019 after 01.09 (365 − 244) + 2192 for 2020..2025 + 225.
     expect(result.totalDays).toBe(2538);
-    expect(result.borrowedFromMonth).toBeUndefined();
-    expect(result.milestone).toEqual({ year: 2026, month: 9, day: 1 });
-    expect(result.milestoneShifted).toBe(false);
+    expect(result.borrow).toBeUndefined();
+    expect(result.milestone).toEqual({ date: { year: 2026, month: 9, day: 1 }, shifted: false });
     // 01.09.2026 (the birthday this year) hasn't happened yet on 13.08.2026:
     // dayNumber(01.09.2026) = 20697, dayNumber(13.08.2026) = 20678 (see the
     // sibling test) → 20697 − 20678 = 19 days, which is also just Aug13→Aug31
@@ -257,9 +253,7 @@ describe("childAge", () => {
     expect(result.years).toBe(0);
     expect(result.months).toBe(1);
     expect(result.days).toBe(1);
-    expect(result.borrowedFromMonth).toBe(2);
-    expect(result.borrowedFromMonthDays).toBe(29);
-    expect(result.borrowClamped).toBe(true);
+    expect(result.borrow).toEqual({ fromMonth: 2, fromMonthDays: 29, clamped: true });
     // 31.01 + 29 days = 29.02, + 1 day = 01.03 → 30 elapsed days.
     expect(result.totalDays).toBe(30);
   });
@@ -272,8 +266,7 @@ describe("childAge", () => {
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.milestone).toEqual({ year: 2024, month: 2, day: 29 });
-    expect(result.milestoneShifted).toBe(false);
+    expect(result.milestone).toEqual({ date: { year: 2024, month: 2, day: 29 }, shifted: false });
   });
 
   it("reports zero days to the next birthday when `on` IS the birthday", () => {
@@ -687,24 +680,24 @@ describe("gradeScalePoints", () => {
     const byIndex = (i: number) => result.rows.find((r) => r.index === i);
     expect(byIndex(0)?.minPoints).toBeCloseTo(43, 10);
     expect(byIndex(0)?.minPercent).toBeCloseTo(91.489362, 6);
-    expect(byIndex(0)?.rangeFrom).toBeCloseTo(43, 10);
-    expect(byIndex(0)?.rangeTo).toBeCloseTo(47, 10); // top row runs to B
+    expect(byIndex(0)?.band?.from).toBeCloseTo(43, 10);
+    expect(byIndex(0)?.band?.to).toBeCloseTo(47, 10); // top row runs to B
     expect(byIndex(1)?.minPoints).toBeCloseTo(39, 10);
-    expect(byIndex(1)?.rangeFrom).toBeCloseTo(39, 10);
-    expect(byIndex(1)?.rangeTo).toBeCloseTo(42, 10); // 43 − step(1)
+    expect(byIndex(1)?.band?.from).toBeCloseTo(39, 10);
+    expect(byIndex(1)?.band?.to).toBeCloseTo(42, 10); // 43 − step(1)
     expect(byIndex(2)?.minPoints).toBeCloseTo(32, 10);
-    expect(byIndex(2)?.rangeTo).toBeCloseTo(38, 10);
+    expect(byIndex(2)?.band?.to).toBeCloseTo(38, 10);
     expect(byIndex(3)?.minPoints).toBeCloseTo(24, 10);
-    expect(byIndex(3)?.rangeTo).toBeCloseTo(31, 10);
+    expect(byIndex(3)?.band?.to).toBeCloseTo(31, 10);
     expect(byIndex(4)?.minPoints).toBeCloseTo(0, 10);
-    expect(byIndex(4)?.rangeFrom).toBeCloseTo(0, 10);
-    expect(byIndex(4)?.rangeTo).toBeCloseTo(23, 10);
-    expect(result.unlabelledFrom).toBeUndefined(); // lowest threshold IS 0%
+    expect(byIndex(4)?.band?.from).toBeCloseTo(0, 10);
+    expect(byIndex(4)?.band?.to).toBeCloseTo(23, 10);
+    expect(result.unlabelled).toBeUndefined(); // lowest threshold IS 0%
     // 38 scored: 10000·3800 = 38,000,000, which is BELOW the 81% product
     // (38,070,000) even though 38/47 = 80.85% "looks" nearly 81 — the
     // comparison is over the integer products, never the rounded percent.
-    expect(result.scoredIndex).toBe(2);
-    expect(result.scoredPercent).toBeCloseTo(80.851064, 6);
+    expect(result.scored?.index).toBe(2);
+    expect(result.scored?.percent).toBeCloseTo(80.851064, 6);
   });
 
   it("handles a half-point step and an unlabelled band below the lowest row", () => {
@@ -718,15 +711,15 @@ describe("gradeScalePoints", () => {
     const byIndex = (i: number) => result.rows.find((r) => r.index === i);
     expect(byIndex(0)?.minPoints).toBeCloseTo(13, 10);
     expect(byIndex(0)?.minPercent).toBeCloseTo(86.666667, 6);
-    expect(byIndex(0)?.rangeFrom).toBeCloseTo(13, 10);
-    expect(byIndex(0)?.rangeTo).toBeCloseTo(15, 10);
+    expect(byIndex(0)?.band?.from).toBeCloseTo(13, 10);
+    expect(byIndex(0)?.band?.to).toBeCloseTo(15, 10);
     expect(byIndex(1)?.minPoints).toBeCloseTo(10.5, 10);
-    expect(byIndex(1)?.rangeTo).toBeCloseTo(12.5, 10); // 13.0 − step(0.5)
+    expect(byIndex(1)?.band?.to).toBeCloseTo(12.5, 10); // 13.0 − step(0.5)
     expect(byIndex(2)?.minPoints).toBeCloseTo(8.5, 10);
-    expect(byIndex(2)?.rangeTo).toBeCloseTo(10, 10); // 10.5 − 0.5
+    expect(byIndex(2)?.band?.to).toBeCloseTo(10, 10); // 10.5 − 0.5
     // Below 8.5 (0–8.0) carries no label — no row's minimum is 0.
-    expect(result.unlabelledFrom).toBeCloseTo(0, 10);
-    expect(result.unlabelledTo).toBeCloseTo(8, 10); // 8.5 − step(0.5)
+    expect(result.unlabelled?.from).toBeCloseTo(0, 10);
+    expect(result.unlabelled?.to).toBeCloseTo(8, 10); // 8.5 − step(0.5)
   });
 
   it("refuses rather than repairs", () => {
@@ -758,7 +751,7 @@ describe("gradeScalePoints", () => {
     ).toEqual({ ok: false, reason: "scoredPoints" });
   });
 
-  it("never awards scoredIndex to a row its own minimum could not reach", () => {
+  it("never awards scored.index to a row its own minimum could not reach", () => {
     // Bc = 1000, kc = 300, perStep = 10000·300 = 3,000,000.
     // 100%: 10000·1000 = 10,000,000 → ceil(10,000,000/3,000,000) = ceil(3.333) = 4
     //   steps → minC = 4·300 = 1200 > Bc(1000) → UNREACHABLE, no band at all.
@@ -768,7 +761,7 @@ describe("gradeScalePoints", () => {
     //   10000·1000 = 10,000,000 ≥ 10000·1000 = 10,000,000 holds — the raw
     //   product says "reached" even though the row it names took no band.
     //   Skipping unreachable rows falls through to 50%, whose own product
-    //   10,000,000 ≥ 5000·1000 = 5,000,000 also holds — so scoredIndex must
+    //   10,000,000 ≥ 5000·1000 = 5,000,000 also holds — so scored.index must
     //   name the 50% row (thresholds index 1), never the unreachable 100% one
     //   (index 0).
     const result = gradeScalePoints({
@@ -780,12 +773,11 @@ describe("gradeScalePoints", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const byIndex = (i: number) => result.rows.find((r) => r.index === i);
-    expect(byIndex(0)?.reachable).toBe(false);
-    expect(byIndex(0)?.rangeFrom).toBeUndefined();
-    expect(byIndex(1)?.reachable).toBe(true);
-    expect(byIndex(1)?.rangeFrom).toBeCloseTo(6, 10);
-    expect(result.scoredPercent).toBeCloseTo(100, 10);
-    expect(result.scoredIndex).toBe(1);
+    expect(byIndex(0)?.band).toBeUndefined(); // an unreachable row takes NO band at all
+    expect(byIndex(1)?.band).toBeDefined();
+    expect(byIndex(1)?.band?.from).toBeCloseTo(6, 10);
+    expect(result.scored?.percent).toBeCloseTo(100, 10);
+    expect(result.scored?.index).toBe(1);
   });
 });
 
@@ -834,14 +826,11 @@ describe("gradeStatistics", () => {
     expect(result.max).toBe(5);
     expect(result.range).toBe(4);
     expect(result.median).toBeCloseTo(4, 10);
-    expect(result.q1).toBe(3);
-    expect(result.q3).toBe(5);
-    expect(result.iqr).toBe(2);
-    expect(result.quartilesDegenerate).toBe(false); // n = 10 ≥ 4
+    expect(result.quartiles).toEqual({ q1: 3, q3: 5, iqr: 2, degenerate: false }); // n = 10 ≥ 4
     expect(result.populationVariance).toBeCloseTo(1.64, 10);
     expect(result.populationDeviation).toBeCloseTo(1.280625, 6);
-    expect(result.sampleVariance).toBeCloseTo(1.822222, 6);
-    expect(result.sampleDeviation).toBeCloseTo(1.349897, 6);
+    expect(result.sample?.variance).toBeCloseTo(1.822222, 6);
+    expect(result.sample?.deviation).toBeCloseTo(1.349897, 6);
     expect(result.modes).toEqual([4, 5]); // both tied at frequency 3
     expect(result.frequencies).toEqual([
       { value: 1, count: 1, share: 10 },
@@ -852,8 +841,8 @@ describe("gradeStatistics", () => {
     ]);
     expect(result.quartileMethod).toBe("moore-mccabe-exclusive");
     // Values ≥ 2: everything except the single 1 → 9 of 10.
-    expect(result.atOrAbove).toBe(9);
-    expect(result.atOrAbovePercent).toBeCloseTo(90, 10);
+    expect(result.atOrAbove?.count).toBe(9);
+    expect(result.atOrAbove?.percent).toBeCloseTo(90, 10);
   });
 
   it("computes an odd-count sample with no threshold given", () => {
@@ -866,18 +855,17 @@ describe("gradeStatistics", () => {
     if (!result.ok) return;
     expect(result.mean).toBeCloseTo(14.8, 10);
     expect(result.median).toBe(15);
-    expect(result.q1).toBeCloseTo(9.5, 10);
-    expect(result.q3).toBeCloseTo(20, 10);
-    expect(result.iqr).toBeCloseTo(10.5, 10);
-    expect(result.quartilesDegenerate).toBe(false); // n = 5 ≥ 4
+    expect(result.quartiles?.q1).toBeCloseTo(9.5, 10);
+    expect(result.quartiles?.q3).toBeCloseTo(20, 10);
+    expect(result.quartiles?.iqr).toBeCloseTo(10.5, 10);
+    expect(result.quartiles?.degenerate).toBe(false); // n = 5 ≥ 4
     expect(result.modes).toEqual([20]);
     expect(result.populationVariance).toBeCloseTo(24.56, 10);
     // sqrt(24.56) = sqrt(614)/5 = 24.7790234…/5 = 4.9558047…
     expect(result.populationDeviation).toBeCloseTo(4.955805, 5);
-    expect(result.sampleVariance).toBeCloseTo(30.7, 10);
-    expect(result.sampleDeviation).toBeCloseTo(5.540758, 6);
+    expect(result.sample?.variance).toBeCloseTo(30.7, 10);
+    expect(result.sample?.deviation).toBeCloseTo(5.540758, 6);
     expect(result.atOrAbove).toBeUndefined();
-    expect(result.atOrAbovePercent).toBeUndefined();
   });
 
   it("lists EVERY value tied for the highest frequency — the reviewer's own case", () => {
@@ -902,11 +890,10 @@ describe("gradeStatistics", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.median).toBe(7);
-    expect(result.q1).toBeUndefined();
-    expect(result.q3).toBeUndefined();
-    expect(result.iqr).toBeUndefined();
-    expect(result.quartilesDegenerate).toBe(true); // n = 1 < 4
-    expect(result.sampleVariance).toBeUndefined(); // n − 1 = 0
+    // n = 1 has neither half, so there is no quartile group to be degenerate
+    // ABOUT — the absence is the stronger statement the flag used to make.
+    expect(result.quartiles).toBeUndefined();
+    expect(result.sample).toBeUndefined(); // n − 1 = 0
     expect(result.populationVariance).toBe(0);
   });
 
@@ -916,23 +903,19 @@ describe("gradeStatistics", () => {
     const two = gradeStatistics({ values: [30, 10] });
     expect(two.ok).toBe(true);
     if (!two.ok) return;
-    expect(two.q1).toBe(10);
-    expect(two.q3).toBe(30);
-    expect(two.quartilesDegenerate).toBe(true);
+    expect(two.quartiles).toEqual({ q1: 10, q3: 30, iqr: 20, degenerate: true });
 
     // n = 3: donja polovina {4}, gornja polovina {12} — the middle value (8)
     // belongs to neither half, by the exclusive method's own rule.
     const three = gradeStatistics({ values: [4, 8, 12] });
     expect(three.ok).toBe(true);
     if (!three.ok) return;
-    expect(three.q1).toBe(4);
-    expect(three.q3).toBe(12);
-    expect(three.quartilesDegenerate).toBe(true);
+    expect(three.quartiles).toEqual({ q1: 4, q3: 12, iqr: 8, degenerate: true });
 
     // n = 4 is the first count where the exclusive split gives each half two
     // values of its own — no longer degenerate.
     expect(gradeStatistics({ values: [1, 2, 3, 4] })).toMatchObject({
-      quartilesDegenerate: false,
+      quartiles: { degenerate: false },
     });
   });
 
@@ -1214,8 +1197,7 @@ describe("lessonCountPeriod", () => {
     expect(result.ignoredExclusions).toEqual([
       { date: { year: 2026, month: 11, day: 11 }, reason: "offWeekday" },
     ]);
-    expect(result.prescribedHours).toBeUndefined();
-    expect(result.hoursDifference).toBeUndefined();
+    expect(result.prescribed).toBeUndefined();
   });
 
   it("tells apart the three reasons an excluded date can change nothing", () => {
@@ -1291,9 +1273,9 @@ describe("lessonCountPeriod", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.totalLessons).toBe(35);
-    expect(result.prescribedHours).toBe(40);
-    expect(result.hoursDifference).toBe(-5);
-    expect(result.hoursRatio).toBeCloseTo(0.875, 10); // 35/40
+    expect(result.prescribed?.hours).toBe(40);
+    expect(result.prescribed?.difference).toBe(-5);
+    expect(result.prescribed?.ratio).toBeCloseTo(0.875, 10); // 35/40
   });
 
   it("moves one date's session onto a different weekday's timetable", () => {
@@ -1476,7 +1458,7 @@ describe("splitIntoGroups", () => {
     expect(result.checkSum).toBe(28);
     expect(result.emptyGroups).toBe(0);
     expect(result.groupsWithMembers).toBe(5);
-    expect(result.fullGroups).toBeUndefined();
+    expect(result.bySize).toBeUndefined(); // split BY GROUPS has no by-size view
   });
 
   it("splits 23 students into groups of 4, with both the evened-out and the plain view", () => {
@@ -1492,11 +1474,13 @@ describe("splitIntoGroups", () => {
       { size: 3, count: 1 },
     ]);
     expect(result.checkSum).toBe(23);
-    expect(result.fullGroups).toBe(5);
-    expect(result.remainder).toBe(3);
-    expect(result.fullCheckSum).toBe(23);
     // ceil(N/g) as the group count guarantees no evened-out group exceeds g.
-    expect(result.largestGroupWithinSize).toBe(true);
+    expect(result.bySize).toEqual({
+      fullGroups: 5,
+      remainder: 3,
+      fullCheckSum: 23,
+      largestGroupWithinSize: true,
+    });
     expect(result.groupsWithMembers).toBe(6);
   });
 
@@ -1804,6 +1788,27 @@ describe("weightedGrade", () => {
     expect(result.rows.map((r) => r.normalizedWeight)).toEqual([75, 25]);
     expect(result.totalPercent).toBeCloseTo(65, 10);
     expect(result.mappedPoints).toBeCloseTo(32.5, 10);
+    // No pending component was entered, so there is nothing for a target to be
+    // ABOUT — and the target cannot be reached past a `pending` that is absent.
+    expect(result.pending).toBeUndefined();
+  });
+
+  it("weighs a pending component with no target: a share of the total, and nothing to reach", () => {
+    // Σ_{i≠t} w·r = 20·0.72 + 20·0.88 = 32.00; Σw = 100 INCLUDING the pending 60.
+    const result = weightedGrade({
+      components: [
+        { scored: 18, max: 25, weight: 20 },
+        { scored: 22, max: 25, weight: 20 },
+      ],
+      pending: { max: 50, weight: 60 },
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.pending?.weightPercent).toBeCloseTo(60, 10); // 100·60/100
+    // Asking „how many points do I need" needs a target; without one the
+    // question was never put, and the answer is its ABSENCE, not a zero.
+    expect(result.pending?.target).toBeUndefined();
+    expect(result.totalPercent).toBeCloseTo(32, 10); // the floor, pending at r = 0
   });
 
   it("computes the points a pending component needs for an 85% target", () => {
@@ -1820,9 +1825,9 @@ describe("weightedGrade", () => {
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.requiredPoints).toBeCloseTo(43, 10);
-    expect(result.targetOutcome).toBe("reachable");
-    expect(result.pendingWeight).toBeCloseTo(50, 10);
+    expect(result.pending?.weightPercent).toBeCloseTo(50, 10);
+    expect(result.pending?.target?.requiredPoints).toBeCloseTo(43, 10);
+    expect(result.pending?.target?.outcome).toBe("reachable");
     // The running total counts the pending component at r = 0, so it is a
     // FLOOR (42.00%), not the 85% being targeted.
     expect(result.totalPercent).toBeCloseTo(42, 10);
@@ -1841,15 +1846,15 @@ describe("weightedGrade", () => {
     const met = weightedGrade({ ...same, targetPercent: 30 });
     expect(met.ok).toBe(true);
     if (!met.ok) return;
-    expect(met.requiredPoints).toBeCloseTo(-12, 10);
-    expect(met.targetOutcome).toBe("alreadyMet");
+    expect(met.pending?.target?.requiredPoints).toBeCloseTo(-12, 10);
+    expect(met.pending?.target?.outcome).toBe("alreadyMet");
 
     // Required = (1.00·100 − 42.00)·1 = 58.00 > 50 (the component's max) → unreachable.
     const stuck = weightedGrade({ ...same, targetPercent: 100 });
     expect(stuck.ok).toBe(true);
     if (!stuck.ok) return;
-    expect(stuck.requiredPoints).toBeCloseTo(58, 10);
-    expect(stuck.targetOutcome).toBe("unreachable");
+    expect(stuck.pending?.target?.requiredPoints).toBeCloseTo(58, 10);
+    expect(stuck.pending?.target?.outcome).toBe("unreachable");
   });
 
   it("refuses rather than repairs", () => {

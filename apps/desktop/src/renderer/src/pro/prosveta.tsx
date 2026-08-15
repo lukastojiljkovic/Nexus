@@ -23,6 +23,7 @@ import {
   type DeviationKind,
   type FractionOperation,
   type ClockTime,
+  type GradeScaleBand,
   type GradeTally,
   type GroupSplit,
   type ItemGroup,
@@ -305,10 +306,18 @@ export function ChildAgeTool() {
         `${s.totalMonths}: ${proNum(result.totalMonths, 0)}`,
         `${s.totalDays}: ${proNum(result.totalDays, 0)}`,
         `${s.daysUntilNextBirthday}: ${proNum(result.daysUntilNextBirthday, 0)}`,
-        ...(result.milestone === undefined ? [] : [`${s.milestoneDate}: ${formatDate(result.milestone)}${result.milestoneShifted ? ` (${s.milestoneShifted})` : ""}`]),
-        ...(result.borrowedFromMonth === undefined
+        ...(result.milestone === undefined
           ? []
-          : [`${s.borrowNote}: ${s.borrowedMonth} ${proNum(result.borrowedFromMonth, 0)} (${proNum(result.borrowedFromMonthDays ?? 0, 0)} ${s.daysUnit})`]),
+          : [
+              `${s.milestoneDate}: ${formatDate(result.milestone.date)}` +
+                `${result.milestone.shifted ? ` (${s.milestoneShifted})` : ""}`,
+            ]),
+        ...(result.borrow === undefined
+          ? []
+          : [
+              `${s.borrowNote}: ${s.borrowedMonth} ${proNum(result.borrow.fromMonth, 0)} ` +
+                `(${proNum(result.borrow.fromMonthDays, 0)} ${s.daysUnit})`,
+            ]),
         "",
         `${s.birth}: ${birth === undefined ? birthText : formatDate(birth)}`,
         `${s.on}: ${on === undefined ? onText : formatDate(on)}`,
@@ -334,13 +343,17 @@ export function ChildAgeTool() {
           {result.milestone !== undefined && (
             <ResultRow
               label={s.milestoneDate}
-              value={`${formatDate(result.milestone)}${result.milestoneShifted ? ` — ${s.milestoneShifted}` : ""}`}
+              value={
+                `${formatDate(result.milestone.date)}` +
+                `${result.milestone.shifted ? ` — ${s.milestoneShifted}` : ""}`
+              }
             />
           )}
-          {result.borrowedFromMonth !== undefined && result.borrowedFromMonthDays !== undefined && (
+          {result.borrow !== undefined && (
             <p className="tool__note">
-              {s.borrowNote} {proNum(result.borrowedFromMonth, 0)} ({proNum(result.borrowedFromMonthDays, 0)}{" "}
-              {s.daysUnit}){result.borrowClamped ? ` — ${s.borrowClamped}` : ""}
+              {s.borrowNote} {proNum(result.borrow.fromMonth, 0)} (
+              {proNum(result.borrow.fromMonthDays, 0)} {s.daysUnit})
+              {result.borrow.clamped ? ` — ${s.borrowClamped}` : ""}
             </p>
           )}
           <ToolFormula>{s.formula}</ToolFormula>
@@ -364,6 +377,12 @@ export function ChildAgeTool() {
 /** Percent thresholds turned into whole marking steps on a paper of a given maximum. */
 export function GradeScalePointsTool() {
   const s = strings.pro.prosveta["grade-scale-points"];
+  // One band, formatted once. The table and the copy text each spelled the
+  // „from – to" out in full, from two optionals guarded on only the first —
+  // so the two ends could not go missing together even in principle, and the
+  // second end carried a `?? 0` that would have printed „0,00 poena".
+  const bandText = (band: GradeScaleBand): string =>
+    `${proUnit(proNum(band.from, 2), s.unitPoints)} – ${proUnit(proNum(band.to, 2), s.unitPoints)}`;
   const [maxPointsText, setMaxPointsText] = useState("");
   const [stepText, setStepText] = useState("");
   const [thresholdsText, setThresholdsText] = useState("");
@@ -396,16 +415,19 @@ export function GradeScalePointsTool() {
     : [
         ...result.rows.map(
           (row) =>
-            `${labels[row.index] ?? ""}: ${proNum(row.percent, 2)}% → ${proUnit(proNum(row.minPoints, 2), s.unitPoints)} (${proNum(row.minPercent, 2)}%)${row.reachable ? ` [${proUnit(proNum(row.rangeFrom ?? 0, 2), s.unitPoints)} – ${proUnit(proNum(row.rangeTo ?? 0, 2), s.unitPoints)}]` : ` — ${s.unreachableRow}`}`,
+            `${labels[row.index] ?? ""}: ${proNum(row.percent, 2)}% → ` +
+            `${proUnit(proNum(row.minPoints, 2), s.unitPoints)} (${proNum(row.minPercent, 2)}%)` +
+            (row.band === undefined ? ` — ${s.unreachableRow}` : ` [${bandText(row.band)}]`),
         ),
-        ...(result.unlabelledFrom === undefined
+        ...(result.unlabelled === undefined
           ? []
-          : [`${s.unlabelled}: ${proUnit(proNum(result.unlabelledFrom, 2), s.unitPoints)} – ${proUnit(proNum(result.unlabelledTo ?? 0, 2), s.unitPoints)}`]),
-        ...(result.scoredPercent === undefined
+          : [`${s.unlabelled}: ${bandText(result.unlabelled)}`]),
+        ...(result.scored === undefined
           ? []
           : [
-              `${s.scoredPercent}: ${proNum(result.scoredPercent, 2)}%`,
-              `${s.scoredLabel}: ${result.scoredIndex === undefined ? s.noLabel : labels[result.scoredIndex] ?? ""}`,
+              `${s.scoredPercent}: ${proNum(result.scored.percent, 2)}%`,
+              `${s.scoredLabel}: ` +
+                `${result.scored.index === undefined ? s.noLabel : labels[result.scored.index] ?? ""}`,
             ]),
         "",
         `${s.maxPoints}: ${proUnit(proNum(proParse(maxPointsText) ?? 0, 2), s.unitPoints)}`,
@@ -430,23 +452,18 @@ export function GradeScalePointsTool() {
               `${proNum(row.percent, 2)} %`,
               proUnit(proNum(row.minPoints, 2), s.unitPoints),
               `${proNum(row.minPercent, 2)} %`,
-              row.reachable
-                ? `${proUnit(proNum(row.rangeFrom ?? 0, 2), s.unitPoints)} – ${proUnit(proNum(row.rangeTo ?? 0, 2), s.unitPoints)}`
-                : s.unreachableRow,
+              row.band === undefined ? s.unreachableRow : bandText(row.band),
             ])}
           />
-          {result.unlabelledFrom !== undefined && (
-            <ResultRow
-              label={s.unlabelled}
-              value={`${proUnit(proNum(result.unlabelledFrom, 2), s.unitPoints)} – ${proUnit(proNum(result.unlabelledTo ?? 0, 2), s.unitPoints)}`}
-            />
+          {result.unlabelled !== undefined && (
+            <ResultRow label={s.unlabelled} value={bandText(result.unlabelled)} />
           )}
-          {result.scoredPercent !== undefined && (
+          {result.scored !== undefined && (
             <>
-              <ResultRow label={s.scoredPercent} value={`${proNum(result.scoredPercent, 2)} %`} />
+              <ResultRow label={s.scoredPercent} value={`${proNum(result.scored.percent, 2)} %`} />
               <ResultRow
                 label={s.scoredLabel}
-                value={result.scoredIndex === undefined ? s.noLabel : labels[result.scoredIndex] ?? ""}
+                value={result.scored.index === undefined ? s.noLabel : labels[result.scored.index] ?? ""}
               />
             </>
           )}
@@ -505,17 +522,27 @@ export function GradeStatisticsTool() {
         `${s.mean}: ${proNum(result.mean, 2)}`,
         `${s.min}: ${proNum(result.min, 2)} — ${s.max}: ${proNum(result.max, 2)} — ${s.range}: ${proNum(result.range, 2)}`,
         `${s.median}: ${proNum(result.median, 2)}`,
-        ...(result.q1 === undefined || result.q3 === undefined
-          ? [s.quartilesDegenerateNote]
-          : [`Q1: ${proNum(result.q1, 2)} — Q3: ${proNum(result.q3, 2)} — IQR: ${proNum(result.iqr ?? 0, 2)}`]),
+        ...(result.quartiles === undefined
+          ? [s.quartilesAbsentNote]
+          : [
+              `Q1: ${proNum(result.quartiles.q1, 2)} — Q3: ${proNum(result.quartiles.q3, 2)} — ` +
+                `IQR: ${proNum(result.quartiles.iqr, 2)}` +
+                (result.quartiles.degenerate ? ` (${s.quartilesDegenerateNote})` : ""),
+            ]),
         `${s.populationDeviation}: ${proNum(result.populationDeviation, 2)} (${s.populationVariance} ${proNum(result.populationVariance, 2)})`,
-        ...(result.sampleDeviation === undefined
+        ...(result.sample === undefined
           ? []
-          : [`${s.sampleDeviation}: ${proNum(result.sampleDeviation, 2)} (${s.sampleVariance} ${proNum(result.sampleVariance ?? 0, 2)})`]),
+          : [
+              `${s.sampleDeviation}: ${proNum(result.sample.deviation, 2)} ` +
+                `(${s.sampleVariance} ${proNum(result.sample.variance, 2)})`,
+            ]),
         `${s.modes}: ${result.modes.length === 0 ? s.noMode : result.modes.map((value) => proNum(value, 2)).join(", ")}`,
         ...(result.atOrAbove === undefined
           ? []
-          : [`${s.atOrAbove}: ${proNum(result.atOrAbove, 0)} (${proNum(result.atOrAbovePercent ?? 0, 2)}%)`]),
+          : [
+              `${s.atOrAbove}: ${proNum(result.atOrAbove.count, 0)} ` +
+                `(${proNum(result.atOrAbove.percent, 2)}%)`,
+            ]),
         "",
         `${s.values}: ${valuesText.trim()}`,
       ].join("\n");
@@ -536,22 +563,25 @@ export function GradeStatisticsTool() {
           <ResultRow label={s.max} value={proNum(result.max, 2)} />
           <ResultRow label={s.range} value={proNum(result.range, 2)} />
           <ResultRow label={s.median} value={proNum(result.median, 2)} />
-          {result.q1 !== undefined && result.q3 !== undefined ? (
-            <>
-              <ResultRow label={s.q1} value={proNum(result.q1, 2)} />
-              <ResultRow label={s.q3} value={proNum(result.q3, 2)} />
-              <ResultRow label={s.iqr} value={proNum(result.iqr ?? 0, 2)} />
-            </>
+          {result.quartiles === undefined ? (
+            <p className="tool__note">{s.quartilesAbsentNote}</p>
           ) : (
-            <p className="tool__note">{s.quartilesDegenerateNote}</p>
+            <>
+              <ResultRow label={s.q1} value={proNum(result.quartiles.q1, 2)} />
+              <ResultRow label={s.q3} value={proNum(result.quartiles.q3, 2)} />
+              <ResultRow label={s.iqr} value={proNum(result.quartiles.iqr, 2)} />
+              {result.quartiles.degenerate && (
+                <p className="tool__note">{s.quartilesDegenerateNote}</p>
+              )}
+            </>
           )}
           <p className="tool__note">{s.quartileMethodNote}</p>
           <ResultRow label={s.populationVariance} value={proNum(result.populationVariance, 2)} />
           <ResultRow label={s.populationDeviation} value={proNum(result.populationDeviation, 2)} />
-          {result.sampleVariance !== undefined && result.sampleDeviation !== undefined && (
+          {result.sample !== undefined && (
             <>
-              <ResultRow label={s.sampleVariance} value={proNum(result.sampleVariance, 2)} />
-              <ResultRow label={s.sampleDeviation} value={proNum(result.sampleDeviation, 2)} />
+              <ResultRow label={s.sampleVariance} value={proNum(result.sample.variance, 2)} />
+              <ResultRow label={s.sampleDeviation} value={proNum(result.sample.deviation, 2)} />
             </>
           )}
           <ResultRow label={s.modes} value={result.modes.length === 0 ? s.noMode : result.modes.map((value) => proNum(value, 2)).join(", ")} />
@@ -561,7 +591,10 @@ export function GradeStatisticsTool() {
           />
           <p className="tool__note">{s.shareRoundingNote}</p>
           {result.atOrAbove !== undefined && (
-            <ResultRow label={s.atOrAbove} value={`${proNum(result.atOrAbove, 0)} (${proNum(result.atOrAbovePercent ?? 0, 2)} %)`} />
+            <ResultRow
+              label={s.atOrAbove}
+              value={`${proNum(result.atOrAbove.count, 0)} (${proNum(result.atOrAbove.percent, 2)} %)`}
+            />
           )}
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
@@ -650,12 +683,12 @@ export function LessonCountPeriodTool() {
         `${s.totalTime}: ${proNum(result.hours, 0)} h ${proNum(result.minutes, 0)} min`,
         `${s.ignoredOffWeekday}: ${proNum(result.ignoredOffWeekday, 0)}`,
         `${s.ignoredOffPeriod}: ${proNum(result.ignoredOffPeriod, 0)}`,
-        ...(result.prescribedHours === undefined
+        ...(result.prescribed === undefined
           ? []
           : [
-              `${s.prescribedHoursLabel}: ${proNum(result.prescribedHours, 0)}`,
-              `${s.hoursDifferenceLabel}: ${proNum(result.hoursDifference ?? 0, 0)}`,
-              `${s.hoursRatioLabel}: ${proRatio(result.hoursRatio) ?? "—"}`,
+              `${s.prescribedHoursLabel}: ${proNum(result.prescribed.hours, 0)}`,
+              `${s.hoursDifferenceLabel}: ${proNum(result.prescribed.difference, 0)}`,
+              `${s.hoursRatioLabel}: ${proRatio(result.prescribed.ratio) ?? "—"}`,
             ]),
         s.noHolidayNote,
       ].join("\n");
@@ -702,18 +735,21 @@ export function LessonCountPeriodTool() {
               rows={result.ignoredExclusions.map((entry) => [formatDate(entry.date), reasonLabel[entry.reason]])}
             />
           )}
-          {result.prescribedHours !== undefined && (
-            <ToolAgainstLimit
-              label={s.totalLessons}
-              value={proNum(result.totalLessons, 0)}
-              limitLabel={s.prescribedHoursLabel}
-              limit={proNum(result.prescribedHours, 0)}
-              ratioLabel={s.hoursRatioLabel}
-              ratio={proRatio(result.hoursRatio)}
-            />
-          )}
-          {result.prescribedHours !== undefined && (
-            <ResultRow label={s.hoursDifferenceLabel} value={proNum(result.hoursDifference ?? 0, 0)} />
+          {result.prescribed !== undefined && (
+            <>
+              <ToolAgainstLimit
+                label={s.totalLessons}
+                value={proNum(result.totalLessons, 0)}
+                limitLabel={s.prescribedHoursLabel}
+                limit={proNum(result.prescribed.hours, 0)}
+                ratioLabel={s.hoursRatioLabel}
+                ratio={proRatio(result.prescribed.ratio)}
+              />
+              <ResultRow
+                label={s.hoursDifferenceLabel}
+                value={proNum(result.prescribed.difference, 0)}
+              />
+            </>
           )}
           <p className="tool__note">{s.noHolidayNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
@@ -854,12 +890,13 @@ export function SplitIntoGroupsTool() {
         ...result.tally.map((row) => `${proNum(row.count, 0)} × ${proNum(row.size, 0)}`),
         `${s.checkSum}: ${proNum(result.checkSum, 0)}`,
         `${s.emptyGroups}: ${proNum(result.emptyGroups, 0)} — ${s.groupsWithMembers}: ${proNum(result.groupsWithMembers, 0)}`,
-        ...(result.fullGroups === undefined
+        ...(result.bySize === undefined
           ? []
           : [
-              `${s.fullGroups}: ${proNum(result.fullGroups, 0)} × ${value.trim()}, ${s.remainder}: ${proNum(result.remainder ?? 0, 0)}`,
-              `${s.fullCheckSum}: ${proNum(result.fullCheckSum ?? 0, 0)}`,
-              `${s.largestGroupWithinSize}: ${result.largestGroupWithinSize === true ? s.yes : s.no}`,
+              `${s.fullGroups}: ${proNum(result.bySize.fullGroups, 0)} × ${value.trim()}, ` +
+                `${s.remainder}: ${proNum(result.bySize.remainder, 0)}`,
+              `${s.fullCheckSum}: ${proNum(result.bySize.fullCheckSum, 0)}`,
+              `${s.largestGroupWithinSize}: ${result.bySize.largestGroupWithinSize ? s.yes : s.no}`,
             ]),
       ].join("\n");
 
@@ -890,14 +927,14 @@ export function SplitIntoGroupsTool() {
           <ResultRow label={s.checkSum} value={proNum(result.checkSum, 0)} />
           <ResultRow label={s.emptyGroups} value={proNum(result.emptyGroups, 0)} />
           <ResultRow label={s.groupsWithMembers} value={proNum(result.groupsWithMembers, 0)} />
-          {result.fullGroups !== undefined && (
+          {result.bySize !== undefined && (
             <>
-              <ResultRow label={s.fullGroups} value={proNum(result.fullGroups, 0)} />
-              <ResultRow label={s.remainder} value={proNum(result.remainder ?? 0, 0)} />
-              <ResultRow label={s.fullCheckSum} value={proNum(result.fullCheckSum ?? 0, 0)} />
+              <ResultRow label={s.fullGroups} value={proNum(result.bySize.fullGroups, 0)} />
+              <ResultRow label={s.remainder} value={proNum(result.bySize.remainder, 0)} />
+              <ResultRow label={s.fullCheckSum} value={proNum(result.bySize.fullCheckSum, 0)} />
               <ResultRow
                 label={s.largestGroupWithinSize}
-                value={result.largestGroupWithinSize === true ? s.yes : s.no}
+                value={result.bySize.largestGroupWithinSize ? s.yes : s.no}
               />
             </>
           )}
@@ -1249,12 +1286,14 @@ export function WeightedGradeTool() {
         ),
         `${s.totalPercent}: ${proNum(result.totalPercent, 2)} %${pending !== undefined ? ` (${s.lowerBoundNote})` : ""}`,
         ...(result.mappedPoints === undefined ? [] : [`${s.mappedPoints}: ${proNum(result.mappedPoints, 2)}`]),
-        ...(result.pendingWeight === undefined ? [] : [`${s.pendingWeight}: ${proNum(result.pendingWeight, 2)} %`]),
-        ...(result.targetOutcome === undefined
+        ...(result.pending === undefined
+          ? []
+          : [`${s.pendingWeight}: ${proNum(result.pending.weightPercent, 2)} %`]),
+        ...(result.pending?.target === undefined
           ? []
           : [
-              `${s.targetOutcome}: ${outcomeLabel[result.targetOutcome]}`,
-              `${s.requiredPoints}: ${proNum(result.requiredPoints ?? 0, 2)}`,
+              `${s.targetOutcome}: ${outcomeLabel[result.pending.target.outcome]}`,
+              `${s.requiredPoints}: ${proNum(result.pending.target.requiredPoints, 2)}`,
             ]),
       ].join("\n");
 
@@ -1279,13 +1318,16 @@ export function WeightedGradeTool() {
           <ResultRow label={s.totalPercent} value={`${proNum(result.totalPercent, 2)} %`} />
           {pending !== undefined && <p className="tool__note">{s.lowerBoundNote}</p>}
           {result.mappedPoints !== undefined && <ResultRow label={s.mappedPoints} value={proNum(result.mappedPoints, 2)} />}
-          {result.pendingWeight !== undefined && (
-            <ResultRow label={s.pendingWeight} value={`${proNum(result.pendingWeight, 2)} %`} />
+          {result.pending !== undefined && (
+            <ResultRow label={s.pendingWeight} value={`${proNum(result.pending.weightPercent, 2)} %`} />
           )}
-          {result.targetOutcome !== undefined && (
+          {result.pending?.target !== undefined && (
             <>
-              <ResultRow label={s.targetOutcome} value={outcomeLabel[result.targetOutcome]} />
-              <ResultRow label={s.requiredPoints} value={proNum(result.requiredPoints ?? 0, 2)} />
+              <ResultRow label={s.targetOutcome} value={outcomeLabel[result.pending.target.outcome]} />
+              <ResultRow
+                label={s.requiredPoints}
+                value={proNum(result.pending.target.requiredPoints, 2)}
+              />
             </>
           )}
           <ToolFormula>{s.formula}</ToolFormula>

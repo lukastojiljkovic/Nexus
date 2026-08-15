@@ -195,8 +195,10 @@ export const PRO_PROSVETA_SR = {
     q1: "Q1",
     q3: "Q3",
     iqr: "IQR",
+    quartilesAbsentNote: "Kvartili se ne računaju — jedna vrednost nema ni donju ni gornju polovinu.",
     quartilesDegenerateNote:
-      "Kvartili se ne prikazuju — niz je prekratak za isključivu metodu (n < 4).",
+      "n < 4: isključiva metoda ovde ostavlja po jednu vrednost sa svake strane, " +
+      "pa ove brojeve ne treba čitati kao pravu meru raspona.",
     quartileMethodNote: "Kvartili: isključiva metoda (Moore–McCabe).",
     populationVariance: "Populaciona varijansa",
     populationDeviation: "Populaciona standardna devijacija",
