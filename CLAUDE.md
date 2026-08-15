@@ -9,7 +9,10 @@ Nexus is Luka's commercial, offline-first, all-in-one life-management platform.
 The single source of truth for *what* the product is: [docs/VISION.md](docs/VISION.md)
 and [docs/SPECIFICATION.md](docs/SPECIFICATION.md). For *where we are*:
 [docs/STATUS.md](docs/STATUS.md). For a plain-language explanation:
-[docs/OVERVIEW.md](docs/OVERVIEW.md).
+[docs/OVERVIEW.md](docs/OVERVIEW.md). **[docs/README.md](docs/README.md) maps
+every document there** and says which are live and which are history —
+reorganised 2026-08-16, when `STATUS.md` was cut from 9 855 lines back to being
+a status rather than a journal.
 
 ## Current focus (2026-08-08 — the founder changed it; supersedes 2026-07)
 
@@ -65,8 +68,12 @@ choice of backend**; whatever in them is about the data model still applies.
   defer work in conversation. Anything genuinely not-yet-built is recorded — with
   full context — in [docs/STATUS.md](docs/STATUS.md), so it is never lost and never
   scattered.
-- **Keep [docs/STATUS.md](docs/STATUS.md) current.** It is the living record of
-  what exists, what's in progress, current problems, and what remains. Update it as
+- **Keep [docs/STATUS.md](docs/STATUS.md) current, and keep it a STATUS.** It is
+  the living record of what exists, what's in progress, current problems, and what
+  remains — **not a journal**. When a piece of work finishes, its narrative moves
+  to [docs/log/](docs/log/) in the same pass and `STATUS.md` keeps only what is
+  still true; a status document that grows monotonically stops being read, and
+  then stops being true. Update it as
   part of finishing each piece of work — that is how the founder (and a non-technical
   PM) can understand the project at any moment without reading code.
 - **Who does what** (founder, 2026-08-06 — supersedes the 2026-07-08 rule that
@@ -107,8 +114,10 @@ choice of backend**; whatever in them is about the data model still applies.
      subsystem in `docs/STATUS.md` — the report was the symptom, the subsystem
      is the finding. One overflow bug can legitimately mean the whole layout
      layer is unfinished, and that is the more useful answer.
-  Record the class in `docs/STATUS.md`'s defect-class ledger so the same shape
-  is recognised the next time it appears somewhere else.
+  Record the class in [docs/defect-classes.md](docs/defect-classes.md) so the
+  same shape is recognised the next time it appears somewhere else. **A class
+  that can be turned into a gate should be** — twelve of the fifty-six already
+  have been, and a rule nobody can forget beats a rule everybody has read.
 - **Concise Serbian status updates** to the founder; the code, comments, and docs
   are in **English**.
 

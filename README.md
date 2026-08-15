@@ -4,9 +4,15 @@ An offline-first, modular life-management app. One workspace for tasks,
 calendar, notes, studying, files, habits, fitness, finance and a canvas — all
 stored on your own device, all working with the network off.
 
-The desktop app (Electron + React) is what is being built now. The web app comes
-later out of *this* codebase rather than a rewrite, so the renderer is kept
-browser-portable; there is no backend, no sync and no cloud account today.
+The desktop app (Electron + React) is complete and in daily use. The web app is
+being built out of *this* codebase rather than as a rewrite, with Supabase
+behind it and end-to-end encrypted sync between the two — the server holds
+ciphertext and never plaintext content.
+
+**Cloud is off by default and can be switched off entirely**, and that is
+structural rather than a promise: the local-only path is not *able* to reach the
+network, and a CI gate enforces it. A user who never turns sync on is running
+exactly the offline app described above.
 
 ---
 
@@ -74,12 +80,17 @@ that native module; Dependabot is configured to ignore Electron majors.
 ```text
 apps/
   desktop/     Electron shell — main, preload, renderer; the database lives here
+  web/         The same renderer on a browser runtime
   gallery/     Component gallery (design review only)
 packages/
-  tokens/      Design tokens — the single source of truth for every style value
-  core/        Platform-free domain: module registry, contracts, views engine
-  db/          Encrypted SQLite, forward-only migrations, per-module stores
-  ui/          Design-system components, token-only
+  tokens/          Design tokens — the single source of truth for every style value
+  core/            Platform-free domain: module registry, contracts, views engine
+  db/              Encrypted SQLite, forward-only migrations, per-module stores
+  ui/              Design-system components, token-only
+  sync/            The sync engine — collection map, change journal, merge
+  sync-crypto/     Key hierarchy, wrapping, pairing transcript
+  sync-port/       The injected crypto seam, so no package hardcodes a primitive
+  sync-transport/  The wire — PostgREST and Broadcast, no keys, no origin
 ```
 
 | Package | What it may depend on |
@@ -88,6 +99,10 @@ packages/
 | `core` | nothing platform-specific — no React, no DOM, no Node |
 | `db` | Node + SQLite; imported only by the Electron **main** process |
 | `ui` | React + `tokens` |
+| `sync-port` | nothing — it is the interface the others are written against |
+| `sync-crypto` | `sync-port` |
+| `sync-transport` | an injected `HttpPort`; it holds no `fetch`, no `WebSocket`, no origin and no key |
+| `sync` | `core`, `sync-crypto`, `sync-transport` |
 
 Feature modules never import each other; they meet through the contracts in
 `core` (widgets, settings, search, import/export, tools).
