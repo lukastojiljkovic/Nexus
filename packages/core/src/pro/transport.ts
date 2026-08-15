@@ -2886,9 +2886,13 @@ export interface TyreChange {
   readonly trueDistance: number;
   /** Error per 100 km, km. */
   readonly errorPer100Km: number;
-  /** True when a measured circumference was used instead of the geometric one, for EITHER tyre. */
-  readonly usedMeasured: boolean;
-  /** Which of the two circumferences came from a measurement rather than geometry. */
+  /**
+   * Which of the two circumferences came from a measurement rather than
+   * geometry. There used to be a third flag above these, the OR of them, and
+   * its own test already said what was wrong with it: it „alone cannot say"
+   * anything the reader needs, because what matters is WHICH side was measured
+   * — which is what these two and `mixedSource` below carry.
+   */
   readonly currentFromMeasurement: boolean;
   readonly replacementFromMeasurement: boolean;
   /**
@@ -2932,7 +2936,6 @@ export function tyreChangeDeviation(input: TyreChangeInput): ProResult<TyreChang
   const replacementDiameter = tyreOuterDiameter(replacement);
   const currentFromMeasurement = input.measuredCurrent > 0;
   const replacementFromMeasurement = input.measuredReplacement > 0;
-  const usedMeasured = currentFromMeasurement || replacementFromMeasurement;
   const currentCircumference = currentFromMeasurement
     ? input.measuredCurrent
     : tyreRollingCircumference(current, deflection);
@@ -2961,7 +2964,6 @@ export function tyreChangeDeviation(input: TyreChangeInput): ProResult<TyreChang
       desired === undefined || !isPositive(desired) ? undefined : desired / circumferenceRatio,
     trueDistance: indicatedDistance * circumferenceRatio,
     errorPer100Km: 100 * (circumferenceRatio - 1),
-    usedMeasured,
     currentFromMeasurement,
     replacementFromMeasurement,
     mixedSource: currentFromMeasurement !== replacementFromMeasurement,

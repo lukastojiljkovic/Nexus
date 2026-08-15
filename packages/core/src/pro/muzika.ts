@@ -2459,13 +2459,39 @@ function isChordSuffix(suffix: string): boolean {
 
 const CHORD_TOKEN = /^([A-G])(#{1,2}|b{1,2}|x)?(.*?)(?:\/([A-G])(#{1,2}|b{1,2}|x)?)?$/;
 
-export interface TransposedSegment {
+/**
+ * One run of the input, and what became of it.
+ *
+ * Three outcomes, and they used to be written as two fields that could spell
+ * four combinations: `transposed: string | undefined` beside `music: boolean`,
+ * where „not music" and „music but unspellable" both came back as an undefined
+ * spelling and only the boolean told them apart. Nothing read the boolean, so
+ * the two were indistinguishable in practice — and the fourth combination,
+ * a spelling on a segment that is not music, was never possible at all.
+ */
+export type TransposedSegment =
+  | TransposedProse
+  | TransposedChord
+  | TransposedUnspellable;
+
+/** Whitespace, a bar line, or a token no chord grammar matched. Passes through. */
+export interface TransposedProse {
+  readonly kind: "prose";
   /** Exactly the characters of the input this segment covers. */
   readonly source: string;
-  /** The transposed spelling; undefined when the token is not music, or unspellable. */
-  readonly transposed: string | undefined;
-  /** True when the segment was recognised as a note or chord symbol. */
-  readonly music: boolean;
+}
+
+/** A recognised chord symbol, transposed. */
+export interface TransposedChord {
+  readonly kind: "chord";
+  readonly source: string;
+  readonly transposed: string;
+}
+
+/** A recognised chord symbol whose root would need more than a double accidental. */
+export interface TransposedUnspellable {
+  readonly kind: "unspellable";
+  readonly source: string;
 }
 
 export interface TransposeTextInput {
@@ -2518,23 +2544,23 @@ export function transposeText(input: TransposeTextInput): ProResult<TransposedTe
     const letter = match?.[1];
     const suffix = match?.[3] ?? "";
     if (match === null || letter === undefined || !isChordSuffix(suffix)) {
-      return { source: part, transposed: undefined, music: false };
+      return { kind: "prose", source: part };
     }
     const root = transposeRoot(letter, match[2], by);
     const bassLetter = match[4];
     const bass = bassLetter === undefined ? undefined : transposeRoot(bassLetter, match[5], by);
     if (root.name === undefined || (bass !== undefined && bass.name === undefined)) {
       unspellable += 1;
-      return { source: part, transposed: undefined, music: true };
+      return { kind: "unspellable", source: part };
     }
     const tail = bass === undefined ? "" : `/${bass.name ?? ""}`;
-    return { source: part, transposed: `${root.name}${suffix}${tail}`, music: true };
+    return { kind: "chord", source: part, transposed: `${root.name}${suffix}${tail}` };
   });
 
   return {
     ok: true,
     segments,
-    text: segments.map((segment) => segment.transposed ?? segment.source).join(""),
+    text: segments.map((s) => (s.kind === "chord" ? s.transposed : s.source)).join(""),
     unspellable,
   };
 }

@@ -194,7 +194,6 @@ describe("depthOfField", () => {
     expect(result.nearLimit).toBeCloseTo(2.337905, 5);
     expect(result.farLimit).toBeCloseTo(4.185268, 5);
     expect(result.totalDepth).toBeCloseTo(1.847363, 5);
-    expect(result.farIsInfinite).toBe(false);
   });
 
   it("focus AT or beyond the hyperfocal: far is infinite and near approaches H/2 by algebraic identity", () => {
@@ -214,9 +213,10 @@ describe("depthOfField", () => {
     if (!result.ok) return;
     expect(result.hyperfocal).toBeCloseTo(hyperfocalM, 6);
     expect(result.nearLimit).toBeCloseTo(hyperfocalM / 2, 3);
+    // Absent, not a very large number: at s >= H the far limit IS infinity,
+    // and the absence is the only thing that says so.
     expect(result.farLimit).toBeUndefined();
     expect(result.totalDepth).toBeUndefined();
-    expect(result.farIsInfinite).toBe(true);
   });
 
   it("corrects the catalogue's third vector: near limit is 938.050 mm, not the draft's 938.03", () => {
@@ -230,9 +230,10 @@ describe("depthOfField", () => {
     if (!result.ok) return;
     expect(result.hyperfocal).toBeCloseTo(1.769455, 5);
     expect(result.nearLimit).toBeCloseTo(0.938050, 5);
+    // Absent, not a very large number: at s >= H the far limit IS infinity,
+    // and the absence is the only thing that says so.
     expect(result.farLimit).toBeUndefined();
     expect(result.totalDepth).toBeUndefined();
-    expect(result.farIsInfinite).toBe(true);
   });
 
   it("refuses a non-positive focal length, f-number or CoC, and focus at or inside the front principal plane", () => {

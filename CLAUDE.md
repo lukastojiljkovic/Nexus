@@ -179,7 +179,7 @@ choice of backend**; whatever in them is about the data model still applies.
   re-run the db tests.
 - **Verification gates before any commit:** `pnpm typecheck` (12/12), `pnpm lint`
   (12/12), `pnpm test` (all green), `pnpm build` (4/4),
-  `pnpm --filter @nexus/desktop smoke` prints `SMOKE OK`, and **all ten static
+  `pnpm --filter @nexus/desktop smoke` prints `SMOKE OK`, and **all eleven static
   gates** pass. **`pnpm lint` used to be missing from this line** even though CI
   has always run it, and on 2026-08-14 six real errors shipped red because of
   that — two of them display bugs the linter had named (DC-49, DC-50). Treat an
@@ -199,7 +199,12 @@ choice of backend**; whatever in them is about the data model still applies.
   **`check:pro-math`** (the other half of the same drawer: no pack module
   declares its own copy of a helper `pro/result.ts` already owns, no absolute
   epsilon hides inside a rounding call, and no tool divides by an input field it
-  never guarded), `check:egress` (no new network construct in a build that must
+  never guarded), **`check:pro-flags`** (the third of the same drawer: every
+  boolean on an exported result type is named by its pack's surface — a flag the
+  screen never reads is a caveat the user never reads, and the misreading it was
+  written to prevent is what ships; nothing else can see this, because skipping
+  one field of a result is well-typed and an unused *property* is not an unused
+  variable), `check:egress` (no new network construct in a build that must
   be able to make none) and `check:rls` (the migration SQL states every policy
   the wall needs).
 - **Looking at the app is a command, not a chore.**

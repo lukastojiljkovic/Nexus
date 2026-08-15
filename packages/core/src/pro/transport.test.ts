@@ -2178,7 +2178,8 @@ describe("tyreChangeDeviation", () => {
     expect(result.trueSpeed).toBeCloseTo(90.29, 1); // 85·1.062222
     expect(result.trueDistance).toBeCloseTo(106.2222, 3); // 100·1.062222
     expect(result.errorPer100Km).toBeCloseTo(6.2222, 3);
-    expect(result.usedMeasured).toBe(false);
+    expect(result.currentFromMeasurement).toBe(false);
+    expect(result.replacementFromMeasurement).toBe(false);
   });
 
   it("computes a small profile change — the odometer error is under half a percent", () => {
@@ -2216,10 +2217,10 @@ describe("tyreChangeDeviation", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.currentCircumference).toBe(3100);
-    expect(result.usedMeasured).toBe(true);
     // The mixed case the review named: one side measured, the other geometric —
-    // two different scales feeding one ratio. `usedMeasured` alone cannot say
-    // that; only the pair of per-side flags (and their XOR) can.
+    // two different scales feeding one ratio. „a measurement was used somewhere"
+    // cannot say that; only the pair of per-side flags (and their XOR) can, and
+    // the summary flag that could not has been removed.
     expect(result.currentFromMeasurement).toBe(true);
     expect(result.replacementFromMeasurement).toBe(false);
     expect(result.mixedSource).toBe(true);

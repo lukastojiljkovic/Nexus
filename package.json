@@ -24,6 +24,7 @@
     "check:invisibles": "node scripts/check-invisibles.mjs",
     "check:risk": "node scripts/check-risk.mjs",
     "check:pro-math": "node scripts/check-pro-math.mjs",
+    "check:pro-flags": "node scripts/check-pro-flags.mjs",
     "check:rls": "node supabase/scripts/check-rls-wall.mjs",
     "db:reset": "supabase db reset",
     "db:test": "supabase db reset && supabase test db"

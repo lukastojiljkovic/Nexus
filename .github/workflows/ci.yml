@@ -102,6 +102,17 @@ jobs:
       # eighteenth toolkit is added.
       - run: pnpm check:pro-math
 
+      # The third of the drawer: not what a tool computes, but what it says
+      # ABOUT what it computed. A boolean on a result is a caveat — „n = 3, do
+      # not read these as quartiles", „this zero is the target already met",
+      # „this amount is negative and the figures beside the words are not". Three
+      # such flags were computed, tested, exported and never named by any
+      # screen, so each user met exactly the misreading the flag was written to
+      # prevent. Nothing else here can see it: skipping one field of a result is
+      # well-typed, an unused PROPERTY is not an unused variable, and the defect
+      # is a line that is not there.
+      - run: pnpm check:pro-flags
+
       # The style half of the cloud-off boundary. The ASSERTION is
       # `apps/desktop/src/main/net/offline.ts` and its unit tests; this catches
       # a new egress construct before it ever has to be caught at runtime.

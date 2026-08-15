@@ -339,21 +339,25 @@ export interface DepthOfField {
   /** Hyperfocal distance, in metres. */
   readonly hyperfocal: number;
   readonly nearLimit: number;
-  /** Far limit in metres, or undefined when it is at infinity. */
+  /**
+   * Far limit in metres, or undefined when it is at infinity — which is the
+   * ONLY reason it is ever absent, so its absence IS „infinite". A
+   * `farIsInfinite` boolean used to sit beside it claiming to tell „infinite"
+   * apart from „not computed"; there is no „not computed" case for it to name,
+   * and the surface had always read the absence instead.
+   */
   readonly farLimit: number | undefined;
   readonly totalDepth: number | undefined;
-  /** True when focus is at or beyond the hyperfocal — the arithmetic, not a judgement. */
-  readonly farIsInfinite: boolean;
 }
 
 /**
  * Hyperfocal distance and the near and far limits of acceptable sharpness.
  *
  * **Focus at or beyond the hyperfocal has no far limit at all**, and the answer
- * says so with a flag rather than a very large number: `s/(H-s)` at s slightly
- * below H produces 10^9 metres, which a surface would happily print as if it
- * meant something. `farLimit` and `totalDepth` are undefined in that case, and
- * `farIsInfinite` distinguishes „infinite" from „not computed".
+ * says so by WITHHOLDING the field rather than by returning a very large
+ * number: `s/(H-s)` at s slightly below H produces 10^9 metres, which a surface
+ * would happily print as if it meant something. `farLimit` and `totalDepth` are
+ * undefined in that case, and in no other, so their absence is the statement.
  *
  * Everything is computed in millimetres and converted once on the way out, so
  * the metre/millimetre boundary exists in exactly two places instead of six.
@@ -387,7 +391,6 @@ export function depthOfField(input: DepthOfFieldInput): ProResult<DepthOfField> 
     nearLimit: near / MM_PER_M,
     farLimit: far === undefined ? undefined : far / MM_PER_M,
     totalDepth: far === undefined ? undefined : (far - near) / MM_PER_M,
-    farIsInfinite: far === undefined,
   };
 }
 

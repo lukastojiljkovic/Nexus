@@ -1713,6 +1713,34 @@ describe("transposeText", () => {
     if (!result.ok) return;
     expect(result.unspellable).toBe(1);
     expect(result.text).toBe("Gx Bad");
+    // The joined text cannot tell „stayed put because it is not music" from
+    // „stayed put because it could not be spelled" — both keep their source.
+    // The segments can, and they are three DISTINCT kinds rather than an
+    // absent spelling that means either of two things.
+    expect(result.segments.map((s) => s.kind)).toEqual(["unspellable", "prose", "prose"]);
+  });
+
+  it("names each segment by what became of it: a chord carries its new spelling, prose carries none", () => {
+    const result = transposeText({
+      text: "C | Bad",
+      by: { kind: "interval", interval: "major-second", direction: "up" },
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // „C", „ ", „|", „ ", „Bad" — the split keeps the layout, so the two runs
+    // of whitespace and the bar line are segments of their own.
+    expect(result.segments.map((s) => s.kind)).toEqual([
+      "chord",
+      "prose",
+      "prose",
+      "prose",
+      "prose",
+    ]);
+    const first = result.segments[0];
+    expect(first?.kind).toBe("chord");
+    if (first?.kind !== "chord") return;
+    expect(first.transposed).toBe("D");
+    expect(first.source).toBe("C");
   });
 
   it("refuses an unrecognised interval, instrument or direction in `by` rather than crashing or transposing the wrong way", () => {
