@@ -303,19 +303,19 @@ export function BreakEvenTool() {
         `${s.breakEvenRevenue}: ${proNum(result.breakEvenRevenue, 2)}`,
         `${s.revenueAtUnits}: ${proNum(result.revenueAtUnits, 2)}`,
         `${s.surplusAtUnits}: ${proNum(result.surplusAtUnits, 2)}`,
-        ...(result.unitsForProfit === undefined
+        ...(result.profitTarget === undefined
           ? []
           : [
-              `${s.exactUnitsForProfit}: ${proNum(result.exactUnitsForProfit ?? 0, 4)}`,
-              `${s.unitsForProfit}: ${proUnit(proNum(result.unitsForProfit, 0), s.unitPieces)}`,
-              `${s.revenueForProfit}: ${proNum(result.revenueForProfit ?? 0, 2)}`,
+              `${s.exactUnitsForProfit}: ${proNum(result.profitTarget.exactUnits, 4)}`,
+              `${s.unitsForProfit}: ${proUnit(proNum(result.profitTarget.units, 0), s.unitPieces)}`,
+              `${s.revenueForProfit}: ${proNum(result.profitTarget.revenue, 2)}`,
             ]),
-        ...(result.marginOfSafetyPercent === undefined
+        ...(result.marginOfSafety === undefined
           ? []
           : [
-              `${s.marginOfSafetyPercent}: ${proUnit(proNum(result.marginOfSafetyPercent, 2), "%")}`,
-              `${s.marginOfSafetyUnits}: ${proNum(result.marginOfSafetyUnits ?? 0, 2)}`,
-              `${s.marginOfSafetyAmount}: ${proNum(result.marginOfSafetyAmount ?? 0, 2)}`,
+              `${s.marginOfSafetyPercent}: ${proUnit(proNum(result.marginOfSafety.percent, 2), "%")}`,
+              `${s.marginOfSafetyUnits}: ${proNum(result.marginOfSafety.units, 2)}`,
+              `${s.marginOfSafetyAmount}: ${proNum(result.marginOfSafety.amount, 2)}`,
             ]),
         "",
         `${s.fixedCosts}: ${proNum(proParse(fixedCosts) ?? 0, 2)}`,
@@ -355,32 +355,32 @@ export function BreakEvenTool() {
           <ResultRow label={s.breakEvenRevenue} value={proNum(result.breakEvenRevenue, 2)} />
           <ResultRow label={s.revenueAtUnits} value={proNum(result.revenueAtUnits, 2)} />
           <ResultRow label={s.surplusAtUnits} value={proNum(result.surplusAtUnits, 2)} />
-          {result.unitsForProfit !== undefined && (
+          {result.profitTarget !== undefined && (
             <>
               <ResultRow
                 label={s.exactUnitsForProfit}
-                value={proNum(result.exactUnitsForProfit ?? 0, 4)}
+                value={proNum(result.profitTarget.exactUnits, 4)}
               />
               <ResultRow
                 label={s.unitsForProfit}
-                value={proUnit(proNum(result.unitsForProfit, 0), s.unitPieces)}
+                value={proUnit(proNum(result.profitTarget.units, 0), s.unitPieces)}
               />
-              <ResultRow label={s.revenueForProfit} value={proNum(result.revenueForProfit ?? 0, 2)} />
+              <ResultRow label={s.revenueForProfit} value={proNum(result.profitTarget.revenue, 2)} />
             </>
           )}
-          {result.marginOfSafetyPercent !== undefined && (
+          {result.marginOfSafety !== undefined && (
             <>
               <ResultRow
                 label={s.marginOfSafetyPercent}
-                value={proUnit(proNum(result.marginOfSafetyPercent, 2), "%")}
+                value={proUnit(proNum(result.marginOfSafety.percent, 2), "%")}
               />
               <ResultRow
                 label={s.marginOfSafetyUnits}
-                value={proNum(result.marginOfSafetyUnits ?? 0, 2)}
+                value={proNum(result.marginOfSafety.units, 2)}
               />
               <ResultRow
                 label={s.marginOfSafetyAmount}
-                value={proNum(result.marginOfSafetyAmount ?? 0, 2)}
+                value={proNum(result.marginOfSafety.amount, 2)}
               />
             </>
           )}

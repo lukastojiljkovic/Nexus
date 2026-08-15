@@ -123,12 +123,12 @@ export function AngleOfViewTool() {
         `${s.vertical}: ${proNum(view.vertical, 2)}${s.unitDeg}`,
         `${s.diagonal}: ${proNum(view.diagonal, 2)}${s.unitDeg}`,
         `${s.sensorDiagonal}: ${proUnit(proNum(view.sensorDiagonal, 4), s.unitMm)}`,
-        ...(view.fieldWidth === undefined
+        ...(view.field === undefined
           ? []
           : [
-              `${s.fieldWidth}: ${proUnit(proNum(view.fieldWidth, 3), s.unitM)}`,
-              `${s.fieldHeight}: ${proUnit(proNum(view.fieldHeight ?? 0, 3), s.unitM)}`,
-              `${s.fieldDiagonal}: ${proUnit(proNum(view.fieldDiagonal ?? 0, 3), s.unitM)}`,
+              `${s.fieldWidth}: ${proUnit(proNum(view.field.width, 3), s.unitM)}`,
+              `${s.fieldHeight}: ${proUnit(proNum(view.field.height, 3), s.unitM)}`,
+              `${s.fieldDiagonal}: ${proUnit(proNum(view.field.diagonal, 3), s.unitM)}`,
             ]),
         "",
         `${s.sensorWidth}: ${proUnit(proNum(proParse(sensorWidth) ?? 0, 1), s.unitMm)}`,
@@ -164,19 +164,19 @@ export function AngleOfViewTool() {
             label={s.sensorDiagonal}
             value={proUnit(proNum(view.sensorDiagonal, 4), s.unitMm)}
           />
-          {view.fieldWidth !== undefined && (
+          {view.field !== undefined && (
             <>
               <ResultRow
                 label={s.fieldWidth}
-                value={proUnit(proNum(view.fieldWidth, 3), s.unitM)}
+                value={proUnit(proNum(view.field.width, 3), s.unitM)}
               />
               <ResultRow
                 label={s.fieldHeight}
-                value={proUnit(proNum(view.fieldHeight ?? 0, 3), s.unitM)}
+                value={proUnit(proNum(view.field.height, 3), s.unitM)}
               />
               <ResultRow
                 label={s.fieldDiagonal}
-                value={proUnit(proNum(view.fieldDiagonal ?? 0, 3), s.unitM)}
+                value={proUnit(proNum(view.field.diagonal, 3), s.unitM)}
               />
             </>
           )}
@@ -492,11 +492,11 @@ export function IlluminanceToApertureTool() {
     : [
         `${s.lux}: ${proUnit(proNum(result.lux, 3), s.unitLx)}`,
         `${s.footCandles}: ${proUnit(proNum(result.footCandles, 3), s.unitFc)}`,
-        ...(result.fNumber === undefined
+        ...(result.aperture === undefined
           ? []
           : [
-              `${s.fNumber}: f/${proNum(result.fNumber, 2)}`,
-              `${s.nearestThirdStop}: f/${proNum(result.nearestThirdStop ?? 0, 2)} (k=${proNum(result.thirdStopIndex ?? 0, 0)})`,
+              `${s.fNumber}: f/${proNum(result.aperture.fNumber, 2)}`,
+              `${s.nearestThirdStop}: f/${proNum(result.aperture.nearestThirdStop, 2)} (k=${proNum(result.aperture.thirdStopIndex, 0)})`,
             ]),
         "",
         `${s.illuminance}: ${proUnit(proNum(proParse(illuminance) ?? 0, 3), unit === "fc" ? s.unitFc : s.unitLx)}`,
@@ -532,12 +532,12 @@ export function IlluminanceToApertureTool() {
             label={s.footCandles}
             value={proUnit(proNum(result.footCandles, 3), s.unitFc)}
           />
-          {result.fNumber !== undefined && (
+          {result.aperture !== undefined && (
             <>
-              <ResultRow label={s.fNumber} value={`f/${proNum(result.fNumber, 2)}`} />
+              <ResultRow label={s.fNumber} value={`f/${proNum(result.aperture.fNumber, 2)}`} />
               <ResultRow
                 label={s.nearestThirdStop}
-                value={`f/${proNum(result.nearestThirdStop ?? 0, 2)} (k=${proNum(result.thirdStopIndex ?? 0, 0)})`}
+                value={`f/${proNum(result.aperture.nearestThirdStop, 2)} (k=${proNum(result.aperture.thirdStopIndex, 0)})`}
               />
             </>
           )}
@@ -1606,11 +1606,11 @@ export function VideoBitrateStorageTool() {
         `${s.duration}: ${proUnit(proNum(storage.duration, 3), s.unitS)}`,
         `${s.gigabytes}: ${proUnit(proNum(storage.gigabytes, 3), s.unitGb)}`,
         `${s.gibibytes}: ${proUnit(proNum(storage.gibibytes, 3), s.unitGib)}`,
-        ...(storage.recordableSecondsPerCard === undefined
+        ...(storage.recordable === undefined
           ? []
           : [
-              `${s.recordableSecondsPerCard}: ${proUnit(proNum(storage.recordableSecondsPerCard, 3), s.unitS)}`,
-              `${s.recordableSecondsTotal}: ${proUnit(proNum(storage.recordableSecondsTotal ?? 0, 3), s.unitS)}`,
+              `${s.recordableSecondsPerCard}: ${proUnit(proNum(storage.recordable.perCardSeconds, 3), s.unitS)}`,
+              `${s.recordableSecondsTotal}: ${proUnit(proNum(storage.recordable.totalSeconds, 3), s.unitS)}`,
             ]),
         "",
         `${s.videoBitrateMbps}: ${proUnit(proNum(proParse(videoBitrateMbps) ?? 0, 2), s.unitMbps)}`,
@@ -1646,15 +1646,15 @@ export function VideoBitrateStorageTool() {
           <ResultRow label={s.duration} value={proUnit(proNum(storage.duration, 3), s.unitS)} />
           <ResultRow label={s.gigabytes} value={proUnit(proNum(storage.gigabytes, 3), s.unitGb)} />
           <ResultRow label={s.gibibytes} value={proUnit(proNum(storage.gibibytes, 3), s.unitGib)} />
-          {storage.recordableSecondsPerCard !== undefined && (
+          {storage.recordable !== undefined && (
             <>
               <ResultRow
                 label={s.recordableSecondsPerCard}
-                value={proUnit(proNum(storage.recordableSecondsPerCard, 3), s.unitS)}
+                value={proUnit(proNum(storage.recordable.perCardSeconds, 3), s.unitS)}
               />
               <ResultRow
                 label={s.recordableSecondsTotal}
-                value={proUnit(proNum(storage.recordableSecondsTotal ?? 0, 3), s.unitS)}
+                value={proUnit(proNum(storage.recordable.totalSeconds, 3), s.unitS)}
               />
             </>
           )}

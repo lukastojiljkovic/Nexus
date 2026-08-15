@@ -241,13 +241,13 @@ describe("breakEven", () => {
     // 480 x 500 - 240000 = 0: an exact break-even leaves no rounding surplus.
     expect(result.surplusAtUnits).toBeCloseTo(0, 6);
     // (600 - 480)/600 = 0.20; in units 600 - 480 = 120; in money 120 x 1200.
-    expect(result.marginOfSafetyPercent).toBeCloseTo(20, 9);
-    expect(result.marginOfSafetyUnits).toBeCloseTo(120, 9);
-    expect(result.marginOfSafetyAmount).toBeCloseTo(144000, 6);
+    expect(result.marginOfSafety?.percent).toBeCloseTo(20, 9);
+    expect(result.marginOfSafety?.units).toBeCloseTo(120, 9);
+    expect(result.marginOfSafety?.amount).toBeCloseTo(144000, 6);
     // No profit goal was typed, so none is invented.
-    expect(result.unitsForProfit).toBeUndefined();
-    expect(result.exactUnitsForProfit).toBeUndefined();
-    expect(result.revenueForProfit).toBeUndefined();
+    // All three at once: the rounded count is only honest beside the exact one
+    // it rounded up from, so they are one field.
+    expect(result.profitTarget).toBeUndefined();
   });
 
   it("adds the wanted profit to the fixed costs before dividing, and mirrors units-for-profit in revenue", () => {
@@ -266,13 +266,12 @@ describe("breakEven", () => {
     expect(result.revenueAtUnits).toBeCloseTo(150000, 6);
     expect(result.surplusAtUnits).toBeCloseTo(0, 6);
     // (90000 + 30000)/1500 = 80, exactly, so the exact and rounded counts agree.
-    expect(result.exactUnitsForProfit).toBeCloseTo(80, 9);
-    expect(result.unitsForProfit).toBe(80);
+    expect(result.profitTarget?.exactUnits).toBeCloseTo(80, 9);
+    expect(result.profitTarget?.units).toBe(80);
     // 80 x 2500 = 200000
-    expect(result.revenueForProfit).toBeCloseTo(200000, 6);
-    expect(result.marginOfSafetyPercent).toBeUndefined();
-    expect(result.marginOfSafetyUnits).toBeUndefined();
-    expect(result.marginOfSafetyAmount).toBeUndefined();
+    expect(result.profitTarget?.revenue).toBeCloseTo(200000, 6);
+    // One measurement in three units, so it is absent in all three at once.
+    expect(result.marginOfSafety).toBeUndefined();
   });
 
   it("rounds the unit count up, and shows what the whole unit actually bills and buys", () => {
@@ -334,9 +333,7 @@ describe("breakEven", () => {
     const zero = breakEven({ fixedCosts: 1000, price: 1200, variableCost: 700, plannedUnits: 0 });
     expect(zero.ok).toBe(true);
     if (!zero.ok) return;
-    expect(zero.marginOfSafetyPercent).toBeUndefined();
-    expect(zero.marginOfSafetyUnits).toBeUndefined();
-    expect(zero.marginOfSafetyAmount).toBeUndefined();
+    expect(zero.marginOfSafety).toBeUndefined();
 
     const negative = breakEven({
       fixedCosts: 1000,
@@ -346,7 +343,7 @@ describe("breakEven", () => {
     });
     expect(negative.ok).toBe(true);
     if (!negative.ok) return;
-    expect(negative.marginOfSafetyPercent).toBeUndefined();
+    expect(negative.marginOfSafety).toBeUndefined();
   });
 });
 

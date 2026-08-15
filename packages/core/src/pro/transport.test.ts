@@ -673,10 +673,12 @@ describe("lashingForce", () => {
     // Fv = 400·sin80°·1.5 = 400·0.9848078·1.5
     expect(result.verticalForce).toBeCloseTo(590.885, 2);
     // perLashing/setForce are the ARRANGEMENT's own geometry — one number, not one per direction.
-    expect(result.perLashing).toBeCloseTo(177.2654, 3); // 0.3·590.885
-    expect(result.perLashingKn).toBeCloseTo(1.772654, 4); // ·10/1000
-    expect(result.setForce).toBeCloseTo(1063.5924, 3); // 6·177.2654
-    expect(result.setForceKn).toBeCloseTo(10.635924, 4);
+    expect(result.arrangement).toBeDefined();
+    if (result.arrangement === undefined) return;
+    expect(result.arrangement.perLashing).toBeCloseTo(177.2654, 3); // 0.3·590.885
+    expect(result.arrangement.perLashingKn).toBeCloseTo(1.772654, 4); // ·10/1000
+    expect(result.arrangement.setForce).toBeCloseTo(1063.5924, 3); // 6·177.2654
+    expect(result.arrangement.setForceKn).toBeCloseTo(10.635924, 4);
     // Forward: Fd = 0.8·1961.33 = 1569.064; Fp = 1569.064 - 588.399 = 980.665.
     expect(result.forward.drivingForce).toBeCloseTo(1569.064, 2);
     expect(result.forward.remainingForce).toBeCloseTo(980.665, 2);
@@ -712,8 +714,10 @@ describe("lashingForce", () => {
     expect(result.weight).toBeCloseTo(4903.325, 2);
     expect(result.frictionForce).toBeCloseTo(1470.9975, 3); // 0.3·4903.325
     // along = cos30°·cos20° = 0.8660254·0.9396926; +μ·sin30° = +0.15
-    expect(result.perLashing).toBeCloseTo(1927.5954, 3);
-    expect(result.setForce).toBeCloseTo(3855.1907, 3); // 2·1927.5954
+    expect(result.arrangement).toBeDefined();
+    if (result.arrangement === undefined) return;
+    expect(result.arrangement.perLashing).toBeCloseTo(1927.5954, 3);
+    expect(result.arrangement.setForce).toBeCloseTo(3855.1907, 3); // 2·1927.5954
     // Forward: Fd = 0.8·4903.325 = 3922.66; Fp = 3922.66 - 1470.9975 = 2451.6625.
     expect(result.forward.remainingForce).toBeCloseTo(2451.6625, 3);
     expect(result.forward.quotient).toBeCloseTo(1.271876, 4);
@@ -742,8 +746,7 @@ describe("lashingForce", () => {
     if (!result.ok) return;
     expect(result.forward.remainingForce).toBeCloseTo(980.665, 2);
     expect(result.backward.remainingForce).toBeCloseTo(392.266, 2);
-    expect(result.perLashing).toBeUndefined();
-    expect(result.setForce).toBeUndefined();
+    expect(result.arrangement).toBeUndefined();
     expect(result.forward.quotient).toBeUndefined();
     expect(result.forward.setRatio).toBeUndefined();
   });
@@ -820,8 +823,10 @@ describe("lashingForce", () => {
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.perLashing).toBe(0);
-    expect(result.setForce).toBe(0); // 4·0
+    expect(result.arrangement).toBeDefined();
+    if (result.arrangement === undefined) return;
+    expect(result.arrangement.perLashing).toBe(0);
+    expect(result.arrangement.setForce).toBe(0); // 4·0
     expect(result.forward.quotient).toBeUndefined();
     expect(result.forward.setRatio).toBeUndefined();
   });
@@ -1301,9 +1306,9 @@ describe("fuelConsumption", () => {
     // T = 187.4·199.9 = 37480 - 18.74
     expect(result.totalCost).toBeCloseTo(37461.26, 2);
     expect(result.costPerKm).toBeCloseTo(58.0795, 3); // 37461.26/645
-    expect(result.tonneKm).toBe(14190); // 22·645
-    expect(result.litresPer100TonneKm).toBeCloseTo(1.3206, 3); // 18740/14190
-    expect(result.costPerTonneKm).toBeCloseTo(2.64, 3); // 37461.26/14190
+    expect(result.tonneKm?.total).toBe(14190); // 22·645
+    expect(result.tonneKm?.rates?.litres).toBeCloseTo(1.3206, 3); // 18740/14190
+    expect(result.tonneKm?.rates?.cost).toBeCloseTo(2.64, 3); // 37461.26/14190
     expect(result.range).toBeUndefined(); // fuelRemaining = 0
   });
 
@@ -1324,7 +1329,6 @@ describe("fuelConsumption", () => {
     expect(result.totalCost).toBe(1500);
     expect(result.costPerKm).toBe(15);
     expect(result.tonneKm).toBeUndefined();
-    expect(result.litresPer100TonneKm).toBeUndefined();
     // R = 100·42/7.5
     expect(result.range).toBeCloseTo(560, 6);
   });
@@ -1398,11 +1402,11 @@ describe("fuelConsumption", () => {
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.tonneKmDistance).toBe(300);
-    expect(result.tonneKm).toBe(6000); // 20·300, NOT 20·500 = 10000
+    expect(result.tonneKm?.distance).toBe(300);
+    expect(result.tonneKm?.total).toBe(6000); // 20·300, NOT 20·500 = 10000
     expect(result.totalCost).toBe(30000); // 150·200
-    expect(result.litresPer100TonneKm).toBeCloseTo(2.5, 6); // 100·150/6000
-    expect(result.costPerTonneKm).toBeCloseTo(5, 6); // 30000/6000
+    expect(result.tonneKm?.rates?.litres).toBeCloseTo(2.5, 6); // 100·150/6000
+    expect(result.tonneKm?.rates?.cost).toBeCloseTo(5, 6); // 30000/6000
   });
 
   it("refuses the two tonne-km rates at a zero LADEN distance, rather than dividing by zero", () => {
@@ -1419,10 +1423,12 @@ describe("fuelConsumption", () => {
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.tonneKmDistance).toBe(0);
-    expect(result.tonneKm).toBe(0); // 22·0 — a real fact, not a refusal
-    expect(result.litresPer100TonneKm).toBeUndefined(); // NOT Infinity
-    expect(result.costPerTonneKm).toBeUndefined(); // NOT Infinity
+    expect(result.tonneKm?.distance).toBe(0);
+    expect(result.tonneKm?.total).toBe(0); // 22·0 — a real fact, not a refusal
+    // Both rates gone TOGETHER, and now unrepresentably so: the copy button
+    // used to guard on `tonneKm` and print `costPerTonneKm ?? 0`, so this very
+    // case put „0,00 RSD/tkm" on the clipboard while the screen showed no row.
+    expect(result.tonneKm?.rates).toBeUndefined(); // NOT Infinity
   });
 });
 

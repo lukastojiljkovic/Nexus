@@ -34,10 +34,32 @@ import {
  * own limit and without it, asserting the ratio is `undefined` in the second.
  */
 
+/**
+ * Every key on a result, including the ones inside its groups and rows.
+ *
+ * The check below used to read `Object.keys(result)`, which was the whole
+ * result only while every field was flat. A `passes` that grew one level down
+ * — inside a group, or inside a row of a table — would pass over unseen. A
+ * check whose reach shrinks when the data moves is the shape DC-45 named, so
+ * it walks, exactly as `agro.test.ts` and `inzenjering.test.ts` do.
+ */
+function allKeys(value: unknown, out: string[] = []): string[] {
+  if (value === null || typeof value !== "object") return out;
+  if (Array.isArray(value)) {
+    for (const item of value) allKeys(item, out);
+    return out;
+  }
+  for (const [key, child] of Object.entries(value)) {
+    out.push(key);
+    allKeys(child, out);
+  }
+  return out;
+}
+
 /** No verdict field lives on a `life-safety`/`food-safety` result — this is the check, not a slogan. */
 function assertNoVerdictFields(result: object): void {
   const forbidden = /^(passes|compliant|safe|withinLimit|status|verdict|ok|severity)$/i;
-  for (const key of Object.keys(result)) {
+  for (const key of allKeys(result)) {
     if (key === "ok") continue; // the ProResult envelope itself, not a verdict about the computation
     expect(forbidden.test(key)).toBe(false);
   }

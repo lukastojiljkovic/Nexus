@@ -154,11 +154,21 @@ export function addMonths(date: CalendarDate, months: number): CalendarDate {
 /* ------------------------------------------------------- cashflow: NPV & IRR */
 
 /**
- * Why no internal rate of return was reported. `found` is the only outcome that
- * carries a number; the other three are properties of the series the user typed,
- * not failures of the tool.
+ * The internal rate of return, or why there is none to report. The other three
+ * outcomes are properties of the series the user typed, not failures of the
+ * tool.
+ *
+ * **`found` carries the rate inside itself.** A rate and the reason a rate
+ * exists are one fact; the two used to be separate fields, and a surface could
+ * then check the reason and read a rate the check had said nothing about —
+ * which is what `irr ?? 0` on the screen was, an IRR of exactly 0 %/period
+ * being both plausible and wrong.
  */
-export type IrrOutcome = "found" | "noSignChange" | "notUnique" | "outsideSearchRange";
+export type Irr =
+  | { readonly outcome: "found"; readonly percentPerPeriod: number }
+  | { readonly outcome: "noSignChange" }
+  | { readonly outcome: "notUnique" }
+  | { readonly outcome: "outsideSearchRange" };
 
 export interface CashflowInput {
   /** CF_0..CF_n, one per period, outflows negative. CF_0 is NOT discounted. */
@@ -190,9 +200,7 @@ export interface CashflowResult {
   readonly paybackPlainCrossings: number;
   /** Same count, taken over the discounted cumulative. */
   readonly paybackDiscountedCrossings: number;
-  /** Percent per period, or undefined — read `irrOutcome` for which. */
-  readonly irr: number | undefined;
-  readonly irrOutcome: IrrOutcome;
+  readonly irr: Irr;
   /** Sign changes among the non-zero flows; Descartes' bound on the root count. */
   readonly signChanges: number;
 }
@@ -252,7 +260,6 @@ export function cashflowNpvIrr(input: CashflowInput): ProResult<CashflowResult> 
   const zeroBand = scale * 1e-12;
 
   const signChanges = countSignChanges(cashflows);
-  const { irr, irrOutcome } = solveIrr(cashflows, signChanges);
 
   return {
     ok: true,
@@ -263,8 +270,7 @@ export function cashflowNpvIrr(input: CashflowInput): ProResult<CashflowResult> 
     paybackDiscounted: payback(discounted, zeroBand, signChanges),
     paybackPlainCrossings: crossingCount(cashflows, zeroBand),
     paybackDiscountedCrossings: crossingCount(discounted, zeroBand),
-    irr,
-    irrOutcome,
+    irr: solveIrr(cashflows, signChanges),
     signChanges,
   };
 }
@@ -325,12 +331,9 @@ function crossingCount(flows: readonly number[], zeroBand: number): number {
   return crossings;
 }
 
-function solveIrr(
-  flows: readonly number[],
-  signChanges: number,
-): { irr: number | undefined; irrOutcome: IrrOutcome } {
-  if (signChanges === 0) return { irr: undefined, irrOutcome: "noSignChange" };
-  if (signChanges > 1) return { irr: undefined, irrOutcome: "notUnique" };
+function solveIrr(flows: readonly number[], signChanges: number): Irr {
+  if (signChanges === 0) return { outcome: "noSignChange" };
+  if (signChanges > 1) return { outcome: "notUnique" };
 
   const npvAt = (rate: number): number => {
     let sum = 0;
@@ -343,12 +346,12 @@ function solveIrr(
   const atLow = npvAt(low);
   const atHigh = npvAt(high);
   if (Number.isNaN(atLow) || Number.isNaN(atHigh)) {
-    return { irr: undefined, irrOutcome: "outsideSearchRange" };
+    return { outcome: "outsideSearchRange" };
   }
-  if (atLow === 0) return { irr: low * 100, irrOutcome: "found" };
-  if (atHigh === 0) return { irr: high * 100, irrOutcome: "found" };
+  if (atLow === 0) return { outcome: "found", percentPerPeriod: low * 100 };
+  if (atHigh === 0) return { outcome: "found", percentPerPeriod: high * 100 };
   if (Math.sign(atLow) === Math.sign(atHigh)) {
-    return { irr: undefined, irrOutcome: "outsideSearchRange" };
+    return { outcome: "outsideSearchRange" };
   }
 
   const lowSign = Math.sign(atLow);
@@ -360,7 +363,7 @@ function solveIrr(
     if (Math.sign(value) === lowSign) low = mid;
     else high = mid;
   }
-  return { irr: mid * 100, irrOutcome: "found" };
+  return { outcome: "found", percentPerPeriod: mid * 100 };
 }
 
 /* ------------------------------------------------------- shared BigInt decimals */

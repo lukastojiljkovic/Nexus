@@ -204,10 +204,8 @@ export interface AngleOfView {
   readonly diagonal: number;
   /** Sensor diagonal, in mm. */
   readonly sensorDiagonal: number;
-  /** Field covered at the subject distance, in metres — undefined when none was given. */
-  readonly fieldWidth: number | undefined;
-  readonly fieldHeight: number | undefined;
-  readonly fieldDiagonal: number | undefined;
+  /** Field covered at the subject distance, in metres — absent when no distance was given. */
+  readonly field: CoveredField | undefined;
   /**
    * Always `true`: the field figures above assume the lens is focused at
    * infinity. `motionBlurPixels` computes the SAME geometry with the
@@ -218,6 +216,19 @@ export interface AngleOfView {
    * comment nobody reading the numbers ever sees.
    */
   readonly focusedAtInfinity: true;
+}
+
+/**
+ * How much of the world the frame covers at the subject distance, in metres.
+ *
+ * One field rather than three: all three are `D*d/f` with a different sensor
+ * dimension, so they exist exactly when a subject distance was given and are
+ * meaningless one at a time — a width with no height is not a frame.
+ */
+export interface CoveredField {
+  readonly width: number;
+  readonly height: number;
+  readonly diagonal: number;
 }
 
 /**
@@ -250,8 +261,10 @@ export function angleOfView(input: AngleOfViewInput): ProResult<AngleOfView> {
   const sensorDiagonal = sensorDiagonalMm(sensorWidth, sensorHeight);
   const angle = (dimension: number): number =>
     2 * Math.atan(dimension / (2 * focalLength)) * DEG_PER_RAD;
-  const field = (dimension: number): number | undefined =>
-    distance === undefined ? undefined : (distance * dimension) / focalLength;
+  // Same association as before the grouping — `(D*d)/f`, not `D*(d/f)`. The
+  // two differ in the last bit or two, and a covered field is checked against
+  // published tables.
+  const covered = (D: number, dimension: number): number => (D * dimension) / focalLength;
 
   return {
     ok: true,
@@ -259,9 +272,14 @@ export function angleOfView(input: AngleOfViewInput): ProResult<AngleOfView> {
     vertical: angle(sensorHeight),
     diagonal: angle(sensorDiagonal),
     sensorDiagonal,
-    fieldWidth: field(sensorWidth),
-    fieldHeight: field(sensorHeight),
-    fieldDiagonal: field(sensorDiagonal),
+    field:
+      distance === undefined
+        ? undefined
+        : {
+            width: covered(distance, sensorWidth),
+            height: covered(distance, sensorHeight),
+            diagonal: covered(distance, sensorDiagonal),
+          },
     focusedAtInfinity: true,
   };
 }
@@ -834,12 +852,26 @@ export interface IlluminanceInput {
 export interface IlluminanceAperture {
   readonly lux: number;
   readonly footCandles: number;
-  /** Undefined when no calibration constant was given — see `calibrationConstant`. */
-  readonly fNumber: number | undefined;
+  /** Absent when no calibration constant was given — see `calibrationConstant`. */
+  readonly aperture: MeteredAperture | undefined;
+}
+
+/**
+ * The aperture an incident reading implies, and the engraved mark next to it.
+ *
+ * One field rather than three: the exact f-number, the nearest third-stop mark
+ * and that mark's index are one calculation, reachable only through a
+ * calibration constant. Split into three optionals, a surface guarded on the
+ * f-number and then had to write `?? 0` under the mark — „f/0" is not an
+ * aperture on any lens ever made.
+ */
+export interface MeteredAperture {
+  /** The exact f-number the equation gives, before any rounding to a mark. */
+  readonly fNumber: number;
   /** The nearest third-stop mark, computed as 2^(k/6) — never read from a table. */
-  readonly nearestThirdStop: number | undefined;
+  readonly nearestThirdStop: number;
   /** k in 2^(k/6): 0 is f/1, 6 is f/2, 9 is f/2.83. */
-  readonly thirdStopIndex: number | undefined;
+  readonly thirdStopIndex: number;
 }
 
 /**
@@ -871,16 +903,7 @@ export function illuminanceToAperture(input: IlluminanceInput): ProResult<Illumi
 
   const lux = input.unit === "fc" ? illuminance * LUX_PER_FOOT_CANDLE : illuminance;
   const footCandles = lux * SQUARE_METRES_PER_SQUARE_FOOT;
-  if (calibrationConstant === undefined) {
-    return {
-      ok: true,
-      lux,
-      footCandles,
-      fNumber: undefined,
-      nearestThirdStop: undefined,
-      thirdStopIndex: undefined,
-    };
-  }
+  if (calibrationConstant === undefined) return { ok: true, lux, footCandles, aperture: undefined };
 
   const { iso, shutter } = input;
   if (!isInRange(iso, 6, 4194304)) return fail("iso");
@@ -900,7 +923,12 @@ export function illuminanceToAperture(input: IlluminanceInput): ProResult<Illumi
       nearestThirdStop = mark;
     }
   }
-  return { ok: true, lux, footCandles, fNumber, nearestThirdStop, thirdStopIndex };
+  return {
+    ok: true,
+    lux,
+    footCandles,
+    aperture: { fNumber, nearestThirdStop, thirdStopIndex },
+  };
 }
 
 /* -------------------------------------------------------------- mired shift -- */
@@ -1745,9 +1773,21 @@ export interface VideoStorage {
   readonly bytes: number;
   readonly gigabytes: number;
   readonly gibibytes: number;
-  /** Recordable seconds on one card; defined only when a capacity was given. */
-  readonly recordableSecondsPerCard: number | undefined;
-  readonly recordableSecondsTotal: number | undefined;
+  /** How much recording the cards hold; present only when a capacity was given. */
+  readonly recordable: RecordableTime | undefined;
+}
+
+/**
+ * How long the cards last, per card and across all of them.
+ *
+ * One field rather than two: the total is `perCard * cardCount`, so a total
+ * with no per-card figure beside it hides how many cards it assumed, and a
+ * per-card figure with no total is the answer to a question nobody asked when
+ * they typed a card count.
+ */
+export interface RecordableTime {
+  readonly perCardSeconds: number;
+  readonly totalSeconds: number;
 }
 
 /**
@@ -1806,7 +1846,9 @@ export function videoStorage(input: VideoStorageInput): ProResult<VideoStorage> 
     bytes,
     gigabytes: bytes / BYTES_PER_GB,
     gibibytes: bytes / BYTES_PER_GIB,
-    recordableSecondsPerCard: perCard,
-    recordableSecondsTotal: perCard === undefined ? undefined : perCard * (cardCount ?? 1),
+    recordable:
+      perCard === undefined
+        ? undefined
+        : { perCardSeconds: perCard, totalSeconds: perCard * (cardCount ?? 1) },
   };
 }

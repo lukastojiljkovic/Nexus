@@ -134,8 +134,9 @@ describe("cashflowNpvIrr", () => {
     // flow in between must NOT itself count as a change of sign.
     expect(result.signChanges).toBe(1);
     // (1+x)² = 1,21 -> x = 0,10 -> 10,0000%.
-    expect(result.irrOutcome).toBe("found");
-    expect(result.irr).toBeCloseTo(10, 4);
+    expect(result.irr.outcome).toBe("found");
+    if (result.irr.outcome !== "found") return;
+    expect(result.irr.percentPerPeriod).toBeCloseTo(10, 4);
     // Undiscounted payback: cumulative is −1000, −1000, 210 — crosses zero at
     // t = 2, carried by a flow of 1210: payback = (2−1) + 1000/1210 = 1,826446…
     expect(result.paybackPlain).toBeCloseTo(1.826446, 6);
@@ -159,8 +160,9 @@ describe("cashflowNpvIrr", () => {
     expect(result.npv).toBeCloseTo(41.322314, 6);
     // u = 1/(1+x): 3u² + 3u − 5 = 0 -> u = (√69 − 3)/6 = (8,306623863 − 3)/6
     //   = 0,884437310; x = 1/u − 1 = 0,130662386 -> 13,0662%.
-    expect(result.irrOutcome).toBe("found");
-    expect(result.irr).toBeCloseTo(13.0662, 3);
+    expect(result.irr.outcome).toBe("found");
+    if (result.irr.outcome !== "found") return;
+    expect(result.irr.percentPerPeriod).toBeCloseTo(13.0662, 3);
     // Undiscounted payback: cumulative −1000, −400, 200 — crosses at t = 2,
     // carried by 600: payback = 1 + 400/600 = 1,666667.
     expect(result.paybackPlain).toBeCloseTo(1.666667, 6);
@@ -172,8 +174,9 @@ describe("cashflowNpvIrr", () => {
     if (!result.ok) return;
     // −, then +, then − again: two sign changes among the non-zero flows.
     expect(result.signChanges).toBe(2);
-    expect(result.irrOutcome).toBe("notUnique");
-    expect(result.irr).toBeUndefined();
+    // `toEqual` on the whole outcome, not just its name: a withheld IRR must
+    // carry NO rate at all, which is now unrepresentable rather than asserted.
+    expect(result.irr).toEqual({ outcome: "notUnique" });
     // NSV is still reported: −1000 + 2500/1,1 + (−1500)/1,21
     //   = −1000 + 2272,727273 − 1239,669421 = 33,057851.
     expect(result.npv).toBeCloseTo(33.057851, 6);
@@ -195,8 +198,7 @@ describe("cashflowNpvIrr", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.signChanges).toBe(1);
-    expect(result.irrOutcome).toBe("outsideSearchRange");
-    expect(result.irr).toBeUndefined();
+    expect(result.irr).toEqual({ outcome: "outsideSearchRange" });
   });
 
   it("reports no IRR NOR payback for a series with no sign change at all — every flow the same sign", () => {
@@ -204,8 +206,7 @@ describe("cashflowNpvIrr", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.signChanges).toBe(0);
-    expect(result.irrOutcome).toBe("noSignChange");
-    expect(result.irr).toBeUndefined();
+    expect(result.irr).toEqual({ outcome: "noSignChange" });
     // No cumulative ever goes negative: there was no outlay to recover from,
     // so a reported payback of 0 would NAME a quantity — a payback period —
     // that this series does not have. Withheld, not printed as 0.
@@ -226,7 +227,7 @@ describe("cashflowNpvIrr", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.signChanges).toBe(3);
-    expect(result.irrOutcome).toBe("notUnique");
+    expect(result.irr).toEqual({ outcome: "notUnique" });
     expect(result.paybackPlain).toBeCloseTo(0.5, 9);
     expect(result.paybackPlainCrossings).toBe(3);
     expect(result.paybackDiscounted).toBeCloseTo(0.5, 9);

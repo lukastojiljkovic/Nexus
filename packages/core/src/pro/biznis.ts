@@ -512,15 +512,41 @@ export interface BreakEvenResult {
   readonly revenueAtUnits: number;
   /** units·contributionMargin − fixedCosts — what rounding UP the unit count buys. */
   readonly surplusAtUnits: number;
-  /** The unrounded unit count for the profit goal, alongside the rounded one below. */
-  readonly exactUnitsForProfit: number | undefined;
-  readonly unitsForProfit: number | undefined;
-  /** unitsForProfit × price, symmetric with `revenueAtUnits`. */
-  readonly revenueForProfit: number | undefined;
+  /** Present exactly when a target profit was given. */
+  readonly profitTarget: ProfitTarget | undefined;
+  /** Present exactly when a planned quantity above zero was given. */
+  readonly marginOfSafety: MarginOfSafety | undefined;
+}
+
+/**
+ * What it takes to reach the profit the user asked for.
+ *
+ * One field rather than three, because the rounded count is only honest beside
+ * the exact one it rounded UP from, and the revenue is that rounded count times
+ * the price. Split apart, a surface could print „350 units" with no sign of the
+ * 349.2 behind it, and the whole reason the exact figure exists is to make the
+ * rounding visible.
+ */
+export interface ProfitTarget {
+  /** The unrounded unit count for the profit goal. */
+  readonly exactUnits: number;
+  readonly units: number;
+  /** units × price, symmetric with `revenueAtUnits`. */
+  readonly revenue: number;
+}
+
+/**
+ * How far the plan sits above (or below) break-even.
+ *
+ * One measurement in three units — percent, units and money — so they are one
+ * field. A percentage with no absolute figure beside it is the classic way to
+ * make a thin cushion look comfortable.
+ */
+export interface MarginOfSafety {
   /** Negative when the plan sits below break-even; shown as the number it is. */
-  readonly marginOfSafetyPercent: number | undefined;
-  readonly marginOfSafetyUnits: number | undefined;
-  readonly marginOfSafetyAmount: number | undefined;
+  readonly percent: number;
+  readonly units: number;
+  readonly amount: number;
 }
 
 /**
@@ -566,10 +592,12 @@ export function breakEven(input: BreakEvenInput): ProResult<BreakEvenResult> {
   // complete input over an optional field nobody meant to fill in.
   const planned =
     input.plannedUnits !== undefined && input.plannedUnits > 0 ? input.plannedUnits : undefined;
-  const exactUnitsForProfit =
-    target === undefined ? undefined : (fixedCosts + target) / contributionMargin;
-  const unitsForProfit =
-    exactUnitsForProfit === undefined ? undefined : Math.ceil(exactUnitsForProfit);
+  let profitTarget: ProfitTarget | undefined;
+  if (target !== undefined) {
+    const exact = (fixedCosts + target) / contributionMargin;
+    const rounded = Math.ceil(exact);
+    profitTarget = { exactUnits: exact, units: rounded, revenue: rounded * price };
+  }
   return {
     ok: true,
     contributionMargin,
@@ -582,13 +610,15 @@ export function breakEven(input: BreakEvenInput): ProResult<BreakEvenResult> {
     breakEvenRevenue: exactUnits * price,
     revenueAtUnits: units * price,
     surplusAtUnits: units * contributionMargin - fixedCosts,
-    exactUnitsForProfit,
-    unitsForProfit,
-    revenueForProfit: unitsForProfit === undefined ? undefined : unitsForProfit * price,
-    marginOfSafetyPercent:
-      planned === undefined ? undefined : ((planned - exactUnits) / planned) * 100,
-    marginOfSafetyUnits: planned === undefined ? undefined : planned - exactUnits,
-    marginOfSafetyAmount: planned === undefined ? undefined : (planned - exactUnits) * price,
+    profitTarget,
+    marginOfSafety:
+      planned === undefined
+        ? undefined
+        : {
+            percent: ((planned - exactUnits) / planned) * 100,
+            units: planned - exactUnits,
+            amount: (planned - exactUnits) * price,
+          },
   };
 }
 

@@ -1010,6 +1010,21 @@ export interface LashingDirection {
   readonly setRatio: number | undefined;
 }
 
+/**
+ * What the described arrangement itself delivers. Absent as a whole for the
+ * blocking method, where there is no lashing to contribute anything — one
+ * condition governs all four figures, because `setForce` is `lashings ×
+ * perLashing` and each kN figure is its own daN figure in the other unit.
+ */
+export interface LashingArrangement {
+  /** What one lashing contributes, daN — the arrangement's own geometry, not the direction. */
+  readonly perLashing: number;
+  readonly perLashingKn: number;
+  /** The user's own arrangement: lashings × perLashing, daN. */
+  readonly setForce: number;
+  readonly setForceKn: number;
+}
+
 export interface LashingForce {
   /** Weight of the load, daN (1 daN = 10 N). */
   readonly weight: number;
@@ -1017,16 +1032,14 @@ export interface LashingForce {
   readonly frictionForce: number;
   /** Fv = STF·sinα·(1 + k) — the vertical force one top-over lashing applies, daN. */
   readonly verticalForce: number | undefined;
-  /** What one lashing contributes, daN — the arrangement's own geometry, not the direction. */
-  readonly perLashing: number | undefined;
-  readonly perLashingKn: number | undefined;
-  /** The user's own arrangement: lashings × perLashing, daN. */
-  readonly setForce: number | undefined;
-  readonly setForceKn: number | undefined;
+  readonly arrangement: LashingArrangement | undefined;
   readonly forward: LashingDirection;
   readonly backward: LashingDirection;
   readonly lateral: LashingDirection;
 }
+
+/** daN → kN. 1 daN is 10 N and 1 kN is 1000 N, so the factor is 1/100. */
+const toKn = (daN: number): number => (daN * 10) / 1000;
 
 /**
  * The force a securing arrangement has to take, and what the arrangement the
@@ -1111,7 +1124,7 @@ export function lashingForce(input: LashingInput): ProResult<LashingForce> {
     return {
       drivingForce,
       remainingForce,
-      remainingForceKn: (remainingForce * 10) / 1000,
+      remainingForceKn: toKn(remainingForce),
       quotient: usable && perLashing !== undefined ? remainingForce / perLashing : undefined,
       setRatio:
         usable && setForce !== undefined ? setForce / remainingForce : undefined,
@@ -1123,10 +1136,15 @@ export function lashingForce(input: LashingInput): ProResult<LashingForce> {
     weight,
     frictionForce,
     verticalForce,
-    perLashing,
-    perLashingKn: perLashing === undefined ? undefined : (perLashing * 10) / 1000,
-    setForce,
-    setForceKn: setForce === undefined ? undefined : (setForce * 10) / 1000,
+    arrangement:
+      perLashing === undefined || setForce === undefined
+        ? undefined
+        : {
+            perLashing,
+            perLashingKn: toKn(perLashing),
+            setForce,
+            setForceKn: toKn(setForce),
+          },
     forward: direction(forwardCoefficient),
     backward: direction(backwardCoefficient),
     lateral: direction(lateralCoefficient),
@@ -1767,11 +1785,39 @@ export interface FuelConsumptionInput {
    * Distance actually run LADEN, km — defaults to `distance` when absent. A
    * mixed trip with empty running should not have that empty distance
    * counted as if the cargo travelled it too; which figure was used comes
-   * back in `ladenDistance` so a surface can show it.
+   * back in `tonneKm.distance` so a surface can show it.
    */
   readonly ladenDistance?: number | undefined;
   /** Fuel left in the tank, l. Zero switches the range row off. */
   readonly fuelRemaining: number;
+}
+
+/**
+ * The two rates that divide BY the tonne-kilometres. Both have the same
+ * divisor, so both are absent for the same reason and at the same time — one
+ * field, not two, because a guard on either one alone type-checks while
+ * saying nothing about the other.
+ */
+export interface TonneKmRates {
+  /** l/100 tkm. */
+  readonly litres: number;
+  /** Money per tkm. */
+  readonly cost: number;
+}
+
+/**
+ * The tonne-kilometre block, present only when there is cargo. The distance
+ * that entered the figure travels WITH it: a tonne-kilometre read next to the
+ * wrong distance is a different quantity, and a reader cannot tell which
+ * distance was used from the product alone.
+ */
+export interface TonneKmWork {
+  /** The distance that entered `total` — `ladenDistance` if given, else `distance`. */
+  readonly distance: number;
+  /** cargoTonnes × distance, tkm. Can legitimately be ZERO. */
+  readonly total: number;
+  /** Absent exactly when `total` is zero — a quotient, not a promise. */
+  readonly rates: TonneKmRates | undefined;
 }
 
 export interface FuelConsumption {
@@ -1785,11 +1831,7 @@ export interface FuelConsumption {
   readonly totalCost: number;
   /** Total cost ÷ distance — computed once so it cannot drift from the total. */
   readonly costPerKm: number;
-  /** The distance that entered `tonneKm` — `ladenDistance` if given, else `distance`. */
-  readonly tonneKmDistance: number | undefined;
-  readonly tonneKm: number | undefined;
-  readonly litresPer100TonneKm: number | undefined;
-  readonly costPerTonneKm: number | undefined;
+  readonly tonneKm: TonneKmWork | undefined;
   /** Remaining fuel at the same consumption, km. A quotient, not a promise. */
   readonly range: number | undefined;
 }
@@ -1831,7 +1873,24 @@ export function fuelConsumption(input: FuelConsumptionInput): ProResult<FuelCons
   const kmPerLitre = distance / litres;
   const totalCost = litres * pricePerLitre;
   const tonneKmDistance = cargoTonnes > 0 ? (ladenDistanceInput ?? distance) : undefined;
-  const tonneKm = tonneKmDistance === undefined ? undefined : cargoTonnes * tonneKmDistance;
+  // `total` can be a defined ZERO — cargo carried over a laden distance of 0 —
+  // and `=== undefined` alone would let that reach a division and print
+  // Infinity (or NaN at a price of 0). `quotient` refuses the zero divisor,
+  // and it refuses it for BOTH rates at once, which is why they are one field.
+  let tonneKm: TonneKmWork | undefined;
+  if (tonneKmDistance !== undefined) {
+    const total = cargoTonnes * tonneKmDistance;
+    const litresRate = quotient(100 * litres, total);
+    const costRate = quotient(totalCost, total);
+    tonneKm = {
+      distance: tonneKmDistance,
+      total,
+      rates:
+        litresRate === undefined || costRate === undefined
+          ? undefined
+          : { litres: litresRate, cost: costRate },
+    };
+  }
 
   return {
     ok: true,
@@ -1842,13 +1901,7 @@ export function fuelConsumption(input: FuelConsumptionInput): ProResult<FuelCons
     mpgImperial: (kmPerLitre * L_PER_IMP_GALLON) / KM_PER_MILE,
     totalCost,
     costPerKm: totalCost / distance,
-    tonneKmDistance,
     tonneKm,
-    // `tonneKm` can be a defined ZERO — cargo carried over a laden distance of
-    // 0 — and `=== undefined` alone would let that reach a division and print
-    // Infinity (or NaN at a price of 0). `quotient` refuses the zero divisor.
-    litresPer100TonneKm: tonneKm === undefined ? undefined : quotient(100 * litres, tonneKm),
-    costPerTonneKm: tonneKm === undefined ? undefined : quotient(totalCost, tonneKm),
     range: fuelRemaining > 0 ? fuelRemaining * kmPerLitre : undefined,
   };
 }

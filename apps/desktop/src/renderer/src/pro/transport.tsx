@@ -1305,7 +1305,9 @@ export function FuelConsumptionCostTool() {
         `${s.kmPerLitre}: ${proNum(result.kmPerLitre, 2)} ${s.unitKmL}`,
         `${s.totalCost}: ${proNum(result.totalCost, 2)} ${s.currency}`,
         `${s.costPerKm}: ${proNum(result.costPerKm, 2)} ${s.currencyPerKm}`,
-        result.tonneKm !== undefined ? `${s.costPerTonneKm}: ${proNum(result.costPerTonneKm ?? 0, 2)} ${s.currencyPerTkm}` : "",
+        result.tonneKm?.rates !== undefined
+          ? `${s.costPerTonneKm}: ${proNum(result.tonneKm.rates.cost, 2)} ${s.currencyPerTkm}`
+          : "",
         result.range !== undefined ? `${s.range}: ${proNum(result.range, 0)} ${s.unitKm}` : "",
         "",
         `${s.distance}: ${proUnit(proNum(result.distance, 1), s.unitKm)}`,
@@ -1340,17 +1342,20 @@ export function FuelConsumptionCostTool() {
             <>
               <ResultRow
                 label={s.tonneKmDistance}
-                value={proUnit(proNum(result.tonneKmDistance ?? 0, 1), s.unitKm)}
+                value={proUnit(proNum(result.tonneKm.distance, 1), s.unitKm)}
               />
-              <ResultRow label={s.tonneKm} value={proUnit(proNum(result.tonneKm, 1), s.unitTkm)} />
-              {result.litresPer100TonneKm !== undefined && (
-                <ResultRow
-                  label={s.litresPer100TonneKm}
-                  value={proUnit(proNum(result.litresPer100TonneKm, 4), s.unitL100tkm)}
-                />
-              )}
-              {result.costPerTonneKm !== undefined && (
-                <ResultRow label={s.costPerTonneKm} value={`${proNum(result.costPerTonneKm, 4)} ${s.currencyPerTkm}`} />
+              <ResultRow label={s.tonneKm} value={proUnit(proNum(result.tonneKm.total, 1), s.unitTkm)} />
+              {result.tonneKm.rates !== undefined && (
+                <>
+                  <ResultRow
+                    label={s.litresPer100TonneKm}
+                    value={proUnit(proNum(result.tonneKm.rates.litres, 4), s.unitL100tkm)}
+                  />
+                  <ResultRow
+                    label={s.costPerTonneKm}
+                    value={`${proNum(result.tonneKm.rates.cost, 4)} ${s.currencyPerTkm}`}
+                  />
+                </>
               )}
             </>
           )}
@@ -1767,8 +1772,8 @@ export function LoadLashingForceTool() {
     ? ""
     : [
         `${s.weight}: ${daN(result.weight)}`,
-        result.perLashing !== undefined ? `${s.perLashing}: ${daN(result.perLashing)}` : "",
-        result.setForce !== undefined ? `${s.setForce}: ${daN(result.setForce)}` : "",
+        result.arrangement !== undefined ? `${s.perLashing}: ${daN(result.arrangement.perLashing)}` : "",
+        result.arrangement !== undefined ? `${s.setForce}: ${daN(result.arrangement.setForce)}` : "",
         `${s.forward} — ${s.remainingForce}: ${daN(result.forward.remainingForce)}`,
         `${s.backward} — ${s.remainingForce}: ${daN(result.backward.remainingForce)}`,
         `${s.lateral} — ${s.remainingForce}: ${daN(result.lateral.remainingForce)}`,
@@ -1820,11 +1825,17 @@ export function LoadLashingForceTool() {
           {result.verticalForce !== undefined && (
             <ResultRow label={s.verticalForce} value={daN(result.verticalForce)} />
           )}
-          {result.perLashing !== undefined && (
-            <ResultRow label={s.perLashing} value={`${daN(result.perLashing)} / ${kN(result.perLashingKn ?? 0)}`} />
-          )}
-          {result.setForce !== undefined && (
-            <ResultRow label={s.setForce} value={`${daN(result.setForce)} / ${kN(result.setForceKn ?? 0)}`} />
+          {result.arrangement !== undefined && (
+            <>
+              <ResultRow
+                label={s.perLashing}
+                value={`${daN(result.arrangement.perLashing)} / ${kN(result.arrangement.perLashingKn)}`}
+              />
+              <ResultRow
+                label={s.setForce}
+                value={`${daN(result.arrangement.setForce)} / ${kN(result.arrangement.setForceKn)}`}
+              />
+            </>
           )}
           {direction(s.forward, result.forward)}
           {direction(s.backward, result.backward)}

@@ -123,11 +123,11 @@ export function CashflowNpvIrrTool() {
 
   const irrText = !result.ok
     ? ""
-    : result.irrOutcome === "found"
-      ? `${proNum(result.irr ?? 0, 4)}${s.unitPercent}`
-      : result.irrOutcome === "noSignChange"
+    : result.irr.outcome === "found"
+      ? `${proNum(result.irr.percentPerPeriod, 4)}${s.unitPercent}`
+      : result.irr.outcome === "noSignChange"
         ? s.irrNoSignChange
-        : result.irrOutcome === "notUnique"
+        : result.irr.outcome === "notUnique"
           ? s.irrNotUnique
           : s.irrOutsideRange;
 

@@ -64,15 +64,15 @@ describe("angleOfView", () => {
     expect(result.horizontal).toBeCloseTo(39.597753, 4);
     expect(result.vertical).toBeCloseTo(26.991467, 4);
     expect(result.diagonal).toBeCloseTo(46.793003, 4);
-    expect(result.fieldWidth).toBeCloseTo(3.6, 3);
-    expect(result.fieldHeight).toBeCloseTo(2.4, 3);
+    expect(result.field?.width).toBeCloseTo(3.6, 3);
+    expect(result.field?.height).toBeCloseTo(2.4, 3);
     // The model is focused at infinity — a fact the result states rather than
     // leaving it to a JSDoc comment nobody building a surface would ever open.
     expect(result.focusedAtInfinity).toBe(true);
-    // fieldDiagonal is the third field figure, never asserted before: the field
+    // The diagonal is the third field figure, never asserted before: the field
     // covered along the sensor's diagonal at the same subject distance.
     // 5000*43.266615/50 = 4326.6615 mm = 4.326662 m
-    expect(result.fieldDiagonal).toBeCloseTo(4.326662, 5);
+    expect(result.field?.diagonal).toBeCloseTo(4.326662, 5);
   });
 
   it("atan(0.75) is a textbook value: 36x24 at f=24 gives exactly 73.7398 deg horizontal", () => {
@@ -81,8 +81,9 @@ describe("angleOfView", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.horizontal).toBeCloseTo(73.739795, 4);
-    expect(result.fieldWidth).toBeUndefined();
-    expect(result.fieldDiagonal).toBeUndefined();
+    // All three at once: a width with no height is not a frame, so they are
+    // one field and cannot go missing one at a time.
+    expect(result.field).toBeUndefined();
   });
 
   it("corrects the catalogue's third vector: atan(23.5/70) is 18.557637 deg, so horizontal is 37.115275 deg, not 37.08", () => {
@@ -103,7 +104,7 @@ describe("angleOfView", () => {
     if (!result.ok) return;
     expect(result.horizontal).toBeCloseTo(37.115275, 3);
     expect(result.horizontal).not.toBeCloseTo(37.08, 2);
-    expect(result.fieldWidth).toBeCloseTo(1.342857, 3);
+    expect(result.field?.width).toBeCloseTo(1.342857, 3);
   });
 
   it("refuses a non-positive sensor dimension or focal length, and an out-of-range distance", () => {
@@ -661,7 +662,7 @@ describe("illuminanceToAperture", () => {
     const result = illuminanceToAperture({ illuminance: 1000, unit: "lx", iso: 100, shutter: 1 / 50, calibrationConstant: 250 });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.fNumber).toBeCloseTo(2.83, 2);
+    expect(result.aperture?.fNumber).toBeCloseTo(2.83, 2);
   });
 
   it("converts lx <-> fc even when no calibration constant was given, rather than blanking the whole surface", () => {
@@ -670,8 +671,9 @@ describe("illuminanceToAperture", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.footCandles).toBeCloseTo(92.903, 3);
-    expect(result.fNumber).toBeUndefined();
-    expect(result.nearestThirdStop).toBeUndefined();
+    // All three at once: the exact f-number, the mark and its index are one
+    // calculation, reachable only through a calibration constant.
+    expect(result.aperture).toBeUndefined();
   });
 
   it("closes the completeness gap the review found: converts lx <-> fc with NEITHER iso NOR shutter typed at all", () => {
@@ -683,7 +685,7 @@ describe("illuminanceToAperture", () => {
     if (!result.ok) return;
     expect(result.lux).toBe(1000);
     expect(result.footCandles).toBeCloseTo(92.903, 3);
-    expect(result.fNumber).toBeUndefined();
+    expect(result.aperture).toBeUndefined();
   });
 
   it("the lx -> fc -> lx round trip closes exactly, because both directions share the one defined foot", () => {
@@ -714,9 +716,9 @@ describe("illuminanceToAperture", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.lux).toBeCloseTo(5381.955208, 5);
-    expect(result.fNumber).toBeCloseTo(13.393973, 4);
-    expect(result.thirdStopIndex).toBe(22);
-    expect(result.nearestThirdStop).toBeCloseTo(12.699208, 5);
+    expect(result.aperture?.fNumber).toBeCloseTo(13.393973, 4);
+    expect(result.aperture?.thirdStopIndex).toBe(22);
+    expect(result.aperture?.nearestThirdStop).toBeCloseTo(12.699208, 5);
   });
 
   it("refuses an out-of-range illuminance, or a supplied-but-invalid ISO, shutter or calibration constant", () => {
@@ -1544,7 +1546,7 @@ describe("videoStorage", () => {
     const result = videoStorage({ videoBitrateMbps: 400, capacityGb: 128 });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.recordableSecondsPerCard).toBeCloseTo(2560, 3);
+    expect(result.recordable?.perCardSeconds).toBeCloseTo(2560, 3);
   });
 
   it("64.000 GiB at 250 Mbit/s plays for 2199.023 s (00:36:39.023)", () => {
@@ -1558,7 +1560,7 @@ describe("videoStorage", () => {
     const result = videoStorage({ videoBitrateMbps: 400, capacityGb: 128, cardCount: 3 });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.recordableSecondsTotal).toBeCloseTo(2560 * 3, 1);
+    expect(result.recordable?.totalSeconds).toBeCloseTo(2560 * 3, 1);
   });
 
   it("refuses a non-positive bitrate, an out-of-range card count, and zero or more than one of duration/size/capacity", () => {
