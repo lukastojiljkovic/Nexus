@@ -29,6 +29,7 @@ import {
   type BandColour,
   type PreferredSeries,
   rlcResponse,
+  type FirstOrderCorner,
   type RlcConnection,
   sectionProperties,
   type SectionShape,
@@ -136,9 +137,9 @@ export function AwgConverterTool() {
             `${s.diameterMm}: ${proUnit(proNum(reverse.diameterMm, 5), s.unitMm)}`,
             `${s.areaMm2}: ${proUnit(proNum(reverse.areaMm2, 5), s.unitMm2)}`,
             `${s.fractionalGauge}: ${proNum(reverse.gauge, 3)}`,
-            reverse.nearestGauge === undefined
+            reverse.nearest === undefined
               ? ""
-              : `${s.nearestGauge}: ${proNum(reverse.nearestGauge, 0)} (${proUnit(proNum(reverse.nearestDiameterMm ?? 0, 5), s.unitMm)}, ${proUnit(proNum(reverse.nearestAreaMm2 ?? 0, 5), s.unitMm2)})`,
+              : `${s.nearestGauge}: ${proNum(reverse.nearest.gauge, 0)} (${proUnit(proNum(reverse.nearest.diameterMm, 5), s.unitMm)}, ${proUnit(proNum(reverse.nearest.areaMm2, 5), s.unitMm2)})`,
             `${s.resistance}: ${proUnit(proNum(reverse.resistanceOhmPerKm, 5), s.unitOhmKm)}`,
             "",
             `${s.known}: ${known === "diameter" ? s.knownDiameter : s.knownArea} = ${value.trim()}`,
@@ -215,20 +216,21 @@ export function AwgConverterTool() {
           <ResultRow label={s.diameterMm} value={proUnit(proNum(reverse.diameterMm, 5), s.unitMm)} />
           <ResultRow label={s.areaMm2} value={proUnit(proNum(reverse.areaMm2, 5), s.unitMm2)} />
           <ResultRow label={s.fractionalGauge} value={proNum(reverse.gauge, 3)} />
-          {reverse.nearestGauge !== undefined && (
+          {reverse.nearest === undefined ? (
+            <p className="tool__note">{s.outsideSeriesNote}</p>
+          ) : (
             <>
-              <ResultRow label={s.nearestGauge} value={proNum(reverse.nearestGauge, 0)} />
+              <ResultRow label={s.nearestGauge} value={proNum(reverse.nearest.gauge, 0)} />
               <ResultRow
                 label={s.nearestDiameter}
-                value={proUnit(proNum(reverse.nearestDiameterMm ?? 0, 5), s.unitMm)}
+                value={proUnit(proNum(reverse.nearest.diameterMm, 5), s.unitMm)}
               />
               <ResultRow
                 label={s.nearestArea}
-                value={proUnit(proNum(reverse.nearestAreaMm2 ?? 0, 5), s.unitMm2)}
+                value={proUnit(proNum(reverse.nearest.areaMm2, 5), s.unitMm2)}
               />
             </>
           )}
-          {reverse.nearestGauge === undefined && <p className="tool__note">{s.outsideSeriesNote}</p>}
           <ResultRow
             label={s.resistance}
             value={proUnit(proNum(reverse.resistanceOhmPerKm, 5), s.unitOhmKm)}
@@ -876,19 +878,29 @@ export function InductionMotorTool() {
                   : s.errorSpeed;
 
   const voltageLabel = system === "single" ? s.voltageSingle : s.voltageThree;
-  const hasSlip = result.ok && result.slipPercent !== undefined;
-  const isGenerating = hasSlip && result.ok && (result.slipPercent ?? 0) < 0;
+  // Narrowed to the VALUE, not to a boolean beside it. A `hasSlip` const does
+  // not narrow the field at the places that read it, so each of them carried a
+  // `?? 0` that could not fire and would have printed „0 %" — a motor running
+  // exactly at synchronism — if it ever had.
+  const slip = result.ok ? result.slipPercent : undefined;
+  const isGenerating = slip !== undefined && slip < 0;
+  // Above synchronism the machine is being driven. The word alone is not the
+  // answer: the core returns a negative number deliberately („it is a number,
+  // not an error"), and the screen used to drop it while the copied text kept
+  // it, so what the user read and what they pasted disagreed.
+  const slipText =
+    slip === undefined
+      ? ""
+      : isGenerating
+        ? `${s.generating} (${proNum(slip, 3)} %)`
+        : `${proNum(slip, 3)} %`;
   const copyText = !result.ok
     ? ""
     : [
         `${s.current}: ${proUnit(proNum(result.currentA, 4), s.unitA)}`,
         `${s.inputPower}: ${proUnit(proNum(result.inputPowerKw, 5), s.unitKw)}`,
         `${s.synchronousSpeed}: ${proUnit(proNum(result.synchronousSpeedRpm, 0), s.unitRpm)}`,
-        hasSlip
-          ? isGenerating
-            ? `${s.slip}: ${s.generating} (${proNum(result.slipPercent ?? 0, 3)} %)`
-            : `${s.slip}: ${proNum(result.slipPercent ?? 0, 3)} %`
-          : "",
+        slip === undefined ? "" : `${s.slip}: ${slipText}`,
         `${s.torque}: ${proUnit(proNum(result.torqueNm, 4), s.unitNm)} (${measuredSpeedRpm.trim() === "" ? s.atSynchronous : s.atMeasured})`,
         "",
         `${s.shaftPower}: ${proUnit(proNum(proParse(shaftPowerKw) ?? 0, 3), s.unitKw)}`,
@@ -934,12 +946,7 @@ export function InductionMotorTool() {
             label={s.synchronousSpeed}
             value={proUnit(proNum(result.synchronousSpeedRpm, 0), s.unitRpm)}
           />
-          {hasSlip && (
-            <ResultRow
-              label={s.slip}
-              value={isGenerating ? s.generating : `${proNum(result.slipPercent ?? 0, 3)} %`}
-            />
-          )}
+          {slip !== undefined && <ResultRow label={s.slip} value={slipText} />}
           <ResultRow
             label={s.torque}
             value={`${proUnit(proNum(result.torqueNm, 4), s.unitNm)} (${measuredSpeedRpm.trim() === "" ? s.atSynchronous : s.atMeasured})`}
@@ -1205,12 +1212,12 @@ export function MetricThreadTool() {
         `${s.minorDiameterNut}: ${proUnit(proNum(result.minorDiameterNutMm, 5), s.unitMm)}`,
         `${s.stressArea}: ${proUnit(proNum(result.stressAreaMm2, 4), s.unitMm2)}`,
         result.forceKn === undefined ? "" : `${s.force}: ${proUnit(proNum(result.forceKn, 4), s.unitKn)}`,
-        result.engagementPct === undefined
+        result.engagement === undefined
           ? ""
-          : `${s.engagement}: ${proNum(result.engagementPct, 4)} %`,
-        result.engagementPctWorkshop === undefined
+          : `${s.engagement}: ${proNum(result.engagement.isoPct, 4)} %`,
+        result.engagement === undefined
           ? ""
-          : `${s.engagementWorkshop}: ${proNum(result.engagementPctWorkshop, 4)} %`,
+          : `${s.engagementWorkshop}: ${proNum(result.engagement.workshopPct, 4)} %`,
         "",
         `${s.nominalDiameter}: ${proUnit(proNum(proParse(nominalDiameterMm) ?? 0, 3), s.unitMm)}`,
         `${s.pitch}: ${proUnit(proNum(proParse(pitchMm) ?? 0, 3), s.unitMm)}`,
@@ -1242,13 +1249,13 @@ export function MetricThreadTool() {
               <p className="tool__note">{s.forceNote}</p>
             </>
           )}
-          {result.engagementPct !== undefined && (
+          {result.engagement !== undefined && (
             <>
-              <ResultRow label={s.engagement} value={`${proNum(result.engagementPct, 4)} %`} />
+              <ResultRow label={s.engagement} value={`${proNum(result.engagement.isoPct, 4)} %`} />
               <p className="tool__note">{s.engagementNote}</p>
               <ResultRow
                 label={s.engagementWorkshop}
-                value={`${proNum(result.engagementPctWorkshop ?? 0, 4)} %`}
+                value={`${proNum(result.engagement.workshopPct, 4)} %`}
               />
               <p className="tool__note">{s.engagementWorkshopNote}</p>
             </>
@@ -1429,12 +1436,12 @@ export function PipeFlowTool() {
         `${s.flowM3h}: ${proUnit(proNum(result.flowM3h, 5), s.unitM3h)}`,
         `${s.flowM3s}: ${proUnit(proNum(result.flowM3s, 8), s.unitM3s)}`,
         result.reynolds === undefined ? "" : `${s.reynolds}: ${proNum(result.reynolds, 1)}`,
-        result.massFlowKgS === undefined
+        result.massFlow === undefined
           ? ""
-          : `${s.massFlowKgS}: ${proUnit(proNum(result.massFlowKgS, 5), s.unitKgS)}`,
-        result.massFlowKgH === undefined
+          : `${s.massFlowKgS}: ${proUnit(proNum(result.massFlow.kgS, 5), s.unitKgS)}`,
+        result.massFlow === undefined
           ? ""
-          : `${s.massFlowKgH}: ${proUnit(proNum(result.massFlowKgH, 3), s.unitKgH)}`,
+          : `${s.massFlowKgH}: ${proUnit(proNum(result.massFlow.kgH, 3), s.unitKgH)}`,
         "",
         `${s.innerDiameter}: ${proUnit(proNum(proParse(innerDiameterMm) ?? 0, 2), s.unitMm)}`,
         known === "flow"
@@ -1488,10 +1495,10 @@ export function PipeFlowTool() {
           <ResultRow label={s.flowM3s} value={proUnit(proNum(result.flowM3s, 8), s.unitM3s)} />
           {result.reynolds !== undefined && <ResultRow label={s.reynolds} value={proNum(result.reynolds, 1)} />}
           {result.reynolds === undefined && <p className="tool__note">{s.reynoldsHint}</p>}
-          {result.massFlowKgS !== undefined && (
+          {result.massFlow !== undefined && (
             <>
-              <ResultRow label={s.massFlowKgS} value={proUnit(proNum(result.massFlowKgS, 5), s.unitKgS)} />
-              <ResultRow label={s.massFlowKgH} value={proUnit(proNum(result.massFlowKgH ?? 0, 3), s.unitKgH)} />
+              <ResultRow label={s.massFlowKgS} value={proUnit(proNum(result.massFlow.kgS, 5), s.unitKgS)} />
+              <ResultRow label={s.massFlowKgH} value={proUnit(proNum(result.massFlow.kgH, 3), s.unitKgH)} />
             </>
           )}
           <p className="tool__note">{s.roundDuctNote}</p>
@@ -2166,6 +2173,14 @@ export function RlcImpedanceTool() {
             ? s.errorInductance
             : s.errorCapacitance;
 
+  // The corner and its τ are written the same way in both branches and in the
+  // copied text; one spelling, so the three cannot drift apart. Declared after
+  // `s` because it reads it.
+  const cornerText = (corner: FirstOrderCorner): string => {
+    const hz = proUnit(proNum(corner.cornerHz, 5), s.unitHz);
+    return `${hz} (τ = ${proUnit(proNum(corner.timeConstantS, 6), s.unitS2)})`;
+  };
+
   const copyText = !result.ok
     ? ""
     : [
@@ -2189,12 +2204,8 @@ export function RlcImpedanceTool() {
         result.resonanceHz === undefined ? "" : `${s.resonance}: ${proUnit(proNum(result.resonanceHz, 5), s.unitHz)}`,
         result.qualityFactor === undefined ? "" : `${s.qualityFactor}: ${proNum(result.qualityFactor, 5)}`,
         result.bandwidthHz === undefined ? "" : `${s.bandwidth}: ${proUnit(proNum(result.bandwidthHz, 5), s.unitHz)}`,
-        result.cornerRcHz === undefined
-          ? ""
-          : `${s.cornerRc}: ${proUnit(proNum(result.cornerRcHz, 5), s.unitHz)} (τ = ${proUnit(proNum(result.timeConstantRcS ?? 0, 6), s.unitS2)})`,
-        result.cornerRlHz === undefined
-          ? ""
-          : `${s.cornerRl}: ${proUnit(proNum(result.cornerRlHz, 5), s.unitHz)} (τ = ${proUnit(proNum(result.timeConstantRlS ?? 0, 6), s.unitS2)})`,
+        result.rc === undefined ? "" : `${s.cornerRc}: ${cornerText(result.rc)}`,
+        result.rl === undefined ? "" : `${s.cornerRl}: ${cornerText(result.rl)}`,
         "",
         `${s.frequency}: ${proUnit(proNum(proParse(frequencyHz) ?? 0, 2), s.unitHz)}`,
         `${s.resistance}: ${proUnit(proNum(proParse(resistanceOhm) ?? 0, 3), s.unitOhm)}`,
@@ -2255,18 +2266,8 @@ export function RlcImpedanceTool() {
           {result.bandwidthHz !== undefined && (
             <ResultRow label={s.bandwidth} value={proUnit(proNum(result.bandwidthHz, 5), s.unitHz)} />
           )}
-          {result.cornerRcHz !== undefined && (
-            <ResultRow
-              label={s.cornerRc}
-              value={`${proUnit(proNum(result.cornerRcHz, 5), s.unitHz)} (τ = ${proUnit(proNum(result.timeConstantRcS ?? 0, 6), s.unitS2)})`}
-            />
-          )}
-          {result.cornerRlHz !== undefined && (
-            <ResultRow
-              label={s.cornerRl}
-              value={`${proUnit(proNum(result.cornerRlHz, 5), s.unitHz)} (τ = ${proUnit(proNum(result.timeConstantRlS ?? 0, 6), s.unitS2)})`}
-            />
-          )}
+          {result.rc !== undefined && <ResultRow label={s.cornerRc} value={cornerText(result.rc)} />}
+          {result.rl !== undefined && <ResultRow label={s.cornerRl} value={cornerText(result.rl)} />}
           <p className="tool__note">{s.absentNote}</p>
           <ToolFormula>{connection === "series" ? s.formulaSeries : s.formulaParallel}</ToolFormula>
           <ToolInputEcho
@@ -2421,12 +2422,12 @@ export function SectionModulusTool() {
         `${s.sectionModulusY}: ${proUnit(proNum(result.sectionModulusYMm3, 5), s.unitMm3)}`,
         `${s.radiusOfGyrationX}: ${proUnit(proNum(result.radiusOfGyrationXMm, 4), s.unitMm)}`,
         `${s.radiusOfGyrationY}: ${proUnit(proNum(result.radiusOfGyrationYMm, 4), s.unitMm)}`,
-        result.polarMomentMm4 === undefined
+        result.polar === undefined
           ? ""
-          : `${s.polarMoment}: ${proUnit(proNum(result.polarMomentMm4, 5), s.unitMm4)}`,
-        result.polarModulusMm3 === undefined
+          : `${s.polarMoment}: ${proUnit(proNum(result.polar.momentMm4, 5), s.unitMm4)}`,
+        result.polar === undefined
           ? ""
-          : `${s.polarModulus}: ${proUnit(proNum(result.polarModulusMm3, 5), s.unitMm3)}`,
+          : `${s.polarModulus}: ${proUnit(proNum(result.polar.modulusMm3, 5), s.unitMm3)}`,
         result.allowableMomentNm === undefined
           ? ""
           : `${s.allowableMoment}: ${proUnit(proNum(result.allowableMomentNm, 3), s.unitNm)}`,
@@ -2511,13 +2512,14 @@ export function SectionModulusTool() {
           <ResultRow label={s.sectionModulusY} value={proUnit(proNum(result.sectionModulusYMm3, 5), s.unitMm3)} />
           <ResultRow label={s.radiusOfGyrationX} value={proUnit(proNum(result.radiusOfGyrationXMm, 4), s.unitMm)} />
           <ResultRow label={s.radiusOfGyrationY} value={proUnit(proNum(result.radiusOfGyrationYMm, 4), s.unitMm)} />
-          {result.polarMomentMm4 !== undefined && (
+          {result.polar === undefined ? (
+            <p className="tool__note">{s.noPolarNote}</p>
+          ) : (
             <>
-              <ResultRow label={s.polarMoment} value={proUnit(proNum(result.polarMomentMm4, 5), s.unitMm4)} />
-              <ResultRow label={s.polarModulus} value={proUnit(proNum(result.polarModulusMm3 ?? 0, 5), s.unitMm3)} />
+              <ResultRow label={s.polarMoment} value={proUnit(proNum(result.polar.momentMm4, 5), s.unitMm4)} />
+              <ResultRow label={s.polarModulus} value={proUnit(proNum(result.polar.modulusMm3, 5), s.unitMm3)} />
             </>
           )}
-          {result.polarMomentMm4 === undefined && <p className="tool__note">{s.noPolarNote}</p>}
           {result.allowableMomentNm !== undefined && (
             <ResultRow label={s.allowableMoment} value={proUnit(proNum(result.allowableMomentNm, 3), s.unitNm)} />
           )}

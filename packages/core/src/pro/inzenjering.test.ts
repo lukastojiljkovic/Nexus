@@ -43,6 +43,30 @@ import {
  * against a limit the test itself supplies.
  */
 
+/**
+ * Every key on a result, including the ones inside its groups.
+ *
+ * Two tools below assert that no field on their answer is named after a
+ * verdict, and that check used to read `Object.keys(result)` — which was the
+ * whole result back when every field was flat. Grouping the correlated
+ * optionals moved fields one level down, so a flat read would now pass over a
+ * `passes` that had grown inside `nearest`, `engagement` or `polar`. A check
+ * whose reach shrinks when the data moves is the shape DC-45 named; it walks
+ * now, exactly as `agro.test.ts` does.
+ */
+function allKeys(value: unknown, out: string[] = []): string[] {
+  if (value === null || typeof value !== "object") return out;
+  if (Array.isArray(value)) {
+    for (const item of value) allKeys(item, out);
+    return out;
+  }
+  for (const [key, child] of Object.entries(value)) {
+    out.push(key);
+    allKeys(child, out);
+  }
+  return out;
+}
+
 describe("awgToMetric", () => {
   it("evaluates the defining law: AWG 12 in copper", () => {
     const result = awgToMetric({ gauge: 12, material: "copper" });
@@ -101,23 +125,23 @@ describe("metricToAwg", () => {
     // d/0.127 = 21.7634110; ln = 3.08023015; x39 = 120.128976;
     // /4.5217885770 = 26.5666947; 36 - 26.5666947 = 9.43330534
     expect(result.gauge).toBeCloseTo(9.43330534, 8);
-    expect(result.nearestGauge).toBe(9);
+    expect(result.nearest?.gauge).toBe(9);
     // (36 - 9)/39 = 0.692307692; x ln 92 = 3.13046904; e^... = 22.8847103;
     // x0.127 = 2.90635821 mm; area = pi/4 x 8.44691... = 6.63419391 mm2
-    expect(result.nearestDiameterMm).toBeCloseTo(2.90635821, 8);
-    expect(result.nearestAreaMm2).toBeCloseTo(6.63419391, 8); // table: AWG 9 = 6.63
+    expect(result.nearest?.diameterMm).toBeCloseTo(2.90635821, 8);
+    expect(result.nearest?.areaMm2).toBeCloseTo(6.63419391, 8); // table: AWG 9 = 6.63
   });
 
   it("leaves the whole-gauge fields absent past the end of the defined series", () => {
     // 20 mm of copper is AWG -7.636, and #00000000 is not a designation that
-    // exists — so the neighbour is omitted rather than extrapolated.
+    // exists — so the neighbour is omitted rather than extrapolated. All three
+    // figures at once: a gauge outside the series has no diameter and therefore
+    // no area, so they are one field and cannot go missing one at a time.
     const result = metricToAwg({ diameterMm: 20 });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.gauge).toBeCloseTo(-7.63598935, 8);
-    expect(result.nearestGauge).toBeUndefined();
-    expect(result.nearestDiameterMm).toBeUndefined();
-    expect(result.nearestAreaMm2).toBeUndefined();
+    expect(result.nearest).toBeUndefined();
   });
 
   it("refuses both-or-neither, and a non-positive or oversized dimension", () => {
@@ -509,8 +533,8 @@ describe("cableCrossSection", () => {
     // 13.7931034/1.5 = 9.19540230 V; 100 x 9.1954023/230 = 3.99800100 %
     expect(result.dropAtChosenV).toBeCloseTo(9.1954023, 7);
     expect(result.dropRatio).toBeCloseTo(1.332667, 6); // 3.998001/3
-    expect(Object.keys(result)).not.toContain("passes");
-    expect(Object.keys(result)).not.toContain("status");
+    expect(allKeys(result)).not.toContain("passes");
+    expect(allKeys(result)).not.toContain("status");
   });
 
   it("warms the conductor by the linear law", () => {
@@ -910,14 +934,14 @@ describe("metricThread", () => {
     expect(result.stressAreaMm2).toBeCloseTo(57.9895931, 7);
     expect(result.forceKn).toBeCloseTo(37.1133396, 7); // 57.9895931 x 640 / 1000
     // 100 x (10 - 8.5)/1.623797632 = 92.3760431 %
-    expect(result.engagementPct).toBeCloseTo(92.3760431, 7);
+    const engagement = result.engagement;
+    if (engagement === undefined) throw new Error("expected engagement");
+    expect(engagement.isoPct).toBeCloseTo(92.3760431, 7);
     // The workshop convention divides by 1.5xROOT3_OVER_2 instead of
     // 1.25xROOT3_OVER_2, so it is exactly 5/6 of the H1 figure for any drill:
     // 92.3760431 x 5/6 = 76.9800359 %, matching the review's worked "76,98 %".
-    expect(result.engagementPctWorkshop).toBeCloseTo(76.9800359, 6);
-    const engagementPct = result.engagementPct;
-    if (engagementPct === undefined) throw new Error("expected engagementPct");
-    expect(result.engagementPctWorkshop).toBeCloseTo((engagementPct * 5) / 6, 9);
+    expect(engagement.workshopPct).toBeCloseTo(76.9800359, 6);
+    expect(engagement.workshopPct).toBeCloseTo((engagement.isoPct * 5) / 6, 9);
   });
 
   it("matches the table for M16 x 2 and omits the force until a strength is entered", () => {
@@ -933,8 +957,8 @@ describe("metricThread", () => {
     // No strength was entered, so there is no force row at all — an absent
     // property class is not a default one.
     expect(result.forceKn).toBeUndefined();
-    expect(result.engagementPct).toBeUndefined();
-    expect(result.engagementPctWorkshop).toBeUndefined();
+    // Both conventions or neither: one drill measured two ways is one field.
+    expect(result.engagement).toBeUndefined();
   });
 
   it("refuses a pitch that would leave the bolt no core, and a drill outside (D1, d)", () => {
@@ -977,7 +1001,7 @@ describe("metricThread", () => {
     if (!result.ok) return;
     // At drill = D1 the numerator (d - D1) equals the denominator (H1) exactly,
     // so the engagement is exactly 100 % under the ISO 898-1 convention.
-    expect(result.engagementPct).toBeCloseTo(100, 9);
+    expect(result.engagement?.isoPct).toBeCloseTo(100, 9);
   });
 });
 
@@ -1090,7 +1114,7 @@ describe("pipeFlow", () => {
     expect(result.flowLmin).toBeCloseTo(50, 9);
     // 0.424413182 x 0.05 = 0.0212206591; /1.004e-6 = 21136.1146
     expect(result.reynolds).toBeCloseTo(21136.1146, 4);
-    expect(result.massFlowKgS).toBeUndefined(); // no density was given
+    expect(result.massFlow).toBeUndefined(); // no density was given
   });
 
   it("goes the other way, from a velocity to a flow and a mass flow", () => {
@@ -1103,8 +1127,8 @@ describe("pipeFlow", () => {
     expect(result.flowLmin).toBeCloseTo(37.6991118, 7);
     expect(result.flowM3h).toBeCloseTo(2.26194671, 8);
     // 998 x 6.28318531e-4 = 0.627061894 kg/s; x3600 = 2257.42282 kg/h
-    expect(result.massFlowKgS).toBeCloseTo(0.627061894, 9);
-    expect(result.massFlowKgH).toBeCloseTo(2257.42282, 5);
+    expect(result.massFlow?.kgS).toBeCloseTo(0.627061894, 9);
+    expect(result.massFlow?.kgH).toBeCloseTo(2257.42282, 5);
     expect(result.reynolds).toBeUndefined(); // no viscosity was given
   });
 
@@ -1121,7 +1145,7 @@ describe("pipeFlow", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.flowM3s).toBe(0);
-    expect(result.massFlowKgS).toBe(0);
+    expect(result.massFlow?.kgS).toBe(0);
   });
 
   it("refuses a zero viscosity rather than returning an infinite Reynolds number", () => {
@@ -1665,13 +1689,13 @@ describe("rlcResponse", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     // 1/(2 pi x 10000 x 1e-7) = 1/6.28318531e-3 = 159.154943 Hz
-    expect(result.cornerRcHz).toBeCloseTo(159.154943, 6);
-    expect(result.timeConstantRcS).toBeCloseTo(0.001, 12); // 10000 x 1e-7
+    expect(result.rc?.cornerHz).toBeCloseTo(159.154943, 6);
+    expect(result.rc?.timeConstantS).toBeCloseTo(0.001, 12); // 10000 x 1e-7
     // No inductor: the inductive reactance, the resonance and the RL corner are
     // absent rather than zero.
     expect(result.reactanceInductiveOhm).toBeUndefined();
     expect(result.resonanceHz).toBeUndefined();
-    expect(result.cornerRlHz).toBeUndefined();
+    expect(result.rl).toBeUndefined();
   });
 
   it("gives the RL corner when only R and L are present", () => {
@@ -1684,8 +1708,8 @@ describe("rlcResponse", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     // 100/(2 pi x 0.01) = 100/0.0628318531 = 1591.54943 Hz; tau = 1e-4 s
-    expect(result.cornerRlHz).toBeCloseTo(1591.54943, 5);
-    expect(result.timeConstantRlS).toBeCloseTo(0.0001, 12);
+    expect(result.rl?.cornerHz).toBeCloseTo(1591.54943, 5);
+    expect(result.rl?.timeConstantS).toBeCloseTo(0.0001, 12);
     expect(result.reactanceCapacitiveOhm).toBeUndefined();
   });
 
@@ -1789,8 +1813,7 @@ describe("sectionProperties", () => {
     expect(result.sectionModulusYMm3).toBeCloseTo(333333.333333, 6);
     expect(result.radiusOfGyrationYMm).toBeCloseTo(28.8675135, 7);
     // A rectangle has no meaningful polar pair — see the note on St Venant.
-    expect(result.polarMomentMm4).toBeUndefined();
-    expect(result.polarModulusMm3).toBeUndefined();
+    expect(result.polar).toBeUndefined();
   });
 
   it("computes a 60/50 tube and its torsional stress", () => {
@@ -1806,8 +1829,8 @@ describe("sectionProperties", () => {
     expect(result.sectionModulusXMm3).toBeCloseTo(10979.2118, 4); // 2I/60
     // sqrt(3600 + 2500)/4 = 78.1024968/4 = 19.5256242, and sqrt(I/A) agrees
     expect(result.radiusOfGyrationXMm).toBeCloseTo(19.5256242, 7);
-    expect(result.polarMomentMm4).toBeCloseTo(658752.710, 3);
-    expect(result.polarModulusMm3).toBeCloseTo(21958.4237, 4);
+    expect(result.polar?.momentMm4).toBeCloseTo(658752.710, 3);
+    expect(result.polar?.modulusMm3).toBeCloseTo(21958.4237, 4);
     // 500 N*m = 500000 N*mm; /21958.4237 = 22.7703048 MPa
     expect(result.torsionalStressMpa).toBeCloseTo(22.7703048, 7);
   });
@@ -1834,7 +1857,7 @@ describe("sectionProperties", () => {
     expect(result.sectionModulusYMm3).toBeCloseTo(26732.9066667, 6); // 2I/100
     expect(result.radiusOfGyrationYMm).toBeCloseTo(22.2333421, 7);
     // No polar pair: I_x + I_y is not the torsion constant of an open section.
-    expect(result.polarModulusMm3).toBeUndefined();
+    expect(result.polar).toBeUndefined();
   });
 
   it("computes a rectangular tube as the difference of two rectangles", () => {
@@ -1868,7 +1891,7 @@ describe("sectionProperties", () => {
     expect(result.momentOfInertiaXMm4).toBeCloseTo(125663.706, 3); // pi x 2560000/64
     expect(result.sectionModulusXMm3).toBeCloseTo(6283.18531, 5); // pi x 64000/32
     expect(result.radiusOfGyrationXMm).toBeCloseTo(10, 10); // d/4
-    expect(result.polarModulusMm3).toBeCloseTo(12566.3706, 4); // 2W
+    expect(result.polar?.modulusMm3).toBeCloseTo(12566.3706, 4); // 2W
   });
 
   it("reports the stress and the ratio against the user's own allowable", () => {
@@ -1884,7 +1907,7 @@ describe("sectionProperties", () => {
     // 50000 x 1000/666666.667 = 75 MPa
     expect(result.bendingStressMpa).toBeCloseTo(75, 9);
     expect(result.stressRatio).toBeCloseTo(0.46875, 10); // 75/160
-    expect(Object.keys(result)).not.toContain("passes");
+    expect(allKeys(result)).not.toContain("passes");
   });
 
   it("draws no comparison at all when no allowable was typed", () => {

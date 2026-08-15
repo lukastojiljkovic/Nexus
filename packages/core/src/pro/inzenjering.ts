@@ -170,15 +170,28 @@ export interface MetricToAwgInput {
   readonly material?: ConductorMaterial | undefined;
 }
 
+/**
+ * The whole AWG size beside the fractional answer, and what it measures.
+ *
+ * One field rather than three, because a gauge number outside the series has no
+ * diameter and therefore no area: the three used to be separate optionals, so a
+ * surface that guarded on the gauge alone still had to write `?? 0` under the
+ * other two — a fallback that could not fire and would have printed „0 mm" as a
+ * conductor dimension if it ever had.
+ */
+export interface NearestAwg {
+  readonly gauge: number;
+  readonly diameterMm: number;
+  readonly areaMm2: number;
+}
+
 export interface MetricToAwg {
   readonly diameterMm: number;
   readonly areaMm2: number;
   /** The exact inverse of the defining law — deliberately fractional. */
   readonly gauge: number;
   /** Absent when the rounded gauge falls outside the defined #40..#0000 series. */
-  readonly nearestGauge?: number | undefined;
-  readonly nearestDiameterMm?: number | undefined;
-  readonly nearestAreaMm2?: number | undefined;
+  readonly nearest: NearestAwg | undefined;
   readonly resistanceOhmPerKm: number;
 }
 
@@ -210,17 +223,22 @@ export function metricToAwg(input: MetricToAwgInput): ProResult<MetricToAwg> {
   const material = input.material ?? "copper";
   const area = circleAreaMm2(diameter);
   const gauge = 36 - (39 * Math.log(diameter / AWG_36_DIAMETER_MM)) / LN_AWG_SPAN;
-  const nearest = Math.round(gauge);
-  const inSeries = nearest >= AWG_MIN && nearest <= AWG_MAX;
-  const nearestDiameter = inSeries ? awgDiameterMm(nearest) : undefined;
+  const rounded = Math.round(gauge);
+  const inSeries = rounded >= AWG_MIN && rounded <= AWG_MAX;
+  const nearestDiameter = inSeries ? awgDiameterMm(rounded) : undefined;
   return {
     ok: true,
     diameterMm: diameter,
     areaMm2: area,
     gauge,
-    nearestGauge: inSeries ? nearest : undefined,
-    nearestDiameterMm: nearestDiameter,
-    nearestAreaMm2: nearestDiameter === undefined ? undefined : circleAreaMm2(nearestDiameter),
+    nearest:
+      nearestDiameter === undefined
+        ? undefined
+        : {
+            gauge: rounded,
+            diameterMm: nearestDiameter,
+            areaMm2: circleAreaMm2(nearestDiameter),
+          },
     resistanceOhmPerKm: (resistivityAt20(material) * 1000) / area,
   };
 }
@@ -396,7 +414,10 @@ export function batteryBankRuntime(input: BatteryBankInput): ProResult<BatteryBa
  * ========================================================================== */
 
 export interface BeltDriveInput {
-  /** Driving (motor-side) pulley PITCH diameter, mm — not the outer diameter a caliper reads on a V-belt pulley. */
+  /**
+   * Driving (motor-side) pulley PITCH diameter, mm — not the outer diameter a
+   * caliper reads on a V-belt pulley.
+   */
   readonly drivingDiameterMm: number;
   /** Driven pulley pitch diameter, mm — same convention as the driving one. */
   readonly drivenDiameterMm: number;
@@ -923,10 +944,25 @@ export interface MetricThread {
   readonly stressAreaMm2: number;
   /** A_s times the user's own strength, kN. Absent until a strength is entered. */
   readonly forceKn?: number | undefined;
-  /** Engagement measured against H1 = (5/8)H, %. The ISO 898-1 convention. */
-  readonly engagementPct?: number | undefined;
-  /** The same drill's engagement against the workshop convention — see the note above `WORKSHOP_ENGAGEMENT_FACTOR`. */
-  readonly engagementPctWorkshop?: number | undefined;
+  /** Both conventions, or neither: one drill measured two ways. */
+  readonly engagement: ThreadEngagement | undefined;
+}
+
+/**
+ * The same tapping drill under both engagement conventions.
+ *
+ * One field rather than two, because they are the same measurement against two
+ * reference depths — a screen that has one of them and not the other has a
+ * number nobody can act on. The whole point of returning both is that they
+ * disagree by more than a rounding error (92.376 % against 76.98 % for M10x1.5
+ * with an 8.5 mm drill), so showing one alone invites „the other tool is wrong"
+ * from whoever compares it to a wall chart.
+ */
+export interface ThreadEngagement {
+  /** Against H1 = (5/8)H, %. The ISO 898-1 convention. */
+  readonly isoPct: number;
+  /** The workshop convention — see the note above `WORKSHOP_ENGAGEMENT_FACTOR`. */
+  readonly workshopPct: number;
 }
 
 /**
@@ -940,12 +976,13 @@ export interface MetricThread {
  * contains no class table and will not choose one.
  *
  * **Engagement is returned in both conventions it gets measured by, each named.**
- * `engagementPct` is quoted against the basic internal thread height
+ * `engagement.isoPct` is quoted against the basic internal thread height
  * `H1 = (5/8)H`, under which 100 % means a full-form internal thread.
- * `engagementPctWorkshop` is the older shop-floor convention (see
+ * `engagement.workshopPct` is the older shop-floor convention (see
  * `WORKSHOP_ENGAGEMENT_FACTOR`). The two disagree by more than a rounding
  * error for the same drill, and a caller that shows only one invites the
- * reading „the other tool is wrong" from whoever compares it to a wall chart.
+ * reading „the other tool is wrong" from whoever compares it to a wall chart —
+ * which is why they are one field and cannot be shown one at a time.
  */
 export function metricThread(input: MetricThreadInput): ProResult<MetricThread> {
   const { nominalDiameterMm, pitchMm } = input;
@@ -983,14 +1020,14 @@ export function metricThread(input: MetricThreadInput): ProResult<MetricThread> 
     stressAreaMm2,
     // A_s in mm2 times R in MPa is newtons; kN is the readable unit for a bolt.
     forceKn: strength === undefined ? undefined : (stressAreaMm2 * strength) / 1000,
-    engagementPct:
+    engagement:
       drill === undefined
         ? undefined
-        : (100 * (nominalDiameterMm - drill)) / (PITCH_TO_D1 * pitchMm),
-    engagementPctWorkshop:
-      drill === undefined
-        ? undefined
-        : (100 * (nominalDiameterMm - drill)) / (WORKSHOP_ENGAGEMENT_FACTOR * pitchMm),
+        : {
+            isoPct: (100 * (nominalDiameterMm - drill)) / (PITCH_TO_D1 * pitchMm),
+            workshopPct:
+              (100 * (nominalDiameterMm - drill)) / (WORKSHOP_ENGAGEMENT_FACTOR * pitchMm),
+          },
   };
 }
 
@@ -1114,7 +1151,10 @@ const FLOW_UNIT_IN_M3S: Record<FlowUnit, number> = {
 };
 
 export interface PipeFlowInput {
-  /** INNER diameter of a round pipe, mm. Nothing here applies to a non-circular duct — that needs a hydraulic-diameter branch, which this is not. */
+  /**
+   * INNER diameter of a round pipe, mm. Nothing here applies to a non-circular
+   * duct — that needs a hydraulic-diameter branch, which this is not.
+   */
   readonly innerDiameterMm: number;
   /** Give exactly one of these two; the other is what the tool computes. */
   readonly flow?: { readonly value: number; readonly unit: FlowUnit } | undefined;
@@ -1135,8 +1175,14 @@ export interface PipeFlow {
   readonly flowM3s: number;
   /** Absent without a viscosity: a Reynolds number needs a fluid. */
   readonly reynolds?: number | undefined;
-  readonly massFlowKgS?: number | undefined;
-  readonly massFlowKgH?: number | undefined;
+  /** Absent without a density — both figures at once, since they are one number in two units. */
+  readonly massFlow: MassFlow | undefined;
+}
+
+/** The same mass flow per second and per hour; the ratio between them is 3600 and nothing else. */
+export interface MassFlow {
+  readonly kgS: number;
+  readonly kgH: number;
 }
 
 /**
@@ -1190,8 +1236,10 @@ export function pipeFlow(input: PipeFlowInput): ProResult<PipeFlow> {
     // nu arrives in mm2/s, which is 1e-6 m2/s — the one unit slip that turns a
     // Reynolds number into a plausible-looking figure a million times out.
     reynolds: viscosity === undefined ? undefined : (velocity * diameterM) / (viscosity * 1e-6),
-    massFlowKgS: density === undefined ? undefined : density * flowM3s,
-    massFlowKgH: density === undefined ? undefined : density * flowM3s * 3600,
+    massFlow:
+      density === undefined
+        ? undefined
+        : { kgS: density * flowM3s, kgH: density * flowM3s * 3600 },
   };
 }
 
@@ -1219,7 +1267,10 @@ export interface PowerFactorCorrectionInput {
 export interface PowerFactorCorrection {
   readonly reactiveBeforeKvar: number;
   readonly reactiveAfterKvar: number;
-  /** Q1 minus Q2 — always at or above zero, since a worse target is refused rather than answered. */
+  /**
+   * Q1 minus Q2 — always at or above zero, since a worse target is refused
+   * rather than answered.
+   */
   readonly correctionKvar: number;
   readonly capacitancePerPhaseF: number;
   readonly capacitancePerPhaseUf: number;
@@ -1810,10 +1861,24 @@ export interface RlcResponse {
   readonly resonanceHz?: number | undefined;
   readonly qualityFactor?: number | undefined;
   readonly bandwidthHz?: number | undefined;
-  readonly cornerRcHz?: number | undefined;
-  readonly timeConstantRcS?: number | undefined;
-  readonly cornerRlHz?: number | undefined;
-  readonly timeConstantRlS?: number | undefined;
+  /** Needs a capacitor and a resistance above zero; absent as a whole otherwise. */
+  readonly rc: FirstOrderCorner | undefined;
+  /** Needs an inductor and a resistance above zero; absent as a whole otherwise. */
+  readonly rl: FirstOrderCorner | undefined;
+}
+
+/**
+ * A first-order corner frequency and its time constant.
+ *
+ * One field, because they are the same fact written twice — `f_c = 1/(2*pi*tau)`
+ * holds identically — and neither exists without the other. They used to be two
+ * optionals, which is why the surface guarded on the corner and then wrote
+ * `?? 0` under the tau it printed in the same breath: „τ = 0 s" beside a real
+ * corner frequency is a circuit that responds instantly.
+ */
+export interface FirstOrderCorner {
+  readonly cornerHz: number;
+  readonly timeConstantS: number;
 }
 
 /**
@@ -1860,20 +1925,26 @@ export function rlcResponse(input: RlcInput): ProResult<RlcResponse> {
     resonanceHz === undefined || qualityFactor === undefined || qualityFactor === 0
       ? undefined
       : resonanceHz / qualityFactor;
-  const cornerRcHz =
-    hasC && resistanceOhm > 0 ? 1 / (2 * Math.PI * resistanceOhm * capacitance) : undefined;
-  const cornerRlHz =
-    hasL && resistanceOhm > 0 ? resistanceOhm / (2 * Math.PI * inductance) : undefined;
   const shared = {
     reactanceInductiveOhm,
     reactanceCapacitiveOhm,
     resonanceHz,
     qualityFactor,
     bandwidthHz,
-    cornerRcHz,
-    timeConstantRcS: cornerRcHz === undefined ? undefined : resistanceOhm * capacitance,
-    cornerRlHz,
-    timeConstantRlS: cornerRlHz === undefined ? undefined : inductance / resistanceOhm,
+    rc:
+      hasC && resistanceOhm > 0
+        ? {
+            cornerHz: 1 / (2 * Math.PI * resistanceOhm * capacitance),
+            timeConstantS: resistanceOhm * capacitance,
+          }
+        : undefined,
+    rl:
+      hasL && resistanceOhm > 0
+        ? {
+            cornerHz: resistanceOhm / (2 * Math.PI * inductance),
+            timeConstantS: inductance / resistanceOhm,
+          }
+        : undefined,
   };
 
   if (connection === "series") {
@@ -1958,14 +2029,25 @@ export interface SectionProperties {
   readonly radiusOfGyrationXMm: number;
   readonly radiusOfGyrationYMm: number;
   /** Circular shapes only — see the note in `sectionProperties`. */
-  readonly polarMomentMm4?: number | undefined;
-  readonly polarModulusMm3?: number | undefined;
+  readonly polar: PolarSection | undefined;
   /** Moment at which the bending stress reaches the user's own allowable, N*m. */
   readonly allowableMomentNm?: number | undefined;
   readonly bendingStressMpa?: number | undefined;
   /** Bending stress over the user's own allowable. Undefined without one. */
   readonly stressRatio?: number | undefined;
   readonly torsionalStressMpa?: number | undefined;
+}
+
+/**
+ * The polar pair, present only for the shapes St Venant torsion is defined on.
+ *
+ * One field, because `I_p` and `W_p` come from the same geometry and are never
+ * derivable separately — a section either has a circular torsion constant or it
+ * has none at all, and half of the pair is not a partial answer.
+ */
+export interface PolarSection {
+  readonly momentMm4: number;
+  readonly modulusMm3: number;
 }
 
 const RECTANGLE_MAX = 10000;
@@ -1976,8 +2058,7 @@ interface CoreSection {
   readonly iy: number;
   readonly wx: number;
   readonly wy: number;
-  readonly polarMomentMm4?: number | undefined;
-  readonly polarModulusMm3?: number | undefined;
+  readonly polar?: PolarSection | undefined;
 }
 
 /**
@@ -2000,9 +2081,9 @@ interface CoreSection {
  */
 const finiteSection = (section: CoreSection): ProResult<CoreSection> => {
   const derived = [section.areaMm2, section.ix, section.iy, section.wx, section.wy];
-  if (section.polarMomentMm4 !== undefined) derived.push(section.polarMomentMm4);
-  if (section.polarModulusMm3 !== undefined) derived.push(section.polarModulusMm3);
-  return derived.every((value) => isPositive(value)) ? { ok: true, ...section } : fail("dimensions");
+  if (section.polar !== undefined) derived.push(section.polar.momentMm4, section.polar.modulusMm3);
+  if (!derived.every((value) => isPositive(value))) return fail("dimensions");
+  return { ok: true, ...section };
 };
 
 const coreSection = (shape: SectionShape): ProResult<CoreSection> => {
@@ -2024,7 +2105,7 @@ const coreSection = (shape: SectionShape): ProResult<CoreSection> => {
     const i = (Math.PI * Math.pow(d, 4)) / 64;
     const w = (Math.PI * d * d * d) / 32;
     return finiteSection({ areaMm2: circleAreaMm2(d), ix: i, iy: i, wx: w, wy: w,
-      polarMomentMm4: 2 * i, polarModulusMm3: 2 * w });
+      polar: { momentMm4: 2 * i, modulusMm3: 2 * w } });
   }
   if (shape.kind === "tube") {
     const { outerDiameterMm: D, innerDiameterMm: d } = shape;
@@ -2038,8 +2119,7 @@ const coreSection = (shape: SectionShape): ProResult<CoreSection> => {
       iy: i,
       wx: w,
       wy: w,
-      polarMomentMm4: 2 * i,
-      polarModulusMm3: 2 * w,
+      polar: { momentMm4: 2 * i, modulusMm3: 2 * w },
     });
   }
   if (shape.kind === "rectangularTube") {
@@ -2107,7 +2187,7 @@ export function sectionProperties(input: SectionInput): ProResult<SectionPropert
 
   // N*m to N*mm is a factor of 1000; W is in mm3 and the stress comes out in MPa.
   const bendingStressMpa = bending === undefined ? undefined : (bending * 1000) / core.wx;
-  const polarModulus = core.polarModulusMm3;
+  const polar = core.polar;
   return {
     ok: true,
     areaMm2: core.areaMm2,
@@ -2117,16 +2197,15 @@ export function sectionProperties(input: SectionInput): ProResult<SectionPropert
     sectionModulusYMm3: core.wy,
     radiusOfGyrationXMm: Math.sqrt(core.ix / core.areaMm2),
     radiusOfGyrationYMm: Math.sqrt(core.iy / core.areaMm2),
-    polarMomentMm4: core.polarMomentMm4,
-    polarModulusMm3: polarModulus,
+    polar,
     allowableMomentNm: allowable === undefined ? undefined : (core.wx * allowable) / 1000,
     bendingStressMpa,
     stressRatio:
       bendingStressMpa === undefined ? undefined : ratioAgainst(bendingStressMpa, allowable),
     torsionalStressMpa:
-      torsion === undefined || polarModulus === undefined
+      torsion === undefined || polar === undefined
         ? undefined
-        : (torsion * 1000) / polarModulus,
+        : (torsion * 1000) / polar.modulusMm3,
   };
 }
 
