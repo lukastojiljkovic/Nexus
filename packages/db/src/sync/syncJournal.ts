@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import {
+  base64urlToBytes,
   bytesToBase64url,
   decodeRowState,
   encodeRowState,
@@ -13,20 +14,21 @@ import {
   type JsonValue,
   type RowState,
 } from "@nexus/sync-crypto";
-import { classify, collections, sweepRow, type SyncCollection } from "@nexus/sync";
+import { classify, collections, deriveColumns, sweepRow, type SyncCollection } from "@nexus/sync";
 import { uuidv7 } from "../ids.js";
 
 /**
- * The SQLite half of ADR-083's change journal: it reads the dirt migration 063's
- * triggers recorded, resolves each entry against the row it names, and leaves a
- * stamped `RowState` behind for the push to seal.
+ * The SQLite half of ADR-083, in both directions: the sweep that turns a local
+ * edit into a stamped `RowState` for the push to seal, and the apply that writes
+ * a merged `RowState` back into the tables it came from.
  *
- * The pure half — what a row projects to and which of its fields actually
- * changed — is `@nexus/sync`'s `sweepRow`, which has no database in it and runs
- * unmodified in a browser tab. Everything here is the part that genuinely needs
- * SQLite: reading a row by an object id that may be a natural key, remembering
- * what was last sealed, and doing all of it in one transaction with the journal
- * entry that caused it.
+ * The pure halves — what a row projects to, which of its fields actually
+ * changed, what a merged state's columns are — are `@nexus/sync`'s `sweepRow`
+ * and `deriveColumns`, which have no database in them and run unmodified in a
+ * browser tab. Everything here is the part that genuinely needs SQLite: reading
+ * and writing a row by an object id that may be a natural key, remembering what
+ * was last sealed or merged, and doing all of it in one transaction with the
+ * journal entry that caused it.
  *
  * **Why the whole sweep is one transaction.** Step five writes `sync_row_state`
  * and step six deletes the journal entry. A crash between them in either order
@@ -38,8 +40,8 @@ import { uuidv7 } from "../ids.js";
  * **Blobs travel as base64url.** `note_updates.update_blob` and
  * `note_versions.snapshot` are the two BLOB columns in the synced schema, and a
  * field map is JSON. The conversion happens here rather than in `@nexus/sync`
- * because it is a fact about SQLite's type system; the apply side reverses it
- * from the same column types.
+ * because it is a fact about SQLite's type system, and both directions read the
+ * same declared column type so neither can drift from the other.
  */
 
 /** One object the sweep resolved into something worth pushing. */
@@ -49,16 +51,61 @@ export interface SweptObject {
   readonly state: RowState;
 }
 
+/** One merged object waiting to be written back into the table it came from. */
+export interface ApplyRequest {
+  readonly collection: string;
+  readonly objectId: string;
+  /** `PullApplied.merged` — what this device now believes about the object. */
+  readonly merged: RowState;
+  /**
+   * `PullApplied.changed` — the merge differs from what this device held.
+   *
+   * When it is false the local row is already correct and only the shadow state
+   * moves. That is not an optimisation: `changed` is computed through
+   * `encodeRowState`, which excludes the VERSION on purpose, so an unchanged row
+   * can still carry a version the server advanced — and the version is what the
+   * next push's compare-and-swap is built on. Skipping the state write for an
+   * unchanged row would make every later push collide.
+   */
+  readonly changed: boolean;
+}
+
+export type ApplyStatus =
+  /** The row and its shadow state were both written. */
+  | "written"
+  /** Only the shadow state moved; the local row already carried the merge. */
+  | "state-only"
+  /**
+   * A local edit for this object is still in the journal, so the merge was
+   * computed against a baseline that is no longer what this device holds.
+   * Sweep, merge again, apply again — see {@link SyncJournal.apply}.
+   */
+  | "stale"
+  /** A collection this build's map no longer carries. */
+  | "unknown"
+  /** SQLite refused the row. Usually a parent that has not arrived yet. */
+  | "refused";
+
+export interface ApplyOutcome {
+  readonly collection: string;
+  readonly objectId: string;
+  readonly status: ApplyStatus;
+  /** Present only for `refused`, and it is SQLite's own message. */
+  readonly error?: string;
+}
+
 /** The journal, the shadow state, and the clock that stamps them. */
 export class SyncJournal {
   private readonly db: Database.Database;
-  private readonly columnCache = new Map<string, readonly string[]>();
+  private readonly columnCache = new Map<string, TableInfo>();
   private readonly readCache = new Map<string, Database.Statement>();
+  private readonly writeCache = new Map<string, Database.Statement>();
 
   private readonly metaRead: Database.Statement;
   private readonly metaWrite: Database.Statement;
   private readonly journalTake: Database.Statement;
   private readonly journalCount: Database.Statement;
+  private readonly journalHas: Database.Statement;
   private readonly journalDrop: Database.Statement;
   private readonly journalForget: Database.Statement;
   private readonly journalClear: Database.Statement;
@@ -81,6 +128,9 @@ export class SyncJournal {
         WHERE profile_id = ? ORDER BY collection, object_id LIMIT ?`,
     );
     this.journalCount = db.prepare("SELECT count(*) AS n FROM sync_journal WHERE profile_id = ?");
+    this.journalHas = db.prepare(
+      "SELECT 1 AS hit FROM sync_journal WHERE profile_id = ? AND collection = ? AND object_id = ?",
+    );
     this.journalDrop = db.prepare(
       "DELETE FROM sync_journal WHERE profile_id = ? AND collection = ? AND object_id = ?",
     );
@@ -204,6 +254,54 @@ export class SyncJournal {
     })();
   }
 
+  /**
+   * Writes merged rows back into the tables they came from, and records what was
+   * merged. The other half of {@link sweep}, and the last step of a pull.
+   *
+   * Four rules, three of which are invisible from the file that would need them:
+   *
+   * **The row and its shadow state are ONE write.** Migration 063 puts
+   * `sync_row_state` in the same SQLite file precisely so this can be true. Split
+   * across two stores, a crash between them leaves a device claiming to have
+   * merged something it did not apply, or applying something it will merge
+   * again — and the second is not idempotent once the field stamps have moved.
+   * Per object, not per batch: a savepoint each, so one row whose parent has not
+   * arrived does not roll back forty that applied cleanly.
+   *
+   * **The apply must not echo.** Every synced table carries a 063 trigger, so
+   * writing a merged row re-dirties `sync_journal`, the next sweep resolves it,
+   * and the device pushes back what it just received — forever, and on both
+   * devices, because the peer does the same with ours. The flag those triggers
+   * read is flipped off for the duration of the transaction, which is atomic with
+   * the writes and self-restoring on rollback. A per-table exemption or a marker
+   * column would be a second place that has to agree with the first.
+   *
+   * **A dirty object is refused, not applied.** If a local edit is journaled and
+   * not yet swept, `sync_row_state` still holds the pre-edit baseline; the caller
+   * merged the remote row against THAT, and writing the result would erase the
+   * user's edit on the device that made it, with no conflict recorded anywhere.
+   * The check cannot live in the caller — `applyPull` is async and the user can
+   * save a note while it awaits the AEAD — so it lives here, inside the
+   * transaction, where nothing can slip between the test and the write. The
+   * caller's answer to `stale` is to sweep, merge again, and apply again.
+   *
+   * **`profileId` scopes the write and never comes off the wire.** It is the
+   * profile whose content key opened the row, so a server that re-pointed a row
+   * at another profile has already failed the AEAD in `applyPull`.
+   */
+  apply(profileId: string, requests: readonly ApplyRequest[], now: string): ApplyOutcome[] {
+    if (requests.length === 0) return [];
+    return this.db.transaction((): ApplyOutcome[] => {
+      const restore = this.meta(JOURNAL_FLAG) ?? "0";
+      this.setMeta(JOURNAL_FLAG, "0");
+      try {
+        return requests.map((request) => this.applyOne(profileId, request, now));
+      } finally {
+        this.setMeta(JOURNAL_FLAG, restore);
+      }
+    })();
+  }
+
   /** What this device last sealed or merged for one object. */
   readState(profileId: string, collection: string, objectId: string): RowState | null {
     const row = this.stateRead.get(profileId, collection, objectId) as
@@ -213,6 +311,103 @@ export class SyncJournal {
   }
 
   // ---------------------------------------------------------------------------
+
+  private applyOne(profileId: string, request: ApplyRequest, now: string): ApplyOutcome {
+    const { collection: name, objectId, changed } = request;
+    const collection = classify(name);
+    if (collection === undefined || collection.kind !== "collection") {
+      return { collection: name, objectId, status: "unknown" };
+    }
+    if (this.journalHas.get(profileId, name, objectId) !== undefined) {
+      return { collection: name, objectId, status: "stale" };
+    }
+
+    try {
+      this.db.transaction(() => {
+        if (changed) this.writeRow(collection, profileId, objectId, request.merged);
+        this.writeState(profileId, name, objectId, request.merged, now);
+      })();
+    } catch (error) {
+      // Reported rather than thrown: a row whose parent has not arrived yet is
+      // an ordinary state of a cursor walk, and one of them must not stop the
+      // batch. The message is SQLite's own, because „it was refused" without
+      // saying by what is a report nobody can act on.
+      return {
+        collection: name,
+        objectId,
+        status: "refused",
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+    return { collection: name, objectId, status: changed ? "written" : "state-only" };
+  }
+
+  /**
+   * The merged state as an actual row: identity from the object id, the profile
+   * from the caller, and every other column from `deriveColumns`.
+   *
+   * An UPSERT on the identity because an apply cannot know whether this device
+   * has ever seen the object — the first pull after adopting an account is one
+   * long list of rows that do not exist here, and a merge that follows an edit
+   * made elsewhere is one that does. `deriveColumns` runs the coupled-CHECK
+   * repair, so what arrives here is already a shape SQLite will take.
+   *
+   * A field naming a column this build does not have is SKIPPED, not an error: a
+   * peer on a newer version legitimately sends columns this one has never heard
+   * of. Nothing is lost by skipping — `projectRow` iterates the LOCAL columns, so
+   * the next sweep never sees the extra field, never diffs it, and pushes it back
+   * untouched with the stamp it arrived with.
+   */
+  private writeRow(
+    collection: SyncCollection,
+    profileId: string,
+    objectId: string,
+    state: RowState,
+  ): void {
+    const info = this.tableInfo(collection.table);
+    const values: Record<string, SqlValue> = {};
+
+    const identity = splitObjectId(objectId, collection);
+    collection.identity.forEach((column, index) => {
+      values[column] = identity[index] ?? null;
+    });
+    // The eight collections that reach their profile through a parent carry no
+    // such column, and their parent link is an ordinary field that travelled.
+    if (info.types.has("profile_id")) values["profile_id"] = profileId;
+
+    for (const [column, value] of Object.entries(deriveColumns(collection, state))) {
+      const declared = info.types.get(column);
+      if (declared === undefined) continue;
+      values[column] = sqlValue(collection.table, column, declared, value);
+    }
+
+    const names = Object.keys(values);
+    this.writeStatement(collection, names).run(names.map((column) => values[column] ?? null));
+  }
+
+  private writeStatement(collection: SyncCollection, names: readonly string[]): Database.Statement {
+    // Keyed by the column list as well as the table: two rows of one collection
+    // can legitimately name different columns when a peer sends a field this
+    // build knows and another peer's row does not carry it.
+    const key = `${collection.table}${names.join(",")}`;
+    const cached = this.writeCache.get(key);
+    if (cached !== undefined) return cached;
+
+    // A per-profile singleton has no identity columns of its own; `profile_id`
+    // IS its primary key, and therefore its conflict target.
+    const conflict = collection.identity.length === 0 ? ["profile_id"] : collection.identity;
+    const updates = names.filter((column) => !conflict.includes(column));
+    // Every identifier comes from the collection map or `PRAGMA table_info`,
+    // never from the wire; every value is bound.
+    const statement = this.db.prepare(
+      `INSERT INTO ${collection.table} (${names.join(", ")})
+         VALUES (${names.map(() => "?").join(", ")})
+       ON CONFLICT (${conflict.join(", ")}) DO UPDATE SET
+         ${updates.map((column) => `${column} = excluded.${column}`).join(", ")}`,
+    );
+    this.writeCache.set(key, statement);
+    return statement;
+  }
 
   private writeState(
     profileId: string,
@@ -259,13 +454,30 @@ export class SyncJournal {
   }
 
   private columnsOf(table: string): readonly string[] {
+    return this.tableInfo(table).names;
+  }
+
+  /**
+   * A table's columns and their DECLARED types, read once.
+   *
+   * The types are what makes the blob round trip honest: `jsonValue` encodes a
+   * `Uint8Array` to base64url on the way out and {@link sqlValue} decodes it on
+   * the way back, and both decide from this one answer rather than from a list
+   * of column names somebody would have to keep current.
+   */
+  private tableInfo(table: string): TableInfo {
     const cached = this.columnCache.get(table);
     if (cached !== undefined) return cached;
-    const columns = (
-      this.db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]
-    ).map((column) => column.name);
-    this.columnCache.set(table, columns);
-    return columns;
+    const rows = this.db.prepare(`PRAGMA table_info(${table})`).all() as {
+      name: string;
+      type: string;
+    }[];
+    const info: TableInfo = {
+      names: rows.map((column) => column.name),
+      types: new Map(rows.map((column) => [column.name, column.type])),
+    };
+    this.columnCache.set(table, info);
+    return info;
   }
 
   /**
@@ -367,6 +579,43 @@ function splitObjectId(objectId: string, collection: SyncCollection): string[] {
     );
   }
   return parts;
+}
+
+/** One table's columns, and what each was declared as. */
+interface TableInfo {
+  readonly names: readonly string[];
+  readonly types: ReadonlyMap<string, string>;
+}
+
+/** What better-sqlite3 will bind. */
+type SqlValue = string | number | Uint8Array | null;
+
+/**
+ * The inverse of {@link jsonValue}: a merged field as something SQLite can store.
+ *
+ * Three conversions, each the mirror of one the sweep made. A BLOB column takes
+ * its base64url back as bytes; a boolean becomes 0 or 1, because SQLite has no
+ * boolean type and better-sqlite3 refuses to bind one; everything else already
+ * is what the column holds.
+ *
+ * An object or array THROWS rather than being stringified. A JSON column in this
+ * schema holds a string — the sweep read it as a string and stamped a string —
+ * so a structured value here means a peer sealed a shape this build does not
+ * understand, and quietly writing `[object Object]` into the user's row is the
+ * silent corruption the throw exists to prevent. It surfaces as one `refused`
+ * outcome for one object, not as a failed batch.
+ */
+function sqlValue(table: string, column: string, declared: string, value: JsonValue): SqlValue {
+  if (value === null) return null;
+  if (typeof value === "boolean") return value ? 1 : 0;
+  if (typeof value === "number") return value;
+  if (typeof value === "string") {
+    return declared.toUpperCase().includes("BLOB") ? base64urlToBytes(value) : value;
+  }
+  throw new TypeError(
+    `${table}.${column} received a ${Array.isArray(value) ? "array" : "object"}, ` +
+      `which is not a value this schema stores.`,
+  );
 }
 
 /** A SQLite value as JSON. Blobs become base64url; everything else is already JSON. */
