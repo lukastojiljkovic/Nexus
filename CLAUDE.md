@@ -116,7 +116,7 @@ choice of backend**; whatever in them is about the data model still applies.
      layer is unfinished, and that is the more useful answer.
   Record the class in [docs/defect-classes.md](docs/defect-classes.md) so the
   same shape is recognised the next time it appears somewhere else. **A class
-  that can be turned into a gate should be** — twelve of the fifty-six already
+  that can be turned into a gate should be** — twelve of the sixty already
   have been, and a rule nobody can forget beats a rule everybody has read.
 - **Concise Serbian status updates** to the founder; the code, comments, and docs
   are in **English**.
