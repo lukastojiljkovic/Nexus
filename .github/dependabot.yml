@@ -25,6 +25,14 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "@vitejs/plugin-react"
         update-types: ["version-update:semver-major"]
+      # @types/node describes a runtime, so its major must follow ours rather
+      # than lead it: engines says `node: >=24`, every workflow pins
+      # `node-version: 24`, and all three specs are `^24.0.0`. Typing against
+      # 26 would let code compile against APIs the runtime we test on does not
+      # have — and 26 also narrows `BufferSource` to `ArrayBuffer`-backed
+      # views, which the crypto ports fail today. Lift when the runtime moves.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
