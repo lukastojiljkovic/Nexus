@@ -33,6 +33,7 @@ import {
   type RowState,
 } from "@nexus/sync-crypto/web";
 import type { SyncCollection } from "./collections.js";
+import { repairCoupled } from "./repair.js";
 
 /**
  * Columns no collection ever puts in its field map, because something else
@@ -74,19 +75,18 @@ export interface CoupledCheck {
  * columns which both travel as fields — and therefore every place where a merge
  * of two honest edits can produce a row the local database refuses to write.
  *
- * **This is a ledger of an open design, not a solved problem.** Field-level LWW
- * decides each column on its own, so nothing in `merge.ts` can see that a
- * semester now ends before it starts. The row still authenticates, still
- * converges, still passes every test in `@nexus/sync` — and the INSERT fails.
+ * Field-level LWW decides each column on its own, so nothing in `merge.ts` can
+ * see that a semester now ends before it starts. The row still authenticates,
+ * still converges, still passes every test in `@nexus/sync` — and the INSERT
+ * fails.
  *
  * Derivation, the answer for `tasks.completed_at`, is not available for any of
  * these: every one of them pairs two columns a user typed, and a column that
  * cannot be rebuilt from what travelled must not be dropped from the field map.
- * So the answer has to live in the apply path, which is where the write is
- * attempted — it needs a repair rule that is DETERMINISTIC (every device must
- * compute the same repaired row, or the two of them diverge over a row neither
- * can fix) and a way to quarantine and surface a row it cannot legally write.
- * That subsystem is recorded as unbuilt in `docs/STATUS.md`.
+ * So the answer lives one step later, in `repair.ts`: the merged state is stored
+ * and pushed exactly as it merged, and the row WRITTEN LOCALLY is a legal
+ * projection of it. Every table named here has a repair, and
+ * `repair.test.ts` fails if one is added here without one.
  *
  * Collections only. A `parent-field` table — `fit_routine_items` inside its
  * routine, `fit_workout_sets` inside its workout — travels as ONE ordered JSON
@@ -322,6 +322,13 @@ export function stampToIso(at: Hlc): string {
  * refuses outright. Both directions read the same two tables of rules, so a
  * column cannot be dropped from one and forgotten in the other.
  *
+ * The last step is {@link repairCoupled}, and it is why this function returns a
+ * PROJECTION rather than the state itself: eleven CHECKs read two synced columns
+ * together, and a per-field merge can satisfy both fields and neither CHECK. The
+ * repair belongs here and not in `merge.ts` precisely because this is the only
+ * output that is not stored and not pushed — the state keeps both values and
+ * both stamps, and only the local row is bent into a shape SQLite will take.
+ *
  * Returns plain values. Applying them — the UPDATE, the profile scope, the
  * transaction — belongs to `@nexus/db`, which is the only thing here that knows
  * what a database is.
@@ -349,5 +356,5 @@ export function deriveColumns(
       status !== undefined && status.value === "done" ? stampToIso(status.at) : null;
   }
 
-  return out;
+  return repairCoupled(collection.table, out, state);
 }

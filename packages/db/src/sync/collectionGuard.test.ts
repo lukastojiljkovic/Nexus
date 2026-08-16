@@ -9,7 +9,9 @@ import {
   classify,
   fieldColumns,
   parentFields,
+  repairCoupled,
 } from "@nexus/sync";
+import { hlcSend, hlcZero, type Hlc, type JsonValue, type RowState } from "@nexus/sync-crypto";
 import { openDatabase, RESTORE_WIPE_TABLES } from "../index.js";
 import type { NexusDatabase } from "../index.js";
 
@@ -292,38 +294,54 @@ describe("the sync map against the real schema", () => {
  * here, on the day it is written, rather than months later as a row that
  * silently never applies on one device.
  */
-describe("coupled CHECKs against the real schema", () => {
-  /** Every top-level `CHECK (...)` in a CREATE TABLE, scanned by balanced parens. */
-  function checkExpressions(table: string): string[] {
-    const row = db.raw
-      .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?")
-      .get(table) as { sql: string | null } | undefined;
-    const sql = row?.sql ?? "";
-    const out: string[] = [];
-    const opener = /\bCHECK\s*\(/gi;
-    let match: RegExpExecArray | null;
-    while ((match = opener.exec(sql)) !== null) {
-      let depth = 1;
-      let i = match.index + match[0].length;
-      for (; i < sql.length && depth > 0; i++) {
-        if (sql[i] === "(") depth++;
-        else if (sql[i] === ")") depth--;
-      }
-      out.push(sql.slice(match.index + match[0].length, i - 1).replace(/\s+/g, " ").trim());
+/**
+ * Every top-level `CHECK (...)` in a CREATE TABLE, scanned by balanced parens.
+ *
+ * Module scope because two blocks below need it for opposite reasons: one reads
+ * the constraints to prove the ledger is complete, the other replays them
+ * verbatim to prove the repair satisfies them.
+ */
+function checkExpressions(table: string): string[] {
+  const row = db.raw
+    .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?")
+    .get(table) as { sql: string | null } | undefined;
+  const sql = row?.sql ?? "";
+  const out: string[] = [];
+  const opener = /\bCHECK\s*\(/gi;
+  let match: RegExpExecArray | null;
+  while ((match = opener.exec(sql)) !== null) {
+    let depth = 1;
+    let i = match.index + match[0].length;
+    for (; i < sql.length && depth > 0; i++) {
+      if (sql[i] === "(") depth++;
+      else if (sql[i] === ")") depth--;
     }
-    return out;
+    out.push(sql.slice(match.index + match[0].length, i - 1).replace(/\s+/g, " ").trim());
   }
+  return out;
+}
 
-  /** The synced field columns one CHECK reads. String literals are blanked first,
-   *  so `metric IN ('reps', …)` is not read as naming the `reps` column. */
-  function coupledColumns(table: string, fields: ReadonlySet<string>, check: string): string[] {
-    const bare = check.replace(/'[^']*'/g, "''");
-    return columns(table)
-      .map((column) => column.name)
-      .filter((name) => fields.has(name))
-      .filter((name) => new RegExp("\\b" + name + "\\b").test(bare));
-  }
+/** The synced field columns one CHECK reads. String literals are blanked first,
+ *  so `metric IN ('reps', …)` is not read as naming the `reps` column. */
+function coupledColumns(table: string, fields: ReadonlySet<string>, check: string): string[] {
+  const bare = check.replace(/'[^']*'/g, "''");
+  return columns(table)
+    .map((column) => column.name)
+    .filter((name) => fields.has(name))
+    .filter((name) => new RegExp("\\b" + name + "\\b").test(bare));
+}
 
+/** The CHECKs of `table` that read two synced columns — the repair's whole remit. */
+function coupledChecks(table: string): string[] {
+  const entry = classify(table);
+  if (entry === undefined || entry.kind !== "collection") return [];
+  const fields = new Set(fieldColumns(entry, columns(table).map((column) => column.name)));
+  return checkExpressions(table).filter(
+    (check) => coupledColumns(table, fields, check).length >= 2,
+  );
+}
+
+describe("coupled CHECKs against the real schema", () => {
   it("lists every CHECK that ties two synced columns together, and nothing that does not", () => {
     const found: string[] = [];
     for (const entry of SYNC_MAP) {
@@ -334,6 +352,7 @@ describe("coupled CHECKs against the real schema", () => {
         if (coupled.length >= 2) found.push(`${entry.table}: ${coupled.join(" + ")}`);
       }
     }
+
     const ledger = Object.entries(COLLECTION_COUPLED).flatMap(([table, entries]) =>
       entries.map((entry) => `${table}: ${entry.columns.join(" + ")}`),
     );
@@ -361,4 +380,207 @@ describe("coupled CHECKs against the real schema", () => {
       }
     }
   });
+});
+
+/**
+ * The third layer: the repair, held against the CHECKs themselves.
+ *
+ * `@nexus/sync`'s own `repair.test.ts` proves the repair does what its author
+ * intended. It cannot prove SQLite AGREES — every expectation in it was typed by
+ * the same person who typed the rule, from the same reading of the same
+ * migration, and a misread CHECK produces a repair and a test that are wrong
+ * together. That is DC-14's real trap: the failure does not appear on the device
+ * that computed the row, it appears months later as one row that will not apply.
+ *
+ * So this block runs no fixtures and asserts no expected values. It lifts each
+ * CHECK's text VERBATIM out of `sqlite_master`, rebuilds it as a temporary table
+ * carrying nothing but that CHECK, and lets SQLite answer twice per scenario:
+ * the merged row is refused, and the repaired row is taken. Both halves matter —
+ * without the first, a scenario that was never illegal would pass by doing
+ * nothing, which is the cheapest way to hold a green test that checks nothing.
+ *
+ * **One CHECK per probe, and the answer is the CHECK's own text.** The first
+ * version of this block put every constraint on one probe table and asked only
+ * „refused: yes or no", and it failed on `focus_sessions` and `fin_transactions`
+ * for a reason that had nothing to do with any merge: the probe drops NOT NULL
+ * and DEFAULT but keeps the CHECKs, so `paused_seconds` arrived NULL and
+ * `typeof(paused_seconds) = 'integer'` refused it. Both halves of the scenario
+ * then „passed" the illegality assertion and failed the repair assertion, and a
+ * boolean cannot tell those two stories apart. Asking each constraint separately
+ * makes the failure name the rule, and makes the scope explicit: the repair owes
+ * an answer to the COUPLED checks and to nothing else, because every other
+ * constraint is satisfied by a real value that a real row already carries.
+ *
+ * The probe drops the real table's NOT NULLs, FKs and defaults on purpose. They
+ * are the apply path's problem, not the repair's; keeping them would mean
+ * building a valid parent row for seven modules, and a scenario that failed to
+ * insert for a missing account would read exactly like one the CHECK refused.
+ */
+describe("the coupled repair against the real CHECKs", () => {
+  const T1 = hlcSend(hlcZero("device-a"), 1_000);
+  const T2 = hlcSend(hlcZero("device-a"), 2_000);
+
+  /** A stamps-only `RowState`, which is all any repair reads. */
+  function stamps(fields: Record<string, Hlc>): RowState {
+    return {
+      version: 1,
+      fields: Object.fromEntries(
+        Object.entries(fields).map(([name, at]) => [name, { value: null, at }]),
+      ),
+      deleted: { value: false, at: T1 },
+    };
+  }
+
+  /**
+   * Which of `table`'s COUPLED CHECKs refuse this row, named by their own text.
+   *
+   * One temp table per constraint: `table`'s columns with no NOT NULL, no FK and
+   * no default, plus exactly one CHECK copied unchanged. Names are quoted in the
+   * column list so a constraint referring to a column whose name needs quoting
+   * still resolves, and the CHECK text is never rewritten — SQLite is being asked
+   * about the rule it actually enforces, not about a paraphrase of it.
+   */
+  function refusedBy(table: string, row: Readonly<Record<string, JsonValue>>): string[] {
+    const names = columns(table).map((column) => column.name);
+    const quoted = names.map((name) => `"${name}"`).join(", ");
+    const values = names.map((name) => {
+      const value = row[name];
+      return value === undefined || value === null ? null : (value as string | number);
+    });
+
+    const out: string[] = [];
+    for (const check of coupledChecks(table)) {
+      db.raw.exec(`DROP TABLE IF EXISTS temp.probe`);
+      db.raw.exec(`CREATE TABLE temp.probe (${quoted}, CHECK (${check}))`);
+      try {
+        db.raw
+          .prepare(`INSERT INTO temp.probe VALUES (${names.map(() => "?").join(", ")})`)
+          .run(...values);
+      } catch (error) {
+        // Only a CHECK counts. Anything else means the probe is wrong, and a
+        // probe that fails for its own reasons reports every row as illegal.
+        if (!String(error).includes("CHECK constraint failed")) throw error;
+        out.push(check);
+      } finally {
+        db.raw.exec(`DROP TABLE temp.probe`);
+      }
+    }
+    return out;
+  }
+
+  /**
+   * One merge SQLite refuses, and the stamps the repair is entitled to read.
+   *
+   * `merged` carries only the columns the coupled CHECKs read. Every other column
+   * of the table is bound NULL by the probe, which is safe precisely because the
+   * probe asks nothing but those CHECKs — and listing more would suggest the
+   * repair's answer depends on values it never looks at.
+   */
+  interface Scenario {
+    readonly label: string;
+    readonly merged: Record<string, JsonValue>;
+    readonly state?: RowState;
+  }
+
+  const SCENARIOS: Readonly<Record<string, readonly Scenario[]>> = {
+    cards: [
+      {
+        label: "a cloze card whose text was cleared on the other device",
+        merged: { kind: "cloze", cloze_text: null, cloze_ordinal: 0, problem_steps: null },
+      },
+      {
+        label: "a basic card that kept the other device's cloze text",
+        merged: { kind: "basic", cloze_text: "Beograd", cloze_ordinal: 0, problem_steps: null },
+        state: stamps({ kind: T1, cloze_text: T2 }),
+      },
+      {
+        label: "a cloze card that kept the other device's worked steps",
+        merged: { kind: "cloze", cloze_text: "Beograd", cloze_ordinal: 0, problem_steps: "1) …" },
+      },
+      {
+        label: "a cloze card whose ordinal went negative",
+        merged: { kind: "cloze", cloze_text: "Beograd", cloze_ordinal: -3, problem_steps: null },
+      },
+    ],
+    focus_sessions: [
+      {
+        label: "a session whose two ends were corrected in opposite directions",
+        merged: { started_at: "2026-08-16T10:40:00.000Z", ended_at: "2026-08-16T10:25:00.000Z" },
+        state: stamps({ started_at: T2, ended_at: T1 }),
+      },
+      {
+        label: "a session that merged into zero length",
+        merged: { started_at: "2026-08-16T10:00:00.000Z", ended_at: "2026-08-16T10:00:00.000Z" },
+        state: stamps({ started_at: T1, ended_at: T2 }),
+      },
+    ],
+    calendar_settings: [
+      {
+        label: "a semester whose start was pushed past its end",
+        merged: { semester_start: "2027-06-01", semester_end: "2027-01-31" },
+        state: stamps({ semester_start: T2, semester_end: T1 }),
+      },
+    ],
+    dashboard_settings: [
+      {
+        label: "a wallpaper cleared on one device and replaced on the other",
+        merged: {
+          background_hash: "9f2b",
+          background_mime: null,
+          background_size_bytes: 40_112,
+        },
+      },
+      {
+        label: "a wallpaper whose size survived the file",
+        merged: { background_hash: null, background_mime: null, background_size_bytes: 40_112 },
+      },
+    ],
+    fin_transactions: [
+      {
+        label: "a transfer re-pointed onto its own account",
+        merged: { account_id: "acc-1", counter_account_id: "acc-1", category_id: null },
+      },
+      {
+        label: "a transaction that became a transfer and got filed under a category",
+        merged: { account_id: "acc-1", counter_account_id: "acc-2", category_id: "cat-9" },
+        state: stamps({ counter_account_id: T2, category_id: T1 }),
+      },
+    ],
+    habits: [
+      {
+        label: "a habit whose target was cleared while its unit was named",
+        merged: { target: null, unit: "čaša" },
+      },
+    ],
+    fit_measurements: [
+      {
+        label: "half a muscle reading",
+        merged: { muscle_value: 34.2, muscle_unit: null },
+      },
+      {
+        label: "the other half",
+        merged: { muscle_value: null, muscle_unit: "kg" },
+      },
+    ],
+  };
+
+  it("has a scenario for every table in the ledger", () => {
+    // Driven off the ledger, so a coupled CHECK added by a future migration is
+    // not merely listed and repaired but PROVED, on the day it appears.
+    expect(Object.keys(SCENARIOS).sort()).toEqual(Object.keys(COLLECTION_COUPLED).sort());
+  });
+
+  for (const [table, scenarios] of Object.entries(SCENARIOS)) {
+    for (const scenario of scenarios) {
+      it(`${table}: SQLite refuses ${scenario.label}, and takes the repair`, () => {
+        const state = scenario.state ?? stamps({});
+        // The scenario has to BE illegal, or the second half proves nothing.
+        expect({ label: scenario.label, illegal: refusedBy(table, scenario.merged).length > 0 })
+          .toEqual({ label: scenario.label, illegal: true });
+        // Reported as the refusing CHECKs' own text, so a failure here says which
+        // rule the repair misread rather than merely that one of them did.
+        expect(refusedBy(table, repairCoupled(table, { ...scenario.merged }, state))).toEqual([]);
+      });
+    }
+  }
 });

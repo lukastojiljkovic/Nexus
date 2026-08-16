@@ -52,6 +52,9 @@ export {
 } from "./projection.js";
 export type { CoupledCheck, SweepInput } from "./projection.js";
 
+export { repairCoupled, REPAIRED_TABLES } from "./repair.js";
+export type { CoupledRepair } from "./repair.js";
+
 export {
   COLLECTION_PATTERN,
   MAX_CIPHERTEXT_BYTES,
