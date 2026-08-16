@@ -45,12 +45,14 @@ import { parseRows, retireDeviceRequest, signOut } from "@nexus/sync-transport";
 import type { SyncAccountStore } from "@nexus/db";
 
 import { cloudRequiresRestart, readCloudSwitch, writeCloudSwitch } from "../net/offline.js";
+import { adoptWithRecoveryCode } from "./adopt.js";
 import { cloudOrigins, parseCloudConfig, type CloudConfig } from "./config.js";
 import { enableSyncOnThisDevice } from "./enable.js";
 import { createCloudPorts, type CloudFetch, type CloudPorts } from "./port.js";
 import { reconnectSync, resumeSync } from "./reconnect.js";
 import { createSessionHolder, type SessionHolder } from "./session.js";
 import type {
+  SyncAdoptView,
   SyncEnableProblem,
   SyncEnableView,
   SyncReconnectView,
@@ -82,6 +84,11 @@ export interface SyncService {
   readonly status: () => SyncStatusView;
   readonly setCloudEnabled: (enabled: boolean) => SyncStatusView;
   readonly enable: (input: SyncEnableRequest) => Promise<SyncEnableView>;
+  /**
+   * The answer to `enable`'s `already-minted`: join an account that already has
+   * a master key, using the Sync Recovery Code from its Recovery Kit.
+   */
+  readonly adopt: (input: SyncAdoptRequest) => Promise<SyncAdoptView>;
   /** One request, no password: the stored refresh token, if it still works. */
   readonly resume: () => Promise<SyncStatusView>;
   /** The expensive way back, when the session is gone for good. */
@@ -102,6 +109,12 @@ export interface SyncEnableRequest {
   readonly totpCode: string;
   readonly deviceName: string;
   readonly factorId?: string;
+}
+
+/** {@link SyncEnableRequest} plus the one thing that makes it an adoption. */
+export interface SyncAdoptRequest extends SyncEnableRequest {
+  /** The Sync Recovery Code, as typed. Normalised inside the derivation. */
+  readonly recoveryCode: string;
 }
 
 export function createSyncService(deps: SyncServiceDeps): SyncService {
@@ -211,22 +224,95 @@ export function createSyncService(deps: SyncServiceDeps): SyncService {
       }
 
       const session = holder.current();
-      deps.accountStore().save({
-        userId: session?.userId ?? "",
-        // The SAME normaliser that decided the KDF salt, never a second copy
-        // of the rule: the stored address is what a later sign-in derives from.
-        email: normalizeWebEmail(input.email),
-        deviceId: result.deviceId,
-        localWrap: result.localWrap,
-        refreshToken: session?.refreshToken ?? null,
-        enabledAt: deps.now().toISOString(),
-      });
       // MK is not held. It is re-opened from the local wrap under the data key
       // whenever something needs it, which keeps its lifetime as short as the
-      // operation that wants it rather than as long as the process.
-      zeroize(result.masterKey);
+      // operation that wants it rather than as long as the process — and the
+      // erasure is in a `finally` so „as short as the operation" stays true when
+      // the operation FAILS. A `save` that throws (a disk that filled, a
+      // database locked between the check and the write) used to leave the
+      // account's master key live in this process for as long as it ran.
+      try {
+        deps.accountStore().save({
+          userId: session?.userId ?? "",
+          // The SAME normaliser that decided the KDF salt, never a second copy
+          // of the rule: the stored address is what a later sign-in derives from.
+          email: normalizeWebEmail(input.email),
+          deviceId: result.deviceId,
+          localWrap: result.localWrap,
+          refreshToken: session?.refreshToken ?? null,
+          enabledAt: deps.now().toISOString(),
+        });
+      } finally {
+        zeroize(result.masterKey);
+      }
 
       return { outcome: "enabled", recoveryCode: result.recoveryCode, status: status() };
+    },
+
+    /**
+     * The other way onto an account: this computer has never had sync, and the
+     * account already has a master key one of the user's other machines minted.
+     *
+     * The three guards are `enable`'s, and `already_enabled` carries more weight
+     * here than it does there. Adopting overwrites the local wrap — this
+     * computer's ONLY copy of MK — and it does so after a step-up has already
+     * revoked every other session on the account. A machine that ran this by
+     * mistake would lose its key and sign its siblings out to do it.
+     */
+    adopt: async (input) => {
+      if (ports === null) return { outcome: "refused", reason: "cloud_off" };
+
+      let dataKeyHex: string;
+      try {
+        dataKeyHex = deps.dataKeyHex();
+      } catch {
+        return { outcome: "refused", reason: "locked" };
+      }
+      if (account() !== null) return { outcome: "refused", reason: "already_enabled" };
+
+      const localDataKey = hexToBytes(dataKeyHex);
+      let result;
+      try {
+        result = await adoptWithRecoveryCode(
+          { crypto, ports, holder, now: deps.now },
+          { ...input, localDataKey },
+        );
+      } catch (error) {
+        // `assertDeviceName` throws `TypeError` for a name this schema cannot
+        // store, and it does so BEFORE the first sign-in — which is the whole
+        // reason it is checked there rather than at step 7. Nothing here is a
+        // server condition, and none of it should reach the renderer as a stack.
+        console.error("sync: adopt failed", error);
+        return { outcome: "refused", reason: "bad_request" };
+      } finally {
+        zeroize(localDataKey);
+      }
+
+      if (result.kind === "refused") {
+        if (result.detail !== null) console.error("sync: adopt refused —", result.detail);
+        return { outcome: "refused", reason: result.reason };
+      }
+
+      // Every field from the RESULT, not from the holder: adopt signs in twice
+      // and the session this computer keeps is the second one, so reading the
+      // holder here would be a second way of asking a question the flow has
+      // already answered — and the two could disagree.
+      //
+      // The erasure is in a `finally` for the reason `enable`'s is.
+      try {
+        deps.accountStore().save({
+          userId: result.userId,
+          email: result.email,
+          deviceId: result.deviceId,
+          localWrap: result.localWrap,
+          refreshToken: result.refreshToken,
+          enabledAt: deps.now().toISOString(),
+        });
+      } finally {
+        zeroize(result.masterKey);
+      }
+
+      return { outcome: "adopted", status: status() };
     },
 
     /**

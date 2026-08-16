@@ -837,7 +837,8 @@ export const IpcChannel = {
   // and each one is a bare enum with no other field to validate. Four channels
   // would be four handlers repeating the same three lines.
   windowView: "window:view",
-  // Sync (the cloud half). Four channels, and the smallness is the design.
+  // Sync (the cloud half). The smallness is the design — no count here, because
+  // the number in this line was wrong for two channels before anyone noticed.
   //
   // `sync:status` is the only read, and it answers no token, no key and no
   // server message — an address, a device id, a date and four booleans.
@@ -855,6 +856,14 @@ export const IpcChannel = {
   syncStatus: "sync:status",
   syncSetCloud: "sync:set-cloud",
   syncEnable: "sync:enable",
+  // The answer to what `sync:enable` returns as `already-minted`. Same four
+  // fields plus the Sync Recovery Code, and a different protocol behind them:
+  // this computer has no master key, so it buys a bootstrap `devices` row with
+  // a stepped-up session, opens the account's recovery wrap with the code, and
+  // pays for a real desktop row with a proof derived from what it found. The
+  // code stops in main and is put through Argon2id there, exactly as the
+  // password is — neither ever reaches a socket.
+  syncAdopt: "sync:adopt",
   // Getting back onto the account, in the two steps it actually takes.
   // `sync:resume` is one request and no password — a refresh keeps the same
   // `session_id`, so the device row that names it is still the right one, and
@@ -7912,10 +7921,6 @@ export type SyncReconnectView =
  * shared union would mean every screen handling one had to handle states the
  * other produces.
  *
- * **Declared ahead of its channel, deliberately.** `main/sync/adopt.ts` walks
- * the whole protocol and is tested; what is missing is the `sync:adopt` channel,
- * its handler, and the screen. This union is the contract those three will meet,
- * written while the reasoning behind each refusal is still in one place.
  */
 export type SyncAdoptProblem =
   | AuthRefusal
@@ -9284,6 +9289,21 @@ export interface NexusApi {
     deviceName: string;
     factorId?: string;
   }): Promise<SyncEnableView>;
+  /**
+   * Joins an account that already has a master key — what to do when
+   * {@link NexusApi.enableSync} answers `already-minted`.
+   *
+   * Same fields as enabling plus the Sync Recovery Code from the other
+   * computer's Recovery Kit. Neither the password nor the code leaves main.
+   */
+  adoptSync(request: {
+    email: string;
+    password: string;
+    totpCode: string;
+    recoveryCode: string;
+    deviceName: string;
+    factorId?: string;
+  }): Promise<SyncAdoptView>;
   /** Tries the stored refresh token. One request, no password, and the same session id — so the device row stays valid. Failing is ordinary: the answer is `reconnectSync`. */
   resumeSync(): Promise<SyncStatusView>;
   /**

@@ -665,6 +665,7 @@ import {
   type StudyStats,
   type SubjectAttachmentsAddResult,
   type SubjectStudyLog,
+  type SyncAdoptView,
   type SyncEnableView,
   type SyncReconnectView,
   type SyncStatusView,
@@ -11172,8 +11173,11 @@ function registerIpc(): void {
     }
   });
 
-  // Sync (the cloud half). Four validation shims over `main/sync/service.ts`,
-  // which holds the ports, the session and the whole mint protocol.
+  // Sync (the cloud half). Validation shims over `main/sync/service.ts`, which
+  // holds the ports, the session and the whole protocol. Deliberately no count
+  // in this sentence: it said „four" through two channels being added, which is
+  // the one thing a comment must never do — be confidently wrong about the code
+  // directly beneath it.
   //
   // `sync:status` answers while LOCKED, deliberately: the settings screen has to
   // be able to say „cloud is off" before anyone signs in, and the account read it
@@ -11208,6 +11212,30 @@ function registerIpc(): void {
       email,
       password,
       totpCode,
+      deviceName,
+      ...(factorId === undefined ? {} : { factorId }),
+    });
+  });
+
+  // Adopting takes everything enabling does plus the Sync Recovery Code, and
+  // the code is validated for SHAPE only here — `deriveSyncRecoveryKey` owns the
+  // rule about what a code IS, and a second copy of it at the bridge would be a
+  // rule that can drift from the one the derivation actually applies. Like the
+  // password, it stops in main: Argon2id runs here and neither reaches a socket.
+  ipcMain.handle(IpcChannel.syncAdopt, async (event, payload): Promise<SyncAdoptView> => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const email = asNonEmptyString(body.email, "email");
+    const password = asNonEmptyString(body.password, "password");
+    const totpCode = asNonEmptyString(body.totpCode, "totpCode");
+    const recoveryCode = asNonEmptyString(body.recoveryCode, "recoveryCode");
+    const deviceName = asNonEmptyString(body.deviceName, "deviceName");
+    const factorId = body.factorId === undefined ? undefined : asNonEmptyString(body.factorId, "factorId");
+    return syncService().adopt({
+      email,
+      password,
+      totpCode,
+      recoveryCode,
       deviceName,
       ...(factorId === undefined ? {} : { factorId }),
     });

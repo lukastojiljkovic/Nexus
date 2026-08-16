@@ -43,6 +43,7 @@ import type {
   ProfilePicturePickErrorCode,
   RestoreModuleCounts,
   RestoreProblemCode,
+  SyncAdoptProblem,
   SyncEnableProblem,
   SyncReconnectProblem,
 } from "../../shared/ipc.js";
@@ -6921,9 +6922,84 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         not_enabled_here: "Sinhronizacija nije uključena na ovom računaru.",
         bad_request: "Podaci nisu ispravni. Proveri ime računara.",
       } satisfies Record<SyncReconnectProblem, string>,
-      /** The account has a key this computer did not mint. Not an error — a fork in the road. */
+      /**
+       * The account has a key this computer did not mint. Not an error — a fork
+       * in the road, and since the adoption screen exists the sentence names the
+       * road rather than describing it: „upotrebi kod za oporavak" was true and
+       * pointed at nothing the user could press.
+       */
       alreadyMinted:
-        "Ovaj nalog već ima ključ, a ovaj računar ga nema. Upari ga sa uređajem koji ključ ima ili upotrebi kod za oporavak.",
+        "Ovaj nalog već ima ključ, a ovaj računar ga nema. Poveži ovaj računar kodom za oporavak sa naloga.",
+      /**
+       * Joining an account that already has a key — the answer to
+       * {@link alreadyMinted}, and the second option on the enable card.
+       *
+       * The copy has one job the rest of this card does not: to make it clear
+       * WHICH code is wanted. „Kod za oporavak" and „kod iz aplikacije za
+       * potvrdu" are both six-to-thirty characters of code typed into the same
+       * form, and a user who confuses them spends a step-up and a revoked
+       * session to find out. So the label names where the code came from, not
+       * what it is.
+       */
+      adoptChoiceTitle: "Ovaj računar se pridružuje nalogu koji već postoji",
+      adoptChoiceHint:
+        "Izaberi ovo ako je sinhronizacija već uključena na nekom tvom uređaju. Treba ti kod za oporavak koji si tada prepisao.",
+      adoptTitle: "Poveži ovaj računar sa postojećim nalogom",
+      adoptIntro:
+        "Upiši podatke naloga i kod za oporavak koji si prepisao kada si prvi put uključio sinhronizaciju. Ovaj računar time dobija ključ naloga i njegovi podaci se spajaju sa ostalim uređajima.",
+      recoveryCodeLabel: "Kod za oporavak sa naloga",
+      recoveryCodeHint:
+        "Onaj koji si prepisao kada je sinhronizacija uključena na prvom uređaju — ne kod iz aplikacije za potvrdu. Ni on ne napušta ovaj računar.",
+      adoptChoiceAction: "Poveži postojeći nalog",
+      adoptBackAction: "Ipak uključi sinhronizaciju iznova",
+      adoptSubmit: "Poveži ovaj računar",
+      adoptWorking: "Povezujem…",
+      adoptError: "Povezivanje sa nalogom nije uspelo. Pokušaj ponovo.",
+      /**
+       * Typed against the protocol's own union, like the two tables above it, so
+       * a refusal the flow can produce and this table does not name is a compile
+       * error rather than an empty box in front of a user.
+       *
+       * Two sentences here carry the whole design of this screen. `not_minted`
+       * must NOT blame the code — the account simply never had a key, and
+       * retyping is the one thing that cannot help, so it sends the user at
+       * „uključi sinhronizaciju" instead. And `recovery_code_rejected` must not
+       * suggest anything else is wrong, because nothing else is.
+       */
+      adoptErrors: {
+        invalid_credentials: "Pogrešan imejl ili lozinka.",
+        email_not_confirmed: "Potvrdi imejl adresu u veb aplikaciji, pa pokušaj ponovo.",
+        invalid_code: "Kod za potvrdu nije prihvaćen. Sačekaj sledeći kod i pokušaj ponovo.",
+        mfa_not_enrolled: "Nalog nema potvrdu u dva koraka. Uključi je u veb aplikaciji, pa se vrati ovde.",
+        mfa_ambiguous: "Nalog ima više načina potvrde. Ostavi jedan u veb aplikaciji, pa pokušaj ponovo.",
+        session_expired: "Prijava je istekla. Pokušaj ponovo.",
+        rate_limited: "Previše pokušaja. Sačekaj nekoliko minuta.",
+        unavailable: "Server trenutno ne odgovara. Pokušaj kasnije.",
+        unknown: "Nešto nije prošlo. Pokušaj ponovo.",
+        step_up_failed: "Potvrda u dva koraka nije prošla do kraja. Pokušaj ponovo.",
+        unauthenticated: "Prijava nije prošla. Pokušaj ponovo.",
+        session_not_live: "Prijava više ne važi. Pokušaj ponovo.",
+        session_not_aal1: "Prijava nije prošla kako treba. Pokušaj ponovo.",
+        not_enabled: "Ovaj nalog još nema ključ. Uključi sinhronizaciju umesto povezivanja.",
+        // The account never minted. Retyping the code is the one thing that
+        // cannot help, so the sentence must not send the user at the code.
+        not_minted:
+          "Na ovom nalogu sinhronizacija nikada nije uključena, pa nema ključa za preuzimanje. Uključi sinhronizaciju na ovom računaru.",
+        // And this one must not suggest anything else is wrong, because nothing
+        // else is: the account, the password and the second factor all passed.
+        recovery_code_rejected:
+          "Kod za oporavak nije prihvaćen. Prepiši ga tačno onako kako je zapisan i pokušaj ponovo.",
+        bootstrap_failed: "Server nije dozvolio ovom računaru pristup nalogu. Pokušaj kasnije.",
+        proof_rejected: "Ključ dobijen kodom za oporavak nije prihvaćen. Prijavi grešku.",
+        too_many_devices:
+          "Nalog već ima najviše dozvoljenih računara. Odjavi jedan u veb aplikaciji, pa pokušaj ponovo.",
+        register_failed: "Server nije uspeo da poveže ovaj računar. Pokušaj kasnije.",
+        rejected_by_schema: "Server je odbio podatke. Prijavi grešku.",
+        cloud_off: "Mrežni pristup je isključen za ovo pokretanje.",
+        locked: "Otključaj Nexus, pa pokušaj ponovo.",
+        already_enabled: "Sinhronizacija je već uključena na ovom računaru.",
+        bad_request: "Podaci nisu ispravni. Proveri ime računara.",
+      } satisfies Record<SyncAdoptProblem, string>,
       disconnectTitle: "Odjavi ovaj računar",
       disconnectWarning:
         "Uređaj se povlači sa naloga i ovaj računar zaboravlja svoju kopiju ključa. Podaci ostaju ovde i otvaraju se pristupnim kodom kao i do sada; povratak na nalog ide preko uparivanja sa drugim uređajem ili preko koda za oporavak.",

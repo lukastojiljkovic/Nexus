@@ -803,14 +803,16 @@ const api: NexusApi = {
     return () => ipcRenderer.removeListener(IpcChannel.windowStateChanged, handler);
   },
   windowView: (command) => ipcRenderer.invoke(IpcChannel.windowView, { command }),
-  // Sync. Four one-line shims like every other method here: the whole protocol
-  // — the derivation, both sign-ins, the step-up, the mint and the byte-for-byte
-  // readback — happens in main, and what crosses this bridge is a request with
-  // four strings in it and an answer with no key material but the Sync Recovery
-  // Code, which the user has to be able to write down.
+  // Sync. One-line shims like every other method here: the whole protocol — the
+  // derivations, both sign-ins, the step-up, the mint or the recovery unwrap,
+  // and the byte-for-byte readback — happens in main, and what crosses this
+  // bridge is a request of strings and an answer with no key material but the
+  // Sync Recovery Code, which the user has to be able to write down. Adopting
+  // sends that same code back the other way and gets none.
   syncStatus: () => ipcRenderer.invoke(IpcChannel.syncStatus),
   setCloudEnabled: (enabled) => ipcRenderer.invoke(IpcChannel.syncSetCloud, { enabled }),
   enableSync: (request) => ipcRenderer.invoke(IpcChannel.syncEnable, request),
+  adoptSync: (request) => ipcRenderer.invoke(IpcChannel.syncAdopt, request),
   resumeSync: () => ipcRenderer.invoke(IpcChannel.syncResume),
   reconnectSync: (request) => ipcRenderer.invoke(IpcChannel.syncReconnect, request),
   disconnectSync: () => ipcRenderer.invoke(IpcChannel.syncDisconnect),

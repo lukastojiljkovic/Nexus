@@ -83,6 +83,17 @@ export function SyncSection({ hits }: SyncSectionProps) {
   const [password, setPassword] = useState("");
   const [totpCode, setTotpCode] = useState("");
   const [deviceName, setDeviceName] = useState("");
+  /**
+   * Which of the two ways onto an account this form is currently asking about.
+   *
+   * Local state rather than another `syncCardState` branch, deliberately: it is
+   * not derived from anything main knows. The status view cannot tell whether
+   * the ACCOUNT already has a master key — only the server can, and only after
+   * a sign-in and a step-up — so a card state computed from the status would be
+   * guessing. What the product knows is what the user said they are doing.
+   */
+  const [mode, setMode] = useState<"enable" | "adopt">("enable");
+  const [recoveryInput, setRecoveryInput] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -166,6 +177,13 @@ export function SyncSection({ hits }: SyncSectionProps) {
         setTotpCode("");
         setDeviceName("");
       } else if (view.outcome === "already-minted") {
+        // Not an error the user can retry — it is the other road, so the form
+        // BECOMES the other road rather than describing it. The address and the
+        // computer's name survive; the code does not, because reaching this
+        // answer spent the step-up that consumed it, and offering the spent one
+        // back would fail for a reason the screen had already been told.
+        setMode("adopt");
+        setTotpCode("");
         setError(s.alreadyMinted);
       } else {
         setError(refusalMessage(view.reason));
@@ -173,6 +191,48 @@ export function SyncSection({ hits }: SyncSectionProps) {
     } catch (enableError) {
       setError(s.error);
       console.error("Nexus: enabling sync failed:", enableError);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * The other way onto an account: this computer joins one that already has a
+   * master key, using the Sync Recovery Code from the machine that minted it.
+   *
+   * The recovery code is dropped from state before the await for the same
+   * reason the password is. It is not a password, but it opens the account's
+   * master key from anywhere, which makes it the more valuable of the two.
+   */
+  async function submitAdopt(event: FormEvent): Promise<void> {
+    event.preventDefault();
+    if (busy) return;
+    setError(null);
+    setBusy(true);
+    const submitted = password;
+    const submittedCode = recoveryInput;
+    setPassword("");
+    setRecoveryInput("");
+    try {
+      const view = await window.nexus.adoptSync({
+        email: email.trim(),
+        password: submitted,
+        totpCode: totpCode.trim(),
+        recoveryCode: submittedCode.trim(),
+        deviceName: deviceName.trim(),
+      });
+      if (view.outcome === "adopted") {
+        setStatus(view.status);
+        setEmail("");
+        setTotpCode("");
+        setDeviceName("");
+        setMode("enable");
+      } else {
+        setError(s.adoptErrors[view.reason]);
+      }
+    } catch (adoptError) {
+      setError(s.adoptError);
+      console.error("Nexus: joining the existing sync account failed:", adoptError);
     } finally {
       setBusy(false);
     }
@@ -225,6 +285,7 @@ export function SyncSection({ hits }: SyncSectionProps) {
   if (status === null) return <p className="app__muted">{strings.app.loading}</p>;
 
   const card = syncCardState({ status, recoveryCode });
+  const adopting = mode === "adopt";
 
   // The one-time code owns the card while it exists. See the header.
   if (card.kind === "recovery") {
@@ -286,60 +347,124 @@ export function SyncSection({ hits }: SyncSectionProps) {
 
       {card.kind === "unconfigured" && <p className="set__section-caption">{s.unconfigured}</p>}
 
+      {/* One form, two modes. The four fields, the two hints and the whole
+          submit discipline are identical between „turn sync on here" and „join
+          an account that already has a key" — the difference is one extra field
+          and which method it calls. Two forms would be two copies of the same
+          validation, and the copies are what drift. */}
       {card.kind === "enable" && (
-        <form className="set__field set__field--stacked" onSubmit={(event) => void submit(event)}>
-          <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("sync-enable"))}>
-            {s.enableTitle}
-          </h3>
-          <p className="app__description">{s.enableIntro}</p>
-          <div className="set__security-form">
-            <TextField
-              type="email"
-              autoComplete="off"
-              label={s.emailLabel}
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-            />
-            <TextField
-              type="password"
-              autoComplete="off"
-              label={s.passwordLabel}
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-            />
-            <TextField
-              // `inputMode="numeric"` rather than `type="number"`: a TOTP code is
-              // six digits that may lead with a zero, which a numeric input would
-              // eat, and it has no arithmetic meaning to step through.
-              inputMode="numeric"
-              autoComplete="off"
-              label={s.totpLabel}
-              value={totpCode}
-              onChange={(event) => setTotpCode(event.target.value)}
-            />
-            <TextField
-              label={s.deviceNameLabel}
-              value={deviceName}
-              onChange={(event) => setDeviceName(event.target.value)}
-            />
-          </div>
-          <p className="set__section-caption">{s.passwordHint}</p>
-          <p className="set__section-caption">{s.deviceNameHint}</p>
-          <Button
-            type="submit"
-            size="sm"
-            variant="primary"
-            disabled={
-              busy ||
-              email.trim().length === 0 ||
-              password.length === 0 ||
-              totpCode.trim().length === 0 ||
-              deviceName.trim().length === 0
-            }
+        <>
+          <form
+            className="set__field set__field--stacked"
+            onSubmit={(event) => void (adopting ? submitAdopt(event) : submit(event))}
           >
-            {busy ? s.working : s.submit}
-          </Button>
-        </form>
+            {/* The mark follows the TITLE, not the slot. Both entries exist in
+                the search index and each names one of the two roads, so a hit
+                keyed to the slot would highlight whichever heading happened to
+                be showing — which is the search telling the user it found
+                something else. */}
+            <h3
+              className={labelClass(
+                "nx-eyebrow set__module-group-title",
+                hits.has(adopting ? "sync-adopt" : "sync-enable"),
+              )}
+            >
+              {adopting ? s.adoptTitle : s.enableTitle}
+            </h3>
+            <p className="app__description">{adopting ? s.adoptIntro : s.enableIntro}</p>
+            <div className="set__security-form">
+              <TextField
+                type="email"
+                autoComplete="off"
+                label={s.emailLabel}
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+              />
+              <TextField
+                type="password"
+                autoComplete="off"
+                label={s.passwordLabel}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+              />
+              <TextField
+                // `inputMode="numeric"` rather than `type="number"`: a TOTP code is
+                // six digits that may lead with a zero, which a numeric input would
+                // eat, and it has no arithmetic meaning to step through.
+                inputMode="numeric"
+                autoComplete="off"
+                label={s.totpLabel}
+                value={totpCode}
+                onChange={(event) => setTotpCode(event.target.value)}
+              />
+              {/* Deliberately NOT `type="password"`. This code is transcribed
+                  from paper, it is long, and the one mistake it invites is a
+                  mistyped character — which a masked field hides until the
+                  submit has already spent a step-up and revoked the user's
+                  other sessions to find out. */}
+              {adopting && (
+                <TextField
+                  autoComplete="off"
+                  label={s.recoveryCodeLabel}
+                  value={recoveryInput}
+                  onChange={(event) => setRecoveryInput(event.target.value)}
+                />
+              )}
+              <TextField
+                label={s.deviceNameLabel}
+                value={deviceName}
+                onChange={(event) => setDeviceName(event.target.value)}
+              />
+            </div>
+            <p className="set__section-caption">{s.passwordHint}</p>
+            {adopting && <p className="set__section-caption">{s.recoveryCodeHint}</p>}
+            <p className="set__section-caption">{s.deviceNameHint}</p>
+            <Button
+              type="submit"
+              size="sm"
+              variant="primary"
+              disabled={
+                busy ||
+                email.trim().length === 0 ||
+                password.length === 0 ||
+                totpCode.trim().length === 0 ||
+                deviceName.trim().length === 0 ||
+                (adopting && recoveryInput.trim().length === 0)
+              }
+            >
+              {busy ? (adopting ? s.adoptWorking : s.working) : adopting ? s.adoptSubmit : s.submit}
+            </Button>
+          </form>
+
+          {/* The house row: what the other road is on the left, the way onto it
+              on the trailing edge with every other control on the page. */}
+          <div className="set__module-row">
+            <div className="set__module-info">
+              <span
+                className={labelClass(
+                  "set__module-name",
+                  hits.has(adopting ? "sync-enable" : "sync-adopt"),
+                )}
+              >
+                {adopting ? s.enableTitle : s.adoptChoiceTitle}
+              </span>
+              <span className="set__module-desc">
+                {adopting ? s.enableIntro : s.adoptChoiceHint}
+              </span>
+            </div>
+            <Button
+              size="sm"
+              disabled={busy}
+              onClick={() => {
+                setMode(adopting ? "enable" : "adopt");
+                setRecoveryInput("");
+                setError(null);
+              }}
+            >
+              {adopting ? s.adoptBackAction : s.adoptChoiceAction}
+            </Button>
+          </div>
+        </>
       )}
 
       {card.kind === "enabled" && (

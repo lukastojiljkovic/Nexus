@@ -427,6 +427,27 @@ function shellEntries(): readonly ShellSettingsSearchEntry[] {
       ],
     },
     {
+      // The second road onto an account, and it needs its own entry because it
+      // is the one people arrive at knowing only a WORD: they have a recovery
+      // code on paper and no idea it is called adoption. „oporavak", „kod" and
+      // „drugi racunar" are what gets typed; „pridruzi" is what the card says.
+      id: "sync-adopt",
+      section: "sync",
+      label: s.sync.adoptTitle,
+      keywords: [
+        "oporavak",
+        "kod",
+        "postojeci",
+        "nalog",
+        "pridruzi",
+        "povezi",
+        "drugi",
+        "racunar",
+        "uredjaj",
+        "kljuc",
+      ],
+    },
+    {
       // Only ever visible on a computer whose session has ended, and that is
       // exactly when somebody searches for it: the form appears by itself, so
       // the person who comes to this page has usually come looking for „poveži"
