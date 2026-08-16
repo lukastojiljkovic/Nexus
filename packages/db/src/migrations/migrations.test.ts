@@ -27,8 +27,8 @@ import { CardStore, MIGRATIONS, NexusDatabase, openDatabase, runMigrations } fro
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 65 (professional toolkits), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(65);
+  it("is at version 66 (the sync loop's three tables), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(66);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -8904,5 +8904,190 @@ describe("migration 065 — the developer drawer becomes one toolkit of „Stru�
     expect(flags(after, "p2")).toEqual({ "pack:softver": 0, pro: 0 });
     expect(flags(after, "p3")).toEqual({ canvas: 1 });
     after.close();
+  });
+});
+
+describe("migration 066 — what a sync round has to survive being interrupted", () => {
+  type Handle = Database.Database;
+  const T = "2026-08-16T09:00:00.000Z";
+
+  function openAt(path: string, version: number): Handle {
+    const raw = new Database(path);
+    raw.pragma("journal_mode = WAL");
+    raw.pragma("foreign_keys = ON");
+    raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
+      typeof value === "string" ? foldSearchText(value) : null,
+    );
+    runMigrations(
+      raw,
+      MIGRATIONS.filter((migration) => migration.version <= version),
+    );
+    return raw;
+  }
+
+  /** Seeds one row into every table the cleanup trigger is supposed to reach. */
+  function seedAllFive(raw: Handle, profileId: string): void {
+    raw
+      .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
+      .run(profileId, "personal", profileId, T);
+    raw
+      .prepare("INSERT INTO sync_journal (profile_id, collection, object_id) VALUES (?, ?, ?)")
+      .run(profileId, "tasks", "o1");
+    raw
+      .prepare(
+        `INSERT INTO sync_row_state (profile_id, collection, object_id, state_json, updated_at)
+         VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run(profileId, "tasks", "o1", "{}", T);
+    raw
+      .prepare("INSERT INTO sync_cursor (profile_id, collection, last_seq) VALUES (?, ?, ?)")
+      .run(profileId, "tasks", 12);
+    raw
+      .prepare("INSERT INTO sync_outbox (profile_id, collection, object_id, queued_at) VALUES (?, ?, ?, ?)")
+      .run(profileId, "tasks", "o1", T);
+    raw
+      .prepare(
+        `INSERT INTO sync_quarantine (profile_id, collection, object_id, seq, reason, seen_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(profileId, "tasks", "o2", 9, "aead-failed", T);
+  }
+
+  const SYNC_TABLES = [
+    "sync_journal",
+    "sync_row_state",
+    "sync_cursor",
+    "sync_outbox",
+    "sync_quarantine",
+  ] as const;
+
+  /** How many rows each sync table holds for one profile — the shape the trigger must zero. */
+  function counts(raw: Handle, profileId: string): Record<string, number> {
+    return Object.fromEntries(
+      SYNC_TABLES.map((table) => [
+        table,
+        (
+          raw.prepare(`SELECT count(*) AS n FROM ${table} WHERE profile_id = ?`).get(profileId) as {
+            n: number;
+          }
+        ).n,
+      ]),
+    );
+  }
+
+  it("adds the three tables a round needs to resume, on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "066-fresh.db") });
+    expect(tableNames(db)).toEqual(expect.arrayContaining([...SYNC_TABLES]));
+    db.close();
+  });
+
+  it("upgrades a file that is already at 65 — so the trigger it drops is the one 063 made", () => {
+    const path = join(dir, "066-upgrade.db");
+    const before = openAt(path, 65);
+    before
+      .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
+      .run("p1", "personal", "p1", T);
+    before.close();
+
+    const after = openAt(path, 66);
+    expect(counts(after, "p1")).toEqual({
+      sync_journal: 0,
+      sync_row_state: 0,
+      sync_cursor: 0,
+      sync_outbox: 0,
+      sync_quarantine: 0,
+    });
+    after.close();
+  });
+
+  it("leaves exactly ONE profiles_sync_ad, so there is one answer to what a deletion clears", () => {
+    const db = openDatabase({ path: join(dir, "066-one-trigger.db") });
+    const triggers = (
+      db.raw
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'trigger' AND name = 'profiles_sync_ad'")
+        .all() as { name: string }[]
+    ).length;
+    expect(triggers).toBe(1);
+    db.close();
+  });
+
+  it("empties all five sync tables when the profile goes, and only that profile's rows", () => {
+    const db = openDatabase({ path: join(dir, "066-cascade.db") });
+    seedAllFive(db.raw, "p1");
+    seedAllFive(db.raw, "p2");
+
+    db.raw.prepare("DELETE FROM profiles WHERE id = ?").run("p1");
+
+    expect(counts(db.raw, "p1")).toEqual({
+      sync_journal: 0,
+      sync_row_state: 0,
+      sync_cursor: 0,
+      sync_outbox: 0,
+      sync_quarantine: 0,
+    });
+    expect(counts(db.raw, "p2")).toEqual({
+      sync_journal: 1,
+      sync_row_state: 1,
+      sync_cursor: 1,
+      sync_outbox: 1,
+      sync_quarantine: 1,
+    });
+    db.close();
+  });
+
+  it("keeps one cursor per collection rather than one per profile", () => {
+    const db = openDatabase({ path: join(dir, "066-cursor.db") });
+    const insert = db.raw.prepare(
+      "INSERT INTO sync_cursor (profile_id, collection, last_seq) VALUES (?, ?, ?)",
+    );
+    insert.run("p1", "tasks", 12);
+    insert.run("p1", "notes", 7);
+    const rows = db.raw
+      .prepare("SELECT collection, last_seq FROM sync_cursor WHERE profile_id = ? ORDER BY collection")
+      .all("p1");
+    expect(rows).toEqual([
+      { collection: "notes", last_seq: 7 },
+      { collection: "tasks", last_seq: 12 },
+    ]);
+    db.close();
+  });
+
+  it("refuses a watermark below zero, an attempt count below zero, and an unknown reason", () => {
+    const db = openDatabase({ path: join(dir, "066-checks.db") });
+    expect(() =>
+      db.raw
+        .prepare("INSERT INTO sync_cursor (profile_id, collection, last_seq) VALUES (?, ?, ?)")
+        .run("p1", "tasks", -1),
+    ).toThrow(/CHECK constraint failed/);
+    expect(() =>
+      db.raw
+        .prepare(
+          "INSERT INTO sync_outbox (profile_id, collection, object_id, queued_at, attempts) VALUES (?, ?, ?, ?, ?)",
+        )
+        .run("p1", "tasks", "o1", T, -1),
+    ).toThrow(/CHECK constraint failed/);
+    // `no-key` is the one refusal `applyPull` never quarantines — it holds the
+    // cursor instead, so the row arrives again on its own. A table that accepted
+    // it would be recording an object as unreadable that is merely waiting.
+    expect(() =>
+      db.raw
+        .prepare(
+          `INSERT INTO sync_quarantine (profile_id, collection, object_id, seq, reason, seen_at)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+        )
+        .run("p1", "tasks", "o1", 3, "no-key", T),
+    ).toThrow(/CHECK constraint failed/);
+    db.close();
+  });
+
+  it("starts an outbox row at zero attempts with no outcome recorded yet", () => {
+    const db = openDatabase({ path: join(dir, "066-outbox.db") });
+    db.raw
+      .prepare("INSERT INTO sync_outbox (profile_id, collection, object_id, queued_at) VALUES (?, ?, ?, ?)")
+      .run("p1", "tasks", "o1", T);
+    expect(
+      db.raw.prepare("SELECT attempts, last_code, last_message FROM sync_outbox").get(),
+    ).toEqual({ attempts: 0, last_code: null, last_message: null });
+    db.close();
   });
 });

@@ -1490,6 +1490,20 @@ describe("RestoreStore", () => {
     //    that has forgotten its wrap — „restore a backup" would silently become
     //    „leave the sync account", which is the one operation on this table that
     //    the settings card makes the user confirm by name.
+    //  - sync_cursor / sync_outbox / sync_quarantine (migration 066): the same
+    //    rule as `sync_row_state`, and each one earns it separately. All three
+    //    describe this device's RELATIONSHIP WITH THE SERVER, and a restore
+    //    replaces a profile's content without changing a single thing about how
+    //    far this device has walked the server's log. `sync_cursor` wiped means
+    //    re-downloading and re-merging the entire history of every collection,
+    //    for nothing. `sync_quarantine` wiped means silently forgetting the
+    //    objects this device already knows it cannot read — the one record that
+    //    it is missing something. `sync_outbox` is the sharpest of the three:
+    //    the restore's own writes fire migration 063's triggers and the next
+    //    sweep re-queues everything it touched, so wiping would only lose the
+    //    rows for objects the restore did NOT touch — which are precisely the
+    //    ones still owed to the server, and losing them is exactly the defect
+    //    the table was added to close.
     const allowlist = new Set<string>([
       "meta",
       "profiles",
@@ -1507,6 +1521,9 @@ describe("RestoreStore", () => {
       "sync_journal",
       "sync_row_state",
       "sync_account",
+      "sync_cursor",
+      "sync_outbox",
+      "sync_quarantine",
     ]);
 
     const wipeTables = new Set<string>(RESTORE_WIPE_TABLES);

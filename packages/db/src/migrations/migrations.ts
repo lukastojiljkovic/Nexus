@@ -65,6 +65,7 @@ import { migration062 } from "./062-order-ranks.js";
 import { migration063 } from "./063-sync-journal.js";
 import { migration064 } from "./064-sync-account.js";
 import { migration065 } from "./065-professional-toolkits.js";
+import { migration066 } from "./066-sync-loop.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -141,6 +142,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration063,
   migration064,
   migration065,
+  migration066,
 ];
 
 /**
