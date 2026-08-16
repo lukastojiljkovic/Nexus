@@ -263,6 +263,9 @@ importers:
       '@nexus/sync-crypto':
         specifier: workspace:*
         version: link:../sync-crypto
+      '@nexus/sync-engine':
+        specifier: workspace:*
+        version: link:../sync-engine
       better-sqlite3-multiple-ciphers:
         specifier: ^12.11.1
         version: 12.11.1
@@ -294,6 +297,25 @@ importers:
         version: 3.2.6(@types/debug@4.1.13)(@types/node@24.13.3)(jiti@2.7.0)
 
   packages/sync-crypto:
+    devDependencies:
+      typescript:
+        specifier: ^5.8.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.0
+        version: 3.2.6(@types/debug@4.1.13)(@types/node@24.13.3)(jiti@2.7.0)
+
+  packages/sync-engine:
+    dependencies:
+      '@nexus/sync':
+        specifier: workspace:*
+        version: link:../sync
+      '@nexus/sync-crypto':
+        specifier: workspace:*
+        version: link:../sync-crypto
+      '@nexus/sync-transport':
+        specifier: workspace:*
+        version: link:../sync-transport
     devDependencies:
       typescript:
         specifier: ^5.8.0
@@ -1907,6 +1929,7 @@ packages:
   '@xmldom/xmldom@0.8.13':
     resolution: {integrity: sha512-KRYzxepc14G/CEpEGc3Yn+JKaAeT63smlDr+vjB8jRfgTBBI9wRj/nkQEO+ucV8p8I9bfKLWp37uHgFrbntPvw==}
     engines: {node: '>=10.0.0'}
+    deprecated: this version has critical issues, please update to the latest version
 
   abbrev@4.0.0:
     resolution: {integrity: sha512-a1wflyaL0tHtJSmLSOVybYhy22vRih4eduhhrkcjgrWGnRfrZtovJ2FRjxuTtkkj47O/baf0R86QU5OuYpz8fA==}

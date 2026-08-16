@@ -670,3 +670,4 @@ export { SyncAccountStore } from "./sync/syncAccount.js";
 export type { SyncAccount, SyncAccountInput } from "./sync/syncAccount.js";
 export { SyncProgressStore } from "./sync/syncProgress.js";
 export type { QuarantinedObject } from "./sync/syncProgress.js";
+export { syncStoreFor } from "./sync/syncStore.js";

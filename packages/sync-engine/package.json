@@ -1,0 +1,25 @@
+{
+  "name": "@nexus/sync-engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The loop: one sync round as sweep, pull, push, over an injected local store, HttpPort and CryptoPort. Holds no database and no network of its own, so the same round runs in the Electron main process against SQLite and in a browser tab against whatever the web app keeps locally.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@nexus/sync": "workspace:*",
+    "@nexus/sync-crypto": "workspace:*",
+    "@nexus/sync-transport": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0",
+    "vitest": "^3.2.0"
+  }
+}

@@ -93,6 +93,20 @@ export interface ApplyRequest {
    * unchanged row would make every later push collide.
    */
   readonly changed: boolean;
+  /**
+   * `PullApplied.owed` — the merge differs from what the SERVER holds, so this
+   * device now owes it a push.
+   *
+   * Required rather than optional, because a caller that forgets it is the whole
+   * defect: the apply writes with migration 063's trigger flag off, so it
+   * journals nothing, and afterwards the row and the shadow state agree, so no
+   * sweep can rediscover the object either. A local edit folded into an arriving
+   * row would be correct on this device and never sent again. Queued inside the
+   * same transaction as the row, for the reason the sweep's queue is inside its
+   * own: „this merge happened" and „the server does not have it" are one fact
+   * that must not half-happen.
+   */
+  readonly owed: boolean;
 }
 
 export type ApplyStatus =
@@ -139,6 +153,7 @@ export class SyncJournal {
   private readonly stateForget: Database.Statement;
   private readonly outboxQueue: Database.Statement;
   private readonly outboxTake: Database.Statement;
+  private readonly outboxCount: Database.Statement;
   private readonly outboxDrop: Database.Statement;
   private readonly outboxFail: Database.Statement;
   private readonly outboxForget: Database.Statement;
@@ -202,6 +217,18 @@ export class SyncJournal {
         WHERE o.profile_id = ?
         ORDER BY o.attempts, o.queued_at, o.collection, o.object_id
         LIMIT ?`,
+    );
+    // The same JOIN as `outboxTake`, and it has to be: an outbox row whose state
+    // is missing is one `owed` skips, so a count over `sync_outbox` alone would
+    // report work the push can never find.
+    this.outboxCount = db.prepare(
+      `SELECT count(*) AS n
+         FROM sync_outbox o
+         JOIN sync_row_state s
+           ON s.profile_id = o.profile_id
+          AND s.collection = o.collection
+          AND s.object_id  = o.object_id
+        WHERE o.profile_id = ?`,
     );
     this.outboxDrop = db.prepare(
       "DELETE FROM sync_outbox WHERE profile_id = ? AND collection = ? AND object_id = ?",
@@ -408,6 +435,14 @@ export class SyncJournal {
   }
 
   /**
+   * How many objects the server does not have — the whole queue, not a page of
+   * it. What a screen shows when it says how much is still waiting.
+   */
+  owedCount(profileId: string): number {
+    return (this.outboxCount.get(profileId) as { n: number }).n;
+  }
+
+  /**
    * The server took it: store the version it accepted and stop owing the object.
    *
    * `next` is `PushAccepted.next` — the same fields and tombstone at `version + 1`
@@ -460,7 +495,7 @@ export class SyncJournal {
   // ---------------------------------------------------------------------------
 
   private applyOne(profileId: string, request: ApplyRequest, now: string): ApplyOutcome {
-    const { collection: name, objectId, changed } = request;
+    const { collection: name, objectId, changed, owed } = request;
     const collection = classify(name);
     if (collection === undefined || collection.kind !== "collection") {
       return { collection: name, objectId, status: "unknown" };
@@ -473,6 +508,7 @@ export class SyncJournal {
       this.db.transaction(() => {
         if (changed) this.writeRow(collection, profileId, objectId, request.merged);
         this.writeState(profileId, name, objectId, request.merged, now);
+        if (owed) this.outboxQueue.run(profileId, name, objectId, now);
       })();
     } catch (error) {
       // Reported rather than thrown: a row whose parent has not arrived yet is

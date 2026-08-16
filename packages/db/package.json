@@ -16,6 +16,7 @@
     "@nexus/core": "workspace:*",
     "@nexus/sync": "workspace:*",
     "@nexus/sync-crypto": "workspace:*",
+    "@nexus/sync-engine": "workspace:*",
     "better-sqlite3-multiple-ciphers": "^12.11.1",
     "ts-fsrs": "^5.4.1"
   },

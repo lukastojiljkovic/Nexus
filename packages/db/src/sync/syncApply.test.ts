@@ -58,7 +58,7 @@ function open(label: string, seed: boolean): Device {
 
 /** Everything one device has to say, as the other device's apply wants it. */
 function toApply(swept: readonly SweptObject[]): ApplyRequest[] {
-  return swept.map((object) => ({ ...object, merged: object.state, changed: true }));
+  return swept.map((object) => ({ ...object, merged: object.state, changed: true, owed: false }));
 }
 
 /** One device's whole outbound batch, applied to the other. */
@@ -277,7 +277,15 @@ describe("what it refuses, and what it does afterwards", () => {
   it("reports a collection this build no longer carries, and writes nothing", () => {
     const outcomes = bob.journal.apply(
       profileId,
-      [{ collection: "ghost_table", objectId: "x", merged: emptyState(), changed: true }],
+      [
+        {
+          collection: "ghost_table",
+          objectId: "x",
+          merged: emptyState(),
+          changed: true,
+          owed: false,
+        },
+      ],
       LATER,
     );
 
@@ -352,6 +360,7 @@ describe("what `changed` decides", () => {
       objectId: object.objectId,
       merged: { ...object.state, version: object.state.version + 3 },
       changed: false,
+      owed: false,
     }));
     const outcomes = bob.journal.apply(profileId, bumped, LATEST);
 
@@ -405,6 +414,7 @@ describe("the coupled-CHECK repair, through the apply", () => {
       objectId: swept[0]!.objectId,
       merged: applyEdit(swept[0]!.state, { kind: "basic" }, hlcSend(hlcZero("c"), 9_000)),
       changed: true,
+      owed: false,
     };
     const outcomes = bob.journal.apply(profileId, [conflicted], LATER);
 
