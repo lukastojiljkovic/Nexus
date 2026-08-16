@@ -51,6 +51,23 @@ export interface SweptObject {
   readonly state: RowState;
 }
 
+/**
+ * One object the server does not have — what `sweep` produced and no push has
+ * yet landed.
+ *
+ * `attempts` is not telemetry. `planPush` can refuse an object outright, and the
+ * server can refuse it by a rule that will not change, so without a count there
+ * is no way to tell „the network was down" from „this row can never be sent" —
+ * and no way to stop the second from sitting at the head of the queue for ever.
+ */
+export interface OwedObject {
+  readonly collection: string;
+  readonly objectId: string;
+  /** Exactly what the sweep decided, so the push seals what was swept. */
+  readonly state: RowState;
+  readonly attempts: number;
+}
+
 /** One merged object waiting to be written back into the table it came from. */
 export interface ApplyRequest {
   readonly collection: string;
@@ -112,6 +129,11 @@ export class SyncJournal {
   private readonly stateRead: Database.Statement;
   private readonly stateWrite: Database.Statement;
   private readonly stateForget: Database.Statement;
+  private readonly outboxQueue: Database.Statement;
+  private readonly outboxTake: Database.Statement;
+  private readonly outboxDrop: Database.Statement;
+  private readonly outboxFail: Database.Statement;
+  private readonly outboxForget: Database.Statement;
 
   constructor(db: Database.Database) {
     this.db = db;
@@ -148,6 +170,39 @@ export class SyncJournal {
          updated_at = excluded.updated_at`,
     );
     this.stateForget = db.prepare("DELETE FROM sync_row_state WHERE profile_id = ?");
+    // A re-sweep RESETS the count and clears the last outcome: the payload is a
+    // new one, and how the previous version of this object was refused says
+    // nothing about how this one will be. It also puts a freshly edited object
+    // back at the head of the queue, which is where the user would expect it.
+    this.outboxQueue = db.prepare(
+      `INSERT INTO sync_outbox (profile_id, collection, object_id, queued_at) VALUES (?, ?, ?, ?)
+       ON CONFLICT (profile_id, collection, object_id) DO UPDATE SET
+         queued_at = excluded.queued_at, attempts = 0, last_code = NULL, last_message = NULL`,
+    );
+    // An INNER JOIN, and it is safe because `sweep` writes both rows in one
+    // transaction: an outbox row without a state cannot be created. Ordered by
+    // `attempts` first so an object that can never be sent sinks to the back
+    // instead of occupying the limit for ever; the last two columns only make the
+    // order total, so a page is the same page twice.
+    this.outboxTake = db.prepare(
+      `SELECT o.collection, o.object_id, o.attempts, s.state_json
+         FROM sync_outbox o
+         JOIN sync_row_state s
+           ON s.profile_id = o.profile_id
+          AND s.collection = o.collection
+          AND s.object_id  = o.object_id
+        WHERE o.profile_id = ?
+        ORDER BY o.attempts, o.queued_at, o.collection, o.object_id
+        LIMIT ?`,
+    );
+    this.outboxDrop = db.prepare(
+      "DELETE FROM sync_outbox WHERE profile_id = ? AND collection = ? AND object_id = ?",
+    );
+    this.outboxFail = db.prepare(
+      `UPDATE sync_outbox SET attempts = attempts + 1, last_code = ?, last_message = ?
+        WHERE profile_id = ? AND collection = ? AND object_id = ?`,
+    );
+    this.outboxForget = db.prepare("DELETE FROM sync_outbox WHERE profile_id = ?");
   }
 
   /** Whether migration 063's triggers are recording anything at all. */
@@ -196,6 +251,7 @@ export class SyncJournal {
     this.db.transaction(() => {
       this.journalForget.run(profileId);
       this.stateForget.run(profileId);
+      this.outboxForget.run(profileId);
     })();
   }
 
@@ -244,6 +300,12 @@ export class SyncJournal {
 
         if (next !== null) {
           this.writeState(profileId, entry.collection, entry.object_id, next, now);
+          // In the SAME transaction as the state, and that is the whole point:
+          // „this object was swept" and „the server does not have it" have to be
+          // one fact. Written apart, a crash between them leaves an object clean
+          // locally and unsent, which no later sweep can rediscover — `sweepRow`
+          // diffs against the state that was just written and answers `null`.
+          this.outboxQueue.run(profileId, entry.collection, entry.object_id, now);
           swept.push({ collection: entry.collection, objectId: entry.object_id, state: next });
         }
         this.journalDrop.run(profileId, entry.collection, entry.object_id);
@@ -300,6 +362,83 @@ export class SyncJournal {
         this.setMeta(JOURNAL_FLAG, restore);
       }
     })();
+  }
+
+  /**
+   * What the server does not have, least-failed first.
+   *
+   * The push plans from THIS rather than from the sweep's return value, and the
+   * difference is the whole reason the table exists: a sweep's return value lives
+   * for one round, while an object stays owed across restarts until a server
+   * accepts it.
+   */
+  owed(profileId: string, limit = 500): OwedObject[] {
+    const rows = this.outboxTake.all(profileId, limit) as {
+      collection: string;
+      object_id: string;
+      attempts: number;
+      state_json: string;
+    }[];
+    const owed: OwedObject[] = [];
+    for (const row of rows) {
+      const state = decodeState(row.state_json);
+      // A shadow state that will not decode is a corrupt local file, not a sync
+      // condition — nothing the server does can cause it, because this column is
+      // only ever written by `writeState`. It is SKIPPED rather than thrown on,
+      // so one unreadable row cannot stall every round for ever, and it is left
+      // in the outbox rather than deleted, so it is neither lost nor silently
+      // resolved: the row is still there to be counted and reported.
+      if (state === null) continue;
+      owed.push({
+        collection: row.collection,
+        objectId: row.object_id,
+        state,
+        attempts: row.attempts,
+      });
+    }
+    return owed;
+  }
+
+  /**
+   * The server took it: store the version it accepted and stop owing the object.
+   *
+   * `next` is `PushAccepted.next` — the same fields and tombstone at `version + 1`
+   * — and it must be the planner's copy rather than one recomputed here, because
+   * a local state left at the observed version would push the same number twice
+   * and be refused by NX001 for ever.
+   *
+   * One transaction, for the reason the apply path has one: a crash between the
+   * two leaves either an object that will be pushed again at a version the server
+   * has already stored, or one recorded as sent at a version nobody accepted.
+   * There is no echo to guard against here — migration 063's triggers are on the
+   * module tables, and this writes only the shadow state.
+   */
+  confirmPushed(
+    profileId: string,
+    collection: string,
+    objectId: string,
+    next: RowState,
+    now: string,
+  ): void {
+    this.db.transaction(() => {
+      this.writeState(profileId, collection, objectId, next, now);
+      this.outboxDrop.run(profileId, collection, objectId);
+    })();
+  }
+
+  /**
+   * The push did not land. The object stays owed and the state is left exactly as
+   * the sweep wrote it, because nothing about the object changed — only what is
+   * known about the server's opinion of it.
+   */
+  recordPushFailure(
+    profileId: string,
+    collection: string,
+    objectId: string,
+    code: string,
+    message: string | null,
+  ): void {
+    this.outboxFail.run(code, message, profileId, collection, objectId);
   }
 
   /** What this device last sealed or merged for one object. */

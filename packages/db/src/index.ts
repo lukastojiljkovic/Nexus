@@ -663,7 +663,10 @@ export type {
   ApplyOutcome,
   ApplyRequest,
   ApplyStatus,
+  OwedObject,
   SweptObject,
 } from "./sync/syncJournal.js";
 export { SyncAccountStore } from "./sync/syncAccount.js";
 export type { SyncAccount, SyncAccountInput } from "./sync/syncAccount.js";
+export { SyncProgressStore } from "./sync/syncProgress.js";
+export type { QuarantinedObject } from "./sync/syncProgress.js";
