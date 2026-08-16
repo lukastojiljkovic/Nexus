@@ -14,7 +14,15 @@ import {
   type JsonValue,
   type RowState,
 } from "@nexus/sync-crypto";
-import { classify, collections, deriveColumns, sweepRow, type SyncCollection } from "@nexus/sync";
+import {
+  classify,
+  collections,
+  deriveColumns,
+  splitObjectId,
+  sweepRow,
+  UNIT_SEPARATOR,
+  type SyncCollection,
+} from "@nexus/sync";
 import { uuidv7 } from "../ids.js";
 
 /**
@@ -511,7 +519,10 @@ export class SyncJournal {
       values[column] = identity[index] ?? null;
     });
     // The eight collections that reach their profile through a parent carry no
-    // such column, and their parent link is an ordinary field that travelled.
+    // such column. Their parent link travelled all the same — for six of them as
+    // an ordinary field, and for `note_versions` and `note_updates` inside the
+    // object id, since their identity begins with it. The loop above has already
+    // written it in that case, which is why this needs no branch of its own.
     if (info.types.has("profile_id")) values["profile_id"] = profileId;
 
     for (const [column, value] of Object.entries(deriveColumns(collection, state))) {
@@ -688,36 +699,25 @@ const JOURNAL_FLAG = "sync_journal_enabled";
 const NODE_ID_KEY = "sync_node_id";
 const CLOCK_KEY = "sync_hlc";
 
-/** The ASCII unit separator, exactly the character migration 063's triggers join with. */
-const UNIT_SEPARATOR = "\u001f";
-
 /** Every collection of the live map, resolved once at module load. */
 const SYNC_COLLECTIONS: readonly SyncCollection[] = collections();
 
 /**
- * SQLite for an object id: the identity columns joined by `char(31)`, or the
- * empty string for a per-profile singleton. `prefix` qualifies the columns when
- * the statement joins another table.
+ * SQLite for an object id: the identity columns joined by the unit separator, or
+ * the empty string for a per-profile singleton. `prefix` qualifies the columns
+ * when the statement joins another table.
+ *
+ * The code point comes from `@nexus/sync` so this half cannot drift from the
+ * half that takes an object id apart. Migration 063 spells `char(31)` out
+ * literally instead, and must: its triggers are in every user's file already, so
+ * what they compose is history rather than a decision a constant still gets to
+ * make. The two are held together by the journal tests, which write the 31 out
+ * by hand and drive the real triggers — a change here reddens them at once.
  */
 function objectIdSql(prefix: string, identity: readonly string[]): string {
   if (identity.length === 0) return "''";
-  return identity.map((column) => `${prefix}${column}`).join(" || char(31) || ");
-}
-
-/** The identity values an object id was built from, in the map's order. */
-function splitObjectId(objectId: string, collection: SyncCollection): string[] {
-  if (collection.identity.length === 0) return [];
-  const parts = objectId.split(UNIT_SEPARATOR);
-  if (parts.length !== collection.identity.length) {
-    // Only a trigger writes this table, so a mismatch means the schema and the
-    // map disagree about what identifies an object — loud, because a silent
-    // skip here is a row that never syncs and never says why.
-    throw new TypeError(
-      `Journal entry for ${collection.table} has ${String(parts.length)} identity parts, ` +
-        `expected ${String(collection.identity.length)}.`,
-    );
-  }
-  return parts;
+  const separator = `char(${String(UNIT_SEPARATOR.charCodeAt(0))})`;
+  return identity.map((column) => `${prefix}${column}`).join(` || ${separator} || `);
 }
 
 /** One table's columns, and what each was declared as. */

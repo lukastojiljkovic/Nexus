@@ -52,6 +52,8 @@ export {
 } from "./projection.js";
 export type { CoupledCheck, SweepInput } from "./projection.js";
 
+export { parentIdOf, splitObjectId, UNIT_SEPARATOR } from "./objectId.js";
+
 export { repairCoupled, REPAIRED_TABLES } from "./repair.js";
 export type { CoupledRepair } from "./repair.js";
 
