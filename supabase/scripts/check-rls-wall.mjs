@@ -271,8 +271,8 @@ function policiesOf(sql) {
 }
 
 /**
- * Every `grant … to authenticated` statement, decomposed into
- * `{ table, privileges: Map<privilege, string[] | null> }`.
+ * The write privileges `authenticated` HOLDS once every migration has run, as
+ * `Map<table, Map<privilege, string[] | null>>`.
  *
  * A null column list means the grant was written at table level, i.e. „all
  * columns, including the ones added next year by somebody who was not thinking
@@ -280,25 +280,66 @@ function policiesOf(sql) {
  * invisible to a text search: `grant insert on public.devices to authenticated`
  * and `grant insert (user_id, session_id, …) on public.devices to authenticated`
  * differ by one parenthesis and by every column the schema will ever gain.
+ *
+ * GRANTS AND REVOKES ARE REPLAYED IN FILE ORDER, for the reason `policiesOf`
+ * replays drops: collecting only the grants is right exactly while migrations
+ * only ever add. Every table here opens with `revoke all … from authenticated`
+ * and migration 012 takes one column back with `revoke update (updated_at) on
+ * public.sync_state`, so a parser that reads grants alone already describes a
+ * database that does not exist — and it would describe it in the widening
+ * direction, reporting a privilege that was handed back.
+ *
+ * A COLUMN REVOKE AGAINST A TABLE-LEVEL GRANT IS LEFT ALONE, deliberately:
+ * Postgres removes nothing in that case, because the table privilege still
+ * covers every column. Rule 8d refuses a table-level write grant outright, so
+ * the combination cannot legitimately arise — and modelling it as a removal
+ * would be this checker inventing a stricter database than the real one.
  */
 function clientGrantsOf(sql) {
-  const grants = [];
-  for (const statement of sql.match(/\bgrant\b[^;]*;/g) ?? []) {
-    if (!/\bto\s+[^;]*\bauthenticated\b/.test(statement)) continue;
+  const held = new Map();
+  for (const statement of sql.match(/\b(?:grant|revoke)\b[^;]*;/g) ?? []) {
+    const revoking = statement.startsWith("revoke");
+    const role = revoking
+      ? /\bfrom\s+[^;]*\bauthenticated\b/
+      : /\bto\s+[^;]*\bauthenticated\b/;
+    if (!role.test(statement)) continue;
     const table = /\bon\s+([a-z_]+\.[a-z_]+)\b/.exec(statement);
     if (table === null) continue;
-    const privileges = new Map();
-    const re = /\b(insert|update)\b\s*(\(([^)]*)\))?/g;
+    const name = table[1];
+
+    if (revoking && /^revoke\s+all\b/.test(statement)) {
+      held.delete(name);
+      continue;
+    }
+
+    const re = /\b(insert|update)\b\s*(?:\(([^)]*)\))?/g;
     let match;
     while ((match = re.exec(statement)) !== null) {
-      const columns = match[3] === undefined
+      const privilege = match[1];
+      const columns = match[2] === undefined
         ? null
-        : match[3].split(",").map((c) => c.trim()).filter((c) => c.length > 0);
-      privileges.set(match[1], columns);
+        : match[2].split(",").map((c) => c.trim()).filter((c) => c.length > 0);
+      const privileges = held.get(name) ?? new Map();
+      held.set(name, privileges);
+      const before = privileges.get(privilege);
+
+      if (!revoking) {
+        privileges.set(privilege, columns === null || before === null
+          ? null
+          : [...new Set([...(before ?? []), ...columns])]);
+        continue;
+      }
+      if (columns === null || before === undefined) {
+        privileges.delete(privilege);
+        continue;
+      }
+      if (before === null) continue;
+      const left = before.filter((column) => !columns.includes(column));
+      if (left.length === 0) privileges.delete(privilege);
+      else privileges.set(privilege, left);
     }
-    if (privileges.size > 0) grants.push({ table: table[1], privileges });
   }
-  return grants;
+  return held;
 }
 
 // A pattern that would mean a real credential reached the repository. `eyj` is
@@ -592,24 +633,75 @@ export function auditWall(dir = MIGRATIONS, root = SUPABASE_ROOT) {
   //     FORBIDDEN_WRITE_COLUMNS for why each entry is there.
   const clientGrants = clientGrantsOf(all);
   for (const [table, rules] of Object.entries(FORBIDDEN_WRITE_COLUMNS)) {
-    const granted = clientGrants.filter((g) => g.table === table);
+    const granted = clientGrants.get(table);
     for (const [privilege, forbidden] of Object.entries(rules)) {
-      const columns = granted
-        .map((g) => g.privileges.get(privilege))
-        .filter((c) => c !== undefined);
-      if (columns.length === 0) continue;
-      if (columns.some((c) => c === null)) {
+      const columns = granted?.get(privilege);
+      if (columns === undefined) continue;
+      if (columns === null) {
         problems.push(
           `${table}: \`grant ${privilege}\` to authenticated is table-level — ` +
           "it must name its columns",
         );
         continue;
       }
-      const flat = columns.flat();
       for (const column of forbidden) {
-        if (flat.includes(column)) {
+        if (columns.includes(column)) {
           problems.push(`${table}.${column}: granted ${privilege.toUpperCase()} to authenticated`);
         }
+      }
+    }
+  }
+
+  // 8f. A GRANT AND A POLICY ARE TWO INDEPENDENT GATES IN SERIES, and access is
+  //     the conjunction of them. Postgres consults the privilege FIRST and
+  //     answers 42501 before row level security is reached at all, so a
+  //     permissive policy on a privilege the role does not hold has never been
+  //     evaluated once — and it reads, in the migration and in every review of
+  //     it, as exactly the rule it is not. Reading only the policies gives „a
+  //     client may insert its own key wraps, scoped to itself"; the database's
+  //     answer would be „a client may not insert", and both sentences would be
+  //     in the same file forty lines apart.
+  //
+  //     THE MIRROR IMAGE IS ASSERTED TOO, because it is the same disagreement
+  //     with the sign flipped: a column-scoped write grant that no permissive
+  //     policy admits is a privilege whose every statement affects zero rows —
+  //     which PostgREST reports as a cheerful `[]`, not as a refusal.
+  //
+  //     Neither half has any other witness. A pgTAP suite proves rules by
+  //     asserting REFUSALS, and a refusal is the same output whether the rule
+  //     under test fired or a gate two layers up did: „a client cannot write
+  //     another user's wrap" passes identically when no client can write any
+  //     wrap at all.
+  //
+  //     `select` is deliberately not checked. It is granted table-wide on every
+  //     walled table, and its absence is a total outage the first request
+  //     reports. A missing WRITE privilege survives precisely because it sits on
+  //     a path nobody has built yet.
+  for (const table of tables.keys()) {
+    if (table.startsWith("private.")) continue;
+    for (const privilege of ["insert", "update"]) {
+      const held = clientGrants.get(table)?.get(privilege) !== undefined;
+      // Permissive only: a restrictive policy narrows, it never admits. `for
+      // all` counts — it covers both writes — even though rule 4 refuses a
+      // permissive one, so that this rule does not add a second, confusing
+      // complaint about a table that already has one.
+      const admits = policies.find((p) =>
+        p.table === table &&
+        !/as\s+restrictive/.test(p.body) &&
+        new RegExp(`for\\s+(?:${privilege}|all)\\b`).test(p.body) &&
+        /\sto\s+authenticated\b/.test(p.body));
+      const name = privilege.toUpperCase();
+      if (held && admits === undefined) {
+        problems.push(
+          `${table}: authenticated holds ${name} but no permissive policy admits it — ` +
+          "every such statement affects zero rows",
+        );
+      }
+      if (!held && admits !== undefined) {
+        problems.push(
+          `${table}: policy \`${admits.name}\` admits ${name} but authenticated has no ` +
+          `${name} privilege — the policy is dead and reads as a rule that runs`,
+        );
       }
     }
   }

@@ -382,6 +382,51 @@ test("catches one forbidden column slipped into a write grant", () => {
   assertReports(problems, "public.devices.platform: granted INSERT to authenticated");
 });
 
+// THE GRANT AND THE POLICY ARE TWO GATES IN SERIES, and each of the three tests
+// below breaks the pair in a different place. All three leave a wall that reads
+// as complete: every policy still says what it always said, and the privilege
+// layer — which is not written next to the policies and is consulted before them
+// — quietly disagrees.
+test("catches a policy left standing on a privilege the client does not hold", () => {
+  // The one that produced a false finding in the other direction. Postgres
+  // answers 42501 before RLS is consulted, so `key_wraps_owner_insert` would
+  // never be evaluated once — while the migration still reads „a client may
+  // insert its own key wraps, scoped to itself".
+  const problems = auditWithMutation(RLS, (sql) =>
+    sql.replace(
+      "grant insert (user_id, kind, profile_id, epoch, nonce, wrapped, commit_tag, " +
+      "kdf_salt, kdf_params)\n  on public.key_wraps to authenticated;\n",
+      "",
+    ));
+  assertReports(problems, "policy `key_wraps_owner_insert` admits INSERT but authenticated has no");
+});
+
+test("catches a write grant that no permissive policy admits", () => {
+  // The mirror image, and the quieter of the two: the privilege is held, every
+  // statement passes the parser, and RLS filters every row. PostgREST reports
+  // that as HTTP 200 `[]` — a write that did nothing and said so to nobody.
+  const problems = auditWithMutation(RLS, (sql) =>
+    sql.replace(
+      "create policy sync_state_owner_update on public.sync_state\n" +
+      "  for update to authenticated\n" +
+      "  using (user_id = (select auth.uid()))\n" +
+      "  with check (user_id = (select auth.uid()));\n",
+      "",
+    ));
+  assertReports(problems, "public.sync_state: authenticated holds UPDATE but no permissive policy");
+});
+
+test("catches a REVOKE that takes back a privilege a policy still claims", () => {
+  // WHY THE PARSER REPLAYS REVOKES. A checker that collects grants alone reads
+  // the widest state the migrations ever had, not the one they end in — and it
+  // errs towards „the client has this", which is the direction that reports a
+  // wall as standing after somebody took a privilege back. Migration 012 already
+  // does exactly this to one column of `sync_state`.
+  const problems = auditWithMutation(RLS, (sql) =>
+    `${sql}\nrevoke update (last_seq, updated_at) on public.sync_state from authenticated;\n`);
+  assertReports(problems, "policy `sync_state_owner_update` admits UPDATE but authenticated has no");
+});
+
 test("catches the sync_objects guard no longer covering INSERT", () => {
   // It guarded UPDATE only, on the reasoning that a first version was bounded by
   // the range CHECK — which bounds it at 2^53-1, the exact number the step rule
