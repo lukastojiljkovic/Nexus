@@ -152,6 +152,29 @@ export { pushRow, pushRows } from "./push.js";
 export { classifyPush, needsReread } from "./outcome.js";
 export type { PushCode, PushResult } from "./outcome.js";
 
+// ── The profile's content key ───────────────────────────────────────────────
+export {
+  CONTENT_KEY_COLUMNS,
+  CONTENT_KEY_KIND,
+  contentKeyWrapOf,
+  contentKeyWrapsRequest,
+  mintContentKeyWrap,
+  mintContentKeyWrapRequest,
+  parseContentKeyWraps,
+  readContentKeyWraps,
+} from "./keys.js";
+export type {
+  ContentKeyFailure,
+  ContentKeyFailureReason,
+  ContentKeyMintInput,
+  ContentKeyMintResult,
+  ContentKeyMinted,
+  ContentKeyWrap,
+  ContentKeyWraps,
+  ContentKeyWrapsResult,
+  SealedBytes,
+} from "./keys.js";
+
 // ── The server's copy of the cursor ─────────────────────────────────────────
 export { readCursors, writeCursor } from "./cursor.js";
 export type { CursorFailure, CursorFailureReason, CursorRow, CursorWritten, CursorsRead } from "./cursor.js";
