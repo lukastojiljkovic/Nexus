@@ -116,7 +116,7 @@ choice of backend**; whatever in them is about the data model still applies.
      layer is unfinished, and that is the more useful answer.
   Record the class in [docs/defect-classes.md](docs/defect-classes.md) so the
   same shape is recognised the next time it appears somewhere else. **A class
-  that can be turned into a gate should be** — twelve of the sixty-two already
+  that can be turned into a gate should be** — thirteen of the sixty-three already
   have been, and a rule nobody can forget beats a rule everybody has read.
 - **Concise Serbian status updates** to the founder; the code, comments, and docs
   are in **English**.
@@ -188,11 +188,12 @@ choice of backend**; whatever in them is about the data model still applies.
   re-run the db tests.
 - **Verification gates before any commit:** `pnpm typecheck` (12/12), `pnpm lint`
   (12/12), `pnpm test` (all green), `pnpm build` (4/4),
-  `pnpm --filter @nexus/desktop smoke` prints `SMOKE OK`, and **all twelve static
-  gates** pass. **`pnpm lint` used to be missing from this line** even though CI
-  has always run it, and on 2026-08-14 six real errors shipped red because of
-  that — two of them display bugs the linter had named (DC-49, DC-50). Treat an
-  unused import as a question, not a nit: it is usually half a feature.
+  `pnpm --filter @nexus/desktop smoke` prints `SMOKE OK`, and **all thirteen
+  static gates** pass. **`pnpm lint` used to be missing from this line** even
+  though CI has always run it, and on 2026-08-14 six real errors shipped red
+  because of that — two of them display bugs the linter had named (DC-49,
+  DC-50). Treat an unused import as a question, not a nit: it is usually half a
+  feature.
   The static gates are cheap, they need no build output, and CI runs each as its
   own step so a red check names the rule:
   `check:colours` (no raw hex/rgb/hsl outside `packages/tokens`),
@@ -203,6 +204,11 @@ choice of backend**; whatever in them is about the data model still applies.
   silently, so „uses a token" and „uses nothing" are otherwise
   indistinguishable), `check:invisibles` (no character that renders as nothing,
   or as a character it is not — the defence review itself cannot make),
+  **`check:zeroize`** (no key erased in the middle of the call using it: a
+  `finally` runs at the RETURN STATEMENT, not when the returned promise settles,
+  so `try { return openAll(mk) } finally { zeroize(mk) }` decrypts under 32 zero
+  bytes and reports it as `wrap/commitment-mismatch` — a message that accuses the
+  server),
   **`check:risk`** (the professional drawer's notice wiring is intact, and no
   tool forbidden a verdict has grown one in its copy or in its arithmetic),
   **`check:pro-math`** (the other half of the same drawer: no pack module

@@ -84,6 +84,13 @@ jobs:
       # `git diff` and on GitHub, and the file compiles and typechecks around it.
       - run: pnpm check:invisibles
 
+      # A key erased in the middle of the call that is using it. `finally` runs
+      # at the RETURN STATEMENT, not when the returned promise settles, so
+      # `try { return openAll(mk) } finally { zeroize(mk) }` decrypts under 32
+      # zero bytes — and reports it as `wrap/commitment-mismatch`, whose message
+      # accuses the server of serving somebody else's row.
+      - run: pnpm check:zeroize
+
       # The sentence the professional drawer rests on, made executable. Forty of
       # its tools may compute a quantity and may never judge it, and both halves
       # of that fail silently: a deleted `<ToolRiskNotice/>` renders nothing,

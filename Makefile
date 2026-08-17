@@ -45,8 +45,8 @@ VERSION     := $(shell node -p "require('./apps/desktop/package.json').version" 
 # `package.json` so a gate that is renamed breaks here loudly instead of
 # silently dropping out of `make gates` — a gate that stops running is exactly
 # the failure the gate set exists to prevent.
-GATES := colours contrast css strings tokens invisibles risk pro-math pro-flags \
-         licences egress rls
+GATES := colours contrast css strings tokens invisibles zeroize risk pro-math \
+         pro-flags licences egress rls
 
 .PHONY: help install build linux windows dist verify gates test typecheck lint \
         smoke artifacts gentoo-manifest clean require-node require-linux \

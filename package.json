@@ -22,6 +22,7 @@
     "check:css": "node scripts/check-css.mjs",
     "check:egress": "node scripts/check-egress.mjs",
     "check:invisibles": "node scripts/check-invisibles.mjs",
+    "check:zeroize": "node scripts/check-zeroize.mjs",
     "check:risk": "node scripts/check-risk.mjs",
     "check:pro-math": "node scripts/check-pro-math.mjs",
     "check:pro-flags": "node scripts/check-pro-flags.mjs",
