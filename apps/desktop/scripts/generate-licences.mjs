@@ -411,9 +411,21 @@ const rendered = `${JSON.stringify(payload, null, 2)}\n`;
 // This is sound only because the generator is deterministic (see DETERMINISM
 // above) — same node_modules in, byte-identical file out, path separators
 // normalised to `/` so a Windows run and a Linux run agree.
+//
+// LINE ENDINGS are compared out, and that is not a nicety. The generator always
+// writes LF; `.gitattributes` says `* text=auto`, so git checks this file out
+// with CRLF on Windows. A byte comparison therefore answers „stale" to a file
+// that is exactly current — on every Windows checkout, and never on CI, which
+// is the inverse of the staleness this gate exists to catch and reads as the
+// gate crying wolf until someone switches it off. The question being asked is
+// whether the NOTICES still describe the tree; a carriage return is not a
+// notice. `.gitattributes` also pins this file to LF so the working copy stops
+// flipping, but the gate must not depend on anyone having remembered that.
+const withoutLineEndings = (text) => text.replaceAll("\r\n", "\n");
+
 if (process.argv.includes("--check")) {
   const committed = readFileSync(OUTPUT, "utf8");
-  if (committed === rendered) {
+  if (withoutLineEndings(committed) === withoutLineEndings(rendered)) {
     console.log(
       `check-licences: ${within(REPO_ROOT, OUTPUT)} is what this tree produces ` +
         `(${payload.packages.length} packages, ${payload.fonts.length} font families).`,

@@ -13,3 +13,10 @@ apps/desktop/build/gentoo/** text eol=lf
 # against this Windows checkout, so without this the file arrives broken in
 # exactly the situation it exists for.
 Makefile text eol=lf
+
+# A generated file that is committed. The generator always writes LF, and
+# `check:licences` compares what it would write against what is on disk — so a
+# CRLF checkout made that gate report „stale" on every Windows machine and never
+# on CI. The gate no longer compares line endings either; this keeps the working
+# copy from flipping between the two on each checkout.
+apps/desktop/src/renderer/src/data/licences.json text eol=lf
