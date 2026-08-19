@@ -1034,3 +1034,31 @@ export {
   scaleLinear,
 } from "./charts/geometry.js";
 export type { Point } from "./charts/geometry.js";
+
+// --- ELEC: the electronics component model and catalogue (slice E1) ---------
+//
+// `validateComponent` is exported alongside the data because it is what makes a
+// user-defined component a first-class one: the same gate runs over what we ship
+// and over what the user types, so a part they add is refused for the same
+// reasons and drawn by the same canvas. See ADR-085.
+export {
+  BUS_KINDS,
+  COMPONENT_KINDS,
+  PIN_FUNCTIONS,
+  validateComponent,
+} from "./electronics/component.js";
+export type {
+  Bus,
+  BusKind,
+  ComponentDef,
+  ComponentKind,
+  ComponentProblem,
+  ComponentProblemCode,
+  Pin,
+  PinFunction,
+} from "./electronics/component.js";
+export {
+  catalogueComponent,
+  COMPONENT_CATALOGUE,
+  componentsOfKind,
+} from "./electronics/catalogue.js";
