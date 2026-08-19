@@ -94,7 +94,10 @@ function emptyInput(): ExportArchiveInput {
       fitWorkoutSets: [],
       fitMeasurements: [],
       fitBodyProfile: [],
-    canvasBoards: [],
+      canvasBoards: [],
+      circuits: [],
+      circuitParts: [],
+      circuitWires: [],
     },
     hash: sha256,
   };
@@ -239,6 +242,7 @@ describe("buildExportArchive", () => {
           "data/habits.ndjson",
           "data/fitness.ndjson",
           "data/canvas.ndjson",
+          "data/electronics.ndjson",
           "data/calendar.ics",
           "tables/tasks.csv",
           "tables/events.csv",
@@ -276,7 +280,7 @@ describe("buildExportArchive", () => {
       expect(archive.totalRecords).toBe(0);
       expect(archive.byModule).toEqual({
         tasks: 0, calendar: 0, study: 0, notifications: 0, notes: 0, dashboard: 0, finance: 0,
-        habits: 0, fitness: 0, canvas: 0,
+        habits: 0, fitness: 0, canvas: 0, electronics: 0,
       });
       expect(archive.binaries).toEqual([]);
     });
@@ -288,7 +292,7 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as Record<string, unknown>;
 
-      expect(manifest.schemaVersion).toBe("1.39.0");
+      expect(manifest.schemaVersion).toBe("1.40.0");
       expect(manifest.appVersion).toBe("0.1.0");
       expect(manifest.createdAt).toBe("2026-07-11T10:00:00.000Z");
       // `picture: null` is written out loud rather than omitted: the manifest is
@@ -327,6 +331,7 @@ describe("buildExportArchive", () => {
         { id: "habits", records: 0 },
         { id: "fitness", records: 0 },
         { id: "canvas", records: 0 },
+        { id: "electronics", records: 0 },
       ]);
       expect(manifest.checksums).toEqual({
         "data/tasks.ndjson": sha256(""),
@@ -340,6 +345,7 @@ describe("buildExportArchive", () => {
         "data/habits.ndjson": sha256(""),
         "data/fitness.ndjson": sha256(""),
         "data/canvas.ndjson": sha256(""),
+        "data/electronics.ndjson": sha256(""),
       });
       expect(manifest.blobs).toEqual([]);
       // The private inventory (ADR-057 §6), beside the blob list it mirrors —
@@ -1048,7 +1054,7 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       expect(archive.byModule).toEqual({
         tasks: 1, calendar: 0, study: 0, notifications: 1, notes: 0, dashboard: 0, finance: 0,
-        habits: 0, fitness: 0, canvas: 0,
+        habits: 0, fitness: 0, canvas: 0, electronics: 0,
       });
       expect(archive.totalRecords).toBe(2);
     });
@@ -1254,6 +1260,16 @@ describe("buildExportArchive", () => {
         canvasBoards: [
           { id: "cb1", profileId: "p1", name: "Šema baze", scene: { type: "excalidraw", version: 2, source: "nexus", elements: [{ id: "el1", type: "rectangle" }], appState: { gridSize: 20 }, files: {} }, createdAt: t, updatedAt: t },
         ],
+        circuits: [
+          { id: "ci1", profileId: "p1", name: "Trepćuća dioda", notes: "5 V", createdAt: t, updatedAt: t },
+        ],
+        circuitParts: [
+          { id: "cp1", circuitId: "ci1", componentId: "arduino-uno", label: "", x: 0, y: 0, rotation: 0, createdAt: t, updatedAt: t },
+          { id: "cp2", circuitId: "ci1", componentId: "resistor", label: "R1", x: 180, y: 40, rotation: 90, value: 220, createdAt: t, updatedAt: t },
+        ],
+        circuitWires: [
+          { id: "cw1", circuitId: "ci1", fromPartId: "cp1", fromPinId: "D9", toPartId: "cp2", toPinId: "1", colour: "yellow", createdAt: t, updatedAt: t },
+        ],
       };
     }
 
@@ -1276,6 +1292,7 @@ describe("buildExportArchive", () => {
         // counted nowhere, because it is not in the archive at all.
         fitness: 10,
         canvas: 1, // one board — a count of boards, never of what is drawn on them
+        electronics: 4, // 1 circuit + 2 parts + 1 wire, summed: all three are rows a restore replaces
       });
     });
 
@@ -1289,7 +1306,7 @@ describe("buildExportArchive", () => {
     it("counts every bucket as zero for empty data", () => {
       expect(countProfileModules(emptyInput().data)).toEqual({
         tasks: 0, calendar: 0, study: 0, notifications: 0, notes: 0, dashboard: 0, finance: 0,
-        habits: 0, fitness: 0, canvas: 0,
+        habits: 0, fitness: 0, canvas: 0, electronics: 0,
       });
     });
   });
@@ -1876,6 +1893,7 @@ describe("buildExportArchive", () => {
         { id: "habits", records: 0 },
         { id: "fitness", records: 0 },
         { id: "canvas", records: 0 },
+        { id: "electronics", records: 0 },
       ]);
       expect(archive.byModule.notes).toBeGreaterThan(0);
       expect(archive.totalRecords).toBe(archive.byModule.notes + archive.byModule.dashboard);
@@ -2073,6 +2091,7 @@ describe("filterProfileData", () => {
       habits: 0,
       fitness: 0,
       canvas: 0,
+      electronics: 0,
     });
   });
 });

@@ -616,6 +616,35 @@ export const SYNC_MAP: readonly SyncClassification[] = [
     identity: [],
     why: "One row per profile; a preference.",
   },
+  // --- ELEC (migration 067) ----------------------------------------------
+  {
+    kind: "collection",
+    table: "circuits",
+    shape: "fields",
+    identity: ["id"],
+    why: "A circuit is a document the user names and edits; its parts and wires are objects of their own, so the header holds only what is genuinely the circuit's.",
+  },
+  {
+    kind: "collection",
+    table: "circuit_parts",
+    shape: "fields",
+    identity: ["id"],
+    profileVia: { parent: "circuits", key: "circuit_id" },
+    // A `parent-field` would make the circuit the sync object and replace its
+    // whole part list on every merge — which is exactly the loss CANV records as
+    // its open question, arriving here by choice instead of by inheritance. Two
+    // people dragging different parts of one circuit is the ordinary case, not
+    // the pathological one, and per-object LWW is what keeps both moves.
+    why: "A placed part carries its own position, label and value, and two devices legitimately move different parts of one circuit at once.",
+  },
+  {
+    kind: "collection",
+    table: "circuit_wires",
+    shape: "fields",
+    identity: ["id"],
+    profileVia: { parent: "circuits", key: "circuit_id" },
+    why: "A wire is drawn and deleted on its own, and its two ends are foreign keys — so it must be an object that can arrive after the parts it names.",
+  },
 ];
 
 /**

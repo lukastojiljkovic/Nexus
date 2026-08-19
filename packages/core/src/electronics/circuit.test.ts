@@ -256,6 +256,15 @@ describe("the assembled circuit, against the components this build ships", () =>
     ]);
   });
 
+  it("names a wire that merged into a loop back to its own pin", () => {
+    // No store writes this — `validateWire` refuses it. It can only arrive from
+    // the other device: two people moved opposite ends of one wire and
+    // field-level LWW took each end from a different writer. Migration 067 has
+    // no CHECK against it on purpose, so this is the only place it surfaces.
+    const looped = circuit({ wires: [wire({ to: { partId: "p1", pinId: "D9" } })] });
+    expect(circuitProblems(looped, resolve)).toEqual([{ field: "wires[w1].to", code: "self" }]);
+  });
+
   it("catches two rows claiming one id, on parts and on wires alike", () => {
     const twoParts = circuit({ parts: [part(), part()], wires: [] });
     expect(circuitProblems(twoParts, resolve)).toEqual([

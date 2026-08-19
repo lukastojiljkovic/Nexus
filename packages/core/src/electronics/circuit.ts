@@ -271,6 +271,15 @@ export function circuitProblems(
     }
     seenWires.add(wire.id);
 
+    // `validateWire` already refuses to write one, so this can only be a row
+    // that arrived by merge: two devices moved opposite ends of one wire, and
+    // field-level LWW took each end from a different writer. Migration 067
+    // deliberately has no CHECK against it — see the table's comment — so this
+    // is where the user hears about it.
+    if (wire.from.partId === wire.to.partId && wire.from.pinId === wire.to.pinId) {
+      problems.push({ field: `wires[${wire.id}].to`, code: "self" });
+    }
+
     for (const side of ["from", "to"] as const) {
       const end = wire[side];
       const part = parts.get(end.partId);

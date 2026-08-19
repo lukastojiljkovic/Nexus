@@ -218,6 +218,12 @@ export const RESTORE_WIPE_TABLES = [
   "fit_exercises",
   "fit_measurements",
   "fit_body_profile",
+  // ELEC (migration 067). Children before parents, as everywhere above: a wire's
+  // ends are real foreign keys into `circuit_parts`, and a part's `circuit_id`
+  // is one into `circuits`. Both cascades exist and neither is leaned on.
+  "circuit_wires",
+  "circuit_parts",
+  "circuits",
 ] as const;
 
 type WipeTable = (typeof RESTORE_WIPE_TABLES)[number];
@@ -246,6 +252,12 @@ const SCOPED_THROUGH_PARENT: Partial<Record<WipeTable, string>> = {
   note_snapshots: `DELETE FROM note_snapshots WHERE note_id IN (SELECT id FROM notes WHERE profile_id = ?)`,
   note_updates: `DELETE FROM note_updates WHERE note_id IN (SELECT id FROM notes WHERE profile_id = ?)`,
   habit_entries: `DELETE FROM habit_entries WHERE habit_id IN (SELECT id FROM habits WHERE profile_id = ?)`,
+  circuit_parts: `DELETE FROM circuit_parts WHERE circuit_id IN (SELECT id FROM circuits WHERE profile_id = ?)`,
+  // Scoped through the wire's OWN `circuit_id`, not through either end's part.
+  // That column is the wire's, so it needs no argument about both ends
+  // belonging to one profile — unlike `task_dependencies` and
+  // `subject_note_links`, which have no such column and must make one.
+  circuit_wires: `DELETE FROM circuit_wires WHERE circuit_id IN (SELECT id FROM circuits WHERE profile_id = ?)`,
 };
 
 /** Every wipe statement takes exactly one bound parameter: this store's own `profileId` (R4) — never the archive's. */
@@ -319,6 +331,9 @@ export class RestoreStore {
   private readonly insertFitWorkoutSet: Database.Statement;
   private readonly insertFitMeasurement: Database.Statement;
   private readonly insertCanvasBoard: Database.Statement;
+  private readonly insertCircuit: Database.Statement;
+  private readonly insertCircuitPart: Database.Statement;
+  private readonly insertCircuitWire: Database.Statement;
   private readonly insertSubject: Database.Statement;
   private readonly insertSubjectAttachment: Database.Statement;
   private readonly insertSubjectNoteLink: Database.Statement;
@@ -539,6 +554,26 @@ export class RestoreStore {
     this.insertCanvasBoard = db.prepare(
       `INSERT INTO canvas_boards (id, profile_id, name, scene, created_at, updated_at, deleted_at)
        VALUES (?, ?, ?, ?, ?, ?, NULL)`,
+    );
+    // ELEC (migration 067). Three statements, run parent-first: a part's
+    // `circuit_id` and both of a wire's ends are real foreign keys, so the
+    // order below is enforced by SQLite rather than merely observed.
+    this.insertCircuit = db.prepare(
+      `INSERT INTO circuits (id, profile_id, name, notes, created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, NULL)`,
+    );
+    // `value` is the one nullable column: a resistor has one, a board does
+    // not, and the archive omits the field entirely rather than writing null.
+    this.insertCircuitPart = db.prepare(
+      `INSERT INTO circuit_parts
+         (id, circuit_id, component_id, label, x, y, rotation, value, created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    );
+    this.insertCircuitWire = db.prepare(
+      `INSERT INTO circuit_wires
+         (id, circuit_id, from_part_id, from_pin_id, to_part_id, to_pin_id, colour,
+          created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.insertSubject = db.prepare(
       `INSERT INTO subjects
@@ -1534,6 +1569,39 @@ export class RestoreStore {
         this.insertCanvasBoard.run(
           board.id, this.profileId, board.name, canvasSceneText(board.scene),
           board.createdAt, board.updatedAt,
+        );
+        written += 1;
+      }
+
+      // ELEC (migration 067): circuits, then their parts, then the wires
+      // between those parts. The order is the schema's, not this loop's — a
+      // wire written before its parts is refused by a foreign key, and the
+      // reader hands the three collections over in the same order for the same
+      // reason. The COMPONENTS are not here and never will be: the catalogue
+      // ships with the application, so a part carries an id into it and this
+      // store writes that id through untouched. EMPTY for every pre-1.40.0
+      // archive, which restores a profile that wired nothing, exactly as it
+      // wired none.
+      for (const circuit of input.data.circuits) {
+        this.insertCircuit.run(
+          circuit.id, this.profileId, circuit.name, circuit.notes,
+          circuit.createdAt, circuit.updatedAt,
+        );
+        written += 1;
+      }
+      for (const part of input.data.circuitParts) {
+        this.insertCircuitPart.run(
+          part.id, part.circuitId, part.componentId, part.label,
+          part.x, part.y, part.rotation, part.value ?? null,
+          part.createdAt, part.updatedAt,
+        );
+        written += 1;
+      }
+      for (const wire of input.data.circuitWires) {
+        this.insertCircuitWire.run(
+          wire.id, wire.circuitId, wire.fromPartId, wire.fromPinId,
+          wire.toPartId, wire.toPinId, wire.colour,
+          wire.createdAt, wire.updatedAt,
         );
         written += 1;
       }

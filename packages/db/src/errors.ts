@@ -914,6 +914,28 @@ export class CanvasValidationError extends DatabaseError {}
 export class CanvasBoardNotFoundError extends DatabaseError {}
 
 /**
+ * Thrown when a circuit, a placed part or a wire is rejected at the store
+ * boundary (ELEC, migration 067).
+ *
+ * Most of what it reports is `@nexus/core`'s own answer, not this store's:
+ * `validateCircuitHeader`, `validatePart` and `validateWire` are the domain's
+ * storage gate, and `ElectronicsStore` hands them the candidate row and
+ * renames their first problem into this. So a blank name, a coordinate off
+ * the working area, a rotation that is not a quarter turn, a value at or
+ * below zero, a colour outside the nine jumpers and a wire from a pin to
+ * itself all arrive here already named by the field at fault.
+ *
+ * Two refusals are the STORE's own, because a row in isolation cannot see
+ * them: a wire whose ends are not live parts of that same circuit — the
+ * invariant migration 067 documents as unstatable, since a CHECK cannot hold
+ * a sub-query — and a malformed `now`.
+ */
+export class CircuitValidationError extends DatabaseError {}
+
+/** Thrown when a circuit, part or wire operation targets an id that is not a live row reachable from the store's own profile — unknown, soft-deleted, on a soft-deleted circuit, or owned by another profile. */
+export class CircuitNotFoundError extends DatabaseError {}
+
+/**
  * Thrown when a USER exercise write is rejected at the store boundary (FIT
  * training, migration 060): an empty or over-80-character `name`, an over-80
  * `nameEn`, over-500-character `notes`, an empty `primaryMuscles` list, any

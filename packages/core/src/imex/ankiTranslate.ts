@@ -740,6 +740,9 @@ export function translateApkg(parsed: ParsedApkg, target: ApkgTranslateTarget): 
     fitMeasurements: [],
     fitBodyProfile: [],
     canvasBoards: [],
+    circuits: [],
+    circuitParts: [],
+    circuitWires: [],
   };
 
   return {

@@ -743,6 +743,9 @@ export function translateCsvTasks(
     fitMeasurements: [],
     fitBodyProfile: [],
     canvasBoards: [],
+    circuits: [],
+    circuitParts: [],
+    circuitWires: [],
   };
 
   return {

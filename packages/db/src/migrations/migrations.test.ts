@@ -27,8 +27,8 @@ import { CardStore, MIGRATIONS, NexusDatabase, openDatabase, runMigrations } fro
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 66 (the sync loop's three tables), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(66);
+  it("is at version 67 (the electronics circuit tables), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(67);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );

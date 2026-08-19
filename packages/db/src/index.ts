@@ -24,6 +24,8 @@ export {
   CanvasValidationError,
   CardNotFoundError,
   CardValidationError,
+  CircuitNotFoundError,
+  CircuitValidationError,
   DashboardSetNotFoundError,
   DashboardSetValidationError,
   DashboardSettingsValidationError,
@@ -611,6 +613,27 @@ export {
   MAX_CANVAS_REF_BATCH,
 } from "./canvas/canvasStore.js";
 export type { CanvasBoard, CanvasBoardWithScene, CanvasRefCard } from "./canvas/canvasStore.js";
+
+// --- ELEC (circuits, migration 067) -----------------------------------------
+//
+// ONE store over THREE tables, because a circuit is three tables (ADR-085 §4)
+// — and the two child tables reach a profile only through their circuit, so
+// every read here joins for its scope rather than filtering a column that is
+// deliberately not there.
+//
+// The COMPONENTS are not among them and never will be: the catalogue ships as
+// constants in `@nexus/core`, versioned with the application, so a part row
+// carries a `componentId` this store never resolves.
+export { ElectronicsStore } from "./electronics/electronicsStore.js";
+export type {
+  NewCircuitPart,
+  NewCircuitWire,
+  StoredCircuit,
+  StoredCircuitDetail,
+  StoredCircuitPart,
+  StoredCircuitWire,
+  UpdateCircuitPartFields,
+} from "./electronics/electronicsStore.js";
 
 export {
   SearchStore,

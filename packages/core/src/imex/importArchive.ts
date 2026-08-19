@@ -25,6 +25,14 @@ import type { MuscleGroup } from "../fitness/exercise.js";
 import { SET_KINDS } from "../fitness/training.js";
 import { MAX_CANVAS_SCENE_LENGTH, validateCanvasScene } from "../canvas/canvasScene.js";
 import type { CanvasScene } from "../canvas/canvasScene.js";
+import {
+  MAX_CANVAS_COORDINATE,
+  MAX_CIRCUIT_NAME_LENGTH,
+  MAX_CIRCUIT_NOTES_LENGTH,
+  MAX_PART_LABEL_LENGTH,
+  PART_ROTATIONS,
+  WIRE_COLOURS,
+} from "../electronics/circuit.js";
 import { validateHabitSchedule } from "../habits/habitSchedule.js";
 import type { HabitSchedule } from "../habits/habitSchedule.js";
 import { FIRST_RANK, isRank, normalizeRank, rankForInteger } from "../order/rank.js";
@@ -44,6 +52,9 @@ import type {
   ExportCalendarSettings,
   ExportCanvasBoard,
   ExportCard,
+  ExportCircuit,
+  ExportCircuitPart,
+  ExportCircuitWire,
   ExportDashboardSet,
   ExportDashboardSettings,
   ExportDashboardWidget,
@@ -274,6 +285,31 @@ export interface ImportArchiveResult {
 /**
  * The schema version this build writes and is the newest it accepts, kept in
  * step with `buildExportArchive`'s own `SCHEMA_VERSION`.
+ *
+ * `1.40.0` adds the ELEC module's circuits (ELEC slice E1, migration 067):
+ * three record types — `circuit`, `circuit-part` and `circuit-wire` — sharing
+ * one new `data/electronics.ndjson`, plus a new `electronics` archive module.
+ * None of the three needs an `ArchiveEra` flag: the whole-absent-type rule
+ * below covers them, and a pre-`1.40.0` archive simply carries no circuits,
+ * exactly as a profile that drew none does.
+ *
+ * **The COMPONENT catalogue is not in the archive, and this reader expects
+ * none** — the food catalogue's arrangement one module over, for a stronger
+ * reason. The 153 components the app ships are constants in this package,
+ * versioned with the application because a fact about a part number is what
+ * they are. So a `circuit-part` carries a `componentId` and nothing else about
+ * the component, and `componentId` gets NO reference rule: it names something
+ * that is not a row anywhere, and the build opening the archive may honestly
+ * not ship it. `circuitProblems` draws that as a placeholder with a note in the
+ * margin — refusing the row HERE would turn a corrected datasheet into an
+ * archive that no longer restores.
+ *
+ * A part's `circuitId` and BOTH of a wire's ends are the opposite case: real
+ * foreign keys in migration 067, each with `ON DELETE CASCADE`, so each takes a
+ * reference rule that DROPS. A wire naming a part this archive does not carry
+ * is a row the schema's own cascade could never have produced, and a dropped
+ * circuit takes its parts with it and then its wires, on the very next sweep of
+ * the same fixpoint.
  *
  * `1.36.0` adds the CANV module's boards (CANV slice a, migration 059): the
  * record type `canvas-board`, riding alone in its own `data/canvas.ndjson` (a
@@ -627,7 +663,7 @@ export interface ImportArchiveResult {
  * shipped would be speculative machinery with nothing to exercise it.
  *
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.39.0";
+export const INTERCHANGE_SCHEMA_VERSION = "1.40.0";
 
 // --- Archive era: what a declared version guarantees its rows CARRY ---------
 //
@@ -1314,7 +1350,10 @@ export type ArchiveRecordType =
   | "fit-workout-set"
   | "fit-measurement"
   | "fit-body-profile"
-  | "canvas-board";
+  | "canvas-board"
+  | "circuit"
+  | "circuit-part"
+  | "circuit-wire";
 
 const ALL_RECORD_TYPES: readonly ArchiveRecordType[] = [
   "task",
@@ -1375,6 +1414,9 @@ const ALL_RECORD_TYPES: readonly ArchiveRecordType[] = [
   "fit-measurement",
   "fit-body-profile",
   "canvas-board",
+  "circuit",
+  "circuit-part",
+  "circuit-wire",
 ];
 
 type DataFilePath = (typeof DATA_FILES)[number];
@@ -1447,6 +1489,10 @@ const FILE_RECORD_TYPES: Record<DataFilePath, readonly ArchiveRecordType[]> = {
     "fit-measurement",
   ],
   "data/canvas.ndjson": ["canvas-board"],
+  // Parents before children in the WRITER's order; this map is a membership
+  // test and does not impose one, but the file's own order is what lets a
+  // restore write a wire after the parts it names.
+  "data/electronics.ndjson": ["circuit", "circuit-part", "circuit-wire"],
 };
 
 /**
@@ -1472,6 +1518,7 @@ const MODULE_OF_DATA_FILE: Record<DataFilePath, ArchiveModuleId | null> = {
   "data/finance.ndjson": "finance",
   "data/habits.ndjson": "habits",
   "data/canvas.ndjson": "canvas",
+  "data/electronics.ndjson": "electronics",
   "data/fitness.ndjson": "fitness",
 };
 
@@ -3394,6 +3441,103 @@ function canvasScene(value: unknown, field: string): CanvasScene {
   return scene;
 }
 
+// --- ELEC (circuits, migration 067) ------------------------------------------
+//
+// The bounds below are IMPORTED rather than copied, which is the opposite of
+// what the CANV section two blocks up does with its name length — and the
+// difference is not inconsistency. `MAX_CANVAS_BOARD_NAME_LENGTH` belongs to a
+// store in `@nexus/db`, a package this one must never depend on. The circuit
+// bounds belong to `electronics/circuit.ts`, which is in THIS package, so there
+// is one definition of how long a circuit's name may be and this reader shares
+// it instead of restating it.
+
+/**
+ * One circuit (migration 067) — the parent of the two types below, and first in
+ * the file for that reason.
+ */
+function parseCircuit(raw: Record<string, unknown>): ExportCircuit {
+  const id = nonEmptyStr(raw.id, "id");
+  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const name = trimmedNonEmptyStr(raw.name, "name", MAX_CIRCUIT_NAME_LENGTH);
+  // Bounded but allowed to be empty, and NOT trimmed: this is prose the user
+  // typed, where a trailing newline is theirs rather than a writer's artefact.
+  const notes = str(raw.notes, "notes");
+  if (notes.length > MAX_CIRCUIT_NOTES_LENGTH) throw new InvalidFieldError("notes");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return { id, profileId, name, notes, createdAt, updatedAt };
+}
+
+/**
+ * One component placed on a circuit's canvas (migration 067).
+ *
+ * **`componentId` is checked for SHAPE and then left alone**, on `foodRef`'s
+ * terms one module over: it names an entry in the catalogue the app ships, which
+ * is not a row anywhere, so there is nothing for a reference rule to resolve
+ * against. See `INTERCHANGE_SCHEMA_VERSION`'s `1.40.0` entry.
+ *
+ * `value` is optional in the interchange contract because it is NULL in the
+ * column: a resistor has one and a board does not. Whether it BELONGS on this
+ * particular part is a catalogue question — `circuitProblems` asks it, with the
+ * component in hand — so this reader checks only what migration 067's CHECK
+ * does, that a stated one is a positive finite number.
+ */
+function parseCircuitPart(raw: Record<string, unknown>): ExportCircuitPart {
+  const id = nonEmptyStr(raw.id, "id");
+  const circuitId = nonEmptyStr(raw.circuitId, "circuitId");
+  const componentId = nonEmptyStr(raw.componentId, "componentId");
+  const label = str(raw.label, "label");
+  if (label.length > MAX_PART_LABEL_LENGTH) throw new InvalidFieldError("label");
+  const x = numberInRange(raw.x, "x", -MAX_CANVAS_COORDINATE, MAX_CANVAS_COORDINATE);
+  const y = numberInRange(raw.y, "y", -MAX_CANVAS_COORDINATE, MAX_CANVAS_COORDINATE);
+  const rotation = enumInt(raw.rotation, "rotation", PART_ROTATIONS);
+  const value = raw.value === undefined ? undefined : finiteNumber(raw.value, "value");
+  if (value !== undefined && value <= 0) throw new InvalidFieldError("value");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return {
+    id,
+    circuitId,
+    componentId,
+    label,
+    x,
+    y,
+    rotation,
+    ...(value === undefined ? {} : { value }),
+    createdAt,
+    updatedAt,
+  };
+}
+
+/**
+ * One wire between two pins (migration 067).
+ *
+ * A PIN id is a string and nothing more here: which pins a component has is
+ * catalogue knowledge, asked by `circuitProblems` where the component is in
+ * hand, for `componentId`'s reason exactly.
+ *
+ * There is no check that the two ends differ, and migration 067 has no CHECK
+ * for it either — deliberately, and the reasoning is in the migration. Such a
+ * wire draws as nothing and changes no electrical result; `circuitProblems`
+ * names it. Refusing it HERE would make an archive unrestorable over a row the
+ * database it came from was willing to hold.
+ */
+function parseCircuitWire(raw: Record<string, unknown>): ExportCircuitWire {
+  const id = nonEmptyStr(raw.id, "id");
+  const circuitId = nonEmptyStr(raw.circuitId, "circuitId");
+  const fromPartId = nonEmptyStr(raw.fromPartId, "fromPartId");
+  const fromPinId = nonEmptyStr(raw.fromPinId, "fromPinId");
+  const toPartId = nonEmptyStr(raw.toPartId, "toPartId");
+  const toPinId = nonEmptyStr(raw.toPinId, "toPinId");
+  // One of nine jumper colours by NAME. A CSS colour can never reach the
+  // column, which is what lets the canvas paint it through a --nx-elec-wire-*
+  // token instead of rendering a stored value.
+  const colour = enumStr(raw.colour, "colour", WIRE_COLOURS);
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return { id, circuitId, fromPartId, fromPinId, toPartId, toPinId, colour, createdAt, updatedAt };
+}
+
 // --- Private notes (PRIV v1, ADR-057 §6) -------------------------------------
 
 /** Mirrors `PRIV_ATTACHMENTS_MAX_COUNT` (`apps/desktop`'s wire cap) — copied, not imported, on `NOTE_FOLDER_COLORS`' terms: this package cannot depend on the app's shared wire file. */
@@ -3619,6 +3763,9 @@ interface Collections {
   fitMeasurements: Bucket<ExportFitMeasurement>;
   fitBodyProfile: Bucket<ExportFitBodyProfile>;
   canvasBoards: Bucket<ExportCanvasBoard>;
+  circuits: Bucket<ExportCircuit>;
+  circuitParts: Bucket<ExportCircuitPart>;
+  circuitWires: Bucket<ExportCircuitWire>;
 }
 
 function newCollections(): Collections {
@@ -3647,6 +3794,7 @@ function newCollections(): Collections {
     fitWorkouts: newBucket(), fitWorkoutSets: newBucket(), fitMeasurements: newBucket(),
     fitBodyProfile: newBucket(),
     canvasBoards: newBucket(),
+    circuits: newBucket(), circuitParts: newBucket(), circuitWires: newBucket(),
   };
 }
 
@@ -4018,6 +4166,21 @@ function dispatchRecord(
     case "canvas-board": {
       const row = parseCanvasBoard(raw);
       pushRow(collections.canvasBoards, row.id, row, type, path, line, ctx);
+      return;
+    }
+    case "circuit": {
+      const row = parseCircuit(raw);
+      pushRow(collections.circuits, row.id, row, type, path, line, ctx);
+      return;
+    }
+    case "circuit-part": {
+      const row = parseCircuitPart(raw);
+      pushRow(collections.circuitParts, row.id, row, type, path, line, ctx);
+      return;
+    }
+    case "circuit-wire": {
+      const row = parseCircuitWire(raw);
+      pushRow(collections.circuitWires, row.id, row, type, path, line, ctx);
       return;
     }
   }
@@ -5124,6 +5287,60 @@ function referenceRules(collections: Collections): ReferenceRule[] {
     // `fit_workouts_profile_open`'s UNIQUE partial index: at most one open
     // workout per profile — see `openWorkoutRule`'s own doc.
     openWorkoutRule(collections),
+    // --- ELEC (migration 067) -----------------------------------------------
+    // A part's circuit and a wire's circuit and BOTH its ends: four real foreign
+    // keys, every one `ON DELETE CASCADE`, so every one DROPS when it dangles —
+    // a row the schema's own cascade could never have produced. The drops
+    // compose: a circuit that is not here takes its parts on this sweep and its
+    // wires on the next, which is why the wire rules come after the part rule
+    // and why the fixpoint runs at all.
+    //
+    // `componentId` gets no rule and never will — see this file's `1.40.0`
+    // entry: it names a constant the app ships, not a row.
+    referenceRule({
+      bucket: collections.circuitParts,
+      type: "circuit-part",
+      field: "circuitId",
+      ref: (row) => row.circuitId,
+      resolver: () => {
+        const ids = idsOf(collections.circuits);
+        return (ref) => ids.has(ref);
+      },
+      onDangling: "drop",
+    }),
+    referenceRule({
+      bucket: collections.circuitWires,
+      type: "circuit-wire",
+      field: "circuitId",
+      ref: (row) => row.circuitId,
+      resolver: () => {
+        const ids = idsOf(collections.circuits);
+        return (ref) => ids.has(ref);
+      },
+      onDangling: "drop",
+    }),
+    referenceRule({
+      bucket: collections.circuitWires,
+      type: "circuit-wire",
+      field: "fromPartId",
+      ref: (row) => row.fromPartId,
+      resolver: () => {
+        const ids = idsOf(collections.circuitParts);
+        return (ref) => ids.has(ref);
+      },
+      onDangling: "drop",
+    }),
+    referenceRule({
+      bucket: collections.circuitWires,
+      type: "circuit-wire",
+      field: "toPartId",
+      ref: (row) => row.toPartId,
+      resolver: () => {
+        const ids = idsOf(collections.circuitParts);
+        return (ref) => ids.has(ref);
+      },
+      onDangling: "drop",
+    }),
   ];
 }
 
@@ -5689,6 +5906,12 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
         // — and a restore reads that emptiness as "this profile drew nothing",
         // which is exactly what it drew.
         canvasBoards: rowsOf(collections.canvasBoards),
+        // Empty for every pre-1.40.0 archive, which carries no such file at
+        // all — and a restore reads that emptiness as „this profile wired
+        // nothing", which is exactly what it wired.
+        circuits: rowsOf(collections.circuits),
+        circuitParts: rowsOf(collections.circuitParts),
+        circuitWires: rowsOf(collections.circuitWires),
       };
 
   // Beside `data` and gated identically (ADR-057 §6): empty both for a

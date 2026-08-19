@@ -6372,6 +6372,15 @@ export interface RestoreModuleCounts {
    * shapes" would name something nobody has a name for.
    */
   canvas: number;
+  /**
+   * The circuits, their placed parts and the wires between them (ELEC,
+   * migration 067) — all three summed, unlike `canvas` above. A circuit is
+   * the unit the user names, so „4" would understate what a restore
+   * replaces; a part and a wire are rows of theirs too. What is counted
+   * NOWHERE is the component catalogue: it ships inside the app rather than
+   * as rows, exactly as the food catalogue does.
+   */
+  electronics: number;
 }
 
 /** The outcome of the native "pick a restore archive" dialog (IMEX slice 3c). Mirrors `SaveAttachmentResult`'s shape, plus what a restore preview needs before it can even ask for a passphrase: the file's display name and whether it is an `NXA1` container. */
@@ -6598,7 +6607,10 @@ export type ImportRecordType =
   | "fit-workout-set"
   | "fit-measurement"
   | "fit-body-profile"
-  | "canvas-board";
+  | "canvas-board"
+  | "circuit"
+  | "circuit-part"
+  | "circuit-wire";
 
 /**
  * Why rows the archive carried are not in the plan. Mirrors `@nexus/core`'s

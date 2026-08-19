@@ -45,6 +45,7 @@ import {
   FitMeasurementStore,
   FitRoutineStore,
   CanvasStore,
+  ElectronicsStore,
   FitTargetStore,
   FitWorkoutStore,
   HabitStore,
@@ -239,6 +240,7 @@ function profileDataDeps(handle: NexusDatabase): ProfileDataDeps {
     fitMeasurementStore: (profileId) => new FitMeasurementStore(handle.raw, profileId),
     fitBodyProfileStore: (profileId) => new FitBodyProfileStore(handle.raw, profileId),
     canvasStore: (profileId) => new CanvasStore(handle.raw, profileId),
+    electronicsStore: (profileId) => new ElectronicsStore(handle.raw, profileId),
   };
 }
 
@@ -553,6 +555,33 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
   const fitMeasurementStore = new FitMeasurementStore(handle.raw, profileId);
   const fitBodyProfileStore = new FitBodyProfileStore(handle.raw, profileId);
   const canvasStore = new CanvasStore(handle.raw, profileId);
+  const electronicsStore = new ElectronicsStore(handle.raw, profileId);
+
+  // ELEC (migration 067): a circuit with two parts and a wire between them.
+  // Three tables whose references only work if the restore writes them in
+  // order, so a round trip that ended in a foreign-key failure says so here
+  // rather than the first time somebody restores a real backup. `R1` carries a
+  // value and the board carries none — the one nullable column, both ways.
+  const circuit = electronicsStore.createCircuit({ name: "Trepćuća dioda", notes: "5 V" }, t0);
+  const boardPart = electronicsStore.addPart(
+    circuit.id,
+    { componentId: "arduino-uno", label: "", x: 0, y: 0, rotation: 0 },
+    t0,
+  );
+  const resistorPart = electronicsStore.addPart(
+    circuit.id,
+    { componentId: "resistor", label: "R1", x: 180, y: 40, rotation: 90, value: 220 },
+    t0,
+  );
+  electronicsStore.addWire(
+    circuit.id,
+    {
+      from: { partId: boardPart.id, pinId: "D9" },
+      to: { partId: resistorPart.id, pinId: "1" },
+      colour: "yellow",
+    },
+    t0,
+  );
 
   // HABIT (migration 055): one habit of each schedule kind and real days ticked
   // on both, so the zip round trip carries a streak's whole substance rather
@@ -886,6 +915,7 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
   new ProfileStore(handle.raw).setPicture(profileId, pictureSha, "image/png", pictureBytes.length);
 
   const taskLists = taskListStore.listActive();
+  const electronics = electronicsStore.listAllForExport();
   const data: ProfileData = {
     tasks: taskStore.listActive(),
     taskLists,
@@ -980,6 +1010,11 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
       createdAt: board.createdAt,
       updatedAt: board.updatedAt,
     })),
+    // ELEC (migration 067), read the way `gatherElectronics` reads it: three
+    // reads for the whole profile, never one per circuit.
+    circuits: electronics.circuits,
+    circuitParts: electronics.parts,
+    circuitWires: electronics.wires,
   };
 
   const derived = deriveRestoredNotes(data.notes);

@@ -93,6 +93,9 @@ export class ForeignImportStore {
   private readonly insertFitWorkout: Database.Statement;
   private readonly insertFitWorkoutSet: Database.Statement;
   private readonly insertCanvasBoard: Database.Statement;
+  private readonly insertCircuit: Database.Statement;
+  private readonly insertCircuitPart: Database.Statement;
+  private readonly insertCircuitWire: Database.Statement;
   private readonly insertNote: Database.Statement;
   private readonly insertNoteSnapshot: Database.Statement;
   private readonly insertNoteAttachment: Database.Statement;
@@ -344,6 +347,23 @@ export class ForeignImportStore {
     this.insertCanvasBoard = db.prepare(
       `INSERT INTO canvas_boards (id, profile_id, name, scene, created_at, updated_at, deleted_at)
        VALUES (?, ?, ?, ?, ?, ?, NULL)`,
+    );
+    // ELEC (migration 067). Three statements, run parent-first — the order is
+    // the schema's, not the loop's.
+    this.insertCircuit = db.prepare(
+      `INSERT INTO circuits (id, profile_id, name, notes, created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, NULL)`,
+    );
+    this.insertCircuitPart = db.prepare(
+      `INSERT INTO circuit_parts
+         (id, circuit_id, component_id, label, x, y, rotation, value, created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    );
+    this.insertCircuitWire = db.prepare(
+      `INSERT INTO circuit_wires
+         (id, circuit_id, from_part_id, from_pin_id, to_part_id, to_pin_id, colour,
+          created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.insertNote = db.prepare(
       `INSERT INTO notes
@@ -1011,6 +1031,37 @@ export class ForeignImportStore {
         this.insertCanvasBoard.run(
           board.id, this.profileId, board.name, canvasSceneText(board.scene),
           board.createdAt, board.updatedAt,
+        );
+        written += 1;
+      }
+
+      // ELEC (migration 067): circuits, then parts, then wires. Every circuit
+      // is a NEW row on the boards' reasoning exactly — two „Robot" circuits in
+      // two profiles are two different machines, so nothing here can collide
+      // and the insert-only contract is kept literally. `componentId` rides
+      // UNREMAPPED and must: it names an entry in the catalogue the app ships,
+      // which is the same catalogue on both sides because it is part of the
+      // build rather than of the database.
+      for (const circuit of planned.circuits) {
+        this.insertCircuit.run(
+          circuit.id, this.profileId, circuit.name, circuit.notes,
+          circuit.createdAt, circuit.updatedAt,
+        );
+        written += 1;
+      }
+      for (const part of planned.circuitParts) {
+        this.insertCircuitPart.run(
+          part.id, part.circuitId, part.componentId, part.label,
+          part.x, part.y, part.rotation, part.value ?? null,
+          part.createdAt, part.updatedAt,
+        );
+        written += 1;
+      }
+      for (const wire of planned.circuitWires) {
+        this.insertCircuitWire.run(
+          wire.id, wire.circuitId, wire.fromPartId, wire.fromPinId,
+          wire.toPartId, wire.toPinId, wire.colour,
+          wire.createdAt, wire.updatedAt,
         );
         written += 1;
       }

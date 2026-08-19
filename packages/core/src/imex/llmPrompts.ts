@@ -1314,6 +1314,9 @@ export function translateLlmRecords(
     fitMeasurements: [],
     fitBodyProfile: [],
     canvasBoards: [],
+    circuits: [],
+    circuitParts: [],
+    circuitWires: [],
   };
 
   return { data, seededIds, planned: tasks.length + events.length + cards.length + decks.length };

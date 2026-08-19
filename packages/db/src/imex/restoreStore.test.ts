@@ -41,6 +41,7 @@ import {
   FitTargetStore,
   FitWorkoutStore,
   CanvasStore,
+  ElectronicsStore,
   HabitStore,
   NexusDatabase,
   NoteAttachmentStore,
@@ -250,6 +251,9 @@ function emptyProfileData(): ProfileData {
     fitMeasurements: [],
     fitBodyProfile: [],
     canvasBoards: [],
+    circuits: [],
+    circuitParts: [],
+    circuitWires: [],
     events: [],
     eventTemplates: [],
     documents: [],
@@ -405,6 +409,7 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
   const fitMeasurementStore = new FitMeasurementStore(handle.raw, profileId);
   const fitBodyProfileStore = new FitBodyProfileStore(handle.raw, profileId);
   const canvasStore = new CanvasStore(handle.raw, profileId);
+  const electronicsStore = new ElectronicsStore(handle.raw, profileId);
 
   // The merged Yjs state and derived body an export would carry for the edited
   // note — stand-ins for real Yjs bytes (see `bytes()`), but genuinely stored
@@ -758,6 +763,28 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
     t1,
   );
 
+  // ELEC (migration 067): a circuit with two parts and a wire between them —
+  // three tables whose references only work if the restore writes them in
+  // order, so a round trip that ended with a foreign-key failure would say so
+  // here rather than the first time a user restored a backup. `R1` carries a
+  // value and the board carries none, which is the one nullable column.
+  const circuit = electronicsStore.createCircuit({ name: `${name} kolo`, notes: "5 V" }, t1);
+  const board = electronicsStore.addPart(
+    circuit.id,
+    { componentId: "arduino-uno", label: "", x: 0, y: 0, rotation: 0 },
+    t1,
+  );
+  const resistor = electronicsStore.addPart(
+    circuit.id,
+    { componentId: "resistor", label: "R1", x: 180, y: 40, rotation: 90, value: 220 },
+    t1,
+  );
+  electronicsStore.addWire(
+    circuit.id,
+    { from: { partId: board.id, pinId: "D9" }, to: { partId: resistor.id, pinId: "1" }, colour: "yellow" },
+    t1,
+  );
+
   const session = focusStore.create(
     { subjectId: subject.id, startedAt: "2026-01-01T09:00:00.000Z", endedAt: "2026-01-01T09:30:00.000Z" },
     "2026-01-01T09:31:00.000Z",
@@ -831,6 +858,7 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
   calendarSettingsStore.save({ semesterStart: "2026-10-01", semesterEnd: "2027-01-31" });
 
   const taskLists = taskListStore.listActive();
+  const electronics = electronicsStore.listAllForExport();
   const data: ProfileData = {
     tasks: taskStore.listActive(),
     taskLists,
@@ -902,6 +930,9 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
     fitMeasurements: fitMeasurementRows(profileId, fitMeasurementStore),
     fitBodyProfile: fitBodyProfileRows(profileId, fitBodyProfileStore),
     canvasBoards: canvasBoardRows(canvasStore),
+    circuits: electronics.circuits,
+    circuitParts: electronics.parts,
+    circuitWires: electronics.wires,
   };
 
   const derived = new Map<string, RestoredNoteDerived>([

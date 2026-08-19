@@ -927,6 +927,9 @@ export function translateCsvFinance(
     fitMeasurements: [],
     fitBodyProfile: [],
     canvasBoards: [],
+    circuits: [],
+    circuitParts: [],
+    circuitWires: [],
   };
 
   return {

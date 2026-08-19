@@ -62,6 +62,35 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * older reader handed a newer archive is therefore no worse off for its
  * presence, which is precisely what a version bump would otherwise be claiming.
  *
+ * `1.40.0` adds the ELEC module's circuits (ELEC slice E1, migration 067):
+ * THREE record types — `circuit`, `circuit-part` and `circuit-wire` — riding in
+ * their own `data/electronics.ndjson`, a new `DATA_FILES` entry checksummed
+ * like the eleven before it, plus a new `electronics` member in
+ * `ARCHIVE_MODULE_IDS`. A module of its own for `1.32.0`'s reason exactly: one
+ * module↔collection mapping serves both `countProfileModules` and
+ * `filterProfileData`, and filing a circuit under (say) notes would make a
+ * notes-only export carry somebody's schematics.
+ *
+ * **The CATALOGUE is not exported, and that is the fact about this module a
+ * reader must not have to rediscover** — the same fact `1.35.0` records about
+ * the food catalogue, and for a stronger reason. The 153 components the app
+ * ships are constants in `@nexus/core`, versioned with the application because
+ * a fact about a part number is what they are. A part row therefore carries a
+ * `componentId` and nothing else about the component, and a build that no
+ * longer ships that entry resolves it to `undefined` — which `circuitProblems`
+ * turns into a placeholder on the canvas and a line in the margin, never a
+ * circuit that will not open. Exporting the catalogue would freeze a corrected
+ * datasheet into every backup ever taken.
+ *
+ * Three types rather than one, and in this order: a part names its circuit, a
+ * wire names its circuit AND both of its parts, so parents precede children
+ * here exactly as `taskLists` precede `tasks`. A wire's ends are real foreign
+ * keys in the database it lands in, so the order is not a courtesy.
+ *
+ * No `ArchiveEra` flag: the whole-absent-type rule covers it, and a
+ * pre-`1.40.0` archive simply carries no circuits, which is indistinguishable
+ * from a profile that drew none.
+ *
  * `1.39.0` renames the ordering key of `task`, `task-list`, `task-section`,
  * `dashboard-set` and `dashboard-widget` from `position` to `rank`, and changes
  * what its value IS: a sparse integer becomes a fractional rank string
@@ -555,7 +584,7 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * pins them equal.
  *
  */
-const SCHEMA_VERSION = "1.39.0";
+const SCHEMA_VERSION = "1.40.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 
@@ -1970,6 +1999,61 @@ export interface ExportCanvasBoard {
 }
 
 /**
+ * One circuit (migration 067). Rides in `data/electronics.ndjson` with the two
+ * types below, and comes first in it: a part names its circuit and a wire names
+ * both, so parents precede children here as `taskLists` precede `tasks`.
+ *
+ * Nothing about the COMPONENTS travels. The catalogue ships inside the app —
+ * see `SCHEMA_VERSION`'s `1.40.0` entry — so a part carries a `componentId` and
+ * the reader resolves it against whatever build opens the archive.
+ */
+export interface ExportCircuit {
+  id: string;
+  profileId: string;
+  name: string;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** One component placed on a circuit's canvas (migration 067). */
+export interface ExportCircuitPart {
+  id: string;
+  circuitId: string;
+  /** Into the app's catalogue, or into a component the user defined. Never resolved here. */
+  componentId: string;
+  /** The user's name for this one. Empty is ordinary: the canvas falls back to the component's. */
+  label: string;
+  x: number;
+  y: number;
+  rotation: number;
+  /** Present only for a component that takes a value — a resistor's ohms. */
+  value?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * One wire between two pins (migration 067).
+ *
+ * Both ends are foreign keys in the database this lands in, which is why the
+ * wires come last in the file: a wire whose parts have not been written yet is
+ * refused by the restore, not merely out of order.
+ */
+export interface ExportCircuitWire {
+  id: string;
+  circuitId: string;
+  fromPartId: string;
+  fromPinId: string;
+  toPartId: string;
+  toPinId: string;
+  /** One of the nine jumper colours by name, never a CSS colour. */
+  colour: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
  * Everything the manifest's "settings" section carries (founder decision #11:
  * flags + NTF settings ship with the export).
  *
@@ -2216,6 +2300,25 @@ export interface ProfileData {
    * second file to keep in step with it.
    */
   canvasBoards: readonly ExportCanvasBoard[];
+  /**
+   * The ELEC module's circuits (migration 067). Required like every field
+   * above: a module the caller forgets must be a type error, not a quiet
+   * omission. EMPTY both for a pre-`1.40.0` archive and for a profile that drew
+   * no circuits, indistinguishable on purpose, because they mean the same
+   * thing.
+   *
+   * Parents before children, on `taskLists`'/`tasks`' arrangement — and here it
+   * is load-bearing rather than tidy: a part's `circuitId` and BOTH of a wire's
+   * ends are real foreign keys in the database a restore writes into, so a wire
+   * written before its parts is refused rather than merely out of order.
+   *
+   * No component collection, and there will not be one: the 153 the app ships
+   * are constants versioned with the application, so a part carries only its
+   * `componentId` and the build that opens the archive resolves it.
+   */
+  circuits: readonly ExportCircuit[];
+  circuitParts: readonly ExportCircuitPart[];
+  circuitWires: readonly ExportCircuitWire[];
 }
 
 // --- Private notes (PRIV v1, ADR-057 §6) ------------------------------------
@@ -2438,6 +2541,9 @@ export const DATA_FILES = [
   // The CANV module (migration 059, `1.36.0`): its own file, on the same terms
   // again — a pre-1.36 archive neither carries it nor declares its checksum.
   "data/canvas.ndjson",
+  // The ELEC module (migration 067, `1.40.0`): its own file, on the same terms
+  // again — a pre-1.40 archive neither carries it nor declares its checksum.
+  "data/electronics.ndjson",
 ] as const;
 
 /** The manifest's module ids, in manifest order — the grouping `countProfileModules` counts by and `buildExportArchive` builds `manifest.modules` from, so the two can never disagree. */
@@ -2467,6 +2573,12 @@ export const ARCHIVE_MODULE_IDS = [
   // One board is one row, drawing and all, so this count is the number of
   // boards rather than of anything drawn on them.
   "canvas",
+  // ELEC (migration 067, `1.40.0`) — its own module, on the same terms again.
+  // What it does NOT cover, exactly as `fitness` does not cover the food
+  // catalogue: the 153 components the app ships are constants and not rows, so
+  // this bucket counts the user's circuits, their parts and their wires, and
+  // nothing the app supplied.
+  "electronics",
 ] as const;
 export type ArchiveModuleId = (typeof ARCHIVE_MODULE_IDS)[number];
 
@@ -2582,6 +2694,12 @@ export function countProfileModules(data: ProfileData): Record<ArchiveModuleId, 
     // shapes: the number a preview must be right about is how many boards are
     // being replaced, and „412" would name something nobody has a name for.
     canvas: data.canvasBoards.length,
+    // Three tables, one bucket. A circuit is what the user names, so a preview
+    // saying „4" would be wrong about the only unit they think in — but a part
+    // and a wire are rows a restore replaces too, and a count that ignored them
+    // would understate what is at stake. The sum is the honest reading of
+    // „how many rows of yours does this touch".
+    electronics: data.circuits.length + data.circuitParts.length + data.circuitWires.length,
   };
 }
 
@@ -2758,6 +2876,9 @@ export function filterProfileData(
     // this whole function. The images a board carries go with it, because they
     // are inside its own row rather than in `blobs/`.
     canvasBoards: only("canvas", data.canvasBoards),
+    circuits: only("electronics", data.circuits),
+    circuitParts: only("electronics", data.circuitParts),
+    circuitWires: only("electronics", data.circuitWires),
   };
 }
 
@@ -2928,6 +3049,15 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
     data.canvasBoards.map((row) => ({ type: "canvas-board", ...row })),
   );
 
+  // Parents before children, and here that is not tidiness: a part names its
+  // circuit and a wire names both its parts, all three as foreign keys in the
+  // database a restore writes into.
+  const electronicsNdjson = toNdjson([
+    ...data.circuits.map((row) => ({ type: "circuit", ...row })),
+    ...data.circuitParts.map((row) => ({ type: "circuit-part", ...row })),
+    ...data.circuitWires.map((row) => ({ type: "circuit-wire", ...row })),
+  ]);
+
   const privateNotes = input.privateNotes ?? EMPTY_PRIVATE_NOTES;
   const privateNotesNdjson = toNdjson([
     ...privateNotes.notes.map((row) => ({ type: "private-note", ...row })),
@@ -2945,6 +3075,7 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
   files.set("data/habits.ndjson", habitsNdjson);
   files.set("data/fitness.ndjson", fitnessNdjson);
   files.set("data/canvas.ndjson", canvasNdjson);
+  files.set("data/electronics.ndjson", electronicsNdjson);
 
   // --- Notes: Markdown mirror + binary entries (ADR-022 section 3) -------
   const binaries: ExportBinaryEntry[] = [];

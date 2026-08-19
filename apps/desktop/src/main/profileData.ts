@@ -18,6 +18,9 @@ import { extractNoteLinkTargets, mergeNoteState } from "@nexus/core";
 import type {
   ExportNote,
   ExportCanvasBoard,
+  ExportCircuit,
+  ExportCircuitPart,
+  ExportCircuitWire,
   ExportNoteAttachment,
   ExportNoteCategory,
   ExportFinAccount,
@@ -61,6 +64,7 @@ import type {
   DeckStore,
   DocumentStore,
   CanvasStore,
+  ElectronicsStore,
   EventStore,
   EventTemplateStore,
   ExamStore,
@@ -150,6 +154,7 @@ export interface ProfileDataDeps {
   fitMeasurementStore(profileId: string): FitMeasurementStore;
   fitBodyProfileStore(profileId: string): FitBodyProfileStore;
   canvasStore(profileId: string): CanvasStore;
+  electronicsStore(profileId: string): ElectronicsStore;
 }
 
 /** Every NOTE-module row `ProfileData` requires (ADR-022 section 3) — `gatherNotes`'s return shape. */
@@ -339,6 +344,7 @@ export function gatherProfileData(deps: ProfileDataDeps, profileId: string): Pro
     ...gatherHabits(deps, profileId),
     ...gatherFitness(deps, profileId),
     ...gatherCanvas(deps, profileId),
+    ...gatherElectronics(deps, profileId),
   };
 }
 
@@ -377,6 +383,38 @@ function gatherCanvas(
         updatedAt: board.updatedAt,
       })),
   };
+}
+
+/** Every ELEC-module row `ProfileData` requires (migration 067) — `gatherElectronics`'s return shape. */
+interface GatheredElectronicsData {
+  circuits: ExportCircuit[];
+  circuitParts: ExportCircuitPart[];
+  circuitWires: ExportCircuitWire[];
+}
+
+/**
+ * Gathers every ELEC-module row for one profile: three reads, one per table,
+ * and never one per circuit — `listAllForExport` exists so that a profile with
+ * forty circuits is three statements rather than eighty-one.
+ *
+ * **Nothing about the COMPONENTS is gathered, and there is no second call to
+ * keep in step with this one.** The 153 the app ships are constants in
+ * `@nexus/core`, versioned with the application, so a part carries a
+ * `componentId` and the build that opens the archive resolves it — the food
+ * catalogue's arrangement one module over, for a stronger reason: a corrected
+ * datasheet must not be frozen into every backup ever taken.
+ *
+ * The store already excludes a soft-deleted circuit AND everything on it, which
+ * is what keeps the three collections consistent with each other: an archive
+ * carrying the parts of a circuit it does not carry would be refused by a
+ * foreign key on the way back in.
+ */
+function gatherElectronics(
+  deps: Pick<ProfileDataDeps, "electronicsStore">,
+  profileId: string,
+): GatheredElectronicsData {
+  const all = deps.electronicsStore(profileId).listAllForExport();
+  return { circuits: all.circuits, circuitParts: all.parts, circuitWires: all.wires };
 }
 
 /** Every HABIT-module row `ProfileData` requires (migration 055) — `gatherHabits`'s return shape. */

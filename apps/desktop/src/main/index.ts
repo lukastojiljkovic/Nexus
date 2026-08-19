@@ -154,6 +154,7 @@ import {
   type DocumentType,
   type DueQueueOptions,
   type EffectiveExamTopic,
+  ElectronicsStore,
   encryptDatabaseInPlace,
   type Event,
   EventStore,
@@ -4926,6 +4927,14 @@ function canvasStore(profileId: string): CanvasStore {
   return new CanvasStore(requireDb().raw, profileId);
 }
 
+// ELEC (migration 067). One store over THREE tables, because a circuit is
+// three tables: its own row, the parts placed on it and the wires between
+// them. The COMPONENTS are not among them — the catalogue ships as constants
+// in `@nexus/core` and is versioned with the application.
+function electronicsStore(profileId: string): ElectronicsStore {
+  return new ElectronicsStore(requireDb().raw, profileId);
+}
+
 /** The whole sets state every `dash:*-set` channel answers with (ADR-055): the named boards in board order plus the active choice. */
 function dashboardSetsState(profileId: string): DashboardSetsState {
   const store = dashboardSetStore(profileId);
@@ -6106,6 +6115,7 @@ function restoreDeps(): ImportDeps {
     fitMeasurementStore,
     fitBodyProfileStore,
     canvasStore,
+    electronicsStore,
     saveBlob: (bytes) => saveBlob(blobStorePathsFor(), requireBlobKeys(), bytes),
     // Injected rather than reached for, so `restore.ts` never has to know WHICH
     // tables reference a blob — that union lives in exactly one place
@@ -6183,6 +6193,7 @@ function imexArchiveDeps(): ImexArchiveDeps {
     fitMeasurementStore,
     fitBodyProfileStore,
     canvasStore,
+    electronicsStore,
     flagStore,
     readBlob: (sha256) => readBlob(blobStorePathsFor(), requireBlobKeys(), sha256),
     // A private attachment's decrypted bytes, under whatever section is open

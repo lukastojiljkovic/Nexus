@@ -77,6 +77,9 @@ function emptyProfileData(): ProfileData {
     fitExercises: [], fitRoutines: [], fitRoutineItems: [],
     fitWorkouts: [], fitWorkoutSets: [], fitMeasurements: [], fitBodyProfile: [],
     canvasBoards: [],
+    circuits: [],
+    circuitParts: [],
+    circuitWires: [],
   };
 }
 

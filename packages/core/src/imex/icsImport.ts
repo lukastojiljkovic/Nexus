@@ -1018,5 +1018,8 @@ export function translateIcsEvents(
     fitMeasurements: [],
     fitBodyProfile: [],
     canvasBoards: [],
+    circuits: [],
+    circuitParts: [],
+    circuitWires: [],
   };
 }

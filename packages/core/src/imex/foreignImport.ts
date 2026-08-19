@@ -842,6 +842,13 @@ const ID_MINTERS: Record<keyof ProfileData, (data: ProfileData, ctx: PlanContext
    * import whose card promises DODAJE.
    */
   canvasBoards: (data, ctx) => mintAll(data.canvasBoards, ctx),
+  // Every circuit, part and wire imports as a row of its own — nothing here
+  // absorbs one, since a circuit has no natural key the way a tag or a template
+  // name does. All three mint, and the references between them are remapped in
+  // the literal below.
+  circuits: (data, ctx) => mintAll(data.circuits, ctx),
+  circuitParts: (data, ctx) => mintAll(data.circuitParts, ctx),
+  circuitWires: (data, ctx) => mintAll(data.circuitWires, ctx),
   noteTagLinks: NO_IDS,
   // The same name-is-identity rule as the two template tables above, against the
   // NOTE module's own name space (migration 015's `UNIQUE (profile_id, name)`).
@@ -1600,6 +1607,33 @@ export function planForeignImport(
       id: mapped(row.id, ctx),
       profileId: target.profileId,
     })),
+    // The only one of the three ELEC tables with a profile of its own; its two
+    // children reach one through it.
+    circuits: source.circuits.map((row) => ({
+      ...row,
+      id: mapped(row.id, ctx),
+      profileId: target.profileId,
+    })),
+    // `componentId` rides UNREMAPPED, and must: it names an entry in the app's
+    // own catalogue, which is the same catalogue on both machines because it
+    // ships with the build rather than living in the database. Remapping it
+    // would treat a shared constant as though it were the source profile's row.
+    circuitParts: source.circuitParts.map((row) => ({
+      ...row,
+      id: mapped(row.id, ctx),
+      circuitId: mapped(row.circuitId, ctx),
+    })),
+    // Three references, every one of them into a row this same import minted,
+    // and every one a foreign key where it lands. So `mapped` rather than any
+    // of the tolerant OrNone helpers beside it: a wire whose part did not come
+    // across is not a wire that imports with one end missing.
+    circuitWires: source.circuitWires.map((row) => ({
+      ...row,
+      id: mapped(row.id, ctx),
+      circuitId: mapped(row.circuitId, ctx),
+      fromPartId: mapped(row.fromPartId, ctx),
+      toPartId: mapped(row.toPartId, ctx),
+    })),
   };
 
   return {
@@ -1621,7 +1655,7 @@ export function planForeignImport(
 function zeroPerModule(): Record<ArchiveModuleId, number> {
   return {
     tasks: 0, calendar: 0, study: 0, notifications: 0, notes: 0, dashboard: 0, finance: 0,
-    habits: 0, fitness: 0, canvas: 0,
+    habits: 0, fitness: 0, canvas: 0, electronics: 0,
   };
 }
 

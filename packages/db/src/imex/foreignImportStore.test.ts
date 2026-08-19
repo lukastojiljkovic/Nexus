@@ -157,6 +157,9 @@ function emptyProfileData(): ProfileData {
     fitMeasurements: [],
     fitBodyProfile: [],
     canvasBoards: [],
+    circuits: [],
+    circuitParts: [],
+    circuitWires: [],
   };
 }
 

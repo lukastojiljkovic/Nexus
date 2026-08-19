@@ -120,7 +120,10 @@ function emptyExportInput(): ExportArchiveInput {
       fitWorkoutSets: [],
       fitMeasurements: [],
       fitBodyProfile: [],
-    canvasBoards: [],
+      canvasBoards: [],
+      circuits: [],
+      circuitParts: [],
+      circuitWires: [],
     },
     hash: sha256,
   };
@@ -885,6 +888,38 @@ function richProfileData(): ProfileData {
         createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-02T00:00:00.000Z",
       },
     ],
+    // One circuit, two parts, one wire — three tables that reference each
+    // other, so the round trip proves the writer's parent-first order and the
+    // reader's reference rules together. The resistor carries a value and the
+    // board carries none, which is the one optional field: an archive that
+    // wrote `value: null` for the board would come back with a field the
+    // fixture does not have.
+    circuits: [
+      {
+        id: "circuit-blink", profileId: "profile1", name: "Trepćuća dioda", notes: "5 V, GND na levu šinu",
+        createdAt: "2026-07-03T00:00:00.000Z", updatedAt: "2026-07-04T00:00:00.000Z",
+      },
+    ],
+    circuitParts: [
+      {
+        id: "part-uno", circuitId: "circuit-blink", componentId: "arduino-uno", label: "",
+        x: 0, y: 0, rotation: 0,
+        createdAt: "2026-07-03T00:00:00.000Z", updatedAt: "2026-07-03T00:00:00.000Z",
+      },
+      {
+        id: "part-r1", circuitId: "circuit-blink", componentId: "resistor", label: "R1",
+        x: 180.5, y: -40, rotation: 90, value: 220,
+        createdAt: "2026-07-03T00:00:00.000Z", updatedAt: "2026-07-04T00:00:00.000Z",
+      },
+    ],
+    circuitWires: [
+      {
+        id: "wire-d9", circuitId: "circuit-blink",
+        fromPartId: "part-uno", fromPinId: "D9", toPartId: "part-r1", toPinId: "1",
+        colour: "yellow",
+        createdAt: "2026-07-03T00:00:00.000Z", updatedAt: "2026-07-03T00:00:00.000Z",
+      },
+    ],
   };
 }
 
@@ -976,6 +1011,10 @@ const EMPTY_DATA_FILE_NAMES = [
   // (`1.37.0`) arrived — every test above this line that never touches fitness
   // rows is unaffected, since the file was always empty for them either way.
   "data/fitness.ndjson",
+  // ELEC (migration 067, `1.40.0`) — always written, empty for a profile that
+  // wired nothing. The pre-1.40 test below strips it (and its checksum) back
+  // off, on the canvas file's exact terms.
+  "data/electronics.ndjson",
 ] as const;
 
 /** A minimal, fully valid manifest+data-files set (5 empty NDJSON files, checksums matching), so an individual test can override exactly one thing and stay isolated from every other rule. */
@@ -1265,12 +1304,12 @@ describe("parseImportArchive — one test per problem code", () => {
     expect(result.data).toBeNull();
   });
 
-  // `1.40.0`: the nearest minor strictly ahead of this build's `1.39.0`.
+  // `1.41.0`: the nearest minor strictly ahead of this build's `1.40.0`.
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.40.0" });
+    const files = baseFiles({ schemaVersion: "1.41.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.40.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.41.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -4209,6 +4248,159 @@ describe("parseImportArchive — CANV (slice a / 1.36.0)", () => {
   });
 });
 
+describe("parseImportArchive — ELEC circuits (ADR-085 slice E1 / 1.40.0)", () => {
+  const T = "2026-07-03T00:00:00.000Z";
+
+  const VALID_CIRCUIT = {
+    type: "circuit", id: "ci1", profileId: "profile1", name: "Trepćuća dioda", notes: "5 V",
+    createdAt: T, updatedAt: T,
+  };
+
+  const VALID_PART = {
+    type: "circuit-part", id: "cp1", circuitId: "ci1", componentId: "arduino-uno", label: "",
+    x: 0, y: 0, rotation: 0, createdAt: T, updatedAt: T,
+  };
+
+  const VALID_RESISTOR = {
+    type: "circuit-part", id: "cp2", circuitId: "ci1", componentId: "resistor", label: "R1",
+    x: 180.5, y: -40, rotation: 90, value: 220, createdAt: T, updatedAt: T,
+  };
+
+  const VALID_WIRE = {
+    type: "circuit-wire", id: "cw1", circuitId: "ci1",
+    fromPartId: "cp1", fromPinId: "D9", toPartId: "cp2", toPinId: "1", colour: "yellow",
+    createdAt: T, updatedAt: T,
+  };
+
+  /** The whole module in one file, which is how the writer emits it: parents first. */
+  const WHOLE = [VALID_CIRCUIT, VALID_PART, VALID_RESISTOR, VALID_WIRE];
+
+  function parseElectronicsFile(rows: readonly Record<string, unknown>[], mode?: ImportMode) {
+    return parseImportArchive(
+      emptyInputWith(
+        baseFiles({ fileContents: { "data/electronics.ndjson": ndjson(rows) } }),
+        mode === undefined ? {} : { mode },
+      ),
+    );
+  }
+
+  it("reads the three types back", () => {
+    const result = parseElectronicsFile(WHOLE);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.circuits).toHaveLength(1);
+    expect(result.data?.circuitParts).toHaveLength(2);
+    expect(result.data?.circuitWires).toHaveLength(1);
+  });
+
+  it("keeps an absent value ABSENT rather than turning it into a null", () => {
+    // The board takes no value and the resistor does. A reader that wrote
+    // `value: null` for the board would hand the store a third state the
+    // column does not have, and would make a round trip compare unequal.
+    const parts = parseElectronicsFile(WHOLE).data?.circuitParts ?? [];
+    expect("value" in (parts[0] ?? {})).toBe(false);
+    expect(parts[1]?.value).toBe(220);
+  });
+
+  it("accepts a componentId this build has never heard of, and gives it no reference rule", () => {
+    // The catalogue ships with the application, so a part names something that
+    // is not a row anywhere — `foodRef`'s arrangement one module over. Refusing
+    // it here would make a corrected datasheet an archive that no longer
+    // restores; `circuitProblems` draws it as a placeholder instead.
+    const result = parseElectronicsFile([
+      VALID_CIRCUIT,
+      { ...VALID_PART, componentId: "arduino-uno-r5" },
+    ]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.circuitParts[0]?.componentId).toBe("arduino-uno-r5");
+  });
+
+  it("accepts a wire whose two ends are the same pin, because a merge can make one", () => {
+    // No store writes it — `validateWire` refuses it — but field-level LWW can
+    // merge two honest edits into one, and migration 067 has no CHECK against
+    // it on purpose. Refusing it here would make an archive unrestorable over a
+    // row the database it came from was willing to hold.
+    const result = parseElectronicsFile([
+      VALID_CIRCUIT,
+      VALID_PART,
+      { ...VALID_WIRE, toPartId: "cp1", toPinId: "D9" },
+    ]);
+    expect(result.problems).toEqual([]);
+  });
+
+  it("refuses a row whose field migration 067's own CHECK would refuse", () => {
+    const bad = (row: Record<string, unknown>) =>
+      parseElectronicsFile([VALID_CIRCUIT, row]).problems.map((problem) => problem.detail);
+    expect(bad({ ...VALID_PART, rotation: 37 })).toEqual(["rotation"]);
+    expect(bad({ ...VALID_PART, x: 100_001 })).toEqual(["x"]);
+    expect(bad({ ...VALID_PART, y: "0" })).toEqual(["y"]);
+    expect(bad({ ...VALID_PART, value: 0 })).toEqual(["value"]);
+    expect(bad({ ...VALID_PART, componentId: "" })).toEqual(["componentId"]);
+    expect(bad({ ...VALID_PART, label: "x".repeat(121) })).toEqual(["label"]);
+    expect(bad({ ...VALID_CIRCUIT, id: "ci2", name: "  " })).toEqual(["name"]);
+    expect(bad({ ...VALID_CIRCUIT, id: "ci2", notes: "x".repeat(8001) })).toEqual(["notes"]);
+  });
+
+  it("refuses a colour that is not one of the nine jumpers", () => {
+    // „magenta" is a perfectly valid CSS colour and not a wire anybody owns.
+    const result = parseElectronicsFile([
+      VALID_CIRCUIT, VALID_PART, VALID_RESISTOR, { ...VALID_WIRE, colour: "magenta" },
+    ]);
+    expect(result.problems.map((problem) => problem.detail)).toEqual(["colour"]);
+  });
+
+  describe("real foreign keys: circuit-part.circuitId, circuit-wire.circuitId/fromPartId/toPartId", () => {
+    it("refuses a part naming a circuit the archive does not carry", () => {
+      const result = parseElectronicsFile([{ ...VALID_PART, circuitId: "ghost" }]);
+      expect(result.problems).toContainEqual({
+        severity: "error", code: "unknown-reference", path: "data/electronics.ndjson", line: 1,
+        detail: "circuitId=ghost",
+      });
+    });
+
+    it("refuses a wire naming a part the archive does not carry, from either end", () => {
+      const details = parseElectronicsFile([
+        VALID_CIRCUIT, VALID_PART, { ...VALID_WIRE, toPartId: "ghost" },
+      ]).problems.map((problem) => problem.detail);
+      expect(details).toEqual(["toPartId=ghost"]);
+
+      const fromEnd = parseElectronicsFile([
+        VALID_CIRCUIT, VALID_RESISTOR, { ...VALID_WIRE, fromPartId: "ghost", toPartId: "cp2" },
+      ]).problems.map((problem) => problem.detail);
+      expect(fromEnd).toEqual(["fromPartId=ghost"]);
+    });
+
+    it("takes a circuit's parts AND its wires with it when the circuit is not there", () => {
+      // The cascade the fixpoint exists for, and it takes two sweeps: the parts
+      // go on the first because their circuit dangles, and the wire goes on the
+      // second because the parts it names are now gone. A single pass would
+      // leave the wire behind and the restore would fail on a foreign key.
+      const result = parseElectronicsFile([VALID_PART, VALID_RESISTOR, VALID_WIRE], "import");
+      expect(result.data?.circuitParts).toEqual([]);
+      expect(result.data?.circuitWires).toEqual([]);
+      expect(result.dropped).toEqual([
+        { module: "electronics", type: "circuit-part", reason: "unknown-reference", detail: "circuitId=ci1" },
+        { module: "electronics", type: "circuit-part", reason: "unknown-reference", detail: "circuitId=ci1" },
+        { module: "electronics", type: "circuit-wire", reason: "unknown-reference", detail: "circuitId=ci1" },
+      ]);
+    });
+  });
+
+  it("reads a pre-1.40.0 archive, which carries no circuits at all, as an empty one", () => {
+    const files = baseFiles({ schemaVersion: "1.39.0" });
+    const manifest = JSON.parse(files.get("manifest.json") ?? "{}") as {
+      checksums: Record<string, string>;
+    };
+    // A 1.39 writer produced neither the file nor its checksum.
+    delete manifest.checksums["data/electronics.ndjson"];
+    files.delete("data/electronics.ndjson");
+    files.set("manifest.json", JSON.stringify(manifest));
+
+    const result = parseImportArchive(emptyInputWith(files));
+    expect(result.problems).toEqual([]);
+    expect(result.data).toMatchObject({ circuits: [], circuitParts: [], circuitWires: [] });
+  });
+});
+
 describe("parseImportArchive — FIT training & body (ADR-081 slice b / 1.37.0)", () => {
   const T = "2026-07-01T00:00:00.000Z";
 
@@ -4640,8 +4832,8 @@ describe("parseImportArchive — note categories (NOTE-002 / 1.27.0)", () => {
 });
 
 describe("parseImportArchive — schema version", () => {
-  it("is 1.39.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.39.0");
+  it("is 1.40.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.40.0");
   });
 
   it("is exactly what buildExportArchive stamps into its own manifest", () => {
@@ -4831,11 +5023,11 @@ describe("parseImportArchive — schema version", () => {
     expect(result.manifest?.profile.kind).toBe("personal");
   });
 
-  // `1.40.0`: the nearest minor strictly ahead of this build's `1.39.0`.
+  // `1.41.0`: the nearest minor strictly ahead of this build's `1.40.0`.
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.40.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.41.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.40.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.41.0" },
     ]);
     expect(result.data).toBeNull();
   });

@@ -110,7 +110,11 @@ describe("the parent an object hangs off", () => {
 describe("what the derivation assumes about the map", () => {
   it("answers for every parented collection there is, from whichever place holds the key", () => {
     const parented = collections().filter((entry) => entry.profileVia !== undefined);
-    expect(parented).toHaveLength(8);
+    // The count is pinned so that adding a parented collection has to come
+    // through here and be looked at, rather than being covered by a loop that
+    // would have passed over an empty list just as happily. Ten since migration
+    // 067 added `circuit_parts` and `circuit_wires`.
+    expect(parented).toHaveLength(10);
 
     for (const entry of parented) {
       const key = entry.profileVia!.key;

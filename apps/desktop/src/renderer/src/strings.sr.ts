@@ -5971,6 +5971,11 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         habits: "Navike",
         fitness: "Fitnes",
         canvas: "Tabla",
+        // ELEC joins on „Navike"'s terms: the archive vocabulary is the
+        // interchange's, not the registry's, so the row appears here as soon
+        // as the archive carries the rows — and reads 0 on both sides until
+        // the module has a screen, which is true.
+        electronics: "Elektronika",
       } satisfies Record<keyof RestoreModuleCounts, string>,
       columnCurrent: "Sada",
       columnIncoming: "Iz arhive",
