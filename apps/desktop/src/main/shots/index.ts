@@ -30,7 +30,7 @@
  * become `Object.keys(SHAPES)` rather than a list someone maintained by hand.
  */
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { BrowserWindow } from "electron";
 import { AUDIT_SCRIPT, type AuditFinding } from "./audit.js";
@@ -807,6 +807,30 @@ async function sweep(win: BrowserWindow, outDir: string, frames: ShotFrame[]): P
         }
 
         const shoot = async (stem: string): Promise<void> => {
+          // THE SIZE IS RE-ASSERTED AT EVERY FRAME, not once per pass.
+          //
+          // `setSize` at the top of the loop is a claim that has to hold for
+          // four hundred captures, and on 2026-08-21 it stopped holding a
+          // hundred and eighty frames into the „min" pass: the window came back
+          // MAXIMISED and the sweep went on writing 1920×1032 images into
+          // `min/` and auditing them as if they were 900×600. Every responsive
+          // rule in the product was reported on at a width nobody had asked
+          // about, and the run still said „SHOTS OK". A frame is LABELLED with a
+          // size, so the size has to be true of the frame rather than of the
+          // loop that opened it.
+          if (win.isMaximized()) win.unmaximize();
+          const actual = win.getSize();
+          if (actual[0] !== size.width || actual[1] !== size.height) {
+            // Said out loud. A correction that stays silent turns „the window
+            // moved" into a fact only this file knows, and the cause — whatever
+            // maximises a window mid-sweep — is worth finding.
+            const was = `${String(actual[0])}×${String(actual[1])}`;
+            const want = `${String(size.width)}×${String(size.height)}`;
+            process.stderr.write(`shots: window was ${was} at "${stem}", not ${want} — corrected\n`);
+            win.setSize(size.width, size.height);
+            await pause(300);
+            await settle(win);
+          }
           const file = join(dir, `${stem}.png`);
           await capture(win, file);
           frames.push({
@@ -901,21 +925,44 @@ async function sweep(win: BrowserWindow, outDir: string, frames: ShotFrame[]): P
   {
     const dir = join(outDir, "maximized", "noc");
     mkdirSync(dir, { recursive: true });
+    const file = join(dir, "dashboard.png");
     await serveTheme(win, "noc");
     win.maximize();
     await pause(400);
-    await settle(win);
-    const file = join(dir, "dashboard.png");
-    await capture(win, file);
-    frames.push({
-      file,
-      scene: "dashboard",
-      theme: "noc",
-      size: "maximized",
-      findings: await auditPage(win),
-    });
-    win.unmaximize();
-    await pause(300);
+    if (!win.isMaximized()) {
+      // One retry. `maximize()` is a REQUEST to the window manager, not a
+      // setter, and on Windows it can be swallowed while the window is still
+      // settling from the `setSize` of the pass before.
+      win.maximize();
+      await pause(800);
+    }
+    if (!win.isMaximized()) {
+      // No frame rather than a false one. This is the only capture in the sweep
+      // whose subject IS the window state, so a frame taken in some other state
+      // is not a weaker piece of evidence — it is a wrong one, filed under a
+      // name that says otherwise. DC-74, in the one place `shoot`'s per-frame
+      // assertion does not reach.
+      process.stderr.write(
+        "shots: the window did not maximise — no „maximized“ frame was taken\n",
+      );
+      // And the previous run's frame goes with it. The sweep overwrites in
+      // place rather than wiping its output, so a refusal that left the old
+      // image on the disk would leave exactly the artefact the refusal exists
+      // to avoid — a picture under a name that is no longer true of it.
+      rmSync(file, { force: true });
+    } else {
+      await settle(win);
+      await capture(win, file);
+      frames.push({
+        file,
+        scene: "dashboard",
+        theme: "noc",
+        size: "maximized",
+        findings: await auditPage(win),
+      });
+      win.unmaximize();
+      await pause(300);
+    }
   }
 }
 

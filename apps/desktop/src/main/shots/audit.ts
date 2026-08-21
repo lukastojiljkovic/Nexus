@@ -96,6 +96,13 @@ export const AUDIT_SCRIPT = `(() => {
     return raw.length > 60 ? raw.slice(0, 57) + "..." : raw;
   }
 
+  // The precision the report has always printed at. It is named because the
+  // small-target rule now COMPARES at it too: a rule and a report that disagree
+  // about the same number are worse than either being slightly coarse.
+  function round1(value) {
+    return Math.round(value * 10) / 10;
+  }
+
   function add(kind, el, other, amount) {
     const where = label(el);
     const key = kind + "|" + where + "|" + label(other) + "|" + Math.round(amount);
@@ -105,7 +112,7 @@ export const AUDIT_SCRIPT = `(() => {
       kind: kind,
       where: where,
       other: other ? label(other) : "",
-      amount: Math.round(amount * 10) / 10,
+      amount: round1(amount),
       text: textOf(el),
     });
   }
@@ -333,7 +340,18 @@ export const AUDIT_SCRIPT = `(() => {
         unitY = Math.hypot(ctm.c, ctm.d) || 1;
       }
     }
-    if (interactive && (rect.width / unitX < 24 || rect.height / unitY < 24)) {
+    // A measurement reconstructed THROUGH a matrix cannot be relied on to land
+    // on an integer, and a target designed to sit exactly ON the floor is the
+    // one case where that matters. The bench's pin is 24 circuit units across
+    // by construction, so dividing its painted width back out by the same scale
+    // lands a hair under 24 rather than on it: eighteen electronics frames
+    // reported a failing target whose size the report printed, correctly, as
+    // „24". A rule and a report that disagree about the same number teach the
+    // reader to stop believing the report, and that costs more than the false
+    // finding does — so the rule now tests the number the report shows.
+    const unitW = round1(rect.width / unitX);
+    const unitH = round1(rect.height / unitY);
+    if (interactive && (unitW < 24 || unitH < 24)) {
       // A control's PAINTED box and its TARGET are different measurements, and
       // the honest way to grow the second without moving the first is a
       // transparent, absolutely positioned pseudo-element — which is exactly
@@ -343,8 +361,8 @@ export const AUDIT_SCRIPT = `(() => {
       const before = getComputedStyle(el, "::before");
       const padW = before.content === "none" ? 0 : Number.parseFloat(before.width) || 0;
       const padH = before.content === "none" ? 0 : Number.parseFloat(before.height) || 0;
-      const hitW = Math.max(rect.width / unitX, padW);
-      const hitH = Math.max(rect.height / unitY, padH);
+      const hitW = Math.max(unitW, padW);
+      const hitH = Math.max(unitH, padH);
       if (hitW < 24 || hitH < 24) add("small-target", el, null, Math.min(hitW, hitH));
     }
 
