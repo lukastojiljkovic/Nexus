@@ -187,7 +187,13 @@ function PercentRow({
 
   return (
     <section className="tool__section">
-      <h4 className="tool__section-title">{title}</h4>
+      {/* The eyebrow, exactly as `pro/shared.tsx`'s `ToolSection` writes it.
+          This file had the same element without it, so „Rezultat" over an
+          everyday tool was sentence-case and semibold while „REZULTAT" over a
+          professional one was uppercase and tracked — one sectioning device with
+          two spellings, in one drawer, and the other file's own comment calls
+          itself „the drawer's only sectioning device". */}
+      <h4 className="nx-eyebrow tool__section-title">{title}</h4>
       <div className="tool__pair">
         <TextField
           label={labelA}

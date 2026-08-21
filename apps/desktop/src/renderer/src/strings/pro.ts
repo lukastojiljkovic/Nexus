@@ -45,9 +45,37 @@ export const proSr = {
   searchPlaceholder: "Pretraži po imenu ili pojmu…",
   noMatches: "Nijedna alatka ne odgovara pretrazi.",
   clearSearch: "Poništi pretragu",
-  emptyTitle: "Nijedna alatka nije otvorena",
-  /** Says how to find one, because with a drawer this size the list is the hard part. */
-  empty: "Izaberi alatku sa liste ili je pronađi pretragom.",
+
+  /**
+   * The line under the drawer's name: how much is standing behind it.
+   *
+   * Composed from the registry and never written down — a hand-typed count is a
+   * number that goes stale the first time a tool is added, and this one also
+   * moves with the profile's own toolkits.
+   */
+  subtitle: "{count} {unit}",
+  /** Numeral agreement for the count above — three forms, through `countUnit`. */
+  unitTool: { one: "alatka", few: "alatke", many: "alatki" },
+
+  /**
+   * „Nedavno": the tools this device opened last, above the directory.
+   *
+   * Drawn only when there is something to draw. An empty „Nedavno" heading is a
+   * promise the drawer has not kept yet, and on a fresh install it would be the
+   * first thing anyone sees.
+   */
+  recentTitle: "Nedavno",
+  /**
+   * The directory that fills the surface before a tool is chosen — and the
+   * reason that surface stopped being empty.
+   *
+   * With two hundred and seventy-four tools behind one rail, „izaberi alatku sa
+   * liste" is the hardest sentence in the drawer. The professional drawer
+   * indexes itself by TOOLKIT rather than by subject, because the toolkits are
+   * what this person chose and the rail already groups by subject — the two
+   * views answer different questions instead of repeating one.
+   */
+  directoryTitle: "Tvoji paketi",
 
   /**
    * The state nothing else in the app has: the module is on and the drawer is

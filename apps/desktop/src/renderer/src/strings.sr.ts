@@ -3933,13 +3933,12 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       finance: "Novac",
     },
     /**
-     * The right pane before a tool is picked. A title and a line under it, not
-     * one sentence: this is the whole surface being empty, and the shape the
-     * app draws that in (`EmptyState variant="page"`) leads with a title.
+     * The line under the drawer's name. Composed from the registry, never
+     * written down — see the same key in `strings/pro.ts`.
      */
-    emptyTitle: "Nijedna alatka nije otvorena",
-    /** The invitation before a tool is picked — the drawer is a list, not a dashboard. */
-    empty: "Izaberi alatku sa liste.",
+    subtitle: "{count} {unit}",
+    /** Numeral agreement for the count above — three forms, through `countUnit`. */
+    unitTool: { one: "alatka", few: "alatke", many: "alatki" },
     /** Shared by every converter surface. */
     convert: {
       valueLabel: "Vrednost",

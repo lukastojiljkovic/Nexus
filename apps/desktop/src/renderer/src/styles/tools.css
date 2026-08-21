@@ -1,16 +1,42 @@
-/* --- Alatke (UTIL slice c) ---------------------------------------------------
-   The tool drawer: a searchable rail on the left, the open tool on the right.
+/* --- Alatke (UTIL slice c) + Stručne alatke (PRO slice a) ---------------------
+   ONE stylesheet for both drawers, because they are one component: a searchable
+   rail on the left, and on the right either the open tool or — in the
+   professional drawer — the index of the whole thing.
+
+   Three objects, in the order they appear below: the INSTRUMENT (`.tool__layout`
+   and its two scrollers), the FORM (`.tool__body` / `.tool__section`, a grid on
+   `--tool-columns`, and the well that draws an answer), and the DIRECTORY
+   (`.tool-dir__*`).
 
    The rail is the app's own nav row (`.nx-nav-item`), not a fourth reading of
    it — see `.tool__item`. Every colour, space and radius below is a token;
    nothing here mints a hue.
 
-   The layout collapses to one column under 720px, where a two-pane drawer would
-   leave both panes too narrow to read. */
+   The instrument collapses to one column under 720px, where a two-pane drawer
+   would leave both panes too narrow to read. */
 .tool {
   display: flex;
   flex-direction: column;
-  gap: var(--nx-space-5);
+  gap: var(--nx-space-3);
+  /*
+   * THE PAGE FILLS THE PANE, because the drawer is an INSTRUMENT — „Elektronika"
+   * and „Tabla"'s shape, and the thing this page most conspicuously was not.
+   *
+   * It had been three bands floating on the background: a header, a search field
+   * in a strip of its own, and a two-pane list that simply ran off the bottom of
+   * the window. Scrolling took the header and the search with it, and at two
+   * hundred and seventy-four tools the rail was ten thousand pixels long — so the
+   * open tool scrolled away in order to reach the next one. Filling the pane is
+   * what lets each pane scroll on its own instead.
+   */
+  flex: 1 1 auto;
+  min-height: 0;
+  /*
+   * How many columns a form lays its fields out in. Declared on the PAGE and
+   * read by `.tool__body` and `.tool__section`, so the two never disagree and a
+   * window size decides it once.
+   */
+  --tool-columns: 2;
   /*
    * TABULAR FIGURES FOR THE WHOLE DRAWER.
    *
@@ -39,46 +65,83 @@
 .tool .nx-button {
   font-variant-numeric: tabular-nums;
 }
-.tool__search {
-  max-width: 360px;
-}
 /*
- * The rail and the tool are ONE instrument, not a list beside a form.
+ * THE INSTRUMENT: one bordered box holding a rail and a surface.
  *
- * They had been two panes with twenty-four pixels of nothing between them and
- * no line to say they belonged together, and the rail stopped at its own last
- * row — so on a tool with a long body the left column simply ran out halfway
- * down the page. A hairline that runs the full height is what makes the pair
- * read as one object: `stretch` gives the rail the taller pane's height, and
- * the rule below hangs the line off its edge.
+ * It had been two panes with twenty-four pixels of nothing between them and a
+ * single hairline to say they belonged together, sitting on the page background
+ * under a search field that belonged to neither. One outline is what makes the
+ * pair read as one object, and it is the shape „Elektronika" and „Tabla" already
+ * wear — the same kind of page, so the same chrome.
+ *
+ * A fixed rail and a fluid surface, for `.elec__instrument`'s reason: the rail's
+ * width is set by the longest tool name it must show without wrapping, and the
+ * surface is the one of the two whose usefulness grows with every pixel.
  */
 .tool__layout {
+  flex: 1 1 auto;
+  min-height: 0;
   display: grid;
-  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
-  align-items: stretch;
+  grid-template-columns: minmax(190px, 240px) minmax(0, 1fr);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+  overflow: hidden;
 }
+/* Under three columns' worth of width the rail would leave both panes too narrow
+   to read, so the instrument becomes one column: the rail keeps its own height
+   at the top and the surface takes the rest, still inside the one outline. */
 @media (max-width: 720px) {
   .tool__layout {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 14rem) minmax(0, 1fr);
   }
 }
 
-/* The rail. */
+/* --- The rail ------------------------------------------------------------- */
+
 .tool__list {
   display: flex;
   flex-direction: column;
-  gap: var(--nx-space-4);
-  padding-right: var(--nx-space-5);
-  border-right: 1px solid var(--nx-border-subtle);
+  min-height: 0;
+  background: var(--nx-surface);
+  border-right: 1px solid var(--nx-border);
 }
 /* Stacked, the divider turns through ninety degrees rather than disappearing:
    the two panes are still one instrument, just folded. */
 @media (max-width: 720px) {
   .tool__list {
-    padding: 0 0 var(--nx-space-4);
     border-right: 0;
-    border-bottom: 1px solid var(--nx-border-subtle);
+    border-bottom: 1px solid var(--nx-border);
   }
+}
+/*
+ * The search, at the head of the rail and pinned there.
+ *
+ * It used to float in a strip above BOTH panes, 360px wide over a 240px rail, so
+ * it read as a search over the whole page while the only thing it narrows is the
+ * list underneath it. It also scrolled away with everything else. Here it is
+ * part of the object it filters and it never leaves.
+ */
+.tool__list-head {
+  flex: none;
+  padding: var(--nx-space-3);
+  border-bottom: 1px solid var(--nx-border);
+}
+.tool__search {
+  width: 100%;
+}
+/* The one scroller on this side. `.elec-palette__list`'s recipe verbatim, and
+   for the same reason: two hundred and seventy-four rows in eighteen sections
+   are not a page's worth of scrolling, they are a list's. */
+.tool__list-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--nx-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
 }
 .tool__group {
   display: flex;
@@ -89,10 +152,20 @@
    takes the tertiary tier the app gives every 11px caps eyebrow. It had been
    `--nx-text-muted`, the SECONDARY tier, where it competed with the tool names
    directly beneath it — the same defect `.app__nav-group-label` was fixed for,
-   and the same fix. */
+   and the same fix.
+
+   Sticky, because the rail is now a scroller: the heading that says which
+   subject you are reading is otherwise the first thing to leave the screen, and
+   at this length it is the only thing telling forty consecutive tool names
+   apart. The opaque background is what the rows scroll UNDER — without it the
+   two overlap and both become unreadable. */
 .tool__group-title {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   margin: 0 0 var(--nx-space-1);
-  padding: 0 var(--nx-space-3);
+  padding: var(--nx-space-1) var(--nx-space-3);
+  background: var(--nx-surface);
 }
 /*
  * A rail row IS `.nx-nav-item` — the app's one nav-row grammar, which this
@@ -138,19 +211,47 @@
   outline: 2px solid var(--nx-accent);
   outline-offset: 2px;
 }
+/* „Nijedna alatka ne odgovara pretrazi." plus the way out of it, at the foot of
+   the rail — which is the pane that has gone empty, and the only one the search
+   narrows. The button is left-aligned under the line rather than beside it,
+   because the line wraps and a trailing control would move with it. */
+.tool__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-2) var(--nx-space-2) 0;
+}
 
-/* The open tool. */
+/* --- The surface: the open tool, or the drawer's own index ---------------- */
+
 .tool__surface {
   display: flex;
   flex-direction: column;
-  gap: var(--nx-space-3);
   min-width: 0;
-  padding-left: var(--nx-space-5);
+  min-height: 0;
 }
-@media (max-width: 720px) {
-  .tool__surface {
-    padding: var(--nx-space-4) 0 0;
-  }
+/* The other scroller. It carries whatever the surface is showing — a long form
+   and its answer, or the directory of the whole drawer — so neither of those
+   moves the rail, and the instrument's outline stays where it is. */
+.tool__surface-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  padding: var(--nx-space-4) var(--nx-space-5) var(--nx-space-6);
+}
+/* The tool's name and the subject it came from, on one line: the second is a
+   label on the first rather than a line of its own. */
+.tool__surface-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nx-space-3);
+  flex-wrap: wrap;
 }
 .tool__surface-title {
   margin: 0;
@@ -159,29 +260,158 @@
   letter-spacing: var(--nx-font-tracking-tight);
   font-weight: var(--nx-font-weight-semibold);
 }
+/* Tertiary tier — which is `.nx-eyebrow`'s own ink, so nothing is restated here.
+   It must NOT drop to `--nx-text-faint`: that tier is held to the 3:1 non-text
+   floor rather than the 4.5:1 body one (see `check-contrast.mjs`), and it exists
+   for MARKS. This is a word somebody reads. */
+.tool__surface-kind {
+  flex: none;
+}
+
+/*
+ * THE FORM IS A GRID, and that one rule reaches all three hundred and
+ * twenty-seven surfaces at once.
+ *
+ * Every control in the drawer used to stretch to the body's whole measure, so a
+ * field holding „4" was five hundred and eighty pixels wide — and „Boje
+ * otpornika", which is six selects, filled the window with them and pushed its
+ * ANSWER, the only reason the tool exists, below the fold. A form that cannot
+ * show its result beside its inputs is not a form, it is a questionnaire.
+ *
+ * A field is one cell; everything else spans the row. Reading order is
+ * untouched — a grid flows exactly the way a form is read — and no surface was
+ * edited, which is what makes it a fix to the class rather than to the tools
+ * somebody happened to look at.
+ */
 .tool__body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nx-space-3);
-  align-items: stretch;
-  max-width: 44rem;
+  display: grid;
+  grid-template-columns: repeat(var(--tool-columns), minmax(0, 1fr));
+  gap: var(--nx-space-3) var(--nx-space-4);
+  align-items: start;
+  max-width: 52rem;
 }
 .tool__section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nx-space-2);
+  display: grid;
+  grid-template-columns: repeat(var(--tool-columns), minmax(0, 1fr));
+  gap: var(--nx-space-2) var(--nx-space-4);
+  align-items: start;
   padding-top: var(--nx-space-3);
   border-top: 1px solid var(--nx-border-subtle);
+}
+/*
+ * Spanning is the DEFAULT and being a cell is the exception, and that way round
+ * on purpose: a result row, a table, a note, a well and a row of buttons are all
+ * full-width, and so is anything a surface renders that this stylesheet has
+ * never heard of. Written the other way round, the first unrecognised block
+ * would be squeezed into half a column with nothing on screen to say why.
+ *
+ * `.tool__limit` is `display: contents`, so its rows are grid items of the
+ * section rather than of it — they have to be named here or the one component
+ * built to put two numbers side by side without comparing them would put them
+ * side by side in the layout, which is the comparison.
+ */
+.tool__body > *,
+.tool__body > .tool__limit > *,
+.tool__section > *,
+.tool__section > .tool__limit > * {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+/*
+ * A FIELD IS ONE CELL — and there are two spellings of „a labelled field" in
+ * this drawer, which is why three selectors are named here rather than one.
+ *
+ * „Stručne alatke" builds its controls out of `pro/shared.tsx`, whose whole
+ * argument is that a labelled field has ONE spelling; „Alatke" predates that kit
+ * and hands `TextField` and `Select` their `label` directly, so its fields are
+ * `.nx-textfield` and `.nx-select` with no wrapper of the drawer's own. Naming
+ * only the kit's class is what left every everyday tool full-width while the
+ * professional ones reflowed — a rule that looked like it covered the drawer and
+ * covered half of it.
+ */
+.tool__body > .tool__field,
+.tool__body > .nx-textfield,
+.tool__body > .nx-select,
+.tool__section > .tool__field,
+.tool__section > .nx-textfield,
+.tool__section > .nx-select {
+  grid-column: auto;
+}
+/* …except a multi-line one. A textarea holding a hexdump, a CSV or a paragraph
+   of source is the one control whose usefulness IS its width. */
+.tool__body > .tool__field:has(.tool__textarea),
+.tool__section > .tool__field:has(.tool__textarea) {
+  grid-column: 1 / -1;
 }
 .tool__section:first-child {
   padding-top: 0;
   border-top: 0;
 }
+/*
+ * Always written `nx-eyebrow tool__section-title`, in BOTH kits — and this rule
+ * deliberately takes back two of the eyebrow's five declarations.
+ *
+ * The eyebrow contributes the uppercase and the tracking; the size and the full
+ * text colour are taken back here on purpose, because this is the label on an
+ * ANSWER („REZULTAT", „UNESENO") rather than a caption on a rail. At the
+ * eyebrow's own 11px `--nx-text-subtle` it would be quieter than the fields it
+ * is summarising. Stated because a rule that silently overrides another looks
+ * like an accident, and the next reader's instinct is to delete it.
+ */
 .tool__section-title {
   margin: 0;
   font-size: var(--nx-font-size-body-sm);
   font-weight: var(--nx-font-weight-semibold);
   color: var(--nx-text);
+}
+/*
+ * THE ANSWER, in the professional drawer.
+ *
+ * „Alatke" has had a well since its first pass (`.tool__figure`); the two
+ * hundred and seventy-four professional tools never did. Their results come out
+ * of `ToolSection`, which is a hairline and a heading — so a page of answers
+ * looked exactly like the page of questions above it, and the drawer read as a
+ * form that happened to have more form underneath.
+ *
+ * A section that CONTAINS result rows is an answer, and nothing else in the
+ * drawer draws one, so the rule can recognise it instead of two hundred and
+ * seventy-four surfaces each remembering to declare it.
+ *
+ * Written AFTER `:first-child` on purpose: `:has(.tool__result-row)` and
+ * `:first-child` carry the same specificity, and the answer is very often the
+ * first thing a surface renders.
+ */
+.tool__section:has(.tool__result-row) {
+  padding: var(--nx-space-3) var(--nx-space-4);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border-subtle);
+  border-radius: var(--nx-radius-md);
+}
+/*
+ * An answer has a MEASURE, like anything else that is read.
+ *
+ * A result row is a label at one end and a figure at the other, and on a
+ * maximised window the professional body is over a thousand pixels wide — so
+ * „Vrednost" and „10,00 Ω" ended up five hundred pixels apart with nothing
+ * between them, which is the distance at which the eye stops being able to pair
+ * them. The form above may use the whole width, because a form is scanned; the
+ * answer is held to something a person can read across.
+ */
+.tool__results,
+.tool__section:has(.tool__result-row) {
+  max-width: 46rem;
+}
+/*
+ * A lone button in a form is a control, not a field.
+ *
+ * Grid items fill their column, so a „Kopiraj" written as a direct child of the
+ * body or of a section came out the full width of the answer with its label
+ * stranded in the middle of it. `.tool__actions` — the row shape most surfaces
+ * use — is untouched, because it is a flex row that happens to span.
+ */
+.tool__body > .nx-button,
+.tool__section > .nx-button {
+  justify-self: start;
 }
 
 /* Two fields side by side, with the converter's swap button between them. */
@@ -346,15 +576,6 @@
   font-size: var(--nx-font-size-body-sm);
   line-height: var(--nx-font-leading-normal);
   color: var(--nx-text-muted);
-}
-/* „Nijedna alatka ne odgovara pretrazi." plus the way out of it. The button is
-   left-aligned under the line rather than beside it, because the line wraps and
-   a trailing control would move with it. */
-.tool__empty {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--nx-space-2);
 }
 .tool__error {
   margin: 0;
@@ -604,7 +825,7 @@
    hexdumps rather than sentences — but still measured, so a maximised window
    does not stretch a form across two feet of screen. */
 .tool--professional .tool__body {
-  max-width: 52rem;
+  max-width: 66rem;
 }
 /* A dozen of these stack in one surface, so the value is body-sized and regular
    rather than the title-sized semibold a loan's single „Mesečna rata" earns. It
@@ -625,8 +846,11 @@
    border — the reader stops seeing it by the fourth surface, which is the exact
    failure the notice exists to avoid — and it is also the look this app's design
    rules ban outright. A hairline, muted type, always present. */
+/* No margin of its own: the notice sits in `.tool__surface-scroll`, which is a
+   flex column with a gap, so a margin here is a second answer to the same
+   question and the two add up. It had one from when the surface was a plain
+   stack with no spacing of its own. */
 .tool__risk {
-  margin-bottom: var(--nx-space-4);
   padding: var(--nx-space-2) var(--nx-space-3);
   border: 1px solid var(--nx-border-subtle);
   border-radius: var(--nx-radius-md);
@@ -799,7 +1023,139 @@
 .pro-picker__error {
   color: var(--nx-danger);
 }
-/* The header control, beside the search field rather than in it. */
-.tool__packs {
-  align-self: flex-start;
+
+/* --- The directory: what stands in the surface before a tool is opened ------
+ *
+ * The pane it replaces was the drawer's front page and it was a 48px mark, a
+ * title and a sentence over six hundred by five hundred pixels of nothing —
+ * „Nijedna alatka nije otvorena", on a screen holding two hundred and
+ * seventy-four of them. This is the drawer indexing itself instead: the
+ * toolkits this profile chose, what each one actually gave them, and whatever
+ * this device opened last.
+ *
+ * Multi-column rather than a grid, because the cards are wildly uneven — a
+ * toolkit has anywhere from four tools to twenty-six — and `columns` is the one
+ * layout that packs blocks of unequal height without measuring them. It also
+ * balances, so the index ends level instead of trailing off in one column.
+ */
+
+.tool-dir {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-6);
+}
+.tool-dir__heading {
+  margin: 0 0 var(--nx-space-3);
+}
+
+/* „Nedavno" — a wrapping row of the kit's small buttons rather than a list,
+   because these are shortcuts and not a section of the catalogue. Up to eight of
+   them, on one or two lines. */
+.tool-dir__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+}
+.tool-dir__columns {
+  columns: 3;
+  column-gap: var(--nx-space-6);
+}
+@media (max-width: 1280px) {
+  .tool-dir__columns {
+    columns: 2;
+  }
+}
+@media (max-width: 980px) {
+  .tool-dir__columns {
+    columns: 1;
+  }
+}
+/* A hairline ABOVE each group rather than below it: in a balanced multi-column
+   layout a trailing rule can end up dangling at the foot of a short column with
+   nothing under it, while a leading one always has its own heading beneath. */
+.tool-dir__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  break-inside: avoid;
+  margin: 0 0 var(--nx-space-5);
+  padding-top: var(--nx-space-3);
+  border-top: 1px solid var(--nx-border-subtle);
+}
+.tool-dir__card-title {
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+  font-weight: var(--nx-font-weight-semibold);
+  color: var(--nx-text);
+}
+/* „arhitekte, građevinski inženjeri, geodeti, izvođači" — the words somebody
+   recognises themselves by, at the tertiary tier so the pack's own name stays
+   the heading. */
+.tool-dir__card-who {
+  margin: 0;
+  font-size: var(--nx-font-size-label);
+  line-height: var(--nx-font-leading-snug);
+  color: var(--nx-text-subtle);
+}
+.tool-dir__list {
+  margin: var(--nx-space-1) 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+/* Secondary ink until the pointer is on it, which is what keeps a column of
+   twenty names reading as one list instead of twenty headlines. `min-height`
+   states the 24px pointer floor rather than leaving it to the line box, which
+   is where a three-pixel change of leading would silently drop under it. */
+.tool-dir__row {
+  display: block;
+  width: 100%;
+  min-height: 24px;
+  padding: 3px var(--nx-space-2);
+  text-align: left;
+  font-family: inherit;
+  font-size: var(--nx-font-size-body-sm);
+  line-height: var(--nx-font-leading-snug);
+  color: var(--nx-text-muted);
+  background: none;
+  border: 0;
+  border-radius: var(--nx-radius-sm);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tool-dir__row:hover {
+  color: var(--nx-text);
+  background: var(--nx-surface-alt);
+}
+.tool-dir__row:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+
+/* --- How many columns a form gets ------------------------------------------
+ *
+ * Last in the file because every one of these is a single class, exactly as
+ * specific as the `.tool` rule that declares the default — so order is what
+ * decides, and stating them together is what makes that visible.
+ *
+ * The professional drawer earns a third column above 1400px and the everyday one
+ * does not: „Alatke" answers with a display figure and three or four fields,
+ * where a third column would be a form spread across two feet of screen for the
+ * sake of filling it. */
+@media (min-width: 1400px) {
+  .tool--professional {
+    --tool-columns: 3;
+  }
+}
+/* At the enforced minimum window the surface is about four hundred and forty
+   pixels wide. Two columns there is two labels wrapping onto three lines each,
+   which is worse than the single column it was trying to improve on. */
+@media (max-width: 1020px) {
+  .tool {
+    --tool-columns: 1;
+  }
 }
