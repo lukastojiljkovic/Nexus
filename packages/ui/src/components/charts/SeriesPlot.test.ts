@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { Point } from "@nexus/core";
+import { niceTicks, scaleLinear, type Point } from "@nexus/core";
 
 import {
   clampTickLabelY,
   ruleLabelY,
   splitRuns,
   stepExpand,
+  tickDomain,
   tickGutter,
 } from "./SeriesPlot.js";
 
@@ -67,6 +68,64 @@ describe("clampTickLabelY", () => {
     // exactly where it was; the tick moves by three pixels, the line does not.
     expect(clampTickLabelY(6, HEIGHT) - 6).toBe(3);
     expect(154 - clampTickLabelY(154, HEIGHT)).toBe(3);
+  });
+});
+
+/**
+ * The clamp above can only be the ±3px guard it claims to be if every tick is
+ * already inside the box. It was not: `niceTicks` rounds both ends OUTWARD so
+ * the axis contains the data, the plot was scaled to the data extent instead,
+ * and the two ticks that fell outside were pinned to the edges on top of their
+ * neighbours — FIN's balance flow printed „80.000,00" and „75.000,00" as one
+ * smear on four surfaces.
+ */
+describe("tickDomain", () => {
+  const HEIGHT = 160;
+  const PAD_Y = 6;
+
+  it("spans the ladder, not the data the ladder was derived from", () => {
+    // 79.045…104.045 is FIN's own range: a step of 5.000 rounds the axis out to
+    // 75.000…105.000, and both of those are outside the extent.
+    const ticks = niceTicks(79_045, 104_045, 5);
+    expect(ticks[0]).toBe(75_000);
+    expect(ticks[ticks.length - 1]).toBe(105_000);
+    expect(tickDomain(ticks, [79_045, 104_045])).toEqual([75_000, 105_000]);
+  });
+
+  it("leaves every tick inside the drawing, which the data extent did not", () => {
+    const ticks = niceTicks(79_045, 104_045, 5);
+    const before = scaleLinear([79_045, 104_045], [HEIGHT - PAD_Y, PAD_Y]);
+    const after = scaleLinear(tickDomain(ticks, [79_045, 104_045]), [HEIGHT - PAD_Y, PAD_Y]);
+
+    // The old scale put the two extremes outside the box, where the clamp had
+    // to move them by far more than the three pixels it is documented to.
+    expect(before(105_000)).toBeLessThan(PAD_Y);
+    expect(before(75_000)).toBeGreaterThan(HEIGHT - PAD_Y);
+    expect(clampTickLabelY(before(105_000), HEIGHT) - before(105_000)).toBeGreaterThan(3);
+
+    for (const tick of ticks) {
+      expect(after(tick)).toBeGreaterThanOrEqual(PAD_Y);
+      expect(after(tick)).toBeLessThanOrEqual(HEIGHT - PAD_Y);
+    }
+  });
+
+  it("spaces the ticks evenly, so no two labels can land on each other", () => {
+    const ticks = niceTicks(79_045, 104_045, 5);
+    const scale = scaleLinear(tickDomain(ticks, [79_045, 104_045]), [HEIGHT - PAD_Y, PAD_Y]);
+    const gaps = ticks.slice(1).map((tick, i) => scale(ticks[i] ?? 0) - scale(tick));
+    for (const gap of gaps) {
+      expect(gap).toBeCloseTo(gaps[0] ?? 0, 9);
+      // A caption-size line box is about 14px; anything at or under it is the
+      // collision this function exists to retire.
+      expect(gap).toBeGreaterThan(14);
+    }
+  });
+
+  it("hands back the caller's own domain when the ladder cannot span anything", () => {
+    // A flat series: `niceTicks` answers the single value it has, and inventing
+    // a range around it would draw movement that never happened.
+    expect(tickDomain(niceTicks(5, 5, 4), [5, 5])).toEqual([5, 5]);
+    expect(tickDomain([], [0, 1])).toEqual([0, 1]);
   });
 });
 

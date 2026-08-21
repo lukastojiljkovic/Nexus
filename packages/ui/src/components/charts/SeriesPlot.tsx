@@ -32,6 +32,13 @@ export interface SeriesPlotProps {
   empty: { reason: string } | null;
   series: readonly SeriesPlotSeries[];
   x: { domain: [number, number] };
+  /**
+   * `domain` is the range the TICKS are derived from, and defaults to the
+   * data's own extent. The axis actually drawn is that range rounded outward
+   * to whole ticks — see `tickDomain` — so passing `[0, max]` still guarantees
+   * a zero baseline, but the top of the plot is the first round number above
+   * `max` rather than `max` itself.
+   */
   y?: { domain?: [number, number]; ticks?: number; format?: (n: number) => string };
   /** The one allowed reference line — a goal, a cap, a threshold. */
   rule?: { value: number; label: string; tone: ChartTone };
@@ -126,6 +133,34 @@ export function clampTickLabelY(y: number, height: number): number {
 }
 
 /**
+ * The domain the plot is DRAWN on, given the ticks that will label it.
+ *
+ * `niceTicks` rounds both ends outward on purpose, so that the axis always
+ * contains the data — which means its first and last values are routinely
+ * OUTSIDE the extent they were derived from. Scaling the plot to that extent
+ * instead put those two labels outside the drawing, where `clampTickLabelY`
+ * pinned them to the edges and straight on top of their neighbours: FIN's
+ * balance flow printed „80.000,00" and „75.000,00" as one smear, 8.6px of
+ * shared pixels on four surfaces, while the clamp's own comment claimed it
+ * could never move a label by more than three.
+ *
+ * The two were never separate decisions, and the ladder is the authoritative
+ * one: the plot is drawn on the range the ticks actually span, every tick lands
+ * inside the box at even spacing, and the clamp goes back to being the ±3px
+ * line-box guard it says it is. A ladder of fewer than two values labels
+ * nothing that could collide — a flat series is one tick — so there the
+ * caller's own domain stands untouched.
+ */
+export function tickDomain(
+  ticks: readonly number[],
+  fallback: readonly [number, number],
+): readonly [number, number] {
+  const first = ticks[0];
+  const last = ticks[ticks.length - 1];
+  return first === undefined || last === undefined || first === last ? fallback : [first, last];
+}
+
+/**
  * The reference rule's label sits above the rule, and below it when „above"
  * would be outside the drawing. A label clipped by the top edge names nothing.
  */
@@ -187,10 +222,8 @@ export function SeriesPlot({
   const dataExtent = extent(allY) ?? [0, 1];
   const yDomain = y?.domain ?? dataExtent;
   const format = y?.format ?? ((n: number) => String(n));
-  const yTicks = niceTicks(yDomain[0], yDomain[1], Math.min(5, y?.ticks ?? 5)).map((value) => ({
-    value,
-    text: format(value),
-  }));
+  const tickValues = niceTicks(yDomain[0], yDomain[1], Math.min(5, y?.ticks ?? 5));
+  const yTicks = tickValues.map((value) => ({ value, text: format(value) }));
 
   // The gutter is sized to the labels that will actually be written in it —
   // see `TICK_CHAR_W`. Computed before the scales, because the plot begins
@@ -198,7 +231,8 @@ export function SeriesPlot({
   const leftMargin = tickGutter(yTicks.map((tick) => tick.text));
 
   const xScale = scaleLinear(x.domain, [leftMargin, width]);
-  const yScale = scaleLinear(yDomain, [height - PAD_Y, PAD_Y]);
+  // The ticks' own range, not the data's — see `tickDomain`.
+  const yScale = scaleLinear(tickDomain(tickValues, yDomain), [height - PAD_Y, PAD_Y]);
   const baselineY = height - PAD_Y;
 
   return (
