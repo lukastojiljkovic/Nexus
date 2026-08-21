@@ -9,7 +9,8 @@ import type { ComponentDef } from "./component.js";
 import type { Circuit, CircuitPart, CircuitWire } from "./circuit.js";
 import {
   circuitProblems,
-  MAX_CANVAS_COORDINATE,
+  MAX_ELEC_ID_LENGTH,
+  MAX_PART_COORDINATE,
   MAX_PART_LABEL_LENGTH,
   validateCircuitHeader,
   validatePart,
@@ -121,16 +122,32 @@ describe("a placed part", () => {
     expect(codes(validatePart(part({ componentId: "" })))).toContain("id");
   });
 
+  it("refuses an id long enough to be a document rather than an identifier", () => {
+    // `idProblems` used to ask only „is this a non-blank string", so a
+    // ten-megabyte `pinId` was a legal wire and a ten-megabyte `componentId` a
+    // legal part — all the way into a column whose only CHECK is that the
+    // string is not empty. Every id here is minted by us or is a catalogue
+    // slug, so the ceiling is one nothing legitimate approaches.
+    const long = "x".repeat(MAX_ELEC_ID_LENGTH + 1);
+    expect(codes(validatePart(part({ componentId: long })))).toContain("length");
+    expect(codes(validatePart(part({ circuitId: long })))).toContain("length");
+    expect(codes(validateWire(wire({ to: { partId: "p2", pinId: long } })))).toContain("length");
+    // The bound itself is inside it, and „length" rather than „id" is the
+    // answer, because the field DOES identify something — just not something an
+    // id here is allowed to be that long to name.
+    expect(validatePart(part({ componentId: "x".repeat(MAX_ELEC_ID_LENGTH) }))).toEqual([]);
+  });
+
   it("refuses a coordinate that is not a finite number", () => {
     expect(codes(validatePart({ ...part(), x: Number.NaN }))).toContain("shape");
     expect(codes(validatePart({ ...part(), y: Number.POSITIVE_INFINITY }))).toContain("shape");
   });
 
   it("refuses a coordinate outside the working area, in either direction", () => {
-    expect(codes(validatePart(part({ x: MAX_CANVAS_COORDINATE + 1 })))).toContain("range");
-    expect(codes(validatePart(part({ y: -MAX_CANVAS_COORDINATE - 1 })))).toContain("range");
+    expect(codes(validatePart(part({ x: MAX_PART_COORDINATE + 1 })))).toContain("range");
+    expect(codes(validatePart(part({ y: -MAX_PART_COORDINATE - 1 })))).toContain("range");
     // The bound itself is inside it.
-    expect(validatePart(part({ x: MAX_CANVAS_COORDINATE, y: -MAX_CANVAS_COORDINATE }))).toEqual([]);
+    expect(validatePart(part({ x: MAX_PART_COORDINATE, y: -MAX_PART_COORDINATE }))).toEqual([]);
   });
 
   it("accepts only quarter turns", () => {

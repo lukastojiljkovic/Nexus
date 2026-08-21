@@ -181,7 +181,7 @@ export interface ComponentDef {
    * and not a fact about the part number. This field is what tells the canvas
    * to ask for it and in which unit.
    */
-  readonly valueUnit?: "ohm" | "farad" | "henry" | "volt" | "ampere";
+  readonly valueUnit?: ValueUnit;
   readonly buses: readonly Bus[];
   readonly pins: readonly Pin[];
   /** The Arduino library the generated sketch will include, when one is needed. */
@@ -315,8 +315,19 @@ export function validateComponent(value: unknown): readonly ComponentProblem[] {
   return problems;
 }
 
-/** The units a part's value can be given in. */
+/**
+ * The units a part's value can be given in.
+ *
+ * Exported as a TYPE because the interface above used to restate these five
+ * names inline, 135 lines from this list and tied to it by nothing: adding a
+ * unit to one of the two would have left the other silently disagreeing, and
+ * the disagreement is invisible — a validator that admits five units and an
+ * interface that admits six are both perfectly well-typed. The screen that
+ * labels the value field keys its copy off this type for the same reason.
+ */
 const VALUE_UNITS = ["ohm", "farad", "henry", "volt", "ampere"] as const;
+
+export type ValueUnit = (typeof VALUE_UNITS)[number];
 
 /**
  * `supply` and `current` are checked when stated, and never required here.

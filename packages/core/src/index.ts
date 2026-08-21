@@ -1059,6 +1059,7 @@ export type {
   ComponentProblemCode,
   Pin,
   PinFunction,
+  ValueUnit,
 } from "./electronics/component.js";
 export {
   catalogueComponent,
@@ -1067,7 +1068,8 @@ export {
 } from "./electronics/catalogue.js";
 export {
   circuitProblems,
-  MAX_CANVAS_COORDINATE,
+  MAX_ELEC_ID_LENGTH,
+  MAX_PART_COORDINATE,
   MAX_CIRCUIT_NAME_LENGTH,
   MAX_CIRCUIT_NOTES_LENGTH,
   MAX_PART_LABEL_LENGTH,

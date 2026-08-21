@@ -55,6 +55,20 @@ export const PART_ROTATIONS = [0, 90, 180, 270] as const;
 
 export type PartRotation = (typeof PART_ROTATIONS)[number];
 
+/**
+ * The bound on every id a circuit row carries — its own, its circuit's, a
+ * component's, a part's, a pin's.
+ *
+ * It exists because `idProblems` bounded NOTHING: it asked only that the value
+ * be a non-blank string, so a ten-megabyte `pinId` was a legal wire and a
+ * ten-megabyte `componentId` a legal part, all the way into a column whose
+ * only CHECK is that the string is not empty. Every id here is either minted by
+ * us (a uuidv7 is 36 characters) or a slug from the catalogue (`arduino-uno`,
+ * `D9`), so this is a ceiling nothing legitimate approaches — which is what a
+ * bound against an untrusted caller is for.
+ */
+export const MAX_ELEC_ID_LENGTH = 120;
+
 /** How long a name the canvas can render without the label becoming the drawing. */
 export const MAX_CIRCUIT_NAME_LENGTH = 200;
 export const MAX_PART_LABEL_LENGTH = 120;
@@ -68,7 +82,7 @@ export const MAX_CIRCUIT_NOTES_LENGTH = 8000;
  * corrupted or hand-edited row cannot place a part where the canvas has to
  * decide what to do about infinity.
  */
-export const MAX_CANVAS_COORDINATE = 100_000;
+export const MAX_PART_COORDINATE = 100_000;
 
 /** One component placed on the canvas. */
 export interface CircuitPart {
@@ -168,7 +182,7 @@ export function validatePart(value: unknown): readonly CircuitProblem[] {
     const coordinate = value[axis];
     if (typeof coordinate !== "number" || !Number.isFinite(coordinate)) {
       problems.push({ field: axis, code: "shape" });
-    } else if (Math.abs(coordinate) > MAX_CANVAS_COORDINATE) {
+    } else if (Math.abs(coordinate) > MAX_PART_COORDINATE) {
       problems.push({ field: axis, code: "range" });
     }
   }
@@ -302,7 +316,12 @@ export function circuitProblems(
 
 /** A non-empty identifying string. */
 function idProblems(value: unknown, field: string): CircuitProblem[] {
-  return typeof value === "string" && value.trim().length > 0 ? [] : [{ field, code: "id" }];
+  if (typeof value !== "string" || value.trim().length === 0) return [{ field, code: "id" }];
+  // A separate code from "id", because it is a separate answer: "id" means the
+  // field identifies nothing, and this means it is far too long to be any of the
+  // things an id here identifies.
+  if (value.length > MAX_ELEC_ID_LENGTH) return [{ field, code: "length" }];
+  return [];
 }
 
 /** A string, optionally required to be non-blank, and bounded. */
