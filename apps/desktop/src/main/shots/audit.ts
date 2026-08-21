@@ -19,7 +19,10 @@
  *                     clip — the class behind the sidebar-foot defect
  *  - `overlap`        two text-bearing elements sharing pixels while neither
  *                     is an overlay
- *  - `small-target`   an interactive control below the 24×24 CSS-pixel floor
+ *  - `small-target`   an interactive control below the 24×24 floor, measured
+ *                     in the coordinates it was authored in rather than in
+ *                     painted pixels, so a canvas the user zooms is judged on
+ *                     its design and not on the zoom it happens to be at
  *
  * The script is a string rather than an imported module because it is evaluated
  * in the RENDERER's world through `executeJavaScript`, where the main process's
@@ -34,7 +37,12 @@ export interface AuditFinding {
   where: string;
   /** The second element, for `overlap`; empty otherwise. */
   other: string;
-  /** How far, in CSS pixels — how many pixels are lost, escape, or are shared. */
+  /**
+   * How far, in CSS pixels — how many pixels are lost, escape, or are shared.
+   * The one exception is `small-target` inside an SVG, which reports the
+   * target's size in that SVG's own user units, for the reason given at the
+   * rule itself.
+   */
   amount: number;
   /** The element's own text, trimmed and capped, so a finding can be found by eye. */
   text: string;
@@ -301,7 +309,31 @@ export const AUDIT_SCRIPT = `(() => {
       el.tagName === "BUTTON" || el.tagName === "A" || el.tagName === "INPUT" ||
       el.tagName === "SELECT" || role === "button" || role === "tab" ||
       role === "menuitem" || role === "checkbox" || role === "radio";
-    if (interactive && (rect.width < 24 || rect.height < 24)) {
+    // The target is measured in the coordinates it was AUTHORED in, which for
+    // everything outside an SVG is the painted pixel and for the workbench is
+    // not. A canvas the user zooms paints its contents at whatever zoom they
+    // chose: the same pin, whose hit circle is 24 circuit units across and can
+    // be no larger without stealing its neighbour's click (PIN_HIT_RADIUS is
+    // exactly half PIN_PITCH), measures 15.8px in the fit view and 29px one
+    // press of „+" later. Two verdicts for one design, neither of them about
+    // the design. getScreenCTM is the entire chain from an element's own user
+    // space to the screen, so dividing it out asks what the floor is actually
+    // about: is this target 24 across where it was written down?
+    //
+    // Nothing outside an SVG has such a chain, so every other element on every
+    // other surface is measured exactly as before. Rotation is decomposed
+    // rather than read off a/d, because a part turned 90° puts the scale in
+    // b/c, and reading a there would answer 0.
+    let unitX = 1;
+    let unitY = 1;
+    if (interactive && typeof el.getScreenCTM === "function") {
+      const ctm = el.getScreenCTM();
+      if (ctm !== null) {
+        unitX = Math.hypot(ctm.a, ctm.b) || 1;
+        unitY = Math.hypot(ctm.c, ctm.d) || 1;
+      }
+    }
+    if (interactive && (rect.width / unitX < 24 || rect.height / unitY < 24)) {
       // A control's PAINTED box and its TARGET are different measurements, and
       // the honest way to grow the second without moving the first is a
       // transparent, absolutely positioned pseudo-element — which is exactly
@@ -311,8 +343,8 @@ export const AUDIT_SCRIPT = `(() => {
       const before = getComputedStyle(el, "::before");
       const padW = before.content === "none" ? 0 : Number.parseFloat(before.width) || 0;
       const padH = before.content === "none" ? 0 : Number.parseFloat(before.height) || 0;
-      const hitW = Math.max(rect.width, padW);
-      const hitH = Math.max(rect.height, padH);
+      const hitW = Math.max(rect.width / unitX, padW);
+      const hitH = Math.max(rect.height / unitY, padH);
       if (hitW < 24 || hitH < 24) add("small-target", el, null, Math.min(hitW, hitH));
     }
 

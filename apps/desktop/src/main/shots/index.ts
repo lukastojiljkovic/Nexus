@@ -167,6 +167,33 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     fanout: ".tool__item",
   },
   { id: "canvas", module: "canvas" },
+  {
+    // The workbench with the demo profile's two circuits on it. `fanout: null`
+    // because it genuinely has no segmented sub-views — the default selector
+    // would find nothing and the sweep would rightly say so.
+    id: "electronics",
+    module: "electronics",
+    fanout: null,
+  },
+  {
+    // The panel on the right with a PART in it. Three of this module's four
+    // surfaces are inside that panel and none of them is reachable without
+    // selecting something, so without these two scenes the sweep would report
+    // „2 000 frames, all fine" about a module whose inspector it never saw —
+    // which is the shape DC-57 named.
+    id: "electronics-part",
+    module: "electronics",
+    prepare: POINTER_TAP(".elec-part__body"),
+    fanout: null,
+  },
+  {
+    // And with a WIRE in it, which is also the only screen the nine jumper
+    // colours appear on twice — once as the swatch row, once as the wire.
+    id: "electronics-wire",
+    module: "electronics",
+    prepare: POINTER_TAP(".elec-wire__hit"),
+    fanout: null,
+  },
   { id: "search", module: "dashboard", prepare: OPEN_SEARCH_PAGE(), fanout: null },
   { id: "settings", module: "settings" },
   {
@@ -324,6 +351,40 @@ function SCROLL_TO(selector: string): string {
   })()`;
 }
 
+/**
+ * Presses and releases a pointer on the first match, and says whether there was
+ * one.
+ *
+ * `CLICK` is not enough for a drawn surface: an SVG shape has no `click()`, and
+ * a bench selects on `pointerdown` rather than on `click` because that is where
+ * a drag has to begin. Both halves are sent, so a handler that opens a gesture
+ * also gets the event that closes it — a scene that pressed and never released
+ * would photograph the page mid-drag.
+ */
+function POINTER_TAP(selector: string): string {
+  return `(async () => {
+    const el = document.querySelector(${JSON.stringify(selector)});
+    if (!el) return "none";
+    const box = el.getBoundingClientRect();
+    const init = {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      button: 0,
+      buttons: 1,
+      pointerId: 1,
+      pointerType: "mouse",
+      isPrimary: true,
+      clientX: box.left + box.width / 2,
+      clientY: box.top + box.height / 2,
+    };
+    el.dispatchEvent(new PointerEvent("pointerdown", init));
+    el.dispatchEvent(new PointerEvent("pointerup", { ...init, buttons: 0 }));
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    return ${JSON.stringify(selector)};
+  })()`;
+}
+
 /** Clicks the first match, or does nothing if the surface is not on this build. */
 function CLICK(selector: string): string {
   return `(() => {
@@ -462,8 +523,71 @@ function pause(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Races a promise against the clock, and clears the clock either way.
+ *
+ * The timer is cleared rather than left to fire, because this runs a few
+ * thousand times a sweep and a run that ends with two thousand live timeouts is
+ * a run that will not exit. The abandoned side is silenced for a sharper reason:
+ * a promise the race walked away from can still REJECT later, and an unhandled
+ * rejection ends the process at an arbitrary moment with a stack that names none
+ * of this.
+ */
+function withCeiling<T>(work: Promise<T>, ms: number, fallback: T): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  work.catch(() => undefined);
+  const ceiling = new Promise<T>((resolve) => {
+    timer = setTimeout(() => resolve(fallback), ms);
+  });
+  return Promise.race([work, ceiling]).finally(() => clearTimeout(timer));
+}
+
+/** What `evalIn` answers when the renderer does not. Nothing else in the sweep equals it. */
+const EVAL_TIMED_OUT = Symbol("shots: the renderer did not answer");
+const EVAL_CEILING_MS = 15_000;
+
+let ceilingReported = false;
+
+/**
+ * Every call this sweep makes into the renderer, with a ceiling on it.
+ *
+ * `executeJavaScript` returns a promise that is not guaranteed to settle. If
+ * the page is suspended — and Chromium suspends a window it considers not
+ * visible — a script waiting on `requestAnimationFrame` never runs and the
+ * promise never resolves and never rejects. That is what killed a run 1 215
+ * frames in: no error, no output, four Electron processes at flat CPU.
+ *
+ * The ceiling is here rather than at each call site because everything else in
+ * this file is built on `evalIn`, and two of the things built on it LOOK
+ * bounded and are not: `waitFor` polls against a deadline, but its deadline is
+ * only checked between calls, so one call that never returns is a deadline that
+ * is never reached again. A bound at the bottom is a bound everywhere; a bound
+ * at the top is one place it was remembered.
+ *
+ * The timeout answers a sentinel rather than throwing. Every caller already has
+ * a „the page did not have it" branch — `waitFor` keeps polling, `openModule`
+ * reports no sidebar row, `fanoutLabels` warns about a stale selector — and a
+ * symbol equals none of the values they test for, so each falls into the branch
+ * it already had.
+ */
 async function evalIn(win: BrowserWindow, code: string): Promise<unknown> {
-  return win.webContents.executeJavaScript(code, true);
+  const answer = await withCeiling(
+    win.webContents.executeJavaScript(code, true) as Promise<unknown>,
+    EVAL_CEILING_MS,
+    EVAL_TIMED_OUT,
+  );
+  if (answer === EVAL_TIMED_OUT && !ceilingReported) {
+    // Once, not per call: a suspended renderer produces one of these for every
+    // remaining step, and ten thousand identical lines hide the first one.
+    ceilingReported = true;
+    process.stderr.write(
+      `shots: the renderer did not answer within ${EVAL_CEILING_MS} ms — the sweep is ` +
+        `continuing, but frames from here on may be unsettled. A window Chromium ` +
+        `considers occluded suspends animation frames; see backgroundThrottling in ` +
+        `createWindow.\n`,
+    );
+  }
+  return answer;
 }
 
 /**
@@ -494,9 +618,52 @@ async function settle(win: BrowserWindow): Promise<void> {
   await pause(220);
 }
 
-async function capture(win: BrowserWindow, file: string): Promise<void> {
-  const image = await win.webContents.capturePage();
-  writeFileSync(file, image.toPNG());
+/**
+ * How many times one frame is worth asking for. See `capture`.
+ *
+ * Four rather than two because the back-off grows with the attempt, so the
+ * total wait is 0,25 s + 0,5 s + 0,75 s — a second and a half spent at most
+ * once in a sweep, against a run that otherwise ends.
+ */
+const CAPTURE_ATTEMPTS = 4;
+
+/**
+ * One frame, asked for until the compositor actually has one.
+ *
+ * `capturePage()` is not a pure read of a surface that is already there: it
+ * asks Chromium's compositor to produce a bitmap, and the compositor can answer
+ * with nothing. Electron surfaces that as a rejected promise whose message is
+ * `VizSentEmptyBitmap`, and it is transient — the next frame is fine. It
+ * happens most readily just after a window resize, which is exactly what this
+ * sweep does eight times.
+ *
+ * Taken once, it ended a run 2 200 frames deep, and every finding those frames
+ * had already made went with it.
+ *
+ * An empty bitmap can also arrive as a SUCCESS rather than as a throw — a
+ * zero-sized image is not an error — and `toPNG()` on one writes a file no
+ * viewer opens. That is the worse half of the two, because it does not stop
+ * anything: it leaves a frame on disk that reads as a page that rendered
+ * nothing. Both shapes are retried here, and the difference between them is
+ * only in the message the last attempt throws.
+ */
+export async function capture(win: BrowserWindow, file: string): Promise<void> {
+  let failure: unknown;
+  for (let attempt = 1; attempt <= CAPTURE_ATTEMPTS; attempt += 1) {
+    try {
+      const image = await win.webContents.capturePage();
+      if (!image.isEmpty()) {
+        writeFileSync(file, image.toPNG());
+        return;
+      }
+      failure = new Error(`capturePage answered an empty image for ${file}`);
+    } catch (error) {
+      failure = error;
+    }
+    // Not after the last one: there is nothing left to wait for.
+    if (attempt < CAPTURE_ATTEMPTS) await pause(250 * attempt);
+  }
+  throw failure instanceof Error ? failure : new Error(String(failure));
 }
 
 async function auditPage(win: BrowserWindow): Promise<AuditFinding[]> {
@@ -516,7 +683,15 @@ async function auditPage(win: BrowserWindow): Promise<AuditFinding[]> {
 async function serveTheme(win: BrowserWindow, theme: ShotTheme): Promise<void> {
   await evalIn(win, `(() => { localStorage.setItem("nexus.theme", ${JSON.stringify(theme)}); return true; })()`);
   win.webContents.reload();
-  await new Promise<void>((resolve) => win.webContents.once("did-finish-load", () => resolve()));
+  // Bounded for `evalIn`'s reason: a `once` listener for an event that has
+  // already fired, or that a suspended page never reaches, waits for ever. The
+  // `waitFor` below is the real check that the reload landed, so overshooting
+  // this one costs a scene rather than the run.
+  await withCeiling(
+    new Promise<void>((resolve) => win.webContents.once("did-finish-load", () => resolve())),
+    EVAL_CEILING_MS,
+    undefined,
+  );
   await waitFor(win, ".app__sidebar");
   await settle(win);
 }
@@ -577,9 +752,33 @@ function slug(label: string): string {
 
 // --- The sweep --------------------------------------------------------------
 
+/**
+ * The sweep, and its report written whether or not the sweep finishes.
+ *
+ * The report is the product here; the PNGs are its evidence. Writing it only on
+ * the success path meant that a single transient capture failure discarded
+ * every finding already made — and did something quieter and worse: the frames
+ * are written one at a time as they are taken, so a run that dies late leaves
+ * two thousand fresh PNGs sitting next to a `report.md` describing the PREVIOUS
+ * run. Nothing in either file says so. A stale report next to fresh frames is
+ * read as a report ABOUT them.
+ *
+ * So the writes are in a `finally`, and the failure still propagates: the run
+ * exits non-zero and says what broke, and the reader gets the findings from the
+ * part that ran.
+ */
 export async function runShots(win: BrowserWindow, outDir: string): Promise<ShotFrame[]> {
   const frames: ShotFrame[] = [];
+  try {
+    await sweep(win, outDir, frames);
+  } finally {
+    writeFileSync(join(outDir, "frames.json"), `${JSON.stringify(frames, null, 2)}\n`);
+    writeFileSync(join(outDir, "report.md"), buildReport(frames));
+  }
+  return frames;
+}
 
+async function sweep(win: BrowserWindow, outDir: string, frames: ShotFrame[]): Promise<void> {
   for (const size of SHOT_SIZES) {
     // Outer dimensions, matching `createWindow` — the frames must show the
     // viewport a real window of this size actually has, chrome included.
@@ -718,10 +917,6 @@ export async function runShots(win: BrowserWindow, outDir: string): Promise<Shot
     win.unmaximize();
     await pause(300);
   }
-
-  writeFileSync(join(outDir, "frames.json"), `${JSON.stringify(frames, null, 2)}\n`);
-  writeFileSync(join(outDir, "report.md"), buildReport(frames));
-  return frames;
 }
 
 /**
