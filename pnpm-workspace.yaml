@@ -55,6 +55,22 @@ overrides:
   # electron-builder's fetch path. 6.x is a separate line with its own tree and
   # is not covered by this advisory's range.
   undici@7: ^7.29.0
+  # GHSA-r292-9mhp-454m — uncontrolled recursion in `mapHas`/`filesFilter`, so
+  # a crafted archive with a long member path and a selection filter overflows
+  # the stack UNCATCHABLY. Build-time only: `tar` arrives through
+  # electron-builder (app-builder-lib) and node-gyp, and it reads archives we
+  # produce or fetch from the Electron release feed, never user input.
+  #
+  # It is here for `js-yaml`'s reason, not `nanoid`'s. Both dependants already
+  # ask for a caret range that ADMITS the patch — `^7.5.7` and `^7.5.4` against
+  # a published 7.5.22 — so a clean install with no lockfile lands on the fix by
+  # itself. What does not move is the lockfile: `pnpm update tar -r`, and the
+  # same with `--depth Infinity`, both leave 7.5.19 exactly where it is, because
+  # a resolved version that still satisfies its range is never re-resolved. The
+  # advisory was cut on a tree nothing here had touched. Retires when both
+  # dependants' floors clear 7.5.20 — at which point ordinary resolution reaches
+  # the patch on its own and this entry must come out.
+  tar@7: ^7.5.22
   # GHSA-mwcw-c2x4-8c55 — predictable ids from a non-integer `size`. SHIPPED,
   # not build-time: it arrives through @excalidraw/excalidraw, which pins
   # nanoid at an exact `3.3.3`, and through @excalidraw/mermaid-to-excalidraw,
