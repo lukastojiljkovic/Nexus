@@ -30,7 +30,20 @@
 
     "materialHorizon": "none",
     "materialBite": "inset 0 1px 2px rgba(34, 30, 24, 0.11)",
-    "materialEdge": "rgba(255, 253, 249, 0.85)"
+    "materialEdge": "rgba(255, 253, 249, 0.85)",
+    "elecCanvas":     "{color.bench.danMat}",
+    "elecGrid":       "{color.bench.danGrid}",
+    "elecPartBody":   "{color.bench.danBody}",
+    "elecPartEdge":   "{color.bench.danEdge}",
+    "elecWireRed":    "{color.wire.red}",
+    "elecWireBlack":  "{color.wire.black}",
+    "elecWireYellow": "{color.wire.yellow}",
+    "elecWireGreen":  "{color.wire.green}",
+    "elecWireBlue":   "{color.wire.blue}",
+    "elecWireWhite":  "{color.wire.white}",
+    "elecWireOrange": "{color.wire.orange}",
+    "elecWireBrown":  "{color.wire.brown}",
+    "elecWireGrey":   "{color.wire.grey}"
   },
   "accents": {
     "zlato":   { "accent": "{color.gold.600}",    "accentSoft": "{color.gold.tintDan}",    "accentStrong": "{color.gold.700}" },

@@ -146,6 +146,31 @@ const TEXT_ON_GROUND = [
 const NON_TEXT = [
   ["textFaint", "bg", "a faint mark on the page"],
   ["textFaint", "surface", "a faint mark on a card"],
+  // The ELEC workbench (DEV-006). A wire is a MARK — a coloured line on a board
+  // — so 3:1 against the bench it is drawn on, not the body floor. The nine are
+  // enrolled INDIVIDUALLY rather than as a group, because they are nine
+  // independent hand-picked values and the one nobody checked is the one that
+  // vanishes: „bela" on Dan's light mat and „crna" on Noć's dark one are each a
+  // colour whose obvious value is invisible on its own theme, which is exactly
+  // why both are tuned rather than literal.
+  ["elecWireRed", "elecCanvas", "a red jumper on the bench"],
+  ["elecWireBlack", "elecCanvas", "a black jumper on the bench"],
+  ["elecWireYellow", "elecCanvas", "a yellow jumper on the bench"],
+  ["elecWireGreen", "elecCanvas", "a green jumper on the bench"],
+  ["elecWireBlue", "elecCanvas", "a blue jumper on the bench"],
+  ["elecWireWhite", "elecCanvas", "a white jumper on the bench"],
+  ["elecWireOrange", "elecCanvas", "an orange jumper on the bench"],
+  ["elecWireBrown", "elecCanvas", "a brown jumper on the bench"],
+  ["elecWireGrey", "elecCanvas", "a grey jumper on the bench"],
+  // A component's outline, against both the things it is drawn between. The
+  // EDGE is what is held to 3:1 and the body deliberately is not: a part on a
+  // bench is a stroked shape, so the boundary is carried by the stroke, and
+  // demanding 3:1 of the fill as well would force every component to be a slab
+  // of light on a dark mat — a board of white rectangles, which is not what a
+  // board looks like. This is the same argument the hairline band makes below,
+  // one rule further out.
+  ["elecPartEdge", "elecPartBody", "a component's outline against its own body"],
+  ["elecPartEdge", "elecCanvas", "a component's outline against the bench"],
 ];
 
 /**
@@ -164,6 +189,10 @@ const NON_TEXT = [
  */
 const HAIRLINE_BAND = { min: 1.2, max: 2.4 };
 const HAIRLINES = [
+  // The bench's grid is a hairline in the exact sense this band was written
+  // for: it must be visible enough to be a ruler and faint enough not to be a
+  // cage, and both failures are ones a value picked by eye reaches easily.
+  ["elecGrid", "elecCanvas", "the workbench grid"],
   ["border", "surface", "a card's own edge"],
   ["border", "bg", "an edge against the page"],
   ["borderStrong", "surface", "an emphasised edge on a card"],

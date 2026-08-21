@@ -93,7 +93,11 @@ describe("the live palette", () => {
       // two grounds at the 3:1 NON-TEXT floor, because it is a mark and holding
       // it to the body floor would delete the tier (+2); and the three hairline
       // pairs, which are checked as a BAND rather than a floor (+3).
-      expect(checked).toBe(75);
+      // +12 with the ELEC workbench (DEV-006): the nine jumper colours against
+      // the bench and a component's outline against both its own body and the
+      // bench, each at the 3:1 NON-TEXT floor because a wire is a mark rather
+      // than prose; plus the grid, which is held to the HAIRLINE band instead.
+      expect(checked).toBe(87);
     }
   });
 });

@@ -99,6 +99,23 @@
       "700": "#403d35",
       "tintDan": "#e9e7e0",
       "tintNoc": "#222530"
+    },
+    "wire": {
+      "red":    "#f0705f",
+      "black":  "#6e7285",
+      "yellow": "#e8c65a",
+      "green":  "#4fc98a",
+      "blue":   "#7ba6f5",
+      "white":  "#f2f3f7",
+      "orange": "#f0a05a",
+      "brown":  "#c08a63",
+      "grey":   "#b9bdcb"
+    },
+    "bench": {
+      "danMat":  "#23201c", "nocMat":  "#0a0d1a",
+      "danGrid": "#3a352d", "nocGrid": "#1c2340",
+      "danBody": "#35302a", "nocBody": "#141a30",
+      "danEdge": "#a89c85", "nocEdge": "#8f96b3"
     }
   },
   "font": {
