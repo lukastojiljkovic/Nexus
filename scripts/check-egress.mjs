@@ -26,6 +26,10 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, extname, join, relative, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+// Shared with `check:elec`, which has the same problem for the same reason —
+// see the module for why one reading of it rather than two.
+import { stripComments } from "./strip-comments.mjs";
+
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = join(HERE, "..");
 
@@ -231,60 +235,6 @@ function* walk(dir) {
  * instead of a fixture tree — a gate whose own tests need files on disk is a
  * gate whose tests get skipped.
  */
-/**
- * Blanks comment bodies while preserving line count and line breaks, so a
- * finding's reported line number still points at the right line.
- *
- * Blanked rather than deleted for exactly that reason. This is a lexer, not a
- * parser: it tracks whether it is inside a string, a template literal, a
- * regex-looking `//`, a line comment or a block comment, because a naive
- * `replace(/\/\/.*$/)` eats the `//` in every `https://` URL and would silently
- * disarm four of the rules above.
- */
-export function stripComments(source) {
-  let out = "";
-  let i = 0;
-  let quote = null;
-  while (i < source.length) {
-    const ch = source[i];
-    const next = source[i + 1];
-    if (quote !== null) {
-      out += ch;
-      if (ch === "\\") {
-        out += next ?? "";
-        i += 2;
-        continue;
-      }
-      if (ch === quote) quote = null;
-      i += 1;
-      continue;
-    }
-    if (ch === '"' || ch === "'" || ch === "`") {
-      quote = ch;
-      out += ch;
-      i += 1;
-      continue;
-    }
-    if (ch === "/" && next === "/") {
-      while (i < source.length && source[i] !== "\n") i += 1;
-      continue;
-    }
-    if (ch === "/" && next === "*") {
-      i += 2;
-      while (i < source.length && !(source[i] === "*" && source[i + 1] === "/")) {
-        // Newlines survive, so every later line keeps its number.
-        if (source[i] === "\n") out += "\n";
-        i += 1;
-      }
-      i += 2;
-      continue;
-    }
-    out += ch;
-    i += 1;
-  }
-  return out;
-}
-
 export function scanSource(relPath, source) {
   const exempt = ALLOWLIST.get(relPath.split(sep).join("/")) ?? [];
   const findings = [];

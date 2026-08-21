@@ -1,37 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { ALLOWLIST, EGRESS_RULES, scanRepo, scanSource, stripComments } from "./check-egress.mjs";
+import { ALLOWLIST, EGRESS_RULES, scanRepo, scanSource } from "./check-egress.mjs";
 
 const ids = (findings) => findings.map((f) => f.rule).sort();
 
-describe("stripComments", () => {
-  it("does not eat the `//` in a URL", () => {
-    // The bug this function exists to avoid: `replace(/\/\/.*$/)` deletes
-    // everything from the `//` in `https://`, which silently disarms four of
-    // the rules while leaving the gate green.
-    const src = 'const u = "https://esm.sh/x";';
-    expect(stripComments(src)).toContain("https://esm.sh/x");
-  });
-
-  it("removes line and block comments but keeps the line numbering", () => {
-    const src = ["a", "// import('https://x/y')", "/* fetch(", "still comment", "*/", "b"].join("\n");
-    const out = stripComments(src);
-    expect(out.split("\n")).toHaveLength(6);
-    expect(out).not.toContain("esm");
-    expect(out).not.toContain("still comment");
-    expect(out.split("\n")[5]).toBe("b");
-  });
-
-  it("leaves a comment marker that is inside a string alone", () => {
-    expect(stripComments('const s = "a // b";')).toBe('const s = "a // b";');
-    expect(stripComments("const s = `a /* b */ c`;")).toBe("const s = `a /* b */ c`;");
-  });
-
-  it("survives an escaped quote inside a string", () => {
-    const src = 'const s = "he said \\"hi\\" // not a comment";';
-    expect(stripComments(src)).toBe(src);
-  });
-});
+// The lexer this gate depends on moved to `strip-comments.mjs` when `check:elec`
+// turned out to need the same one; its four tests moved with it, unchanged, to
+// `strip-comments.test.mjs`. What stays here is this gate's own behaviour.
 
 describe("the rules catch what they are for", () => {
   const cases = [

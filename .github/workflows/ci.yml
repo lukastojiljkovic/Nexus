@@ -78,6 +78,14 @@ jobs:
 
       - run: pnpm check:tokens
 
+      # DEV-006 exempts the Elektronika workbench from the ban on blue and
+      # orange, because inside a wiring diagram a colour is data. The deviation
+      # says the exemption reaches the canvas and its legend „and nothing else",
+      # which is a rule over a reachability set — nothing in CSS tells a blue
+      # jumper apart from a blue button, and `check:colours` is satisfied by
+      # both. This is the sentence, enforced.
+      - run: pnpm check:elec
+
       # A character that renders as nothing, or as a character it is not. This
       # one has to run here rather than in review, because review is exactly
       # what it defeats: a non-breaking space is a space in every editor, in
