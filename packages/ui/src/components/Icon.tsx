@@ -30,6 +30,7 @@ export type IconName =
   | "habits"
   | "fitness"
   | "canvas"
+  | "electronics"
   | "tools"
   | "pro"
   | "priv"
@@ -210,6 +211,23 @@ const SHAPES: Record<IconName, ReactNode> = {
     <>
       <rect x="3" y="4" width="18" height="16" rx="2" />
       <path d="M6.6 15.4c2-4.6 4-4.6 5.5-1.6s3.5 3 5.4-2" />
+    </>
+  ),
+  // A DIP chip seen from above: the body, three legs a side, and the dot that
+  // marks pin 1. A schematic squiggle would have been the obvious draw and the
+  // wrong one — „canvas" is already a rect with a curve through it, and at
+  // 16px the two would be one smudge apart. A chip is a THING rather than a
+  // diagram, which is also what the module is: a drawer of components.
+  electronics: (
+    <>
+      <rect x="7" y="6" width="10" height="12" rx="1.5" />
+      <path d="M7 9H4" />
+      <path d="M7 12H4" />
+      <path d="M7 15H4" />
+      <path d="M17 9h3" />
+      <path d="M17 12h3" />
+      <path d="M17 15h3" />
+      <path d="M9.5 8.5h0" />
     </>
   ),
   // A ruler: UTIL is converters and calculators, so it measures.
