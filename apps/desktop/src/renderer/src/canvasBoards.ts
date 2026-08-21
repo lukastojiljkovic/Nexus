@@ -1,5 +1,3 @@
-import type { CanvasBoard } from "../../shared/ipc.js";
-
 /**
  * The pure decisions „Tabla" makes, kept out of the component so they can be
  * tested without an editor (`focusPhases.ts`'s arrangement).
@@ -64,38 +62,9 @@ export function looksLikeMermaid(text: string): boolean {
   return MERMAID_PATTERN.test(text.trim());
 }
 
-/**
- * Which board to show once `deletedId` is gone.
- *
- * The NEIGHBOUR rather than the first board, and rather than nothing: deleting
- * the third of five and landing on the first would scroll the strip away from
- * where the user was working, while landing on nothing would make a delete feel
- * like a crash. The one after it, or the one before it when there is no after,
- * or null when that board was the last one there was.
- *
- * `boards` is the list as it stood BEFORE the delete — the caller has it already,
- * and computing from it is what makes „the one after" meaningful.
+/*
+ * „Which board do I land on" used to live here as `boardAfterDelete` and
+ * `resolveActiveBoard`. Neither ever read more than a board's `id`, and
+ * „Elektronika" asks the identical two questions about circuits, so they moved
+ * to `pickedList.ts` rather than being copied — see that file's own comment.
  */
-export function boardAfterDelete(
-  boards: readonly CanvasBoard[],
-  deletedId: string,
-): string | null {
-  const index = boards.findIndex((board) => board.id === deletedId);
-  if (index < 0) return boards[0]?.id ?? null;
-  return boards[index + 1]?.id ?? boards[index - 1]?.id ?? null;
-}
-
-/**
- * Which board to show given a list and whatever the page was showing before.
- *
- * Keeps the current one whenever it is still there — a refresh after a rename or
- * a save must not move the user — and otherwise falls to the first, which is the
- * sr-Latn alphabetical head the store already sorted.
- */
-export function resolveActiveBoard(
-  boards: readonly CanvasBoard[],
-  current: string | null,
-): string | null {
-  if (current !== null && boards.some((board) => board.id === current)) return current;
-  return boards[0]?.id ?? null;
-}

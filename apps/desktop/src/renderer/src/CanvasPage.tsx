@@ -26,7 +26,8 @@ import type { ThemeName } from "@nexus/tokens";
 import { Button, EmptyState, Icon, LoadingState, PageHeader, SaveIndicator, type SaveStatus, TextField } from "@nexus/ui";
 import { MAX_CANVAS_BOARD_NAME_LENGTH, MAX_CANVAS_SCENE_LENGTH } from "../../shared/ipc.js";
 import type { CanvasBoard, CanvasRefCard } from "../../shared/ipc.js";
-import { boardAfterDelete, looksLikeMermaid, resolveActiveBoard } from "./canvasBoards.js";
+import { looksLikeMermaid } from "./canvasBoards.js";
+import { neighbourAfterDelete, resolveOpenItem } from "./pickedList.js";
 import { moduleName } from "./moduleName.js";
 import { NotePopover } from "./notePopover.js";
 // „Danas u 14:32" collapses to the bare clock and anything older grows a date —
@@ -265,7 +266,7 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
     const listed = await window.nexus.listCanvasBoards(profileId);
     setState((previous) => ({
       boards: listed,
-      activeId: resolveActiveBoard(listed, previous.activeId),
+      activeId: resolveOpenItem(listed, previous.activeId),
     }));
   }, [profileId]);
 
@@ -288,7 +289,7 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
           listed = await window.nexus.listCanvasBoards(profileId);
         }
         if (!active) return;
-        setState({ boards: listed, activeId: resolveActiveBoard(listed, null) });
+        setState({ boards: listed, activeId: resolveOpenItem(listed, null) });
       } catch (error) {
         if (active) setFailed(true);
         console.error("Nexus: failed to load canvas boards:", error);
@@ -703,8 +704,8 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
 
   async function deleteBoard(id: string): Promise<void> {
     // Computed against the list as it stands NOW, which is what makes „the one
-    // after it" mean anything (`boardAfterDelete`).
-    const next = boardAfterDelete(boards ?? [], id);
+    // after it" mean anything (`neighbourAfterDelete`).
+    const next = neighbourAfterDelete(boards ?? [], id);
     await run(async () => {
       await window.nexus.deleteCanvasBoard(profileId, id);
       setState((previous) => ({ ...previous, activeId: next }));
