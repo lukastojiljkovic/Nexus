@@ -35,6 +35,8 @@ import type {
   BodyCircumferences,
   BodySex,
   CanvasRefKind,
+  CircuitPart,
+  CircuitWire,
   ExerciseEquipment,
   ExerciseMetric,
   FocusOutcome,
@@ -48,6 +50,7 @@ import type {
   MuscleReading,
   SetKind,
   TaskViewConfig,
+  WireEnd,
 } from "@nexus/core";
 // The sync surface's refusal vocabulary joins on the closed-list ground stated
 // above, and on a sharper version of it: these two unions are what the auth
@@ -598,6 +601,34 @@ export const IpcChannel = {
   // WITHOUT re-reading the drawing every time a title changes or an object is
   // deleted, and the scene is the expensive half of that pair.
   canvasResolveRefs: "canvas:resolve-refs",
+  // Elektronika (ELEC slice E1, migration 067). One channel per store
+  // operation, on the `canvas:*` rule, and here it does the same real work it
+  // does there: `elec:update-part` fires on every drag and must not be able to
+  // rename the circuit, while `elec:rename` must not be able to move anything.
+  // The store keeps those apart with separate statements; this list keeps them
+  // apart on the wire.
+  //
+  // **There is no channel for the component CATALOGUE, and there will not be
+  // one.** It ships as constants in `@nexus/core` and the renderer imports it —
+  // see the request shapes below.
+  //
+  // `elec:list` and `elec:open` are two channels on `canvas:list`/`canvas:open`'s
+  // grounds, though the cost differs in kind rather than in size: a circuit's
+  // parts and wires are rows, not megabytes, but the picker asks on every mount
+  // and has no use for what is on any circuit but the one being opened.
+  elecList: "elec:list",
+  elecOpen: "elec:open",
+  elecCreate: "elec:create",
+  elecRename: "elec:rename",
+  elecSetNotes: "elec:set-notes",
+  elecDelete: "elec:delete",
+  elecRestore: "elec:restore",
+  elecAddPart: "elec:add-part",
+  elecUpdatePart: "elec:update-part",
+  elecRemovePart: "elec:remove-part",
+  elecAddWire: "elec:add-wire",
+  elecSetWireColour: "elec:set-wire-colour",
+  elecRemoveWire: "elec:remove-wire",
   searchQuery: "search:query",
   searchRecent: "search:recent",
   searchPage: "search:page",
@@ -5831,6 +5862,172 @@ export type CanvasRefCard =
     }
   | { kind: CanvasRefKind; id: string; missing: true };
 
+// --- Elektronika: circuits, parts and wires (ELEC slice E1, migration 067) ---
+//
+// **The component CATALOGUE does not cross this wire, and no channel answers
+// it.** The 153 components ship as constants in `@nexus/core`, which the
+// renderer imports directly: they are not the profile's data, they never touch
+// the database, and a channel would be main answering a question the caller can
+// already answer — at the cost of a second copy that could drift from the one
+// `circuitProblems` resolves against.
+//
+// The circuit DOCUMENT is imported rather than redeclared, which is the
+// `TaskViewConfig` exception rather than a lapse in the redeclare rule. A part
+// and a wire are the nested grammar the store gate, the domain validator and
+// this wire all share, and the renderer hands the very object below straight to
+// `circuitProblems` — two declarations of it would be two answers to „what is a
+// part", drifting silently the first time one of them gained a field.
+
+/**
+ * One circuit WITHOUT its contents — what the circuit picker lists.
+ *
+ * `notes` rides even on the cheap read, unlike CANV's scene: a note is a
+ * sentence about the circuit rather than a document, so the picker can show it
+ * and the editor needs no second call to have it.
+ */
+export interface ElecCircuit {
+  id: string;
+  profileId: string;
+  name: string;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * One circuit AND everything on it — what `elec:open` answers and the canvas
+ * draws. Assignable to `@nexus/core`'s `Circuit`, which is the point: the page
+ * runs `circuitProblems` on exactly this object.
+ */
+export interface ElecCircuitDocument extends ElecCircuit {
+  parts: CircuitPart[];
+  wires: CircuitWire[];
+}
+
+export interface ElecListRequest {
+  profileId: string;
+}
+
+export interface ElecOpenRequest {
+  profileId: string;
+  id: string;
+}
+
+/** Creates a circuit. An ABSENT `notes` is an empty one — a new circuit is the ordinary case. */
+export interface ElecCreateRequest {
+  profileId: string;
+  name: string;
+  notes?: string;
+}
+
+/** Renames a circuit. Cannot carry notes — see the channel list's own note. */
+export interface ElecRenameRequest {
+  profileId: string;
+  id: string;
+  name: string;
+}
+
+/** Replaces a circuit's notes. Cannot rename it. */
+export interface ElecSetNotesRequest {
+  profileId: string;
+  id: string;
+  notes: string;
+}
+
+/** A soft delete. Everything on the circuit stays, so the undo brings the whole canvas back. */
+export interface ElecDeleteRequest {
+  profileId: string;
+  id: string;
+}
+
+export interface ElecRestoreRequest {
+  profileId: string;
+  id: string;
+}
+
+/**
+ * Places a component on a circuit.
+ *
+ * `rotation` crosses as a plain `number` rather than as `PartRotation`: the
+ * renderer is untrusted, so the type it claims to send is not evidence, and
+ * main narrows it to one of the four quarter turns before the store ever sees
+ * it. `value` is absent for a component that takes none — never null, which the
+ * column does not have either.
+ */
+export interface ElecAddPartRequest {
+  profileId: string;
+  circuitId: string;
+  part: {
+    componentId: string;
+    label: string;
+    x: number;
+    y: number;
+    rotation: number;
+    value?: number;
+  };
+}
+
+/**
+ * Edits a placed part — the channel that fires on every drag.
+ *
+ * Three states per field, not two: absent leaves it alone, a value replaces it,
+ * and `value: null` CLEARS it. Without the null there would be no way to say
+ * „this resistor should not have a value after all", and a resistor that cannot
+ * lose its value is a row the user cannot correct.
+ */
+export interface ElecUpdatePartRequest {
+  profileId: string;
+  id: string;
+  fields: {
+    label?: string;
+    x?: number;
+    y?: number;
+    rotation?: number;
+    value?: number | null;
+  };
+}
+
+/** Removes a placed part. Answers with the WIRES that went with it — see `removeCircuitPart`. */
+export interface ElecRemovePartRequest {
+  profileId: string;
+  id: string;
+}
+
+/**
+ * Runs a wire between two pins.
+ *
+ * `colour` crosses as a plain `string` for `rotation`'s reason exactly: main
+ * narrows it to one of the nine jumper names, and a wire whose colour arrived
+ * as a CSS value would be a stored colour the canvas then had to paint rather
+ * than a name it resolves through a `--nx-elec-wire-*` token.
+ */
+export interface ElecAddWireRequest {
+  profileId: string;
+  circuitId: string;
+  wire: {
+    from: WireEnd;
+    to: WireEnd;
+    colour: string;
+  };
+}
+
+/**
+ * Recolours a wire — the only edit a wire admits, and a channel of its own for
+ * `elec:rename`/`elec:set-notes`' reason: a recolour must not be able to move an
+ * end. `colour` crosses as a plain `string` and is narrowed by main, exactly as
+ * it is on the way in.
+ */
+export interface ElecSetWireColourRequest {
+  profileId: string;
+  id: string;
+  colour: string;
+}
+
+export interface ElecRemoveWireRequest {
+  profileId: string;
+  id: string;
+}
+
 /**
  * Global search (ADR-021 / PRD 08 SRCH-001/002). The index itself (migration
  * 017) and its read-only store already exist; these three channels are the
@@ -8919,6 +9116,58 @@ export interface NexusApi {
    * by main, never resolved to an empty card.
    */
   resolveCanvasRefs(profileId: string, refs: string[]): Promise<CanvasRefCard[]>;
+  /** This profile's circuits, sr-Latn alphabetical and WITHOUT their contents — the cheap read the picker is built from. */
+  listCircuits(profileId: string): Promise<ElecCircuit[]>;
+  /** One circuit AND everything on it — the document the canvas draws and `circuitProblems` reads. */
+  openCircuit(profileId: string, id: string): Promise<ElecCircuitDocument>;
+  /** Creates a circuit; absent notes are empty ones. Answers the header, since a new circuit has nothing on it. */
+  createCircuit(profileId: string, name: string, notes?: string): Promise<ElecCircuit>;
+  /** Renames a circuit. Cannot touch the notes. */
+  renameCircuit(profileId: string, id: string, name: string): Promise<ElecCircuit>;
+  /** Replaces a circuit's notes. Cannot rename it. */
+  setCircuitNotes(profileId: string, id: string, notes: string): Promise<ElecCircuit>;
+  /** Soft-deletes a circuit. Everything on it stays, so the undo brings the whole canvas back. */
+  deleteCircuit(profileId: string, id: string): Promise<void>;
+  restoreCircuit(profileId: string, id: string): Promise<void>;
+  /** Places a component on a circuit. */
+  addCircuitPart(
+    profileId: string,
+    circuitId: string,
+    part: ElecAddPartRequest["part"],
+  ): Promise<CircuitPart>;
+  /** Edits a placed part — the call that fires on every drag. `value: null` clears the value. */
+  updateCircuitPart(
+    profileId: string,
+    id: string,
+    fields: ElecUpdatePartRequest["fields"],
+  ): Promise<CircuitPart>;
+  /**
+   * Removes a placed part, and answers with the IDS OF THE WIRES that went with
+   * it — every wire touching it, from either end.
+   *
+   * The answer is load-bearing rather than informative. The caller is a canvas
+   * holding the document in memory; „the part is gone" alone leaves it drawing
+   * wires to nothing, and re-opening the circuit to find out would cost every
+   * other part and wire on it on every delete.
+   */
+  removeCircuitPart(profileId: string, id: string): Promise<string[]>;
+  /** Runs a wire between two pins of one circuit. Both ends must be live parts of it. */
+  addCircuitWire(
+    profileId: string,
+    circuitId: string,
+    wire: ElecAddWireRequest["wire"],
+  ): Promise<CircuitWire>;
+  /**
+   * Recolours a wire, and answers with it as it now stands.
+   *
+   * A jumper's colour is how the trade says what a wire carries, so it is the
+   * one thing about a run that gets corrected after the run is made. Correcting
+   * it by deleting and re-running would mint a new `id` — a different object to
+   * sync, and the same one to the user.
+   */
+  setCircuitWireColour(profileId: string, id: string, colour: string): Promise<CircuitWire>;
+  /** Removes a wire. Both its parts stay exactly where they are. */
+  removeCircuitWire(profileId: string, id: string): Promise<void>;
   /** Runs the query pipeline (parse -> FTS match -> bm25 candidates -> rank), falling back to `searchRecent`'s order when the query has no matchable terms (ADR-021). */
   searchQuery(profileId: string, query: string, limit: number): Promise<SearchResult[]>;
   /** The profile's most recently touched entries, already in their final order — no ranking pass, unlike `searchQuery`. */

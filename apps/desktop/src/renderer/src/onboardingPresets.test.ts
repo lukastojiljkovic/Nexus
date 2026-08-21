@@ -212,6 +212,7 @@ describe("resolveModuleSelection", () => {
       focus: true,
       tools: true,
       canvas: true,
+      electronics: true,
       pro: false,
     });
   });
@@ -243,6 +244,7 @@ describe("moduleFlagWrites", () => {
       { moduleId: "focus", enabled: true },
       { moduleId: "tools", enabled: true },
       { moduleId: "canvas", enabled: true },
+      { moduleId: "electronics", enabled: true },
       // Written explicitly even though it matches the manifest default, which
       // is the whole point of a first run: what modules a profile has is a
       // stored fact of the profile, not an accident of this build's manifests.

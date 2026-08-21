@@ -5548,6 +5548,51 @@ const V0_MODULES: ModuleManifest[] = [
     category: "Professional & utilities",
     defaultEnabled: true,
   },
+  // Elektronika (ELEC slice E1, migration 067) — the breadboard: a catalogue of
+  // 153 components, a canvas to place them on and wires between their pins.
+  // Fourth module in „Profesionalno i alati", after „Tabla" and before „Stručne
+  // alatke", and the category is the honest one on „Tabla"'s exact terms:
+  // „Životni centri" holds subjects somebody HAS, while a breadboard is an
+  // INSTRUMENT you use on whichever of them you are at. Its own prefix rather
+  // than joining UTIL, for „Tabla"'s reason: the sharing UTIL does is one PRD
+  // section implemented twice, not a bin for anything tool-shaped.
+  //
+  // ON by default, like every built module except PRIV and „Stručne alatke" —
+  // and the two exceptions are what settle it rather than what invite a third.
+  // PRIV is opt-in because of what it HOLDS; „Stručne alatke" because it is
+  // literally EMPTY until a pack is granted, so an un-asked-for profile would
+  // open it onto nothing. Neither is true here: this module is complete the
+  // moment it is on, and writes nothing until somebody places a part — which is
+  // „Tabla"'s situation exactly, and „Tabla" ships on. Somebody who never wires
+  // anything switches it off in Settings, which is what the toggle is for.
+  //
+  // THREE contract slots stay empty. No `widgets`: a dashboard card draws a
+  // FACT about the profile, and „imaš 3 kola" is a count nobody acts on — the
+  // honest card would be a thumbnail, and rendering one means drawing a
+  // schematic on the home screen. No `settings`: the module has nothing to
+  // prefer yet, and a card with one checkbox for the sake of having a card is
+  // the padding SET-006 warns about. No `imex` either, and that is not a gap:
+  // the module DOES ride in every archive (`circuit`/`circuit-part`/
+  // `circuit-wire`, interchange `1.40.0`), but no module in this file fills
+  // that slot — the interchange is assembled in `@nexus/core` from
+  // `ProfileData`, not from manifests.
+  //
+  // `searchIndexers` is the one that is „not yet" rather than „never", and it
+  // is worth being precise about the difference. „Tabla" declines one because a
+  // hit inside a board could only say „somewhere on this board", which is not a
+  // result anybody can use. A CIRCUIT is not like that: its name is a phrase
+  // the user typed for the express purpose of telling this circuit from that
+  // one, and „Trepćuća dioda" in the palette would open exactly the right
+  // thing. What stands in the way is not the argument but the work — a new
+  // `SearchKind` is a migration and a backfill, not a declaration (see
+  // `contracts/search.ts`) — so it is recorded in `docs/STATUS.md` rather than
+  // half-declared here.
+  {
+    id: "electronics",
+    prefix: "ELEC",
+    category: "Professional & utilities",
+    defaultEnabled: true,
+  },
   // „Stručne alatke" (UTIL slice d) — the professional drawer itself, host to
   // every toolkit as its pack ships rather than a drawer of its own kind. Its
   // contents are `PRO_TOOLS`, which is one array per subject concatenated: the

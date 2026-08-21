@@ -62,6 +62,7 @@ describe("createModuleRegistry", () => {
       "focus",
       "tools",
       "canvas",
+      "electronics",
       "pro",
     ]);
   });
@@ -119,6 +120,10 @@ describe("createModuleRegistry", () => {
       // its own prefix below rather than borrowing this one.
       UTIL: ["focus", "tools"],
       CANV: ["canvas"],
+      // „Elektronika" takes its own for „Tabla"'s reason exactly: ELEC is its
+      // own PRD entry, and the UTIL sharing above is one section implemented
+      // twice rather than a bin for anything tool-shaped.
+      ELEC: ["electronics"],
       PRO: ["pro"],
     });
   });
@@ -181,6 +186,7 @@ describe("createModuleRegistry", () => {
       "focus",
       "tools",
       "canvas",
+      "electronics",
       "pro",
     ]);
   });
@@ -213,6 +219,7 @@ describe("createModuleRegistry", () => {
       "focus",
       "tools",
       "canvas",
+      "electronics",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");

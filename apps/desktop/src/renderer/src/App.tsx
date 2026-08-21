@@ -44,6 +44,7 @@ import { HabitsPage } from "./HabitsPage.js";
 import { FocusPage } from "./FocusPage.js";
 import { ToolsPage } from "./ToolsPage.js";
 import { CanvasPage } from "./CanvasPage.js";
+import { ElectronicsPage } from "./ElectronicsPage.js";
 import { FitnessPage } from "./FitnessPage.js";
 import { SettingsPage } from "./SettingsPage.js";
 import { formatArchiveInstant } from "./timeFormat.js";
@@ -171,6 +172,7 @@ const MODULE_ICONS: Record<string, IconName> = {
   pro: "pro",
   focus: "focus",
   canvas: "canvas",
+  electronics: "electronics",
 };
 
 /** The rail's icon for a module, or nothing at all if the set does not cover it. */
@@ -1640,6 +1642,14 @@ export function App() {
               theme={theme}
               onOpenRef={openCanvasRef}
             />
+          ) : effectiveId === "electronics" && activeProfile ? (
+            // One prop, and no `theme`: the bench is our own SVG over our own
+            // tokens, so it follows `<html data-theme>` like every other surface
+            // in the app. No `intent` pair either — a circuit is made on the
+            // page, from a name, and nothing deep-links into one yet (ELEC is
+            // absent from `searchCommands.ts` for the same reason it is absent
+            // from the search index: a circuit has no `SearchKind`).
+            <ElectronicsPage key={activeProfile.id} profileId={activeProfile.id} />
           ) : effectiveId === SEARCH_PAGE_ID && activeProfile ? (
             <SearchPage
               key={activeProfile.id}

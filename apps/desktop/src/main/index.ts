@@ -43,14 +43,20 @@ import {
   isValidDayKey,
   MAX_ARCHIVE_PASSPHRASE_LENGTH,
   MAX_CANVAS_SCENE_LENGTH,
+  MAX_CIRCUIT_NAME_LENGTH,
+  MAX_CIRCUIT_NOTES_LENGTH,
   MAX_CIRCUMFERENCE_CM,
+  MAX_ELEC_ID_LENGTH,
   MAX_EXERCISE_REF_LENGTH,
   MAX_HEIGHT_CM,
+  MAX_PART_COORDINATE,
+  MAX_PART_LABEL_LENGTH,
   MAX_WEIGHT_KG,
   MOVEMENT_PATTERNS,
   MUSCLE_GROUPS,
   normalizeChordKey,
   openPrivBlob,
+  PART_ROTATIONS,
   parseCanvasScene,
   parseExerciseRef,
   parseFoodRef,
@@ -72,10 +78,13 @@ import {
   validateRecurrenceRule,
   validateTaskViewConfig,
   validateWidgetConfig,
+  WIRE_COLOURS,
 } from "@nexus/core";
 import type {
   BodyMeasurement,
   BodyProfile,
+  CircuitPart,
+  CircuitWire,
   ExerciseEntry,
   ExerciseMetric,
   FocusOutcome,
@@ -87,8 +96,11 @@ import type {
   HabitSchedule,
   MuscleGroup,
   MuscleReading,
+  PartRotation,
   SetKind,
   TaskViewConfig,
+  WireColour,
+  WireEnd,
 } from "@nexus/core";
 import type {
   ArchiveModuleId,
@@ -155,6 +167,8 @@ import {
   type DueQueueOptions,
   type EffectiveExamTopic,
   ElectronicsStore,
+  type NewCircuitPart,
+  type NewCircuitWire,
   encryptDatabaseInPlace,
   type Event,
   EventStore,
@@ -336,6 +350,7 @@ import {
   TopicStore,
   type TrackedDocument,
   type UpdateCardFields,
+  type UpdateCircuitPartFields,
   type UpdateDeckFields,
   type UpdateDocumentFields,
   type UpdateEventFields,
@@ -437,6 +452,7 @@ import {
   type AttachmentTextTarget,
 } from "./attachmentText.js";
 import { localToday } from "./clock.js";
+import { toCircuitDocument, toWireDocument } from "./elecDocument.js";
 import {
   decodePreviewText,
   isAllowedPreviewNavigation,
@@ -560,6 +576,8 @@ import {
   type DocMimeFamily,
   type DocTextContent,
   DEMO_PROFILE_NAME,
+  type ElecCircuit,
+  type ElecCircuitDocument,
   type ExportResult,
   FIN_CSV_IMPORT_COLUMN_ROLES,
   FIN_CSV_IMPORT_SIGN_CONVENTIONS,
@@ -802,6 +820,23 @@ app.setName("Nexus");
 // how the destination was spelled.
 if (shouldBlockResolver(app.getPath("userData"))) {
   app.commandLine.appendSwitch("host-resolver-rules", "MAP * ~NOTFOUND");
+}
+
+// The screenshot sweep only. Two switches, because Chromium has two separate
+// mechanisms for standing a window down and `backgroundThrottling: false` in
+// `webPreferences` only reaches one of them: it stops the RENDERER being
+// throttled, while occlusion detection is a browser-process decision that
+// suspends compositing regardless. A sweep needs both off — one dead run hung
+// for ever on an animation frame that never came, and the run before it died on
+// `capturePage` answering `VizSentEmptyBitmap`, which is what a window with no
+// live compositor has to give.
+//
+// Guarded on `--shots` and never shipped: throttling an invisible window is
+// correct behaviour that a laptop's battery depends on. This is a measurement
+// instrument asking not to be stood down while it measures.
+if (isShots) {
+  app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
+  app.commandLine.appendSwitch("disable-renderer-backgrounding");
 }
 
 // Interim brand glyph (four-pointed star, see build/make-icon.ps1). Resolved
@@ -4411,6 +4446,145 @@ function asCanvasScene(value: unknown, field: string): string {
 // The card batch's validator is `asCanvasRefs` in `./canvasRefs.js` rather than
 // here, and its own header says why: it is the one CANV validator whose refusals
 // are worth a test, and nothing in this file is reachable from Vitest.
+
+// --- ELEC: circuits, parts and wires (slice E1, migration 067) ---------------
+//
+// SEC-EL-02 as everywhere: structural checks here, semantics in the store — and
+// the store re-asks every one of them through `@nexus/core`'s own gate, because
+// a store never assumes its caller did. What this layer adds is the narrowing
+// the wire cannot do. `rotation` and `colour` arrive as a plain number and a
+// plain string, because the renderer is untrusted and the type it CLAIMS to
+// send is not evidence; they leave as members of the two closed lists migration
+// 067's CHECKs enforce.
+
+function asCircuitName(value: unknown, field: string): string {
+  const name = asCappedChars(value, field, MAX_CIRCUIT_NAME_LENGTH);
+  if (name.trim().length === 0) {
+    throw new Error(`Invalid IPC payload: "${field}" must not be blank.`);
+  }
+  return name;
+}
+
+/** Bounded, and allowed to be empty: a circuit nobody wrote a note about is the ordinary one. */
+function asCircuitNotes(value: unknown, field: string): string {
+  return asCappedChars(value, field, MAX_CIRCUIT_NOTES_LENGTH);
+}
+
+/** An id this module owns — its own rows', a component's, a pin's. Bounded on `MAX_ELEC_ID_LENGTH`'s terms. */
+function asElecId(value: unknown, field: string): string {
+  const id = asCappedChars(value, field, MAX_ELEC_ID_LENGTH);
+  if (id.trim().length === 0) {
+    throw new Error(`Invalid IPC payload: "${field}" must not be blank.`);
+  }
+  return id;
+}
+
+function asPartCoordinate(value: unknown, field: string): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new Error(`Invalid IPC payload: "${field}" must be a finite number.`);
+  }
+  if (Math.abs(value) > MAX_PART_COORDINATE) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must be within ±${MAX_PART_COORDINATE} of the origin.`,
+    );
+  }
+  return value;
+}
+
+function asPartRotation(value: unknown, field: string): PartRotation {
+  if (!(PART_ROTATIONS as readonly unknown[]).includes(value)) {
+    throw new Error(`Invalid IPC payload: "${field}" must be one of 0, 90, 180 or 270.`);
+  }
+  return value as PartRotation;
+}
+
+/**
+ * A component's chosen value — a resistor's ohms, a capacitor's farads.
+ *
+ * Whether the component takes one AT ALL is a catalogue question, and it is
+ * asked by `circuitProblems` where the component is in hand. What is asked here
+ * is only what migration 067's CHECK asks: that a stated one is a positive
+ * finite number, because zero and negative resistances are not values a user
+ * chose.
+ */
+function asPartValue(value: unknown, field: string): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    throw new Error(`Invalid IPC payload: "${field}" must be a positive finite number.`);
+  }
+  return value;
+}
+
+function asWireColour(value: unknown, field: string): WireColour {
+  if (!(WIRE_COLOURS as readonly unknown[]).includes(value)) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must be one of the nine jumper colours by name.`,
+    );
+  }
+  return value as WireColour;
+}
+
+function asWireEnd(value: unknown, field: string): WireEnd {
+  const end = asRecord(value);
+  return {
+    partId: asElecId(end.partId, `${field}.partId`),
+    pinId: asElecId(end.pinId, `${field}.pinId`),
+  };
+}
+
+/** A placed part, as `elec:add-part` carries it: everything but the id and the clock, which are main's. */
+function asNewCircuitPart(value: unknown, field: string): NewCircuitPart {
+  const part = asRecord(value);
+  const chosen = part.value;
+  return {
+    componentId: asElecId(part.componentId, `${field}.componentId`),
+    label: asCappedChars(part.label, `${field}.label`, MAX_PART_LABEL_LENGTH),
+    x: asPartCoordinate(part.x, `${field}.x`),
+    y: asPartCoordinate(part.y, `${field}.y`),
+    rotation: asPartRotation(part.rotation, `${field}.rotation`),
+    ...(chosen === undefined ? {} : { value: asPartValue(chosen, `${field}.value`) }),
+  };
+}
+
+/**
+ * A partial edit of a placed part — the payload that fires on every drag.
+ *
+ * Three states per field rather than two, and the middle one is why this
+ * validator cannot be a loop over `asPartCoordinate`: an ABSENT key leaves the
+ * field alone, a value replaces it, and `value: null` CLEARS it. A validator
+ * that turned the absent key into a default would rewrite the four fields the
+ * caller did not mention, on every drag.
+ */
+function asCircuitPartFields(value: unknown, field: string): UpdateCircuitPartFields {
+  const fields = asRecord(value);
+  return {
+    ...(fields.label === undefined
+      ? {}
+      : { label: asCappedChars(fields.label, `${field}.label`, MAX_PART_LABEL_LENGTH) }),
+    ...(fields.x === undefined ? {} : { x: asPartCoordinate(fields.x, `${field}.x`) }),
+    ...(fields.y === undefined ? {} : { y: asPartCoordinate(fields.y, `${field}.y`) }),
+    ...(fields.rotation === undefined
+      ? {}
+      : { rotation: asPartRotation(fields.rotation, `${field}.rotation`) }),
+    ...(fields.value === undefined
+      ? {}
+      : { value: fields.value === null ? null : asPartValue(fields.value, `${field}.value`) }),
+  };
+}
+
+/** A wire, as `elec:add-wire` carries it. Whether its ends are parts OF THAT CIRCUIT is the store's question — no payload can answer it. */
+function asNewCircuitWire(value: unknown, field: string): NewCircuitWire {
+  const wire = asRecord(value);
+  return {
+    from: asWireEnd(wire.from, `${field}.from`),
+    to: asWireEnd(wire.to, `${field}.to`),
+    colour: asWireColour(wire.colour, `${field}.colour`),
+  };
+}
+
+// `toWireDocument` and `toCircuitDocument` — the store's flat rows as the
+// domain's nested documents — live in `elecDocument.ts`, next door. That file
+// says why the conversion is main-side at all, and why it is not private to
+// this one.
 
 // --- FOCUS: the one running phase (UTIL slice b, ADR-077) --------------------
 //
@@ -10273,6 +10447,146 @@ function registerIpc(): void {
     return canvasStore(profileId).resolveRefs(refs);
   });
 
+  // Elektronika (ELEC slice E1, migration 067). Twelve channels over one store
+  // and three tables, and the store re-validates everything below through
+  // `@nexus/core`'s own gate — including the invariant no payload can carry,
+  // that a wire's two ends are live parts of the circuit the wire is on. `now`
+  // is main's clock on every write.
+  //
+  // The COMPONENT catalogue is absent from this whole block and there is no
+  // channel for it: it ships as constants in `@nexus/core`, which the renderer
+  // imports directly.
+  ipcMain.handle(IpcChannel.elecList, (event, payload): ElecCircuit[] => {
+    assertTrustedSender(event);
+    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    return electronicsStore(profileId).listActive();
+  });
+
+  // The one read that carries a whole circuit. It answers the DOCUMENT shape
+  // rather than the store's rows — see `toCircuitDocument`.
+  ipcMain.handle(IpcChannel.elecOpen, (event, payload): ElecCircuitDocument => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asElecId(body.id, "id");
+    return toCircuitDocument(electronicsStore(profileId).read(id));
+  });
+
+  // An ABSENT `notes` is an empty one, read off the key being missing rather
+  // than off a sentinel — the store owns what „no notes" is.
+  ipcMain.handle(IpcChannel.elecCreate, (event, payload): ElecCircuit => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const name = asCircuitName(body.name, "name");
+    const input =
+      body.notes === undefined ? { name } : { name, notes: asCircuitNotes(body.notes, "notes") };
+    return electronicsStore(profileId).createCircuit(input, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.elecRename, (event, payload): ElecCircuit => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asElecId(body.id, "id");
+    const name = asCircuitName(body.name, "name");
+    return electronicsStore(profileId).renameCircuit(id, name, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.elecSetNotes, (event, payload): ElecCircuit => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asElecId(body.id, "id");
+    const notes = asCircuitNotes(body.notes, "notes");
+    return electronicsStore(profileId).setNotes(id, notes, new Date().toISOString());
+  });
+
+  // A soft delete: every part and wire is UNTOUCHED, so the undo beside it
+  // brings the canvas back exactly as it was rather than as an empty circuit.
+  ipcMain.handle(IpcChannel.elecDelete, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asElecId(body.id, "id");
+    electronicsStore(profileId).softDelete(id, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.elecRestore, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asElecId(body.id, "id");
+    electronicsStore(profileId).restore(id, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.elecAddPart, (event, payload): CircuitPart => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const circuitId = asElecId(body.circuitId, "circuitId");
+    const part = asNewCircuitPart(body.part, "part");
+    return electronicsStore(profileId).addPart(circuitId, part, new Date().toISOString());
+  });
+
+  // The channel that fires while somebody is working — one drag is one call —
+  // so it carries the narrowest payload there is: an id and whichever fields
+  // actually changed. It cannot rename the circuit and cannot touch a wire.
+  ipcMain.handle(IpcChannel.elecUpdatePart, (event, payload): CircuitPart => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asElecId(body.id, "id");
+    const fields = asCircuitPartFields(body.fields, "fields");
+    return electronicsStore(profileId).updatePart(id, fields, new Date().toISOString());
+  });
+
+  // Answers with the WIRES that went with the part. SQLite's `ON DELETE
+  // CASCADE` fires on a hard delete and this is a soft one, so the store takes
+  // them itself — and the canvas has to erase them from a document it is
+  // holding, which re-opening the circuit would tell it at the cost of every
+  // other row on it.
+  ipcMain.handle(IpcChannel.elecRemovePart, (event, payload): string[] => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asElecId(body.id, "id");
+    return electronicsStore(profileId).removePart(id, new Date().toISOString());
+  });
+
+  ipcMain.handle(IpcChannel.elecAddWire, (event, payload): CircuitWire => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const circuitId = asElecId(body.circuitId, "circuitId");
+    const wire = asNewCircuitWire(body.wire, "wire");
+    return toWireDocument(
+      electronicsStore(profileId).addWire(circuitId, wire, new Date().toISOString()),
+    );
+  });
+
+  // Colour is the only field of a wire this channel can reach, and the narrowing
+  // is `asWireColour`'s — the same one `elec:add-wire` runs, so a colour cannot
+  // enter the file by one door that the other door would have refused.
+  ipcMain.handle(IpcChannel.elecSetWireColour, (event, payload): CircuitWire => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asElecId(body.id, "id");
+    const colour = asWireColour(body.colour, "colour");
+    return toWireDocument(
+      electronicsStore(profileId).setWireColour(id, colour, new Date().toISOString()),
+    );
+  });
+
+  ipcMain.handle(IpcChannel.elecRemoveWire, (event, payload): void => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asElecId(body.id, "id");
+    electronicsStore(profileId).removeWire(id, new Date().toISOString());
+  });
+
   // Global search (ADR-021 / PRD 08 SRCH-001/002): `runSearchQuery`/
   // `runRecentSearch` own the actual pipeline (see their doc comments) so the
   // smoke rehearsal can call the exact same code the renderer does.
@@ -11419,6 +11733,22 @@ function createWindow(): BrowserWindow {
       // emptied on the session in `whenReady` — two switches, because either
       // one alone leaves the other able to fire.
       spellcheck: false,
+      // Chromium suspends `requestAnimationFrame`, and stops compositing
+      // altogether, in a window it considers not visible — occluded by another
+      // window, minimised, or on a desktop that is not the current one. For the
+      // shipped app that is exactly right: it is what stops an idle Nexus
+      // spending a laptop's battery on animations nobody can see, so the
+      // default stays on for real windows.
+      //
+      // For the screenshot sweep it is fatal, and it took two dead runs to see
+      // that both deaths were this one cause. `settle()` awaits two animation
+      // frames, so an occluded window hangs the sweep FOR EVER — 1 215 frames
+      // in, with no output and no error. And `capturePage()` on a window with
+      // no live compositor answers `VizSentEmptyBitmap`, which is how the run
+      // before it died at 2 200. The sweep drives a real window for
+      // twenty-five minutes on a machine somebody is using; „nothing will ever
+      // cover it" is not an assumption it is entitled to make.
+      ...(isShots ? { backgroundThrottling: false } : {}),
       // webSecurity is left at its secure default and never touched (SEC-EL-01).
     },
   });
@@ -12541,8 +12871,14 @@ app.whenReady().then(async () => {
             shutdown(0);
           })
           .catch((error: unknown) => {
+            // The frames taken before the failure, and the report over them,
+            // are written anyway — see `runShots`. Said out loud, because the
+            // reader's next question is whether the run left anything usable
+            // behind, and the answer used to be „no" and is now „yes, up to
+            // here".
             process.stderr.write(
-              `SHOTS FAIL: ${error instanceof Error ? error.message : String(error)}\n`,
+              `SHOTS FAIL: ${error instanceof Error ? error.message : String(error)}\n` +
+                `  frames taken before the failure, and their report, are in ${shotsOutputDir()}\n`,
             );
             shutdown(1);
           });

@@ -666,6 +666,35 @@ const api: NexusApi = {
   // filter here would be a second gate whose disagreement nobody would notice.
   resolveCanvasRefs: (profileId, refs) =>
     ipcRenderer.invoke(IpcChannel.canvasResolveRefs, { profileId, refs }),
+  listCircuits: (profileId) => ipcRenderer.invoke(IpcChannel.elecList, { profileId }),
+  openCircuit: (profileId, id) => ipcRenderer.invoke(IpcChannel.elecOpen, { profileId, id }),
+  // `notes` is passed through as given, `undefined` included — an absent note is
+  // an empty one, which main reads off the key being missing rather than off a
+  // sentinel, exactly as an absent scene is an empty board one module over.
+  createCircuit: (profileId, name, notes) =>
+    ipcRenderer.invoke(IpcChannel.elecCreate, { profileId, name, notes }),
+  renameCircuit: (profileId, id, name) =>
+    ipcRenderer.invoke(IpcChannel.elecRename, { profileId, id, name }),
+  setCircuitNotes: (profileId, id, notes) =>
+    ipcRenderer.invoke(IpcChannel.elecSetNotes, { profileId, id, notes }),
+  deleteCircuit: (profileId, id) => ipcRenderer.invoke(IpcChannel.elecDelete, { profileId, id }),
+  restoreCircuit: (profileId, id) => ipcRenderer.invoke(IpcChannel.elecRestore, { profileId, id }),
+  // The part and the fields ride as whole objects rather than as spread
+  // arguments, and main destructures them there: a placed part has six fields
+  // and an edit has five, and a positional list that long is one transposition
+  // away from putting a rotation into a coordinate.
+  addCircuitPart: (profileId, circuitId, part) =>
+    ipcRenderer.invoke(IpcChannel.elecAddPart, { profileId, circuitId, part }),
+  updateCircuitPart: (profileId, id, fields) =>
+    ipcRenderer.invoke(IpcChannel.elecUpdatePart, { profileId, id, fields }),
+  removeCircuitPart: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.elecRemovePart, { profileId, id }),
+  addCircuitWire: (profileId, circuitId, wire) =>
+    ipcRenderer.invoke(IpcChannel.elecAddWire, { profileId, circuitId, wire }),
+  setCircuitWireColour: (profileId, id, colour) =>
+    ipcRenderer.invoke(IpcChannel.elecSetWireColour, { profileId, id, colour }),
+  removeCircuitWire: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.elecRemoveWire, { profileId, id }),
   searchQuery: (profileId, query, limit) =>
     ipcRenderer.invoke(IpcChannel.searchQuery, { profileId, query, limit }),
   searchRecent: (profileId, limit) =>

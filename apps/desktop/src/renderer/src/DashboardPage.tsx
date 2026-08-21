@@ -85,6 +85,7 @@ const MODULE_SIGILS: Readonly<Record<string, IconName>> = {
   fitness: "fitness",
   files: "files",
   canvas: "canvas",
+  electronics: "electronics",
   priv: "priv",
   tools: "tools",
 };

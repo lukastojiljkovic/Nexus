@@ -1,0 +1,707 @@
+/* --- Elektronika (ELEC slice E2) ------------------------------------------
+ *
+ * The workbench: a component drawer, a bench, and a panel about whatever is
+ * selected. „Tabla"'s page rhythm exactly — same header, same switcher, same
+ * one-outline instrument — because they are the same kind of page: a list of
+ * documents above one surface you work on.
+ *
+ * **The bench is dark in BOTH themes, and that is a decision rather than an
+ * oversight.** A canvas here is an instrument, not a page: the information on it
+ * is carried by the WIRE COLOURS, and nine jumper hues over a light mat cannot
+ * all clear contrast — „bela" measured 2.46:1 against warm paper. Every tool the
+ * trade uses (Fritzing, Tinkercad, KiCad) does the same thing for the same
+ * reason. Dan's bench is a warm graphite and Noć's is night: the theme's
+ * identity is carried by WARMTH rather than by value. The tokens are
+ * `--nx-elec-*` (DEV-006, the one place blue and orange are allowed, because a
+ * blue jumper is blue on the desk).
+ */
+
+.elec {
+  display: flex;
+  flex-direction: column;
+  /* The page rhythm every other module uses. See `.canv` for why this one is
+     also entitled to be tighter than a reading page: the pixels between the
+     header and the bench come out of the working surface. */
+  gap: var(--nx-space-3);
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* The circuit switcher. `.note__menu-trigger` is a 24×24 grid cell built for a
+   single glyph, so a page that hands it a WORD has to restate the whole box —
+   half-adopting it is what turned „Table" into two grid rows on the canvas
+   header. This is that same restatement, and it is the same control on both
+   pages rather than two readings of it. */
+.elec__switcher.note__menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  width: auto;
+  height: auto;
+  min-height: 30px;
+  max-width: 28ch;
+  padding: 0 var(--nx-space-3);
+  /* The shared rule was written for a glyph and declares no family, so a button
+     wearing it keeps the UA's Arial — invisible behind an icon, plainly wrong
+     behind the word „Kola". */
+  font-family: inherit;
+  font-size: var(--nx-font-size-body-sm);
+  line-height: var(--nx-font-leading-snug);
+  color: var(--nx-text-muted);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+}
+.elec__switcher.note__menu-trigger:hover,
+.elec__switcher.note__menu-trigger[aria-expanded="true"] {
+  color: var(--nx-text);
+  background: var(--nx-surface-alt);
+}
+.elec__switcher.note__menu-trigger:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+/* How many circuits — the row's tertiary level, a figure, never the name's ink.
+   No `tracking-label`: that token is the correction UPPERCASE needs, and on
+   digits it just spaces them out. */
+.elec__count {
+  flex: none;
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+.elec__switcher-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  /* The panel is sized by its widest row and has no cap of its own, so a
+     200-character name (`MAX_CIRCUIT_NAME_LENGTH`) would open a menu wider than
+     the window. This is what gives the ellipsis below something to be narrower
+     than. */
+  max-width: 32ch;
+}
+.elec__switcher-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* „izmenjeno 14:32". Regular weight is STATED because the active row is
+   semibold, and the second line must not be dragged into the selection. */
+.elec__switcher-meta {
+  font-size: var(--nx-font-size-label);
+  font-weight: var(--nx-font-weight-regular);
+  line-height: var(--nx-font-leading-snug);
+  color: var(--nx-text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+.elec__name-form {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--nx-space-2);
+}
+.elec__error,
+.elec__notice {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+}
+.elec__error {
+  color: var(--nx-danger);
+}
+.elec__notice {
+  color: var(--nx-text-muted);
+}
+
+/* --- The instrument: drawer, bench, panel ------------------------------- */
+
+/* One outline around all three, for `.canv__instrument`'s reason: a drawer
+   floating beside a bordered box reads as a palette that happens to be near a
+   drawing rather than as the drawing's own chrome.
+
+   Fixed rails and a fluid middle. The drawer's width is set by the longest
+   component name it has to show without wrapping and the panel's by a pin row
+   („SDA · I²C SDA · povezano"); the bench takes whatever is left, which is the
+   only one of the three whose usefulness grows with width. */
+.elec__instrument {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr) 300px;
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+  overflow: hidden;
+}
+
+/* The middle column. `position: relative` so the „prazna radna površina" line
+   can sit over the surface rather than push it. */
+.elec__bench {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-inline: 1px solid var(--nx-border);
+}
+
+/* The bar over the bench. Left to right: what the next jumper will be, what a
+   click will do, and what you are looking at — the same „tools, then state"
+   order the canvas bar reads in. */
+.elec__toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2) var(--nx-space-4);
+  flex-wrap: wrap;
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-surface-alt);
+  border-bottom: 1px solid var(--nx-border);
+}
+.elec-swatches {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  flex-wrap: wrap;
+}
+/* The swatch BOX — 24px, its edge, its chosen ring — is `.nx-swatch` in
+   `@nexus/ui`. All this adds is which jumper it shows. */
+.elec-swatch--red {
+  background: var(--nx-elec-wire-red);
+}
+.elec-swatch--black {
+  background: var(--nx-elec-wire-black);
+}
+.elec-swatch--yellow {
+  background: var(--nx-elec-wire-yellow);
+}
+.elec-swatch--green {
+  background: var(--nx-elec-wire-green);
+}
+.elec-swatch--blue {
+  background: var(--nx-elec-wire-blue);
+}
+.elec-swatch--white {
+  background: var(--nx-elec-wire-white);
+}
+.elec-swatch--orange {
+  background: var(--nx-elec-wire-orange);
+}
+.elec-swatch--brown {
+  background: var(--nx-elec-wire-brown);
+}
+.elec-swatch--grey {
+  background: var(--nx-elec-wire-grey);
+}
+
+/* What the next click does. It is a `role="status"`, so it is also the line a
+   screen reader hears the moment a pin is armed. */
+.elec__hint {
+  margin: 0;
+  min-width: 0;
+  flex: 1 1 auto;
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-subtle);
+}
+.elec__zoom {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  margin-left: auto;
+}
+/* Tabular figures and a floor width, so „100 %" and „25 %" do not shift the
+   three buttons beside them. */
+.elec__zoom-value {
+  min-width: 6ch;
+  text-align: right;
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The surface itself. The SVG fills it; nothing about the drawing is sized in
+   CSS, because everything on the bench is in circuit units inside one
+   transformed group (`ElecBench.tsx`). */
+.elec__surface {
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+  /* A pointer over a pannable surface. The grab cursor is not switched to
+     „grabbing" on press: the class would have to be state, and the pan is
+     already unmistakable because the whole bench moves. */
+  cursor: grab;
+  -webkit-user-select: none;
+  user-select: none;
+  /* The wheel is bound by hand with `passive: false` and preventDefault'ed, so
+     the browser must not start a scroll gesture of its own on the way. */
+  touch-action: none;
+}
+.elec__svg {
+  display: block;
+}
+.elec__ground {
+  fill: var(--nx-elec-canvas);
+}
+/* The ruled surface: a hairline in the band's exact sense — visible as a
+   texture, never as a set of lines you read. */
+.elec__grid-line {
+  stroke: var(--nx-elec-grid);
+  stroke-width: 1;
+}
+
+/* „Prazna radna površina" — over the bench, not in place of it. The surface is
+   still pannable underneath, so the line is `pointer-events: none`. */
+.elec__bench-empty {
+  position: absolute;
+  inset-inline: 0;
+  top: 40%;
+  margin: 0;
+  padding: 0 var(--nx-space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  text-align: center;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-subtle);
+  pointer-events: none;
+}
+.elec__bench-empty-title {
+  font-size: var(--nx-font-size-body);
+  font-weight: var(--nx-font-weight-semibold);
+  color: var(--nx-text-muted);
+}
+
+/* --- What is drawn on the bench ----------------------------------------- */
+
+.elec-part__body {
+  fill: var(--nx-elec-part-body);
+  stroke: var(--nx-elec-part-edge);
+  stroke-width: 1.5;
+}
+/* A part this build does not ship: the same box, drawn open. Dashed rather than
+   tinted, because a colour would have to mean something and this means „we do
+   not know what this is", which has no hue. */
+.elec-part--unknown .elec-part__body {
+  fill: none;
+  stroke-dasharray: 6 4;
+}
+/* Selection is an accent BORDER, never a glow — the product's one rule about
+   what „chosen" looks like. */
+.elec-part--selected .elec-part__body {
+  stroke: var(--nx-accent);
+  stroke-width: 2;
+}
+/* The reference designator. Drawn outside the rotated group, so it stays
+   horizontal at every angle — see `ElecBench.tsx`. */
+.elec-part__name {
+  fill: var(--nx-text);
+  font-size: 12px;
+  font-weight: var(--nx-font-weight-medium);
+  paint-order: stroke;
+  /* A halo in the bench's own colour, so a name that happens to fall over a
+     jumper is still readable without moving either. */
+  stroke: var(--nx-elec-canvas);
+  stroke-width: 3;
+  stroke-linejoin: round;
+}
+
+/* Every part of a pin except its hit disc is decoration: the disc is the target,
+   and a leg or a label that took the pointer would swallow the click that runs
+   a wire. */
+.elec-pin__leg,
+.elec-pin__pad,
+.elec-pin__label {
+  pointer-events: none;
+}
+.elec-pin__leg {
+  stroke: var(--nx-elec-part-edge);
+  stroke-width: 1.5;
+}
+.elec-pin__pad {
+  fill: var(--nx-elec-part-edge);
+  stroke: none;
+}
+.elec-pin__label {
+  fill: var(--nx-text-subtle);
+  font-size: 9px;
+}
+/* Transparent rather than absent: a shape with no fill takes no pointer events
+   at all, and this circle exists only to be hit. 24 across at 1×, which is the
+   product's pointer floor and also the pin pitch. */
+.elec-pin__hit {
+  fill: transparent;
+  cursor: crosshair;
+}
+.elec-pin__hit:focus-visible {
+  outline: none;
+  stroke: var(--nx-accent);
+  stroke-width: 2;
+}
+/* The armed end of a wire being drawn. */
+.elec-pin--armed .elec-pin__pad {
+  fill: var(--nx-accent);
+}
+.elec-pin--armed .elec-pin__leg {
+  stroke: var(--nx-accent);
+}
+
+.elec-wire__line {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+.elec-wire__line--red {
+  stroke: var(--nx-elec-wire-red);
+}
+.elec-wire__line--black {
+  stroke: var(--nx-elec-wire-black);
+}
+.elec-wire__line--yellow {
+  stroke: var(--nx-elec-wire-yellow);
+}
+.elec-wire__line--green {
+  stroke: var(--nx-elec-wire-green);
+}
+.elec-wire__line--blue {
+  stroke: var(--nx-elec-wire-blue);
+}
+.elec-wire__line--white {
+  stroke: var(--nx-elec-wire-white);
+}
+.elec-wire__line--orange {
+  stroke: var(--nx-elec-wire-orange);
+}
+.elec-wire__line--brown {
+  stroke: var(--nx-elec-wire-brown);
+}
+.elec-wire__line--grey {
+  stroke: var(--nx-elec-wire-grey);
+}
+/* The selected jumper's casing: a wider path UNDER the wire, so the accent
+   reads as an outline around it. A border, never a glow. */
+.elec-wire__casing {
+  fill: none;
+  stroke: var(--nx-accent);
+  stroke-width: 7;
+  stroke-linecap: round;
+}
+/* The same path, invisible and fat, so a three-unit line is a target a person
+   can actually hit. */
+.elec-wire__hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 14;
+  cursor: pointer;
+}
+
+/* --- The component drawer ------------------------------------------------ */
+
+.elec-palette {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  min-height: 0;
+  padding: var(--nx-space-3);
+  background: var(--nx-surface);
+}
+.elec-palette__title {
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+  font-weight: var(--nx-font-weight-semibold);
+  color: var(--nx-text);
+}
+.elec-palette__empty {
+  margin: 0;
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-subtle);
+}
+/* The one scroller on this page: 153 components in eight sections. The columns
+   beside it do not scroll — the bench pans and the panel is short. */
+.elec-palette__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+.elec-palette__group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.elec-palette__heading {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0 0 var(--nx-space-1);
+  padding: var(--nx-space-1) 0;
+  background: var(--nx-surface);
+  font-size: var(--nx-font-size-label);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-subtle);
+}
+/* The row IS the button — see `ElecPalette.tsx`. Three lines, left-aligned,
+   because a name and its summary are read rather than scanned. */
+.elec-palette__row {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  min-height: 30px;
+  padding: var(--nx-space-2);
+  text-align: left;
+  font-family: inherit;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--nx-radius-md);
+  cursor: pointer;
+}
+.elec-palette__row:hover:enabled {
+  background: var(--nx-surface-alt);
+}
+.elec-palette__row:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+/* `.nx-button:disabled`'s treatment, which is what this row is while a write is
+   in flight. There is no opacity token — the product states the number once, in
+   that rule, and this is the one other control that has to say it. */
+.elec-palette__row:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.elec-palette__name {
+  font-size: var(--nx-font-size-body-sm);
+  font-weight: var(--nx-font-weight-medium);
+  color: var(--nx-text);
+}
+.elec-palette__summary,
+.elec-palette__meta {
+  font-size: var(--nx-font-size-label);
+  line-height: var(--nx-font-leading-snug);
+  color: var(--nx-text-subtle);
+}
+.elec-palette__meta {
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- The panel on the right ---------------------------------------------- */
+
+.elec-inspector {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--nx-space-3);
+  background: var(--nx-surface);
+}
+.elec-inspector__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  align-items: flex-start;
+}
+/* The checks are pinned to the BOTTOM of the panel rather than following the
+   selection, so „what is wrong with this circuit" is always in the same place.
+   The rule above it is the separator; a heading alone would let the two read as
+   one list. */
+.elec-inspector__panel--checks {
+  margin-top: auto;
+  padding-top: var(--nx-space-3);
+  border-top: 1px solid var(--nx-border);
+}
+.elec-inspector__title {
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+  font-weight: var(--nx-font-weight-semibold);
+  color: var(--nx-text);
+}
+.elec-inspector__heading {
+  display: flex;
+  align-items: baseline;
+  gap: var(--nx-space-2);
+  margin: var(--nx-space-1) 0 0;
+  font-size: var(--nx-font-size-label);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-subtle);
+}
+.elec-inspector__counts,
+.elec-inspector__count,
+.elec-inspector__hint {
+  margin: 0;
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+.elec-inspector__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  width: 100%;
+}
+.elec-inspector__label {
+  font-size: var(--nx-font-size-label);
+  font-weight: var(--nx-font-weight-medium);
+  color: var(--nx-text-muted);
+}
+/* The notes box wears the text field's own input recipe, so a textarea and an
+   input are the same control at two heights rather than two controls. */
+.elec-inspector__textarea {
+  width: 100%;
+  resize: vertical;
+  font-family: inherit;
+  line-height: var(--nx-font-leading-normal);
+}
+.elec-inspector__saved,
+.elec-inspector__ok {
+  margin: 0;
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-subtle);
+}
+.elec-inspector__error {
+  margin: 0;
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-danger);
+}
+/* What the selected part IS, under its own name: the catalogue entry's name and
+   summary, so the panel says what „R1" actually is. */
+.elec-inspector__subject {
+  margin: 0;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+}
+.elec-inspector__summary {
+  margin: 0;
+  font-size: var(--nx-font-size-label);
+  line-height: var(--nx-font-leading-snug);
+  color: var(--nx-text-subtle);
+}
+/* Facts: a two-column definition list, label left and figure right, which is
+   how a datasheet prints them. */
+.elec-inspector__facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px var(--nx-space-3);
+  margin: 0;
+  width: 100%;
+  font-size: var(--nx-font-size-label);
+}
+.elec-inspector__term {
+  color: var(--nx-text-subtle);
+}
+.elec-inspector__value {
+  margin: 0;
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.elec-inspector__figure {
+  font-variant-numeric: tabular-nums;
+}
+.elec-inspector__row {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  flex-wrap: wrap;
+}
+
+/* The pin list. Three columns — label, what the pin does, whether anything is
+   on it — because „is this pin free" is the question the list is opened for. */
+.elec-inspector__pins,
+.elec-inspector__problems {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.elec-inspector__pin {
+  display: grid;
+  grid-template-columns: 6ch minmax(0, 1fr) auto;
+  gap: var(--nx-space-2);
+  align-items: baseline;
+  padding: 2px 0;
+  font-size: var(--nx-font-size-label);
+}
+.elec-inspector__pin-label {
+  font-weight: var(--nx-font-weight-medium);
+  color: var(--nx-text);
+}
+.elec-inspector__pin-functions {
+  color: var(--nx-text-subtle);
+  overflow-wrap: anywhere;
+}
+.elec-inspector__pin-state {
+  color: var(--nx-text-subtle);
+}
+/* A pin with a wire on it. The accent, not a green: „povezano" is a state of
+   this circuit, not a verdict about it. */
+.elec-inspector__pin-state--live {
+  color: var(--nx-accent-strong);
+}
+.elec-inspector__problem {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 2px 0;
+  font-size: var(--nx-font-size-label);
+}
+.elec-inspector__problem-text {
+  color: var(--nx-text-muted);
+}
+/* Which row the notice is about. Muted and monospaced-by-figures rather than
+   hidden: it is the only thing that tells two identical notices apart. */
+.elec-inspector__problem-field {
+  color: var(--nx-text-faint);
+  overflow-wrap: anywhere;
+}
+
+/* Narrow windows: two rails either side of a bench are what a 1024px window
+   cannot afford, so below three columns' worth of width the panel moves UNDER
+   THE DRAWER rather than under the bench.
+ *
+ * It used to go under the bench, and that was the wrong axis. Height is the
+ * scarce dimension on this page: `fitView` fits both axes and therefore takes
+ * the SMALLER ratio, so every pixel of instrument height the panel takes is a
+ * proportional cut in the zoom the circuit is drawn at. With the panel across
+ * the bottom at `max-height: 40vh` — 240 px of a 600 px window — the bench was
+ * left about a hundred pixels tall and the demo circuit framed itself at 20 %,
+ * which is a photograph of a board rather than a board. The arithmetic was
+ * doing exactly what the rule said; the rule was spending the wrong dimension.
+ *
+ * Stacked on the rail, both panels scroll in their own half and the bench keeps
+ * the instrument's FULL height at the full remaining width — 435 px tall and
+ * ~600 px wide at the 900 px minimum, where it was 105 × 600 before. */
+@media (max-width: 1180px) {
+  .elec__instrument {
+    grid-template-columns: 240px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .elec-palette {
+    grid-row: 1;
+    grid-column: 1;
+  }
+  .elec-inspector {
+    grid-row: 2;
+    grid-column: 1;
+    border-top: 1px solid var(--nx-border);
+  }
+  .elec__bench {
+    grid-row: 1 / -1;
+    grid-column: 2;
+    /* The bench is the last column now, so its trailing edge would double the
+       instrument's own outline. */
+    border-inline-end: 0;
+  }
+}

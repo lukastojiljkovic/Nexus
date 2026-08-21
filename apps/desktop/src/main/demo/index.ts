@@ -19,6 +19,7 @@ import { SqliteFlagStore, TaskListStore } from "@nexus/db";
 import { BUSINESS_DISABLED_MODULE_IDS, createModuleRegistry } from "../../shared/modules.js";
 import { seedDemoBusinessProfile } from "./business.js";
 import { seedDemoCanvas } from "./canvas.js";
+import { seedDemoElectronics } from "./electronics.js";
 import { createDemoContext, type DatabaseHandle, type DemoContext } from "./context.js";
 import { seedDemoTasks } from "./tasks.js";
 import { seedDemoCalendar } from "./calendar.js";
@@ -110,6 +111,7 @@ export function seedDemoProfile(db: DatabaseHandle, profileId: string, now: numb
   seedDemoPeople(db, ctx);
   seedDemoDocuments(db, ctx);
   seedDemoFocus(db, ctx);
+  seedDemoElectronics(db, ctx);
 }
 
 /**

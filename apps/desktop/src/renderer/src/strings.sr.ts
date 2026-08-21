@@ -15,6 +15,7 @@
  */
 import type { SmartListId } from "@nexus/core";
 import { devtoolsSr } from "./strings/devtools.js";
+import { electronicsSr } from "./strings/electronics.js";
 import { proSr } from "./strings/pro.js";
 import type {
   ApkgImportSkipCode,
@@ -416,6 +417,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     fitness: "Fitnes",
     tools: "Alatke",
     canvas: "Tabla",
+    electronics: "Elektronika",
     pro: "Stručne alatke",
   } satisfies Record<string, string>,
 
@@ -4118,6 +4120,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
   devtools: devtoolsSr,
   /* „Stručne alatke" — the drawer that hosts every pack, see `strings/pro.ts`. */
   pro: proSr,
+  /* „Elektronika" — the workbench, see `strings/electronics.ts`. */
+  electronics: electronicsSr,
   fitness: {
     loadErrorTitle: "Ishrana nije učitana",
     loadError: "Učitavanje dnevnika ishrane nije uspelo. Zatvori i ponovo otvori stranicu.",
@@ -5719,6 +5723,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         "Ishrana i trening — obroci i dnevni ciljevi, dnevnik treninga sa rutinama i katalogom vežbi.",
       tools: "Pretvarači jedinica i svakodnevni računi — procenat, PDV, kredit i cena po jedinici.",
       canvas: "Beskonačna tabla za crtanje, dijagrame i skice — sa karticama koje vode na druge module.",
+      electronics:
+        "Radna površina za Arduino i Raspberry — postavi ploče i senzore iz kataloga i poveži ih žicama.",
       pro:
         "Alatke po strukama — uključuješ pakete koji ti trebaju, a fioka pokazuje samo njih.",
     } satisfies Record<string, string>,

@@ -41,6 +41,7 @@ export const ESSENTIALS_MODULE_PRESET: Readonly<Record<string, boolean>> = {
   fitness: true,
   tools: true,
   canvas: true,
+  electronics: true,
   pro: false,
 };
 
