@@ -197,13 +197,15 @@ export class ElectronicsStore {
   private readonly insertWire: Database.Statement;
   private readonly selectWires: Database.Statement;
   private readonly selectWireById: Database.Statement;
+  private readonly updateWireColour: Database.Statement;
   private readonly markWireDeleted: Database.Statement;
+  private readonly selectWiresOfPart: Database.Statement;
   private readonly markWiresOfPartDeleted: Database.Statement;
 
   private readonly selectAllParts: Database.Statement;
   private readonly selectAllWires: Database.Statement;
 
-  private readonly removePartTx: Database.Transaction;
+  private readonly removePartTx: (id: string, now: string) => string[];
 
   constructor(
     db: DatabaseHandle,
@@ -277,9 +279,26 @@ export class ElectronicsStore {
       `SELECT ${WIRE_COLUMNS} FROM circuit_wires
        WHERE circuit_id = ? AND deleted_at IS NULL ORDER BY created_at, id`,
     );
+    // Answers with the WHOLE row rather than just its id. It was written for
+    // `removeWire`, which needs only „does this profile own a live wire with
+    // this id" — and giving the recolour a second statement would have been a
+    // second answer to the same scope question, which is how two scope checks
+    // drift apart. One statement, one profile scope; the caller that wants
+    // nothing but existence simply ignores the columns.
     this.selectWireById = db.prepare(
-      `SELECT w.id AS id FROM circuit_wires w JOIN circuits c ON c.id = w.circuit_id
+      `SELECT w.id AS id, w.circuit_id AS circuit_id,
+              w.from_part_id AS from_part_id, w.from_pin_id AS from_pin_id,
+              w.to_part_id AS to_part_id, w.to_pin_id AS to_pin_id, w.colour AS colour,
+              w.created_at AS created_at, w.updated_at AS updated_at
+         FROM circuit_wires w JOIN circuits c ON c.id = w.circuit_id
         WHERE w.id = ? AND c.profile_id = ? AND w.deleted_at IS NULL AND c.deleted_at IS NULL`,
+    );
+    // Colour is the only field of a wire that can be edited, and it gets a
+    // statement of its own for `updateName`/`updateNotes`' reason: a recolour
+    // must not be able to move an end. Re-routing a jumper is pulling it out and
+    // running another — which is also what happens on the bench.
+    this.updateWireColour = db.prepare(
+      `UPDATE circuit_wires SET colour = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL`,
     );
     this.markWireDeleted = db.prepare(
       `UPDATE circuit_wires SET deleted_at = ?, updated_at = ?
@@ -290,6 +309,14 @@ export class ElectronicsStore {
     this.markWiresOfPartDeleted = db.prepare(
       `UPDATE circuit_wires SET deleted_at = ?, updated_at = ?
        WHERE deleted_at IS NULL AND (from_part_id = ? OR to_part_id = ?)`,
+    );
+    // The same predicate, asked before the update rather than after it. It has
+    // to run BEFORE, and inside the same transaction: the caller is a canvas
+    // that must erase those wires from the screen, and asking afterwards is
+    // asking which wires are gone of a query that answers with the ones left.
+    this.selectWiresOfPart = db.prepare(
+      `SELECT id FROM circuit_wires
+        WHERE deleted_at IS NULL AND (from_part_id = ? OR to_part_id = ?)`,
     );
 
     // The export reads: one statement per table for the whole profile, never
@@ -315,9 +342,13 @@ export class ElectronicsStore {
     // The part and its wires go together or not at all: a crash between the two
     // statements would leave exactly the hanging wire this method exists to
     // prevent.
-    this.removePartTx = db.transaction((id: string, now: string) => {
+    this.removePartTx = db.transaction((id: string, now: string): string[] => {
+      const wires = (this.selectWiresOfPart.all(id, id) as { id: string }[]).map(
+        (row) => row.id,
+      );
       this.markWiresOfPartDeleted.run(now, now, id, id);
       this.markPartDeleted.run(now, now, id);
+      return wires;
     });
   }
 
@@ -468,11 +499,19 @@ export class ElectronicsStore {
     return next;
   }
 
-  /** Removes a placed part and every wire touching it, from either end. */
-  removePart(id: string, now: string): void {
+  /**
+   * Removes a placed part and every wire touching it, from either end, and
+   * answers with the WIRE IDS that went with it.
+   *
+   * The answer is the point rather than a courtesy: the caller is a canvas
+   * holding the document in memory, and „the part is gone" leaves it drawing
+   * wires to nothing. Re-reading the whole circuit after every delete would
+   * answer the same question at the cost of every part and wire on it.
+   */
+  removePart(id: string, now: string): string[] {
     const validNow = validateNow(now);
     this.requirePart(id);
-    this.removePartTx(id, validNow);
+    return this.removePartTx(id, validNow);
   }
 
   /**
@@ -527,13 +566,45 @@ export class ElectronicsStore {
     return row;
   }
 
+  /**
+   * Recolours a wire, and answers with the wire as it now stands.
+   *
+   * The colour is not decoration. A jumper's colour is how the trade says what
+   * a wire carries — black is ground, red is supply — so it is the one thing
+   * about a run that gets corrected after the run is made, and „delete it and
+   * run another" is the wrong repair: a new wire is a new `id`, which to sync is
+   * a different object and to the user is the same one.
+   *
+   * The whole merged row is re-validated rather than the colour alone, on
+   * `updatePart`'s terms — the store asks the domain the same question about
+   * every row it writes, whichever field the caller touched.
+   */
+  setWireColour(id: string, colour: string, now: string): StoredCircuitWire {
+    const validNow = validateNow(now);
+    const current = this.requireWire(id);
+    const next: StoredCircuitWire = {
+      ...current,
+      colour: colour as WireColour,
+      updatedAt: validNow,
+    };
+    refuse(
+      validateWire({
+        id: next.id,
+        circuitId: next.circuitId,
+        from: { partId: next.fromPartId, pinId: next.fromPinId },
+        to: { partId: next.toPartId, pinId: next.toPinId },
+        colour: next.colour,
+      }),
+    );
+
+    this.updateWireColour.run(next.colour, validNow, id);
+    return next;
+  }
+
   /** Removes a wire. Both its parts stay exactly where they are. */
   removeWire(id: string, now: string): void {
     const validNow = validateNow(now);
-    const found = this.selectWireById.get(id, this.profileId) as { id: string } | undefined;
-    if (!found) {
-      throw new CircuitNotFoundError(`No live wire "${id}" in this profile.`);
-    }
+    this.requireWire(id);
     this.markWireDeleted.run(validNow, validNow, id);
   }
 
@@ -553,6 +624,15 @@ export class ElectronicsStore {
       throw new CircuitNotFoundError(`No live circuit part "${id}" in this profile.`);
     }
     return toPart(row);
+  }
+
+  /** And once more for wires, through the wire's own circuit. */
+  private requireWire(id: string): StoredCircuitWire {
+    const row = this.selectWireById.get(id, this.profileId) as WireRow | undefined;
+    if (!row) {
+      throw new CircuitNotFoundError(`No live wire "${id}" in this profile.`);
+    }
+    return toWire(row);
   }
 }
 

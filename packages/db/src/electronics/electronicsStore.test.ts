@@ -233,7 +233,7 @@ describe("ElectronicsStore parts", () => {
     // wires are this store's job. A wire left hanging off a deleted part is a
     // row `circuitProblems` would report for ever and no screen could fix.
     const elec = store();
-    const { circuit, board, resistor } = seeded(elec);
+    const { circuit, board, resistor, wire } = seeded(elec);
     const second = elec.addWire(
       circuit.id,
       { from: { partId: resistor.id, pinId: "2" }, to: { partId: board.id, pinId: "GND1" }, colour: "black" },
@@ -241,10 +241,36 @@ describe("ElectronicsStore parts", () => {
     );
     expect(elec.read(circuit.id).wires.map((wire) => wire.id)).toContain(second.id);
 
-    elec.removePart(resistor.id, LATER);
+    const taken = elec.removePart(resistor.id, LATER);
     const detail = elec.read(circuit.id);
     expect(detail.parts.map((part) => part.id)).toEqual([board.id]);
     expect(detail.wires).toEqual([]);
+    // The ids come back because the caller is a canvas holding the document in
+    // memory: „the part is gone" alone leaves it drawing wires to nothing, and
+    // re-reading the whole circuit to find out would cost every other row on it.
+    expect(new Set(taken)).toEqual(new Set([wire.id, second.id]));
+  });
+
+  it("answers with an empty list for a part nothing was wired to", () => {
+    // The other half of the same question, and the one a mutation reaches: a
+    // removal that reported the wires of some OTHER part would still pass the
+    // test above, which only ever removes the part every wire touches.
+    const elec = store();
+    const { circuit, board, resistor } = seeded(elec);
+    const lone = elec.addPart(
+      circuit.id,
+      { componentId: "led", label: "D1", x: 300, y: 0, rotation: 0 },
+      NOW,
+    );
+    expect(elec.removePart(lone.id, LATER)).toEqual([]);
+    // And the wire between the two OTHER parts is untouched.
+    expect(elec.read(circuit.id).wires).toHaveLength(1);
+    // A Set, not an array: `seeded` stamps both parts with the same instant, so
+    // the order between them is the id tie-break — deterministic per row pair and
+    // a coin flip across runs, because uuidv7 puts CSPRNG bytes under the clock.
+    expect(new Set(elec.read(circuit.id).parts.map((part) => part.id))).toEqual(
+      new Set([board.id, resistor.id]),
+    );
   });
 });
 
@@ -329,6 +355,42 @@ describe("ElectronicsStore wires", () => {
         NOW,
       ),
     ).toThrow(CircuitValidationError);
+  });
+
+  it("recolours a wire in place, keeping its id and both its ends", () => {
+    const elec = store();
+    const { circuit, wire } = seeded(elec);
+    const recoloured = elec.setWireColour(wire.id, "black", LATER);
+    expect(recoloured).toEqual({ ...wire, colour: "black", updatedAt: LATER });
+    expect(elec.read(circuit.id).wires).toEqual([recoloured]);
+  });
+
+  it("refuses a recolour to something that is not one of the nine jumpers", () => {
+    const elec = store();
+    const { circuit, wire } = seeded(elec);
+    expect(() => elec.setWireColour(wire.id, "magenta", LATER)).toThrow(CircuitValidationError);
+    // And the refusal left the row alone — a validation that has already
+    // written is a validation that ran too late.
+    expect(elec.read(circuit.id).wires[0]).toEqual(wire);
+  });
+
+  it("recolours only the wire it names", () => {
+    const elec = store();
+    const { circuit, board, resistor, wire } = seeded(elec);
+    const other = elec.addWire(
+      circuit.id,
+      { from: { partId: board.id, pinId: "GND1" }, to: { partId: resistor.id, pinId: "2" }, colour: "black" },
+      NOW,
+    );
+    elec.setWireColour(wire.id, "red", LATER);
+    expect(elec.read(circuit.id).wires.find((row) => row.id === other.id)).toEqual(other);
+  });
+
+  it("refuses to recolour another profile's wire", () => {
+    const mine = store();
+    const theirs = store();
+    const { wire } = seeded(theirs);
+    expect(() => mine.setWireColour(wire.id, "red", LATER)).toThrow(CircuitNotFoundError);
   });
 
   it("removes a wire and leaves both its parts alone", () => {
