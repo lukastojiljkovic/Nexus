@@ -3,6 +3,7 @@ import type { ChangeEvent, FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { Button, Card, Checkbox, Chip, EmptyState, PageHeader, Select, TextField } from "@nexus/ui";
 import {
+  ARCHIVE_MODULE_IDS,
   buildLlmPrompt,
   chordAccelerator,
   chordFromEvent,
@@ -705,19 +706,22 @@ function ProfilesSection({
 /**
  * The archive modules, in the order the export picker, the restore table and
  * the import report all show them.
+ *
+ * **`ARCHIVE_MODULE_IDS` itself, never a copy of it**, and it used to be a
+ * copy: the same names typed out a second time, in the same order, drifting
+ * silently the first time the interchange gained a module. It had already
+ * drifted — ELEC made the vocabulary eleven and this list still held ten, so
+ * „Šta se izvozi" offered ten boxes, every box ticked meant ten, and a full
+ * export left every circuit out of the archive without saying so. There is
+ * nothing to notice: a list that is merely SHORT is a perfectly valid list,
+ * and the array that decides what is exported (`runExport`) is this one.
+ *
+ * The annotation keeps the two vocabularies the same set going the other way
+ * — an interchange module this page cannot count would not compile — and
+ * `archiveModules.test.ts` asks the question a type cannot: whether every one
+ * of them has a Serbian name to render.
  */
-const ARCHIVE_MODULES: (keyof RestoreModuleCounts)[] = [
-  "tasks",
-  "calendar",
-  "study",
-  "notifications",
-  "notes",
-  "dashboard",
-  "finance",
-  "habits",
-  "fitness",
-  "canvas",
-];
+const ARCHIVE_MODULES: readonly (keyof RestoreModuleCounts)[] = ARCHIVE_MODULE_IDS;
 
 interface BackupSectionProps {
   profileId: string;
