@@ -213,52 +213,23 @@
   font-variant-numeric: tabular-nums;
 }
 /*
- * A colour swatch: a chosen one takes a ring in the text colour rather than a
- * glow, and „bez ispune" is the same dot carrying a ×.
+ * What this bar puts INSIDE a swatch. The box itself — its 24px, its edge, its
+ * hover and its chosen ring — is `.nx-swatch` in `@nexus/ui`, which is where it
+ * moved once the workbench became the third page to want the same control.
  *
- * **24px, not 20.** It was copied from `.note__swatch`, which predates the
- * pointer-target floor, and it is not a `.nx-button` — so the `min-height: 30px`
- * that rule now states for every button-shaped control in the product never
- * reached it, and all nineteen dots in this bar (nine stroke, nine fill, and
- * „bez ispune") sat at 20×20 under the floor. The size is stated ONCE here, on
- * the class, which is why the three variants (`--colour`, `--selected`, both)
- * needed no edit of their own.
- *
- * The ring thickens the border rather than adding anything outside it: with
- * `box-sizing: border-box` (shell.css, first rule in the app) the outer box
- * stays exactly 24px whether the swatch is chosen or not, so picking a colour
- * cannot shuffle the eight beside it sideways.
+ * The size in particular is not this page's to hold: this rule used to say 20px
+ * because it was copied from `.note__swatch` before the pointer floor existed,
+ * and the two copies were then corrected separately, months apart, for the same
+ * reason. What stays here is the „bez ispune" dot's own grid — a swatch with no
+ * colour carries a × instead.
  */
 .canv__swatch {
-  width: 24px;
-  height: 24px;
-  flex: none;
-  padding: 0;
-  border-radius: var(--nx-radius-round);
-  border: 1px solid var(--nx-border);
   background: var(--nx-surface);
   color: var(--nx-text-muted);
   display: grid;
   place-items: center;
   font-size: var(--nx-font-size-body-sm);
   line-height: 1;
-  cursor: pointer;
-  transition: border-color var(--nx-motion-base) var(--nx-motion-ease);
-}
-/* Hover firms the edge of a swatch that is NOT the current one. Excluded on the
-   chosen swatch on purpose: `:hover` outranks a modifier class, so an unscoped
-   rule would take the selection ring off the very swatch the pointer is on and
-   the bar would forget which colour is live for as long as the pointer sat
-   there. */
-.canv__swatch:not(.canv__swatch--selected):hover {
-  border-color: var(--nx-border-strong);
-}
-.canv__swatch:focus-visible {
-  outline: 2px solid var(--nx-accent);
-  outline-offset: 2px;
-}
-.canv__swatch--selected {
-  border: 2px solid var(--nx-text);
 }
 /* A colour dot shows the colour the stroke will BE, which under Noć is not the
    colour we hand the editor.

@@ -355,8 +355,15 @@ function keepEditorFocus(event: { preventDefault: () => void }): void {
   event.preventDefault();
 }
 
+/**
+ * The shared swatch box (`.nx-swatch`), plus what this bar puts inside it.
+ *
+ * The size, the edge, the hover and the chosen ring are the product's, not this
+ * page's — `.canv__swatch` used to restate all four, and it restated the 20px
+ * they were written at before the pointer floor existed.
+ */
 function swatchClass(selected: boolean): string {
-  return selected ? "canv__swatch canv__swatch--selected" : "canv__swatch";
+  return selected ? "nx-swatch nx-swatch--selected canv__swatch" : "nx-swatch canv__swatch";
 }
 
 /** The element fields a change writes — the counterpart of the `currentItem*` default beside it. */

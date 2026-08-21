@@ -553,7 +553,7 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
           <button
             key={id}
             type="button"
-            className={`note__swatch${colorDraft === id ? " note__swatch--selected" : ""}`}
+            className={`nx-swatch${colorDraft === id ? " nx-swatch--selected" : ""}`}
             style={{ background: `var(--nx-swatch-${id})` }}
             aria-label={id}
             aria-pressed={colorDraft === id}
@@ -562,7 +562,7 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
         ))}
         <button
           type="button"
-          className="note__swatch note__swatch--none"
+          className="nx-swatch note__swatch--none"
           aria-label={s.form.noColor}
           aria-pressed={colorDraft === null}
           onClick={() => setColorDraft(null)}

@@ -250,21 +250,18 @@
   gap: var(--nx-space-2);
   padding: var(--nx-space-2) 0 var(--nx-space-2) calc(var(--nx-space-3) * var(--note-depth, 0));
 }
-/* 24px, not the 22 this drew at: it is a button, and the floor is the floor
-   wherever the recipe is mounted — the folder tree, the category rows, and
-   HabitsPage, which borrows this class outright. */
-.note__swatch {
-  width: 24px;
-  height: 24px;
-  border-radius: var(--nx-radius-round);
-  border: 1px solid var(--nx-border);
-  padding: 0;
-  cursor: pointer;
-  transition: border-color var(--nx-motion-base) var(--nx-motion-ease);
-}
-.note__swatch--selected {
-  border: 2px solid var(--nx-text);
-}
+/* The swatch BOX — its 24px pointer floor, its edge and its chosen ring — is
+   `.nx-swatch` in `@nexus/ui`. It was written here first and copied to the
+   canvas bar, where the copy shipped at 20px and had to be corrected on its
+   own; the workbench asking for the same control a third time is what moved it.
+   What stays here is the row and the „no colour" option's own dot.
+
+   The modifier keeps its `note__` name although the block it modifies is now
+   `.nx-swatch`, because what it holds is still this page's: the ×-glyph recipe.
+   That recipe is ALSO the whole of `.canv__swatch` — six identical declarations
+   on the surface next door — and sharing it is a cascade move that has to be
+   looked at rather than reasoned about, so it is recorded in `docs/STATUS.md`
+   instead of done blind here. */
 .note__swatch--none {
   display: grid;
   place-items: center;

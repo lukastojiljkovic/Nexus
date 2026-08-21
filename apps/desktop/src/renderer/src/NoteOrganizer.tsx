@@ -468,7 +468,7 @@ export function NoteOrganizer({
         <button
           key={id}
           type="button"
-          className={`note__swatch${current === id ? " note__swatch--selected" : ""}`}
+          className={`nx-swatch${current === id ? " nx-swatch--selected" : ""}`}
           style={{ background: `var(--nx-swatch-${id})` }}
           aria-label={id}
           aria-pressed={current === id}
@@ -477,7 +477,7 @@ export function NoteOrganizer({
       ))}
       <button
         type="button"
-        className="note__swatch note__swatch--none"
+        className="nx-swatch note__swatch--none"
         aria-label={strings.notes.noColor}
         aria-pressed={current === null}
         onClick={() => onPick(null)}
