@@ -26,7 +26,8 @@ import { SET_KINDS } from "../fitness/training.js";
 import { MAX_CANVAS_SCENE_LENGTH, validateCanvasScene } from "../canvas/canvasScene.js";
 import type { CanvasScene } from "../canvas/canvasScene.js";
 import {
-  MAX_CANVAS_COORDINATE,
+  MAX_ELEC_ID_LENGTH,
+  MAX_PART_COORDINATE,
   MAX_CIRCUIT_NAME_LENGTH,
   MAX_CIRCUIT_NOTES_LENGTH,
   MAX_PART_LABEL_LENGTH,
@@ -3452,11 +3453,27 @@ function canvasScene(value: unknown, field: string): CanvasScene {
 // it instead of restating it.
 
 /**
+ * An id this module owns, bounded — the reader's half of `idProblems`.
+ *
+ * The bare `nonEmptyStr` every other module here uses caps nothing, and for an
+ * id minted by us or taken from the catalogue that is a hole an archive can
+ * walk through: `RestoreStore` writes with prepared statements rather than
+ * through `validatePart`, and the column's only CHECK is that the string is not
+ * empty. So a ten-megabyte `componentId` would land in the database, and no
+ * screen would ever be able to show the row it is on.
+ */
+function elecId(value: unknown, field: string): string {
+  const id = nonEmptyStr(value, field);
+  if (id.length > MAX_ELEC_ID_LENGTH) throw new InvalidFieldError(field);
+  return id;
+}
+
+/**
  * One circuit (migration 067) — the parent of the two types below, and first in
  * the file for that reason.
  */
 function parseCircuit(raw: Record<string, unknown>): ExportCircuit {
-  const id = nonEmptyStr(raw.id, "id");
+  const id = elecId(raw.id, "id");
   const profileId = nonEmptyStr(raw.profileId, "profileId");
   const name = trimmedNonEmptyStr(raw.name, "name", MAX_CIRCUIT_NAME_LENGTH);
   // Bounded but allowed to be empty, and NOT trimmed: this is prose the user
@@ -3483,13 +3500,13 @@ function parseCircuit(raw: Record<string, unknown>): ExportCircuit {
  * does, that a stated one is a positive finite number.
  */
 function parseCircuitPart(raw: Record<string, unknown>): ExportCircuitPart {
-  const id = nonEmptyStr(raw.id, "id");
-  const circuitId = nonEmptyStr(raw.circuitId, "circuitId");
-  const componentId = nonEmptyStr(raw.componentId, "componentId");
+  const id = elecId(raw.id, "id");
+  const circuitId = elecId(raw.circuitId, "circuitId");
+  const componentId = elecId(raw.componentId, "componentId");
   const label = str(raw.label, "label");
   if (label.length > MAX_PART_LABEL_LENGTH) throw new InvalidFieldError("label");
-  const x = numberInRange(raw.x, "x", -MAX_CANVAS_COORDINATE, MAX_CANVAS_COORDINATE);
-  const y = numberInRange(raw.y, "y", -MAX_CANVAS_COORDINATE, MAX_CANVAS_COORDINATE);
+  const x = numberInRange(raw.x, "x", -MAX_PART_COORDINATE, MAX_PART_COORDINATE);
+  const y = numberInRange(raw.y, "y", -MAX_PART_COORDINATE, MAX_PART_COORDINATE);
   const rotation = enumInt(raw.rotation, "rotation", PART_ROTATIONS);
   const value = raw.value === undefined ? undefined : finiteNumber(raw.value, "value");
   if (value !== undefined && value <= 0) throw new InvalidFieldError("value");
@@ -3523,12 +3540,12 @@ function parseCircuitPart(raw: Record<string, unknown>): ExportCircuitPart {
  * database it came from was willing to hold.
  */
 function parseCircuitWire(raw: Record<string, unknown>): ExportCircuitWire {
-  const id = nonEmptyStr(raw.id, "id");
-  const circuitId = nonEmptyStr(raw.circuitId, "circuitId");
-  const fromPartId = nonEmptyStr(raw.fromPartId, "fromPartId");
-  const fromPinId = nonEmptyStr(raw.fromPinId, "fromPinId");
-  const toPartId = nonEmptyStr(raw.toPartId, "toPartId");
-  const toPinId = nonEmptyStr(raw.toPinId, "toPinId");
+  const id = elecId(raw.id, "id");
+  const circuitId = elecId(raw.circuitId, "circuitId");
+  const fromPartId = elecId(raw.fromPartId, "fromPartId");
+  const fromPinId = elecId(raw.fromPinId, "fromPinId");
+  const toPartId = elecId(raw.toPartId, "toPartId");
+  const toPinId = elecId(raw.toPinId, "toPinId");
   // One of nine jumper colours by NAME. A CSS colour can never reach the
   // column, which is what lets the canvas paint it through a --nx-elec-wire-*
   // token instead of rendering a stored value.

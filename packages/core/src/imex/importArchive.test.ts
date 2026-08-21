@@ -4340,6 +4340,23 @@ describe("parseImportArchive — ELEC circuits (ADR-085 slice E1 / 1.40.0)", () 
     expect(bad({ ...VALID_CIRCUIT, id: "ci2", notes: "x".repeat(8001) })).toEqual(["notes"]);
   });
 
+  it("refuses an id long enough to be a document rather than an identifier", () => {
+    // The bare `nonEmptyStr` this file uses everywhere caps nothing, and
+    // `RestoreStore` writes with prepared statements rather than through
+    // `validatePart` — so without a bound HERE a ten-megabyte `componentId`
+    // lands in a column whose only CHECK is that the string is not empty.
+    const long = "x".repeat(121);
+    const bad = (row: Record<string, unknown>) =>
+      parseElectronicsFile([VALID_CIRCUIT, row]).problems.map((problem) => problem.detail);
+    expect(bad({ ...VALID_PART, componentId: long })).toEqual(["componentId"]);
+    expect(bad({ ...VALID_PART, id: long })).toEqual(["id"]);
+    expect(
+      parseElectronicsFile([
+        VALID_CIRCUIT, VALID_PART, VALID_RESISTOR, { ...VALID_WIRE, toPinId: long },
+      ]).problems.map((problem) => problem.detail),
+    ).toEqual(["toPinId"]);
+  });
+
   it("refuses a colour that is not one of the nine jumpers", () => {
     // „magenta" is a perfectly valid CSS colour and not a wire anybody owns.
     const result = parseElectronicsFile([
