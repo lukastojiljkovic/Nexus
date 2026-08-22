@@ -620,7 +620,7 @@
 
 .cal__month-weekdays {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   border-bottom: 1px solid var(--nx-border);
 }
 /* Eyebrow tier: „PON … NED" names the columns and is never what anyone is
@@ -644,11 +644,11 @@
   --cal-weeknum-w: 36px;
 }
 .cal__month-grid--weeknum .cal__month-weekdays {
-  grid-template-columns: var(--cal-weeknum-w) repeat(7, 1fr);
+  grid-template-columns: var(--cal-weeknum-w) repeat(7, minmax(0, 1fr));
 }
 .cal__month-grid--weeknum .cal__month-week {
   display: grid;
-  grid-template-columns: var(--cal-weeknum-w) 1fr;
+  grid-template-columns: var(--cal-weeknum-w) minmax(0, 1fr);
 }
 .cal__month-grid--weeknum .cal__month-bars {
   left: var(--cal-weeknum-w);
@@ -695,9 +695,32 @@
 .cal__month-week:first-child {
   border-top: none;
 }
+/* THE SEVEN COLUMNS ARE `minmax(0, 1fr)`, NOT `1fr`, AND THAT IS THE WHOLE
+   RULE THIS GRID RESTS ON.
+
+   Bare `1fr` means `minmax(auto, 1fr)`: a track that is an equal share UNTIL
+   one cell's content refuses to be narrower. A day cell holds `.cal__month-chip`
+   buttons whose labels are `white-space: nowrap`, so a chip reading
+   „08:00 — Plata" set its column's automatic minimum to the full width of that
+   sentence. The column took it, the other six gave it up, and they gave it up
+   down to THEIR minimum — one digit. The sweep measured a day-number button, a
+   pointer target with a 24px floor, at 5.7px wide, and the weekday header above
+   it (short labels, so no blow-out) went on drawing seven even columns that no
+   longer lined up with anything beneath them.
+
+   The chip was already written for this: `overflow: hidden` + `text-overflow:
+   ellipsis` truncate it cleanly the moment the column stops growing. What was
+   missing was the column refusing to grow.
+
+   Every equal-share track in this file is written this way — the two weekday
+   headers and the mini month's two rows — because „these columns are a seventh
+   each" is either a guarantee or it is decoration, and the header and the cells
+   have to agree at every window width. So is the week-number row's second
+   track, which is not a share but a remainder: `1fr` there would let the seven
+   columns it contains push the row wider than the grid it sits in. */
 .cal__month-cells {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
 }
 
 .cal__month-day {
@@ -801,6 +824,18 @@ button.cal__month-chip {
   font-size: var(--nx-font-size-caption);
   text-align: left;
   padding: 1px 4px;
+  /* A CHIP IS A BUTTON AND TAKES THE APP'S 24px POINTER FLOOR, exactly as
+     the bar beside it does. `--cal-bar-h - 3px` IS that 24 — read from the
+     one variable so a chip and a bar drawn in the same cell cannot drift
+     apart again. The bar was raised to clear this floor on 2026-08-08 and
+     the chip was not; it went on painting 16.8px, which is what a blast
+     radius looks like when it stops one call site short.
+     `line-height` centres the single line inside it: the border box less the
+     1px padding either side. The two inline marks a chip can carry are
+     immune to it — `.cal__foreign-mark` is `inline-flex` + `vertical-align:
+     middle`, `.recur__mark` sets its own `line-height: 1`. */
+  min-height: calc(var(--cal-bar-h) - 3px);
+  line-height: calc(var(--cal-bar-h) - 5px);
   border: none;
   border-radius: var(--nx-radius-xs);
   background: var(--nx-accent-soft);
@@ -1075,7 +1110,7 @@ button.cal__month-day-number:hover {
 .cal__mini-weekdays,
 .cal__mini-days {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
 }
 .cal__mini-days {
   gap: 1px;
@@ -1248,8 +1283,15 @@ button.cal__mini-day {
   flex: 1;
   min-width: 0;
 }
+/* `min-width: 0` for the reason `.cal__month-cells` spells out: a flex item
+   defaults to a CONTENT-based minimum, so `flex: 1` is an equal share only
+   until one label refuses to be narrower. The body columns under these
+   headers already carry it, and the all-day band places its bars at
+   `dayIndex / 7 * 100%` — so a header that kept a content minimum would put
+   the seven date labels out of step with the seven columns they name. */
 button.cal__grid-header {
   flex: 1;
+  min-width: 0;
   display: block;
   font: inherit;
   font-size: var(--nx-font-size-body-sm);
@@ -1259,6 +1301,12 @@ button.cal__grid-header {
   border-left: 1px solid var(--nx-border-subtle);
   background: transparent;
   color: var(--nx-text-muted);
+  /* A share that cannot grow has to be able to truncate, or the label
+     escapes the column instead of pushing it — same recipe as the month
+     grid's chips, which were written this way for the same reason. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   cursor: pointer;
 }
 .cal__grid-headers > button.cal__grid-header:first-child {
