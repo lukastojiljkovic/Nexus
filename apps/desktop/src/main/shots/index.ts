@@ -54,6 +54,12 @@ export interface ShotScene {
    * suppresses the sweep for a surface that has no switcher, or whose switcher
    * must not be driven (an open editor, where clicking would lose the frame
    * that was the point).
+   *
+   * A surface with no switcher must say `null` rather than leave this undefined
+   * and let the default match nothing. `fanoutLabels` reports an empty match as
+   * a stale selector, which is the one warning here worth reading — and six
+   * single-surface modules leaving it undeclared fired it thirty-six times a
+   * run, which is how a warning stops being read (DC-15).
    */
   readonly fanout?: string | null;
   /** Renderer JS to run after the last frame — closes whatever `prepare` opened. */
@@ -68,7 +74,7 @@ export interface ShotScene {
  * starting a timer) is followed by scenes that do not depend on it.
  */
 export const SHOT_SCENES: readonly ShotScene[] = [
-  { id: "dashboard", module: "dashboard" },
+  { id: "dashboard", module: "dashboard", fanout: null },
   { id: "tasks", module: "tasks" },
   {
     id: "tasks-detail",
@@ -96,11 +102,11 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     prepare: OPEN_FIRST(".note__item-row, .notes__row, .nx-list-row"),
     fanout: null,
   },
-  { id: "priv", module: "priv" },
+  { id: "priv", module: "priv", fanout: null },
   { id: "files", module: "files" },
-  { id: "study", module: "study" },
+  { id: "study", module: "study", fanout: null },
   { id: "finance", module: "finance" },
-  { id: "habits", module: "habits" },
+  { id: "habits", module: "habits", fanout: null },
   {
     id: "fitness",
     module: "fitness",
@@ -141,7 +147,7 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     ),
     fanout: null,
   },
-  { id: "focus", module: "focus" },
+  { id: "focus", module: "focus", fanout: null },
   {
     id: "tools",
     module: "tools",
@@ -195,7 +201,7 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     fanout: null,
   },
   { id: "search", module: "dashboard", prepare: OPEN_SEARCH_PAGE(), fanout: null },
-  { id: "settings", module: "settings" },
+  { id: "settings", module: "settings", fanout: null },
   {
     // „Podešavanja" is twenty-odd cards long and a frame only ever shows the
     // first one, so every card below the fold was unphotographed — which is why
@@ -779,6 +785,17 @@ export async function runShots(win: BrowserWindow, outDir: string): Promise<Shot
 }
 
 async function sweep(win: BrowserWindow, outDir: string, frames: ShotFrame[]): Promise<void> {
+  // Every file this run has written. A stem is derived from a LABEL and is
+  // therefore not unique by construction, so without this the second frame of
+  // a colliding pair overwrites the first without a word — see `shoot`.
+  //
+  // It covers `shoot`, and `shoot` is the only path whose file name comes
+  // from a LABEL. The write probe names its frames after module ids and the
+  // maximised frame is a constant, so neither can collide by construction —
+  // which is a fact about them, not an exemption. A third path that derives a
+  // name from anything a person typed belongs behind this set too (DC-61: a
+  // rule over a reachability set permits everything outside it).
+  const taken = new Set<string>();
   for (const size of SHOT_SIZES) {
     // Outer dimensions, matching `createWindow` — the frames must show the
     // viewport a real window of this size actually has, chrome included.
@@ -831,7 +848,35 @@ async function sweep(win: BrowserWindow, outDir: string, frames: ShotFrame[]): P
             await pause(300);
             await settle(win);
           }
-          const file = join(dir, `${stem}.png`);
+          // TWO FRAMES THAT WANT ONE FILE.
+          //
+          // A stem is not an identity. It comes from the rail row's LABEL,
+          // diacritics folded and truncated to 32 characters by `slug` — so two
+          // distinct names can produce one stem, and two identical names
+          // certainly do. Until 2026-08-22 the second capture simply overwrote
+          // the first: the sweep reported 2 423 frames over 2 399 files on disk
+          // and still printed „SHOTS OK", and the twenty-four images that
+          // vanished were the evidence for a real defect in the catalogue
+          // (DC-75) — found only by subtracting one number from the other, by
+          // hand, once.
+          //
+          // Renaming the four tools fixed the catalogue and fixes nothing here:
+          // the mechanism is the instrument's, so the rule belongs to the
+          // instrument. A sweep that loses a frame in silence is worse than one
+          // that refuses to take it, so both frames are kept, the collision is
+          // said out loud, and `buildReport` carries it into the report — which
+          // is the artefact anybody actually reads.
+          let named = stem;
+          for (let n = 2; taken.has(join(dir, `${named}.png`)); n += 1) {
+            named = `${stem}-${String(n)}`;
+          }
+          if (named !== stem) {
+            process.stderr.write(
+              `shots: two frames named "${stem}" in ${size.id}/${theme} — kept as ${named}.png\n`,
+            );
+          }
+          const file = join(dir, `${named}.png`);
+          taken.add(file);
           await capture(win, file);
           frames.push({
             file,
@@ -869,6 +914,28 @@ async function sweep(win: BrowserWindow, outDir: string, frames: ShotFrame[]): P
             await clickFanout(win, selector, index);
             await shoot(`${scene.id}--${slug(labels[index] ?? String(index))}`);
           }
+          // A SCENE LEAVES THE SWITCHER WHERE IT FOUND IT.
+          //
+          // The loop above ends on the LAST sub-view, and several of these
+          // switchers are backed by a persisted preference — so the next pass
+          // opened the module there instead of on its default view. The cost
+          // was not one odd frame. „Kalendar" opens on „Mesec", the month grid
+          // is its whole point, and because the first pass ended on „Ljudi" the
+          // month grid appeared in exactly ONE of 2 423 frames: `min/noc`. It
+          // was never photographed at the two larger sizes, never in „Dan", and
+          // the two real findings it carries would have been reported at one
+          // width and called a small-window problem.
+          //
+          // It also made the fan-out itself uneven. „Ljudi" has no source row
+          // and no create form, so the same scene enumerated eighteen options
+          // in the first pass and six in the next — the sweep photographing a
+          // different set of surfaces at each size, with nothing saying so.
+          //
+          // One click back to the first option costs one navigation per scene
+          // per pass and makes „the first option is already on screen", which
+          // the loop above asserts, true in every pass rather than only the
+          // first.
+          if (labels.length > 1) await clickFanout(win, selector, 0);
         }
 
         if (scene.cleanup !== undefined) {
@@ -967,6 +1034,32 @@ async function sweep(win: BrowserWindow, outDir: string, frames: ShotFrame[]): P
 }
 
 /**
+ * The frames that wanted one file, as `size/theme/stem`.
+ *
+ * DERIVED from the frame list rather than tracked beside it, and that is the
+ * whole point: the frame list is what the report is written from, so a
+ * collision recorded in a second place is a collision that can go missing from
+ * the report while the sweep still knows about it. Here the two cannot drift —
+ * if a duplicate is in the frames, it is in the report.
+ *
+ * A duplicate here is never a fault of the sweep. It says either that two rows
+ * on one rail carry the same name (`modules.test.ts` refuses that now) or that
+ * two different names fold to one stem — 32 characters, no diacritics. Both are
+ * findings about the app, which is why this is reported rather than silently
+ * renamed away.
+ */
+export function duplicateStems(frames: readonly ShotFrame[]): readonly string[] {
+  const seen = new Set<string>();
+  const twice = new Set<string>();
+  for (const frame of frames) {
+    const key = `${frame.size}/${frame.theme}/${frame.scene}`;
+    if (seen.has(key)) twice.add(key);
+    else seen.add(key);
+  }
+  return [...twice].sort();
+}
+
+/**
  * The findings, grouped so the reader sees CLASSES rather than instances.
  *
  * A defect in a shared component reports once per surface it appears on; a list
@@ -991,9 +1084,26 @@ function buildReport(frames: readonly ShotFrame[]): string {
     "",
     `${frames.length} frames, ${rows.length} distinct findings.`,
     "",
+  ];
+  // A collision is not a layout finding and has no place in the table below —
+  // but it IS a defect, and the reader must not have to subtract one number
+  // from another to notice it, which is how it was noticed the first time.
+  const duplicates = duplicateStems(frames);
+  if (duplicates.length > 0) {
+    lines.push(
+      `**${String(duplicates.length)} frame(s) wanted a file another frame had taken.**`,
+      "Either two rows on one rail carry the same name, or two different names",
+      "fold to one 32-character stem. Both frames were kept; the second of each",
+      "pair carries a `-2` suffix.",
+      "",
+      ...duplicates.map((key) => `- \`${key}\``),
+      "",
+    );
+  }
+  lines.push(
     "| kind | element | other | px | surfaces | text |",
     "| --- | --- | --- | --- | --- | --- |",
-  ];
+  );
   for (const row of rows) {
     const { finding, scenes } = row;
     lines.push(

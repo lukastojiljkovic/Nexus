@@ -697,7 +697,7 @@ import {
 } from "../shared/ipc.js";
 import { businessProfileFlags, createModuleRegistry, LOCKED_MODULE_IDS } from "../shared/modules.js";
 import { DEMO_BUSINESS_PROFILE_NAME, seedDemoBusiness, seedDemoProfile } from "./demo/index.js";
-import { runShots } from "./shots/index.js";
+import { duplicateStems, runShots } from "./shots/index.js";
 
 /**
  * Reads a harness flag off the command line — and answers false for every one
@@ -12865,8 +12865,16 @@ app.whenReady().then(async () => {
         void runShots(mainWindow!, shotsOutputDir())
           .then((frames) => {
             const findings = frames.reduce((total, frame) => total + frame.findings.length, 0);
+            // The duplicate count is on the HEADLINE and not only in the
+            // report, because the headline is what a reader takes away — and
+            // a run that had quietly lost frames printed exactly what a clean
+            // one prints.
+            const duplicates = duplicateStems(frames);
+            const collided =
+              duplicates.length === 0 ? "" : `, ${String(duplicates.length)} duplicate stems`;
             process.stdout.write(
-              `SHOTS OK — ${frames.length} frames, ${findings} findings → ${shotsOutputDir()}\n`,
+              `SHOTS OK — ${String(frames.length)} frames, ${String(findings)} findings` +
+                `${collided} → ${shotsOutputDir()}\n`,
             );
             shutdown(0);
           })
