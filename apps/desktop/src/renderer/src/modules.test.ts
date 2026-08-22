@@ -1,6 +1,7 @@
 import {
   MODULE_CATEGORIES,
   TOOL_CATEGORIES,
+  TOOL_DRAWERS,
   TOOL_PACKS,
   TOOL_RISK_CLASSES,
   UNIT_KINDS,
@@ -814,6 +815,45 @@ describe("the tools the registry publishes (PRD 29 UTIL, PRD 30 PRO)", () => {
     const ids = declared.map((tool) => tool.id);
     expect(new Set(ids).size).toBe(ids.length);
     for (const id of ids) expect(id, id).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+  });
+
+  /**
+   * ...and no two tools in a drawer wear one NAME.
+   *
+   * The test above is the one anybody writes, because identity in
+   * `ToolRegistration` IS the `id`: two ids are two tools by construction, so
+   * nothing ever asked what a tool is CALLED. „Stručne alatke" shipped four
+   * tools twice under four shared names — the same specification implemented
+   * once under `pravo` and once under `racunovodstvo`, each pair listed
+   * together by at least three toolkits (DC-75). Nothing failed. The rail drew
+   * both rows, the search returned both, and the only instrument that noticed
+   * was the screenshot sweep — which names a frame after the row's label, and
+   * so wrote two of its frames into one file.
+   *
+   * The rule is per DRAWER, which is stricter than what a single profile sees
+   * and is meant to be: a profile may switch on every toolkit, so for anybody
+   * who does, „unique within a pack" and „unique within the drawer" are the
+   * same question — and the demo profile, the sweep and the pack editor all
+   * reach that state. It does not reach ACROSS the two drawers: „Alatke" and
+   * „Stručne alatke" are two surfaces and never one list.
+   */
+  it("gives no two tools in one drawer the same name", () => {
+    for (const drawer of TOOL_DRAWERS) {
+      const byName = new Map<string, string[]>();
+      for (const tool of declared) {
+        if (toolDrawer(tool) !== drawer) continue;
+        // A `titleKey` resolving to nothing is the previous test's business.
+        // Skipped here so that two unresolved keys are not reported as two
+        // tools sharing a name — which would name the wrong defect.
+        const name = lookup(tool.titleKey);
+        if (typeof name !== "string") continue;
+        byName.set(name, [...(byName.get(name) ?? []), tool.id]);
+      }
+      expect(
+        [...byName].filter(([, ids]) => ids.length > 1).map(([n, ids]) => `${n}: ${ids.join(" + ")}`),
+        drawer,
+      ).toEqual([]);
+    }
   });
 
   it("names a real string for every tool title and declared blurb, and a canonical, labelled category", () => {

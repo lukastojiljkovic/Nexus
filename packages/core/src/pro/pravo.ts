@@ -1646,7 +1646,7 @@ export function splitAmount(input: SplitAmountInput): ProResult<SplitAmountResul
 }
 
 // ---------------------------------------------------------------------------
-// Račun i IBAN — ISO 7064 MOD 97-10
+// Račun, IBAN i modul 97 — ISO 7064 MOD 97-10
 //
 // Computed digit by digit, so no intermediate ever exceeds a small integer and
 // no BigInt is needed. A match means the string agrees with its own check
@@ -2252,7 +2252,7 @@ export function textPages(input: TextPagesInput): ProResult<TextPagesResult> {
 }
 
 // ---------------------------------------------------------------------------
-// Suvlasnički udeli
+// Udeli i ciljni imenilac
 // ---------------------------------------------------------------------------
 
 export interface ShareFraction {

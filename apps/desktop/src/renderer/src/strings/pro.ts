@@ -387,7 +387,7 @@ export const proSr = {
    */
   name: {
     "allocation-remainder": "Raspodela bez ostatka",
-    "amount-in-words": "Iznos slovima",
+    "amount-in-words": "Iznos i broj slovima",
     "angle-of-view": "Ugao vidnog polja",
     "angle-units": "Uglovi i direkcioni ugao",
     "anuitet-otplatni-plan": "Anuitet i otplatni plan",
@@ -555,10 +555,10 @@ export const proSr = {
     "print-resolution": "Rezolucija za štampu",
     "pro-rata-days": "Pro-rata po danima",
     "projector-throw-screen": "Projekcija i platno",
-    "racun-iban-provera": "Račun i IBAN",
+    "racun-iban-provera": "Račun, IBAN i modul 97",
     "radni-dani": "Radni dani",
     "raster-image-size": "Veličina rastera",
-    "rate-conversion": "Nominalna i efektivna stopa",
+    "rate-conversion": "Proporcionalna i konformna stopa",
     "ratio-split": "Podela po odnosu",
     "reading-time": "Trajanje čitanja",
     "rebar-weight": "Masa armature",
@@ -615,7 +615,7 @@ export const proSr = {
     "subtitle-audit": "Provera titlova",
     "subtitle-retime": "Pomeranje titlova",
     "survey-bearing-distance": "Geodetski zadatak",
-    "suvlasnicki-udeli": "Suvlasnički udeli",
+    "suvlasnicki-udeli": "Udeli i ciljni imenilac",
     "sweat-rate-hydration": "Stopa znojenja",
     "tank-mix-dose": "Doza po rezervoaru",
     "tank-volume-by-level": "Zapremina rezervoara",
@@ -672,8 +672,8 @@ export const proSr = {
       "Deli iznos po zadatom ključu tako da zbir delova bude tačno jednak celini, bez pare koja " +
       "se izgubi na zaokruživanju.",
     "amount-in-words":
-      "Ispisuje novčani iznos slovima na srpskom, sa oblikom reči za dinare i pare koji odgovara " +
-      "broju.",
+      "Ispisuje iznos slovima na srpskom — sa valutom, gde oblik reči za dinare i pare prati " +
+      "broj, ili bez valute, kao goli broj.",
     "angle-of-view":
       "Za unete dimenzije senzora i žižnu daljinu daje ugao snimanja po širini, visini i " +
       "dijagonali i koliko metara kadar obuhvata na zadatom rastojanju.",

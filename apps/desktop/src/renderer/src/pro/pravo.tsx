@@ -937,7 +937,7 @@ export function ProportionalCostsTool() {
 }
 
 // ---------------------------------------------------------------------------
-// Suvlasnički udeli
+// Udeli i ciljni imenilac
 // ---------------------------------------------------------------------------
 
 export function CoOwnershipTool() {
@@ -1430,7 +1430,7 @@ export function WorkingDaysTool() {
 }
 
 // ---------------------------------------------------------------------------
-// Račun i IBAN — ISO 7064 MOD 97-10
+// Račun, IBAN i modul 97 — ISO 7064 MOD 97-10
 // ---------------------------------------------------------------------------
 
 export function AccountCheckTool() {
