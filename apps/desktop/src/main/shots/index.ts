@@ -401,6 +401,105 @@ function CLICK(selector: string): string {
 }
 
 /**
+ * ADR-086's questionnaire, which nothing else in this sweep can reach.
+ *
+ * Every scene above is anchored to a sidebar row, and the questionnaire is not
+ * a page — it replaces the shell. So eight screens that decide what a new
+ * user's whole app looks like had no photograph at all, which is exactly the
+ * shape DC-57 named: a harness whose fixture can never reach the state, and a
+ * run that says „2 483 frames, no findings" about a surface it never saw.
+ *
+ * The way in is the RERUN (`Podešavanja → Kako je Nexus podešen za tebe`),
+ * which mounts the same component in `mode: "rerun"`. That is not a weaker
+ * subject than a first run: it is one component with one render site, told
+ * apart by a prop, and the rerun is the reachable half.
+ *
+ * The pass ANSWERS the questions rather than clicking through them empty. An
+ * unanswered flow photographs six screens in the one state none of them is
+ * interesting in — no recognition chips, no chosen cards, an empty reveal — and
+ * the states that carry the design are precisely the ones a person produces by
+ * answering. It runs last, and it COMPLETES: „Priprema" and „Evo tvog Nexusa"
+ * only exist on the far side of the write, and a rerun over the demo profile in
+ * a disposable `userData` is free to make it.
+ */
+const ONB_SCREENS = ["ime", "nedelja", "posao", "ritam", "oko", "podsetnici"] as const;
+
+/** The trade sentence the pass types. Two clean stems, so the „Prepoznato“ chips are in the frame. */
+const ONB_TRADE = "stolar, advokat";
+
+/** Which step the questionnaire is on („Korak N od 6“), or „none“ when it is not on screen. */
+const ONB_STEP = `(() => {
+  const el = document.querySelector(".onb__steps");
+  if (!el) return "none";
+  const found = (el.textContent || "").match(/[0-9]+/);
+  return found ? found[0] : "none";
+})()`;
+
+/**
+ * What the questionnaire is showing, for the three screens that have no step
+ * counter. Ordered most-specific first: the manual override is a form inside
+ * the same card as the reveal, so „has a stage list“ and „is the manual form“
+ * are both asked before the reveal's own button.
+ */
+const ONB_PHASE = `(() => {
+  if (!document.querySelector(".onb")) return "none";
+  if (document.querySelector(".onb__stages")) return "prepare";
+  if (document.querySelector(".onb__form--manual")) return "manual";
+  if (document.querySelector(".onb__enter")) return "reveal";
+  return "asking";
+})()`;
+
+/**
+ * Types into the first visible text field of the screen, the way `WRITE_PROBE`
+ * does — through the prototype's value setter, because React listens to the
+ * `input` event and a plain assignment fires nothing.
+ */
+function ONB_TYPE(selector: string, text: string): string {
+  return `(async () => {
+    const field = document.querySelector(${JSON.stringify(selector)});
+    if (!field) return "none";
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+    field.focus();
+    setter.call(field, ${JSON.stringify(text)});
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    return "typed";
+  })()`;
+}
+
+/** Clicks the nth match of a selector, and says whether there was one. */
+function ONB_PICK(selector: string, ...indexes: readonly number[]): string {
+  return `(async () => {
+    const all = document.querySelectorAll(${JSON.stringify(selector)});
+    let hit = 0;
+    for (const index of ${JSON.stringify(indexes)}) {
+      const el = all[index];
+      if (!el) continue;
+      el.click();
+      hit += 1;
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    }
+    return hit === ${JSON.stringify(indexes.length)} ? "picked" : "none";
+  })()`;
+}
+
+/**
+ * What each screen is answered with before it is photographed.
+ *
+ * Keyed by screen so a screen added to the flow without an answer here is
+ * visibly missing rather than silently unanswered — the same argument
+ * `fanoutLabels` makes about a selector that has gone stale.
+ */
+const ONB_ANSWERS: Readonly<Record<string, string | null>> = {
+  ime: null,
+  nedelja: ONB_PICK(".pro-kit", 0, 5),
+  posao: null,
+  ritam: ONB_PICK(".pro-kit", 1),
+  oko: ONB_PICK(".pro-kit", 0, 2),
+  podsetnici: ONB_PICK(".onb__choice", 1),
+};
+
+/**
  * The modules whose create form the write pass exercises, and the marker it
  * types. The marker is deliberately obvious in a screenshot and obviously not
  * real data, so a frame containing it cannot be mistaken for the demo profile's
@@ -1029,6 +1128,121 @@ async function sweep(win: BrowserWindow, outDir: string, frames: ShotFrame[]): P
       });
       win.unmaximize();
       await pause(300);
+    }
+  }
+
+  // The questionnaire, last of all.
+  //
+  // It COMPLETES, which rewrites this profile's flags, board and sidebar — so
+  // it runs after every other frame has been taken rather than before any of
+  // them. It is its own loop over sizes and themes rather than a scene, for the
+  // reason `ONB_SCREENS` gives: it is not a page, and `openModule` is how every
+  // scene above begins.
+  for (const size of SHOT_SIZES) {
+    win.setSize(size.width, size.height);
+    await pause(300);
+    for (const theme of SHOT_THEMES) {
+      await serveTheme(win, theme);
+      const dir = join(outDir, size.id, theme);
+      mkdirSync(dir, { recursive: true });
+
+      // These stems are constants, so unlike `shoot`'s they cannot collide with
+      // each other by construction — the write probe's argument, and the reason
+      // this path is allowed to stand outside `taken`.
+      const shootOnb = async (stem: string): Promise<void> => {
+        if (win.isMaximized()) win.unmaximize();
+        const actual = win.getSize();
+        if (actual[0] !== size.width || actual[1] !== size.height) {
+          const was = `${String(actual[0])}×${String(actual[1])}`;
+          const want = `${String(size.width)}×${String(size.height)}`;
+          process.stderr.write(`shots: window was ${was} at "${stem}", not ${want} — corrected\n`);
+          win.setSize(size.width, size.height);
+          await pause(300);
+        }
+        await settle(win);
+        const file = join(dir, `${stem}.png`);
+        await capture(win, file);
+        frames.push({ file, scene: stem, theme, size: size.id, findings: await auditPage(win) });
+      };
+
+      if (!(await openModule(win, "settings"))) {
+        process.stderr.write(`shots: no sidebar row for module "settings"\n`);
+        continue;
+      }
+      await evalIn(win, CLICK("#set-section-setup .set__module-row--foot .nx-button"));
+      await settle(win);
+      if ((await evalIn(win, ONB_PHASE)) !== "asking") {
+        // Said out loud and abandoned rather than photographed. Every frame
+        // below would otherwise be the settings page under a questionnaire's
+        // name, which reads as „the questionnaire looks like Podešavanja“.
+        process.stderr.write("shots: the rerun row did not open the questionnaire\n");
+        continue;
+      }
+
+      for (let index = 0; index < ONB_SCREENS.length; index += 1) {
+        const screen = ONB_SCREENS[index] ?? "";
+        const step = await evalIn(win, ONB_STEP);
+        if (step !== String(index + 1)) {
+          process.stderr.write(
+            `shots: questionnaire was on step ${String(step)}, not ${String(index + 1)} ("${screen}")\n`,
+          );
+          break;
+        }
+        // Answered BEFORE the frame: an unanswered screen is the one state none
+        // of these six is interesting in.
+        if (screen === "posao") {
+          if ((await evalIn(win, ONB_TYPE(".onb__form input", ONB_TRADE))) !== "typed") {
+            process.stderr.write("shots: the trade field was not on the „posao“ screen\n");
+          }
+          await settle(win);
+          await evalIn(win, ONB_PICK(".onb__act", 0, 4));
+        }
+        const answer = ONB_ANSWERS[screen];
+        if (answer !== null && answer !== undefined && (await evalIn(win, answer)) !== "picked") {
+          process.stderr.write(`shots: nothing to answer on the „${screen}“ screen\n`);
+        }
+        await settle(win);
+        await shootOnb(`onb-${screen}`);
+        await evalIn(win, CLICK(".onb__actions .nx-button[type=submit]"));
+        await settle(win);
+      }
+
+      // „Priprema“, caught mid-flight. Each stage is held for `STAGE_MS` (520)
+      // and there are five, so a frame at ~800 ms lands on the second or third
+      // with the ones behind it already ticked — which is the state worth
+      // having, rather than a list of five identical pending rows.
+      await pause(800);
+      if ((await evalIn(win, ONB_PHASE)) === "prepare") await shootOnb("onb-priprema");
+      else process.stderr.write("shots: „Priprema“ was over before it could be photographed\n");
+
+      // The far side. Generous, because the beats are a FLOOR under real work —
+      // four flag loops, a board rebuild and a rename — not a fixed animation.
+      await pause(4000);
+      if ((await evalIn(win, ONB_PHASE)) !== "reveal") {
+        process.stderr.write("shots: the reveal never arrived — no „Evo tvog Nexusa“ frame\n");
+        continue;
+      }
+      await shootOnb("onb-evo");
+
+      await evalIn(win, CLICK(".onb__quiet"));
+      await settle(win);
+      if ((await evalIn(win, ONB_PHASE)) === "manual") {
+        await shootOnb("onb-rucno");
+        // Back to the reveal rather than saving: „Podesi ručno“ writes its own
+        // deltas and this pass has nothing to say about the modules — it is
+        // here to be photographed, not to decide anything.
+        await evalIn(win, CLICK_THEN(".onb__actions .nx-button"));
+        await settle(win);
+      } else {
+        process.stderr.write("shots: „Podesi ručno“ did not open\n");
+      }
+
+      // And out through the front door, so the shell is back for the next pass.
+      await evalIn(win, CLICK(".onb__enter"));
+      await settle(win);
+      if ((await evalIn(win, ONB_PHASE)) !== "none") {
+        process.stderr.write("shots: the questionnaire did not close\n");
+      }
     }
   }
 }
