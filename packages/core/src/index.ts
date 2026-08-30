@@ -1090,3 +1090,28 @@ export type {
   WireColour,
   WireEnd,
 } from "./electronics/circuit.js";
+
+/**
+ * ADR-086 — „Priprema": the signals a first run collects, the lexicon that
+ * reads a trade out of a sentence, and the plan that turns both into one
+ * person's Nexus.
+ */
+export {
+  KEEPS,
+  TEMPOS,
+  WEEK_SHAPES,
+  keeps,
+  tempoOf,
+  tradePacks,
+  weekShapes,
+} from "./profile/signals.js";
+export type { Keep, Signal, Tempo, WeekShape } from "./profile/signals.js";
+export { TRADE_ACTIVITIES, TRADE_STEMS, recognizeTrades } from "./profile/lexicon.js";
+export type { TradeActivity, TradeMatch, TradeStem } from "./profile/lexicon.js";
+export { buildProfilePlan } from "./profile/plan.js";
+export type {
+  PlanBoardEntry,
+  PlanCalendarView,
+  PlanReason,
+  ProfilePlan,
+} from "./profile/plan.js";
