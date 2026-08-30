@@ -6,8 +6,8 @@
  * different table another process owns.
  *
  * **Nothing in here judges.** Every tool in this pack is `riskClass: "none"`,
- * so none of them ever needed the „granica koju si uneo" phrasing `gradnja`
- * uses — there is no regulated limit in this pack for a value to sit beside.
+ * so none of them ever needed the „tvoja granica" phrasing `gradnja` uses —
+ * there is no regulated limit in this pack for a value to sit beside.
  *
  * **A unit is copy, not a constant** — „mm", „m", „°" are written here rather
  * than concatenated in the surface.
@@ -92,7 +92,7 @@ export const PRO_FOTO_SR = {
     infinite: "beskonačno",
     modelNote:
       "Model tankog sočiva, rastojanja od prednje glavne ravni. Krug rasipanja je vrednost " +
-      "koju si uneo, ne izbor alata.",
+      "koju uneseš, ne izbor alata.",
 
     inputs: "Uneseno",
     formula: "H = f²/(N·c) + f     near = s·(H−f)/(H+s−2f)     far = s·(H−f)/(H−s)",

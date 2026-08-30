@@ -93,8 +93,8 @@ export const PRO_KUHINJA_SR = {
     doughMass: "Masa testa",
     hydration: "Hidratacija",
     hydrationNote:
-      "Uračunati su isključivo redovi koje si označio kao vodu — mleko, jaja i ulje ulaze samo " +
-      "ako si ih tako obeležio.",
+      "Uračunati su isključivo redovi označeni kao voda — mleko, jaja i ulje ulaze samo " +
+      "ako su tako obeleženi.",
     rawPieceMass: "Masa sirovog komada",
 
     inputs: "Uneseno",
@@ -133,7 +133,7 @@ export const PRO_KUHINJA_SR = {
     dissolvedSalt: "So već rastvorena u salamuri",
     sugarPercent: "Ciljni procenat šećera",
     sugarPercentHint: "Opciono, na istoj osnovi kao so. Računa se nezavisno od soli.",
-    percentLimit: "Granica koju si uneo",
+    percentLimit: "Tvoja granica",
     percentLimitHint:
       "Iz propisa koji primenjuješ. Nexus ne zna koji je to propis i ne nudi vrednost.",
 

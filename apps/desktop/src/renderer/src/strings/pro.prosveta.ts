@@ -329,7 +329,7 @@ export const PRO_PROSVETA_SR = {
     hoursDifferenceLabel: "Razlika izračunato − propisano",
     hoursRatioLabel: "Odnos izračunato/propisano",
     noHolidayNote:
-      "Nexus nema ugrađen kalendar praznika — oduzeti su samo datumi koje si sam upisao.",
+      "Nexus nema ugrađen kalendar praznika — oduzeti su samo datumi koje uneseš.",
     weekdayNames: ["Ponedeljak", "Utorak", "Sreda", "Četvrtak", "Petak", "Subota", "Nedelja"],
 
     inputs: "Uneseno",

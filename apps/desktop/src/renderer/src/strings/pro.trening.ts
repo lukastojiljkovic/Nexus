@@ -14,7 +14,7 @@
  * `packages/core/src/pro/trening.ts` returns quantities and nothing else, and
  * this table only ever names what a number IS, never whether it is good. The
  * two tools that carry a regulated figure — the symmetry target, the
- * weight-class limit — echo it back as „koji si uneo", never as a pass/fail.
+ * weight-class limit — echo it back as „tvoja granica", never as a pass/fail.
  */
 export const PRO_TRENING_SR = {
   "barbell-plate-loading": {
@@ -22,8 +22,8 @@ export const PRO_TRENING_SR = {
     targetHint: "Ukupna masa sa šipkom i svim diskovima, u kilogramima.",
     bar: "Masa šipke",
     barHint:
-      "Masa šipke koju imaš pred sobom. Muške šipke su obično 20 kg, ženske 15 kg — proveri ako " +
-      "nisi siguran.",
+      "Masa šipke koju imaš pred sobom. Muške šipke su obično 20 kg, ženske 15 kg — proveri " +
+      "za svaki slučaj.",
     collar: "Masa jedne stezaljke",
     collarHint: "Masa jedne stezaljke — obe se računaju. Ostavi 0 ako ih ne koristiš.",
     plates: "Raspoloživi diskovi",

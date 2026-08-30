@@ -165,8 +165,8 @@ export const PRO_RACUNOVODSTVO_SR = {
 
     averageNote:
       "Pozicija koja nije uneta ostavlja svoj pokazatelj praznim; deljenje nulom takođe ostavlja " +
-      "prazno polje umesto broja. Alat ne pravi proseke sam — koristi tačno one iznose koje si " +
-      "uneo.",
+      "prazno polje umesto broja. Alat ne pravi proseke sam — koristi tačno one iznose koje " +
+      "uneseš.",
     inputs: "Uneseno",
     formula:
       "Likvidnost = obrtna imovina/kratkoročne obaveze (brza: bez zaliha, novčana: samo " +
@@ -184,7 +184,7 @@ export const PRO_RACUNOVODSTVO_SR = {
     rateUnit: "Jedinica kursa",
     rateUnitHint:
       "Neki kursevi se objavljuju za 100 ili 1.000 jedinica strane valute — izaberi tačno onu " +
-      "koju si uneo.",
+      "koju uneseš.",
     rateUnit1: "za 1 jedinicu",
     rateUnit100: "za 100 jedinica",
     rateUnit1000: "za 1.000 jedinica",

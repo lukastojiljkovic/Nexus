@@ -968,7 +968,7 @@ export const PRO_AGRO_SR = {
     labelNote:
       "Škropivo je voda plus svi dodati preparati — zapremina vode je zapremina rezervoara " +
       "umanjena za tečne preparate koje sadrži, ne cela zapremina rezervoara. Dozu i normu " +
-      "prskanja uneo si sa etikete preparata; Nexus ih ne poznaje, ne pamti i ne predlaže.",
+      "prskanja unosiš sa etikete preparata; Nexus ih ne poznaje, ne pamti i ne predlaže.",
 
     inputs: "Uneseno",
     productCount: "Broj preparata",

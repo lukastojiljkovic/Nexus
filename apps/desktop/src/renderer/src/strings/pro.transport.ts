@@ -791,7 +791,7 @@ export const PRO_TRANSPORT_SR = {
     distanceIntervalInHours: "Kilometarski interval izražen u motočasovima",
     hoursIntervalInKm: "Motočasovni interval izražen u kilometrima",
     averagesNote:
-      "Datumi su procena iz prosečnih dnevnih vrednosti koje si uneo, ne iz stvarnog rasporeda " +
+      "Datumi su procena iz prosečnih dnevnih vrednosti koje uneseš, ne iz stvarnog rasporeda " +
       "vožnje.",
 
     formula: "Δk = trenutna − poslednja     Rk = Ik − Δk     dana = Rk / km dnevno",
@@ -995,7 +995,7 @@ export const PRO_TRANSPORT_SR = {
     pricePerLadenKm: "Cena po kilometru pod teretom",
     pricePerTonne: "Cena po toni",
     regulatedFiguresNote:
-      "Iznos dnevnice i stopa PDV su brojevi koje si uneo — Nexus ne tvrdi da je bilo koji iznos " +
+      "Iznos dnevnice i stopa PDV su brojevi koje uneseš — Nexus ne tvrdi da je bilo koji iznos " +
       "poreski priznat niti da je stopa tačna.",
 
     formula:

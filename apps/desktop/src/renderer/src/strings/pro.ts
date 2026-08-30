@@ -264,7 +264,7 @@ export const proSr = {
     "life-safety": {
       label: "Bezbednost",
       line:
-        "Račun iz vrednosti koje si uneo. Ne zamenjuje proračun, proveru ni odgovornost " +
+        "Račun iz vrednosti koje uneseš. Ne zamenjuje proračun, proveru ni odgovornost " +
         "ovlašćenog inženjera.",
       note:
         "Alatke u ovoj grupi računaju veličinu iz podataka koje sam uneseš. One ne biraju " +
@@ -285,7 +285,7 @@ export const proSr = {
     "legal-procedure": {
       label: "Rokovi",
       line:
-        "Računa datume po pravilu koje si izabrao. Izbor pravila i provera roka su pravno " +
+        "Računa datume po pravilu koje izabereš. Izbor pravila i provera roka su pravno " +
         "pitanje.",
       note:
         "Alatke u ovoj grupi sabiraju i oduzimaju datume po pravilu računanja koje sam izabereš " +
@@ -297,7 +297,7 @@ export const proSr = {
     financial: {
       label: "Novac",
       line:
-        "Informativan račun iz stopa i iznosa koje si uneo. Nije poreski ni računovodstveni " +
+        "Informativan račun iz stopa i iznosa koje uneseš. Nije poreski ni računovodstveni " +
         "savet.",
       note:
         "Alatke u ovoj grupi računaju iz stopa i iznosa koje sam uneseš. Nijedna stopa nije " +
@@ -308,7 +308,7 @@ export const proSr = {
     },
     "food-safety": {
       label: "Bezbednost hrane",
-      line: "Račun iz vrednosti koje si uneo. Bezbednost hrane određuju tvoj HACCP plan i propisi.",
+      line: "Račun iz vrednosti koje uneseš. Bezbednost hrane određuju tvoj HACCP plan i propisi.",
       note:
         "Alatke u ovoj grupi računaju količine i vremena iz vrednosti koje sam uneseš. One ne " +
         "određuju bezbednu temperaturu, vreme ni postupak — to određuju tvoj HACCP plan i " +
@@ -1329,7 +1329,7 @@ export const proSr = {
       "Koliko obračunskih strana nosi tekst pri unetom broju karaktera po strani, i koliki je " +
       "iznos po unetoj ceni.",
     "subtitle-audit":
-      "Meri svaki titl i pokazuje izmerenu vrednost pored granice koju si sam upisao: dužina " +
+      "Meri svaki titl i pokazuje izmerenu vrednost pored granice koju uneseš: dužina " +
       "reda, broj redova, trajanje, znakova u sekundi i razmak do sledećeg.",
     "subtitle-retime":
       "Pomera sve vremenske oznake u SRT ili VTT titlu i preračunava ih za drugi broj slika u " +

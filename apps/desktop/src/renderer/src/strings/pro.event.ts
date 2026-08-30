@@ -13,8 +13,9 @@
  * `truss-hoist-reactions`, `voltage-drop` and `venue-occupancy-area` are
  * `life-safety`; `ice-and-chilling` is `food-safety`. Their copy may name a
  * quantity and may name the user's own limit, and may never say what the two
- * mean together. Where a limit appears it is always „koju si uneo/uneta" —
- * whose it is, said in the label.
+ * mean together. Where a limit appears it is always „tvoja granica" — whose it
+ * is, said in the label, and in the possessive rather than a participle that
+ * would have to pick the reader's gender.
  */
 export const PRO_EVENT_SR = {
   "beam-spot-diameter": {

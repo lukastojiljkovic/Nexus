@@ -517,9 +517,9 @@ export const PRO_ZANAT_SR = {
     limitMode: "Granica ugiba — način zadavanja",
     limitModeValue: "U milimetrima",
     limitModeRatio: "Kao L/x",
-    deflectionLimit: "Sopstvena granica ugiba koju si uneo",
-    deflectionLimitDivisor: "Sopstvena granica ugiba kao L/x koju si uneo",
-    stressLimit: "Sopstvena granica napona koju si uneo",
+    deflectionLimit: "Sopstvena granica ugiba",
+    deflectionLimitDivisor: "Sopstvena granica ugiba kao L/x",
+    stressLimit: "Sopstvena granica napona",
     limitHint: "Iz propisa koji primenjuješ. Nexus ne zna koji je to propis i ne nudi vrednost.",
 
     results: "Rezultat",

@@ -4634,12 +4634,12 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
           failure: "Do otkaza",
         },
         /**
-         * RIR rather than RPE (ADR-081 §4): „koliko si još mogao" is a question
-         * a person can answer, and a field people answer wrongly is worse than
-         * one they leave empty.
+         * RIR rather than RPE (ADR-081 §4): „koliko ti je još ostalo" is a
+         * question a person can answer, and a field people answer wrongly is
+         * worse than one they leave empty.
          */
         rirLabel: "RIR",
-        rirHint: "Koliko si ponavljanja još mogao. 0–5, prazno ako ne znaš.",
+        rirHint: "Koliko ti je ponavljanja još ostalo. 0–5, prazno ako ne znaš.",
         /**
          * The five fields, named by what they MEAN. „Pomoć" and „Dodatna težina"
          * are two labels over one column, because assistance getting smaller is
@@ -4824,7 +4824,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
        */
       exercises: {
         heading: "Moje vežbe",
-        caption: "Katalog aplikacije se ne menja — ovde su samo vežbe koje si sam dodao.",
+        caption: "Katalog aplikacije se ne menja — ovde su samo tvoje vežbe.",
         newExercise: "Nova vežba",
         newTitle: "Nova vežba",
         editTitle: "Izmena vežbe",
@@ -6126,7 +6126,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         "missing-ydoc": "Oštećen red — belešci u arhivi nedostaje sadržaj.",
         "invalid-ydoc": "Oštećen red — sadržaj beleške u arhivi nije ispravan.",
         "settings-not-imported":
-          "Podešavanja iz arhive se ne uvoze — moduli i obaveštenja ostaju onako kako si ih ti podesio.",
+          "Podešavanja iz arhive se ne uvoze — moduli i obaveštenja ostaju onako kako su podešeni na ovom uređaju.",
         "notifications-not-imported":
           "Zabeležena obaveštenja se ne uvoze — taj spisak pripada profilu u kom je nastao.",
         "dashboard-settings-not-imported":
@@ -6403,7 +6403,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       /** The mapped-„Lista" count line: prefix, then the number, then this suffix. */
       listCellsDroppedPrefix: "Vrednosti kolone „Lista“:",
       listCellsDroppedSuffix:
-        "— ne prenose se; svi zadaci ulaze u listu koju si izabrao iznad.",
+        "— ne prenose se; svi zadaci ulaze u listu izabranu iznad.",
       /** One sentence per `CsvImportReadErrorCode`: the file could not be turned into columns at all. */
       unreadable: {
         "too-large": "Tabela prelazi bezbednosna ograničenja (5 MB) i zato je odbijena.",
@@ -6763,21 +6763,21 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
        * fixed in the chat window rather than here.
        */
       unreadable: {
-        empty: "Nisi nalepio nikakav odgovor.",
+        empty: "Nije nalepljen nikakav odgovor.",
         "too-long": "Odgovor je prevelik. Podeli tekst na manje delove i uvezi ih redom.",
         "no-json":
           "U odgovoru nema JSON-a. Asistent je verovatno odgovorio rečenicom — zamoli ga da odgovori isključivo JSON-om, tačno kao u uputstvu.",
         "not-json":
           "Ono što je asistent poslao nije ispravan JSON (najčešće zarez posle poslednjeg elementa). Zamoli ga da pošalje isti odgovor kao ispravan JSON.",
         "not-an-envelope":
-          "Ovo nije odgovor u obliku koji uputstvo traži. Proveri da si nalepio ceo odgovor, sa „nexus-llm“ na početku.",
+          "Ovo nije odgovor u obliku koji uputstvo traži. Proveri da li je nalepljen ceo odgovor, sa „nexus-llm“ na početku.",
         "unsupported-version":
           "Odgovor je u obliku koji ova verzija Nexusa ne čita. Kopiraj uputstvo ponovo i pitaj iznova.",
         "unknown-kind": "Odgovor navodi vrstu zapisa koju Nexus ne poznaje.",
       } satisfies Record<LlmImportAnswerProblem, string>,
       /** The answer was readable, but for a different kind than the picker says — fixed by changing the picker, not the chat. */
       kindMismatchPrefix: "Ovaj odgovor sadrži",
-      kindMismatchSuffix: "— a ti si izabrao drugu vrstu. Promeni izbor iznad ili pitaj ponovo.",
+      kindMismatchSuffix: "— a izbor iznad je druga vrsta. Promeni izbor ili pitaj ponovo.",
       applyButton: "Uvezi",
       applying: "Uvoz u toku…",
       applied: "Podaci su uvezeni. Aplikacija se osvežava…",
@@ -6953,13 +6953,13 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
        */
       adoptChoiceTitle: "Ovaj računar se pridružuje nalogu koji već postoji",
       adoptChoiceHint:
-        "Izaberi ovo ako je sinhronizacija već uključena na nekom tvom uređaju. Treba ti kod za oporavak koji si tada prepisao.",
+        "Izaberi ovo ako je sinhronizacija već uključena na nekom tvom uređaju. Treba ti kod za oporavak koji je tada prepisan.",
       adoptTitle: "Poveži ovaj računar sa postojećim nalogom",
       adoptIntro:
-        "Upiši podatke naloga i kod za oporavak koji si prepisao kada si prvi put uključio sinhronizaciju. Ovaj računar time dobija ključ naloga i njegovi podaci se spajaju sa ostalim uređajima.",
+        "Upiši podatke naloga i kod za oporavak prepisan pri prvom uključivanju sinhronizacije. Ovaj računar time dobija ključ naloga i njegovi podaci se spajaju sa ostalim uređajima.",
       recoveryCodeLabel: "Kod za oporavak sa naloga",
       recoveryCodeHint:
-        "Onaj koji si prepisao kada je sinhronizacija uključena na prvom uređaju — ne kod iz aplikacije za potvrdu. Ni on ne napušta ovaj računar.",
+        "Onaj prepisan kada je sinhronizacija uključena na prvom uređaju — ne kod iz aplikacije za potvrdu. Ni on ne napušta ovaj računar.",
       adoptChoiceAction: "Poveži postojeći nalog",
       adoptBackAction: "Ipak uključi sinhronizaciju iznova",
       adoptSubmit: "Poveži ovaj računar",

@@ -9,8 +9,9 @@
  * fastener, a pressure vessel, a belt guard — a wrong number here is not a
  * cosmetic bug. So this file never writes a verdict word: no „zadovoljava",
  * „bezbedno", „ispravno", „u skladu", „dozvoljeno". Where a limit appears it
- * is always „granica koju si uneo" — whose it is, said in the label — and
- * the number beside it is left to speak for itself.
+ * is always „tvoja granica" — whose it is, said in the label — and the number
+ * beside it is left to speak for itself. The possessive, never „koju si uneo":
+ * that participle agrees with the addressee's gender.
  */
 export const PRO_INZENJERING_SR = {
   "awg-to-mm2": {
@@ -202,7 +203,7 @@ export const PRO_INZENJERING_SR = {
     temperatureNote:
       "Na 70 °C je otpornost bakra veća 1,1965 puta nego na 20 °C, i potreban presek raste za " +
       "isti činilac.",
-    chosenArea: "Presek koji si sam izabrao",
+    chosenArea: "Sopstveni izabrani presek",
     chosenAreaHint: "Opciono — za red o padu napona na tom preseku.",
     errorLength: "Dužina trase mora biti između 0 i 100000 m.",
     errorCurrent: "Struja mora biti između 0 i 100000 A.",

@@ -14,8 +14,10 @@
  * **Nothing in here judges.** Every tool in this pack that touches a load, a
  * height or a fall is `life-safety`, so its copy may name a quantity and may
  * name the user's own limit, and may not say what the two mean together
- * (`toolForbidsVerdict`). Where a limit appears below it is always „granica koju
- * si uneo" — whose it is, said in the label.
+ * (`toolForbidsVerdict`). Where a limit appears below it is always „tvoja
+ * granica" — whose it is, said in the label. The possessive, never „koju si
+ * uneo": a Serbian l-participle agrees with the addressee's gender, so that
+ * phrasing addressed every user as a man (`check:address` enforces this).
  */
 export const PRO_GRADNJA_SR = {
   "stair-geometry": {
@@ -29,8 +31,8 @@ export const PRO_GRADNJA_SR = {
     top: "Izlaz kraka",
     topFlush: "U ravan gornjeg poda",
     topLanding: "Na podest u nivou poslednjeg podizanja",
-    riserLimit: "Granična visina stepenika koju si uneo",
-    goingLimit: "Granično gazište koje si uneo",
+    riserLimit: "Tvoja granična visina stepenika",
+    goingLimit: "Tvoje granično gazište",
     limitHint: "Iz propisa koji primenjuješ. Nexus ne zna koji je to propis i ne nudi vrednost.",
     roundTo: "Korak zaokruživanja",
     roundToHint: "Na koliko se visina stepenika iscrtava na letvi. Podrazumevano 1 mm.",
@@ -135,8 +137,8 @@ export const PRO_GRADNJA_SR = {
     modeMaxSpacing: "Najveći razmak",
     modeCount: "Zadat broj komada",
     modeMaxGap: "Najveći svetli razmak (ispuna)",
-    maxSpacing: "Najveći razmak koji si uneo",
-    maxGap: "Najveći svetli razmak koji si uneo",
+    maxSpacing: "Tvoj najveći razmak",
+    maxGap: "Tvoj najveći svetli razmak",
     limitHint: "Iz propisa koji primenjuješ. Nexus ne zna koji je to propis i ne nudi vrednost.",
     countLabel: "Broj komada",
     layout: "Raspored",
@@ -193,8 +195,8 @@ export const PRO_GRADNJA_SR = {
     heightHint: "Dimenzija u ravni savijanja. Zamena sa širinom menja I kubno.",
     sectionModulus: "Otporni moment W",
     sectionModulusHint: "Opciono, kad presek nije pravougaon. Bez njega se napon ne prikazuje.",
-    stressLimit: "Granični napon koji si uneo",
-    deflectionRatioLimit: "Granični odnos L/f koji si uneo",
+    stressLimit: "Tvoj granični napon",
+    deflectionRatioLimit: "Tvoj granični odnos L/f",
     limitHint: "Iz propisa koji primenjuješ. Nexus ne zna koji je to propis i ne nudi vrednost.",
 
     results: "Rezultat",

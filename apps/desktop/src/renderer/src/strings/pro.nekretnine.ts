@@ -568,7 +568,7 @@ export const PRO_NEKRETNINE_SR = {
     total: "Ukupna površina za obradu",
     material: "Količina materijala",
     materialNote:
-      "U jedinici izdašnosti koju si uneo (l ili kg). Ne uključuje rasipanje ni gubitke.",
+      "U jedinici izdašnosti koju uneseš (l ili kg). Ne uključuje rasipanje ni gubitke.",
     packageCount: "Broj pakovanja",
     revealArea: "Površina špaletni",
 

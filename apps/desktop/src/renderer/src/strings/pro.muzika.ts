@@ -693,7 +693,7 @@ export const PRO_MUZIKA_SR = {
     colImpedance: "Impedansa",
     colShare: "Udeo snage (%)",
     colPower: "Snaga (W)",
-    limitLabel: "Najmanja impedansa koju si uneo",
+    limitLabel: "Tvoja najmanja impedansa",
     ratioLabel: "Ukupna impedansa ÷ tvoja granica",
     modelNote:
       "Model je nominalna otporna impedansa sa deklaracije kutije, ne stvarna reaktivna kriva " +
@@ -730,7 +730,7 @@ export const PRO_MUZIKA_SR = {
     referenceDistanceHint: "Podrazumevano 1 m — rastojanje na kome je osetljivost merena.",
     secondDistance: "Drugo rastojanje",
     secondDistanceHint: "Opciono — za razliku u odnosu na prvo rastojanje.",
-    limit: "Granica nivoa koju si uneo",
+    limit: "Tvoja granica nivoa",
     limitHint: "Iz propisa koji primenjuješ. Nexus ne zna koji je to propis i ne nudi vrednost.",
 
     results: "Rezultat",

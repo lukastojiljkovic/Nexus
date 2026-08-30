@@ -18,6 +18,7 @@
     "check:colours": "node scripts/check-colours.mjs",
     "check:contrast": "node scripts/check-contrast.mjs",
     "check:strings": "node scripts/check-string-capture.mjs",
+    "check:address": "node scripts/check-address.mjs",
     "check:tokens": "node scripts/check-tokens.mjs",
     "check:elec": "node scripts/check-elec.mjs",
     "check:css": "node scripts/check-css.mjs",

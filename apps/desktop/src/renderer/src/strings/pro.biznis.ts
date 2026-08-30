@@ -466,7 +466,7 @@ export const PRO_BIZNIS_SR = {
     dailyInterest: "Dnevna kamata",
     total: "Glavnica + kamata",
     note:
-      "Kamata je PROSTA, bez kapitalisanja. Stopa je ona koju si uneo — Nexus je ne bira i ne " +
+      "Kamata je PROSTA, bez kapitalisanja. Stopa je ona koju uneseš — Nexus je ne bira i ne " +
       "izriče da li potraživanje postoji.",
 
     inputs: "Uneseno",

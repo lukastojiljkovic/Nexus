@@ -6,8 +6,8 @@
  * process owns.
  *
  * **Every tool in this pack is `riskClass: "none"`.** There is no regulatory
- * limit anywhere in it, so this file never writes a „granica koju si uneo"
- * line — that phrasing belongs to a pack that actually takes one.
+ * limit anywhere in it, so this file never writes a „tvoja granica" line —
+ * that phrasing belongs to a pack that actually takes one.
  *
  * A unit is copy, not a constant: written out here rather than concatenated
  * in the surface.
@@ -403,7 +403,7 @@ export const PRO_DIZAJN_SR = {
     lineHeight: "Prored (CSS line-height)",
     metricSource: "Izvor metrika",
     metricSourceHint:
-      "Koju tabelu fonta si ukucao — hhea, OS/2 sTypo ili OS/2 usWin. Utiče na to ČIJI je ovaj " +
+      "Koju tabelu fonta unosiš — hhea, OS/2 sTypo ili OS/2 usWin. Utiče na to ČIJI je ovaj " +
       "rezultat, ne na ono što će prikazivač uraditi.",
     sourceHhea: "hhea",
     sourceOs2Typo: "OS/2 sTypo",

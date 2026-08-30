@@ -76,6 +76,14 @@ jobs:
 
       - run: pnpm check:strings
 
+      # Serbian has no genderless past tense, so „šta si uneo" has chosen the
+      # reader's gender — and the only one it ever chose was masculine. This is
+      # invisible to every other instrument: it is valid Serbian, valid
+      # TypeScript, and photographs correctly; forty lines shipped, six
+      # file headers told the next author to copy the phrasing, and review
+      # missed all of it.
+      - run: pnpm check:address
+
       - run: pnpm check:tokens
 
       # DEV-006 exempts the Elektronika workbench from the ban on blue and

@@ -116,7 +116,7 @@ choice of backend**; whatever in them is about the data model still applies.
      layer is unfinished, and that is the more useful answer.
   Record the class in [docs/defect-classes.md](docs/defect-classes.md) so the
   same shape is recognised the next time it appears somewhere else. **A class
-  that can be turned into a gate should be** — fourteen of the seventy already
+  that can be turned into a gate should be** — fifteen of the eighty already
   have been, and a rule nobody can forget beats a rule everybody has read.
 - **Concise Serbian status updates** to the founder; the code, comments, and docs
   are in **English**.
@@ -186,9 +186,9 @@ choice of backend**; whatever in them is about the data model still applies.
   @nexus/desktop smoke` (flips to electron, runs, restores) and `… rebuild:node`
   (restores node). Never flip it by hand. After a smoke run, restore node ABI and
   re-run the db tests.
-- **Verification gates before any commit:** `pnpm typecheck` (12/12), `pnpm lint`
-  (12/12), `pnpm test` (all green), `pnpm build` (4/4),
-  `pnpm --filter @nexus/desktop smoke` prints `SMOKE OK`, and **all fourteen
+- **Verification gates before any commit:** `pnpm typecheck` (13/13), `pnpm lint`
+  (13/13), `pnpm test` (all green), `pnpm build` (4/4),
+  `pnpm --filter @nexus/desktop smoke` prints `SMOKE OK`, and **all fifteen
   static gates** pass. **`pnpm lint` used to be missing from this line** even
   though CI has always run it, and on 2026-08-14 six real errors shipped red
   because of that — two of them display bugs the linter had named (DC-49,
@@ -228,8 +228,19 @@ choice of backend**; whatever in them is about the data model still applies.
   this dependency tree actually produces — a generated file that is committed
   goes stale silently, and `licences.test.ts` can only ask whether the file is
   fit to ship, never whether it still describes the tree), `check:egress` (no
-  new network construct in a build that must be able to make none) and
-  `check:rls` (the migration SQL states every policy the wall needs).
+  new network construct in a build that must be able to make none),
+  `check:rls` (the migration SQL states every policy the wall needs) and
+  **`check:address`** (Serbian has no genderless past tense, so „šta si uneo"
+  has chosen the reader's gender — and the only one it ever chose was
+  masculine; forty lines shipped that way and six file headers taught
+  the next author to copy the phrasing, because it is valid Serbian, valid
+  TypeScript and photographs correctly, so nothing else in the tree can see
+  it. Write the possessive („tvoja granica"), the present („koje uneseš"), the
+  impersonal or the passive. It watches **predicative adjectives too** —
+  „ako nisi siguran" picks a gender exactly as „uneo" does — and reads a
+  `"…" + "…"` chain as ONE sentence, because the copy is hand-wrapped near 100
+  columns and both live instances of those two holes had the trigger and the
+  word it governs on opposite sides of the split).
 - **Looking at the app is a command, not a chore.**
   `pnpm --filter @nexus/desktop shots` seeds a demo profile, drives the real
   renderer through every module and sub-view in both themes at three window
