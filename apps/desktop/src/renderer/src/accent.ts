@@ -56,6 +56,20 @@ export function readStoredAccent(profileId: string, kind: ProfileKind): AccentId
   return defaultAccent(kind);
 }
 
+/**
+ * Whether this profile already HAS an accent of its own — a stored value, or a
+ * pre-ADR-058 device-wide one it is about to inherit.
+ *
+ * The one caller is ADR-086's apply layer, and the distinction it needs is
+ * seed-versus-overwrite: a profile plan may give a fresh profile its accent,
+ * and must never quietly repaint one somebody chose in „Izgled" months ago
+ * because they reopened the questionnaire to switch one module on.
+ */
+export function hasStoredAccent(profileId: string): boolean {
+  if (isAccentId(localStorage.getItem(STORAGE_KEY_PREFIX + profileId))) return true;
+  return isAccentId(localStorage.getItem(LEGACY_STORAGE_KEY));
+}
+
 /** Persists the ACTIVE profile's accent choice and applies it to the document root — the Settings swatch click. */
 export function persistAccent(profileId: string, accent: AccentId): void {
   localStorage.setItem(STORAGE_KEY_PREFIX + profileId, accent);

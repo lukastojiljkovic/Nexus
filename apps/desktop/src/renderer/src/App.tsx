@@ -25,6 +25,7 @@ import { Onboarding } from "./Onboarding.js";
 import { ProfileSwitchDialog } from "./ProfileSwitchDialog.js";
 import { NotePopover } from "./notePopover.js";
 import { applyProfileAccent, defaultAccent, seedAccent } from "./accent.js";
+import { PINNED_GROUP_KEY, readPinnedModules, sidebarGroups } from "./navPrefs.js";
 import { pruneOnboardingDrafts } from "./onboardingDraft.js";
 import { moduleName } from "./moduleName.js";
 import {
@@ -72,7 +73,7 @@ import {
   subscribeSystemTheme,
   type ThemePreference,
 } from "./theme.js";
-import { strings } from "./strings.js";
+import { lookup, strings } from "./strings.js";
 
 /**
  * A pending page-level intent (021-e): one payload, tagged with the module
@@ -217,6 +218,18 @@ export function App() {
   // via onIntentHandled (`clearIntent`), so a later return to that module
   // never re-fires the same intent.
   const [pending, setPending] = useState<PendingIntent | null>(null);
+  /**
+   * The modules this profile keeps above the sidebar's categories (ADR-086),
+   * and the counter that makes a fresh write show up.
+   *
+   * An EFFECT over the active profile rather than a read at each of the three
+   * places a profile is entered — boot, a switch, and the end of the
+   * questionnaire — because a preference read in three places is one that gets
+   * read in two after the next change. The questionnaire bumps `navEpoch`: it
+   * has just written the key, and this is what re-reads it.
+   */
+  const [navEpoch, setNavEpoch] = useState(0);
+  const [pinnedModules, setPinnedModules] = useState<readonly string[]>([]);
   // The local account's lock state (ADR-018). `null` only until the very
   // first `getAuthStatus` round trip resolves.
   const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
@@ -455,18 +468,35 @@ export function App() {
     };
   }, [globalCaptureChord]);
 
+  useEffect(() => {
+    setPinnedModules(activeProfileId === null ? [] : readPinnedModules(activeProfileId));
+  }, [activeProfileId, navEpoch]);
+
   /**
-   * The sidebar's own order — `registry.byCategory()` flattened, filtered by
-   * the enabled flags — which is what Ctrl+1…Ctrl+9 count along. Deliberately
-   * NOT `resolveEnabled`: that returns registration order, and the two are
-   * only accidentally equal for today's module set.
+   * The sidebar, as the blocks it draws — the pinned „Za tebe" group this
+   * profile's plan chose (ADR-086), then the registry's categories with those
+   * modules taken out of them.
    */
-  const visibleModuleIds = useMemo(() => {
-    const enabled = new Set(resolveEnabled(registry, flags));
-    return [...registry.byCategory()].flatMap(([, members]) =>
-      members.filter((manifest) => enabled.has(manifest.id)).map((manifest) => manifest.id),
-    );
-  }, [flags]);
+  const navGroups = useMemo(
+    () => sidebarGroups(registry, new Set(resolveEnabled(registry, flags)), pinnedModules),
+    [flags, pinnedModules],
+  );
+
+  /**
+   * What Ctrl+1…Ctrl+9 count along — the SAME list the nav renders, flattened.
+   *
+   * Derived from `navGroups` rather than walked again, and that is the whole
+   * reason `sidebarGroups` exists: this used to be its own pass over
+   * `registry.byCategory()` that happened to agree with the render, and a
+   * pinned group would have renumbered the visible rows while leaving the
+   * shortcuts pointing at the old ones. (Deliberately NOT `resolveEnabled`:
+   * that returns registration order, and the two are only accidentally equal
+   * for today's module set.)
+   */
+  const visibleModuleIds = useMemo(
+    () => navGroups.flatMap((group) => group.moduleIds),
+    [navGroups],
+  );
 
   // The profile every page below is handed (ADR-058) — the state's id resolved
   // against the live list. Same-array lookups return the same object, so this
@@ -1174,6 +1204,10 @@ export function App() {
             // reach and is still being offered.
             setProfiles(demoProfile === null ? renamed : [...renamed, demoProfile]);
             setFlags(nextFlags);
+            // The questionnaire has just written the pinned modules for this
+            // profile (ADR-086); the bump is what redraws the sidebar without
+            // a reload.
+            setNavEpoch((epoch) => epoch + 1);
             setRerunOnboarding(false);
           }}
         />
@@ -1269,42 +1303,47 @@ export function App() {
               shell that never scrolls as a whole. */}
           <StarField enabled={theme === "noc"} />
           <div className="app__nav-scroll">
-            {[...registry.byCategory()].map(([category, members], index) => {
-              const visible = members.filter((manifest) => enabledIds.has(manifest.id));
-              if (visible.length === 0) return null;
+            {navGroups.map((group, index) => {
               // The manifests have always carried the grouping — the nav had
               // been rendering the groups and discarding their names, so
               // fourteen modules read as one flat list (STATUS §5 C item 13).
               // A category with no name of its own falls back to the registry
-              // key rather than rendering an empty strip.
+              // key rather than rendering an empty strip. „Za tebe" is the one
+              // heading that is NOT a category: it is a fact about this person
+              // rather than about the product, which is why `PINNED_GROUP_KEY`
+              // is deliberately not a `ModuleCategory` a manifest could claim.
               const headingId = `app-nav-category-${index}`;
+              const label =
+                group.key === PINNED_GROUP_KEY
+                  ? strings.app.navPinned
+                  : (lookup(strings.app.navCategories, group.key) ?? group.key);
               return (
                 <div
-                  key={category}
+                  key={group.key}
                   className="app__nav-group"
                   role="group"
                   aria-labelledby={headingId}
                 >
                   <h2 id={headingId} className="app__nav-group-label">
-                    {strings.app.navCategories[category] ?? category}
+                    {label}
                   </h2>
-                  {visible.map((manifest) => (
+                  {group.moduleIds.map((moduleId) => (
                     <NavItem
-                      key={manifest.id}
+                      key={moduleId}
                       href="#"
                       // The screenshot sweep's landing hook (`main/shots/`).
                       // A stable id rather than the visible label, because the
                       // label is Serbian today and a `--shots` run must keep
                       // working in whatever language the shell is serving.
-                      data-module-id={manifest.id}
-                      active={manifest.id === effectiveId}
+                      data-module-id={moduleId}
+                      active={moduleId === effectiveId}
                       onClick={(event) => {
                         event.preventDefault();
-                        setActiveId(manifest.id);
+                        setActiveId(moduleId);
                       }}
                     >
-                      {moduleIcon(manifest.id)}
-                      {moduleName(manifest.id)}
+                      {moduleIcon(moduleId)}
+                      {moduleName(moduleId)}
                     </NavItem>
                   ))}
                 </div>

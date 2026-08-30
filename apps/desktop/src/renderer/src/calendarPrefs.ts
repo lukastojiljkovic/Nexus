@@ -76,9 +76,57 @@ export function persistClock(clock: ClockPreference): void {
   localStorage.setItem(CLOCK_KEY, clock);
 }
 
+// --- Per-profile view memory ------------------------------------------------
+//
+// The one calendar preference that is NOT device-wide: which grid a profile
+// left off on, under `nexus.calendar.view.<profileId>` on `accent.ts`'s recipe.
+// It lived inside `CalendarPage` until ADR-086, which gave it a second author —
+// a profile plan opens a planner on the month and somebody working through a
+// day on the day — and a key written from two files by hand is a key that
+// drifts. Moved rather than copied: the page imports these.
+
+/** Every view the module has, in the order the toggle draws them — also what a stored value is checked against. */
+export const CALENDAR_VIEWS = [
+  "mesec",
+  "nedelja",
+  "dan",
+  "semestar",
+  "agenda",
+  "dokumenta",
+  "ljudi",
+] as const;
+
+export type CalendarView = (typeof CALENDAR_VIEWS)[number];
+
+const VIEW_KEY_PREFIX = "nexus.calendar.view.";
+
+/** Narrowing over the stored string — never a cast, so an unknown value falls through to the default. */
+export function isCalendarView(value: string | null): value is CalendarView {
+  return CALENDAR_VIEWS.some((view) => view === value);
+}
+
 /**
- * Forgets both keys, so the next read is the module's own default again — the
- * calendar's half of „Izgled“'s „Vrati na podrazumevano“ (SET §5).
+ * Which grid this profile opens on. Anything unrecognized — including a profile
+ * that has never chosen — opens on the month, the view the page has always
+ * defaulted to.
+ */
+export function readStoredCalendarView(profileId: string): CalendarView {
+  const raw = localStorage.getItem(VIEW_KEY_PREFIX + profileId);
+  return isCalendarView(raw) ? raw : "mesec";
+}
+
+export function persistCalendarView(profileId: string, view: CalendarView): void {
+  localStorage.setItem(VIEW_KEY_PREFIX + profileId, view);
+}
+
+/** Whether this profile has ever chosen — what tells a plan's SEED from an overwrite of somebody's own pick. */
+export function hasStoredCalendarView(profileId: string): boolean {
+  return isCalendarView(localStorage.getItem(VIEW_KEY_PREFIX + profileId));
+}
+
+/**
+ * Forgets both device-wide keys, so the next read is the module's own default
+ * again — the calendar's half of „Izgled“'s „Vrati na podrazumevano“ (SET §5).
  *
  * The two keys are ENUMERATED, never swept by prefix:
  * `nexus.calendar.view.<profile>` and `nexus.calendar.sources.<profile>` sit

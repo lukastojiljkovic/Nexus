@@ -1,4 +1,6 @@
-import { TOOL_PACKS } from "@nexus/core";
+import type { Signal } from "@nexus/core";
+
+import { parseSignalList } from "./signalPrefs.js";
 
 /**
  * ADR-065: the questionnaire's IN-PROGRESS state — which screen the user is on
@@ -12,8 +14,15 @@ import { TOOL_PACKS } from "@nexus/core";
  * a half-answered questionnaire is not a fact about the profile, it is a fact
  * about a session on one computer. The questionnaire's DURABLE output is the
  * explicit flag rows plus the name/theme/appetite it writes through channels
- * that already exist; the raw answers have no second reader, so a table for
- * them would be storage nobody queries.
+ * that already exist, and — since ADR-086 — the answers themselves, which are
+ * kept by `signalPrefs.ts` under a key of their own once the run completes.
+ *
+ * **The draft and the stored signals are two different things** and the
+ * difference is worth stating, since both now hold a `Signal[]`. This is what
+ * somebody is in the middle of saying and it is discarded the moment they
+ * finish; `signalPrefs.ts` holds what they SAID, and it outlives the run so the
+ * app can explain itself a year later. One is a resume point, the other is a
+ * record.
  *
  * Completion clears the key. `pruneOnboardingDrafts` carries the `profilePrefs`
  * rule — validate against the LIVE profile list, drop what names a profile that
@@ -26,36 +35,33 @@ const STORAGE_KEY_PREFIX = "nexus.onb.";
 /** Upper bound on a stored name, mirroring the main-process rule the screen itself enforces (1–80 after trimming). */
 const NAME_MAX = 80;
 
+/** Upper bound on the stored trade sentence, mirroring the field's own maximum on the screen. */
+const TRADE_MAX = 120;
+
 export interface OnboardingDraft {
-  /** The step id the user was last on — validated by the screen against its own list, since the business flow is one screen shorter. */
+  /** The step id the user was last on — validated by the screen against its own list, since a build can rename a screen. */
   readonly step: string;
   /** What has been typed into the name field so far; deliberately NOT trimmed or committed — the rename is the completion act. */
   readonly name: string;
   /**
-   * The toolkits ticked on „Tvoja nedelja“ so far.
+   * What the person has told the questionnaire so far (ADR-086).
    *
-   * Stored as an array of pack ids and read back through the live `TOOL_PACKS`
-   * list, so a draft written by a build that offered a pack this one does not
-   * simply loses that id instead of resuming into a card that no longer exists.
+   * Validated field by field on the way back in, through the same
+   * `parseSignalList` the durable store uses — one narrowing for one shape, so
+   * a signal that is safe to plan from in one place is safe in the other.
    */
-  readonly packs: readonly string[];
-  /** The „Šta ti treba?“ checkbox state: one entry per selectable module. */
-  readonly modules: Readonly<Record<string, boolean>>;
-}
-
-/** The known pack ids out of a stored array, in `TOOL_PACKS` order — anything else is dropped, not rejected. */
-function asPacks(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  const stored = new Set(value.filter((entry): entry is string => typeof entry === "string"));
-  return TOOL_PACKS.filter((pack) => stored.has(pack));
-}
-
-/** A `Record<string, boolean>` or nothing — anything with a non-boolean value is not a selection this app wrote. */
-function asModuleSelection(value: unknown): Record<string, boolean> | null {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
-  const entries = Object.entries(value);
-  if (entries.some(([, enabled]) => typeof enabled !== "boolean")) return null;
-  return Object.fromEntries(entries) as Record<string, boolean>;
+  readonly signals: readonly Signal[];
+  /**
+   * What is literally in the trade field — the one screen whose state a signal
+   * cannot record.
+   *
+   * A signal carries a recognised TERM, so the rest of the sentence somebody
+   * wrote („stolar, radim i montažu kuhinja") is not in it, and neither is the
+   * fact that a chip was dismissed. Keeping the raw text is what lets a resumed
+   * run open on the words the person actually typed and derive the dismissals
+   * by diffing what the lexicon reads now against what the draft still carries.
+   */
+  readonly trade: string;
 }
 
 /**
@@ -63,6 +69,16 @@ function asModuleSelection(value: unknown): Record<string, boolean> | null {
  * unparseable JSON, or a shape this build does not recognise. Null always means
  * „start the questionnaire from the beginning“, which is a correct answer for
  * every one of those cases.
+ *
+ * **A draft written by the ADR-065 flow reads as a NAME and nothing else, and
+ * that is deliberate.** It carries `packs` and `modules` — thirty-two ticked
+ * boxes — and there is no honest conversion from those to signals: a tick is a
+ * setting somebody chose about the software, a signal is something they said
+ * about themselves, and nothing in „Finansije: da“ tells us they would have
+ * written „vodim knjige“. So the answers are dropped, the typed name survives
+ * (the one thing that is annoying to retype), and `resumeStep` refuses the old
+ * screen id on its own — the run restarts at screen one with the name filled
+ * in. Rejecting the whole draft would have thrown the name away for nothing.
  */
 export function readOnboardingDraft(profileId: string): OnboardingDraft | null {
   const stored = localStorage.getItem(STORAGE_KEY_PREFIX + profileId);
@@ -75,15 +91,12 @@ export function readOnboardingDraft(profileId: string): OnboardingDraft | null {
   }
   if (typeof parsed !== "object" || parsed === null) return null;
   const draft = parsed as Record<string, unknown>;
-  const modules = asModuleSelection(draft["modules"]);
-  if (typeof draft["step"] !== "string" || typeof draft["name"] !== "string" || modules === null) {
-    return null;
-  }
+  if (typeof draft["step"] !== "string" || typeof draft["name"] !== "string") return null;
   return {
     step: draft["step"],
     name: draft["name"].slice(0, NAME_MAX),
-    packs: asPacks(draft["packs"]),
-    modules,
+    signals: parseSignalList(draft["signals"]),
+    trade: typeof draft["trade"] === "string" ? draft["trade"].slice(0, TRADE_MAX) : "",
   };
 }
 

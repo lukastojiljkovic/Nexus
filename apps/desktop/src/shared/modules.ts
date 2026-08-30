@@ -5221,6 +5221,84 @@ const FITNESS_WIDGETS: WidgetContract[] = [
 ];
 
 /**
+ * ADR-086's missing cards — and the reason they were missing is the finding,
+ * not the omission.
+ *
+ * „Početna" could only ever be built out of the modules that happened to
+ * publish a widget, and the five that published none are the five a
+ * professional actually lives in: Datoteke, Alatke, Tabla, Elektronika and
+ * Stručne alatke. So a bricklayer's home screen and a student's home screen
+ * were composed from the same nine cards, seven of which are about a life
+ * neither of them necessarily has — which is exactly the „every Nexus looks the
+ * same" the founder named. A profile plan that may only choose from a
+ * catalogue cannot make an app somebody's own if the catalogue itself is one
+ * shape.
+ *
+ * FOUR of the five are filled here. „Alatke" is deliberately still without a
+ * card, because its refusal is the only one of the five that survives the
+ * change of question: the other four were refused over what the AVERAGE user
+ * wants on a home screen everybody shared, and that is now the wrong question.
+ * The drawer's refusal never rested on that. It holds nothing a user wrote —
+ * its own „Nedavno" is a fact about this DEVICE, not about the profile — so a
+ * card of it would report on the machine, and would be the drawer's own rail
+ * drawn twice on one screen. `modules.test.ts` asserts both halves.
+ *
+ * All four are LISTS of the module's own most recent things, on the
+ * `notes:nedavno` recipe, and all but one take the shared row cap.
+ */
+const FILES_WIDGETS: WidgetContract[] = [
+  {
+    id: "nedavno",
+    title: "dashboard.recentFiles.title",
+    // „L" as well as S and M, unlike the other four: a file row carries a name,
+    // what it is attached to and a size, and the wide card is the only one that
+    // fits all three without an ellipsis eating the file name.
+    sizes: ["S", "M", "L"],
+    deepLink: "files",
+    configFields: [ROW_CAP],
+  },
+];
+
+const CANVAS_WIDGETS: WidgetContract[] = [
+  {
+    id: "table",
+    title: "dashboard.recentBoards.title",
+    sizes: ["S", "M"],
+    deepLink: "canvas",
+    configFields: [ROW_CAP],
+  },
+];
+
+const ELEC_WIDGETS: WidgetContract[] = [
+  {
+    id: "kola",
+    title: "dashboard.recentCircuits.title",
+    sizes: ["S", "M"],
+    deepLink: "electronics",
+    configFields: [ROW_CAP],
+  },
+];
+
+/**
+ * The professional drawer's card: the toolkits this profile carries, with how
+ * many tools each brings.
+ *
+ * NO row cap, and that is the one deliberate difference from its four
+ * neighbours. The others list things that accumulate — files, boards, circuits,
+ * tools opened — so „the five most recent" is the honest answer and the cap is
+ * a preference. This lists what somebody ASKED FOR: a profile has exactly the
+ * packs it chose, and a cap would hide a toolkit the user themselves put there.
+ */
+const PRO_WIDGETS: WidgetContract[] = [
+  {
+    id: "paketi",
+    title: "dashboard.proPacks.title",
+    sizes: ["S", "M"],
+    deepLink: "pro",
+  },
+];
+
+/**
  * FIT slice b. FOUR controls, and the count is the point in the same way UTIL's
  * is: `fit_targets` holds four independently nullable goals (migration 058) and
  * collapsing them into presets („mršavljenje", „održavanje") would be inventing
@@ -5368,14 +5446,25 @@ const V0_MODULES: ModuleManifest[] = [
   // BROWSE files; the palette is where you find the thing they belong to. Do
   // not add one.
   //
-  // NO `widgets` in v1 either: „the N newest files" is a card that answers a
-  // question nobody has — a file matters where it is attached, and the surfaces
-  // that own them already say so.
+  // ONE widget, added by ADR-086, and it reverses a recorded refusal — „the N
+  // newest files" was called a card answering a question nobody has, because a
+  // file matters where it is attached and the surfaces that own them already
+  // say so.
+  //
+  // The rule that refusal rested on is the right one and is NOT being waived:
+  // a dashboard card draws a FACT about the profile. What changed is that the
+  // rule is satisfied here — these files exist, they arrived in this order, and
+  // each row names what carries it, which is the very „where it is attached"
+  // the refusal was protecting. What was actually wrong was the question the
+  // refusal answered: it asked whether the AVERAGE user wants this card, on a
+  // home screen that was the same for everybody. It is not any more. Somebody
+  // whose week is contracts and scans gets it; nobody else is given it.
   {
     id: "files",
     prefix: "DOC",
     category: "Content & knowledge",
     defaultEnabled: true,
+    widgets: FILES_WIDGETS,
     settings: FILES_SETTINGS,
   },
   {
@@ -5526,10 +5615,15 @@ const V0_MODULES: ModuleManifest[] = [
   //
   // ON by default, like every built module except PRIV.
   //
-  // THREE contract slots stay empty, and none of them merely „not yet". No
-  // `widgets`: a dashboard card draws a FACT about the profile, and „you have 4
-  // boards" is a count nobody acts on — a thumbnail would be the honest card,
-  // and rendering one means rasterising a scene on the home screen. No
+  // TWO contract slots stay empty, and neither merely „not yet".
+  //
+  // `widgets` was the third, refused because „you have 4 boards" is a count
+  // nobody acts on and the honest card would be a thumbnail, which means
+  // rasterising a scene on the home screen. ADR-086 fills it WITHOUT touching
+  // that argument: the card is not a count and not a picture, it is the boards
+  // by NAME, most recently touched first — the same shape „Nedavne beleške"
+  // has had since DASH-003. A name somebody typed is a fact about the profile;
+  // a thumbnail is still not worth rasterising, and this card does not. No
   // `searchIndexers`: what a board holds is shapes and hand-placed text at
   // arbitrary positions, so a hit would have to say „somewhere on this board",
   // which is a result a user cannot use — and a search INSIDE a board is the
@@ -5547,6 +5641,7 @@ const V0_MODULES: ModuleManifest[] = [
     prefix: "CANV",
     category: "Professional & utilities",
     defaultEnabled: true,
+    widgets: CANVAS_WIDGETS,
   },
   // Elektronika (ELEC slice E1, migration 067) — the breadboard: a catalogue of
   // 153 components, a canvas to place them on and wires between their pins.
@@ -5566,10 +5661,13 @@ const V0_MODULES: ModuleManifest[] = [
   // „Tabla"'s situation exactly, and „Tabla" ships on. Somebody who never wires
   // anything switches it off in Settings, which is what the toggle is for.
   //
-  // THREE contract slots stay empty. No `widgets`: a dashboard card draws a
-  // FACT about the profile, and „imaš 3 kola" is a count nobody acts on — the
-  // honest card would be a thumbnail, and rendering one means drawing a
-  // schematic on the home screen. No `settings`: the module has nothing to
+  // TWO contract slots stay empty. `widgets` was the third, refused on „Tabla"'s
+  // exact terms — „imaš 3 kola" is a count nobody acts on and the honest card
+  // would be a thumbnail, which means drawing a schematic on the home screen —
+  // and filled by ADR-086 on „Tabla"'s exact terms too: the circuits by NAME,
+  // most recently touched first. Neither a count nor a picture.
+  //
+  // No `settings`: the module has nothing to
   // prefer yet, and a card with one checkbox for the sake of having a card is
   // the padding SET-006 warns about. No `imex` either, and that is not a gap:
   // the module DOES ride in every archive (`circuit`/`circuit-part`/
@@ -5592,6 +5690,7 @@ const V0_MODULES: ModuleManifest[] = [
     prefix: "ELEC",
     category: "Professional & utilities",
     defaultEnabled: true,
+    widgets: ELEC_WIDGETS,
   },
   // „Stručne alatke" (UTIL slice d) — the professional drawer itself, host to
   // every toolkit as its pack ships rather than a drawer of its own kind. Its
@@ -5626,15 +5725,24 @@ const V0_MODULES: ModuleManifest[] = [
   // because a VAT rate is a fact about the country you are in. Nor is the pack
   // picker itself hiding in this slot: a pack decides what the drawer CONTAINS
   // rather than how it behaves, so it belongs beside the tools it grants, not
-  // among behavioural preferences. No `widgets`: a dashboard card draws a FACT
-  // about the profile and this module holds none. No `searchIndexers`: there
-  // is nothing here a query could find, because nothing a user writes is kept.
-  // No `imex`: nothing to export.
+  // among behavioural preferences.
+  //
+  // ONE widget since ADR-086, and it is the pack picker's fact rather than the
+  // drawer's contents. The refusal was „a dashboard card draws a FACT about the
+  // profile and this module holds none", which is true of everything the drawer
+  // COMPUTES — a tool stores nothing — and false of what it CONTAINS: which
+  // toolkits a profile carries is a `pack:` row somebody chose, as much a fact
+  // about them as any task. That is the card, and it is the one card ADR-086
+  // most needs: for a tradesman it is the thing that makes the home screen
+  // theirs rather than a stranger's. No `searchIndexers`: there is nothing here
+  // a query could find, because nothing a user writes is kept. No `imex`:
+  // nothing to export.
   {
     id: "pro",
     prefix: "PRO",
     category: "Professional & utilities",
     defaultEnabled: false,
+    widgets: PRO_WIDGETS,
     tools: PRO_TOOLS,
   },
 ];

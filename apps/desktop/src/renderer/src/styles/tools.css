@@ -944,14 +944,6 @@
   grid-template-columns: repeat(auto-fill, minmax(212px, 1fr));
   gap: var(--nx-space-2);
 }
-/* Capped and scrollable — for a list inside something that cannot grow: the
-   onboarding card (a centred grid with no scroll of its own) and the picker
-   dialog. The Settings card omits it, because a nested scroller inside a page
-   that already scrolls is a trap for the wheel. */
-.pro-kits--capped {
-  max-height: 46vh;
-  overflow-y: auto;
-}
 /* A `<button>` wearing a card: `font: inherit` and the explicit colours are
    what stop the UA stylesheet from making it 13px Arial and centre-aligned. */
 .pro-kit {

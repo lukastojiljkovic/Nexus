@@ -277,10 +277,10 @@ describe("buildSettingsIndex", () => {
     const actual = buildSettingsIndex(registry)
       .entries.filter((entry) => entry.section === "modules")
       .map((entry) => entry.id);
-    // The „Moduli“ card also holds ADR-065's „ponovo pokreni upitnik“ row,
-    // which is a control rather than a module of its own; it is a fixed entry,
-    // so it leads, and the per-module rows follow whole and in gallery order.
-    expect(actual).toEqual(["modules-onboarding", ...expected]);
+    // The „Moduli“ card is now nothing but modules: ADR-065's „ponovo pokreni
+    // upitnik“ row moved to „Kako je Nexus podešen za tebe“ when ADR-086 made
+    // the questionnaire about more than this gallery.
+    expect(actual).toEqual(expected);
   });
 
   it("labels a module row with the sidebar's name and keywords it with its description", () => {

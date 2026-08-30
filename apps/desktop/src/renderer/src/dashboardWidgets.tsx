@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType, ReactNode } from "react";
 import {
   computeHabitStreak,
@@ -16,6 +16,8 @@ import type { WidgetContract } from "@nexus/core";
 import { Button, Checkbox, Chip, EmptyState, Icon, ListRow, LoadingState } from "@nexus/ui";
 import type { IconName } from "@nexus/ui";
 import { FIT_MEAL_SLOTS } from "../../shared/ipc.js";
+import { createModuleRegistry } from "../../shared/modules.js";
+import { packInventory, resolvePackSelection } from "../../shared/onboardingPresets.js";
 import type { Event, Exam, Subject } from "../../shared/ipc.js";
 import { buildCalendarItems } from "./calendarItems.js";
 import type { CalendarItem, CalendarSource } from "./calendarItems.js";
@@ -36,6 +38,7 @@ import {
   localTodayKey,
   shiftDayKey,
 } from "./examDates.js";
+import { formatFileSize } from "./fileRows.js";
 import { formatKcal, macroGoals } from "./fitDay.js";
 import { focusSessionMinutes, formatDurationMinutes, formatPhaseClock } from "./focusFormat.js";
 import {
@@ -1288,6 +1291,184 @@ function FitnessTrainingWidget({ profileId, onOpenModule }: DashboardWidgetBodyP
   );
 }
 
+// --- ADR-086: the modules that published no card ----------------------------
+//
+// „Početna" could only ever be composed out of the modules that happened to
+// publish a widget, and the five that published none — Datoteke, Alatke,
+// Tabla, Elektronika, Stručne alatke — are the five a professional lives in.
+// Four are drawn below; „Alatke" stays without one, because its own „Nedavno"
+// is a fact about the DEVICE rather than about the profile. See `FILES_WIDGETS`
+// in `shared/modules.ts` for the argument; what follows is the drawing.
+
+/** „Nedavne datoteke" — every attachment the profile's public surfaces carry, newest first. */
+function RecentFilesWidget({ profileId, contract, config, onOpenModule }: DashboardWidgetBodyProps) {
+  const load = useCallback(
+    // The page's own „sve" filter, and deliberately the same call: „Datoteke"
+    // already answers newest-first and already leaves the private section
+    // structurally absent, so a card that narrowed the query itself would be a
+    // second definition of what a file is.
+    () => window.nexus.listAttachments(profileId, { ownerKind: null, family: null, query: "" }),
+    [profileId],
+  );
+  const { state, retry } = useWidgetData(load);
+  const s = strings.dashboard.recentFiles;
+
+  return (
+    <WidgetData state={state} retry={retry}>
+      {(list) => {
+        const cfg = parseWidgetConfig(contract, config);
+        const recent = list.entries.slice(0, widgetCount(cfg, "count"));
+        if (recent.length === 0) return <EmptyState variant="inline" title={s.empty} />;
+        return (
+          <div className="dash__list">
+            {recent.map((entry) => (
+              <DashRow
+                key={entry.id}
+                onClick={() => onOpenModule("files")}
+                trailing={<span className="dash__num">{formatFileSize(entry.sizeBytes)}</span>}
+              >
+                <RowText
+                  title={entry.fileName}
+                  // What carries the file, which is how somebody recognizes it:
+                  // „ugovor.pdf" says little, „ugovor.pdf — Krov, Novi Sad"
+                  // says everything. An untitled owner gets the page's own word
+                  // rather than an invented one.
+                  meta={entry.ownerTitle.trim().length > 0 ? entry.ownerTitle : s.untitledOwner}
+                />
+              </DashRow>
+            ))}
+          </div>
+        );
+      }}
+    </WidgetData>
+  );
+}
+
+/** „Nedavne table" — CANV's boards, most recently touched first. */
+function RecentBoardsWidget({
+  profileId,
+  contract,
+  config,
+  onOpenModule,
+}: DashboardWidgetBodyProps) {
+  const load = useCallback(() => window.nexus.listCanvasBoards(profileId), [profileId]);
+  const { state, retry } = useWidgetData(load);
+  const s = strings.dashboard.recentBoards;
+
+  return (
+    <WidgetData state={state} retry={retry}>
+      {(boards) => {
+        const cfg = parseWidgetConfig(contract, config);
+        // Copied before sorting — the array is this widget's loaded state, and
+        // sorting in place would be a render mutating what it renders.
+        const recent = [...boards]
+          .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.id.localeCompare(a.id))
+          .slice(0, widgetCount(cfg, "count"));
+        if (recent.length === 0) return <EmptyState variant="inline" title={s.empty} />;
+        return (
+          <div className="dash__list">
+            {recent.map((board) => (
+              <DashRow
+                key={board.id}
+                onClick={() => onOpenModule("canvas")}
+                trailing={
+                  <span className="dash__num">{formatNotificationWhen(board.updatedAt)}</span>
+                }
+              >
+                <RowText title={board.name} />
+              </DashRow>
+            ))}
+          </div>
+        );
+      }}
+    </WidgetData>
+  );
+}
+
+/** „Nedavna kola" — ELEC's circuits, most recently touched first. */
+function RecentCircuitsWidget({
+  profileId,
+  contract,
+  config,
+  onOpenModule,
+}: DashboardWidgetBodyProps) {
+  const load = useCallback(() => window.nexus.listCircuits(profileId), [profileId]);
+  const { state, retry } = useWidgetData(load);
+  const s = strings.dashboard.recentCircuits;
+
+  return (
+    <WidgetData state={state} retry={retry}>
+      {(circuits) => {
+        const cfg = parseWidgetConfig(contract, config);
+        const recent = [...circuits]
+          .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.id.localeCompare(a.id))
+          .slice(0, widgetCount(cfg, "count"));
+        if (recent.length === 0) return <EmptyState variant="inline" title={s.empty} />;
+        return (
+          <div className="dash__list">
+            {recent.map((circuit) => (
+              <DashRow
+                key={circuit.id}
+                onClick={() => onOpenModule("electronics")}
+                trailing={
+                  <span className="dash__num">{formatNotificationWhen(circuit.updatedAt)}</span>
+                }
+              >
+                <RowText title={circuit.name} />
+              </DashRow>
+            ))}
+          </div>
+        );
+      }}
+    </WidgetData>
+  );
+}
+
+/**
+ * „Tvoje stručne alatke" — the toolkits this profile carries, with how many
+ * tools each brings.
+ *
+ * The one card that reads FLAGS rather than rows, because that is where a pack
+ * lives (`pack:<id>` under `feature_flags`), and `enabledModules` carries only
+ * module ids. It is one call and it is the card's whole data source.
+ */
+function ProPacksWidget({ profileId, onOpenModule }: DashboardWidgetBodyProps) {
+  const load = useCallback(() => window.nexus.getFlags(profileId), [profileId]);
+  const { state, retry } = useWidgetData(load);
+  const s = strings.dashboard.proPacks;
+  // `packInventory` is the drawer's own inventory: only packs that HAVE tools,
+  // in `TOOL_PACKS` order. Built ONCE — it walks every manifest and every
+  // tool, and this is a card on a screen that redraws — which is `ProPacks`'
+  // own idiom for the same call.
+  const inventory = useMemo(() => packInventory(createModuleRegistry()), []);
+
+  return (
+    <WidgetData state={state} retry={retry}>
+      {(flags) => {
+        const chosen = resolvePackSelection(flags);
+        // A profile cannot have chosen a pack the inventory does not hold, so
+        // the intersection can only shrink when a pack's tools leave the build
+        // — which is exactly when the row should stop drawing.
+        const rows = inventory.filter((entry) => chosen.has(entry.pack));
+        if (rows.length === 0) return <EmptyState variant="inline" title={s.empty} />;
+        return (
+          <div className="dash__list">
+            {rows.map(({ pack, toolCount }) => (
+              <DashRow
+                key={pack}
+                onClick={() => onOpenModule("pro")}
+                trailing={<span className="dash__num">{toolCount}</span>}
+              >
+                <RowText title={strings.pro.packs[pack].name} meta={strings.pro.packs[pack].who} />
+              </DashRow>
+            ))}
+          </div>
+        );
+      }}
+    </WidgetData>
+  );
+}
+
 // --- The registry-driven map (ADR-045 section 3) ----------------------------
 
 /** How the page draws one placement: the body, and whether it draws at all. */
@@ -1332,4 +1513,11 @@ export const DASHBOARD_WIDGETS: Record<string, DashboardWidgetRenderer> = {
   "focus:fokus": { Body: FocusWidget, visible: (enabled) => enabled.has("focus") },
   "fitness:danas": { Body: FitnessTodayWidget, visible: (enabled) => enabled.has("fitness") },
   "fitness:trening": { Body: FitnessTrainingWidget, visible: (enabled) => enabled.has("fitness") },
+  "files:nedavno": { Body: RecentFilesWidget, visible: (enabled) => enabled.has("files") },
+  "canvas:table": { Body: RecentBoardsWidget, visible: (enabled) => enabled.has("canvas") },
+  "electronics:kola": {
+    Body: RecentCircuitsWidget,
+    visible: (enabled) => enabled.has("electronics"),
+  },
+  "pro:paketi": { Body: ProPacksWidget, visible: (enabled) => enabled.has("pro") },
 };

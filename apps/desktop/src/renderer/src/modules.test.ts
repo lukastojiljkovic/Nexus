@@ -235,7 +235,7 @@ describe("createModuleRegistry", () => {
     expect(registry.all().find((manifest) => manifest.id === "priv")?.searchIndexers).toBeUndefined();
   });
 
-  it("keeps DOC a pure browse surface: no widgets, and no second index over file names", () => {
+  it("keeps DOC out of the palette, and gives it the one card ADR-086 argued for", () => {
     const registry = createModuleRegistry();
     // An attachment's file name already rides its owning row's indexed body
     // (migrations 025/048). An indexer here would put every file into the
@@ -243,7 +243,34 @@ describe("createModuleRegistry", () => {
     // manifest's own comment. „Datoteke" is where you browse files; the palette
     // is where you find the thing they belong to.
     expect(registry.all().find((manifest) => manifest.id === "files")?.searchIndexers).toBeUndefined();
-    expect(registry.widgetsOf("files")).toEqual([]);
+    // The widget half of that pair was ALSO a decision, and ADR-086 reversed
+    // it — so this asserts the new one rather than being deleted: exactly one
+    // card, and it is the recent-files list the manifest now argues for.
+    expect(registry.widgetsOf("files").map((widget) => widget.id)).toEqual(["nedavno"]);
+  });
+
+  /**
+   * The other three reversals of the same rule („a dashboard card draws a FACT
+   * about the profile"), asserted together because they are one decision. Each
+   * module publishes exactly ONE card and it is the one its manifest names — a
+   * second card appearing here means somebody added one without arguing it.
+   */
+  it("gives CANV, ELEC and PRO the one card each that ADR-086 argued for", () => {
+    const registry = createModuleRegistry();
+    expect(registry.widgetsOf("canvas").map((widget) => widget.id)).toEqual(["table"]);
+    expect(registry.widgetsOf("electronics").map((widget) => widget.id)).toEqual(["kola"]);
+    expect(registry.widgetsOf("pro").map((widget) => widget.id)).toEqual(["paketi"]);
+  });
+
+  /**
+   * And the one that was NOT reversed, which is the half that keeps the rule a
+   * rule. „Alatke" holds nothing a user wrote: its „Nedavno" is a fact about
+   * this DEVICE, so a card of it would be the home screen reporting on the
+   * machine rather than on the person — and it would be the drawer's own rail,
+   * drawn twice on one screen.
+   */
+  it("still keeps UTIL's drawer off the dashboard", () => {
+    expect(createModuleRegistry().widgetsOf("tools")).toEqual([]);
   });
 
   it("keeps HABIT's searchIndexer slot empty while slice c fills the other two", () => {

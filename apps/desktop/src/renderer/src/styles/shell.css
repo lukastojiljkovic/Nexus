@@ -702,7 +702,16 @@ body {
    are these two and a difference between them would read as two products. */
 .onb {
   flex: 1;
+  /* Both of these exist so the card's `max-height: 100%` can RESOLVE, and each
+     fixes a different link in the chain. A flex item's `min-height` is `auto`,
+     which refuses to shrink below its content — without the `0` this element
+     grows with the card and pushes the shell past the window instead of
+     bounding it. And an `auto` row track is sized BY its item, so a percentage
+     measured against it is circular and the browser drops it: `minmax(0, 1fr)`
+     makes the track the container's own height, which is definite. */
+  min-height: 0;
   display: grid;
+  grid-template-rows: minmax(0, 1fr);
   place-items: center;
   padding: var(--nx-space-6);
   position: relative;
@@ -791,6 +800,194 @@ body {
   gap: var(--nx-space-1);
 }
 
+/* ADR-086 — „Čime se baviš?", „Priprema" and „Evo tvog Nexusa" -----------
+   The week, tempo and „drži na oku" screens draw `.pro-kit` cards and need no
+   rule of their own: a chosen thing looks the same everywhere in this app, so
+   the drawer's block is worn rather than copied. What follows is only what
+   those three screens genuinely add. */
+
+/* A small label over a group of controls — the theme picker's own rhythm,
+   shared rather than respelled, because „Prepoznato" and „Ili izaberi šta
+   radiš:" sit in exactly the same relation to what is under them. */
+.onb__group-label {
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-muted);
+  font-weight: var(--nx-font-weight-medium);
+}
+.onb__heard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+.onb__heard-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+}
+/* The recognition receipt: the person's own word, what it opened, and a way to
+   take it back. Accent border + soft background — the house „this one" recipe,
+   the same one `.pro-kit--on` wears — because a chip here IS a live choice and
+   not a static tag, which is also why it is not `.nx-chip`. */
+.onb__heard-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  padding: 4px var(--nx-space-2) 4px var(--nx-space-3);
+  border: 1px solid var(--nx-accent);
+  border-radius: var(--nx-radius-round);
+  background: var(--nx-accent-soft);
+  font-size: var(--nx-font-size-body-sm);
+}
+.onb__heard-term {
+  font-weight: var(--nx-font-weight-medium);
+}
+.onb__heard-packs {
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-caption);
+}
+.onb__heard-drop {
+  display: grid;
+  place-items: center;
+  /* 24px, not the 20px the glyph wants: dropping a recognised trade is the one
+     destructive control on the screen and it may not be the hardest to hit. */
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: var(--nx-radius-round);
+  background: transparent;
+  color: var(--nx-text-muted);
+  font: inherit;
+  font-size: var(--nx-font-size-caption);
+  cursor: pointer;
+}
+.onb__heard-drop:hover {
+  color: var(--nx-text);
+}
+.onb__heard-drop:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 1px;
+}
+/* The activity chips — the net under the lexicon, for whoever it does not
+   recognise. A pill rather than a card: a card would make fourteen verbs look
+   like fourteen decisions, where the field above is the real question and these
+   are the shortcut. */
+.onb__acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+}
+.onb__act {
+  padding: 6px var(--nx-space-3);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-round);
+  background: var(--nx-surface);
+  color: var(--nx-text);
+  font: inherit;
+  font-size: var(--nx-font-size-body-sm);
+  cursor: pointer;
+}
+.onb__act:hover {
+  border-color: var(--nx-border-strong);
+}
+.onb__act--on {
+  border-color: var(--nx-accent);
+  background: var(--nx-accent-soft);
+}
+.onb__act:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+
+/* „Priprema": a determinate rail, because the progress IS determinate — five
+   stages, and the screen knows which one is being written. The transition is
+   the only motion on the screen and @nexus/ui's blanket reduced-motion rule
+   already flattens it. */
+.onb__progress {
+  height: 4px;
+  border-radius: var(--nx-radius-round);
+  background: var(--nx-surface-alt);
+  overflow: hidden;
+}
+.onb__progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--nx-accent);
+  transition: width var(--nx-motion-base) var(--nx-motion-ease);
+}
+.onb__stages {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.onb__stage {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  color: var(--nx-text-subtle);
+  font-size: var(--nx-font-size-body-sm);
+}
+.onb__stage--done {
+  color: var(--nx-text-muted);
+}
+/* The line being written: gold text plus weight and the brand glyph, the app's
+   single active-state recipe. No spinner, and nothing that moves. */
+.onb__stage--now {
+  color: var(--nx-text);
+  font-weight: var(--nx-font-weight-medium);
+}
+/* A fixed column for the marker, so a line does not shift sideways when its
+   glyph changes from „·“ to „✦“ to „✓“. */
+.onb__stage-mark {
+  flex: none;
+  width: 1em;
+  text-align: center;
+  color: var(--nx-text-subtle);
+}
+.onb__stage--now .onb__stage-mark {
+  color: var(--nx-accent);
+}
+.onb__stage--done .onb__stage-mark {
+  color: var(--nx-success);
+}
+
+/* „Evo tvog Nexusa": one line per decision, each generated from the plan's own
+   reasons. The glyph is the brand's, marking a thing the app did.
+
+   Worn by TWO surfaces — the questionnaire's reveal and „Podešavanja → Kako je
+   Nexus podešen za tebe" — and deliberately not copied under a `.set__` name:
+   they render the same object through the same `planReasonLines`, and a second
+   rule is how one of them would start looking like a different answer. The
+   recognition chips above (`.onb__heard-list`) are shared for the same reason. */
+.onb__reasons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.onb__reason {
+  display: flex;
+  align-items: baseline;
+  gap: var(--nx-space-2);
+  font-size: var(--nx-font-size-body-sm);
+  line-height: var(--nx-font-leading-normal);
+}
+.onb__reason-mark {
+  flex: none;
+  color: var(--nx-accent);
+}
+/* The terminal action of the whole flow, and the only button on its screen —
+   so it takes the width rather than sitting in a row with nothing beside it. */
+.onb__enter {
+  width: 100%;
+}
+
 /* The two PICKING screens („Tvoja nedelja“ and „Šta ti treba?“) are wider than
    the three that ask one question each.
 
@@ -811,18 +1008,17 @@ body {
    how the questionnaire and the drawer would end up disagreeing about what a
    chosen toolkit looks like. */
 
-/* „Šta ti treba?“: the Settings module gallery's own rows. Capped and scrollable
-   so a growing registry can never push the card past the viewport — the shell is
-   a centred grid with no scroll of its own. The groups sit on a reflowing grid
-   for the reason the toolkits do, and `start` keeps a short group from stretching
-   its rows to the height of the tall one beside it. */
+/* „Šta ti treba?“: the Settings module gallery's own rows. NOT capped and NOT
+   scrollable — the card scrolls now, and a scroller inside a scroller is what
+   cut „Dizajn i grafika" in half mid-row on the one screen that has two lists.
+   The groups sit on a reflowing grid for the reason the toolkits do, and `start`
+   keeps a short group from stretching its rows to the height of the tall one
+   beside it. */
 .onb__modules {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   align-items: start;
   gap: var(--nx-space-2) var(--nx-space-6);
-  max-height: 46vh;
-  overflow-y: auto;
 }
 .onb__module-group {
   display: flex;
@@ -876,8 +1072,16 @@ body {
    is available, not advertised, so no border and no fill. */
 .onb__quiet {
   align-self: center;
+  /* The half of `.set__reset` that was not copied the first time: the LOOK is
+     typographic, the TARGET is not. Text at caption size is 14.8px tall, which
+     is a link, not a control — every other bare-text button in this app states
+     `min-height: 24px`, and these two fell out of that convention because the
+     screens they live on had never been photographed. */
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
   margin: 0;
-  padding: 0;
+  padding: 0 var(--nx-space-2);
   border: none;
   border-radius: var(--nx-radius-xs);
   background: transparent;
@@ -907,6 +1111,15 @@ body {
   place-items: center;
   padding: var(--nx-space-6);
 }
+/* The same bounding `.onb` gets, and only on the full-window screen: `.auth` is
+   reused NESTED inside `.priv__gate`, on a page that already scrolls, where a
+   second scroller would be a trap for the wheel. Nothing changes visually today
+   — the lock screen's card is short — but the recovery panel is the one screen
+   here that can grow, and the alternative to scrolling is being cut in half. */
+.auth--sky {
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
+}
 /* The sky, and ONLY on the full-window lock screen.
    `.auth` is reused nested inside the private section's own gate
    (`.priv__gate`), which lives on a page that scrolls — and a gradient on a
@@ -928,10 +1141,27 @@ body {
 }
 /* The card has to sit ON the sky rather than dissolve into it: on Noć the
    ground behind it is now a gradient, and a surface-coloured card at the
-   gradient's lighter end has almost no edge left. */
+   gradient's lighter end has almost no edge left.
+
+   AND THE CARD IS THE SCROLLER — the rule three separate `vh` caps used to work
+   around. „the shell is a centred grid with no scroll of its own" was written
+   down three times as the reason a list had to be capped, and each cap bounded
+   the ONE list it was written for; everything that is not a capped list (a
+   title, a description, the recognised-trade chips, the actions row) still fell
+   off the bottom. 900×600 proved it: „Čime se baviš?" ran 121px past the window
+   with „Dalje" below the fold and no way to reach it.
+
+   The scroll belongs on the CARD and not on the shell, because both shells host
+   the star field as an absolutely positioned `z-index: -1` layer and a scrolling
+   parent would carry the sky up with the content. `max-height: 100%` measures
+   the grid area, which both shells make definite above — so the card is never
+   taller than the window, at any size, for any registry, and nothing is cut off
+   at either end. */
 .auth--sky .auth__card,
 .onb__card {
   position: relative;
+  max-height: 100%;
+  overflow-y: auto;
   box-shadow: var(--nx-elevation-lifted), inset 0 1px 0 var(--nx-material-edge);
 }
 .auth__card {

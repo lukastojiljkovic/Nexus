@@ -54,10 +54,14 @@ import {
   readStoredSources,
 } from "./calendarItems.js";
 import {
+  CALENDAR_VIEWS,
   formatClockLabel,
   localMinutesOfDay,
+  persistCalendarView,
+  readStoredCalendarView,
   readStoredClock,
   readStoredEventDuration,
+  type CalendarView,
   type ClockPreference,
 } from "./calendarPrefs.js";
 import type {
@@ -80,22 +84,6 @@ import { dayUnit, strings } from "./strings.js";
 import { moduleName } from "./moduleName.js";
 import { CalendarHourRing } from "./CalendarHourRing.js";
 
-// --- Per-profile view memory (interim, mirrors TasksPage) -------------------
-//
-// Mesec / Nedelja / Dan / Semestar / Agenda / Dokumenta / Ljudi is a lightweight
-// UI preference, persisted per profile in localStorage exactly like the tasks
-// list/kanban toggle.
-type CalendarView = "mesec" | "nedelja" | "dan" | "semestar" | "agenda" | "dokumenta" | "ljudi";
-/** Every view, in the order the toggle draws them — also what a stored value is checked against. */
-const CALENDAR_VIEWS = [
-  "mesec",
-  "nedelja",
-  "dan",
-  "semestar",
-  "agenda",
-  "dokumenta",
-  "ljudi",
-] as const satisfies readonly CalendarView[];
 // A function, not a module-scope const, so a language switch relabels the
 // view toggle on the next render instead of freezing it at import.
 function viewLabel(): Record<CalendarView, string> {
@@ -109,26 +97,9 @@ function viewLabel(): Record<CalendarView, string> {
     ljudi: strings.calendar.viewLjudi,
   };
 }
-const VIEW_KEY_PREFIX = "nexus.calendar.view.";
-
 /** The two views that replace the whole event surface with a panel of their own. */
 function isPanelView(view: CalendarView): boolean {
   return view === "dokumenta" || view === "ljudi";
-}
-
-/** Narrowing helper over the stored string — never a cast, so an unknown value falls through to the default. */
-function isCalendarView(value: string | null): value is CalendarView {
-  return CALENDAR_VIEWS.some((view) => view === value);
-}
-
-function readStoredView(profileId: string): CalendarView {
-  // Anything unrecognized — including a profile that has never chosen — opens
-  // on the month, the view this page has always defaulted to.
-  const raw = localStorage.getItem(VIEW_KEY_PREFIX + profileId);
-  return isCalendarView(raw) ? raw : "mesec";
-}
-function persistView(profileId: string, view: CalendarView): void {
-  localStorage.setItem(VIEW_KEY_PREFIX + profileId, view);
 }
 
 /** Serbian Latin tailoring — plain `"sr"` mis-orders š/č/ć (the house pattern every alphabetical list here follows). */
@@ -567,7 +538,7 @@ export function CalendarPage({
       ? { start: term.semesterStart, end: term.semesterEnd }
       : null;
   const [failed, setFailed] = useState(false);
-  const [view, setView] = useState<CalendarView>(() => readStoredView(profileId));
+  const [view, setView] = useState<CalendarView>(() => readStoredCalendarView(profileId));
   const [sources, setSources] = useState<ReadonlySet<CalendarSource>>(() =>
     readStoredSources(profileId),
   );
@@ -716,7 +687,7 @@ export function CalendarPage({
 
   function selectView(next: CalendarView): void {
     setView(next);
-    persistView(profileId, next);
+    persistCalendarView(profileId, next);
   }
 
   function toggleSource(source: CalendarSource): void {

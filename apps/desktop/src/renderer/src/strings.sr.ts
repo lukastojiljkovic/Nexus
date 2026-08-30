@@ -72,6 +72,14 @@ export const sr = {
       "Professional & utilities": "Rad",
       "Growth & platform": "Rast",
     } satisfies Record<string, string>,
+    /**
+     * The sidebar's one heading that is not a category (ADR-086): the modules
+     * this profile's own answers put at the top. „Za tebe" and not „Omiljeno" —
+     * nobody marked these as favourites, the app placed them, and the honest
+     * word says so. „Podešavanja → Kako je Nexus podešen za tebe" is where it
+     * says why, and where somebody changes it.
+     */
+    navPinned: "Za tebe",
     themeToggle: "Promeni temu",
     themeDan: "Dan",
     themeNoc: "Noć",
@@ -167,6 +175,157 @@ export const sr = {
     nameLabel: "Ime profila",
     namePlaceholder: "Upiši ime",
     themeLabel: "Tema",
+    /**
+     * ADR-086's four questions, and what makes them different from the two they
+     * replaced: every one of them is about the PERSON and none is about the
+     * software. „Do you want the Finance module" is the questionnaire asking the
+     * user to do its job; „do you want Nexus to keep an eye on money" is a
+     * question anybody can answer about themselves. The mapping from the second
+     * to the first lives in `buildProfilePlan`, where it can be argued with.
+     */
+    week: {
+      title: "Na šta ti odlazi nedelja?",
+      description: "Izaberi najviše dve — one na koje stvarno ode najviše vremena.",
+      /** Said out loud, the „remindersNoChoice" idiom: choosing nothing is an answer here. */
+      noChoice: "Ako ništa ne izabereš, Nexus kreće standardno.",
+      shapes: {
+        posao: { name: "Posao", desc: "Radim za nekoga — zadaci, sastanci, rokovi." },
+        skola: { name: "Škola i fakultet", desc: "Predavanja, ispiti, učenje." },
+        dom: { name: "Dom i porodica", desc: "Kuća, računi, obaveze koje ne čekaju." },
+        kondicija: { name: "Trening i zdravlje", desc: "Vežbanje, navike, san i ishrana." },
+        stvaranje: { name: "Stvaranje", desc: "Pišem, crtam, gradim nešto svoje." },
+        firma: { name: "Svoja firma", desc: "Klijenti, ponude, naplata." },
+      } satisfies Record<string, { name: string; desc: string }>,
+    },
+    /**
+     * The screen that replaced eighteen toolkit cards with one text field.
+     *
+     * The cards were „the same taxonomy with fewer boxes": eighteen packs
+     * regrouped, and a person outside the eighteen still has nowhere to be. A
+     * field the user writes their own word into fails OPEN — the lexicon reads
+     * „zidar" in every case Serbian inflects it into — and the activity chips
+     * below the rule are the net for whoever it does not know.
+     */
+    trade: {
+      title: "Čime se baviš?",
+      description:
+        "Napiši svojim rečima. Nexus prepoznaje posao i dodaje alatke za njega — ništa ne menja tvoje podatke.",
+      label: "Tvoj posao",
+      placeholder: "npr. stolar, advokat, fotografkinja, vodim knjige",
+      /** The recognition receipt. Quotes the person's own word back, then what it opened. */
+      heard: "Prepoznato",
+      /** Removing one chip un-says it — the recognition is a suggestion, not a verdict. */
+      remove: "Ukloni",
+      activitiesLabel: "Ili izaberi šta radiš:",
+      noChoice:
+        "Ako ne prepoznam ništa, ništa se ne dodaje — stručne alatke uključuješ kasnije, kad zatrebaju.",
+      /** One per `TRADE_ACTIVITIES` id. A verb, because the question is what somebody DOES. */
+      activities: {
+        "mere-sece": "Merim i sečem",
+        ponude: "Pravim ponude i predračune",
+        teren: "Radim na terenu",
+        predaje: "Držim nastavu",
+        ugovori: "Pišem ugovore",
+        vozi: "Vozim i isporučujem",
+        kuva: "Kuvam",
+        snima: "Snimam i fotografišem",
+        kod: "Pišem kod",
+        svira: "Sviram",
+        knjige: "Vodim knjige",
+        dogadjaji: "Organizujem događaje",
+        trenira: "Treniram druge",
+        prevodi: "Prevodim i lektorišem",
+      } satisfies Record<string, string>,
+    },
+    /** Not what somebody does but HOW — and it decides what every module opens on. */
+    tempo: {
+      title: "Kako ti izgleda dan?",
+      description: "Izaberi jedno — po ovome Nexus bira šta ti prvo pokazuje.",
+      noChoice: "Ako preskočiš, sve ostaje kako je i menjaš u hodu.",
+      options: {
+        planer: { name: "Planiram unapred", desc: "Volim da vidim ceo mesec pre nego što krene." },
+        reaktivan: { name: "Rešavam kako naiđe", desc: "Bitno mi je šta je danas i šta kasni." },
+        beleznik: { name: "Prvo zapišem", desc: "Sve ide u beleške, pa se posle složi." },
+      } satisfies Record<string, { name: string; desc: string }>,
+    },
+    /** Asked about CONTENT, never about modules — the honest form of the same question. */
+    keep: {
+      title: "Šta hoćeš da ti Nexus drži na oku?",
+      description: "Izaberi koliko god hoćeš, ili ništa.",
+      noChoice: "Ništa od ovoga nije obavezno — sve se uključuje i isključuje kasnije.",
+      options: {
+        novac: { name: "Novac", desc: "Računi, pretplate, ko još nije platio." },
+        zdravlje: { name: "Zdravlje i navike", desc: "Ono što se meri iz dana u dan." },
+        dokumenta: { name: "Dokumenta", desc: "Ugovori, lične isprave, rokovi važenja." },
+        ideje: { name: "Ideje i beleške", desc: "Da mi ništa ne propadne." },
+        privatno: {
+          name: "Nešto samo moje",
+          desc: "Zaključana sekcija — otvara se posebnom lozinkom.",
+        },
+      } satisfies Record<string, { name: string; desc: string }>,
+    },
+    /**
+     * The „Priprema" screen. It narrates REAL steps — each line is a thing that
+     * is actually being written — because a progress screen that invents its
+     * stages is the one kind of loading screen a user is right to resent.
+     */
+    prepare: {
+      title: "Sklapam tvoj Nexus",
+      description: "Nameštam početnu, meni i boje prema tvojim odgovorima.",
+      stages: {
+        packs: "Uključujem alatke",
+        modules: "Nameštam module",
+        board: "Slažem početnu",
+        look: "Biram boju i ritam",
+        done: "Završavam",
+      } satisfies Record<string, string>,
+    },
+    /**
+     * „Evo tvog Nexusa" — the receipt.
+     *
+     * Every line is generated from `plan.reasons`, so the app can only say what
+     * it actually did: a decision with no sentence here is a decision law 4
+     * makes unrepresentable. The screen exists because an app that reshapes
+     * itself without saying so is an app that feels broken rather than personal.
+     */
+    reveal: {
+      title: "Evo tvog Nexusa",
+      description: "Ovako smo ga složili. Sve može da se menja — u Podešavanjima, kad god.",
+      /** The Serbian list conjunction (`joinList`) — „A, B i C". */
+      and: "i",
+      heard: "Tvoje reči",
+      /**
+       * The participle is a VERB here („složili smo ih") and not an adjective
+       * agreeing with the noun, which it cannot be: a composed board is 3–6
+       * cards, so `{unit}` is „kartice" at three and „kartica" — genitive
+       * plural — at five, and one modifier cannot be right for both.
+       */
+      board: "Početna ti ima {count} {unit} — složili smo ih prema tvojim odgovorima.",
+      boardUnitOne: "karticu",
+      boardUnitFew: "kartice",
+      boardUnitMany: "kartica",
+      packs: "Uključene su alatke za: {packs}.",
+      nav: "U meniju su ti prvi: {modules}.",
+      priv: "Privatna sekcija je uključena — otvara se posebnom lozinkom.",
+      calendar: "Kalendar se otvara na prikazu „{view}“.",
+      accent: "Boja aplikacije je {colour}.",
+      /** What a run where nothing was answered says. Not an apology: it is a legitimate answer. */
+      nothing: "Bez odgovora Nexus kreće standardno — sve podešavaš kad zatreba.",
+      enter: "Uđi u Nexus",
+      /** The escape hatch, quiet: ADR-065's two checkbox screens survive as this. */
+      advanced: "Podesi ručno",
+    },
+    /**
+     * „Napredno" — ADR-065's two screens, kept.
+     *
+     * They were the whole questionnaire and are now the override: reachable from
+     * the reveal and from Podešavanja, never on the path. A person who wants to
+     * tick thirty-two boxes should be able to; nobody should have to.
+     */
+    advancedTitle: "Podesi ručno",
+    advancedDescription:
+      "Ovde biraš tačno šta hoćeš. Ista lista stoji i u Podešavanjima → Moduli, pa ništa ovde nije poslednja prilika.",
+    advancedSave: "Sačuvaj",
     /**
      * Screen 2 — „Tvoja nedelja". Which toolkits „Stručne alatke" carries.
      *
@@ -527,6 +686,34 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     recentNotes: {
       title: "Nedavne beleške",
       empty: "Još nema beležaka",
+    },
+    /**
+     * ADR-086's four cards, for four of the five modules that published none —
+     * „Alatke" is the fifth and deliberately still has none, because its
+     * history is a fact about this DEVICE rather than about the profile.
+     *
+     * Each empty line says what is MISSING rather than that something went
+     * wrong: a fresh profile has no files and no boards, and that is not a
+     * failure to report.
+     */
+    recentFiles: {
+      title: "Nedavne datoteke",
+      empty: "Još nema datoteka",
+      /** DOC's own word for a carrier with no title — the page draws the same one. */
+      untitledOwner: "Bez naslova",
+    },
+    recentBoards: {
+      title: "Nedavne table",
+      empty: "Još nema tabli",
+    },
+    recentCircuits: {
+      title: "Nedavna kola",
+      empty: "Još nema kola",
+    },
+    /** Not „nedavno": a profile has the toolkits it chose, so this lists them all. */
+    proPacks: {
+      title: "Tvoje stručne alatke",
+      empty: "Nijedan paket još nije uključen",
     },
     /** FIN slice d: what the subscriptions' rules say is coming — never a row, always the schedule. */
     renewals: {
@@ -5307,6 +5494,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       focus: "Fokus",
       fitness: "Fitnes",
       tools: "Alatke",
+      setup: "Kako je Nexus podešen za tebe",
       modules: "Moduli",
       packs: "Paketi alatki",
       risk: "Napomene uz stručne alatke",
@@ -5738,16 +5926,49 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     modulesAlwaysOn: "Uvek uključeno",
     modulesToggleError: "Promena nije uspela. Pokušaj ponovo.",
     /**
-     * ADR-065 §5 — the one row that reopens the onboarding questionnaire. It
-     * sits at the foot of this card because the questionnaire's third screen IS
-     * this gallery, only asked as a question; the caption states the two things
-     * a rerun could otherwise be feared to do, since it starts from what the
-     * profile has and writes only what changes.
+     * ADR-065 §5, moved by ADR-086 — the one row that reopens the
+     * questionnaire.
+     *
+     * It used to sit at the foot of „Moduli", on the argument that the
+     * questionnaire's third screen WAS that gallery. It is not any more: the
+     * flow asks four questions about the person and decides the board, the
+     * sidebar, the accent and the calendar as well as the modules, so the row
+     * belongs on the card that explains all of that. The gallery survives
+     * inside the flow as „Podesi ručno", which is an override rather than a
+     * step.
+     *
+     * The caption states the two things a rerun could otherwise be feared to
+     * do, since it starts from what the profile has and writes only what
+     * changes.
      */
-    onboardingRerunTitle: "Podešavanje modula",
+    onboardingRerunTitle: "Tvoji odgovori",
     onboardingRerunAction: "Ponovo pokreni upitnik",
     onboardingRerunCaption:
       "Ista pitanja kao pri prvom pokretanju — kreće od onoga što sada imaš i menja samo ono što promeniš.",
+    /**
+     * ADR-086 §5 — „Kako je Nexus podešen za tebe".
+     *
+     * The card exists because an app that reshapes itself and never says so is
+     * an app that feels broken rather than personal. It rebuilds the plan from
+     * the stored ANSWERS, so what it says is what the current build would do
+     * with what the person actually said — never a sentence written beside a
+     * decision and free to drift from it.
+     */
+    setup: {
+      description:
+        "Nexus se složio prema tvojim odgovorima pri prvom pokretanju. Evo šta je od toga izašlo.",
+      /** No stored answers: not an apology, and not a nag — the standard app is a legitimate answer. */
+      none: "Pitanja nisu popunjena, pa Nexus stoji standardno. Sve možeš da podesiš i odavde, ručno.",
+      /**
+       * Forgetting is separated from changing, and it says exactly what it
+       * does: the answers go, the app stays as it is. A person who wants the
+       * standard app back gets it by turning things off, not by deleting a
+       * record — otherwise „zaboravi" would be an undo nobody asked for.
+       */
+      forget: "Zaboravi odgovore",
+      forgetHint:
+        "Briše sačuvane odgovore sa ovog uređaja. Ništa se ne vraća unazad — aplikacija ostaje kako jeste.",
+    },
     /** NTF-008 appetite presets — shortcuts over the per-source toggles below. */
     notificationPresets: {
       /** The row's own name, so the three buttons stop being an unlabelled bar at the top of the card. */

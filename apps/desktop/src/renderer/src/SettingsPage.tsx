@@ -5,6 +5,7 @@ import { Button, Card, Checkbox, Chip, EmptyState, PageHeader, Select, TextField
 import {
   ARCHIVE_MODULE_IDS,
   buildLlmPrompt,
+  buildProfilePlan,
   chordAccelerator,
   chordFromEvent,
   enabledPacks,
@@ -83,6 +84,9 @@ import { Kbd } from "./ShortcutsDialog.js";
 import { clearStoredAccent, persistAccent, readStoredAccent } from "./accent.js";
 import { ProfileAvatar } from "./profileAvatar.js";
 import { ProPackList } from "./ProPacks.js";
+import { resolveModuleSelection } from "../../shared/onboardingPresets.js";
+import { heardTrades, planReasonLines } from "./profilePlanCopy.js";
+import { clearStoredSignals, readStoredSignals } from "./signalPrefs.js";
 import { profileDisplayName } from "./profilePrefs.js";
 import {
   clearStoredWeekStart,
@@ -158,7 +162,15 @@ function sectionDomId(sectionId: string): string {
  * contents. An index whose entries are not in the order of the thing they index
  * is worse than none — the reader learns it lies on the first click.
  */
-const SHELL_SECTIONS_BEFORE_MODULES = ["profile", "profiles", "security", "appearance"] as const;
+const SHELL_SECTIONS_BEFORE_MODULES = [
+  "profile",
+  "profiles",
+  "security",
+  "appearance",
+  // ADR-086: the explanation card. Last of the shell's own cards and the first thing
+  // before the module cards, because it summarises both halves.
+  "setup",
+] as const;
 const SHELL_SECTIONS_AFTER_MODULES = [
   "shortcuts",
   "modules",
@@ -4776,6 +4788,104 @@ function LicencesSection() {
   );
 }
 
+interface SetupSectionProps {
+  profileId: string;
+  flags: FlagState;
+  registry: ModuleRegistry;
+  hits: ReadonlySet<string>;
+  onRerunOnboarding: () => void;
+}
+
+/**
+ * ADR-086 §5 — „Kako je Nexus podešen za tebe".
+ *
+ * The plan is REBUILT here from the stored answers, never read back from a
+ * stored plan, and that is the whole reason the ANSWERS are what get stored: a
+ * plan is a snapshot of what one build's registry could compose, where a plan
+ * rebuilt from the same answers next year names the modules and cards that
+ * exist then. It also means this card cannot drift from the questionnaire's own
+ * reveal, because both render `planReasonLines` over the same object.
+ *
+ * It is rebuilt against the profile's LIVE flags, so the sentence about modules
+ * describes the app as it now stands rather than as it stood the day it was
+ * answered — somebody who has since switched Finansije off is not told it was
+ * turned on for them.
+ */
+function SetupSection({ profileId, flags, registry, hits, onRerunOnboarding }: SetupSectionProps) {
+  const s = strings.settings.setup;
+  const [signals, setSignals] = useState(() => readStoredSignals(profileId));
+  const plan = useMemo(
+    () => buildProfilePlan(signals, registry, resolveModuleSelection(registry, flags)),
+    [signals, registry, flags],
+  );
+  const trades = heardTrades(plan);
+  const lines = planReasonLines(plan);
+  const answered = signals.length > 0;
+
+  return (
+    <>
+      <p className="set__section-caption">{answered ? s.description : s.none}</p>
+      {/* What it HEARD, in the person's own spelling, before anything it
+          decided — the reveal's own opening, for the same reason. */}
+      {trades.length > 0 && (
+        <div className="onb__heard-list">
+          {trades.map((entry) => (
+            <Chip key={entry.term} variant="accent">
+              {entry.term} → {entry.packs}
+            </Chip>
+          ))}
+        </div>
+      )}
+      {lines.length > 0 && (
+        <ul className="onb__reasons">
+          {lines.map((line) => (
+            <li key={line} className="onb__reason">
+              <span className="onb__reason-mark" aria-hidden="true">
+                ✦
+              </span>
+              <span>{line}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="set__module-row set__module-row--foot">
+        <div className="set__module-info">
+          <span className={labelClass("set__module-name", hits.has("modules-onboarding"))}>
+            {strings.settings.onboardingRerunTitle}
+          </span>
+          <span className="set__module-desc">{strings.settings.onboardingRerunCaption}</span>
+        </div>
+        <Button size="sm" onClick={onRerunOnboarding}>
+          {strings.settings.onboardingRerunAction}
+        </Button>
+      </div>
+      {/* Forgetting is quiet and typographic, the `ResetLink` idiom, and it is
+          offered only where there is something to forget. It deliberately does
+          NOT undo: the answers go, the app stays exactly as it is, which is
+          what the hint says. An „erase" that also reverted the app would be an
+          undo nobody asked for, reaching settings the person may since have
+          changed by hand. */}
+      {answered && (
+        <>
+          <p className={labelClass("set__section-caption", hits.has("setup-forget"))}>
+            {s.forgetHint}
+          </p>
+          <button
+            type="button"
+            className="set__reset"
+            onClick={() => {
+              clearStoredSignals(profileId);
+              setSignals([]);
+            }}
+          >
+            {s.forget}
+          </button>
+        </>
+      )}
+    </>
+  );
+}
+
 export interface SettingsPageProps {
   profileId: string;
   profileName: string;
@@ -5234,6 +5344,24 @@ export function SettingsPage({
         />
       </Card>
 
+      {/* ADR-086 §5 — why this profile's Nexus looks the way it does.
+          Directly under „Izgled" because it explains the accent that card
+          holds, and directly above the module cards because it explains those
+          too; a summary belongs before the detail it summarises. */}
+      <Card
+        id={sectionDomId("setup")}
+        title={strings.settings.sectionTitle.setup}
+        className={sectionClass(sections.has("setup"))}
+      >
+        <SetupSection
+          profileId={profileId}
+          flags={flags}
+          registry={registry}
+          hits={hits}
+          onRerunOnboarding={onRerunOnboarding}
+        />
+      </Card>
+
       {/* Every card a MODULE owns, composed from the registry in registry order
           (`manifest.settings`). Nothing is drawn for a module the profile has
           switched off — a card for a section the sidebar does not show would be
@@ -5323,22 +5451,6 @@ export function SettingsPage({
           </div>
         ))}
         {modulesError != null && <p className="set__error">{modulesError}</p>}
-        {/* ADR-065 §5 — the questionnaire's third screen IS this gallery, only
-            asked as a question, so its way back in belongs at this card's foot
-            rather than in a card of its own. */}
-        <div className="set__module-row set__module-row--foot">
-          <div className="set__module-info">
-            <span
-              className={labelClass("set__module-name", hits.has("modules-onboarding"))}
-            >
-              {strings.settings.onboardingRerunTitle}
-            </span>
-            <span className="set__module-desc">{strings.settings.onboardingRerunCaption}</span>
-          </div>
-          <Button size="sm" onClick={onRerunOnboarding}>
-            {strings.settings.onboardingRerunAction}
-          </Button>
-        </div>
       </Card>
 
       {/* The picker, inline rather than behind the drawer's dialog: this is the
