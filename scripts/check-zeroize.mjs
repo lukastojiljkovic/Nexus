@@ -45,6 +45,7 @@ import { pathToFileURL } from "node:url";
 import { relative } from "node:path";
 
 import { REPO_ROOT, findScanFiles } from "./check-colours.mjs";
+import { stripComments } from "./strip-comments.mjs";
 
 /** What the `finally` must be releasing for this gate to have an opinion. */
 const RELEASE = "zeroize(";
@@ -114,7 +115,16 @@ function block(text, from) {
  * a gate whose rule can only be exercised against the real repository is a gate
  * that can only be observed passing.
  */
-export function scanSource(text) {
+export function scanSource(source) {
+  // Comments blanked first, and this gate needs it more than the two that
+  // already did. `check:egress` learned that a gate firing on prose about itself
+  // teaches people to stop writing the prose; here the prose IS the mitigation —
+  // the defect is invisible in correct-looking code, so every file that meets it
+  // is supposed to quote the wrong shape and say why it is wrong. `round.ts`
+  // does exactly that in its header, and was this gate's first false failure.
+  // `stripComments` keeps the newlines, so a reported line is still the right
+  // one.
+  const text = stripComments(source);
   const problems = [];
   const sync = localSyncFunctions(text);
   let at = 0;

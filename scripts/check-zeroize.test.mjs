@@ -131,6 +131,38 @@ describe("scanSource — what must NOT trip it", () => {
     expect(hits(source)).toEqual([]);
   });
 
+  it("ignores the defect QUOTED IN A COMMENT, which is how a file warns about it", () => {
+    // The gate's first false failure, and the one that matters most: this defect
+    // is invisible in correct-looking code, so a file that meets it is supposed
+    // to write the wrong shape down and say why. A gate that punished that would
+    // be deleting its own documentation.
+    const source = [
+      "/**",
+      " * Never `try { return syncOnce(x) } finally { keys.zeroize() }`, which",
+      " * erases the keys AT THE RETURN STATEMENT.",
+      " */",
+      "async function round() {",
+      "  return await syncOnce(x);",
+      "}",
+    ].join("\n");
+    expect(hits(source)).toEqual([]);
+  });
+
+  it("still reports the real thing on the line under the comment that describes it", () => {
+    // Blanking must not move anything: the finding's line number is what a
+    // reader opens the file at, and a stripper that deleted rather than blanked
+    // would point three lines short of the defect.
+    const source = [
+      "// try { return openAll(mk) } finally { zeroize(mk) } is the trap.",
+      "try {",
+      "  return openAll(deps, masterKey);",
+      "} finally {",
+      "  zeroize(masterKey);",
+      "}",
+    ].join("\n");
+    expect(scanSource(source)).toEqual([{ line: 3, statement: "return openAll(" }]);
+  });
+
   it("ignores a bare `return` and a returned identifier", () => {
     const source = [
       "try {",
