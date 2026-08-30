@@ -8,16 +8,26 @@ import type { Plugin } from "vite";
 // Workspace packages are consumed as TypeScript source, so they must be BUNDLED
 // into the main/preload output rather than externalized and require()d at
 // runtime (Node cannot execute their raw .ts).
-const NEXUS_WORKSPACE = [
-  "@nexus/core",
-  "@nexus/db",
-  "@nexus/ui",
-  "@nexus/tokens",
-  "@nexus/sync",
-  "@nexus/sync-crypto",
-  "@nexus/sync-port",
-  "@nexus/sync-transport",
-];
+//
+// DERIVED from this app's own dependencies, and it used to be a hand-written
+// list of eight names. That list was a second declaration of „which of our
+// dependencies are workspace packages", and the first one is three metres away
+// in `package.json` — so adding `@nexus/sync-engine` there and forgetting it
+// here was a build that SUCCEEDED, a typecheck that passed, a lint that passed
+// and 1 700 tests that passed, because every one of them reads TypeScript source
+// and none of them runs the packaged main process. The only thing that could see
+// it was launching the app: `ERR_MODULE_NOT_FOUND … sync-engine/src/round.js`,
+// Electron resolving a bare `./round.js` inside a package that ships none.
+// Derived, the ninth package is bundled the day it is depended on.
+const NEXUS_WORKSPACE = Object.entries(
+  (
+    JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")) as {
+      dependencies?: Record<string, string>;
+    }
+  ).dependencies ?? {},
+)
+  .filter(([, range]) => range.startsWith("workspace:"))
+  .map(([name]) => name);
 
 /**
  * Production-only renderer hardening. Injects a strict CSP (SEC-EL-05,
