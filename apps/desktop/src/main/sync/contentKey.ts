@@ -97,8 +97,17 @@ export interface ContentKeySet {
    * Erase every generation. Idempotent, and after it `keyFor` answers `null`
    * rather than 32 zero bytes — a zeroed key is still a key as far as an AEAD is
    * concerned, and one that „works" is worse than one that is absent.
+   *
+   * NOT called `close`, and the name is the point. `check:zeroize` exists
+   * because a key released in a `finally` beside a `return` of an async call is
+   * erased in the MIDDLE of that call, and the gate recognises the release by
+   * the substring `zeroize(` — narrowly, because `close(` is what a database, a
+   * file and a socket are released with and a gate that fired on all of them
+   * would be switched off. So a set released as `keys.close()` would sit exactly
+   * outside the reach of the rule written for it (DC-61), while `keys.zeroize()`
+   * is inside it for every caller that will ever be written.
    */
-  readonly close: () => void;
+  readonly zeroize: () => void;
 }
 
 export type OpenContentKeyResult =
@@ -233,12 +242,12 @@ async function openAll(
 ): Promise<OpenContentKeyResult> {
   const keys = new Map<number, Uint8Array>();
   const unopenable: number[] = [];
-  const close = (): void => {
+  const erase = (): void => {
     for (const key of keys.values()) zeroize(key);
     keys.clear();
   };
   const give = (reason: ContentKeyProblem, detail: string): OpenContentKeyResult => {
-    close();
+    erase();
     return refused(reason, detail);
   };
 
@@ -285,7 +294,7 @@ async function openAll(
       keyFor: (epoch: number) => keys.get(epoch) ?? null,
       minted,
       unopenable,
-      close,
+      zeroize: erase,
     },
   };
 }

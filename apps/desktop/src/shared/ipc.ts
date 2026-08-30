@@ -906,6 +906,15 @@ export const IpcChannel = {
   syncResume: "sync:resume",
   syncReconnect: "sync:reconnect",
   syncDisconnect: "sync:disconnect",
+  // The loop itself, and the three things a screen needs of it. `sync:activity`
+  // is the read a page does when it opens; `sync:activity-changed` is main
+  // pushing the same view on every phase change, so a page that stays open
+  // watches instead of polling a five-minute cadence once a second. `sync:now`
+  // is the user's button, and it is also the way back from a halt: pressing it
+  // is the evidence that whatever the loop stopped for has been dealt with.
+  syncNow: "sync:now",
+  syncActivity: "sync:activity",
+  syncActivityChanged: "sync:activity-changed",
   appInfo: "app:info",
 } as const;
 
@@ -8066,6 +8075,91 @@ export interface SyncStatusView {
 }
 
 /**
+ * Why the last sync round did not do what it set out to. Machine codes, never
+ * prose — the renderer maps each to its own Serbian sentence, as
+ * {@link SyncEnableProblem} does.
+ *
+ * Declared HERE and derived in main rather than the other way round, for the
+ * reason the three view types are: the renderer has to have a sentence for every
+ * member, and a second declaration of the list is a member that eventually has
+ * no sentence. `main/sync/round.ts` takes all of these except `nonce_reuse` —
+ * that one is not a refusal to run a round, it is what a round that RAN came
+ * back and said.
+ */
+export type SyncProblem =
+  /** Cloud is off for this launch, or this build carries no project. */
+  | "cloud_off"
+  /** Sync has never been turned on for this computer. */
+  | "not_enabled"
+  /** The database is locked, so there is no data key to open anything with. */
+  | "locked"
+  /** No live session, and the stored token did not buy one. */
+  | "signed_out"
+  /** The server could not be reached, or answered with nothing to learn from. */
+  | "offline"
+  /** The session is dead, or this device has been revoked. */
+  | "forbidden"
+  /** The server served something this build cannot read as its own data. */
+  | "malformed"
+  /**
+   * This machine holds no key that opens what it would have to seal or read.
+   * Waiting does not fix it — pairing or the Recovery Kit does.
+   */
+  | "key_unavailable"
+  /** The key slot was taken and then read back empty: a server disagreeing with itself. */
+  | "contested"
+  /**
+   * A content key was used twice with one nonce. Latched — sync does not come
+   * back for this profile until the key has been rotated, and the user is told
+   * so rather than watching a loop that silently never succeeds.
+   */
+  | "nonce_reuse";
+
+/**
+ * What sync is doing right now.
+ *
+ * `problem` is one field rather than „why it stopped" and „what the last round
+ * said" separately, because a screen given both has to decide which one it
+ * means — and the failure of deciding wrong is telling the user their session
+ * died when their wifi dropped. `phase` is what says whether the loop will try
+ * again.
+ */
+export interface SyncActivityView {
+  /** The profile the loop is bound to, or null when nothing is open. */
+  profileId: string | null;
+  /** `waiting` between rounds, `running` during one, `halted`/`stopped` when it will not try again on its own. */
+  phase: "stopped" | "waiting" | "running" | "halted";
+  problem: SyncProblem | null;
+  /** Epoch milliseconds of the next scheduled round, or null when none is. */
+  nextRunAt: number | null;
+  /** Epoch milliseconds of the last round's end, or null before the first. */
+  lastRunAt: number | null;
+  /**
+   * What the last round moved. Null before the first one.
+   *
+   * FOUR of the engine's six, and the two that are missing are missing on
+   * purpose. `pulled` counts rows fetched, including the ones this device
+   * already had, so „Preuzeto" is `applied` — the number that describes what
+   * actually changed here. `conflicts` counts pushes the server refused because
+   * a peer's row was newer, which the next round merges by itself; it is a fact
+   * about the protocol working, not about the user's data. Neither has a Serbian
+   * sentence, and a number on a contract that no surface names is a number
+   * nobody reads (DC-55). They come back the day a screen has a name for them.
+   */
+  lastRound: {
+    /** Rows from other devices written into this one. */
+    applied: number;
+    pushed: number;
+    /** Rows the server served that this device could not open. They are kept, not dropped. */
+    quarantined: number;
+    /** Local changes still waiting to be sent. */
+    owed: number;
+  } | null;
+  /** Consecutive failed rounds. Zero after any round that did not fail. */
+  failures: number;
+}
+
+/**
  * Why turning sync on was refused. Machine codes, never prose — the renderer
  * maps each to its own Serbian sentence, exactly as `BackupRunErrorCode` does.
  *
@@ -9575,5 +9669,16 @@ export interface NexusApi {
   reconnectSync(request: { password: string; deviceName: string }): Promise<SyncReconnectView>;
   /** Retires this computer's device row, ends its session, and forgets its copy of the master key. Coming back needs pairing or the Recovery Kit. */
   disconnectSync(): Promise<SyncStatusView>;
+  /** What sync is doing right now. Read once on mount; every change after that arrives through `onSyncActivity`. */
+  syncActivity(): Promise<SyncActivityView>;
+  /**
+   * Runs a round now, whatever the loop was waiting for — and it is also the way
+   * back from a halt, since pressing it is the evidence that whatever stopped
+   * the loop has been dealt with. Answers with the activity on the way out; what
+   * the round finds arrives through `onSyncActivity`.
+   */
+  syncNow(): Promise<SyncActivityView>;
+  /** Subscribes to every change in what sync is doing. Returns an unsubscribe function. */
+  onSyncActivity(listener: (activity: SyncActivityView) => void): () => void;
   appInfo(): Promise<AppInfo>;
 }

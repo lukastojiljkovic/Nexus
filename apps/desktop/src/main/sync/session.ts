@@ -30,8 +30,16 @@
  * refresh loop in the main process would keep an account signed in — and keep a
  * socket warm — on a machine whose user has closed every window and believes the
  * app is idle. {@link freshAccessToken} refreshes when a call is about to be
- * made and the token would not survive it, which means the network is used
- * exactly when the user's own action needs it.
+ * made and the token would not survive it, so the network is used when something
+ * is actually about to be sent.
+ *
+ * The sync loop repeats, so „something is about to be sent" now happens without
+ * the user doing anything — and the difference still holds: the loop decides
+ * when a ROUND runs, and a round asks for a token because it has a request to
+ * make. Nothing here keeps a session alive on its own account. What the loop did
+ * add is {@link accessTokenForRound}, because a refresh spends the STORED token
+ * and a repeating caller that never writes the new one back leaves the next
+ * launch unable to resume.
  */
 
 import { parseSession, refreshRequest, type AuthPort, type AuthSession } from "@nexus/sync-transport";
@@ -117,4 +125,45 @@ export async function freshAccessToken(
   // must not go on using it as though it had not been.
   holder.setSession(refreshed.value);
   return refreshed.value.accessToken;
+}
+
+/**
+ * What {@link accessTokenForRound} needs besides the ports: somewhere to write a
+ * refresh token that has just been rotated away.
+ */
+export interface RotationSink {
+  /** Store the token the next launch must resume from. Called only on a rotation. */
+  readonly persist: (refreshToken: string) => void;
+}
+
+/**
+ * {@link freshAccessToken}, plus the write-back a repeating caller cannot do
+ * without.
+ *
+ * GoTrue rotates the refresh token on every use, so a refresh SPENDS the stored
+ * one. That was harmless while every refresh happened inside a user's own action
+ * — `resume` writes the new token back in the same breath — and it stops being
+ * harmless the moment something repeats on a timer: a loop that refreshes twelve
+ * times an hour and a machine that is then closed leaves `sync_account` holding a
+ * token twelve rotations dead, and the next launch's one-request resume fails.
+ * The user is asked for a password to fix a problem the app made for itself.
+ *
+ * A FAILED refresh writes nothing, deliberately. `freshAccessToken` clears the
+ * in-memory holder on any refusal, which is right for a value that costs one
+ * request to rebuild — but a refusal can be a server having a bad minute, and
+ * erasing the stored token on one would turn a 502 into „type your password
+ * again". The stored token stays; the next attempt spends it or learns it is
+ * gone.
+ */
+export async function accessTokenForRound(
+  port: AuthPort,
+  holder: SessionHolder,
+  sink: RotationSink,
+  nowSeconds: number,
+): Promise<string | null> {
+  const before = holder.current()?.refreshToken ?? null;
+  const token = await freshAccessToken(port, holder, nowSeconds);
+  const after = holder.current()?.refreshToken ?? null;
+  if (after !== null && after !== before) sink.persist(after);
+  return token;
 }

@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Button, Checkbox, TextField } from "@nexus/ui";
-import type { SyncEnableProblem, SyncStatusView } from "../../shared/ipc.js";
+import type { SyncActivityView, SyncEnableProblem, SyncStatusView } from "../../shared/ipc.js";
 import { ConfirmDialog } from "./ConfirmDialog.js";
 import { labelClass } from "./settingsSearch.js";
-import { strings } from "./strings.js";
+import { fill, strings } from "./strings.js";
 import { syncCardState } from "./syncCardState.js";
-import { formatArchiveInstant } from "./timeFormat.js";
+import { formatArchiveInstant, formatClockTime } from "./timeFormat.js";
 
 export interface SyncSectionProps {
   /** The settings filter's current matches, for the typographic hit mark. */
@@ -534,6 +534,8 @@ export function SyncSection({ hits }: SyncSectionProps) {
             </form>
           )}
 
+          <SyncActivityPanel hits={hits} />
+
           <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("sync-disconnect"))}>
             {s.disconnectTitle}
           </h3>
@@ -556,6 +558,137 @@ export function SyncSection({ hits }: SyncSectionProps) {
           onCancel={() => setConfirmingDisconnect(false)}
         />
       )}
+    </>
+  );
+}
+
+/**
+ * „Stanje sinhronizacije" — what the loop is doing, and the button that makes it
+ * do it now.
+ *
+ * ─── It watches, it does not poll ───────────────────────────────────────────
+ *
+ * One read on mount and then a subscription. Main pushes on every phase change,
+ * so the alternative — asking once a second about a five-minute cadence — would
+ * make this card the busiest thing in the process and still be behind by up to a
+ * second. The unsubscribe is returned by the bridge and called on unmount, which
+ * is what stops main from sending into a window that has gone.
+ *
+ * ─── One sentence, and it is always the true one ────────────────────────────
+ *
+ * `problem` outranks everything except a round actually in flight, because a
+ * device that is backing off is „waiting" and „offline" at the same time and the
+ * useful half is the second one. Two lines saying `Sve je usklađeno` and
+ * `Server nije dostupan` at once is the shape this avoids.
+ *
+ * ─── Its own component, and its own state ───────────────────────────────────
+ *
+ * Not more fields on `SyncSection`. It is only ever drawn inside the enabled
+ * branch, its subscription's lifetime is exactly its own, and the card above it
+ * must keep working if this one fails to load: an activity that never arrives
+ * leaves the account, the device row and the disconnect button exactly as they
+ * were.
+ */
+function SyncActivityPanel({ hits }: SyncSectionProps) {
+  const s = strings.settings.sync.activity;
+  const [activity, setActivity] = useState<SyncActivityView | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const view = await window.nexus.syncActivity();
+        if (!cancelled) setActivity(view);
+      } catch (activityError) {
+        // Nothing to say to the user: the rest of the card is about the account,
+        // and it is unaffected by not knowing what the loop is doing.
+        console.error("Nexus: reading the sync activity failed:", activityError);
+      }
+    })();
+    const unsubscribe = window.nexus.onSyncActivity((next) => {
+      if (!cancelled) setActivity(next);
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, []);
+
+  async function runNow(): Promise<void> {
+    if (busy) return;
+    setBusy(true);
+    try {
+      // The answer is the activity on the way out — „running", most of the time.
+      // What the round FINDS arrives on the subscription, which is why this does
+      // not await a round it has no way to await.
+      setActivity(await window.nexus.syncNow());
+    } catch (nowError) {
+      console.error("Nexus: starting a sync round failed:", nowError);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (activity === null) return null;
+
+  const headline =
+    activity.phase === "running"
+      ? s.running
+      : activity.problem !== null
+        ? s.problems[activity.problem]
+        : activity.lastRunAt === null
+          ? s.idle
+          : s.synced;
+
+  const round = activity.lastRound;
+  return (
+    <>
+      <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("sync-activity"))}>
+        {s.title}
+      </h3>
+      <p className="app__description">{headline}</p>
+      {activity.phase === "waiting" && activity.nextRunAt !== null && (
+        <p className="set__section-caption">
+          {fill(s.nextAt, { time: formatClockTime(new Date(activity.nextRunAt)) })}
+        </p>
+      )}
+      {activity.phase !== "waiting" && activity.lastRunAt !== null && (
+        <p className="set__section-caption">
+          {fill(s.lastAt, { time: formatClockTime(new Date(activity.lastRunAt)) })}
+        </p>
+      )}
+      {round !== null && (
+        <dl className="app__facts">
+          <div>
+            <dt>{s.applied}</dt>
+            <dd>{round.applied}</dd>
+          </div>
+          <div>
+            <dt>{s.pushed}</dt>
+            <dd>{round.pushed}</dd>
+          </div>
+          <div>
+            <dt>{s.owed}</dt>
+            <dd>{round.owed}</dd>
+          </div>
+          {/* Only when there is something to say. A permanent „Nečitljivo: 0" row
+              teaches the user to stop reading the number that matters. */}
+          {round.quarantined > 0 && (
+            <div>
+              <dt>{s.quarantined}</dt>
+              <dd>{round.quarantined}</dd>
+            </div>
+          )}
+        </dl>
+      )}
+      <Button
+        size="sm"
+        disabled={busy || activity.phase === "running"}
+        onClick={() => void runNow()}
+      >
+        {busy || activity.phase === "running" ? s.working : s.now}
+      </Button>
     </>
   );
 }

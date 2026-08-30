@@ -4,6 +4,7 @@ import type { AuthPort, AuthSession, HttpResponse } from "@nexus/sync-transport"
 
 import {
   REFRESH_MARGIN_SECONDS,
+  accessTokenForRound,
   createSessionHolder,
   freshAccessToken,
   needsRefresh,
@@ -80,20 +81,21 @@ describe("needsRefresh", () => {
   });
 });
 
-describe("freshAccessToken", () => {
-  const port = (responses: readonly HttpResponse[]): { port: AuthPort; paths: string[] } => {
-    const paths: string[] = [];
-    let index = 0;
-    return {
-      paths,
-      port: async (request) => {
-        paths.push(request.path);
-        const response = responses[Math.min(index, responses.length - 1)];
-        index += 1;
-        return response ?? { status: 500, body: "{}" };
-      },
-    };
+const port = (responses: readonly HttpResponse[]): { port: AuthPort; paths: string[] } => {
+  const paths: string[] = [];
+  let index = 0;
+  return {
+    paths,
+    port: async (request) => {
+      paths.push(request.path);
+      const response = responses[Math.min(index, responses.length - 1)];
+      index += 1;
+      return response ?? { status: 500, body: "{}" };
+    },
   };
+};
+
+describe("freshAccessToken", () => {
 
   it("answers null when nothing is signed in, which is not an error", async () => {
     const { port: auth, paths } = port([]);
@@ -139,5 +141,67 @@ describe("freshAccessToken", () => {
 
     expect(await freshAccessToken(auth, holder, 999_999)).toBeNull();
     expect(holder.current()).toBeNull();
+  });
+});
+
+/**
+ * The half `freshAccessToken` cannot do, and the reason it needs doing at all:
+ * a refresh SPENDS the stored token. One inside a user's action is written back
+ * in the same breath by `resume`; one inside a loop that repeats every five
+ * minutes is not, and a machine closed after twelve of them holds a token twelve
+ * rotations dead.
+ */
+describe("accessTokenForRound", () => {
+  const sink = (): { persist: (token: string) => void; wrote: string[] } => {
+    const wrote: string[] = [];
+    return { persist: (token) => wrote.push(token), wrote };
+  };
+
+  it("writes the rotated token back", async () => {
+    const holder = createSessionHolder();
+    holder.setSession(session({}, 1_000_000));
+    const next = token("session-one", "aal1", 2_000_000);
+    const { port: auth } = port([
+      { status: 200, body: JSON.stringify({ access_token: next, refresh_token: "refresh-two" }) },
+    ]);
+    const store = sink();
+
+    expect(await accessTokenForRound(auth, holder, store, 999_999)).toBe(next);
+    expect(store.wrote).toEqual(["refresh-two"]);
+  });
+
+  /** No rotation, nothing to write. A round every five minutes must not be a write every five minutes. */
+  it("writes nothing when the token was still good", async () => {
+    const holder = createSessionHolder();
+    holder.setSession(session({}, 1_000_000));
+    const { port: auth, paths } = port([]);
+    const store = sink();
+
+    expect(await accessTokenForRound(auth, holder, store, 900_000)).toBe(holder.accessToken());
+    expect(paths).toEqual([]);
+    expect(store.wrote).toEqual([]);
+  });
+
+  /**
+   * A refusal can be a server having a bad minute. Erasing the stored token on
+   * one would turn a 502 into „type your password again" — so the write-back
+   * happens on a rotation and on nothing else.
+   */
+  it("leaves the stored token alone when the refresh is refused", async () => {
+    const holder = createSessionHolder();
+    holder.setSession(session({}, 1_000_000));
+    const { port: auth } = port([{ status: 502, body: "" }]);
+    const store = sink();
+
+    expect(await accessTokenForRound(auth, holder, store, 999_999)).toBeNull();
+    expect(holder.current()).toBeNull();
+    expect(store.wrote).toEqual([]);
+  });
+
+  it("writes nothing when nothing is signed in", async () => {
+    const { port: auth } = port([]);
+    const store = sink();
+    expect(await accessTokenForRound(auth, createSessionHolder(), store, 0)).toBeNull();
+    expect(store.wrote).toEqual([]);
   });
 });

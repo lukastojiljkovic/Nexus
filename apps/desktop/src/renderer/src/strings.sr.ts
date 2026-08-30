@@ -46,6 +46,7 @@ import type {
   RestoreProblemCode,
   SyncAdoptProblem,
   SyncEnableProblem,
+  SyncProblem,
   SyncReconnectProblem,
 } from "../../shared/ipc.js";
 import type { ClockPreference } from "./calendarPrefs.js";
@@ -7265,6 +7266,44 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       } satisfies Record<SyncEnableProblem, string>,
       error: "Uključivanje sinhronizacije nije uspelo. Pokušaj ponovo.",
       disconnectError: "Odjava nije uspela. Pokušaj ponovo.",
+      /**
+       * What sync is doing right now.
+       *
+       * One headline sentence, never two: `problems` carries the reason when
+       * there is one, and `synced`/`running`/`idle` cover the case where there
+       * is none. Same discipline as `errors` — the table is `satisfies
+       * Record<SyncProblem, string>`, so a reason the core adds and nobody names
+       * here breaks the build rather than reaching the user as an empty row.
+       */
+      activity: {
+        title: "Stanje sinhronizacije",
+        running: "Sinhronizacija je u toku…",
+        synced: "Sve je usklađeno.",
+        idle: "Čeka se prva sinhronizacija.",
+        nextAt: "Sledeća provera u {time}.",
+        lastAt: "Poslednja provera u {time}.",
+        applied: "Preuzeto",
+        pushed: "Poslato",
+        owed: "Na čekanju",
+        quarantined: "Nečitljivo",
+        now: "Sinhronizuj sada",
+        working: "Radi…",
+        problems: {
+          cloud_off: "Mrežni pristup je isključen za ovo pokretanje.",
+          not_enabled: "Sinhronizacija nije uključena na ovom računaru.",
+          locked: "Nexus je zaključan, pa nema ključa za sinhronizaciju.",
+          signed_out: "Prijava više ne važi. Prijavi se ponovo niže na ovoj kartici.",
+          offline: "Server nije dostupan. Pokušaj se ponavlja sam.",
+          forbidden:
+            "Prijava je istekla ili je ovaj računar povučen sa naloga. Prijavi se ponovo niže na ovoj kartici.",
+          malformed: "Server je poslao podatke koje ova verzija ne razume.",
+          key_unavailable:
+            "Ovaj računar nema ključ za ovaj profil. Upari ga sa uređajem koji ga ima ili upotrebi kod za oporavak.",
+          contested: "Ključ je upisan, pa pročitan kao prazan. Pokušaj ponovo.",
+          nonce_reuse:
+            "Bezbednosna provera je zaustavila sinhronizaciju za ovaj profil. Ključ mora da se zameni pre nastavka.",
+        } satisfies Record<SyncProblem, string>,
+      },
     },
     /**
      * „Podaci i privatnost“ (SET-010, local half): six plain sentences, each

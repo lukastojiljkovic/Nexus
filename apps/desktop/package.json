@@ -29,6 +29,7 @@
     "@nexus/db": "workspace:*",
     "@nexus/sync": "workspace:*",
     "@nexus/sync-crypto": "workspace:*",
+    "@nexus/sync-engine": "workspace:*",
     "@nexus/sync-port": "workspace:*",
     "@nexus/sync-transport": "workspace:*",
     "@nexus/tokens": "workspace:*",

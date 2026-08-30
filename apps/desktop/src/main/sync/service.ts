@@ -43,15 +43,20 @@ import { normalizeWebEmail, zeroize, type CryptoPort, type SyncCryptoError } fro
 import { createWebCryptoPort } from "@nexus/sync-port";
 import { parseRows, retireDeviceRequest, signOut } from "@nexus/sync-transport";
 import type { SyncAccountStore } from "@nexus/db";
+import type { SyncStore } from "@nexus/sync-engine";
 
 import { cloudRequiresRestart, readCloudSwitch, writeCloudSwitch } from "../net/offline.js";
 import { adoptWithRecoveryCode } from "./adopt.js";
 import { cloudOrigins, parseCloudConfig, type CloudConfig } from "./config.js";
+import { dataKeyBytes } from "./dataKey.js";
 import { enableSyncOnThisDevice } from "./enable.js";
 import { createCloudPorts, type CloudFetch, type CloudPorts } from "./port.js";
 import { reconnectSync, resumeSync } from "./reconnect.js";
+import { runSyncRound } from "./round.js";
+import { createSyncScheduler, type SyncScheduler } from "./scheduler.js";
 import { createSessionHolder, type SessionHolder } from "./session.js";
 import type {
+  SyncActivityView,
   SyncAdoptView,
   SyncEnableProblem,
   SyncEnableView,
@@ -75,9 +80,20 @@ export interface SyncServiceDeps {
   readonly accountStore: () => SyncAccountStore;
   /** The unlocked SQLCipher data key as hex. Throws when locked. */
   readonly dataKeyHex: () => string;
+  /**
+   * The journal and the watermarks for one profile, as the engine asks for them.
+   *
+   * A factory, resolved per round, for the reason every other store literal in
+   * main is: the database behind it is closed by a lock and reopened by an
+   * unlock, and one built at construction would hold a handle to the file the
+   * user just locked.
+   */
+  readonly syncStore: (profileId: string) => SyncStore;
   readonly now: () => Date;
   /** Overridable so the tests do not run 64 MiB of Argon2id per case. */
   readonly crypto?: CryptoPort;
+  /** Every change to what sync is doing, so main can push it to the window. */
+  readonly onActivity?: (activity: SyncActivityView) => void;
 }
 
 export interface SyncService {
@@ -96,6 +112,30 @@ export interface SyncService {
   readonly disconnect: () => Promise<SyncStatusView>;
   /** The origins the cloud-off boundary must admit for this launch. */
   readonly allowedOrigins: () => readonly string[];
+
+  /**
+   * Point the loop at a profile and start it — on unlock, and on every real
+   * profile switch. Idempotent for the profile already open.
+   *
+   * It is called whatever the state of the account is, and deliberately so. A
+   * machine with cloud off, or with no account, refuses its first round before
+   * making a request and the loop stops itself; that is the same rule stated
+   * once in `runSyncRound` rather than a second copy of „should we be syncing"
+   * here, which is the copy that would eventually disagree.
+   */
+  readonly openProfile: (profileId: string) => void;
+  /** Stop, on lock and on quit. */
+  readonly closeProfile: () => void;
+  /**
+   * The user pressed the button. Also the way back from a halt — pressing it is
+   * the evidence that whatever stopped the loop has been dealt with — which is
+   * why every flow that fixes one ends by calling it.
+   *
+   * Answers with the activity as it is on the way out; what the round finds
+   * arrives on `sync:activity-changed`.
+   */
+  readonly syncNow: () => SyncActivityView;
+  readonly activity: () => SyncActivityView;
 }
 
 export interface SyncReconnectRequest {
@@ -163,8 +203,54 @@ export function createSyncService(deps: SyncServiceDeps): SyncService {
     };
   };
 
+  /**
+   * The loop, and the round it drives.
+   *
+   * Everything the round needs is read PER ROUND rather than captured: the
+   * account row can be emptied by `disconnect`, the data key dies with a lock,
+   * and the store's database is closed and reopened by both. A dependency
+   * captured here would be the state of this machine at the moment the settings
+   * screen was first touched.
+   */
+  const scheduler: SyncScheduler = createSyncScheduler({
+    round: (input) =>
+      runSyncRound(
+        {
+          crypto,
+          ports,
+          holder,
+          account,
+          // A round refreshes without a user behind it, so it is the first
+          // caller that has to write the rotated refresh token back — see
+          // `accessTokenForRound`. Without this, a machine left running would
+          // rotate its stored token into the past and need a password next
+          // launch.
+          saveRefreshToken: (token) => {
+            deps.accountStore().setRefreshToken(token);
+          },
+          dataKeyHex: deps.dataKeyHex,
+          store: deps.syncStore,
+          now: deps.now,
+        },
+        input,
+      ),
+    ...(deps.onActivity === undefined ? {} : { onChange: deps.onActivity }),
+  });
+
   return {
     status,
+
+    openProfile: (profileId) => {
+      scheduler.open(profileId);
+    },
+    closeProfile: () => {
+      scheduler.close();
+    },
+    activity: scheduler.status,
+    syncNow: () => {
+      scheduler.syncNow();
+      return scheduler.status();
+    },
 
     allowedOrigins: () => (ports === null ? [] : cloudOrigins(config)),
 
@@ -198,7 +284,7 @@ export function createSyncService(deps: SyncServiceDeps): SyncService {
       // thing at the point it is true.
       if (account() !== null) return { outcome: "refused", reason: "already_enabled" };
 
-      const localDataKey = hexToBytes(dataKeyHex);
+      const localDataKey = dataKeyBytes(dataKeyHex);
       let result;
       try {
         result = await enableSyncOnThisDevice(
@@ -246,6 +332,9 @@ export function createSyncService(deps: SyncServiceDeps): SyncService {
         zeroize(result.masterKey);
       }
 
+      // There is an account now, so the loop that has been refusing
+      // `not_enabled` since unlock has something to do. See `syncNow`.
+      scheduler.syncNow();
       return { outcome: "enabled", recoveryCode: result.recoveryCode, status: status() };
     },
 
@@ -270,7 +359,7 @@ export function createSyncService(deps: SyncServiceDeps): SyncService {
       }
       if (account() !== null) return { outcome: "refused", reason: "already_enabled" };
 
-      const localDataKey = hexToBytes(dataKeyHex);
+      const localDataKey = dataKeyBytes(dataKeyHex);
       let result;
       try {
         result = await adoptWithRecoveryCode(
@@ -312,6 +401,7 @@ export function createSyncService(deps: SyncServiceDeps): SyncService {
         zeroize(result.masterKey);
       }
 
+      scheduler.syncNow(); // an account, a key and a session: the loop can work now
       return { outcome: "adopted", status: status() };
     },
 
@@ -338,6 +428,7 @@ export function createSyncService(deps: SyncServiceDeps): SyncService {
         // spent the moment this succeeds. Not writing the new one back would
         // make each launch the LAST launch that could resume.
         deps.accountStore().setRefreshToken(resumed.session.refreshToken);
+        scheduler.syncNow(); // signed in again, so a loop halted on `signed_out` may go
       }
       return status();
     },
@@ -363,7 +454,7 @@ export function createSyncService(deps: SyncServiceDeps): SyncService {
       const record = account();
       if (record === null) return { outcome: "refused", reason: "not_enabled_here" };
 
-      const localDataKey = hexToBytes(dataKeyHex);
+      const localDataKey = dataKeyBytes(dataKeyHex);
       let result;
       try {
         result = await reconnectSync(
@@ -396,6 +487,7 @@ export function createSyncService(deps: SyncServiceDeps): SyncService {
       // launch. Both, or the machine is reconnected only until it is closed.
       deps.accountStore().setDeviceId(result.deviceId);
       deps.accountStore().setRefreshToken(result.session.refreshToken);
+      scheduler.syncNow(); // a new device row and a live session: the halt is over
       return { outcome: "reconnected", status: status() };
     },
 
@@ -441,21 +533,4 @@ function enableFault(error: unknown): SyncEnableProblem {
   return named?.name === "SyncCryptoError" && named.code === "enable/round-trip-mismatch"
     ? "round_trip_mismatch"
     : "bad_request";
-}
-
-/**
- * The SQLCipher data key, hex to bytes.
- *
- * Refuses anything that is not exactly 64 lower- or upper-case hex characters
- * rather than parsing as far as it can: `parseInt` on a bad pair yields `NaN`,
- * `Uint8Array` stores that as 0, and the result is a KEY THAT LOOKS FINE and
- * wraps the master key under bytes nothing will ever reproduce.
- */
-function hexToBytes(hex: string): Uint8Array {
-  if (!/^[0-9a-fA-F]{64}$/.test(hex)) {
-    throw new TypeError("sync: the local data key is not 32 bytes of hex.");
-  }
-  const out = new Uint8Array(32);
-  for (let i = 0; i < 32; i += 1) out[i] = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16);
-  return out;
 }

@@ -1,5 +1,10 @@
 import { contextBridge, ipcRenderer } from "electron";
-import { IpcChannel, type NexusApi, type WindowState } from "../shared/ipc.js";
+import {
+  IpcChannel,
+  type NexusApi,
+  type SyncActivityView,
+  type WindowState,
+} from "../shared/ipc.js";
 
 /**
  * The renderer's only bridge to the main process (SEC-EL-02). Each method wraps
@@ -845,6 +850,18 @@ const api: NexusApi = {
   resumeSync: () => ipcRenderer.invoke(IpcChannel.syncResume),
   reconnectSync: (request) => ipcRenderer.invoke(IpcChannel.syncReconnect, request),
   disconnectSync: () => ipcRenderer.invoke(IpcChannel.syncDisconnect),
+  syncActivity: () => ipcRenderer.invoke(IpcChannel.syncActivity),
+  syncNow: () => ipcRenderer.invoke(IpcChannel.syncNow),
+  onSyncActivity: (listener) => {
+    // Carries a payload, so the handler is typed at the boundary, as
+    // `onWindowStateChanged` is — and the renderer treats it as a hint to
+    // re-read rather than as a fact it can act on unchecked.
+    const handler = (_event: unknown, activity: SyncActivityView): void => {
+      listener(activity);
+    };
+    ipcRenderer.on(IpcChannel.syncActivityChanged, handler);
+    return () => ipcRenderer.removeListener(IpcChannel.syncActivityChanged, handler);
+  },
   appInfo: () => ipcRenderer.invoke(IpcChannel.appInfo),
 };
 

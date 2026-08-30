@@ -62,6 +62,9 @@ importers:
       '@nexus/sync-crypto':
         specifier: workspace:*
         version: link:../../packages/sync-crypto
+      '@nexus/sync-engine':
+        specifier: workspace:*
+        version: link:../../packages/sync-engine
       '@nexus/sync-port':
         specifier: workspace:*
         version: link:../../packages/sync-port

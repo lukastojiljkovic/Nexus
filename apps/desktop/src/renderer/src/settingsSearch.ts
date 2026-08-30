@@ -485,6 +485,25 @@ function shellEntries(): readonly ShellSettingsSearchEntry[] {
       keywords: ["povezi", "ponovo", "prijava", "istekla", "sesija", "lozinka", "nalog"],
     },
     {
+      // What the loop is doing, and the button that makes it do it now. The
+      // words are the ones somebody types when they think sync is stuck —
+      // „zaglavilo", „ne radi" — rather than the card's own vocabulary, because
+      // a person who could name the state would not be searching for it.
+      id: "sync-activity",
+      section: "sync",
+      label: s.sync.activity.title,
+      keywords: [
+        "stanje",
+        "sinhronizuj",
+        "sada",
+        "odmah",
+        "zaglavilo",
+        "ceka",
+        "greska",
+        "poslednja",
+      ],
+    },
+    {
       // Its own entry because it is a BUTTON with consequences, and because the
       // word somebody reaches for („odjavi") appears nowhere else on the page.
       id: "sync-disconnect",

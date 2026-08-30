@@ -333,7 +333,7 @@ describe("openContentKey — failures the transport names", () => {
   });
 });
 
-describe("ContentKeySet.close", () => {
+describe("ContentKeySet.zeroize", () => {
   it("erases every generation, and the live key with them", async () => {
     const { http } = port([
       ok([await row(crypto.randomBytes(32), 1, { disabled: true }), await row(crypto.randomBytes(32), 2)]),
@@ -347,7 +347,7 @@ describe("ContentKeySet.close", () => {
     const retired = result.keys.keyFor(1);
     expect(retired).not.toBeNull();
 
-    result.keys.close();
+    result.keys.zeroize();
 
     expect([...live]).toEqual(Array<number>(32).fill(0));
     expect([...(retired ?? [])]).toEqual(Array<number>(32).fill(0));
@@ -361,7 +361,7 @@ describe("ContentKeySet.close", () => {
     const { http } = port([ok([await row(crypto.randomBytes(32), 1)])]);
     const result = await openContentKey({ crypto, http }, input());
     if (result.kind !== "open") throw new Error("expected an open key set");
-    result.keys.close();
-    expect(() => result.keys.close()).not.toThrow();
+    result.keys.zeroize();
+    expect(() => result.keys.zeroize()).not.toThrow();
   });
 });

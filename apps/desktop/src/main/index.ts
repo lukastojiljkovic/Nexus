@@ -368,6 +368,9 @@ import {
   type UpdateSubjectFields,
   type UpdateTaskFields,
   SyncAccountStore,
+  SyncJournal,
+  SyncProgressStore,
+  syncStoreFor,
   uuidv7,
 } from "@nexus/db";
 import {
@@ -684,6 +687,7 @@ import {
   type StudyStats,
   type SubjectAttachmentsAddResult,
   type SubjectStudyLog,
+  type SyncActivityView,
   type SyncAdoptView,
   type SyncEnableView,
   type SyncReconnectView,
@@ -5153,7 +5157,20 @@ function syncService(): SyncService {
     fetch: electronCloudFetch,
     accountStore: () => new SyncAccountStore(requireDb().raw),
     dataKeyHex: requireUnlockedDataKeyHex,
+    // Resolved per round, exactly like every other store literal in this file:
+    // `requireDb()` throws while locked, and a handle captured once would be a
+    // handle to a database the user has since closed.
+    syncStore: (profileId) => {
+      const raw = requireDb().raw;
+      return syncStoreFor(new SyncJournal(raw), new SyncProgressStore(raw), profileId);
+    },
     now: () => new Date(),
+    // The window watches instead of polling. Nothing here is key-shaped — a
+    // profile id, a phase, four counts and a machine-readable problem — and a
+    // window that has gone away is simply not sent to.
+    onActivity: (activity) => {
+      mainWindow?.webContents.send(IpcChannel.syncActivityChanged, activity);
+    },
   });
   return syncServiceInstance;
 }
@@ -5641,6 +5658,15 @@ function notificationSchedulerDeps(): NotificationSchedulerDeps {
 function startUnlockedServices(): void {
   if (isAutomatedRun) return;
   startNotificationScheduler(notificationSchedulerDeps());
+  // Sync follows the profile that is open, on the same rule and through the same
+  // resolver the notification scheduler uses — so the two can never be serving
+  // different profiles. A machine with cloud off, or with no account, refuses
+  // its first round before making any request and the loop stops itself; there
+  // is deliberately no second copy of „should we be syncing" here. A file with
+  // no profile at all has nothing to bind to; `profiles:set-active` opens the
+  // loop the moment the first one is created and landed on.
+  const syncProfileId = resolveActiveProfileId(listProfiles(requireDb()), activeProfileId);
+  if (syncProfileId !== null) syncService().openProfile(syncProfileId);
 
   // The one-time note-healing sweep (see `notes.ts`'s doc comment).
   // Unawaited, mirroring `adoptUnlockedKey`'s legacy-blob drain: an unlock
@@ -5836,6 +5862,10 @@ function performLock(): void {
   // nothing below may run against a still-open private section.
   privLock();
   stopNotificationScheduler();
+  // A round needs the data key and the open database; both die here. Optional
+  // chaining rather than `syncService()`, because constructing the service to
+  // stop a loop that was never started would read `cloud.json` at lock time.
+  syncServiceInstance?.closeProfile();
   // ADR-058: the active-profile report dies with the session — the next unlock
   // may be a DIFFERENT account, and the renderer re-reports its landing anyway.
   // Until it does, `resolveActiveProfileId` serves the personal anchor.
@@ -6885,8 +6915,14 @@ function registerIpc(): void {
       profileId === resolveActiveProfileId(listProfiles(database), activeProfileId);
     activeProfileId = profileId;
     if (alreadyServed) return;
-    // Never during an automated run — the scheduler never runs there at all.
-    if (!isAutomatedRun) startNotificationScheduler(notificationSchedulerDeps());
+    // Never during an automated run — neither scheduler runs there at all. The
+    // sync loop follows the same switch, and its own `open` is idempotent for
+    // the profile already bound, so the `alreadyServed` return above is the
+    // notification scheduler's rule rather than a second one repeated here.
+    if (!isAutomatedRun) {
+      startNotificationScheduler(notificationSchedulerDeps());
+      syncService().openProfile(profileId);
+    }
   });
 
   ipcMain.handle(IpcChannel.profilesRename, (event, payload): void => {
@@ -11589,6 +11625,19 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.syncDisconnect, async (event): Promise<SyncStatusView> => {
     assertTrustedSender(event);
     return syncService().disconnect();
+  });
+
+  ipcMain.handle(IpcChannel.syncActivity, (event): SyncActivityView => {
+    assertTrustedSender(event);
+    return syncService().activity();
+  });
+
+  // No payload: the round is about the profile the loop is already bound to, and
+  // that is main's own fact. A `profileId` here would be a way for a renderer to
+  // aim a round at a profile whose data it is not currently showing.
+  ipcMain.handle(IpcChannel.syncNow, (event): SyncActivityView => {
+    assertTrustedSender(event);
+    return syncService().syncNow();
   });
 
   ipcMain.handle(IpcChannel.appInfo, (event): AppInfo => {

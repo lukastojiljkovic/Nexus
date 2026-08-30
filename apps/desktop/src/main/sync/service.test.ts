@@ -5,7 +5,16 @@ import { join } from "node:path";
 import { bytesToBase64url, utf8 } from "@nexus/sync-crypto";
 import { createFakeCryptoPort } from "@nexus/sync-crypto/testing";
 import { base64urlToBytea } from "@nexus/sync-transport";
-import { NexusDatabase, SyncAccountStore, openDatabase } from "@nexus/db";
+import {
+  NexusDatabase,
+  SyncAccountStore,
+  SyncJournal,
+  SyncProgressStore,
+  openDatabase,
+  syncStoreFor,
+} from "@nexus/db";
+
+import type { SyncStore } from "@nexus/sync-engine";
 
 import { writeCloudSwitch } from "../net/offline.js";
 import { createSyncService, type SyncService } from "./service.js";
@@ -21,6 +30,18 @@ const DEVICE = "22222222-3333-4444-8555-666666666666";
 const SECOND_DEVICE = "33333333-4444-4555-8666-777777777777";
 const BOOTSTRAP_DEVICE = "44444444-5555-4666-8777-888888888888";
 const DATA_KEY_HEX = "ab".repeat(32);
+
+/**
+ * The engine's view of one profile's journal, built on demand.
+ *
+ * Nothing in this file opens a profile, so the loop never runs and this is never
+ * called — but it is a REAL store rather than a stub, so the day one of these
+ * tests does open one, what it exercises is the desktop's own binding.
+ */
+const storeFor =
+  (raw: NexusDatabase["raw"]) =>
+  (profileId: string): SyncStore =>
+    syncStoreFor(new SyncJournal(raw), new SyncProgressStore(raw), profileId);
 
 const configured = { [CLOUD_URL_VAR]: ORIGIN, [CLOUD_ANON_KEY_VAR]: KEY };
 
@@ -209,6 +230,7 @@ const service = (
     env,
     fetch: net.fetch,
     accountStore: () => store,
+    syncStore: storeFor(db.raw),
     dataKeyHex: () => {
       if (locked) throw new Error("The data key is locked.");
       return DATA_KEY_HEX;
@@ -258,6 +280,7 @@ const otherMachine = (
       env,
       fetch: net.fetch,
       accountStore: () => store,
+      syncStore: storeFor(other.raw),
       dataKeyHex: () => {
         if (locked) throw new Error("The data key is locked.");
         // A DIFFERENT data key, because it is a different computer. The local
@@ -304,6 +327,7 @@ describe("the cloud switch", () => {
       env: configured,
       fetch: wire().fetch,
       accountStore: () => store,
+      syncStore: storeFor(db.raw),
       dataKeyHex: () => DATA_KEY_HEX,
       now: () => new Date(),
       crypto: createFakeCryptoPort(),
