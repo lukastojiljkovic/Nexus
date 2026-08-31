@@ -14,17 +14,40 @@ every document there** and says which are live and which are history —
 reorganised 2026-08-16, when `STATUS.md` was cut from 9 855 lines back to being
 a status rather than a journal.
 
-## Current focus (2026-08-08 — the founder changed it; supersedes 2026-07)
+## Current focus (2026-08-31 — the founder changed it; supersedes 2026-08-08)
 
-The desktop app reached **1.0.0**. The founder has opened the next phase:
+*„web/sync je za sada trajno na hold-u, dok ne završimo sve feature za desktop,
+lako ćemo ih posle portovati na sajt jer je electron osnova."*
+
+**Every remaining DESKTOP feature comes first.** The web app, the Supabase
+backend and pairing are **on hold** — not cancelled, and not to be treated as
+dead code: everything already built for them (`sync-crypto`, `sync-transport`,
+`sync-engine`, `sync-port`, the 13 server migrations, the desktop sync round and
+scheduler) stays built, stays tested, stays green in CI, and stays OFF by
+default. Nothing new is added to it until the desktop is complete.
+
+The founder's reasoning is worth keeping because it is the load-bearing part:
+the renderer is one React codebase and Electron is only its shell, so a feature
+finished on the desktop is a feature the web app inherits. Building the web
+surface first would mean building each feature twice.
+
+The section below is the 2026-08-08 phase, kept because the *architecture* it
+fixes — the three keys, the ciphertext-only server, cloud off by default, the
+pairing exchange — is still the plan of record for when web resumes. What has
+changed is only its **place in the queue**.
+
+---
+
+The desktop app reached **1.0.0**. The founder had opened the phase:
 *„resi sve sto je ostalo… da bude clean slate potpuno, i onda da pripremis back
 i front za sajt… supabase za backend… da se pripremi sync desktop app i webapp,
 da bude ful usluga."*
 
 1. **Clean slate first.** Everything recorded as unfinished gets finished, and
    any defect met on the way gets fixed, before web work is called done.
-2. **Web app + backend are now IN scope.** Frontend from the *same* React
-   codebase on **Cloudflare Workers with static assets** — deliberately **not**
+2. **Web app + backend** — *on hold since 2026-08-31, see above.* Frontend from
+   the *same* React codebase on **Cloudflare Workers with static assets**
+   — deliberately **not**
    GitHub Pages, which cannot set HTTP response headers and therefore cannot
    send a CSP or `frame-ancestors`; a page that decrypts user data in a browser
    without a CSP has had its primary defence removed. Workers rather than
@@ -116,8 +139,8 @@ choice of backend**; whatever in them is about the data model still applies.
      layer is unfinished, and that is the more useful answer.
   Record the class in [docs/defect-classes.md](docs/defect-classes.md) so the
   same shape is recognised the next time it appears somewhere else. **A class
-  that can be turned into a gate should be** — fifteen of the eighty already
-  have been, and a rule nobody can forget beats a rule everybody has read.
+  that can be turned into a gate should be** — fourteen of the ninety
+  already have been, and a rule nobody can forget beats a rule everybody has read.
 - **Concise Serbian status updates** to the founder; the code, comments, and docs
   are in **English**.
 
