@@ -200,6 +200,34 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     prepare: POINTER_TAP(".elec-wire__hit"),
     fanout: null,
   },
+  {
+    // „Kod" — the generated Arduino sketch (E4), which is a MODAL and therefore
+    // invisible to every scene above it: the sweep photographs what is on
+    // screen, and a dialog nobody opened is not. The circuit the page opens on
+    // is „Merenje razdaljine", an UNO and an HC-SR04, which is the plain shape
+    // — two named pins, no libraries, and a page of code that must scroll
+    // rather than push the buttons off the bottom of the panel.
+    id: "electronics-sketch",
+    module: "electronics",
+    prepare: OPEN_SKETCH_DIALOG(),
+    fanout: null,
+    // The dialog is a portal on `document.body`, and the scene after this one
+    // stays on the same module — where nothing remounts. Escape is what closes
+    // it, and this is the same recipe the shortcut sheet uses.
+    cleanup: DISPATCH_KEY("Escape"),
+  },
+  {
+    // The same dialog over the demo's OTHER circuit, which is the loaded shape:
+    // a DHT22 brings a library list, and its DATA pin is one the sketch
+    // deliberately does not name, so the wiring table gets its „—" row and the
+    // sentence under it that explains one. Neither section exists in the frame
+    // above, and a section no frame carries is a section nothing measures.
+    id: "electronics-sketch-libraries",
+    module: "electronics",
+    prepare: OPEN_SKETCH_DIALOG(SWITCH_TO_OTHER_CIRCUIT()),
+    fanout: null,
+    cleanup: DISPATCH_KEY("Escape"),
+  },
   { id: "search", module: "dashboard", prepare: OPEN_SEARCH_PAGE(), fanout: null },
   { id: "settings", module: "settings", fanout: null },
   {
@@ -318,6 +346,13 @@ function OPEN_FIRST(selectors: string): string {
  * target does not exist yet at the moment the previous handler returns.
  * Chaining the clicks without the wait finds nothing and photographs the
  * unchanged page — the quietest way for a scene to be wrong.
+ *
+ * Two rAFs are enough for a target that does not exist yet, and NOT enough for
+ * one that exists on the outgoing state: a control can be present and enabled
+ * and still belong to the entity the previous step just navigated away from.
+ * A step that has to outlast an async load wants the OUTCOME rather than a
+ * count of frames — see {@link OPEN_SKETCH_DIALOG}, which is what a scene that
+ * needed one had to be written as.
  */
 function CLICK_THEN(...steps: readonly string[]): string {
   return `(async () => {
@@ -333,6 +368,63 @@ function CLICK_THEN(...steps: readonly string[]): string {
     }
     return true;
   })()`;
+}
+
+/**
+ * Opens ELEC's „Kod" dialog, and waits for **the dialog**.
+ *
+ * Not assembled from {@link CLICK_THEN} because of the one thing that helper
+ * cannot do: wait for a condition. Opening a circuit is an IPC round trip and
+ * „Kod" is disabled until it lands, so a fixed number of frames is a bet.
+ *
+ * **Two failed drafts are why the wait is on the outcome.** Selecting a circuit
+ * only schedules the page's effect, so for one turn the button is still enabled
+ * on the OUTGOING document: draft one clicked there, the effect ran a moment
+ * later and did exactly its job — dropping a dialog that belongs to the circuit
+ * that just closed — and the frame was the ordinary page under a dialog's name.
+ * Draft two therefore waited for the button to be seen DISABLED first, and
+ * never saw it: `setDoc(null)` and the `setDoc(opened)` that follows a
+ * sub-millisecond IPC read coalesce into one React render, so the loading state
+ * is real and is never painted. A precondition you hope implies the outcome is
+ * not a wait. The panel is in the DOM or it is not, so the loop clicks and
+ * re-checks until it is, and says `"none"` if it never gets there.
+ *
+ * `preamble` is statements to run first, inside the same async function, for a
+ * scene that has to get somewhere before there is anything to open.
+ */
+function OPEN_SKETCH_DIALOG(preamble = ""): string {
+  return `(async () => {
+  const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+${preamble}
+  for (let attempt = 0; attempt < 120; attempt += 1) {
+    if (document.querySelector(".elec-sketch__panel")) return true;
+    const code = document.querySelector(".elec__code");
+    if (code && !code.disabled) code.click();
+    await frame();
+  }
+  return "none";
+})()`;
+}
+
+/**
+ * Chooses the circuit that is not the open one, as {@link OPEN_SKETCH_DIALOG}'s
+ * preamble.
+ *
+ * „Other" by `aria-checked` rather than by index or by name: the switcher lists
+ * circuits most-recently-touched first, which is an order the demo seeder does
+ * not promise, and the demo profile has exactly two.
+ */
+function SWITCH_TO_OTHER_CIRCUIT(): string {
+  return `  const trigger = document.querySelector(".elec__switcher");
+  if (!trigger) return "none";
+  trigger.click();
+  await frame();
+  const other = Array.prototype.find.call(
+    document.querySelectorAll(".note__menu-item"),
+    (node) => node.getAttribute("aria-checked") === "false",
+  );
+  if (!other) return "none";
+  other.click();`;
 }
 
 /**

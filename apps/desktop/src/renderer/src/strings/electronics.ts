@@ -21,6 +21,7 @@ import type {
   PinFunction,
   RuleCode,
   RuleSeverity,
+  SketchRefusal,
   ValueUnit,
   WireColour,
 } from "@nexus/core";
@@ -317,5 +318,71 @@ export const electronicsSr = {
       "analog-signal": "Analogni signal je doveden na pin koji razlikuje samo nulu i jedinicu.",
       "led-unprotected": "Dioda je vezana bez otpornika u nizu.",
     } satisfies Record<RuleCode, string>,
+  },
+
+  /**
+   * ADR-085 slice E4: the Arduino sketch the wiring implies.
+   *
+   * **The copy states the boundary before the code is read, not after.**
+   * `generateSketch` emits the WIRING and refuses to invent the program — see
+   * that module's header for why that is the only line that can be drawn
+   * honestly — and a person who opens this dialog expecting a finished program
+   * would find that out by reading the `loop` and being disappointed. Said
+   * first, it is a design; said last, it is an excuse.
+   */
+  sketch: {
+    /** The header action, beside „Preimenuj" and „Obriši". */
+    open: "Kod",
+    dialogTitle: "Arduino skica",
+    /** What the file holds, and what it deliberately does not. */
+    description:
+      "Fajl opisuje veze: pinove na koje su komponente vezane, njihove smerove i " +
+      "magistrale. Šta uređaj radi ostaje na tebi — petlja samo očitava ulaze, da " +
+      "se na serijskom monitoru vidi da li je sve povezano onako kako šema kaže.",
+    /** The Library Manager names the sketch needs, listed rather than `#include`d. */
+    librariesHeading: "Biblioteke",
+    /** Where those names go — the IDE's own menu path, in the IDE's own English. */
+    librariesHint: "Arduino IDE → Sketch → Include Library → Manage Libraries",
+    /**
+     * The wiring table — the same rows the sketch prints in its header comment,
+     * on screen where they can be read while the wires are being pushed in.
+     * Nobody counts pins out of a C comment with one hand on a jumper.
+     */
+    wiringHeading: "Veze",
+    wiringPin: "Pin ploče",
+    wiringPart: "Komponenta",
+    wiringConstant: "Konstanta",
+    /** In the constant column, for a pin the sketch deliberately leaves unnamed. */
+    wiringUnnamed: "—",
+    /** Shown only when some row is unnamed, so it never explains an absence nobody saw. */
+    wiringHint: "Pin bez konstante vodi biblioteka ili magistrala, pa mu skica ne daje ime.",
+    /** Above the code itself, with the file name the save dialog will suggest. */
+    sourceHeading: "Skica",
+    copy: "Kopiraj",
+    copied: "Kopirano.",
+    /** The ellipsis is the OS convention for „this opens a dialog". */
+    saveAs: "Sačuvaj kao…",
+    close: "Zatvori",
+    saved: "Skica je sačuvana.",
+    /**
+     * Said above the code when the checks panel is reporting errors. The sketch
+     * describes the circuit as it stands, so a circuit with a short in it gets a
+     * sketch with that short in its wiring table — and nothing about generated
+     * code should be read as an opinion that the bench is sound.
+     */
+    hasErrors: "Provere prijavljuju greške na ovom kolu. Skica opisuje veze kakve jesu.",
+    /**
+     * Why there is no sketch. Each is a fact about the circuit rather than a
+     * failure: a refusal is a first-class answer here, exactly as it is in
+     * `generateSketch`, and the dialog opens and says which one it is instead
+     * of a button quietly doing nothing.
+     */
+    refused: {
+      "no-board": "U kolu nema ploče, pa nema ni programa koji bi se pisao za nju.",
+      "many-boards": "U kolu je više ploča, a jedna skica je jedan program za jednu ploču.",
+      "not-programmable":
+        "Ova ploča pokreće operativni sistem — na nju se program kopira i pokreće, " +
+        "a .ino skica nije oblik u kom se to radi.",
+    } satisfies Record<SketchRefusal, string>,
   },
 } as const;

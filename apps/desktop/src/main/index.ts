@@ -25,6 +25,7 @@ import {
   BODY_SEXES,
   buildSearchSnippet,
   buildSearchTagFacets,
+  catalogueComponent,
   catalogueExercise,
   catalogueFood,
   chordAccelerator,
@@ -39,6 +40,7 @@ import {
   FOOD_CATALOGUE,
   FOOD_CATEGORIES,
   foodRefText,
+  generateSketch,
   isInlineImageMime,
   isValidDayKey,
   MAX_ARCHIVE_PASSPHRASE_LENGTH,
@@ -494,6 +496,7 @@ import {
   CALENDAR_FILTER_NAME,
   CSV_TABLE_FILTER_NAME,
   IMAGE_FILTER_NAME,
+  SKETCH_FILTER_NAME,
   STATEMENT_DIALOG_TITLE,
   STATEMENT_FILTER_NAME,
 } from "./shellStrings.js";
@@ -682,6 +685,7 @@ import {
   type SearchHistoryEntry,
   type SearchPageResult,
   type SearchResult,
+  type SketchExportResult,
   type SnoozePreset,
   type StudySettings,
   type StudyStats,
@@ -10622,6 +10626,43 @@ function registerIpc(): void {
     const id = asElecId(body.id, "id");
     electronicsStore(profileId).removeWire(id, new Date().toISOString());
   });
+
+  // ADR-085 E4: the sketch onto disk. The payload is an id and nothing else —
+  // main reads the circuit from its own store and generates the text here, so
+  // the bytes written are the circuit as stored rather than a string the
+  // renderer composed. The path comes only from the native dialog (SEC-EL);
+  // `handleIcsExport` in `main/imex.ts` is the shape this follows.
+  //
+  // The refusals ride back rather than throwing. „This circuit has two boards"
+  // is a true sentence about the circuit, not a failure of the export, and the
+  // renderer already disables the button for it — reaching this arm means the
+  // canvas changed under the click, which is worth saying out loud and is
+  // certainly worth NOT overwriting the file the user just pointed at.
+  ipcMain.handle(
+    IpcChannel.elecExportSketch,
+    async (event, payload): Promise<SketchExportResult> => {
+      assertTrustedSender(event);
+      const body = asRecord(payload);
+      const profileId = asNonEmptyString(body.profileId, "profileId");
+      const id = asElecId(body.id, "id");
+
+      const circuit = toCircuitDocument(electronicsStore(profileId).read(id));
+      const sketch = generateSketch(circuit, catalogueComponent);
+      if (sketch.kind === "refused") return { canceled: false, refused: sketch.reason };
+
+      const dialogOptions = {
+        defaultPath: sketch.filename,
+        filters: [{ name: SKETCH_FILTER_NAME, extensions: ["ino"] }],
+      };
+      const { canceled, filePath } = mainWindow
+        ? await dialog.showSaveDialog(mainWindow, dialogOptions)
+        : await dialog.showSaveDialog(dialogOptions);
+      if (canceled || !filePath) return { canceled: true };
+
+      await writeFileAsync(filePath, sketch.source, "utf8");
+      return { canceled: false, path: filePath, libraries: sketch.libraries.length };
+    },
+  );
 
   // Global search (ADR-021 / PRD 08 SRCH-001/002): `runSearchQuery`/
   // `runRecentSearch` own the actual pipeline (see their doc comments) so the

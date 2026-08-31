@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   COMPONENT_CATALOGUE,
   MAX_CIRCUIT_NAME_LENGTH,
@@ -6,6 +6,7 @@ import {
   catalogueComponent,
   circuitProblems,
   circuitRules,
+  generateSketch,
 } from "@nexus/core";
 import type { CircuitPart, ComponentDef, PartRotation, WireColour, WireEnd } from "@nexus/core";
 import { Button, EmptyState, Icon, LoadingState, PageHeader, TextField } from "@nexus/ui";
@@ -14,6 +15,7 @@ import type { ElecCircuit, ElecCircuitDocument } from "../../shared/ipc.js";
 import { ElecBench, type ElecSelection } from "./ElecBench.js";
 import { ElecInspector } from "./ElecInspector.js";
 import { ElecPalette } from "./ElecPalette.js";
+import { ElecSketchDialog } from "./ElecSketchDialog.js";
 import {
   contentBounds,
   dropSpot,
@@ -96,6 +98,9 @@ export function ElectronicsPage({ profileId }: ElectronicsPageProps) {
   const [naming, setNaming] = useState<{ id: string | null; draft: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [notesSaved, setNotesSaved] = useState(false);
+  /** The generated-code dialog (E4), and the one line left behind after it closes. */
+  const [sketchOpen, setSketchOpen] = useState(false);
+  const [sketchNotice, setSketchNotice] = useState<string | null>(null);
 
   const [selection, setSelection] = useState<ElecSelection | null>(null);
   const [wiring, setWiring] = useState<WireEnd | null>(null);
@@ -176,6 +181,10 @@ export function ElectronicsPage({ profileId }: ElectronicsPageProps) {
     setSelection(null);
     setWiring(null);
     setNotesSaved(false);
+    // The code dialog belongs to the circuit that was open. It would otherwise
+    // stay up and refill itself with a different circuit's sketch.
+    setSketchOpen(false);
+    setSketchNotice(null);
     void (async () => {
       try {
         const opened = await window.nexus.openCircuit(profileId, activeId);
@@ -237,6 +246,26 @@ export function ElectronicsPage({ profileId }: ElectronicsPageProps) {
     // `doc`, which is listed; everything else they touch is a state setter.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selection, wiring, busy, doc]);
+
+  /**
+   * The three derived readings of the open circuit, memoised on the document.
+   *
+   * All three are pure functions of the same rows, and all three used to be
+   * called inline in the JSX below — which meant re-deriving the nets, the
+   * thirteen rules and the whole sketch on every keystroke in the notes box.
+   * They change when the document changes and at no other time, which is
+   * exactly what `useMemo` says. `resolveComponent` is module-scope and needs
+   * no dependency.
+   */
+  const problems = useMemo(
+    () => (doc === null ? [] : circuitProblems(doc, resolveComponent)),
+    [doc],
+  );
+  const rules = useMemo(() => (doc === null ? [] : circuitRules(doc, resolveComponent)), [doc]);
+  const sketch = useMemo(
+    () => (doc === null ? null : generateSketch(doc, resolveComponent)),
+    [doc],
+  );
 
   /** Runs one mutation: clears the previous refusal, blocks a second write, reports a failure. */
   async function run(action: () => Promise<void>): Promise<void> {
@@ -314,6 +343,29 @@ export function ElectronicsPage({ profileId }: ElectronicsPageProps) {
       await reload();
       patch(circuitId, (document) => ({ ...document, notes }));
       setNotesSaved(true);
+    });
+  }
+
+  /**
+   * Writes the sketch (ADR-085 E4). The payload is the circuit's id: main reads
+   * its own rows and generates its own text, so what lands on disk is never a
+   * string this page composed.
+   *
+   * A canceled dialog leaves everything as it was, including the preview — the
+   * user pressed „Otkaži" in the OS's file picker, not in ours. A refusal can
+   * only mean the circuit changed under the click, since „Sačuvaj kao…" is not
+   * rendered over a preview that already refused, so it closes the preview it
+   * now contradicts.
+   */
+  async function saveSketch(): Promise<void> {
+    if (doc === null) return;
+    const circuitId = doc.id;
+    setSketchNotice(null);
+    await run(async () => {
+      const result = await window.nexus.exportCircuitSketch(profileId, circuitId);
+      if (result.canceled) return;
+      setSketchOpen(false);
+      setSketchNotice("refused" in result ? s.sketch.refused[result.refused] : s.sketch.saved);
     });
   }
 
@@ -528,6 +580,17 @@ export function ElectronicsPage({ profileId }: ElectronicsPageProps) {
             </Button>
             {active !== null && (
               <>
+                {/* Enabled only once the circuit is actually open: the sketch is
+                    derived from the parts and wires, which the list row does
+                    not carry. */}
+                <Button
+                  className="elec__code"
+                  variant="ghost"
+                  disabled={doc === null}
+                  onClick={() => setSketchOpen(true)}
+                >
+                  {s.sketch.open}
+                </Button>
                 <Button
                   variant="ghost"
                   onClick={() => setNaming({ id: active.id, draft: active.name })}
@@ -588,6 +651,25 @@ export function ElectronicsPage({ profileId }: ElectronicsPageProps) {
             {s.undo}
           </Button>
         </p>
+      )}
+
+      {sketchNotice !== null && (
+        <p className="elec__notice" role="status">
+          {sketchNotice}
+          <Button variant="ghost" onClick={() => setSketchNotice(null)}>
+            {s.dismiss}
+          </Button>
+        </p>
+      )}
+
+      {sketchOpen && sketch !== null && (
+        <ElecSketchDialog
+          sketch={sketch}
+          errors={rules.filter((finding) => finding.severity === "error").length}
+          busy={busy}
+          onSave={() => void saveSketch()}
+          onClose={() => setSketchOpen(false)}
+        />
       )}
 
       {active === null ? (
@@ -673,8 +755,8 @@ export function ElectronicsPage({ profileId }: ElectronicsPageProps) {
             circuit={doc}
             resolve={resolveComponent}
             selection={selection}
-            problems={circuitProblems(doc, resolveComponent)}
-            rules={circuitRules(doc, resolveComponent)}
+            problems={problems}
+            rules={rules}
             busy={busy}
             onRenamePart={(id, label) => void editPart(id, { label })}
             onRotatePart={rotatePart}

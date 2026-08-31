@@ -629,6 +629,13 @@ export const IpcChannel = {
   elecAddWire: "elec:add-wire",
   elecSetWireColour: "elec:set-wire-colour",
   elecRemoveWire: "elec:remove-wire",
+  // ADR-085 slice E4. The renderer already generates the sketch for its own
+  // preview — `generateSketch` is pure and lives in `@nexus/core` — so this
+  // channel exists for exactly one thing the renderer may not do: put a file on
+  // the user's disk. Main regenerates from its OWN store rather than writing
+  // text the renderer sent, which costs a few milliseconds and means the bytes
+  // on disk are the circuit as stored, not as a renderer described it.
+  elecExportSketch: "elec:export-sketch",
   searchQuery: "search:query",
   searchRecent: "search:recent",
   searchPage: "search:page",
@@ -6316,6 +6323,24 @@ export type IcsExportResult =
   | { canceled: false; path: string; events: number; skipped: number };
 
 /**
+ * The outcome of an Arduino sketch export (ADR-085 E4), shaped like
+ * `IcsExportResult`'s — the user canceled, or the file was written at the path
+ * the native dialog returned, never one the renderer supplied (SEC-EL).
+ *
+ * `refused` is the third outcome and it is not an error: a circuit with two
+ * boards, or with a Raspberry Pi in it, has no sketch to give. The renderer
+ * says so in its own dialog and renders no „Sačuvaj kao…" there at all, so
+ * reaching this arm means the circuit changed between the preview and the click
+ * — which is worth reporting rather than writing an empty file over whatever
+ * the user pointed at.
+ * The reason is a machine code; the renderer owns the Serbian sentence.
+ */
+export type SketchExportResult =
+  | { canceled: true }
+  | { canceled: false; path: string; libraries: number }
+  | { canceled: false; refused: "no-board" | "many-boards" | "not-programmable" };
+
+/**
  * The scheduled backup's cadence (SET-011 / ADR-056). Mirrors `@nexus/db`'s
  * `BACKUP_CADENCES` exactly — redeclared rather than imported, the
  * `AuthErrorReason` pattern, because this file deliberately imports nothing;
@@ -9262,6 +9287,16 @@ export interface NexusApi {
   setCircuitWireColour(profileId: string, id: string, colour: string): Promise<CircuitWire>;
   /** Removes a wire. Both its parts stay exactly where they are. */
   removeCircuitWire(profileId: string, id: string): Promise<void>;
+  /**
+   * Writes this circuit's Arduino sketch (ADR-085 E4) at a path the user picks
+   * in a native save dialog. Resolves once that dialog is settled.
+   *
+   * Takes no sketch text. Main regenerates from its own store, so what lands on
+   * disk is the circuit as stored — and the renderer, which can already produce
+   * the identical string for its preview, is not the thing that decides what a
+   * file on the user's machine contains.
+   */
+  exportCircuitSketch(profileId: string, id: string): Promise<SketchExportResult>;
   /** Runs the query pipeline (parse -> FTS match -> bm25 candidates -> rank), falling back to `searchRecent`'s order when the query has no matchable terms (ADR-021). */
   searchQuery(profileId: string, query: string, limit: number): Promise<SearchResult[]>;
   /** The profile's most recently touched entries, already in their final order — no ranking pass, unlike `searchQuery`. */

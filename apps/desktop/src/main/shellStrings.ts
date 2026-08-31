@@ -56,6 +56,15 @@ export const CALENDAR_FILENAME_TOKEN = "kalendar";
  */
 export const CALENDAR_FILTER_NAME = "Kalendar (iCalendar)";
 
+/**
+ * Save-dialog filter for a generated Arduino sketch (`index.ts`'s
+ * `elec:export-sketch`, ADR-085 E4). „Skica" is what the Arduino IDE's own
+ * Serbian-speaking users call a sketch, and the extension is what the IDE
+ * insists on: a `.ino` must sit in a folder of the same name, which is why the
+ * suggested filename is the circuit's slug and not a date.
+ */
+export const SKETCH_FILTER_NAME = "Arduino skica";
+
 /** Open-dialog filter for an Anki deck (`index.ts`'s `pickApkgFile`, ADR-052). */
 export const ANKI_DECK_FILTER_NAME = "Anki špil";
 

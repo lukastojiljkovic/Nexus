@@ -696,6 +696,137 @@
   color: var(--nx-text-muted);
 }
 
+/* --- „Kod": the generated Arduino sketch (slice E4) ----------------------- */
+
+/* The house dialog recipe, taken outright from the shortcuts reference and the
+   attachment preview: `.recur-dialog__*` carries the overlay, the backdrop and
+   the panel, and everything below is only what a page of code needs that a
+   page of key chords does not. Sized like the preview — a sketch is read at a
+   fixed measure, and a panel that grew with the file would put the buttons off
+   the bottom of a short window. */
+.elec-sketch__panel.recur-dialog__panel {
+  width: min(720px, 94vw);
+  max-height: min(760px, 90vh);
+}
+.elec-sketch__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+  overflow-y: auto;
+  /* A flex item will not shrink below its content without this, and the panel
+     would grow past its own max-height instead of the body scrolling. */
+  min-height: 0;
+  padding-right: var(--nx-space-2);
+}
+.elec-sketch__description,
+.elec-sketch__refused {
+  margin: 0;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+  line-height: var(--nx-font-leading-loose);
+}
+.elec-sketch__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+/* The file name sits ON the heading rather than under it: it is the heading's
+   object, and it is the one string in this dialog the save dialog will repeat. */
+.elec-sketch__heading {
+  display: flex;
+  align-items: baseline;
+  gap: var(--nx-space-2);
+  margin: 0;
+}
+.elec-sketch__filename {
+  font-family: var(--nx-font-family-mono);
+  font-size: var(--nx-font-size-caption);
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--nx-text-muted);
+}
+/* Library Manager names, as a plain list of things to install. No bullets: the
+   names are already distinct lines, and a bullet would make an instruction
+   look like prose. */
+.elec-sketch__libraries {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.elec-sketch__library {
+  font-family: var(--nx-font-family-mono);
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+}
+.elec-sketch__hint {
+  margin: 0;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-caption);
+}
+/* The wiring table: two columns of fixed facts and one name the user typed, so
+   the name is the only one allowed to wrap. A pin id and a constant are read as
+   tokens and compared by eye against the code below, and a broken
+   `PIN_HC_SR04_TRIG` costs more than a long label costs. */
+.elec-sketch__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--nx-font-size-body-sm);
+}
+.elec-sketch__table th,
+.elec-sketch__table td {
+  padding: 6px var(--nx-space-2);
+  text-align: left;
+  vertical-align: baseline;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--nx-border-subtle);
+}
+.elec-sketch__table tbody td:nth-child(2) {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+/* The last rule would otherwise read as the table's own bottom edge, which the
+   section's gap already provides. */
+.elec-sketch__table tbody tr:last-child th,
+.elec-sketch__table tbody tr:last-child td {
+  border-bottom: none;
+}
+/* The two cells that are code. `regular` because a row header inherits `bold`,
+   and a bold pin id would out-shout the name beside it. */
+.elec-sketch__mono {
+  font-family: var(--nx-font-family-mono);
+  font-weight: var(--nx-font-weight-regular);
+}
+/* The one thing on this screen that takes a colour: the sketch describes a
+   circuit the checks are calling wrong, and that has to read as a caveat
+   rather than as another grey line of chrome. `--nx-danger`, because that is
+   what the checks panel already gives an error. */
+.elec-sketch__warning {
+  margin: 0;
+  color: var(--nx-danger);
+  font-size: var(--nx-font-size-body-sm);
+}
+/* The code itself: the app's mono recipe, on the alternate surface, scrolling
+   sideways rather than wrapping — a wrapped `constexpr` line stops looking
+   like code, and the file is written at a width that fits. */
+.elec-sketch__source {
+  margin: 0;
+  padding: var(--nx-space-3);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  font-family: var(--nx-font-family-mono);
+  font-size: var(--nx-font-size-body-sm);
+  line-height: var(--nx-font-leading-loose);
+  color: var(--nx-text);
+  white-space: pre;
+  overflow-x: auto;
+  -webkit-user-select: all;
+  user-select: all;
+}
+
 /* Narrow windows: two rails either side of a bench are what a 1024px window
    cannot afford, so below three columns' worth of width the panel moves UNDER
    THE DRAWER rather than under the bench.
