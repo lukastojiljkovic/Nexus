@@ -22,9 +22,20 @@ body,
    „white never appears" true by construction instead of true only while nothing
    happens to overflow. This is what the founder saw as „malo puca boja kad se
    skroluje app": a pure white strip against Noć's blue-black. */
+/* And the canvas FOREGROUND, for the same argument one paragraph further on.
+   `.nx-app` sets `color: var(--nx-text)`, and twenty components render through
+   `createPortal(…, document.body)` — every dialog, the search palette, every
+   popover — so all of that markup hangs OUTSIDE the element that names the
+   colour. It has been legible only because each panel's children set a colour
+   of their own; a child that does not gets Chromium's default, which is BLACK,
+   on Noć's blue-black surface. That is not a rule anyone can be expected to
+   remember at every new `<td>` — the sketch dialog's „Komponenta" column found
+   it by being the first cell in months with no class of its own — so it is
+   settled here, where inheritance already had to be settled once. */
 body {
   margin: 0;
   background: var(--nx-bg);
+  color: var(--nx-text);
 }
 
 /* Global "you found it" mark for a global-search reveal (021-e), applied by
