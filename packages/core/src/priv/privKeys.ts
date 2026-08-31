@@ -7,6 +7,7 @@ import {
   type WrappedKey,
 } from "../auth/keyChain.js";
 import { normalizePasscode } from "../auth/passcode.js";
+import { asBufferSource } from "../bytes.js";
 
 /**
  * The private-notes key chain (ADR-057): the PRIV DEK and its two wraps.
@@ -81,9 +82,11 @@ export async function derivePrivCredentialKey(
     outputType: "binary",
   });
 
-  const ikm = await crypto.subtle.importKey("raw", argonOutput, "HKDF", false, ["deriveBits"]);
+  const ikm = await crypto.subtle.importKey("raw", asBufferSource(argonOutput), "HKDF", false, [
+    "deriveBits",
+  ]);
   const kek = await crypto.subtle.deriveBits(
-    { name: "HKDF", hash: "SHA-256", salt: deviceSecret, info: PRIV_WRAP_INFO },
+    { name: "HKDF", hash: "SHA-256", salt: asBufferSource(deviceSecret), info: PRIV_WRAP_INFO },
     ikm,
     256,
   );

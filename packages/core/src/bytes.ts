@@ -44,6 +44,36 @@
  * annotation.
  */
 
+/**
+ * `Uint8Array` → the `BufferSource` WebCrypto wants, with no copy where none is
+ * needed.
+ *
+ * A `Uint8Array` may be a VIEW onto a larger buffer — which is what
+ * `subarray()` returns. Handing `.buffer` to WebCrypto would pass the WHOLE
+ * backing buffer and silently authenticate or encrypt bytes the caller never
+ * offered. Passing the view itself is correct and is what this does; the
+ * function exists to hold this comment, because the „optimisation" of reaching
+ * for `.buffer` is the kind a future reader makes in good faith.
+ *
+ * The cast is TypeScript 5.7's `Uint8Array<ArrayBufferLike>` meeting
+ * WebCrypto's `BufferSource`, which is `ArrayBufferView<ArrayBuffer>`. The gap
+ * is `SharedArrayBuffer`: a `Uint8Array` COULD be backed by one, and WebCrypto
+ * rejects those at runtime. Nothing in this product ever allocates shared
+ * memory — there is no `SharedArrayBuffer` anywhere in the repository, and the
+ * web app deliberately does not set the COOP/COEP headers that would make one
+ * available — so the type the compiler cannot rule out is one the runtime
+ * cannot produce.
+ *
+ * `@nexus/sync-crypto` exports the same function under the same name, and this
+ * is a deliberate second copy rather than an import, for the reason this file's
+ * header gives about `imex` and `auth`: `@nexus/core` is the domain layer and
+ * must not grow a dependency on the sync stack to obtain a one-line cast. Two
+ * copies of a comment are cheaper than an edge between those two packages.
+ */
+export function asBufferSource(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
+  return bytes as Uint8Array<ArrayBuffer>;
+}
+
 const HEX_DIGITS = "0123456789abcdef";
 
 /** Lower-case hex, two characters per byte. */

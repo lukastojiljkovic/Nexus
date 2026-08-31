@@ -63,7 +63,18 @@ export type { SyncCryptoErrorCode } from "./errors.js";
 // and `parent_id` by `octet_length`, and a client that checked `String.length`
 // would pass a 200-character Serbian id that is 320 bytes on the wire. Counting
 // the same bytes the database counts needs the same encoder.
-export { base64urlToBytes, bytesToBase64url, constantTimeEqual, utf8, zeroize } from "./bytes.js";
+// `asBufferSource` is exported for the two WebCrypto ports — the real one in
+// `@nexus/sync-port` and the fake here — so that „never hand `.buffer` to
+// WebCrypto" is one function with one comment rather than a rule two files
+// remember separately.
+export {
+  asBufferSource,
+  base64urlToBytes,
+  bytesToBase64url,
+  constantTimeEqual,
+  utf8,
+  zeroize,
+} from "./bytes.js";
 
 // ── Canonical JSON ──────────────────────────────────────────────────────────
 export { canonicalJson, isJsonObject, parseJsonValue } from "./json.js";

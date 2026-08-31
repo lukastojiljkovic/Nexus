@@ -120,6 +120,38 @@ export function zeroize(bytes: Uint8Array): void {
   bytes.fill(0);
 }
 
+/**
+ * `Uint8Array` → the `BufferSource` WebCrypto wants, with no copy where none is
+ * needed.
+ *
+ * A `Uint8Array` may be a VIEW onto a larger buffer — which is what
+ * `subarray()` returns, and what {@link encodeStruct} produces all over.
+ * Handing `.buffer` to WebCrypto would pass the WHOLE backing buffer and
+ * silently authenticate or encrypt bytes the caller never offered. Passing the
+ * view itself is correct and is what this does; the function exists to hold
+ * this comment, because the „optimisation" of reaching for `.buffer` is the
+ * kind a future reader makes in good faith.
+ *
+ * It lives HERE, in the package every crypto surface already depends on, rather
+ * than beside either caller. `sync-port`'s real WebCrypto port had it and
+ * `sync-crypto`'s FAKE port did not — not because the fake was exempt, but
+ * because the fake was compiled without `lib: DOM` and met Node's looser types
+ * instead. A fake held to a weaker contract than the thing it fakes is a fake
+ * that can drift from it, and every sync test in this repository runs against
+ * that one.
+ */
+export function asBufferSource(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
+  // The cast is TypeScript 5.7's `Uint8Array<ArrayBufferLike>` meeting
+  // WebCrypto's `BufferSource`, which is `ArrayBufferView<ArrayBuffer>`. The
+  // gap is `SharedArrayBuffer`: a `Uint8Array` COULD be backed by one, and
+  // WebCrypto rejects those at runtime. Nothing in this product ever allocates
+  // shared memory — there is no `SharedArrayBuffer` anywhere in the repository,
+  // and the web app deliberately does not set the COOP/COEP headers that would
+  // make one available — so the type the compiler cannot rule out is one the
+  // runtime cannot produce.
+  return bytes as Uint8Array<ArrayBuffer>;
+}
+
 const BASE64URL_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
 /** Reverse table for `base64urlToBytes`; 255 marks "not in the alphabet". */

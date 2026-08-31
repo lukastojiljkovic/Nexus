@@ -15,6 +15,7 @@ import {
   AEAD_TAG_BYTES,
   SHA256_BYTES,
   X25519_PUBLIC_KEY_BYTES,
+  asBufferSource,
 } from "@nexus/sync-crypto";
 
 /**
@@ -140,28 +141,11 @@ const subtle = (): Subtle => {
   return c.subtle;
 };
 
-/**
- * `Uint8Array` → the `BufferSource` WebCrypto wants, with no copy where none is
- * needed.
- *
- * A `Uint8Array` may be a VIEW onto a larger buffer — which is what
- * `subarray()` returns, and what `encodeStruct` in `@nexus/sync-crypto`
- * produces all over. Handing `.buffer` to WebCrypto would pass the WHOLE
- * backing buffer and silently authenticate or encrypt bytes the caller never
- * offered. Passing the view itself is correct and is what this does; the
- * function exists to hold this comment, because the „optimisation" of reaching
- * for `.buffer` is the kind a future reader makes in good faith.
- */
-const view = (bytes: Uint8Array): Uint8Array<ArrayBuffer> =>
-  // The cast is TypeScript 5.7's `Uint8Array<ArrayBufferLike>` meeting
-  // WebCrypto's `BufferSource`, which is `ArrayBufferView<ArrayBuffer>`. The
-  // gap is `SharedArrayBuffer`: a `Uint8Array` COULD be backed by one, and
-  // WebCrypto rejects those at runtime. Nothing in this product ever allocates
-  // shared memory — there is no `SharedArrayBuffer` anywhere in the repository,
-  // and the web app deliberately does not set the COOP/COEP headers that would
-  // make one available — so the type the compiler cannot rule out is one the
-  // runtime cannot produce.
-  bytes as Uint8Array<ArrayBuffer>;
+// `view` used to live here, with the comment that is now on `asBufferSource`
+// in `@nexus/sync-crypto`. It moved because the FAKE `CryptoPort` in that
+// package needed the identical adaptation and had never had it — the fake was
+// compiled without `lib: DOM` and met Node's looser types instead, so the two
+// implementations of one port were being held to two different contracts.
 
 const bytesOf = (buffer: ArrayBuffer): Uint8Array => new Uint8Array(buffer);
 
@@ -201,19 +185,19 @@ export function createWebCryptoPort(): CryptoPort {
     },
 
     async sha256(data: Uint8Array): Promise<Uint8Array> {
-      return bytesOf(await subtle().digest("SHA-256", view(data)));
+      return bytesOf(await subtle().digest("SHA-256", asBufferSource(data)));
     },
 
     async hmacSha256(key: Uint8Array, data: Uint8Array): Promise<Uint8Array> {
       const material = key.length === 0 ? new Uint8Array(HMAC_BLOCK_BYTES) : key;
       const cryptoKey = await subtle().importKey(
         "raw",
-        view(material),
+        asBufferSource(material),
         { name: "HMAC", hash: "SHA-256" },
         false,
         ["sign"],
       );
-      return bytesOf(await subtle().sign("HMAC", cryptoKey, view(data)));
+      return bytesOf(await subtle().sign("HMAC", cryptoKey, asBufferSource(data)));
     },
 
     async hkdfSha256(request: HkdfRequest): Promise<Uint8Array> {
@@ -233,9 +217,11 @@ export function createWebCryptoPort(): CryptoPort {
       // port requires — WebCrypto has no expand-only mode, so the shape that
       // would silently disagree with a hand-rolled adapter is not reachable
       // from here.
-      const base = await subtle().importKey("raw", view(ikm), "HKDF", false, ["deriveBits"]);
+      const base = await subtle().importKey("raw", asBufferSource(ikm), "HKDF", false, [
+        "deriveBits",
+      ]);
       const derived = await subtle().deriveBits(
-        { name: "HKDF", hash: "SHA-256", salt: view(salt), info: view(info) },
+        { name: "HKDF", hash: "SHA-256", salt: asBufferSource(salt), info: asBufferSource(info) },
         base,
         outputBytes * 8,
       );
@@ -346,7 +332,13 @@ export function createWebCryptoPort(): CryptoPort {
       }
       let peer: KeyHandle;
       try {
-        peer = await subtle().importKey("raw", view(peerPublicKey), { name: "X25519" }, false, []);
+        peer = await subtle().importKey(
+          "raw",
+          asBufferSource(peerPublicKey),
+          { name: "X25519" },
+          false,
+          [],
+        );
       } catch {
         // A 32-byte string that is not a valid u-coordinate encoding. `null`,
         // for the same reason a low-order point is `null`: the caller's next

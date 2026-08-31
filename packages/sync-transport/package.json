@@ -17,7 +17,8 @@
     "@nexus/sync-crypto": "workspace:*"
   },
   "devDependencies": {
+    "@types/node": "^24.13.3",
     "typescript": "^5.8.0",
-    "vitest": "^3.2.0"
+    "vitest": "^4.1.11"
   }
 }

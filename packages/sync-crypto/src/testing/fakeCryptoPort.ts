@@ -58,6 +58,7 @@ import {
   type X25519KeyPair,
   type X25519SecretKey,
 } from "../port.js";
+import { asBufferSource } from "../bytes.js";
 
 /** Options for {@link createFakeCryptoPort}. */
 export interface FakeCryptoPortOptions {
@@ -125,7 +126,7 @@ async function importAesKey(key: Uint8Array, usage: "encrypt" | "decrypt"): Prom
   if (key.length !== AEAD_KEY_BYTES) {
     throw new TypeError(`AEAD key must be ${AEAD_KEY_BYTES} bytes, got ${key.length}`);
   }
-  return subtle.importKey("raw", key, "AES-GCM", false, [usage]);
+  return subtle.importKey("raw", asBufferSource(key), "AES-GCM", false, [usage]);
 }
 
 /** Creates a fresh fake. Each call gets its own PRNG state; tests never share one. */
@@ -166,24 +167,31 @@ export function createFakeCryptoPort(options: FakeCryptoPortOptions = {}): FakeC
     },
 
     async sha256(data: Uint8Array): Promise<Uint8Array> {
-      return new Uint8Array(await subtle.digest("SHA-256", data));
+      return new Uint8Array(await subtle.digest("SHA-256", asBufferSource(data)));
     },
 
     async hmacSha256(key: Uint8Array, data: Uint8Array): Promise<Uint8Array> {
       const imported = await subtle.importKey(
         "raw",
-        key,
+        asBufferSource(key),
         { name: "HMAC", hash: "SHA-256" },
         false,
         ["sign"],
       );
-      return new Uint8Array(await subtle.sign("HMAC", imported, data));
+      return new Uint8Array(await subtle.sign("HMAC", imported, asBufferSource(data)));
     },
 
     async hkdfSha256(request: HkdfRequest): Promise<Uint8Array> {
-      const ikm = await subtle.importKey("raw", request.ikm, "HKDF", false, ["deriveBits"]);
+      const ikm = await subtle.importKey("raw", asBufferSource(request.ikm), "HKDF", false, [
+        "deriveBits",
+      ]);
       const bits = await subtle.deriveBits(
-        { name: "HKDF", hash: "SHA-256", salt: request.salt, info: request.info },
+        {
+          name: "HKDF",
+          hash: "SHA-256",
+          salt: asBufferSource(request.salt),
+          info: asBufferSource(request.info),
+        },
         ikm,
         request.outputBytes * 8,
       );
@@ -200,9 +208,11 @@ export function createFakeCryptoPort(options: FakeCryptoPortOptions = {}): FakeC
       );
       // HKDF rejects an empty IKM in some implementations; a password of zero
       // bytes is a caller bug everywhere in this package, so let it throw.
-      const ikm = await subtle.importKey("raw", request.password, "HKDF", false, ["deriveBits"]);
+      const ikm = await subtle.importKey("raw", asBufferSource(request.password), "HKDF", false, [
+        "deriveBits",
+      ]);
       const bits = await subtle.deriveBits(
-        { name: "HKDF", hash: "SHA-256", salt: request.salt, info },
+        { name: "HKDF", hash: "SHA-256", salt: asBufferSource(request.salt), info },
         ikm,
         request.outputBytes * 8,
       );
@@ -215,9 +225,13 @@ export function createFakeCryptoPort(options: FakeCryptoPortOptions = {}): FakeC
       }
       const key = await importAesKey(request.key, "encrypt");
       const sealed = await subtle.encrypt(
-        { name: "AES-GCM", iv: request.nonce, additionalData: request.aad },
+        {
+          name: "AES-GCM",
+          iv: asBufferSource(request.nonce),
+          additionalData: asBufferSource(request.aad),
+        },
         key,
-        request.plaintext,
+        asBufferSource(request.plaintext),
       );
       return new Uint8Array(sealed);
     },
@@ -229,9 +243,13 @@ export function createFakeCryptoPort(options: FakeCryptoPortOptions = {}): FakeC
       const key = await importAesKey(request.key, "decrypt");
       try {
         const opened = await subtle.decrypt(
-          { name: "AES-GCM", iv: request.nonce, additionalData: request.aad },
+          {
+          name: "AES-GCM",
+          iv: asBufferSource(request.nonce),
+          additionalData: asBufferSource(request.aad),
+        },
           key,
-          request.ciphertext,
+          asBufferSource(request.ciphertext),
         );
         return new Uint8Array(opened);
       } catch {
@@ -256,7 +274,13 @@ export function createFakeCryptoPort(options: FakeCryptoPortOptions = {}): FakeC
     ): Promise<Uint8Array | null> {
       if (peerPublicKey.length !== X25519_PUBLIC_KEY_BYTES) return null;
       try {
-        const peer = await subtle.importKey("raw", peerPublicKey, { name: "X25519" }, false, []);
+        const peer = await subtle.importKey(
+          "raw",
+          asBufferSource(peerPublicKey),
+          { name: "X25519" },
+          false,
+          [],
+        );
         const bits = await subtle.deriveBits(
           { name: "X25519", public: peer },
           secretKey as PlatformKey,

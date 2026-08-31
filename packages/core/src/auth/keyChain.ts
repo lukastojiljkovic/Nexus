@@ -1,5 +1,5 @@
 import { argon2id } from "hash-wasm";
-import { base64ToBytes, bytesToBase64, bytesToHex } from "../bytes.js";
+import { asBufferSource, base64ToBytes, bytesToBase64, bytesToHex } from "../bytes.js";
 import { normalizeArchivePassphrase } from "../imex/archivePassphrase.js";
 import { normalizePasscode } from "./passcode.js";
 
@@ -138,9 +138,11 @@ export async function derivePasscodeKey(
   // one key regardless of keyboard/IME — decorative.
   const argonOutput = await runArgon2id(normalizePasscode(passcode), salt, params);
 
-  const ikm = await crypto.subtle.importKey("raw", argonOutput, "HKDF", false, ["deriveBits"]);
+  const ikm = await crypto.subtle.importKey("raw", asBufferSource(argonOutput), "HKDF", false, [
+    "deriveBits",
+  ]);
   const kek = await crypto.subtle.deriveBits(
-    { name: "HKDF", hash: "SHA-256", salt: deviceSecret, info: PASSCODE_WRAP_INFO },
+    { name: "HKDF", hash: "SHA-256", salt: asBufferSource(deviceSecret), info: PASSCODE_WRAP_INFO },
     ikm,
     256,
   );
@@ -188,8 +190,14 @@ export async function deriveArchiveKey(
 /** Wraps `dataKey` with AES-256-GCM under `kek`, using a fresh random nonce every call. */
 export async function wrapDataKey(dataKey: Uint8Array, kek: Uint8Array): Promise<WrappedKey> {
   const nonce = randomBytes(GCM_NONCE_BYTES);
-  const key = await crypto.subtle.importKey("raw", kek, "AES-GCM", false, ["encrypt"]);
-  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv: nonce }, key, dataKey);
+  const key = await crypto.subtle.importKey("raw", asBufferSource(kek), "AES-GCM", false, [
+    "encrypt",
+  ]);
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv: asBufferSource(nonce) },
+    key,
+    asBufferSource(dataKey),
+  );
   return { nonce: bytesToBase64(nonce), ciphertext: bytesToBase64(new Uint8Array(ciphertext)) };
 }
 
@@ -203,7 +211,9 @@ export async function wrapDataKey(dataKey: Uint8Array, kek: Uint8Array): Promise
  */
 export async function unwrapDataKey(wrapped: WrappedKey, kek: Uint8Array): Promise<Uint8Array> {
   try {
-    const key = await crypto.subtle.importKey("raw", kek, "AES-GCM", false, ["decrypt"]);
+    const key = await crypto.subtle.importKey("raw", asBufferSource(kek), "AES-GCM", false, [
+      "decrypt",
+    ]);
     const plaintext = await crypto.subtle.decrypt(
       { name: "AES-GCM", iv: base64ToBytes(wrapped.nonce) },
       key,
