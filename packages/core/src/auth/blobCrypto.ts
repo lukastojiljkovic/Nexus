@@ -1,4 +1,4 @@
-import { bytesToHex, hexToBytes } from "../bytes.js";
+import { asBufferSource, bytesToHex, hexToBytes } from "../bytes.js";
 
 /**
  * Attachment blob crypto (ADR-019): encryption and naming for the NOTE
@@ -128,7 +128,7 @@ export async function blobStorageName(nameKey: Uint8Array, sha256Hex: string): P
   assertSha256Hex(sha256Hex);
   const key = await crypto.subtle.importKey(
     "raw",
-    nameKey,
+    asBufferSource(nameKey),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"],
@@ -153,12 +153,14 @@ export async function encryptBlob(
   assertSha256Hex(sha256Hex);
 
   const nonce = randomNonce();
-  const key = await crypto.subtle.importKey("raw", contentKey, "AES-GCM", false, ["encrypt"]);
+  const key = await crypto.subtle.importKey("raw", asBufferSource(contentKey), "AES-GCM", false, [
+    "encrypt",
+  ]);
   const ciphertext = new Uint8Array(
     await crypto.subtle.encrypt(
-      { name: "AES-GCM", iv: nonce, additionalData: textEncoder.encode(sha256Hex) },
+      { name: "AES-GCM", iv: asBufferSource(nonce), additionalData: textEncoder.encode(sha256Hex) },
       key,
-      plaintext,
+      asBufferSource(plaintext),
     ),
   );
 
@@ -198,11 +200,13 @@ export async function decryptBlob(
   const ciphertext = container.subarray(HEADER_BYTES);
 
   try {
-    const key = await crypto.subtle.importKey("raw", contentKey, "AES-GCM", false, ["decrypt"]);
+    const key = await crypto.subtle.importKey("raw", asBufferSource(contentKey), "AES-GCM", false, [
+      "decrypt",
+    ]);
     const plaintext = await crypto.subtle.decrypt(
-      { name: "AES-GCM", iv: nonce, additionalData: textEncoder.encode(sha256Hex) },
+      { name: "AES-GCM", iv: asBufferSource(nonce), additionalData: textEncoder.encode(sha256Hex) },
       key,
-      ciphertext,
+      asBufferSource(ciphertext),
     );
     return new Uint8Array(plaintext);
   } catch (error) {

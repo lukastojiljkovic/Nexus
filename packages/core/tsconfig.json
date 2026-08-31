@@ -1,7 +1,20 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "noEmit": true
+    "noEmit": true,
+    // `DOM` for the platform globals `src/auth` uses — `crypto`, `TextEncoder`,
+    // `TextDecoder`, `btoa`, `atob`. This package is the shared domain layer
+    // behind both the desktop renderer and the web app, so the WEB surface is
+    // the one it must compile against; nothing here touches `document` or
+    // `window`. Declared rather than inherited, because until 2026-08-31 these
+    // names resolved only through an `@types` directory a test runner happened
+    // to leave on tsc's type-root walk.
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    // `node` for three test files alone — `imex`'s archive round-trips sign with
+    // `node:crypto` and base64 with `Buffer`, and `ankiTranslate.test.ts` does the
+    // same. They compile with the rest of `src`, so the types they need are this
+    // package's, and `@types/node` is now declared rather than merely reachable.
+    "types": ["node"]
   },
   "include": ["src"]
 }

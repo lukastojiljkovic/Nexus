@@ -1,7 +1,16 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "noEmit": true
+    "noEmit": true,
+    // `DOM` for the platform globals this package deliberately uses —
+    // `TextEncoder`, `TextDecoder`, `URL`, `atob`, `fetch`, `Response`. Same
+    // reason as `sync-port`: the sync stack targets the WEB platform surface so
+    // that one implementation serves the Electron main process, the renderer
+    // and a browser tab. Declared rather than inherited, because until 2026-08-31
+    // these names resolved only through an `@types` directory a test runner
+    // happened to leave on tsc's type-root walk, and a devDependency bump took
+    // them all away at once. Nothing here touches `document` or `window`.
+    "lib": ["ES2023", "DOM"]
   },
   "include": ["src"]
 }

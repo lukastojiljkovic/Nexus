@@ -25,6 +25,7 @@
  * Electron main process.
  */
 
+import { asBufferSource } from "../bytes.js";
 import { KeyUnwrapError, unwrapDataKey, wrapDataKey, type WrappedKey } from "./keyChain.js";
 
 const DATA_KEY_HEX_PATTERN = /^[0-9a-fA-F]{64}$/;
@@ -57,7 +58,9 @@ async function deriveBackupWrapKey(dataKeyHex: string): Promise<Uint8Array> {
     );
   }
   const dataKey = hexToBytes(dataKeyHex.toLowerCase());
-  const ikm = await crypto.subtle.importKey("raw", dataKey, "HKDF", false, ["deriveBits"]);
+  const ikm = await crypto.subtle.importKey("raw", asBufferSource(dataKey), "HKDF", false, [
+    "deriveBits",
+  ]);
   const bits = await crypto.subtle.deriveBits(
     { name: "HKDF", hash: "SHA-256", salt: EMPTY_SALT, info: BACKUP_PASSPHRASE_INFO },
     ikm,
