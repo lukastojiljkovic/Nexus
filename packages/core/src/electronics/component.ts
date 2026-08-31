@@ -188,6 +188,30 @@ export interface ComponentDef {
   readonly library?: string;
   /** A board's own logic level. Boards only — nothing else has one to state. */
   readonly logicVolts?: number;
+  /**
+   * A part that destroys itself without a resistor in series with it.
+   *
+   * A fact about the physics, not a preference: a light-emitting junction has an
+   * exponential I–V curve and no internal limiting, so across a fixed voltage it
+   * takes whatever current the supply can deliver until something gives. The
+   * `led` entry has said exactly this in its Serbian summary since the catalogue
+   * shipped — „Nikad bez otpornika u nizu" — and prose is not something a rule
+   * can read.
+   *
+   * It exists because the obvious test is WRONG. „Has an `anode` and a
+   * `cathode`" would be true of `diode-1n4007` and `diode-1n4148`, which are
+   * built from the same `polarised()` helper as the LED and are correct with no
+   * resistor anywhere near them — a flyback diode across a motor coil is
+   * supposed to be a bare diode. A rules engine that hardcoded the two LED ids
+   * instead would be a rules engine with catalogue data inside it, which is the
+   * one thing ADR-085 §3 says this module does not do.
+   *
+   * Set on the parts whose emitting junction faces the user's wiring: `led`,
+   * `led-rgb`, and the input side of `optocoupler-pc817`. Deliberately NOT on
+   * the Zener, whose textbook use is itself a current-limited shunt and whose
+   * „needs a resistor" depends on the topology rather than on the part.
+   */
+  readonly needsSeriesResistor?: true;
 }
 
 export type ComponentProblemCode =
@@ -296,6 +320,15 @@ export function validateComponent(value: unknown): readonly ComponentProblem[] {
   const library = value["library"];
   if (library !== undefined && (typeof library !== "string" || library.trim().length === 0)) {
     problems.push({ field: "library", code: "shape" });
+  }
+
+  // `true` or absent, never `false`. „This part does not need a resistor" is the
+  // default and says nothing, so a stored `false` would be a field carrying no
+  // information that a reader would nonetheless have to interpret — and the two
+  // spellings of „no" would eventually disagree in a comparison somewhere.
+  const needsSeriesResistor = value["needsSeriesResistor"];
+  if (needsSeriesResistor !== undefined && needsSeriesResistor !== true) {
+    problems.push({ field: "needsSeriesResistor", code: "shape" });
   }
 
   const valueUnit = value["valueUnit"];

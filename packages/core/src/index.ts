@@ -1090,6 +1090,16 @@ export type {
   WireColour,
   WireEnd,
 } from "./electronics/circuit.js";
+// ADR-085 slice E3. `buildNets` is exported beside the rules rather than kept
+// private to them, because it is the derived fact E4 (sketch generation) and E5
+// (simulation) are specified to consume — §2's „E3 comes before E4 and E5". A
+// generator that re-derived connectivity would be a second rules engine, and
+// the day the two disagreed the user would get code contradicting the warning
+// on their own screen.
+export { buildNets } from "./electronics/nets.js";
+export type { CircuitNets, Net, PinRef } from "./electronics/nets.js";
+export { circuitRules } from "./electronics/rules.js";
+export type { RuleCode, RuleFinding, RuleSeverity, RuleValue } from "./electronics/rules.js";
 
 /**
  * ADR-086 — „Priprema": the signals a first run collects, the lexicon that

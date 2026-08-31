@@ -125,6 +125,7 @@ export const PASSIVES: readonly ComponentDef[] = [
     kind: "passive",
     name: "LED dioda",
     summary: "Nikad bez otpornika u nizu — direktno na pin traje nekoliko sekundi.",
+    needsSeriesResistor: true,
     buses: [],
     pins: polarised(),
   },
@@ -133,6 +134,7 @@ export const PASSIVES: readonly ComponentDef[] = [
     kind: "passive",
     name: "RGB LED (zajednička katoda)",
     summary: "Tri diode u jednom kućištu; svaka traži svoj otpornik i svoj PWM pin.",
+    needsSeriesResistor: true,
     buses: [],
     pins: [
       pin("R", ["anode"], undefined, "crvena"),
@@ -195,6 +197,7 @@ export const PASSIVES: readonly ComponentDef[] = [
     kind: "passive",
     name: "Optokupler PC817",
     summary: "Prenosi signal svetlošću — dve strane kola nemaju zajedničku masu.",
+    needsSeriesResistor: true,
     buses: [],
     pins: [
       pin("A", ["anode"], undefined, "LED +"),
