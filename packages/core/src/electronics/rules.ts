@@ -35,7 +35,8 @@
  */
 
 import type { Circuit, CircuitPart } from "./circuit.js";
-import type { ComponentDef, Pin, PinFunction } from "./component.js";
+import type { BusRoleFunction, ComponentDef, Pin, PinFunction } from "./component.js";
+import { BUS_ROLE_FUNCTIONS, pinBuses } from "./component.js";
 import type { Net, PinRef } from "./nets.js";
 import { buildNets } from "./nets.js";
 
@@ -92,8 +93,17 @@ export interface RuleFinding {
   readonly values: readonly RuleValue[];
 }
 
-/** Which pin functions pair with which, for {@link busRoleFindings}. */
-const BUS_PAIRS: Partial<Record<PinFunction, readonly PinFunction[]>> = {
+/**
+ * Which pin functions pair with which, for {@link busRoleFindings}.
+ *
+ * Total over `BusRoleFunction` rather than partial over `PinFunction`, so a
+ * tenth bus role added to the catalogue's model is a compile error here. The
+ * two tables have to agree about WHICH functions are roles — `busRoleFindings`
+ * uses this one to decide whether a pin is committed and `pinBuses` to decide
+ * which bus it is committed to — and a role present in one and missing from the
+ * other would silently stop being judged rather than fail.
+ */
+const BUS_PAIRS: Record<BusRoleFunction, readonly PinFunction[]> = {
   // Straight through: a peripheral's SDA is wired to the master's SDA. The same
   // holds for SPI, where a slave's „MOSI" pin is its input and carries the name
   // of the master's output — which is why MOSI pairs with MOSI, not with MISO.
@@ -110,7 +120,11 @@ const BUS_PAIRS: Partial<Record<PinFunction, readonly PinFunction[]>> = {
   "uart-rx": ["uart-tx"],
 };
 
-const BUS_ROLES = Object.keys(BUS_PAIRS) as readonly PinFunction[];
+/**
+ * The same nine, widened once here so `LISTENING` can splice them in and the
+ * membership test in {@link busRoleFindings} reads as a test rather than a cast.
+ */
+const BUS_ROLES: readonly PinFunction[] = BUS_ROLE_FUNCTIONS;
 
 /** The functions that make a pin a source rather than a sink. */
 const DRIVING: readonly PinFunction[] = ["digital-out", "analog-out", "pwm", "power-out"];
@@ -447,7 +461,8 @@ function busRoleFindings(bench: Bench): RuleFinding[] {
       .pinsOf(net)
       .map((member) => ({
         member,
-        roles: member.pin.functions.filter((fn) => BUS_ROLES.includes(fn)),
+        roles: member.pin.functions.filter((fn): fn is BusRoleFunction => BUS_ROLES.includes(fn)),
+        buses: pinBuses(member.pin),
       }))
       // A pin that commits to no bus role is never judged. Bit-banging I²C on a
       // plain GPIO is ordinary, and an ESP32 remaps the hardware bus onto almost
@@ -460,10 +475,19 @@ function busRoleFindings(bench: Bench): RuleFinding[] {
         const a = committed[i];
         const b = committed[j];
         if (a === undefined || b === undefined) continue;
-        const pairs = a.roles.some((role) =>
-          (BUS_PAIRS[role] ?? []).some((mate) => b.roles.includes(mate)),
-        );
-        if (pairs) continue;
+        // **Two pins are only crossed if they are on the same bus.** The
+        // exemption above was written for a pin that declares no role at all,
+        // and that turned out to be a much smaller set than it reads as: every
+        // hardware bus pin on every board is ALSO an ordinary GPIO with a second
+        // name, so bit-banging I²C onto a UNO's D11 met `spi-mosi` and was
+        // reported as an error — the exact practice the comment above says is
+        // ordinary, refused because the *board* had a spare name for the pin.
+        // A board's role is a capability; only a peripheral's is an intent.
+        // Different buses at the two ends means one of them is bit-banging,
+        // which is not this rule's business; the SAME bus, badly paired, is.
+        if (![...a.buses].some((bus) => b.buses.has(bus))) continue;
+        const mates = new Set<PinFunction>(b.roles);
+        if (a.roles.some((role) => BUS_PAIRS[role].some((mate) => mates.has(mate)))) continue;
         findings.push({
           code: "bus-role",
           severity: "error",

@@ -1100,6 +1100,11 @@ export { buildNets } from "./electronics/nets.js";
 export type { CircuitNets, Net, PinRef } from "./electronics/nets.js";
 export { circuitRules } from "./electronics/rules.js";
 export type { RuleCode, RuleFinding, RuleSeverity, RuleValue } from "./electronics/rules.js";
+// ADR-085 slice E4. Pure, and deliberately so: the main process calls it and
+// writes the result at a path the user picks in a native dialog, exactly as the
+// `.ics` export does — the renderer never supplies a filesystem path.
+export { generateSketch } from "./electronics/sketch.js";
+export type { Sketch, SketchConnection, SketchRefusal } from "./electronics/sketch.js";
 
 /**
  * ADR-086 — „Priprema": the signals a first run collects, the lexicon that

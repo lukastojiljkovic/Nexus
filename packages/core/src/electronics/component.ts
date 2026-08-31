@@ -189,6 +189,24 @@ export interface ComponentDef {
   /** A board's own logic level. Boards only — nothing else has one to state. */
   readonly logicVolts?: number;
   /**
+   * How code gets onto this board. **Required on a board, forbidden on anything
+   * else** — see the `board` rule in {@link validateComponent}.
+   *
+   * `"arduino"` is a microcontroller you compile a sketch for and upload;
+   * `"linux"` is a single-board computer you copy a program onto and run. The
+   * distinction is not a preference between toolchains, it is what makes a
+   * generated artefact right or absurd: a `.ino` for a Raspberry Pi 4 is not a
+   * worse answer than a Python file, it is an answer to a question nobody asked.
+   * ADR-085's E4 refuses rather than emits one, and it can only refuse if the
+   * catalogue says which kind of board this is.
+   *
+   * Required rather than optional because the alternative is a board added six
+   * months from now that silently defaults to one of the two. This is the field
+   * that decides whether the code generator will speak to it at all, and a
+   * default would be a guess wearing a value's clothes.
+   */
+  readonly programming?: "arduino" | "linux";
+  /**
    * A part that destroys itself without a resistor in series with it.
    *
    * A fact about the physics, not a preference: a light-emitting junction has an
@@ -292,6 +310,78 @@ const BUS_REQUIREMENTS: Record<BusKind, readonly (readonly PinFunction[])[]> = {
 };
 
 /**
+ * Every pin function that names a role on a bus, as opposed to a direction or a
+ * rail.
+ *
+ * Exported because `rules.ts` keys its pairing table on it: which role mates
+ * with which is that file's business, but WHICH FUNCTIONS ARE ROLES is this
+ * one's, and two files enumerating the same nine strings is two files that can
+ * disagree. Typed as this list rather than as `PinFunction`, so a tenth role
+ * added here is a compile error in the pairing table rather than a rule that
+ * quietly stops judging it.
+ */
+export const BUS_ROLE_FUNCTIONS = [
+  "i2c-sda",
+  "i2c-scl",
+  "spi-mosi",
+  "spi-miso",
+  "spi-sck",
+  "spi-cs",
+  "uart-tx",
+  "uart-rx",
+  "onewire",
+] as const satisfies readonly PinFunction[];
+
+export type BusRoleFunction = (typeof BUS_ROLE_FUNCTIONS)[number];
+
+/**
+ * Which bus each of those roles is speaking.
+ *
+ * Written out rather than derived from `BUS_REQUIREMENTS` above, because the two
+ * answer different questions. That table says which pins a part must HAVE to
+ * claim a bus: an SPI part needs a clock and a data line, and it does not need a
+ * chip select, which is very often an ordinary GPIO the library toggles. This
+ * one says which bus a pin is TALKING when it carries a role, and `spi-cs` most
+ * certainly is. The asymmetry is the hardware's, not an oversight.
+ */
+const BUS_OF_FUNCTION: Partial<Record<PinFunction, BusKind>> &
+  Record<BusRoleFunction, BusKind> = {
+  "i2c-sda": "i2c",
+  "i2c-scl": "i2c",
+  "spi-mosi": "spi",
+  "spi-miso": "spi",
+  "spi-sck": "spi",
+  "spi-cs": "spi",
+  "uart-tx": "uart",
+  "uart-rx": "uart",
+  onewire: "onewire",
+};
+
+/**
+ * Every bus one pin declares a role on. Empty for an ordinary GPIO.
+ *
+ * **One end of a wire is never enough to say a bus is in use**, and this
+ * function exists so that both readers of it agree on that. Every hardware bus
+ * pin on every board in the catalogue is also an ordinary GPIO carrying a second
+ * name — the UNO's A4/A5 are the I²C pair *and* two analogue inputs, its D10–D13
+ * are the SPI header *and* four digital pins — so a board's role is a
+ * CAPABILITY and only a peripheral's is an INTENT. The rules engine and the
+ * sketch generator both had this wrong in their own way and in their own file:
+ * one reported „bus pins crossed" for a legitimate bit-banged I²C line on D11,
+ * the other emitted `#include <SPI.h>` for a circuit whose only SPI was that
+ * same spare name on the same pin. Both now intersect the two ends through
+ * here.
+ */
+export function pinBuses(pin: Pin): ReadonlySet<BusKind> {
+  const buses = new Set<BusKind>();
+  for (const fn of pin.functions) {
+    const bus = BUS_OF_FUNCTION[fn];
+    if (bus !== undefined) buses.add(bus);
+  }
+  return buses;
+}
+
+/**
  * Every problem with one entry, or an empty list.
  *
  * Returns all of them rather than the first, because the caller is a test over a
@@ -334,6 +424,20 @@ export function validateComponent(value: unknown): readonly ComponentProblem[] {
   const valueUnit = value["valueUnit"];
   if (valueUnit !== undefined && !(VALUE_UNITS as readonly unknown[]).includes(valueUnit)) {
     problems.push({ field: "valueUnit", code: "shape" });
+  }
+
+  // Required on a board and forbidden elsewhere, rather than optional. A
+  // sensor has no toolchain, and a board that failed to state one would reach
+  // the code generator as „not an Arduino", which is the same answer a
+  // Raspberry Pi gives — so the next board somebody adds would be silently
+  // unprogrammable instead of loudly incomplete.
+  const programming = value["programming"];
+  if (kind === "board") {
+    if (programming !== "arduino" && programming !== "linux") {
+      problems.push({ field: "programming", code: "board" });
+    }
+  } else if (programming !== undefined) {
+    problems.push({ field: "programming", code: "board" });
   }
 
   // Pins first: whether a supply is even meaningful is read off them.

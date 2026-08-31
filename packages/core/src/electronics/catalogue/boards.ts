@@ -13,6 +13,16 @@
  * inviting both. `current.typical` is the board idling; `peak` is the board plus
  * what its rails are rated to hand out, which is the number a current budget has
  * to work against.
+ *
+ * `programming` splits these ten in two, and the split is by what the board IS
+ * rather than by whose name is on it. The eight microcontrollers are
+ * `"arduino"` — including the Pico, which is an RP2040 you upload a compiled
+ * binary to, and which the `arduino-pico` core builds sketches for exactly as
+ * the AVR core does; MicroPython being the other common way to write for it
+ * does not make it a computer. The two Raspberry Pis are `"linux"`: they boot
+ * an operating system, and code reaches them as a file you run. E4 generates a
+ * sketch for the first group and refuses the second, which is the whole reason
+ * the field exists.
  */
 
 import type { ComponentDef } from "../component.js";
@@ -27,6 +37,7 @@ export const BOARDS: readonly ComponentDef[] = [
     supply: { min: 7, max: 12 },
     current: { typical: 45, peak: 200 },
     logicVolts: 5,
+    programming: "arduino",
     buses: [
       { kind: "i2c", addresses: [] },
       { kind: "spi" },
@@ -67,6 +78,7 @@ export const BOARDS: readonly ComponentDef[] = [
     supply: { min: 7, max: 12 },
     current: { typical: 19, peak: 200 },
     logicVolts: 5,
+    programming: "arduino",
     buses: [
       { kind: "i2c", addresses: [] },
       { kind: "spi" },
@@ -105,6 +117,7 @@ export const BOARDS: readonly ComponentDef[] = [
     supply: { min: 7, max: 12 },
     current: { typical: 60, peak: 800 },
     logicVolts: 5,
+    programming: "arduino",
     buses: [
       { kind: "i2c", addresses: [] },
       { kind: "spi" },
@@ -151,6 +164,7 @@ export const BOARDS: readonly ComponentDef[] = [
     supply: { min: 7, max: 12 },
     current: { typical: 40, peak: 200 },
     logicVolts: 5,
+    programming: "arduino",
     buses: [
       { kind: "i2c", addresses: [] },
       { kind: "spi" },
@@ -196,6 +210,7 @@ export const BOARDS: readonly ComponentDef[] = [
     supply: { min: 5, max: 12 },
     current: { typical: 4, peak: 150 },
     logicVolts: 5,
+    programming: "arduino",
     buses: [
       { kind: "i2c", addresses: [] },
       { kind: "spi" },
@@ -231,6 +246,7 @@ export const BOARDS: readonly ComponentDef[] = [
     supply: { min: 5, max: 12 },
     current: { typical: 80, peak: 500 },
     logicVolts: 3.3,
+    programming: "arduino",
     buses: [
       { kind: "i2c", addresses: [] },
       { kind: "spi" },
@@ -279,6 +295,7 @@ export const BOARDS: readonly ComponentDef[] = [
     supply: { min: 5, max: 10 },
     current: { typical: 70, peak: 400 },
     logicVolts: 3.3,
+    programming: "arduino",
     buses: [
       { kind: "i2c", addresses: [] },
       { kind: "spi" },
@@ -320,6 +337,7 @@ export const BOARDS: readonly ComponentDef[] = [
     supply: { min: 1.8, max: 5.5 },
     current: { typical: 25, peak: 300 },
     logicVolts: 3.3,
+    programming: "arduino",
     buses: [
       { kind: "i2c", addresses: [] },
       { kind: "spi" },
@@ -364,6 +382,7 @@ export const BOARDS: readonly ComponentDef[] = [
     supply: { min: 5, max: 5.1 },
     current: { typical: 600, peak: 3000 },
     logicVolts: 3.3,
+    programming: "linux",
     buses: [
       { kind: "i2c", addresses: [] },
       { kind: "spi" },
@@ -407,6 +426,7 @@ export const BOARDS: readonly ComponentDef[] = [
     supply: { min: 5, max: 5.1 },
     current: { typical: 800, peak: 5000 },
     logicVolts: 3.3,
+    programming: "linux",
     buses: [
       { kind: "i2c", addresses: [] },
       { kind: "spi" },

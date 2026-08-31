@@ -40,6 +40,13 @@ const uno: ComponentDef = {
     { id: "D2", label: "2", functions: ["digital-in", "digital-out", "interrupt"], volts: 5 },
     { id: "D7", label: "7", functions: ["digital-in", "digital-out"], volts: 5 },
     { id: "D9", label: "9", functions: ["digital-in", "digital-out", "pwm"], volts: 5 },
+    // Present for the same reason `VIN` is. The real UNO's D11 is the SPI
+    // header's MOSI AND an ordinary digital pin, and that second name is what
+    // made the bus rule report a crossed bus on a legitimate bit-banged line —
+    // a board's role is a capability, a peripheral's is an intent. The fixture
+    // carries the pin that proves the distinction rather than the trimmed board
+    // that hides the need for it.
+    { id: "D11", label: "11", functions: ["digital-in", "digital-out", "pwm", "spi-mosi"], volts: 5 },
   ],
 };
 
@@ -334,6 +341,33 @@ describe("circuitRules", () => {
       ],
     );
     expect(codes(bitBanged)).not.toContain("bus-role");
+
+    // And the same, on a board pin that DOES carry a role — a different bus's.
+    // D11 is MOSI and is also an ordinary digital pin; software I²C over it is
+    // the same ordinary practice as over D7, and the rule used to report it as
+    // a crossed bus because the two ends' roles did not pair. Two pins are only
+    // crossed if they are on the same bus.
+    const bitBangedOverSpiPin = circuit(
+      [part("p1", "arduino-uno"), part("p2", "bmp280")],
+      [
+        w(["p1", "3V3"], ["p2", "VCC"]),
+        w(["p1", "GND1"], ["p2", "GND"]),
+        w(["p1", "D11"], ["p2", "SDA"]),
+      ],
+    );
+    expect(codes(bitBangedOverSpiPin)).not.toContain("bus-role");
+
+    // The exemption is by BUS, not a blanket one: SDA on the board's own SCL is
+    // still the same bus wired backwards, and still an error.
+    const crossedOnItsOwnBus = circuit(
+      [part("p1", "arduino-uno"), part("p2", "bmp280")],
+      [
+        w(["p1", "3V3"], ["p2", "VCC"]),
+        w(["p1", "GND1"], ["p2", "GND"]),
+        w(["p1", "A4"], ["p2", "SCL"]),
+      ],
+    );
+    expect(codes(crossedOnItsOwnBus)).toContain("bus-role");
   });
 
   it("reports two I²C parts that cannot be strapped apart, and only warns when they can", () => {

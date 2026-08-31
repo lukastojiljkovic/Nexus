@@ -43,6 +43,7 @@ const uno = (): Record<string, unknown> => ({
   supply: { min: 7, max: 12 },
   current: { typical: 45, peak: 200 },
   logicVolts: 5,
+  programming: "arduino",
   // A master lists no address, which the `address` rule allows only for a board.
   buses: [{ kind: "i2c", addresses: [] }],
   pins: [
@@ -250,6 +251,18 @@ describe("validateComponent — what only a board may be", () => {
   it("demands a logic level from a board", () => {
     const { logicVolts: _drop, ...rest } = uno() as Record<string, unknown> & { logicVolts?: number };
     expect(codes(rest)).toContain("board");
+  });
+
+  it("demands that a board say how code reaches it, and forbids anything else from saying", () => {
+    // Required rather than optional, because „absent" and „linux" would reach
+    // the code generator as the same answer — and the next board added six
+    // months from now would be silently unprogrammable instead of loudly
+    // incomplete.
+    const { programming: _drop, ...rest } = uno() as Record<string, unknown>;
+    expect(codes(rest)).toContain("board");
+    expect(codes(withField(uno(), "programming", "micropython"))).toContain("board");
+    expect(codes(withField(bmp280(), "programming", "arduino"))).toContain("board");
+    expect(validateComponent(withField(uno(), "programming", "linux"))).toEqual([]);
   });
 
   it("demands that a board supply power on some pin", () => {
