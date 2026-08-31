@@ -19,6 +19,8 @@ import type {
   CircuitProblemCode,
   ComponentKind,
   PinFunction,
+  RuleCode,
+  RuleSeverity,
   ValueUnit,
   WireColour,
 } from "@nexus/core";
@@ -255,5 +257,65 @@ export const electronicsSr = {
       component: "Ova verzija Nexusa ne poznaje tu komponentu — nacrtana je kao prazan okvir.",
       value: "Vrednost nedostaje, ili je upisana na komponenti koja je nema.",
     } satisfies Record<CircuitProblemCode, string>,
+  },
+
+  /**
+   * ADR-085 slice E3: what is wrong with the ELECTRICITY, said in Serbian.
+   *
+   * These sit in the same panel as `problems` above and are a different kind of
+   * statement. A structural problem is about the document — a row that is not a
+   * row, a part this build does not ship. One of these is about the circuit: it
+   * will not work, or it will destroy something the moment power arrives. They
+   * share a panel because there is one place a person looks for „what is wrong
+   * with this", and they are told apart by the severity word rather than by
+   * being in two lists nobody reads both of.
+   *
+   * **Every sentence is static, and the numbers arrive separately.** The
+   * finding carries its own figures — the rail it measured, the range the part
+   * is rated for — and the panel prints them on the line beneath. Copy built by
+   * interpolation is copy `check:address` cannot read, and it is how a table of
+   * strings quietly turns into a template language.
+   *
+   * **They are notices, exactly as `problems` are.** Nothing here refuses a
+   * save, and nothing here is certain: the catalogue knows a part number, not
+   * the user's bench, and somebody wiring a level shifter this module has no
+   * entry for is entitled to be told they are wrong and to carry on.
+   */
+  rules: {
+    /**
+     * The word that separates „this will destroy something" from „this is
+     * probably not what you meant". Without it both are one grey line of the
+     * same size and the panel teaches that neither is worth reading.
+     */
+    severity: {
+      error: "greška",
+      warning: "upozorenje",
+    } satisfies Record<RuleSeverity, string>,
+    /** The third word, for the structural notices from `problems` above. */
+    notice: "napomena",
+    /** Units. Symbols rather than translations, but they live here so a locale can move them. */
+    volts: "V",
+    milliamps: "mA",
+    /** „1,7–3,6 V" — an en dash, because it is a span and not a minus sign. */
+    rangeDash: "–",
+    /** An I²C address is always read in hex, on the module and in every datasheet. */
+    addressPrefix: "0x",
+    /** Between the figures and the parts they are about: „5 V · BMP280". */
+    separator: "·",
+    codes: {
+      "supply-unreached": "Komponenta traži napajanje, a nijedna žica je ne vodi do šine.",
+      "ground-unreached": "Masa komponente nikuda ne vodi — kolo nema povratni put.",
+      "supply-range": "Napon šine je izvan opsega koji komponenta podnosi.",
+      "rail-conflict": "Dve različite šine spojene su u istu tačku.",
+      "rail-short": "Šina ide pravo na masu — to je kratak spoj.",
+      "logic-level": "Signal prelazi između dva logička nivoa, bez pretvarača nivoa.",
+      "output-conflict": "Dva izlaza guraju isti vod.",
+      "bus-role": "Pinovi magistrale su ukršteni — uloge im se ne poklapaju.",
+      "i2c-address": "Dva uređaja na istoj I²C magistrali odazivaju se na istu adresu.",
+      "current-budget": "Traži se više struje nego što ploča ume da isporuči.",
+      "pin-capability": "Komponenta traži PWM ili prekid, a pin ploče nema ni jedno ni drugo.",
+      "analog-signal": "Analogni signal je doveden na pin koji razlikuje samo nulu i jedinicu.",
+      "led-unprotected": "Dioda je vezana bez otpornika u nizu.",
+    } satisfies Record<RuleCode, string>,
   },
 } as const;

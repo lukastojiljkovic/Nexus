@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { catalogueComponent, circuitProblems } from "@nexus/core";
+import { catalogueComponent, circuitProblems, circuitRules } from "@nexus/core";
 import { ElectronicsStore, NexusDatabase, openDatabase, uuidv7 } from "@nexus/db";
 
 import { createDemoContext } from "./context.js";
@@ -66,6 +66,65 @@ describe("seedDemoElectronics", () => {
       const circuit = toCircuitDocument(store.read(listed.id));
       expect(circuitProblems(circuit, catalogueComponent)).toEqual([]);
     }
+  });
+
+  /**
+   * The other half, and the harder one: E3's electrical rules, run against the
+   * REAL catalogue rather than a fixture.
+   *
+   * Both demo circuits are described by their own file as „circuits somebody
+   * would actually build", so an empty list here is the strongest available
+   * check that the rules engine does not cry wolf. Every false positive it can
+   * have is a false positive on ordinary correct work — a board powered over
+   * USB whose VIN pin is unconnected, a sensor on a rail it is rated for, a
+   * plain digital pin carrying a signal that commits to no bus role — and each
+   * of those is present in these two circuits. A rules engine that cannot stay
+   * silent about a correct circuit is one the user learns to dismiss, and then
+   * the one finding that would have saved a part goes unread with the rest.
+   */
+  it("has nothing ELECTRICAL to say about either circuit either", () => {
+    const store = new ElectronicsStore(db.raw, profileId);
+    for (const listed of store.listActive()) {
+      const circuit = toCircuitDocument(store.read(listed.id));
+      expect(circuitRules(circuit, catalogueComponent)).toEqual([]);
+    }
+  });
+
+  /**
+   * And the mutation, because „the list was empty" is also what a rules engine
+   * that resolves nothing returns.
+   *
+   * The test above can pass for two opposite reasons — the circuit is sound, or
+   * `catalogueComponent` handed back `undefined` for every part and every rule
+   * skipped it. This one moves the LED's anode off the resistor and onto the
+   * board pin, which is the exact fault the seeder's own comment says it is
+   * avoiding, and requires the engine to SEE it: through the real `led` entry,
+   * its `needsSeriesResistor`, and a net list built from real pin ids.
+   *
+   * It is also the check that found the rule's first version wrong — see
+   * DC-87. Asking „is a resistor on the anode's net" passed on the correct
+   * circuit and passed here too, because moving the anode's wire leaves the
+   * resistor's other leg on that net while it carries nothing.
+   */
+  it("reports the LED the moment the resistor is taken out of its path", () => {
+    const store = new ElectronicsStore(db.raw, profileId);
+    const listed = store.listActive().find((circuit) => circuit.name === "Stanica za vlažnost");
+    const circuit = toCircuitDocument(store.read(listed?.id ?? ""));
+    const led = circuit.parts.find((part) => part.componentId === "led");
+    const board = circuit.parts.find((part) => part.componentId === "arduino-uno");
+    expect(led && board).toBeTruthy();
+
+    const straightToPin = {
+      ...circuit,
+      wires: circuit.wires.map((wire) =>
+        wire.to.partId === led?.id && wire.to.pinId === "A"
+          ? { ...wire, from: { partId: board?.id ?? "", pinId: "D9" } }
+          : wire,
+      ),
+    };
+    expect(circuitRules(straightToPin, catalogueComponent).map((f) => f.code)).toContain(
+      "led-unprotected",
+    );
   });
 
   it("wires the indicator through its resistor rather than straight off the pin", () => {

@@ -660,11 +660,40 @@
 .elec-inspector__problem-text {
   color: var(--nx-text-muted);
 }
-/* Which row the notice is about. Muted and monospaced-by-figures rather than
-   hidden: it is the only thing that tells two identical notices apart. */
+/* Which row the notice is about, and for an E3 finding the figures it measured
+   and the parts it names. Muted rather than hidden: it is the only thing that
+   tells two identical notices apart, and for „napon šine je izvan opsega" it
+   carries the whole point — the volts found and the range the part is rated
+   for. */
 .elec-inspector__problem-field {
   color: var(--nx-text-faint);
   overflow-wrap: anywhere;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nx-space-1);
+}
+/* „greška" / „upozorenje" / „napomena".
+ *
+ * Typographic by default and coloured only at the top of the scale. There is
+ * deliberately no amber tier: orange is a banned system hue, so a middle colour
+ * would be a colour invented for one panel and meaning nothing anywhere else in
+ * the app. Weight, letter-spacing and the sort order carry the distinction
+ * instead — which is the same argument the active-nav treatment is built on. */
+.elec-inspector__severity {
+  flex: none;
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-medium);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: lowercase;
+  color: var(--nx-text-faint);
+}
+.elec-inspector__severity--error {
+  color: var(--nx-danger);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.elec-inspector__severity--warning {
+  color: var(--nx-text-muted);
 }
 
 /* Narrow windows: two rails either side of a bench are what a 1024px window

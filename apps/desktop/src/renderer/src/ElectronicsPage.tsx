@@ -5,6 +5,7 @@ import {
   WIRE_COLOURS,
   catalogueComponent,
   circuitProblems,
+  circuitRules,
 } from "@nexus/core";
 import type { CircuitPart, ComponentDef, PartRotation, WireColour, WireEnd } from "@nexus/core";
 import { Button, EmptyState, Icon, LoadingState, PageHeader, TextField } from "@nexus/ui";
@@ -673,6 +674,7 @@ export function ElectronicsPage({ profileId }: ElectronicsPageProps) {
             resolve={resolveComponent}
             selection={selection}
             problems={circuitProblems(doc, resolveComponent)}
+            rules={circuitRules(doc, resolveComponent)}
             busy={busy}
             onRenamePart={(id, label) => void editPart(id, { label })}
             onRotatePart={rotatePart}

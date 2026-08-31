@@ -5,6 +5,8 @@ import type {
   CircuitProblem,
   CircuitWire,
   ComponentDef,
+  RuleFinding,
+  RuleValue,
   WireColour,
 } from "@nexus/core";
 // The caps come from `@nexus/core` rather than from a mirror in `ipc.ts`: they
@@ -25,6 +27,12 @@ export interface ElecInspectorProps {
   selection: ElecSelection | null;
   /** What `circuitProblems` found. Notices about an open circuit, never refusals — see the strings table. */
   problems: readonly CircuitProblem[];
+  /**
+   * What `circuitRules` found — ADR-085 slice E3, arriving already sorted
+   * worst-first. Also notices: an electrical finding cannot refuse a circuit
+   * either, because the catalogue knows a part number and not the user's bench.
+   */
+  rules: readonly RuleFinding[];
   busy: boolean;
   onRenamePart: (id: string, label: string) => void;
   onRotatePart: (id: string) => void;
@@ -55,6 +63,7 @@ export function ElecInspector({
   resolve,
   selection,
   problems,
+  rules,
   busy,
   onRenamePart,
   onRotatePart,
@@ -109,7 +118,7 @@ export function ElecInspector({
           notesSaved={notesSaved}
         />
       )}
-      <ProblemList problems={problems} />
+      <ProblemList problems={problems} rules={rules} circuit={circuit} resolve={resolve} />
     </aside>
   );
 }
@@ -414,31 +423,120 @@ function Fact({ term, children }: { term: string; children: ReactNode }) {
   );
 }
 
-/** What the checks found, always visible — see the component header for why. */
-function ProblemList({ problems }: { problems: readonly CircuitProblem[] }) {
+/**
+ * What the checks found, always visible — see the component header for why.
+ *
+ * **One panel for both kinds, ordered by severity.** The electrical findings
+ * (E3) and the structural ones answer different questions, and they are still
+ * one list: there is exactly one place a person looks for „what is wrong with
+ * this circuit", and splitting it in two would mean the half they read is
+ * whichever one is nearer the top. What tells them apart is the severity word
+ * on each row — „greška", „upozorenje", „napomena" — which is also what orders
+ * them, so a finding that will destroy a part cannot end up beneath a note
+ * about a row identifier.
+ *
+ * **Severity is typographic, not chromatic.** Only `error` takes a colour, and
+ * it takes `--nx-danger` because that is what danger already means everywhere
+ * else in this app. There is no amber: the palette bans orange outright, and
+ * inventing a warning hue for one panel would put a colour on screen that means
+ * nothing anywhere else. Weight and order carry the rest.
+ */
+function ProblemList({
+  problems,
+  rules,
+  circuit,
+  resolve,
+}: {
+  problems: readonly CircuitProblem[];
+  rules: readonly RuleFinding[];
+  circuit: ElecCircuitDocument;
+  resolve: (componentId: string) => ComponentDef | undefined;
+}) {
   const s = strings.electronics.problems;
+  const r = strings.electronics.rules;
+  const total = problems.length + rules.length;
+
+  const nameOf = (partId: string): string => {
+    const part = circuit.parts.find((candidate) => candidate.id === partId);
+    return part === undefined
+      ? partId
+      : partDisplayName(part.label, resolve(part.componentId), strings.electronics.bench.unknownPart);
+  };
+
+  const detailOf = (finding: RuleFinding): string =>
+    [...finding.values.map(formatRuleValue), ...finding.parts.map(nameOf)].join(` ${r.separator} `);
+
   return (
     <section className="elec-inspector__panel elec-inspector__panel--checks">
       <h3 className="elec-inspector__heading">
         {s.heading}
-        {problems.length > 0 && (
+        {total > 0 && (
           <span className="elec-inspector__count">
-            {problems.length} {countUnit(problems.length, s.countOne, s.countFew, s.countMany)}
+            {total} {countUnit(total, s.countOne, s.countFew, s.countMany)}
           </span>
         )}
       </h3>
-      {problems.length === 0 ? (
+      {total === 0 ? (
         <p className="elec-inspector__ok">{s.none}</p>
       ) : (
         <ul className="elec-inspector__problems">
+          {/* The index is part of the key on purpose. `circuitRules` collapses
+              findings that are identical, but two that differ only in their
+              FIGURES are two real rows — one part on two rails is two
+              `supply-range` findings with the same code and the same part — and
+              code-plus-part alone would give them one key between them. The
+              list is derived from props on every render and its rows hold no
+              state, so the index is stable enough to be the tie-breaker. */}
+          {rules.map((finding, index) => (
+            <li
+              key={`${finding.code}:${finding.parts.join()}:${index}`}
+              className="elec-inspector__problem"
+            >
+              <span className="elec-inspector__problem-text">{r.codes[finding.code]}</span>
+              <span className="elec-inspector__problem-field">
+                <span
+                  className={`elec-inspector__severity elec-inspector__severity--${finding.severity}`}
+                >
+                  {r.severity[finding.severity]}
+                </span>
+                {detailOf(finding)}
+              </span>
+            </li>
+          ))}
           {problems.map((problem) => (
             <li key={`${problem.field}:${problem.code}`} className="elec-inspector__problem">
               <span className="elec-inspector__problem-text">{s.codes[problem.code]}</span>
-              <span className="elec-inspector__problem-field">{problem.field}</span>
+              <span className="elec-inspector__problem-field">
+                <span className="elec-inspector__severity">{r.notice}</span>
+                {problem.field}
+              </span>
             </li>
           ))}
         </ul>
       )}
     </section>
   );
+}
+
+/**
+ * One figure from a finding, in Serbian.
+ *
+ * The sentence above it is static — see the strings table on why — so this is
+ * where „5 V" and „1,7–3,6 V" are actually built. `formatToolNumber` does the
+ * decimal comma, as it does for every other number this renderer prints; an
+ * address is the one exception and is written in hex, because that is how every
+ * datasheet and every module's silkscreen gives it.
+ */
+function formatRuleValue(value: RuleValue): string {
+  const r = strings.electronics.rules;
+  switch (value.kind) {
+    case "volts":
+      return `${formatToolNumber(value.amount)} ${r.volts}`;
+    case "milliamps":
+      return `${formatToolNumber(value.amount)} ${r.milliamps}`;
+    case "range":
+      return `${formatToolNumber(value.min)}${r.rangeDash}${formatToolNumber(value.max)} ${r.volts}`;
+    case "address":
+      return `${r.addressPrefix}${value.value.toString(16).toUpperCase().padStart(2, "0")}`;
+  }
 }
