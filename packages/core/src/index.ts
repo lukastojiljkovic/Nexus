@@ -1103,8 +1103,32 @@ export type { RuleCode, RuleFinding, RuleSeverity, RuleValue } from "./electroni
 // ADR-085 slice E4. Pure, and deliberately so: the main process calls it and
 // writes the result at a path the user picks in a native dialog, exactly as the
 // `.ics` export does — the renderer never supplies a filesystem path.
-export { generateSketch } from "./electronics/sketch.js";
+//
+// Two artefacts, one derivation. `wiring.ts` answers what the board is wired to
+// and both generators print it in their own dialect; it is not exported,
+// because it is the shape of the answer rather than the answer, and a caller
+// that reached for it would be a third generator nobody had noticed writing.
+//
+// `generateCode` is the door the app goes through, and it is the ONLY door:
+// the choice between the two artefacts is one field on the board, so a screen
+// that called `generateSketch` by name would be a screen that had decided what
+// a Raspberry Pi is. Neither generator is exported for the same reason
+// `wiring.ts` is not — the rule is worth more as a reachability set than as
+// this paragraph. Their result TYPES are exported, because the dialog that
+// renders a `Sketch` and the one that renders a `RosPackage` are one component
+// switching on `GeneratedCode`'s tag.
+export { generateCode } from "./electronics/code.js";
+export type { CodeRefusal, GeneratedCode } from "./electronics/code.js";
 export type { Sketch, SketchConnection, SketchRefusal } from "./electronics/sketch.js";
+export type {
+  RosFile,
+  RosPackage,
+  RosPin,
+  RosRefusal,
+  RosRole,
+  RosSkip,
+  RosSkipped,
+} from "./electronics/ros.js";
 
 /**
  * ADR-086 — „Priprema": the signals a first run collects, the lexicon that

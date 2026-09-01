@@ -36,7 +36,7 @@
 
 import type { Circuit, CircuitPart } from "./circuit.js";
 import type { BusRoleFunction, ComponentDef, Pin, PinFunction } from "./component.js";
-import { BUS_ROLE_FUNCTIONS, pinBuses } from "./component.js";
+import { BUS_ROLE_FUNCTIONS, PIN_FLOW, pinBuses } from "./component.js";
 import type { Net, PinRef } from "./nets.js";
 import { buildNets } from "./nets.js";
 
@@ -121,29 +121,37 @@ const BUS_PAIRS: Record<BusRoleFunction, readonly PinFunction[]> = {
 };
 
 /**
- * The same nine, widened once here so `LISTENING` can splice them in and the
- * membership test in {@link busRoleFindings} reads as a test rather than a cast.
+ * The same nine, widened once here so the membership test in
+ * {@link busRoleFindings} reads as a test rather than as a cast.
  */
 const BUS_ROLES: readonly PinFunction[] = BUS_ROLE_FUNCTIONS;
 
-/** The functions that make a pin a source rather than a sink. */
-const DRIVING: readonly PinFunction[] = ["digital-out", "analog-out", "pwm", "power-out"];
+/** Whether a pin can source a signal at all. */
+function drives(pin: Pin): boolean {
+  return pin.functions.some((fn) => PIN_FLOW[fn] === "drives");
+}
 
-/** The functions that make a pin able to listen. A pin with any is not output-only. */
-const LISTENING: readonly PinFunction[] = [
-  "digital-in",
-  "analog-in",
-  "power-in",
-  "gnd",
-  "passive",
-  "anode",
-  "cathode",
-  "vref",
-  "reset",
-  "interrupt",
-  "nc",
-  ...BUS_ROLES,
-];
+/**
+ * A pin that can do NOTHING but drive — the only kind two of which on one net
+ * is a conflict.
+ *
+ * „Every function drives", rather than „some function drives and none listens".
+ * The difference is the third answer `PIN_FLOW` gives: `pwm` names what a wire
+ * carries and not which way it goes, so a servo's `SIG` and an L298N's `ENA`
+ * are not output-only, and two of them on one line is the ordinary way people
+ * parallel two motors rather than an error to report. Written as two hand-kept
+ * lists it was, and the second list had to remember to contain every bus role.
+ *
+ * The length guard is not defensive noise: `every` is true of an empty list, so
+ * a pin that declares no function at all would otherwise be „output-only", and
+ * two such pins on one net would be reported as a conflict between two things
+ * that do nothing. The predicate this replaced asked „drives AND does not
+ * listen", which was false there, and a refactor that quietly widened a rule is
+ * the kind that ships.
+ */
+function drivesOnly(pin: Pin): boolean {
+  return pin.functions.length > 0 && pin.functions.every((fn) => PIN_FLOW[fn] === "drives");
+}
 
 /**
  * Everything wrong with a circuit, worst first.
@@ -402,11 +410,7 @@ function signalFindings(bench: Bench): RuleFinding[] {
     // input and an output and which it becomes is the sketch's decision, which
     // the catalogue says outright — so two of them on one net is ordinary and
     // is not judged here.
-    const drivers = members.filter(
-      (member) =>
-        member.pin.functions.some((fn) => DRIVING.includes(fn)) &&
-        !member.pin.functions.some((fn) => LISTENING.includes(fn)),
-    );
+    const drivers = members.filter((member) => drivesOnly(member.pin));
     if (drivers.length > 1) {
       findings.push({
         code: "output-conflict",
@@ -639,11 +643,7 @@ function ledFindings(bench: Bench): RuleFinding[] {
         net.rails.length > 0 ||
         bench
           .pinsOf(net)
-          .some(
-            (member) =>
-              member.of.part.id !== placed.part.id &&
-              member.pin.functions.some((fn) => DRIVING.includes(fn)),
-          );
+          .some((member) => member.of.part.id !== placed.part.id && drives(member.pin));
       if (!driven) continue;
       // One row per part, not per anode: an RGB LED has three, and three
       // identical sentences about one component say nothing the first did not.

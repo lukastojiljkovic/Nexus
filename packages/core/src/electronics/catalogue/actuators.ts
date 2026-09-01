@@ -26,7 +26,7 @@ export const ACTUATORS: readonly ComponentDef[] = [
     supply: { min: 4.8, max: 6 },
     current: { typical: 10, peak: 700 },
     buses: [],
-    pins: [powerIn(), gnd(), pin("SIG", ["pwm"])],
+    pins: [powerIn(), gnd(), pin("SIG", ["digital-in", "pwm"])],
     library: "Servo",
   },
   {
@@ -37,7 +37,7 @@ export const ACTUATORS: readonly ComponentDef[] = [
     supply: { min: 4.8, max: 7.2 },
     current: { typical: 170, peak: 2500 },
     buses: [],
-    pins: [powerIn(), gnd(), pin("SIG", ["pwm"])],
+    pins: [powerIn(), gnd(), pin("SIG", ["digital-in", "pwm"])],
     library: "Servo",
   },
   {
@@ -48,7 +48,7 @@ export const ACTUATORS: readonly ComponentDef[] = [
     supply: { min: 4.8, max: 6 },
     current: { typical: 120, peak: 1400 },
     buses: [],
-    pins: [powerIn(), gnd(), pin("SIG", ["pwm"])],
+    pins: [powerIn(), gnd(), pin("SIG", ["digital-in", "pwm"])],
     library: "Servo",
   },
   {
@@ -59,7 +59,7 @@ export const ACTUATORS: readonly ComponentDef[] = [
     supply: { min: 4.8, max: 6 },
     current: { typical: 10, peak: 700 },
     buses: [],
-    pins: [powerIn(), gnd(), pin("SIG", ["pwm"])],
+    pins: [powerIn(), gnd(), pin("SIG", ["digital-in", "pwm"])],
     library: "Servo",
   },
   {
@@ -114,7 +114,7 @@ export const ACTUATORS: readonly ComponentDef[] = [
     supply: { min: 7.4, max: 25 },
     current: { typical: 5000, peak: 30000 },
     buses: [],
-    pins: [powerIn("VBAT"), gnd(), pin("SIG", ["pwm"])],
+    pins: [powerIn("VBAT"), gnd(), pin("SIG", ["digital-in", "pwm"])],
     library: "Servo",
   },
 
@@ -196,7 +196,7 @@ export const ACTUATORS: readonly ComponentDef[] = [
     supply: { min: 3.3, max: 5 },
     current: { typical: 25, peak: 35 },
     buses: [],
-    pins: [powerIn(), gnd(), pin("IO", ["pwm"])],
+    pins: [powerIn(), gnd(), pin("IO", ["digital-in", "pwm"])],
   },
   {
     id: "vibration-motor",

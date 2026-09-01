@@ -92,6 +92,47 @@ const relay: ComponentDef = {
   ],
 };
 
+/**
+ * An enable pin that wants a PWM waveform — the L298N's `ENA`, the L293D's
+ * `EN1`, the IRF520 module's `SIG`, the passive buzzer's `IO`. None of the four
+ * declares a library, so all four reach this generator.
+ *
+ * `pwm` says what a wire CARRIES, never which way it goes: on a board's header
+ * it marks a hole with a timer behind it, and on a peripheral it marks a pin
+ * that wants a waveform. Read as a direction it makes the board an INPUT on a
+ * motor-enable line it has to drive, and prints a floating pin as a reading.
+ */
+const motorDriver: ComponentDef = {
+  id: "l298n",
+  kind: "driver",
+  name: "L298N",
+  summary: "Drajver za dva motora.",
+  buses: [],
+  pins: [
+    { id: "ENA", label: "ENA", functions: ["digital-in", "pwm"] },
+    { id: "IN1", label: "IN1", functions: ["digital-in"] },
+    { id: "GND", label: "GND", functions: ["gnd"] },
+  ],
+};
+
+/**
+ * A pin whose ONLY function is `pwm`, which is what a user-defined component
+ * may well declare. There is no direction to derive, and inventing one is how
+ * the defect above happened; the wire is still named, because the connection
+ * table's job is to describe the bench either way.
+ */
+const undirected: ComponentDef = {
+  id: "modulator",
+  kind: "driver",
+  name: "Modulator",
+  summary: "Ulaz bez smera.",
+  buses: [],
+  pins: [
+    { id: "SIG", label: "SIG", functions: ["pwm"] },
+    { id: "GND", label: "GND", functions: ["gnd"] },
+  ],
+};
+
 const lm35: ComponentDef = {
   id: "lm35",
   kind: "sensor",
@@ -177,7 +218,19 @@ const unnameable: ComponentDef = {
 };
 
 const shipped = new Map(
-  [uno, pi, button, relay, lm35, dht22, bmp280, bluetooth, unnameable].map((component) => [
+  [
+    uno,
+    pi,
+    button,
+    relay,
+    motorDriver,
+    undirected,
+    lm35,
+    dht22,
+    bmp280,
+    bluetooth,
+    unnameable,
+  ].map((component) => [
     component.id,
     component,
   ]),
@@ -314,6 +367,33 @@ describe("generateSketch — direction and reads", () => {
     expect(source).toContain("pinMode(PIN_RELEJ_IN, OUTPUT);");
     expect(source).not.toContain("digitalWrite");
     expect(source).toContain("Nijedan pin");
+  });
+
+  it("drives an enable pin that wants a waveform, and never reads it back", () => {
+    // `pwm` is a capability word, not a direction word. Read as a direction it
+    // made the board an INPUT on the L298N's ENA — the line that turns a motor
+    // on — and printed that floating pin to the serial monitor as a reading.
+    const c = circuit(
+      [part("p1", "arduino-uno"), part("p2", "l298n")],
+      [w(["p1", "GND1"], ["p2", "GND"]), w(["p1", "D9"], ["p2", "ENA"])],
+    );
+    const source = sourceOf(c);
+    expect(source).toContain("pinMode(PIN_L298N_ENA, OUTPUT);");
+    expect(source).not.toContain("digitalRead");
+  });
+
+  it("gives no direction at all to a pin whose only function is `pwm`", () => {
+    // Nothing about the wire says which way it goes, so the sketch says nothing
+    // — but it still names the pin, because the connection table is what a
+    // person reads at the bench and the wire is really there.
+    const c = circuit(
+      [part("p1", "arduino-uno"), part("p2", "modulator")],
+      [w(["p1", "GND1"], ["p2", "GND"]), w(["p1", "D9"], ["p2", "SIG"])],
+    );
+    const source = sourceOf(c);
+    expect(source).toContain("constexpr uint8_t PIN_MODULATOR_SIG = 9;");
+    expect(source).not.toContain("pinMode");
+    expect(source).not.toContain("Read(PIN_");
   });
 
   it("reads an analogue output with analogRead, on a pin that can take one", () => {

@@ -358,6 +358,60 @@ const BUS_OF_FUNCTION: Partial<Record<PinFunction, BusKind>> &
 };
 
 /**
+ * What one pin function says about which way the signal on that wire goes.
+ *
+ * Three answers, and the third is the one that keeps being forgotten. A pin
+ * function can name a DIRECTION (`digital-out` sources, `anode` sinks) or it
+ * can name what the wire CARRIES (`pwm`, and every bus role), and the second
+ * kind says nothing whatever about direction. Read as if it did, `pwm` makes a
+ * board an INPUT on the L298N's motor-enable line and prints that floating pin
+ * to the serial monitor as though it were a measurement — which is what the
+ * sketch generator shipped, and what a hand-written list of „driving functions"
+ * in `rules.ts` still says.
+ *
+ * It is a total `Record` rather than three lists for the reason
+ * `BUS_ROLE_FUNCTIONS` is typed the way it is: a twenty-fifth pin function is
+ * then a compile error here — somebody must decide what it means — instead of a
+ * string that silently belongs to no list and is quietly treated as `neither`
+ * by one reader and as a direction by the next.
+ */
+export type PinFlow = "drives" | "listens" | "neither";
+
+export const PIN_FLOW: Record<PinFunction, PinFlow> = {
+  gnd: "listens",
+  "power-in": "listens",
+  "power-out": "drives",
+  "digital-in": "listens",
+  "digital-out": "drives",
+  "analog-in": "listens",
+  "analog-out": "drives",
+  vref: "listens",
+  // Carried, not directed — see the note above. A board's D9 has a timer behind
+  // it; a servo's SIG wants a waveform on it. One word, two opposite ends.
+  pwm: "neither",
+  "i2c-sda": "neither",
+  "i2c-scl": "neither",
+  "spi-mosi": "neither",
+  "spi-miso": "neither",
+  "spi-sck": "neither",
+  "spi-cs": "neither",
+  "uart-tx": "neither",
+  "uart-rx": "neither",
+  interrupt: "listens",
+  onewire: "neither",
+  reset: "listens",
+  // Two legs of a part with no direction of its own: a resistor conducts both
+  // ways, and which end is the source is a fact about the circuit, not the pin.
+  passive: "listens",
+  anode: "listens",
+  cathode: "listens",
+  // Electrically nothing. `listens` rather than `neither`, because the one
+  // question asked of that answer is „can this pin do anything but drive", and
+  // a pin connected to no silicon at all certainly can not drive.
+  nc: "listens",
+};
+
+/**
  * Every bus one pin declares a role on. Empty for an ordinary GPIO.
  *
  * **One end of a wire is never enough to say a bus is in use**, and this

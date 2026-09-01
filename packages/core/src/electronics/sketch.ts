@@ -13,10 +13,10 @@
  *
  * That boundary is not modesty, it is the only line that can be drawn without
  * fabricating. Everything above it is DERIVED — from the catalogue's pin
- * functions and from `buildNets`, which is the same derived model the rules
- * engine reads (ADR-085 §2: E4 must not re-derive connectivity, or the day the
- * two disagree the user gets code contradicting the warning on their screen).
- * Everything below it would have to be invented.
+ * functions and from `boardWiring`, which stands on the same `buildNets` the
+ * rules engine reads (ADR-085 §2: E4 must not re-derive connectivity, or the
+ * day the two disagree the user gets code contradicting the warning on their
+ * screen). Everything below it would have to be invented.
  *
  * **The libraries are named, not included.** The catalogue's `library` field
  * holds a LIBRARY MANAGER name — „DHT sensor library", „Adafruit ST7735 and
@@ -34,11 +34,17 @@
  * like a reading and is noise.
  */
 
-import type { Circuit, CircuitPart } from "./circuit.js";
-import type { BusKind, ComponentDef, Pin } from "./component.js";
-import { pinBuses } from "./component.js";
+import type { Circuit } from "./circuit.js";
+import type { ComponentDef } from "./component.js";
 import { slugify } from "../devtools/text.js";
-import { buildNets } from "./nets.js";
+import {
+  boardWiring,
+  identifier,
+  soleBoard,
+  uniqueName,
+  type BoardWire,
+  type Placed,
+} from "./wiring.js";
 
 /** Why a circuit produced no sketch. Never a failure — see {@link generateSketch}. */
 export type SketchRefusal =
@@ -88,13 +94,10 @@ export function generateSketch(
   circuit: Circuit,
   resolve: (componentId: string) => ComponentDef | undefined,
 ): Sketch {
-  const placed = placedParts(circuit, resolve);
-  const boards = placed.filter((entry) => entry.component.kind === "board");
-  if (boards.length === 0) return { kind: "refused", reason: "no-board" };
-  if (boards.length > 1) return { kind: "refused", reason: "many-boards" };
+  const chosen = soleBoard(circuit, resolve);
+  if (chosen.kind === "refused") return { kind: "refused", reason: chosen.reason };
 
-  const board = boards[0];
-  if (board === undefined) return { kind: "refused", reason: "no-board" };
+  const { board, placed } = chosen;
   if (board.component.programming !== "arduino") {
     return { kind: "refused", reason: "not-programmable" };
   }
@@ -126,34 +129,18 @@ export function generateSketch(
 // The model the renderer below walks
 // ---------------------------------------------------------------------------
 
-interface Placed {
-  readonly part: CircuitPart;
-  readonly component: ComponentDef;
-  /** What the user calls it: their own label, or the catalogue's name. */
-  readonly name: string;
-}
-
 /**
- * One board pin joined to one peripheral pin — a row of the connection table.
+ * A {@link BoardWire} in Arduino's dialect.
  *
- * Every wire that reaches the board becomes one of these, INCLUDING the ones
- * the sketch will not name: a bus line, a pin a library owns, a line two
- * peripherals share. The table is what a person reads at the bench, and a table
- * that quietly omitted the I²C pair would be describing a different circuit
- * from the one on the canvas. What varies is `constant`, which is minted only
- * where a name would be unambiguous and useful.
+ * The four added fields are the whole of what this generator knows that
+ * `wiring.ts` deliberately does not: how a pin id is spelled in C, what a name
+ * for it would be, and the two `setup`/`loop` verbs. Everything else on the row
+ * — which pins are joined, which way each faces, who owns the line — arrives
+ * already derived, from the same table the ROS 2 generator reads.
  */
-interface WiredPin {
-  readonly boardPin: Pin;
-  readonly partName: string;
-  readonly partPin: Pin;
+interface WiredPin extends BoardWire {
   /** `PIN_HC_SR04_TRIG`, or `undefined` for a bus, a library's pin, or a shared line. */
   readonly constant: string | undefined;
-  /**
-   * The buses **both ends** declare — see {@link pinBuses} for why one end is
-   * never enough. Empty for an ordinary wire, which is most of them.
-   */
-  readonly buses: readonly BusKind[];
   /** The Arduino literal: `9` for `D9`, `A0` for `A0`, `23` for `GPIO23`. */
   readonly literal: string;
   /** What `setup` should do, or `undefined` to leave the pin alone. */
@@ -180,125 +167,45 @@ function isRead(entry: NamedPin): entry is ReadPin {
   return entry.read !== undefined;
 }
 
-function placedParts(
-  circuit: Circuit,
-  resolve: (componentId: string) => ComponentDef | undefined,
-): Placed[] {
-  const placed: Placed[] = [];
-  const seen = new Set<string>();
-  for (const part of circuit.parts) {
-    if (seen.has(part.id)) continue;
-    seen.add(part.id);
-    const component = resolve(part.componentId);
-    if (component === undefined) continue;
-    const label = part.label.trim();
-    placed.push({ part, component, name: label === "" ? component.name : label });
-  }
-  return placed;
-}
-
-/**
- * Power and ground carry no signal and get no constant: a sketch never names
- * the 5 V rail, and pretending otherwise would fill the header with lines that
- * do nothing.
- */
-const NOT_A_SIGNAL = new Set(["power-in", "power-out", "gnd"]);
-
 function signalPins(
   circuit: Circuit,
   resolve: (componentId: string) => ComponentDef | undefined,
   placed: readonly Placed[],
   board: Placed,
 ): WiredPin[] {
-  const nets = buildNets(circuit, resolve);
-  const byId = new Map(placed.map((entry) => [entry.part.id, entry]));
-  const wired: WiredPin[] = [];
   const taken = new Set<string>();
-
-  for (const boardPin of board.component.pins) {
-    if (boardPin.functions.some((fn) => NOT_A_SIGNAL.has(fn))) continue;
-    const net = nets.at(board.part.id, boardPin.id);
-    if (net === undefined) continue;
-
-    // Every peripheral pin on this net, the board's own excluded. Several means
-    // a shared line — an I²C bus, or two parts on one output — and each of them
-    // is still a row of the table.
-    const others = net.pins.flatMap((ref) => {
-      if (ref.partId === board.part.id) return [];
-      const owner = byId.get(ref.partId);
-      const partPin = owner?.component.pins.find((pin) => pin.id === ref.pinId);
-      return owner === undefined || partPin === undefined ? [] : [{ owner, partPin }];
-    });
-
-    const boardRoles = pinBuses(boardPin);
-    for (const { owner, partPin } of others) {
-      // Three reasons a wire gets no constant, and each is a different „a name
-      // here would be a lie": a bus line belongs to `Wire`/`SPI` or to the
-      // software equivalent, and not to one `#define`; a pin whose part
-      // declares a library is spoken to by that library's protocol; and a line
-      // several parts share cannot be named after one of them.
-      //
-      // Only the PERIPHERAL is asked whether this is a bus line — see
-      // `pinBuses`. A part's pin says what the wire carries; a board's pin says
-      // only what that hole on the header is capable of, and on every board in
-      // the catalogue every bus pin is capable of being an ordinary GPIO too.
-      const partRoles = pinBuses(partPin);
-      const nameable =
-        partRoles.size === 0 && owner.component.library === undefined && others.length === 1;
-
-      const constant = nameable ? uniqueConstant(owner, partPin, taken) : undefined;
-      wired.push({
-        boardPin,
-        partName: owner.name,
-        partPin,
-        constant,
-        // The hardware controller is in play only where both ends agree. A
-        // BMP280's SDA on D7 is software I²C — ordinary practice, which the
-        // rules engine deliberately allows — and `Wire.begin()` there would
-        // describe a peripheral that is not being used.
-        buses: [...partRoles].filter((role) => boardRoles.has(role)),
-        literal: pinLiteral(boardPin.id),
-        mode: constant === undefined ? undefined : boardMode(partPin),
-        read: constant === undefined ? undefined : boardRead(boardPin, partPin),
-      });
-    }
-  }
-  return wired;
+  return boardWiring(circuit, resolve, placed, board).map((wire) => {
+    // A wire someone else owns gets no constant, no `pinMode` and no read: a
+    // name would claim this generator speaks the protocol on that line, and the
+    // three ways that happens are exactly `BoardWire.owner`.
+    const constant = wire.owner === undefined ? constantFor(wire, taken) : undefined;
+    return {
+      ...wire,
+      constant,
+      literal: pinLiteral(wire.boardPin.id),
+      mode: constant === undefined ? undefined : ARDUINO_MODE[wire.direction ?? "none"],
+      read: constant === undefined ? undefined : boardRead(wire),
+    };
+  });
 }
+
+/** `wiring.ts` speaks of a pin's direction; `setup` speaks of its mode. */
+const ARDUINO_MODE = {
+  in: "INPUT",
+  out: "OUTPUT",
+  none: undefined,
+} as const;
 
 /**
  * `PIN_SENZOR_TRIG`, and never the same name twice.
  *
- * Two parts of one kind with no labels are the ordinary case — „LED dioda" and
- * „LED dioda" — and two constants of one name is a file that does not compile.
- * The suffix counts from 2 so the first of a pair keeps the clean name.
+ * C's dialect of {@link identifier}: the same folding, then uppercased, which
+ * also lifts the empty-name fallback to `PIN` and the digit guard to `P`.
  */
-function uniqueConstant(owner: Placed, partPin: Pin, taken: Set<string>): string {
-  const base = `PIN_${identifier(owner.name)}_${identifier(partPin.label || partPin.id)}`;
-  if (!taken.has(base)) {
-    taken.add(base);
-    return base;
-  }
-  for (let suffix = 2; ; suffix += 1) {
-    const candidate = `${base}_${suffix}`;
-    if (taken.has(candidate)) continue;
-    taken.add(candidate);
-    return candidate;
-  }
-}
-
-/**
- * Serbian text as a C identifier: „Senzor vlažnosti" becomes `SENZOR_VLAZNOSTI`.
- *
- * `slugify` does the folding — the same one the search index uses, rather than
- * a second table of `š→s` that would drift from it. What is added here is the
- * part C cares about and a URL does not: an identifier may not start with a
- * digit, and it may not be empty.
- */
-function identifier(text: string): string {
-  const slug = slugify(text, { separator: "_", lowercase: false, maxLength: 24 }).toUpperCase();
-  if (slug === "") return "PIN";
-  return /^[0-9]/.test(slug) ? `P${slug}` : slug;
+function constantFor(wire: BoardWire, taken: Set<string>): string {
+  const part = identifier(wire.partName, "pin").toUpperCase();
+  const pin = identifier(wire.partPin.label || wire.partPin.id, "pin").toUpperCase();
+  return uniqueName(`PIN_${part}_${pin}`, taken);
 }
 
 /**
@@ -319,28 +226,6 @@ function pinLiteral(pinId: string): string {
 }
 
 /**
- * The direction of the BOARD's pin, which is the opposite of the peripheral's.
- *
- * A part whose pin can only drive (a comparator's `digital-out`) makes the
- * board an INPUT; a part that can only listen (an LED's anode, a servo's
- * signal) makes it an OUTPUT. A pin that does both is the DHT22 shape — a
- * protocol, not a direction — and gets no `pinMode` at all, because either
- * answer would be wrong half the time.
- */
-function boardMode(partPin: Pin): "INPUT" | "OUTPUT" | undefined {
-  const drives = partPin.functions.some(
-    (fn) => fn === "digital-out" || fn === "analog-out" || fn === "pwm",
-  );
-  const listens = partPin.functions.some(
-    (fn) => fn === "digital-in" || fn === "analog-in" || fn === "anode" || fn === "cathode",
-  );
-  if (drives && listens) return undefined;
-  if (drives) return "INPUT";
-  if (listens) return "OUTPUT";
-  return undefined;
-}
-
-/**
  * How `loop` reads a pin back, or `undefined` where it must not read at all.
  *
  * Only pins the board LISTENS to are read; an output is not read back, and
@@ -348,10 +233,10 @@ function boardMode(partPin: Pin): "INPUT" | "OUTPUT" | undefined {
  * never do — a servo swept or a relay closed by a program nobody wrote is a
  * machine moving for no reason.
  */
-function boardRead(boardPin: Pin, partPin: Pin): "digitalRead" | "analogRead" | undefined {
-  if (boardMode(partPin) !== "INPUT") return undefined;
-  if (partPin.functions.includes("analog-out")) {
-    return boardPin.functions.includes("analog-in") ? "analogRead" : undefined;
+function boardRead(wire: BoardWire): "digitalRead" | "analogRead" | undefined {
+  if (wire.direction !== "in") return undefined;
+  if (wire.partPin.functions.includes("analog-out")) {
+    return wire.boardPin.functions.includes("analog-in") ? "analogRead" : undefined;
   }
   return "digitalRead";
 }
@@ -359,7 +244,7 @@ function boardRead(boardPin: Pin, partPin: Pin): "digitalRead" | "analogRead" | 
 /**
  * Which of the board's own hardware buses the wiring actually brings up.
  *
- * A fold over what `signalPins` already worked out per wire, which is where
+ * A fold over what `boardWiring` already worked out per wire, which is where
  * both ends of it were in hand. `Wire.begin()` starts the hardware I²C
  * controller, and that controller exists only where the board's SDA/SCL meet a
  * peripheral that says it speaks I²C: a BMP280 bit-banged onto D7 is a

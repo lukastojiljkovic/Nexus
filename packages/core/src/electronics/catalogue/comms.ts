@@ -177,7 +177,7 @@ export const COMMS: readonly ComponentDef[] = [
     supply: { min: 3.3, max: 5 },
     current: { typical: 20, peak: 50 },
     buses: [],
-    pins: [powerIn(), gnd(), pin("DAT", ["pwm"])],
+    pins: [powerIn(), gnd(), pin("DAT", ["digital-in", "pwm"])],
     library: "IRremote",
   },
 
