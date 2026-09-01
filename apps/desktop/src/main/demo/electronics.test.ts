@@ -46,9 +46,10 @@ afterEach(() => {
 });
 
 describe("seedDemoElectronics", () => {
-  it("seeds two circuits, each with parts and wires on it", () => {
+  it("seeds three circuits, each with parts and wires on it", () => {
     const circuits = new ElectronicsStore(db.raw, profileId).listActive();
     expect(circuits.map((circuit) => circuit.name).sort()).toEqual([
+      "Malina: dodir i vazduh",
       "Merenje razdaljine",
       "Stanica za vlažnost",
     ]);
@@ -72,17 +73,17 @@ describe("seedDemoElectronics", () => {
    * The other half, and the harder one: E3's electrical rules, run against the
    * REAL catalogue rather than a fixture.
    *
-   * Both demo circuits are described by their own file as „circuits somebody
+   * All three demo circuits are described by their own file as „circuits somebody
    * would actually build", so an empty list here is the strongest available
    * check that the rules engine does not cry wolf. Every false positive it can
    * have is a false positive on ordinary correct work — a board powered over
    * USB whose VIN pin is unconnected, a sensor on a rail it is rated for, a
    * plain digital pin carrying a signal that commits to no bus role — and each
-   * of those is present in these two circuits. A rules engine that cannot stay
+   * of those is present in these three circuits. A rules engine that cannot stay
    * silent about a correct circuit is one the user learns to dismiss, and then
    * the one finding that would have saved a part goes unread with the rest.
    */
-  it("has nothing ELECTRICAL to say about either circuit either", () => {
+  it("has nothing ELECTRICAL to say about any of them either", () => {
     const store = new ElectronicsStore(db.raw, profileId);
     for (const listed of store.listActive()) {
       const circuit = toCircuitDocument(store.read(listed.id));
@@ -164,19 +165,43 @@ describe("seedDemoElectronics", () => {
     expect(resistor?.label).toBe("R1");
   });
 
-  /** Every jumper the seeder runs must be one of the nine the model admits. */
+  /**
+   * Ground is black and a supply rail is red, on every jumper of every circuit.
+   *
+   * By the pin's FUNCTION rather than by its name, and over every wire rather
+   * than over the first one found. The first version asked for a pin spelled
+   * `"5V"` and for one wire per circuit, which held exactly as long as every
+   * board in the demo was an Arduino: a Raspberry Pi supplies its peripherals
+   * from `3V3`, so the name matched nothing, `find` answered `undefined`, and a
+   * convention nobody had broken was reported as broken. A name is not a fact
+   * about a pin — `power-out` is.
+   */
   it("uses ground-black and supply-red, the two colours the trade reserves", () => {
     const store = new ElectronicsStore(db.raw, profileId);
+    const functionsOf = (componentId: string, pinId: string): readonly string[] =>
+      catalogueComponent(componentId)?.pins.find((pin) => pin.id === pinId)?.functions ?? [];
+
     for (const listed of store.listActive()) {
-      const circuit = store.read(listed.id);
-      const supply = circuit.wires.find(
-        (wire) => wire.fromPinId === "5V" || wire.toPinId === "5V",
-      );
-      const ground = circuit.wires.find(
-        (wire) => wire.fromPinId.startsWith("GND") || wire.toPinId.startsWith("GND"),
-      );
-      expect(supply?.colour).toBe("red");
-      expect(ground?.colour).toBe("black");
+      const circuit = toCircuitDocument(store.read(listed.id));
+      const byId = new Map(circuit.parts.map((part) => [part.id, part.componentId]));
+      const seen = { supply: 0, ground: 0 };
+
+      for (const wire of circuit.wires) {
+        const roles = [wire.from, wire.to].flatMap((end) =>
+          functionsOf(byId.get(end.partId) ?? "", end.pinId),
+        );
+        if (roles.includes("gnd")) {
+          seen.ground += 1;
+          expect(wire.colour).toBe("black");
+        } else if (roles.includes("power-out")) {
+          seen.supply += 1;
+          expect(wire.colour).toBe("red");
+        }
+      }
+      // And that there was something to check, so a circuit whose parts stopped
+      // resolving cannot pass this by having no opinion about any wire.
+      expect(seen.supply).toBeGreaterThan(0);
+      expect(seen.ground).toBeGreaterThan(0);
     }
   });
 });

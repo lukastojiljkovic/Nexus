@@ -30,8 +30,8 @@
  * become `Object.keys(SHAPES)` rather than a list someone maintained by hand.
  */
 
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import type { BrowserWindow } from "electron";
 import { AUDIT_SCRIPT, type AuditFinding } from "./audit.js";
 
@@ -201,15 +201,19 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     fanout: null,
   },
   {
-    // „Kod" — the generated Arduino sketch (E4), which is a MODAL and therefore
-    // invisible to every scene above it: the sweep photographs what is on
-    // screen, and a dialog nobody opened is not. The circuit the page opens on
-    // is „Merenje razdaljine", an UNO and an HC-SR04, which is the plain shape
-    // — two named pins, no libraries, and a page of code that must scroll
-    // rather than push the buttons off the bottom of the panel.
-    id: "electronics-sketch",
+    // „Kod" — the generated code (E4), which is a MODAL and therefore invisible
+    // to every scene above it: the sweep photographs what is on screen, and a
+    // dialog nobody opened is not.
+    //
+    // Three scenes because ONE dialog has three shapes, and each carries a
+    // section the other two do not. This first is the ROS 2 package, over the
+    // circuit the page happens to open on — the switcher is sr-Latn
+    // alphabetical, so „Malina: dodir i vazduh" is first and no preamble is
+    // needed to reach it. It is the widest of the three: a five-column topics
+    // table, plus the „skipped" table the I²C pins produce.
+    id: "electronics-code-ros",
     module: "electronics",
-    prepare: OPEN_SKETCH_DIALOG(),
+    prepare: OPEN_CODE_DIALOG(),
     fanout: null,
     // The dialog is a portal on `document.body`, and the scene after this one
     // stays on the same module — where nothing remounts. Escape is what closes
@@ -217,14 +221,24 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     cleanup: DISPATCH_KEY("Escape"),
   },
   {
-    // The same dialog over the demo's OTHER circuit, which is the loaded shape:
-    // a DHT22 brings a library list, and its DATA pin is one the sketch
-    // deliberately does not name, so the wiring table gets its „—" row and the
-    // sentence under it that explains one. Neither section exists in the frame
-    // above, and a section no frame carries is a section nothing measures.
-    id: "electronics-sketch-libraries",
+    // The plain Arduino shape: an UNO and an HC-SR04 — two named pins, no
+    // libraries, and a page of code that must scroll rather than push the
+    // buttons off the bottom of the panel.
+    id: "electronics-code-sketch",
     module: "electronics",
-    prepare: OPEN_SKETCH_DIALOG(SWITCH_TO_OTHER_CIRCUIT()),
+    prepare: OPEN_CODE_DIALOG(SWITCH_TO_CIRCUIT("Merenje")),
+    fanout: null,
+    cleanup: DISPATCH_KEY("Escape"),
+  },
+  {
+    // And the loaded Arduino shape: a DHT22 brings a library list, and its DATA
+    // pin is one the sketch deliberately does not name, so the wiring table
+    // gets its „—" row and the sentence under it that explains one. Neither
+    // section exists in the two frames above, and a section no frame carries is
+    // a section nothing measures.
+    id: "electronics-code-libraries",
+    module: "electronics",
+    prepare: OPEN_CODE_DIALOG(SWITCH_TO_CIRCUIT("Stanica")),
     fanout: null,
     cleanup: DISPATCH_KEY("Escape"),
   },
@@ -351,7 +365,7 @@ function OPEN_FIRST(selectors: string): string {
  * one that exists on the outgoing state: a control can be present and enabled
  * and still belong to the entity the previous step just navigated away from.
  * A step that has to outlast an async load wants the OUTCOME rather than a
- * count of frames — see {@link OPEN_SKETCH_DIALOG}, which is what a scene that
+ * count of frames — see {@link OPEN_CODE_DIALOG}, which is what a scene that
  * needed one had to be written as.
  */
 function CLICK_THEN(...steps: readonly string[]): string {
@@ -392,12 +406,12 @@ function CLICK_THEN(...steps: readonly string[]): string {
  * `preamble` is statements to run first, inside the same async function, for a
  * scene that has to get somewhere before there is anything to open.
  */
-function OPEN_SKETCH_DIALOG(preamble = ""): string {
+function OPEN_CODE_DIALOG(preamble = ""): string {
   return `(async () => {
   const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 ${preamble}
   for (let attempt = 0; attempt < 120; attempt += 1) {
-    if (document.querySelector(".elec-sketch__panel")) return true;
+    if (document.querySelector(".elec-code__panel")) return true;
     const code = document.querySelector(".elec__code");
     if (code && !code.disabled) code.click();
     await frame();
@@ -407,24 +421,36 @@ ${preamble}
 }
 
 /**
- * Chooses the circuit that is not the open one, as {@link OPEN_SKETCH_DIALOG}'s
+ * Chooses one named circuit in the switcher, as {@link OPEN_CODE_DIALOG}'s
  * preamble.
  *
- * „Other" by `aria-checked` rather than by index or by name: the switcher lists
- * circuits most-recently-touched first, which is an order the demo seeder does
- * not promise, and the demo profile has exactly two.
+ * By NAME, and this used to be „the one that is not checked". That worked while
+ * the demo profile had two circuits and stopped meaning anything the moment it
+ * had three — `aria-checked === "false"` then matches two rows and picks
+ * whichever the DOM lists first, so a scene named for the sketch could
+ * photograph the package. „Other" is not a name; it is an arithmetic that holds
+ * for exactly one profile shape.
+ *
+ * A PREFIX rather than the whole title, because the match runs on rendered
+ * text: „Malina: dodir i vazduh" is unambiguous at „Malina", and a prefix keeps
+ * the scene definitions ASCII where the titles are not. `"none"` if it matches
+ * nothing, which is how a renamed demo circuit becomes a red sweep rather than
+ * a frame of the wrong dialog.
  */
-function SWITCH_TO_OTHER_CIRCUIT(): string {
+function SWITCH_TO_CIRCUIT(name: string): string {
   return `  const trigger = document.querySelector(".elec__switcher");
   if (!trigger) return "none";
   trigger.click();
   await frame();
-  const other = Array.prototype.find.call(
+  const wanted = Array.prototype.find.call(
     document.querySelectorAll(".note__menu-item"),
-    (node) => node.getAttribute("aria-checked") === "false",
+    (node) => {
+      const label = node.querySelector(".elec__switcher-name");
+      return !!label && (label.textContent || "").trim().startsWith(${JSON.stringify(name)});
+    },
   );
-  if (!other) return "none";
-  other.click();`;
+  if (!wanted) return "none";
+  wanted.click();`;
 }
 
 /**
@@ -968,11 +994,48 @@ export async function runShots(win: BrowserWindow, outDir: string): Promise<Shot
   const frames: ShotFrame[] = [];
   try {
     await sweep(win, outDir, frames);
+    // Only on the success path — see {@link pruneStaleFrames}.
+    pruneStaleFrames(outDir, frames);
   } finally {
     writeFileSync(join(outDir, "frames.json"), `${JSON.stringify(frames, null, 2)}\n`);
     writeFileSync(join(outDir, "report.md"), buildReport(frames));
   }
   return frames;
+}
+
+/**
+ * Deletes every PNG under `outDir` this run did not write.
+ *
+ * The sweep overwrites in place rather than wiping its output first, which is
+ * right — a run that dies late still leaves a usable set beside a report that
+ * says how far it got. What it costs is that a **renamed** scene leaves its old
+ * frame on disk forever: `electronics-sketch.png` outlived the scene that made
+ * it by three renames, sitting in the directory looking exactly as current as
+ * the frame beside it. `frames.json` never mentioned it, so the report could
+ * not see it either; the only reader who could was a person opening the folder,
+ * which is the reader this whole instrument exists for.
+ *
+ * **Not in the `finally`, and that is the whole design.** A crashed run has a
+ * short `frames` list and a full directory, so pruning there would delete every
+ * frame the run had not reached — turning one transient capture failure into
+ * the loss of the previous run's evidence. It runs only where „this run took
+ * every frame it meant to" is true.
+ */
+function pruneStaleFrames(outDir: string, frames: readonly ShotFrame[]): void {
+  const written = new Set(frames.map((frame) => resolve(frame.file)));
+  for (const size of SHOT_SIZES) {
+    for (const theme of SHOT_THEMES) {
+      const dir = join(outDir, size.id, theme);
+      if (!existsSync(dir)) continue;
+      for (const name of readdirSync(dir)) {
+        if (!name.endsWith(".png")) continue;
+        const file = join(dir, name);
+        if (written.has(resolve(file))) continue;
+        process.stderr.write(`shots: removed a frame no scene takes any more — ${file}\n`);
+        rmSync(file, { force: true });
+      }
+    }
+  }
 }
 
 async function sweep(win: BrowserWindow, outDir: string, frames: ShotFrame[]): Promise<void> {

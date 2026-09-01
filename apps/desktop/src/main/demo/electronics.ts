@@ -3,13 +3,15 @@ import { ElectronicsStore } from "@nexus/db";
 import type { DatabaseHandle, DemoContext } from "./context.js";
 
 /**
- * ELEC's demo slice: two circuits that between them show what „Elektronika" is
- * for — a sensor read and an indicator on one board, and a second board doing
- * one job with four wires.
+ * ELEC's demo slice: three circuits that between them show what „Elektronika"
+ * is for — a sensor read and an indicator on one board, a second board doing one
+ * job with four wires, and a Raspberry Pi, which is the board whose „Kod" is a
+ * ROS 2 package rather than a sketch.
  *
- * **Both are circuits somebody would actually build.** A DHT22 wants 5 V, a
+ * **All three are circuits somebody would actually build.** A DHT22 wants 5 V, a
  * ground and one data pin; a LED wants a resistor in series and never the pin
- * directly; an HC-SR04 wants TRIG on one digital pin and ECHO on another. The
+ * directly; an HC-SR04 wants TRIG on one digital pin and ECHO on another; a Pi
+ * runs its peripherals at 3,3 V because it has no other logic level. The
  * demo profile exists so a person opening Nexus sees the app FULL rather than
  * empty, and a bench of parts wired at random would be worse than an empty one:
  * it would teach the wrong thing about the only module that has a right answer.
@@ -90,6 +92,43 @@ const CIRCUITS: readonly DemoCircuit[] = [
       { from: ["board", "GND1"], to: ["range", "GND"], colour: "black" },
       { from: ["board", "D10"], to: ["range", "TRIG"], colour: "yellow" },
       { from: ["board", "D11"], to: ["range", "ECHO"], colour: "blue" },
+    ],
+  },
+  {
+    // The third board kind, and the reason this circuit exists: „Kod" over a
+    // Raspberry Pi generates a ROS 2 package rather than a sketch (E4b), and
+    // without a Pi in the demo profile there is no circuit the sweep can
+    // photograph that dialog over. It is also the only frame the Pi's own
+    // 40-pin header ever appears in.
+    //
+    // Its three peripherals are each one of the three things the generator can
+    // do with a wire, on purpose: a touch pad the node PUBLISHES, a buzzer it
+    // SUBSCRIBES to as a duty cycle, and a barometer on I²C it leaves entirely
+    // alone. Everything runs on 3,3 V, which is not a simplification — a Pi has
+    // no 5 V logic, and every part here is rated for 3,3.
+    name: "Malina: dodir i vazduh",
+    notes:
+      "TTP223 na GPIO27, pasivna zujalica na GPIO18, BMP280 preko I²C. " +
+      "Sve na 3,3 V — Malina nema 5 V logiku.",
+    parts: {
+      board: { componentId: "raspberry-pi-4b", label: "", x: 120, y: 80 },
+      touch: { componentId: "ttp223", label: "", x: 460, y: 80 },
+      buzzer: { componentId: "buzzer-passive", label: "", x: 460, y: 250 },
+      air: { componentId: "bmp280", label: "", x: 460, y: 420 },
+    },
+    wires: [
+      { from: ["board", "3V3"], to: ["touch", "VCC"], colour: "red" },
+      { from: ["board", "GND1"], to: ["touch", "GND"], colour: "black" },
+      { from: ["board", "GPIO27"], to: ["touch", "SIG"], colour: "yellow" },
+      { from: ["board", "3V3"], to: ["buzzer", "VCC"], colour: "red" },
+      { from: ["board", "GND2"], to: ["buzzer", "GND"], colour: "black" },
+      // GPIO18 rather than any free pin: it is one of the four the Pi has a
+      // hardware timer behind, and a buzzer wants a waveform.
+      { from: ["board", "GPIO18"], to: ["buzzer", "IO"], colour: "green" },
+      { from: ["board", "3V3"], to: ["air", "VCC"], colour: "red" },
+      { from: ["board", "GND3"], to: ["air", "GND"], colour: "black" },
+      { from: ["board", "GPIO2"], to: ["air", "SDA"], colour: "white" },
+      { from: ["board", "GPIO3"], to: ["air", "SCL"], colour: "grey" },
     ],
   },
 ];
