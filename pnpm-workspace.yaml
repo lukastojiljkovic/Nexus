@@ -71,6 +71,26 @@ overrides:
   # dependants' floors clear 7.5.20 — at which point ordinary resolution reaches
   # the patch on its own and this entry must come out.
   tar@7: ^7.5.22
+  # GHSA-c83g-rgw3-j3cx — unbounded memory growth: the query cache never evicts,
+  # so a process that resolves many distinct browserslist queries grows until it
+  # is killed. And GHSA-73wf-gq98-2v4g — `normalizeStats` writes through an
+  # untrusted `browserslist-stats.json`, which is a prototype write and a crash.
+  #
+  # Build-time only, and only just: it arrives through
+  # @babel/helper-compilation-targets under electron-vite, @vitejs/plugin-react
+  # and eslint-plugin-react-hooks, all devDependencies. Neither reachable
+  # condition exists here — this repo resolves one query set from one
+  # `browserslist` key and ships no custom stats file at all — but SEC-VER-03
+  # blocks on the advisory rather than on my reading of it, and the patch is a
+  # lockfile bump away.
+  #
+  # `tar`'s mechanism exactly: `@babel/helper-compilation-targets` asks for
+  # `^4.24.0`, which has admitted 4.28.8 since the day it was published, so a
+  # clean install with no lockfile lands on the fix by itself. What does not
+  # move is the lockfile — 4.28.4 still satisfies `^4.24.0`, and a resolved
+  # version that still satisfies its range is never re-resolved. Retires when
+  # the lockfile's own resolution clears 4.28.6.
+  browserslist: ^4.28.8
   # GHSA-mwcw-c2x4-8c55 — predictable ids from a non-integer `size`. SHIPPED,
   # not build-time: it arrives through @excalidraw/excalidraw, which pins
   # nanoid at an exact `3.3.3`, and through @excalidraw/mermaid-to-excalidraw,
