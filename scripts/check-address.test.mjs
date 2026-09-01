@@ -185,6 +185,27 @@ describe("scanRepo", () => {
     expect(files.length).toBeGreaterThan(20);
   });
 
+  /**
+   * The copy tables are not the only place a Serbian sentence comes from, and
+   * asserting this is the point: the gate read only `strings/` until ADR-085's
+   * E4 started GENERATING Serbian — a README, a Python docstring and a manifest
+   * description, written into files the user opens outside Nexus — and main has
+   * always owned the native dialog titles, which no renderer table can hold.
+   * A widening nothing asserts is a widening a later edit reverts in silence.
+   */
+  it("covers main's native-dialog strings and the code generators too", () => {
+    const files = scanFiles().map((path) => path.split(/[\\/]/).pop());
+    expect(files).toContain("shellStrings.ts");
+    expect(files).toContain("ros.ts");
+    expect(files).toContain("sketch.ts");
+    // The 153 component summaries, which are read on screen.
+    expect(files).toContain("sensors.ts");
+  });
+
+  it("takes no test file, which may say the banned phrasing in order to test it", () => {
+    expect(scanFiles().filter((path) => path.endsWith(".test.ts"))).toEqual([]);
+  });
+
   it("is green — the whole product addresses everybody", () => {
     expect(scanRepo()).toEqual([]);
   });

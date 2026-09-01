@@ -26,11 +26,15 @@
 //     „Nisi ništa izabrao"            → „Bez odgovora…"         (impersonal)
 //     „Proveri da si nalepio ceo…"    → „Proveri da li je nalepljen ceo…" (passive)
 //
-// SCOPE. Only string LITERALS, and only in the Serbian copy tables — the gate
-// parses with the TypeScript compiler rather than reading lines, so a comment
-// that names the banned phrasing in order to forbid it does not trip it.
+// SCOPE. Only string LITERALS — the gate parses with the TypeScript compiler
+// rather than reading lines, so a comment that names the banned phrasing in
+// order to forbid it does not trip it. It reads the Serbian copy tables and
+// everything in `OTHER_COPY` below: main's native-dialog strings, and the one
+// package that GENERATES Serbian into files the user opens outside Nexus.
+// „Only the copy tables" was true until a code generator started writing a
+// README, which is the shape of hole this gate was built to close.
 
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join, relative, sep } from "node:path";
 import ts from "typescript";
@@ -39,6 +43,27 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = join(HERE, "..");
 
 const STRINGS_DIR = join("apps", "desktop", "src", "renderer", "src", "strings");
+
+/**
+ * Serbian that reaches a person from somewhere other than a copy table.
+ *
+ * `shellStrings.ts` is main's — native dialog titles and filter names, which
+ * the renderer's tables cannot hold because a native dialog is opened before
+ * any renderer exists. `electronics/` is the one package that *generates*
+ * Serbian: ADR-085 E4 writes a README, a Python docstring and a manifest
+ * description into files the user opens outside Nexus, and the catalogue's 153
+ * component summaries are read on screen.
+ *
+ * Whole directories rather than named files, deliberately (DC-61: a rule over a
+ * reachability set permits everything outside it). A fourth generator or a new
+ * catalogue shelf is covered without anyone remembering this line exists — and
+ * scanning an English-only file costs nothing, because the gate fires on
+ * Serbian trigger words and there are none in it.
+ */
+const OTHER_COPY = [
+  join("apps", "desktop", "src", "main", "shellStrings.ts"),
+  join("packages", "core", "src", "electronics"),
+];
 
 /** The second-person markers. „si" is also the auxiliary in „nisi", spelled out. */
 const ADDRESS = new Set(["si", "nisi"]);
@@ -206,13 +231,32 @@ export function scanSource(relPath, source) {
   return findings;
 }
 
-/** The Serbian copy tables: the facade and the per-pack files it pulls in. */
+/**
+ * Every file that can put a Serbian sentence in front of a person: the copy
+ * tables — the facade and the per-pack files it pulls in — plus {@link
+ * OTHER_COPY}.
+ */
 export function scanFiles(root = REPO_ROOT) {
   const files = [join(root, "apps", "desktop", "src", "renderer", "src", "strings.sr.ts")];
   for (const entry of readdirSync(join(root, STRINGS_DIR)).sort()) {
     if (entry.endsWith(".ts")) files.push(join(root, STRINGS_DIR, entry));
   }
+  for (const entry of OTHER_COPY) files.push(...sourcesUnder(join(root, entry)));
   return files;
+}
+
+/** One `.ts` file, or every non-test `.ts` beneath a directory, sorted. */
+function sourcesUnder(path) {
+  if (!statSync(path).isDirectory()) return [path];
+  const found = [];
+  for (const entry of readdirSync(path, { withFileTypes: true }).sort((a, b) =>
+    a.name < b.name ? -1 : 1,
+  )) {
+    const child = join(path, entry.name);
+    if (entry.isDirectory()) found.push(...sourcesUnder(child));
+    else if (entry.name.endsWith(".ts") && !entry.name.endsWith(".test.ts")) found.push(child);
+  }
+  return found;
 }
 
 export function scanRepo(root = REPO_ROOT) {
