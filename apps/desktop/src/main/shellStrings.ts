@@ -58,12 +58,24 @@ export const CALENDAR_FILTER_NAME = "Kalendar (iCalendar)";
 
 /**
  * Save-dialog filter for a generated Arduino sketch (`index.ts`'s
- * `elec:export-sketch`, ADR-085 E4). „Skica" is what the Arduino IDE's own
+ * `elec:export-code`, ADR-085 E4). „Skica" is what the Arduino IDE's own
  * Serbian-speaking users call a sketch, and the extension is what the IDE
  * insists on: a `.ino` must sit in a folder of the same name, which is why the
  * suggested filename is the circuit's slug and not a date.
  */
 export const SKETCH_FILTER_NAME = "Arduino skica";
+
+/**
+ * The directory picker for a generated ROS 2 package (`index.ts`'s
+ * `elec:export-code`, ADR-085 E4b). The user points at a colcon workspace's
+ * `src/` and Nexus makes the package folder inside it, so the title asks for
+ * the PARENT — „izaberi paket" would be asking for a thing that does not exist
+ * yet.
+ */
+export const ROS_WORKSPACE_DIALOG_TITLE = "Gde da se napravi ROS 2 paket";
+
+/** The picker's confirm button. Native default is „Open", which says nothing here. */
+export const ROS_WORKSPACE_DIALOG_BUTTON = "Napravi ovde";
 
 /** Open-dialog filter for an Anki deck (`index.ts`'s `pickApkgFile`, ADR-052). */
 export const ANKI_DECK_FILTER_NAME = "Anki špil";

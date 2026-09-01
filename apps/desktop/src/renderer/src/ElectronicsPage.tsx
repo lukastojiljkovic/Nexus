@@ -6,16 +6,16 @@ import {
   catalogueComponent,
   circuitProblems,
   circuitRules,
-  generateSketch,
+  generateCode,
 } from "@nexus/core";
 import type { CircuitPart, ComponentDef, PartRotation, WireColour, WireEnd } from "@nexus/core";
 import { Button, EmptyState, Icon, LoadingState, PageHeader, TextField } from "@nexus/ui";
 
-import type { ElecCircuit, ElecCircuitDocument } from "../../shared/ipc.js";
+import type { CodeExportResult, ElecCircuit, ElecCircuitDocument } from "../../shared/ipc.js";
 import { ElecBench, type ElecSelection } from "./ElecBench.js";
+import { ElecCodeDialog } from "./ElecCodeDialog.js";
 import { ElecInspector } from "./ElecInspector.js";
 import { ElecPalette } from "./ElecPalette.js";
-import { ElecSketchDialog } from "./ElecSketchDialog.js";
 import {
   contentBounds,
   dropSpot,
@@ -30,7 +30,7 @@ import { moduleName } from "./moduleName.js";
 import { NotePopover } from "./notePopover.js";
 import { formatNotificationWhen } from "./notificationFormat.js";
 import { neighbourAfterDelete, resolveOpenItem } from "./pickedList.js";
-import { strings } from "./strings.js";
+import { countUnit, strings } from "./strings.js";
 
 /**
  * „Elektronika" (ELEC) — the workbench: a circuit, the parts on it and the
@@ -99,8 +99,8 @@ export function ElectronicsPage({ profileId }: ElectronicsPageProps) {
   const [busy, setBusy] = useState(false);
   const [notesSaved, setNotesSaved] = useState(false);
   /** The generated-code dialog (E4), and the one line left behind after it closes. */
-  const [sketchOpen, setSketchOpen] = useState(false);
-  const [sketchNotice, setSketchNotice] = useState<string | null>(null);
+  const [codeOpen, setCodeOpen] = useState(false);
+  const [codeNotice, setCodeNotice] = useState<string | null>(null);
 
   const [selection, setSelection] = useState<ElecSelection | null>(null);
   const [wiring, setWiring] = useState<WireEnd | null>(null);
@@ -182,9 +182,9 @@ export function ElectronicsPage({ profileId }: ElectronicsPageProps) {
     setWiring(null);
     setNotesSaved(false);
     // The code dialog belongs to the circuit that was open. It would otherwise
-    // stay up and refill itself with a different circuit's sketch.
-    setSketchOpen(false);
-    setSketchNotice(null);
+    // stay up and refill itself with a different circuit's code.
+    setCodeOpen(false);
+    setCodeNotice(null);
     void (async () => {
       try {
         const opened = await window.nexus.openCircuit(profileId, activeId);
@@ -252,7 +252,7 @@ export function ElectronicsPage({ profileId }: ElectronicsPageProps) {
    *
    * All three are pure functions of the same rows, and all three used to be
    * called inline in the JSX below — which meant re-deriving the nets, the
-   * thirteen rules and the whole sketch on every keystroke in the notes box.
+   * thirteen rules and the whole artefact on every keystroke in the notes box.
    * They change when the document changes and at no other time, which is
    * exactly what `useMemo` says. `resolveComponent` is module-scope and needs
    * no dependency.
@@ -262,10 +262,7 @@ export function ElectronicsPage({ profileId }: ElectronicsPageProps) {
     [doc],
   );
   const rules = useMemo(() => (doc === null ? [] : circuitRules(doc, resolveComponent)), [doc]);
-  const sketch = useMemo(
-    () => (doc === null ? null : generateSketch(doc, resolveComponent)),
-    [doc],
-  );
+  const code = useMemo(() => (doc === null ? null : generateCode(doc, resolveComponent)), [doc]);
 
   /** Runs one mutation: clears the previous refusal, blocks a second write, reports a failure. */
   async function run(action: () => Promise<void>): Promise<void> {
@@ -347,25 +344,26 @@ export function ElectronicsPage({ profileId }: ElectronicsPageProps) {
   }
 
   /**
-   * Writes the sketch (ADR-085 E4). The payload is the circuit's id: main reads
-   * its own rows and generates its own text, so what lands on disk is never a
-   * string this page composed.
+   * Writes the code (ADR-085 E4). The payload is the circuit's id: main reads
+   * its own rows, generates its own text and decides on its own whether the
+   * user is shown a file picker or a directory one — so neither the bytes nor
+   * the kind of dialog is something this page composed.
    *
    * A canceled dialog leaves everything as it was, including the preview — the
-   * user pressed „Otkaži" in the OS's file picker, not in ours. A refusal can
-   * only mean the circuit changed under the click, since „Sačuvaj kao…" is not
-   * rendered over a preview that already refused, so it closes the preview it
-   * now contradicts.
+   * user pressed „Otkaži" in the OS's picker, not in ours. Every other outcome
+   * closes the preview: a refusal can only mean the circuit changed under the
+   * click, since „Sačuvaj kao…" is not rendered over a preview that already
+   * refused, and the other three are done.
    */
-  async function saveSketch(): Promise<void> {
+  async function saveCode(): Promise<void> {
     if (doc === null) return;
     const circuitId = doc.id;
-    setSketchNotice(null);
+    setCodeNotice(null);
     await run(async () => {
-      const result = await window.nexus.exportCircuitSketch(profileId, circuitId);
+      const result = await window.nexus.exportCircuitCode(profileId, circuitId);
       if (result.canceled) return;
-      setSketchOpen(false);
-      setSketchNotice("refused" in result ? s.sketch.refused[result.refused] : s.sketch.saved);
+      setCodeOpen(false);
+      setCodeNotice(codeNoticeFor(result));
     });
   }
 
@@ -580,16 +578,16 @@ export function ElectronicsPage({ profileId }: ElectronicsPageProps) {
             </Button>
             {active !== null && (
               <>
-                {/* Enabled only once the circuit is actually open: the sketch is
+                {/* Enabled only once the circuit is actually open: the code is
                     derived from the parts and wires, which the list row does
                     not carry. */}
                 <Button
                   className="elec__code"
                   variant="ghost"
                   disabled={doc === null}
-                  onClick={() => setSketchOpen(true)}
+                  onClick={() => setCodeOpen(true)}
                 >
-                  {s.sketch.open}
+                  {s.code.open}
                 </Button>
                 <Button
                   variant="ghost"
@@ -653,22 +651,22 @@ export function ElectronicsPage({ profileId }: ElectronicsPageProps) {
         </p>
       )}
 
-      {sketchNotice !== null && (
+      {codeNotice !== null && (
         <p className="elec__notice" role="status">
-          {sketchNotice}
-          <Button variant="ghost" onClick={() => setSketchNotice(null)}>
+          {codeNotice}
+          <Button variant="ghost" onClick={() => setCodeNotice(null)}>
             {s.dismiss}
           </Button>
         </p>
       )}
 
-      {sketchOpen && sketch !== null && (
-        <ElecSketchDialog
-          sketch={sketch}
+      {codeOpen && code !== null && (
+        <ElecCodeDialog
+          code={code}
           errors={rules.filter((finding) => finding.severity === "error").length}
           busy={busy}
-          onSave={() => void saveSketch()}
-          onClose={() => setSketchOpen(false)}
+          onSave={() => void saveCode()}
+          onClose={() => setCodeOpen(false)}
         />
       )}
 
@@ -771,4 +769,41 @@ export function ElectronicsPage({ profileId }: ElectronicsPageProps) {
       )}
     </div>
   );
+}
+
+/**
+ * The sentence a settled export gets (ADR-085 E4).
+ *
+ * A `switch` over the outcome rather than a truthiness test on some field: the
+ * four are genuinely different things that happened — a file written, a
+ * directory created, a circuit that has no code to give, and the one
+ * destructive act main declines to perform — and `path` is present in three of
+ * them, so no field tells them apart.
+ *
+ * A function rather than a table read at module scope, which `check:strings`
+ * forbids and for a good reason: the locale switch rewrites these leaves, and a
+ * value captured at import time would be the language the app started in.
+ */
+function codeNoticeFor(result: Extract<CodeExportResult, { canceled: false }>): string {
+  const s = strings.electronics.code;
+  switch (result.outcome) {
+    case "refused":
+      return s.refused[result.reason];
+    case "sketch": {
+      if (result.libraries === 0) return s.sketch.saved;
+      const unit = countUnit(
+        result.libraries,
+        s.sketch.libraryOne,
+        s.sketch.libraryFew,
+        s.sketch.libraryMany,
+      );
+      return `${s.sketch.saved} ${s.sketch.savedLibraries} ${result.libraries} ${unit}.`;
+    }
+    case "package": {
+      const unit = countUnit(result.files, s.ros.fileOne, s.ros.fileFew, s.ros.fileMany);
+      return `${s.ros.saved} ${result.files} ${unit}.`;
+    }
+    case "exists":
+      return s.ros.exists;
+  }
 }

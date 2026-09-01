@@ -629,13 +629,20 @@ export const IpcChannel = {
   elecAddWire: "elec:add-wire",
   elecSetWireColour: "elec:set-wire-colour",
   elecRemoveWire: "elec:remove-wire",
-  // ADR-085 slice E4. The renderer already generates the sketch for its own
-  // preview — `generateSketch` is pure and lives in `@nexus/core` — so this
+  // ADR-085 slice E4. The renderer already generates the code for its own
+  // preview — `generateCode` is pure and lives in `@nexus/core` — so this
   // channel exists for exactly one thing the renderer may not do: put a file on
   // the user's disk. Main regenerates from its OWN store rather than writing
   // text the renderer sent, which costs a few milliseconds and means the bytes
   // on disk are the circuit as stored, not as a renderer described it.
-  elecExportSketch: "elec:export-sketch",
+  //
+  // One channel for both artefacts, and the payload says nothing about which.
+  // An Arduino sketch is one file and a ROS 2 package is a directory of eight,
+  // so the two need different native dialogs — and main derives WHICH from the
+  // stored circuit's board, never from a field the renderer sent. A channel
+  // that took „save me a directory" would be a channel a renderer could use to
+  // ask for the wrong one.
+  elecExportCode: "elec:export-code",
   searchQuery: "search:query",
   searchRecent: "search:recent",
   searchPage: "search:page",
@@ -6323,22 +6330,45 @@ export type IcsExportResult =
   | { canceled: false; path: string; events: number; skipped: number };
 
 /**
- * The outcome of an Arduino sketch export (ADR-085 E4), shaped like
- * `IcsExportResult`'s — the user canceled, or the file was written at the path
- * the native dialog returned, never one the renderer supplied (SEC-EL).
+ * Why a circuit produced no code (ADR-085 E4) — `@nexus/core`'s
+ * `SketchRefusal | RosRefusal`, redeclared on `AuthErrorReason`'s terms because
+ * this file imports nothing. Main assigns the generator's own value to it, so a
+ * drift is a compile error rather than a silent gap.
  *
- * `refused` is the third outcome and it is not an error: a circuit with two
- * boards, or with a Raspberry Pi in it, has no sketch to give. The renderer
- * says so in its own dialog and renders no „Sačuvaj kao…" there at all, so
- * reaching this arm means the circuit changed between the preview and the click
- * — which is worth reporting rather than writing an empty file over whatever
- * the user pointed at.
- * The reason is a machine code; the renderer owns the Serbian sentence.
+ * Machine codes, never prose: the renderer owns the Serbian sentence.
  */
-export type SketchExportResult =
+export type CodeRefusal = "no-board" | "many-boards" | "not-programmable" | "not-ros";
+
+/**
+ * The outcome of a code export (ADR-085 E4), shaped like `IcsExportResult`'s —
+ * the user canceled, or it was written at the path the native dialog returned,
+ * never one the renderer supplied (SEC-EL).
+ *
+ * `outcome` rather than a bare `path`, because the two artefacts are different
+ * things on disk: a sketch is a file the user named, a package is a directory
+ * Nexus created under a directory the user picked. „Sačuvana je skica" and
+ * „napravljen je paket od osam fajlova" are different sentences and the
+ * renderer has to be able to tell which it is saying.
+ *
+ * `refused` is not an error: a circuit with two boards has no code to give. The
+ * renderer says so in its own dialog and shows no save button there at all, so
+ * reaching that arm means the circuit changed between the preview and the click
+ * — worth reporting rather than writing an empty file over whatever the user
+ * pointed at.
+ *
+ * `exists` is the one refusal main makes on its own, and it is deliberate: the
+ * generated package tells the user to fill in its licence and to write their
+ * own node beside it, so a second export that silently overwrote the directory
+ * would destroy work Nexus itself asked for.
+ */
+export type CodeExportResult =
   | { canceled: true }
-  | { canceled: false; path: string; libraries: number }
-  | { canceled: false; refused: "no-board" | "many-boards" | "not-programmable" };
+  | { canceled: false; outcome: "refused"; reason: CodeRefusal }
+  /** A `.ino` at the path the save dialog returned. `libraries` is how many to install. */
+  | { canceled: false; outcome: "sketch"; path: string; libraries: number }
+  /** A package directory, freshly created. `path` is the directory, not its parent. */
+  | { canceled: false; outcome: "package"; path: string; files: number }
+  | { canceled: false; outcome: "exists"; path: string };
 
 /**
  * The scheduled backup's cadence (SET-011 / ADR-056). Mirrors `@nexus/db`'s
@@ -9288,15 +9318,17 @@ export interface NexusApi {
   /** Removes a wire. Both its parts stay exactly where they are. */
   removeCircuitWire(profileId: string, id: string): Promise<void>;
   /**
-   * Writes this circuit's Arduino sketch (ADR-085 E4) at a path the user picks
-   * in a native save dialog. Resolves once that dialog is settled.
+   * Writes this circuit's generated code (ADR-085 E4) where the user picks in
+   * a native dialog. Resolves once that dialog is settled.
    *
-   * Takes no sketch text. Main regenerates from its own store, so what lands on
-   * disk is the circuit as stored — and the renderer, which can already produce
-   * the identical string for its preview, is not the thing that decides what a
-   * file on the user's machine contains.
+   * Takes no text and no path, and says nothing about WHICH artefact it wants.
+   * Main regenerates from its own store, so what lands on disk is the circuit
+   * as stored — and the renderer, which can already produce the identical
+   * string for its preview, is not the thing that decides what a file on the
+   * user's machine contains, nor whether the user is shown a file picker or a
+   * directory one.
    */
-  exportCircuitSketch(profileId: string, id: string): Promise<SketchExportResult>;
+  exportCircuitCode(profileId: string, id: string): Promise<CodeExportResult>;
   /** Runs the query pipeline (parse -> FTS match -> bm25 candidates -> rank), falling back to `searchRecent`'s order when the query has no matchable terms (ADR-021). */
   searchQuery(profileId: string, query: string, limit: number): Promise<SearchResult[]>;
   /** The profile's most recently touched entries, already in their final order — no ranking pass, unlike `searchQuery`. */

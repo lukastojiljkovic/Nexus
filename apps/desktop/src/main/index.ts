@@ -9,7 +9,7 @@ import {
   unlink as unlinkAsync,
   writeFile as writeFileAsync,
 } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, protocol, session } from "electron";
 import type { IpcMainInvokeEvent, OpenDialogOptions } from "electron";
 // `electron-updater` is deliberately NOT imported — see the disarmed
@@ -40,7 +40,7 @@ import {
   FOOD_CATALOGUE,
   FOOD_CATEGORIES,
   foodRefText,
-  generateSketch,
+  generateCode,
   isInlineImageMime,
   isValidDayKey,
   MAX_ARCHIVE_PASSPHRASE_LENGTH,
@@ -496,6 +496,8 @@ import {
   CALENDAR_FILTER_NAME,
   CSV_TABLE_FILTER_NAME,
   IMAGE_FILTER_NAME,
+  ROS_WORKSPACE_DIALOG_BUTTON,
+  ROS_WORKSPACE_DIALOG_TITLE,
   SKETCH_FILTER_NAME,
   STATEMENT_DIALOG_TITLE,
   STATEMENT_FILTER_NAME,
@@ -558,6 +560,7 @@ import {
   CARD_KINDS,
   CARD_TEXT_MAX_LENGTH,
   type CardKind,
+  type CodeExportResult,
   CSV_IMPORT_COLUMN_ROLES,
   CSV_IMPORT_MAX_COLUMNS,
   CSV_IMPORT_MAX_LIST_NAME_LENGTH,
@@ -685,7 +688,6 @@ import {
   type SearchHistoryEntry,
   type SearchPageResult,
   type SearchResult,
-  type SketchExportResult,
   type SnoozePreset,
   type StudySettings,
   type StudyStats,
@@ -4485,6 +4487,38 @@ function asElecId(value: unknown, field: string): string {
     throw new Error(`Invalid IPC payload: "${field}" must not be blank.`);
   }
   return id;
+}
+
+/**
+ * Where a ROS 2 package goes: the user points at a colcon workspace's `src/`
+ * and Nexus makes the package folder inside it (ADR-085 E4b).
+ *
+ * `createDirectory` so a first-ever workspace can be made in the picker rather
+ * than in a terminal first; macOS shows the button, Windows always has one.
+ */
+const ROS_WORKSPACE_DIALOG: OpenDialogOptions = {
+  title: ROS_WORKSPACE_DIALOG_TITLE,
+  buttonLabel: ROS_WORKSPACE_DIALOG_BUTTON,
+  properties: ["openDirectory", "createDirectory"],
+};
+
+/**
+ * That a generated file's path really is inside the package directory.
+ *
+ * Nothing the renderer sends reaches here — `generateRosPackage` builds every
+ * one of these paths, from a package name that is `[a-z0-9_]` by construction
+ * — so this can only fire if that generator changes. Which is the point: it
+ * makes „a future edit introduces a `..`" a thrown error rather than eight
+ * files written somewhere the user did not choose.
+ */
+function assertInsidePackage(path: string): void {
+  const outside =
+    path === "" ||
+    path.startsWith("/") ||
+    path.includes("\\") ||
+    /^[A-Za-z]:/.test(path) ||
+    path.split("/").some((segment) => segment === "" || segment === "." || segment === "..");
+  if (outside) throw new Error(`Generated package path escapes its directory: ${path}`);
 }
 
 function asPartCoordinate(value: unknown, field: string): number {
@@ -10627,31 +10661,37 @@ function registerIpc(): void {
     electronicsStore(profileId).removeWire(id, new Date().toISOString());
   });
 
-  // ADR-085 E4: the sketch onto disk. The payload is an id and nothing else —
-  // main reads the circuit from its own store and generates the text here, so
-  // the bytes written are the circuit as stored rather than a string the
-  // renderer composed. The path comes only from the native dialog (SEC-EL);
+  // ADR-085 E4: the generated code onto disk. The payload is an id and nothing
+  // else — main reads the circuit from its own store and generates the text
+  // here, so the bytes written are the circuit as stored rather than a string
+  // the renderer composed. The path comes only from the native dialog (SEC-EL);
   // `handleIcsExport` in `main/imex.ts` is the shape this follows.
+  //
+  // **Which dialog the user sees is derived, never asked for.** A sketch is one
+  // file and a ROS 2 package is a directory of eight, so `generateCode` decides
+  // by reading the stored circuit's board. A renderer cannot ask for the wrong
+  // one, because it cannot ask for either.
   //
   // The refusals ride back rather than throwing. „This circuit has two boards"
   // is a true sentence about the circuit, not a failure of the export, and the
-  // renderer already disables the button for it — reaching this arm means the
+  // renderer already hides the button for it — reaching this arm means the
   // canvas changed under the click, which is worth saying out loud and is
   // certainly worth NOT overwriting the file the user just pointed at.
-  ipcMain.handle(
-    IpcChannel.elecExportSketch,
-    async (event, payload): Promise<SketchExportResult> => {
-      assertTrustedSender(event);
-      const body = asRecord(payload);
-      const profileId = asNonEmptyString(body.profileId, "profileId");
-      const id = asElecId(body.id, "id");
+  ipcMain.handle(IpcChannel.elecExportCode, async (event, payload): Promise<CodeExportResult> => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asElecId(body.id, "id");
 
-      const circuit = toCircuitDocument(electronicsStore(profileId).read(id));
-      const sketch = generateSketch(circuit, catalogueComponent);
-      if (sketch.kind === "refused") return { canceled: false, refused: sketch.reason };
+    const circuit = toCircuitDocument(electronicsStore(profileId).read(id));
+    const code = generateCode(circuit, catalogueComponent);
+    if (code.kind === "refused") {
+      return { canceled: false, outcome: "refused", reason: code.reason };
+    }
 
+    if (code.kind === "sketch") {
       const dialogOptions = {
-        defaultPath: sketch.filename,
+        defaultPath: code.filename,
         filters: [{ name: SKETCH_FILTER_NAME, extensions: ["ino"] }],
       };
       const { canceled, filePath } = mainWindow
@@ -10659,10 +10699,41 @@ function registerIpc(): void {
         : await dialog.showSaveDialog(dialogOptions);
       if (canceled || !filePath) return { canceled: true };
 
-      await writeFileAsync(filePath, sketch.source, "utf8");
-      return { canceled: false, path: filePath, libraries: sketch.libraries.length };
-    },
-  );
+      await writeFileAsync(filePath, code.source, "utf8");
+      const libraries = code.libraries.length;
+      return { canceled: false, outcome: "sketch", path: filePath, libraries };
+    }
+
+    // A package is a DIRECTORY, so the user picks its parent — a colcon
+    // workspace's `src/` — and Nexus makes the package folder inside it. That
+    // is the layout `colcon build` requires, and writing the eight files
+    // straight into the chosen directory would scatter a `package.xml` into a
+    // workspace that already has several.
+    const chosen = mainWindow
+      ? await dialog.showOpenDialog(mainWindow, ROS_WORKSPACE_DIALOG)
+      : await dialog.showOpenDialog(ROS_WORKSPACE_DIALOG);
+    const parent = chosen.filePaths[0];
+    if (chosen.canceled || parent === undefined) return { canceled: true };
+
+    const root = join(parent, code.name);
+    // Never over an existing directory. The generated README tells the user to
+    // fill in the licence and to write their own node beside `wiring.py`, so a
+    // second export that overwrote this would destroy work Nexus asked for.
+    if (existsSync(root)) return { canceled: false, outcome: "exists", path: root };
+
+    for (const file of code.files) {
+      // Belt and braces. Every path here is generated — the package name is
+      // `[a-z0-9_]` by construction and the rest are literals — so this can
+      // only fire if the generator itself changes. That is the point: it turns
+      // „a future edit puts a `..` in a path" from a write outside the user's
+      // chosen directory into a thrown error.
+      assertInsidePackage(file.path);
+      const target = join(root, file.path);
+      await mkdirAsync(dirname(target), { recursive: true });
+      await writeFileAsync(target, file.contents, "utf8");
+    }
+    return { canceled: false, outcome: "package", path: root, files: code.files.length };
+  });
 
   // Global search (ADR-021 / PRD 08 SRCH-001/002): `runSearchQuery`/
   // `runRecentSearch` own the actual pipeline (see their doc comments) so the

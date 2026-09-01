@@ -700,8 +700,8 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.elecSetWireColour, { profileId, id, colour }),
   removeCircuitWire: (profileId, id) =>
     ipcRenderer.invoke(IpcChannel.elecRemoveWire, { profileId, id }),
-  exportCircuitSketch: (profileId, id) =>
-    ipcRenderer.invoke(IpcChannel.elecExportSketch, { profileId, id }),
+  exportCircuitCode: (profileId, id) =>
+    ipcRenderer.invoke(IpcChannel.elecExportCode, { profileId, id }),
   searchQuery: (profileId, query, limit) =>
     ipcRenderer.invoke(IpcChannel.searchQuery, { profileId, query, limit }),
   searchRecent: (profileId, limit) =>
