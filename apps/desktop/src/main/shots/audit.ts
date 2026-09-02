@@ -53,6 +53,16 @@ export interface AuditFinding {
  * *supposed* to paint over the surface behind them; flagging every open dialog
  * would bury the findings that matter. They are still checked for clipping,
  * escaping and off-screen painting, because those are wrong in an overlay too.
+ *
+ * **It is a list because the property it encodes is INTENT, and geometry does
+ * not carry intent.** Every generalisation of it that has been considered fails
+ * on one real case: „positioned with a z-index" also describes an ordinary
+ * raised card; „paints an opaque background over the thing beneath it" also
+ * describes UČE's state chip painting over the flashcard text it truncates,
+ * which is a defect this audit found and must keep finding. An overlay is a
+ * surface the USER opened, and nothing about a box says that. So the cost of
+ * this list is that a new overlay produces noise until it is added — noise, not
+ * silence, which is the failure direction to prefer.
  */
 const OVERLAY_SELECTOR =
   '[role="dialog"], [role="menu"], [role="tooltip"], [role="listbox"], .nx-popover, .note__menu, ' +
@@ -60,7 +70,14 @@ const OVERLAY_SELECTOR =
   // foot, 360px wide against a 220px rail, deliberately painting over the page.
   // Every one of its rows was being reported as overlapping whatever it covers
   // — five of the sweep's fifteen findings, all of them the panel doing its job.
-  ".ntf__panel";
+  ".ntf__panel, " +
+  // NOTE's organizer under 1345px, where it leaves the grid and becomes a
+  // drawer over the list — `position: absolute`, `z-index: 5`, its own opaque
+  // surface, and a scrim that puts it away again. It carries no `role`, because
+  // it is a disclosure rather than a dialog, so nothing above matches it. Ten of
+  // the thirteen findings in the run that first opened it were its own folder,
+  // tag and category controls reported against the note rows underneath.
+  ".note__org-pane";
 
 export const AUDIT_SCRIPT = `(() => {
   const OVERLAY_SELECTOR = ${JSON.stringify(OVERLAY_SELECTOR)};

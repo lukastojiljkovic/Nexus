@@ -94,6 +94,47 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     prepare: CLICK_THEN(".nx-segmented__option", "text:Detalji"),
     fanout: null,
   },
+  {
+    // The rail's own create forms. The rail is outside the view switch, so it
+    // is on the page whatever view the scene above left open.
+    id: "tasks-new-list",
+    module: "tasks",
+    prepare: OPEN_CREATE_FORM({ open: ".tasks__new-list" }),
+    fanout: null,
+    cleanup: CLICK_THEN("text:Otkaži"),
+  },
+  {
+    id: "tasks-new-tag",
+    module: "tasks",
+    prepare: OPEN_CREATE_FORM({ open: ".tasks__new-tag" }),
+    fanout: null,
+    cleanup: CLICK_THEN("text:Otkaži"),
+  },
+  {
+    // „Nova sekcija" is the one TASK create form with a precondition: it is
+    // drawn only for a SELECTED list, and the scenes above leave the rail on a
+    // smart view. So the path chooses a list first — and the form then renders
+    // under that list's last group, which is what the scroll is for.
+    //
+    // The path is child-scoped, not just `.tasks__rail-list`. That class is
+    // worn by BOTH kinds of rail row — the five Pregledi and the real lists —
+    // because they are the same object to the eye and to the stylesheet, and
+    // the Pregledi are drawn first. The short selector therefore chose „Danas",
+    // which selects a smart view, which is precisely the state that removes the
+    // button this scene came to press. Real lists are direct children of
+    // `.tasks__rail`; the smart rows are inside `.tasks__rail-views`.
+    //
+    // LAST of the three, because it is the only one that leaves the module in a
+    // different state than it found it.
+    id: "tasks-new-section",
+    module: "tasks",
+    prepare: OPEN_CREATE_FORM({
+      path: [".tasks__rail > .tasks__rail-row .tasks__rail-list"],
+      open: ".tasks__new-section",
+    }),
+    fanout: null,
+    cleanup: CLICK_THEN("text:Otkaži"),
+  },
   { id: "calendar", module: "calendar" },
   { id: "notes", module: "notes" },
   {
@@ -102,11 +143,144 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     prepare: OPEN_FIRST(".note__item-row, .notes__row, .nx-list-row"),
     fanout: null,
   },
+  // The organizer's three create forms. Each path clicks `.note__org-toggle`
+  // and each cleanup clicks it again, which is the whole responsive story in
+  // one line: under 1345px the organizer is a DRAWER and starts closed, so two
+  // of the four window sizes would otherwise photograph a pane that is
+  // `display: none`. At the wide sizes the toggle is `display: none` itself and
+  // the pane is a grid column regardless of the state — a programmatic click
+  // still runs the handler, and the state it flips changes nothing there. The
+  // toggle is a TOGGLE, so the cleanup has to undo it: without that, the second
+  // of these scenes would close the drawer the first one opened.
+  {
+    // By text, not by `.note__new-folder` — the „Nova kategorija" button below
+    // wears that same class, so a selector would give both scenes the folder.
+    id: "notes-new-folder",
+    module: "notes",
+    prepare: OPEN_CREATE_FORM({ path: [".note__org-toggle"], open: "text:Nova fascikla" }),
+    fanout: null,
+    cleanup: CLICK_THEN("text:Otkaži", ".note__org-toggle"),
+  },
+  {
+    id: "notes-new-tag",
+    module: "notes",
+    prepare: OPEN_CREATE_FORM({ path: [".note__org-toggle"], open: ".note__new-tag" }),
+    fanout: null,
+    cleanup: CLICK_THEN("text:Otkaži", ".note__org-toggle"),
+  },
+  {
+    id: "notes-new-category",
+    module: "notes",
+    prepare: OPEN_CREATE_FORM({ path: [".note__org-toggle"], open: "text:Nova kategorija" }),
+    fanout: null,
+    cleanup: CLICK_THEN("text:Otkaži", ".note__org-toggle"),
+  },
   { id: "priv", module: "priv", fanout: null },
   { id: "files", module: "files" },
   { id: "study", module: "study", fanout: null },
+  // UČE's four hub forms. All by TEXT: „Dodaj ispit", „Dodaj špil" and „Dodaj
+  // karticu" share the class `study__add-exam`, which is a copy-paste the
+  // stylesheet does not mind and a selector cannot survive — one of the three
+  // would have answered for all three, and every frame would have been filed
+  // under a name it did not show.
+  {
+    id: "study-new-subject",
+    module: "study",
+    prepare: OPEN_CREATE_FORM({ open: "text:Dodaj predmet" }),
+    fanout: null,
+    cleanup: CLICK_THEN("text:Otkaži"),
+  },
+  {
+    id: "study-new-exam",
+    module: "study",
+    prepare: OPEN_CREATE_FORM({ open: "text:Dodaj ispit" }),
+    fanout: null,
+    cleanup: CLICK_THEN("text:Otkaži"),
+  },
+  {
+    id: "study-new-deck",
+    module: "study",
+    prepare: OPEN_CREATE_FORM({ open: "text:Dodaj špil" }),
+    fanout: null,
+    cleanup: CLICK_THEN("text:Otkaži"),
+  },
+  {
+    id: "study-new-plan",
+    module: "study",
+    prepare: OPEN_CREATE_FORM({ open: "text:Novi plan" }),
+    fanout: null,
+    cleanup: CLICK_THEN("text:Otkaži"),
+  },
+  {
+    // The deck DRILL-IN, which is a route rather than a form — and the reason
+    // it is here is that the sweep has never photographed it either. „Kartice"
+    // leaves the hub entirely, so every card row, every state chip and the
+    // cloze and problem renderings live on a screen no frame has ever carried.
+    //
+    // LAST of the UČE scenes, and it walks itself back with `.study__back`: a
+    // scene that leaves the module on a different route hands the next pass a
+    // page it did not ask for.
+    id: "study-cards",
+    module: "study",
+    prepare: CLICK_THEN("text:Kartice"),
+    fanout: null,
+    cleanup: CLICK_THEN(".study__back"),
+  },
+  {
+    // „Dodaj karticu" is the one create form that is not on the hub at all: it
+    // is three states deep — a subject, its deck, then the drill-in — which is
+    // exactly the reach DC-57 describes and exactly why a native control could
+    // sit in FIT's equivalent for as long as it did.
+    id: "study-new-card",
+    module: "study",
+    prepare: OPEN_CREATE_FORM({ path: ["text:Kartice"], open: "text:Dodaj karticu" }),
+    fanout: null,
+    cleanup: CLICK_THEN("text:Otkaži", ".study__back"),
+  },
   { id: "finance", module: "finance" },
+  {
+    // NOVAC's rail forms, and „Nova pretplata" on the third of the page's three
+    // halves. The path re-states the half every time because the scene above
+    // fans out through the switcher and stops on whichever option came last —
+    // a module that is already open is not remounted, so the page it left is
+    // the page these start from.
+    id: "finance-new-account",
+    module: "finance",
+    prepare: OPEN_CREATE_FORM({
+      path: [".fin__segmented .nx-segmented__option"],
+      open: "text:Novi račun",
+    }),
+    fanout: null,
+    cleanup: CLICK_THEN("text:Otkaži"),
+  },
+  {
+    id: "finance-new-category",
+    module: "finance",
+    prepare: OPEN_CREATE_FORM({
+      path: [".fin__segmented .nx-segmented__option"],
+      open: "text:Nova kategorija",
+    }),
+    fanout: null,
+    cleanup: CLICK_THEN("text:Otkaži"),
+  },
+  {
+    id: "finance-new-subscription",
+    module: "finance",
+    prepare: OPEN_CREATE_FORM({
+      path: [".fin__segmented .nx-segmented__option:nth-child(3)"],
+      open: "text:Nova pretplata",
+    }),
+    fanout: null,
+    cleanup: CLICK_THEN("text:Otkaži", ".fin__segmented .nx-segmented__option"),
+  },
   { id: "habits", module: "habits", fanout: null },
+  {
+    id: "habits-new",
+    module: "habits",
+    prepare: OPEN_CREATE_FORM({ open: "text:Nova navika" }),
+    fanout: null,
+    cleanup: CLICK_THEN("text:Otkaži"),
+  },
   {
     id: "fitness",
     module: "fitness",
@@ -148,16 +322,47 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     fanout: null,
   },
   {
-    // „Nova vežba", the create form itself — added because of what its absence
-    // cost. A native checkbox sat in this form for as long as the form has
-    // existed and nothing ever reported it: the sweep photographs the section,
-    // never the form behind its primary button, so the one check that has ever
-    // caught a bare `<input type="checkbox">` could not see this one. The class
-    // is now a gate (`check:controls`, DC-98) — this scene is the other half,
-    // and every create form still behind a button is the same hole.
+    // „Nova vežba", the create form itself — the scene that started all of
+    // these. A native checkbox sat in this form for as long as the form has
+    // existed and nothing ever reported it: the sweep photographed the section
+    // and never the form behind its primary button, so the one check that has
+    // ever caught a bare `<input type="checkbox">` structurally could not see
+    // this one. The class is now a gate (`check:controls`, DC-98); this is the
+    // other half, and every create form in the list is here for its reason.
+    //
+    // The tab is named by INDEX because „Trening" is the third of four and the
+    // scenes above leave the page on whichever tab their fan-out ended on — a
+    // module that is already open is not remounted, so the section survives
+    // into the next scene. Exact text is what keeps „Nova rutina", which sits
+    // directly above it with a primary button of its own, out of this frame.
+    id: "fitness-new-routine",
+    module: "fitness",
+    prepare: OPEN_CREATE_FORM({
+      path: [".fit__section-tab:nth-child(3)"],
+      open: "text:Nova rutina",
+    }),
+    fanout: null,
+    cleanup: CLICK_THEN("text:Otkaži"),
+  },
+  {
     id: "fitness-new-exercise",
     module: "fitness",
-    prepare: OPEN_NEW_EXERCISE(),
+    prepare: OPEN_CREATE_FORM({
+      path: [".fit__section-tab:nth-child(3)"],
+      open: "text:Nova vežba",
+    }),
+    fanout: null,
+    cleanup: CLICK_THEN("text:Otkaži"),
+  },
+  {
+    // „Ishrana" is the second tab, and its food form is the widest of the three
+    // — seven numeric fields on one row.
+    id: "fitness-new-food",
+    module: "fitness",
+    prepare: OPEN_CREATE_FORM({
+      path: [".fit__section-tab:nth-child(2)"],
+      open: "text:Nova namirnica",
+    }),
     fanout: null,
     cleanup: CLICK_THEN("text:Otkaži"),
   },
@@ -188,12 +393,36 @@ export const SHOT_SCENES: readonly ShotScene[] = [
   },
   { id: "canvas", module: "canvas" },
   {
+    // The name line a new board opens with. It is one field and two buttons,
+    // which is exactly the sort of surface that gets built once and never
+    // looked at again — and it sits between the header and the board, so it is
+    // also the one place on this page where a layout mistake moves everything
+    // below it.
+    id: "canvas-new-board",
+    module: "canvas",
+    prepare: OPEN_CREATE_FORM({ open: "text:Nova tabla" }),
+    fanout: null,
+    cleanup: CLICK_THEN("text:Otkaži"),
+  },
+  {
     // The workbench with the demo profile's three circuits on it. `fanout: null`
     // because it genuinely has no segmented sub-views — the default selector
     // would find nothing and the sweep would rightly say so.
     id: "electronics",
     module: "electronics",
     fanout: null,
+  },
+  {
+    // „Novo kolo" — ELEK's own name line, `canvas-new-board`'s twin, and first
+    // among the ELEK scenes because it is the only one that needs nothing
+    // selected. The three below it all put something in the inspector and
+    // there is no click back to an empty bench that this list would not then
+    // have to own.
+    id: "electronics-new-circuit",
+    module: "electronics",
+    prepare: OPEN_CREATE_FORM({ open: "text:Novo kolo" }),
+    fanout: null,
+    cleanup: CLICK_THEN("text:Otkaži"),
   },
   {
     // „Mašina" (E4c) — the nine-field form, and a MODAL, so it is invisible to
@@ -494,40 +723,56 @@ function OPEN_CHASSIS_DIALOG(): string {
 }
 
 /**
- * Opens FIT's „Nova vežba" form and brings it into the frame.
+ * Opens a create form that lives behind a button, and brings it into the frame.
  *
- * Four steps rather than a {@link CLICK_THEN} chain, and each one is a thing
- * that chain cannot do.
+ * **This is the sweep's largest blind spot, made reachable.** A scene
+ * photographs a module and its sub-views; a create form is neither of those. It
+ * replaces a primary button at the moment that button is pressed, so until this
+ * helper existed not one of the twelve had ever been in a frame — which is how
+ * a native checkbox survived inside FIT's exercise form for as long as the form
+ * has existed (DC-98, now `check:controls`). Every geometric rule the audit
+ * enforces was unenforced inside all of them, and the run said nothing about
+ * it, because in a report that counts findings a surface with none and a
+ * surface nobody visited read exactly alike.
  *
- * **The tab is named by index** because „Trening" is the third of four and the
- * scenes above leave the page on whichever tab their fan-out ended on — a
- * module that is already open is not remounted, so the section survives into
- * the next scene.
+ * Four things it does that a {@link CLICK_THEN} chain cannot:
  *
- * **The button is looked up inside „Moje vežbe"**, not by text across the
- * document. „Rutine" sits directly above it with a primary button of its own,
- * and a search over every `button` on the page is a bet on which one comes
- * first in document order.
+ * **It waits for each outcome**, on {@link OPEN_CODE_DIALOG}'s recipe. A module
+ * that loads its snapshot over IPC has no section to click one frame after its
+ * tab is clicked, and the first draft of the FIT scene therefore reported
+ * „found nothing to open" — the honest failure, but a failure.
  *
- * **Every step waits for its outcome**, on {@link OPEN_CODE_DIALOG}'s recipe.
- * „Trening" loads its snapshot over IPC, so one frame after the tab is clicked
- * the section that holds this form is not in the document yet — the draft that
- * queried immediately reported „found nothing to open", which is at least the
- * honest failure rather than a photograph of the wrong page.
+ * **It finds the form by what CHANGED, not by a class.** Every module names its
+ * own (`fit__form`, `hab__form`, `note__folder-form`, `tasks__name-form`), and
+ * a page can already hold one before anything is opened — TASK's quick-add form
+ * is on screen throughout. So the set of `<form>`s is snapshotted before the
+ * click and the one meant is whichever was not in it: „the form that appeared
+ * because I pressed this button" is the same sentence in every module, and it
+ * needs no list of class names to go stale.
  *
- * **And then it scrolls**, which is the whole reason the first draft of this
- * scene was worthless: `FitRoutines` renders at the BOTTOM of a long training
- * page, so the click succeeded, the form opened, and the frame photographed
- * the top of the page — a scene that reports „fine" about a surface it never
- * showed. `"none"` at every step for {@link SCROLL_TO}'s reason: a probe that
- * misses must not look like a surface that is clean.
+ * **It scrolls.** These forms usually render far down a long page —
+ * `FitRoutines` sits at the bottom of the training section — so the draft that
+ * clicked correctly and opened the form correctly photographed the top of the
+ * page instead. A scene that reports „fine" about a surface it never showed is
+ * worse than no scene at all.
+ *
+ * **And it says `"none"` at every step**, for {@link SCROLL_TO}'s reason: a
+ * probe that misses must never look like a surface that is clean.
+ *
+ * `path` is the clicks that reach the section first — a section tab, a rail
+ * row — each waited for before it is clicked. `open` is the button itself: a
+ * CSS selector where it has a class of its own, `text:Naziv` where it does not.
+ * That text match is EXACT rather than {@link CLICK_THEN}'s prefix, because the
+ * pages this runs on put „Nova kategorija" beside „Nova lista" and „Nova
+ * rutina" directly above „Nova vežba" — under a prefix the rail would answer
+ * for the panel, and the frame would be filed under the other one's name.
  */
-function OPEN_NEW_EXERCISE(): string {
+function OPEN_CREATE_FORM(spec: {
+  readonly path?: readonly string[];
+  readonly open: string;
+}): string {
   return `(async () => {
   const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-  const tab = document.querySelector(".fit__section-tab:nth-child(3)");
-  if (!tab) return "none";
-  tab.click();
   const waitFor = async (find) => {
     for (let attempt = 0; attempt < 120; attempt += 1) {
       const found = find();
@@ -536,18 +781,36 @@ function OPEN_NEW_EXERCISE(): string {
     }
     return null;
   };
-  const host = await waitFor(() => document.querySelector('[aria-label="Moje vežbe"]'));
-  if (!host) return "none";
-  const open = await waitFor(() =>
-    Array.prototype.find.call(
-      host.querySelectorAll("button"),
-      (node) => (node.textContent || "").trim() === "Nova vežba",
-    ),
-  );
-  if (!open) return "none";
+  const locate = (step) =>
+    step.startsWith("text:")
+      ? Array.prototype.find.call(
+          document.querySelectorAll("button"),
+          (node) => (node.textContent || "").trim() === step.slice(5),
+        )
+      : document.querySelector(step);
+  for (const step of ${JSON.stringify(spec.path ?? [])}) {
+    const node = await waitFor(() => locate(step));
+    if (!node) return "none: path step " + step;
+    node.click();
+    // A commit between the click and the next lookup, and this is load-bearing.
+    // \`waitFor\` calls its finder BEFORE it waits, so without this the next
+    // lookup runs against the DOM the click has not been applied to yet — and a
+    // stale hit is worse than a miss, because the probe then clicks a node
+    // React is about to unmount and reports the click as having done nothing.
+    // That is exactly how „.tasks__new-section opened no new form" happened:
+    // the path selected a different scope, the pre-commit DOM still held the
+    // old scope's button, and the handler ran against a scope that was already
+    // gone.
+    await frame();
+  }
+  const open = await waitFor(() => locate(${JSON.stringify(spec.open)}));
+  if (!open) return "none: no " + ${JSON.stringify(spec.open)};
+  const before = new Set(document.querySelectorAll("form"));
   open.click();
-  const form = await waitFor(() => host.querySelector(".fit__form"));
-  if (!form) return "none";
+  const form = await waitFor(() =>
+    Array.prototype.find.call(document.querySelectorAll("form"), (node) => !before.has(node)),
+  );
+  if (!form) return "none: " + ${JSON.stringify(spec.open)} + " opened no new form";
   form.scrollIntoView({ behavior: "instant", block: "start" });
   await frame();
   return true;
@@ -782,12 +1045,17 @@ function WRITE_PROBE(text: string): string {
     // looking for a field shape this app does not produce and reporting "no
     // create form" on five surfaces that all have one.
     const FIELDS = "form input:not([type]), form input[type=text], form input[type=search], form textarea";
+    // A \`display: none\` element still answers querySelectorAll and still has a
+    // textContent; what it does not have is a box. One rect test, used for the
+    // field AND for the button that reveals it — see the opener below for the
+    // surface that needed the second half.
+    const onScreen = (el) => {
+      const rect = el.getBoundingClientRect();
+      return rect.width > 40 && rect.height > 10;
+    };
     const visibleField = () => Array.prototype.find.call(
       document.querySelectorAll(FIELDS),
-      (el) => {
-        const rect = el.getBoundingClientRect();
-        return rect.width > 40 && rect.height > 10 && !el.disabled && !el.readOnly;
-      },
+      (el) => onScreen(el) && !el.disabled && !el.readOnly,
     );
 
     let field = visibleField();
@@ -797,11 +1065,22 @@ function WRITE_PROBE(text: string): string {
       // open — so the probe has to do what a person does and press the button
       // that reveals it. Matched on the visible Serbian verb rather than a
       // class, because the class is each page's own and the verb is the app's.
+      //
+      // \`onScreen\` is not decoration. NOTE's organizer stays MOUNTED when it
+      // is a closed drawer under 1345px — the rule that puts it away is
+      // \`display: none\`, not an unmount — and it sits before the list pane in
+      // document order, so the first button matching this verb was „Nova
+      // fascikla" inside a drawer nobody can see. The probe pressed it, the
+      // form mounted with a zero-sized box, and the module was reported as
+      // having no create form at all.
       const opener = Array.prototype.find.call(
         document.querySelectorAll("button"),
-        (el) => /^(nova|novi|novo|dodaj|upiši|zapiši)\\b/i.test((el.textContent || "").trim()),
+        (el) =>
+          onScreen(el) &&
+          /^(nova|novi|novo|dodaj|upiši|zapiši)\\b/i.test((el.textContent || "").trim()),
       );
-      if (!opener) return "no-form";
+      if (!opener) return "none: no visible field and no create button";
+      const label = (opener.textContent || "").trim();
       opener.click();
       // React has not re-rendered yet. The click only SCHEDULES the state
       // update; the field the disclosure reveals does not exist until the
@@ -810,8 +1089,8 @@ function WRITE_PROBE(text: string): string {
       // probe reported „no create form" on five surfaces that all have one.
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       field = visibleField();
+      if (!field) return "none: " + label + " revealed no field";
     }
-    if (!field) return "no-form";
     const proto = field instanceof HTMLTextAreaElement
       ? window.HTMLTextAreaElement.prototype
       : window.HTMLInputElement.prototype;
@@ -820,7 +1099,7 @@ function WRITE_PROBE(text: string): string {
     setter.call(field, ${JSON.stringify(text)});
     field.dispatchEvent(new Event("input", { bubbles: true }));
     const form = field.closest("form");
-    if (!form) return "no-form";
+    if (!form) return "none: the field is outside a form";
     form.requestSubmit();
     return "submitted";
   })()`;
@@ -1110,6 +1389,34 @@ function slug(label: string): string {
 // --- The sweep --------------------------------------------------------------
 
 /**
+ * The slice of the sweep this run was asked for, and whether it is one.
+ *
+ * **A scene is a twenty-minute feedback loop, and that is why scenes were the
+ * least-iterated part of this instrument.** `OPEN_CREATE_FORM`'s twenty scenes
+ * needed three passes to write; at 2 700 frames a pass, the cost of finding out
+ * whether a selector is right was an hour. `NEXUS_SHOTS_SCENES=tasks-new-section
+ * NEXUS_SHOTS_SIZES=default NEXUS_SHOTS_THEMES=dan` makes that forty seconds.
+ *
+ * A name that matches nothing is reported rather than ignored: `SCENES=tasks_new`
+ * silently taking no frames would look exactly like a scene that found nothing
+ * to open, which is the one message this instrument must never counterfeit.
+ */
+function pickBy<T>(all: readonly T[], variable: string, idOf: (item: T) => string): readonly T[] {
+  const raw = process.env[variable];
+  if (raw === undefined || raw.trim() === "") return all;
+  const wanted = raw
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part !== "");
+  for (const name of wanted) {
+    if (!all.some((item) => idOf(item) === name)) {
+      process.stderr.write(`shots: ${variable} names "${name}", which is not in the list\n`);
+    }
+  }
+  return all.filter((item) => wanted.includes(idOf(item)));
+}
+
+/**
  * The sweep, and its report written whether or not the sweep finishes.
  *
  * The report is the product here; the PNGs are its evidence. Writing it only on
@@ -1125,14 +1432,48 @@ function slug(label: string): string {
  * part that ran.
  */
 export async function runShots(win: BrowserWindow, outDir: string): Promise<ShotFrame[]> {
+  const plan = {
+    scenes: pickBy(SHOT_SCENES, "NEXUS_SHOTS_SCENES", (scene) => scene.id),
+    sizes: pickBy(SHOT_SIZES, "NEXUS_SHOTS_SIZES", (size) => size.id),
+    themes: pickBy(SHOT_THEMES, "NEXUS_SHOTS_THEMES", (theme) => theme),
+  };
+  // A partial run is a DIFFERENT KIND OF RUN, and every consequence below is
+  // about not letting it pretend otherwise. It does not prune (every frame it
+  // did not take would go), it does not run the questionnaire (which completes,
+  // and rewrites this profile's flags, board and sidebar), and it writes its
+  // findings beside `report.md` rather than over it — a one-scene report sitting
+  // where the full one was is a stale-report-next-to-fresh-frames again, with
+  // the staleness moved into the other file.
+  const partial =
+    plan.scenes.length !== SHOT_SCENES.length ||
+    plan.sizes.length !== SHOT_SIZES.length ||
+    plan.themes.length !== SHOT_THEMES.length;
+  if (partial) {
+    const names = plan.scenes.map((scene) => scene.id).join(", ");
+    process.stderr.write(
+      `shots: PARTIAL RUN — ${String(plan.scenes.length)} scene(s) [${names}], ` +
+        `${String(plan.sizes.length)} size(s), ${String(plan.themes.length)} theme(s). ` +
+        "No pruning, no questionnaire, findings in report.partial.md.\n",
+    );
+  }
+
   const frames: ShotFrame[] = [];
   try {
-    await sweep(win, outDir, frames);
+    await sweep(win, outDir, frames, plan, partial);
     // Only on the success path — see {@link pruneStaleFrames}.
-    pruneStaleFrames(outDir, frames);
+    if (!partial) pruneStaleFrames(outDir, frames);
   } finally {
-    writeFileSync(join(outDir, "frames.json"), `${JSON.stringify(frames, null, 2)}\n`);
-    writeFileSync(join(outDir, "report.md"), buildReport(frames));
+    if (partial) {
+      writeFileSync(join(outDir, "report.partial.md"), buildReport(frames));
+    } else {
+      writeFileSync(join(outDir, "frames.json"), `${JSON.stringify(frames, null, 2)}\n`);
+      writeFileSync(join(outDir, "report.md"), buildReport(frames));
+      // And take the partial report away with it. A four-scene report left
+      // sitting beside a full run's frames is the same staleness this whole
+      // block exists to prevent, one file over: it names real findings, from a
+      // run that is no longer what is on disk.
+      rmSync(join(outDir, "report.partial.md"), { force: true });
+    }
   }
   return frames;
 }
@@ -1172,7 +1513,19 @@ function pruneStaleFrames(outDir: string, frames: readonly ShotFrame[]): void {
   }
 }
 
-async function sweep(win: BrowserWindow, outDir: string, frames: ShotFrame[]): Promise<void> {
+interface ShotPlan {
+  readonly scenes: readonly ShotScene[];
+  readonly sizes: readonly ShotSize[];
+  readonly themes: readonly ShotTheme[];
+}
+
+async function sweep(
+  win: BrowserWindow,
+  outDir: string,
+  frames: ShotFrame[],
+  plan: ShotPlan,
+  partial: boolean,
+): Promise<void> {
   // Every file this run has written. A stem is derived from a LABEL and is
   // therefore not unique by construction, so without this the second frame of
   // a colliding pair overwrites the first without a word — see `shoot`.
@@ -1184,18 +1537,18 @@ async function sweep(win: BrowserWindow, outDir: string, frames: ShotFrame[]): P
   // name from anything a person typed belongs behind this set too (DC-61: a
   // rule over a reachability set permits everything outside it).
   const taken = new Set<string>();
-  for (const size of SHOT_SIZES) {
+  for (const size of plan.sizes) {
     // Outer dimensions, matching `createWindow` — the frames must show the
     // viewport a real window of this size actually has, chrome included.
     win.setSize(size.width, size.height);
     await pause(300);
 
-    for (const theme of SHOT_THEMES) {
+    for (const theme of plan.themes) {
       await serveTheme(win, theme);
       const dir = join(outDir, size.id, theme);
       mkdirSync(dir, { recursive: true });
 
-      for (const scene of SHOT_SCENES) {
+      for (const scene of plan.scenes) {
         if (!(await openModule(win, scene.module))) {
           process.stderr.write(`shots: no sidebar row for module "${scene.module}"\n`);
           continue;
@@ -1205,8 +1558,16 @@ async function sweep(win: BrowserWindow, outDir: string, frames: ShotFrame[]): P
           // `OPEN_FIRST` answers "none" when no candidate matched. Said out
           // loud, because the frame it would otherwise produce looks like a
           // perfectly ordinary list rather than like a broken scene.
-          if (outcome === "none") {
-            process.stderr.write(`shots: scene "${scene.id}" found nothing to open\n`);
+          //
+          // Anything AFTER „none" is the probe saying which of its steps missed,
+          // and it is printed. A multi-step helper that reports only „none"
+          // makes the reader re-derive the path by hand — which is what the
+          // first two failures of `OPEN_CREATE_FORM` cost, and the whole reason
+          // both of them took a second full sweep to place.
+          if (typeof outcome === "string" && outcome.startsWith("none")) {
+            const why = outcome.slice("none".length).replace(/^:\s*/, "");
+            const detail = why === "" ? "" : ` — ${why}`;
+            process.stderr.write(`shots: scene "${scene.id}" found nothing to open${detail}\n`);
           }
           await settle(win);
         }
@@ -1343,6 +1704,22 @@ async function sweep(win: BrowserWindow, outDir: string, frames: ShotFrame[]): P
   // behind, and it is outside the size/theme loop because running it eighteen
   // times would leave eighteen.
   {
+    // The pass declares its own geometry instead of inheriting whatever the
+    // size loop above happened to leave behind. It used to inherit, and because
+    // `wide` is last in `SHOT_SIZES` that was 1600px by accident — which held
+    // until a partial run pinned `default` and NOTE reported no create form on
+    // a surface every full run had photographed. NOTE's only `<form>` is the
+    // organizer's name form, and under 1345px the organizer is a closed drawer.
+    //
+    // `wide` on purpose rather than `default`: this pass is about the DATA path
+    // — renderer to preload to IPC to SQLite and back — and geometry is what the
+    // eighteen scene passes above are for. Pinning it is what makes a partial
+    // run and a full run agree, which is the one property it did not have.
+    const geometry = SHOT_SIZES.find((size) => size.id === "wide");
+    if (geometry !== undefined) {
+      win.setSize(geometry.width, geometry.height);
+      await settle(win);
+    }
     const dir = join(outDir, "write", "noc");
     mkdirSync(dir, { recursive: true });
     await serveTheme(win, "noc");
@@ -1350,7 +1727,12 @@ async function sweep(win: BrowserWindow, outDir: string, frames: ShotFrame[]): P
       if (!(await openModule(win, moduleId))) continue;
       const outcome = await evalIn(win, WRITE_PROBE(`${WRITE_MARKER} · ${moduleId}`));
       if (outcome !== "submitted") {
-        process.stderr.write(`shots: write probe on "${moduleId}" found no create form\n`);
+        // The reason, not the conclusion. „found no create form" was printed
+        // for three different outcomes, one of which — a form found behind a
+        // hidden button — was not that at all.
+        const why =
+          typeof outcome === "string" ? outcome.replace(/^none:\s*/, "") : String(outcome);
+        process.stderr.write(`shots: write probe on "${moduleId}" did not submit — ${why}\n`);
         continue;
       }
       // Long enough for the IPC round trip and the list's re-render. A write
@@ -1427,10 +1809,15 @@ async function sweep(win: BrowserWindow, outDir: string, frames: ShotFrame[]): P
   // them. It is its own loop over sizes and themes rather than a scene, for the
   // reason `ONB_SCREENS` gives: it is not a page, and `openModule` is how every
   // scene above begins.
-  for (const size of SHOT_SIZES) {
+  //
+  // And it is the one part a PARTIAL run skips outright, for that same reason:
+  // somebody iterating on one scene must not have the profile rewritten under
+  // them between attempts.
+  if (partial) return;
+  for (const size of plan.sizes) {
     win.setSize(size.width, size.height);
     await pause(300);
-    for (const theme of SHOT_THEMES) {
+    for (const theme of plan.themes) {
       await serveTheme(win, theme);
       const dir = join(outDir, size.id, theme);
       mkdirSync(dir, { recursive: true });
