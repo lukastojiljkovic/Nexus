@@ -53,6 +53,12 @@ const RG_EXAM_OFFSET = 6; // within 7 days — the countdown surfaces have somet
 const DS_USMENI_OFFSET = 13;
 const ML_USMENI_OFFSET = 20;
 
+/**
+ * The furthest exam out, and the only future one with no plan — see the exam
+ * itself for why that absence is the point rather than an oversight.
+ */
+const SI_USMENI_OFFSET = 34;
+
 /** How many days ahead of a past exam's date count as its "cramming period". */
 const CRAM_WINDOW_DAYS = 10;
 
@@ -480,6 +486,22 @@ export function seedDemoStudy(db: DatabaseHandle, ctx: DemoContext): void {
     examType: "usmeni",
     examDate: demoDay(ctx, ML_USMENI_OFFSET),
     scope: "Regularizacija, ansambli, transfer learning, nenadgledano učenje.",
+  });
+  // Not bound, and deliberately absent from the `seedPlan` calls below: every
+  // other future exam here has a plan, and „Novi plan" is drawn ONLY for a
+  // future exam that has none. So the profile that the screenshot sweep and the
+  // „Demo" account both read had no plan form at all — the page rendered the
+  // „nothing left to plan" empty state instead, and a create form nobody could
+  // reach was a create form nobody had ever looked at.
+  //
+  // It is also the truer fixture. A student whose every upcoming exam is
+  // already planned is the unusual one; the exam furthest out is the one still
+  // waiting, which is why this is the furthest out and has no topics yet.
+  examStore.create({
+    subjectId: si.id,
+    examType: "usmeni",
+    examDate: demoDay(ctx, SI_USMENI_OFFSET),
+    scope: "Arhitektonski obrasci, refaktorisanje, procena i planiranje.",
   });
 
   // --- Decks + cards -----------------------------------------------------------
