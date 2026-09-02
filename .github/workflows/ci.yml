@@ -94,6 +94,14 @@ jobs:
       # both. This is the sentence, enforced.
       - run: pnpm check:elec
 
+      # The design system replaces the OS radio and checkbox. A bare
+      # `<input type="radio">` is 13x13, grey in both themes, and eleven pixels
+      # under the pointer floor. Nothing else here can see it: it uses no
+      # colour, declares no token, and typechecks. The third instance was found
+      # by hand, inside a form three modal steps deep, which is where the
+      # screenshot sweep does not go.
+      - run: pnpm check:controls
+
       # A character that renders as nothing, or as a character it is not. This
       # one has to run here rather than in review, because review is exactly
       # what it defeats: a non-breaking space is a space in every editor, in

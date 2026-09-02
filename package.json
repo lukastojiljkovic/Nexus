@@ -21,6 +21,7 @@
     "check:address": "node scripts/check-address.mjs",
     "check:tokens": "node scripts/check-tokens.mjs",
     "check:elec": "node scripts/check-elec.mjs",
+    "check:controls": "node scripts/check-controls.mjs",
     "check:css": "node scripts/check-css.mjs",
     "check:egress": "node scripts/check-egress.mjs",
     "check:invisibles": "node scripts/check-invisibles.mjs",
