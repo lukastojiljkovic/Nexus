@@ -1246,10 +1246,27 @@
 }
 
 /* KaTeX host (MathText) — no colour of its own, so its output inherits
-   currentColor and matches the surrounding themed text in both Dan and Noć. */
-.study__math {
-  display: inline;
-}
+   currentColor and matches the surrounding themed text in both Dan and Noć.
+
+   `.study__math`, the wrapper itself, HAS NO RULE, and that is the finding
+   rather than an omission. `MathText` composes that class with whatever the
+   caller passes, so anything the wrapper declares outranks the caller's class by
+   source order at equal specificity — and it used to declare `display: inline`,
+   which a `<span>` already is. A restatement of the default is not a no-op: it
+   is a rule that wins.
+
+   What it won was `.study__card-front`'s ellipsis, a hundred lines above. That
+   class is `display: block` precisely so `overflow`, `text-overflow` and
+   `max-width` apply — an INLINE box ignores all three — so every flashcard front
+   on the deck drill-in ran at full width under the state chip and the due date
+   instead of being shortened, and was painted through by the chip's own
+   background. Unreadable, on a route nothing had ever photographed until the
+   sweep gained `study-cards`.
+
+   `.study__card-source` above documents the identical trap from the other side:
+   it forces `display: block` to beat `.nx-button`'s `inline-flex`, and says why.
+   Same rule met twice — an ellipsis needs a block box, and the thing most likely
+   to take that away is a wrapper stating what it thought was nothing. */
 .study__katex {
   color: inherit;
 }
