@@ -26,6 +26,15 @@ import { SET_KINDS } from "../fitness/training.js";
 import { MAX_CANVAS_SCENE_LENGTH, validateCanvasScene } from "../canvas/canvasScene.js";
 import type { CanvasScene } from "../canvas/canvasScene.js";
 import {
+  CHASSIS_LENGTHS,
+  CHASSIS_MASSES,
+  CHASSIS_MAX_CM,
+  CHASSIS_MAX_GRAMS,
+  CHASSIS_SHAPES,
+  MOUNTS,
+} from "../electronics/chassis.js";
+import type { ChassisField } from "../electronics/chassis.js";
+import {
   MAX_ELEC_ID_LENGTH,
   MAX_PART_COORDINATE,
   MAX_CIRCUIT_NAME_LENGTH,
@@ -54,6 +63,7 @@ import type {
   ExportCanvasBoard,
   ExportCard,
   ExportCircuit,
+  ExportCircuitChassis,
   ExportCircuitPart,
   ExportCircuitWire,
   ExportDashboardSet,
@@ -286,6 +296,31 @@ export interface ImportArchiveResult {
 /**
  * The schema version this build writes and is the newest it accepts, kept in
  * step with `buildExportArchive`'s own `SCHEMA_VERSION`.
+ *
+ * `1.41.0` adds the MACHINE a circuit is the electronics of (ADR-085 E4c,
+ * migration 068): one record type — `circuit-chassis` — riding in the
+ * `data/electronics.ndjson` the module already has, plus an OPTIONAL `mount` on
+ * `circuit-part`. Neither needs an `ArchiveEra` flag: the whole-absent-type
+ * rule below covers the record, and `mount`'s absence means „not on the
+ * machine", which is what every part in every earlier archive was.
+ *
+ * **Keyed by `circuitId` and carrying no id of its own**, because a circuit has
+ * at most one machine — migration 068's primary key IS the parent reference.
+ * The bucket is keyed on it, `fit-measurement`'s natural-key arrangement one
+ * module over, which makes a second machine for one circuit the ordinary
+ * `duplicate-id` refusal rather than a silent last-one-wins.
+ *
+ * All nine measurements are REQUIRED here, and each is bounded exactly as
+ * migration 068's own CHECKs bound it, in the units the user typed — a chassis
+ * is nine numbers or it is no row at all, and a NULL would become a default
+ * would become a dimension nobody measured in a file a simulator treats as
+ * fact. The one cross-field rule (`wheelTrack > wheelWidth`) is checked here
+ * too, because it is a CHECK in the database this lands in: letting it through
+ * would trade a named field error for a raw SQLite failure mid-restore.
+ *
+ * The chassis's `circuitId` is a real foreign key with `ON DELETE CASCADE`, so
+ * it takes a reference rule that DROPS — a circuit that is not here takes its
+ * machine on the same sweep it takes its parts.
  *
  * `1.40.0` adds the ELEC module's circuits (ELEC slice E1, migration 067):
  * three record types — `circuit`, `circuit-part` and `circuit-wire` — sharing
@@ -664,7 +699,7 @@ export interface ImportArchiveResult {
  * shipped would be speculative machinery with nothing to exercise it.
  *
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.40.0";
+export const INTERCHANGE_SCHEMA_VERSION = "1.41.0";
 
 // --- Archive era: what a declared version guarantees its rows CARRY ---------
 //
@@ -1353,6 +1388,7 @@ export type ArchiveRecordType =
   | "fit-body-profile"
   | "canvas-board"
   | "circuit"
+  | "circuit-chassis"
   | "circuit-part"
   | "circuit-wire";
 
@@ -1416,6 +1452,7 @@ const ALL_RECORD_TYPES: readonly ArchiveRecordType[] = [
   "fit-body-profile",
   "canvas-board",
   "circuit",
+  "circuit-chassis",
   "circuit-part",
   "circuit-wire",
 ];
@@ -1493,7 +1530,7 @@ const FILE_RECORD_TYPES: Record<DataFilePath, readonly ArchiveRecordType[]> = {
   // Parents before children in the WRITER's order; this map is a membership
   // test and does not impose one, but the file's own order is what lets a
   // restore write a wire after the parts it names.
-  "data/electronics.ndjson": ["circuit", "circuit-part", "circuit-wire"],
+  "data/electronics.ndjson": ["circuit", "circuit-chassis", "circuit-part", "circuit-wire"],
 };
 
 /**
@@ -3510,6 +3547,11 @@ function parseCircuitPart(raw: Record<string, unknown>): ExportCircuitPart {
   const rotation = enumInt(raw.rotation, "rotation", PART_ROTATIONS);
   const value = raw.value === undefined ? undefined : finiteNumber(raw.value, "value");
   if (value !== undefined && value <= 0) throw new InvalidFieldError("value");
+  // One of five named faces or absent, and absent is what every part in every
+  // pre-`1.41.0` archive was — so no era flag (see that entry). WHETHER this
+  // particular part is one a simulator has physics for is a catalogue question,
+  // asked by the URDF generator, which lists what it left out.
+  const mount = raw.mount === undefined ? undefined : enumStr(raw.mount, "mount", MOUNTS);
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
   const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
   return {
@@ -3521,9 +3563,48 @@ function parseCircuitPart(raw: Record<string, unknown>): ExportCircuitPart {
     y,
     rotation,
     ...(value === undefined ? {} : { value }),
+    ...(mount === undefined ? {} : { mount }),
     createdAt,
     updatedAt,
   };
+}
+
+/**
+ * The machine one circuit is the electronics of (migration 068).
+ *
+ * **No `id`, by design**: a circuit has at most one machine, so `circuitId` IS
+ * the key. Every measurement is REQUIRED — a chassis is nine numbers or it is
+ * no row at all, which is why migration 068 made it a table — and each is
+ * bounded exactly as that migration's CHECKs bound it, in the units the user
+ * typed: centimetres for the seven lengths, grams for the two masses.
+ *
+ * Zero is refused with the negatives. A body 0 cm long has zero inertia, and a
+ * simulator does not refuse that — it simulates a machine that cannot be
+ * pushed, which is the silent wrong answer.
+ *
+ * The one cross-field rule is here too: wheels centred no further apart than
+ * they are wide overlap through the middle of the robot. It is a CHECK in the
+ * database this lands in, so a reader that let it through would trade a named
+ * field error for a raw SQLite failure mid-restore.
+ */
+function parseCircuitChassis(raw: Record<string, unknown>): ExportCircuitChassis {
+  const circuitId = elecId(raw.circuitId, "circuitId");
+  const shape = enumStr(raw.shape, "shape", CHASSIS_SHAPES);
+  const measured = {} as Record<ChassisField, number>;
+  for (const [names, max] of [
+    [CHASSIS_LENGTHS, CHASSIS_MAX_CM],
+    [CHASSIS_MASSES, CHASSIS_MAX_GRAMS],
+  ] as const) {
+    for (const name of names) {
+      const number = finiteNumber(raw[name], name);
+      if (number <= 0 || number > max) throw new InvalidFieldError(name);
+      measured[name] = number;
+    }
+  }
+  if (measured.wheelTrack <= measured.wheelWidth) throw new InvalidFieldError("wheelTrack");
+  const createdAt = isoDateTime(raw.createdAt, "createdAt");
+  const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
+  return { circuitId, shape, ...measured, createdAt, updatedAt };
 }
 
 /**
@@ -3781,6 +3862,7 @@ interface Collections {
   fitBodyProfile: Bucket<ExportFitBodyProfile>;
   canvasBoards: Bucket<ExportCanvasBoard>;
   circuits: Bucket<ExportCircuit>;
+  circuitChassis: Bucket<ExportCircuitChassis>;
   circuitParts: Bucket<ExportCircuitPart>;
   circuitWires: Bucket<ExportCircuitWire>;
 }
@@ -3811,7 +3893,8 @@ function newCollections(): Collections {
     fitWorkouts: newBucket(), fitWorkoutSets: newBucket(), fitMeasurements: newBucket(),
     fitBodyProfile: newBucket(),
     canvasBoards: newBucket(),
-    circuits: newBucket(), circuitParts: newBucket(), circuitWires: newBucket(),
+    circuits: newBucket(), circuitChassis: newBucket(),
+    circuitParts: newBucket(), circuitWires: newBucket(),
   };
 }
 
@@ -4188,6 +4271,15 @@ function dispatchRecord(
     case "circuit": {
       const row = parseCircuit(raw);
       pushRow(collections.circuits, row.id, row, type, path, line, ctx);
+      return;
+    }
+    // Keyed by `circuitId`, the `fit-target` arrangement again: one machine per
+    // circuit, so the parent id IS the key and a second row for the same
+    // circuit is the ordinary duplicate-id refusal rather than a silent last-
+    // one-wins.
+    case "circuit-chassis": {
+      const row = parseCircuitChassis(raw);
+      pushRow(collections.circuitChassis, row.circuitId, row, type, path, line, ctx);
       return;
     }
     case "circuit-part": {
@@ -5304,16 +5396,27 @@ function referenceRules(collections: Collections): ReferenceRule[] {
     // `fit_workouts_profile_open`'s UNIQUE partial index: at most one open
     // workout per profile — see `openWorkoutRule`'s own doc.
     openWorkoutRule(collections),
-    // --- ELEC (migration 067) -----------------------------------------------
-    // A part's circuit and a wire's circuit and BOTH its ends: four real foreign
-    // keys, every one `ON DELETE CASCADE`, so every one DROPS when it dangles —
-    // a row the schema's own cascade could never have produced. The drops
-    // compose: a circuit that is not here takes its parts on this sweep and its
-    // wires on the next, which is why the wire rules come after the part rule
-    // and why the fixpoint runs at all.
+    // --- ELEC (migrations 067, 068) ----------------------------------------
+    // A machine's circuit, a part's circuit, and a wire's circuit and BOTH its
+    // ends: five real foreign keys, every one `ON DELETE CASCADE`, so every one
+    // DROPS when it dangles — a row the schema's own cascade could never have
+    // produced. The drops compose: a circuit that is not here takes its parts
+    // on this sweep and its wires on the next, which is why the wire rules
+    // come after the part rule and why the fixpoint runs at all.
     //
     // `componentId` gets no rule and never will — see this file's `1.40.0`
     // entry: it names a constant the app ships, not a row.
+    referenceRule({
+      bucket: collections.circuitChassis,
+      type: "circuit-chassis",
+      field: "circuitId",
+      ref: (row) => row.circuitId,
+      resolver: () => {
+        const ids = idsOf(collections.circuits);
+        return (ref) => ids.has(ref);
+      },
+      onDangling: "drop",
+    }),
     referenceRule({
       bucket: collections.circuitParts,
       type: "circuit-part",
@@ -5927,6 +6030,7 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
         // all — and a restore reads that emptiness as „this profile wired
         // nothing", which is exactly what it wired.
         circuits: rowsOf(collections.circuits),
+        circuitChassis: rowsOf(collections.circuitChassis),
         circuitParts: rowsOf(collections.circuitParts),
         circuitWires: rowsOf(collections.circuitWires),
       };

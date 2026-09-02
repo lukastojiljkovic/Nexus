@@ -78,6 +78,7 @@ function emptyProfileData(): ProfileData {
     fitWorkouts: [], fitWorkoutSets: [], fitMeasurements: [], fitBodyProfile: [],
     canvasBoards: [],
     circuits: [],
+    circuitChassis: [],
     circuitParts: [],
     circuitWires: [],
   };
@@ -1538,6 +1539,58 @@ describe("planForeignImport — duplicate detection", () => {
  * has — but the seam is tested here, on the planner's own terms, because it is
  * the planner's contract and not the translator's.
  */
+describe("planForeignImport — a machine has no id of its own", () => {
+  /** One circuit, its machine and a sensor bolted to it — nothing else. */
+  function roverData(): ProfileData {
+    return {
+      ...emptyProfileData(),
+      circuits: [
+        { id: "src-ci1", profileId: "src", name: "Rover", notes: "", createdAt: T0, updatedAt: T0 },
+      ],
+      circuitChassis: [
+        {
+          circuitId: "src-ci1", shape: "diff-rover",
+          bodyLength: 20, bodyWidth: 14, bodyHeight: 6,
+          wheelRadius: 3.2, wheelWidth: 2.5, wheelTrack: 16, wheelBase: 12,
+          bodyMass: 900, wheelMass: 40,
+          createdAt: T0, updatedAt: T0,
+        },
+      ],
+      circuitParts: [
+        {
+          id: "src-cp1", circuitId: "src-ci1", componentId: "vl53l0x", label: "Daljinar",
+          x: 0, y: 0, rotation: 0, mount: "front", createdAt: T0, updatedAt: T0,
+        },
+      ],
+    };
+  }
+
+  it("carries the machine across on the circuit's NEW id, minting nothing for it", () => {
+    // `circuit_id` is the whole primary key (migration 068), so there is no id
+    // to mint and the one reference it has is the one that identifies it. A
+    // planner that minted here would produce a machine hanging off a circuit
+    // that does not exist.
+    const { data } = plan(roverData());
+    const circuitId = data.circuits[0]?.id;
+    expect(circuitId).toBe("new-1");
+    expect(data.circuitChassis).toEqual([
+      {
+        circuitId, shape: "diff-rover",
+        bodyLength: 20, bodyWidth: 14, bodyHeight: 6,
+        wheelRadius: 3.2, wheelWidth: 2.5, wheelTrack: 16, wheelBase: 12,
+        bodyMass: 900, wheelMass: 40,
+        createdAt: T0, updatedAt: T0,
+      },
+    ]);
+    expect(allIdsIn(data)).toEqual([]);
+  });
+
+  it("carries a part's mount across untouched, because a face is not an id", () => {
+    const { data } = plan(roverData());
+    expect(data.circuitParts[0]?.mount).toBe("front");
+  });
+});
+
 describe("planForeignImport — seeded ids", () => {
   const SEEDED = "apkg:subject";
 

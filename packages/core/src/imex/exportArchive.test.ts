@@ -96,6 +96,7 @@ function emptyInput(): ExportArchiveInput {
       fitBodyProfile: [],
       canvasBoards: [],
       circuits: [],
+      circuitChassis: [],
       circuitParts: [],
       circuitWires: [],
     },
@@ -292,7 +293,7 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as Record<string, unknown>;
 
-      expect(manifest.schemaVersion).toBe("1.40.0");
+      expect(manifest.schemaVersion).toBe("1.41.0");
       expect(manifest.appVersion).toBe("0.1.0");
       expect(manifest.createdAt).toBe("2026-07-11T10:00:00.000Z");
       // `picture: null` is written out loud rather than omitted: the manifest is
@@ -1263,6 +1264,9 @@ describe("buildExportArchive", () => {
         circuits: [
           { id: "ci1", profileId: "p1", name: "Trepćuća dioda", notes: "5 V", createdAt: t, updatedAt: t },
         ],
+        circuitChassis: [
+          { circuitId: "ci1", shape: "diff-rover", bodyLength: 20, bodyWidth: 14, bodyHeight: 6, wheelRadius: 3.2, wheelWidth: 2.5, wheelTrack: 16, wheelBase: 12, bodyMass: 900, wheelMass: 40, createdAt: t, updatedAt: t },
+        ],
         circuitParts: [
           { id: "cp1", circuitId: "ci1", componentId: "arduino-uno", label: "", x: 0, y: 0, rotation: 0, createdAt: t, updatedAt: t },
           { id: "cp2", circuitId: "ci1", componentId: "resistor", label: "R1", x: 180, y: 40, rotation: 90, value: 220, createdAt: t, updatedAt: t },
@@ -1292,7 +1296,9 @@ describe("buildExportArchive", () => {
         // counted nowhere, because it is not in the archive at all.
         fitness: 10,
         canvas: 1, // one board — a count of boards, never of what is drawn on them
-        electronics: 4, // 1 circuit + 2 parts + 1 wire, summed: all three are rows a restore replaces
+        // 1 circuit + 1 machine + 2 parts + 1 wire, summed: every one of the four
+        // is a row a restore replaces
+        electronics: 5,
       });
     });
 

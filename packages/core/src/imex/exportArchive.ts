@@ -62,6 +62,38 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * older reader handed a newer archive is therefore no worse off for its
  * presence, which is precisely what a version bump would otherwise be claiming.
  *
+ * `1.41.0` adds the MACHINE a circuit is the electronics of (ADR-085 E4c,
+ * migration 068): one record type — `circuit-chassis` — riding in the
+ * `data/electronics.ndjson` the module already has, immediately after the
+ * circuits and before the parts, plus an OPTIONAL `mount` on `circuit-part`.
+ *
+ * **The chassis is keyed by its CIRCUIT and carries no id of its own**, because
+ * a circuit has at most one machine (migration 068's primary key). Its bucket
+ * is therefore keyed on `circuitId` — `fin-recurring`'s composite-key idiom,
+ * one column short, exactly as `fit-measurement` keys on `(profileId, day)` —
+ * which makes a second chassis for one circuit the ORDINARY `duplicate-id`
+ * problem every keyless row already produces rather than a rule of its own.
+ *
+ * **All nine measurements are required, and that is the contract rather than
+ * strictness for its own sake.** A chassis is nine numbers or it is no row at
+ * all; the alternative is a NULL that every reader downstream has to turn into
+ * a default, which is a dimension nobody measured in a file a simulator treats
+ * as measured. They travel in the units the user typed — CENTIMETRES and GRAMS
+ * — because that is what the column holds; the conversion to metres and
+ * kilograms happens in the URDF generator, where it is a fact about that format
+ * and not about this file.
+ *
+ * `mount` is one of five named faces or absent, and absent means „not on the
+ * machine" — which is what every part in every earlier archive was, so it needs
+ * no `ArchiveEra` flag (the ADR-028 rule). The record type needs none either,
+ * by the whole-absent-type rule below.
+ *
+ * The bump is owed twice over, and the FIELD is the sharper half: an older
+ * reader handed this archive would refuse `circuit-chassis` as an unrecognised
+ * type AND refuse `mount` as an unknown member of a `circuit-part` it otherwise
+ * understands — one baffling line-error per sensor on somebody's robot. The
+ * version gate turns both into one true sentence about the build.
+ *
  * `1.40.0` adds the ELEC module's circuits (ELEC slice E1, migration 067):
  * THREE record types — `circuit`, `circuit-part` and `circuit-wire` — riding in
  * their own `data/electronics.ndjson`, a new `DATA_FILES` entry checksummed
@@ -584,7 +616,7 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * pins them equal.
  *
  */
-const SCHEMA_VERSION = "1.40.0";
+const SCHEMA_VERSION = "1.41.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 
@@ -2029,6 +2061,41 @@ export interface ExportCircuitPart {
   rotation: number;
   /** Present only for a component that takes a value — a resistor's ohms. */
   value?: number;
+  /**
+   * Which face of the machine this part is bolted to (migration 068) — one of
+   * `front`, `rear`, `left`, `right`, `top`. ABSENT means „not on the machine",
+   * which is what every part in every pre-`1.41.0` archive was.
+   */
+  mount?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * The machine one circuit is the electronics of (ADR-085 E4c, migration 068).
+ *
+ * **No id of its own**: a circuit has at most one machine, so `circuitId` IS the
+ * key — which also makes a second chassis for one circuit the ordinary
+ * `duplicate-id` problem rather than an invariant of its own (see
+ * `SCHEMA_VERSION`'s `1.41.0` entry).
+ *
+ * Every measurement is required. A chassis is nine numbers or it is no row at
+ * all, and the units are the ones the user typed: CENTIMETRES for the seven
+ * lengths, GRAMS for the two masses.
+ */
+export interface ExportCircuitChassis {
+  circuitId: string;
+  /** `diff-rover` or `four-wheel-rover` — the shapes the generator has geometry for. */
+  shape: string;
+  bodyLength: number;
+  bodyWidth: number;
+  bodyHeight: number;
+  wheelRadius: number;
+  wheelWidth: number;
+  wheelTrack: number;
+  wheelBase: number;
+  bodyMass: number;
+  wheelMass: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -2317,6 +2384,12 @@ export interface ProfileData {
    * `componentId` and the build that opens the archive resolves it.
    */
   circuits: readonly ExportCircuit[];
+  /**
+   * The machines, at most one per circuit and usually none — a breadboard is
+   * not a robot. Between the circuits and the parts for the same reason the
+   * parts come before the wires: `circuitId` is a real foreign key.
+   */
+  circuitChassis: readonly ExportCircuitChassis[];
   circuitParts: readonly ExportCircuitPart[];
   circuitWires: readonly ExportCircuitWire[];
 }
@@ -2576,8 +2649,8 @@ export const ARCHIVE_MODULE_IDS = [
   // ELEC (migration 067, `1.40.0`) — its own module, on the same terms again.
   // What it does NOT cover, exactly as `fitness` does not cover the food
   // catalogue: the 153 components the app ships are constants and not rows, so
-  // this bucket counts the user's circuits, their parts and their wires, and
-  // nothing the app supplied.
+  // this bucket counts the user's circuits, the machines they measured, their
+  // parts and their wires, and nothing the app supplied.
   "electronics",
 ] as const;
 export type ArchiveModuleId = (typeof ARCHIVE_MODULE_IDS)[number];
@@ -2694,12 +2767,16 @@ export function countProfileModules(data: ProfileData): Record<ArchiveModuleId, 
     // shapes: the number a preview must be right about is how many boards are
     // being replaced, and „412" would name something nobody has a name for.
     canvas: data.canvasBoards.length,
-    // Three tables, one bucket. A circuit is what the user names, so a preview
-    // saying „4" would be wrong about the only unit they think in — but a part
-    // and a wire are rows a restore replaces too, and a count that ignored them
-    // would understate what is at stake. The sum is the honest reading of
-    // „how many rows of yours does this touch".
-    electronics: data.circuits.length + data.circuitParts.length + data.circuitWires.length,
+    // Four tables, one bucket. A circuit is what the user names, so a preview
+    // saying „4" would be wrong about the only unit they think in — but a
+    // machine, a part and a wire are rows a restore replaces too, and a count
+    // that ignored them would understate what is at stake. The sum is the
+    // honest reading of „how many rows of yours does this touch".
+    electronics:
+      data.circuits.length +
+      data.circuitChassis.length +
+      data.circuitParts.length +
+      data.circuitWires.length,
   };
 }
 
@@ -2877,6 +2954,7 @@ export function filterProfileData(
     // are inside its own row rather than in `blobs/`.
     canvasBoards: only("canvas", data.canvasBoards),
     circuits: only("electronics", data.circuits),
+    circuitChassis: only("electronics", data.circuitChassis),
     circuitParts: only("electronics", data.circuitParts),
     circuitWires: only("electronics", data.circuitWires),
   };
@@ -3049,11 +3127,12 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
     data.canvasBoards.map((row) => ({ type: "canvas-board", ...row })),
   );
 
-  // Parents before children, and here that is not tidiness: a part names its
-  // circuit and a wire names both its parts, all three as foreign keys in the
-  // database a restore writes into.
+  // Parents before children, and here that is not tidiness: a chassis and a
+  // part each name their circuit and a wire names both its parts, all four as
+  // foreign keys in the database a restore writes into.
   const electronicsNdjson = toNdjson([
     ...data.circuits.map((row) => ({ type: "circuit", ...row })),
+    ...data.circuitChassis.map((row) => ({ type: "circuit-chassis", ...row })),
     ...data.circuitParts.map((row) => ({ type: "circuit-part", ...row })),
     ...data.circuitWires.map((row) => ({ type: "circuit-wire", ...row })),
   ]);

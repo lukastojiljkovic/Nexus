@@ -122,6 +122,7 @@ function emptyExportInput(): ExportArchiveInput {
       fitBodyProfile: [],
       canvasBoards: [],
       circuits: [],
+      circuitChassis: [],
       circuitParts: [],
       circuitWires: [],
     },
@@ -888,15 +889,25 @@ function richProfileData(): ProfileData {
         createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-02T00:00:00.000Z",
       },
     ],
-    // One circuit, two parts, one wire — three tables that reference each
-    // other, so the round trip proves the writer's parent-first order and the
-    // reader's reference rules together. The resistor carries a value and the
-    // board carries none, which is the one optional field: an archive that
-    // wrote `value: null` for the board would come back with a field the
-    // fixture does not have.
+    // One circuit, one machine, three parts, one wire — four tables that
+    // reference each other, so the round trip proves the writer's parent-first
+    // order and the reader's reference rules together. Two optional fields ride
+    // here and both are exercised present AND absent: the resistor carries a
+    // `value` the board does not, and the ranger carries a `mount` neither of
+    // the others does. An archive that wrote `value: null` or `mount: null` for
+    // the board would come back with a field the fixture does not have.
     circuits: [
       {
         id: "circuit-blink", profileId: "profile1", name: "Trepćuća dioda", notes: "5 V, GND na levu šinu",
+        createdAt: "2026-07-03T00:00:00.000Z", updatedAt: "2026-07-04T00:00:00.000Z",
+      },
+    ],
+    circuitChassis: [
+      {
+        circuitId: "circuit-blink", shape: "diff-rover",
+        bodyLength: 20, bodyWidth: 14, bodyHeight: 6,
+        wheelRadius: 3.2, wheelWidth: 2.5, wheelTrack: 16, wheelBase: 12,
+        bodyMass: 900, wheelMass: 40,
         createdAt: "2026-07-03T00:00:00.000Z", updatedAt: "2026-07-04T00:00:00.000Z",
       },
     ],
@@ -910,6 +921,11 @@ function richProfileData(): ProfileData {
         id: "part-r1", circuitId: "circuit-blink", componentId: "resistor", label: "R1",
         x: 180.5, y: -40, rotation: 90, value: 220,
         createdAt: "2026-07-03T00:00:00.000Z", updatedAt: "2026-07-04T00:00:00.000Z",
+      },
+      {
+        id: "part-tof", circuitId: "circuit-blink", componentId: "vl53l0x", label: "Daljinar",
+        x: -60, y: 120, rotation: 180, mount: "front",
+        createdAt: "2026-07-03T00:00:00.000Z", updatedAt: "2026-07-03T00:00:00.000Z",
       },
     ],
     circuitWires: [
@@ -1304,12 +1320,12 @@ describe("parseImportArchive — one test per problem code", () => {
     expect(result.data).toBeNull();
   });
 
-  // `1.41.0`: the nearest minor strictly ahead of this build's `1.40.0`.
+  // `1.42.0`: the nearest minor strictly ahead of this build's `1.41.0`.
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.41.0" });
+    const files = baseFiles({ schemaVersion: "1.42.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.41.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.42.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -4266,6 +4282,22 @@ describe("parseImportArchive — ELEC circuits (ADR-085 slice E1 / 1.40.0)", () 
     x: 180.5, y: -40, rotation: 90, value: 220, createdAt: T, updatedAt: T,
   };
 
+  const VALID_CHASSIS = {
+    type: "circuit-chassis", circuitId: "ci1", shape: "diff-rover",
+    bodyLength: 20, bodyWidth: 14, bodyHeight: 6,
+    wheelRadius: 3.2, wheelWidth: 2.5, wheelTrack: 16, wheelBase: 12,
+    bodyMass: 900, wheelMass: 40,
+    createdAt: T, updatedAt: T,
+  };
+
+  /** The same row as the reader hands it back: the discriminant is not a field. */
+  const { type: _chassisType, ...VALID_CHASSIS_ROW } = VALID_CHASSIS;
+
+  const VALID_RANGER = {
+    type: "circuit-part", id: "cp3", circuitId: "ci1", componentId: "vl53l0x", label: "Daljinar",
+    x: -60, y: 120, rotation: 180, mount: "front", createdAt: T, updatedAt: T,
+  };
+
   const VALID_WIRE = {
     type: "circuit-wire", id: "cw1", circuitId: "ci1",
     fromPartId: "cp1", fromPinId: "D9", toPartId: "cp2", toPinId: "1", colour: "yellow",
@@ -4273,7 +4305,7 @@ describe("parseImportArchive — ELEC circuits (ADR-085 slice E1 / 1.40.0)", () 
   };
 
   /** The whole module in one file, which is how the writer emits it: parents first. */
-  const WHOLE = [VALID_CIRCUIT, VALID_PART, VALID_RESISTOR, VALID_WIRE];
+  const WHOLE = [VALID_CIRCUIT, VALID_CHASSIS, VALID_PART, VALID_RESISTOR, VALID_WIRE];
 
   function parseElectronicsFile(rows: readonly Record<string, unknown>[], mode?: ImportMode) {
     return parseImportArchive(
@@ -4284,10 +4316,11 @@ describe("parseImportArchive — ELEC circuits (ADR-085 slice E1 / 1.40.0)", () 
     );
   }
 
-  it("reads the three types back", () => {
+  it("reads the four types back", () => {
     const result = parseElectronicsFile(WHOLE);
     expect(result.problems).toEqual([]);
     expect(result.data?.circuits).toHaveLength(1);
+    expect(result.data?.circuitChassis).toHaveLength(1);
     expect(result.data?.circuitParts).toHaveLength(2);
     expect(result.data?.circuitWires).toHaveLength(1);
   });
@@ -4365,6 +4398,60 @@ describe("parseImportArchive — ELEC circuits (ADR-085 slice E1 / 1.40.0)", () 
     expect(result.problems.map((problem) => problem.detail)).toEqual(["colour"]);
   });
 
+  it("reads the machine and the mount a 1.41.0 archive carries", () => {
+    const result = parseElectronicsFile([VALID_CIRCUIT, VALID_CHASSIS, VALID_RANGER]);
+    expect(result.problems).toEqual([]);
+    expect(result.data?.circuitChassis).toEqual([VALID_CHASSIS_ROW]);
+    expect(result.data?.circuitParts[0]?.mount).toBe("front");
+  });
+
+  it("keeps an absent mount ABSENT rather than turning it into a null", () => {
+    // `value`'s rule one column over, and the same reason: NULL is what the
+    // column holds for a part nobody bolted to the machine, and a reader that
+    // wrote `mount: null` would hand the store a third state and break a round
+    // trip that compares equal.
+    const parts = parseElectronicsFile([VALID_CIRCUIT, VALID_PART]).data?.circuitParts ?? [];
+    expect("mount" in (parts[0] ?? {})).toBe(false);
+  });
+
+  it("refuses a mount that is not one of the five faces", () => {
+    // „bottom" is where the wheels are.
+    const result = parseElectronicsFile([VALID_CIRCUIT, { ...VALID_RANGER, mount: "bottom" }]);
+    expect(result.problems.map((problem) => problem.detail)).toEqual(["mount"]);
+  });
+
+  it("refuses a machine whose field migration 068's own CHECK would refuse", () => {
+    const bad = (row: Record<string, unknown>) =>
+      parseElectronicsFile([VALID_CIRCUIT, row]).problems.map((problem) => problem.detail);
+    expect(bad({ ...VALID_CHASSIS, shape: "hexapod" })).toEqual(["shape"]);
+    // Zero with the negatives: a body of no length has no inertia, and Gazebo
+    // simulates that rather than refusing it.
+    expect(bad({ ...VALID_CHASSIS, bodyLength: 0 })).toEqual(["bodyLength"]);
+    expect(bad({ ...VALID_CHASSIS, wheelRadius: -1 })).toEqual(["wheelRadius"]);
+    expect(bad({ ...VALID_CHASSIS, bodyWidth: 501 })).toEqual(["bodyWidth"]);
+    expect(bad({ ...VALID_CHASSIS, bodyMass: 100_001 })).toEqual(["bodyMass"]);
+    expect(bad({ ...VALID_CHASSIS, wheelMass: "40" })).toEqual(["wheelMass"]);
+    // Every one is required — half a chassis is the state the table exists to
+    // make unrepresentable.
+    expect(bad({ ...VALID_CHASSIS, wheelBase: undefined })).toEqual(["wheelBase"]);
+  });
+
+  it("refuses wheels no further apart than they are wide, which SQLite would refuse next", () => {
+    const bad = (row: Record<string, unknown>) =>
+      parseElectronicsFile([VALID_CIRCUIT, row]).problems.map((problem) => problem.detail);
+    expect(bad({ ...VALID_CHASSIS, wheelTrack: 2.5, wheelWidth: 2.5 })).toEqual(["wheelTrack"]);
+    expect(bad({ ...VALID_CHASSIS, wheelTrack: 2, wheelWidth: 2.5 })).toEqual(["wheelTrack"]);
+  });
+
+  it("refuses a second machine for one circuit as the duplicate it is", () => {
+    // `circuitId` is the key, so „two machines for this circuit" arrives as the
+    // ordinary duplicate-id refusal rather than as a silent last-one-wins.
+    const result = parseElectronicsFile([
+      VALID_CIRCUIT, VALID_CHASSIS, { ...VALID_CHASSIS, bodyLength: 21 },
+    ]);
+    expect(result.problems.map((problem) => problem.code)).toEqual(["duplicate-id"]);
+  });
+
   describe("real foreign keys: circuit-part.circuitId, circuit-wire.circuitId/fromPartId/toPartId", () => {
     it("refuses a part naming a circuit the archive does not carry", () => {
       const result = parseElectronicsFile([{ ...VALID_PART, circuitId: "ghost" }]);
@@ -4386,15 +4473,21 @@ describe("parseImportArchive — ELEC circuits (ADR-085 slice E1 / 1.40.0)", () 
       expect(fromEnd).toEqual(["fromPartId=ghost"]);
     });
 
-    it("takes a circuit's parts AND its wires with it when the circuit is not there", () => {
-      // The cascade the fixpoint exists for, and it takes two sweeps: the parts
-      // go on the first because their circuit dangles, and the wire goes on the
-      // second because the parts it names are now gone. A single pass would
-      // leave the wire behind and the restore would fail on a foreign key.
-      const result = parseElectronicsFile([VALID_PART, VALID_RESISTOR, VALID_WIRE], "import");
+    it("takes a circuit's machine AND its parts AND its wires when the circuit is not there", () => {
+      // The cascade the fixpoint exists for, and it takes two sweeps: the
+      // machine and the parts go on the first because their circuit dangles,
+      // and the wire goes on the second because the parts it names are now
+      // gone. A single pass would leave the wire behind and the restore would
+      // fail on a foreign key.
+      const result = parseElectronicsFile(
+        [VALID_CHASSIS, VALID_PART, VALID_RESISTOR, VALID_WIRE],
+        "import",
+      );
+      expect(result.data?.circuitChassis).toEqual([]);
       expect(result.data?.circuitParts).toEqual([]);
       expect(result.data?.circuitWires).toEqual([]);
       expect(result.dropped).toEqual([
+        { module: "electronics", type: "circuit-chassis", reason: "unknown-reference", detail: "circuitId=ci1" },
         { module: "electronics", type: "circuit-part", reason: "unknown-reference", detail: "circuitId=ci1" },
         { module: "electronics", type: "circuit-part", reason: "unknown-reference", detail: "circuitId=ci1" },
         { module: "electronics", type: "circuit-wire", reason: "unknown-reference", detail: "circuitId=ci1" },
@@ -4414,7 +4507,9 @@ describe("parseImportArchive — ELEC circuits (ADR-085 slice E1 / 1.40.0)", () 
 
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([]);
-    expect(result.data).toMatchObject({ circuits: [], circuitParts: [], circuitWires: [] });
+    expect(result.data).toMatchObject({
+      circuits: [], circuitChassis: [], circuitParts: [], circuitWires: [],
+    });
   });
 });
 
@@ -4849,8 +4944,8 @@ describe("parseImportArchive — note categories (NOTE-002 / 1.27.0)", () => {
 });
 
 describe("parseImportArchive — schema version", () => {
-  it("is 1.40.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.40.0");
+  it("is 1.41.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.41.0");
   });
 
   it("is exactly what buildExportArchive stamps into its own manifest", () => {
@@ -5040,11 +5135,11 @@ describe("parseImportArchive — schema version", () => {
     expect(result.manifest?.profile.kind).toBe("personal");
   });
 
-  // `1.41.0`: the nearest minor strictly ahead of this build's `1.40.0`.
+  // `1.42.0`: the nearest minor strictly ahead of this build's `1.41.0`.
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.41.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.42.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.41.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.42.0" },
     ]);
     expect(result.data).toBeNull();
   });

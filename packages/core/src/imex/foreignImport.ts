@@ -849,9 +849,14 @@ const ID_MINTERS: Record<keyof ProfileData, (data: ProfileData, ctx: PlanContext
   circuits: (data, ctx) => mintAll(data.circuits, ctx),
   circuitParts: (data, ctx) => mintAll(data.circuitParts, ctx),
   circuitWires: (data, ctx) => mintAll(data.circuitWires, ctx),
+  /**
+   * NOT minted, and it is not an omission: a machine has no id of its own —
+   * `circuit_id` is its whole primary key (migration 068) — so there is nothing
+   * here to give a new identity to. It still IMPORTS; the remap literal below
+   * carries it across on the circuit id its parent was minted.
+   */
+  circuitChassis: NO_IDS,
   noteTagLinks: NO_IDS,
-  // The same name-is-identity rule as the two template tables above, against the
-  // NOTE module's own name space (migration 015's `UNIQUE (profile_id, name)`).
   // The same name-is-identity rule as the two template tables above, against the
   // NOTE module's own name space (migration 015's `UNIQUE (profile_id, name)`).
   noteTemplates: (data, ctx) =>
@@ -1607,12 +1612,18 @@ export function planForeignImport(
       id: mapped(row.id, ctx),
       profileId: target.profileId,
     })),
-    // The only one of the three ELEC tables with a profile of its own; its two
+    // The only one of the four ELEC tables with a profile of its own; its three
     // children reach one through it.
     circuits: source.circuits.map((row) => ({
       ...row,
       id: mapped(row.id, ctx),
       profileId: target.profileId,
+    })),
+    // No id to remap and none to invent: the machine IS its circuit, so the one
+    // reference it has is the one that identifies it (migration 068).
+    circuitChassis: source.circuitChassis.map((row) => ({
+      ...row,
+      circuitId: mapped(row.circuitId, ctx),
     })),
     // `componentId` rides UNREMAPPED, and must: it names an entry in the app's
     // own catalogue, which is the same catalogue on both machines because it

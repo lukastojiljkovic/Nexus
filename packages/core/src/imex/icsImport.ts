@@ -1019,6 +1019,7 @@ export function translateIcsEvents(
     fitBodyProfile: [],
     canvasBoards: [],
     circuits: [],
+    circuitChassis: [],
     circuitParts: [],
     circuitWires: [],
   };

@@ -741,6 +741,7 @@ export function translateApkg(parsed: ParsedApkg, target: ApkgTranslateTarget): 
     fitBodyProfile: [],
     canvasBoards: [],
     circuits: [],
+    circuitChassis: [],
     circuitParts: [],
     circuitWires: [],
   };

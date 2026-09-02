@@ -1315,6 +1315,7 @@ export function translateLlmRecords(
     fitBodyProfile: [],
     canvasBoards: [],
     circuits: [],
+    circuitChassis: [],
     circuitParts: [],
     circuitWires: [],
   };
