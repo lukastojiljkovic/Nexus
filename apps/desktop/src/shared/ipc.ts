@@ -35,6 +35,7 @@ import type {
   BodyCircumferences,
   BodySex,
   CanvasRefKind,
+  Chassis,
   CircuitPart,
   CircuitWire,
   ExerciseEquipment,
@@ -629,6 +630,12 @@ export const IpcChannel = {
   elecAddWire: "elec:add-wire",
   elecSetWireColour: "elec:set-wire-colour",
   elecRemoveWire: "elec:remove-wire",
+  // ADR-085 slice E4c. Dimensioning the machine is its own channel on
+  // `elec:rename`'s grounds — a wheel radius must not be able to arrive on the
+  // channel that fires while a part is being dragged — and it carries the whole
+  // chassis rather than one field at a time, because nine numbers are all
+  // present or the machine does not exist. `null` says there is no machine.
+  elecSetChassis: "elec:set-chassis",
   // ADR-085 slice E4. The renderer already generates the code for its own
   // preview — `generateCode` is pure and lives in `@nexus/core` — so this
   // channel exists for exactly one thing the renderer may not do: put a file on
@@ -5925,6 +5932,12 @@ export interface ElecCircuit {
 export interface ElecCircuitDocument extends ElecCircuit {
   parts: CircuitPart[];
   wires: CircuitWire[];
+  /**
+   * The machine, when the user has dimensioned one (ADR-085 E4c). Absent is the
+   * ordinary case and is what the generator refuses a URDF for — a chassis
+   * defaulted here would be nine measurements nobody took.
+   */
+  chassis?: Chassis;
 }
 
 export interface ElecListRequest {
@@ -5975,7 +5988,8 @@ export interface ElecRestoreRequest {
  * renderer is untrusted, so the type it claims to send is not evidence, and
  * main narrows it to one of the four quarter turns before the store ever sees
  * it. `value` is absent for a component that takes none — never null, which the
- * column does not have either.
+ * column does not have either. `mount` crosses as a plain `string` for
+ * `rotation`'s reason and is absent for a part that is not on the machine.
  */
 export interface ElecAddPartRequest {
   profileId: string;
@@ -5987,6 +6001,7 @@ export interface ElecAddPartRequest {
     y: number;
     rotation: number;
     value?: number;
+    mount?: string;
   };
 }
 
@@ -5996,7 +6011,8 @@ export interface ElecAddPartRequest {
  * Three states per field, not two: absent leaves it alone, a value replaces it,
  * and `value: null` CLEARS it. Without the null there would be no way to say
  * „this resistor should not have a value after all", and a resistor that cannot
- * lose its value is a row the user cannot correct.
+ * lose its value is a row the user cannot correct. `mount: null` says the same
+ * thing about the machine: a sensor taken off the robot must be expressible.
  */
 export interface ElecUpdatePartRequest {
   profileId: string;
@@ -6007,6 +6023,7 @@ export interface ElecUpdatePartRequest {
     y?: number;
     rotation?: number;
     value?: number | null;
+    mount?: string | null;
   };
 }
 
@@ -6049,6 +6066,35 @@ export interface ElecSetWireColourRequest {
 export interface ElecRemoveWireRequest {
   profileId: string;
   id: string;
+}
+
+/**
+ * Dimensions the machine, or says there is not one (ADR-085 E4c).
+ *
+ * The whole chassis crosses at once, never a field at a time: nine numbers are
+ * all present or the machine does not exist, and a per-field channel would make
+ * „half a chassis" a state the wire could express — which is the state
+ * migration 068 made unrepresentable in the database on purpose.
+ *
+ * `shape` crosses as a plain `string`, and every number as a plain `number`,
+ * for `rotation`'s reason: what the renderer claims to send is not evidence.
+ * `chassis: null` REMOVES it — the machine that turned out not to be one.
+ */
+export interface ElecSetChassisRequest {
+  profileId: string;
+  id: string;
+  chassis: {
+    shape: string;
+    bodyLength: number;
+    bodyWidth: number;
+    bodyHeight: number;
+    wheelRadius: number;
+    wheelWidth: number;
+    wheelTrack: number;
+    wheelBase: number;
+    bodyMass: number;
+    wheelMass: number;
+  } | null;
 }
 
 /**
@@ -6870,6 +6916,7 @@ export type ImportRecordType =
   | "fit-body-profile"
   | "canvas-board"
   | "circuit"
+  | "circuit-chassis"
   | "circuit-part"
   | "circuit-wire";
 
@@ -9317,6 +9364,20 @@ export interface NexusApi {
   setCircuitWireColour(profileId: string, id: string, colour: string): Promise<CircuitWire>;
   /** Removes a wire. Both its parts stay exactly where they are. */
   removeCircuitWire(profileId: string, id: string): Promise<void>;
+  /**
+   * Dimensions the machine this circuit is the electronics of, or removes it
+   * (ADR-085 E4c). `null` is „this is not a robot after all".
+   *
+   * Answers with the chassis as stored, or `null` — nothing else, because
+   * nothing else changed: the parts, the wires and the circuit's own name are
+   * exactly where they were, and echoing the whole document back would be the
+   * expensive read the caller already has in memory.
+   */
+  setCircuitChassis(
+    profileId: string,
+    id: string,
+    chassis: ElecSetChassisRequest["chassis"],
+  ): Promise<Chassis | null>;
   /**
    * Writes this circuit's generated code (ADR-085 E4) where the user picks in
    * a native dialog. Resolves once that dialog is settled.

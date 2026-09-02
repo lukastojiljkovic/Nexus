@@ -42,5 +42,10 @@ export function toCircuitDocument(detail: StoredCircuitDetail): ElecCircuitDocum
     updatedAt: detail.updatedAt,
     parts: detail.parts,
     wires: detail.wires.map(toWireDocument),
+    // Spread rather than `chassis: detail.chassis`: under
+    // `exactOptionalPropertyTypes` those two are different documents — the
+    // second declares the key and gives it `undefined`, which survives the
+    // structured clone as a key the renderer's `"chassis" in doc` would find.
+    ...(detail.chassis === undefined ? {} : { chassis: detail.chassis }),
   };
 }

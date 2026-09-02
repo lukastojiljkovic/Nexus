@@ -2,7 +2,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { catalogueComponent, circuitProblems, circuitRules } from "@nexus/core";
+import { catalogueComponent, circuitProblems, circuitRules, generateCode } from "@nexus/core";
+import type { GeneratedCode, RobotDescription } from "@nexus/core";
 import { ElectronicsStore, NexusDatabase, openDatabase, uuidv7 } from "@nexus/db";
 
 import { createDemoContext } from "./context.js";
@@ -49,7 +50,7 @@ describe("seedDemoElectronics", () => {
   it("seeds three circuits, each with parts and wires on it", () => {
     const circuits = new ElectronicsStore(db.raw, profileId).listActive();
     expect(circuits.map((circuit) => circuit.name).sort()).toEqual([
-      "Malina: dodir i vazduh",
+      "Malina: rover",
       "Merenje razdaljine",
       "Stanica za vlažnost",
     ]);
@@ -203,5 +204,64 @@ describe("seedDemoElectronics", () => {
       expect(seen.supply).toBeGreaterThan(0);
       expect(seen.ground).toBeGreaterThan(0);
     }
+  });
+
+  /**
+   * The rover, end to end (ADR-085 E4c).
+   *
+   * The demo profile is what the sweep photographs, so „the dialog has a model
+   * to show" is a property of the SEEDER rather than of the generator, and
+   * nothing else asserts it: `generateUrdf` has its own tests over fixtures, and
+   * a seeder that quietly stopped writing the chassis would leave those green
+   * while every screenshot of „Model mašine" said there was no machine.
+   *
+   * Both halves are checked, because both are on screen: the ranger IS in the
+   * model, and the three peripherals that have no equivalent in physics are
+   * listed as left out rather than silently missing.
+   */
+  it("gives the rover a machine, with the ranger on the front of it", () => {
+    const store = new ElectronicsStore(db.raw, profileId);
+    const listed = store.listActive().find((circuit) => circuit.name === "Malina: rover");
+    expect(listed).toBeDefined();
+    const circuit = toCircuitDocument(store.read(listed!.id));
+
+    expect(circuit.chassis?.shape).toBe("diff-rover");
+    // Centre-to-centre against the wheel's own width: the one cross-field rule,
+    // asserted on the numbers that actually shipped rather than on a fixture.
+    expect(circuit.chassis!.wheelTrack).toBeGreaterThan(circuit.chassis!.wheelWidth);
+
+    const code = generateCode(circuit, catalogueComponent);
+    expect(code.kind).toBe("package");
+    const robot = (code as Extract<GeneratedCode, { kind: "package" }>).robot;
+    expect(robot.kind).toBe("urdf");
+    const model = robot as Extract<RobotDescription, { kind: "urdf" }>;
+    expect(model.sensors.map((sensor) => sensor.mount)).toEqual(["front"]);
+    expect(model.sensors[0]?.message).toBe("sensor_msgs/msg/Range");
+    // Two, not three: the buzzer is an ACTUATOR, and the generator walks
+    // sensors only — which is why the table it feeds is headed „Senzori koji
+    // nisu u modelu" rather than „šta nije u modelu".
+    expect(model.skipped.map((row) => row.reason)).toEqual(["no-equivalent", "no-equivalent"]);
+  });
+
+  /**
+   * The other half of the same story, and the branch the rover above cannot
+   * reach: a MEASURED circuit whose board gets a sketch.
+   *
+   * „Kod" prints the model's absence there rather than a model — the URDF is a
+   * file of the ROS 2 package, and an Arduino gets no package — and that
+   * paragraph is drawn only when the circuit has a machine. The demo profile is
+   * the only place a screenshot of it can come from, so the seeder is what has
+   * to keep the branch reachable.
+   */
+  it("measures the Arduino rover too, so the sketch has an absence to explain", () => {
+    const store = new ElectronicsStore(db.raw, profileId);
+    const listed = store.listActive().find((circuit) => circuit.name === "Merenje razdaljine");
+    expect(listed).toBeDefined();
+    const circuit = toCircuitDocument(store.read(listed!.id));
+
+    expect(circuit.chassis).toBeDefined();
+    expect(circuit.parts.find((part) => part.componentId === "hc-sr04")?.mount).toBe("front");
+    // A sketch, which carries no model however well measured the machine is.
+    expect(generateCode(circuit, catalogueComponent).kind).toBe("sketch");
   });
 });

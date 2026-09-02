@@ -5,6 +5,7 @@ import type {
   CircuitProblem,
   CircuitWire,
   ComponentDef,
+  Mount,
   RuleFinding,
   RuleValue,
   WireColour,
@@ -12,14 +13,29 @@ import type {
 // The caps come from `@nexus/core` rather than from a mirror in `ipc.ts`: they
 // are the very constants the domain validator and main's own narrowing read, so
 // a field capped from them cannot disagree with the gate that will refuse it.
-import { MAX_CIRCUIT_NOTES_LENGTH, MAX_PART_LABEL_LENGTH, WIRE_COLOURS } from "@nexus/core";
-import { Button, TextField } from "@nexus/ui";
+import {
+  MAX_CIRCUIT_NOTES_LENGTH,
+  MAX_PART_LABEL_LENGTH,
+  MOUNTS,
+  isMount,
+  WIRE_COLOURS,
+} from "@nexus/core";
+import { Button, Select, TextField } from "@nexus/ui";
 
 import { partDisplayName } from "./elecCatalogue.js";
 import type { ElecSelection } from "./ElecBench.js";
 import type { ElecCircuitDocument } from "../../shared/ipc.js";
 import { countUnit, strings } from "./strings.js";
 import { formatToolNumber } from "./toolFormat.js";
+
+/**
+ * The mount picker's raw string, narrowed without an assertion — `asPriority`'s
+ * idiom one module over. The empty option means „not on the machine", which is
+ * what `null` says on the wire.
+ */
+function asMount(value: string): Mount | null {
+  return isMount(value) ? value : null;
+}
 
 export interface ElecInspectorProps {
   circuit: ElecCircuitDocument;
@@ -37,10 +53,14 @@ export interface ElecInspectorProps {
   onRenamePart: (id: string, label: string) => void;
   onRotatePart: (id: string) => void;
   onSetPartValue: (id: string, value: number | null) => void;
+  /** Where the part sits on the machine — `null` takes it off (ADR-085 E4c). */
+  onSetPartMount: (id: string, mount: Mount | null) => void;
   onRemovePart: (id: string) => void;
   onSetWireColour: (id: string, colour: WireColour) => void;
   onRemoveWire: (id: string) => void;
   onSaveNotes: (notes: string) => void;
+  /** Opens the chassis dialog. The dialog itself is the page's, beside the code one. */
+  onOpenChassis: () => void;
   /** Set by the page after a successful notes write, cleared when the field is touched again. */
   notesSaved: boolean;
 }
@@ -68,10 +88,12 @@ export function ElecInspector({
   onRenamePart,
   onRotatePart,
   onSetPartValue,
+  onSetPartMount,
   onRemovePart,
   onSetWireColour,
   onRemoveWire,
   onSaveNotes,
+  onOpenChassis,
   notesSaved,
 }: ElecInspectorProps) {
   const part =
@@ -97,6 +119,7 @@ export function ElecInspector({
           onRename={onRenamePart}
           onRotate={onRotatePart}
           onSetValue={onSetPartValue}
+          onSetMount={onSetPartMount}
           onRemove={onRemovePart}
         />
       ) : wire !== undefined ? (
@@ -115,6 +138,7 @@ export function ElecInspector({
           circuit={circuit}
           busy={busy}
           onSaveNotes={onSaveNotes}
+          onOpenChassis={onOpenChassis}
           notesSaved={notesSaved}
         />
       )}
@@ -127,16 +151,25 @@ interface CircuitPanelProps {
   circuit: ElecCircuitDocument;
   busy: boolean;
   onSaveNotes: (notes: string) => void;
+  onOpenChassis: () => void;
   notesSaved: boolean;
 }
 
-/** Nothing selected: what the circuit holds, and the one note about it. */
-function CircuitPanel({ circuit, busy, onSaveNotes, notesSaved }: CircuitPanelProps) {
+/** Nothing selected: what the circuit holds, the machine it sits on, and the one note about it. */
+function CircuitPanel({
+  circuit,
+  busy,
+  onSaveNotes,
+  onOpenChassis,
+  notesSaved,
+}: CircuitPanelProps) {
   const s = strings.electronics.inspector;
+  const machine = strings.electronics.chassis;
   const [draft, setDraft] = useState(circuit.notes);
 
   const parts = circuit.parts.length;
   const wires = circuit.wires.length;
+  const chassis = circuit.chassis;
 
   return (
     <section className="elec-inspector__panel">
@@ -145,6 +178,27 @@ function CircuitPanel({ circuit, busy, onSaveNotes, notesSaved }: CircuitPanelPr
         {parts} {countUnit(parts, s.partsOne, s.partsFew, s.partsMany)} · {wires}{" "}
         {countUnit(wires, s.wiresOne, s.wiresFew, s.wiresMany)}
       </p>
+
+      {/*
+        The machine, or the fact that there is not one. The absence is printed
+        rather than left blank: a circuit with no chassis gets no model in its
+        ROS 2 package, and „nothing here" is the only place that says why
+        before the export dialog does.
+      */}
+      <p className="elec-inspector__machine">
+        {chassis === undefined
+          ? machine.none
+          : `${machine.shapes[chassis.shape]} · ${formatToolNumber(chassis.bodyLength)} × ` +
+            `${formatToolNumber(chassis.bodyWidth)} × ${formatToolNumber(chassis.bodyHeight)} cm`}
+      </p>
+      <Button
+        className="elec-inspector__machine-open"
+        variant="ghost"
+        disabled={busy}
+        onClick={onOpenChassis}
+      >
+        {machine.open}
+      </Button>
       <label className="elec-inspector__field">
         <span className="elec-inspector__label">{s.notesLabel}</span>
         <textarea
@@ -180,6 +234,7 @@ interface PartPanelProps {
   onRename: (id: string, label: string) => void;
   onRotate: (id: string) => void;
   onSetValue: (id: string, value: number | null) => void;
+  onSetMount: (id: string, mount: Mount | null) => void;
   onRemove: (id: string) => void;
 }
 
@@ -192,10 +247,12 @@ function PartPanel({
   onRename,
   onRotate,
   onSetValue,
+  onSetMount,
   onRemove,
 }: PartPanelProps) {
   const s = strings.electronics.inspector;
   const bench = strings.electronics.bench;
+  const machine = strings.electronics.chassis;
   const [label, setLabel] = useState(part.label);
   const [value, setValue] = useState(part.value === undefined ? "" : String(part.value));
   const [valueError, setValueError] = useState(false);
@@ -284,6 +341,32 @@ function PartPanel({
               {s.valueInvalid}
             </p>
           )}
+        </>
+      )}
+
+      {/*
+        The mount, offered only for a part the simulator has physics for
+        (ADR-085 E4c). A resistor has no mounting face worth naming and no
+        equivalent in a world model, so the picker would be a control whose
+        every setting produced the same file — and the generator's own „šta
+        nije u modelu" already says so for the parts it skipped.
+      */}
+      {component?.simulates !== undefined && (
+        <>
+          <Select
+            label={machine.mountLabel}
+            value={part.mount ?? ""}
+            disabled={busy}
+            onChange={(event) => onSetMount(part.id, asMount(event.target.value))}
+          >
+            <option value="">{machine.mountNone}</option>
+            {MOUNTS.map((mount) => (
+              <option key={mount} value={mount}>
+                {machine.mounts[mount]}
+              </option>
+            ))}
+          </Select>
+          <p className="elec-inspector__hint">{machine.mountHint}</p>
         </>
       )}
 

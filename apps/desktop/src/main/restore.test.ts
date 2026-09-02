@@ -1013,6 +1013,7 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
     // ELEC (migration 067), read the way `gatherElectronics` reads it: three
     // reads for the whole profile, never one per circuit.
     circuits: electronics.circuits,
+    circuitChassis: electronics.chassis,
     circuitParts: electronics.parts,
     circuitWires: electronics.wires,
   };

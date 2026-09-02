@@ -845,6 +845,115 @@
   user-select: all;
 }
 
+/* The machine (ADR-085 E4c). Narrower than the code dialog: nine short numeric
+   fields in two columns are what this holds, and the 720 px panel would put
+   them at 340 px each — a field five times wider than „17,5". */
+.elec-chassis__panel.recur-dialog__panel {
+  width: min(560px, 94vw);
+  max-height: min(720px, 90vh);
+}
+/* The BODY scrolls, never the panel — the code dialog next door, for the reason
+   `.recur-dialog__panel` states about itself: a panel that scrolls carries its
+   own actions off the bottom, and „Sačuvaj mašinu" becomes something the user
+   has to go looking for. Nine fields on a short window is exactly the case that
+   happens in. `min-height: 0` because the panel is a flex column and a tall
+   child otherwise refuses to shrink. */
+.elec-chassis__body {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  min-height: 0;
+  padding-right: var(--nx-space-2);
+}
+.elec-chassis__description {
+  margin: 0;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+  line-height: var(--nx-font-leading-loose);
+}
+/* The shape choice. A radio per shape rather than a select, because each one
+   carries a sentence about how it drives — and an option element cannot.
+   Left as a BLOCK fieldset on purpose: a rendered `<legend>` is not a flex or
+   grid item, so `display: flex` here painted „Oblik" straight through the first
+   row's border. The rows space themselves instead. */
+.elec-chassis__shapes {
+  margin: var(--nx-space-3) 0 0;
+  padding: 0;
+  border: 0;
+}
+.elec-chassis__shapes > legend {
+  margin-bottom: var(--nx-space-2);
+  padding: 0;
+}
+/* `align-items: center` rather than `baseline`: `.nx-radio` draws itself with
+   `display: grid` and has no text baseline to align to, so baseline would fall
+   back to its margin edge. Row one holds the radio and the name; row two holds
+   only the hint, where centring is a no-op. */
+.elec-chassis__shape {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--nx-space-2);
+  padding: var(--nx-space-2);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  cursor: pointer;
+}
+.elec-chassis__shape + .elec-chassis__shape {
+  margin-top: var(--nx-space-2);
+}
+/* The chosen shape reads as chosen through its BORDER and its ground, never a
+   glow and never an inset bar (the design rules' two banned selection idioms). */
+.elec-chassis__shape:has(input:checked) {
+  border-color: var(--nx-accent);
+  background: var(--nx-surface-alt);
+}
+.elec-chassis__shape:focus-within {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+.elec-chassis__shape-name {
+  font-size: var(--nx-font-size-body-sm);
+  font-weight: var(--nx-font-weight-medium);
+  color: var(--nx-text);
+}
+/* The hint sits in the second column, under the name — so it lines up with the
+   name rather than with the radio, and the radio keeps one row of its own. */
+.elec-chassis__shape-hint {
+  grid-column: 2;
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-subtle);
+  line-height: var(--nx-font-leading-normal);
+}
+/* Two columns of fields, which is what nine measurements want: `auto-fit` down
+   to one column carries them to the narrow window without a second rule. */
+.elec-chassis__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--nx-space-3);
+  margin: var(--nx-space-4) 0;
+}
+.elec-chassis__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  min-width: 0;
+}
+.elec-chassis__hint {
+  margin: 0;
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-subtle);
+  line-height: var(--nx-font-leading-normal);
+}
+/* The one line in „O kolu" that says what machine this circuit is on, or that
+   there is none. Tabular figures, because it prints three measurements. */
+.elec-inspector__machine {
+  margin: 0;
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
 /* Narrow windows: two rails either side of a bench are what a 1024px window
    cannot afford, so below three columns' worth of width the panel moves UNDER
    THE DRAWER rather than under the bench.

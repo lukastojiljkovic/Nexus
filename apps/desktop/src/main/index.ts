@@ -28,6 +28,10 @@ import {
   catalogueComponent,
   catalogueExercise,
   catalogueFood,
+  CHASSIS_LENGTHS,
+  CHASSIS_MASSES,
+  CHASSIS_MAX_CM,
+  CHASSIS_MAX_GRAMS,
   chordAccelerator,
   countSearchKinds,
   dayKeyToUtcMs,
@@ -41,7 +45,9 @@ import {
   FOOD_CATEGORIES,
   foodRefText,
   generateCode,
+  isChassisShape,
   isInlineImageMime,
+  isMount,
   isValidDayKey,
   MAX_ARCHIVE_PASSPHRASE_LENGTH,
   MAX_CANVAS_SCENE_LENGTH,
@@ -85,6 +91,8 @@ import {
 import type {
   BodyMeasurement,
   BodyProfile,
+  Chassis,
+  ChassisField,
   CircuitPart,
   CircuitWire,
   ExerciseEntry,
@@ -96,6 +104,7 @@ import type {
   FoodMacros,
   FoodServing,
   HabitSchedule,
+  Mount,
   MuscleGroup,
   MuscleReading,
   PartRotation,
@@ -4556,6 +4565,63 @@ function asPartValue(value: unknown, field: string): number {
   return value;
 }
 
+/**
+ * Which face of the machine a part sits on (ADR-085 E4c).
+ *
+ * A NAME rather than three coordinates, so a sensor's origin stays derived from
+ * the body the user already dimensioned. WHETHER the part is one the simulator
+ * has physics for is a catalogue question, asked in the generator — which lists
+ * what it skipped rather than refusing the circuit. A mount on a resistor is
+ * harmless and is reported honestly.
+ */
+function asPartMount(value: unknown, field: string): Mount {
+  if (!isMount(value)) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must be one of the five mounting faces by name.`,
+    );
+  }
+  return value;
+}
+
+/**
+ * The machine, all nine numbers at once (ADR-085 E4c).
+ *
+ * A LOOP over the two field lists, which is the opposite choice from
+ * `asCircuitPartFields` above and for the opposite reason: there every key is
+ * optional, so a loop would have to invent a default for each absent one, while
+ * here every key is required and nine hand-written lines would be nine chances
+ * to type one bound wrong once.
+ *
+ * The bounds are `chassis.ts`'s own constants, so this validator, the domain's
+ * `chassisProblems` and migration 068's CHECKs are one number in one place.
+ * Zero is refused along with the negatives: a body 0 cm long has zero inertia,
+ * and a simulator does not refuse that — it simulates a machine that cannot be
+ * pushed, which is the silent wrong answer.
+ */
+function asChassis(value: unknown, field: string): Chassis {
+  const record = asRecord(value);
+  const shape = record.shape;
+  if (!isChassisShape(shape)) {
+    throw new Error(`Invalid IPC payload: "${field}.shape" must be a chassis shape by name.`);
+  }
+  const measured = {} as Record<ChassisField, number>;
+  for (const [names, max] of [
+    [CHASSIS_LENGTHS, CHASSIS_MAX_CM],
+    [CHASSIS_MASSES, CHASSIS_MAX_GRAMS],
+  ] as const) {
+    for (const name of names) {
+      const number = record[name];
+      if (typeof number !== "number" || !Number.isFinite(number) || number <= 0 || number > max) {
+        throw new Error(
+          `Invalid IPC payload: "${field}.${name}" must be a number above 0 and at most ${max}.`,
+        );
+      }
+      measured[name] = number;
+    }
+  }
+  return { shape, ...measured };
+}
+
 function asWireColour(value: unknown, field: string): WireColour {
   if (!(WIRE_COLOURS as readonly unknown[]).includes(value)) {
     throw new Error(
@@ -4584,6 +4650,7 @@ function asNewCircuitPart(value: unknown, field: string): NewCircuitPart {
     y: asPartCoordinate(part.y, `${field}.y`),
     rotation: asPartRotation(part.rotation, `${field}.rotation`),
     ...(chosen === undefined ? {} : { value: asPartValue(chosen, `${field}.value`) }),
+    ...(part.mount === undefined ? {} : { mount: asPartMount(part.mount, `${field}.mount`) }),
   };
 }
 
@@ -4610,6 +4677,9 @@ function asCircuitPartFields(value: unknown, field: string): UpdateCircuitPartFi
     ...(fields.value === undefined
       ? {}
       : { value: fields.value === null ? null : asPartValue(fields.value, `${field}.value`) }),
+    ...(fields.mount === undefined
+      ? {}
+      : { mount: fields.mount === null ? null : asPartMount(fields.mount, `${field}.mount`) }),
   };
 }
 
@@ -10659,6 +10729,24 @@ function registerIpc(): void {
     const profileId = asNonEmptyString(body.profileId, "profileId");
     const id = asElecId(body.id, "id");
     electronicsStore(profileId).removeWire(id, new Date().toISOString());
+  });
+
+  // ADR-085 E4c: the machine the circuit is the electronics of. `null` removes
+  // it — a circuit that turned out to be a breadboard after all — and the two
+  // arms are one channel rather than two because they are one edit to the user:
+  // the form's „ovo nije mašina" is the same save button as its nine fields.
+  //
+  // It answers the chassis rather than the whole document. Nothing else moved,
+  // and re-reading every part and wire to say so would be the expensive read
+  // the caller is already holding.
+  ipcMain.handle(IpcChannel.elecSetChassis, (event, payload): Chassis | null => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const id = asElecId(body.id, "id");
+    const chassis = body.chassis === null ? null : asChassis(body.chassis, "chassis");
+    electronicsStore(profileId).setChassis(id, chassis, new Date().toISOString());
+    return chassis;
   });
 
   // ADR-085 E4: the generated code onto disk. The payload is an id and nothing

@@ -8,11 +8,24 @@ import {
   circuitRules,
   generateCode,
 } from "@nexus/core";
-import type { CircuitPart, ComponentDef, PartRotation, WireColour, WireEnd } from "@nexus/core";
+import type {
+  Chassis,
+  CircuitPart,
+  ComponentDef,
+  PartRotation,
+  WireColour,
+  WireEnd,
+} from "@nexus/core";
 import { Button, EmptyState, Icon, LoadingState, PageHeader, TextField } from "@nexus/ui";
 
-import type { CodeExportResult, ElecCircuit, ElecCircuitDocument } from "../../shared/ipc.js";
+import type {
+  CodeExportResult,
+  ElecCircuit,
+  ElecCircuitDocument,
+  ElecUpdatePartRequest,
+} from "../../shared/ipc.js";
 import { ElecBench, type ElecSelection } from "./ElecBench.js";
+import { ElecChassisDialog } from "./ElecChassisDialog.js";
 import { ElecCodeDialog } from "./ElecCodeDialog.js";
 import { ElecInspector } from "./ElecInspector.js";
 import { ElecPalette } from "./ElecPalette.js";
@@ -101,6 +114,8 @@ export function ElectronicsPage({ profileId }: ElectronicsPageProps) {
   /** The generated-code dialog (E4), and the one line left behind after it closes. */
   const [codeOpen, setCodeOpen] = useState(false);
   const [codeNotice, setCodeNotice] = useState<string | null>(null);
+  /** The chassis form (E4c) — nine numbers saved as one, so it is a dialog rather than nine committed fields. */
+  const [chassisOpen, setChassisOpen] = useState(false);
 
   const [selection, setSelection] = useState<ElecSelection | null>(null);
   const [wiring, setWiring] = useState<WireEnd | null>(null);
@@ -181,10 +196,12 @@ export function ElectronicsPage({ profileId }: ElectronicsPageProps) {
     setSelection(null);
     setWiring(null);
     setNotesSaved(false);
-    // The code dialog belongs to the circuit that was open. It would otherwise
-    // stay up and refill itself with a different circuit's code.
+    // Both dialogs belong to the circuit that was open. Either would otherwise
+    // stay up and refill itself from a different circuit — the code one with
+    // another board's sketch, the chassis one with another machine's numbers.
     setCodeOpen(false);
     setCodeNotice(null);
+    setChassisOpen(false);
     void (async () => {
       try {
         const opened = await window.nexus.openCircuit(profileId, activeId);
@@ -344,6 +361,31 @@ export function ElectronicsPage({ profileId }: ElectronicsPageProps) {
   }
 
   /**
+   * Dimensions the machine, or takes it away (ADR-085 E4c).
+   *
+   * The answer is patched in rather than re-read, on this page's rule — but the
+   * write is one row and the document in memory already holds everything else,
+   * so „re-read" here would mean fetching every part and wire to learn nine
+   * numbers the dialog just handed over.
+   */
+  async function saveChassis(chassis: Chassis | null): Promise<void> {
+    if (doc === null) return;
+    const circuitId = doc.id;
+    await run(async () => {
+      const saved = await window.nexus.setCircuitChassis(profileId, circuitId, chassis);
+      patch(circuitId, (document) => {
+        // Built without the key rather than with `chassis: undefined`: under
+        // `exactOptionalPropertyTypes` those are different documents, and the
+        // second leaves a `"chassis" in document` that is true of a circuit
+        // with no machine.
+        const { chassis: _removed, ...rest } = document;
+        return saved === null ? rest : { ...rest, chassis: saved };
+      });
+      setChassisOpen(false);
+    });
+  }
+
+  /**
    * Writes the code (ADR-085 E4). The payload is the circuit's id: main reads
    * its own rows, generates its own text and decides on its own whether the
    * user is shown a file picker or a directory one — so neither the bytes nor
@@ -389,7 +431,7 @@ export function ElectronicsPage({ profileId }: ElectronicsPageProps) {
 
   async function editPart(
     id: string,
-    fields: { label?: string; x?: number; y?: number; rotation?: number; value?: number | null },
+    fields: ElecUpdatePartRequest["fields"],
   ): Promise<void> {
     if (doc === null) return;
     const circuitId = doc.id;
@@ -663,10 +705,27 @@ export function ElectronicsPage({ profileId }: ElectronicsPageProps) {
       {codeOpen && code !== null && (
         <ElecCodeDialog
           code={code}
+          // ADR-085 E4c. The dialog is told the FACT rather than the conclusion:
+          // what a machine means for the artefact is a question about the
+          // artefact, and only the sketch half has an answer worth printing.
+          hasMachine={doc?.chassis !== undefined}
           errors={rules.filter((finding) => finding.severity === "error").length}
           busy={busy}
           onSave={() => void saveCode()}
           onClose={() => setCodeOpen(false)}
+        />
+      )}
+
+      {chassisOpen && doc !== null && (
+        <ElecChassisDialog
+          // Keyed by the circuit, so the drafts inside are the OPEN circuit's
+          // rather than whatever was typed into the one before it.
+          key={doc.id}
+          chassis={doc.chassis}
+          busy={busy}
+          onSave={(chassis) => void saveChassis(chassis)}
+          onRemove={() => void saveChassis(null)}
+          onClose={() => setChassisOpen(false)}
         />
       )}
 
@@ -759,10 +818,12 @@ export function ElectronicsPage({ profileId }: ElectronicsPageProps) {
             onRenamePart={(id, label) => void editPart(id, { label })}
             onRotatePart={rotatePart}
             onSetPartValue={(id, value) => void editPart(id, { value })}
+            onSetPartMount={(id, mount) => void editPart(id, { mount })}
             onRemovePart={(id) => void removePart(id)}
             onSetWireColour={(id, colour) => void recolourWire(id, colour)}
             onRemoveWire={(id) => void removeWire(id)}
             onSaveNotes={(notes) => void saveNotes(notes)}
+            onOpenChassis={() => setChassisOpen(true)}
             notesSaved={notesSaved}
           />
         </div>

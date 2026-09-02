@@ -19,6 +19,7 @@ import type {
   ExportNote,
   ExportCanvasBoard,
   ExportCircuit,
+  ExportCircuitChassis,
   ExportCircuitPart,
   ExportCircuitWire,
   ExportNoteAttachment,
@@ -385,17 +386,18 @@ function gatherCanvas(
   };
 }
 
-/** Every ELEC-module row `ProfileData` requires (migration 067) — `gatherElectronics`'s return shape. */
+/** Every ELEC-module row `ProfileData` requires (migrations 067, 068) — `gatherElectronics`'s return shape. */
 interface GatheredElectronicsData {
   circuits: ExportCircuit[];
+  circuitChassis: ExportCircuitChassis[];
   circuitParts: ExportCircuitPart[];
   circuitWires: ExportCircuitWire[];
 }
 
 /**
- * Gathers every ELEC-module row for one profile: three reads, one per table,
+ * Gathers every ELEC-module row for one profile: four reads, one per table,
  * and never one per circuit — `listAllForExport` exists so that a profile with
- * forty circuits is three statements rather than eighty-one.
+ * forty circuits is four statements rather than a hundred and twenty-one.
  *
  * **Nothing about the COMPONENTS is gathered, and there is no second call to
  * keep in step with this one.** The 153 the app ships are constants in
@@ -405,7 +407,7 @@ interface GatheredElectronicsData {
  * datasheet must not be frozen into every backup ever taken.
  *
  * The store already excludes a soft-deleted circuit AND everything on it, which
- * is what keeps the three collections consistent with each other: an archive
+ * is what keeps the four collections consistent with each other: an archive
  * carrying the parts of a circuit it does not carry would be refused by a
  * foreign key on the way back in.
  */
@@ -414,7 +416,12 @@ function gatherElectronics(
   profileId: string,
 ): GatheredElectronicsData {
   const all = deps.electronicsStore(profileId).listAllForExport();
-  return { circuits: all.circuits, circuitParts: all.parts, circuitWires: all.wires };
+  return {
+    circuits: all.circuits,
+    circuitChassis: all.chassis,
+    circuitParts: all.parts,
+    circuitWires: all.wires,
+  };
 }
 
 /** Every HABIT-module row `ProfileData` requires (migration 055) — `gatherHabits`'s return shape. */

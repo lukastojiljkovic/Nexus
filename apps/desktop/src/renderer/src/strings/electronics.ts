@@ -16,14 +16,18 @@
 
 import type {
   BusKind,
+  ChassisField,
+  ChassisShape,
   CircuitProblemCode,
   CodeRefusal,
   ComponentKind,
+  Mount,
   PinFunction,
   RosRole,
   RosSkip,
   RuleCode,
   RuleSeverity,
+  UrdfSkip,
   ValueUnit,
   WireColour,
 } from "@nexus/core";
@@ -323,6 +327,90 @@ export const electronicsSr = {
   },
 
   /**
+   * The machine the circuit is the electronics of (ADR-085 E4c).
+   *
+   * Every dimension is asked for in the unit it is typed in — centimetres and
+   * grams — with the unit in the LABEL rather than in the field, so the number
+   * on screen is the number stored. The conversion to metres and kilograms is
+   * the generator's, where it is a fact about the URDF format.
+   */
+  chassis: {
+    /** In „O kolu", under the counts. The ellipsis is the OS convention for „this opens a dialog". */
+    open: "Mašina…",
+    dialogTitle: "Mašina",
+    /**
+     * What the nine numbers are for, and — the load-bearing half — where they
+     * come from. Nexus measures nothing; a dimension it guessed would be a
+     * dimension a simulator treats as measured.
+     */
+    description:
+      "Kolo opisuje elektroniku, a ovo opisuje mašinu na kojoj ta elektronika stoji. " +
+      "Brojevi idu u model koji simulator čita, pa svaki mora doći sa merne trake — " +
+      "Nexus nijedan ne pretpostavlja.",
+    /** In the inspector when there is no machine — a fact, not a prompt. */
+    none: "Za ovo kolo nije opisana nijedna mašina.",
+    shapeLabel: "Oblik",
+    /** The two shapes the generator has geometry for. */
+    shapes: {
+      "diff-rover": "Rover sa dva točka i osloncem",
+      "four-wheel-rover": "Rover sa četiri točka",
+    } satisfies Record<ChassisShape, string>,
+    /** Under each, because „diferencijalni pogon" is the part that decides how it drives. */
+    shapeHints: {
+      "diff-rover":
+        "Dva pogonska točka na istoj osovini, treća tačka je oslonac. Skreće razlikom " +
+        "brzina.",
+      "four-wheel-rover": "Četiri točka, po dva sa svake strane. Skreće razlikom brzina.",
+    } satisfies Record<ChassisShape, string>,
+    /** The nine fields, each with its unit. */
+    fields: {
+      bodyLength: "Dužina tela (cm)",
+      bodyWidth: "Širina tela (cm)",
+      bodyHeight: "Visina tela (cm)",
+      wheelRadius: "Poluprečnik točka (cm)",
+      wheelWidth: "Širina točka (cm)",
+      wheelTrack: "Razmak točkova (cm)",
+      wheelBase: "Međuosovinsko rastojanje (cm)",
+      bodyMass: "Masa tela (g)",
+      wheelMass: "Masa točka (g)",
+    } satisfies Record<ChassisField, string>,
+    /**
+     * The two measurements that are not obvious from their name, said where
+     * they are typed. „Razmak točkova" is centre-to-centre and not the gap
+     * between them, which is the one a person measures by mistake — and the
+     * one that makes wheels overlap through the middle of the robot.
+     */
+    hints: {
+      wheelTrack: "Od sredine levog do sredine desnog točka.",
+      wheelBase: "Od prednje do zadnje osovine. Kod rovera sa dva točka: do oslonca.",
+    } satisfies Record<"wheelTrack" | "wheelBase", string>,
+    save: "Sačuvaj mašinu",
+    remove: "Ukloni mašinu",
+    /** Said when a field holds something that is not a positive number. */
+    invalid: "Svaka mera mora biti broj veći od nule.",
+    /** The one cross-field rule, and the reason for it. */
+    trackTooNarrow:
+      "Razmak točkova mora biti veći od širine točka — inače se točkovi preklapaju " +
+      "kroz sredinu mašine.",
+    /** The mount picker, in the panel of a part the simulator has physics for. */
+    mountLabel: "Strana mašine",
+    /** The first option: the part is in the circuit but not on the robot. */
+    mountNone: "nije na mašini",
+    mounts: {
+      front: "napred",
+      rear: "nazad",
+      left: "levo",
+      right: "desno",
+      top: "gore",
+    } satisfies Record<Mount, string>,
+    /**
+     * Why a face is enough. The origin is derived from the body's own
+     * dimensions, so nobody types three coordinates per sensor.
+     */
+    mountHint: "Iz strane i mera tela Nexus računa gde senzor stoji na modelu.",
+  },
+
+  /**
    * ADR-085 slice E4: the code the wiring implies — an Arduino sketch for a
    * microcontroller, a ROS 2 package for a board that runs Linux.
    *
@@ -398,6 +486,19 @@ export const electronicsSr = {
       wiringUnnamed: "—",
       /** Shown only when some row is unnamed, so it never explains an absence nobody saw. */
       wiringHint: "Pin bez konstante vodi biblioteka ili magistrala, pa mu skica ne daje ime.",
+      /**
+       * The machine, said only on a circuit that HAS one (ADR-085 E4c).
+       *
+       * The model is a file of the ROS 2 package, so this board produces none —
+       * and „Mašina" has already told the user that their numbers go into a
+       * model a simulator reads, which on this board nothing keeps. The last
+       * sentence is the one that matters: the measurements are not lost, and a
+       * user who reads „skica ih ne koristi" would otherwise reasonably wonder.
+       */
+      machineHeading: "Model mašine",
+      machineNone:
+        "Mašina je opisana, ali je skica ne koristi: model čita simulator, a on ide uz " +
+        "ROS 2 paket — koji Nexus pravi za ploče sa Linuksom. Mere ostaju uz kolo.",
       /** Above the code itself, with the file name the save dialog will suggest. */
       sourceHeading: "Skica",
       saved: "Skica je sačuvana.",
@@ -456,6 +557,48 @@ export const electronicsSr = {
         "no-direction": "iz šeme se ne vidi smer",
         "no-number": "pin nema BCM broj",
       } satisfies Record<RosSkip, string>,
+      /**
+       * The model of the machine, which rides inside the same package (ADR-085
+       * E4c). A section rather than a dialog of its own: the URDF is a file in
+       * this package and nothing else, so a second dialog would be a second
+       * place to look for one artefact.
+       */
+      urdfHeading: "Model mašine",
+      urdfIntro:
+        "Uz čvor ide i model mašine — telo, točkovi i senzori na njima, u merama " +
+        "koje su unete u „Mašina“. Simulator ga čita, a paket ga instalira uz sebe.",
+      /** When the circuit has no chassis: the honest absence, said once. */
+      urdfNone:
+        "Za ovo kolo nije opisana nijedna mašina, pa paket nema model. Mere se unose " +
+        "u „Mašina“, u panelu o kolu.",
+      /** The sensors that made it into the model. */
+      urdfSensorsHeading: "Senzori u modelu",
+      urdfSensorPart: "Komponenta",
+      urdfSensorMount: "Strana",
+      urdfSensorTopic: "Tema",
+      urdfSensorMessage: "Poruka",
+      /**
+       * The one thing about this file that a user WILL misread if it is not
+       * said: the model's topics are not the node's topics. A ranger in
+       * simulation publishes a distance; the node publishes whether a pin is
+       * high. Two different quantities, and pretending otherwise would be the
+       * dishonest half of generating both from one circuit.
+       */
+      urdfTopicsHint:
+        "Ove teme dolaze iz simulatora i nose izmerene veličine. Teme čvora iznad " +
+        "nose stanja pinova — to nisu iste teme i ne spajaju se same.",
+      /**
+       * The second table. Scoped to SENSORS, exactly as the generated README
+       * is, because that is what the generator actually walks: a buzzer is an
+       * actuator and has no place in a sensor list, so „šta nije u modelu" would have promised a
+       * completeness the table does not have.
+       */
+      urdfSkippedHeading: "Senzori koji nisu u modelu",
+      urdfSkippedReason: "Razlog",
+      urdfReasons: {
+        "no-equivalent": "fizika nema šta da simulira umesto njega",
+        "no-mount": "nije postavljen ni na jednu stranu mašine",
+      } satisfies Record<UrdfSkip, string>,
       /** Above the node's own source; the other seven files are the ament shape. */
       sourceHeading: "Čvor",
       /** Precedes the other seven paths, so the package's size is never a surprise. */

@@ -700,6 +700,11 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.elecSetWireColour, { profileId, id, colour }),
   removeCircuitWire: (profileId, id) =>
     ipcRenderer.invoke(IpcChannel.elecRemoveWire, { profileId, id }),
+  // The whole chassis as one object, `part`'s reason taken further: nine
+  // numbers positional would be nine chances to swap two of them, and a swap
+  // between two lengths is a machine that still validates.
+  setCircuitChassis: (profileId, id, chassis) =>
+    ipcRenderer.invoke(IpcChannel.elecSetChassis, { profileId, id, chassis }),
   exportCircuitCode: (profileId, id) =>
     ipcRenderer.invoke(IpcChannel.elecExportCode, { profileId, id }),
   searchQuery: (profileId, query, limit) =>

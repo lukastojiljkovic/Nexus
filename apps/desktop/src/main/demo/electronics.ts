@@ -1,4 +1,4 @@
-import type { WireColour } from "@nexus/core";
+import type { Chassis, Mount, WireColour } from "@nexus/core";
 import { ElectronicsStore } from "@nexus/db";
 import type { DatabaseHandle, DemoContext } from "./context.js";
 
@@ -38,6 +38,8 @@ interface Placement {
   readonly x: number;
   readonly y: number;
   readonly value?: number;
+  /** Which face of the machine it is bolted to (ADR-085 E4c). Only the rover's ranger has one. */
+  readonly mount?: Mount;
 }
 
 /** One jumper, by the KEY of each part in the placement map rather than by id — the ids do not exist yet. */
@@ -52,6 +54,13 @@ interface DemoCircuit {
   readonly notes: string;
   readonly parts: Readonly<Record<string, Placement>>;
   readonly wires: readonly Jumper[];
+  /**
+   * The machine the circuit is the electronics of (ADR-085 E4c). Absent from
+   * two of the three, which is the ordinary case and the state the „Kod" dialog
+   * has to be photographed in as well: a breadboard is not a robot, and its
+   * ROS 2 package says so rather than shipping a model of a guess.
+   */
+  readonly chassis?: Chassis;
 }
 
 const CIRCUITS: readonly DemoCircuit[] = [
@@ -81,11 +90,33 @@ const CIRCUITS: readonly DemoCircuit[] = [
     ],
   },
   {
+    // The plainest circuit here, and — since E4c — the one that carries the
+    // other half of the machine story: it HAS a chassis and its board is an
+    // Arduino, so „Kod" prints the model's absence rather than a model. That
+    // branch exists in no other demo circuit, and the sweep photographs what is
+    // on screen: without a measured Arduino there is nothing to photograph it
+    // over. The HC-SR04 looks forward because that is where a rangefinder on a
+    // rover looks; the mount is stored and is what the URDF would read if this
+    // board ever became a Raspberry Pi.
     name: "Merenje razdaljine",
-    notes: "HC-SR04: TRIG na D10, ECHO na D11. Senzor traži punih 5 V.",
+    notes:
+      "HC-SR04: TRIG na D10, ECHO na D11. Senzor traži punih 5 V. " +
+      "Senzor gleda napred sa malog rovera.",
+    chassis: {
+      shape: "diff-rover",
+      bodyLength: 18,
+      bodyWidth: 12,
+      bodyHeight: 5,
+      wheelRadius: 3,
+      wheelWidth: 2.4,
+      wheelTrack: 14,
+      wheelBase: 10,
+      bodyMass: 640,
+      wheelMass: 32,
+    },
     parts: {
       board: { componentId: "arduino-uno", label: "", x: 120, y: 80 },
-      range: { componentId: "hc-sr04", label: "", x: 400, y: 140 },
+      range: { componentId: "hc-sr04", label: "", x: 400, y: 140, mount: "front" },
     },
     wires: [
       { from: ["board", "5V"], to: ["range", "VCC"], colour: "red" },
@@ -101,20 +132,42 @@ const CIRCUITS: readonly DemoCircuit[] = [
     // photograph that dialog over. It is also the only frame the Pi's own
     // 40-pin header ever appears in.
     //
-    // Its three peripherals are each one of the three things the generator can
-    // do with a wire, on purpose: a touch pad the node PUBLISHES, a buzzer it
-    // SUBSCRIBES to as a duty cycle, and a barometer on I²C it leaves entirely
-    // alone. Everything runs on 3,3 V, which is not a simplification — a Pi has
-    // no 5 V logic, and every part here is rated for 3,3.
-    name: "Malina: dodir i vazduh",
+    // Its first three peripherals are each one of the three things the node
+    // generator can do with a wire, on purpose: a touch pad the node PUBLISHES,
+    // a buzzer it SUBSCRIBES to as a duty cycle, and a barometer on I²C it
+    // leaves entirely alone. Everything runs on 3,3 V, which is not a
+    // simplification — a Pi has no 5 V logic, and every part here is rated for
+    // 3,3.
+    //
+    // The fourth is the URDF's half (E4c). A laser ranger bolted to the front
+    // of a measured chassis is the one part in the demo profile with an honest
+    // equivalent in physics, so this is the circuit where the „Model mašine"
+    // section has both of its tables to show: the ranger in the model, and the
+    // other three listed as parts a simulator has nothing to put in the world
+    // for. An HC-SR04 would have been the obvious ranger and is the wrong one —
+    // it needs 5 V, which this board does not have.
+    name: "Malina: rover",
     notes:
-      "TTP223 na GPIO27, pasivna zujalica na GPIO18, BMP280 preko I²C. " +
-      "Sve na 3,3 V — Malina nema 5 V logiku.",
+      "TTP223 na GPIO27, pasivna zujalica na GPIO18, BMP280 i VL53L0X preko I²C. " +
+      "Sve na 3,3 V — Malina nema 5 V logiku. Daljinomer gleda napred.",
+    chassis: {
+      shape: "diff-rover",
+      bodyLength: 22,
+      bodyWidth: 15,
+      bodyHeight: 7,
+      wheelRadius: 3.3,
+      wheelWidth: 2.6,
+      wheelTrack: 17,
+      wheelBase: 13,
+      bodyMass: 1100,
+      wheelMass: 45,
+    },
     parts: {
       board: { componentId: "raspberry-pi-4b", label: "", x: 120, y: 80 },
       touch: { componentId: "ttp223", label: "", x: 460, y: 80 },
       buzzer: { componentId: "buzzer-passive", label: "", x: 460, y: 250 },
       air: { componentId: "bmp280", label: "", x: 460, y: 420 },
+      range: { componentId: "vl53l0x", label: "", x: 460, y: 580, mount: "front" },
     },
     wires: [
       { from: ["board", "3V3"], to: ["touch", "VCC"], colour: "red" },
@@ -129,6 +182,14 @@ const CIRCUITS: readonly DemoCircuit[] = [
       { from: ["board", "GND3"], to: ["air", "GND"], colour: "black" },
       { from: ["board", "GPIO2"], to: ["air", "SDA"], colour: "white" },
       { from: ["board", "GPIO3"], to: ["air", "SCL"], colour: "grey" },
+      // The ranger hangs off the SAME two I²C lines as the barometer, which is
+      // what a bus is for — 0x29 against 0x76, so the two never answer at once.
+      // Its own ground is GND4, the board's last, rather than a second wire
+      // onto a pin that already has one.
+      { from: ["board", "3V3"], to: ["range", "VCC"], colour: "red" },
+      { from: ["board", "GND4"], to: ["range", "GND"], colour: "black" },
+      { from: ["board", "GPIO2"], to: ["range", "SDA"], colour: "white" },
+      { from: ["board", "GPIO3"], to: ["range", "SCL"], colour: "grey" },
     ],
   },
 ];
@@ -153,11 +214,15 @@ export function seedDemoElectronics(db: DatabaseHandle, ctx: DemoContext): void 
           y: part.y,
           rotation: 0,
           ...(part.value === undefined ? {} : { value: part.value }),
+          ...(part.mount === undefined ? {} : { mount: part.mount }),
         },
         nowIso,
       );
       placed.set(key, row.id);
     }
+    // After the parts and before the wires only because it reads in the order
+    // the screen does; the chassis has no foreign key to either.
+    if (spec.chassis !== undefined) circuits.setChassis(circuit.id, spec.chassis, nowIso);
     for (const wire of spec.wires) {
       const fromId = placed.get(wire.from[0]);
       const toId = placed.get(wire.to[0]);
