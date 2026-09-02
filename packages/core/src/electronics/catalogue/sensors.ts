@@ -178,6 +178,8 @@ export const SENSORS: readonly ComponentDef[] = [
   {
     id: "hc-sr04",
     kind: "sensor",
+    simulates: "ranger",
+    simRangeCm: { min: 2, max: 400 },
     name: "HC-SR04",
     summary: "Ultrazvučni daljinomer, 2–400 cm; ECHO vraća 5 V i traži delitelj na 3.3 V pločama.",
     supply: { min: 5, max: 5 },
@@ -193,6 +195,8 @@ export const SENSORS: readonly ComponentDef[] = [
   {
     id: "vl53l0x",
     kind: "sensor",
+    simulates: "ranger",
+    simRangeCm: { min: 3, max: 200 },
     name: "VL53L0X",
     summary: "Laserski daljinomer na principu vremena leta — tačan i na crnim površinama.",
     supply: { min: 2.6, max: 5.5 },
@@ -204,6 +208,8 @@ export const SENSORS: readonly ComponentDef[] = [
   {
     id: "gp2y0a21",
     kind: "sensor",
+    simulates: "ranger",
+    simRangeCm: { min: 10, max: 80 },
     name: "Sharp GP2Y0A21YK0F",
     summary: "Infracrveni daljinomer 10–80 cm; izlaz je nelinearan i traži tabelu.",
     supply: { min: 4.5, max: 5.5 },
@@ -224,6 +230,7 @@ export const SENSORS: readonly ComponentDef[] = [
   {
     id: "mpu6050",
     kind: "sensor",
+    simulates: "imu",
     name: "MPU-6050 (GY-521)",
     summary: "Akcelerometar i žiroskop u šest osa — osnova svake stabilizacije.",
     supply: { min: 3, max: 5 },
@@ -235,6 +242,7 @@ export const SENSORS: readonly ComponentDef[] = [
   {
     id: "mpu9250",
     kind: "sensor",
+    simulates: "imu",
     name: "MPU-9250",
     summary: "MPU-6050 plus magnetometar — devet osa, pa i kurs, ne samo nagib.",
     supply: { min: 3, max: 5 },
@@ -245,6 +253,7 @@ export const SENSORS: readonly ComponentDef[] = [
   {
     id: "adxl345",
     kind: "sensor",
+    simulates: "imu",
     name: "ADXL345",
     summary: "Akcelerometar u tri ose sa prepoznavanjem pada i dvostrukog kucanja.",
     // GY-291, the module this is sold as, carries its own regulator and level
@@ -258,6 +267,7 @@ export const SENSORS: readonly ComponentDef[] = [
   {
     id: "hmc5883l",
     kind: "sensor",
+    simulates: "magnetometer",
     name: "HMC5883L",
     summary: "Magnetometar — kompas, ali samo daleko od motora i zvučnika.",
     supply: { min: 3, max: 5 },

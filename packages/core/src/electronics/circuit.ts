@@ -24,6 +24,12 @@
  * load.
  */
 
+// `chassis.ts` reads `CircuitProblem` back from here — TYPE-only, so that half
+// of the pair is erased and the module graph carries one edge rather than a
+// cycle. It is worth the arrangement: a bad dimension is then refused in the
+// same vocabulary as a bad coordinate, and one `CircuitProblem[]` reaches the
+// store, the IPC layer and the canvas from every source of them.
+import { chassisProblems, isMount, type Chassis, type Mount } from "./chassis.js";
 import type { ComponentDef } from "./component.js";
 
 /**
@@ -97,6 +103,16 @@ export interface CircuitPart {
   readonly rotation: PartRotation;
   /** The value the user chose, for a component that has a `valueUnit`. */
   readonly value?: number;
+  /**
+   * Where this part sits on the machine — ADR-085 E4c, and only ever set on a
+   * sensor the URDF can simulate.
+   *
+   * Absent is the ordinary case and means „not on the robot": a resistor has no
+   * mounting face, and a ranger the user has not placed is one the description
+   * lists rather than guesses at. It is a NAME rather than three coordinates so
+   * that the origin stays derived from the body the user already dimensioned.
+   */
+  readonly mount?: Mount;
 }
 
 /** One end of a wire: which part, and which of its pins. */
@@ -119,6 +135,15 @@ export interface CircuitHeader {
   readonly id: string;
   readonly name: string;
   readonly notes: string;
+  /**
+   * The machine this circuit is the electronics of — ADR-085 E4c.
+   *
+   * Absent until the user dimensions one, and absent is the common case: most
+   * circuits are a breadboard rather than a robot, and a URDF is refused rather
+   * than invented for them. Nine numbers, all typed by hand — see
+   * `chassis.ts` for why none of them could have come from anywhere else.
+   */
+  readonly chassis?: Chassis;
 }
 
 /** A circuit assembled from its three tables, which is what a canvas opens. */
@@ -163,6 +188,15 @@ export function validateCircuitHeader(value: unknown): readonly CircuitProblem[]
   problems.push(...idProblems(value["id"], "id"));
   problems.push(...textProblems(value["name"], "name", MAX_CIRCUIT_NAME_LENGTH, true));
   problems.push(...textProblems(value["notes"], "notes", MAX_CIRCUIT_NOTES_LENGTH, false));
+  // A circuit without a machine is the ordinary circuit — a breadboard is not a
+  // robot — so absent says nothing. A PRESENT one is checked in full, because
+  // every field of it is a dimension a simulator will treat as measured.
+  const chassis = value["chassis"];
+  if (chassis !== undefined) {
+    for (const problem of chassisProblems(chassis)) {
+      problems.push({ ...problem, field: `chassis.${problem.field}` });
+    }
+  }
   return problems;
 }
 
@@ -196,6 +230,13 @@ export function validatePart(value: unknown): readonly CircuitProblem[] {
   const chosen = value["value"];
   if (chosen !== undefined && (typeof chosen !== "number" || !Number.isFinite(chosen) || chosen <= 0)) {
     problems.push({ field: "value", code: "range" });
+  }
+  // Whether this part is the SORT of thing that can be mounted is a catalogue
+  // question, so it is asked in `circuitProblems` beside the others. What is
+  // asked of the row alone is that a stated mount is one of the five faces.
+  const mount = value["mount"];
+  if (mount !== undefined && !isMount(mount)) {
+    problems.push({ field: "mount", code: "range" });
   }
   return problems;
 }

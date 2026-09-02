@@ -230,7 +230,49 @@ export interface ComponentDef {
    * „needs a resistor" depends on the topology rather than on the part.
    */
   readonly needsSeriesResistor?: true;
+  /**
+   * What a physics engine can stand in for this part with — ADR-085 E4c.
+   *
+   * **Sensors only, and only the few that have an equivalent.** Gazebo models
+   * rays, rates and fields; it does not model a gas sensor's chemistry or a
+   * light meter's spectrum, and a `<sensor>` tag claiming otherwise would
+   * publish a plausible number that stands for nothing. Most of the catalogue's
+   * fifty sensors therefore state nothing here, and the URDF lists them as left
+   * out — the same answer, and for the same reason, as the pins the ROS package
+   * declines to drive.
+   *
+   * Absent rather than `"none"`: „there is no equivalent" is the default and
+   * the overwhelming majority, so spelling it would be fifty fields carrying no
+   * information. See the `simulates` rule in {@link validateComponent}.
+   */
+  readonly simulates?: SimSensor;
+  /**
+   * A ranger's working span in centimetres, as the datasheet gives it.
+   *
+   * **Required exactly when `simulates` is `"ranger"`.** A `<ray>` sensor with
+   * no `<range>` is a beam of unstated length, and the number a simulator then
+   * reports is the number whoever wrote the default chose. Two of the three
+   * rangers already print this span in their Serbian summary — 2–400 cm on the
+   * HC-SR04, 10–80 on the Sharp — so it is a fact this catalogue already
+   * carried in prose and could not read.
+   */
+  readonly simRangeCm?: { readonly min: number; readonly max: number };
 }
+
+/**
+ * The physics a simulator can actually supply, and nothing beyond it.
+ *
+ * Three, because three is how many of the catalogue's sensors have an honest
+ * counterpart. A `ranger` is anything that reports a distance along a beam —
+ * ultrasonic, infrared or time-of-flight are one `<sensor type="ray">` with
+ * different ranges, which is a fact about the physics rather than a
+ * simplification. An `imu` is rate and acceleration; a `magnetometer` is the
+ * field. Each maps to one standard `sensor_msgs` type, so the topic a
+ * simulated robot publishes is the topic the real one does.
+ */
+export const SIM_SENSORS = ["ranger", "imu", "magnetometer"] as const;
+
+export type SimSensor = (typeof SIM_SENSORS)[number];
 
 export type ComponentProblemCode =
   /** Not the right sort of thing at all: a missing field, a wrong type. */
@@ -478,6 +520,33 @@ export function validateComponent(value: unknown): readonly ComponentProblem[] {
   const valueUnit = value["valueUnit"];
   if (valueUnit !== undefined && !(VALUE_UNITS as readonly unknown[]).includes(valueUnit)) {
     problems.push({ field: "valueUnit", code: "shape" });
+  }
+
+  // Sensors only. A physics engine stands in for something that MEASURES the
+  // world; „simulate this motor driver as an IMU" is not a wrong value so much
+  // as a category error, and letting it through would put a `<sensor>` on a
+  // link that reports a quantity the part never had.
+  const simulates = value["simulates"];
+  if (simulates !== undefined && (kind !== "sensor" || !SIM_SENSORS.includes(simulates as SimSensor))) {
+    problems.push({ field: "simulates", code: "shape" });
+  }
+
+  // Required on a ranger and forbidden on everything else — `programming`'s
+  // rule, for `programming`'s reason. A beam of unstated length reports
+  // whatever the default was, and an IMU has no span to state.
+  const span = value["simRangeCm"];
+  if (simulates === "ranger") {
+    const ok =
+      isRecord(span) &&
+      typeof span["min"] === "number" &&
+      typeof span["max"] === "number" &&
+      Number.isFinite(span["min"]) &&
+      Number.isFinite(span["max"]) &&
+      span["min"] > 0 &&
+      span["max"] > span["min"];
+    if (!ok) problems.push({ field: "simRangeCm", code: "shape" });
+  } else if (span !== undefined) {
+    problems.push({ field: "simRangeCm", code: "shape" });
   }
 
   // Required on a board and forbidden elsewhere, rather than optional. A

@@ -615,6 +615,7 @@ export type {
   ExportEventTemplatePayload,
   ExportCanvasBoard,
   ExportCircuit,
+  ExportCircuitChassis,
   ExportCircuitPart,
   ExportCircuitWire,
   ExportExam,
@@ -1090,6 +1091,35 @@ export type {
   WireColour,
   WireEnd,
 } from "./electronics/circuit.js";
+// ADR-085 slice E4c — the machine the circuit is the electronics of. The form
+// that asks for the nine numbers, the IPC layer that re-checks them and the
+// generator that turns them into a URDF all read these, so unlike `wiring.ts`
+// and the two generators there is nothing here worth keeping to a reachability
+// set: a bound the screen cannot name is a bound the screen cannot enforce, and
+// then „<= 500 cm" is written down twice and drifts.
+//
+// `mountOrigin` is deliberately NOT here. Where a named face lands in metres is
+// a fact about the URDF format, and a caller outside the generator that wanted
+// it would be a second generator.
+export {
+  CHASSIS_LENGTHS,
+  CHASSIS_MASSES,
+  CHASSIS_MAX_CM,
+  CHASSIS_MAX_GRAMS,
+  CHASSIS_SHAPES,
+  chassisProblems,
+  isChassisShape,
+  isMount,
+  MOUNTS,
+} from "./electronics/chassis.js";
+export type {
+  Chassis,
+  ChassisField,
+  ChassisLength,
+  ChassisMass,
+  ChassisShape,
+  Mount,
+} from "./electronics/chassis.js";
 // ADR-085 slice E3. `buildNets` is exported beside the rules rather than kept
 // private to them, because it is the derived fact E4 (sketch generation) and E5
 // (simulation) are specified to consume — §2's „E3 comes before E4 and E5". A
@@ -1129,6 +1159,19 @@ export type {
   RosSkip,
   RosSkipped,
 } from "./electronics/ros.js";
+// The URDF's own result types, for the same reason and no more: the dialog
+// renders what the description contains and what it left out, and the strings
+// table keys its „why" column on `UrdfSkip`. `generateUrdf` itself stays
+// unexported beside the other two generators — a `RosPackage` already carries
+// its `robot`, and a caller that generated one separately would be generating a
+// model of a machine nobody had asked the package for.
+export type {
+  RobotDescription,
+  UrdfRefusal,
+  UrdfSensor,
+  UrdfSkip,
+  UrdfSkipped,
+} from "./electronics/urdf.js";
 
 /**
  * ADR-086 — „Priprema": the signals a first run collects, the lexicon that

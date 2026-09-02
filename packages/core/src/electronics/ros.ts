@@ -32,6 +32,8 @@
 
 import type { Circuit } from "./circuit.js";
 import type { ComponentDef } from "./component.js";
+import type { Mount } from "./chassis.js";
+import { generateUrdf, xmlText, type RobotDescription, type UrdfSkip } from "./urdf.js";
 import {
   boardWiring,
   identifier,
@@ -108,6 +110,12 @@ export type RosPackage =
       readonly pins: readonly RosPin[];
       /** Every wire it deliberately did not, and why. */
       readonly skipped: readonly RosSkipped[];
+      /**
+       * The machine, when the user has dimensioned one — ADR-085 E4c. A
+       * refusal here is not a refusal of the package: the node is about wires
+       * and needs no geometry, so this only decides whether `urdf/` exists.
+       */
+      readonly robot: RobotDescription;
     }
   | { readonly kind: "refused"; readonly reason: RosRefusal };
 
@@ -130,13 +138,17 @@ export function generateRosPackage(
 
   const name = identifier(circuit.name, "kolo", PACKAGE_NAME_LENGTH);
   const { pins, skipped } = classify(boardWiring(circuit, resolve, placed, board));
+  // A refusal here is the ordinary case — most circuits are a breadboard rather
+  // than a robot — and it costs the package only its `urdf/` directory.
+  const robot = generateUrdf(circuit, resolve);
 
   return {
     kind: "package",
     name,
-    files: renderPackage(name, circuit, board, pins, skipped),
+    files: renderPackage(name, circuit, board, pins, skipped, robot),
     pins,
     skipped,
+    robot,
   };
 }
 
@@ -264,9 +276,10 @@ function pyString(text: string): string {
 }
 
 /** Text inside an XML element. The three that must never appear raw. */
-function xmlText(text: string): string {
-  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
+// `xmlText` lives in `urdf.ts` — the generator whose whole output is XML — and
+// is imported here for the one `<description>` this manifest carries. One
+// escaper rather than two: a second copy is a second thing to get right, and
+// the copy that is wrong is always the one nobody was looking at.
 
 /**
  * One cell of a markdown table, from a name the user chose.
@@ -293,17 +306,23 @@ function renderPackage(
   board: Placed,
   pins: readonly RosPin[],
   skipped: readonly RosSkipped[],
+  robot: RobotDescription,
 ): RosFile[] {
   return [
     { path: "package.xml", contents: renderManifest(name, circuit) },
-    { path: "setup.py", contents: renderSetup(name, circuit) },
+    { path: "setup.py", contents: renderSetup(name, circuit, robot) },
     { path: "setup.cfg", contents: renderSetupCfg(name) },
     // The ament index marker: an empty file whose PATH is the whole content.
     { path: `resource/${name}`, contents: "" },
     { path: `${name}/__init__.py`, contents: "" },
     { path: `${name}/wiring.py`, contents: renderNode(circuit, board, pins) },
     { path: `launch/wiring.launch.py`, contents: renderLaunch(name) },
-    { path: "README.md", contents: renderReadme(name, circuit, board, pins, skipped) },
+    // The robot description, when the user has dimensioned a machine — ADR-085
+    // E4c. Inside this package rather than beside it, because that is where a
+    // ROS 2 developer looks for one and because it makes a single `colcon
+    // build` produce the node and the description together.
+    ...(robot.kind === "urdf" ? [{ path: `urdf/${name}.urdf`, contents: robot.xml }] : []),
+    { path: "README.md", contents: renderReadme(name, circuit, board, pins, skipped, robot) },
   ];
 }
 
@@ -332,7 +351,14 @@ function renderManifest(name: string, circuit: Circuit): string {
 `;
 }
 
-function renderSetup(name: string, circuit: Circuit): string {
+function renderSetup(name: string, circuit: Circuit, robot: RobotDescription): string {
+  // A data file that is generated but not INSTALLED is one `colcon build`
+  // silently leaves in the source tree, so the description has to be listed
+  // here or `ros2 launch` cannot find it in `share/`.
+  const urdf =
+    robot.kind === "urdf"
+      ? `\n        ("share/" + package_name + "/urdf", ["urdf/" + package_name + ".urdf"]),`
+      : "";
   return `from setuptools import find_packages, setup
 
 package_name = ${pyString(name)}
@@ -344,7 +370,7 @@ setup(
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
         ("share/" + package_name, ["package.xml"]),
-        ("share/" + package_name + "/launch", ["launch/wiring.launch.py"]),
+        ("share/" + package_name + "/launch", ["launch/wiring.launch.py"]),${urdf}
     ],
     install_requires=["setuptools"],
     zip_safe=True,
@@ -574,12 +600,26 @@ const ROLE_LABEL: Record<RosRole, string> = {
   pwm: "izlaz (PWM) — čvor sluša",
 };
 
+const MOUNT_LABEL: Record<Mount, string> = {
+  front: "napred",
+  rear: "nazad",
+  left: "levo",
+  right: "desno",
+  top: "gore",
+};
+
+const URDF_SKIP_REASON: Record<UrdfSkip, string> = {
+  "no-equivalent": "fizika nema šta da simulira umesto njega",
+  "no-mount": "nije postavljen ni na jednu stranu mašine",
+};
+
 function renderReadme(
   name: string,
   circuit: Circuit,
   board: Placed,
   pins: readonly RosPin[],
   skipped: readonly RosSkipped[],
+  robot: RobotDescription,
 ): string {
   const lines: string[] = [];
   lines.push(`# ${oneLine(circuit.name)}`);
@@ -620,6 +660,48 @@ function renderReadme(
       const target = `${mdCell(entry.part)} · ${mdCell(entry.partPin)}`;
       lines.push(`| ${entry.boardPin} | ${target} | ${SKIP_REASON[entry.reason]} |`);
     }
+    lines.push("");
+  }
+
+  if (robot.kind === "urdf") {
+    lines.push("## Mašina — `urdf/" + name + ".urdf`");
+    lines.push("");
+    lines.push("Opis mašine izveden iz dimenzija koje uneseš u Nexusu. Svaka mera dole je");
+    lines.push("tvoja; nijedna nije pretpostavljena. Masa kastera je jedini izuzetak —");
+    lines.push("uzima masu točka, jer diferencijalni pogon bez treće tačke oslonca ne");
+    lines.push("stoji, a ta masa se ne pita posebno.");
+    lines.push("");
+    if (robot.sensors.length > 0) {
+      lines.push("| Senzor | Mesto | Tema u simulaciji | Poruka |");
+      lines.push("| --- | --- | --- | --- |");
+      for (const sensor of robot.sensors) {
+        lines.push(
+          `| ${mdCell(sensor.part)} | ${MOUNT_LABEL[sensor.mount]}` +
+            ` | \`${sensor.topic}\` | \`${sensor.message}\` |`,
+        );
+      }
+      lines.push("");
+      lines.push("**Ove teme nisu teme čvora iznad, i to je namerno.** Čvor objavljuje ono");
+      lines.push("što GPIO pin daje — `Bool` po pinu, jer to je ono što gpiozero pročita sa");
+      lines.push("ECHO linije. Simulacija objavljuje `sensor_msgs/Range`, jer fizika zna");
+      lines.push("rastojanje direktno. To su različite veličine i spajanje bi bilo laž.");
+      lines.push("");
+    }
+    if (robot.skipped.length > 0) {
+      lines.push("Senzori koji nisu u opisu:");
+      lines.push("");
+      for (const entry of robot.skipped) {
+        lines.push(`- ${mdCell(entry.part)} — ${URDF_SKIP_REASON[entry.reason]}`);
+      }
+      lines.push("");
+    }
+    lines.push("`<sensor>` je tu, `<plugin>` namerno nije: koji plugin spaja senzor na ROS");
+    lines.push("temu zavisi od tvog Gazeba (`gazebo_ros` za Classic, `ros_gz_bridge` za");
+    lines.push("novi), a pogrešan se ne učitava uopšte. Provera opisa:");
+    lines.push("");
+    lines.push("```sh");
+    lines.push(`check_urdf install/${name}/share/${name}/urdf/${name}.urdf`);
+    lines.push("```");
     lines.push("");
   }
 

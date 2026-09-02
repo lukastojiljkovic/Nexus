@@ -10,6 +10,7 @@
 
 import { describe, expect, it } from "vitest";
 
+import type { Chassis, Mount } from "./chassis.js";
 import type { ComponentDef } from "./component.js";
 import type { Circuit, CircuitPart, CircuitWire } from "./circuit.js";
 import { generateRosPackage, type RosPackage } from "./ros.js";
@@ -146,15 +147,29 @@ const undirected: ComponentDef = {
   ],
 };
 
+/** A ranger: one GPIO line to the node, and a `<sensor>` to the simulator. */
+const hcsr04: ComponentDef = {
+  id: "hc-sr04",
+  kind: "sensor",
+  simulates: "ranger",
+  simRangeCm: { min: 2, max: 400 },
+  name: "HC-SR04",
+  summary: "Ultrazvučni daljinomer.",
+  buses: [],
+  pins: [
+    { id: "ECHO", label: "ECHO", functions: ["digital-out"] },
+    { id: "GND", label: "GND", functions: ["gnd"] },
+  ],
+};
+
 const shipped = new Map(
-  [pi, uno, button, relay, motorDriver, lm35, dht22, bmp280, undirected].map((component) => [
-    component.id,
-    component,
-  ]),
+  [pi, uno, button, relay, motorDriver, lm35, dht22, bmp280, undirected, hcsr04].map(
+    (component) => [component.id, component],
+  ),
 );
 const resolve = (id: string): ComponentDef | undefined => shipped.get(id);
 
-const part = (id: string, componentId: string, label = ""): CircuitPart => ({
+const part = (id: string, componentId: string, label = "", mount?: Mount): CircuitPart => ({
   id,
   circuitId: "c1",
   componentId,
@@ -162,6 +177,7 @@ const part = (id: string, componentId: string, label = ""): CircuitPart => ({
   x: 0,
   y: 0,
   rotation: 0,
+  ...(mount === undefined ? {} : { mount }),
 });
 
 let wireCount = 0;
@@ -184,6 +200,26 @@ const circuit = (
   parts,
   wires,
 });
+
+/**
+ * A rover somebody measured. Only the E4c tests below pass one — every other
+ * test in this file describes a circuit on a bench, which has no machine and
+ * therefore no `urdf/`.
+ */
+const rover: Chassis = {
+  shape: "diff-rover",
+  bodyLength: 20,
+  bodyWidth: 15,
+  bodyHeight: 6,
+  wheelRadius: 3.4,
+  wheelWidth: 2.6,
+  wheelTrack: 17,
+  wheelBase: 12,
+  bodyMass: 900,
+  wheelMass: 40,
+};
+
+const onWheels = (c: Circuit): Circuit => ({ ...c, chassis: rover });
 
 /** The generated package, or a failure that names what came back instead. */
 function packageOf(c: Circuit): Extract<RosPackage, { kind: "package" }> {
@@ -554,5 +590,57 @@ describe("generateRosPackage — the node as a whole", () => {
       if (file.contents === "") continue;
       expect(file.contents.endsWith("\n")).toBe(true);
     }
+  });
+});
+
+/**
+ * ADR-085 E4c. The description ships INSIDE the package, so these are about the
+ * seam rather than about the XML — `urdf.test.ts` owns the geometry.
+ */
+describe("generateRosPackage — the machine, when there is one", () => {
+  it("adds a urdf/ file, and only when the circuit has been dimensioned", () => {
+    const bench = circuit([part("p1", "raspberry-pi-4b")], []);
+    expect(packageOf(bench).files.map((file) => file.path)).not.toContain(
+      "urdf/merenje_razdaljine.urdf",
+    );
+    expect(packageOf(bench).robot).toEqual({ kind: "refused", reason: "no-chassis" });
+
+    const paths = packageOf(onWheels(bench)).files.map((file) => file.path);
+    expect(paths).toContain("urdf/merenje_razdaljine.urdf");
+    // Before the README, so the file list still reads in build order.
+    expect(paths.indexOf("urdf/merenje_razdaljine.urdf")).toBeLessThan(paths.indexOf("README.md"));
+  });
+
+  /**
+   * A generated data file that `setup.py` does not list is one `colcon build`
+   * leaves in the source tree — the description would exist, and `ros2 launch`
+   * would not find it in `share/`.
+   */
+  it("installs the description, rather than only writing it", () => {
+    const setup = fileOf(onWheels(circuit([part("p1", "raspberry-pi-4b")], [])), "setup.py");
+    expect(setup).toContain('("share/" + package_name + "/urdf", ["urdf/" + package_name + ".urdf"])');
+    const bench = fileOf(circuit([part("p1", "raspberry-pi-4b")], []), "setup.py");
+    expect(bench).not.toContain("/urdf");
+  });
+
+  it("tells the reader the two sets of topics are not the same set", () => {
+    const c = onWheels(
+      circuit(
+        [part("p1", "raspberry-pi-4b"), part("p2", "hc-sr04", "Prednji", "front")],
+        [w(["p1", "GPIO23"], ["p2", "ECHO"])],
+      ),
+    );
+    const readme = fileOf(c, "README.md");
+    expect(readme).toContain("nisu teme čvora iznad");
+    expect(readme).toContain("`prednji/range`");
+    expect(readme).toContain("`sensor_msgs/msg/Range`");
+    // And the node's own topic for the same part is still the pin's.
+    expect(readme).toContain("`~/prednji_echo`");
+  });
+
+  it("says nothing about a machine in a package that has none", () => {
+    const readme = fileOf(circuit([part("p1", "raspberry-pi-4b")], []), "README.md");
+    expect(readme).not.toContain("Mašina");
+    expect(readme).not.toContain("check_urdf");
   });
 });
