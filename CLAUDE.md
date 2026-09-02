@@ -139,7 +139,7 @@ choice of backend**; whatever in them is about the data model still applies.
      layer is unfinished, and that is the more useful answer.
   Record the class in [docs/defect-classes.md](docs/defect-classes.md) so the
   same shape is recognised the next time it appears somewhere else. **A class
-  that can be turned into a gate should be** — fourteen of the ninety
+  that can be turned into a gate should be** — fifteen of the ninety-eight
   already have been, and a rule nobody can forget beats a rule everybody has read.
 - **Concise Serbian status updates** to the founder; the code, comments, and docs
   are in **English**.
@@ -211,7 +211,7 @@ choice of backend**; whatever in them is about the data model still applies.
   re-run the db tests.
 - **Verification gates before any commit:** `pnpm typecheck` (13/13), `pnpm lint`
   (13/13), `pnpm test` (all green), `pnpm build` (4/4),
-  `pnpm --filter @nexus/desktop smoke` prints `SMOKE OK`, and **all fifteen
+  `pnpm --filter @nexus/desktop smoke` prints `SMOKE OK`, and **all sixteen
   static gates** pass. **`pnpm lint` used to be missing from this line** even
   though CI has always run it, and on 2026-08-14 six real errors shipped red
   because of that — two of them display bugs the linter had named (DC-49,
@@ -230,8 +230,14 @@ choice of backend**; whatever in them is about the data model still applies.
   data — and says the exemption reaches the canvas and its legend and nothing
   else; that is a rule over a reachability set, so it is enforced rather than
   remembered: a `--nx-elec-*` token may be read or declared only in
-  `styles/electronics.css`), `check:invisibles` (no character that renders as nothing,
-  or as a character it is not — the defence review itself cannot make),
+  `styles/electronics.css`), **`check:controls`** (a native `<input type="radio">`
+  or `type="checkbox"` must carry the shared `.nx-radio`/`.nx-checkbox` class:
+  the OS widget is 13x13, grey in both themes and eleven pixels under the
+  pointer floor, and nothing else here can see it — it uses no colour, declares
+  no token and typechecks, so the only check that ever caught one was the
+  screenshot sweep, which does not reach a form three modal steps deep),
+  `check:invisibles` (no character that renders as nothing, or as a character it
+  is not — the defence review itself cannot make),
   **`check:zeroize`** (no key erased in the middle of the call using it: a
   `finally` runs at the RETURN STATEMENT, not when the returned promise settles,
   so `try { return openAll(mk) } finally { zeroize(mk) }` decrypts under 32 zero
