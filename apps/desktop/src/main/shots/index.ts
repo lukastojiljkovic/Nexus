@@ -147,6 +147,20 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     ),
     fanout: null,
   },
+  {
+    // „Nova vežba", the create form itself — added because of what its absence
+    // cost. A native checkbox sat in this form for as long as the form has
+    // existed and nothing ever reported it: the sweep photographs the section,
+    // never the form behind its primary button, so the one check that has ever
+    // caught a bare `<input type="checkbox">` could not see this one. The class
+    // is now a gate (`check:controls`, DC-98) — this scene is the other half,
+    // and every create form still behind a button is the same hole.
+    id: "fitness-new-exercise",
+    module: "fitness",
+    prepare: OPEN_NEW_EXERCISE(),
+    fanout: null,
+    cleanup: CLICK_THEN("text:Otkaži"),
+  },
   { id: "focus", module: "focus", fanout: null },
   {
     id: "tools",
@@ -174,12 +188,31 @@ export const SHOT_SCENES: readonly ShotScene[] = [
   },
   { id: "canvas", module: "canvas" },
   {
-    // The workbench with the demo profile's two circuits on it. `fanout: null`
+    // The workbench with the demo profile's three circuits on it. `fanout: null`
     // because it genuinely has no segmented sub-views — the default selector
     // would find nothing and the sweep would rightly say so.
     id: "electronics",
     module: "electronics",
     fanout: null,
+  },
+  {
+    // „Mašina" (E4c) — the nine-field form, and a MODAL, so it is invisible to
+    // every scene that does not open it exactly as „Kod" is. It sits HERE, and
+    // not beside the code scenes, because the button that opens it lives in the
+    // panel that appears when nothing is selected: after the two scenes below
+    // there is a part or a wire in that panel and no way back to the circuit's
+    // own without a click this list would then have to own.
+    //
+    // The frame is a FULL form rather than an empty one — the circuit the page
+    // opens on is the demo rover, which is measured — and a filled field is the
+    // one that can overflow. `.elec-inspector__machine-open` is an anchor with
+    // no rule behind it, `.elec__code`'s arrangement: the sweep needs a name
+    // for the control, and the control needs no style of its own.
+    id: "electronics-chassis",
+    module: "electronics",
+    prepare: OPEN_CHASSIS_DIALOG(),
+    fanout: null,
+    cleanup: DISPATCH_KEY("Escape"),
   },
   {
     // The panel on the right with a PART in it. Three of this module's four
@@ -201,6 +234,17 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     fanout: null,
   },
   {
+    // The mount picker (E4c), which the scene above cannot reach: it is drawn
+    // only for a part the simulator has physics for, and `.elec-part__body`
+    // takes whichever the DOM lists first — the rover's Raspberry Pi, which is
+    // a board. By `aria-label`, because that is the part's own name on the
+    // bench and the only stable way to ask for ONE of five identical rects.
+    id: "electronics-mount",
+    module: "electronics",
+    prepare: POINTER_TAP('[aria-label="VL53L0X"] .elec-part__body'),
+    fanout: null,
+  },
+  {
     // „Kod" — the generated code (E4), which is a MODAL and therefore invisible
     // to every scene above it: the sweep photographs what is on screen, and a
     // dialog nobody opened is not.
@@ -208,9 +252,11 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     // Three scenes because ONE dialog has three shapes, and each carries a
     // section the other two do not. This first is the ROS 2 package, over the
     // circuit the page happens to open on — the switcher is sr-Latn
-    // alphabetical, so „Malina: dodir i vazduh" is first and no preamble is
-    // needed to reach it. It is the widest of the three: a five-column topics
-    // table, plus the „skipped" table the I²C pins produce.
+    // alphabetical, so „Malina: rover" is first and no preamble is needed to
+    // reach it. It is the widest of the three: a five-column topics table, the
+    // „skipped" table the I²C pins produce, and — because that circuit is the
+    // one with a measured chassis — the „Model mašine" section with both of
+    // ITS tables, which no other frame in this sweep carries.
     id: "electronics-code-ros",
     module: "electronics",
     prepare: OPEN_CODE_DIALOG(),
@@ -421,6 +467,94 @@ ${preamble}
 }
 
 /**
+ * Opens ELEC's „Mašina" dialog, on {@link OPEN_CODE_DIALOG}'s recipe and for
+ * its reasons.
+ *
+ * The same two hazards apply verbatim — the button is disabled until the
+ * circuit's IPC read lands, and the loading state between `setDoc(null)` and
+ * `setDoc(opened)` is never painted — so the wait is again on the OUTCOME:
+ * the panel is in the DOM or it is not.
+ *
+ * One difference worth stating, because it is the reason this is not a
+ * `preamble` on the other helper: the button lives in the panel that is drawn
+ * only while NOTHING is selected, so this scene has to run before the two that
+ * select something rather than after them.
+ */
+function OPEN_CHASSIS_DIALOG(): string {
+  return `(async () => {
+  const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  for (let attempt = 0; attempt < 120; attempt += 1) {
+    if (document.querySelector(".elec-chassis__panel")) return true;
+    const open = document.querySelector(".elec-inspector__machine-open");
+    if (open && !open.disabled) open.click();
+    await frame();
+  }
+  return "none";
+})()`;
+}
+
+/**
+ * Opens FIT's „Nova vežba" form and brings it into the frame.
+ *
+ * Four steps rather than a {@link CLICK_THEN} chain, and each one is a thing
+ * that chain cannot do.
+ *
+ * **The tab is named by index** because „Trening" is the third of four and the
+ * scenes above leave the page on whichever tab their fan-out ended on — a
+ * module that is already open is not remounted, so the section survives into
+ * the next scene.
+ *
+ * **The button is looked up inside „Moje vežbe"**, not by text across the
+ * document. „Rutine" sits directly above it with a primary button of its own,
+ * and a search over every `button` on the page is a bet on which one comes
+ * first in document order.
+ *
+ * **Every step waits for its outcome**, on {@link OPEN_CODE_DIALOG}'s recipe.
+ * „Trening" loads its snapshot over IPC, so one frame after the tab is clicked
+ * the section that holds this form is not in the document yet — the draft that
+ * queried immediately reported „found nothing to open", which is at least the
+ * honest failure rather than a photograph of the wrong page.
+ *
+ * **And then it scrolls**, which is the whole reason the first draft of this
+ * scene was worthless: `FitRoutines` renders at the BOTTOM of a long training
+ * page, so the click succeeded, the form opened, and the frame photographed
+ * the top of the page — a scene that reports „fine" about a surface it never
+ * showed. `"none"` at every step for {@link SCROLL_TO}'s reason: a probe that
+ * misses must not look like a surface that is clean.
+ */
+function OPEN_NEW_EXERCISE(): string {
+  return `(async () => {
+  const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  const tab = document.querySelector(".fit__section-tab:nth-child(3)");
+  if (!tab) return "none";
+  tab.click();
+  const waitFor = async (find) => {
+    for (let attempt = 0; attempt < 120; attempt += 1) {
+      const found = find();
+      if (found) return found;
+      await frame();
+    }
+    return null;
+  };
+  const host = await waitFor(() => document.querySelector('[aria-label="Moje vežbe"]'));
+  if (!host) return "none";
+  const open = await waitFor(() =>
+    Array.prototype.find.call(
+      host.querySelectorAll("button"),
+      (node) => (node.textContent || "").trim() === "Nova vežba",
+    ),
+  );
+  if (!open) return "none";
+  open.click();
+  const form = await waitFor(() => host.querySelector(".fit__form"));
+  if (!form) return "none";
+  form.scrollIntoView({ behavior: "instant", block: "start" });
+  await frame();
+  return true;
+})()`;
+}
+
+/**
  * Chooses one named circuit in the switcher, as {@link OPEN_CODE_DIALOG}'s
  * preamble.
  *
@@ -432,8 +566,8 @@ ${preamble}
  * for exactly one profile shape.
  *
  * A PREFIX rather than the whole title, because the match runs on rendered
- * text: „Malina: dodir i vazduh" is unambiguous at „Malina", and a prefix keeps
- * the scene definitions ASCII where the titles are not. `"none"` if it matches
+ * text: „Malina: rover" is unambiguous at „Malina", and a prefix keeps the
+ * scene definitions ASCII where the titles are not. `"none"` if it matches
  * nothing, which is how a renamed demo circuit becomes a red sweep rather than
  * a frame of the wrong dialog.
  */
