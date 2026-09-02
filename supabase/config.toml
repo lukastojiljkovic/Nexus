@@ -95,6 +95,34 @@ max_enrolled_factors = 10
 enroll_enabled = true
 verify_enabled = true
 
+# A FRESH WORKER PER REQUEST, because the default's worker LIFETIME is a clock
+# the test suite runs out.
+#
+# `per_worker` — the CLI's default, and right for `supabase functions serve`
+# during development — keeps one user worker per function alive across requests
+# so an edit hot-reloads. That worker carries a 150-second wall-clock limit, and
+# under `per_worker` the limit is against the WORKER, not the request: it counts
+# the worker's whole lifetime. `pnpm test:live` runs longer than that (the
+# `sync-enable` suite alone signs in for real, enrols and verifies a TOTP factor
+# and steps a session up, and takes about 160 seconds), so the worker is
+# terminated part-way through — and whichever request happens to be in flight at
+# that moment comes back 504 after exactly 150 010 ms.
+#
+# That is why the failure looked random. CI went red on 2026-09-01 with „neither
+# endpoint is callable from a browsing context" and on 2026-09-02 with „an
+# oversized body is refused before it is parsed", each `504 !== 400`, each at
+# 150 s, with the run between them green — three different outcomes from one
+# clock, and none of them about the endpoint named in the failure. A retry in the
+# test helper would have made it pass while leaving the sentence „this test
+# proves the function refuses X" false whenever the clock ran out.
+#
+# `oneshot` recreates the worker for every request, so no lifetime accumulates
+# and the 150 seconds are always the request's own. The cost is a cold start per
+# call, which is the trade this suite should want anyway: each test then meets
+# the function in the state a deployment does.
+[edge_runtime]
+policy = "oneshot"
+
 # THE ONE UNAUTHENTICATED ENDPOINT IN THE SYSTEM, and it must be unauthenticated:
 # at the moment of the first pairing the desktop has no session, which is the
 # entire problem it exists to solve. `verify_jwt = false` therefore removes the
