@@ -112,9 +112,11 @@ describe("what the derivation assumes about the map", () => {
     const parented = collections().filter((entry) => entry.profileVia !== undefined);
     // The count is pinned so that adding a parented collection has to come
     // through here and be looked at, rather than being covered by a loop that
-    // would have passed over an empty list just as happily. Ten since migration
-    // 067 added `circuit_parts` and `circuit_wires`.
-    expect(parented).toHaveLength(10);
+    // would have passed over an empty list just as happily. Eleven since
+    // migration 068 added `circuit_chassis` — the first parented collection whose
+    // parent key is also its identity, so the key is read off the object id
+    // rather than out of the state.
+    expect(parented).toHaveLength(11);
 
     for (const entry of parented) {
       const key = entry.profileVia!.key;

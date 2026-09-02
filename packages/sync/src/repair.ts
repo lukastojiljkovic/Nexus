@@ -3,7 +3,7 @@
  *
  * ─── The problem, in one sentence ───────────────────────────────────────────
  *
- * Field-level LWW decides every column on its own, and eleven table-level CHECKs
+ * Field-level LWW decides every column on its own, and twelve table-level CHECKs
  * over synced collections read TWO columns together. Two honest edits on two
  * devices therefore merge into a row SQLite refuses to write — and „refuses to
  * write" is worse than „wrong", because the row cannot be applied at all and the
@@ -301,6 +301,40 @@ const REPAIRS: Readonly<Record<string, CoupledRepair>> = {
     const out = { ...columns };
     set(out, "muscle_unit", null);
     set(out, "muscle_value", null);
+    return out;
+  },
+
+  /**
+   * `wheel_track_cm > wheel_width_cm`, strictly — wheels centred closer together
+   * than they are wide overlap through the middle of the machine.
+   *
+   * `focus_sessions`' situation and not `habits`': both columns are NOT NULL and
+   * both are bounded above zero, so neither can be cleared and one of them has
+   * to move. The newer stamp is honoured and the older gives way to HALF or
+   * DOUBLE it — a factor of two rather than the smallest legal nudge, because a
+   * wheel one millimetre narrower than the track reads as a measurement and
+   * this has to read as an artefact. It is the same choice the one-millisecond
+   * session makes, in the units this table is in.
+   */
+  circuit_chassis(columns, state) {
+    const track = columns["wheel_track_cm"];
+    const width = columns["wheel_width_cm"];
+    if (typeof track !== "number" || typeof width !== "number" || track > width) return columns;
+
+    const out = { ...columns };
+    // Widening the track is only available while it stays inside the column's
+    // own bound (migration 068 caps every length at 500 cm). Past that the move
+    // does not exist, so the other one is taken regardless of the stamps —
+    // producing a legal row is the requirement; honouring the newer edit is the
+    // preference.
+    if (width * 2 <= 500 && newer(state, "wheel_width_cm", "wheel_track_cm") === "wheel_width_cm") {
+      set(out, "wheel_track_cm", width * 2);
+    } else {
+      // Always legal, given a positive track — half of one is positive and
+      // strictly under it. A track that is not positive is refused by its own
+      // single-column CHECK, which is a bound no coupled repair is asked about.
+      set(out, "wheel_width_cm", track / 2);
+    }
     return out;
   },
 };

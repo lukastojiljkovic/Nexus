@@ -67,8 +67,8 @@ export interface SyncCollection {
    *
    * Three shapes turn up, and all three matter to the wire format:
    *
-   * - `["id"]` — the ordinary case, a UUIDv7 the row owns. Forty-four of the
-   *   fifty-four collections.
+   * - `["id"]` — the ordinary case, a UUIDv7 the row owns. Forty-five of the
+   *   fifty-eight collections.
    * - a NATURAL key of one or more columns — `["instance_id"]` for a dashboard
    *   placement, `["note_id", "seq"]` for one Yjs update, `["module_id"]` for a
    *   feature flag, `["day"]` for a body measurement. These are not opaque, so
@@ -86,7 +86,7 @@ export interface SyncCollection {
    */
   readonly identity: readonly string[];
   /**
-   * How a row of this table reaches the profile it belongs to, for the eight
+   * How a row of this table reaches the profile it belongs to, for the eleven
    * collections that carry no `profile_id` column of their own. Absent means the
    * table has the column and nothing has to be joined.
    *
@@ -616,13 +616,35 @@ export const SYNC_MAP: readonly SyncClassification[] = [
     identity: [],
     why: "One row per profile; a preference.",
   },
-  // --- ELEC (migration 067) ----------------------------------------------
+  // --- ELEC (migrations 067, 068) ---------------------------------------
   {
     kind: "collection",
     table: "circuits",
     shape: "fields",
     identity: ["id"],
     why: "A circuit is a document the user names and edits; its parts and wires are objects of their own, so the header holds only what is genuinely the circuit's.",
+  },
+  {
+    kind: "collection",
+    table: "circuit_chassis",
+    shape: "fields",
+    // `circuit_id` IS the primary key (migration 068) — one machine per circuit —
+    // so the identity is the parent id and the profile is reached through the
+    // same column. The eleventh natural key on this map and the only one that
+    // leaks nothing new: it is a UUIDv7 the server already sees as its own
+    // circuit's object id, not a day or a module name.
+    identity: ["circuit_id"],
+    profileVia: { parent: "circuits", key: "circuit_id" },
+    // `fields` with a caveat worth writing down: per-field LWW COULD tear nine
+    // measurements that belong together, and what stops it is the writer rather
+    // than the merge — `setChassis` upserts all nine columns on every save, so
+    // every field carries the same stamp and the later whole-form save wins the
+    // whole form. A `parent-field` would have said that structurally, and would
+    // have been defensible — the chassis really is one field of the circuit —
+    // but neither form fits: it is not a join row and it is not an ordered
+    // child. If a partial write is ever added, this classification is what has
+    // to change.
+    why: "A machine is measured once and edited whole; it is its circuit's one machine, so the circuit id identifies it and no id of its own exists.",
   },
   {
     kind: "collection",
@@ -657,7 +679,7 @@ export const OPEN_QUESTIONS: readonly string[] = [
   "`canvas_boards.scene` is one opaque Excalidraw document merged by whole-field LWW. Two devices drawing on the same board concurrently lose one side's strokes entirely. Excalidraw's own elements carry versionNonce/updated and are designed to be merged element-wise; doing that means the scene stops being an opaque field, which is a change to `canvasScene.ts`'s central decision. Decide before CANV syncs, not after.",
   "`note_versions` must carry its own snapshot bytes, because `note_snapshots` is derived and a device that never compacted at that point has nothing to point at. The NOTE sync slice has to make the version row self-contained.",
   "`notifications` sync so a dismissal travels, but a notification generated independently on two devices from the same source would arrive twice under two ids. Either generation becomes deterministic (id derived from source + moment) or the apply step dedupes on (source, entity, moment).",
-  "Ten collections identify their objects by a NATURAL key rather than a UUID — `module_id`, `source`, `day`, `covered_seq`, `seq`. An object id is metadata in the clear, so an untrusted server learns which modules exist, which notification sources are configured, and on which DAYS the user measured themselves, without decrypting anything. UUIDv7 ids already leak creation time (ADR-082 §3.4) and this is the same class, one step worse because the value is meaningful rather than a timestamp. Either the object id becomes a keyed hash of the natural key under a per-profile key, or the residual list states this plainly. It must not be discovered later.",
+  "Seven collections identify their objects by a NATURAL key rather than a UUID of their own — `module_id`, `source`, `instance_id`, `day`, `covered_seq`, `seq`, `circuit_id`. An object id is metadata in the clear, so an untrusted server learns which modules exist, which notification sources are configured, and on which DAYS the user measured themselves, without decrypting anything. UUIDv7 ids already leak creation time (ADR-082 §3.4) and this is the same class, one step worse because the value is meaningful rather than a timestamp — `circuit_id` alone is exempt, being a UUIDv7 the server already sees as the parent circuit's own object id. Either the object id becomes a keyed hash of the natural key under a per-profile key, or the residual list states this plainly. It must not be discovered later.",
 ];
 
 const BY_TABLE = new Map(SYNC_MAP.map((entry) => [entry.table, entry]));

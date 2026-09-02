@@ -98,7 +98,7 @@ export interface CoupledCheck {
  * The reason this table exists NOW, before the repair does: it is checked
  * against the real schema by `@nexus/db`'s `collectionGuard.test.ts`, which
  * fails on any coupled CHECK that is not listed here. A future migration adding
- * one silently is exactly how this class stays invisible — eleven of these
+ * one silently is exactly how this class stays invisible — twelve of these
  * shipped without anyone naming the first.
  */
 export const COLLECTION_COUPLED: Readonly<Record<string, readonly CoupledCheck[]>> = {
@@ -158,6 +158,12 @@ export const COLLECTION_COUPLED: Readonly<Record<string, readonly CoupledCheck[]
     {
       columns: ["muscle_unit", "muscle_value"],
       why: "`(muscle_unit IS NULL) = (muscle_value IS NULL)`. A reading and its unit are one measurement; clearing one on a device that never saw the other set leaves half a reading.",
+    },
+  ],
+  circuit_chassis: [
+    {
+      columns: ["wheel_width_cm", "wheel_track_cm"],
+      why: "`wheel_track_cm > wheel_width_cm`. Track is centre-to-centre, so wheels no further apart than they are wide overlap through the middle of the machine. One device narrows the track after re-measuring the axle while another widens the tyres, and the merged machine is one SQLite refuses to write.",
     },
   ],
 };
@@ -323,7 +329,7 @@ export function stampToIso(at: Hlc): string {
  * column cannot be dropped from one and forgotten in the other.
  *
  * The last step is {@link repairCoupled}, and it is why this function returns a
- * PROJECTION rather than the state itself: eleven CHECKs read two synced columns
+ * PROJECTION rather than the state itself: twelve CHECKs read two synced columns
  * together, and a per-field merge can satisfy both fields and neither CHECK. The
  * repair belongs here and not in `merge.ts` precisely because this is the only
  * output that is not stored and not pushed — the state keeps both values and

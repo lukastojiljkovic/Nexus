@@ -331,6 +331,52 @@ describe("repairCoupled — fit_measurements", () => {
   });
 });
 
+describe("repairCoupled — circuit_chassis", () => {
+  it("leaves a machine whose wheels clear each other alone", () => {
+    const rover = { wheel_track_cm: 16, wheel_width_cm: 2.5 };
+    expect(repair("circuit_chassis", { ...rover })).toEqual(rover);
+  });
+
+  it("widens the track when the track is the older edit", () => {
+    // One device widened the tyres to 9 cm; the other had narrowed the track to
+    // 8 cm earlier. The tyres carry the newer stamp, so they stand and the
+    // track doubles — a machine whose wheels are exactly half its track reads as
+    // the artefact it is.
+    const state = stamps({ wheel_width_cm: T2, wheel_track_cm: T1 });
+    expect(repair("circuit_chassis", { wheel_track_cm: 8, wheel_width_cm: 9 }, state)).toEqual({
+      wheel_track_cm: 18,
+      wheel_width_cm: 9,
+    });
+  });
+
+  it("halves the wheels when the track is the newer edit", () => {
+    const state = stamps({ wheel_width_cm: T1, wheel_track_cm: T2 });
+    expect(repair("circuit_chassis", { wheel_track_cm: 8, wheel_width_cm: 9 }, state)).toEqual({
+      wheel_track_cm: 8,
+      wheel_width_cm: 4,
+    });
+  });
+
+  it("halves the wheels even for the newer tyres when doubling would break the bound", () => {
+    // Migration 068 caps every length at 500 cm, so „double the tyres" stops
+    // being a move at 250. Producing a legal row is the requirement; honouring
+    // the newer edit is only the preference.
+    const state = stamps({ wheel_width_cm: T2, wheel_track_cm: T1 });
+    expect(repair("circuit_chassis", { wheel_track_cm: 260, wheel_width_cm: 300 }, state)).toEqual({
+      wheel_track_cm: 260,
+      wheel_width_cm: 130,
+    });
+  });
+
+  it("touches nothing when either half is not a number", () => {
+    // A peer can send anything. Guessing at a measurement is the one thing this
+    // file never does, and a non-number is refused by the column's own type
+    // affinity long before the coupled CHECK is reached.
+    const odd = { wheel_track_cm: "8", wheel_width_cm: 9 };
+    expect(repair("circuit_chassis", { ...odd })).toEqual(odd);
+  });
+});
+
 describe("deriveColumns applies the repair", () => {
   // The repair is only worth anything if the one function that turns a merged
   // state into local columns runs it. Reaching it through `deriveColumns` — with
