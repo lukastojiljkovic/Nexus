@@ -27,8 +27,8 @@ import { CardStore, MIGRATIONS, NexusDatabase, openDatabase, runMigrations } fro
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 67 (the electronics circuit tables), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(67);
+  it("is at version 68 (the machine a circuit sits on), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(68);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -9089,5 +9089,137 @@ describe("migration 066 — what a sync round has to survive being interrupted",
       db.raw.prepare("SELECT attempts, last_code, last_message FROM sync_outbox").get(),
     ).toEqual({ attempts: 0, last_code: null, last_message: null });
     db.close();
+  });
+});
+
+describe("migration 068 — the machine a circuit is the electronics of", () => {
+  const T = "2026-09-01T09:00:00.000Z";
+
+  function open(): Database.Database {
+    const raw = new Database(join(dir, "chassis.db"));
+    raw.pragma("foreign_keys = ON");
+    raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
+      typeof value === "string" ? foldSearchText(value) : null,
+    );
+    runMigrations(raw);
+    raw
+      .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
+      .run("p1", "personal", "P", T);
+    raw
+      .prepare(
+        "INSERT INTO circuits (id, profile_id, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+      )
+      .run("c1", "p1", "Rover", T, T);
+    return raw;
+  }
+
+  const COLUMNS =
+    "circuit_id, shape, body_length_cm, body_width_cm, body_height_cm, wheel_radius_cm," +
+    " wheel_width_cm, wheel_track_cm, wheel_base_cm, body_mass_g, wheel_mass_g," +
+    " created_at, updated_at";
+
+  const ROVER: readonly unknown[] = ["c1", "diff-rover", 20, 15, 6, 3.4, 2.6, 17, 12, 900, 40, T, T];
+
+  const insert = (raw: Database.Database, row: readonly unknown[]): void => {
+    raw.prepare(`INSERT INTO circuit_chassis (${COLUMNS}) VALUES (${"?, ".repeat(12)}?)`).run(...row);
+  };
+
+  /** Replaces one positional value, so each CHECK is exercised in isolation. */
+  const withField = (index: number, value: unknown): unknown[] => {
+    const row = [...ROVER];
+    row[index] = value;
+    return row;
+  };
+
+  it("takes a chassis somebody measured", () => {
+    const raw = open();
+    insert(raw, ROVER);
+    expect(raw.prepare("SELECT COUNT(*) AS n FROM circuit_chassis").get()).toEqual({ n: 1 });
+    raw.close();
+  });
+
+  it("refuses a shape it does not ship", () => {
+    const raw = open();
+    expect(() => insert(raw, withField(1, "hovercraft"))).toThrow(/CHECK/);
+    raw.close();
+  });
+
+  /**
+   * The bound worth spelling out: a body 0 cm long is a link with no extent and
+   * an inertia of zero, and Gazebo does not refuse it — it simulates a machine
+   * that cannot be pushed. A silent wrong answer beats no answer only in the
+   * sense that nobody notices.
+   */
+  it("refuses a dimension of zero as firmly as a negative one", () => {
+    for (const [index, bad] of [
+      [2, 0],
+      [2, -1],
+      [5, 0],
+      [9, 0],
+      [10, -3],
+    ] as const) {
+      const raw = open();
+      expect(() => insert(raw, withField(index, bad))).toThrow(/CHECK/);
+      raw.close();
+      rmSync(join(dir, "chassis.db"), { force: true });
+    }
+  });
+
+  it("refuses a machine larger than the bound, in the unit the user typed", () => {
+    const raw = open();
+    expect(() => insert(raw, withField(2, 501))).toThrow(/CHECK/);
+    raw.close();
+  });
+
+  it("refuses wheels that would intersect each other through the middle", () => {
+    const raw = open();
+    // Track equal to the wheel's own width: the two wheels touch, which grinds.
+    expect(() => insert(raw, withField(7, 2.6))).toThrow(/CHECK/);
+    raw.close();
+  });
+
+  /**
+   * The reason this is a TABLE and not ten columns on `circuits`: „half a
+   * chassis" has to be unwritable, or every reader downstream has to decide
+   * what a missing wheel radius means — and that decision is a default, which
+   * is a fabricated dimension in a file a simulator treats as fact.
+   */
+  it("cannot hold half a chassis", () => {
+    const raw = open();
+    expect(() =>
+      raw
+        .prepare(
+          "INSERT INTO circuit_chassis (circuit_id, shape, created_at, updated_at) VALUES (?,?,?,?)",
+        )
+        .run("c1", "diff-rover", T, T),
+    ).toThrow(/NOT NULL/);
+    raw.close();
+  });
+
+  it("takes the machine with the circuit it belongs to", () => {
+    const raw = open();
+    insert(raw, ROVER);
+    raw.prepare("DELETE FROM circuits WHERE id = ?").run("c1");
+    expect(raw.prepare("SELECT COUNT(*) AS n FROM circuit_chassis").get()).toEqual({ n: 0 });
+    raw.close();
+  });
+
+  it("admits the five mounting faces on a part, and nothing else", () => {
+    const raw = open();
+    const place = (mount: string | null): void => {
+      raw
+        .prepare(
+          `INSERT INTO circuit_parts
+             (id, circuit_id, component_id, x, y, rotation, mount, created_at, updated_at)
+           VALUES (?, ?, ?, 0, 0, 0, ?, ?, ?)`,
+        )
+        .run(`part-${mount ?? "none"}`, "c1", "hc-sr04", mount, T, T);
+    };
+    for (const mount of ["front", "rear", "left", "right", "top"]) place(mount);
+    // NULL is the ordinary case: a resistor has no mounting face.
+    place(null);
+    expect(raw.prepare("SELECT COUNT(*) AS n FROM circuit_parts").get()).toEqual({ n: 6 });
+    expect(() => place("bottom")).toThrow(/CHECK/);
+    raw.close();
   });
 });

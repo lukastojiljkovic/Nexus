@@ -562,6 +562,22 @@ describe("the coupled repair against the real CHECKs", () => {
         merged: { muscle_value: null, muscle_unit: "kg" },
       },
     ],
+    circuit_chassis: [
+      {
+        label: "a machine whose wheels were widened past the track they sit on",
+        merged: { wheel_width_cm: 9, wheel_track_cm: 8 },
+        state: stamps({ wheel_width_cm: T2, wheel_track_cm: T1 }),
+      },
+      {
+        label: "a machine whose track was narrowed onto the wheels",
+        merged: { wheel_width_cm: 9, wheel_track_cm: 8 },
+        state: stamps({ wheel_width_cm: T1, wheel_track_cm: T2 }),
+      },
+      {
+        label: "wheels exactly as far apart as they are wide, which grind rather than drive",
+        merged: { wheel_width_cm: 6, wheel_track_cm: 6 },
+      },
+    ],
   };
 
   it("has a scenario for every table in the ledger", () => {

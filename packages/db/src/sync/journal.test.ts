@@ -57,6 +57,28 @@ function createSubject(): string {
   return id;
 }
 
+function createCircuit(): string {
+  const id = uuidv7();
+  db.raw
+    .prepare(
+      "INSERT INTO circuits (id, profile_id, name, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+    )
+    .run(id, profileId, "Rover", "", NOW, NOW);
+  return id;
+}
+
+function insertChassis(circuitId: string): void {
+  db.raw
+    .prepare(
+      `INSERT INTO circuit_chassis
+         (circuit_id, shape, body_length_cm, body_width_cm, body_height_cm,
+          wheel_radius_cm, wheel_width_cm, wheel_track_cm, wheel_base_cm,
+          body_mass_g, wheel_mass_g, created_at, updated_at)
+       VALUES (?, 'diff-rover', 20, 14, 6, 3.2, 2.5, 16, 12, 900, 40, ?, ?)`,
+    )
+    .run(circuitId, NOW, NOW);
+}
+
 function attachToSubject(subjectId: string): string {
   const id = uuidv7();
   db.raw
@@ -222,6 +244,35 @@ describe("a row that has no profile of its own", () => {
     expect(entries().sort()).toEqual(
       [`task_attachments/${attachment}`, `tasks/${parent.id}`, `tasks/${child.id}`].sort(),
     );
+    expect(journal().every((row) => row.profile_id === profileId)).toBe(true);
+  });
+
+  it("journals a machine under the id of the circuit it belongs to", () => {
+    // The only collection on the map whose object id is its PARENT's id —
+    // `circuit_id` is the whole primary key (migration 068), so the trigger has
+    // nothing else to journal it under and `SYNC_MAP` says the same in
+    // `identity: ["circuit_id"]`. Worth its own test because every other
+    // parented trigger reads `new.id`, and reading it here would journal NULL.
+    const circuit = createCircuit();
+    clearJournal();
+    insertChassis(circuit);
+
+    expect(journal()).toEqual([
+      { profile_id: profileId, collection: "circuit_chassis", object_id: circuit },
+    ]);
+  });
+
+  it("is still journaled when the circuit it hangs off cascades it away", () => {
+    // `circuits_sync_bd`'s whole reason, one table wider than migration 067 left
+    // it: by the time the machine's own AFTER DELETE runs, the circuit it would
+    // have joined to for a `profile_id` is already gone.
+    const circuit = createCircuit();
+    insertChassis(circuit);
+    clearJournal();
+
+    db.raw.prepare("DELETE FROM circuits WHERE id = ?").run(circuit);
+
+    expect(entries()).toEqual([`circuit_chassis/${circuit}`, `circuits/${circuit}`]);
     expect(journal().every((row) => row.profile_id === profileId)).toBe(true);
   });
 
