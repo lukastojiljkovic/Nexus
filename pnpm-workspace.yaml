@@ -42,7 +42,24 @@ overrides:
   brace-expansion@5: ^5.0.9
   # Host confusion via a literal backslash authority delimiter, reached
   # through app-builder-lib > ajv. Build-time only.
-  fast-uri@3: ^3.1.5
+  #
+  # 2026-09-02 — RAISED to 3.1.6 for FOUR more, cut on the same parser on the
+  # same day and all patched by the same release: GHSA-jqff-g426-hqxp and
+  # GHSA-5jgf-p345-68v8 are host confusion again (a percent-encoded scheme, and
+  # a scheme-relative reference whose IDN canonicalisation is skipped), while
+  # GHSA-f65p-4m7j-42xc and GHSA-fph4-wmhf-6fwf are SSRF (a malformed IPv6
+  # authority, and a hostname percent-decoded more than once). One parser
+  # answering „where does this URL point" four different ways is a subsystem
+  # finding, not four bugs, which is the argument for taking the whole line
+  # rather than the exact patch floor.
+  #
+  # `tar`'s and `browserslist`'s mechanism, not `nanoid`'s: ajv asks for
+  # `^3.0.1` and has admitted every one of these releases since it was
+  # published, so a clean install with no lockfile lands on the fix by itself.
+  # What does not move is the lockfile — 3.1.5 still satisfies `^3.0.1`, and a
+  # resolved version that still satisfies its range is never re-resolved.
+  # Retires when the lockfile's own resolution clears 3.1.6.
+  fast-uri@3: ^3.1.6
   # GHSA-5p4m-2wfm-xmqj — quadratic CPU in `!!omap` resolution. Reached BOTH
   # ways: `electron-updater` ships it (so the shipped audit sees it) and
   # `app-builder-lib` builds with it. Every dependant asks for `^4.1.0`, so
