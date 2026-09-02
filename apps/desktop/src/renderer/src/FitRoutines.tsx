@@ -1,6 +1,6 @@
 import { Fragment, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
-import { Button, Chip, EmptyState, Icon, ListRow, Select, TextField } from "@nexus/ui";
+import { Button, Checkbox, Chip, EmptyState, Icon, ListRow, Select, TextField } from "@nexus/ui";
 import {
   EXERCISE_EQUIPMENT,
   EXERCISE_METRICS,
@@ -714,16 +714,21 @@ export function FitRoutines({ profileId, routines, exercises, onChanged }: FitRo
         </Select>
         <span className="fit__field-hint">{f.metricHint}</span>
 
-        <label className="fit__checkline">
-          <input
-            type="checkbox"
-            checked={exerciseForm.unilateral}
-            onChange={(event) =>
-              setExerciseForm({ ...exerciseForm, unilateral: event.target.checked })
-            }
-          />
-          <span>{f.unilateralLabel}</span>
-        </label>
+        {/*
+          The shared control, never a native one: an unstyled `input
+          type="checkbox"` renders at 13x13 — the OS widget, in a product where
+          every other checkbox is `.nx-checkbox` — and its pointer target is
+          under the 24px floor. `priv.css` had this once and the chassis dialog
+          had it again, which is what made it a gate (`check:controls`).
+        */}
+        <Checkbox
+          checked={exerciseForm.unilateral}
+          onChange={(event) =>
+            setExerciseForm({ ...exerciseForm, unilateral: event.target.checked })
+          }
+        >
+          {f.unilateralLabel}
+        </Checkbox>
         <span className="fit__field-hint">{f.unilateralHint}</span>
 
         <TextField

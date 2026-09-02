@@ -908,12 +908,6 @@
   gap: var(--nx-space-1);
   align-self: stretch;
 }
-.fit__checkline {
-  display: flex;
-  align-items: center;
-  gap: var(--nx-space-2);
-  font-size: var(--nx-font-size-body-sm);
-}
 
 /* --- Napredak i Merenja (FIT slice d) ---------------------------------------
    Two surfaces whose whole job is to say what a number IS, so every figure sits
