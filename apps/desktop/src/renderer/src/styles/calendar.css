@@ -1526,6 +1526,39 @@ button.cal__grid-event--dragging {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* THE CLOCK IS DROPPED WHEN THE BLOCK IS TOO NARROW TO HOLD IT AND A NAME.
+
+   The block is a flex row of two items, and only one of them can shrink: the
+   title has `min-width: 0` and an ellipsis, the time has `flex: none` and
+   tabular figures. So below roughly forty pixels of column the time alone is
+   wider than the button, and the button's own `overflow: hidden` cuts it with
+   no `text-overflow` to admit it — the characters are simply gone. Column
+   width is `1 / columns` of the day, and „columns" is however many events
+   overlap that hour, so there is no floor: a third overlapping event is all it
+   takes. The comment above `button.cal__grid-event` records the VERTICAL form
+   of exactly this being fixed once; this is its horizontal twin.
+
+   Squeezing the time or ellipsising it are both worse than dropping it. „08:0…"
+   is a wrong time rather than an absent one, and in a TIME GRID the block's own
+   top edge already states when it starts — the clock label is a convenience,
+   the name is the content. So below the threshold the name takes the whole
+   block, and above it both fit by construction, which is what makes the clip
+   unrepresentable rather than merely rarer.
+
+   `ch`, not pixels, and resolved against the block's own caption font: the
+   label is 12h in some profiles („10:45 PM" is half again as wide as „22:45"),
+   and a threshold in pixels would be a measurement of one font at one size.
+   Thirteen leaves a 24-hour label about seven characters of title beside it,
+   which is where „Priprema prezent…" stops being a useful word and starts
+   being an ellipsis. */
+button.cal__grid-event {
+  container-type: inline-size;
+}
+@container (max-width: 13ch) {
+  .cal__grid-event-time {
+    display: none;
+  }
+}
 
 /* The current-time rule — a plain 1px line, never animated, click-through so
    it never blocks the slot-creation click underneath it. */
