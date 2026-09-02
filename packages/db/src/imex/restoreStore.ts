@@ -218,11 +218,13 @@ export const RESTORE_WIPE_TABLES = [
   "fit_exercises",
   "fit_measurements",
   "fit_body_profile",
-  // ELEC (migration 067). Children before parents, as everywhere above: a wire's
-  // ends are real foreign keys into `circuit_parts`, and a part's `circuit_id`
-  // is one into `circuits`. Both cascades exist and neither is leaned on.
+  // ELEC (migrations 067, 068). Children before parents, as everywhere above:
+  // a wire's ends are real foreign keys into `circuit_parts`, and a part's and
+  // a machine's `circuit_id` are ones into `circuits`. Every cascade exists
+  // and none of them is leaned on.
   "circuit_wires",
   "circuit_parts",
+  "circuit_chassis",
   "circuits",
 ] as const;
 
@@ -258,6 +260,9 @@ const SCOPED_THROUGH_PARENT: Partial<Record<WipeTable, string>> = {
   // belonging to one profile — unlike `task_dependencies` and
   // `subject_note_links`, which have no such column and must make one.
   circuit_wires: `DELETE FROM circuit_wires WHERE circuit_id IN (SELECT id FROM circuits WHERE profile_id = ?)`,
+  // The one row here whose scope column IS its primary key — one machine per
+  // circuit (migration 068), so `circuit_id` is both.
+  circuit_chassis: `DELETE FROM circuit_chassis WHERE circuit_id IN (SELECT id FROM circuits WHERE profile_id = ?)`,
 };
 
 /** Every wipe statement takes exactly one bound parameter: this store's own `profileId` (R4) — never the archive's. */
@@ -332,6 +337,7 @@ export class RestoreStore {
   private readonly insertFitMeasurement: Database.Statement;
   private readonly insertCanvasBoard: Database.Statement;
   private readonly insertCircuit: Database.Statement;
+  private readonly insertCircuitChassis: Database.Statement;
   private readonly insertCircuitPart: Database.Statement;
   private readonly insertCircuitWire: Database.Statement;
   private readonly insertSubject: Database.Statement;
@@ -555,19 +561,33 @@ export class RestoreStore {
       `INSERT INTO canvas_boards (id, profile_id, name, scene, created_at, updated_at, deleted_at)
        VALUES (?, ?, ?, ?, ?, ?, NULL)`,
     );
-    // ELEC (migration 067). Three statements, run parent-first: a part's
-    // `circuit_id` and both of a wire's ends are real foreign keys, so the
-    // order below is enforced by SQLite rather than merely observed.
+    // ELEC (migrations 067, 068). Four statements, run parent-first: a
+    // machine's and a part's `circuit_id` and both of a wire's ends are real
+    // foreign keys, so the order below is enforced by SQLite rather than
+    // merely observed.
     this.insertCircuit = db.prepare(
       `INSERT INTO circuits (id, profile_id, name, notes, created_at, updated_at, deleted_at)
        VALUES (?, ?, ?, ?, ?, ?, NULL)`,
     );
-    // `value` is the one nullable column: a resistor has one, a board does
-    // not, and the archive omits the field entirely rather than writing null.
+    // No `id` column to write and none to invent: `circuit_id` is the whole
+    // primary key (migration 068), which is what one machine per circuit means
+    // in the schema rather than only in the dialog.
+    this.insertCircuitChassis = db.prepare(
+      `INSERT INTO circuit_chassis
+         (circuit_id, shape, body_length_cm, body_width_cm, body_height_cm,
+          wheel_radius_cm, wheel_width_cm, wheel_track_cm, wheel_base_cm,
+          body_mass_g, wheel_mass_g, created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    );
+    // `value` and `mount` are the two nullable columns: a resistor has a value
+    // and a board does not, a ranger bolted to the front of the machine has a
+    // mount and a resistor never does. The archive omits either field entirely
+    // rather than writing null.
     this.insertCircuitPart = db.prepare(
       `INSERT INTO circuit_parts
-         (id, circuit_id, component_id, label, x, y, rotation, value, created_at, updated_at, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+         (id, circuit_id, component_id, label, x, y, rotation, value, mount,
+          created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.insertCircuitWire = db.prepare(
       `INSERT INTO circuit_wires
@@ -1573,15 +1593,16 @@ export class RestoreStore {
         written += 1;
       }
 
-      // ELEC (migration 067): circuits, then their parts, then the wires
-      // between those parts. The order is the schema's, not this loop's — a
-      // wire written before its parts is refused by a foreign key, and the
-      // reader hands the three collections over in the same order for the same
-      // reason. The COMPONENTS are not here and never will be: the catalogue
-      // ships with the application, so a part carries an id into it and this
-      // store writes that id through untouched. EMPTY for every pre-1.40.0
-      // archive, which restores a profile that wired nothing, exactly as it
-      // wired none.
+      // ELEC (migrations 067, 068): circuits, then the machine each one is the
+      // electronics of, then their parts, then the wires between those parts.
+      // The order is the schema's, not this loop's — a wire written before its
+      // parts is refused by a foreign key, and the reader hands the four
+      // collections over in the same order for the same reason. The COMPONENTS
+      // are not here and never will be: the catalogue ships with the
+      // application, so a part carries an id into it and this store writes that
+      // id through untouched. EMPTY for every pre-1.40.0 archive, which restores
+      // a profile that wired nothing, exactly as it wired none — and the
+      // machines are empty for every pre-1.41.0 one besides.
       for (const circuit of input.data.circuits) {
         this.insertCircuit.run(
           circuit.id, this.profileId, circuit.name, circuit.notes,
@@ -1589,10 +1610,20 @@ export class RestoreStore {
         );
         written += 1;
       }
+      for (const chassis of input.data.circuitChassis) {
+        this.insertCircuitChassis.run(
+          chassis.circuitId, chassis.shape,
+          chassis.bodyLength, chassis.bodyWidth, chassis.bodyHeight,
+          chassis.wheelRadius, chassis.wheelWidth, chassis.wheelTrack, chassis.wheelBase,
+          chassis.bodyMass, chassis.wheelMass,
+          chassis.createdAt, chassis.updatedAt,
+        );
+        written += 1;
+      }
       for (const part of input.data.circuitParts) {
         this.insertCircuitPart.run(
           part.id, part.circuitId, part.componentId, part.label,
-          part.x, part.y, part.rotation, part.value ?? null,
+          part.x, part.y, part.rotation, part.value ?? null, part.mount ?? null,
           part.createdAt, part.updatedAt,
         );
         written += 1;

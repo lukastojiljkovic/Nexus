@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { Chassis } from "@nexus/core";
 import {
   CircuitNotFoundError,
   CircuitValidationError,
@@ -411,7 +412,7 @@ describe("ElectronicsStore wires", () => {
 });
 
 describe("ElectronicsStore.listAllForExport", () => {
-  it("hands back the three collections in one read each, parents first", () => {
+  it("hands back the four collections in one read each, parents first", () => {
     const elec = store();
     const { circuit, board, resistor, wire } = seeded(elec);
     const all = elec.listAllForExport();
@@ -424,13 +425,32 @@ describe("ElectronicsStore.listAllForExport", () => {
     expect(all.wires.map((row) => row.id)).toEqual([wire.id]);
   });
 
-  it("carries nothing of a soft-deleted circuit — not the circuit, not its parts, not its wires", () => {
+  it("carries the machine with the circuit that owns it, keyed by that circuit", () => {
+    // The one export row with no id of its own: `circuit_id` is the whole
+    // primary key, so the export has to say which circuit it belongs to or the
+    // row cannot be written back.
+    const elec = store();
+    const { circuit } = seeded(elec);
+    elec.setChassis(circuit.id, ROVER, LATER);
+    expect(elec.listAllForExport().chassis).toEqual([
+      { circuitId: circuit.id, ...ROVER, createdAt: LATER, updatedAt: LATER },
+    ]);
+  });
+
+  it("carries no machine for a circuit that has none", () => {
+    const elec = store();
+    seeded(elec);
+    expect(elec.listAllForExport().chassis).toEqual([]);
+  });
+
+  it("carries nothing of a soft-deleted circuit — not the circuit, not its machine, not its parts, not its wires", () => {
     // An archive that carried the parts of a circuit it did not carry would
     // restore rows a foreign key refuses.
     const elec = store();
     const { circuit } = seeded(elec);
+    elec.setChassis(circuit.id, ROVER, NOW);
     elec.softDelete(circuit.id, LATER);
-    expect(elec.listAllForExport()).toEqual({ circuits: [], parts: [], wires: [] });
+    expect(elec.listAllForExport()).toEqual({ circuits: [], chassis: [], parts: [], wires: [] });
   });
 
   it("carries nothing of another profile", () => {
@@ -440,5 +460,198 @@ describe("ElectronicsStore.listAllForExport", () => {
     expect(mine.listAllForExport().circuits).toEqual([]);
     expect(mine.listAllForExport().parts).toEqual([]);
     expect(mine.listAllForExport().wires).toEqual([]);
+  });
+});
+
+/** A rover somebody actually measured — centimetres and grams, as typed. */
+const ROVER: Chassis = {
+  shape: "diff-rover",
+  bodyLength: 20,
+  bodyWidth: 15,
+  bodyHeight: 6,
+  wheelRadius: 3.4,
+  wheelWidth: 2.6,
+  wheelTrack: 17,
+  wheelBase: 12,
+  bodyMass: 900,
+  wheelMass: 40,
+};
+
+describe("ElectronicsStore chassis", () => {
+  it("says nothing about a machine when nobody dimensioned one", () => {
+    // Absent, not null: a breadboard is not a robot, and the difference matters
+    // to the generator, which refuses rather than inventing a wheel radius.
+    const elec = store();
+    const { circuit } = seeded(elec);
+    expect(elec.read(circuit.id).chassis).toBeUndefined();
+  });
+
+  it("keeps the nine numbers in the units they were typed in", () => {
+    const elec = store();
+    const { circuit } = seeded(elec);
+    elec.setChassis(circuit.id, ROVER, LATER);
+    expect(elec.read(circuit.id).chassis).toEqual(ROVER);
+  });
+
+  it("replaces the machine rather than keeping two of them", () => {
+    const elec = store();
+    const { circuit } = seeded(elec);
+    elec.setChassis(circuit.id, ROVER, NOW);
+    elec.setChassis(circuit.id, { ...ROVER, bodyLength: 24 }, LATER);
+    expect(elec.read(circuit.id).chassis?.bodyLength).toBe(24);
+    const row = db.raw
+      .prepare("SELECT COUNT(*) AS n FROM circuit_chassis WHERE circuit_id = ?")
+      .get(circuit.id);
+    expect(row).toEqual({ n: 1 });
+  });
+
+  it("keeps the first measurement's created_at through a re-measure", () => {
+    const elec = store();
+    const { circuit } = seeded(elec);
+    elec.setChassis(circuit.id, ROVER, NOW);
+    elec.setChassis(circuit.id, { ...ROVER, bodyMass: 1200 }, LATER);
+    expect(
+      db.raw
+        .prepare("SELECT created_at, updated_at FROM circuit_chassis WHERE circuit_id = ?")
+        .get(circuit.id),
+    ).toEqual({ created_at: NOW, updated_at: LATER });
+  });
+
+  it("takes the machine away when told there is not one", () => {
+    const elec = store();
+    const { circuit } = seeded(elec);
+    elec.setChassis(circuit.id, ROVER, NOW);
+    elec.setChassis(circuit.id, null, LATER);
+    expect(elec.read(circuit.id).chassis).toBeUndefined();
+  });
+
+  it("is content to be told twice there is no machine", () => {
+    const elec = store();
+    const { circuit } = seeded(elec);
+    expect(() => elec.setChassis(circuit.id, null, LATER)).not.toThrow();
+  });
+
+  it("refuses wheels that would grind through each other", () => {
+    // Track is centre-to-centre, so a track no wider than a wheel puts the two
+    // wheels in the same space. The store, the canvas and the SQL CHECK all
+    // refuse it, and this is the one of the three a user can reach.
+    const elec = store();
+    const { circuit } = seeded(elec);
+    expect(() => elec.setChassis(circuit.id, { ...ROVER, wheelTrack: 2.6 }, LATER)).toThrow(
+      CircuitValidationError,
+    );
+  });
+
+  it("refuses a dimension of zero as firmly as a negative one", () => {
+    // A body 0 cm long has zero inertia and simulates a machine that cannot be
+    // pushed — a silent wrong answer, which is worse than a refused row.
+    const elec = store();
+    const { circuit } = seeded(elec);
+    expect(() => elec.setChassis(circuit.id, { ...ROVER, bodyHeight: 0 }, LATER)).toThrow(
+      CircuitValidationError,
+    );
+  });
+
+  it("refuses a shape the generator has no geometry for", () => {
+    // The cast is the test: the shape arrives over IPC from an untrusted
+    // renderer, where „it is one of the two" is a claim rather than a fact, so
+    // the store has to refuse it at runtime and not merely at compile time.
+    const elec = store();
+    const { circuit } = seeded(elec);
+    const hexapod = { ...ROVER, shape: "hexapod" } as unknown as Chassis;
+    expect(() => elec.setChassis(circuit.id, hexapod, LATER)).toThrow(CircuitValidationError);
+  });
+
+  it("names the field at fault under its chassis prefix", () => {
+    const elec = store();
+    const { circuit } = seeded(elec);
+    expect(() => elec.setChassis(circuit.id, { ...ROVER, wheelRadius: -1 }, LATER)).toThrow(
+      /chassis\.wheelRadius/,
+    );
+  });
+
+  it("refuses to dimension another profile's circuit", () => {
+    const mine = store();
+    const theirs = store();
+    const { circuit } = seeded(theirs);
+    expect(() => mine.setChassis(circuit.id, ROVER, LATER)).toThrow(CircuitNotFoundError);
+    expect(theirs.read(circuit.id).chassis).toBeUndefined();
+  });
+
+  it("refuses to un-dimension another profile's circuit", () => {
+    const mine = store();
+    const theirs = store();
+    const { circuit } = seeded(theirs);
+    theirs.setChassis(circuit.id, ROVER, NOW);
+    expect(() => mine.setChassis(circuit.id, null, LATER)).toThrow(CircuitNotFoundError);
+    expect(theirs.read(circuit.id).chassis).toEqual(ROVER);
+  });
+});
+
+describe("ElectronicsStore part mounts", () => {
+  function ranger(elec: ElectronicsStore, circuitId: string, mount?: string) {
+    return elec.addPart(
+      circuitId,
+      { componentId: "hc-sr04", label: "US1", x: 40, y: 40, rotation: 0, ...(mount === undefined ? {} : { mount }) },
+      NOW,
+    );
+  }
+
+  it("places a sensor on a face of the machine", () => {
+    const elec = store();
+    const { circuit } = seeded(elec);
+    const part = ranger(elec, circuit.id, "front");
+    expect(part.mount).toBe("front");
+    expect(elec.read(circuit.id).parts.find((row) => row.id === part.id)?.mount).toBe("front");
+  });
+
+  it("leaves a part that is not on the machine without the field at all", () => {
+    const elec = store();
+    const { circuit } = seeded(elec);
+    const part = ranger(elec, circuit.id);
+    expect(part).not.toHaveProperty("mount");
+    expect(elec.read(circuit.id).parts.find((row) => row.id === part.id)).not.toHaveProperty("mount");
+  });
+
+  it("refuses a face the machine does not have", () => {
+    const elec = store();
+    const { circuit } = seeded(elec);
+    expect(() => ranger(elec, circuit.id, "underneath")).toThrow(CircuitValidationError);
+  });
+
+  it("keeps the mount through an edit that never mentions it", () => {
+    // The regression this exists for: the by-id read is a different statement
+    // from the by-circuit one, and a column missing from it makes „leave it
+    // alone" read as „it was never set" — so renaming a sensor would quietly
+    // take it off the robot.
+    const elec = store();
+    const { circuit } = seeded(elec);
+    const part = ranger(elec, circuit.id, "front");
+    expect(elec.updatePart(part.id, { label: "Prednji" }, LATER).mount).toBe("front");
+    expect(elec.read(circuit.id).parts.find((row) => row.id === part.id)?.mount).toBe("front");
+  });
+
+  it("moves a sensor from one face to another", () => {
+    const elec = store();
+    const { circuit } = seeded(elec);
+    const part = ranger(elec, circuit.id, "front");
+    expect(elec.updatePart(part.id, { mount: "rear" }, LATER).mount).toBe("rear");
+  });
+
+  it("takes a sensor off the machine when the mount is cleared", () => {
+    // `null` clears, `undefined` leaves alone — `value`'s three states, for
+    // `value`'s reason: a sensor taken off the robot must be expressible.
+    const elec = store();
+    const { circuit } = seeded(elec);
+    const part = ranger(elec, circuit.id, "top");
+    expect(elec.updatePart(part.id, { mount: null }, LATER)).not.toHaveProperty("mount");
+    expect(elec.read(circuit.id).parts.find((row) => row.id === part.id)).not.toHaveProperty("mount");
+  });
+
+  it("carries the mount into an export", () => {
+    const elec = store();
+    const { circuit } = seeded(elec);
+    const part = ranger(elec, circuit.id, "left");
+    expect(elec.listAllForExport().parts.find((row) => row.id === part.id)?.mount).toBe("left");
   });
 });

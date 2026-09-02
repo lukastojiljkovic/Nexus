@@ -252,6 +252,7 @@ function emptyProfileData(): ProfileData {
     fitBodyProfile: [],
     canvasBoards: [],
     circuits: [],
+    circuitChassis: [],
     circuitParts: [],
     circuitWires: [],
     events: [],
@@ -763,11 +764,12 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
     t1,
   );
 
-  // ELEC (migration 067): a circuit with two parts and a wire between them —
-  // three tables whose references only work if the restore writes them in
-  // order, so a round trip that ended with a foreign-key failure would say so
-  // here rather than the first time a user restored a backup. `R1` carries a
-  // value and the board carries none, which is the one nullable column.
+  // ELEC (migrations 067, 068): a circuit with a machine, three parts and a
+  // wire between two of them — four tables whose references only work if the
+  // restore writes them in order, so a round trip that ended with a
+  // foreign-key failure would say so here rather than the first time a user
+  // restored a backup. `R1` carries a value the board does not and the ranger
+  // carries a mount neither of them does, which are the two nullable columns.
   const circuit = electronicsStore.createCircuit({ name: `${name} kolo`, notes: "5 V" }, t1);
   const board = electronicsStore.addPart(
     circuit.id,
@@ -782,6 +784,25 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
   electronicsStore.addWire(
     circuit.id,
     { from: { partId: board.id, pinId: "D9" }, to: { partId: resistor.id, pinId: "1" }, colour: "yellow" },
+    t1,
+  );
+
+  // Migration 068's half of the same round trip: a sensor bolted to a face of
+  // the machine, and the machine itself — the one row a restore writes with no
+  // id of its own, keyed on the circuit that owns it.
+  electronicsStore.addPart(
+    circuit.id,
+    { componentId: "vl53l0x", label: "Daljinar", x: -60, y: 120, rotation: 180, mount: "front" },
+    t1,
+  );
+  electronicsStore.setChassis(
+    circuit.id,
+    {
+      shape: "diff-rover",
+      bodyLength: 20, bodyWidth: 14, bodyHeight: 6,
+      wheelRadius: 3.2, wheelWidth: 2.5, wheelTrack: 16, wheelBase: 12,
+      bodyMass: 900, wheelMass: 40,
+    },
     t1,
   );
 
@@ -931,6 +952,7 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
     fitBodyProfile: fitBodyProfileRows(profileId, fitBodyProfileStore),
     canvasBoards: canvasBoardRows(canvasStore),
     circuits: electronics.circuits,
+    circuitChassis: electronics.chassis,
     circuitParts: electronics.parts,
     circuitWires: electronics.wires,
   };
@@ -1273,6 +1295,20 @@ function assertModulesMatch(
   expect(
     restoredBodyProfile === null ? [] : [{ profileId: remapTo, ...restoredBodyProfile }],
   ).toEqual(remap(fixture.data.fitBodyProfile));
+
+  // ELEC (migrations 067, 068), through the store's own export read — the only
+  // thing that reads all four tables at once, so this is the assertion that a
+  // restored circuit comes back WHOLE. Four things it catches that nothing else
+  // would: a machine written under no circuit, a mount dropped on the way
+  // through, a part whose `value` came back as a null it never was, and a wire
+  // whose ends stopped pointing at real parts.
+  const elecRead = new ElectronicsStore(handle.raw, readProfileId).listAllForExport();
+  expect(elecRead.circuits).toEqual(remap(fixture.data.circuits));
+  // No `remap`: a machine has no profile of its own — it reaches one through
+  // the circuit, which is the whole reason `circuit_id` is its primary key.
+  expect(elecRead.chassis).toEqual(fixture.data.circuitChassis);
+  expect(elecRead.parts).toEqual(fixture.data.circuitParts);
+  expect(elecRead.wires).toEqual(fixture.data.circuitWires);
 }
 
 describe("RestoreStore", () => {

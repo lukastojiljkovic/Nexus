@@ -1,6 +1,6 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import { validateCircuitHeader, validatePart, validateWire } from "@nexus/core";
-import type { CircuitProblem, PartRotation, WireColour } from "@nexus/core";
+import type { Chassis, CircuitProblem, Mount, PartRotation, WireColour } from "@nexus/core";
 import { CircuitNotFoundError, CircuitValidationError } from "../errors.js";
 import { uuidv7 } from "../ids.js";
 import { isDateTime } from "../finance/money.js";
@@ -36,6 +36,11 @@ export interface StoredCircuitPart {
   rotation: PartRotation;
   /** Present only for a component that takes one. Absent, never null — see `toPart`. */
   value?: number;
+  /**
+   * Where this part sits on the machine — one of five named faces, or absent.
+   * Absent is the ordinary case and means „not on the robot" (ADR-085 E4c).
+   */
+  mount?: Mount;
   createdAt: string;
   updatedAt: string;
 }
@@ -53,10 +58,41 @@ export interface StoredCircuitWire {
   updatedAt: string;
 }
 
+/**
+ * One machine, as the EXPORT reads it: the domain's nine measurements plus the
+ * circuit that owns them and the two timestamps.
+ *
+ * The only shape in this file that is not „a `Stored*` with an `id`", because
+ * a machine has no id — `circuit_id` is its whole primary key (migration 068).
+ * `read` hands back the bare `Chassis` instead, since a caller who already
+ * opened the circuit knows perfectly well which circuit it is.
+ */
+export interface StoredCircuitChassis extends Chassis {
+  circuitId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /** A circuit with everything on it — what opening one reads. */
 export interface StoredCircuitDetail extends StoredCircuit {
   parts: StoredCircuitPart[];
   wires: StoredCircuitWire[];
+  /**
+   * The machine this circuit is the electronics of — ADR-085 E4c. Absent is the
+   * ordinary case: a breadboard is not a robot.
+   *
+   * On the DETAIL rather than on `StoredCircuit`, deliberately. The list answers
+   * „koja kola imam" and nothing in it reads a wheel radius, so putting it there
+   * would buy one extra query per circuit for a column no caller of `listActive`
+   * has ever wanted.
+   *
+   * The domain's own `Chassis` rather than a `Stored*` twin of it, on
+   * `PartRotation`'s grounds: nine measurements in centimetres and grams have
+   * no store-side identity to add, and a second declaration of them would be a
+   * second answer to „what is a chassis" the first time one of the two gained
+   * a field.
+   */
+  chassis?: Chassis;
 }
 
 /** What `addPart` is given: the row, minus everything the store decides. */
@@ -67,6 +103,7 @@ export interface NewCircuitPart {
   y: number;
   rotation: number;
   value?: number;
+  mount?: string;
 }
 
 /**
@@ -83,6 +120,7 @@ export interface UpdateCircuitPartFields {
   y?: number;
   rotation?: number;
   value?: number | null;
+  mount?: string | null;
 }
 
 /** What `addWire` is given. */
@@ -110,6 +148,7 @@ interface PartRow {
   y: number;
   rotation: number;
   value: number | null;
+  mount: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -126,9 +165,36 @@ interface WireRow {
   updated_at: string;
 }
 
+interface ChassisRow {
+  circuit_id: string;
+  shape: string;
+  body_length_cm: number;
+  body_width_cm: number;
+  body_height_cm: number;
+  wheel_radius_cm: number;
+  wheel_width_cm: number;
+  wheel_track_cm: number;
+  wheel_base_cm: number;
+  body_mass_g: number;
+  wheel_mass_g: number;
+}
+
+/**
+ * The same row as `ChassisRow` plus the two timestamps — what the export reads
+ * and what opening one circuit does not need, since `read` already knows when
+ * the circuit itself last changed.
+ */
+interface ChassisExportRow extends ChassisRow {
+  created_at: string;
+  updated_at: string;
+}
+
 const CIRCUIT_COLUMNS = "id, profile_id, name, notes, created_at, updated_at";
 const PART_COLUMNS =
-  "id, circuit_id, component_id, label, x, y, rotation, value, created_at, updated_at";
+  "id, circuit_id, component_id, label, x, y, rotation, value, mount, created_at, updated_at";
+const CHASSIS_COLUMNS =
+  "circuit_id, shape, body_length_cm, body_width_cm, body_height_cm, wheel_radius_cm," +
+  " wheel_width_cm, wheel_track_cm, wheel_base_cm, body_mass_g, wheel_mass_g";
 const WIRE_COLUMNS =
   "id, circuit_id, from_part_id, from_pin_id, to_part_id, to_pin_id, colour, created_at, updated_at";
 
@@ -194,6 +260,10 @@ export class ElectronicsStore {
   private readonly updatePartRow: Database.Statement;
   private readonly markPartDeleted: Database.Statement;
 
+  private readonly selectChassis: Database.Statement;
+  private readonly upsertChassis: Database.Statement;
+  private readonly deleteChassis: Database.Statement;
+
   private readonly insertWire: Database.Statement;
   private readonly selectWires: Database.Statement;
   private readonly selectWireById: Database.Statement;
@@ -202,6 +272,7 @@ export class ElectronicsStore {
   private readonly selectWiresOfPart: Database.Statement;
   private readonly markWiresOfPartDeleted: Database.Statement;
 
+  private readonly selectAllChassis: Database.Statement;
   private readonly selectAllParts: Database.Statement;
   private readonly selectAllWires: Database.Statement;
 
@@ -244,8 +315,8 @@ export class ElectronicsStore {
 
     this.insertPart = db.prepare(
       `INSERT INTO circuit_parts
-         (id, circuit_id, component_id, label, x, y, rotation, value, created_at, updated_at, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+         (id, circuit_id, component_id, label, x, y, rotation, value, mount, created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.selectParts = db.prepare(
       `SELECT ${PART_COLUMNS} FROM circuit_parts
@@ -256,18 +327,48 @@ export class ElectronicsStore {
     this.selectPartById = db.prepare(
       `SELECT p.id AS id, p.circuit_id AS circuit_id, p.component_id AS component_id,
               p.label AS label, p.x AS x, p.y AS y, p.rotation AS rotation, p.value AS value,
-              p.created_at AS created_at, p.updated_at AS updated_at
+              p.mount AS mount, p.created_at AS created_at, p.updated_at AS updated_at
          FROM circuit_parts p JOIN circuits c ON c.id = p.circuit_id
         WHERE p.id = ? AND c.profile_id = ? AND p.deleted_at IS NULL AND c.deleted_at IS NULL`,
     );
     this.updatePartRow = db.prepare(
-      `UPDATE circuit_parts SET label = ?, x = ?, y = ?, rotation = ?, value = ?, updated_at = ?
+      `UPDATE circuit_parts SET label = ?, x = ?, y = ?, rotation = ?, value = ?, mount = ?, updated_at = ?
        WHERE id = ? AND deleted_at IS NULL`,
     );
     this.markPartDeleted = db.prepare(
       `UPDATE circuit_parts SET deleted_at = ?, updated_at = ?
        WHERE id = ? AND deleted_at IS NULL`,
     );
+
+    this.selectChassis = db.prepare(`SELECT ${CHASSIS_COLUMNS} FROM circuit_chassis
+        WHERE circuit_id = ? AND deleted_at IS NULL`);
+    // One machine per circuit, so a re-dimensioning REPLACES rather than
+    // appends — the primary key is the circuit's own id and there is nothing to
+    // version. `updated_at` moves; `created_at` is preserved by the excluded
+    // clause reading the row that is already there.
+    this.upsertChassis = db.prepare(
+      `INSERT INTO circuit_chassis (${CHASSIS_COLUMNS}, created_at, updated_at)
+         VALUES (@circuit_id, @shape, @body_length_cm, @body_width_cm, @body_height_cm,
+                 @wheel_radius_cm, @wheel_width_cm, @wheel_track_cm, @wheel_base_cm,
+                 @body_mass_g, @wheel_mass_g, @now, @now)
+       ON CONFLICT(circuit_id) DO UPDATE SET
+         shape = excluded.shape,
+         body_length_cm = excluded.body_length_cm,
+         body_width_cm = excluded.body_width_cm,
+         body_height_cm = excluded.body_height_cm,
+         wheel_radius_cm = excluded.wheel_radius_cm,
+         wheel_width_cm = excluded.wheel_width_cm,
+         wheel_track_cm = excluded.wheel_track_cm,
+         wheel_base_cm = excluded.wheel_base_cm,
+         body_mass_g = excluded.body_mass_g,
+         wheel_mass_g = excluded.wheel_mass_g,
+         updated_at = excluded.updated_at`,
+    );
+    // A HARD delete, unlike everything else in this store. „This is not a
+    // machine after all" leaves nothing worth restoring — the nine numbers are
+    // re-typed in a minute — and a soft-deleted chassis would have to be
+    // filtered out of every read for the sake of an undo nobody asked for.
+    this.deleteChassis = db.prepare(`DELETE FROM circuit_chassis WHERE circuit_id = ?`);
 
     this.insertWire = db.prepare(
       `INSERT INTO circuit_wires
@@ -322,10 +423,22 @@ export class ElectronicsStore {
     // The export reads: one statement per table for the whole profile, never
     // one per circuit. An N+1 over circuits is the obvious wrong shape when the
     // caller wants everything.
+    this.selectAllChassis = db.prepare(
+      `SELECT ch.circuit_id AS circuit_id, ch.shape AS shape,
+              ch.body_length_cm AS body_length_cm, ch.body_width_cm AS body_width_cm,
+              ch.body_height_cm AS body_height_cm, ch.wheel_radius_cm AS wheel_radius_cm,
+              ch.wheel_width_cm AS wheel_width_cm, ch.wheel_track_cm AS wheel_track_cm,
+              ch.wheel_base_cm AS wheel_base_cm, ch.body_mass_g AS body_mass_g,
+              ch.wheel_mass_g AS wheel_mass_g,
+              ch.created_at AS created_at, ch.updated_at AS updated_at
+         FROM circuit_chassis ch JOIN circuits c ON c.id = ch.circuit_id
+        WHERE c.profile_id = ? AND ch.deleted_at IS NULL AND c.deleted_at IS NULL
+        ORDER BY ch.created_at, ch.circuit_id`,
+    );
     this.selectAllParts = db.prepare(
       `SELECT p.id AS id, p.circuit_id AS circuit_id, p.component_id AS component_id,
               p.label AS label, p.x AS x, p.y AS y, p.rotation AS rotation, p.value AS value,
-              p.created_at AS created_at, p.updated_at AS updated_at
+              p.mount AS mount, p.created_at AS created_at, p.updated_at AS updated_at
          FROM circuit_parts p JOIN circuits c ON c.id = p.circuit_id
         WHERE c.profile_id = ? AND p.deleted_at IS NULL AND c.deleted_at IS NULL
         ORDER BY p.created_at, p.id`,
@@ -361,30 +474,78 @@ export class ElectronicsStore {
   /** One live circuit with every part and wire on it, or a `CircuitNotFoundError`. */
   read(id: string): StoredCircuitDetail {
     const circuit = this.requireCircuit(id);
+    const chassis = this.selectChassis.get(id) as ChassisRow | undefined;
     return {
       ...circuit,
       parts: (this.selectParts.all(id) as PartRow[]).map(toPart),
       wires: (this.selectWires.all(id) as WireRow[]).map(toWire),
+      ...(chassis === undefined ? {} : { chassis: toChassis(chassis) }),
     };
   }
 
   /**
-   * Everything this profile has, in three reads — what an export gathers.
+   * Dimensions the machine, or says there is not one.
    *
-   * Parents first, and it is not tidiness: a part's `circuit_id` and both of a
-   * wire's ends are real foreign keys wherever these rows land next, so an
-   * archive that carried them in any other order would be refused on the way
-   * back in. Nothing of a soft-deleted circuit rides, its parts and wires
-   * included — the alternative is an archive carrying children of a parent it
-   * does not carry.
+   * `null` REMOVES it, and that is the whole of the „undo": a chassis is nine
+   * numbers the user typed in a minute, so there is nothing here worth the soft
+   * delete every other row in this store gets.
+   *
+   * Validated through `validateCircuitHeader` rather than against a private
+   * rule, so the store, the IPC layer and the canvas all refuse the same
+   * dimension for the same reason — and the SQL CHECKs behind it are the same
+   * bounds again, because the caller is untrusted (SEC-EL-02) and a row that
+   * slipped past the validator must still not be writable.
+   */
+  setChassis(circuitId: string, chassis: Chassis | null, now: string): void {
+    const validNow = validateNow(now);
+    const circuit = this.requireCircuit(circuitId);
+    if (chassis === null) {
+      this.deleteChassis.run(circuitId);
+      return;
+    }
+    refuse(validateCircuitHeader({ ...circuit, chassis }));
+    this.upsertChassis.run({
+      circuit_id: circuitId,
+      shape: chassis.shape,
+      body_length_cm: chassis.bodyLength,
+      body_width_cm: chassis.bodyWidth,
+      body_height_cm: chassis.bodyHeight,
+      wheel_radius_cm: chassis.wheelRadius,
+      wheel_width_cm: chassis.wheelWidth,
+      wheel_track_cm: chassis.wheelTrack,
+      wheel_base_cm: chassis.wheelBase,
+      body_mass_g: chassis.bodyMass,
+      wheel_mass_g: chassis.wheelMass,
+      now: validNow,
+    });
+  }
+
+  /**
+   * Everything this profile has, in four reads — what an export gathers.
+   *
+   * Parents first, and it is not tidiness: a machine's and a part's `circuit_id`
+   * and both of a wire's ends are real foreign keys wherever these rows land
+   * next, so an archive that carried them in any other order would be refused
+   * on the way back in. Nothing of a soft-deleted circuit rides — not its
+   * machine, not its parts, not its wires — because the alternative is an
+   * archive carrying children of a parent it does not carry.
    */
   listAllForExport(): {
     circuits: StoredCircuit[];
+    chassis: StoredCircuitChassis[];
     parts: StoredCircuitPart[];
     wires: StoredCircuitWire[];
   } {
     return {
       circuits: this.listActive(),
+      chassis: (this.selectAllChassis.all(this.profileId) as ChassisExportRow[]).map(
+        (row) => ({
+          circuitId: row.circuit_id,
+          ...toChassis(row),
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        }),
+      ),
       parts: (this.selectAllParts.all(this.profileId) as PartRow[]).map(toPart),
       wires: (this.selectAllWires.all(this.profileId) as WireRow[]).map(toWire),
     };
@@ -458,6 +619,9 @@ export class ElectronicsStore {
       // caller is untrusted (SEC-EL-02).
       rotation: input.rotation as PartRotation,
       ...(input.value === undefined ? {} : { value: input.value }),
+      // Cast on the way IN and never trusted either, `rotation` exactly:
+      // `validatePart` below is what decides this is one of the five faces.
+      ...(input.mount === undefined ? {} : { mount: input.mount as Mount }),
       createdAt: validNow,
       updatedAt: validNow,
     };
@@ -465,7 +629,7 @@ export class ElectronicsStore {
 
     this.insertPart.run(
       id, circuitId, row.componentId, row.label, row.x, row.y, row.rotation,
-      row.value ?? null, validNow, validNow,
+      row.value ?? null, row.mount ?? null, validNow, validNow,
     );
     return row;
   }
@@ -479,6 +643,10 @@ export class ElectronicsStore {
     // would carry the old value across and „cleared" would then have to be
     // undone with a `delete`.
     const value = fields.value === undefined ? current.value : (fields.value ?? undefined);
+    // Same three states, same reason: a sensor taken off the machine has to be
+    // expressible, and „leave it where it is" must not be the only option.
+    const mount =
+      fields.mount === undefined ? current.mount : ((fields.mount ?? undefined) as Mount | undefined);
     const edited = {
       id: current.id,
       circuitId: current.circuitId,
@@ -490,11 +658,12 @@ export class ElectronicsStore {
       createdAt: current.createdAt,
       updatedAt: validNow,
     };
-    const next: StoredCircuitPart = value === undefined ? edited : { ...edited, value };
+    const withValue = value === undefined ? edited : { ...edited, value };
+    const next: StoredCircuitPart = mount === undefined ? withValue : { ...withValue, mount };
     refuse(validatePart(next));
 
     this.updatePartRow.run(
-      next.label, next.x, next.y, next.rotation, next.value ?? null, validNow, id,
+      next.label, next.x, next.y, next.rotation, next.value ?? null, next.mount ?? null, validNow, id,
     );
     return next;
   }
@@ -662,6 +831,7 @@ function toPart(row: PartRow): StoredCircuitPart {
     y: row.y,
     rotation: row.rotation as PartRotation,
     ...(row.value === null ? {} : { value: row.value }),
+    ...(row.mount === null ? {} : { mount: row.mount as Mount }),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -678,6 +848,31 @@ function toWire(row: WireRow): StoredCircuitWire {
     colour: row.colour as WireColour,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+/**
+ * The chassis row, in the app's names and the user's units.
+ *
+ * Nothing here is conditional, unlike `toPart`'s `value` and `mount`: every
+ * column is `NOT NULL` because a chassis is all nine numbers or it is no row at
+ * all, which is the reason migration 068 made it a table.
+ */
+function toChassis(row: ChassisRow): Chassis {
+  return {
+    // Cast on the way OUT, `toPart`'s rotation exactly: the column CHECK is
+    // what makes it one of the two, and a widened type here would spread
+    // „it is only a string" to every reader of a stored circuit.
+    shape: row.shape as Chassis["shape"],
+    bodyLength: row.body_length_cm,
+    bodyWidth: row.body_width_cm,
+    bodyHeight: row.body_height_cm,
+    wheelRadius: row.wheel_radius_cm,
+    wheelWidth: row.wheel_width_cm,
+    wheelTrack: row.wheel_track_cm,
+    wheelBase: row.wheel_base_cm,
+    bodyMass: row.body_mass_g,
+    wheelMass: row.wheel_mass_g,
   };
 }
 

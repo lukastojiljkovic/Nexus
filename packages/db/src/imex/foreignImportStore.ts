@@ -94,6 +94,7 @@ export class ForeignImportStore {
   private readonly insertFitWorkoutSet: Database.Statement;
   private readonly insertCanvasBoard: Database.Statement;
   private readonly insertCircuit: Database.Statement;
+  private readonly insertCircuitChassis: Database.Statement;
   private readonly insertCircuitPart: Database.Statement;
   private readonly insertCircuitWire: Database.Statement;
   private readonly insertNote: Database.Statement;
@@ -348,16 +349,24 @@ export class ForeignImportStore {
       `INSERT INTO canvas_boards (id, profile_id, name, scene, created_at, updated_at, deleted_at)
        VALUES (?, ?, ?, ?, ?, ?, NULL)`,
     );
-    // ELEC (migration 067). Three statements, run parent-first — the order is
-    // the schema's, not the loop's.
+    // ELEC (migrations 067, 068). Four statements, run parent-first — the
+    // order is the schema's, not the loop's.
     this.insertCircuit = db.prepare(
       `INSERT INTO circuits (id, profile_id, name, notes, created_at, updated_at, deleted_at)
        VALUES (?, ?, ?, ?, ?, ?, NULL)`,
     );
+    this.insertCircuitChassis = db.prepare(
+      `INSERT INTO circuit_chassis
+         (circuit_id, shape, body_length_cm, body_width_cm, body_height_cm,
+          wheel_radius_cm, wheel_width_cm, wheel_track_cm, wheel_base_cm,
+          body_mass_g, wheel_mass_g, created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    );
     this.insertCircuitPart = db.prepare(
       `INSERT INTO circuit_parts
-         (id, circuit_id, component_id, label, x, y, rotation, value, created_at, updated_at, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+         (id, circuit_id, component_id, label, x, y, rotation, value, mount,
+          created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.insertCircuitWire = db.prepare(
       `INSERT INTO circuit_wires
@@ -1035,13 +1044,13 @@ export class ForeignImportStore {
         written += 1;
       }
 
-      // ELEC (migration 067): circuits, then parts, then wires. Every circuit
-      // is a NEW row on the boards' reasoning exactly — two „Robot" circuits in
-      // two profiles are two different machines, so nothing here can collide
-      // and the insert-only contract is kept literally. `componentId` rides
-      // UNREMAPPED and must: it names an entry in the catalogue the app ships,
-      // which is the same catalogue on both sides because it is part of the
-      // build rather than of the database.
+      // ELEC (migrations 067, 068): circuits, then machines, then parts, then
+      // wires. Every circuit is a NEW row on the boards' reasoning exactly —
+      // two „Robot" circuits in two profiles are two different machines, so
+      // nothing here can collide and the insert-only contract is kept
+      // literally. `componentId` rides UNREMAPPED and must: it names an entry in
+      // the catalogue the app ships, which is the same catalogue on both sides
+      // because it is part of the build rather than of the database.
       for (const circuit of planned.circuits) {
         this.insertCircuit.run(
           circuit.id, this.profileId, circuit.name, circuit.notes,
@@ -1049,10 +1058,20 @@ export class ForeignImportStore {
         );
         written += 1;
       }
+      for (const chassis of planned.circuitChassis) {
+        this.insertCircuitChassis.run(
+          chassis.circuitId, chassis.shape,
+          chassis.bodyLength, chassis.bodyWidth, chassis.bodyHeight,
+          chassis.wheelRadius, chassis.wheelWidth, chassis.wheelTrack, chassis.wheelBase,
+          chassis.bodyMass, chassis.wheelMass,
+          chassis.createdAt, chassis.updatedAt,
+        );
+        written += 1;
+      }
       for (const part of planned.circuitParts) {
         this.insertCircuitPart.run(
           part.id, part.circuitId, part.componentId, part.label,
-          part.x, part.y, part.rotation, part.value ?? null,
+          part.x, part.y, part.rotation, part.value ?? null, part.mount ?? null,
           part.createdAt, part.updatedAt,
         );
         written += 1;
