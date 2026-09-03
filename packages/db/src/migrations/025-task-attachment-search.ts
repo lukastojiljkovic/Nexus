@@ -20,10 +20,16 @@ import type { Migration } from "./migrations.js";
  *  - With no description the `CASE` drops the separator instead, so the
  *    filenames stand alone rather than behind a leading space.
  *  - `group_concat` alone is documented to concatenate in an ARBITRARY order,
- *    so the rows come from a sub-select ordered by `id` (a UUIDv7 — insertion
- *    order without a second column). An aggregate over a subquery carrying its
- *    own `ORDER BY` cannot be flattened away, which is what makes the order
- *    survive into the aggregate rather than merely tending to.
+ *    so the rows come from a sub-select ordered by `id`. An aggregate over a
+ *    subquery carrying its own `ORDER BY` cannot be flattened away, which is
+ *    what makes the order survive into the aggregate rather than merely tending
+ *    to. What `id` buys here is DETERMINISM — the same task projects the same
+ *    body every time — and that is all this needs. It is not insertion order:
+ *    a UUIDv7 is chronological only to the millisecond (migration 058), so two
+ *    files attached together can concatenate either way round. For a bag of
+ *    filenames inside a search body nothing reads that order, which is why the
+ *    sub-select is left alone rather than given a `created_at` it would have to
+ *    be rebuilt for.
  *
  * The 8000-character cap wraps the WHOLE thing, exactly as every other kind's
  * body cap does: a description long enough to hit it crowds the filenames out

@@ -10,15 +10,20 @@ import type { Migration } from "./migrations.js";
  * hash plus the metadata the UI and the `nx-blob:` protocol need without
  * touching the filesystem.
  *
- * `note_attachments_note` covers the hot path — "this note's attachments", in
- * insertion order via `id` (a UUIDv7, so it sorts chronologically without a
- * separate column). `note_attachments_sha` covers the reverse lookup the blob
- * store's GC and the `nx-blob:` protocol both need — "how many/which rows
- * reference this hash" — deliberately NOT scoped by profile: the blob store is
- * content-addressed across the whole database (two notes, even in different
- * profiles, that attach byte-identical files share one on-disk blob), so a
- * reference count must see every row, not just one profile's. `NoteAttachmentStore`
- * documents this same choice on `refCount`/`mimeForHash`.
+ * `note_attachments_note` covers the hot path — "this note's attachments". The
+ * ORDER is `NoteAttachmentStore`'s `ORDER BY created_at ASC, id ASC`, not the
+ * id: this line used to say a UUIDv7 sorts by insertion order, and migration 058
+ * corrected that — the timestamp in its high bits is a MILLISECOND and the bytes
+ * below it are CSPRNG, so five files dropped at once sort randomly against each
+ * other. The store never relied on the id; only this sentence did.
+ *
+ * `note_attachments_sha` covers the reverse lookup the blob store's GC and the
+ * `nx-blob:` protocol both need — "how many/which rows reference this hash" —
+ * deliberately NOT scoped by profile: the blob store is content-addressed across
+ * the whole database (two notes, even in different profiles, that attach
+ * byte-identical files share one on-disk blob), so a reference count must see
+ * every row, not just one profile's. `NoteAttachmentStore` documents this same
+ * choice on `refCount`/`mimeForHash`.
  *
  * `size_bytes` is denormalized from the blob (rather than re-derived with a
  * filesystem stat on every read) and CHECKed positive — a zero-byte

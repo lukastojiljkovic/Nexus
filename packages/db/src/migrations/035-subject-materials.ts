@@ -27,12 +27,15 @@ import type { Migration } from "./migrations.js";
  * the fourth still points at.
  *
  * `subject_attachments_subject` covers the hot path — "this subject's
- * materials", in insertion order via `id` (a UUIDv7, so it sorts
- * chronologically without a separate column). `subject_attachments_sha` covers
- * the reverse lookup the blob store's GC and the `nx-blob:` protocol both need,
- * and is deliberately NOT scoped by profile for the reason
- * `task_attachments_sha` is not: the store is content-addressed across the whole
- * database, so a reference count must see every row.
+ * materials". The ORDER is `SubjectAttachmentStore`'s `ORDER BY created_at ASC,
+ * id ASC`, not the id: a UUIDv7 is chronological to the millisecond and CSPRNG
+ * below it, so files added together sort randomly among themselves (migration
+ * 058).
+ *
+ * `subject_attachments_sha` covers the reverse lookup the blob store's GC and
+ * the `nx-blob:` protocol both need, and is deliberately NOT scoped by profile
+ * for the reason `task_attachments_sha` is not: the store is content-addressed
+ * across the whole database, so a reference count must see every row.
  *
  * A material's file NAME is deliberately NOT projected into the search index
  * (migration 017). Task attachments started exactly here too — migration 024

@@ -171,8 +171,12 @@ export const migration048: Migration = {
       ALTER TABLE task_attachments ADD COLUMN extracted_text TEXT;
 
       -- The pending queue, as an index: exactly the rows the backfill still has
-      -- to look at, in insertion order (id is a UUIDv7). Empties itself as the
-      -- backfill drains, so an unlock on a fully indexed library reads nothing.
+      -- to look at. Ordered by id, which is stable and is all a work queue
+      -- needs; it is NOT insertion order, because a uuidv7 is chronological
+      -- only to the millisecond and CSPRNG below that (migration 058). Nothing
+      -- here depends on which of two rows stamped in the same millisecond is
+      -- drained first. Empties itself as the backfill drains, so an unlock on a
+      -- fully indexed library reads nothing.
       CREATE INDEX note_attachments_text_pending ON note_attachments (id)
         WHERE extracted_text IS NULL;
       CREATE INDEX task_attachments_text_pending ON task_attachments (id)

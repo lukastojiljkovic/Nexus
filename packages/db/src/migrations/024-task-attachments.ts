@@ -16,13 +16,17 @@ import type { Migration } from "./migrations.js";
  * table names it anymore, and a GC that consulted just one would delete a file
  * the other still points at.
  *
- * `task_attachments_task` covers the hot path — "this task's attachments", in
- * insertion order via `id` (a UUIDv7, so it sorts chronologically without a
- * separate column). `task_attachments_sha` covers the reverse lookup the blob
- * store's GC and the `nx-blob:` protocol both need — "how many/which rows
- * reference this hash" — deliberately NOT scoped by profile, exactly as
- * `note_attachments_sha` is not: the blob store is content-addressed across the
- * whole database, so a reference count must see every row.
+ * `task_attachments_task` covers the hot path — "this task's attachments". The
+ * ORDER is `TaskAttachmentStore`'s `ORDER BY created_at ASC, id ASC`, not the
+ * id — a UUIDv7 is chronological only to the millisecond, and below that it is
+ * CSPRNG, so a multi-file drop sorts randomly within itself. See migration 058,
+ * which corrected the same claim where it WAS load-bearing.
+ *
+ * `task_attachments_sha` covers the reverse lookup the blob store's GC and the
+ * `nx-blob:` protocol both need — "how many/which rows reference this hash" —
+ * deliberately NOT scoped by profile, exactly as `note_attachments_sha` is not:
+ * the blob store is content-addressed across the whole database, so a reference
+ * count must see every row.
  *
  * `size_bytes` is denormalized from the blob (rather than re-derived with a
  * filesystem stat on every read) and CHECKed positive — a zero-byte
