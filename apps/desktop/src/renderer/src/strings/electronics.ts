@@ -27,6 +27,11 @@ import type {
   RosSkip,
   RuleCode,
   RuleSeverity,
+  SimFlow,
+  SimRefusal,
+  SimSkip,
+  SimUnit,
+  SimWave,
   UrdfSkip,
   ValueUnit,
   WireColour,
@@ -620,5 +625,140 @@ export const electronicsSr = {
        */
       exists: "Tu već postoji direktorijum sa tim imenom. Nexus preko njega ne piše.",
     },
+  },
+
+  /**
+   * „Klupa" — the bench (ADR-085 E5).
+   *
+   * The copy carries one idea the screen cannot: that the values are the
+   * USER's. Everything here describes a chain the circuit really has — this pin
+   * to that component, this pin to that topic — animated by a signal nobody
+   * measured, and a word like „simulacija" invites the reader to expect physics
+   * that is deliberately absent. So the description says what moves and who
+   * decides it, in that order, before anything else is named.
+   */
+  sim: {
+    /** The header action, beside „Kod". */
+    open: "Klupa",
+    dialogTitle: "Klupa",
+    close: "Zatvori",
+    /**
+     * The boundary, said once and at the top. The generators say the same thing
+     * in their own words — the artefact describes the wiring and never the
+     * behaviour — and this is that sentence for a thing that moves.
+     */
+    description:
+      "Klupa pokazuje kako signal ide kroz kolo dok sat radi: šta ploča čita sa " +
+      "senzora i šta šalje komponenti koju vodi. Vrednosti zadaješ ti — Nexus ne " +
+      "pretpostavlja šta tvoj program radi, pa ovo proverava veze, ne logiku.",
+    /** Why there is no bench. `soleBoard`'s two refusals, in the dialog's own voice. */
+    refused: {
+      "no-board": "U kolu nema ploče, pa nema ni pinova čiji bi se signali pratili.",
+      "many-boards": "U kolu je više ploča, a klupa prati pinove jedne ploče.",
+    } satisfies Record<SimRefusal, string>,
+
+    /** The transport. */
+    clockHeading: "Sat",
+    run: "Pokreni",
+    pause: "Pauziraj",
+    /** One tick forward, which is the only way to read a fast waveform. */
+    step: "Korak",
+    reset: "Na početak",
+    tickLabel: "Korak (ms)",
+    /**
+     * The one thing about the clock that would otherwise be misread: the tick
+     * is SIMULATED time. The bench advances at its own steady pace whatever the
+     * step is set to, so a step of 1 ms is a slow-motion reading rather than a
+     * thousand frames a second.
+     */
+    tickHint:
+      "Korak je simulirano vreme. Sat radi istim tempom bez obzira na to koliko je " +
+      "korak dugačak, pa manji korak znači sporije čitanje iste pojave.",
+    /** Before the tick number in the readout: „korak 42 · 4 200 ms". */
+    tickPrefix: "korak",
+    /** Beside the board's name, when it states a logic level. */
+    logicPrefix: "Logički nivo:",
+
+    /** The channels themselves. */
+    channelsHeading: "Kanali",
+    channelsEmpty:
+      "Nijedan pin ploče nema signal koji se može pratiti. Poveži komponentu na pin " +
+      "ploče i kanal se pojavljuje ovde.",
+    /**
+     * The two headings the „šta klupa ne prati" table uses.
+     *
+     * There were four. A channel is a CARD whose head reads as one sentence —
+     * pin, part·pin, direction, topic — rather than as a row of five columns,
+     * so „Signal", „Vrednost" and „Tema" were headings for a table that the
+     * design does not have, left behind when it stopped being one.
+     */
+    channelPin: "Pin",
+    channelPart: "Komponenta",
+    /**
+     * Which way the wire goes, keyed by `SimFlow`. Written from the BOARD's
+     * side, because the board is the thing the user's program runs on and the
+     * only end both halves of the chain have in common.
+     */
+    flows: {
+      sensor: "ploča čita",
+      actuator: "ploča upravlja",
+    } satisfies Record<SimFlow, string>,
+    /** What the number means, keyed by `SimUnit`. The symbol is on the value; this is the noun. */
+    units: {
+      level: "stanje",
+      percent: "radni ciklus",
+      volts: "napon",
+    } satisfies Record<SimUnit, string>,
+    /** The waveform picker, keyed by `SimWave`'s own tag. */
+    waves: {
+      constant: "Stalna vrednost",
+      square: "Pravougaoni",
+      ramp: "Rampa",
+      steps: "Koraci",
+    } satisfies Record<SimWave["kind"], string>,
+    waveKindLabel: "Oblik",
+    waveValue: "Vrednost",
+    waveFrom: "Od",
+    waveTo: "Do",
+    wavePeriod: "Perioda (ms)",
+    waveHold: "Zadržavanje (ms)",
+    waveDuty: "Radni ciklus (%)",
+    waveValues: "Očitavanja",
+    /**
+     * The separator, said where it is typed. A semicolon rather than a comma
+     * because the app writes decimals the Serbian way, and „1,5" in a
+     * comma-separated list could be one number or two.
+     */
+    waveValuesHint: "Razdvoj vrednosti tačkom i zarezom: 0; 1,5; 3,3",
+    /** What stands in a channel's topic slot when the board has no topics. */
+    topicNone: "—",
+    /**
+     * Why a channel on a Linux board can still have no topic: the ROS package
+     * declines an analogue line, because gpiozero reads high and low. The bench
+     * carries it, which is why the row exists at all — but the row must not
+     * look like a topic that failed to render.
+     */
+    topicHint:
+      "Kanal bez teme nije izveden u ROS 2 paketu — najčešće zato što je analogni, a " +
+      "gpiozero čita samo visoko i nisko. Klupa ga ipak prati.",
+
+    /** The per-tick warning, which no static check can give. */
+    overLogic: "iznad nivoa",
+    overLogicHint:
+      "Označene vrednosti su iznad logičkog nivoa ploče. Provere prijavljuju " +
+      "neusklađen nivo za celo kolo; ovde se vidi u kom trenutku se javlja.",
+
+    /** The wires the bench does not carry. Same vocabulary as the ROS table. */
+    skippedHeading: "Šta klupa ne prati",
+    skippedIntro:
+      "Ove veze postoje u šemi, ali nemaju jedan signal koji bi se pratio — svaka " +
+      "pripada protokolu, drajveru ili liniji koju deli više komponenti.",
+    skippedReason: "Razlog",
+    reasons: {
+      bus: "magistrala",
+      library: "vodi ga drajver komponente",
+      shared: "na liniji je više komponenti",
+      "no-direction": "iz šeme se ne vidi smer",
+    } satisfies Record<SimSkip, string>,
   },
 } as const;

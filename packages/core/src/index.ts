@@ -1173,6 +1173,33 @@ export type {
   UrdfSkip,
   UrdfSkipped,
 } from "./electronics/urdf.js";
+// ADR-085 slice E5 — the bench. Three functions rather than one door, because
+// unlike the generators these are not one artefact produced once: the model is
+// built when the panel opens, and a frame is produced for every tick the clock
+// advances. `channelValueAt` is the third, so a preview strip can be drawn
+// without standing up a whole frame — the same closed form and the same
+// quantization, asked one channel at a time. `waveAt` is deliberately NOT here:
+// a caller with a raw wave value has skipped the rule that says what the channel
+// can carry.
+//
+// The module's own bounds and defaults stay inside it. They are asserted by its
+// tests, which import the file directly; putting them here would widen the
+// package's API by three constants nothing imports.
+export { buildSimBench, channelValueAt, simulateFrame } from "./electronics/simulate.js";
+export type {
+  SimBench,
+  SimChannel,
+  SimFlow,
+  SimFrame,
+  SimModel,
+  SimRange,
+  SimRefusal,
+  SimSkip,
+  SimSkipped,
+  SimUnit,
+  SimValue,
+  SimWave,
+} from "./electronics/simulate.js";
 
 /**
  * ADR-086 — „Priprema": the signals a first run collects, the lexicon that

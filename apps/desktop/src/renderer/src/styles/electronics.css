@@ -954,6 +954,188 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* --- „Klupa": the circuit as a running thing (slice E5) ------------------- */
+
+/* Wider than the code dialog's base, and for the same kind of reason the
+   package is: a channel row is a form and an instrument on one line, and at
+   720 px the four fields of a square wave wrap under the picker so every row
+   grows a second line the eye has to re-find. */
+.elec-sim__panel.recur-dialog__panel {
+  width: min(860px, 94vw);
+  max-height: min(780px, 90vh);
+}
+
+/* The transport. Wraps because the step field carries a label and the three
+   buttons carry words: at the 900 px minimum window they legitimately need two
+   lines, and the alternative is a controls row that scrolls sideways. */
+.elec-sim__clock {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--nx-space-2);
+}
+.elec-sim__tick-field {
+  width: 120px;
+}
+/* The counter. Tabular figures because that is exactly what it is: with
+   proportional digits the whole line reflows on every tick, which is motion
+   nobody asked for on a screen that already has some. */
+.elec-sim__readout {
+  margin: 0 0 var(--nx-space-1) auto;
+  color: var(--nx-text-muted);
+  font-family: var(--nx-font-family-mono);
+  font-size: var(--nx-font-size-body-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.elec-sim__channels {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* A card per channel rather than a row of a table: the row holds a form, and a
+   form in a table cell is a column width fighting a control width. On the
+   alternate surface so the panel's own background reads as the space between
+   the channels rather than as another one of them. */
+.elec-sim__channel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-3);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+}
+/* The head is one sentence in the order the chain runs — pin, component,
+   direction, topic. `baseline` so the mono pin id and the prose beside it sit
+   on one line rather than on their own box edges. */
+.elec-sim__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nx-space-2);
+  font-size: var(--nx-font-size-body-sm);
+}
+.elec-sim__pin {
+  font-weight: var(--nx-font-weight-semibold);
+  color: var(--nx-text);
+}
+.elec-sim__part {
+  color: var(--nx-text);
+}
+.elec-sim__flow {
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-caption);
+}
+/* Pushed to the trailing edge: the topic is the one thing on this row a person
+   scans DOWN the list for, and a column that starts wherever the component's
+   name happens to end is not a column. */
+.elec-sim__topic {
+  margin-inline-start: auto;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-caption);
+}
+/* Form on the leading side, instrument on the trailing one. Both wrap, because
+   four fields and a gauge genuinely do not fit a 94vw panel on a 900 px window
+   — and a wrapped row still reads, where a squeezed one does not. */
+.elec-sim__body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--nx-space-3);
+}
+.elec-sim__controls {
+  display: flex;
+  flex: 1 1 380px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--nx-space-2);
+}
+/* Sized to the numbers they hold: a period is four digits and a duty cycle is
+   three, and a field at the form default would be five times the width of what
+   is ever typed into it. */
+.elec-sim__field {
+  width: 104px;
+}
+/* The one field holding a list rather than a number. */
+.elec-sim__field--wide {
+  width: 208px;
+}
+/* Its own line inside the wrapping row: the separator is a rule this app
+   invented, so it has to be said, and said next to the field it is about. */
+.elec-sim__values-hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+.elec-sim__kind {
+  min-width: 152px;
+}
+.elec-sim__gauge {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-3);
+  margin-inline-start: auto;
+}
+/* Sized here rather than in the `viewBox`: `preserveAspectRatio: none` lets the
+   100x24 drawing stretch to whatever the row can spare, which is what a
+   waveform strip wants — the shape is the information, not the aspect. */
+.elec-sim__preview {
+  width: 180px;
+  height: 34px;
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border-subtle);
+  border-radius: var(--nx-radius-sm);
+}
+/* `vector-effect` because of that stretch: without it a strip drawn 1.8x wider
+   than tall renders its vertical edges 1.8x thinner than its horizontal ones,
+   and a square wave ends up with two weights of line in it. */
+.elec-sim__trace {
+  fill: none;
+  stroke: var(--nx-accent);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+/* Where the clock is inside the two seconds the strip covers. Faint on purpose:
+   it is a position, not a reading, and the reading is the number beside it. */
+.elec-sim__marker {
+  stroke: var(--nx-text-faint);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+/* The number and what it is. A fixed minimum width and tabular figures because
+   it is read as a column down the list while every digit in it changes ten
+   times a second. */
+.elec-sim__value {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--nx-space-1);
+  margin: 0;
+  min-width: 96px;
+}
+.elec-sim__number {
+  color: var(--nx-text);
+  font-family: var(--nx-font-family-mono);
+  font-size: var(--nx-font-size-title);
+  font-variant-numeric: tabular-nums;
+}
+.elec-sim__unit {
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-caption);
+}
+/* The one per-tick verdict on this screen, and the only thing here that takes a
+   colour: a value above what the board's logic is rated for. `--nx-danger`,
+   which the checks panel and the code dialog's caveat already use — a third
+   colour for a fourth severity would be a new vocabulary for one idea. */
+.elec-sim__value--over .elec-sim__number,
+.elec-sim__value--over .elec-sim__unit {
+  color: var(--nx-danger);
+}
+
 /* Narrow windows: two rails either side of a bench are what a 1024px window
    cannot afford, so below three columns' worth of width the panel moves UNDER
    THE DRAWER rather than under the bench.

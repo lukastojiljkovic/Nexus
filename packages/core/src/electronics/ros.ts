@@ -137,7 +137,7 @@ export function generateRosPackage(
   if (board.component.programming !== "linux") return { kind: "refused", reason: "not-ros" };
 
   const name = identifier(circuit.name, "kolo", PACKAGE_NAME_LENGTH);
-  const { pins, skipped } = classify(boardWiring(circuit, resolve, placed, board));
+  const { pins, skipped } = rosPins(boardWiring(circuit, resolve, placed, board));
   // A refusal here is the ordinary case — most circuits are a breadboard rather
   // than a robot — and it costs the package only its `urdf/` directory.
   const robot = generateUrdf(circuit, resolve);
@@ -162,7 +162,17 @@ const PACKAGE_NAME_LENGTH = 40;
 /** The same, for a topic: `senzor_vlaznosti_out` is already at the edge of readable. */
 const TOPIC_NAME_LENGTH = 40;
 
-function classify(wired: readonly BoardWire[]): {
+/**
+ * Which board pins become devices, and which are left alone with a reason.
+ *
+ * Exported because the SIMULATOR reads it too (ADR-085 E5): a channel's topic
+ * has to be the topic the generated package publishes on, and the only way to
+ * guarantee that is for both to come out of this function. A second naming pass
+ * would agree today and disagree the first time `TOPIC_NAME_LENGTH` or the
+ * uniqueness rule moved — and the user would be looking at a bench readout that
+ * names a topic their own node does not have.
+ */
+export function rosPins(wired: readonly BoardWire[]): {
   pins: RosPin[];
   skipped: RosSkipped[];
 } {

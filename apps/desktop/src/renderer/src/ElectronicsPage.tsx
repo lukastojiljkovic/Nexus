@@ -3,6 +3,7 @@ import {
   COMPONENT_CATALOGUE,
   MAX_CIRCUIT_NAME_LENGTH,
   WIRE_COLOURS,
+  buildSimBench,
   catalogueComponent,
   circuitProblems,
   circuitRules,
@@ -29,6 +30,7 @@ import { ElecChassisDialog } from "./ElecChassisDialog.js";
 import { ElecCodeDialog } from "./ElecCodeDialog.js";
 import { ElecInspector } from "./ElecInspector.js";
 import { ElecPalette } from "./ElecPalette.js";
+import { ElecSimDialog } from "./ElecSimDialog.js";
 import {
   contentBounds,
   dropSpot,
@@ -113,6 +115,7 @@ export function ElectronicsPage({ profileId }: ElectronicsPageProps) {
   const [notesSaved, setNotesSaved] = useState(false);
   /** The generated-code dialog (E4), and the one line left behind after it closes. */
   const [codeOpen, setCodeOpen] = useState(false);
+  const [simOpen, setSimOpen] = useState(false);
   const [codeNotice, setCodeNotice] = useState<string | null>(null);
   /** The chassis form (E4c) — nine numbers saved as one, so it is a dialog rather than nine committed fields. */
   const [chassisOpen, setChassisOpen] = useState(false);
@@ -265,14 +268,19 @@ export function ElectronicsPage({ profileId }: ElectronicsPageProps) {
   }, [selection, wiring, busy, doc]);
 
   /**
-   * The three derived readings of the open circuit, memoised on the document.
+   * The four derived readings of the open circuit, memoised on the document.
    *
-   * All three are pure functions of the same rows, and all three used to be
+   * All four are pure functions of the same rows, and all four used to be
    * called inline in the JSX below — which meant re-deriving the nets, the
    * thirteen rules and the whole artefact on every keystroke in the notes box.
    * They change when the document changes and at no other time, which is
    * exactly what `useMemo` says. `resolveComponent` is module-scope and needs
    * no dependency.
+   *
+   * The bench (ADR-085 E5) joins them on the same terms and for a sharper
+   * version of the same reason: the dialog re-renders ten times a second
+   * while the clock runs, and a model re-derived on every frame would walk
+   * every net in the circuit to produce the list it produced last frame.
    */
   const problems = useMemo(
     () => (doc === null ? [] : circuitProblems(doc, resolveComponent)),
@@ -280,6 +288,7 @@ export function ElectronicsPage({ profileId }: ElectronicsPageProps) {
   );
   const rules = useMemo(() => (doc === null ? [] : circuitRules(doc, resolveComponent)), [doc]);
   const code = useMemo(() => (doc === null ? null : generateCode(doc, resolveComponent)), [doc]);
+  const bench = useMemo(() => (doc === null ? null : buildSimBench(doc, resolveComponent)), [doc]);
 
   /** Runs one mutation: clears the previous refusal, blocks a second write, reports a failure. */
   async function run(action: () => Promise<void>): Promise<void> {
@@ -631,6 +640,19 @@ export function ElectronicsPage({ profileId }: ElectronicsPageProps) {
                 >
                   {s.code.open}
                 </Button>
+                {/* The bench, on the same terms: it reads the parts and wires,
+                    which the list row does not carry. `.elec__sim` is an anchor
+                    with no rule behind it, `.elec__code`'s arrangement — the
+                    screenshot sweep needs a name for the control, and the
+                    control needs no style of its own. */}
+                <Button
+                  className="elec__sim"
+                  variant="ghost"
+                  disabled={doc === null}
+                  onClick={() => setSimOpen(true)}
+                >
+                  {s.sim.open}
+                </Button>
                 <Button
                   variant="ghost"
                   onClick={() => setNaming({ id: active.id, draft: active.name })}
@@ -713,6 +735,16 @@ export function ElectronicsPage({ profileId }: ElectronicsPageProps) {
           busy={busy}
           onSave={() => void saveCode()}
           onClose={() => setCodeOpen(false)}
+        />
+      )}
+
+      {simOpen && bench !== null && (
+        <ElecSimDialog
+          // Keyed by the circuit, so the waveforms typed into the bench are the
+          // OPEN circuit's — the chassis dialog's rule, for the same reason.
+          key={doc?.id}
+          bench={bench}
+          onClose={() => setSimOpen(false)}
         />
       )}
 

@@ -482,10 +482,13 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     // section the other two do not. This first is the ROS 2 package, over the
     // circuit the page happens to open on — the switcher is sr-Latn
     // alphabetical, so „Malina: rover" is first and no preamble is needed to
-    // reach it. It is the widest of the three: a five-column topics table, the
-    // „skipped" table the I²C pins produce, and — because that circuit is the
-    // one with a measured chassis — the „Model mašine" section with both of
-    // ITS tables, which no other frame in this sweep carries.
+    // reach it. **That holds because of where this scene SITS**, not because
+    // the page returns to it: nothing above switches, and the two scenes below
+    // do — so anything added after them names its circuit, as „Klupa" now does
+    // after a sweep in which it did not. It is the widest of the three: a
+    // five-column topics table, the „skipped" table the I²C pins produce, and —
+    // because that circuit is the one with a measured chassis — the „Model
+    // mašine" section with both of ITS tables, which no other frame carries.
     id: "electronics-code-ros",
     module: "electronics",
     prepare: OPEN_CODE_DIALOG(),
@@ -503,7 +506,7 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     module: "electronics",
     prepare: OPEN_CODE_DIALOG(SWITCH_TO_CIRCUIT("Merenje")),
     fanout: null,
-    cleanup: DISPATCH_KEY("Escape"),
+    cleanup: CLOSE_AND_RESTORE_CIRCUIT(),
   },
   {
     // And the loaded Arduino shape: a DHT22 brings a library list, and its DATA
@@ -515,7 +518,61 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     module: "electronics",
     prepare: OPEN_CODE_DIALOG(SWITCH_TO_CIRCUIT("Stanica")),
     fanout: null,
-    cleanup: DISPATCH_KEY("Escape"),
+    cleanup: CLOSE_AND_RESTORE_CIRCUIT(),
+  },
+  {
+    // „Klupa" — the circuit running (E5). A MODAL, so it is invisible to every
+    // scene above it exactly as „Kod" is.
+    //
+    // THE ROVER IS ASKED FOR BY NAME, and that is the lesson of this pair.
+    // „Kod"'s first scene reaches it with no preamble, and this one copied the
+    // reasoning — but between the two sits a scene that switches to „Stanica",
+    // and the switcher's choice persists across `openModule`. So the frame
+    // photographed an UNO with a relay on it: one channel, no topic, one
+    // skipped row, and every part of the dialog worth measuring absent, in an
+    // image that looks like a perfectly ordinary bench. A scene that depends on
+    // which record is open has to name it, because the scene above it is free
+    // to change it and nothing downstream can tell that it did.
+    //
+    // The rover is the only circuit that fills this dialog. Its board runs
+    // Linux, so the channels carry the topics the generated package publishes
+    // on; its touch pad is a level the board READS and its buzzer a duty cycle
+    // the board DRIVES, which are two of the three units and both directions;
+    // and its two I²C parts produce the „šta klupa ne prati" table underneath.
+    // On an Arduino circuit the topic column is „—" down its whole length and
+    // that table has a single row.
+    id: "electronics-sim",
+    module: "electronics",
+    prepare: OPEN_SIM_DIALOG(SWITCH_TO_CIRCUIT("Malina")),
+    fanout: null,
+    // A portal on `document.body`, and the scene after it stays on this module
+    // where nothing remounts — the code scenes' cleanup, for their reason.
+    cleanup: CLOSE_AND_RESTORE_CIRCUIT(),
+  },
+  {
+    // The same dialog with the pickers moved, which is the only way the other
+    // three waveform forms are ever on screen — see {@link SET_WAVE_KINDS}.
+    //
+    // TWO SCENES AND NOT ONE, because the rover has two channels and a frame
+    // therefore holds two forms. Dealing all four across two pickers photographs
+    // the first two and silently drops „Koraci" — the only shape with a list
+    // field and the only one carrying a hint, which is to say the one most worth
+    // photographing. „Stalna vrednost" is the fourth and needs no scene: it is
+    // what every channel opens on, in the frame above.
+    id: "electronics-sim-waves",
+    module: "electronics",
+    prepare: OPEN_SIM_DIALOG(SWITCH_TO_CIRCUIT("Malina"), SET_WAVE_KINDS(["square", "ramp"])),
+    fanout: null,
+    cleanup: CLOSE_AND_RESTORE_CIRCUIT(),
+  },
+  {
+    // „Koraci" on every channel: a wider field holding a semicolon-separated
+    // list, and the one line of copy that says the separator is a semicolon.
+    id: "electronics-sim-steps",
+    module: "electronics",
+    prepare: OPEN_SIM_DIALOG(SWITCH_TO_CIRCUIT("Malina"), SET_WAVE_KINDS(["steps"])),
+    fanout: null,
+    cleanup: CLOSE_AND_RESTORE_CIRCUIT(),
   },
   { id: "search", module: "dashboard", prepare: OPEN_SEARCH_PAGE(), fanout: null },
   { id: "settings", module: "settings", fanout: null },
@@ -723,6 +780,74 @@ function OPEN_CHASSIS_DIALOG(): string {
 }
 
 /**
+ * Opens ELEC's „Klupa" dialog (E5), on {@link OPEN_CODE_DIALOG}'s recipe and
+ * for its two reasons verbatim: the button is disabled until the circuit's IPC
+ * read lands, and the render between `setDoc(null)` and `setDoc(opened)` is
+ * never painted, so the wait is on the OUTCOME rather than on a precondition.
+ *
+ * `after` is statements to run once the panel is up, which the code dialog
+ * needed no equivalent of: „Kod" renders one shape per circuit and „Klupa"
+ * renders a FORM whose fields depend on a picker. See {@link SET_WAVE_KINDS}.
+ */
+function OPEN_SIM_DIALOG(preamble = "", after = ""): string {
+  return `(async () => {
+  const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+${preamble}
+  for (let attempt = 0; attempt < 120; attempt += 1) {
+    if (document.querySelector(".elec-sim__panel")) {
+${after}
+      return true;
+    }
+    const open = document.querySelector(".elec__sim");
+    if (open && !open.disabled) open.click();
+    await frame();
+  }
+  return "none";
+})()`;
+}
+
+/**
+ * Deals the given waveform shapes across the bench's pickers, in order.
+ *
+ * **Without it the sweep photographs one of four forms.** Every channel opens on
+ * „Stalna vrednost", which draws ONE field; a square wave draws four, a ramp
+ * three and a list two, and each of those is a row that can overflow its card
+ * in a way the one-field row cannot. That is DC-98's shape exactly — a control
+ * the sweep can see hiding a form the sweep cannot.
+ *
+ * **It takes the list rather than owning it, because the coverage is bounded by
+ * the CIRCUIT and not by the helper.** It used to deal all four, which reads as
+ * complete and is not: the demo rover has exactly two channels, so one frame
+ * holds two forms and the last two in the list were never drawn. Naming the
+ * shapes at the call site puts that arithmetic where somebody can do it — two
+ * scenes deal two each, and a circuit that grows a third channel still covers
+ * all four rather than covering three and looking finished.
+ *
+ * The value is written through the prototype's own setter rather than assigned.
+ * React tracks a controlled input's value on the DOM node and skips the change
+ * event when what it reads back matches what it last wrote, so `node.value = x`
+ * followed by a dispatched `change` is a no-op that leaves the picker showing
+ * one thing and the form rendering another.
+ *
+ * A function rather than a constant so it can be read by the scene list above,
+ * which every other helper here is: a `const` is not hoisted, and the one that
+ * was declared below its only call site did not compile.
+ */
+function SET_WAVE_KINDS(kinds: readonly string[]): string {
+  return `      const setter = Object.getOwnPropertyDescriptor(
+        HTMLSelectElement.prototype,
+        "value",
+      ).set;
+      const kinds = ${JSON.stringify(kinds)};
+      const pickers = document.querySelectorAll(".elec-sim__kind");
+      for (let index = 0; index < pickers.length; index += 1) {
+        setter.call(pickers[index], kinds[index % kinds.length]);
+        pickers[index].dispatchEvent(new Event("change", { bubbles: true }));
+      }
+      await frame();`;
+}
+
+/**
  * Opens a create form that lives behind a button, and brings it into the frame.
  *
  * **This is the sweep's largest blind spot, made reachable.** A scene
@@ -848,6 +973,42 @@ function SWITCH_TO_CIRCUIT(name: string): string {
   );
   if (!wanted) return "none";
   wanted.click();`;
+}
+
+/**
+ * Closes ELEC's open modal and puts the circuit switcher back on its first entry.
+ *
+ * **DC-77's rule, applied to the state this module persists.** Two of the code
+ * scenes reach their shape by switching circuits and the switcher's choice
+ * survives `openModule`, so until this existed every ELEC scene below them was
+ * photographing whichever circuit the last one had wanted. „Klupa" is where it
+ * showed: it asked for the rover's bench and got the UNO the scene above it had
+ * selected — one channel, no topics — in a frame that looks exactly like a
+ * bench, which is why nothing in the report said a word about it.
+ *
+ * The FIRST entry rather than a named one, on `CLICK_THEN`'s reasoning in FIN:
+ * what has to be restored is the state the page OPENS in, and that is a
+ * position in a sorted list, not a title that a demo profile could rename.
+ *
+ * `DISPATCH_KEY` is embedded rather than repeated — it is an IIFE, so it is
+ * already an expression — because the reason it dispatches on the focused
+ * element and not on `window` is written down once, over there.
+ */
+function CLOSE_AND_RESTORE_CIRCUIT(): string {
+  return `(async () => {
+  const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  ${DISPATCH_KEY("Escape")};
+  await frame();
+  const trigger = document.querySelector(".elec__switcher");
+  if (!trigger) return "none: no circuit switcher to restore";
+  trigger.click();
+  await frame();
+  const first = document.querySelector(".note__menu-item");
+  if (!first) return "none: the switcher opened on an empty list";
+  first.click();
+  await frame();
+  return true;
+})()`;
 }
 
 /**
