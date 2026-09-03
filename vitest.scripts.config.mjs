@@ -28,5 +28,21 @@ export default defineConfig({
   test: {
     include: ["scripts/**/*.test.mjs"],
     exclude: ["**/node_modules/**", ".claude/**", "**/dist/**", "**/out/**"],
+    /**
+     * Vitest's default is 5 000 ms, which is a UNIT TEST's budget.
+     *
+     * Nothing here is a unit test. Every gate walks the whole repository and
+     * most of them parse what they find, so the cost is I/O and CPU contention
+     * rather than anything about the code under test — and twenty-one of them
+     * run at once. `check:quotes` takes 2.7 s alone on this machine and timed
+     * out at 5 s in a full run on 2026-09-03, with a message („Test timed out")
+     * that names neither the gate's subject nor the real cause. A CI runner
+     * with fewer cores is the same failure with less warning.
+     *
+     * 30 s is a tenfold margin on the slowest gate measured, and still far
+     * shorter than any run in which a gate is genuinely stuck. Raising it costs
+     * nothing: a passing gate never spends it.
+     */
+    testTimeout: 30_000,
   },
 });
