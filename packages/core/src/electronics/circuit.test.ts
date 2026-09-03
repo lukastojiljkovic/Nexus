@@ -7,9 +7,9 @@ import { describe, expect, it } from "vitest";
 
 import type { ComponentDef } from "./component.js";
 import type { Circuit, CircuitPart, CircuitWire } from "./circuit.js";
+import { MAX_ID_LENGTH } from "../ids.js";
 import {
   circuitProblems,
-  MAX_ELEC_ID_LENGTH,
   MAX_PART_COORDINATE,
   MAX_PART_LABEL_LENGTH,
   validateCircuitHeader,
@@ -128,14 +128,14 @@ describe("a placed part", () => {
     // legal part — all the way into a column whose only CHECK is that the
     // string is not empty. Every id here is minted by us or is a catalogue
     // slug, so the ceiling is one nothing legitimate approaches.
-    const long = "x".repeat(MAX_ELEC_ID_LENGTH + 1);
+    const long = "x".repeat(MAX_ID_LENGTH + 1);
     expect(codes(validatePart(part({ componentId: long })))).toContain("length");
     expect(codes(validatePart(part({ circuitId: long })))).toContain("length");
     expect(codes(validateWire(wire({ to: { partId: "p2", pinId: long } })))).toContain("length");
     // The bound itself is inside it, and „length" rather than „id" is the
     // answer, because the field DOES identify something — just not something an
     // id here is allowed to be that long to name.
-    expect(validatePart(part({ componentId: "x".repeat(MAX_ELEC_ID_LENGTH) }))).toEqual([]);
+    expect(validatePart(part({ componentId: "x".repeat(MAX_ID_LENGTH) }))).toEqual([]);
   });
 
   it("refuses a coordinate that is not a finite number", () => {

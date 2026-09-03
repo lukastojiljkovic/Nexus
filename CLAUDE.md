@@ -139,7 +139,7 @@ choice of backend**; whatever in them is about the data model still applies.
      layer is unfinished, and that is the more useful answer.
   Record the class in [docs/defect-classes.md](docs/defect-classes.md) so the
   same shape is recognised the next time it appears somewhere else. **A class
-  that can be turned into a gate should be** — sixteen of the hundred-odd
+  that can be turned into a gate should be** — seventeen of the hundred-odd
   already have been, and a rule nobody can forget beats a rule everybody has read.
 - **Concise Serbian status updates** to the founder; the code, comments, and docs
   are in **English**.
@@ -211,7 +211,7 @@ choice of backend**; whatever in them is about the data model still applies.
   re-run the db tests.
 - **Verification gates before any commit:** `pnpm typecheck` (13/13), `pnpm lint`
   (13/13), `pnpm test` (all green), `pnpm build` (4/4),
-  `pnpm --filter @nexus/desktop smoke` prints `SMOKE OK`, and **all seventeen
+  `pnpm --filter @nexus/desktop smoke` prints `SMOKE OK`, and **all eighteen
   static gates** pass. **`pnpm lint` used to be missing from this line** even
   though CI has always run it, and on 2026-08-14 six real errors shipped red
   because of that — two of them display bugs the linter had named (DC-49,
@@ -283,7 +283,21 @@ choice of backend**; whatever in them is about the data model still applies.
   quotation routinely opens in one literal and closes in the next, and the gate
   carries the open state across a `+` and a `${…}` instead. `migrations/` is
   outside the walk: a migration's SQL is a template literal, so its `--`
-  comments are literal text to a parser, and a comment is shown to nobody).
+  comments are literal text to a parser, and a comment is shown to nobody) and
+  **`check:ids`** (an identifier validated for EXISTENCE and nothing else. Both
+  trust boundaries did it — `nonEmptyStr(raw.profileId, …)` in the archive
+  reader, `asNonEmptyString(payload.id, …)` on the IPC wire, 784 call sites
+  between them — and nothing downstream bounds an id: `RestoreStore` and every
+  store write through prepared statements rather than through each module's
+  validators, and no migration CHECKs an id column past `NOT NULL`. So a
+  ten-megabyte `profileId` was a row that landed and that every later query
+  carried. It is invisible to the rest of the tree because the call LOOKS
+  validated: `string` is `string`, it lints, and it names the field it refuses.
+  The gate reads the AST rather than the text — 69 of the 784 had a nested first
+  argument that no regex can split, and a text rule would also fire on the
+  documentation of the defect in `core/src/ids.ts`. `packages/db` is out of
+  scope on purpose: a store's validator reads an argument from MAIN, which is
+  not this boundary).
 - **Looking at the app is a command, not a chore.**
   `pnpm --filter @nexus/desktop shots` seeds a demo profile, drives the real
   renderer through every module and sub-view in both themes at three window

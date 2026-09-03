@@ -29,6 +29,7 @@
 // cycle. It is worth the arrangement: a bad dimension is then refused in the
 // same vocabulary as a bad coordinate, and one `CircuitProblem[]` reaches the
 // store, the IPC layer and the canvas from every source of them.
+import { MAX_ID_LENGTH } from "../ids.js";
 import { chassisProblems, isMount, type Chassis, type Mount } from "./chassis.js";
 import type { ComponentDef } from "./component.js";
 
@@ -60,20 +61,6 @@ export type WireColour = (typeof WIRE_COLOURS)[number];
 export const PART_ROTATIONS = [0, 90, 180, 270] as const;
 
 export type PartRotation = (typeof PART_ROTATIONS)[number];
-
-/**
- * The bound on every id a circuit row carries — its own, its circuit's, a
- * component's, a part's, a pin's.
- *
- * It exists because `idProblems` bounded NOTHING: it asked only that the value
- * be a non-blank string, so a ten-megabyte `pinId` was a legal wire and a
- * ten-megabyte `componentId` a legal part, all the way into a column whose
- * only CHECK is that the string is not empty. Every id here is either minted by
- * us (a uuidv7 is 36 characters) or a slug from the catalogue (`arduino-uno`,
- * `D9`), so this is a ceiling nothing legitimate approaches — which is what a
- * bound against an untrusted caller is for.
- */
-export const MAX_ELEC_ID_LENGTH = 120;
 
 /** How long a name the canvas can render without the label becoming the drawing. */
 export const MAX_CIRCUIT_NAME_LENGTH = 200;
@@ -361,7 +348,7 @@ function idProblems(value: unknown, field: string): CircuitProblem[] {
   // A separate code from "id", because it is a separate answer: "id" means the
   // field identifies nothing, and this means it is far too long to be any of the
   // things an id here identifies.
-  if (value.length > MAX_ELEC_ID_LENGTH) return [{ field, code: "length" }];
+  if (value.length > MAX_ID_LENGTH) return [{ field, code: "length" }];
   return [];
 }
 

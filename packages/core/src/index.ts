@@ -1,3 +1,5 @@
+export { MAX_ID_LENGTH } from "./ids.js";
+
 export { MODULE_CATEGORIES } from "./modules/manifest.js";
 export type { ModuleCategory, ModuleManifest } from "./modules/manifest.js";
 export { ModuleRegistry } from "./modules/registry.js";
@@ -1069,7 +1071,6 @@ export {
 } from "./electronics/catalogue.js";
 export {
   circuitProblems,
-  MAX_ELEC_ID_LENGTH,
   MAX_PART_COORDINATE,
   MAX_CIRCUIT_NAME_LENGTH,
   MAX_CIRCUIT_NOTES_LENGTH,

@@ -34,8 +34,8 @@ import {
   MOUNTS,
 } from "../electronics/chassis.js";
 import type { ChassisField } from "../electronics/chassis.js";
+import { MAX_ID_LENGTH } from "../ids.js";
 import {
-  MAX_ELEC_ID_LENGTH,
   MAX_PART_COORDINATE,
   MAX_CIRCUIT_NAME_LENGTH,
   MAX_CIRCUIT_NOTES_LENGTH,
@@ -901,6 +901,39 @@ function nullableNonEmptyStr(value: unknown, field: string): string | null {
 }
 
 /**
+ * An IDENTIFIER — a row's own id, a foreign key, or a composite key like a
+ * notification's `occurrenceKey` — bounded on `MAX_ID_LENGTH`'s terms.
+ *
+ * **Every id in this file used to be a bare `nonEmptyStr`, which caps nothing.**
+ * That is the field nobody thinks of as user input, so it got the check that
+ * asks whether the string exists and no check at all on what it is. It matters
+ * here more than anywhere: `RestoreStore` writes through prepared statements
+ * rather than through each module's validators, and no migration puts a CHECK on
+ * an id column beyond `NOT NULL`. So this reader is the ONLY bound between an
+ * archive file and the database, and a ten-megabyte `profileId` was a row every
+ * later query would carry and no screen could draw.
+ *
+ * A LENGTH and not a grammar, deliberately — see `MAX_ID_LENGTH` for why the ids
+ * here are not all uuids. `check:ids` keeps this from silently un-happening the
+ * next time a module is added.
+ *
+ * Outer whitespace is refused rather than trimmed, on `trimmedNonEmptyStr`'s
+ * terms: no writer in this codebase emits an id with a space on either end, so
+ * one that arrives with a space is not a row this app wrote — and trimming it
+ * here would silently forge the foreign key that then fails to resolve.
+ */
+function idStr(value: unknown, field: string): string {
+  const id = nonEmptyStr(value, field);
+  if (id !== id.trim() || id.length > MAX_ID_LENGTH) throw new InvalidFieldError(field);
+  return id;
+}
+
+/** {@link idStr} for a nullable foreign key. `null` means „no parent“, never `""`. */
+function nullableIdStr(value: unknown, field: string): string | null {
+  return value === null ? null : idStr(value, field);
+}
+
+/**
  * A string whose CONTENT must itself be JSON — what a `TEXT` column documented
  * as holding JSON actually holds. Parsed and thrown away: nothing here
  * interprets the value (see `parseDashboardWidget`), the parse IS the check.
@@ -1087,6 +1120,43 @@ function sha256Hex(value: unknown, field: string): string {
   const s = nonEmptyStr(value, field);
   if (!SHA256_PATTERN.test(s)) throw new InvalidFieldError(field);
   return s;
+}
+
+/**
+ * Mirrors `MAX_FILE_NAME_LENGTH`/`MAX_MIME_LENGTH`/`MIME_PATTERN` in `@nexus/db`'s
+ * `notes/noteAttachmentStore.ts` — copied, not imported, because `@nexus/core`
+ * must not depend on `@nexus/db`. The three attachment tables (013, 024, 035)
+ * share one set of rules and each store restates it.
+ */
+const MAX_ATTACHMENT_FILE_NAME_LENGTH = 255;
+const MAX_MIME_LENGTH = 100;
+const MIME_PATTERN = /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/;
+
+/**
+ * An attachment's file NAME, on `validateFileName`'s terms.
+ *
+ * Every one of these was a bare `nonEmptyStr`, which is the identifier hole one
+ * shape over: `RestoreStore` writes an attachment row with prepared statements
+ * rather than through `NoteAttachmentStore.add`, so the store's own three checks
+ * — bounded, trimmed, no path separators — reach an archive only if this reader
+ * makes them. The separators are the part that is not merely hygiene: this name
+ * is what the app offers as a download name and what a „save a copy" dialog is
+ * pre-filled with, so a `..\` in it is a directory traversal proposed by the
+ * archive and accepted by the user.
+ */
+function attachmentFileName(value: unknown, field: string): string {
+  const name = trimmedNonEmptyStr(value, field, MAX_ATTACHMENT_FILE_NAME_LENGTH);
+  if (name.includes("/") || name.includes("\\")) throw new InvalidFieldError(field);
+  return name;
+}
+
+/** An attachment's media type, on `validateMime`'s terms — a real type, and bounded. */
+function attachmentMime(value: unknown, field: string): string {
+  const mime = nonEmptyStr(value, field);
+  if (mime.length > MAX_MIME_LENGTH || !MIME_PATTERN.test(mime)) {
+    throw new InvalidFieldError(field);
+  }
+  return mime;
 }
 
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -1564,9 +1634,9 @@ const MODULE_OF_DATA_FILE: Record<DataFilePath, ArchiveModuleId | null> = {
 // --- the interface's own declared order (see the class comment above). ----
 
 function parseTask(raw: Record<string, unknown>, era: ArchiveEra): ExportTask {
-  const id = nonEmptyStr(raw.id, "id");
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
-  const parentId = nullableNonEmptyStr(raw.parentId, "parentId");
+  const id = idStr(raw.id, "id");
+  const profileId = idStr(raw.profileId, "profileId");
+  const parentId = nullableIdStr(raw.parentId, "parentId");
   const title = nonEmptyStr(raw.title, "title");
   const description = nullableStr(raw.description, "description");
   const status = enumStr(raw.status, "status", TASK_STATUSES);
@@ -1614,13 +1684,13 @@ function parseTask(raw: Record<string, unknown>, era: ArchiveEra): ExportTask {
   const listId = eraDefault<string | null>(
     raw.listId,
     era.writesTaskLists,
-    (value) => nonEmptyStr(value, "listId"),
+    (value) => idStr(value, "listId"),
     null,
   );
   const sectionId = eraDefault<string | null>(
     raw.sectionId,
     era.writesTaskLists,
-    (value) => nullableNonEmptyStr(value, "sectionId"),
+    (value) => nullableIdStr(value, "sectionId"),
     null,
   );
   // Three eras meet on this one field. Before 1.3 a task had no scope at all,
@@ -1663,9 +1733,9 @@ function orderRank(raw: Record<string, unknown>, era: ArchiveEra): string {
 }
 
 function parseTaskList(raw: Record<string, unknown>, era: ArchiveEra): ExportTaskList {
-  const id = nonEmptyStr(raw.id, "id");
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
-  const parentId = nullableNonEmptyStr(raw.parentId, "parentId");
+  const id = idStr(raw.id, "id");
+  const profileId = idStr(raw.profileId, "profileId");
+  const parentId = nullableIdStr(raw.parentId, "parentId");
   const name = nonEmptyStr(raw.name, "name");
   const isInbox = bool(raw.isInbox, "isInbox");
   const defaultView = enumStr(raw.defaultView, "defaultView", TASK_LIST_VIEWS);
@@ -1692,8 +1762,8 @@ function parseTaskList(raw: Record<string, unknown>, era: ArchiveEra): ExportTas
 }
 
 function parseTaskSection(raw: Record<string, unknown>, era: ArchiveEra): ExportTaskSection {
-  const id = nonEmptyStr(raw.id, "id");
-  const listId = nonEmptyStr(raw.listId, "listId");
+  const id = idStr(raw.id, "id");
+  const listId = idStr(raw.listId, "listId");
   const name = nonEmptyStr(raw.name, "name");
   const rank = orderRank(raw, era);
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
@@ -1703,27 +1773,27 @@ function parseTaskSection(raw: Record<string, unknown>, era: ArchiveEra): Export
 
 /** `parseNoteTag`'s twin, and deliberately identical: migration 023's `task_tags` is migration 011's `note_tags` with tasks on the other end of the join. */
 function parseTaskTag(raw: Record<string, unknown>): ExportTaskTag {
-  const id = nonEmptyStr(raw.id, "id");
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const id = idStr(raw.id, "id");
+  const profileId = idStr(raw.profileId, "profileId");
   const name = nonEmptyStr(raw.name, "name");
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
   return { id, profileId, name, createdAt };
 }
 
 function parseTaskTagLink(raw: Record<string, unknown>): ExportTaskTagLink {
-  const taskId = nonEmptyStr(raw.taskId, "taskId");
-  const tagId = nonEmptyStr(raw.tagId, "tagId");
+  const taskId = idStr(raw.taskId, "taskId");
+  const tagId = idStr(raw.tagId, "tagId");
   return { taskId, tagId };
 }
 
 /** `parseNoteAttachment`'s twin, and deliberately identical: migration 024's `task_attachments` is migration 013's `note_attachments` with a task on the other end. `sizeBytes` is `positiveInt` because both tables CHECK it. */
 function parseTaskAttachment(raw: Record<string, unknown>): ExportTaskAttachment {
-  const id = nonEmptyStr(raw.id, "id");
-  const taskId = nonEmptyStr(raw.taskId, "taskId");
-  const fileName = nonEmptyStr(raw.fileName, "fileName");
-  const mime = nonEmptyStr(raw.mime, "mime");
+  const id = idStr(raw.id, "id");
+  const taskId = idStr(raw.taskId, "taskId");
+  const fileName = attachmentFileName(raw.fileName, "fileName");
+  const mime = attachmentMime(raw.mime, "mime");
   const sizeBytes = positiveInt(raw.sizeBytes, "sizeBytes");
-  const sha256 = nonEmptyStr(raw.sha256, "sha256");
+  const sha256 = sha256Hex(raw.sha256, "sha256");
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
   return { id, taskId, fileName, mime, sizeBytes, sha256, createdAt };
 }
@@ -1797,8 +1867,8 @@ function parseTaskTemplatePayload(value: unknown, field: string): ExportTaskTemp
 }
 
 function parseTaskTemplate(raw: Record<string, unknown>): ExportTaskTemplate {
-  const id = nonEmptyStr(raw.id, "id");
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const id = idStr(raw.id, "id");
+  const profileId = idStr(raw.profileId, "profileId");
   const name = trimmedNonEmptyStr(raw.name, "name", MAX_TASK_TEMPLATE_NAME_LENGTH);
   const payload = parseTaskTemplatePayload(raw.payload, "payload");
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
@@ -1813,15 +1883,15 @@ function parseTaskTemplate(raw: Record<string, unknown>): ExportTaskTemplate {
  * only the whole file can reveal, is `reference-cycle` further down.
  */
 function parseTaskDependency(raw: Record<string, unknown>): ExportTaskDependency {
-  const blockerId = nonEmptyStr(raw.blockerId, "blockerId");
-  const blockedId = nonEmptyStr(raw.blockedId, "blockedId");
+  const blockerId = idStr(raw.blockerId, "blockerId");
+  const blockedId = idStr(raw.blockedId, "blockedId");
   if (blockerId === blockedId) throw new InvalidFieldError("blockedId");
   return { blockerId, blockedId };
 }
 
 function parseEvent(raw: Record<string, unknown>, era: ArchiveEra): ExportEvent {
-  const id = nonEmptyStr(raw.id, "id");
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const id = idStr(raw.id, "id");
+  const profileId = idStr(raw.profileId, "profileId");
   const title = nonEmptyStr(raw.title, "title");
   const description = nullableStr(raw.description, "description");
   const startAt = isoDateTime(raw.startAt, "startAt");
@@ -1941,8 +2011,8 @@ function parseEventTemplatePayload(
 }
 
 function parseEventTemplate(raw: Record<string, unknown>): ExportEventTemplate {
-  const id = nonEmptyStr(raw.id, "id");
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const id = idStr(raw.id, "id");
+  const profileId = idStr(raw.profileId, "profileId");
   const name = trimmedNonEmptyStr(raw.name, "name", MAX_EVENT_TEMPLATE_NAME_LENGTH);
   const payload = parseEventTemplatePayload(raw.payload, "payload");
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
@@ -1951,8 +2021,8 @@ function parseEventTemplate(raw: Record<string, unknown>): ExportEventTemplate {
 }
 
 function parseDocument(raw: Record<string, unknown>): ExportDocument {
-  const id = nonEmptyStr(raw.id, "id");
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const id = idStr(raw.id, "id");
+  const profileId = idStr(raw.profileId, "profileId");
   const docType = enumStr(raw.docType, "docType", DOC_TYPES);
   const label = nonEmptyStr(raw.label, "label");
   const expiryDate = bareDate(raw.expiryDate, "expiryDate");
@@ -1964,8 +2034,8 @@ function parseDocument(raw: Record<string, unknown>): ExportDocument {
 }
 
 function parseRenewal(raw: Record<string, unknown>): ExportRenewal {
-  const id = nonEmptyStr(raw.id, "id");
-  const documentId = nonEmptyStr(raw.documentId, "documentId");
+  const id = idStr(raw.id, "id");
+  const documentId = idStr(raw.documentId, "documentId");
   // `previous_expiry` (migration 004) is the same kind of value as
   // `expiry_date` — a bare calendar date, not an instant — so it gets the
   // same validator.
@@ -1987,8 +2057,8 @@ function parseRenewal(raw: Record<string, unknown>): ExportRenewal {
  * there: to catch a typo'd `19858`, not to model history.
  */
 function parsePerson(raw: Record<string, unknown>): ExportPerson {
-  const id = nonEmptyStr(raw.id, "id");
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const id = idStr(raw.id, "id");
+  const profileId = idStr(raw.profileId, "profileId");
   const name = nonEmptyStr(raw.name, "name");
   const kind = enumStr(raw.kind, "kind", PERSON_KINDS);
   const month = intInRange(raw.month, "month", 1, 12);
@@ -2005,8 +2075,8 @@ function parsePerson(raw: Record<string, unknown>): ExportPerson {
 }
 
 function parseSubject(raw: Record<string, unknown>): ExportSubject {
-  const id = nonEmptyStr(raw.id, "id");
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const id = idStr(raw.id, "id");
+  const profileId = idStr(raw.profileId, "profileId");
   const name = nonEmptyStr(raw.name, "name");
   const color = enumStr(raw.color, "color", SUBJECT_COLORS);
   const semester = nullableStr(raw.semester, "semester");
@@ -2018,12 +2088,12 @@ function parseSubject(raw: Record<string, unknown>): ExportSubject {
 
 /** `parseTaskAttachment`'s twin, and deliberately identical: migration 035's `subject_attachments` is migration 024's `task_attachments` with a subject on the other end. `sizeBytes` is `positiveInt` because both tables CHECK it. */
 function parseSubjectAttachment(raw: Record<string, unknown>): ExportSubjectAttachment {
-  const id = nonEmptyStr(raw.id, "id");
-  const subjectId = nonEmptyStr(raw.subjectId, "subjectId");
-  const fileName = nonEmptyStr(raw.fileName, "fileName");
-  const mime = nonEmptyStr(raw.mime, "mime");
+  const id = idStr(raw.id, "id");
+  const subjectId = idStr(raw.subjectId, "subjectId");
+  const fileName = attachmentFileName(raw.fileName, "fileName");
+  const mime = attachmentMime(raw.mime, "mime");
   const sizeBytes = positiveInt(raw.sizeBytes, "sizeBytes");
-  const sha256 = nonEmptyStr(raw.sha256, "sha256");
+  const sha256 = sha256Hex(raw.sha256, "sha256");
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
   return { id, subjectId, fileName, mime, sizeBytes, sha256, createdAt };
 }
@@ -2036,16 +2106,16 @@ function parseSubjectAttachment(raw: Record<string, unknown>): ExportSubjectAtta
  * cross-reference pass below, exactly as a dependency's are.
  */
 function parseSubjectNoteLink(raw: Record<string, unknown>): ExportSubjectNoteLink {
-  const subjectId = nonEmptyStr(raw.subjectId, "subjectId");
-  const noteId = nonEmptyStr(raw.noteId, "noteId");
+  const subjectId = idStr(raw.subjectId, "subjectId");
+  const noteId = idStr(raw.noteId, "noteId");
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
   return { subjectId, noteId, createdAt };
 }
 
 function parseExam(raw: Record<string, unknown>): ExportExam {
-  const id = nonEmptyStr(raw.id, "id");
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
-  const subjectId = nonEmptyStr(raw.subjectId, "subjectId");
+  const id = idStr(raw.id, "id");
+  const profileId = idStr(raw.profileId, "profileId");
+  const subjectId = idStr(raw.subjectId, "subjectId");
   const examType = enumStr(raw.examType, "examType", EXAM_TYPES);
   const examDate = bareDate(raw.examDate, "examDate");
   const scope = nullableStr(raw.scope, "scope");
@@ -2055,9 +2125,9 @@ function parseExam(raw: Record<string, unknown>): ExportExam {
 }
 
 function parseDeck(raw: Record<string, unknown>): ExportDeck {
-  const id = nonEmptyStr(raw.id, "id");
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
-  const subjectId = nonEmptyStr(raw.subjectId, "subjectId");
+  const id = idStr(raw.id, "id");
+  const profileId = idStr(raw.profileId, "profileId");
+  const subjectId = idStr(raw.subjectId, "subjectId");
   const name = nonEmptyStr(raw.name, "name");
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
   const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
@@ -2065,13 +2135,13 @@ function parseDeck(raw: Record<string, unknown>): ExportDeck {
 }
 
 function parseCard(raw: Record<string, unknown>, era: ArchiveEra): ExportCard {
-  const id = nonEmptyStr(raw.id, "id");
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
-  const deckId = nonEmptyStr(raw.deckId, "deckId");
+  const id = idStr(raw.id, "id");
+  const profileId = idStr(raw.profileId, "profileId");
+  const deckId = idStr(raw.deckId, "deckId");
   const front = nonEmptyStr(raw.front, "front");
   const back = nonEmptyStr(raw.back, "back");
-  const sourceNoteId = nullableNonEmptyStr(raw.sourceNoteId, "sourceNoteId");
-  const sourceBlockKey = nullableNonEmptyStr(raw.sourceBlockKey, "sourceBlockKey");
+  const sourceNoteId = nullableIdStr(raw.sourceNoteId, "sourceNoteId");
+  const sourceBlockKey = nullableIdStr(raw.sourceBlockKey, "sourceBlockKey");
   // Both or neither. No SQL CHECK backs this — `CardStore` enforces it
   // structurally instead (`create` writes two nulls, `syncFromNote` writes two
   // values, and nothing else ever touches these columns), which is exactly why
@@ -2172,9 +2242,9 @@ function parseCardKind(
 }
 
 function parseReview(raw: Record<string, unknown>): ExportReviewLogEntry {
-  const id = nonEmptyStr(raw.id, "id");
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
-  const cardId = nonEmptyStr(raw.cardId, "cardId");
+  const id = idStr(raw.id, "id");
+  const profileId = idStr(raw.profileId, "profileId");
+  const cardId = idStr(raw.cardId, "cardId");
   const rating = enumInt(raw.rating, "rating", REVIEW_RATINGS);
   const state = enumInt(raw.state, "state", CARD_STATES);
   const due = isoDateTime(raw.due, "due");
@@ -2200,13 +2270,13 @@ function parseReview(raw: Record<string, unknown>): ExportReviewLogEntry {
  * checked in the cross-reference pass.
  */
 function parseExamTopic(raw: Record<string, unknown>): ExportExamTopic {
-  const id = nonEmptyStr(raw.id, "id");
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
-  const examId = nonEmptyStr(raw.examId, "examId");
+  const id = idStr(raw.id, "id");
+  const profileId = idStr(raw.profileId, "profileId");
+  const examId = idStr(raw.examId, "examId");
   const name = trimmedNonEmptyStr(raw.name, "name", MAX_EXAM_TOPIC_NAME_LENGTH);
   const sortOrder = nonNegativeInt(raw.sortOrder, "sortOrder");
   const confidence = raw.confidence === null ? null : intInRange(raw.confidence, "confidence", 0, 100);
-  const deckId = nullableNonEmptyStr(raw.deckId, "deckId");
+  const deckId = nullableIdStr(raw.deckId, "deckId");
   const cut = bool(raw.cut, "cut");
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
   const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
@@ -2234,9 +2304,9 @@ function optionalWeekdayMinutes(value: unknown, field: string): number[] | null 
 }
 
 function parsePlan(raw: Record<string, unknown>): ExportStudyPlan {
-  const id = nonEmptyStr(raw.id, "id");
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
-  const examId = nonEmptyStr(raw.examId, "examId");
+  const id = idStr(raw.id, "id");
+  const profileId = idStr(raw.profileId, "profileId");
+  const examId = idStr(raw.examId, "examId");
   const dailyMinutes = intInRange(raw.dailyMinutes, "dailyMinutes", 15, 480);
   const startDate = bareDate(raw.startDate, "startDate");
   const examWeekBoost = bool(raw.examWeekBoost, "examWeekBoost");
@@ -2250,16 +2320,16 @@ function parsePlan(raw: Record<string, unknown>): ExportStudyPlan {
 }
 
 function parseBlock(raw: Record<string, unknown>): ExportStudyBlock {
-  const id = nonEmptyStr(raw.id, "id");
-  const planId = nonEmptyStr(raw.planId, "planId");
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const id = idStr(raw.id, "id");
+  const planId = idStr(raw.planId, "planId");
+  const profileId = idStr(raw.profileId, "profileId");
   const blockDate = bareDate(raw.blockDate, "blockDate");
   const minutes = positiveInt(raw.minutes, "minutes");
   const status = enumStr(raw.status, "status", STUDY_BLOCK_STATUSES);
   // All three optional-with-a-default (ADR-063): absent means what every
   // pre-1.25.0 block was — no topic, plain coverage, unpinned — so no
   // `ArchiveEra` flag; a PRESENT key is validated strictly in every era.
-  const topicId = raw.topicId === undefined ? null : nullableNonEmptyStr(raw.topicId, "topicId");
+  const topicId = raw.topicId === undefined ? null : nullableIdStr(raw.topicId, "topicId");
   const kind = raw.kind === undefined ? "coverage" : enumStr(raw.kind, "kind", STUDY_BLOCK_KINDS);
   const pinned = raw.pinned === undefined ? false : bool(raw.pinned, "pinned");
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
@@ -2306,12 +2376,12 @@ const MAX_FOCUS_LABEL_LENGTH = 200;
  * the time was spent whether or not the task survived it.
  */
 function parseFocusSession(raw: Record<string, unknown>): ExportFocusSession {
-  const id = nonEmptyStr(raw.id, "id");
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const id = idStr(raw.id, "id");
+  const profileId = idStr(raw.profileId, "profileId");
   // Nullable from 1.34.0 — a Pomodoro phase belongs to no subject. An ABSENT key
   // is an older archive's row, which always named one, so absence is still a
   // refusal rather than a null.
-  const subjectId = nullableNonEmptyStr(raw.subjectId, "subjectId");
+  const subjectId = nullableIdStr(raw.subjectId, "subjectId");
   const startedAt = isoDateTime(raw.startedAt, "startedAt");
   const endedAt = isoDateTime(raw.endedAt, "endedAt");
   // Migration 008's CHECK: `ended_at > started_at` — every persisted session
@@ -2337,7 +2407,7 @@ function parseFocusSession(raw: Record<string, unknown>): ExportFocusSession {
     raw.cycleIndex === undefined
       ? 0
       : intInRange(raw.cycleIndex, "cycleIndex", 0, MAX_FOCUS_CYCLE_INDEX);
-  const taskId = raw.taskId === undefined ? null : nullableNonEmptyStr(raw.taskId, "taskId");
+  const taskId = raw.taskId === undefined ? null : nullableIdStr(raw.taskId, "taskId");
   const label =
     raw.label === undefined ? null : nullableTrimmedStr(raw.label, "label", MAX_FOCUS_LABEL_LENGTH);
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
@@ -2354,13 +2424,13 @@ function focusSpanSeconds(startedAt: string, endedAt: string): number {
 }
 
 function parseNotification(raw: Record<string, unknown>): ExportNotification {
-  const id = nonEmptyStr(raw.id, "id");
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const id = idStr(raw.id, "id");
+  const profileId = idStr(raw.profileId, "profileId");
   const source = enumStr(raw.source, "source", NOTIFICATION_SOURCES);
   // `entityId` is deliberately NOT reference-checked: it points at several
   // different tables and at rows that may legitimately be gone by now.
-  const entityId = nonEmptyStr(raw.entityId, "entityId");
-  const occurrenceKey = nonEmptyStr(raw.occurrenceKey, "occurrenceKey");
+  const entityId = idStr(raw.entityId, "entityId");
+  const occurrenceKey = idStr(raw.occurrenceKey, "occurrenceKey");
   const title = nonEmptyStr(raw.title, "title");
   const body = nonEmptyStr(raw.body, "body");
   const status = enumStr(raw.status, "status", NOTIFICATION_STATUSES);
@@ -2375,9 +2445,9 @@ function parseNotification(raw: Record<string, unknown>): ExportNotification {
 }
 
 function parseNoteFolder(raw: Record<string, unknown>, era: ArchiveEra): ExportNoteFolder {
-  const id = nonEmptyStr(raw.id, "id");
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
-  const parentId = nullableNonEmptyStr(raw.parentId, "parentId");
+  const id = idStr(raw.id, "id");
+  const profileId = idStr(raw.profileId, "profileId");
+  const parentId = nullableIdStr(raw.parentId, "parentId");
   const name = nonEmptyStr(raw.name, "name");
   const color = nullableFolderColor(raw.color, "color");
   // ADR-036: the id is checked for SHAPE only, never for existence. It may name
@@ -2389,7 +2459,7 @@ function parseNoteFolder(raw: Record<string, unknown>, era: ArchiveEra): ExportN
   const defaultTemplateId = eraDefault<string | null>(
     raw.defaultTemplateId,
     era.writesNoteFolderPrefs,
-    (value) => nullableNonEmptyStr(value, "defaultTemplateId"),
+    (value) => nullableIdStr(value, "defaultTemplateId"),
     null,
   );
   const isCaptureDefault = eraDefault(
@@ -2417,8 +2487,8 @@ function parseNoteFolder(raw: Record<string, unknown>, era: ArchiveEra): ExportN
 }
 
 function parseNoteTag(raw: Record<string, unknown>): ExportNoteTag {
-  const id = nonEmptyStr(raw.id, "id");
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const id = idStr(raw.id, "id");
+  const profileId = idStr(raw.profileId, "profileId");
   const name = nonEmptyStr(raw.name, "name");
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
   return { id, profileId, name, createdAt };
@@ -2435,8 +2505,8 @@ function parseNoteTag(raw: Record<string, unknown>): ExportNoteTag {
  * introduce through the folder one.
  */
 function parseNoteCategory(raw: Record<string, unknown>): ExportNoteCategory {
-  const id = nonEmptyStr(raw.id, "id");
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const id = idStr(raw.id, "id");
+  const profileId = idStr(raw.profileId, "profileId");
   const name = nonEmptyStr(raw.name, "name");
   const color = nullableFolderColor(raw.color, "color");
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
@@ -2446,36 +2516,36 @@ function parseNoteCategory(raw: Record<string, unknown>): ExportNoteCategory {
 
 /** Metadata only — `snapshot` is attached afterward from `input.ydocs` (rule 7 of the reader's spec). */
 function parseNoteMeta(raw: Record<string, unknown>): Omit<ExportNote, "snapshot"> {
-  const id = nonEmptyStr(raw.id, "id");
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const id = idStr(raw.id, "id");
+  const profileId = idStr(raw.profileId, "profileId");
   // Deliberately `str`, not `nonEmptyStr`: `NoteStore.create` inserts a note
   // with `title = ''` and `appendUpdate` documents the title as "may be
   // empty" — a never-titled or freshly-cleared note is legitimate data, not
   // a corrupt row.
   const title = str(raw.title, "title");
-  const folderId = nullableNonEmptyStr(raw.folderId, "folderId");
+  const folderId = nullableIdStr(raw.folderId, "folderId");
   // Optional with a default (NOTE-002), so no era flag — the `defaultView`
   // reasoning at INTERCHANGE_SCHEMA_VERSION. Absent means null, which is what
   // every note in every archive written before 1.27.0 actually was; a PRESENT
   // value is validated strictly, in every era.
   const categoryId =
-    raw.categoryId === undefined ? null : nullableNonEmptyStr(raw.categoryId, "categoryId");
+    raw.categoryId === undefined ? null : nullableIdStr(raw.categoryId, "categoryId");
   const pinned = bool(raw.pinned, "pinned");
-  const cardDeckId = nullableNonEmptyStr(raw.cardDeckId, "cardDeckId");
+  const cardDeckId = nullableIdStr(raw.cardDeckId, "cardDeckId");
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
   const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
   return { id, profileId, title, folderId, categoryId, pinned, cardDeckId, createdAt, updatedAt };
 }
 
 function parseNoteTagLink(raw: Record<string, unknown>): ExportNoteTagLink {
-  const noteId = nonEmptyStr(raw.noteId, "noteId");
-  const tagId = nonEmptyStr(raw.tagId, "tagId");
+  const noteId = idStr(raw.noteId, "noteId");
+  const tagId = idStr(raw.tagId, "tagId");
   return { noteId, tagId };
 }
 
 function parseNoteTemplate(raw: Record<string, unknown>): ExportNoteTemplate {
-  const id = nonEmptyStr(raw.id, "id");
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const id = idStr(raw.id, "id");
+  const profileId = idStr(raw.profileId, "profileId");
   const name = nonEmptyStr(raw.name, "name");
   const content = jsonObjectString(raw.content, "content");
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
@@ -2484,12 +2554,12 @@ function parseNoteTemplate(raw: Record<string, unknown>): ExportNoteTemplate {
 }
 
 function parseNoteAttachment(raw: Record<string, unknown>): ExportNoteAttachment {
-  const id = nonEmptyStr(raw.id, "id");
-  const noteId = nonEmptyStr(raw.noteId, "noteId");
-  const fileName = nonEmptyStr(raw.fileName, "fileName");
-  const mime = nonEmptyStr(raw.mime, "mime");
+  const id = idStr(raw.id, "id");
+  const noteId = idStr(raw.noteId, "noteId");
+  const fileName = attachmentFileName(raw.fileName, "fileName");
+  const mime = attachmentMime(raw.mime, "mime");
   const sizeBytes = positiveInt(raw.sizeBytes, "sizeBytes");
-  const sha256 = nonEmptyStr(raw.sha256, "sha256");
+  const sha256 = sha256Hex(raw.sha256, "sha256");
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
   return { id, noteId, fileName, mime, sizeBytes, sha256, createdAt };
 }
@@ -2525,7 +2595,7 @@ function parseNoteAttachment(raw: Record<string, unknown>): ExportNoteAttachment
  * the same convention the quiet-hours pair rule follows.
  */
 function parseCalendarSettings(raw: Record<string, unknown>): ExportCalendarSettings {
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const profileId = idStr(raw.profileId, "profileId");
   const semesterStart = nullableBareDate(raw.semesterStart, "semesterStart");
   const semesterEnd = nullableBareDate(raw.semesterEnd, "semesterEnd");
   if ((semesterStart === null) !== (semesterEnd === null)) {
@@ -2538,7 +2608,7 @@ function parseCalendarSettings(raw: Record<string, unknown>): ExportCalendarSett
 }
 
 function parseStudySettings(raw: Record<string, unknown>): ExportStudySettings {
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const profileId = idStr(raw.profileId, "profileId");
   const targetRetention = numberInRange(
     raw.targetRetention,
     "targetRetention",
@@ -2572,7 +2642,7 @@ function parseStudySettings(raw: Record<string, unknown>): ExportStudySettings {
  * halfway through.
  */
 function parseDashboardSettings(raw: Record<string, unknown>): ExportDashboardSettings {
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const profileId = idStr(raw.profileId, "profileId");
   const backgroundHash =
     raw.backgroundHash === null ? null : sha256Hex(raw.backgroundHash, "backgroundHash");
   const backgroundMime =
@@ -2595,7 +2665,7 @@ function parseDashboardSettings(raw: Record<string, unknown>): ExportDashboardSe
   const activeSetId =
     raw.activeSetId === undefined || raw.activeSetId === null
       ? null
-      : nonEmptyStr(raw.activeSetId, "activeSetId");
+      : idStr(raw.activeSetId, "activeSetId");
   return { profileId, backgroundHash, backgroundMime, backgroundSizeBytes, backgroundDim, activeSetId };
 }
 
@@ -2607,8 +2677,8 @@ function parseDashboardSettings(raw: Record<string, unknown>): ExportDashboardSe
  * board never appears here: it is not a row (see `ExportDashboardSet`).
  */
 function parseDashboardSet(raw: Record<string, unknown>, era: ArchiveEra): ExportDashboardSet {
-  const id = nonEmptyStr(raw.id, "id");
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const id = idStr(raw.id, "id");
+  const profileId = idStr(raw.profileId, "profileId");
   const name = trimmedNonEmptyStr(raw.name, "name", MAX_DASHBOARD_SET_NAME_LENGTH);
   const rank = orderRank(raw, era);
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
@@ -2641,9 +2711,9 @@ function parseDashboardWidget(
   raw: Record<string, unknown>,
   era: ArchiveEra,
 ): ExportDashboardWidget {
-  const instanceId = nonEmptyStr(raw.instanceId, "instanceId");
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
-  const widgetId = nonEmptyStr(raw.widgetId, "widgetId");
+  const instanceId = idStr(raw.instanceId, "instanceId");
+  const profileId = idStr(raw.profileId, "profileId");
+  const widgetId = idStr(raw.widgetId, "widgetId");
   if (!WIDGET_ID_PATTERN.test(widgetId)) throw new InvalidFieldError("widgetId");
   const size = enumStr(raw.size, "size", DASHBOARD_WIDGET_SIZES);
   const rank = orderRank(raw, era);
@@ -2653,13 +2723,13 @@ function parseDashboardWidget(
   // Optional with a default (absent or null = the default board, ADR-055), so
   // no era flag — see `parseDashboardSettings`' `activeSetId`, its exact twin.
   const setId =
-    raw.setId === undefined || raw.setId === null ? null : nonEmptyStr(raw.setId, "setId");
+    raw.setId === undefined || raw.setId === null ? null : idStr(raw.setId, "setId");
   return { instanceId, profileId, widgetId, size, rank, config, createdAt, updatedAt, setId };
 }
 
 /** Metadata only — `snapshot` is attached afterward from `input.ydocs`, and is REQUIRED (rule 7), unlike a note's. */
 function parseNoteVersionMeta(raw: Record<string, unknown>): Omit<ExportNoteVersion, "snapshot"> {
-  const noteId = nonEmptyStr(raw.noteId, "noteId");
+  const noteId = idStr(raw.noteId, "noteId");
   const coveredSeq = nonNegativeInt(raw.coveredSeq, "coveredSeq");
   // Same "may be empty" reasoning as a note's own title — a version captures
   // whatever the note was titled at that moment.
@@ -2723,8 +2793,8 @@ function minorUnits(value: unknown, field: string): number {
 }
 
 function parseFinAccount(raw: Record<string, unknown>): ExportFinAccount {
-  const id = nonEmptyStr(raw.id, "id");
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const id = idStr(raw.id, "id");
+  const profileId = idStr(raw.profileId, "profileId");
   const name = trimmedNonEmptyStr(raw.name, "name", MAX_FIN_NAME_LENGTH);
   const kind = enumStr(raw.kind, "kind", FIN_ACCOUNT_KINDS);
   const currency = currencyCode(raw.currency, "currency");
@@ -2742,8 +2812,8 @@ function parseFinAccount(raw: Record<string, unknown>): ExportFinAccount {
  * own posture, one module over).
  */
 function parseFinCategory(raw: Record<string, unknown>): ExportFinCategory {
-  const id = nonEmptyStr(raw.id, "id");
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const id = idStr(raw.id, "id");
+  const profileId = idStr(raw.profileId, "profileId");
   const name = trimmedNonEmptyStr(raw.name, "name", MAX_FIN_NAME_LENGTH);
   const kind = enumStr(raw.kind, "kind", FIN_CATEGORY_KINDS);
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
@@ -2764,11 +2834,11 @@ function parseFinCategory(raw: Record<string, unknown>): ExportFinCategory {
  * through on a row this reader called fine.
  */
 function parseFinTransaction(raw: Record<string, unknown>): ExportFinTransaction {
-  const id = nonEmptyStr(raw.id, "id");
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
-  const accountId = nonEmptyStr(raw.accountId, "accountId");
-  const counterAccountId = nullableNonEmptyStr(raw.counterAccountId, "counterAccountId");
-  const categoryId = nullableNonEmptyStr(raw.categoryId, "categoryId");
+  const id = idStr(raw.id, "id");
+  const profileId = idStr(raw.profileId, "profileId");
+  const accountId = idStr(raw.accountId, "accountId");
+  const counterAccountId = nullableIdStr(raw.counterAccountId, "counterAccountId");
+  const categoryId = nullableIdStr(raw.categoryId, "categoryId");
   const date = bareDate(raw.date, "date");
   const amount = minorUnits(raw.amount, "amount");
   if (amount === 0) throw new InvalidFieldError("amount");
@@ -2795,7 +2865,7 @@ function parseFinTransaction(raw: Record<string, unknown>): ExportFinTransaction
   // PRESENT value is validated strictly, in every era, and reference-checked
   // against the archive's own subscriptions in the reference pass.
   const recurringId =
-    raw.recurringId === undefined ? null : nullableNonEmptyStr(raw.recurringId, "recurringId");
+    raw.recurringId === undefined ? null : nullableIdStr(raw.recurringId, "recurringId");
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
   const updatedAt = isoDateTime(raw.updatedAt, "updatedAt");
   return {
@@ -2824,10 +2894,10 @@ function parseFinTransaction(raw: Record<string, unknown>): ExportFinTransaction
  * `parseFinCategory`'s posture towards a `parentId`.
  */
 function parseFinRecurring(raw: Record<string, unknown>): ExportFinRecurring {
-  const id = nonEmptyStr(raw.id, "id");
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
-  const accountId = nonEmptyStr(raw.accountId, "accountId");
-  const categoryId = nullableNonEmptyStr(raw.categoryId, "categoryId");
+  const id = idStr(raw.id, "id");
+  const profileId = idStr(raw.profileId, "profileId");
+  const accountId = idStr(raw.accountId, "accountId");
+  const categoryId = nullableIdStr(raw.categoryId, "categoryId");
   const name = trimmedNonEmptyStr(raw.name, "name", MAX_FIN_NAME_LENGTH);
   const amount = minorUnits(raw.amount, "amount");
   if (amount === 0) throw new InvalidFieldError("amount");
@@ -2859,9 +2929,9 @@ function parseFinRecurring(raw: Record<string, unknown>): ExportFinRecurring {
 
 /** One category's allowance in one currency (migration 051). `amount` is a POSITIVE integer of minor units — a limit of nothing is no row, never a zero. */
 function parseFinBudget(raw: Record<string, unknown>): ExportFinBudget {
-  const id = nonEmptyStr(raw.id, "id");
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
-  const categoryId = nonEmptyStr(raw.categoryId, "categoryId");
+  const id = idStr(raw.id, "id");
+  const profileId = idStr(raw.profileId, "profileId");
+  const categoryId = idStr(raw.categoryId, "categoryId");
   const currency = currencyCode(raw.currency, "currency");
   const amount = minorUnits(raw.amount, "amount");
   if (amount <= 0) throw new InvalidFieldError("amount");
@@ -2903,8 +2973,8 @@ const MAX_HABIT_COUNT = 100_000;
  * a restored archived habit is still archived.
  */
 function parseHabit(raw: Record<string, unknown>): ExportHabit {
-  const id = nonEmptyStr(raw.id, "id");
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const id = idStr(raw.id, "id");
+  const profileId = idStr(raw.profileId, "profileId");
   const name = trimmedNonEmptyStr(raw.name, "name", MAX_HABIT_NAME_LENGTH);
   const color = nullableFolderColor(raw.color, "color");
   const schedule = habitSchedule(raw.schedule, "schedule");
@@ -2940,8 +3010,8 @@ function parseHabit(raw: Record<string, unknown>): ExportHabit {
  * quietly dropped here, which is the honest place for it.
  */
 function parseHabitEntry(raw: Record<string, unknown>): ExportHabitEntry {
-  const id = nonEmptyStr(raw.id, "id");
-  const habitId = nonEmptyStr(raw.habitId, "habitId");
+  const id = idStr(raw.id, "id");
+  const habitId = idStr(raw.habitId, "habitId");
   const date = bareDate(raw.date, "date");
   const value = intInRange(raw.value, "value", 1, MAX_HABIT_COUNT);
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
@@ -2991,8 +3061,8 @@ const MEAL_SLOTS = ["dorucak", "uzina1", "rucak", "uzina2", "vecera"] as const;
  * enforced is what cannot be anything but wrong.
  */
 function parseFitFood(raw: Record<string, unknown>): ExportFitFood {
-  const id = nonEmptyStr(raw.id, "id");
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const id = idStr(raw.id, "id");
+  const profileId = idStr(raw.profileId, "profileId");
   const name = trimmedNonEmptyStr(raw.name, "name", MAX_FIT_FOOD_NAME_LENGTH);
   const category = enumStr(raw.category, "category", FOOD_CATEGORIES);
   const per100g = foodMacros(raw.per100g, "per100g");
@@ -3017,8 +3087,8 @@ function parseFitFood(raw: Record<string, unknown>): ExportFitFood {
  * catalogue values.
  */
 function parseFitMealItem(raw: Record<string, unknown>): ExportFitMealItem {
-  const id = nonEmptyStr(raw.id, "id");
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const id = idStr(raw.id, "id");
+  const profileId = idStr(raw.profileId, "profileId");
   const date = bareDate(raw.date, "date");
   const slot = enumStr(raw.slot, "slot", MEAL_SLOTS);
   const foodRef = str(raw.foodRef, "foodRef");
@@ -3042,7 +3112,7 @@ function parseFitMealItem(raw: Record<string, unknown>): ExportFitMealItem {
  * one somebody did.
  */
 function parseFitTarget(raw: Record<string, unknown>): ExportFitTarget {
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const profileId = idStr(raw.profileId, "profileId");
   const kcal = nullableGoal(raw.kcal, "kcal");
   const proteinG = nullableGoal(raw.proteinG, "proteinG");
   const carbsG = nullableGoal(raw.carbsG, "carbsG");
@@ -3188,8 +3258,8 @@ function nullableNonNegativeInt(value: unknown, field: string): number | null {
  * closed list.
  */
 function parseFitExercise(raw: Record<string, unknown>): ExportFitExercise {
-  const id = nonEmptyStr(raw.id, "id");
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const id = idStr(raw.id, "id");
+  const profileId = idStr(raw.profileId, "profileId");
   const name = trimmedNonEmptyStr(raw.name, "name", MAX_FIT_EXERCISE_NAME_LENGTH);
   const nameEn = str(raw.nameEn, "nameEn");
   if (nameEn.length > MAX_FIT_EXERCISE_NAME_EN_LENGTH) throw new InvalidFieldError("nameEn");
@@ -3214,8 +3284,8 @@ function parseFitExercise(raw: Record<string, unknown>): ExportFitExercise {
  * (migration 060). Rides ahead of the `fit-routine-item` rows that name it.
  */
 function parseFitRoutine(raw: Record<string, unknown>): ExportFitRoutine {
-  const id = nonEmptyStr(raw.id, "id");
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const id = idStr(raw.id, "id");
+  const profileId = idStr(raw.profileId, "profileId");
   const name = trimmedNonEmptyStr(raw.name, "name", MAX_FIT_ROUTINE_NAME_LENGTH);
   const notes = str(raw.notes, "notes");
   if (notes.length > MAX_FIT_ROUTINE_NOTES_LENGTH) throw new InvalidFieldError("notes");
@@ -3233,9 +3303,9 @@ function parseFitRoutine(raw: Record<string, unknown>): ExportFitRoutine {
  * table CHECK on the pair.
  */
 function parseFitRoutineItem(raw: Record<string, unknown>): ExportFitRoutineItem {
-  const id = nonEmptyStr(raw.id, "id");
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
-  const routineId = nonEmptyStr(raw.routineId, "routineId");
+  const id = idStr(raw.id, "id");
+  const profileId = idStr(raw.profileId, "profileId");
+  const routineId = idStr(raw.routineId, "routineId");
   const position = nonNegativeInt(raw.position, "position");
   const exerciseRef = fitExerciseRef(raw.exerciseRef, "exerciseRef");
   const label = trimmedNonEmptyStr(raw.label, "label", MAX_FIT_ROUTINE_ITEM_LABEL_LENGTH);
@@ -3303,8 +3373,8 @@ function nullableRestSeconds(value: unknown, field: string): number | null {
  * `routineRef` is shape-checked only (`nullableRoutineRef`).
  */
 function parseFitWorkout(raw: Record<string, unknown>): ExportFitWorkout {
-  const id = nonEmptyStr(raw.id, "id");
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const id = idStr(raw.id, "id");
+  const profileId = idStr(raw.profileId, "profileId");
   const day = bareDate(raw.day, "day");
   const startedAt = isoDateTime(raw.startedAt, "startedAt");
   const endedAt = nullableIsoDateTime(raw.endedAt, "endedAt");
@@ -3327,9 +3397,9 @@ function parseFitWorkout(raw: Record<string, unknown>): ExportFitWorkout {
  * `referenceRule` of its own below; `exerciseRef` gets shape validation only.
  */
 function parseFitWorkoutSet(raw: Record<string, unknown>): ExportFitWorkoutSet {
-  const id = nonEmptyStr(raw.id, "id");
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
-  const workoutId = nonEmptyStr(raw.workoutId, "workoutId");
+  const id = idStr(raw.id, "id");
+  const profileId = idStr(raw.profileId, "profileId");
+  const workoutId = idStr(raw.workoutId, "workoutId");
   const position = nonNegativeInt(raw.position, "position");
   const exerciseRef = fitExerciseRef(raw.exerciseRef, "exerciseRef");
   const label = trimmedNonEmptyStr(raw.label, "label", MAX_FIT_SET_LABEL_LENGTH);
@@ -3399,7 +3469,7 @@ function fitCircumferences(value: unknown, field: string): BodyCircumferences {
  * composite keys are one table over.
  */
 function parseFitMeasurement(raw: Record<string, unknown>): ExportFitMeasurement {
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const profileId = idStr(raw.profileId, "profileId");
   const day = bareDate(raw.day, "day");
   const weightKg = positiveReal(raw.weightKg, "weightKg", MAX_WEIGHT_KG);
   const bodyFatPercent = nullableBodyPercent(raw.bodyFatPercent, "bodyFatPercent");
@@ -3420,7 +3490,7 @@ function parseFitMeasurement(raw: Record<string, unknown>): ExportFitMeasurement
  * second row is the ordinary `duplicate-id` problem.
  */
 function parseFitBodyProfile(raw: Record<string, unknown>): ExportFitBodyProfile {
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const profileId = idStr(raw.profileId, "profileId");
   const sex = raw.sex === null ? null : enumStr(raw.sex, "sex", BODY_SEXES);
   const birthDate = bareDate(raw.birthDate, "birthDate");
   const heightCm = numberInRange(raw.heightCm, "heightCm", MIN_HEIGHT_CM, MAX_HEIGHT_CM);
@@ -3462,8 +3532,8 @@ const MAX_CANVAS_BOARD_NAME_LENGTH = 60;
  * neither dangle nor be dangled at.
  */
 function parseCanvasBoard(raw: Record<string, unknown>): ExportCanvasBoard {
-  const id = nonEmptyStr(raw.id, "id");
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const id = idStr(raw.id, "id");
+  const profileId = idStr(raw.profileId, "profileId");
   const name = trimmedNonEmptyStr(raw.name, "name", MAX_CANVAS_BOARD_NAME_LENGTH);
   const scene = canvasScene(raw.scene, "scene");
   const createdAt = isoDateTime(raw.createdAt, "createdAt");
@@ -3488,30 +3558,19 @@ function canvasScene(value: unknown, field: string): CanvasScene {
 // bounds belong to `electronics/circuit.ts`, which is in THIS package, so there
 // is one definition of how long a circuit's name may be and this reader shares
 // it instead of restating it.
-
-/**
- * An id this module owns, bounded — the reader's half of `idProblems`.
- *
- * The bare `nonEmptyStr` every other module here uses caps nothing, and for an
- * id minted by us or taken from the catalogue that is a hole an archive can
- * walk through: `RestoreStore` writes with prepared statements rather than
- * through `validatePart`, and the column's only CHECK is that the string is not
- * empty. So a ten-megabyte `componentId` would land in the database, and no
- * screen would ever be able to show the row it is on.
- */
-function elecId(value: unknown, field: string): string {
-  const id = nonEmptyStr(value, field);
-  if (id.length > MAX_ELEC_ID_LENGTH) throw new InvalidFieldError(field);
-  return id;
-}
+//
+// The ids use `idStr`, like every other module's. ELEC bounded its own for one
+// slice, under a constant of its own, before it was clear the same hole ran the
+// length of the file — that constant is now `MAX_ID_LENGTH` and there is one of
+// it.
 
 /**
  * One circuit (migration 067) — the parent of the two types below, and first in
  * the file for that reason.
  */
 function parseCircuit(raw: Record<string, unknown>): ExportCircuit {
-  const id = elecId(raw.id, "id");
-  const profileId = nonEmptyStr(raw.profileId, "profileId");
+  const id = idStr(raw.id, "id");
+  const profileId = idStr(raw.profileId, "profileId");
   const name = trimmedNonEmptyStr(raw.name, "name", MAX_CIRCUIT_NAME_LENGTH);
   // Bounded but allowed to be empty, and NOT trimmed: this is prose the user
   // typed, where a trailing newline is theirs rather than a writer's artefact.
@@ -3537,9 +3596,9 @@ function parseCircuit(raw: Record<string, unknown>): ExportCircuit {
  * does, that a stated one is a positive finite number.
  */
 function parseCircuitPart(raw: Record<string, unknown>): ExportCircuitPart {
-  const id = elecId(raw.id, "id");
-  const circuitId = elecId(raw.circuitId, "circuitId");
-  const componentId = elecId(raw.componentId, "componentId");
+  const id = idStr(raw.id, "id");
+  const circuitId = idStr(raw.circuitId, "circuitId");
+  const componentId = idStr(raw.componentId, "componentId");
   const label = str(raw.label, "label");
   if (label.length > MAX_PART_LABEL_LENGTH) throw new InvalidFieldError("label");
   const x = numberInRange(raw.x, "x", -MAX_PART_COORDINATE, MAX_PART_COORDINATE);
@@ -3588,7 +3647,7 @@ function parseCircuitPart(raw: Record<string, unknown>): ExportCircuitPart {
  * field error for a raw SQLite failure mid-restore.
  */
 function parseCircuitChassis(raw: Record<string, unknown>): ExportCircuitChassis {
-  const circuitId = elecId(raw.circuitId, "circuitId");
+  const circuitId = idStr(raw.circuitId, "circuitId");
   const shape = enumStr(raw.shape, "shape", CHASSIS_SHAPES);
   const measured = {} as Record<ChassisField, number>;
   for (const [names, max] of [
@@ -3621,12 +3680,12 @@ function parseCircuitChassis(raw: Record<string, unknown>): ExportCircuitChassis
  * database it came from was willing to hold.
  */
 function parseCircuitWire(raw: Record<string, unknown>): ExportCircuitWire {
-  const id = elecId(raw.id, "id");
-  const circuitId = elecId(raw.circuitId, "circuitId");
-  const fromPartId = elecId(raw.fromPartId, "fromPartId");
-  const fromPinId = elecId(raw.fromPinId, "fromPinId");
-  const toPartId = elecId(raw.toPartId, "toPartId");
-  const toPinId = elecId(raw.toPinId, "toPinId");
+  const id = idStr(raw.id, "id");
+  const circuitId = idStr(raw.circuitId, "circuitId");
+  const fromPartId = idStr(raw.fromPartId, "fromPartId");
+  const fromPinId = idStr(raw.fromPinId, "fromPinId");
+  const toPartId = idStr(raw.toPartId, "toPartId");
+  const toPinId = idStr(raw.toPinId, "toPinId");
   // One of nine jumper colours by NAME. A CSS colour can never reach the
   // column, which is what lets the canvas paint it through a --nx-elec-wire-*
   // token instead of rendering a stored value.
@@ -3674,9 +3733,9 @@ function privateAttachments(value: unknown, field: string): ExportPrivateAttachm
   const refs = entries.map((entry, index): ExportPrivateAttachment => {
     const root = expectRecord(entry, `${field}[${index}]`);
     return {
-      id: nonEmptyStr(root.id, `${field}[${index}].id`),
-      fileName: nonEmptyStr(root.fileName, `${field}[${index}].fileName`),
-      mime: nonEmptyStr(root.mime, `${field}[${index}].mime`),
+      id: idStr(root.id, `${field}[${index}].id`),
+      fileName: attachmentFileName(root.fileName, `${field}[${index}].fileName`),
+      mime: attachmentMime(root.mime, `${field}[${index}].mime`),
       sizeBytes: nonNegativeInt(root.sizeBytes, `${field}[${index}].sizeBytes`),
     };
   });
@@ -3689,7 +3748,7 @@ function privateAttachments(value: unknown, field: string): ExportPrivateAttachm
 
 function parsePrivateNote(raw: Record<string, unknown>): ExportPrivateNote {
   return {
-    id: nonEmptyStr(raw.id, "id"),
+    id: idStr(raw.id, "id"),
     // The title may legitimately be empty (an untitled note), exactly as a
     // public note's may — `str`, not `nonEmptyStr`.
     title: str(raw.title, "title"),
@@ -3703,7 +3762,7 @@ function parsePrivateNote(raw: Record<string, unknown>): ExportPrivateNote {
 
 function parsePrivateNoteVersion(raw: Record<string, unknown>): ExportPrivateNoteVersion {
   return {
-    noteId: nonEmptyStr(raw.noteId, "noteId"),
+    noteId: idStr(raw.noteId, "noteId"),
     seq: intInRange(raw.seq, "seq", 1, MAX_PRIVATE_VERSION_SEQ),
     title: str(raw.title, "title"),
     yjsState: privateYjsState(raw.yjsState, "yjsState"),
@@ -4351,7 +4410,7 @@ function parseModules(value: unknown): { id: string; records: number }[] {
   return value.map((item, index) => {
     const entry = expectRecord(item, `modules[${index}]`);
     return {
-      id: nonEmptyStr(entry.id, `modules[${index}].id`),
+      id: idStr(entry.id, `modules[${index}].id`),
       records: nonNegativeInt(entry.records, `modules[${index}].records`),
     };
   });
@@ -4398,7 +4457,7 @@ function parseBlobs(value: unknown): { sha256: string; sizeBytes: number }[] {
   return value.map((item, index) => {
     const entry = expectRecord(item, `blobs[${index}]`);
     return {
-      sha256: nonEmptyStr(entry.sha256, `blobs[${index}].sha256`),
+      sha256: sha256Hex(entry.sha256, `blobs[${index}].sha256`),
       sizeBytes: positiveInt(entry.sizeBytes, `blobs[${index}].sizeBytes`),
     };
   });
@@ -4411,7 +4470,7 @@ function parsePrivateBlobs(value: unknown): { id: string; sizeBytes: number }[] 
   return value.map((item, index) => {
     const entry = expectRecord(item, `privateBlobs[${index}]`);
     return {
-      id: nonEmptyStr(entry.id, `privateBlobs[${index}].id`),
+      id: idStr(entry.id, `privateBlobs[${index}].id`),
       // Zero is legal, unlike a content-addressed blob's size: an empty file
       // can be privately attached, and its sealed container still has bytes.
       sizeBytes: nonNegativeInt(entry.sizeBytes, `privateBlobs[${index}].sizeBytes`),
@@ -4439,7 +4498,7 @@ function parseManifest(
 
     const profileRoot = expectRecord(root.profile, "profile");
     const profile = {
-      id: nonEmptyStr(profileRoot.id, "profile.id"),
+      id: idStr(profileRoot.id, "profile.id"),
       name: nonEmptyStr(profileRoot.name, "profile.name"),
       // ADR-058 (`1.22.0`). Optional-with-a-default, so no `ArchiveEra` flag:
       // an archive written before business profiles carries no key at all, and

@@ -9,6 +9,7 @@ import {
   type ImportMode,
 } from "./importArchive.js";
 import { FIRST_RANK, isRank, rankForInteger, rankSequence } from "../order/rank.js";
+import { MAX_ID_LENGTH } from "../ids.js";
 
 /** The test's own sha256 hex — mirrors the shape `main` injects, kept out of `@nexus/core`. */
 function sha256(content: string): string {
@@ -1499,6 +1500,57 @@ describe("parseImportArchive — one test per problem code", () => {
   });
 });
 
+/**
+ * The bound on an identifier, which is the reader's alone to apply.
+ *
+ * `RestoreStore` writes through prepared statements rather than through each
+ * module's validators, and no migration puts a CHECK on an id column past
+ * `NOT NULL` — so a `profileId` this file admits is a `profileId` the database
+ * gets. Every id here was a bare `nonEmptyStr` until ELEC bounded its own, and
+ * ELEC's ids were never the special ones: the hole ran the length of the file.
+ *
+ * TASK is the sample rather than the subject. The rule lives in one helper
+ * (`idStr`), so a test per module would be a test of the same three lines
+ * forty-six times; what these check is that the helper is REACHED — on a row's
+ * own id, on a foreign key, and on a nullable one.
+ */
+describe("parseImportArchive — identifiers are bounded (`idStr`)", () => {
+  const long = "x".repeat(MAX_ID_LENGTH + 1);
+
+  const refuses = (row: Record<string, unknown>, detail: string) => {
+    const files = baseFiles({ fileContents: { "data/tasks.ndjson": tasksFile([row]) } });
+    expect(parseImportArchive(emptyInputWith(files)).problems).toContainEqual({
+      severity: "error", code: "invalid-record", path: "data/tasks.ndjson", line: 2, detail,
+    });
+  };
+
+  it("refuses an over-long id, foreign key and nullable foreign key alike", () => {
+    refuses({ ...VALID_TASK, id: long }, "id");
+    refuses({ ...VALID_TASK, profileId: long }, "profileId");
+    refuses({ ...VALID_TASK, listId: long }, "listId");
+    refuses({ ...VALID_TASK, parentId: long }, "parentId");
+  });
+
+  /**
+   * Refused rather than trimmed, on `trimmedNonEmptyStr`'s terms: nothing in
+   * this codebase mints an id with a space on either end, so trimming would
+   * forge the key that then fails to resolve instead of naming the bad row.
+   */
+  it("refuses an id carrying outer whitespace", () => {
+    refuses({ ...VALID_TASK, id: " t1" }, "id");
+    refuses({ ...VALID_TASK, profileId: "profile1\n" }, "profileId");
+  });
+
+  it("accepts an id of exactly the bound, and still refuses an empty one", () => {
+    const exact = "x".repeat(MAX_ID_LENGTH);
+    const files = baseFiles({
+      fileContents: { "data/tasks.ndjson": tasksFile([{ ...VALID_TASK, id: exact }]) },
+    });
+    expect(parseImportArchive(emptyInputWith(files)).problems).toEqual([]);
+    refuses({ ...VALID_TASK, id: "" }, "id");
+  });
+});
+
 describe("parseImportArchive — task lists and sections (TASK-004 / ADR-029)", () => {
   const VALID_SECTION = {
     type: "task-section", id: "ts1", listId: "tl1", name: "U toku", rank: FIRST_RANK,
@@ -2247,6 +2299,17 @@ describe("parseImportArchive — task attachments (migration 024)", () => {
     { name: "a fractional sizeBytes", row: { sizeBytes: 1.5 }, detail: "sizeBytes" },
     { name: "an empty sha256", row: { sha256: "" }, detail: "sha256" },
     { name: "a malformed createdAt", row: { createdAt: "juče" }, detail: "createdAt" },
+    // `RestoreStore` writes this row with prepared statements rather than
+    // through `TaskAttachmentStore.add`, so the store's three rules about a
+    // file's name and type reach an archive only if this reader states them.
+    // The separator is the one that is not hygiene: the name is what the app
+    // offers as a download name, so a `..\` in it is a traversal the archive
+    // proposed and the user accepted.
+    { name: "a file name carrying a path separator", row: { fileName: "..\\etc\\passwd" }, detail: "fileName" },
+    { name: "a file name longer than the column allows", row: { fileName: `${"x".repeat(256)}.pdf` }, detail: "fileName" },
+    { name: "a mime that is not a media type", row: { mime: "pdf" }, detail: "mime" },
+    // The blob store names a FILE by this, and `blobs/<name>` has to spell it.
+    { name: "a sha256 that is not 64 hex characters", row: { sha256: "F".repeat(64) }, detail: "sha256" },
   ];
 
   for (const { name, row, detail } of BAD_ROWS) {
@@ -4374,11 +4437,13 @@ describe("parseImportArchive — ELEC circuits (ADR-085 slice E1 / 1.40.0)", () 
   });
 
   it("refuses an id long enough to be a document rather than an identifier", () => {
-    // The bare `nonEmptyStr` this file uses everywhere caps nothing, and
+    // The bare `nonEmptyStr` this file used everywhere caps nothing, and
     // `RestoreStore` writes with prepared statements rather than through
     // `validatePart` — so without a bound HERE a ten-megabyte `componentId`
-    // lands in a column whose only CHECK is that the string is not empty.
-    const long = "x".repeat(121);
+    // lands in a column whose only CHECK is that the string is not empty. ELEC
+    // is where that was first noticed; `idStr` now answers it for every module,
+    // and the suite above this one checks the rest of them.
+    const long = "x".repeat(MAX_ID_LENGTH + 1);
     const bad = (row: Record<string, unknown>) =>
       parseElectronicsFile([VALID_CIRCUIT, row]).problems.map((problem) => problem.detail);
     expect(bad({ ...VALID_PART, componentId: long })).toEqual(["componentId"]);

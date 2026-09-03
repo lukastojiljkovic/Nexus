@@ -124,6 +124,16 @@ jobs:
       # accuses the server of serving somebody else's row.
       - run: pnpm check:zeroize
 
+      # An id validated for existence and nothing else. Both trust boundaries
+      # did it — `nonEmptyStr(raw.profileId, …)` in the archive reader,
+      # `asNonEmptyString(payload.id, …)` on the IPC wire — and nothing
+      # downstream bounds one: stores write through prepared statements, and no
+      # migration CHECKs an id column past NOT NULL. So a ten-megabyte
+      # `profileId` landed in the database and every later query carried it.
+      # Invisible to the rest of the tree because the call LOOKS validated:
+      # `string` is `string`, it lints, and it names the field it refuses.
+      - run: pnpm check:ids
+
       # The sentence the professional drawer rests on, made executable. Forty of
       # its tools may compute a quantity and may never judge it, and both halves
       # of that fail silently: a deleted `<ToolRiskNotice/>` renders nothing,

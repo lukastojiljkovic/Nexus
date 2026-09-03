@@ -54,9 +54,9 @@ import {
   MAX_CIRCUIT_NAME_LENGTH,
   MAX_CIRCUIT_NOTES_LENGTH,
   MAX_CIRCUMFERENCE_CM,
-  MAX_ELEC_ID_LENGTH,
   MAX_EXERCISE_REF_LENGTH,
   MAX_HEIGHT_CM,
+  MAX_ID_LENGTH,
   MAX_PART_COORDINATE,
   MAX_PART_LABEL_LENGTH,
   MAX_WEIGHT_KG,
@@ -1624,6 +1624,31 @@ function asNonEmptyString(value: unknown, field: string): string {
   return value;
 }
 
+/**
+ * An IDENTIFIER off the wire — a row's own id, a foreign key, a registry key —
+ * bounded on `MAX_ID_LENGTH`'s terms.
+ *
+ * **Every id here used to be a bare `asNonEmptyString`, which caps nothing.** An
+ * id is the field nobody thinks of as untrusted input, so it got the check that
+ * asks whether the string exists and nothing about what it is. The renderer IS
+ * untrusted (SEC-EL), no id column in any migration carries a CHECK past
+ * `NOT NULL`, and several handlers write a renderer-supplied key rather than
+ * minting one — so the wire is the only bound those values ever meet.
+ *
+ * Same three questions as the archive reader's `idStr`, because it is the same
+ * rule at the other boundary: non-empty, no outer whitespace (nothing in this
+ * codebase mints an id with a space on either end, and trimming would forge a
+ * key rather than refuse one), and inside `MAX_ID_LENGTH`. `check:ids` is what
+ * keeps the next handler from reaching for `asNonEmptyString` again.
+ */
+function asId(value: unknown, field: string): string {
+  const id = asNonEmptyString(value, field);
+  if (id !== id.trim() || id.length > MAX_ID_LENGTH) {
+    throw new Error(`Invalid IPC payload: "${field}" is not a well-formed id.`);
+  }
+  return id;
+}
+
 function asBoolean(value: unknown, field: string): boolean {
   if (typeof value !== "boolean") {
     throw new Error(`Invalid IPC payload: "${field}" must be a boolean.`);
@@ -1865,7 +1890,7 @@ function asAccountLabel(value: unknown, field: string): string {
  * name no path main did not already create.
  */
 function asAccountId(value: unknown, field: string): string {
-  const id = asNonEmptyString(value, field);
+  const id = asId(value, field);
   if (!accountExists(userDataDir(), id)) {
     throw new Error(`Invalid IPC payload: "${field}" is not a known account id.`);
   }
@@ -1909,10 +1934,13 @@ function asNullableString(value: unknown, field: string): string | null {
   throw new Error(`Invalid IPC payload: "${field}" must be a string or null.`);
 }
 
-/** An optional id: `null`, or a non-empty string. An empty string is a bug on the wire, never "no id" — that is what `null` says. */
+/**
+ * An optional id: `null`, or an {@link asId}. An empty string is a bug on the
+ * wire, never "no id" — that is what `null` says.
+ */
 function asNullableId(value: unknown, field: string): string | null {
   if (value === null) return null;
-  return asNonEmptyString(value, field);
+  return asId(value, field);
 }
 
 /**
@@ -1989,7 +2017,7 @@ function asPrivAutoLockMinutes(value: unknown, field: string): number {
  */
 function asPrivAttachmentRef(value: unknown, field: string): PrivAttachmentRef {
   const body = asRecord(value);
-  const id = asNonEmptyString(body.id, `${field}.id`);
+  const id = asId(body.id, `${field}.id`);
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id)) {
     throw new Error(`Invalid IPC payload: "${field}.id" is not a private attachment id.`);
   }
@@ -2444,7 +2472,7 @@ function asNewTaskInput(value: unknown): CreateTaskInput {
   if (task.startDate !== undefined) {
     input.startDate = asNullableString(task.startDate, "task.startDate");
   }
-  if (task.parentId !== undefined) input.parentId = asNullableString(task.parentId, "task.parentId");
+  if (task.parentId !== undefined) input.parentId = asNullableId(task.parentId, "task.parentId");
   if (task.recurrence !== undefined) {
     input.recurrence = asRecurrenceRule(task.recurrence, "task.recurrence");
   }
@@ -2454,9 +2482,9 @@ function asNewTaskInput(value: unknown): CreateTaskInput {
   // Placement (TASK-004): structural checks only — that the list is this
   // profile's, that the section belongs to that list, and that a subtask
   // inherits its parent's placement instead are all `TaskStore.create`'s rules.
-  if (task.listId !== undefined) input.listId = asNonEmptyString(task.listId, "task.listId");
+  if (task.listId !== undefined) input.listId = asId(task.listId, "task.listId");
   if (task.sectionId !== undefined) {
-    input.sectionId = asNullableString(task.sectionId, "task.sectionId");
+    input.sectionId = asNullableId(task.sectionId, "task.sectionId");
   }
   return input;
 }
@@ -3031,7 +3059,7 @@ function asNoteFolderCreateInput(value: unknown): {
 } {
   const input = asRecord(value);
   return {
-    parentId: asNullableString(input.parentId, "input.parentId"),
+    parentId: asNullableId(input.parentId, "input.parentId"),
     name: asString(input.name, "input.name"),
     color: asNullableNoteFolderColor(input.color, "input.color"),
   };
@@ -3096,7 +3124,7 @@ function asExamType(value: unknown, field: string): ExamType {
 function asNewExamInput(value: unknown): CreateExamInput {
   const exam = asRecord(value);
   const input: CreateExamInput = {
-    subjectId: asNonEmptyString(exam.subjectId, "exam.subjectId"),
+    subjectId: asId(exam.subjectId, "exam.subjectId"),
     examType: asExamType(exam.examType, "exam.examType"),
     examDate: asNonEmptyString(exam.examDate, "exam.examDate"),
   };
@@ -3109,7 +3137,7 @@ function asExamFieldChanges(value: unknown): UpdateExamFields {
   const changes = asRecord(value);
   const patch: UpdateExamFields = {};
   if (changes.subjectId !== undefined) {
-    patch.subjectId = asNonEmptyString(changes.subjectId, "changes.subjectId");
+    patch.subjectId = asId(changes.subjectId, "changes.subjectId");
   }
   if (changes.examType !== undefined) patch.examType = asExamType(changes.examType, "changes.examType");
   if (changes.examDate !== undefined) {
@@ -3128,7 +3156,7 @@ function asExamFieldChanges(value: unknown): UpdateExamFields {
 function asNewDeckInput(value: unknown): CreateDeckInput {
   const deck = asRecord(value);
   return {
-    subjectId: asNonEmptyString(deck.subjectId, "deck.subjectId"),
+    subjectId: asId(deck.subjectId, "deck.subjectId"),
     name: asNonEmptyString(deck.name, "deck.name"),
   };
 }
@@ -3138,7 +3166,7 @@ function asDeckFieldChanges(value: unknown): UpdateDeckFields {
   const changes = asRecord(value);
   const patch: UpdateDeckFields = {};
   if (changes.subjectId !== undefined) {
-    patch.subjectId = asNonEmptyString(changes.subjectId, "changes.subjectId");
+    patch.subjectId = asId(changes.subjectId, "changes.subjectId");
   }
   if (changes.name !== undefined) patch.name = asNonEmptyString(changes.name, "changes.name");
   return patch;
@@ -3153,7 +3181,7 @@ function asDeckFieldChanges(value: unknown): UpdateDeckFields {
 function asNewCardInput(value: unknown): CreateCardInput {
   const card = asRecord(value);
   return {
-    deckId: asNonEmptyString(card.deckId, "card.deckId"),
+    deckId: asId(card.deckId, "card.deckId"),
     front: asNonEmptyString(card.front, "card.front"),
     back: asNonEmptyString(card.back, "card.back"),
   };
@@ -3174,7 +3202,7 @@ function asNewCardInput(value: unknown): CreateCardInput {
 function asCardFieldChanges(value: unknown): UpdateCardFields {
   const changes = asRecord(value);
   const patch: UpdateCardFields = {};
-  if (changes.deckId !== undefined) patch.deckId = asNonEmptyString(changes.deckId, "changes.deckId");
+  if (changes.deckId !== undefined) patch.deckId = asId(changes.deckId, "changes.deckId");
   if (changes.front !== undefined) patch.front = asNonEmptyString(changes.front, "changes.front");
   if (changes.back !== undefined) patch.back = asNonEmptyString(changes.back, "changes.back");
   if (changes.clozeText !== undefined) {
@@ -3250,7 +3278,7 @@ function asWeekdayMinutes(value: unknown, field: string): number[] | null {
 function asNewPlanInput(value: unknown): CreatePlanInput {
   const plan = asRecord(value);
   const input: CreatePlanInput = {
-    examId: asNonEmptyString(plan.examId, "plan.examId"),
+    examId: asId(plan.examId, "plan.examId"),
     dailyMinutes: asInteger(plan.dailyMinutes, "plan.dailyMinutes"),
     startDate: asNonEmptyString(plan.startDate, "plan.startDate"),
     examWeekBoost: asBoolean(plan.examWeekBoost, "plan.examWeekBoost"),
@@ -3468,7 +3496,7 @@ function asFinAccountFieldChanges(value: unknown): UpdateFinAccountFields {
 function asSetFinBudgetInput(value: unknown): SetFinBudgetInput {
   const budget = asRecord(value);
   return {
-    categoryId: asNonEmptyString(budget.categoryId, "budget.categoryId"),
+    categoryId: asId(budget.categoryId, "budget.categoryId"),
     currency: asCurrencyCode(budget.currency, "budget.currency"),
     amount: asMinorUnits(budget.amount, "budget.amount"),
   };
@@ -3496,7 +3524,7 @@ function asFinPeriod(value: unknown): FinPeriod {
 function asNewFinTransactionInput(value: unknown): CreateFinTransactionInput {
   const transaction = asRecord(value);
   const input: CreateFinTransactionInput = {
-    accountId: asNonEmptyString(transaction.accountId, "transaction.accountId"),
+    accountId: asId(transaction.accountId, "transaction.accountId"),
     date: asBareDate(transaction.date, "transaction.date"),
     amount: asMinorUnits(transaction.amount, "transaction.amount"),
   };
@@ -3529,7 +3557,7 @@ function asFinTransactionFieldChanges(value: unknown): UpdateFinTransactionField
   const changes = asRecord(value);
   const patch: UpdateFinTransactionFields = {};
   if (changes.accountId !== undefined) {
-    patch.accountId = asNonEmptyString(changes.accountId, "changes.accountId");
+    patch.accountId = asId(changes.accountId, "changes.accountId");
   }
   if (changes.counterAccountId !== undefined) {
     patch.counterAccountId = asNullableId(changes.counterAccountId, "changes.counterAccountId");
@@ -3578,7 +3606,7 @@ function asReminderDays(value: unknown, field: string): number | null {
 function asNewFinRecurringInput(value: unknown): CreateFinRecurringInput {
   const subscription = asRecord(value);
   const input: CreateFinRecurringInput = {
-    accountId: asNonEmptyString(subscription.accountId, "subscription.accountId"),
+    accountId: asId(subscription.accountId, "subscription.accountId"),
     name: asNonEmptyString(subscription.name, "subscription.name"),
     amount: asMinorUnits(subscription.amount, "subscription.amount"),
     recurrence: asRequiredRecurrenceRule(subscription.recurrence, "subscription.recurrence"),
@@ -3604,7 +3632,7 @@ function asFinRecurringFieldChanges(value: unknown): UpdateFinRecurringFields {
   const changes = asRecord(value);
   const patch: UpdateFinRecurringFields = {};
   if (changes.accountId !== undefined) {
-    patch.accountId = asNonEmptyString(changes.accountId, "changes.accountId");
+    patch.accountId = asId(changes.accountId, "changes.accountId");
   }
   if (changes.categoryId !== undefined) {
     patch.categoryId = asNullableId(changes.categoryId, "changes.categoryId");
@@ -4211,7 +4239,7 @@ function readFitRoutineBody(payload: unknown): {
   items: (FitRoutineItemInput & { label: string })[];
 } {
   const body = asRecord(payload);
-  const profileId = asNonEmptyString(body.profileId, "profileId");
+  const profileId = asId(body.profileId, "profileId");
   return {
     profileId,
     name: asCappedChars(body.name, "name", MAX_FIT_ROUTINE_NAME_LENGTH),
@@ -4489,15 +4517,6 @@ function asCircuitNotes(value: unknown, field: string): string {
   return asCappedChars(value, field, MAX_CIRCUIT_NOTES_LENGTH);
 }
 
-/** An id this module owns — its own rows', a component's, a pin's. Bounded on `MAX_ELEC_ID_LENGTH`'s terms. */
-function asElecId(value: unknown, field: string): string {
-  const id = asCappedChars(value, field, MAX_ELEC_ID_LENGTH);
-  if (id.trim().length === 0) {
-    throw new Error(`Invalid IPC payload: "${field}" must not be blank.`);
-  }
-  return id;
-}
-
 /**
  * Where a ROS 2 package goes: the user points at a colcon workspace's `src/`
  * and Nexus makes the package folder inside it (ADR-085 E4b).
@@ -4634,8 +4653,8 @@ function asWireColour(value: unknown, field: string): WireColour {
 function asWireEnd(value: unknown, field: string): WireEnd {
   const end = asRecord(value);
   return {
-    partId: asElecId(end.partId, `${field}.partId`),
-    pinId: asElecId(end.pinId, `${field}.pinId`),
+    partId: asId(end.partId, `${field}.partId`),
+    pinId: asId(end.pinId, `${field}.pinId`),
   };
 }
 
@@ -4644,7 +4663,7 @@ function asNewCircuitPart(value: unknown, field: string): NewCircuitPart {
   const part = asRecord(value);
   const chosen = part.value;
   return {
-    componentId: asElecId(part.componentId, `${field}.componentId`),
+    componentId: asId(part.componentId, `${field}.componentId`),
     label: asCappedChars(part.label, `${field}.label`, MAX_PART_LABEL_LENGTH),
     x: asPartCoordinate(part.x, `${field}.x`),
     y: asPartCoordinate(part.y, `${field}.y`),
@@ -6995,7 +7014,7 @@ function registerIpc(): void {
 
   ipcMain.handle(IpcChannel.profilesDelete, (event, payload): Promise<void> => {
     assertTrustedSender(event);
-    const id = asNonEmptyString(asRecord(payload).id, "id");
+    const id = asId(asRecord(payload).id, "id");
     return handleProfilesDelete(id);
   });
 
@@ -7016,7 +7035,7 @@ function registerIpc(): void {
   // recorded without a restart, so unlock never double-fires the first check.
   ipcMain.handle(IpcChannel.profilesSetActive, (event, payload): void => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     const database = requireDb();
     requireProfile(database, profileId); // an unknown id is refused, never stored
     const alreadyServed =
@@ -7036,7 +7055,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.profilesRename, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const id = asNonEmptyString(body.id, "id");
+    const id = asId(body.id, "id");
     const name = asProfileName(body.name, "name");
     renameProfile(requireDb(), id, name);
   });
@@ -7050,14 +7069,14 @@ function registerIpc(): void {
     IpcChannel.profilesPicturePick,
     (event, payload): Promise<ProfilePicturePickResult> => {
       assertTrustedSender(event);
-      const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+      const profileId = asId(asRecord(payload).profileId, "profileId");
       return handleProfilePicturePick(profileId);
     },
   );
 
   ipcMain.handle(IpcChannel.profilesPictureClear, async (event, payload): Promise<Profile> => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
 
     const store = profileStore();
     const previous = store.get(profileId);
@@ -7071,14 +7090,14 @@ function registerIpc(): void {
 
   ipcMain.handle(IpcChannel.flagsGet, (event, payload): Promise<FlagState> => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return new SqliteFlagStore(requireDb().raw, profileId).get();
   });
 
   ipcMain.handle(IpcChannel.flagsSet, async (event, payload): Promise<void> => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const flagKey = asFlagKey(body.moduleId);
     const enabled = asBoolean(body.enabled, "enabled");
     await new SqliteFlagStore(requireDb().raw, profileId).set(flagKey, enabled);
@@ -7086,30 +7105,30 @@ function registerIpc(): void {
 
   ipcMain.handle(IpcChannel.tasksList, (event, payload): Task[] => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return taskStore(profileId).listActive();
   });
 
   ipcMain.handle(IpcChannel.tasksCreate, (event, payload): Task => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     return taskStore(profileId).create(asNewTaskInput(body.task));
   });
 
   ipcMain.handle(IpcChannel.tasksUpdate, (event, payload): Task => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     return taskStore(profileId).update(id, asTaskFieldChanges(body.changes));
   });
 
   ipcMain.handle(IpcChannel.tasksSetDone, (event, payload): Task => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     const done = asBoolean(body.done, "done");
     return taskStore(profileId).setDone(id, done);
   });
@@ -7117,16 +7136,16 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.tasksDelete, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     taskStore(profileId).softDelete(id);
   });
 
   ipcMain.handle(IpcChannel.tasksRestore, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     taskStore(profileId).restore(id);
   });
 
@@ -7136,8 +7155,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.tasksCompleteOccurrence, (event, payload): Task => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     return taskStore(profileId).completeOccurrence(id, new Date().toISOString());
   });
 
@@ -7149,7 +7168,7 @@ function registerIpc(): void {
 
   ipcMain.handle(IpcChannel.taskListsList, (event, payload): TaskListsSnapshot => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     const lists = taskListStore(profileId);
     const active = lists.listActive();
     // One reply for the whole rail: the sections follow the same list order, so
@@ -7160,17 +7179,17 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.taskListsCreate, (event, payload): TaskList => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const name = asTaskListName(body.name, "name");
-    const parentId = asNullableString(body.parentId, "parentId");
+    const parentId = asNullableId(body.parentId, "parentId");
     return taskListStore(profileId).createList({ name, parentId }, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.taskListsRename, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     const name = asTaskListName(body.name, "name");
     taskListStore(profileId).renameList(id, name, new Date().toISOString());
   });
@@ -7178,8 +7197,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.taskListsSetView, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     const view = asTaskListView(body.view, "view");
     taskListStore(profileId).setDefaultView(id, view, new Date().toISOString());
   });
@@ -7187,8 +7206,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.taskListsSetViewConfig, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     const config = asTaskViewConfig(body.config, "config");
     taskListStore(profileId).setViewConfig(id, config, new Date().toISOString());
   });
@@ -7196,19 +7215,19 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.taskListsMove, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
-    const parentId = asNullableString(body.parentId, "parentId");
-    const beforeId = asNullableString(body.beforeId, "beforeId");
-    const afterId = asNullableString(body.afterId, "afterId");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
+    const parentId = asNullableId(body.parentId, "parentId");
+    const beforeId = asNullableId(body.beforeId, "beforeId");
+    const afterId = asNullableId(body.afterId, "afterId");
     taskListStore(profileId).moveList(id, parentId, beforeId, afterId, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.taskListsDelete, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     const mode = asDeleteListMode(body.mode, "mode");
     taskListStore(profileId).deleteList(id, mode, new Date().toISOString());
   });
@@ -7216,16 +7235,16 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.taskListsRestore, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     taskListStore(profileId).restoreList(id, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.taskSectionsCreate, (event, payload): TaskSection => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const listId = asNonEmptyString(body.listId, "listId");
+    const profileId = asId(body.profileId, "profileId");
+    const listId = asId(body.listId, "listId");
     const name = asTaskListName(body.name, "name");
     return taskListStore(profileId).createSection(listId, name, new Date().toISOString());
   });
@@ -7233,8 +7252,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.taskSectionsRename, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     const name = asTaskListName(body.name, "name");
     taskListStore(profileId).renameSection(id, name, new Date().toISOString());
   });
@@ -7242,46 +7261,46 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.taskSectionsMove, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
-    const beforeId = asNullableString(body.beforeId, "beforeId");
-    const afterId = asNullableString(body.afterId, "afterId");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
+    const beforeId = asNullableId(body.beforeId, "beforeId");
+    const afterId = asNullableId(body.afterId, "afterId");
     taskListStore(profileId).moveSection(id, beforeId, afterId, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.taskSectionsDelete, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     taskListStore(profileId).deleteSection(id, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.tasksMoveToList, (event, payload): Task => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
-    const listId = asNonEmptyString(body.listId, "listId");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
+    const listId = asId(body.listId, "listId");
     return taskStore(profileId).moveToList(id, listId, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.tasksMoveToSection, (event, payload): Task => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
-    const sectionId = asNullableString(body.sectionId, "sectionId");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
+    const sectionId = asNullableId(body.sectionId, "sectionId");
     return taskStore(profileId).moveToSection(id, sectionId, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.tasksReorder, (event, payload): Task => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
-    const beforeId = asNullableString(body.beforeId, "beforeId");
-    const afterId = asNullableString(body.afterId, "afterId");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
+    const beforeId = asNullableId(body.beforeId, "beforeId");
+    const afterId = asNullableId(body.afterId, "afterId");
     return taskStore(profileId).reorder(id, beforeId, afterId, new Date().toISOString());
   });
 
@@ -7297,17 +7316,17 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.tasksBulkMove, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const ids = asTaskIdArray(body.ids, "ids");
-    const listId = asNonEmptyString(body.listId, "listId");
-    const sectionId = asNullableString(body.sectionId, "sectionId");
+    const listId = asId(body.listId, "listId");
+    const sectionId = asNullableId(body.sectionId, "sectionId");
     taskStore(profileId).bulkMoveToList(ids, listId, sectionId, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.tasksBulkPriority, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const ids = asTaskIdArray(body.ids, "ids");
     const priority = asTaskPriority(body.priority, "priority");
     taskStore(profileId).bulkSetPriority(ids, priority);
@@ -7316,7 +7335,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.tasksBulkDue, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const ids = asTaskIdArray(body.ids, "ids");
     const dueDate = asNullableString(body.dueDate, "dueDate");
     taskStore(profileId).bulkSetDueDate(ids, dueDate);
@@ -7325,7 +7344,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.tasksBulkDelete, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const ids = asTaskIdArray(body.ids, "ids");
     // The shared `deleted_at` the store returns stays in main: the undo offer
     // is keyed by the very id set the renderer just sent, so handing the stamp
@@ -7336,7 +7355,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.tasksBulkRestore, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const ids = asTaskIdArray(body.ids, "ids");
     taskStore(profileId).bulkRestore(ids);
   });
@@ -7351,14 +7370,14 @@ function registerIpc(): void {
 
   ipcMain.handle(IpcChannel.taskTagsList, (event, payload): TaskTag[] => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return taskTagStore(profileId).listTags();
   });
 
   ipcMain.handle(IpcChannel.taskTagsCreate, (event, payload): TaskTag => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const name = asTaskTagName(body.name, "name");
     return taskTagStore(profileId).createTag(name, new Date().toISOString());
   });
@@ -7366,8 +7385,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.taskTagsRename, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     const name = asTaskTagName(body.name, "name");
     taskTagStore(profileId).renameTag(id, name);
   });
@@ -7375,32 +7394,32 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.taskTagsDelete, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     taskTagStore(profileId).deleteTag(id);
   });
 
   ipcMain.handle(IpcChannel.taskTagLinksList, (event, payload): TaskTagLink[] => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return taskTagStore(profileId).listTagLinks();
   });
 
   ipcMain.handle(IpcChannel.taskTagsAttach, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const taskId = asNonEmptyString(body.taskId, "taskId");
-    const tagId = asNonEmptyString(body.tagId, "tagId");
+    const profileId = asId(body.profileId, "profileId");
+    const taskId = asId(body.taskId, "taskId");
+    const tagId = asId(body.tagId, "tagId");
     taskTagStore(profileId).attachTag(taskId, tagId);
   });
 
   ipcMain.handle(IpcChannel.taskTagsDetach, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const taskId = asNonEmptyString(body.taskId, "taskId");
-    const tagId = asNonEmptyString(body.tagId, "tagId");
+    const profileId = asId(body.profileId, "profileId");
+    const taskId = asId(body.taskId, "taskId");
+    const tagId = asId(body.tagId, "tagId");
     taskTagStore(profileId).detachTag(taskId, tagId);
   });
 
@@ -7416,8 +7435,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.taskAttachmentsList, (event, payload): TaskAttachment[] => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     return taskAttachmentStore(profileId).list(id);
   });
 
@@ -7433,8 +7452,8 @@ function registerIpc(): void {
     async (event, payload): Promise<TaskAttachmentsAddResult> => {
       assertTrustedSender(event);
       const body = asRecord(payload);
-      const profileId = asNonEmptyString(body.profileId, "profileId");
-      const id = asNonEmptyString(body.id, "id");
+      const profileId = asId(body.profileId, "profileId");
+      const id = asId(body.id, "id");
 
       const picked = await pickAttachmentFiles(mainWindow, MAX_TASK_ATTACHMENT_BYTES);
       if (picked.canceled) return { canceled: true };
@@ -7469,9 +7488,9 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.taskAttachmentsRemove, async (event, payload): Promise<void> => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
-    const attachmentId = asNonEmptyString(body.attachmentId, "attachmentId");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
+    const attachmentId = asId(body.attachmentId, "attachmentId");
 
     const removed = taskAttachmentStore(profileId).remove(id, attachmentId);
     await deleteBlobIfOrphaned(
@@ -7485,9 +7504,9 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.taskAttachmentsOpen, async (event, payload): Promise<void> => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
-    const attachmentId = asNonEmptyString(body.attachmentId, "attachmentId");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
+    const attachmentId = asId(body.attachmentId, "attachmentId");
 
     const attachment = requireTaskAttachment(profileId, id, attachmentId);
     await openExternally(blobStorePathsFor(), requireBlobKeys(), tmpOpenDirPath(), attachment);
@@ -7498,9 +7517,9 @@ function registerIpc(): void {
     (event, payload): Promise<SaveAttachmentResult> => {
       assertTrustedSender(event);
       const body = asRecord(payload);
-      const profileId = asNonEmptyString(body.profileId, "profileId");
-      const id = asNonEmptyString(body.id, "id");
-      const attachmentId = asNonEmptyString(body.attachmentId, "attachmentId");
+      const profileId = asId(body.profileId, "profileId");
+      const id = asId(body.id, "id");
+      const attachmentId = asId(body.attachmentId, "attachmentId");
 
       const attachment = requireTaskAttachment(profileId, id, attachmentId);
       return saveAttachmentAs(mainWindow, blobStorePathsFor(), requireBlobKeys(), attachment);
@@ -7509,7 +7528,7 @@ function registerIpc(): void {
 
   ipcMain.handle(IpcChannel.taskAttachmentsCounts, (event, payload): TaskAttachmentCount[] => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return taskAttachmentStore(profileId).countsByTask();
   });
 
@@ -7524,15 +7543,15 @@ function registerIpc(): void {
 
   ipcMain.handle(IpcChannel.taskTemplatesList, (event, payload): TaskTemplate[] => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return taskTemplateStore(profileId).list();
   });
 
   ipcMain.handle(IpcChannel.taskTemplatesSaveFromTask, (event, payload): TaskTemplate => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const taskId = asNonEmptyString(body.taskId, "taskId");
+    const profileId = asId(body.profileId, "profileId");
+    const taskId = asId(body.taskId, "taskId");
     const name = asTaskTemplateName(body.name, "name");
     // Read and write in one transaction: the payload describes the task as it
     // stands, and a save that captured half of it (say, after another window
@@ -7550,21 +7569,21 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.taskTemplatesApply, (event, payload): Task => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const templateId = asNonEmptyString(body.templateId, "templateId");
+    const profileId = asId(body.profileId, "profileId");
+    const templateId = asId(body.templateId, "templateId");
     // Structural checks only: that the list is this profile's and the section
     // belongs to it are `TaskStore.create`'s rules, and re-spelling them here
     // would be a second, drifting copy of them.
-    const listId = asNonEmptyString(body.listId, "listId");
-    const sectionId = asNullableString(body.sectionId, "sectionId");
+    const listId = asId(body.listId, "listId");
+    const sectionId = asNullableId(body.sectionId, "sectionId");
     return applyTaskTemplate(profileId, templateId, listId, sectionId);
   });
 
   ipcMain.handle(IpcChannel.taskTemplatesDelete, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     taskTemplateStore(profileId).delete(id);
   });
 
@@ -7577,62 +7596,62 @@ function registerIpc(): void {
 
   ipcMain.handle(IpcChannel.taskDependenciesList, (event, payload): TaskDependencyLink[] => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return taskDependencyStore(profileId).listLinks();
   });
 
   ipcMain.handle(IpcChannel.taskDependenciesAdd, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const blockerId = asNonEmptyString(body.blockerId, "blockerId");
-    const blockedId = asNonEmptyString(body.blockedId, "blockedId");
+    const profileId = asId(body.profileId, "profileId");
+    const blockerId = asId(body.blockerId, "blockerId");
+    const blockedId = asId(body.blockedId, "blockedId");
     taskDependencyStore(profileId).addDependency(blockerId, blockedId);
   });
 
   ipcMain.handle(IpcChannel.taskDependenciesRemove, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const blockerId = asNonEmptyString(body.blockerId, "blockerId");
-    const blockedId = asNonEmptyString(body.blockedId, "blockedId");
+    const profileId = asId(body.profileId, "profileId");
+    const blockerId = asId(body.blockerId, "blockerId");
+    const blockedId = asId(body.blockedId, "blockedId");
     taskDependencyStore(profileId).removeDependency(blockerId, blockedId);
   });
 
   ipcMain.handle(IpcChannel.eventsList, (event, payload): Event[] => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return eventStore(profileId).listActive();
   });
 
   ipcMain.handle(IpcChannel.eventsCreate, (event, payload): Event => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     return eventStore(profileId).create(asNewEventInput(body.event));
   });
 
   ipcMain.handle(IpcChannel.eventsUpdate, (event, payload): Event => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     return eventStore(profileId).update(id, asEventFieldChanges(body.changes));
   });
 
   ipcMain.handle(IpcChannel.eventsDelete, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     eventStore(profileId).softDelete(id);
   });
 
   ipcMain.handle(IpcChannel.eventsRestore, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     eventStore(profileId).restore(id);
   });
 
@@ -7642,8 +7661,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.eventsAddRecurrenceExdate, (event, payload): Event => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     const date = asBareDate(body.date, "date");
     return eventStore(profileId).addRecurrenceExdate(id, date, new Date().toISOString());
   });
@@ -7651,8 +7670,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.eventsSplitRecurrence, (event, payload): Event => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     const occurrenceDate = asBareDate(body.occurrenceDate, "occurrenceDate");
     return eventStore(profileId).splitRecurrence(id, occurrenceDate, new Date().toISOString());
   });
@@ -7669,15 +7688,15 @@ function registerIpc(): void {
 
   ipcMain.handle(IpcChannel.eventTemplatesList, (event, payload): EventTemplate[] => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return eventTemplateStore(profileId).list();
   });
 
   ipcMain.handle(IpcChannel.eventTemplatesCapture, (event, payload): EventTemplate => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const eventId = asNonEmptyString(body.eventId, "eventId");
+    const profileId = asId(body.profileId, "profileId");
+    const eventId = asId(body.eventId, "eventId");
     const name = asEventTemplateName(body.name, "name");
     // The read and the write are one act inside the store, which does both over
     // the same handle — unlike a task capture, no second store is involved, so
@@ -7692,8 +7711,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.eventTemplatesApply, (event, payload): Event => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const templateId = asNonEmptyString(body.templateId, "templateId");
+    const profileId = asId(body.profileId, "profileId");
+    const templateId = asId(body.templateId, "templateId");
     // A real calendar day, so `2026-02-30` is refused here rather than becoming
     // an event nothing can expand. The store re-checks it regardless.
     const dayKey = asBareDate(body.dayKey, "dayKey");
@@ -7703,8 +7722,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.eventTemplatesDelete, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     eventTemplateStore(profileId).delete(id);
   });
 
@@ -7715,14 +7734,14 @@ function registerIpc(): void {
   // store is never the place that assumes its caller did.
   ipcMain.handle(IpcChannel.calendarGetSettings, (event, payload): CalendarSettings => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return calendarSettingsStore(profileId).get();
   });
 
   ipcMain.handle(IpcChannel.calendarSetSettings, (event, payload): CalendarSettings => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     // Both together, never one at a time: a term with one edge means nothing,
     // so a half-set pair is refused before anything reaches the store.
     const semesterStart =
@@ -7754,7 +7773,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.calendarOverlay, (event, payload): CalendarOverlayEvent[] => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const from = asBareDate(body.from, "from");
     const to = asBareDate(body.to, "to");
     const database = requireDb();
@@ -7772,22 +7791,22 @@ function registerIpc(): void {
   // renderer's to say (SEC-EL-02), exactly as with the task/event writes above.
   ipcMain.handle(IpcChannel.peopleList, (event, payload): Person[] => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return peopleStore(profileId).listActive();
   });
 
   ipcMain.handle(IpcChannel.peopleCreate, (event, payload): Person => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     return peopleStore(profileId).create(asNewPersonInput(body.person), new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.peopleUpdate, (event, payload): Person => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     return peopleStore(profileId).update(
       id,
       asPersonFieldChanges(body.changes),
@@ -7798,61 +7817,61 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.peopleDelete, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     peopleStore(profileId).softDelete(id, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.peopleRestore, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     peopleStore(profileId).restore(id, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.documentsList, (event, payload): TrackedDocument[] => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return documentStore(profileId).listActive();
   });
 
   ipcMain.handle(IpcChannel.documentsCreate, (event, payload): TrackedDocument => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     return documentStore(profileId).create(asNewDocumentInput(body.document));
   });
 
   ipcMain.handle(IpcChannel.documentsUpdate, (event, payload): TrackedDocument => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     return documentStore(profileId).update(id, asDocumentFieldChanges(body.changes));
   });
 
   ipcMain.handle(IpcChannel.documentsDelete, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     documentStore(profileId).softDelete(id);
   });
 
   ipcMain.handle(IpcChannel.documentsRestore, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     documentStore(profileId).restore(id);
   });
 
   ipcMain.handle(IpcChannel.documentsRenew, (event, payload): TrackedDocument => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     const newExpiryDate = asNonEmptyString(body.newExpiryDate, "newExpiryDate");
     return documentStore(profileId).renew(id, newExpiryDate);
   });
@@ -7860,45 +7879,45 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.documentsRenewals, (event, payload): DocumentRenewal[] => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     return documentStore(profileId).listRenewals(id);
   });
 
   ipcMain.handle(IpcChannel.subjectsList, (event, payload): Subject[] => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return subjectStore(profileId).listActive();
   });
 
   ipcMain.handle(IpcChannel.subjectsCreate, (event, payload): Subject => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     return subjectStore(profileId).create(asNewSubjectInput(body.subject));
   });
 
   ipcMain.handle(IpcChannel.subjectsUpdate, (event, payload): Subject => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     return subjectStore(profileId).update(id, asSubjectFieldChanges(body.changes));
   });
 
   ipcMain.handle(IpcChannel.subjectsDelete, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     subjectStore(profileId).softDelete(id);
   });
 
   ipcMain.handle(IpcChannel.subjectsRestore, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     subjectStore(profileId).restore(id);
   });
 
@@ -7919,8 +7938,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.subjectAttachmentsList, (event, payload): SubjectAttachment[] => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     return subjectAttachmentStore(profileId).list(id);
   });
 
@@ -7936,8 +7955,8 @@ function registerIpc(): void {
     async (event, payload): Promise<SubjectAttachmentsAddResult> => {
       assertTrustedSender(event);
       const body = asRecord(payload);
-      const profileId = asNonEmptyString(body.profileId, "profileId");
-      const id = asNonEmptyString(body.id, "id");
+      const profileId = asId(body.profileId, "profileId");
+      const id = asId(body.id, "id");
 
       const picked = await pickAttachmentFiles(mainWindow, MAX_SUBJECT_ATTACHMENT_BYTES);
       if (picked.canceled) return { canceled: true };
@@ -7971,9 +7990,9 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.subjectAttachmentsRemove, async (event, payload): Promise<void> => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
-    const attachmentId = asNonEmptyString(body.attachmentId, "attachmentId");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
+    const attachmentId = asId(body.attachmentId, "attachmentId");
 
     const removed = subjectAttachmentStore(profileId).remove(id, attachmentId);
     await deleteBlobIfOrphaned(
@@ -7987,9 +8006,9 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.subjectAttachmentsOpen, async (event, payload): Promise<void> => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
-    const attachmentId = asNonEmptyString(body.attachmentId, "attachmentId");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
+    const attachmentId = asId(body.attachmentId, "attachmentId");
 
     const attachment = requireSubjectAttachment(profileId, id, attachmentId);
     await openExternally(blobStorePathsFor(), requireBlobKeys(), tmpOpenDirPath(), attachment);
@@ -8000,9 +8019,9 @@ function registerIpc(): void {
     (event, payload): Promise<SaveAttachmentResult> => {
       assertTrustedSender(event);
       const body = asRecord(payload);
-      const profileId = asNonEmptyString(body.profileId, "profileId");
-      const id = asNonEmptyString(body.id, "id");
-      const attachmentId = asNonEmptyString(body.attachmentId, "attachmentId");
+      const profileId = asId(body.profileId, "profileId");
+      const id = asId(body.id, "id");
+      const attachmentId = asId(body.attachmentId, "attachmentId");
 
       const attachment = requireSubjectAttachment(profileId, id, attachmentId);
       return saveAttachmentAs(mainWindow, blobStorePathsFor(), requireBlobKeys(), attachment);
@@ -8019,115 +8038,115 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.subjectNotesLinked, (event, payload): LinkedNote[] => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     return subjectNoteLinkStore(profileId).listLinkedNotes(id);
   });
 
   ipcMain.handle(IpcChannel.subjectNotesLink, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
-    const noteId = asNonEmptyString(body.noteId, "noteId");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
+    const noteId = asId(body.noteId, "noteId");
     subjectNoteLinkStore(profileId).linkNote(id, noteId, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.subjectNotesUnlink, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
-    const noteId = asNonEmptyString(body.noteId, "noteId");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
+    const noteId = asId(body.noteId, "noteId");
     subjectNoteLinkStore(profileId).unlinkNote(id, noteId);
   });
 
   ipcMain.handle(IpcChannel.examsList, (event, payload): Exam[] => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return examStore(profileId).listActive();
   });
 
   ipcMain.handle(IpcChannel.examsCreate, (event, payload): Exam => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     return examStore(profileId).create(asNewExamInput(body.exam));
   });
 
   ipcMain.handle(IpcChannel.examsUpdate, (event, payload): Exam => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     return examStore(profileId).update(id, asExamFieldChanges(body.changes));
   });
 
   ipcMain.handle(IpcChannel.examsDelete, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     examStore(profileId).softDelete(id);
   });
 
   ipcMain.handle(IpcChannel.examsRestore, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     examStore(profileId).restore(id);
   });
 
   ipcMain.handle(IpcChannel.decksList, (event, payload): Deck[] => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return deckStore(profileId).listActive();
   });
 
   ipcMain.handle(IpcChannel.decksCreate, (event, payload): Deck => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     return deckStore(profileId).create(asNewDeckInput(body.deck));
   });
 
   ipcMain.handle(IpcChannel.decksUpdate, (event, payload): Deck => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     return deckStore(profileId).update(id, asDeckFieldChanges(body.changes));
   });
 
   ipcMain.handle(IpcChannel.decksDelete, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     deckStore(profileId).softDelete(id);
   });
 
   ipcMain.handle(IpcChannel.decksRestore, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     deckStore(profileId).restore(id);
   });
 
   ipcMain.handle(IpcChannel.cardsListByDeck, (event, payload): Card[] => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const deckId = asNonEmptyString(body.deckId, "deckId");
+    const profileId = asId(body.profileId, "profileId");
+    const deckId = asId(body.deckId, "deckId");
     return cardStore(profileId).listByDeck(deckId);
   });
 
   ipcMain.handle(IpcChannel.cardsCreate, (event, payload): Card => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     return cardStore(profileId).create(asNewCardInput(body.card), new Date().toISOString());
   });
 
@@ -8137,8 +8156,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.cardsCreateCloze, (event, payload): Card[] => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const deckId = asNonEmptyString(body.deckId, "deckId");
+    const profileId = asId(body.profileId, "profileId");
+    const deckId = asId(body.deckId, "deckId");
     const text = asCappedChars(body.text, "text", CARD_TEXT_MAX_LENGTH);
     return cardStore(profileId).createCloze(deckId, text, new Date().toISOString());
   });
@@ -8149,8 +8168,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.cardsCreateProblem, (event, payload): Card => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const deckId = asNonEmptyString(body.deckId, "deckId");
+    const profileId = asId(body.profileId, "profileId");
+    const deckId = asId(body.deckId, "deckId");
     const front = asCappedChars(body.front, "front", CARD_TEXT_MAX_LENGTH);
     const stepsText = asCappedChars(body.stepsText, "stepsText", CARD_TEXT_MAX_LENGTH);
     return cardStore(profileId).createProblem(deckId, front, stepsText, new Date().toISOString());
@@ -8159,30 +8178,30 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.cardsUpdate, (event, payload): Card => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     return cardStore(profileId).update(id, asCardFieldChanges(body.changes));
   });
 
   ipcMain.handle(IpcChannel.cardsDelete, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     cardStore(profileId).softDelete(id);
   });
 
   ipcMain.handle(IpcChannel.cardsRestore, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     cardStore(profileId).restore(id);
   });
 
   ipcMain.handle(IpcChannel.cardsCounts, (event, payload): DeckCounts[] => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return cardStore(profileId).countsByDeck(new Date().toISOString());
   });
 
@@ -8191,12 +8210,12 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.reviewQueue, (event, payload): ReviewQueue => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     // Field by field, only the keys that arrived — the store then judges the
     // semantics (which scopes may co-exist, whether the ids resolve, ADR-047).
     const scope: DueQueueOptions = {};
-    if (body.deckId !== undefined) scope.deckId = asNonEmptyString(body.deckId, "deckId");
-    if (body.subjectId !== undefined) scope.subjectId = asNonEmptyString(body.subjectId, "subjectId");
+    if (body.deckId !== undefined) scope.deckId = asId(body.deckId, "deckId");
+    if (body.subjectId !== undefined) scope.subjectId = asId(body.subjectId, "subjectId");
     if (body.deckIds !== undefined) {
       scope.deckIds = asStringArray(body.deckIds, "deckIds", MAX_QUEUE_DECK_IDS, 64);
     }
@@ -8210,8 +8229,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.reviewGrade, (event, payload): Card => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     const rating = asCardRating(body.rating, "rating");
     return cardStore(profileId).review(id, rating, new Date().toISOString());
   });
@@ -8219,16 +8238,16 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.reviewUndo, (event, payload): Card => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     return cardStore(profileId).undoLastReview(id, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.reviewPreview, (event, payload): PreviewIntervals => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     return cardStore(profileId).previewIntervals(id, new Date().toISOString());
   });
 
@@ -8236,14 +8255,14 @@ function registerIpc(): void {
   // clock — the renderer never supplies either for plan/block date math.
   ipcMain.handle(IpcChannel.plansList, (event, payload): StudyPlan[] => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return planStore(profileId).listActive();
   });
 
   ipcMain.handle(IpcChannel.plansCreate, (event, payload): StudyPlan => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     return planStore(profileId).createPlan(
       asNewPlanInput(body.plan),
       new Date().toISOString(),
@@ -8254,8 +8273,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.plansUpdate, (event, payload): StudyPlan => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     return planStore(profileId).updatePlan(
       id,
       asPlanFieldChanges(body.changes),
@@ -8267,22 +8286,22 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.plansDelete, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     planStore(profileId).softDelete(id, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.plansRestore, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     planStore(profileId).restore(id, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.plansSyncAll, (event, payload): PlanHealth[] => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     // One honesty report per synced plan (ADR-063 invariant 5) — the health
     // line every plan card renders. The pre-063 synced COUNT died here.
     return planStore(profileId).syncAll(new Date().toISOString(), localToday());
@@ -8291,8 +8310,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.plansScopeCutProposal, (event, payload): ScopeCutProposal => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const planId = asNonEmptyString(body.planId, "planId");
+    const profileId = asId(body.profileId, "profileId");
+    const planId = asId(body.planId, "planId");
     return planStore(profileId).scopeCutProposal(planId, localToday());
   });
 
@@ -8304,8 +8323,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.plansAcceptScopeCut, (event, payload): PlanHealth => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const planId = asNonEmptyString(body.planId, "planId");
+    const profileId = asId(body.profileId, "profileId");
+    const planId = asId(body.planId, "planId");
     const topicIds = asScopeCutTopicIds(body.topicIds, "topicIds");
     const store = planStore(profileId);
     store.acceptScopeCut(topicIds, new Date().toISOString());
@@ -8315,15 +8334,15 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.blocksListByPlan, (event, payload): StudyBlock[] => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const planId = asNonEmptyString(body.planId, "planId");
+    const profileId = asId(body.profileId, "profileId");
+    const planId = asId(body.planId, "planId");
     return planStore(profileId).listBlocks(planId);
   });
 
   ipcMain.handle(IpcChannel.blocksRange, (event, payload): StudyBlockWithExam[] => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const fromDate = asNonEmptyString(body.fromDate, "fromDate");
     const toDate = asNonEmptyString(body.toDate, "toDate");
     return planStore(profileId).listBlocksInRange(fromDate, toDate);
@@ -8332,8 +8351,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.blocksSetStatus, (event, payload): StudyBlock => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     const status = asBlockStatus(body.status, "status");
     return planStore(profileId).setBlockStatus(id, status, new Date().toISOString());
   });
@@ -8341,8 +8360,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.blocksSetPinned, (event, payload): StudyBlock => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     const pinned = asBoolean(body.pinned, "pinned");
     return planStore(profileId).setBlockPinned(id, pinned, new Date().toISOString());
   });
@@ -8358,16 +8377,16 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.topicsListByExam, (event, payload): EffectiveExamTopic[] => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const examId = asNonEmptyString(body.examId, "examId");
+    const profileId = asId(body.profileId, "profileId");
+    const examId = asId(body.examId, "examId");
     return effectiveTopics(profileId, examId);
   });
 
   ipcMain.handle(IpcChannel.topicsCreate, (event, payload): EffectiveExamTopic[] => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const examId = asNonEmptyString(body.examId, "examId");
+    const profileId = asId(body.profileId, "profileId");
+    const examId = asId(body.examId, "examId");
     const name = asNonEmptyString(body.name, "name");
     topicStore(profileId).create({ examId, name }, new Date().toISOString());
     return effectiveTopics(profileId, examId);
@@ -8376,8 +8395,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.topicsRename, (event, payload): EffectiveExamTopic[] => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     const name = asNonEmptyString(body.name, "name");
     const renamed = topicStore(profileId).rename(id, name, new Date().toISOString());
     return effectiveTopics(profileId, renamed.examId);
@@ -8386,8 +8405,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.topicsSetConfidence, (event, payload): EffectiveExamTopic[] => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     // The closed manual-confidence domain at the IPC edge: null clears, else 0..100.
     const confidence = asNullableBoundedInteger(body.confidence, "confidence", 0, 100);
     const updated = topicStore(profileId).setConfidence(id, confidence, new Date().toISOString());
@@ -8397,11 +8416,11 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.topicsSetDeck, (event, payload): EffectiveExamTopic[] => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     // Structural only — that a non-null id names a LIVE deck of THIS profile
     // is the store's semantic re-check (`resolveDeck`).
-    const deckId = asNullableString(body.deckId, "deckId");
+    const deckId = asNullableId(body.deckId, "deckId");
     const updated = topicStore(profileId).setDeck(id, deckId, new Date().toISOString());
     return effectiveTopics(profileId, updated.examId);
   });
@@ -8409,8 +8428,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.topicsMove, (event, payload): EffectiveExamTopic[] => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     const direction = asTopicMoveDirection(body.direction, "direction");
     const store = topicStore(profileId);
     const moved = store.listAll().find((topic) => topic.id === id);
@@ -8431,8 +8450,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.topicsDelete, (event, payload): EffectiveExamTopic[] => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     const store = topicStore(profileId);
     const doomed = store.listAll().find((topic) => topic.id === id);
     if (!doomed) {
@@ -8452,8 +8471,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.topicsRestoreToPlan, (event, payload): EffectiveExamTopic[] => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     const restored = topicStore(profileId)
       .listAll()
       .find((topic) => topic.id === id);
@@ -8476,7 +8495,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.focusStart, (event, payload): RunningFocusSession => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     if (runningFocusSessions.has(profileId)) {
       throw new Error("A focus session is already running for this profile.");
     }
@@ -8487,7 +8506,7 @@ function registerIpc(): void {
     const subjectId =
       rawSubjectId === undefined || rawSubjectId === null
         ? null
-        : focusStore(profileId).resolveSubject(asNonEmptyString(rawSubjectId, "subjectId"));
+        : focusStore(profileId).resolveSubject(asId(rawSubjectId, "subjectId"));
 
     const running: RunningFocusPhase = {
       subjectId,
@@ -8522,7 +8541,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.focusStop, (event, payload): FocusSession | null => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const phase = runningFocusSessions.get(profileId);
     if (!phase) {
       throw new Error("No focus session is running for this profile.");
@@ -8539,7 +8558,7 @@ function registerIpc(): void {
   // throwing, because a double-click on a button must not be an error.
   ipcMain.handle(IpcChannel.focusPause, (event, payload): RunningFocusSession => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     const phase = runningFocusSessions.get(profileId);
     if (!phase) {
       throw new Error("No focus session is running for this profile.");
@@ -8555,7 +8574,7 @@ function registerIpc(): void {
 
   ipcMain.handle(IpcChannel.focusResume, (event, payload): RunningFocusSession => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     const phase = runningFocusSessions.get(profileId);
     if (!phase) {
       throw new Error("No focus session is running for this profile.");
@@ -8574,21 +8593,21 @@ function registerIpc(): void {
 
   ipcMain.handle(IpcChannel.focusStatus, (event, payload): RunningFocusSession | null => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     const phase = runningFocusSessions.get(profileId);
     return phase === undefined ? null : toRunningFocusSession(phase);
   });
 
   ipcMain.handle(IpcChannel.focusCancel, (event, payload): void => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     discardRunningFocusPhase(profileId);
   });
 
   ipcMain.handle(IpcChannel.focusListRange, (event, payload): FocusSession[] => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const fromDate = asNonEmptyString(body.fromDate, "fromDate");
     const toDate = asNonEmptyString(body.toDate, "toDate");
     return focusStore(profileId).listRange(fromDate, toDate);
@@ -8597,23 +8616,23 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.focusDelete, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     focusStore(profileId).softDelete(id, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.focusRestore, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     focusStore(profileId).restore(id, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.statsStudy, (event, payload): StudyStats => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const fromDate = asNonEmptyString(body.fromDate, "fromDate");
     const toDate = asNonEmptyString(body.toDate, "toDate");
     const stats = statsStore(profileId);
@@ -8637,8 +8656,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.studyLog, (event, payload): SubjectStudyLog => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const subjectId = asNonEmptyString(body.subjectId, "subjectId");
+    const profileId = asId(body.profileId, "profileId");
+    const subjectId = asId(body.subjectId, "subjectId");
     const fromDay = asBareDate(body.fromDay, "fromDay");
     const toDay = asBareDate(body.toDay, "toDay");
     return statsStore(profileId).studyLogForSubject(subjectId, fromDay, toDay);
@@ -8651,14 +8670,14 @@ function registerIpc(): void {
   // caller did. `now` is stamped from main's own clock.
   ipcMain.handle(IpcChannel.studySettingsGet, (event, payload): StudySettings => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return studySettingsStore(profileId).get();
   });
 
   ipcMain.handle(IpcChannel.studySettingsSet, (event, payload): StudySettings => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     // All three together, never one at a time: they are one form, and a write
     // that carried two of them would leave the third describing a decision the
     // user did not make.
@@ -8686,15 +8705,15 @@ function registerIpc(): void {
 
   ipcMain.handle(IpcChannel.notificationsCenterList, (event, payload): NotificationRecord[] => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return notificationStore(profileId).listCenter();
   });
 
   ipcMain.handle(IpcChannel.notificationsSnooze, (event, payload): NotificationRecord => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     const store = notificationStore(profileId);
     const settings = store.getSettings();
     const now = new Date();
@@ -8716,22 +8735,22 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.notificationsDismiss, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     notificationStore(profileId).dismiss(id, new Date().toISOString());
     mainWindow?.webContents.send(IpcChannel.notificationsChanged);
   });
 
   ipcMain.handle(IpcChannel.notificationsSettingsGet, (event, payload): NotificationSettings => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return notificationStore(profileId).getSettings();
   });
 
   ipcMain.handle(IpcChannel.notificationsSettingsUpdate, (event, payload): NotificationSettings => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const changes = asNotificationSettingsChanges(body.changes);
     return notificationStore(profileId).updateSettings(changes, new Date().toISOString());
   });
@@ -8739,7 +8758,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.notificationsSourceToggle, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const source = asNotificationSource(body.source, "source");
     const enabled = asBoolean(body.enabled, "enabled");
     notificationStore(profileId).setSourceEnabled(source, enabled, new Date().toISOString());
@@ -8762,7 +8781,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.notificationsAppetiteAnswer, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const sources = asNotificationSourceListOrNull(body.sources, "sources");
     const now = new Date().toISOString();
     const store = notificationStore(profileId);
@@ -8782,30 +8801,31 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.notesList, (event, payload): NoteMeta[] => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const filter = "folderId" in body ? { folderId: asNullableString(body.folderId, "folderId") } : undefined;
+    const profileId = asId(body.profileId, "profileId");
+    const filter =
+      "folderId" in body ? { folderId: asNullableId(body.folderId, "folderId") } : undefined;
     return noteStore(profileId).list(filter);
   });
 
   ipcMain.handle(IpcChannel.notesCreate, (event, payload): NoteMeta => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return noteStore(profileId).create(new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.notesLoad, (event, payload): NoteDocPayload => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     return noteStore(profileId).load(id);
   });
 
   ipcMain.handle(IpcChannel.notesAppendUpdate, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     const update = asUint8Array(body.update, "update", MAX_NOTE_UPDATE_BYTES);
     const title = asString(body.title, "title");
     const store = noteStore(profileId);
@@ -8842,8 +8862,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.notesDelete, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     const disposition = asNoteCardDisposition(body.cards, "cards");
     const now = new Date().toISOString();
     const notes = noteStore(profileId);
@@ -8869,8 +8889,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.notesDuplicate, (event, payload): NoteDuplicateResult => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     return duplicateNote(
       {
         notes: noteStore(profileId),
@@ -8886,8 +8906,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.notesRestore, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     const notes = noteStore(profileId);
     const cards = cardStore(profileId);
 
@@ -8902,8 +8922,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.notesCardsCount, (event, payload): number => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     return cardStore(profileId).countCardsOfNote(id);
   });
 
@@ -8919,8 +8939,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.notesChecklistCount, (event, payload): number => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     return countNoteChecklistItems(noteStore(profileId), id);
   });
 
@@ -8929,9 +8949,9 @@ function registerIpc(): void {
     (event, payload): NoteChecklistTasksResult => {
       assertTrustedSender(event);
       const body = asRecord(payload);
-      const profileId = asNonEmptyString(body.profileId, "profileId");
-      const id = asNonEmptyString(body.id, "id");
-      const listId = asNonEmptyString(body.listId, "listId");
+      const profileId = asId(body.profileId, "profileId");
+      const id = asId(body.id, "id");
+      const listId = asId(body.listId, "listId");
       return checklistToTasks(
         {
           notes: noteStore(profileId),
@@ -8949,14 +8969,14 @@ function registerIpc(): void {
   // from main's own clock, never accepted from the renderer (SEC-EL-02).
   ipcMain.handle(IpcChannel.noteFoldersList, (event, payload): NoteFolder[] => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return noteOrgStore(profileId).listFolders();
   });
 
   ipcMain.handle(IpcChannel.noteFoldersCreate, (event, payload): NoteFolder => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     return noteOrgStore(profileId).createFolder(
       asNoteFolderCreateInput(body.input),
       new Date().toISOString(),
@@ -8966,8 +8986,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.noteFoldersUpdate, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     noteOrgStore(profileId).updateFolder(
       id,
       asNoteFolderFieldChanges(body.fields),
@@ -8978,17 +8998,17 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.noteFoldersMove, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
-    const newParentId = asNullableString(body.newParentId, "newParentId");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
+    const newParentId = asNullableId(body.newParentId, "newParentId");
     noteOrgStore(profileId).moveFolder(id, newParentId, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.noteFoldersDelete, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     noteOrgStore(profileId).deleteFolder(id, new Date().toISOString());
   });
 
@@ -8999,8 +9019,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.noteFoldersSetTemplate, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     const templateId = asNullableId(body.templateId, "templateId");
     noteOrgStore(profileId).setDefaultTemplate(id, templateId, new Date().toISOString());
   });
@@ -9008,7 +9028,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.noteFoldersSetCapture, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     // `null` is a real, meaningful value here — it clears the profile's mark.
     const id = asNullableId(body.id, "id");
     noteOrgStore(profileId).setCaptureDefault(id, new Date().toISOString());
@@ -9020,62 +9040,62 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.noteFoldersSetView, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     const view = asNoteFolderView(body.view, "view");
     noteOrgStore(profileId).setFolderView(id, view, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.noteTagsList, (event, payload): NoteTag[] => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return noteOrgStore(profileId).listTags();
   });
 
   ipcMain.handle(IpcChannel.noteTagsCreate, (event, payload): NoteTag => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     return noteOrgStore(profileId).createTag(asString(body.name, "name"), new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.noteTagsRename, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     noteOrgStore(profileId).renameTag(id, asString(body.name, "name"));
   });
 
   ipcMain.handle(IpcChannel.noteTagsDelete, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     noteOrgStore(profileId).deleteTag(id);
   });
 
   ipcMain.handle(IpcChannel.noteTagLinksList, (event, payload): NoteTagLink[] => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return noteOrgStore(profileId).listTagLinks();
   });
 
   ipcMain.handle(IpcChannel.noteTagsAttach, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const noteId = asNonEmptyString(body.noteId, "noteId");
-    const tagId = asNonEmptyString(body.tagId, "tagId");
+    const profileId = asId(body.profileId, "profileId");
+    const noteId = asId(body.noteId, "noteId");
+    const tagId = asId(body.tagId, "tagId");
     noteOrgStore(profileId).attachTag(noteId, tagId);
   });
 
   ipcMain.handle(IpcChannel.noteTagsDetach, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const noteId = asNonEmptyString(body.noteId, "noteId");
-    const tagId = asNonEmptyString(body.tagId, "tagId");
+    const profileId = asId(body.profileId, "profileId");
+    const noteId = asId(body.noteId, "noteId");
+    const tagId = asId(body.tagId, "tagId");
     noteOrgStore(profileId).detachTag(noteId, tagId);
   });
 
@@ -9084,14 +9104,14 @@ function registerIpc(): void {
   // `NoteStore` beside `setFolder`, because it is a column on `notes`.
   ipcMain.handle(IpcChannel.noteCategoriesList, (event, payload): NoteCategory[] => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return noteOrgStore(profileId).listCategories();
   });
 
   ipcMain.handle(IpcChannel.noteCategoriesCreate, (event, payload): NoteCategory => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     return noteOrgStore(profileId).createCategory(
       asNoteCategoryCreateInput(body.input),
       new Date().toISOString(),
@@ -9101,8 +9121,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.noteCategoriesUpdate, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     noteOrgStore(profileId).updateCategory(
       id,
       asNoteCategoryFieldChanges(body.fields),
@@ -9113,35 +9133,35 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.noteCategoriesDelete, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     noteOrgStore(profileId).deleteCategory(id);
   });
 
   ipcMain.handle(IpcChannel.notesSetCategory, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const noteId = asNonEmptyString(body.noteId, "noteId");
+    const profileId = asId(body.profileId, "profileId");
+    const noteId = asId(body.noteId, "noteId");
     // `null` is a real, meaningful value here — it uncategorizes the note.
-    const categoryId = asNullableString(body.categoryId, "categoryId");
+    const categoryId = asNullableId(body.categoryId, "categoryId");
     noteStore(profileId).setCategory(noteId, categoryId);
   });
 
   ipcMain.handle(IpcChannel.notesSetFolder, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const noteId = asNonEmptyString(body.noteId, "noteId");
-    const folderId = asNullableString(body.folderId, "folderId");
+    const profileId = asId(body.profileId, "profileId");
+    const noteId = asId(body.noteId, "noteId");
+    const folderId = asNullableId(body.folderId, "folderId");
     noteStore(profileId).setFolder(noteId, folderId);
   });
 
   ipcMain.handle(IpcChannel.notesSetPinned, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const noteId = asNonEmptyString(body.noteId, "noteId");
+    const profileId = asId(body.profileId, "profileId");
+    const noteId = asId(body.noteId, "noteId");
     const pinned = asBoolean(body.pinned, "pinned");
     noteStore(profileId).setPinned(noteId, pinned);
   });
@@ -9152,8 +9172,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.notesSetLinks, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     const targetIds = asStringArray(body.targetIds, "targetIds", MAX_NOTE_LINKS, 64);
     noteStore(profileId).setOutboundLinks(id, targetIds);
   });
@@ -9161,8 +9181,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.notesBacklinks, (event, payload): NoteMeta[] => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     return noteStore(profileId).listBacklinks(id);
   });
 
@@ -9175,16 +9195,16 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.notesVersions, (event, payload): NoteVersionMeta[] => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     return noteStore(profileId).listVersions(id);
   });
 
   ipcMain.handle(IpcChannel.notesVersionLoad, (event, payload): Uint8Array => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     const coveredSeq = asPositiveInteger(body.coveredSeq, "coveredSeq");
     return noteStore(profileId).loadVersion(id, coveredSeq);
   });
@@ -9192,8 +9212,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.notesVersionCapture, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     captureNoteVersion(noteStore(profileId), id);
   });
 
@@ -9208,14 +9228,14 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.notesTemplatesList, (event, payload): NoteTemplate[] => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     return noteTemplateStore(profileId).list();
   });
 
   ipcMain.handle(IpcChannel.notesTemplateSave, (event, payload): NoteTemplate => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const name = asString(body.name, "name");
     const content = asCappedString(body.content, "content", MAX_NOTE_TEMPLATE_BYTES);
     return noteTemplateStore(profileId).save(name, content, new Date().toISOString());
@@ -9224,8 +9244,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.notesTemplateRename, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     const name = asString(body.name, "name");
     noteTemplateStore(profileId).rename(id, name, new Date().toISOString());
   });
@@ -9233,8 +9253,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.notesTemplateDelete, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     noteTemplateStore(profileId).remove(id);
   });
 
@@ -9248,9 +9268,9 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.notesCardsSync, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
-    const deckId = asNonEmptyString(body.deckId, "deckId");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
+    const deckId = asId(body.deckId, "deckId");
     const cards = asNoteCardSpecArray(body.cards, "cards");
     cardStore(profileId).syncFromNote(id, deckId, cards, new Date().toISOString());
   });
@@ -9258,9 +9278,9 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.notesCardDeckSet, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
-    const deckId = asNullableString(body.deckId, "deckId");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
+    const deckId = asNullableId(body.deckId, "deckId");
     noteStore(profileId).setCardDeck(id, deckId, new Date().toISOString());
   });
 
@@ -9272,16 +9292,16 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.noteAttachmentsList, (event, payload): NoteAttachment[] => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     return noteAttachmentStore(profileId).list(id);
   });
 
   ipcMain.handle(IpcChannel.noteAttachmentsAdd, async (event, payload): Promise<NoteAttachment> => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     const fileName = asNonEmptyString(body.fileName, "fileName");
     const bytes = asUint8Array(body.bytes, "bytes", MAX_NOTE_ATTACHMENT_BYTES);
 
@@ -9315,9 +9335,9 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.noteAttachmentsRemove, async (event, payload): Promise<void> => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
-    const attachmentId = asNonEmptyString(body.attachmentId, "attachmentId");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
+    const attachmentId = asId(body.attachmentId, "attachmentId");
 
     const removed = noteAttachmentStore(profileId).remove(id, attachmentId);
     await deleteBlobIfOrphaned(
@@ -9331,9 +9351,9 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.noteAttachmentsOpen, async (event, payload): Promise<void> => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
-    const attachmentId = asNonEmptyString(body.attachmentId, "attachmentId");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
+    const attachmentId = asId(body.attachmentId, "attachmentId");
 
     const attachment = requireNoteAttachment(profileId, id, attachmentId);
     await openExternally(blobStorePathsFor(), requireBlobKeys(), tmpOpenDirPath(), attachment);
@@ -9344,9 +9364,9 @@ function registerIpc(): void {
     (event, payload): Promise<SaveAttachmentResult> => {
       assertTrustedSender(event);
       const body = asRecord(payload);
-      const profileId = asNonEmptyString(body.profileId, "profileId");
-      const id = asNonEmptyString(body.id, "id");
-      const attachmentId = asNonEmptyString(body.attachmentId, "attachmentId");
+      const profileId = asId(body.profileId, "profileId");
+      const id = asId(body.id, "id");
+      const attachmentId = asId(body.attachmentId, "attachmentId");
 
       const attachment = requireNoteAttachment(profileId, id, attachmentId);
       return saveAttachmentAs(mainWindow, blobStorePathsFor(), requireBlobKeys(), attachment);
@@ -9359,19 +9379,19 @@ function registerIpc(): void {
   // what actually crosses IPC — a profile id, and a dim.
   ipcMain.handle(IpcChannel.dashboardGetSettings, (event, payload): DashboardSettings => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return dashboardSettingsStore(profileId).get();
   });
 
   ipcMain.handle(IpcChannel.dashboardPickBackground, (event, payload): Promise<DashboardPickResult> => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return handleDashboardPick(profileId);
   });
 
   ipcMain.handle(IpcChannel.dashboardClearBackground, async (event, payload): Promise<DashboardSettings> => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
 
     const store = dashboardSettingsStore(profileId);
     const previousHash = store.get().backgroundHash;
@@ -9383,7 +9403,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.dashboardSetDim, (event, payload): DashboardSettings => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const dim = asBoundedInteger(body.dim, "dim", 0, MAX_BACKGROUND_DIM);
     return dashboardSettingsStore(profileId).setDim(dim, new Date().toISOString());
   });
@@ -9400,7 +9420,7 @@ function registerIpc(): void {
     (event, payload): DashboardWidgetInstance[] => {
       assertTrustedSender(event);
       const body = asRecord(payload);
-      const profileId = asNonEmptyString(body.profileId, "profileId");
+      const profileId = asId(body.profileId, "profileId");
       return dashboardWidgetStore(profileId).listLayout(asDashboardSetScope(body.setId));
     },
   );
@@ -9410,13 +9430,13 @@ function registerIpc(): void {
     (event, payload): DashboardWidgetInstance[] => {
       assertTrustedSender(event);
       const body = asRecord(payload);
-      const profileId = asNonEmptyString(body.profileId, "profileId");
+      const profileId = asId(body.profileId, "profileId");
       // Structural here, semantic in the store (SEC-EL-02's usual split): the
       // `moduleId:widgetId` slug rule is `DashboardWidgetStore`'s, and which
       // widgets actually EXIST is neither's — that catalogue lives in the module
       // manifests, and a layout deliberately keeps placements this build cannot
       // draw (migration 032).
-      const widgetId = asNonEmptyString(body.widgetId, "widgetId");
+      const widgetId = asId(body.widgetId, "widgetId");
       const size = asDashboardWidgetSize(body.size, "size");
       return dashboardWidgetStore(profileId).add(
         asDashboardSetScope(body.setId),
@@ -9432,8 +9452,8 @@ function registerIpc(): void {
     (event, payload): DashboardWidgetInstance[] => {
       assertTrustedSender(event);
       const body = asRecord(payload);
-      const profileId = asNonEmptyString(body.profileId, "profileId");
-      const instanceId = asNonEmptyString(body.instanceId, "instanceId");
+      const profileId = asId(body.profileId, "profileId");
+      const instanceId = asId(body.instanceId, "instanceId");
       return dashboardWidgetStore(profileId).remove(
         asDashboardSetScope(body.setId),
         instanceId,
@@ -9447,8 +9467,8 @@ function registerIpc(): void {
     (event, payload): DashboardWidgetInstance[] => {
       assertTrustedSender(event);
       const body = asRecord(payload);
-      const profileId = asNonEmptyString(body.profileId, "profileId");
-      const instanceId = asNonEmptyString(body.instanceId, "instanceId");
+      const profileId = asId(body.profileId, "profileId");
+      const instanceId = asId(body.instanceId, "instanceId");
       const size = asDashboardWidgetSize(body.size, "size");
       return dashboardWidgetStore(profileId).setSize(
         asDashboardSetScope(body.setId),
@@ -9464,8 +9484,8 @@ function registerIpc(): void {
     (event, payload): DashboardWidgetInstance[] => {
       assertTrustedSender(event);
       const body = asRecord(payload);
-      const profileId = asNonEmptyString(body.profileId, "profileId");
-      const instanceId = asNonEmptyString(body.instanceId, "instanceId");
+      const profileId = asId(body.profileId, "profileId");
+      const instanceId = asId(body.instanceId, "instanceId");
       const scope = asDashboardSetScope(body.setId);
       const store = dashboardWidgetStore(profileId);
       // The domain `config` is validated into is the CONTRACT of the widget
@@ -9499,10 +9519,10 @@ function registerIpc(): void {
     (event, payload): DashboardWidgetInstance[] => {
       assertTrustedSender(event);
       const body = asRecord(payload);
-      const profileId = asNonEmptyString(body.profileId, "profileId");
-      const instanceId = asNonEmptyString(body.instanceId, "instanceId");
-      const beforeId = asNullableString(body.beforeId, "beforeId");
-      const afterId = asNullableString(body.afterId, "afterId");
+      const profileId = asId(body.profileId, "profileId");
+      const instanceId = asId(body.instanceId, "instanceId");
+      const beforeId = asNullableId(body.beforeId, "beforeId");
+      const afterId = asNullableId(body.afterId, "afterId");
       return dashboardWidgetStore(profileId).move(
         asDashboardSetScope(body.setId),
         instanceId,
@@ -9521,14 +9541,14 @@ function registerIpc(): void {
   // row.
   ipcMain.handle(IpcChannel.dashboardSetsList, (event, payload): DashboardSetsState => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return dashboardSetsState(profileId);
   });
 
   ipcMain.handle(IpcChannel.dashboardSetCreate, (event, payload): DashboardSetsCreated => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const name = asDashboardSetName(body.name, "name");
     const created = dashboardSetStore(profileId).create(name, new Date().toISOString());
     return { ...dashboardSetsState(profileId), createdSetId: created.id };
@@ -9537,8 +9557,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.dashboardSetRename, (event, payload): DashboardSetsState => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const setId = asNonEmptyString(body.setId, "setId");
+    const profileId = asId(body.profileId, "profileId");
+    const setId = asId(body.setId, "setId");
     const name = asDashboardSetName(body.name, "name");
     dashboardSetStore(profileId).rename(setId, name, new Date().toISOString());
     return dashboardSetsState(profileId);
@@ -9547,8 +9567,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.dashboardSetDelete, (event, payload): DashboardSetsState => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const setId = asNonEmptyString(body.setId, "setId");
+    const profileId = asId(body.profileId, "profileId");
+    const setId = asId(body.setId, "setId");
     dashboardSetStore(profileId).delete(setId, new Date().toISOString());
     return dashboardSetsState(profileId);
   });
@@ -9556,7 +9576,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.dashboardSetActivate, (event, payload): DashboardSetsState => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const setId = asNullableId(body.setId, "setId");
     dashboardSetStore(profileId).setActive(setId, new Date().toISOString());
     return dashboardSetsState(profileId);
@@ -9570,7 +9590,7 @@ function registerIpc(): void {
   // to say.
   ipcMain.handle(IpcChannel.finAccountsList, (event, payload): FinAccount[] => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return finAccountStore(profileId).listActive();
   });
 
@@ -9578,7 +9598,7 @@ function registerIpc(): void {
   // balance column for this to go stale against.
   ipcMain.handle(IpcChannel.finAccountsBalances, (event, payload): FinAccountBalance[] => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return finAccountStore(profileId).listBalances();
   });
 
@@ -9586,14 +9606,14 @@ function registerIpc(): void {
   // number, so there is nothing here that could be folded into one.
   ipcMain.handle(IpcChannel.finAccountsTotals, (event, payload): FinCurrencyTotal[] => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return finAccountStore(profileId).totalsByCurrency();
   });
 
   ipcMain.handle(IpcChannel.finAccountsCreate, (event, payload): FinAccount => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     return finAccountStore(profileId).create(
       asNewFinAccountInput(body.account),
       new Date().toISOString(),
@@ -9603,8 +9623,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.finAccountsUpdate, (event, payload): FinAccount => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     return finAccountStore(profileId).update(
       id,
       asFinAccountFieldChanges(body.changes),
@@ -9615,29 +9635,29 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.finAccountsDelete, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     finAccountStore(profileId).softDelete(id, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.finAccountsRestore, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     finAccountStore(profileId).restore(id, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.finCategoriesList, (event, payload): FinCategory[] => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return finCategoryStore(profileId).list();
   });
 
   ipcMain.handle(IpcChannel.finCategoriesCreate, (event, payload): FinCategory => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const name = asNonEmptyString(body.name, "name");
     const kind = asFinCategoryKind(body.kind, "kind");
     return finCategoryStore(profileId).create({ name, kind }, new Date().toISOString());
@@ -9646,8 +9666,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.finCategoriesRename, (event, payload): FinCategory => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     const name = asNonEmptyString(body.name, "name");
     return finCategoryStore(profileId).rename(id, name, new Date().toISOString());
   });
@@ -9659,8 +9679,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.finCategoriesDelete, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     finCategoryStore(profileId).delete(id);
   });
 
@@ -9669,14 +9689,14 @@ function registerIpc(): void {
   // amount on this wire.
   ipcMain.handle(IpcChannel.finBudgetsList, (event, payload): FinBudget[] => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return finCategoryStore(profileId).listBudgets();
   });
 
   ipcMain.handle(IpcChannel.finBudgetsSet, (event, payload): FinBudget => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     return finCategoryStore(profileId).setBudget(
       asSetFinBudgetInput(body.budget),
       new Date().toISOString(),
@@ -9688,22 +9708,22 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.finBudgetsClear, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const categoryId = asNonEmptyString(body.categoryId, "categoryId");
+    const profileId = asId(body.profileId, "profileId");
+    const categoryId = asId(body.categoryId, "categoryId");
     const currency = asCurrencyCode(body.currency, "currency");
     finCategoryStore(profileId).clearBudget(categoryId, currency);
   });
 
   ipcMain.handle(IpcChannel.finTransactionsList, (event, payload): FinTransaction[] => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return finTransactionStore(profileId).listActive();
   });
 
   ipcMain.handle(IpcChannel.finTransactionsCreate, (event, payload): FinTransaction => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     return finTransactionStore(profileId).create(
       asNewFinTransactionInput(body.transaction),
       new Date().toISOString(),
@@ -9713,8 +9733,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.finTransactionsUpdate, (event, payload): FinTransaction => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     return finTransactionStore(profileId).update(
       id,
       asFinTransactionFieldChanges(body.changes),
@@ -9725,16 +9745,16 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.finTransactionsDelete, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     finTransactionStore(profileId).softDelete(id, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.finTransactionsRestore, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     finTransactionStore(profileId).restore(id, new Date().toISOString());
   });
 
@@ -9745,14 +9765,14 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.finTransactionsSpend, (event, payload): FinCategorySpend[] => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     return finTransactionStore(profileId).spendByCategory(asFinPeriod(body.period));
   });
 
   ipcMain.handle(IpcChannel.finTransactionsIncome, (event, payload): FinCurrencyTotal[] => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     return finTransactionStore(profileId).incomeByCurrency(asFinPeriod(body.period));
   });
 
@@ -9764,7 +9784,7 @@ function registerIpc(): void {
   // write path nobody needs is a write path nobody should have.)
   ipcMain.handle(IpcChannel.finRecurringList, (event, payload): FinRecurring[] => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return finRecurringStore(profileId).listActive();
   });
 
@@ -9773,14 +9793,14 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.finRecurringUpcoming, (event, payload): FinUpcomingRenewal[] => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     return finRecurringStore(profileId).upcoming(asFinRenewalWindow(body.window));
   });
 
   ipcMain.handle(IpcChannel.finRecurringCreate, (event, payload): FinRecurring => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     return finRecurringStore(profileId).create(
       asNewFinRecurringInput(body.subscription),
       new Date().toISOString(),
@@ -9790,8 +9810,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.finRecurringUpdate, (event, payload): FinRecurring => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     return finRecurringStore(profileId).update(
       id,
       asFinRecurringFieldChanges(body.changes),
@@ -9802,16 +9822,16 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.finRecurringDelete, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     finRecurringStore(profileId).softDelete(id, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.finRecurringRestore, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     finRecurringStore(profileId).restore(id, new Date().toISOString());
   });
 
@@ -9820,8 +9840,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.finRecurringPause, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     finRecurringStore(profileId).pause(id, new Date().toISOString());
   });
 
@@ -9831,8 +9851,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.finRecurringResume, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     finRecurringStore(profileId).resume(id, new Date().toISOString(), localToday());
   });
 
@@ -9844,22 +9864,22 @@ function registerIpc(): void {
   // `localToday()` slice c's reminder check will read.
   ipcMain.handle(IpcChannel.habitsList, (event, payload): Habit[] => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return habitStore(profileId).listActive();
   });
 
   ipcMain.handle(IpcChannel.habitsCreate, (event, payload): Habit => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     return habitStore(profileId).create(asNewHabitInput(body.habit), new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.habitsUpdate, (event, payload): Habit => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     return habitStore(profileId).update(
       id,
       asHabitFieldChanges(body.changes),
@@ -9872,16 +9892,16 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.habitsDelete, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     habitStore(profileId).softDelete(id, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.habitsRestore, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     habitStore(profileId).restore(id, new Date().toISOString());
   });
 
@@ -9890,16 +9910,16 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.habitsArchive, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     habitStore(profileId).archive(id, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.habitsUnarchive, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     habitStore(profileId).unarchive(id, new Date().toISOString());
   });
 
@@ -9909,8 +9929,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.habitsSetEntry, (event, payload): HabitEntry => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const habitId = asNonEmptyString(body.habitId, "habitId");
+    const profileId = asId(body.profileId, "profileId");
+    const habitId = asId(body.habitId, "habitId");
     const day = asHabitEntryDay(body.day, "day");
     const value = asHabitCount(body.value, "value");
     const store = habitStore(profileId);
@@ -9921,8 +9941,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.habitsClearEntry, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const habitId = asNonEmptyString(body.habitId, "habitId");
+    const profileId = asId(body.profileId, "profileId");
+    const habitId = asId(body.habitId, "habitId");
     const day = asHabitEntryDay(body.day, "day");
     const store = habitStore(profileId);
     assertHabitExisted(store, habitId, day);
@@ -9934,7 +9954,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.habitsEntries, (event, payload): HabitEntry[] => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     return habitStore(profileId).listAllEntries(asHabitDayRange(body.range));
   });
 
@@ -9956,7 +9976,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.fitFoodSearch, (event, payload): FitFoodOption[] => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const query = asCappedChars(body.query, "query", MAX_FIT_FOOD_QUERY_LENGTH);
     const limit = Math.min(asPositiveInteger(body.limit, "limit"), MAX_FIT_FOOD_RESULTS);
 
@@ -9990,7 +10010,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.fitDay, (event, payload): FitDay => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const day = asFitDay(body.day, "day");
     const store = fitMealStore(profileId);
     return { day, slots: store.listDay(day), totals: store.dayTotals(day) };
@@ -10003,7 +10023,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.fitItemAdd, (event, payload): FitMealItem => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const resolved = resolveLoggedFood(profileId, body.foodRef);
     return fitMealStore(profileId).addItem(
       {
@@ -10023,8 +10043,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.fitItemUpdate, (event, payload): FitMealItem => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     const changes: { grams?: number; slot?: MealSlot } = {};
     if (body.grams !== undefined) changes.grams = asFitGrams(body.grams, "grams");
     if (body.slot !== undefined) changes.slot = asFitMealSlot(body.slot, "slot");
@@ -10034,16 +10054,16 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.fitItemRemove, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     fitMealStore(profileId).removeItem(id, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.fitItemRestore, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     fitMealStore(profileId).restoreItem(id, new Date().toISOString());
   });
 
@@ -10051,14 +10071,14 @@ function registerIpc(): void {
   // because it is not a table — see migration 058.
   ipcMain.handle(IpcChannel.fitFoodsList, (event, payload): FitFood[] => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return fitFoodStore(profileId).list();
   });
 
   ipcMain.handle(IpcChannel.fitFoodCreate, (event, payload): FitFood => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     return fitFoodStore(profileId).create(
       asNewFitFoodInput(body.food),
       new Date().toISOString(),
@@ -10070,8 +10090,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.fitFoodUpdate, (event, payload): FitFood => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     return fitFoodStore(profileId).update(
       id,
       asFitFoodChanges(body.changes),
@@ -10084,16 +10104,16 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.fitFoodDelete, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     fitFoodStore(profileId).softDelete(id, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.fitFoodRestore, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     fitFoodStore(profileId).restore(id, new Date().toISOString());
   });
 
@@ -10104,7 +10124,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.fitDayTotalsRange, (event, payload): FitDayTotals[] => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     return fitMealStore(profileId).rangeTotals({
       from: asFitDay(body.from, "from"),
       to: asFitDay(body.to, "to"),
@@ -10113,7 +10133,7 @@ function registerIpc(): void {
 
   ipcMain.handle(IpcChannel.fitTargets, (event, payload): FitTargets => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return fitTargetStore(profileId).get();
   });
 
@@ -10122,7 +10142,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.fitTargetsSave, (event, payload): FitTargets => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     return fitTargetStore(profileId).save(
       asFitTargetGoals(body.goals),
       new Date().toISOString(),
@@ -10141,7 +10161,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.fitExerciseSearch, (event, payload): FitExerciseOption[] => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const query = asCappedChars(body.query, "query", MAX_FIT_EXERCISE_QUERY_LENGTH);
     const limit = Math.min(asPositiveInteger(body.limit, "limit"), MAX_FIT_EXERCISE_RESULTS);
 
@@ -10173,14 +10193,14 @@ function registerIpc(): void {
 
   ipcMain.handle(IpcChannel.fitExercisesList, (event, payload): FitExercise[] => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return fitExerciseStore(profileId).list();
   });
 
   ipcMain.handle(IpcChannel.fitExerciseCreate, (event, payload): FitExercise => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     return fitExerciseStore(profileId).create(
       asNewFitExercise(body.exercise),
       new Date().toISOString(),
@@ -10190,8 +10210,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.fitExerciseUpdate, (event, payload): FitExercise => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     return fitExerciseStore(profileId).update(
       id,
       asFitExerciseChanges(body.changes),
@@ -10202,15 +10222,15 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.fitExerciseDelete, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    fitExerciseStore(profileId).remove(asNonEmptyString(body.id, "id"), new Date().toISOString());
+    const profileId = asId(body.profileId, "profileId");
+    fitExerciseStore(profileId).remove(asId(body.id, "id"), new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.fitExerciseRestore, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    fitExerciseStore(profileId).restore(asNonEmptyString(body.id, "id"), new Date().toISOString());
+    const profileId = asId(body.profileId, "profileId");
+    fitExerciseStore(profileId).restore(asId(body.id, "id"), new Date().toISOString());
   });
 
   // Every routine's items are resolved LIVE against one read of the profile's
@@ -10218,7 +10238,7 @@ function registerIpc(): void {
   // not the snapshot a logged set's are.
   ipcMain.handle(IpcChannel.fitRoutinesList, (event, payload): FitRoutine[] => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     const lookup = fitExerciseLookup(profileId);
     return fitRoutineStore(profileId)
       .list()
@@ -10240,7 +10260,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.fitRoutineUpdate, (event, payload): FitRoutine => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const id = asNonEmptyString(body.id, "id");
+    const id = asId(body.id, "id");
     const { profileId, name, notes, items } = readFitRoutineBody(payload);
     return toWireRoutine(
       fitRoutineStore(profileId).update(id, { name, notes, items }, new Date().toISOString()),
@@ -10251,27 +10271,27 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.fitRoutineDelete, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    fitRoutineStore(profileId).remove(asNonEmptyString(body.id, "id"), new Date().toISOString());
+    const profileId = asId(body.profileId, "profileId");
+    fitRoutineStore(profileId).remove(asId(body.id, "id"), new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.fitRoutineRestore, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    fitRoutineStore(profileId).restore(asNonEmptyString(body.id, "id"), new Date().toISOString());
+    const profileId = asId(body.profileId, "profileId");
+    fitRoutineStore(profileId).restore(asId(body.id, "id"), new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.fitWorkoutOpen, (event, payload): FitWorkout | null => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return fitWorkoutStore(profileId).open();
   });
 
   ipcMain.handle(IpcChannel.fitWorkoutStart, (event, payload): FitWorkout => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const day = asFitTrainingDay(body.day, "day");
     const notes =
       body.notes === undefined
@@ -10293,9 +10313,9 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.fitWorkoutFinish, (event, payload): FitWorkout => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     return fitWorkoutStore(profileId).finish(
-      asNonEmptyString(body.id, "id"),
+      asId(body.id, "id"),
       new Date().toISOString(),
     );
   });
@@ -10303,9 +10323,9 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.fitWorkoutReopen, (event, payload): FitWorkout => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     return fitWorkoutStore(profileId).reopen(
-      asNonEmptyString(body.id, "id"),
+      asId(body.id, "id"),
       new Date().toISOString(),
     );
   });
@@ -10313,8 +10333,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.fitWorkoutUpdate, (event, payload): FitWorkout => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     const changes: { day?: string; notes?: string } = {};
     if (body.day !== undefined) changes.day = asFitTrainingDay(body.day, "day");
     if (body.notes !== undefined) {
@@ -10326,21 +10346,21 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.fitWorkoutDelete, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    fitWorkoutStore(profileId).remove(asNonEmptyString(body.id, "id"), new Date().toISOString());
+    const profileId = asId(body.profileId, "profileId");
+    fitWorkoutStore(profileId).remove(asId(body.id, "id"), new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.fitWorkoutRestore, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    fitWorkoutStore(profileId).restore(asNonEmptyString(body.id, "id"), new Date().toISOString());
+    const profileId = asId(body.profileId, "profileId");
+    fitWorkoutStore(profileId).restore(asId(body.id, "id"), new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.fitWorkoutsRange, (event, payload): FitWorkout[] => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     return fitWorkoutStore(profileId).listRange(
       asBareDate(body.from, "from"),
       asBareDate(body.to, "to"),
@@ -10353,8 +10373,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.fitSetLog, (event, payload): FitWorkoutSet => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const workoutId = asNonEmptyString(body.workoutId, "workoutId");
+    const profileId = asId(body.profileId, "profileId");
+    const workoutId = asId(body.workoutId, "workoutId");
     const resolved = resolveLoggedExercise(profileId, body.exerciseRef);
     return fitWorkoutStore(profileId).logSet(
       workoutId,
@@ -10374,8 +10394,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.fitSetUpdate, (event, payload): FitWorkoutSet => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     // Only the numbers and the kind. The snapshot is not on this wire at all,
     // so no payload can reach it.
     const changes: UpdateFitSetFields = {};
@@ -10397,14 +10417,14 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.fitSetRemove, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    fitWorkoutStore(profileId).removeSet(asNonEmptyString(body.id, "id"));
+    const profileId = asId(body.profileId, "profileId");
+    fitWorkoutStore(profileId).removeSet(asId(body.id, "id"));
   });
 
   ipcMain.handle(IpcChannel.fitLastPerformed, (event, payload): FitLastPerformed[] => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const refs = asStringArray(
       body.exerciseRefs,
       "exerciseRefs",
@@ -10417,7 +10437,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.fitMeasurements, (event, payload): FitMeasurement[] => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     return fitMeasurementStore(profileId).listRange(
       asBareDate(body.from, "from"),
       asBareDate(body.to, "to"),
@@ -10427,7 +10447,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.fitMeasurementSave, (event, payload): FitMeasurement => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     return fitMeasurementStore(profileId).save(
       asFitMeasurementInput(body.measurement),
       new Date().toISOString(),
@@ -10437,7 +10457,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.fitMeasurementRemove, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     fitMeasurementStore(profileId).remove(asBareDate(body.day, "day"));
   });
 
@@ -10447,7 +10467,7 @@ function registerIpc(): void {
   // starts describing something other than what crosses it.
   ipcMain.handle(IpcChannel.fitBodyProfile, (event, payload): FitBodyProfile | null => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     const row = fitBodyProfileStore(profileId).get();
     return row === null ? null : toWireBodyProfile(row);
   });
@@ -10455,7 +10475,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.fitBodyProfileSave, (event, payload): FitBodyProfile => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     return toWireBodyProfile(
       fitBodyProfileStore(profileId).save(
         asFitBodyProfileInput(body.profile),
@@ -10478,7 +10498,7 @@ function registerIpc(): void {
     // touching a store.
     requireDb();
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const seconds = asPositiveInteger(body.seconds, "seconds");
     if (seconds < MIN_FIT_REST_SECONDS || seconds > MAX_FIT_REST_SECONDS) {
       throw new Error(
@@ -10493,12 +10513,12 @@ function registerIpc(): void {
   // ends and must not read as an error.
   ipcMain.handle(IpcChannel.fitRestStop, (event, payload): void => {
     assertTrustedSender(event);
-    clearRestTimer(asNonEmptyString(asRecord(payload).profileId, "profileId"));
+    clearRestTimer(asId(asRecord(payload).profileId, "profileId"));
   });
 
   ipcMain.handle(IpcChannel.fitRestStatus, (event, payload): FitRestTimer | null => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     const rest = runningRestTimers.get(profileId);
     return rest === undefined ? null : toWireRestTimer(rest);
   });
@@ -10514,15 +10534,15 @@ function registerIpc(): void {
   // the second carries megabytes (see the channel list's own note).
   ipcMain.handle(IpcChannel.canvasList, (event, payload): CanvasBoard[] => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return canvasStore(profileId).listActive();
   });
 
   ipcMain.handle(IpcChannel.canvasOpen, (event, payload): CanvasBoardWithScene => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     return canvasStore(profileId).readScene(id);
   });
 
@@ -10532,7 +10552,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.canvasCreate, (event, payload): CanvasBoardWithScene => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const name = asCanvasBoardName(body.name, "name");
     const input =
       body.scene === undefined
@@ -10544,8 +10564,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.canvasRename, (event, payload): CanvasBoard => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     const name = asCanvasBoardName(body.name, "name");
     return canvasStore(profileId).rename(id, name, new Date().toISOString());
   });
@@ -10556,8 +10576,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.canvasSaveScene, (event, payload): CanvasBoard => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     const scene = asCanvasScene(body.scene, "scene");
     return canvasStore(profileId).saveScene(id, scene, new Date().toISOString());
   });
@@ -10567,16 +10587,16 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.canvasDelete, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     canvasStore(profileId).softDelete(id, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.canvasRestore, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     canvasStore(profileId).restore(id, new Date().toISOString());
   });
 
@@ -10586,7 +10606,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.canvasResolveRefs, (event, payload): CanvasRefCard[] => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const refs = asCanvasRefs(body.refs, "refs");
     return canvasStore(profileId).resolveRefs(refs);
   });
@@ -10602,7 +10622,7 @@ function registerIpc(): void {
   // imports directly.
   ipcMain.handle(IpcChannel.elecList, (event, payload): ElecCircuit[] => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return electronicsStore(profileId).listActive();
   });
 
@@ -10611,8 +10631,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.elecOpen, (event, payload): ElecCircuitDocument => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asElecId(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     return toCircuitDocument(electronicsStore(profileId).read(id));
   });
 
@@ -10621,7 +10641,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.elecCreate, (event, payload): ElecCircuit => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const name = asCircuitName(body.name, "name");
     const input =
       body.notes === undefined ? { name } : { name, notes: asCircuitNotes(body.notes, "notes") };
@@ -10631,8 +10651,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.elecRename, (event, payload): ElecCircuit => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asElecId(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     const name = asCircuitName(body.name, "name");
     return electronicsStore(profileId).renameCircuit(id, name, new Date().toISOString());
   });
@@ -10640,8 +10660,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.elecSetNotes, (event, payload): ElecCircuit => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asElecId(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     const notes = asCircuitNotes(body.notes, "notes");
     return electronicsStore(profileId).setNotes(id, notes, new Date().toISOString());
   });
@@ -10651,24 +10671,24 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.elecDelete, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asElecId(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     electronicsStore(profileId).softDelete(id, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.elecRestore, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asElecId(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     electronicsStore(profileId).restore(id, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.elecAddPart, (event, payload): CircuitPart => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const circuitId = asElecId(body.circuitId, "circuitId");
+    const profileId = asId(body.profileId, "profileId");
+    const circuitId = asId(body.circuitId, "circuitId");
     const part = asNewCircuitPart(body.part, "part");
     return electronicsStore(profileId).addPart(circuitId, part, new Date().toISOString());
   });
@@ -10679,8 +10699,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.elecUpdatePart, (event, payload): CircuitPart => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asElecId(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     const fields = asCircuitPartFields(body.fields, "fields");
     return electronicsStore(profileId).updatePart(id, fields, new Date().toISOString());
   });
@@ -10693,16 +10713,16 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.elecRemovePart, (event, payload): string[] => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asElecId(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     return electronicsStore(profileId).removePart(id, new Date().toISOString());
   });
 
   ipcMain.handle(IpcChannel.elecAddWire, (event, payload): CircuitWire => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const circuitId = asElecId(body.circuitId, "circuitId");
+    const profileId = asId(body.profileId, "profileId");
+    const circuitId = asId(body.circuitId, "circuitId");
     const wire = asNewCircuitWire(body.wire, "wire");
     return toWireDocument(
       electronicsStore(profileId).addWire(circuitId, wire, new Date().toISOString()),
@@ -10715,8 +10735,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.elecSetWireColour, (event, payload): CircuitWire => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asElecId(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     const colour = asWireColour(body.colour, "colour");
     return toWireDocument(
       electronicsStore(profileId).setWireColour(id, colour, new Date().toISOString()),
@@ -10726,8 +10746,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.elecRemoveWire, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asElecId(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     electronicsStore(profileId).removeWire(id, new Date().toISOString());
   });
 
@@ -10742,8 +10762,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.elecSetChassis, (event, payload): Chassis | null => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asElecId(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     const chassis = body.chassis === null ? null : asChassis(body.chassis, "chassis");
     electronicsStore(profileId).setChassis(id, chassis, new Date().toISOString());
     return chassis;
@@ -10768,8 +10788,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.elecExportCode, async (event, payload): Promise<CodeExportResult> => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asElecId(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
 
     const circuit = toCircuitDocument(electronicsStore(profileId).read(id));
     const code = generateCode(circuit, catalogueComponent);
@@ -10829,7 +10849,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.searchQuery, (event, payload): Promise<SearchResult[]> => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const query = asCappedString(body.query, "query", SEARCH_QUERY_MAX_BYTES);
     const limit = Math.min(asPositiveInteger(body.limit, "limit"), SEARCH_RESULT_MAX_LIMIT);
     return runSearchQuery(profileId, query, limit);
@@ -10838,7 +10858,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.searchRecent, (event, payload): Promise<SearchResult[]> => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const limit = Math.min(asPositiveInteger(body.limit, "limit"), SEARCH_RESULT_MAX_LIMIT);
     return runRecentSearch(profileId, limit);
   });
@@ -10854,7 +10874,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.searchPage, (event, payload): Promise<SearchPageResult> => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const query = asCappedString(body.query, "query", SEARCH_QUERY_MAX_BYTES);
     return runSearchPage(profileId, query);
   });
@@ -10868,7 +10888,7 @@ function registerIpc(): void {
    */
   ipcMain.handle(IpcChannel.searchRebuild, (event, payload): number => {
     assertTrustedSender(event);
-    asNonEmptyString(asRecord(payload).profileId, "profileId");
+    asId(asRecord(payload).profileId, "profileId");
     return rebuildSearchIndex(requireDb().raw);
   });
 
@@ -10892,14 +10912,14 @@ function registerIpc(): void {
    */
   ipcMain.handle(IpcChannel.searchHistory, (event, payload): SearchHistoryEntry[] => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return searchHistoryStore(profileId).list();
   });
 
   ipcMain.handle(IpcChannel.searchHistoryRecord, (event, payload): SearchHistoryEntry[] => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const query = asCappedString(body.query, "query", SEARCH_QUERY_MAX_BYTES);
     const store = searchHistoryStore(profileId);
     // The store re-validates the semantics this boundary cannot (SEC-EL-02):
@@ -10913,7 +10933,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.searchHistoryRemove, (event, payload): SearchHistoryEntry[] => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const query = asCappedString(body.query, "query", SEARCH_QUERY_MAX_BYTES);
     const store = searchHistoryStore(profileId);
     store.remove(query);
@@ -10922,7 +10942,7 @@ function registerIpc(): void {
 
   ipcMain.handle(IpcChannel.searchHistoryClear, (event, payload): number => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return searchHistoryStore(profileId).clear();
   });
 
@@ -10935,7 +10955,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.imexExport, (event, payload): Promise<ExportResult> => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const passphrase = asArchivePassphrase(body.passphrase, "passphrase");
     const modules = asArchiveModules(body.modules, "modules");
     const profile = requireProfile(requireDb(), profileId);
@@ -10962,7 +10982,7 @@ function registerIpc(): void {
   // validate and no plaintext confirmation to honour.
   ipcMain.handle(IpcChannel.imexExportIcs, (event, payload): Promise<IcsExportResult> => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     const profile = requireProfile(requireDb(), profileId);
     return handleIcsExport({ eventStore, getMainWindow: () => mainWindow }, profile);
   });
@@ -10980,7 +11000,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.imexRestorePreview, (event, payload): Promise<RestorePreviewResult> => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const passphrase = asRestorePassphrase(body.passphrase, "passphrase");
     return previewRestore(restoreDeps(), profileId, passphrase);
   });
@@ -10990,7 +11010,7 @@ function registerIpc(): void {
     async (event, payload): Promise<RestoreApplyResult> => {
       assertTrustedSender(event);
       const body = asRecord(payload);
-      const profileId = asNonEmptyString(body.profileId, "profileId");
+      const profileId = asId(body.profileId, "profileId");
       const token = asRestoreToken(body.token, "token");
       const result = await applyRestore(restoreDeps(), profileId, token);
       // An archive carries an attachment's BYTES but not the text derived from
@@ -11005,7 +11025,7 @@ function registerIpc(): void {
 
   ipcMain.handle(IpcChannel.imexRestoreUndo, async (event, payload): Promise<RestoreUndoResult> => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     const result = await undoRestore(restoreDeps(), profileId);
     // The undo just put a different set of sealed rows back, wholesale and
     // without passing through `privWrite` — so whatever the open section's
@@ -11021,7 +11041,7 @@ function registerIpc(): void {
 
   ipcMain.handle(IpcChannel.imexRestoreStatus, (event, payload): RestoreStatus => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     return restoreStatus(profileId);
   });
 
@@ -11043,7 +11063,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.imexImportPreview, (event, payload): Promise<ImportPreviewResult> => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const passphrase = asRestorePassphrase(body.passphrase, "passphrase");
     return previewImport(restoreDeps(), profileId, passphrase);
   });
@@ -11055,7 +11075,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.imexImportReplan, (event, payload): ImportPreviewResult => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const token = asRestoreToken(body.token, "token");
     const choices = asImportDuplicateChoices(body.choices, "choices");
     return replanImport(restoreDeps(), profileId, token, choices);
@@ -11066,7 +11086,7 @@ function registerIpc(): void {
     async (event, payload): Promise<ImportApplyResult> => {
       assertTrustedSender(event);
       const body = asRecord(payload);
-      const profileId = asNonEmptyString(body.profileId, "profileId");
+      const profileId = asId(body.profileId, "profileId");
       const token = asRestoreToken(body.token, "token");
       const result = await applyImport(restoreDeps(), profileId, token);
       // Same reason as `imex:restore-apply`: imported attachment rows arrive
@@ -11099,7 +11119,7 @@ function registerIpc(): void {
     (event, payload): Promise<ApkgImportPreviewResult> => {
       assertTrustedSender(event);
       const body = asRecord(payload);
-      const profileId = asNonEmptyString(body.profileId, "profileId");
+      const profileId = asId(body.profileId, "profileId");
       const subject = asApkgSubjectChoice(body.subject, "subject");
       return previewApkgImport(restoreDeps(), profileId, subject);
     },
@@ -11108,7 +11128,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.imexImportApkgApply, (event, payload): Promise<ApkgImportApplyResult> => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const token = asRestoreToken(body.token, "token");
     return applyApkgImport(restoreDeps(), profileId, token);
   });
@@ -11138,7 +11158,7 @@ function registerIpc(): void {
     (event, payload): Promise<CsvImportPreviewResult> => {
       assertTrustedSender(event);
       const body = asRecord(payload);
-      asNonEmptyString(body.profileId, "profileId");
+      asId(body.profileId, "profileId");
       const delimiter = asCsvImportDelimiter(body.delimiter, "delimiter");
       const hasHeader = asCsvImportHeaderFlag(body.hasHeader, "hasHeader");
       return previewCsvImport(restoreDeps(), delimiter, hasHeader);
@@ -11151,7 +11171,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.imexImportCsvMap, (event, payload): CsvImportMapResult => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const roles = asCsvImportRoles(body.roles, "roles");
     const list = asCsvImportListChoice(body.list, "list");
     return mapCsvImport(restoreDeps(), profileId, roles, list);
@@ -11160,7 +11180,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.imexImportCsvApply, (event, payload): Promise<CsvImportApplyResult> => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const token = asRestoreToken(body.token, "token");
     return applyCsvImport(restoreDeps(), profileId, token);
   });
@@ -11186,7 +11206,7 @@ function registerIpc(): void {
     (event, payload): Promise<FinCsvImportPreviewResult> => {
       assertTrustedSender(event);
       const body = asRecord(payload);
-      asNonEmptyString(body.profileId, "profileId");
+      asId(body.profileId, "profileId");
       const delimiter = asCsvImportDelimiter(body.delimiter, "delimiter");
       const hasHeader = asCsvImportHeaderFlag(body.hasHeader, "hasHeader");
       return previewFinCsvImport(restoreDeps(), delimiter, hasHeader);
@@ -11200,9 +11220,9 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.imexImportFinCsvMap, (event, payload): FinCsvImportMapResult => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const roles = asFinCsvImportRoles(body.roles, "roles");
-    const accountId = asNonEmptyString(body.accountId, "accountId");
+    const accountId = asId(body.accountId, "accountId");
     const signConvention = asFinCsvImportSignConvention(body.signConvention, "signConvention");
     return mapFinCsvImport(restoreDeps(), profileId, roles, accountId, signConvention);
   });
@@ -11212,7 +11232,7 @@ function registerIpc(): void {
     (event, payload): Promise<FinCsvImportApplyResult> => {
       assertTrustedSender(event);
       const body = asRecord(payload);
-      const profileId = asNonEmptyString(body.profileId, "profileId");
+      const profileId = asId(body.profileId, "profileId");
       const token = asRestoreToken(body.token, "token");
       return applyFinCsvImport(restoreDeps(), profileId, token);
     },
@@ -11241,7 +11261,7 @@ function registerIpc(): void {
     (event, payload): Promise<IcsImportPreviewResult> => {
       assertTrustedSender(event);
       const body = asRecord(payload);
-      const profileId = asNonEmptyString(body.profileId, "profileId");
+      const profileId = asId(body.profileId, "profileId");
       const importDuplicates = asBoolean(body.importDuplicates, "importDuplicates");
       return previewIcsImport(restoreDeps(), profileId, importDuplicates);
     },
@@ -11250,7 +11270,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.imexImportIcsApply, (event, payload): Promise<IcsImportApplyResult> => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const token = asRestoreToken(body.token, "token");
     return applyIcsImport(restoreDeps(), profileId, token);
   });
@@ -11268,7 +11288,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.imexImportLlmPreview, (event, payload): LlmImportPreviewResult => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const kind = asLlmImportKind(body.kind, "kind");
     const text = asLlmAnswerText(body.text, "text");
     // Structurally validated here, semantically in `restore.ts` against the
@@ -11285,7 +11305,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.imexImportLlmReplan, (event, payload): LlmImportPreviewResult => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const token = asRestoreToken(body.token, "token");
     const importDuplicates = asBoolean(body.importDuplicates, "importDuplicates");
     return replanLlmImport(restoreDeps(), profileId, token, importDuplicates);
@@ -11294,7 +11314,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.imexImportLlmApply, (event, payload): Promise<LlmImportApplyResult> => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const token = asRestoreToken(body.token, "token");
     return applyLlmImport(restoreDeps(), profileId, token);
   });
@@ -11312,8 +11332,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.imexImportMarkdown, (event, payload): Promise<MarkdownImportResult> => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const folderId = asNullableString(body.folderId, "folderId");
+    const profileId = asId(body.profileId, "profileId");
+    const folderId = asNullableId(body.folderId, "folderId");
     const source = asMarkdownImportSource(body.source, "source");
     return handleMarkdownImport(
       {
@@ -11334,7 +11354,7 @@ function registerIpc(): void {
   // renderer NEVER sees the passphrase back, in any form.
   ipcMain.handle(IpcChannel.backupGetSettings, (event, payload): BackupSettingsView => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     requireProfile(requireDb(), profileId);
     return backupSettingsView(profileId);
   });
@@ -11342,7 +11362,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.backupSetSettings, (event, payload): BackupSettingsView => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const enabled = asBoolean(body.enabled, "enabled");
     const cadence = asBackupCadence(body.cadence, "cadence");
     const keepLast = asBackupKeepLast(body.keepLast, "keepLast");
@@ -11363,7 +11383,7 @@ function registerIpc(): void {
     IpcChannel.backupPickFolder,
     async (event, payload): Promise<BackupSettingsView> => {
       assertTrustedSender(event);
-      const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+      const profileId = asId(asRecord(payload).profileId, "profileId");
       requireProfile(requireDb(), profileId);
       const options: OpenDialogOptions = { properties: ["openDirectory"] };
       const { canceled, filePaths } = mainWindow
@@ -11386,7 +11406,7 @@ function registerIpc(): void {
     async (event, payload): Promise<BackupSettingsView> => {
       assertTrustedSender(event);
       const body = asRecord(payload);
-      const profileId = asNonEmptyString(body.profileId, "profileId");
+      const profileId = asId(body.profileId, "profileId");
       const passphrase = asBackupPassphrase(body.passphrase, "passphrase");
       requireProfile(requireDb(), profileId);
       const wrapped = await wrapBackupPassphrase(requireUnlockedDataKeyHex(), passphrase);
@@ -11399,7 +11419,7 @@ function registerIpc(): void {
   // view it answers carries the run's recorded outcome, which is the report.
   ipcMain.handle(IpcChannel.backupRunNow, async (event, payload): Promise<BackupSettingsView> => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     requireProfile(requireDb(), profileId);
     await runBackupNow(backupRunnerDeps(), profileId);
     return backupSettingsView(profileId);
@@ -11414,7 +11434,7 @@ function registerIpc(): void {
   // before anything else runs.
   ipcMain.handle(IpcChannel.privStatus, (event, payload): PrivStatus => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     requireProfile(requireDb(), profileId);
     return privStatus(privDeps(), profileId);
   });
@@ -11422,7 +11442,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.privSetup, (event, payload): Promise<PrivSetupResult> => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const credential = asPasscode(body.credential, "credential");
     const usesAccountPasscode = asBoolean(body.usesAccountPasscode, "usesAccountPasscode");
     const regenerateKit = asBoolean(body.regenerateKit, "regenerateKit");
@@ -11433,7 +11453,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.privUnlock, async (event, payload): Promise<PrivUnlockResult> => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const credential = asPasscode(body.credential, "credential");
     requireProfile(requireDb(), profileId);
     const result = await privUnlock(privDeps(), profileId, credential);
@@ -11468,7 +11488,7 @@ function registerIpc(): void {
 
   ipcMain.handle(IpcChannel.privList, (event, payload): Promise<PrivNoteListEntry[]> => {
     assertTrustedSender(event);
-    const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+    const profileId = asId(asRecord(payload).profileId, "profileId");
     requireProfile(requireDb(), profileId);
     return privList(privDeps(), profileId);
   });
@@ -11476,8 +11496,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.privRead, (event, payload): Promise<PrivNoteEnvelopePayload> => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     requireProfile(requireDb(), profileId);
     return privRead(privDeps(), profileId, id);
   });
@@ -11485,7 +11505,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.privWrite, (event, payload): Promise<{ id: string }> => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const id = asNullableId(body.id, "id");
     const envelope = asPrivEnvelope(body.envelope, "envelope");
     requireProfile(requireDb(), profileId);
@@ -11495,8 +11515,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.privDelete, (event, payload): Promise<void> => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     requireProfile(requireDb(), profileId);
     return privDelete(privDeps(), profileId, id);
   });
@@ -11505,7 +11525,7 @@ function registerIpc(): void {
     IpcChannel.privAttachmentPick,
     (event, payload): Promise<PrivAttachmentPickResult> => {
       assertTrustedSender(event);
-      const profileId = asNonEmptyString(asRecord(payload).profileId, "profileId");
+      const profileId = asId(asRecord(payload).profileId, "profileId");
       requireProfile(requireDb(), profileId);
       return handlePrivAttachmentPick(profileId);
     },
@@ -11514,8 +11534,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.privMoveIn, (event, payload): Promise<PrivMoveInResult> => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const noteId = asNonEmptyString(body.noteId, "noteId");
+    const profileId = asId(body.profileId, "profileId");
+    const noteId = asId(body.noteId, "noteId");
     requireProfile(requireDb(), profileId);
     return moveNoteToPrivate(privMoveDeps(), profileId, noteId);
   });
@@ -11523,8 +11543,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.privMoveOut, (event, payload): Promise<PrivMoveOutResult> => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     requireProfile(requireDb(), profileId);
     return movePrivateNoteOut(privMoveDeps(), profileId, id);
   });
@@ -11532,7 +11552,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.privSearch, (event, payload): Promise<string[]> => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const query = asCappedString(body.query, "query", SEARCH_QUERY_MAX_BYTES);
     requireProfile(requireDb(), profileId);
     return privSearch(privDeps(), profileId, query);
@@ -11545,8 +11565,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.privVersions, (event, payload): PrivNoteVersionMeta[] => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     requireProfile(requireDb(), profileId);
     return privListVersions(privDeps(), profileId, id);
   });
@@ -11554,8 +11574,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.privVersionRead, (event, payload): Promise<PrivNoteEnvelopePayload> => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     const seq = asPositiveInteger(body.seq, "seq");
     requireProfile(requireDb(), profileId);
     return privReadVersion(privDeps(), profileId, id, seq);
@@ -11564,8 +11584,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.privVersionCapture, async (event, payload): Promise<void> => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
-    const id = asNonEmptyString(body.id, "id");
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
     requireProfile(requireDb(), profileId);
     await privCaptureVersion(privDeps(), profileId, id);
   });
@@ -11573,7 +11593,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.privSetLockPrefs, (event, payload): PrivStatus => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const autoLockMinutes = asPrivAutoLockMinutes(body.autoLockMinutes, "autoLockMinutes");
     const lockOnMinimize = asBoolean(body.lockOnMinimize, "lockOnMinimize");
     requireProfile(requireDb(), profileId);
@@ -11591,10 +11611,10 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.docPreview, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const module = asDocAttachmentModule(body.module, "module");
-    const id = asNonEmptyString(body.id, "id");
-    const attachmentId = asNonEmptyString(body.attachmentId, "attachmentId");
+    const id = asId(body.id, "id");
+    const attachmentId = asId(body.attachmentId, "attachmentId");
 
     const attachment = requireDocAttachment(module, profileId, id, attachmentId);
     // The dedicated window exists for exactly one mime: the one Chromium
@@ -11612,10 +11632,10 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.docReadText, async (event, payload): Promise<DocTextContent> => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const module = asDocAttachmentModule(body.module, "module");
-    const id = asNonEmptyString(body.id, "id");
-    const attachmentId = asNonEmptyString(body.attachmentId, "attachmentId");
+    const id = asId(body.id, "id");
+    const attachmentId = asId(body.attachmentId, "attachmentId");
 
     const attachment = requireDocAttachment(module, profileId, id, attachmentId);
     // Refused by the stored mime, with the one recorded widening: an
@@ -11649,7 +11669,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.docListAttachments, (event, payload): DocAttachmentList => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asNonEmptyString(body.profileId, "profileId");
+    const profileId = asId(body.profileId, "profileId");
     const filter: AttachmentIndexFilter = asDocAttachmentFilter(body.filter);
     return attachmentIndexStore(profileId).list(filter);
   });
@@ -11768,7 +11788,7 @@ function registerIpc(): void {
     const password = asNonEmptyString(body.password, "password");
     const totpCode = asNonEmptyString(body.totpCode, "totpCode");
     const deviceName = asNonEmptyString(body.deviceName, "deviceName");
-    const factorId = body.factorId === undefined ? undefined : asNonEmptyString(body.factorId, "factorId");
+    const factorId = body.factorId === undefined ? undefined : asId(body.factorId, "factorId");
     return syncService().enable({
       email,
       password,
@@ -11791,7 +11811,7 @@ function registerIpc(): void {
     const totpCode = asNonEmptyString(body.totpCode, "totpCode");
     const recoveryCode = asNonEmptyString(body.recoveryCode, "recoveryCode");
     const deviceName = asNonEmptyString(body.deviceName, "deviceName");
-    const factorId = body.factorId === undefined ? undefined : asNonEmptyString(body.factorId, "factorId");
+    const factorId = body.factorId === undefined ? undefined : asId(body.factorId, "factorId");
     return syncService().adopt({
       email,
       password,
