@@ -107,7 +107,7 @@ export const DEVTOOLS_DATA_SR = {
     "csv.no-rows": "Nema nijednog reda",
     "convert.csv-needs-rows": "Za CSV je potreban niz redova",
     "convert.csv-nesting": "CSV ne može da drži ugnježdenu vrednost",
-    "convert.csv-null": "CSV nema null — uključi „prazno polje umesto null\" ako odgovara",
+    "convert.csv-null": "CSV nema null — uključi „prazno polje umesto null“ ako odgovara",
     "convert.csv-ragged-object": "Objekti nemaju iste kolone",
     "convert.toml-root-not-table": "TOML koren mora biti tabela",
     "convert.toml-null": "TOML nema null",

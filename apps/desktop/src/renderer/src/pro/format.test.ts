@@ -25,7 +25,7 @@ describe("proNum — Serbian, and always to the stated precision", () => {
     expect(proNum(4, 0)).toBe("4");
   });
 
-  it("answers an em dash rather than „NaN\" or „∞\"", () => {
+  it("answers an em dash rather than „NaN“ or „∞“", () => {
     expect(proNum(Number.NaN)).toBe("—");
     expect(proNum(Number.POSITIVE_INFINITY)).toBe("—");
   });

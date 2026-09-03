@@ -1470,22 +1470,22 @@ function parseCronField(text: string, field: CronFieldName): ParsedField | CronE
 
   if (text.includes("?")) {
     if (field !== "dayOfMonth" && field !== "dayOfWeek") {
-      return bad("syntax", text, `Znak „?" sme samo u poljima za dan; polje „${label}" ga ne prima.`);
+      return bad("syntax", text, `Znak „?“ sme samo u poljima za dan; polje „${label}“ ga ne prima.`);
     }
     // „?" means „no opinion about this field"; combining it with anything else in
     // the same field is a contradiction rather than a shorthand.
     if (text !== "?") {
-      return bad("syntax", text, `Znak „?" u polju „${label}" mora stajati sam.`);
+      return bad("syntax", text, `Znak „?“ u polju „${label}“ mora stajati sam.`);
     }
   }
 
   const values = new Set<number>();
   for (const item of text.split(",")) {
-    if (item === "") return bad("syntax", text, `Polje „${label}" ima praznu stavku u listi.`);
+    if (item === "") return bad("syntax", text, `Polje „${label}“ ima praznu stavku u listi.`);
 
     const slices = item.split("/");
     if (slices.length > 2) {
-      return bad("syntax", item, `Polje „${label}" ima više od jednog koraka u „${item}".`);
+      return bad("syntax", item, `Polje „${label}“ ima više od jednog koraka u „${item}“.`);
     }
     const [rangeText = "", stepText] = slices;
 
@@ -1495,7 +1495,7 @@ function parseCronField(text: string, field: CronFieldName): ParsedField | CronE
         return bad(
           "step",
           item,
-          `Korak u polju „${label}" mora biti ceo broj veći od nule, a dobio je „${stepText}".`,
+          `Korak u polju „${label}“ mora biti ceo broj veći od nule, a dobio je „${stepText}“.`,
         );
       }
       step = Number(stepText);
@@ -1511,33 +1511,33 @@ function parseCronField(text: string, field: CronFieldName): ParsedField | CronE
       const start = bounds.length === 2 ? cronValue(bounds[0] ?? "", names, nameBase) : null;
       const end = bounds.length === 2 ? cronValue(bounds[1] ?? "", names, nameBase) : null;
       if (start === null || end === null) {
-        return bad("syntax", item, `Polje „${label}" ne razume opseg „${rangeText}".`);
+        return bad("syntax", item, `Polje „${label}“ ne razume opseg „${rangeText}“.`);
       }
       if (start < min || start > max || end < min || end > max) {
         return bad(
           "range",
           item,
-          `Polje „${label}" prihvata ${min}–${max}, a dobilo je „${rangeText}".`,
+          `Polje „${label}“ prihvata ${min}–${max}, a dobilo je „${rangeText}“.`,
         );
       }
       if (start > end) {
         // Vixie cron does not wrap a range around the end of a field and neither
         // does this: „22-4" would have to mean either nothing or two ranges, and
         // guessing which would silently change a schedule.
-        return bad("range-order", item, `Opseg u polju „${label}" ide unazad: „${rangeText}".`);
+        return bad("range-order", item, `Opseg u polju „${label}“ ide unazad: „${rangeText}“.`);
       }
       from = start;
       to = end;
     } else {
       const value = cronValue(rangeText, names, nameBase);
       if (value === null) {
-        return bad("syntax", item, `Polje „${label}" ne razume „${rangeText}".`);
+        return bad("syntax", item, `Polje „${label}“ ne razume „${rangeText}“.`);
       }
       if (value < min || value > max) {
         return bad(
           "range",
           item,
-          `Polje „${label}" prihvata ${min}–${max}, a dobilo je „${rangeText}".`,
+          `Polje „${label}“ prihvata ${min}–${max}, a dobilo je „${rangeText}“.`,
         );
       }
       from = value;
@@ -1583,12 +1583,12 @@ export function parseCron(text: string): CronParseResult {
         "reboot",
         null,
         trimmed,
-        `„@reboot" se pokreće pri podizanju sistema i nema vreme okidanja.`,
+        `„@reboot“ se pokreće pri podizanju sistema i nema vreme okidanja.`,
       );
     }
     const expansion = CRON_MACROS[key];
     if (expansion === undefined) {
-      return cronFailure("unknown-macro", null, trimmed, `Nepoznat makro „${trimmed}".`);
+      return cronFailure("unknown-macro", null, trimmed, `Nepoznat makro „${trimmed}“.`);
     }
     macro = key;
     body = expansion;

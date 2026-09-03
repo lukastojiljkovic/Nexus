@@ -1059,7 +1059,7 @@ export const proSr = {
       "Niz veličina slova dobijen množenjem osnovne veličine izabranim odnosom, u pikselima, rem " +
       "jedinicama i tačkama.",
     "mojibake-repair":
-      "Vraća pokvarene znakove tipa „Å¡\" i „Ä‡\" u ispravna slova, birajući kojim je kodiranjem " +
+      "Vraća pokvarene znakove tipa „Å¡“ i „Ä‡“ u ispravna slova, birajući kojim je kodiranjem " +
       "tekst pisan a kojim pročitan.",
     "mortar-mix-quantity":
       "Količina gotove smeše ili sastojaka za mešanje iz površine i debljine sloja, sa vodom, " +

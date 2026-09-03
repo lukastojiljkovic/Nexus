@@ -937,7 +937,7 @@ export const PRO_AGRO_SR = {
     productsText: "Preparati u rezervoaru",
     productsTextHint:
       "Nalepi jedan preparat po redu: naziv;l ili kg;način doze (ha, % ili ml);vrednost. Način " +
-      "„ha\" je doza po hektaru, „%\" je koncentracija u procentima, „ml\" je doza po litru " +
+      "„ha“ je doza po hektaru, „%“ je koncentracija u procentima, „ml“ je doza po litru " +
       "škropiva (ml ili g na litar). Do 10 preparata.",
     productsTextPlaceholder: "Preparat A;l;ha;1,5\nPreparat B;kg;%;0,625",
     sprayRateLHa: "Norma prskanja (utrošak vode)",

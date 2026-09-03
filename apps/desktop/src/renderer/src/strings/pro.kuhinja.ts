@@ -21,12 +21,12 @@ export const PRO_KUHINJA_SR = {
     serviceTimeHint: "Sat u koji jelo mora biti na stolu, HH:MM, 24-časovni zapis.",
     serviceDate: "Datum serviranja",
     serviceDateHint:
-      "Opciono — samo da bi oznaka dana bila konkretan datum, a ne „−1 dan\". Bez ovog polja " +
+      "Opciono — samo da bi oznaka dana bila konkretan datum, a ne „−1 dan“. Bez ovog polja " +
       "današnji dan se ne pretpostavlja.",
     steps: "Koraci pripreme",
     stepsHint:
-      "Jedan red po koraku, redom kojim se izvode: naziv;trajanje. Trajanje kao „12\" je 12 " +
-      "minuta, a „12:00\" je 12 sati — dvotačka bira sate i minute, go broj bira minute.",
+      "Jedan red po koraku, redom kojim se izvode: naziv;trajanje. Trajanje kao „12“ je 12 " +
+      "minuta, a „12:00“ je 12 sati — dvotačka bira sate i minute, go broj bira minute.",
     buffer: "Rezerva pre serviranja",
     bufferHint:
       "Minuti slobodnog vremena između poslednjeg koraka i serviranja. Prazno polje znači da " +
@@ -67,10 +67,10 @@ export const PRO_KUHINJA_SR = {
     modePercentToWeights: "Procenti → težine",
     lines: "Stavke recepta",
     linesHint:
-      "Jedan red po sastojku: naziv;uloga;vrednost. Uloga je jedna od reči „brašno\", „voda\", " +
-      "„ostalo\" ili „predferment\" — vrednost je masa u gramima (režim 1) ili procenat od " +
+      "Jedan red po sastojku: naziv;uloga;vrednost. Uloga je jedna od reči „brašno“, „voda“, " +
+      "„ostalo“ ili „predferment“ — vrednost je masa u gramima (režim 1) ili procenat od " +
       "brašna (režim 2). Predferment se ne deli ovde: alat ga odbija i uputi na „Hidratacija i " +
-      "starter\".",
+      "starter“.",
     targetMode: "Cilj",
     targetModeMass: "Ciljna masa testa",
     targetModePieces: "Broj komada",
@@ -105,7 +105,7 @@ export const PRO_KUHINJA_SR = {
     errorLines: "Unesi bar jedan sastojak.",
     errorLineValue: "Vrednost svakog sastojka mora biti nula ili više.",
     errorPreferment:
-      "Predferment nije ni brašno ni voda — podeli ga alatom „Hidratacija i starter\" pa unesi " +
+      "Predferment nije ni brašno ni voda — podeli ga alatom „Hidratacija i starter“ pa unesi " +
       "dobijeno brašno i vodu kao zasebne redove.",
     errorFlour: "Bar jedan red mora biti označen kao brašno, sa masom ili procentom većim od nule.",
     errorDoughMass: "Ciljna masa testa mora biti veća od nule.",
@@ -113,7 +113,7 @@ export const PRO_KUHINJA_SR = {
     errorBakedPieceMass: "Masa pečenog komada mora biti veća od nule.",
     errorBakeLoss: "Gubitak pečenjem je procenat od 0 do ispod 100.",
     errorFlourPercentSum:
-      "U režimu „procenti → težine\" redovi označeni kao brašno moraju zbirno dati tačno 100 %.",
+      "U režimu „procenti → težine“ redovi označeni kao brašno moraju zbirno dati tačno 100 %.",
 
     unitG: "g",
   },
@@ -157,7 +157,7 @@ export const PRO_KUHINJA_SR = {
     errorSaltPercent: "Ciljni procenat soli je broj strogo između 0 i 100.",
     errorSugarPercent:
       "Ciljni procenat šećera je broj od 0 do ispod 100, a zbir sa procentom soli ne sme dostići " +
-      "100 na osnovi „% od ukupnog\".",
+      "100 na osnovi „% od ukupnog“.",
 
     unitG: "g",
   },
@@ -294,7 +294,7 @@ export const PRO_KUHINJA_SR = {
     folds: "Niz presavijanja",
     foldsHint:
       "Jedan red po presavijanju, redom kojim se izvode: vrsta ili vrsta;debljina posle valjanja " +
-      "u mm. Vrsta je jedna od reči „jednostruko\" (×3), „knjiga\" (×4) ili „napola\" (×2). " +
+      "u mm. Vrsta je jedna od reči „jednostruko“ (×3), „knjiga“ (×4) ili „napola“ (×2). " +
       "Debljina posle valjanja je opciona — bez nje red ostaje samo presavijen, bez razvijanja.",
     startingFatLayers: "Početni broj slojeva masti",
     startingFatLayersHint: "Prazno polje znači 1 — jedan blok masti zatvoren u testo.",
@@ -325,8 +325,8 @@ export const PRO_KUHINJA_SR = {
       "t_testo=t·(1−φ)/D",
 
     errorFolds:
-      "Unesi bar jedno presavijanje, svako prepoznato kao „jednostruko\", „knjiga\" ili " +
-      "„napola\".",
+      "Unesi bar jedno presavijanje, svako prepoznato kao „jednostruko“, „knjiga“ ili " +
+      "„napola“.",
     errorStartingFatLayers: "Početni broj slojeva masti je ceo broj, 1 ili više.",
     errorFinalThickness:
       "Završna debljina mora biti veća od nule i ne veća od debljine dostignute na kraju niza " +
@@ -515,7 +515,7 @@ export const PRO_KUHINJA_SR = {
     linesHint:
       "Jedan red po sastojku: naziv;količina;jedinica;nabavna cena po kg/l/kom;randman %. " +
       "Jedinica je g, ml ili kom. Randman je isti složeni randman (čišćenje × termička obrada) " +
-      "koji daje „Randman i kalo\".",
+      "koji daje „Randman i kalo“.",
     portions: "Broj porcija koje recept daje",
     targetFoodCost: "Ciljni food-cost",
     extraPerPortion: "Dodatni trošak po porciji",
@@ -643,7 +643,7 @@ export const PRO_KUHINJA_SR = {
     lines: "Stavke recepta",
     linesHint:
       "Jedan red po sastojku: količina;jedinica;naziv;korak (poslednji opcionalan). Količina " +
-      "može biti decimalna („1,5\"), razlomak („1/2\") ili mešovita („1 1/2\"). Jedinica je g, " +
+      "može biti decimalna („1,5“), razlomak („1/2“) ili mešovita („1 1/2“). Jedinica je g, " +
       "kg, ml, l, kom ili ostalo.",
     originalPortions: "Polazni broj porcija",
     targetPortions: "Ciljni broj porcija",

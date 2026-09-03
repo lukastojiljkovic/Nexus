@@ -711,7 +711,7 @@ describe("relative time in Serbian", () => {
     expect(ago(12 * 3_600_000)).toBe("pre 12 sati");
   });
 
-  it('declines the noun for the preposition, so „pre" and „za" do not share a word', () => {
+  it('declines the noun for the preposition, so „pre“ and „za“ do not share a word', () => {
     // „pre" governs the genitive and „za" the accusative. One shared table gives
     // „pre 1 sat" and „pre 1 sekunda", which are the nominative leaking through.
     expect(ago(3_600_000)).toBe("pre 1 sata");
@@ -726,7 +726,7 @@ describe("relative time in Serbian", () => {
     expect(ahead(5 * 3_600_000)).toBe("za 5 sati");
   });
 
-  it('says „pre 3 dana" and „za 3 dana" from the same span', () => {
+  it('says „pre 3 dana“ and „za 3 dana“ from the same span', () => {
     expect(ago(3 * 86_400_000)).toBe("pre 3 dana");
     expect(ahead(3 * 86_400_000)).toBe("za 3 dana");
   });
@@ -774,7 +774,7 @@ describe("durations", () => {
     expect(parseDuration("1h 30m")).toBe(5_400_000);
   });
 
-  it('does not read „500ms" as five hundred minutes', () => {
+  it('does not read „500ms“ as five hundred minutes', () => {
     expect(parseDuration("500ms")).toBe(500);
     expect(parseDuration("1s500ms")).toBe(1500);
     expect(parseDuration("500m")).toBe(30_000_000);
@@ -902,7 +902,7 @@ describe("the cron grammar", () => {
     expect(specOf("0 0 * * 5-7").daysOfWeek).toEqual([0, 5, 6]);
   });
 
-  it('treats ? as „no opinion", the same as a star, in the two day fields only', () => {
+  it('treats ? as „no opinion“, the same as a star, in the two day fields only', () => {
     const spec = specOf("0 0 13 * ?");
     expect(spec.daysOfWeek).toEqual([0, 1, 2, 3, 4, 5, 6]);
     expect(spec.dayOfWeekStar).toBe(true);
@@ -954,7 +954,7 @@ describe("the cron refusals", () => {
     expect(errorOf("60 * * * *")).toEqual({
       code: "range",
       field: "minute",
-      message: 'Polje „minut" prihvata 0–59, a dobilo je „60".',
+      message: 'Polje „minut“ prihvata 0–59, a dobilo je „60“.',
     });
     expect(errorOf("0 24 * * *").field).toBe("hour");
     expect(errorOf("0 0 32 * *").field).toBe("dayOfMonth");
@@ -962,7 +962,7 @@ describe("the cron refusals", () => {
     expect(errorOf("0 0 * * 8")).toEqual({
       code: "range",
       field: "dayOfWeek",
-      message: 'Polje „dan u nedelji" prihvata 0–7, a dobilo je „8".',
+      message: 'Polje „dan u nedelji“ prihvata 0–7, a dobilo je „8“.',
     });
     // Six fields, so the leading one is the seconds — and „0 0 * * * 60" would
     // put the 60 in the day-of-week, which is a different refusal entirely.
@@ -974,7 +974,7 @@ describe("the cron refusals", () => {
     expect(errorOf("0 17-9 * * *")).toEqual({
       code: "range-order",
       field: "hour",
-      message: 'Opseg u polju „sat" ide unazad: „17-9".',
+      message: 'Opseg u polju „sat“ ide unazad: „17-9“.',
     });
     expect(errorOf("0 0 * * FRI-MON").code).toBe("range-order");
   });
@@ -1001,7 +1001,7 @@ describe("the cron refusals", () => {
     expect(errorOf("@sometimes")).toEqual({
       code: "unknown-macro",
       field: null,
-      message: 'Nepoznat makro „@sometimes".',
+      message: 'Nepoznat makro „@sometimes“.',
     });
   });
 });
@@ -1152,7 +1152,7 @@ describe("the cron explanation in Serbian", () => {
     expect(explain("*/5 * * * * *")).toBe("svakih 5 sekundi");
   });
 
-  it('says „ili" for the union and „i" for the intersection, which is the whole point', () => {
+  it('says „ili“ for the union and „i“ for the intersection, which is the whole point', () => {
     expect(explain("0 0 13 * 5")).toBe("u 00:00, 13. u mesecu ili petkom");
     expect(explain("0 0 */2 * 5")).toBe("u 00:00, svaki 2. dan u mesecu i petkom");
   });
@@ -1168,7 +1168,7 @@ describe("the cron explanation in Serbian", () => {
     expect(explain("0 0 1,15 * *")).toBe("u 00:00, 1. i 15. u mesecu");
   });
 
-  it('says „svakog dana" for a day field spelled out as a full range, which fires daily', () => {
+  it('says „svakog dana“ for a day field spelled out as a full range, which fires daily', () => {
     // „1-31" covers every day AND leaves Vixie's star flag clear, so `dayMatches`
     // takes the OR branch and the job runs every day. The explanation used to
     // drop the field — its VALUES are the whole range, which reads as „says
@@ -1210,7 +1210,7 @@ describe("the cron explanation in Serbian", () => {
         const sentence = explain(text);
         const saysEveryDay = sentence === "u 00:00" || sentence === "u 00:00, svakog dana";
         if (saysEveryDay !== (fires.length === 31)) {
-          disagreements.push(`${text} → „${sentence}" for ${fires.length} of 31 days`);
+          disagreements.push(`${text} → „${sentence}“ for ${fires.length} of 31 days`);
         }
       }
     }

@@ -92,7 +92,7 @@ describe("the shipped catalogue", () => {
       }
       for (const [label, count] of counted) {
         if (count > 1 && label !== "GND" && label !== "5V" && label !== "3V3") {
-          offenders.push(`${component.id}: ${count}× „${label}"`);
+          offenders.push(`${component.id}: ${count}× „${label}“`);
         }
       }
     }

@@ -465,7 +465,7 @@ function ThemePanel({ theme, label }: { theme: ThemeName; label: string }) {
         <Card title="Navike — poslednja nedelja">
           <CellMatrix
             title="Navike po danu"
-            description="Tri navike praćene sedam dana; „Trčanje” se ne prati vikendom, „Meditacija” ima niz od pet dana zaredom."
+            description="Tri navike praćene sedam dana; „Trčanje“ se ne prati vikendom, „Meditacija“ ima niz od pet dana zaredom."
             empty={null}
             columns={heatmapDays}
             rows={heatmapHabits}

@@ -40,7 +40,7 @@ export const PRO_TEKST_SR = {
     inputs: "Uneseno",
     formula:
       "stek: otvarač → gurni; zatvarač → skini ako se poklapa sa vrhom, inače prijavi i ne diraj " +
-      "stek     „ i ' se razrešavaju po vrhu steka; pravi navodnici \" i ' se broje po parnosti " +
+      "stek     „ i ' se razrešavaju po vrhu steka; pravi navodnici “ i ' se broje po parnosti " +
       "unutar pasusa",
 
     errorText: "Tekst sme imati najviše 500000 kodnih tačaka.",
@@ -174,7 +174,7 @@ export const PRO_TEKST_SR = {
 
   "mojibake-repair": {
     text: "Tekst",
-    textHint: "Nalepi pokvaren tekst, na primer „Å¡\" ili „Ä‡\".",
+    textHint: "Nalepi pokvaren tekst, na primer „Å¡“ ili „Ä‡“.",
     writtenAs: "Pisano kao",
     writtenAsHint: "Kodiranje kojim su bajtovi ZAISTA napisani.",
     readAs: "Pročitano kao",
@@ -184,19 +184,19 @@ export const PRO_TEKST_SR = {
     results: "Rezultat",
     repaired: "Popravljen tekst",
     notPossible: "Popravka nije moguća sa ovim izborom kodiranja.",
-    unmappableCount: "Znakova bez bajta u kodiranju „pročitano kao\"",
-    invalidByteCount: "Bajtova koji ne čine ispravan niz u kodiranju „pisano kao\"",
+    unmappableCount: "Znakova bez bajta u kodiranju „pročitano kao“",
+    invalidByteCount: "Bajtova koji ne čine ispravan niz u kodiranju „pisano kao“",
     colIndex: "Indeks",
     colChar: "Znak",
     colByte: "Bajt (dekadno)",
-    resolvedWrittenAs: "Kodiranje „pisano kao\" je razrešeno na",
-    resolvedReadAs: "Kodiranje „pročitano kao\" je razrešeno na",
+    resolvedWrittenAs: "Kodiranje „pisano kao“ je razrešeno na",
+    resolvedReadAs: "Kodiranje „pročitano kao“ je razrešeno na",
     collisions: "Bajtova sa istim znakom kao manji bajt",
 
     inputs: "Uneseno",
     formula:
-      "1) znak → bajt po inverznoj mapi kodiranja „pročitano kao\"     " +
-      "2) taj niz bajtova → tekst, dekodiran kodiranjem „pisano kao\"",
+      "1) znak → bajt po inverznoj mapi kodiranja „pročitano kao“     " +
+      "2) taj niz bajtova → tekst, dekodiran kodiranjem „pisano kao“",
 
     errorText: "Tekst sme imati najviše 500000 kodnih tačaka.",
     errorReplacementCharacter: "Tekst već sadrži U+FFFD — ti bajtovi su nepovratno izgubljeni.",
@@ -346,12 +346,12 @@ export const PRO_TEKST_SR = {
     colWord: "Reč",
     colReason: "Razlog",
     reasonDigraph: "dvoslov lj/nj/dž",
-    reasonDj: "„dj\" — nikad se ne pretvara u đ",
+    reasonDj: "„dj“ — nikad se ne pretvara u đ",
 
     inputs: "Uneseno",
     formula:
       "ćirilica → latinica: zamena po tabeli od 30 parova, veličina dvoslova po kontekstu     " +
-      "latinica → ćirilica: lj/nj/dž pohlepno, svako poklapanje se prijavljuje; „dj\" se nikad " +
+      "latinica → ćirilica: lj/nj/dž pohlepno, svako poklapanje se prijavljuje; „dj“ se nikad " +
       "ne čita kao đ",
 
     errorText: "Tekst sme imati najviše 500000 kodnih tačaka.",
@@ -387,7 +387,7 @@ export const PRO_TEKST_SR = {
     colGapRatio: "Razmak ÷ tvoja granica",
     ratioNote:
       "Za najkraće trajanje odnos je obrnut (granica ÷ trajanje), da veći broj uvek znači „dalje " +
-      "od granice\". Prazna kolona znači da ta granica nije upisana.",
+      "od granice“. Prazna kolona znači da ta granica nije upisana.",
 
     nonPositiveDuration: "Blokovi sa nultim ili negativnim trajanjem",
     outOfOrder: "Blokovi van redosleda",
@@ -487,7 +487,7 @@ export const PRO_TEKST_SR = {
     text: "Tekst",
     textHint: "Nalepi tekst. Ništa se ne pamti između otvaranja alatke.",
     style: "Stil navodnika",
-    styleCurly: "„…\"",
+    styleCurly: "„…“",
     styleGuillemets: "«…»",
     styleStraight: "\"…\" (ostavi prave)",
     selectPlaceholder: "— izaberi —",
@@ -496,7 +496,7 @@ export const PRO_TEKST_SR = {
     dashes: "Crte",
     spaces: "Razmaci",
     nbsp: "NBSP → običan razmak",
-    nbspHint: "Menja U+00A0 razmakom, nezavisno od pravila „Navodnici\".",
+    nbspHint: "Menja U+00A0 razmakom, nezavisno od pravila „Navodnici“.",
     on: "Uključeno",
     off: "Isključeno",
 

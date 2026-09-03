@@ -99,7 +99,7 @@ export const PRO_FOTO_SR = {
 
     helperTitle: "Pomoć: krug rasipanja iz dijagonale",
     helperHint:
-      "Konvencija „dijagonala / delilac\" — jedna od više mogućih. Rezultat je predlog, ne " +
+      "Konvencija „dijagonala / delilac“ — jedna od više mogućih. Rezultat je predlog, ne " +
       "popunjava se sam u polje iznad.",
     helperDiagonal: "Dijagonala senzora",
     helperDivisor: "Delilac",
@@ -489,7 +489,7 @@ export const PRO_FOTO_SR = {
     driftSeconds: "Odstupanje oznake od stvarnog vremena",
     wrapNote:
       "Oznaka je prikazana na 24-časovnom brojaču (24:00:00;00 postaje 00:00:00;00) — broj " +
-      "kadrova iz polja „Kadrovi\" iznad je pravi, neomotan zbir.",
+      "kadrova iz polja „Kadrovi“ iznad je pravi, neomotan zbir.",
 
     inputs: "Uneseno",
     formula:

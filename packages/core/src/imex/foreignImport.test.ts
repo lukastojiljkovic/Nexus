@@ -450,7 +450,7 @@ describe("planForeignImport — tags merge by name onto the target's", () => {
     expect(data.taskTags[0]?.name).toBe("Posao");
   });
 
-  it("does not fold diacritics either — „skola\" and „škola\" are two tags", () => {
+  it("does not fold diacritics either — „skola“ and „škola“ are two tags", () => {
     const source = withTags([{ id: "src-tag", profileId: "src", name: "škola", createdAt: T0 }]);
     const { data } = plan(source, emptyTarget({ taskTags: [{ id: "tgt-tag", name: "skola" }] }));
 
@@ -568,7 +568,7 @@ describe("planForeignImport — tags merge by name onto the target's", () => {
     expect(report.modules.notes.merged).toBe(0);
   });
 
-  it("compares category names exactly — „Sastanak\" and „sastanak\" stay two categories", () => {
+  it("compares category names exactly — „Sastanak“ and „sastanak“ stay two categories", () => {
     const source: ProfileData = {
       ...emptyProfileData(),
       noteCategories: [
@@ -584,7 +584,7 @@ describe("planForeignImport — tags merge by name onto the target's", () => {
     expect(report.modules.notes.merged).toBe(0);
   });
 
-  it("never merges anything but tags — two lists named „Posao\" coexist", () => {
+  it("never merges anything but tags — two lists named „Posao“ coexist", () => {
     const [listRank1, listRank2] = rankSequence(2) as [string, string];
     const source: ProfileData = {
       ...emptyProfileData(),

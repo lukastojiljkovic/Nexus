@@ -202,7 +202,7 @@ function formatStructuredError(
   const message = errors[error.code] ?? error.code;
   const detail: string[] = [];
   if (error.expected !== "") detail.push(`${words.expected} ${error.expected}`);
-  if (error.found !== "") detail.push(`${words.found} „${error.found}"`);
+  if (error.found !== "") detail.push(`${words.found} „${error.found}“`);
   const suffix = detail.length === 0 ? "" : ` (${detail.join(", ")})`;
   return `${message}${suffix} — ${words.line} ${error.line}, ${words.column} ${error.column}`;
 }

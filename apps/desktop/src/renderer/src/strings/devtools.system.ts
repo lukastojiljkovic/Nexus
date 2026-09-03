@@ -41,7 +41,7 @@ export const DEVTOOLS_SYSTEM_SR = {
       posix: "POSIX (bash/zsh)",
     },
     cmdPercentWarning:
-      "Ova putanja sadrži znak „%” — cmd.exe ga čita kao promenljivu PRE nego što " +
+      "Ova putanja sadrži znak „%“ — cmd.exe ga čita kao promenljivu PRE nego što " +
       "ukloni navodnike, pa navodnici ovde ne pomažu.",
     refusal: {
       unparsable: "Ovo nije putanja u obliku koji ova alatka prepoznaje.",
@@ -60,7 +60,7 @@ export const DEVTOOLS_SYSTEM_SR = {
       "not-absolute": "file:// zapis zahteva apsolutnu putanju, a ova je relativna.",
       "illegal-windows-name":
         "Neki deo putanje sadrži znak ili ime koje Windows čita kao rezervisano " +
-        "(npr. „:”, „*” ili ime uređaja poput CON) — ne kao deo imena fajla.",
+        "(npr. „:“, „*“ ili ime uređaja poput CON) — ne kao deo imena fajla.",
     },
   },
 

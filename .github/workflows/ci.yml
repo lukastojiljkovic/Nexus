@@ -84,6 +84,15 @@ jobs:
       # missed all of it.
       - run: pnpm check:address
 
+      # Serbian closes a quotation with “, never with ” and never with an
+      # ASCII ". Inside a double-quoted literal the ASCII one has to be escaped,
+      # which is what made it look deliberate: 172 of roughly 375 quoted phrases
+      # in the shipped copy — more than a third, over 29 files — closed with the
+      # wrong mark, sometimes both forms inside one sentence. All of it
+      # typechecks, lints, passes `check:address` and photographs as a quotation
+      # mark of some kind, so nothing else in this repository could see it.
+      - run: pnpm check:quotes
+
       - run: pnpm check:tokens
 
       # DEV-006 exempts the Elektronika workbench from the ban on blue and

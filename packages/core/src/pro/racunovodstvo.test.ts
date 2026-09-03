@@ -339,7 +339,7 @@ describe("amountInWords", () => {
     expect(result.text).toBe("dvadeset jedan dinar i nula para");
   });
 
-  it("applies the 11-14 exception — 12000,00 is „dvanaest hiljada\", never „hiljade\"", () => {
+  it("applies the 11-14 exception — 12000,00 is „dvanaest hiljada“, never „hiljade“", () => {
     const result = amountInWords({
       ...withCurrency,
       cents: 1_200_000,
@@ -352,7 +352,7 @@ describe("amountInWords", () => {
     expect(result.text).toBe("dvanaest hiljada dinara i nula para");
   });
 
-  it("writes a lone million without „jedan\" and a single para in the feminine", () => {
+  it("writes a lone million without „jedan“ and a single para in the feminine", () => {
     const result = amountInWords({
       ...withCurrency,
       cents: 100_000_001,
@@ -387,7 +387,7 @@ describe("amountInWords", () => {
     expect(two.text).toBe("dva dinara i nula para");
   });
 
-  it("marks a negative amount with a leading „minus\"", () => {
+  it("marks a negative amount with a leading „minus“", () => {
     const result = amountInWords({
       ...withCurrency,
       cents: -2100,

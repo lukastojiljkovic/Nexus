@@ -1655,7 +1655,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       "Kreiraj prvu belešku dugmetom iznad — piše se u editoru sa desne strane.",
     noSelectionTitle: "Nijedna beleška nije izabrana",
     noSelectionDescription: "Izaberi belešku sa leve strane ili kreiraj novu.",
-    placeholder: "Počni da pišeš, ili otkucaj „/” za komande…",
+    placeholder: "Počni da pišeš, ili otkucaj „/“ za komande…",
     deleteLabel: "Obriši belešku",
     deletedNotice: "Beleška obrisana",
     /**
@@ -4376,7 +4376,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       /** Nothing has been logged for this day at all. */
       emptyDay: "Za ovaj dan još nema ničega.",
       /** Points at the one place goals are set, once, under the bars. */
-      setGoals: "Dnevne ciljeve postavljaš u Podešavanjima, u kartici „Fitnes”.",
+      setGoals: "Dnevne ciljeve postavljaš u Podešavanjima, u kartici „Fitnes“.",
     },
     /** Adding something to a meal: the search, the amount, and what the food says about itself. */
     picker: {
@@ -4386,7 +4386,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       searchPlaceholder: "npr. jaje, hleb, jogurt…",
       /** Nothing matched. The next sentence is the way out, and it is a real one. */
       noResults: "Nema namirnice sa tim imenom.",
-      noResultsHint: "Dodaj je u „Moje namirnice” ispod — sa brojevima sa deklaracije.",
+      noResultsHint: "Dodaj je u „Moje namirnice“ ispod — sa brojevima sa deklaracije.",
       /** Shown instead of `noResults` when the search itself rejected — an empty list must not be read as "nothing matched". */
       searchError: "Pretraga namirnica trenutno ne radi. Pokušaj ponovo.",
       /** Before anything is typed: the box has nothing to rank, and says so. */
@@ -4471,7 +4471,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     foods: {
       heading: "Moje namirnice",
       caption:
-        "Ono čega nema u ugrađenoj listi — „mamin ajvar”, domaći brend, dodatak ishrani. Brojeve prepiši sa deklaracije, na 100 g.",
+        "Ono čega nema u ugrađenoj listi — „mamin ajvar“, domaći brend, dodatak ishrani. Brojeve prepiši sa deklaracije, na 100 g.",
       newFood: "Nova namirnica",
       edit: "Izmeni",
       delete: "Obriši",
@@ -4902,7 +4902,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         stop: "Prekini",
         done: "Odmor je gotov",
         lengthLabel: "Dužina odmora",
-        note: "Odbrojavanje se nigde ne beleži i nije deo statistike u „Fokusu”.",
+        note: "Odbrojavanje se nigde ne beleži i nije deo statistike u „Fokusu“.",
         error: "Odmor nije mogao da se pokrene.",
       },
       /** What the section shows when nothing is open. */
@@ -5020,7 +5020,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         namePlaceholder: "npr. Potisak sa klupe uskim hvatom",
         nameEnLabel: "Naziv na engleskom",
         nameEnPlaceholder: "npr. close-grip bench press",
-        nameEnHint: "Nije obavezno. Pretraga ga koristi, prikaz ne — pola sveta traži „RDL”.",
+        nameEnHint: "Nije obavezno. Pretraga ga koristi, prikaz ne — pola sveta traži „RDL“.",
         primaryLabel: "Glavni mišići",
         secondaryLabel: "Pomoćni mišići",
         equipmentLabel: "Sprava",
@@ -5197,7 +5197,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         searchPlaceholder: "npr. potisak, RDL, zgib…",
         idle: "Počni da kucaš da bi našao vežbu.",
         noResults: "Nijedna vežba ne odgovara pretrazi.",
-        noResultsHint: "Proveri naziv ili dodaj svoju vežbu u „Moje vežbe”.",
+        noResultsHint: "Proveri naziv ili dodaj svoju vežbu u „Moje vežbe“.",
         searchError: "Pretraga nije uspela. Pokušaj ponovo.",
         choose: "Izaberi",
         cancel: "Otkaži",
@@ -5684,7 +5684,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     tasks: {
       blockedInTodayLabel: "Blokirani zadaci u pregledu Danas",
       blockedInTodayCaption:
-        "Zadatak koji čeka na drugi zadatak. Važi i za pregled „Sledećih 7 dana”.",
+        "Zadatak koji čeka na drugi zadatak. Važi i za pregled „Sledećih 7 dana“.",
       blockedInTodayOptions: {
         sakrij: "Sakrij",
         prikazi: "Prikaži",
@@ -5700,7 +5700,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       } satisfies Record<string, string>,
       markdownLabel: "Markdown prečice",
       markdownCaption:
-        "Kucanje „# ”, „- ” ili „> ” odmah pretvara blok. „/” meni radi i kada je isključeno.",
+        "Kucanje „# “, „- “ ili „> “ odmah pretvara blok. „/“ meni radi i kada je isključeno.",
     },
     /**
      * Privatne beleške card (PRIV v1 / ADR-057) — shown only while the
@@ -5865,13 +5865,13 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
      */
     fitness: {
       caption:
-        "Dnevni ciljevi za „Ishranu”. Svaki je zaseban i nijedan nije obavezan — prazno polje znači da cilja nema. Nexus ne predlaže vrednosti i ne ocenjuje dan.",
+        "Dnevni ciljevi za „Ishranu“. Svaki je zaseban i nijedan nije obavezan — prazno polje znači da cilja nema. Nexus ne predlaže vrednosti i ne ocenjuje dan.",
       kcalLabel: "Kalorije (kcal)",
       proteinLabel: "Proteini (g)",
       carbsLabel: "Ugljeni hidrati (g)",
       fatLabel: "Masti (g)",
       /** Says what „prazno" means, once, where the fields are — because 0 and absent are different claims. */
-      hint: "Ostavi prazno za „bez cilja”. Nula je cilj, prazno polje nije.",
+      hint: "Ostavi prazno za „bez cilja“. Nula je cilj, prazno polje nije.",
       saved: "Ciljevi su sačuvani.",
       invalid: "Upiši broj — najviše dve decimale, bez tačke za hiljade.",
       loadError: "Ciljevi se ne mogu učitati.",
@@ -5889,7 +5889,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
      */
     tools: {
       caption:
-        "Stopa na koju se „PDV” otvara. Menja samo početnu vrednost polja — svaki račun možeš prebaciti na drugu stopu.",
+        "Stopa na koju se „PDV“ otvara. Menja samo početnu vrednost polja — svaki račun možeš prebaciti na drugu stopu.",
       defaultVatLabel: "Podrazumevana stopa PDV-a",
       hint: "Važi samo na ovom uređaju.",
       saved: "Podrazumevana stopa je sačuvana.",
@@ -5900,7 +5900,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       tasks: "Zadaci sa listom i tablom, prioritetima i rokovima.",
       calendar: "Događaji, agenda i praćenje isteka dokumenata.",
       settings: "Profil, izgled, moduli i obaveštenja.",
-      notes: "Beleške sa blok-editorom — markdown prečice i „/” meni za formatiranje.",
+      notes: "Beleške sa blok-editorom — markdown prečice i „/“ meni za formatiranje.",
       study: "Predmeti, ispiti, kartice za učenje i planovi pripreme za ispite.",
       priv: "Šifrovane privatne beleške — otključavaju se posebno i ne pojavljuju se u pretrazi.",
       files: "Sve datoteke priložene uz beleške, zadatke i predmete, na jednom mestu.",

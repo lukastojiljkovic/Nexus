@@ -29,7 +29,7 @@ export const PRO_TRENING_SR = {
     plates: "Raspoloživi diskovi",
     platesHint:
       "Jedan disk po redu: masa u kilogramima, i opciono razmak pa broj raspoloživih pari " +
-      "(npr. „25 4\"). Bez broja pari — neograničeno na raspolaganju.",
+      "(npr. „25 4“). Bez broja pari — neograničeno na raspolaganju.",
 
     results: "Rezultat",
     perSideTitle: "Diskovi za jednu stranu, od najtežeg ka najlakšem",
@@ -215,7 +215,7 @@ export const PRO_TRENING_SR = {
     hrRestHint: "Otkucaja u minutu.",
     percents: "Procenti za tabelu",
     percentsHint:
-      "Razdvoj tačka-zapetom (npr. „60; 70; 80\"). Prazno polje daje podrazumevanu lestvicu " +
+      "Razdvoj tačka-zapetom (npr. „60; 70; 80“). Prazno polje daje podrazumevanu lestvicu " +
       "50–100 % u koracima od 5 %.",
     measuredHr: "Izmereni puls, za obrnut smer",
     measuredHrHint: "Opciono. Puls čiji procenat rezerve i maksimuma želiš da vidiš.",
@@ -254,7 +254,7 @@ export const PRO_TRENING_SR = {
     concentric: "Koncentrična faza",
     pauseTop: "Pauza gore",
     tempoHint:
-      "Cele sekunde po fazi. Oznaka „X\" se ne prihvata — upiši broj sekundi na koji misliš.",
+      "Cele sekunde po fazi. Oznaka „X“ se ne prihvata — upiši broj sekundi na koji misliš.",
     restMode: "Način unosa odmora",
     restModeSeconds: "Sekunde",
     restModeRatio: "Odnos rad:odmor",
@@ -464,7 +464,7 @@ export const PRO_TRENING_SR = {
     concentric: "Koncentrična faza",
     pauseTop: "Pauza gore",
     tempoHint:
-      "Cele sekunde po fazi. Oznaka „X\" se ne prihvata — upiši broj sekundi na koji misliš.",
+      "Cele sekunde po fazi. Oznaka „X“ se ne prihvata — upiši broj sekundi na koji misliš.",
     reps: "Ponavljanja po seriji",
     sets: "Broj serija",
     restBetweenSets: "Pauza između serija",
@@ -568,7 +568,7 @@ export const PRO_TRENING_SR = {
     rows: "Redovi programa",
     rowsHint:
       "Jedan red po liniji, kao serije×ponavljanja×opterećenje, opciono i ×1RM za taj red " +
-      "(npr. „5x5x100\" ili „5x5x100x130\").",
+      "(npr. „5x5x100“ ili „5x5x100x130“).",
 
     results: "Rezultat",
     rowsTitle: "Po redu",

@@ -453,7 +453,7 @@ export const PRO_NEKRETNINE_SR = {
       "Ostavi prazno ako tražiš samo obrnuti smer (vrednost iz NOI i kapitalizacione stope).",
     monthlyRent: "Mesečna zakupnina",
     occupancy: "Popunjenost",
-    occupancyHint: "Procenat, podrazumevano 100 — to je identitet „bez praznog hoda\", ne procena.",
+    occupancyHint: "Procenat, podrazumevano 100 — to je identitet „bez praznog hoda“, ne procena.",
     monthlyCosts: "Mesečni troškovi",
     costsHint:
       "Alatka ne pretpostavlja nijedan trošak — sabira samo ono što uneseš, u punom iznosu bez " +

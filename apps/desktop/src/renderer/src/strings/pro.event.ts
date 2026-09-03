@@ -86,14 +86,14 @@ export const PRO_EVENT_SR = {
       "Jedan red po stavci: naziv;tip;iznos;osnovica;oporezivo. Tip je fiksno, gost, sto ili " +
       "procenat. Osnovica važi samo za procenat — brojevi redova (od 1) razdvojeni zapetom na " +
       "koje se procenat primenjuje; prazno znači svi neprocentualni redovi. Oporezivo je da ili " +
-      "ne, koristi se samo uz osnovicu poreza „samo označene stavke\".",
+      "ne, koristi se samo uz osnovicu poreza „samo označene stavke“.",
     reserve: "Rezerva",
     taxRate: "Poreska stopa",
     taxRateHint:
       "Korisnikov unos — Nexus ne drži nijednu poresku stopu i ne zna koja se primenjuje.",
     taxBaseMode: "Osnovica za porez",
     taxBaseModeHint:
-      "Rezerva nikad ne ulazi u osnovicu „samo označene stavke\" — markup je na ceo budžet.",
+      "Rezerva nikad ne ulazi u osnovicu „samo označene stavke“ — markup je na ceo budžet.",
     taxBaseModeTotal: "Ceo iznos",
     taxBaseModeMarked: "Samo označene stavke",
     revenueLines: "Prihodi",
@@ -677,7 +677,7 @@ export const PRO_EVENT_SR = {
     items: "Tačke satnice",
     itemsHint:
       "Po jedan red: naziv; trajanje u minutima ili H:MM (npr. 1:30 = 90 min); opciono fiksno " +
-      "vreme HH:MM. U smeru „unazad\" fiksno vreme sme da nosi samo poslednji red.",
+      "vreme HH:MM. U smeru „unazad“ fiksno vreme sme da nosi samo poslednji red.",
     changeover: "Prelaz između tačaka",
     changeoverHint: "Minuti, isti za sve tačke, 0 do 240.",
     curfew: "Krajnji rok",
@@ -686,7 +686,7 @@ export const PRO_EVENT_SR = {
     directionForward: "Unapred, od vremena početka",
     directionBackward: "Unazad, od poslednje (zakovane) tačke",
     buffer: "Rezerva pre poslednje tačke",
-    bufferHint: "Minuti držani pre poslednje, zakovane tačke — smer „unazad\" jedini je koristi.",
+    bufferHint: "Minuti držani pre poslednje, zakovane tačke — smer „unazad“ jedini je koristi.",
     display: "Prikaz vremena u tabeli",
     displayAbsolute: "Apsolutna vremena",
     displayRelative: "Vreme od početka",
@@ -722,8 +722,8 @@ export const PRO_EVENT_SR = {
     errorCurfew: "Krajnji rok mora biti u obliku HH:MM, između 00:00 i 23:59.",
     errorBuffer: "Rezerva pre poslednje tačke ne sme biti negativna.",
     errorDuration: "Trajanje tačke mora biti veće od nule — broj minuta ili H:MM.",
-    errorAnchorMissing: "U smeru „unazad\" poslednja tačka mora imati fiksno vreme.",
-    errorAnchorNotLast: "U smeru „unazad\" fiksno vreme sme da nosi samo poslednja tačka.",
+    errorAnchorMissing: "U smeru „unazad“ poslednja tačka mora imati fiksno vreme.",
+    errorAnchorNotLast: "U smeru „unazad“ fiksno vreme sme da nosi samo poslednja tačka.",
     errorAnchorFormat: "Fiksno vreme mora biti u obliku HH:MM, između 00:00 i 23:59.",
 
     unitMin: "min",
@@ -1049,7 +1049,7 @@ export const PRO_EVENT_SR = {
     zones: "Oduzete zone",
     zonesHint:
       "Po jedan red: naziv; površina u m² (bina, šank, plesni podijum, tehnika, prolazi). " +
-      "Isključivo sa poljem „oduzeto kao procenat\".",
+      "Isključivo sa poljem „oduzeto kao procenat“.",
     deductPct: "Oduzeto kao procenat",
     deductPctHint: "Umesto pojedinačnih zona, ne uz njih.",
     layouts: "Rasporedi",
@@ -1088,7 +1088,7 @@ export const PRO_EVENT_SR = {
     errorZoneArea: "Površina zone ne sme biti negativna.",
     errorDensity: "Gustina mora biti veća od nule.",
     errorDocumentedCount: "Broj lica iz dokumentacije objekta mora biti veći od nule.",
-    errorBasisFormat: "Osnova gustine nije prepoznata — upiši „bruto\" ili „neto\".",
+    errorBasisFormat: "Osnova gustine nije prepoznata — upiši „bruto“ ili „neto“.",
 
     unitM2: "m²",
     unitM2PerPerson: "m²/osobi",

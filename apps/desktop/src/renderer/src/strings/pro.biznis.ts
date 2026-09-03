@@ -20,7 +20,7 @@ export const PRO_BIZNIS_SR = {
   "billable-hours": {
     entries: "Stavke vremena",
     entriesHint:
-      "Jedna stavka po redu — „1:45\", „1h 45min\" ili decimalno „1,75\" (sat i tri četvrtine).",
+      "Jedna stavka po redu — „1:45“, „1h 45min“ ili decimalno „1,75“ (sat i tri četvrtine).",
     intervalMinutes: "Interval zaokruživanja",
     intervalHint: "U minutima, 1–120. Prazno ili 0 znači bez zaokruživanja.",
     rule: "Pravilo zaokruživanja",
@@ -52,7 +52,7 @@ export const PRO_BIZNIS_SR = {
       "mestu     iznos = zaokruženo/60 · satnica",
 
     errorEntries:
-      "Svaka stavka mora biti vreme u obliku „1:45\", „1h 45min\" ili decimalno „1,75\" — bez " +
+      "Svaka stavka mora biti vreme u obliku „1:45“, „1h 45min“ ili decimalno „1,75“ — bez " +
       "praznih redova između stavki.",
     errorInterval: "Interval zaokruživanja je ceo broj minuta od 1 do 120, ili prazno.",
     errorRate: "Satnica ne sme biti negativna.",
@@ -251,7 +251,7 @@ export const PRO_BIZNIS_SR = {
     inputs: "Uneseno",
     formula:
       "premesti prva 4 znaka na kraj, slova A=10…Z=35, r = niz mod 97     provera: r = 1     " +
-      "sastavljanje: K = 98 − (BBAN + država + „00\") mod 97",
+      "sastavljanje: K = 98 − (BBAN + država + „00“) mod 97",
 
     errorIban:
       "IBAN mora imati 5–34 znaka, prva dva slova A–Z, sledeća dva cifre, i samo cifre i velika " +
@@ -333,7 +333,7 @@ export const PRO_BIZNIS_SR = {
     referenceDateDay: "Referentni datum — dan",
     referenceDateMonth: "Referentni datum — mesec",
     referenceDateYear: "Referentni datum — godina",
-    referenceDateHint: "„Danas\" se upisuje ovde, ne čita se sa sata.",
+    referenceDateHint: "„Danas“ se upisuje ovde, ne čita se sa sata.",
 
     results: "Rezultat",
     dueDate: "Datum dospeća",
@@ -454,7 +454,7 @@ export const PRO_BIZNIS_SR = {
     basisAct360: "ACT/360",
     basisE30360: "30E/360 (Eurobond Basis)",
     countBothEnds: "Brojanje dana",
-    countBothEndsNo: "Uobičajeno — uračunat dan „od\", neuračunat dan „do\"",
+    countBothEndsNo: "Uobičajeno — uračunat dan „od“, neuračunat dan „do“",
     countBothEndsYes: "Uračunata oba kraja",
     countBothEndsHint: "Ne utiče na 30E/360, koja svoje brojanje dana već ima ugrađeno u D1/D2.",
 
@@ -477,8 +477,8 @@ export const PRO_BIZNIS_SR = {
 
     errorPrincipal: "Glavnica ne sme biti negativna.",
     errorAnnualRatePercent: "Godišnja stopa ne sme biti negativna.",
-    errorFrom: "Datum „od\" mora biti ispravan kalendarski datum.",
-    errorTo: "Datum „do\" mora biti ispravan kalendarski datum i ne sme biti pre datuma „od\".",
+    errorFrom: "Datum „od“ mora biti ispravan kalendarski datum.",
+    errorTo: "Datum „do“ mora biti ispravan kalendarski datum i ne sme biti pre datuma „od“.",
 
     unitPercent: "%",
     unitDays: "dana",
@@ -524,7 +524,7 @@ export const PRO_BIZNIS_SR = {
     base: "Osnovica",
     tiers: "Pragovi i stope",
     tiersHint:
-      "Jedan red po pragu, u obliku „donja granica; stopa %\". Prva donja granica mora biti 0, " +
+      "Jedan red po pragu, u obliku „donja granica; stopa %“. Prva donja granica mora biti 0, " +
       "granice se ne smeju ponavljati.",
     mode: "Način",
     modeMarginal: "Marginalno (po tranšama)",

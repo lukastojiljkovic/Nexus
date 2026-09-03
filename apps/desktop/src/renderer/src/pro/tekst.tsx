@@ -1060,7 +1060,7 @@ export function SerbianTransliterationTool() {
           "",
           ...result.ambiguities.map(
             (a) =>
-              `${a.sequence} — ${s.colLine} ${a.line}, ${s.colColumn} ${a.column}, „${a.word}" (${reasonLabel(a.reason)})`,
+              `${a.sequence} — ${s.colLine} ${a.line}, ${s.colColumn} ${a.column}, „${a.word}“ (${reasonLabel(a.reason)})`,
           ),
         ].join("\n");
 

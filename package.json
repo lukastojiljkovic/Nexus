@@ -19,6 +19,7 @@
     "check:contrast": "node scripts/check-contrast.mjs",
     "check:strings": "node scripts/check-string-capture.mjs",
     "check:address": "node scripts/check-address.mjs",
+    "check:quotes": "node scripts/check-quotes.mjs",
     "check:tokens": "node scripts/check-tokens.mjs",
     "check:elec": "node scripts/check-elec.mjs",
     "check:controls": "node scripts/check-controls.mjs",

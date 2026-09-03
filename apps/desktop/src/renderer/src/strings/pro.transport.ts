@@ -85,7 +85,7 @@ export const PRO_TRANSPORT_SR = {
     errorWheelbase: "Međuosovinsko rastojanje je broj od 0,5 do 12 m.",
     errorEmptyFront: "Prazna prednja osovina je broj od 0 do 30000 kg.",
     errorEmptyRear: "Prazna zadnja ili pogonska osovina je broj od 0 do 40000 kg.",
-    errorItems: "Unesi bar jedan red stavke tereta, do 100 redova, svaki „masa kg, rastojanje m\".",
+    errorItems: "Unesi bar jedan red stavke tereta, do 100 redova, svaki „masa kg, rastojanje m“.",
     errorKingpinToBogie: "Rastojanje kraljičnog čepa do grupe je broj od 1 do 15 m.",
     errorTrailerTare: "Tara poluprikolice je broj od 0 do 20000 kg.",
     errorTrailerTareCentre: "Težište prazne poluprikolice je broj od 0 do 15 m.",
@@ -936,7 +936,7 @@ export const PRO_TRANSPORT_SR = {
     emptyKm: "Prazni i pristupni kilometri",
     costPerKmKind: "Uneta stopa je po",
     costPerKmKindHint:
-      "Ako je stopa preuzeta iz alatke „Trošak po kilometru\", proveri da li je to trošak po " +
+      "Ako je stopa preuzeta iz alatke „Trošak po kilometru“, proveri da li je to trošak po " +
       "ukupnom ili po kilometru pod teretom — pomnožena sa pogrešnom kilometražom, prazan hod se " +
       "naplati dvaput.",
     costPerKmKindTotal: "ukupnom kilometru",

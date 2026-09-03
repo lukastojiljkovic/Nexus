@@ -110,7 +110,7 @@ describe("quotient — the commonest defect in the drawer, made unrepresentable"
     expect(quotient(10, -4)).toBe(-2.5);
   });
 
-  it("withholds instead of returning infinity — the „∞ mm\" on screen", () => {
+  it("withholds instead of returning infinity — the „∞ mm“ on screen", () => {
     expect(quotient(10, 0)).toBeUndefined();
     expect(quotient(10, -0)).toBeUndefined();
     expect(quotient(10, Number.NaN)).toBeUndefined();
@@ -194,7 +194,7 @@ describe("roundHalfUp — money's rounding, with a nudge that scales", () => {
     expect(roundHalfUp(900000000.005, 2)).toBe(900000000.01);
   });
 
-  it("never returns a negative zero for the formatter to print as „−0,00\"", () => {
+  it("never returns a negative zero for the formatter to print as „−0,00“", () => {
     expect(Object.is(roundHalfUp(-0.004, 2), 0)).toBe(true);
     expect(Object.is(roundHalfUp(-0, 2), 0)).toBe(true);
   });
@@ -264,7 +264,7 @@ describe("minorUnits — the money bridge, and the absolute epsilon it replaces"
     expect(minorUnits(999999999.99, 2)).toBe(99999999999);
   });
 
-  it("refuses rather than rounding — the „strane su izjednačene\" on an unbalanced book", () => {
+  it("refuses rather than rounding — the „strane su izjednačene“ on an unbalanced book", () => {
     // `Math.round(-0.5)` is `-0`, so a difference of half a unit at zero
     // decimals used to compare equal to zero and print „balanced".
     expect(Object.is(Math.round(-0.5), -0)).toBe(true);

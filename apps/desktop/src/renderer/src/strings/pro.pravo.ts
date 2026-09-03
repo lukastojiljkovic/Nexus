@@ -108,7 +108,7 @@ export const PRO_PRAVO_SR = {
     inputs: "Uneseno",
     formula:
       "klasa(n): o=1 ∧ t≠11 → jednina; o∈{2,3,4} ∧ t∉{12,13,14} → paukal; inače množina (t = n " +
-      "mod 100, o = n mod 10); grupa hiljada = 1 → „hiljadu\"; nulta grupa se preskače sa skalom",
+      "mod 100, o = n mod 10); grupa hiljada = 1 → „hiljadu“; nulta grupa se preskače sa skalom",
 
     errorAmount:
       "Iznos mora biti nenegativan broj sa najviše 8 decimala i celim delom do 999 999 999 999 " +
@@ -428,7 +428,7 @@ export const PRO_PRAVO_SR = {
 
     inputs: "Uneseno",
     formula:
-      "r = 0; za svaku cifru c: r = (r·10 + c) mod 97     kontrolni = 98 − mod97(niz ‖ „00\")",
+      "r = 0; za svaku cifru c: r = (r·10 + c) mod 97     kontrolni = 98 − mod97(niz ‖ „00“)",
 
     errorAccount: "Broj računa mora imati tačno 18 (provera) ili 16 (izračunavanje) cifara.",
     errorIban: "IBAN mora imati dva slova države, dve kontrolne cifre u opsegu 02–98, i BBAN.",

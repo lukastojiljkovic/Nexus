@@ -224,7 +224,7 @@ describe("annuitySchedule", () => {
 describe("amountInWords", () => {
   const dinar = { currency: "dinar", style: "spaced", capitalise: false } as const;
 
-  it("writes the thousands group of exactly one as „hiljadu\"", () => {
+  it("writes the thousands group of exactly one as „hiljadu“", () => {
     const result = amountInWords({ ...dinar, amountText: "1234.56" });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -255,7 +255,7 @@ describe("amountInWords", () => {
     expect(result.words).toBe("dvadeset dva dinara i dvadeset dve pare");
   });
 
-  it("applies the „hiljadu\" exception only to a group of exactly one", () => {
+  it("applies the „hiljadu“ exception only to a group of exactly one", () => {
     const result = amountInWords({ ...dinar, amountText: "21000" });
     expect(result.ok).toBe(true);
     if (!result.ok) return;

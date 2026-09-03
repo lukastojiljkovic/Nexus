@@ -24,7 +24,7 @@ export const PRO_DIZAJN_SR = {
     modeExactHeight: "Tačna visina",
     modeStretch: "Razvuci",
     targetWidth: "Širina okvira",
-    targetHint: "Potrebno za sve načine osim „tačna visina\".",
+    targetHint: "Potrebno za sve načine osim „tačna visina“.",
     targetHeight: "Visina okvira",
     roundTo: "Zaokruživanje",
     roundToNone: "Bez",
@@ -125,7 +125,7 @@ export const PRO_DIZAJN_SR = {
     bulkHint:
       "Podatak proizvođača papira — NIJE debljina lista. Ako ovde upišeš debljinu (npr. 0,10 " +
       "umesto 1,25), hrbat izlazi i do 12,5 puta tanji: proveri red „Debljina lista (iz " +
-      "gramature)\" ispod.",
+      "gramature)“ ispod.",
     measuredStack: "Izmerena visina bloka",
     measuredStackHint:
       "U milimetrima, za ceo izmereni blok — treći izvor debljine lista, ako prva dva nisu " +
@@ -570,7 +570,7 @@ export const PRO_DIZAJN_SR = {
     widthPx: "Širina (px)",
     heightPx: "Visina (px)",
     resolution: "Rezolucija (ppi)",
-    resolutionHint: "Potrebno za oba smera osim „efektivna rezolucija\".",
+    resolutionHint: "Potrebno za oba smera osim „efektivna rezolucija“.",
     physicalWidth: "Fizička širina",
     physicalHeight: "Fizička visina",
     physicalUnit: "Jedinica fizičke veličine",

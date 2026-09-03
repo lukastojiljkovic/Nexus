@@ -1306,7 +1306,7 @@ describe("setTempoTut", () => {
     expect(result.blockClock).toBe("1:15:00");
   });
 
-  it("refuses a fractional or negative phase, an „X\" that never became a number, and bad counts", () => {
+  it("refuses a fractional or negative phase, an „X“ that never became a number, and bad counts", () => {
     const base = {
       eccentric: 3,
       pauseBottom: 1,

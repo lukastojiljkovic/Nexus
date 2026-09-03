@@ -144,7 +144,7 @@ export const PRO_PROSVETA_SR = {
     stepHint: "Tipično 1 ili 0,5. Prazno polje računa sa korakom 1.",
     thresholds: "Pragovi (oznaka; prag u %)",
     thresholdsHint:
-      "Jedan red po pragu — oznaka i procenat razdvojeni tačkom-zarezom, npr. „5; 91\". Pragove " +
+      "Jedan red po pragu — oznaka i procenat razdvojeni tačkom-zarezom, npr. „5; 91“. Pragove " +
       "propisuje pravilnik ustanove ili ministarstva; Nexus nema ugrađenu skalu.",
     scoredPoints: "Osvojeni bodovi",
     scoredPointsHint: "Opciono — bodovi za koje se traži oznaka iz skale.",
@@ -169,7 +169,7 @@ export const PRO_PROSVETA_SR = {
     errorMaxPoints: "Maksimalan broj bodova mora biti veći od nule.",
     errorStep: "Korak bodovanja mora biti veći od nule i ne veći od maksimuma.",
     errorThresholds:
-      "Pragovi moraju biti brojevi iz [0, 100], svaki upisan kao „oznaka; procenat\".",
+      "Pragovi moraju biti brojevi iz [0, 100], svaki upisan kao „oznaka; procenat“.",
     errorTooManyRows: "Previše redova pragova u jednom unosu.",
     errorDuplicateThreshold: "Dva praga imaju istu vrednost — opseg između njih ne postoji.",
     errorScoredPoints: "Osvojeni bodovi moraju biti iz [0, B].",
@@ -179,7 +179,7 @@ export const PRO_PROSVETA_SR = {
     values: "Vrednosti",
     valuesHint:
       "Ocene ili bodovi, razdvojeni razmakom, tačkom-zarezom ili novim redom. Zarez je decimalni " +
-      "znak — „3,5\" je jedna vrednost.",
+      "znak — „3,5“ je jedna vrednost.",
     passThreshold: "Prag prolaznosti",
     passThresholdHint:
       "Opciono. Granicu propisuje ustanova ili ministarstvo; Nexus je ne pretpostavlja.",
@@ -292,7 +292,7 @@ export const PRO_PROSVETA_SR = {
     weekdays: "Dani u nedelji sa brojem časova",
     weekdaysHint:
       "Jedan red po danu: broj dana u nedelji (1 = ponedeljak … 7 = nedelja, ISO 8601) i broj " +
-      "časova, razdvojeni tačkom-zarezom — npr. „2; 1\".",
+      "časova, razdvojeni tačkom-zarezom — npr. „2; 1“.",
     excludedDates: "Izuzeti datumi",
     excludedDatesHint:
       "Jedan datum po redu, format DD.MM.GGGG. Nexus nema ugrađen kalendar praznika — računaju " +
@@ -300,7 +300,7 @@ export const PRO_PROSVETA_SR = {
     makeupDays: "Dani koji rade po rasporedu drugog dana",
     makeupDaysHint:
       "Jedan red po danu: datum i dan u nedelji čiji se raspored primenjuje, razdvojeni " +
-      "tačkom-zarezom — npr. „15.10.2026; 1\".",
+      "tačkom-zarezom — npr. „15.10.2026; 1“.",
     lessonMinutes: "Trajanje časa (minuta)",
     prescribedHours: "Propisan fond časova",
     prescribedHoursHint: "Opciono — godišnji fond iz nastavnog plana; Nexus ga ne zna.",
@@ -355,7 +355,7 @@ export const PRO_PROSVETA_SR = {
     startHint: "Format HH:MM, 24-časovni zapis, npr. 08:00.",
     activities: "Aktivnosti (naziv; trajanje u minutima)",
     activitiesHint:
-      "Jedan red po aktivnosti, naziv i trajanje razdvojeni tačkom-zarezom — npr. „Uvod; 5\".",
+      "Jedan red po aktivnosti, naziv i trajanje razdvojeni tačkom-zarezom — npr. „Uvod; 5“.",
     lessonMinutes: "Trajanje časa (minuta)",
     lessonMinutesHint: "Opciono — okvir u koji se aktivnosti smeštaju.",
     dayUnit: "dan",
@@ -494,7 +494,7 @@ export const PRO_PROSVETA_SR = {
     totalHours: "Ukupan broj časova T",
     topics: "Teme (naziv; težina)",
     topicsHint:
-      "Jedan red po temi, naziv i težina razdvojeni tačkom-zarezom — npr. „Uvod; 20\". Težine ne " +
+      "Jedan red po temi, naziv i težina razdvojeni tačkom-zarezom — npr. „Uvod; 20“. Težine ne " +
       "moraju da daju 100.",
 
     results: "Rezultat",
@@ -523,7 +523,7 @@ export const PRO_PROSVETA_SR = {
   "weighted-grade": {
     components: "Komponente (naziv; osvojeno; maksimum; težina)",
     componentsHint:
-      "Jedan red po komponenti, razdvojeno tačkom-zarezom — npr. „Kolokvijum 1; 18; 25; 20\". " +
+      "Jedan red po komponenti, razdvojeno tačkom-zarezom — npr. „Kolokvijum 1; 18; 25; 20“. " +
       "Bar jedan red mora imati težinu > 0.",
     totalPoints: "Ukupan broj bodova T",
     totalPointsHint: "Opciono — skala na koju se rezultat preslikava.",

@@ -75,7 +75,7 @@ export const PRO_RACUNOVODSTVO_SR = {
     modePlain: "Bez valute (samo broj slovima)",
     currencySingular: "Valuta — jednina",
     currencySingularHint:
-      "Na primer „dinar\", „evro\". Oblik za broj koji se slaže sa jedninom (1, 21, 31…).",
+      "Na primer „dinar“, „evro“. Oblik za broj koji se slaže sa jedninom (1, 21, 31…).",
     currencyPaucal: "Valuta — paukal",
     currencyPlural: "Valuta — množina",
     currencyGender: "Rod imenice valute",
@@ -84,7 +84,7 @@ export const PRO_RACUNOVODSTVO_SR = {
     paraStyleFraction: "Razlomak xx/100",
     subunitSingular: "Podjedinica — jednina",
     subunitSingularHint:
-      "Na primer „para\", „cent\". Koristi se samo kad je podjedinica zapisana slovima.",
+      "Na primer „para“, „cent“. Koristi se samo kad je podjedinica zapisana slovima.",
     subunitPaucal: "Podjedinica — paukal",
     subunitPlural: "Podjedinica — množina",
     subunitGender: "Rod imenice podjedinice",
@@ -584,8 +584,8 @@ export const PRO_RACUNOVODSTVO_SR = {
       "Prikazana su oba zbira, svaki označen — tabela čija se kolona ne sabira u sopstveni " +
       "zaokruženi zbir bila bi greška u ispisu.",
     totalDue: "Ukupno dugovanje (glavnica + kamata)",
-    earliestFrom: "Najraniji datum „od\"",
-    latestTo: "Najkasniji datum „do\"",
+    earliestFrom: "Najraniji datum „od“",
+    latestTo: "Najkasniji datum „do“",
     overlapDays: "Dani u preklapanju perioda",
     uncoveredDays: "Nepokriveni dani",
     coverageNote: "Preklapanje i rupe između perioda alat ne popravlja — prikazuje ih kao unete.",
@@ -651,7 +651,7 @@ export const PRO_RACUNOVODSTVO_SR = {
       "Periodični prosek: cena = (početna vrednost + Σulaza)/(početna količina + Σulaza), " +
       "primenjena na sve izlaze.",
 
-    errorMovementType: "Tip promene mora biti „ulaz\" ili „izlaz\".",
+    errorMovementType: "Tip promene mora biti „ulaz“ ili „izlaz“.",
     errorOpeningQuantity: "Početna količina ne sme biti negativna.",
     errorOpeningUnitCost: "Početna jedinična cena ne sme biti negativna.",
     errorUnitCost: "Jedinična cena ulaza mora biti nula ili veća.",
