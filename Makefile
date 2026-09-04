@@ -41,12 +41,18 @@ HOST_OS     := $(shell uname -s 2>/dev/null || echo unknown)
 # a version the build does not produce. Simply-expanded, so node runs once.
 VERSION     := $(shell node -p "require('./apps/desktop/package.json').version" 2>/dev/null || echo "?")
 
-# Every gate CI runs as its own step. Kept as a list rather than a loop over
-# `package.json` so a gate that is renamed breaks here loudly instead of
-# silently dropping out of `make gates` — a gate that stops running is exactly
-# the failure the gate set exists to prevent.
-GATES := colours contrast css strings tokens invisibles zeroize risk pro-math \
-         pro-flags licences egress rls
+# Every gate CI runs as its own step, READ from the manifest rather than
+# written here — `VERSION` above, for the same reason.
+#
+# It used to be a hand-written list, on the argument that a RENAMED gate would
+# then break here loudly instead of dropping out silently. The argument is
+# sound and the list was still wrong: it named thirteen of the eighteen gates,
+# because the failure that actually happens is a gate being ADDED, five times
+# over, and `make verify` answered „all 13 static gates are green“ while
+# `check:address`, `check:quotes`, `check:elec`, `check:controls` and
+# `check:ids` never ran. Deriving the list keeps the rename safe too: the names
+# ARE the script names, so one that no longer exists cannot be in the list.
+GATES := $(shell node -p "Object.keys(require('./package.json').scripts).filter(s => s.startsWith('check:')).map(s => s.slice(6)).join(' ')" 2>/dev/null)
 
 .PHONY: help install build linux windows dist verify gates test typecheck lint \
         smoke artifacts gentoo-manifest clean require-node require-linux \
@@ -171,6 +177,7 @@ test: require-node
 	pnpm test
 
 gates: require-node
+	@[ -n "$(GATES)" ] || { echo "gates: no check:* scripts found in package.json."; exit 1; }
 	@for gate in $(GATES); do \
 	  printf '%-12s ' "$$gate"; \
 	  if pnpm -w run "check:$$gate" >/dev/null 2>&1; then echo OK; \

@@ -95,7 +95,7 @@ at the first query.
 make                 # the target list, and the host it detected
 make linux           # AppImage + tar.gz   (refuses a non-Linux host)
 make windows         # NSIS installer      (refuses a non-Windows host)
-make verify          # typecheck, lint, test, build, and all thirteen static gates
+make verify          # typecheck, lint, test, build, and every static gate
 make artifacts       # what is currently in apps/desktop/release/
 ```
 
