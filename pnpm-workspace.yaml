@@ -10,7 +10,16 @@ packages:
   # subsystem whose whole job is to be checked.
   - "supabase"
 allowBuilds:
-  better-sqlite3-multiple-ciphers: true
+  # DENIED, deliberately. 13.0.3 ships eight prebuilt binaries — one per
+  # platform and arch, with no ABI in the key, because it is a Node-API addon
+  # — so there is nothing here to compile. What the package still carries is a
+  # `binding.gyp`, and npm's implicit rule turns that into `install: node-gyp
+  # rebuild` for any package that does not set `gypfile: false`. It DOES set it,
+  # and pnpm runs the build anyway, so a `true` here fails the install on any
+  # machine without Visual Studio's C++ workload — for a binary the package
+  # already carries. The explicit `false` is the decision written down; leaving
+  # the key out would mean the same thing while reading as an omission.
+  better-sqlite3-multiple-ciphers: false
   electron: true
   electron-winstaller: true
   esbuild: true
@@ -155,6 +164,19 @@ overrides:
   # functions and none of the changed ones; the suites are what prove it.
   # Retires when chevrotain's own range reaches 4.18.
   lodash-es: ^4.18.1
+
+# One four-line patch, and it is a TYPES bug rather than a code one. 13.0.3
+# added an `exports` map whose `"."` is a bare `"./lib/index.js"` with no
+# `types` condition, and under `moduleResolution: "bundler"` an exports map
+# REPLACES the `types` field rather than supplementing it — so the `index.d.ts`
+# sitting right there stops being found and the 75 files that import it raise
+# TS7016. Patching the package is the fix that reaches every program: the
+# alternative is a shim per typecheck project, and this repo has thirteen of
+# them, which is thirteen places to forget. The key carries the exact version on
+# purpose — a bump that has fixed this upstream will fail to apply the patch,
+# and being told to come and look is the whole point of that failure.
+patchedDependencies:
+  better-sqlite3-multiple-ciphers@13.0.3: patches/better-sqlite3-multiple-ciphers@13.0.3.patch
 
 # `auditConfig.ignoreGhsas` remains FORBIDDEN here — the overrides above are
 # allowed to grow precisely because they are the opposite of it. An override

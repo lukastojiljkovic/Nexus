@@ -200,15 +200,29 @@ choice of backend**; whatever in them is about the data model still applies.
   `exactOptionalPropertyTypes`), React 19, Vite 7, electron-vite, Vitest.
   Packages: `tokens`, `core` (registry, contracts, headless views engine), `db`
   (encrypted SQLite), `ui`. Apps: `desktop`, `gallery`.
-- **Electron is pinned to ^42** (ABI 146): 43/ABI 148 has no prebuild for
-  `better-sqlite3-multiple-ciphers`. Dependabot ignores electron majors. Do not bump.
+- **Electron is pinned to ^42** (ABI 146). Dependabot ignores electron majors.
+  **Do not bump without asking the founder** — but the REASON written here for
+  four months („43/ABI 148 has no prebuild for `better-sqlite3-multiple-ciphers`“)
+  stopped being true on 2026-09-04, and was measured rather than assumed: the
+  same `prebuilds/win32-x64.node` file, byte-identical, loaded under Node 24
+  (ABI 137), Electron 43 (148) and Electron 44 (149), and in all three opened a
+  database written by 12.11.1, read a Serbian row back and wrote one. Electron
+  42 leaves support on **2026-10-20**, which is the one deadline on this project
+  that arrives whether or not anyone works on it, so the pin is now a decision
+  waiting on him rather than a constraint.
 - **Shell quirk (Windows):** pnpm is under `%APPDATA%\npm` and not on the tool PATH.
   Prefix every command: `$env:Path += ";$env:APPDATA\npm"; pnpm …`.
-- **Native ABI dance:** the SQLite binary is either node-ABI (for Vitest) or
-  electron-ABI (for the app). Use only the repo scripts — `pnpm --filter
-  @nexus/desktop smoke` (flips to electron, runs, restores) and `… rebuild:node`
-  (restores node). Never flip it by hand. After a smoke run, restore node ABI and
-  re-run the db tests.
+- **The native ABI dance is GONE** (2026-09-04). `better-sqlite3-multiple-ciphers`
+  13.0.3 is a Node-API addon: eight prebuilds keyed by platform and arch, no ABI
+  in the key, one loader picking at runtime. One file serves Vitest and the app,
+  so `rebuild-native.mjs`, `rebuild:electron`, `rebuild:node` and the flip inside
+  `launch.mjs` are all deleted, and **`smoke`, `shots` and `demo` may now run
+  while tests do**. Nothing compiles the module — `pnpm-workspace.yaml` denies it
+  a build script, because the `binding.gyp` it still ships would otherwise make
+  pnpm run `node-gyp rebuild` and fail the install on a machine with no C++
+  toolchain, for a binary the package already carries. One `patches/` entry adds
+  the `types` condition its `exports` map omits; without it the 75 files that
+  import it raise TS7016.
 - **Verification gates before any commit:** `pnpm typecheck` (13/13), `pnpm lint`
   (13/13), `pnpm test` (all green), `pnpm build` (4/4),
   `pnpm --filter @nexus/desktop smoke` prints `SMOKE OK`, and **all eighteen
@@ -305,7 +319,9 @@ choice of backend**; whatever in them is about the data model still applies.
   `apps/desktop/shots/` with `report.md` — a geometric audit of clipped text,
   boxes escaping their parent, overlapping text and sub-24px targets, grouped
   as classes. `pnpm --filter @nexus/desktop demo` adds a populated „Demo"
-  account to this device (passcode `demo-nexus-2026`). Both flip the native ABI
-  through `launch.mjs`, so **never run either while agents are running tests.** New store logic is **TDD** (tests
+  account to this device (passcode `demo-nexus-2026`). Neither flips anything any
+  more — the line that stood here forbade running either beside a test suite,
+  and that constraint retired with the ABI dance on 2026-09-04.
+  New store logic is **TDD** (tests
   red before green). Serbian sr-Latn sorting/formatting uses
   `Intl.Collator(["sr-Latn","sr"])` — plain `"sr"` mis-tailors Latin š/č/ć.

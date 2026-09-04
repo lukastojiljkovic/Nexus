@@ -20,3 +20,10 @@ Makefile text eol=lf
 # on CI. The gate no longer compares line endings either; this keeps the working
 # copy from flipping between the two on each checkout.
 apps/desktop/src/renderer/src/data/licences.json text eol=lf
+
+# pnpm writes its patches with LF and matches them against the package as the
+# store holds it, which is also LF. A CRLF checkout would hand pnpm a patch
+# whose every line differs from the file it is meant to apply to, and the
+# install fails on Windows and nowhere else — the licences.json rule above,
+# one directory over.
+patches/** text eol=lf

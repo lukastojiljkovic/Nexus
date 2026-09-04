@@ -4,11 +4,13 @@
 # the repo's style of separate, purpose-named configs (electron.vite.config.ts,
 # tsconfig.*.json).
 #
-# Native module: better-sqlite3-multiple-ciphers ships a prebuilt .node binary
-# (scripts/rebuild-native.mjs provisions the Electron-ABI one before packaging).
-# Node cannot require() a native addon from inside an asar archive, so it is
-# unpacked. npmRebuild is disabled — electron-builder's own @electron/rebuild
-# step would fight the ABI already provisioned by rebuild-native.mjs.
+# Native module: better-sqlite3-multiple-ciphers 13.0.3 is a Node-API addon and
+# ships eight prebuilt binaries, one per platform and arch, with no ABI in the
+# key. Node cannot require() a native addon from inside an asar archive, so it
+# is unpacked. npmRebuild stays disabled — there is nothing to rebuild, and
+# @electron/rebuild would compile from source what the package already carries.
+# `files` below keeps the 14 MB amalgamation it would only need in order to
+# compile one out of the installer, and says why the seven unusable binaries stay.
 #
 # publish: documented plan of record (GitHub provider, lukastojiljkovic/
 # nexus-releases). That repo does not exist yet (founder decision pending) —
@@ -55,6 +57,28 @@ files:
   # ICO decoder exists on Windows only (src/main/index.ts, `iconFile`).
   - build/icon.ico
   - build/icon.png
+  # The native module's source: 14 MB of SQLite3MultipleCiphers amalgamation
+  # and its addon sources, shipped so the package CAN be built from source.
+  # Nothing here ever builds it — see the `allowBuilds: false` in
+  # pnpm-workspace.yaml — so it is 14 MB of installer that no code path reads.
+  - "!node_modules/better-sqlite3-multiple-ciphers/{deps,src,binding.gyp}"
+  # And seven of its eight prebuilds, ~17 MB of binaries this build cannot
+  # load. Everything out, then the one back in — patterns are applied in order,
+  # so the re-include has to come second, and `${platform}`/`${arch}` are
+  # electron-builder's own macros for the TARGET, which is what makes one list
+  # correct for both hosts.
+  #
+  # This must NOT be written as a per-platform `win:`/`linux:` `files` key.
+  # That key does not ADD to this list, it REPLACES it, so every line above
+  # stops applying and the default `**/*` takes over. Tried on 2026-09-04: the
+  # build succeeded, said nothing, and produced a 388 MB installer with the
+  # whole source tree and every devDependency inside the asar.
+  #
+  # A miss in the OTHER direction is worse and just as quiet — an app packaged
+  # with no binary at all starts and dies at its first query. `dist.mjs` reads
+  # the unpacked output afterwards and refuses to leave one behind.
+  - "!node_modules/better-sqlite3-multiple-ciphers/prebuilds/*"
+  - "node_modules/better-sqlite3-multiple-ciphers/prebuilds/${platform}-${arch}.node"
 
 asarUnpack:
   - node_modules/better-sqlite3-multiple-ciphers/**/*

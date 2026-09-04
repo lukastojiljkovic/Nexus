@@ -8,11 +8,10 @@
 #     it fails inside Vite with „failed to resolve entry for package" and no
 #     hint that a workspace package simply was not built yet. Here it is a
 #     prerequisite, so it cannot be skipped by accident.
-#   * `dist` builds for the HOST platform only. Cross-building a Linux artifact
-#     from Windows produces an archive carrying a Windows `.node`, which dies at
-#     the first database query with an error about the native module rather than
-#     about the build. `make linux` refuses non-Linux hosts up front, with the
-#     reason, instead of letting you find out later.
+#   * `dist` builds for the HOST platform only — an AppImage wants Linux
+#     tooling and an NSIS installer wants Windows', and nothing here has ever
+#     produced or opened a cross-built artifact. `make linux` refuses non-Linux
+#     hosts up front, with the reason, instead of letting you find out later.
 #
 # `make` on its own prints the target list. Full Linux guide, including the
 # AppImage's FUSE/sandbox behaviour and the Gentoo overlay:
@@ -185,8 +184,9 @@ gates: require-node
 	done; \
 	[ -z "$$fail" ] || { echo; echo "gates: at least one gate failed — re-run it alone for the message."; exit 1; }
 
-# Flips the native module to the Electron ABI and restores Node's on the way
-# out. Never run while a test suite is running.
+# Builds the app and runs it once against the real database. Safe beside a test
+# run since 13.0.3: the native module is one prebuild per platform with no ABI
+# in the key, so nothing is flipped and nothing has to be restored.
 smoke: require-node
 	pnpm --filter $(DESKTOP) smoke
 

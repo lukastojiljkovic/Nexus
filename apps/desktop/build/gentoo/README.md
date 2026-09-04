@@ -17,10 +17,13 @@ as three things, produced by one build:
 ## 1. Building the artifacts
 
 The build runs **on Linux**, and only on Linux. `scripts/dist.mjs` refuses any
-other host on purpose: the SQLite native module is provisioned per platform by
-`scripts/rebuild-native.mjs`, so a Linux archive cross-built from Windows would
-carry a Windows `.node` and die at the first query with an error about the
-module rather than about the build.
+other host on purpose — an AppImage wants Linux tooling, and nothing here has
+ever produced or opened a cross-built artifact. This used to be a statement
+about the SQLite native module, which was fetched per platform and would have
+landed in the archive as a Windows `.node`. Since 13.0.3 the npm package
+carries all eight platform binaries and `electron-builder.yml` keeps the
+TARGET's, so that half of the reason is gone and the refusal now rests on the
+packaging toolchain alone.
 
 WSL is enough — it is a real Linux userspace and the artifacts it produces are
 ordinary Linux artifacts. No Docker, no VM.

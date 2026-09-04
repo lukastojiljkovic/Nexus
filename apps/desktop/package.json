@@ -9,7 +9,7 @@
     "name": "Luka Stojiljkovic"
   },
   "scripts": {
-    "dev": "node scripts/rebuild-native.mjs electron && electron-vite dev",
+    "dev": "electron-vite dev",
     "build": "electron-vite build",
     "postinstall": "node scripts/ensure-electron.mjs",
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
@@ -19,8 +19,6 @@
     "shots": "electron-vite build && node scripts/launch.mjs --shots",
     "demo": "electron-vite build && node scripts/launch.mjs --demo",
     "licences": "node scripts/generate-licences.mjs",
-    "rebuild:electron": "node scripts/rebuild-native.mjs electron",
-    "rebuild:node": "node scripts/rebuild-native.mjs node",
     "dist": "node scripts/dist.mjs"
   },
   "dependencies": {
@@ -43,7 +41,7 @@
     "@tiptap/starter-kit": "^3.30.5",
     "@tiptap/suggestion": "^3.30.5",
     "@tiptap/y-tiptap": "^3.0.9",
-    "better-sqlite3-multiple-ciphers": "^12.11.1",
+    "better-sqlite3-multiple-ciphers": "^13.0.3",
     "electron-updater": "^6.8.9",
     "katex": "^0.18.4",
     "react": "^19.2.8",

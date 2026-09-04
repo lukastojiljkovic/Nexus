@@ -188,8 +188,8 @@ export default defineConfig({
     build: {
       rollupOptions: {
         // The SQLite native addon cannot be bundled; it stays external and is
-        // require()d at runtime. scripts/rebuild-native.mjs provisions the
-        // Electron-ABI binary.
+        // require()d at runtime, from the prebuild its own loader picks for
+        // this platform.
         external: ["better-sqlite3-multiple-ciphers"],
       },
     },

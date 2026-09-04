@@ -58,38 +58,34 @@ Component gallery — the design-system review surface, not shipped to users:
 pnpm --filter @nexus/gallery dev
 ```
 
-## Native ABI
+## The native module
 
-`better-sqlite3-multiple-ciphers` is a native module, so it is compiled against
-either Node's ABI (what Vitest runs on) or Electron's (what the app runs on) —
-never both at once. Two scripts flip it:
+`better-sqlite3-multiple-ciphers` is a native module, and since **13.0.3** it is
+a Node-API one: the package ships eight prebuilt binaries keyed by platform and
+arch with no ABI in the key, and its loader picks one at runtime. The same file
+serves Node (what Vitest runs on) and Electron (what the app runs on), so there
+is nothing to flip, nothing to restore, and `smoke`, `shots` and `demo` can run
+while the tests do.
 
-```sh
-pnpm --filter @nexus/desktop rebuild:electron   # for running the app
-pnpm --filter @nexus/desktop rebuild:node       # for running the tests
-```
-
-`smoke` flips to Electron and restores Node on the way out, so after any smoke
-run the test suite is runnable again. Never rebuild the module by hand.
-
-Electron is pinned to **^42** (ABI 146) because 43 (ABI 148) has no prebuild for
-that native module; Dependabot is configured to ignore Electron majors.
+Nothing in this repo compiles it. `pnpm-workspace.yaml` denies the package a
+build script for that reason — the `binding.gyp` it still ships would otherwise
+make pnpm run `node-gyp rebuild` and fail the install on any machine without
+Visual Studio's C++ workload, for a binary the package already carries.
 
 ## Building a release
 
-`dist` builds for the **host platform only**. The packaged app carries a
-platform-specific build of `better-sqlite3-multiple-ciphers`, fetched for
-`process.platform` — a Linux archive cross-built from Windows would ship the
-wrong `.node` and die at the first database query, with an error about the
-native module rather than about the build. `dist.mjs` refuses a host it cannot
-package for before it touches that module.
+`dist` builds for the **host platform only**. Not because of the native module
+— that reason retired with 13.0.3, which carries every platform's binary — but
+because an AppImage wants Linux tooling and an NSIS installer wants Windows',
+and nothing here has ever produced or opened a cross-built artifact. `dist.mjs`
+refuses a host it cannot package for before it builds anything.
 
 A root [`Makefile`](Makefile) wraps this. It adds nothing the pnpm scripts do
 not do; what it adds is **order** — `pnpm build` before `dist` is not optional
 in a fresh tree, and skipping it fails inside Vite with „failed to resolve
 entry for package" and no hint that a workspace package simply was not built
-yet — and **refusal**, so the cross-build above is caught up front rather than
-at the first query.
+yet — and **refusal**, so the cross-build above is caught before the build
+rather than after it.
 
 ```sh
 make                 # the target list, and the host it detected
