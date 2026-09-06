@@ -5116,14 +5116,25 @@ export function SettingsPage({
 
   return (
     <div className="set">
-      <PageHeader title={moduleName("settings")} sigil="settings" />
-
-      <TextField
-        className="set__search"
-        value={query}
-        aria-label={strings.settings.searchPlaceholder}
-        placeholder={strings.settings.searchPlaceholder}
-        onChange={(event) => setQuery(event.target.value)}
+      {/* The filter is a PAGE-LEVEL control, so it sits in the header's actions
+          slot rather than as the first row of the body — which is what
+          `actions` exists for, and what it was doing wrong before. Two things
+          come out of it: the page stops spending a whole row plus a gap on
+          chrome above a table of contents that is itself three rows tall, and
+          the header's own band (72px, the mark's height) carries something
+          instead of standing empty beside the title. */}
+      <PageHeader
+        title={moduleName("settings")}
+        sigil="settings"
+        actions={
+          <TextField
+            className="set__search"
+            value={query}
+            aria-label={strings.settings.searchPlaceholder}
+            placeholder={strings.settings.searchPlaceholder}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        }
       />
       {/* One card left is not an index, it is a label repeating the card's own
           title directly beneath it. */}

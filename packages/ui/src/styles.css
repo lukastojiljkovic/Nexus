@@ -309,7 +309,16 @@ samp {
   position: relative;
   flex: none;
   display: flex;
-  align-items: flex-start;
+  /* Centred, not top-aligned, and the mark is the reason. The header's floor is
+     the mark's own 72px (below), and eighteen headers carry a mark while only
+     four ever set a subtitle — so on nearly every page the title is a 34px line
+     at the top of a 72px band, and the 38px under it reads as a gap the page
+     forgot to fill rather than as the air the floor was bought for. The mark
+     fills the whole band at the trailing corner; centring the text against it
+     is what makes the two read as one opening. A header that outgrows the floor
+     (a wrapped title, wrapped actions) centres its lines against each other,
+     which is the same intent one size up. */
+  align-items: center;
   justify-content: space-between;
   gap: var(--nx-space-4);
   flex-wrap: wrap;

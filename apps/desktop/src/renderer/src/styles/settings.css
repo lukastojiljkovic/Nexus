@@ -129,10 +129,19 @@
   min-width: 172px;
 }
 
-/* SET-014: the page filter, sitting alone under the title. Sized like the
-   Profil name field so the page keeps one measure down its left edge. */
+/* SET-014: the page filter. It used to sit alone under the title, which cost
+   the page a whole row plus a gap above a table of contents that is itself
+   three rows tall; it is a page-level control, so it lives in the header's
+   `actions` slot now — which is what that slot is for.
+
+   A stated width, not a cap. In the body flow this was a full-width field
+   capped at 320; in a flex row a cap alone lets it size to its own
+   placeholder, which would make the page's one search box a different width
+   in Serbian than in any other language. `max-width: 100%` keeps it from
+   pushing the title off its line at the smallest window. */
 .set__search {
-  max-width: 320px;
+  width: 320px;
+  max-width: 100%;
 }
 /* The section index (SET §5's answer to „a page this long with no way to jump
    is a scroll hunt"). It is the page's table of contents and it sticks to the
