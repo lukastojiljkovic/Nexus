@@ -68,7 +68,7 @@
 /* The control: the first thing after the label that is not more prose. Pinned
    to row 1 so it sits BESIDE the label, and to the trailing edge so the whole
    page's controls line up. */
-.set__field > .set__section-caption:first-child + *:not(.set__section-caption),
+.set__field > .nx-hint:first-child + *:not(.nx-hint),
 .set__field > .set__field-control {
   grid-column: 2;
   grid-row: 1;
@@ -79,7 +79,7 @@
   align-self: center;
 }
 /* The row's own name. Primary tier — this is the word the page is scanned for. */
-.set__field > .set__section-caption:first-child {
+.set__field > .nx-hint:first-child {
   grid-row: 1;
   font-size: var(--nx-font-size-body);
   font-weight: var(--nx-font-weight-medium);
@@ -449,13 +449,6 @@
   font-weight: var(--nx-font-weight-medium);
   color: var(--nx-text);
 }
-/* Secondary tier, exactly like a `.set__field` explanation line. */
-.set__module-desc {
-  max-width: var(--nx-layout-prose);
-  color: var(--nx-text-muted);
-  font-size: var(--nx-font-size-body-sm);
-  line-height: var(--nx-font-leading-snug);
-}
 /* „Profili“ (SET-003 / ADR-058): a profile row is the module-row recipe with
    the name and its kind chip on one line; the ACTIVE profile's name carries
    the gold + weight active state, the app's one active-marker idiom. */
@@ -474,25 +467,6 @@
   display: inline-flex;
   gap: var(--nx-space-1);
   flex-wrap: wrap;
-}
-/* THE SECONDARY TIER. Every explanation line on this page is this class, and it
-   is 13px rather than the 11px it was: 11px caps-tracked is the tertiary tier,
-   which exists for eyebrows and counts, and prose set in it is not READ — it is
-   skipped, which is the same as not shipping it. Identical to `.app__description`
-   in shell.css by construction; the two differ only in which surface adopted
-   which name first.
-
-   Explanatory text also has a maximum measure, like every other run of prose in
-   the product. Settings is the one pane that fills the whole main column, so
-   without a cap this ran the full window width — lines a thousand pixels wide,
-   which is not a line anybody's eye can track back from. The cap is a token
-   because it is a typographic decision, not a Settings one. */
-.set__section-caption {
-  margin: 0;
-  max-width: var(--nx-layout-prose);
-  color: var(--nx-text-muted);
-  font-size: var(--nx-font-size-body-sm);
-  line-height: var(--nx-font-leading-snug);
 }
 .set__error {
   margin: 0;

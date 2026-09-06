@@ -1156,7 +1156,7 @@ export function App() {
   }
 
   if (!authStatus) {
-    return inWindow(<p className="app__muted">{strings.app.loading}</p>, true);
+    return inWindow(<p className="nx-hint">{strings.app.loading}</p>, true);
   }
 
   if (authStatus.state !== "unlocked") {
@@ -1164,7 +1164,7 @@ export function App() {
   }
 
   if (!profiles) {
-    return inWindow(<p className="app__muted">{strings.app.loading}</p>, true);
+    return inWindow(<p className="nx-hint">{strings.app.loading}</p>, true);
   }
 
   // ONB gates the shell on the ACTIVE profile's empty name — the deliberate

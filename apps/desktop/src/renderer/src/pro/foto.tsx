@@ -180,7 +180,7 @@ export function AngleOfViewTool() {
               />
             </>
           )}
-          <p className="tool__note">{s.modelNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.modelNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -310,7 +310,7 @@ export function FlashGuideNumberTool() {
               value={signed(flash.distanceStops, proNum(flash.distanceStops, 3))}
             />
           )}
-          <p className="tool__note">{s.modelNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.modelNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -437,7 +437,7 @@ export function FrameRateConformTool() {
               value={proUnit(proNum(conform.requiredCaptureFps, 3), s.unitFps)}
             />
           )}
-          <p className="tool__note">{s.modelNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.modelNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -541,7 +541,7 @@ export function IlluminanceToApertureTool() {
               />
             </>
           )}
-          <p className="tool__note">{s.modelNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.modelNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -782,7 +782,7 @@ export function MotionBlurTool() {
             value={proUnit(proNum(blurResult.blurMillimetres, 4), s.unitMm)}
           />
           <ResultRow label={s.blurPixels} value={`${proNum(blurResult.blurPixels, 2)} px`} />
-          <p className="tool__note">{s.modelNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.modelNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -798,7 +798,7 @@ export function MotionBlurTool() {
             label={s.solvedShutter}
             value={`${proNum(shutterResult.shutter, 6)} ${s.unitS} (1/${proNum(shutterResult.shutterDenominator, 0)})`}
           />
-          <p className="tool__note">{s.roundingNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.roundingNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -893,7 +893,7 @@ export function NdFilterExposureTool() {
       />
       {Array.from({ length: ND_FILTER_SLOTS }, (_, index) => index).map((index) => (
         <ToolSection key={index} title={`${s.filterSlot} ${index + 1}`}>
-          {index === 0 && <p className="tool__note">{s.slotHint}</p>}
+          {index === 0 && <p className="nx-hint nx-hint--prose">{s.slotHint}</p>}
           <ToolInput
             label={s.stops}
             value={slotStops[index] ?? ""}
@@ -1021,7 +1021,7 @@ export function PqNitsTool() {
           <ResultRow label={s.luminance} value={proUnit(proNum(point.luminance, 3), s.unitNits)} />
           <ResultRow label={s.codeNarrow} value={proNum(point.code.narrow, 0)} />
           <ResultRow label={s.codeFull} value={proNum(point.code.full, 0)} />
-          <p className="tool__note">{s.modelNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.modelNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1152,7 +1152,7 @@ export function RasterImageSizeTool() {
           {result.filesThatFit !== undefined && (
             <ResultRow label={s.filesThatFit} value={proNum(result.filesThatFit, 0)} />
           )}
-          <p className="tool__note">{s.modelNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.modelNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1380,7 +1380,7 @@ export function SmpteTimecodeTool() {
       </ToolSection>
 
       <ToolSection title={s.timecodeB}>
-        <p className="tool__note">{s.timecodeBHint}</p>
+        <p className="nx-hint nx-hint--prose">{s.timecodeBHint}</p>
         <ToolInput label={s.hours} value={hoursB} onChange={setHoursB} />
         <ToolInput label={s.minutes} value={minutesB} onChange={setMinutesB} />
         <ToolInput label={s.seconds} value={secondsB} onChange={setSecondsB} />
@@ -1404,7 +1404,7 @@ export function SmpteTimecodeTool() {
               proUnit(proNum(operation_.elapsedSeconds, 4), s.unitS),
             )}
           />
-          <p className="tool__note">{s.wrapNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.wrapNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho title={s.inputs} entries={inputEntries} />
           <CopyButton value={copyText} />
@@ -1538,7 +1538,7 @@ export function TimelapsePlannerTool() {
               value={proNum(plan.shutterOverIntervalRatio, 3)}
             />
           )}
-          <p className="tool__note">{s.fencepostNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.fencepostNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1658,7 +1658,7 @@ export function VideoBitrateStorageTool() {
               />
             </>
           )}
-          <p className="tool__note">{s.modelNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.modelNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1774,7 +1774,7 @@ export function DepthOfFieldTool() {
               dof.totalDepth === undefined ? s.infinite : proUnit(proNum(dof.totalDepth, 3), s.unitM)
             }
           />
-          <p className="tool__note">{s.modelNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.modelNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1796,7 +1796,7 @@ export function DepthOfFieldTool() {
       )}
 
       <ToolSection title={s.helperTitle}>
-        <p className="tool__note">{s.helperHint}</p>
+        <p className="nx-hint nx-hint--prose">{s.helperHint}</p>
         <ToolInput label={s.helperDiagonal} value={helperDiagonal} onChange={setHelperDiagonal} />
         <ToolInput label={s.helperDivisor} value={helperDivisor} onChange={setHelperDivisor} />
         {helperFailure !== undefined && <ToolFailure>{helperFailure}</ToolFailure>}
@@ -1885,7 +1885,7 @@ export function DiffractionLimitTool() {
             label={s.fNumberAtOnePitch}
             value={`f/${proNum(diffraction.fNumberAtOnePitch, 2)}`}
           />
-          <p className="tool__note">{s.modelNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.modelNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1993,7 +1993,7 @@ export function CropFactorTool() {
                 label={s.equivalentAperture}
                 value={`f/${proNum(crop.equivalentAperture, 2)}`}
               />
-              <p className="tool__note">{s.apertureNote}</p>
+              <p className="nx-hint nx-hint--prose">{s.apertureNote}</p>
             </>
           )}
           <ToolFormula>{s.formula}</ToolFormula>

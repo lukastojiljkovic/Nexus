@@ -394,7 +394,7 @@ export function PrivNoteEditor({ profileId, noteId, onSaved, onMaybeLocked }: Pr
   if (doc === null) {
     return (
       <div className="note__editor-empty">
-        <p className="app__muted">{strings.app.loading}</p>
+        <p className="nx-hint">{strings.app.loading}</p>
       </div>
     );
   }

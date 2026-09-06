@@ -727,13 +727,6 @@
   min-height: 0;
   padding-right: var(--nx-space-2);
 }
-.elec-code__description,
-.elec-code__refused {
-  margin: 0;
-  color: var(--nx-text-muted);
-  font-size: var(--nx-font-size-body-sm);
-  line-height: var(--nx-font-leading-loose);
-}
 .elec-code__section {
   display: flex;
   flex-direction: column;
@@ -864,12 +857,6 @@
   overflow-y: auto;
   min-height: 0;
   padding-right: var(--nx-space-2);
-}
-.elec-chassis__description {
-  margin: 0;
-  color: var(--nx-text-muted);
-  font-size: var(--nx-font-size-body-sm);
-  line-height: var(--nx-font-leading-loose);
 }
 /* The shape choice. A radio per shape rather than a select, because each one
    carries a sentence about how it drives — and an option element cannot.

@@ -138,7 +138,7 @@ export function ElecChassisDialog({
           pressed the button and got nothing for.
         */}
         <div className="elec-chassis__body">
-          <p className="elec-chassis__description">{s.description}</p>
+          <p className="nx-hint nx-hint--prose">{s.description}</p>
 
           <fieldset className="elec-chassis__shapes">
             <legend className="elec-inspector__label">{s.shapeLabel}</legend>

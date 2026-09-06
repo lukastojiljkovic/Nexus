@@ -56,7 +56,7 @@ export function EmptyState({
     // the mark would be the loudest thing on a card that is reporting an
     // absence. At 14 it reads as the line's own bullet, which is what it is.
     return (
-      <p className="nx-empty nx-empty--inline">
+      <p className="nx-hint nx-empty nx-empty--inline">
         {sigil != null && (
           <span className="nx-empty__sigil nx-empty__sigil--inline" aria-hidden="true">
             <Icon name={sigil} size={14} />

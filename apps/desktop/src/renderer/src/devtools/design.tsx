@@ -270,13 +270,13 @@ function ColorConvertTool() {
         mono
       />
       {!typed ? (
-        <p className="tool__note">{common.awaitingInput}</p>
+        <p className="nx-hint nx-hint--prose">{common.awaitingInput}</p>
       ) : colour === null ? (
         <ToolFailure>{s.invalid}</ToolFailure>
       ) : (
         <>
           <Swatch colour={formatColour(colour, "hex")} size={SWATCH_SIZE} />
-          {!isInGamut(colour) && <p className="tool__note">{s.outOfGamut}</p>}
+          {!isInGamut(colour) && <p className="nx-hint nx-hint--prose">{s.outOfGamut}</p>}
           <div className="tool__results">
             {COLOUR_FORMATS.map((format: ColourFormat) => {
               const value = formatColour(colour, format);
@@ -346,7 +346,7 @@ function ColorPaletteTool() {
         />
       </div>
       {!typed ? (
-        <p className="tool__note">{common.awaitingInput}</p>
+        <p className="nx-hint nx-hint--prose">{common.awaitingInput}</p>
       ) : (
         <>
           {ramp !== null && (
@@ -368,7 +368,7 @@ function ColorPaletteTool() {
                   label: s.kind[kind],
                 }))}
               />
-              {toOklch(base).c < 1e-4 && <p className="tool__note">{s.greyNote}</p>}
+              {toOklch(base).c < 1e-4 && <p className="nx-hint nx-hint--prose">{s.greyNote}</p>}
               <SwatchRow colours={harmony(base, harmonyKind)} />
             </ToolSection>
           )}
@@ -539,7 +539,7 @@ function GradientTool() {
       </div>
 
       {!anyStopTyped ? (
-        <p className="tool__note">{common.awaitingInput}</p>
+        <p className="nx-hint nx-hint--prose">{common.awaitingInput}</p>
       ) : (
         <>
           {previewSamples !== null && <GradientBar samples={previewSamples} />}
@@ -769,7 +769,7 @@ function CubicBezierTool() {
         </p>
       )}
       {progress !== null && (progress < 0 || progress > 1) && (
-        <p className="tool__note">{s.overshoot}</p>
+        <p className="nx-hint nx-hint--prose">{s.overshoot}</p>
       )}
 
       {legalEasing !== null && <ToolOutput label={s.css} value={bezierCss(legalEasing)} />}
@@ -839,7 +839,7 @@ function ContrastTool() {
       </div>
 
       {!typed ? (
-        <p className="tool__note">{strings.pro.common.awaitingInput}</p>
+        <p className="nx-hint nx-hint--prose">{strings.pro.common.awaitingInput}</p>
       ) : text !== null && background !== null && report !== null ? (
         <>
           <div className="tool__output" style={{ background: formatColour(background, "hex") }}>
@@ -885,8 +885,8 @@ function ContrastTool() {
             />
             <ResultRow label={s.apca} value={report.apcaLc.toFixed(1)} />
           </div>
-          <p className="tool__note">{s.apcaHint}</p>
-          {translucent && <p className="tool__note">{s.alphaHint}</p>}
+          <p className="nx-hint nx-hint--prose">{s.apcaHint}</p>
+          {translucent && <p className="nx-hint nx-hint--prose">{s.alphaHint}</p>}
         </>
       ) : null}
     </>
@@ -993,7 +993,7 @@ function ColorMixerTool() {
       </ToolSection>
 
       {!anyPartTyped ? (
-        <p className="tool__note">{strings.pro.common.awaitingInput}</p>
+        <p className="nx-hint nx-hint--prose">{strings.pro.common.awaitingInput}</p>
       ) : (
         mixResults !== null && (
           <div className="tool__results">
@@ -1015,7 +1015,7 @@ function ColorMixerTool() {
           <ToolInput label={s.backdrop} value={backdropText} onChange={setBackdropText} mono />
         </div>
         {composite !== null && <SwatchCopy colour={composite} />}
-        <p className="tool__note">{s.compositeHint}</p>
+        <p className="nx-hint nx-hint--prose">{s.compositeHint}</p>
       </ToolSection>
     </>
   );

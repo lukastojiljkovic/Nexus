@@ -138,7 +138,7 @@ export function BracketBalanceTool() {
 
           <ToolSection title={s.unclosedSection}>
             {result.unclosed.length === 0 ? (
-              <p className="tool__note">{s.unclosedNone}</p>
+              <p className="nx-hint nx-hint--prose">{s.unclosedNone}</p>
             ) : (
               <ToolTable
                 head={[s.colChar, s.colLine, s.colColumn]}
@@ -149,7 +149,7 @@ export function BracketBalanceTool() {
 
           <ToolSection title={s.unmatchedSection}>
             {result.unmatched.length === 0 ? (
-              <p className="tool__note">{s.unmatchedNone}</p>
+              <p className="nx-hint nx-hint--prose">{s.unmatchedNone}</p>
             ) : (
               <ToolTable
                 head={[s.colChar, s.colLine, s.colColumn, s.colOpenOnTop]}
@@ -160,7 +160,7 @@ export function BracketBalanceTool() {
 
           <ToolSection title={s.oddQuoteSection}>
             {result.oddQuoteParagraphs.length === 0 ? (
-              <p className="tool__note">{s.oddQuoteNone}</p>
+              <p className="nx-hint nx-hint--prose">{s.oddQuoteNone}</p>
             ) : (
               <ToolTable
                 head={[s.colParagraph, s.colStartLine, s.colDoubleQuotes, s.colSingleQuotes]}
@@ -268,7 +268,7 @@ export function GlossaryCheckTool() {
       {result.ok && (
         <ToolSection title={s.results}>
           {result.rows.length === 0 ? (
-            <p className="tool__note">{s.rowsNone}</p>
+            <p className="nx-hint nx-hint--prose">{s.rowsNone}</p>
           ) : (
             <ToolTable
               head={[s.colSource, s.colTarget, s.colInOriginal, s.colInTranslation, s.colStatus]}
@@ -471,7 +471,7 @@ export function MojibakeRepairTool() {
       {result !== undefined && result.ok && (
         <ToolSection title={s.results}>
           {result.repaired === undefined ? (
-            <p className="tool__note">{s.notPossible}</p>
+            <p className="nx-hint nx-hint--prose">{s.notPossible}</p>
           ) : (
             <ToolOutput label={s.repaired} value={result.repaired} multiline />
           )}
@@ -568,7 +568,7 @@ export function NumberCheckTool() {
 
           <ToolSection title={s.pairedSection}>
             {result.paired.length === 0 ? (
-              <p className="tool__note">{s.pairedNone}</p>
+              <p className="nx-hint nx-hint--prose">{s.pairedNone}</p>
             ) : (
               <ToolTable
                 head={[s.colDigits, s.colFormsOriginal, s.colFormsTranslation, s.colCount]}
@@ -584,7 +584,7 @@ export function NumberCheckTool() {
 
           <ToolSection title={s.onlyOriginalSection}>
             {result.onlyInOriginal.length === 0 ? (
-              <p className="tool__note">{s.onlyOriginalNone}</p>
+              <p className="nx-hint nx-hint--prose">{s.onlyOriginalNone}</p>
             ) : (
               <ToolTable
                 head={[s.colDigits, s.colFormsOriginal, s.colCount]}
@@ -595,7 +595,7 @@ export function NumberCheckTool() {
 
           <ToolSection title={s.onlyTranslationSection}>
             {result.onlyInTranslation.length === 0 ? (
-              <p className="tool__note">{s.onlyTranslationNone}</p>
+              <p className="nx-hint nx-hint--prose">{s.onlyTranslationNone}</p>
             ) : (
               <ToolTable
                 head={[s.colDigits, s.colFormsTranslation, s.colCount]}
@@ -606,7 +606,7 @@ export function NumberCheckTool() {
 
           <ToolSection title={s.differentLengthSection}>
             {result.differentLength.length === 0 ? (
-              <p className="tool__note">{s.differentLengthNone}</p>
+              <p className="nx-hint nx-hint--prose">{s.differentLengthNone}</p>
             ) : (
               <ToolTable
                 head={[s.colDigits, s.colFormsOriginal, s.colFormsTranslation]}
@@ -713,7 +713,7 @@ export function NumberToSerbianWordsTool() {
       {result !== undefined && result.ok && (
         <ToolSection title={s.results}>
           <ToolOutput label={s.resultText} value={result.text} />
-          {result.decimalsTruncated && <p className="tool__note">{s.truncatedNote}</p>}
+          {result.decimalsTruncated && <p className="nx-hint nx-hint--prose">{s.truncatedNote}</p>}
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -786,7 +786,7 @@ export function ReadingTimeTool() {
           <ResultRow label={s.totalClock} value={result.totalClock} />
           <ResultRow label={s.words} value={result.words} />
           <ResultRow label={s.displayedSum} value={`${proNum(result.displayedSumSeconds, 0)} s`} />
-          <p className="tool__note">{s.sumNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.sumNote}</p>
           <ToolTable
             head={[s.colParagraph, s.colWords, s.colDuration, s.colEntry]}
             rows={result.paragraphs.map((p) => [p.index, p.words, p.clock, p.entryClock])}
@@ -980,7 +980,7 @@ export function HiddenCharactersTool() {
           <ResultRow label={s.codePointsAfter} value={proNum(result.codePointsAfter, 0)} />
 
           {result.findings.length === 0 ? (
-            <p className="tool__note">{s.findingsNone}</p>
+            <p className="nx-hint nx-hint--prose">{s.findingsNone}</p>
           ) : (
             <ToolTable
               head={[s.colKind, s.colName, s.colLine, s.colColumn]}
@@ -989,7 +989,7 @@ export function HiddenCharactersTool() {
           )}
 
           {result.mixedScriptWords.length === 0 ? (
-            <p className="tool__note">{s.mixedNone}</p>
+            <p className="nx-hint nx-hint--prose">{s.mixedNone}</p>
           ) : (
             <ToolTable
               head={[s.colWord, s.colScripts, s.colLine, s.colColumn]}
@@ -1084,7 +1084,7 @@ export function SerbianTransliterationTool() {
         <ToolSection title={s.results}>
           <ToolOutput label={s.resultText} value={result.text} multiline />
           {result.ambiguities.length === 0 ? (
-            <p className="tool__note">
+            <p className="nx-hint nx-hint--prose">
               {direction === "cyrillicToLatin" ? s.ambiguitiesNoneDirection : s.ambiguitiesNoneOther}
             </p>
           ) : (
@@ -1200,7 +1200,7 @@ export function TranslationVolumeTool() {
         <ToolSection title={s.results}>
           <ResultRow label={s.charactersWithSpaces} value={result.charactersWithSpaces} />
           <ResultRow label={s.charactersWithLineBreaks} value={result.charactersWithLineBreaks} />
-          <p className="tool__note">{s.lineBreakNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.lineBreakNote}</p>
           <ResultRow label={s.charactersWithoutSpaces} value={result.charactersWithoutSpaces} />
           <ResultRow label={s.wordsBySpaces} value={result.wordsBySpaces} />
           <ResultRow label={s.wordsByLetters} value={result.wordsByLetters} />
@@ -1212,7 +1212,7 @@ export function TranslationVolumeTool() {
           {result.amountRoundedUp !== undefined && (
             <ResultRow label={s.amountRoundedUp} value={proNum(result.amountRoundedUp, 2)} />
           )}
-          {result.amountExact !== undefined && <p className="tool__note">{s.noCurrencyNote}</p>}
+          {result.amountExact !== undefined && <p className="nx-hint nx-hint--prose">{s.noCurrencyNote}</p>}
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1362,7 +1362,7 @@ export function SubtitleAuditTool() {
               proRatioOrDash(b.gapRatio),
             ])}
           />
-          <p className="tool__note">{s.ratioNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.ratioNote}</p>
 
           <ResultRow label={s.nonPositiveDuration} value={list(result.nonPositiveDuration)} />
           <ResultRow label={s.outOfOrder} value={list(result.outOfOrder)} />
@@ -1794,7 +1794,7 @@ export function WordFrequencyTool() {
           <ResultRow label={s.totalNgrams} value={result.totalNgrams} />
           <ResultRow label={s.distinctPhrases} value={result.distinctPhrases} />
           {result.rows.length === 0 ? (
-            <p className="tool__note">{s.rowsNone}</p>
+            <p className="nx-hint nx-hint--prose">{s.rowsNone}</p>
           ) : (
             <ToolTable
               head={[s.colPhrase, s.colCount, s.colShare]}

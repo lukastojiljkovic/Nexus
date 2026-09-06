@@ -350,7 +350,7 @@ export function ChildAgeTool() {
             />
           )}
           {result.borrow !== undefined && (
-            <p className="tool__note">
+            <p className="nx-hint nx-hint--prose">
               {s.borrowNote} {proNum(result.borrow.fromMonth, 0)} (
               {proNum(result.borrow.fromMonthDays, 0)} {s.daysUnit})
               {result.borrow.clamped ? ` — ${s.borrowClamped}` : ""}
@@ -564,18 +564,18 @@ export function GradeStatisticsTool() {
           <ResultRow label={s.range} value={proNum(result.range, 2)} />
           <ResultRow label={s.median} value={proNum(result.median, 2)} />
           {result.quartiles === undefined ? (
-            <p className="tool__note">{s.quartilesAbsentNote}</p>
+            <p className="nx-hint nx-hint--prose">{s.quartilesAbsentNote}</p>
           ) : (
             <>
               <ResultRow label={s.q1} value={proNum(result.quartiles.q1, 2)} />
               <ResultRow label={s.q3} value={proNum(result.quartiles.q3, 2)} />
               <ResultRow label={s.iqr} value={proNum(result.quartiles.iqr, 2)} />
               {result.quartiles.degenerate && (
-                <p className="tool__note">{s.quartilesDegenerateNote}</p>
+                <p className="nx-hint nx-hint--prose">{s.quartilesDegenerateNote}</p>
               )}
             </>
           )}
-          <p className="tool__note">{s.quartileMethodNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.quartileMethodNote}</p>
           <ResultRow label={s.populationVariance} value={proNum(result.populationVariance, 2)} />
           <ResultRow label={s.populationDeviation} value={proNum(result.populationDeviation, 2)} />
           {result.sample !== undefined && (
@@ -589,7 +589,7 @@ export function GradeStatisticsTool() {
             head={[s.colValue, s.colCount, s.colShare]}
             rows={result.frequencies.map((row) => [proNum(row.value, 2), proNum(row.count, 0), `${proNum(row.share, 2)} %`])}
           />
-          <p className="tool__note">{s.shareRoundingNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.shareRoundingNote}</p>
           {result.atOrAbove !== undefined && (
             <ResultRow
               label={s.atOrAbove}
@@ -751,7 +751,7 @@ export function LessonCountPeriodTool() {
               />
             </>
           )}
-          <p className="tool__note">{s.noHolidayNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.noHolidayNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -833,7 +833,7 @@ export function LessonTimelineTool() {
               `${proNum(row.share, 2)} %`,
             ])}
           />
-          <p className="tool__note">{s.shareRoundingNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.shareRoundingNote}</p>
           <ResultRow label={s.totalMinutes} value={proNum(result.totalMinutes, 0)} />
           <ResultRow label={s.end} value={formatClockTime(result.end, s.dayUnit)} />
           {result.slack !== undefined && <ResultRow label={s.slack} value={proNum(result.slack, 0)} />}
@@ -1039,7 +1039,7 @@ export function StandardScoreTool() {
         <ToolSection title={s.results}>
           <ResultRow label={s.z} value={proNum(result.z, 4)} />
           <ResultRow label={s.tScore} value={proNum(result.tScore, 2)} />
-          <p className="tool__note">{s.tScoreSource}</p>
+          <p className="nx-hint nx-hint--prose">{s.tScoreSource}</p>
           {result.targetScore !== undefined && <ResultRow label={s.targetScore} value={proNum(result.targetScore, 2)} />}
           {result.rawFromZ !== undefined && <ResultRow label={s.rawFromZ} value={proNum(result.rawFromZ, 2)} />}
           {result.rawFromTScore !== undefined && <ResultRow label={s.rawFromTScore} value={proNum(result.rawFromTScore, 2)} />}
@@ -1136,7 +1136,7 @@ export function TestPrintingTool() {
           <ResultRow label={s.packs} value={proNum(result.packs, 0)} />
           <ResultRow label={s.leftInLastPack} value={proNum(result.leftInLastPack, 0)} />
           {result.amount !== undefined && <ResultRow label={s.amount} value={proNum(result.amount, 2)} />}
-          <p className="tool__note">{s.impositionNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.impositionNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1210,7 +1210,7 @@ export function TopicHourAllocationTool() {
           />
           <ResultRow label={s.checkSum} value={proNum(result.checkSum, 0)} />
           <ResultRow label={s.extraHourCount} value={proNum(result.extraHourCount, 0)} />
-          <p className="tool__note">{s.methodNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.methodNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1316,7 +1316,7 @@ export function WeightedGradeTool() {
             rows={result.rows.map((row) => [names[row.index] ?? "", `${proNum(row.percent, 2)} %`, `${proNum(row.normalizedWeight, 2)} %`])}
           />
           <ResultRow label={s.totalPercent} value={`${proNum(result.totalPercent, 2)} %`} />
-          {pending !== undefined && <p className="tool__note">{s.lowerBoundNote}</p>}
+          {pending !== undefined && <p className="nx-hint nx-hint--prose">{s.lowerBoundNote}</p>}
           {result.mappedPoints !== undefined && <ResultRow label={s.mappedPoints} value={proNum(result.mappedPoints, 2)} />}
           {result.pending !== undefined && (
             <ResultRow label={s.pendingWeight} value={`${proNum(result.pending.weightPercent, 2)} %`} />
@@ -1549,7 +1549,7 @@ export function FractionsDecimalsTool() {
             value={result.percent === undefined ? "—" : `${proNum(result.percent, 2)} %`}
           />
           {result.percentIsApproximate && result.percent !== undefined && (
-            <p className="tool__note">{s.percentApprox}</p>
+            <p className="nx-hint nx-hint--prose">{s.percentApprox}</p>
           )}
           <ToolFormula>{mode === "compute" ? s.formulaCompute : s.formulaConvert}</ToolFormula>
           <ToolInputEcho

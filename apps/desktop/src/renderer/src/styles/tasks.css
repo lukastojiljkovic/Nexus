@@ -973,11 +973,6 @@ button.tasks__cal-chip:active {
   gap: var(--nx-space-3);
   padding: var(--nx-space-3) var(--nx-space-2) 0;
 }
-.tasks__more-note {
-  margin: 0;
-  font-size: var(--nx-font-size-body-sm);
-  color: var(--nx-text-muted);
-}
 .tasks__more-action.nx-button {
   background: transparent;
   border-color: transparent;

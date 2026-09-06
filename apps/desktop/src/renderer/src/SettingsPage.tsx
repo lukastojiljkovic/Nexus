@@ -471,7 +471,7 @@ function ProfileSection({
               </Button>
             )}
           </div>
-          <p className="set__section-caption">{s.pictureCaption}</p>
+          <p className="nx-hint">{s.pictureCaption}</p>
           {pictureError != null && <p className="set__error">{pictureError}</p>}
         </div>
       </div>
@@ -540,7 +540,7 @@ function ProfileDeleteDialog({ profile, busy, error, onConfirm, onCancel }: Prof
           {s.deleteTitle}
         </h2>
         <p className="recur-dialog__name">„{displayName}“</p>
-        <p id={questionId} className="recur-dialog__question">
+        <p id={questionId} className="nx-hint">
           {s.deleteWarning}
         </p>
         <form
@@ -648,7 +648,7 @@ function ProfilesSection({
 
   return (
     <>
-      <p className="set__section-caption">{s.caption}</p>
+      <p className="nx-hint">{s.caption}</p>
       <div className="set__module-list">
         {profiles.map((profile) => {
           const isActive = profile.id === activeProfileId;
@@ -662,7 +662,7 @@ function ProfilesSection({
                   </span>
                   {profile.kind === "business" && <Chip>{strings.profiles.businessLabel}</Chip>}
                 </span>
-                {isActive && <span className="set__module-desc">{s.activeMarker}</span>}
+                {isActive && <span className="nx-hint">{s.activeMarker}</span>}
               </div>
               {/* Business only, and never the last profile: the personal anchor
                   is undeletable by design, so the action simply is not offered
@@ -694,7 +694,7 @@ function ProfilesSection({
       )}
       {created != null && (
         <div className="set__row">
-          <p className="set__section-caption">{s.createdNotice}</p>
+          <p className="nx-hint">{s.createdNotice}</p>
           <Button size="sm" variant="primary" onClick={() => onRequestSwitch(created)}>
             {s.switchToNew}
           </Button>
@@ -851,7 +851,7 @@ function BackupSection({ profileId }: BackupSectionProps) {
 
   return (
     <>
-      <p className="app__description">{s.description}</p>
+      <p className="nx-hint">{s.description}</p>
       <button
         type="button"
         className="set__disclosure"
@@ -879,7 +879,7 @@ function BackupSection({ profileId }: BackupSectionProps) {
           ))}
         </div>
       )}
-      {modules.size === 0 && <p className="set__section-caption">{s.modulesEmpty}</p>}
+      {modules.size === 0 && <p className="nx-hint">{s.modulesEmpty}</p>}
       <Checkbox
         checked={encrypt}
         onChange={(event) => {
@@ -908,12 +908,12 @@ function BackupSection({ profileId }: BackupSectionProps) {
               onChange={(event) => setConfirmPassphrase(event.target.value)}
             />
           </div>
-          <p className="set__section-caption">{s.passphraseHint}</p>
-          <p className="app__description">{s.encryptedNotice}</p>
+          <p className="nx-hint">{s.passphraseHint}</p>
+          <p className="nx-hint">{s.encryptedNotice}</p>
         </>
       ) : (
         <>
-          <p className="app__description">{s.plaintextNotice}</p>
+          <p className="nx-hint">{s.plaintextNotice}</p>
           <Checkbox
             checked={plaintextConfirmed}
             onChange={(event) => setPlaintextConfirmed(event.target.checked)}
@@ -926,7 +926,7 @@ function BackupSection({ profileId }: BackupSectionProps) {
         {s.exportButton}
       </Button>
       {saved != null && (
-        <p className="set__section-caption">
+        <p className="nx-hint">
           {s.savedPrefix} <span className="app__path">{saved.path}</span> (
           {saved.totalRecords} {dayUnit(saved.totalRecords, s.recordsUnitOne, s.recordsUnitMany)}
           {saved.encrypted ? <> · {s.savedEncryptedSuffix}</> : null})
@@ -943,7 +943,7 @@ function BackupSection({ profileId }: BackupSectionProps) {
           to decide about — included with its count, or excluded with the named
           reason. Never both: the result carries a count XOR a skip. */}
       {saved != null && saved.privateNotes > 0 && (
-        <p className="set__section-caption">
+        <p className="nx-hint">
           {s.privateNotesIncludedPrefix} ({saved.privateNotes}).
         </p>
       )}
@@ -1049,7 +1049,7 @@ function AutoBackupSection({ profileId, hits }: AutoBackupSectionProps) {
     return (
       <div className="set__restore-block">
         <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-auto"))}>{s.title}</h3>
-        <p className="app__muted">{strings.app.loading}</p>
+        <p className="nx-hint">{strings.app.loading}</p>
       </div>
     );
   }
@@ -1060,7 +1060,7 @@ function AutoBackupSection({ profileId, hits }: AutoBackupSectionProps) {
   return (
     <div className="set__restore-block">
       <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-auto"))}>{s.title}</h3>
-      <p className="app__description">{s.description}</p>
+      <p className="nx-hint">{s.description}</p>
 
       {/* A boolean preference is the module gallery's row, not a labelled
           checkbox floating in a card: name on the left, why-it-is-off under it,
@@ -1068,7 +1068,7 @@ function AutoBackupSection({ profileId, hits }: AutoBackupSectionProps) {
       <div className="set__module-row">
         <div className="set__module-info">
           <span className="set__module-name">{s.enableLabel}</span>
-          {!configured && <span className="set__module-desc">{s.enableHint}</span>}
+          {!configured && <span className="nx-hint">{s.enableHint}</span>}
         </div>
         <Checkbox
           checked={settings.enabled}
@@ -1086,7 +1086,7 @@ function AutoBackupSection({ profileId, hits }: AutoBackupSectionProps) {
       </div>
 
       <div className="set__field">
-        <p className="set__section-caption">{s.cadenceLabel}</p>
+        <p className="nx-hint">{s.cadenceLabel}</p>
         <div className="set__segmented" role="group" aria-label={s.cadenceLabel}>
           {BACKUP_CADENCES.map((option) => (
             <Button
@@ -1108,7 +1108,7 @@ function AutoBackupSection({ profileId, hits }: AutoBackupSectionProps) {
       </div>
 
       <div className="set__field">
-        <p className="set__section-caption">{s.folderLabel}</p>
+        <p className="nx-hint">{s.folderLabel}</p>
         <Button
           size="sm"
           disabled={busy}
@@ -1117,11 +1117,11 @@ function AutoBackupSection({ profileId, hits }: AutoBackupSectionProps) {
           {s.folderPick}
         </Button>
         {settings.folderPath !== null ? (
-          <p className="set__section-caption">
+          <p className="nx-hint">
             <span className="app__path">{settings.folderPath}</span>
           </p>
         ) : (
-          <p className="set__section-caption">{s.folderNone}</p>
+          <p className="nx-hint">{s.folderNone}</p>
         )}
       </div>
 
@@ -1147,14 +1147,14 @@ function AutoBackupSection({ profileId, hits }: AutoBackupSectionProps) {
             </option>
           ))}
         </Select>
-        <p className="set__section-caption">{s.keepLastHint}</p>
+        <p className="nx-hint">{s.keepLastHint}</p>
       </div>
 
       {/* The one declared exception to the row shape: what answers this label is
           a two-field form and a button, not a control, and a form pushed to the
           trailing edge would be nonsense. `--stacked` says so out loud. */}
       <div className="set__field set__field--stacked">
-        <p className="set__section-caption">{s.passphraseTitle}</p>
+        <p className="nx-hint">{s.passphraseTitle}</p>
         <div className="set__security-form">
           <TextField
             type="password"
@@ -1169,8 +1169,8 @@ function AutoBackupSection({ profileId, hits }: AutoBackupSectionProps) {
             onChange={(event) => setConfirmPassphrase(event.target.value)}
           />
         </div>
-        <p className="set__section-caption">{b.passphraseHint}</p>
-        <p className="set__section-caption">{s.passphraseFutureNote}</p>
+        <p className="nx-hint">{b.passphraseHint}</p>
+        <p className="nx-hint">{s.passphraseFutureNote}</p>
         <Button
           size="sm"
           disabled={busy || passphrase.length === 0}
@@ -1178,14 +1178,14 @@ function AutoBackupSection({ profileId, hits }: AutoBackupSectionProps) {
         >
           {settings.passphraseSet ? s.passphraseChange : s.passphraseSave}
         </Button>
-        {settings.passphraseSet && <p className="set__section-caption">{s.passphraseStatusSet}</p>}
+        {settings.passphraseSet && <p className="nx-hint">{s.passphraseStatusSet}</p>}
       </div>
 
       <Button size="sm" disabled={busy || !configured} onClick={() => void mutate(() => window.nexus.runBackupNow(profileId))}>
         {s.runNow}
       </Button>
       {settings.lastRunAt === null ? (
-        <p className="app__muted">{s.lastRunNever}</p>
+        <p className="nx-hint">{s.lastRunNever}</p>
       ) : settings.lastStatus === "failed" ? (
         <p className="set__error">
           {s.lastRunPrefix} {s.lastRunFailed} —{" "}
@@ -1193,7 +1193,7 @@ function AutoBackupSection({ profileId, hits }: AutoBackupSectionProps) {
           {formatArchiveInstant(settings.lastRunAt)}
         </p>
       ) : (
-        <p className="set__section-caption">
+        <p className="nx-hint">
           {s.lastRunPrefix} {s.lastRunOk} — {formatArchiveInstant(settings.lastRunAt)}
         </p>
       )}
@@ -1264,7 +1264,7 @@ function SearchHistorySection({ profileId, hits }: SearchHistorySectionProps) {
       <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("privacy-search-history"))}>
         {s.title}
       </h3>
-      <p className="app__description">{s.caption}</p>
+      <p className="nx-hint">{s.caption}</p>
       <Button
         size="sm"
         disabled={clearing || count === null || count === 0}
@@ -1273,7 +1273,7 @@ function SearchHistorySection({ profileId, hits }: SearchHistorySectionProps) {
         {s.clear}
       </Button>
       {count !== null && (
-        <p className="set__section-caption">
+        <p className="nx-hint">
           {count === 0
             ? s.empty
             : `${count} ${countUnit(count, s.countOne, s.countFew, s.countMany)}`}
@@ -1323,12 +1323,12 @@ function CalendarExportSection({ profileId, hits }: CalendarExportSectionProps) 
   return (
     <div className="set__restore-block">
       <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-calendar"))}>{s.title}</h3>
-      <p className="app__description">{s.description}</p>
+      <p className="nx-hint">{s.description}</p>
       <Button size="sm" disabled={running} onClick={() => void runExport()}>
         {s.button}
       </Button>
       {saved != null && (
-        <p className="set__section-caption">
+        <p className="nx-hint">
           {strings.settings.backup.savedPrefix} <span className="app__path">{saved.path}</span> (
           {saved.events} {dayUnit(saved.events, s.eventsUnitOne, s.eventsUnitMany)})
         </p>
@@ -1387,7 +1387,7 @@ function problemFragment(problem: RestoreProblem): string {
 function RestoreProblemRow({ problem, tone }: { problem: RestoreProblem; tone: "error" | "muted" }) {
   const fragment = problemFragment(problem);
   return (
-    <li className={tone === "error" ? "set__error" : "set__section-caption"}>
+    <li className={tone === "error" ? "set__error" : "nx-hint"}>
       {strings.settings.restore.problems[problem.code]}
       {fragment !== "" && <span className="set__restore-fragment"> {fragment}</span>}
     </li>
@@ -1536,7 +1536,7 @@ function RestoreSection({ profileId, hits }: RestoreSectionProps) {
   return (
     <div className="set__restore-block">
       <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-restore"))}>{s.title}</h3>
-      <p className="app__description">{s.description}</p>
+      <p className="nx-hint">{s.description}</p>
 
       {!previewing && state.phase !== "applied" && (
         <Button
@@ -1553,7 +1553,7 @@ function RestoreSection({ profileId, hits }: RestoreSectionProps) {
 
       {state.phase === "picked" && (
         <>
-          <p className="set__section-caption">
+          <p className="nx-hint">
             {s.pickedPrefix} <span className="app__path">{state.pick.fileName}</span>
           </p>
           {state.needsPassphrase && (
@@ -1576,14 +1576,14 @@ function RestoreSection({ profileId, hits }: RestoreSectionProps) {
               </Button>
             </form>
           )}
-          {state.busy && <p className="app__muted">{s.previewRunning}</p>}
+          {state.busy && <p className="nx-hint">{s.previewRunning}</p>}
           {state.error != null && <p className="set__error">{state.error}</p>}
         </>
       )}
 
       {state.phase === "invalid" && (
         <>
-          <p className="set__section-caption">
+          <p className="nx-hint">
             {s.pickedPrefix} <span className="app__path">{state.pick.fileName}</span>
           </p>
           <ul className="set__restore-problems">
@@ -1642,7 +1642,7 @@ function RestoreSection({ profileId, hits }: RestoreSectionProps) {
             </ul>
           )}
           {state.preview.corruptBlobs > 0 && (
-            <p className="set__section-caption">
+            <p className="nx-hint">
               {s.corruptBlobsPrefix} {state.preview.corruptBlobs}{" "}
               {dayUnit(state.preview.corruptBlobs, s.corruptBlobsUnitOne, s.corruptBlobsUnitMany)}{" "}
               {s.corruptBlobsSuffix}
@@ -1652,7 +1652,7 @@ function RestoreSection({ profileId, hits }: RestoreSectionProps) {
               it does, and the skip sentence joins it only when this apply will
               NOT restore them (locked / never-set-up section). */}
           {state.preview.privateNotes != null && (
-            <p className="set__section-caption">
+            <p className="nx-hint">
               {s.privateNotesIncomingPrefix} ({state.preview.privateNotes.count}).
             </p>
           )}
@@ -1679,12 +1679,12 @@ function RestoreSection({ profileId, hits }: RestoreSectionProps) {
             </Button>
           </div>
 
-          {state.phase === "applying" && <p className="app__muted">{s.applying}</p>}
+          {state.phase === "applying" && <p className="nx-hint">{s.applying}</p>}
           {state.phase === "ready" && state.error != null && <p className="set__error">{state.error}</p>}
         </>
       )}
 
-      {state.phase === "applied" && <p className="set__section-caption">{s.applied}</p>}
+      {state.phase === "applied" && <p className="nx-hint">{s.applied}</p>}
     </div>
   );
 }
@@ -1978,7 +1978,7 @@ function ImportSection({ profileId, hits }: ImportSectionProps) {
   return (
     <div className="set__import-block">
       <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-import"))}>{s.title}</h3>
-      <p className="app__description">{s.description}</p>
+      <p className="nx-hint">{s.description}</p>
 
       {!previewing && state.phase !== "applied" && (
         <Button
@@ -1995,7 +1995,7 @@ function ImportSection({ profileId, hits }: ImportSectionProps) {
 
       {state.phase === "picked" && (
         <>
-          <p className="set__section-caption">
+          <p className="nx-hint">
             {shared.pickedPrefix} <span className="app__path">{state.pick.fileName}</span>
           </p>
           {state.needsPassphrase && (
@@ -2018,14 +2018,14 @@ function ImportSection({ profileId, hits }: ImportSectionProps) {
               </Button>
             </form>
           )}
-          {state.busy && <p className="app__muted">{shared.previewRunning}</p>}
+          {state.busy && <p className="nx-hint">{shared.previewRunning}</p>}
           {state.error != null && <p className="set__error">{state.error}</p>}
         </>
       )}
 
       {state.phase === "invalid" && (
         <>
-          <p className="set__section-caption">
+          <p className="nx-hint">
             {shared.pickedPrefix} <span className="app__path">{state.pick.fileName}</span>
           </p>
           <ul className="set__restore-problems">
@@ -2081,7 +2081,7 @@ function ImportSection({ profileId, hits }: ImportSectionProps) {
               })}
             </tbody>
           </table>
-          <p className="set__section-caption">{s.tableCaption}</p>
+          <p className="nx-hint">{s.tableCaption}</p>
 
           {/* ADR-051: above the skip list, because these rows are the one part
               of the report the user can still CHANGE — everything below them
@@ -2089,7 +2089,7 @@ function ImportSection({ profileId, hits }: ImportSectionProps) {
           {state.preview.report.duplicates.length > 0 && (
             <>
               <h4 className="nx-eyebrow set__module-group-title">{s.duplicatesTitle}</h4>
-              <p className="set__section-caption">{s.duplicatesCaption}</p>
+              <p className="nx-hint">{s.duplicatesCaption}</p>
               <ul className="set__import-duplicates">
                 {state.preview.report.duplicates.map((group) => (
                   <ImportDuplicateRow
@@ -2131,7 +2131,7 @@ function ImportSection({ profileId, hits }: ImportSectionProps) {
             </>
           )}
           {state.preview.corruptBlobs > 0 && (
-            <p className="set__section-caption">
+            <p className="nx-hint">
               {shared.corruptBlobsPrefix} {state.preview.corruptBlobs}{" "}
               {dayUnit(state.preview.corruptBlobs, shared.corruptBlobsUnitOne, shared.corruptBlobsUnitMany)}{" "}
               {s.corruptBlobsSuffix}
@@ -2157,13 +2157,13 @@ function ImportSection({ profileId, hits }: ImportSectionProps) {
             </Button>
           </div>
 
-          {state.phase === "applying" && <p className="app__muted">{s.applying}</p>}
-          {replanning && <p className="app__muted">{shared.previewRunning}</p>}
+          {state.phase === "applying" && <p className="nx-hint">{s.applying}</p>}
+          {replanning && <p className="nx-hint">{shared.previewRunning}</p>}
           {state.phase === "ready" && state.error != null && <p className="set__error">{state.error}</p>}
         </>
       )}
 
-      {state.phase === "applied" && <p className="set__section-caption">{s.applied}</p>}
+      {state.phase === "applied" && <p className="nx-hint">{s.applied}</p>}
     </div>
   );
 }
@@ -2365,7 +2365,7 @@ function IcsImportSection({ profileId, hits }: IcsImportSectionProps) {
   return (
     <div className="set__import-block">
       <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-ics"))}>{s.title}</h3>
-      <p className="app__description">{s.description}</p>
+      <p className="nx-hint">{s.description}</p>
 
       {!previewing && state.phase !== "applied" && (
         <Button
@@ -2382,10 +2382,10 @@ function IcsImportSection({ profileId, hits }: IcsImportSectionProps) {
 
       {state.phase === "picked" && (
         <>
-          <p className="set__section-caption">
+          <p className="nx-hint">
             {shared.pickedPrefix} <span className="app__path">{state.fileName}</span>
           </p>
-          {state.busy && <p className="app__muted">{s.previewRunning}</p>}
+          {state.busy && <p className="nx-hint">{s.previewRunning}</p>}
           {state.error != null && <p className="set__error">{state.error}</p>}
         </>
       )}
@@ -2449,7 +2449,7 @@ function IcsImportSection({ profileId, hits }: IcsImportSectionProps) {
               siblings. */}
           {state.preview.duplicates > 0 && (
             <div className="set__llm-duplicates">
-              <p className="set__section-caption">
+              <p className="nx-hint">
                 {s.duplicatesPrefix} {state.preview.duplicates}{" "}
                 {countUnit(
                   state.preview.duplicates,
@@ -2499,7 +2499,7 @@ function IcsImportSection({ profileId, hits }: IcsImportSectionProps) {
           )}
 
           {state.preview.plannedEvents === 0 && (
-            <p className="set__section-caption">{s.nothingToImport}</p>
+            <p className="nx-hint">{s.nothingToImport}</p>
           )}
 
           <div className="set__restore-actions">
@@ -2523,13 +2523,13 @@ function IcsImportSection({ profileId, hits }: IcsImportSectionProps) {
             </Button>
           </div>
 
-          {state.phase === "applying" && <p className="app__muted">{s.applying}</p>}
-          {replanning && <p className="app__muted">{s.previewRunning}</p>}
+          {state.phase === "applying" && <p className="nx-hint">{s.applying}</p>}
+          {replanning && <p className="nx-hint">{s.previewRunning}</p>}
           {state.phase === "ready" && state.error != null && <p className="set__error">{state.error}</p>}
         </>
       )}
 
-      {state.phase === "applied" && <p className="set__section-caption">{s.applied}</p>}
+      {state.phase === "applied" && <p className="nx-hint">{s.applied}</p>}
     </div>
   );
 }
@@ -2740,7 +2740,7 @@ function ApkgImportSection({ profileId, hits }: ApkgImportSectionProps) {
   return (
     <div className="set__import-block">
       <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-apkg"))}>{s.title}</h3>
-      <p className="app__description">{s.description}</p>
+      <p className="nx-hint">{s.description}</p>
 
       {state.phase !== "applied" && (
         <div className="set__apkg-subject">
@@ -2811,10 +2811,10 @@ function ApkgImportSection({ profileId, hits }: ApkgImportSectionProps) {
 
       {state.phase === "picked" && (
         <>
-          <p className="set__section-caption">
+          <p className="nx-hint">
             {shared.pickedPrefix} <span className="app__path">{state.fileName}</span>
           </p>
-          {state.busy && <p className="app__muted">{s.previewRunning}</p>}
+          {state.busy && <p className="nx-hint">{s.previewRunning}</p>}
           {state.error != null && <p className="set__error">{state.error}</p>}
         </>
       )}
@@ -2898,7 +2898,7 @@ function ApkgImportSection({ profileId, hits }: ApkgImportSectionProps) {
           )}
 
           {state.preview.plannedCards === 0 && (
-            <p className="set__section-caption">{s.nothingToImport}</p>
+            <p className="nx-hint">{s.nothingToImport}</p>
           )}
 
           <div className="set__restore-actions">
@@ -2922,13 +2922,13 @@ function ApkgImportSection({ profileId, hits }: ApkgImportSectionProps) {
             </Button>
           </div>
 
-          {state.phase === "applying" && <p className="app__muted">{s.applying}</p>}
-          {state.phase === "ready" && state.busy && <p className="app__muted">{s.previewRunning}</p>}
+          {state.phase === "applying" && <p className="nx-hint">{s.applying}</p>}
+          {state.phase === "ready" && state.busy && <p className="nx-hint">{s.previewRunning}</p>}
           {state.phase === "ready" && state.error != null && <p className="set__error">{state.error}</p>}
         </>
       )}
 
-      {state.phase === "applied" && <p className="set__section-caption">{s.applied}</p>}
+      {state.phase === "applied" && <p className="nx-hint">{s.applied}</p>}
     </div>
   );
 }
@@ -3050,7 +3050,7 @@ function CsvMappingDialog({
           {s.mapTitle}
         </h2>
         <p className="recur-dialog__name app__path">{preview.fileName}</p>
-        <p id={questionId} className="recur-dialog__question">
+        <p id={questionId} className="nx-hint">
           {s.mapQuestion}
         </p>
 
@@ -3120,7 +3120,7 @@ function CsvMappingDialog({
               </div>
             );
           })}
-          {!titleMapped && <p className="set__section-caption">{s.titleRequired}</p>}
+          {!titleMapped && <p className="nx-hint">{s.titleRequired}</p>}
 
           <div className="csv-map__list">
             <Select
@@ -3348,7 +3348,7 @@ function CsvImportSection({ profileId, hits }: CsvImportSectionProps) {
   return (
     <div className="set__import-block">
       <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-csv"))}>{s.title}</h3>
-      <p className="app__description">{s.description}</p>
+      <p className="nx-hint">{s.description}</p>
 
       {!planned && state.phase !== "applied" && (
         <Button
@@ -3365,10 +3365,10 @@ function CsvImportSection({ profileId, hits }: CsvImportSectionProps) {
 
       {state.phase === "picked" && (
         <>
-          <p className="set__section-caption">
+          <p className="nx-hint">
             {shared.pickedPrefix} <span className="app__path">{state.fileName}</span>
           </p>
-          {state.busy && <p className="app__muted">{s.reading}</p>}
+          {state.busy && <p className="nx-hint">{s.reading}</p>}
           {state.error != null && <p className="set__error">{state.error}</p>}
         </>
       )}
@@ -3433,7 +3433,7 @@ function CsvImportSection({ profileId, hits }: CsvImportSectionProps) {
             </tbody>
           </table>
           {state.plan.blankRows > 0 && (
-            <p className="set__section-caption">
+            <p className="nx-hint">
               {s.blankRowsPrefix} {state.plan.blankRows}
             </p>
           )}
@@ -3490,7 +3490,7 @@ function CsvImportSection({ profileId, hits }: CsvImportSectionProps) {
             </>
           )}
 
-          {state.plan.tasks === 0 && <p className="set__section-caption">{s.nothingToImport}</p>}
+          {state.plan.tasks === 0 && <p className="nx-hint">{s.nothingToImport}</p>}
 
           <div className="set__restore-actions">
             {state.plan.tasks > 0 && (
@@ -3532,14 +3532,14 @@ function CsvImportSection({ profileId, hits }: CsvImportSectionProps) {
             </Button>
           </div>
 
-          {state.phase === "applying" && <p className="app__muted">{s.applying}</p>}
+          {state.phase === "applying" && <p className="nx-hint">{s.applying}</p>}
           {state.phase === "planned" && state.error != null && (
             <p className="set__error">{state.error}</p>
           )}
         </>
       )}
 
-      {state.phase === "applied" && <p className="set__section-caption">{s.applied}</p>}
+      {state.phase === "applied" && <p className="nx-hint">{s.applied}</p>}
     </div>
   );
 }
@@ -3840,7 +3840,7 @@ function LlmImportSection({ profileId, hits }: LlmImportSectionProps) {
     return (
       <div className="set__import-block">
         <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-llm"))}>{s.title}</h3>
-        <p className="set__section-caption">{s.applied}</p>
+        <p className="nx-hint">{s.applied}</p>
       </div>
     );
   }
@@ -3848,9 +3848,9 @@ function LlmImportSection({ profileId, hits }: LlmImportSectionProps) {
   return (
     <div className="set__import-block">
       <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-llm"))}>{s.title}</h3>
-      <p className="app__description">{s.description}</p>
+      <p className="nx-hint">{s.description}</p>
 
-      <p className="set__section-caption">{s.kindLabel}</p>
+      <p className="nx-hint">{s.kindLabel}</p>
       <div className="set__segmented" role="group" aria-label={s.kindLabel}>
         {LLM_IMPORT_KINDS.map((option) => (
           <Button
@@ -3871,7 +3871,7 @@ function LlmImportSection({ profileId, hits }: LlmImportSectionProps) {
         ))}
       </div>
 
-      <p className="set__section-caption">{s.languageLabel}</p>
+      <p className="nx-hint">{s.languageLabel}</p>
       <div className="set__segmented" role="group" aria-label={s.languageLabel}>
         {LLM_PROMPT_LANGUAGES.map((option) => (
           <Button
@@ -3899,7 +3899,7 @@ function LlmImportSection({ profileId, hits }: LlmImportSectionProps) {
           {showPrompt ? s.promptHide : s.promptShow}
         </Button>
       </div>
-      <p className="set__section-caption">{s.copyHint}</p>
+      <p className="nx-hint">{s.copyHint}</p>
       {copyError && <p className="set__error">{s.copyError}</p>}
 
       {showPrompt && (
@@ -3914,10 +3914,10 @@ function LlmImportSection({ profileId, hits }: LlmImportSectionProps) {
         (subjects.length === 0 ? (
           // The one honest dead end left: a new deck needs a subject to live
           // in, and this profile has none — the way out is named, not implied.
-          <p className="set__section-caption">{s.noSubjects}</p>
+          <p className="nx-hint">{s.noSubjects}</p>
         ) : (
           <div className="set__llm-deck">
-            <p className="set__section-caption">{s.deckChoiceLabel}</p>
+            <p className="nx-hint">{s.deckChoiceLabel}</p>
             <div className="set__segmented" role="group" aria-label={s.deckChoiceLabel}>
               {(["existing", "new"] as const).map((option) => (
                 <Button
@@ -3937,7 +3937,7 @@ function LlmImportSection({ profileId, hits }: LlmImportSectionProps) {
             </div>
             {deckMode === "existing" ? (
               decks.length === 0 ? (
-                <p className="set__section-caption">{s.noDecks}</p>
+                <p className="nx-hint">{s.noDecks}</p>
               ) : (
                 <Select
                   label={s.deckLabel}
@@ -3994,7 +3994,7 @@ function LlmImportSection({ profileId, hits }: LlmImportSectionProps) {
           </div>
         ))}
 
-      <p className="set__section-caption">{s.answerLabel}</p>
+      <p className="nx-hint">{s.answerLabel}</p>
       <textarea
         className="nx-textfield__input set__llm-answer"
         value={answer}
@@ -4019,7 +4019,7 @@ function LlmImportSection({ profileId, hits }: LlmImportSectionProps) {
         </Button>
       )}
 
-      {state.phase === "editing" && state.busy && <p className="app__muted">{s.previewRunning}</p>}
+      {state.phase === "editing" && state.busy && <p className="nx-hint">{s.previewRunning}</p>}
       {state.phase === "editing" && state.error != null && (
         <p className="set__error">{state.error}</p>
       )}
@@ -4044,7 +4044,7 @@ function LlmImportSection({ profileId, hits }: LlmImportSectionProps) {
           </table>
 
           {state.preview.kind === "cards" && (
-            <p className="set__section-caption">{s.cardsCaption}</p>
+            <p className="nx-hint">{s.cardsCaption}</p>
           )}
 
           {/* ADR-051: the one part of the preview the user can still CHANGE.
@@ -4053,7 +4053,7 @@ function LlmImportSection({ profileId, hits }: LlmImportSectionProps) {
               siblings. */}
           {state.preview.duplicates > 0 && (
             <div className="set__llm-duplicates">
-              <p className="set__section-caption">
+              <p className="nx-hint">
                 {s.duplicatesPrefix} {state.preview.duplicates}{" "}
                 {countUnit(
                   state.preview.duplicates,
@@ -4087,7 +4087,7 @@ function LlmImportSection({ profileId, hits }: LlmImportSectionProps) {
           )}
 
           {state.preview.droppedFields > 0 && (
-            <p className="set__section-caption">
+            <p className="nx-hint">
               {s.droppedPrefix} {state.preview.droppedFields}{" "}
               {countUnit(
                 state.preview.droppedFields,
@@ -4111,7 +4111,7 @@ function LlmImportSection({ profileId, hits }: LlmImportSectionProps) {
           )}
 
           {state.preview.planned === 0 && (
-            <p className="set__section-caption">{s.nothingToImport}</p>
+            <p className="nx-hint">{s.nothingToImport}</p>
           )}
 
           <div className="set__restore-actions">
@@ -4135,8 +4135,8 @@ function LlmImportSection({ profileId, hits }: LlmImportSectionProps) {
             </Button>
           </div>
 
-          {state.phase === "applying" && <p className="app__muted">{s.applying}</p>}
-          {replanning && <p className="app__muted">{shared.previewRunning}</p>}
+          {state.phase === "applying" && <p className="nx-hint">{s.applying}</p>}
+          {replanning && <p className="nx-hint">{shared.previewRunning}</p>}
           {state.phase === "ready" && state.error != null && (
             <p className="set__error">{state.error}</p>
           )}
@@ -4215,7 +4215,7 @@ function MarkdownImportSection({ profileId, hits }: MarkdownImportSectionProps) 
       <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-markdown"))}>
         {s.title}
       </h3>
-      <p className="app__description">{s.description}</p>
+      <p className="nx-hint">{s.description}</p>
 
       <Select
         label={s.folderLabel}
@@ -4240,20 +4240,20 @@ function MarkdownImportSection({ profileId, hits }: MarkdownImportSectionProps) 
           {s.folderButton}
         </Button>
       </div>
-      <p className="set__section-caption">{s.folderHint}</p>
+      <p className="nx-hint">{s.folderHint}</p>
 
-      {busy && <p className="app__muted">{s.running}</p>}
+      {busy && <p className="nx-hint">{s.running}</p>}
       {error != null && <p className="set__error">{error}</p>}
 
       {report !== null && (
         <>
-          <p className="set__section-caption">
+          <p className="nx-hint">
             {report.created > 0
               ? `${s.createdPrefix} ${report.created} ${countUnit(report.created, s.createdUnitOne, s.createdUnitFew, s.createdUnitMany)}.`
               : s.createdNone}
           </p>
           {report.imagesAsText > 0 && (
-            <p className="set__section-caption">
+            <p className="nx-hint">
               {s.imagesPrefix} {report.imagesAsText}{" "}
               {countUnit(report.imagesAsText, s.imagesUnitOne, s.imagesUnitFew, s.imagesUnitMany)}{" "}
               {s.imagesSuffix}
@@ -4393,7 +4393,7 @@ function SecuritySection({ autoLockMinutes, onAutoLockChange, hits }: SecuritySe
           </Button>
         </form>
         {changeMessage != null && (
-          <p className={changeMessage.failed ? "set__error" : "set__section-caption"}>
+          <p className={changeMessage.failed ? "set__error" : "nx-hint"}>
             {changeMessage.text}
           </p>
         )}
@@ -4407,7 +4407,7 @@ function SecuritySection({ autoLockMinutes, onAutoLockChange, hits }: SecuritySe
           <RecoveryKitPanel code={newRecoveryCode} onContinue={() => setNewRecoveryCode(null)} />
         ) : (
           <>
-            <p className="set__section-caption">{s.recoveryWarning}</p>
+            <p className="nx-hint">{s.recoveryWarning}</p>
             <Button size="sm" variant="primary" disabled={regenerating} onClick={() => void regenerate()}>
               {s.regenerate}
             </Button>
@@ -4436,7 +4436,7 @@ function SecuritySection({ autoLockMinutes, onAutoLockChange, hits }: SecuritySe
             </option>
           ))}
         </Select>
-        <p className="set__section-caption">{s.autoLockHint}</p>
+        <p className="nx-hint">{s.autoLockHint}</p>
       </div>
     </>
   );
@@ -4581,14 +4581,14 @@ function ShortcutsSection({
                 </div>
               </div>
               {isCapturing && (
-                <p className={refusal !== null ? "set__error" : "set__section-caption"} role="status">
+                <p className={refusal !== null ? "set__error" : "nx-hint"} role="status">
                   {refusal ?? s.captureHint}
                 </p>
               )}
               {/* The „globalna" marker, said rather than drawn: what makes this
                   row different is a behaviour, so it is written out under it
                   instead of dressed up as a badge. */}
-              {action.global && <p className="set__section-caption">{s.globalHint}</p>}
+              {action.global && <p className="nx-hint">{s.globalHint}</p>}
               {action.global && globalTaken && (
                 <p className="set__error" role="status">
                   {s.globalTaken}
@@ -4598,7 +4598,7 @@ function ShortcutsSection({
           );
         })}
       </div>
-      <p className="set__section-caption">{s.cardCaption}</p>
+      <p className="nx-hint">{s.cardCaption}</p>
       <div className="set__shortcut-footer">
         <Button size="sm" variant="primary" onClick={onShowAll}>
           {s.showAll}
@@ -4651,7 +4651,7 @@ function LicenceGroup({ title, caption, entries, defaultOpen }: LicenceGroupProp
         {title}
         <span className="set__disclosure-summary">{entries.length}</span>
       </button>
-      <p className="set__section-caption">{caption}</p>
+      <p className="nx-hint">{caption}</p>
       {open && (
         <ul className="set__licence-list">
           {entries.map((entry) => {
@@ -4682,10 +4682,10 @@ function LicenceGroup({ title, caption, entries, defaultOpen }: LicenceGroupProp
                         font whose licence could not be established are two
                         different facts, and both are the user's to know. */}
                     {entry.status === "declared-only" && (
-                      <p className="set__section-caption">{s.declaredOnly}</p>
+                      <p className="nx-hint">{s.declaredOnly}</p>
                     )}
                     {entry.status === "unknown" && (
-                      <p className="set__section-caption">{s.notEstablished}</p>
+                      <p className="nx-hint">{s.notEstablished}</p>
                     )}
                     {/* A named, focusable region — the same treatment the AI
                         import's prompt block gets: the notice scrolls, and a
@@ -4701,7 +4701,7 @@ function LicenceGroup({ title, caption, entries, defaultOpen }: LicenceGroupProp
                         {entry.notice}
                       </pre>
                     )}
-                    <p className="set__section-caption set__licence-source">
+                    <p className="nx-hint set__licence-source">
                       {s.source}: {entry.source}
                     </p>
                   </div>
@@ -4761,13 +4761,13 @@ function LicencesSection() {
 
   return (
     <>
-      <p className="app__description">{s.caption}</p>
+      <p className="nx-hint">{s.caption}</p>
       {failed && (
-        <p className="set__section-caption" role="alert">
+        <p className="nx-hint" role="alert">
           {s.loadError}
         </p>
       )}
-      {!failed && loaded === null && <p className="set__section-caption">{s.loading}</p>}
+      {!failed && loaded === null && <p className="nx-hint">{s.loading}</p>}
       {loaded !== null && (
         <>
           <LicenceGroup
@@ -4824,7 +4824,7 @@ function SetupSection({ profileId, flags, registry, hits, onRerunOnboarding }: S
 
   return (
     <>
-      <p className="set__section-caption">{answered ? s.description : s.none}</p>
+      <p className="nx-hint">{answered ? s.description : s.none}</p>
       {/* What it HEARD, in the person's own spelling, before anything it
           decided — the reveal's own opening, for the same reason. */}
       {trades.length > 0 && (
@@ -4853,7 +4853,7 @@ function SetupSection({ profileId, flags, registry, hits, onRerunOnboarding }: S
           <span className={labelClass("set__module-name", hits.has("modules-onboarding"))}>
             {strings.settings.onboardingRerunTitle}
           </span>
-          <span className="set__module-desc">{strings.settings.onboardingRerunCaption}</span>
+          <span className="nx-hint">{strings.settings.onboardingRerunCaption}</span>
         </div>
         <Button size="sm" onClick={onRerunOnboarding}>
           {strings.settings.onboardingRerunAction}
@@ -4867,7 +4867,7 @@ function SetupSection({ profileId, flags, registry, hits, onRerunOnboarding }: S
           changed by hand. */}
       {answered && (
         <>
-          <p className={labelClass("set__section-caption", hits.has("setup-forget"))}>
+          <p className={labelClass("nx-hint", hits.has("setup-forget"))}>
             {s.forgetHint}
           </p>
           <button
@@ -5227,10 +5227,10 @@ export function SettingsPage({
               </option>
             ))}
           </Select>
-          <p className="set__section-caption">{a.languageHint}</p>
+          <p className="nx-hint">{a.languageHint}</p>
         </div>
         <div className="set__field">
-          <p className={labelClass("set__section-caption", hits.has("appearance-theme"))}>
+          <p className={labelClass("nx-hint", hits.has("appearance-theme"))}>
             {a.themeLabel}
           </p>
           <div className="set__segmented" role="group" aria-label={a.themeLabel}>
@@ -5246,10 +5246,10 @@ export function SettingsPage({
               </Button>
             ))}
           </div>
-          <p className="set__section-caption">{a.themeHint}</p>
+          <p className="nx-hint">{a.themeHint}</p>
         </div>
         <div className="set__field">
-          <p className={labelClass("set__section-caption", hits.has("appearance-accent"))}>
+          <p className={labelClass("nx-hint", hits.has("appearance-accent"))}>
             {a.accentLabel}
           </p>
           <div className="set__accent-row" role="group" aria-label={a.accentLabel}>
@@ -5276,12 +5276,12 @@ export function SettingsPage({
           {/* The chosen accent's NAME, on the row's own explanation line rather
               than glued to the label with an em dash: eight swatches say which
               one is selected by shape, and this says what it is called. */}
-          <p className="set__section-caption">{a.accentNames[accent] ?? accent}</p>
+          <p className="nx-hint">{a.accentNames[accent] ?? accent}</p>
         </div>
         {/* PRD 04 §5. The calendar reads this on mount, so a change here shows
             the next time that page is opened — page switching remounts it. */}
         <div className="set__field">
-          <p className={labelClass("set__section-caption", hits.has("appearance-week-start"))}>
+          <p className={labelClass("nx-hint", hits.has("appearance-week-start"))}>
             {a.weekStartLabel}
           </p>
           <div className="set__segmented" role="group" aria-label={a.weekStartLabel}>
@@ -5346,7 +5346,7 @@ export function SettingsPage({
               </option>
             ))}
           </Select>
-          <p className="set__section-caption">{a.clockHint}</p>
+          <p className="nx-hint">{a.clockHint}</p>
         </div>
         <ResetLink
           onClick={() =>
@@ -5442,7 +5442,7 @@ export function SettingsPage({
                       >
                         {moduleName(manifest.id)}
                       </span>
-                      <span className="set__module-desc">
+                      <span className="nx-hint">
                         {lookup(strings.settings.moduleDescriptions, manifest.id) ?? ""}
                       </span>
                     </div>
@@ -5504,7 +5504,7 @@ export function SettingsPage({
             <h3 className="nx-eyebrow set__module-group-title">
               {strings.pro.risk[riskClass].label}
             </h3>
-            <p className="set__module-desc">{strings.pro.risk[riskClass].note}</p>
+            <p className="nx-hint">{strings.pro.risk[riskClass].note}</p>
           </div>
         ))}
       </Card>
@@ -5518,7 +5518,7 @@ export function SettingsPage({
             „koliko obaveštenja", the answer is the three-way choice, and the
             controls under it are the exceptions to whichever one is picked. */}
         <div className="set__field">
-          <p className="set__section-caption">{strings.settings.notificationPresets.label}</p>
+          <p className="nx-hint">{strings.settings.notificationPresets.label}</p>
           <div className="set__preset-row">
             {NOTIFICATION_PRESETS.map((preset) => (
               <Button
@@ -5531,7 +5531,7 @@ export function SettingsPage({
               </Button>
             ))}
           </div>
-          <p className="set__section-caption">{strings.settings.notificationPresets.caption}</p>
+          <p className="nx-hint">{strings.settings.notificationPresets.caption}</p>
         </div>
         {presetError != null && <p className="set__error">{presetError}</p>}
         <NotificationSettingsControls profileId={profileId} refreshToken={refreshToken} />
@@ -5584,12 +5584,12 @@ export function SettingsPage({
         title={strings.settings.sectionTitle.privacy}
         className={sectionClass(sections.has("privacy"))}
       >
-        <p className="set__section-caption">{strings.settings.privacy.storage}</p>
-        <p className="set__section-caption">{strings.settings.privacy.noTelemetry}</p>
-        <p className="set__section-caption">{strings.settings.privacy.offline}</p>
-        <p className="set__section-caption">{strings.settings.privacy.sync}</p>
-        <p className="set__section-caption">{strings.settings.privacy.exports}</p>
-        <p className="set__section-caption">{strings.settings.privacy.deletion}</p>
+        <p className="nx-hint">{strings.settings.privacy.storage}</p>
+        <p className="nx-hint">{strings.settings.privacy.noTelemetry}</p>
+        <p className="nx-hint">{strings.settings.privacy.offline}</p>
+        <p className="nx-hint">{strings.settings.privacy.sync}</p>
+        <p className="nx-hint">{strings.settings.privacy.exports}</p>
+        <p className="nx-hint">{strings.settings.privacy.deletion}</p>
         <SearchHistorySection profileId={profileId} hits={hits} />
       </Card>
 
@@ -5624,7 +5624,7 @@ export function SettingsPage({
             </div>
           </dl>
         ) : (
-          <p className="app__muted">{strings.app.loading}</p>
+          <p className="nx-hint">{strings.app.loading}</p>
         )}
       </Card>
 

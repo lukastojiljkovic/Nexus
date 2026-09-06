@@ -128,7 +128,7 @@ function TasksSettingsPanel({ hits }: SettingsPanelProps) {
     <div className="set__field">
       <p
         className={labelClass(
-          "set__section-caption",
+          "nx-hint",
           hits.has(settingsEntryId("tasks", "blocked-today")),
         )}
       >
@@ -150,7 +150,7 @@ function TasksSettingsPanel({ hits }: SettingsPanelProps) {
           </Button>
         ))}
       </div>
-      <p className="set__section-caption">{s.blockedInTodayCaption}</p>
+      <p className="nx-hint">{s.blockedInTodayCaption}</p>
     </div>
   );
 }
@@ -168,7 +168,7 @@ function NotesSettingsPanel({ hits }: SettingsPanelProps) {
   return (
     <>
       <div className="set__field">
-      <p className={labelClass("set__section-caption", hits.has(settingsEntryId("notes", "width")))}>
+      <p className={labelClass("nx-hint", hits.has(settingsEntryId("notes", "width")))}>
         {s.widthLabel}
       </p>
       <div className="set__segmented" role="group" aria-label={s.widthLabel}>
@@ -198,7 +198,7 @@ function NotesSettingsPanel({ hits }: SettingsPanelProps) {
           >
             {s.markdownLabel}
           </span>
-          <span className="set__module-desc">{s.markdownCaption}</span>
+          <span className="nx-hint">{s.markdownCaption}</span>
         </div>
         <Checkbox
           checked={markdownShortcuts}
@@ -302,7 +302,7 @@ function DashboardSettingsPanel({ profileId, hits }: SettingsPanelProps) {
   }
 
   if (settings === null) {
-    return error != null ? <p className="set__error">{error}</p> : <p className="app__muted">{strings.app.loading}</p>;
+    return error != null ? <p className="set__error">{error}</p> : <p className="nx-hint">{strings.app.loading}</p>;
   }
 
   const backgroundHash = settings.backgroundHash;
@@ -316,7 +316,7 @@ function DashboardSettingsPanel({ profileId, hits }: SettingsPanelProps) {
           `moduleSettings.test.ts` pins declaration↔renderer pairing per PANEL,
           which is why it stayed green. */}
       <div className="set__field">
-      <p className={labelClass("set__section-caption", hits.has(settingsEntryId("dashboard", "background")))}>
+      <p className={labelClass("nx-hint", hits.has(settingsEntryId("dashboard", "background")))}>
         {s.caption}
       </p>
 
@@ -359,7 +359,7 @@ function DashboardSettingsPanel({ profileId, hits }: SettingsPanelProps) {
             value={settings.backgroundDim}
             onChange={(event) => void changeDim(Number(event.target.value))}
           />
-          <p className="set__section-caption">{s.dimHint}</p>
+          <p className="nx-hint">{s.dimHint}</p>
         </div>
       )}
 
@@ -444,7 +444,7 @@ function StudySettingsPanel({ profileId, hits }: SettingsPanelProps) {
     return error != null ? (
       <p className="set__error">{error}</p>
     ) : (
-      <p className="app__muted">{strings.app.loading}</p>
+      <p className="nx-hint">{strings.app.loading}</p>
     );
   }
 
@@ -476,11 +476,11 @@ function StudySettingsPanel({ profileId, hits }: SettingsPanelProps) {
 
   return (
     <>
-      <p className="set__section-caption">{s.caption}</p>
+      <p className="nx-hint">{s.caption}</p>
 
       <p
         className={labelClass(
-          "set__section-caption",
+          "nx-hint",
           hits.has(settingsEntryId("study", "retention")),
         )}
       >
@@ -499,7 +499,7 @@ function StudySettingsPanel({ profileId, hits }: SettingsPanelProps) {
           </Button>
         ))}
       </div>
-      <p className="set__section-caption">{s.retentionHint}</p>
+      <p className="nx-hint">{s.retentionHint}</p>
 
       <div className="set__study-fields">
         <label className="set__study-field">
@@ -521,7 +521,7 @@ function StudySettingsPanel({ profileId, hits }: SettingsPanelProps) {
             onChange={(event) => changeNewPerDay(event.target.value)}
             onBlur={() => setNewPerDayDraft(String(current.newPerDay))}
           />
-          <span className="set__section-caption">{s.newPerDayHint}</span>
+          <span className="nx-hint">{s.newPerDayHint}</span>
         </label>
 
         <label className="set__study-field">
@@ -548,11 +548,11 @@ function StudySettingsPanel({ profileId, hits }: SettingsPanelProps) {
               )
             }
           />
-          <span className="set__section-caption">{s.reviewCapHint}</span>
+          <span className="nx-hint">{s.reviewCapHint}</span>
         </label>
       </div>
 
-      <p className="set__section-caption">{s.retroNotice}</p>
+      <p className="nx-hint">{s.retroNotice}</p>
       {error != null && <p className="set__error">{error}</p>}
     </>
   );
@@ -640,7 +640,7 @@ function CalendarSettingsPanel({ profileId, hits }: SettingsPanelProps) {
     return message !== null ? (
       <p className="set__error">{message.text}</p>
     ) : (
-      <p className="app__muted">{strings.app.loading}</p>
+      <p className="nx-hint">{strings.app.loading}</p>
     );
   }
 
@@ -648,10 +648,10 @@ function CalendarSettingsPanel({ profileId, hits }: SettingsPanelProps) {
 
   return (
     <>
-      <p className="set__section-caption">{s.caption}</p>
+      <p className="nx-hint">{s.caption}</p>
       <p
         className={labelClass(
-          "set__section-caption",
+          "nx-hint",
           hits.has(settingsEntryId("calendar", "semester-dates")),
         )}
       >
@@ -687,7 +687,7 @@ function CalendarSettingsPanel({ profileId, hits }: SettingsPanelProps) {
         </div>
       </form>
       {message !== null && (
-        <p className={message.failed ? "set__error" : "set__section-caption"}>{message.text}</p>
+        <p className={message.failed ? "set__error" : "nx-hint"}>{message.text}</p>
       )}
     </>
   );
@@ -737,14 +737,14 @@ function PrivSettingsPanel({ profileId, hits }: SettingsPanelProps) {
     return error != null ? (
       <p className="set__error">{error}</p>
     ) : (
-      <p className="app__muted">{strings.app.loading}</p>
+      <p className="nx-hint">{strings.app.loading}</p>
     );
   }
   if (!status.setUp) {
     return (
       <>
-        <p className="set__section-caption">{s.caption}</p>
-        <p className="set__section-caption">{s.notSetUp}</p>
+        <p className="nx-hint">{s.caption}</p>
+        <p className="nx-hint">{s.notSetUp}</p>
       </>
     );
   }
@@ -753,7 +753,7 @@ function PrivSettingsPanel({ profileId, hits }: SettingsPanelProps) {
     <>
       <p
         className={labelClass(
-          "set__section-caption",
+          "nx-hint",
           hits.has(settingsEntryId("priv", "kit-status")),
         )}
       >
@@ -768,7 +768,7 @@ function PrivSettingsPanel({ profileId, hits }: SettingsPanelProps) {
         >
           {s.autoLockLabel}
         </h3>
-        <p className="set__section-caption">{s.autoLockHint}</p>
+        <p className="nx-hint">{s.autoLockHint}</p>
         <select
           className="set__select"
           value={status.autoLockMinutes}
@@ -800,7 +800,7 @@ function PrivSettingsPanel({ profileId, hits }: SettingsPanelProps) {
           onChange={(event) => void savePrefs(status.autoLockMinutes, event.target.checked)}
         />
       </div>
-      <p className="set__section-caption">
+      <p className="nx-hint">
         {status.hasRecoveryKit ? s.kitStatusSet : s.kitStatusMissing}
       </p>
       {error != null && <p className="set__error">{error}</p>}
@@ -839,7 +839,7 @@ function FinanceSettingsPanel({ hits }: SettingsPanelProps) {
 
   return (
     <>
-      <p className="set__section-caption">{s.caption}</p>
+      <p className="nx-hint">{s.caption}</p>
       <div className="set__study-fields">
         <label className="set__study-field">
           <span
@@ -865,11 +865,11 @@ function FinanceSettingsPanel({ hits }: SettingsPanelProps) {
               setMessage(null);
             }}
           />
-          <span className="set__section-caption">{s.primaryCurrencyHint}</span>
+          <span className="nx-hint">{s.primaryCurrencyHint}</span>
         </label>
       </div>
       {message !== null && (
-        <p className={message.failed ? "set__error" : "set__section-caption"}>{message.text}</p>
+        <p className={message.failed ? "set__error" : "nx-hint"}>{message.text}</p>
       )}
     </>
   );
@@ -893,8 +893,8 @@ function FilesSettingsPanel({ hits }: SettingsPanelProps) {
 
   return (
     <>
-      <p className="set__section-caption">{s.caption}</p>
-      <p className={labelClass("set__section-caption", hits.has(settingsEntryId("files", "view")))}>
+      <p className="nx-hint">{s.caption}</p>
+      <p className={labelClass("nx-hint", hits.has(settingsEntryId("files", "view")))}>
         {s.viewLabel}
       </p>
       <div className="set__segmented" role="group" aria-label={s.viewLabel}>
@@ -913,7 +913,7 @@ function FilesSettingsPanel({ hits }: SettingsPanelProps) {
           </Button>
         ))}
       </div>
-      <p className="set__section-caption">{s.viewHint}</p>
+      <p className="nx-hint">{s.viewHint}</p>
     </>
   );
 }
@@ -939,7 +939,7 @@ function HabitsSettingsPanel({ hits }: SettingsPanelProps) {
 
   return (
     <>
-      <p className="set__section-caption">{s.caption}</p>
+      <p className="nx-hint">{s.caption}</p>
       <div className="set__study-fields">
         <label className="set__study-field">
           <span
@@ -965,10 +965,10 @@ function HabitsSettingsPanel({ hits }: SettingsPanelProps) {
               setSaved(true);
             }}
           />
-          <span className="set__section-caption">{s.defaultReminderHint}</span>
+          <span className="nx-hint">{s.defaultReminderHint}</span>
         </label>
       </div>
-      {saved && <p className="set__section-caption">{s.saved}</p>}
+      {saved && <p className="nx-hint">{s.saved}</p>}
     </>
   );
 }
@@ -1040,7 +1040,7 @@ function FocusSettingsPanel({ hits }: SettingsPanelProps) {
 
   return (
     <>
-      <p className="set__section-caption">{s.caption}</p>
+      <p className="nx-hint">{s.caption}</p>
       <div className="set__study-fields">
         {FOCUS_FIELDS.map((field) => (
           <label key={field.key} className="set__study-field">
@@ -1079,8 +1079,8 @@ function FocusSettingsPanel({ hits }: SettingsPanelProps) {
           </label>
         ))}
       </div>
-      <p className="set__section-caption">{s.hint}</p>
-      {saved && <p className="set__section-caption">{s.saved}</p>}
+      <p className="nx-hint">{s.hint}</p>
+      {saved && <p className="nx-hint">{s.saved}</p>}
     </>
   );
 }
@@ -1181,7 +1181,7 @@ function FitnessSettingsPanel({ profileId, hits }: SettingsPanelProps) {
     return error != null ? (
       <p className="set__error">{error}</p>
     ) : (
-      <p className="app__muted">{strings.app.loading}</p>
+      <p className="nx-hint">{strings.app.loading}</p>
     );
   }
 
@@ -1214,7 +1214,7 @@ function FitnessSettingsPanel({ profileId, hits }: SettingsPanelProps) {
 
   return (
     <>
-      <p className="set__section-caption">{s.caption}</p>
+      <p className="nx-hint">{s.caption}</p>
       <div className="set__study-fields">
         {FITNESS_GOALS.map((field) => (
           <label key={field.key} className="set__study-field">
@@ -1238,9 +1238,9 @@ function FitnessSettingsPanel({ profileId, hits }: SettingsPanelProps) {
           </label>
         ))}
       </div>
-      <p className="set__section-caption">{s.hint}</p>
+      <p className="nx-hint">{s.hint}</p>
       {error != null && <p className="set__error">{error}</p>}
-      {saved && error == null && <p className="set__section-caption">{s.saved}</p>}
+      {saved && error == null && <p className="nx-hint">{s.saved}</p>}
     </>
   );
 }
@@ -1263,10 +1263,10 @@ function ToolsSettingsPanel({ hits }: SettingsPanelProps) {
 
   return (
     <>
-      <p className="set__section-caption">{s.caption}</p>
+      <p className="nx-hint">{s.caption}</p>
       <p
         className={labelClass(
-          "set__section-caption",
+          "nx-hint",
           hits.has(settingsEntryId("tools", "default-vat-rate")),
         )}
       >
@@ -1288,7 +1288,7 @@ function ToolsSettingsPanel({ hits }: SettingsPanelProps) {
           </Button>
         ))}
       </div>
-      <p className="set__section-caption">{s.hint}</p>
+      <p className="nx-hint">{s.hint}</p>
     </>
   );
 }

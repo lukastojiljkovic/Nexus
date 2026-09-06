@@ -95,7 +95,7 @@ export function NotificationAppetiteDialog({
         <h2 id={titleId} className="ntf__appetite-title">
           {s.title}
         </h2>
-        <p id={questionId} className="ntf__appetite-question">
+        <p id={questionId} className="nx-hint">
           {s.question}
         </p>
         <div className="ntf__appetite-choices">

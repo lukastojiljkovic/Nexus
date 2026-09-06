@@ -285,7 +285,7 @@ function UrlEncodeTool() {
         ariaLabel={s.escaping}
         options={escapingOptions}
       />
-      <p className="tool__note">{escapingHint[escaping]}</p>
+      <p className="nx-hint nx-hint--prose">{escapingHint[escaping]}</p>
       <ModeSwitch
         value={direction}
         onChange={setDirection}
@@ -343,7 +343,7 @@ function UrlParseTool() {
         mono
       />
       {text.trim() === "" ? (
-        <p className="tool__note">{c.awaitingInput}</p>
+        <p className="nx-hint nx-hint--prose">{c.awaitingInput}</p>
       ) : parsed === null ? (
         <ToolFailure>{s.errNotAUrl}</ToolFailure>
       ) : (
@@ -372,7 +372,7 @@ function UrlParseTool() {
           </div>
           <ToolSection title={s.query}>
             {parsed.query.length === 0 ? (
-              <p className="tool__note">{s.noQuery}</p>
+              <p className="nx-hint nx-hint--prose">{s.noQuery}</p>
             ) : (
               <ToolTable
                 head={[s.queryKey, s.queryValue]}
@@ -471,7 +471,7 @@ function AsciiBinaryHexTool() {
       <ToolOutput label={s.hex} value={views.hex} empty={c.awaitingInput} />
       <ToolOutput label={s.binary} value={views.binary} empty={c.awaitingInput} />
       <ToolOutput label={s.characters} value={views.characters} empty={c.awaitingInput} />
-      <p className="tool__note">{s.hintUtf8}</p>
+      <p className="nx-hint nx-hint--prose">{s.hintUtf8}</p>
 
       {text !== "" && (
         <ToolSection title={s.perCharacter}>
@@ -565,7 +565,7 @@ function UnicodeInspectorTool() {
       {tooLong ? (
         <ToolFailure>{fill(s.tooLong, { limit: INSPECT_MAX_LENGTH })}</ToolFailure>
       ) : text === "" ? (
-        <p className="tool__note">{c.awaitingInput}</p>
+        <p className="nx-hint nx-hint--prose">{c.awaitingInput}</p>
       ) : (
         <>
           <div className="tool__results">
@@ -574,7 +574,7 @@ function UnicodeInspectorTool() {
             <ResultRow label={s.utf16Length} value={report.utf16Length} />
             <ResultRow label={s.utf8ByteCount} value={report.utf8ByteCount} />
           </div>
-          <p className="tool__note">{s.hintLength}</p>
+          <p className="nx-hint nx-hint--prose">{s.hintLength}</p>
           <ToolTable
             head={[s.codePoint, s.character, s.utf8, s.utf16, s.surrogatePair, s.category]}
             prose={[5]}
@@ -804,7 +804,7 @@ function HexdumpTool() {
           )}
         </ToolFailure>
       )}
-      <p className="tool__note">{s.hintGutter}</p>
+      <p className="nx-hint nx-hint--prose">{s.hintGutter}</p>
     </>
   );
 }

@@ -328,7 +328,7 @@ export function AnnuityScheduleTool() {
                 label={s.noticeShortfall}
                 value={proNum(plan.amortisationNotice.shortfall, 6)}
               />
-              <p className="tool__note">{s.noticeNote}</p>
+              <p className="nx-hint nx-hint--prose">{s.noticeNote}</p>
             </ToolSection>
           )}
 
@@ -424,7 +424,7 @@ export function JmbgTool() {
             <ResultRow label={s.matches} value={record.matches ? s.yes : s.no} />
           )}
           <ResultRow label={s.digits} value={record.digits} mono />
-          <p className="tool__note">{s.matchesNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.matchesNote}</p>
 
           <ToolSection title={s.dateTitle}>
             <ResultRow label={s.date} value={fmtDate(record.date)} />
@@ -436,7 +436,7 @@ export function JmbgTool() {
               label={s.centuryRule}
               value={record.centuryOffset === 1000 ? s.centuryPast : s.centuryPresent}
             />
-            <p className="tool__note">{s.centuryNote}</p>
+            <p className="nx-hint nx-hint--prose">{s.centuryNote}</p>
           </ToolSection>
 
           <ToolSection title={s.otherTitle}>
@@ -542,8 +542,8 @@ export function CadastralAreaTool() {
         <ToolSection title={s.results}>
           <ResultRow label={s.composed} value={composed} />
           <ResultRow label={s.total} value={proUnit(proNum(area.totalSquareMetres, 4), s.unitM2)} />
-          {area.wasNormalised && <p className="tool__note">{s.wasNormalisedNote}</p>}
-          {area.rounded && <p className="tool__note">{s.roundedNote}</p>}
+          {area.wasNormalised && <p className="nx-hint nx-hint--prose">{s.wasNormalisedNote}</p>}
+          {area.rounded && <p className="nx-hint nx-hint--prose">{s.roundedNote}</p>}
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -666,7 +666,7 @@ export function SumOfPeriodsTool() {
 
           <ToolSection title={s.overlapsTitle}>
             {result.overlaps.length === 0 ? (
-              <p className="tool__note">{s.noOverlaps}</p>
+              <p className="nx-hint nx-hint--prose">{s.noOverlaps}</p>
             ) : (
               <ToolTable
                 head={[s.colFirst, s.colSecond, s.colFrom, s.colTo, s.colOverlapDays]}
@@ -679,7 +679,7 @@ export function SumOfPeriodsTool() {
                 ])}
               />
             )}
-            <p className="tool__note">{s.overlapsNote}</p>
+            <p className="nx-hint nx-hint--prose">{s.overlapsNote}</p>
           </ToolSection>
 
           <ToolFormula>{s.formula}</ToolFormula>
@@ -810,7 +810,7 @@ export function ContractPenaltyTool() {
             />
           )}
           {result.capDay === undefined && capPercent.trim() !== "" && (
-            <p className="tool__note">{s.noCapDayNote}</p>
+            <p className="nx-hint nx-hint--prose">{s.noCapDayNote}</p>
           )}
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
@@ -1283,7 +1283,7 @@ export function DeadlineTool() {
           <ResultRow label={s.shiftedByDays} value={String(forward.shiftedByDays)} />
           <ResultRow label={s.totalDays} value={String(forward.totalDays)} />
           <ResultRow label={s.totalDaysBeforeShift} value={String(forward.totalDaysBeforeShift)} />
-          {forward.expiredBeforeStart && <p className="tool__note">{s.expiredNote}</p>}
+          {forward.expiredBeforeStart && <p className="nx-hint nx-hint--prose">{s.expiredNote}</p>}
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1309,7 +1309,7 @@ export function DeadlineTool() {
               fmtDate(candidate.lastDay),
             ])}
           />
-          {backward.candidates.length === 0 && <p className="tool__note">{s.noCandidates}</p>}
+          {backward.candidates.length === 0 && <p className="nx-hint nx-hint--prose">{s.noCandidates}</p>}
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1398,7 +1398,7 @@ export function WorkingDaysTool() {
           <ResultRow label={s.listedInRange} value={String(result.listedDatesInRange)} />
           <ResultRow label={s.fullWeeks} value={String(result.fullWeeks)} />
           <ResultRow label={s.remainderDays} value={String(result.remainderDays)} />
-          {result.reversed && <p className="tool__note">{s.reversedNote}</p>}
+          {result.reversed && <p className="nx-hint nx-hint--prose">{s.reversedNote}</p>}
           <ResultRow label={s.effectiveLastDate} value={fmtDate(result.effectiveLastDate)} />
           {result.firstWorkingDay !== undefined && (
             <ResultRow label={s.firstWorkingDay} value={fmtDate(result.firstWorkingDay)} />
@@ -1542,7 +1542,7 @@ export function AccountCheckTool() {
           {active.matches !== undefined && (
             <ResultRow label={s.matches} value={active.matches ? s.yes : s.no} />
           )}
-          <p className="tool__note">{s.matchesNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.matchesNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1953,7 +1953,7 @@ export function RateConversionTool() {
           <ResultRow label={s.effectivePercent} value={`${proNum(result.effectivePercent, 6)}%`} />
           <ResultRow label={s.growthFactor} value={proNum(result.growthFactor, 10)} />
           <ResultRow label={s.continuousPercent} value={`${proNum(result.continuousPercent, 6)}%`} />
-          <p className="tool__note">{s.continuousNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.continuousNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -2071,7 +2071,7 @@ export function SentenceTermTool() {
           <ResultRow label={s.exactCredit} value={proNum(term.exactCredit, 4)} />
           <ResultRow label={s.creditedDaysApplied} value={String(term.creditedDaysApplied)} />
           {term.coversWholeTerm ? (
-            <p className="tool__note">{s.coversWholeTerm}</p>
+            <p className="nx-hint nx-hint--prose">{s.coversWholeTerm}</p>
           ) : (
             <>
               {term.dateAfterCredit !== undefined && term.dateAfterCreditWeekday !== undefined && (

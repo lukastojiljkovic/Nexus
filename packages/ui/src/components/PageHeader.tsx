@@ -74,7 +74,7 @@ export function PageHeader({ title, subtitle, sigil, actions, className }: PageH
       )}
       <div className="nx-page-header__text">
         <h1 className="nx-page-header__title">{title}</h1>
-        {subtitle != null && <p className="nx-page-header__subtitle">{subtitle}</p>}
+        {subtitle != null && <p className="nx-hint nx-page-header__subtitle">{subtitle}</p>}
       </div>
       {actions != null && <div className="nx-page-header__actions">{actions}</div>}
     </header>

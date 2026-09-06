@@ -262,7 +262,7 @@ function WidgetFailure({ onRetry }: { onRetry: () => void }) {
   const s = strings.dashboard.widget;
   return (
     <div className="dash__failure" role="alert">
-      <p className="dash__quiet">{s.error}</p>
+      <p className="nx-hint dash__quiet">{s.error}</p>
       <Button size="sm" onClick={onRetry}>
         {s.retry}
       </Button>

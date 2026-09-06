@@ -165,7 +165,7 @@ function TextualPreview({ profileId, module, ownerId, attachmentId, kind }: Text
     );
   }
   if (content === null) {
-    return <p className="app__muted">{strings.app.loading}</p>;
+    return <p className="nx-hint">{strings.app.loading}</p>;
   }
   if (kind === "text") {
     // React escapes the interpolated text, so this stays an inert <pre>

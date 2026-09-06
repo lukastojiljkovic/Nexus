@@ -212,7 +212,7 @@ function DiffTool() {
         placeholder={s.leftPlaceholder}
       />
       {leftText !== "" && !endsWithNewline(leftText) && (
-        <p className="tool__note">{s.noTrailingNewline}</p>
+        <p className="nx-hint nx-hint--prose">{s.noTrailingNewline}</p>
       )}
       <ToolTextArea
         label={s.right}
@@ -221,7 +221,7 @@ function DiffTool() {
         placeholder={s.rightPlaceholder}
       />
       {rightText !== "" && !endsWithNewline(rightText) && (
-        <p className="tool__note">{s.noTrailingNewline}</p>
+        <p className="nx-hint nx-hint--prose">{s.noTrailingNewline}</p>
       )}
 
       <div className="tool__actions" role="group" aria-label={s.level}>
@@ -258,7 +258,7 @@ function DiffTool() {
       </div>
 
       {!hasInput ? (
-        <p className="tool__note">{common.awaitingInput}</p>
+        <p className="nx-hint nx-hint--prose">{common.awaitingInput}</p>
       ) : (
         <>
           <div className="tool__results">
@@ -285,7 +285,7 @@ function DiffTool() {
           </div>
 
           {identical ? (
-            <p className="tool__note">{s.identical}</p>
+            <p className="nx-hint nx-hint--prose">{s.identical}</p>
           ) : view === "unified" ? (
             <>
               <ToolInput label={s.context} value={contextText} onChange={setContextText} mono />
@@ -495,7 +495,7 @@ function MarkdownTableTool() {
           onChange={handleMarkdownChange}
           placeholder={s.markdownPlaceholder}
         />
-        <p className="tool__note">{s.edgeSpaceNote}</p>
+        <p className="nx-hint nx-hint--prose">{s.edgeSpaceNote}</p>
       </ToolSection>
     </>
   );
@@ -572,7 +572,7 @@ function LoremTool() {
       >
         {s.classicOpening}
       </Checkbox>
-      <p className="tool__note">{s.classicOpeningNote}</p>
+      <p className="nx-hint nx-hint--prose">{s.classicOpeningNote}</p>
 
       <div className="tool__actions">
         <Button size="sm" onClick={() => setSeed((n) => n + 1)}>
@@ -625,7 +625,7 @@ function SlugTool() {
       />
       {showTransliteration && <ResultRow label={s.transliterated} value={transliterated} />}
       <ToolOutput label={s.result} value={result} empty={s.empty} />
-      {overLength && <p className="tool__note">{s.wordKeptWhole}</p>}
+      {overLength && <p className="nx-hint nx-hint--prose">{s.wordKeptWhole}</p>}
 
       <div className="tool__pair">
         <ToolInput label={s.separator} value={separator} onChange={setSeparator} mono />
@@ -670,7 +670,7 @@ function CaseConvertTool() {
         mono
       />
       {input.trim() === "" ? (
-        <p className="tool__note">{common.awaitingInput}</p>
+        <p className="nx-hint nx-hint--prose">{common.awaitingInput}</p>
       ) : (
         <>
           <ToolSection title={s.tokens}>
@@ -679,7 +679,7 @@ function CaseConvertTool() {
                 <Chip key={index}>{token}</Chip>
               ))}
             </div>
-            <p className="tool__note">{s.tokensHint}</p>
+            <p className="nx-hint nx-hint--prose">{s.tokensHint}</p>
           </ToolSection>
           <ToolTable
             head={[s.format, s.value, ""]}
@@ -692,7 +692,7 @@ function CaseConvertTool() {
               ];
             })}
           />
-          <p className="tool__note">{s.acronymNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.acronymNote}</p>
         </>
       )}
     </>
@@ -890,13 +890,13 @@ function LineToolsTool() {
               mono
               error={showWrapWidthError ? s.invalidWidth : undefined}
             />
-            <p className="tool__note">{s.wrapNote}</p>
+            <p className="nx-hint nx-hint--prose">{s.wrapNote}</p>
           </>
         )}
       </ToolSection>
 
       {input === "" ? (
-        <p className="tool__note">{common.awaitingInput}</p>
+        <p className="nx-hint nx-hint--prose">{common.awaitingInput}</p>
       ) : (
         <>
           <ToolOutput label={common.output} value={output} multiline />
@@ -982,7 +982,7 @@ function RegexTool() {
       />
       <ToolInput label={s.flags} value={flags} onChange={setFlags} mono />
       {nestedAt !== null && (
-        <p className="tool__note">{fmt(s.nestedQuantifierNote, { at: nestedAt })}</p>
+        <p className="nx-hint nx-hint--prose">{fmt(s.nestedQuantifierNote, { at: nestedAt })}</p>
       )}
       <ToolTextArea
         label={s.text}
@@ -992,7 +992,7 @@ function RegexTool() {
       />
 
       {pattern === "" ? (
-        <p className="tool__note">{common.awaitingInput}</p>
+        <p className="nx-hint nx-hint--prose">{common.awaitingInput}</p>
       ) : !runResult.ok ? (
         <ToolFailure>
           {runResult.reason === "invalid" ? (
@@ -1010,7 +1010,7 @@ function RegexTool() {
         <>
           <ToolSection title={s.matches}>
             {runResult.matches.length === 0 ? (
-              <p className="tool__note">{s.noMatches}</p>
+              <p className="nx-hint nx-hint--prose">{s.noMatches}</p>
             ) : (
               <>
                 <ResultRow label={s.matches} value={runResult.matches.length} />
@@ -1035,12 +1035,12 @@ function RegexTool() {
               </>
             )}
             {runResult.stop === "match-cap" && (
-              <p className="tool__note">
+              <p className="nx-hint nx-hint--prose">
                 {fmt(s.matchCap, { count: runResult.matches.length })}
               </p>
             )}
             {runResult.stop === "time-budget" && (
-              <p className="tool__note">{s.timeBudget}</p>
+              <p className="nx-hint nx-hint--prose">{s.timeBudget}</p>
             )}
           </ToolSection>
 
@@ -1052,18 +1052,18 @@ function RegexTool() {
               placeholder={s.replacementPlaceholder}
               mono
             />
-            {!flags.includes("g") && <p className="tool__note">{s.globalNote}</p>}
+            {!flags.includes("g") && <p className="nx-hint nx-hint--prose">{s.globalNote}</p>}
             {replaceResult.ok && (
               <>
                 <ToolOutput label={s.preview} value={replaceResult.text} multiline />
                 <ResultRow label={s.replacedCount} value={replaceResult.count} />
                 {replaceResult.stop === "match-cap" && (
-                  <p className="tool__note">
+                  <p className="nx-hint nx-hint--prose">
                     {fmt(s.matchCap, { count: replaceResult.count })}
                   </p>
                 )}
                 {replaceResult.stop === "time-budget" && (
-                  <p className="tool__note">{s.timeBudget}</p>
+                  <p className="nx-hint nx-hint--prose">{s.timeBudget}</p>
                 )}
               </>
             )}

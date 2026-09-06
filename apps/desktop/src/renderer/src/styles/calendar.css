@@ -88,17 +88,6 @@
 .tasks__reminder.nx-button {
   padding: 2px 8px;
 }
-/* Stands in for the chips while the form has no rok to count back from — the
-   same muted "why this field is off" line as .recur__caption right beside it.
-   .tasks__deps-caption is the same line one field down: "waits on nothing", or
-   the dependency block's own failure notice. */
-.tasks__reminders-caption,
-.tasks__deps-caption {
-  margin: 0;
-  font-size: var(--nx-font-size-body-sm);
-  color: var(--nx-text-muted);
-}
-
 /* Prilozi on the task form (migration 024) — the NOTE panel's rows
    (.note__attachment*) in the form's own context: a full row of the wrapping
    field row, like .tasks__reminders above, so a long file name wraps under

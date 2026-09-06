@@ -90,11 +90,10 @@
 /* The centre's loading and failure lines. Same rule as `.dash__quiet` and named
    the same way on purpose — an empty list is `EmptyState`, and these two are not
    empty lists. */
+/* `.nx-hint` with the centre's own padding: this line replaces the whole list,
+   so it is inset like the panel rather than like a row. */
 .ntf__quiet {
-  margin: 0;
   padding: var(--nx-space-4);
-  color: var(--nx-text-muted);
-  font-size: var(--nx-font-size-body-sm);
 }
 
 .ntf__row {
@@ -139,12 +138,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
-}
-.ntf__row-body {
-  margin: 0;
-  color: var(--nx-text-muted);
-  font-size: var(--nx-font-size-body-sm);
-  line-height: var(--nx-font-leading-snug);
 }
 .ntf__row-meta {
   display: flex;

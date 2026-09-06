@@ -659,8 +659,8 @@ function RegistersSection() {
           saverLabel(SAVER_BY_ABI.get(abi) ?? "—", s.registers),
         ])}
       />
-      <p className="tool__note">{s.registers.savingNote}</p>
-      <p className="tool__note">{s.registers.fpNote}</p>
+      <p className="nx-hint nx-hint--prose">{s.registers.savingNote}</p>
+      <p className="nx-hint nx-hint--prose">{s.registers.fpNote}</p>
     </>
   );
 }

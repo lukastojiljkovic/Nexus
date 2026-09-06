@@ -131,7 +131,7 @@ export function PrivVersionHistory({
     );
   }
   if (versions === null) {
-    return <p className="app__muted">{strings.app.loading}</p>;
+    return <p className="nx-hint">{strings.app.loading}</p>;
   }
   if (versions.length === 0) {
     return <EmptyState variant="inline" title={s.empty} />;
@@ -170,7 +170,7 @@ export function PrivVersionHistory({
             {s.error}
           </div>
         ) : selected === null ? (
-          <p className="app__muted">{strings.app.loading}</p>
+          <p className="nx-hint">{strings.app.loading}</p>
         ) : (
           <>
             <h3 className="note__history-title">{s.previewLabel}</h3>

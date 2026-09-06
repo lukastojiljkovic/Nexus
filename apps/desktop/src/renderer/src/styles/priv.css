@@ -145,29 +145,20 @@
   color: var(--nx-accent-strong);
   font-weight: var(--nx-font-weight-semibold);
 }
-.priv__choice-note {
-  font-size: var(--nx-font-size-body-sm);
-  line-height: var(--nx-font-leading-normal);
-  color: var(--nx-text-muted);
-}
 
 /* „Ovde namerno nema nijednog grafika…" — the section's stated principle, and
-   the reason it has no signature graphic while every other module got one.
-   It had been rendered through `.app__muted`, the class this app uses for
-   „Učitavanje…", so a deliberate design position was dressed as a status line —
-   which reads like an apology for a missing feature rather than like the
-   feature it actually is. Prose measure, prose leading, and the section's own
-   mark set beside it in the tier that exists for marks. The sentence itself is
-   untouched. */
+   the reason it has no signature graphic while every other module got one. It
+   had been rendered through `.app__muted`, the class this app used for
+   „Učitavanje…", so a deliberate design position was dressed as a status line,
+   which reads like an apology for a missing feature. That class no longer
+   exists — it folded into `.nx-hint` with the rest of the tier — and what still
+   separates the two is what always mattered: PROSE leading, and the section's
+   own mark set beside the sentence. So this is `.nx-hint .nx-hint--prose` plus
+   the mark. The sentence itself is untouched. */
 .priv__no-chart {
   display: flex;
   align-items: flex-start;
   gap: var(--nx-space-2);
-  max-width: var(--nx-layout-prose);
-  margin: 0;
-  font-size: var(--nx-font-size-body-sm);
-  line-height: var(--nx-font-leading-normal);
-  color: var(--nx-text-muted);
 }
 .priv__no-chart-mark {
   flex: none;

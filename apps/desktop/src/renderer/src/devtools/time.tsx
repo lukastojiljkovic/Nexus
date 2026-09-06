@@ -349,7 +349,7 @@ function CronTool() {
             value={result.spec.fieldCount === 6 ? s.fields6 : s.fields5}
             mono={false}
           />
-          <p className="tool__note">{s.unionNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.unionNote}</p>
 
           <ToolSection title={s.next}>
             <div className="tool__pair">
@@ -371,7 +371,7 @@ function CronTool() {
             {fires === null ? (
               <ToolFailure>{s.invalidZone}</ToolFailure>
             ) : fires.length === 0 ? (
-              <p className="tool__note">{s.never}</p>
+              <p className="nx-hint nx-hint--prose">{s.never}</p>
             ) : (
               <>
                 <ToolTable
@@ -380,7 +380,7 @@ function CronTool() {
                     formatInZone(instant, displayZone) ?? "",
                   ])}
                 />
-                {fires.length < Number(count) && <p className="tool__note">{s.fewer}</p>}
+                {fires.length < Number(count) && <p className="nx-hint nx-hint--prose">{s.fewer}</p>}
               </>
             )}
           </ToolSection>

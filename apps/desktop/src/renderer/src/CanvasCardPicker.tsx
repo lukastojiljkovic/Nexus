@@ -134,7 +134,7 @@ export function CanvasCardPicker({ profileId, onPick, onCancel }: CanvasCardPick
         <h2 id={titleId} className="recur-dialog__title">
           {s.title}
         </h2>
-        <p id={descriptionId} className="recur-dialog__question">
+        <p id={descriptionId} className="nx-hint">
           {s.description}
         </p>
 
@@ -153,9 +153,9 @@ export function CanvasCardPicker({ profileId, onPick, onCancel }: CanvasCardPick
         )}
 
         {rows === null ? (
-          <p className="recur-dialog__question">{strings.app.loading}</p>
+          <p className="nx-hint">{strings.app.loading}</p>
         ) : rows.length === 0 ? (
-          <p className="recur-dialog__question">{strings.search.emptyResults}</p>
+          <p className="nx-hint">{strings.search.emptyResults}</p>
         ) : (
           <ul className="canv-picker__list">
             {/* The heading names what an untyped list IS — the entries this

@@ -160,7 +160,7 @@ function PathConvertTool() {
               ))}
             </div>
             {cmdExpandsPath(converted.path) && (
-              <p className="tool__note">{s.cmdPercentWarning}</p>
+              <p className="nx-hint nx-hint--prose">{s.cmdPercentWarning}</p>
             )}
           </ToolSection>
         </>
@@ -243,7 +243,7 @@ function CidrTool() {
       <ToolSection title={s.containmentTitle}>
         <ToolInput label={s.containmentLabel} value={addressText} onChange={setAddressText} mono />
         {block === null ? (
-          <p className="tool__note">{s.needsBlock}</p>
+          <p className="nx-hint nx-hint--prose">{s.needsBlock}</p>
         ) : !typedAddress ? null : address === null ? (
           <ToolFailure>{s.containmentInvalid}</ToolFailure>
         ) : (
@@ -263,7 +263,7 @@ function CidrTool() {
           onChange={setPartsId}
         />
         {block === null ? (
-          <p className="tool__note">{s.needsBlock}</p>
+          <p className="nx-hint nx-hint--prose">{s.needsBlock}</p>
         ) : subnets === null ? (
           <ToolFailure>{s.splitInvalid}</ToolFailure>
         ) : (

@@ -141,13 +141,12 @@
   flex-direction: column;
   gap: var(--nx-space-2);
 }
+/* `.nx-hint` plus the one thing that is not a hint's business: this line
+   carries a spinner or a mark beside its text. */
 .dash__status {
-  margin: 0;
   display: flex;
   align-items: center;
   gap: var(--nx-space-2);
-  color: var(--nx-text-muted);
-  font-size: var(--nx-font-size-body-sm);
 }
 
 /* --- The widget grid -------------------------------------------------------
@@ -352,11 +351,10 @@
 /* A quiet line on a card that is NOT „nothing here" — the failure notice, which
    `EmptyState` must never be used for: a card that could not READ has not been
    told there is nothing to read. Empty states are the component's now. */
+/* `.nx-hint` with the widget body's own inset, so an empty widget's line sits
+   where a populated one's first row would. */
 .dash__quiet {
-  margin: 0;
   padding: var(--nx-space-2) 0;
-  color: var(--nx-text-muted);
-  font-size: var(--nx-font-size-body-sm);
 }
 
 /* --- ONE row grammar for all twelve widget bodies --------------------------

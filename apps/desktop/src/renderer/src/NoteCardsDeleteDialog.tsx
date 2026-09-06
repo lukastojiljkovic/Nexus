@@ -67,7 +67,7 @@ export function NoteCardsDeleteDialog({
           {s.title}
         </h2>
         <p className="recur-dialog__name">„{noteTitle}“</p>
-        <p id={questionId} className="recur-dialog__question">
+        <p id={questionId} className="nx-hint">
           {counted}. {s.question} {s.keepNote}
         </p>
         <div className="recur-dialog__choices">

@@ -253,11 +253,11 @@ function PrivSetup({ profileId, onStatusChange }: PrivSetupProps) {
             ) : (
               <form className="auth__form" onSubmit={(event) => void submit(event)}>
                 <h1 className="auth__title">{s.title}</h1>
-                <p className="auth__note">{s.intro}</p>
-                <p className="auth__note">{s.introSecond}</p>
+                <p className="nx-hint nx-hint--prose">{s.intro}</p>
+                <p className="nx-hint nx-hint--prose">{s.introSecond}</p>
 
                 <fieldset className="priv__choice" role="radiogroup" aria-label={s.credentialLabel}>
-                  <legend className="auth__note">{s.credentialLabel}</legend>
+                  <legend className="nx-hint nx-hint--prose">{s.credentialLabel}</legend>
                   <label className={choiceRowClass(!useAccountPasscode)}>
                     <input
                       className="nx-radio"
@@ -268,7 +268,7 @@ function PrivSetup({ profileId, onStatusChange }: PrivSetupProps) {
                     />
                     <span className="priv__choice-text">
                       <span className="priv__choice-name">{s.useSeparate}</span>
-                      <span className="priv__choice-note">{s.useSeparateNote}</span>
+                      <span className="nx-hint">{s.useSeparateNote}</span>
                     </span>
                   </label>
                   <label className={choiceRowClass(useAccountPasscode)}>
@@ -281,7 +281,7 @@ function PrivSetup({ profileId, onStatusChange }: PrivSetupProps) {
                     />
                     <span className="priv__choice-text">
                       <span className="priv__choice-name">{s.useAccountPasscode}</span>
-                      <span className="priv__choice-note">{s.useAccountPasscodeNote}</span>
+                      <span className="nx-hint">{s.useAccountPasscodeNote}</span>
                     </span>
                   </label>
                 </fieldset>
@@ -317,7 +317,7 @@ function PrivSetup({ profileId, onStatusChange }: PrivSetupProps) {
                 )}
 
                 <fieldset className="priv__choice" role="radiogroup" aria-label={s.kitLabel}>
-                  <legend className="auth__note">{s.kitLabel}</legend>
+                  <legend className="nx-hint nx-hint--prose">{s.kitLabel}</legend>
                   <label className={choiceRowClass(regenerateKit)}>
                     <input
                       className="nx-radio"
@@ -328,7 +328,7 @@ function PrivSetup({ profileId, onStatusChange }: PrivSetupProps) {
                     />
                     <span className="priv__choice-text">
                       <span className="priv__choice-name">{s.kitRegenerate}</span>
-                      <span className="priv__choice-note">{s.kitRegenerateNote}</span>
+                      <span className="nx-hint">{s.kitRegenerateNote}</span>
                     </span>
                   </label>
                   <label className={choiceRowClass(!regenerateKit)}>
@@ -341,7 +341,7 @@ function PrivSetup({ profileId, onStatusChange }: PrivSetupProps) {
                     />
                     <span className="priv__choice-text">
                       <span className="priv__choice-name">{s.kitOptOut}</span>
-                      <span className="priv__choice-note">{s.kitOptOutNote}</span>
+                      <span className="nx-hint">{s.kitOptOutNote}</span>
                     </span>
                   </label>
                 </fieldset>
@@ -355,7 +355,7 @@ function PrivSetup({ profileId, onStatusChange }: PrivSetupProps) {
                 )}
 
                 {lockedForMs > 0 && (
-                  <p className="auth__note">
+                  <p className="nx-hint nx-hint--prose">
                     {strings.auth.unlock.retryPrefix} {formatCountdown(lockedForMs)}
                   </p>
                 )}
@@ -438,7 +438,7 @@ function PrivLockScreen({ profileId, status, onStatusChange }: PrivLockScreenPro
             <PrivGateMark />
             <form className="auth__form" onSubmit={(event) => void submit(event)}>
               <h1 className="auth__title">{s.title}</h1>
-              <p className="auth__note">{account ? s.descriptionAccount : s.description}</p>
+              <p className="nx-hint nx-hint--prose">{account ? s.descriptionAccount : s.description}</p>
               <TextField
                 type="password"
                 label={account ? s.fieldLabelAccount : s.fieldLabel}
@@ -450,7 +450,7 @@ function PrivLockScreen({ profileId, status, onStatusChange }: PrivLockScreenPro
                 onChange={(event) => setCredential(event.target.value)}
               />
               {lockedForMs > 0 && (
-                <p className="auth__note">
+                <p className="nx-hint nx-hint--prose">
                   {strings.auth.unlock.retryPrefix} {formatCountdown(lockedForMs)}
                 </p>
               )}
@@ -693,12 +693,12 @@ function PrivSection({ profileId, onStatusChange, onRecheck }: PrivSectionProps)
           than leaving a gap someone reads as an oversight. Only meaningful once
           inside, so it lives here rather than on the setup or lock screen.
 
-          It is set as a STATED PRINCIPLE — measured, with the section's own mark
-          beside it — rather than as `.app__muted`, which is the class the app
-          uses for „učitavanje…". A sentence about why a whole class of picture
-          does not exist is not a status line, and dressed as one it reads like
-          an apology for a missing feature. The sentence itself is untouched. */}
-      <p className="priv__no-chart">
+          It is set as a STATED PRINCIPLE — prose leading, with the section's own
+          mark beside it — rather than as the plain hint the app uses for
+          „učitavanje…". A sentence about why a whole class of picture does not
+          exist is not a status line, and dressed as one it reads like an apology
+          for a missing feature. The sentence itself is untouched. */}
+      <p className="nx-hint nx-hint--prose priv__no-chart">
         <span className="priv__no-chart-mark" aria-hidden="true">
           <Icon name="priv" size={18} />
         </span>

@@ -69,7 +69,7 @@ export function CanvasCard({ elementId, view, interaction, onOpen, onRemove }: C
       {view.state === "ready" && (
         <>
           <p className="canv-card__title">{view.title}</p>
-          {view.detail !== null && <p className="canv-card__detail">{view.detail}</p>}
+          {view.detail !== null && <p className="nx-hint">{view.detail}</p>}
           <div className="canv-card__actions">
             <button
               type="button"
@@ -82,7 +82,7 @@ export function CanvasCard({ elementId, view, interaction, onOpen, onRemove }: C
         </>
       )}
 
-      {view.state === "loading" && <p className="canv-card__detail">{strings.app.loading}</p>}
+      {view.state === "loading" && <p className="nx-hint">{strings.app.loading}</p>}
 
       {/*
         Said, never acted on. A card whose object is gone is still a card the
@@ -93,7 +93,7 @@ export function CanvasCard({ elementId, view, interaction, onOpen, onRemove }: C
       {view.state === "missing" && (
         <>
           <p className="canv-card__title">{s.missingTitle}</p>
-          <p className="canv-card__detail">{s.missingBody}</p>
+          <p className="nx-hint">{s.missingBody}</p>
           <div className="canv-card__actions">
             <button
               type="button"
@@ -109,7 +109,7 @@ export function CanvasCard({ elementId, view, interaction, onOpen, onRemove }: C
       {view.state === "foreign" && (
         <>
           <p className="canv-card__title">{s.foreignTitle}</p>
-          <p className="canv-card__detail">{s.foreignBody}</p>
+          <p className="nx-hint">{s.foreignBody}</p>
           <div className="canv-card__actions">
             <button
               type="button"

@@ -648,27 +648,6 @@ body {
 .app__path {
   word-break: break-all;
 }
-.app__muted {
-  color: var(--nx-text-muted);
-  font-size: var(--nx-font-size-body-sm);
-}
-/**
- * A Settings sub-section's explanatory paragraph. `.app__muted`'s treatment
- * plus the one thing it must not have: a measure.
- *
- * `f1fa51a` gave the Settings CARDS a measure and this level kept none, because
- * these paragraphs render through the SHARED `.app__muted`, which App,
- * StudyPage, PrivPage, FinCsvImport, noteTemplatePane, attachmentPreview and
- * moduleSettingsPanels also use — almost always for a short status or loading
- * line that a 68ch cap would do nothing for. Capping the shared class would
- * have been a blast radius nobody asked for; a description class adopted where
- * a description actually is costs nothing anywhere else.
- */
-.app__description {
-  max-width: var(--nx-layout-prose);
-  color: var(--nx-text-muted);
-  font-size: var(--nx-font-size-body-sm);
-}
 
 /* Restore undo banner (IMEX slice 3d): sits at the top of the main column on
    every page, since a restore replaces the whole profile and the offer to take
@@ -751,12 +730,6 @@ body {
   line-height: var(--nx-font-leading-tight);
   font-weight: var(--nx-font-weight-semibold);
   letter-spacing: var(--nx-font-tracking-display);
-}
-.onb__desc {
-  margin: 0;
-  color: var(--nx-text-muted);
-  font-size: var(--nx-font-size-body-sm);
-  line-height: var(--nx-font-leading-normal);
 }
 /* Label-above-options, mirroring the nx-textfield label rhythm. */
 .onb__theme {
@@ -1212,12 +1185,6 @@ body {
 }
 /* Quiet informational line — the create-screen encryption notice, the
    unlock-screen throttle countdown, the recovery-screen explanation. */
-.auth__note {
-  margin: 0;
-  color: var(--nx-text-muted);
-  font-size: var(--nx-font-size-body-sm);
-  line-height: var(--nx-font-leading-normal);
-}
 /* Same recipe as .note__save-error, scoped to the auth channel. */
 .auth__error {
   margin: 0;

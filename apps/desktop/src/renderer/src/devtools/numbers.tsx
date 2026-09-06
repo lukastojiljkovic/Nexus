@@ -535,7 +535,7 @@ function DataUnitTool() {
           />
         </>
       )}
-      <p className="tool__note">{s.note}</p>
+      <p className="nx-hint nx-hint--prose">{s.note}</p>
     </>
   );
 }
@@ -776,7 +776,7 @@ function MxBlockTool() {
                 : `2^${decoded.scaleExponent} (${scaleFields.hex})`
             }
           />
-          {outcome.diagnostics.scaleClamped && <p className="tool__note">{s.scaleClamped}</p>}
+          {outcome.diagnostics.scaleClamped && <p className="nx-hint nx-hint--prose">{s.scaleClamped}</p>}
           <ToolTable
             head={[s.index, s.input, s.elementBits, s.decodedValue, s.notes]}
             prose={[4]}
@@ -799,7 +799,7 @@ function MxBlockTool() {
               ];
             })}
           />
-          {enteredCount < MX_BLOCK_SIZE && <p className="tool__note">{s.padded}</p>}
+          {enteredCount < MX_BLOCK_SIZE && <p className="nx-hint nx-hint--prose">{s.padded}</p>}
           <ResultRow
             label={s.bitsPerValue}
             value={formatToolNumber(mxBitsPerValue(elementFormat))}

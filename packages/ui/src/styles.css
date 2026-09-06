@@ -164,8 +164,8 @@ samp {
 
    It was written out by hand in eleven places across six stylesheets before
    this rule existed (`.tasks__rail-heading`, `.tool__group-title`,
-   `.tool__results-heading`, `.study__col-legend`, `.set__section-caption`,
-   the app's own nav-group label, …), each an independent copy of the same
+   `.tool__results-heading`, `.study__col-legend`, the app's own nav-group
+   label, …), each an independent copy of the same
    five declarations — DC-02, and the exact shape that drifts: two of the
    eleven had already lost the tracking, and one had reached for
    `--nx-text-muted`, which is body-adjacent ink on a label.
@@ -179,6 +179,66 @@ samp {
   letter-spacing: var(--nx-font-tracking-label);
   text-transform: uppercase;
   color: var(--nx-text-subtle);
+}
+
+/* --- Hint --------------------------------------------------------------
+   The tier below body ink and above nothing: the sentence that explains a
+   control, captions a figure, or says why a list is empty. `.nx-eyebrow`'s
+   sibling, and it is here for the same reason and after the same count.
+
+   It was written out by hand in THIRTY-THREE classes across fifteen
+   stylesheets before this rule existed — `.set__section-caption`, `.tool__note`,
+   `.app__muted`, `.auth__note`, `.onb__desc`, `.recur-dialog__question`,
+   `.canv-card__detail`, … — each an independent copy of `--nx-text-muted` +
+   `--nx-font-size-body-sm` on a paragraph, and DC-02 says what happens next.
+   It had already happened, three ways:
+
+     - FOUR leadings for one tier, over twenty-nine rules. Seventeen declared
+       none and inherited the app's `snug`; four said `snug` out loud; six said
+       `normal`; two said `loose`, which is 1.7 on a 13px hint and is justified
+       nowhere.
+     - THREE measures. Five capped at `--nx-layout-prose`, two at a literal
+       `64ch` — a raw value four characters narrower than the token, so the
+       professional drawer's notes wrapped earlier than the same sentence
+       anywhere else in the app and nothing said why — and the rest at nothing
+       at all, which on a maximised window is a 13px line a thousand pixels
+       wide.
+     - And `.app__muted`, which forty-eight paragraphs render through, never
+       reset the MARGIN. `<p>` carries 1em top and bottom from the UA, this app
+       has no element reset, and so forty-eight hints sat 13px away from their
+       neighbours inside containers whose `gap` was already saying how far
+       apart things go.
+
+   So: `snug`, because that is the app's base leading and what twenty-five of
+   the thirty-three were already doing, and the prose cap always, because an
+   uncapped line is not a decision anyone made.
+
+   What this rule is NOT: the same ink and size on a SPAN. Eighty-seven rules
+   in this repository declare `--nx-text-muted` + `--nx-font-size-body-sm`;
+   twenty-nine of them are the paragraph tier and folded here. Most of the other
+   fifty-eight are inline runs — a timestamp beside a title, a count, a tag —
+   and an inline box takes neither a margin nor a measure, so they are a second
+   promotion and a different one. Two are neither: `.tasks__archive-toggle` is a
+   BUTTON that borrows the ink, and `.nx-empty--inline` belongs to a component
+   with its own measure (34ch, narrower on purpose because an empty state is
+   centred).
+
+   Adopted with the class, never by copying the block again: a surface that
+   wants a variant adds a modifier of its own beside `.nx-hint`. */
+.nx-hint {
+  margin: 0;
+  max-width: var(--nx-layout-prose);
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+  line-height: var(--nx-font-leading-snug);
+}
+/* For a hint that is genuinely a PARAGRAPH rather than a line under a control
+   — the onboarding copy, the unlock screen's note, the professional tools'
+   explanations, the description above a generated ROS 2 package. `normal` is
+   the leading the base rule already names for prose; this is not a fifth
+   value, it is the second one the app has, applied where it belongs. */
+.nx-hint--prose {
+  line-height: var(--nx-font-leading-normal);
 }
 
 /* --- Visually hidden ---------------------------------------------------
@@ -374,13 +434,6 @@ samp {
   line-height: var(--nx-font-leading-tight);
   letter-spacing: var(--nx-font-tracking-h1);
   color: var(--nx-text);
-}
-.nx-page-header__subtitle {
-  margin: 0;
-  max-width: var(--nx-layout-prose);
-  font-size: var(--nx-font-size-body-sm);
-  line-height: var(--nx-font-leading-snug);
-  color: var(--nx-text-muted);
 }
 /* `margin-left: auto` so that when the header wraps — a long title, a narrow
    window — the actions stay on the trailing edge instead of jumping to the left
@@ -1200,14 +1253,15 @@ samp {
 }
 /* The inline shape: one quiet line where the rows would be. It overrides the
    block above rather than sitting beside it, because the two ARE one component —
-   an app with two independent empty-state rules is how it grew three of them. */
+   an app with two independent empty-state rules is how it grew three of them.
+
+   The ink, the size and the margin come from `.nx-hint`, which the component
+   puts on this element: „there is nothing here" is a hint, and this rule was
+   the tier's last hand-copy inside the package that owns the tier. */
 .nx-empty.nx-empty--inline {
   display: block;
-  margin: 0;
   padding: var(--nx-space-2) 0;
   text-align: left;
-  color: var(--nx-text-muted);
-  font-size: var(--nx-font-size-body-sm);
 }
 
 /* --- ListRow (generic dense row; future task/agenda row) --------------- */

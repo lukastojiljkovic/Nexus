@@ -173,7 +173,7 @@ export function StairGeometryTool() {
           />
           <ResultRow label={s.pitch} value={`${proNum(flight.pitch, 4)}${s.unitDeg}`} />
           <ResultRow label={s.blondel} value={proUnit(proNum(flight.blondel, 3), s.unitMm)} />
-          <p className="tool__note">{s.blondelNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.blondelNote}</p>
 
           {/* The computed value, the limit the user typed, and the quotient.
               No word, no colour, no icon — whether 0,96 is acceptable is a
@@ -221,7 +221,7 @@ export function StairGeometryTool() {
               label={s.remainder}
               value={proUnit(proNum(flight.rounded.remainder, 3), s.unitMm)}
             />
-            <p className="tool__note">{s.remainderNote}</p>
+            <p className="nx-hint nx-hint--prose">{s.remainderNote}</p>
           </ToolSection>
 
           <ToolFormula>{s.formula}</ToolFormula>
@@ -923,7 +923,7 @@ export function ConcreteTakeoffTool() {
             <ResultRow label={s.rebarMass} value={proUnit(proNum(result.rebarMass, 1), s.unitKg)} />
           )}
           {result.batches !== undefined && <ResultRow label={s.batches} value={result.batches} />}
-          <p className="tool__note">{s.formworkNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.formworkNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1098,7 +1098,7 @@ export function DrawingScaleTool() {
       {lengthResult.ok && (
         <>
           <ToolFormula>{s.formula}</ToolFormula>
-          <p className="tool__note">{s.source}</p>
+          <p className="nx-hint nx-hint--prose">{s.source}</p>
           <ToolInputEcho
             title={s.inputs}
             entries={[
@@ -1219,7 +1219,7 @@ export function EarthworkTool() {
           {result.balanceAdjusted !== undefined && (
             <ResultRow label={s.balanceAdjusted} value={proUnit(proNum(result.balanceAdjusted, 2), s.unitM3)} />
           )}
-          <p className="tool__note">{s.balanceNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.balanceNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho title={s.inputs} entries={[{ label: s.profiles, value: rows.length }]} />
           <CopyButton value={copyText} />
@@ -1333,7 +1333,7 @@ export function LevelRunTool() {
             <ResultRow label={s.misclosure} value={proUnit(proNum(result.misclosure * 1000, 1), s.unitMm)} />
           )}
           <ResultRow label={s.stations} value={result.stations} />
-          <p className="tool__note">{s.checkNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.checkNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1458,7 +1458,7 @@ export function RebarWeightTool() {
           <ResultRow label={s.totalLength} value={proUnit(proNum(lengthResult.totalLength, 2), s.unitM)} />
           <ResultRow label={s.totalMass} value={proUnit(proNum(lengthResult.totalMass, 3), s.unitKg)} />
           <ResultRow label={s.totalTonnes} value={proUnit(proNum(lengthResult.totalTonnes, 3), s.unitT)} />
-          <p className="tool__note">{s.densityNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.densityNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1479,7 +1479,7 @@ export function RebarWeightTool() {
           {massResult.remainder !== undefined && (
             <ResultRow label={s.remainder} value={proUnit(proNum(massResult.remainder, 2), s.unitM)} />
           )}
-          <p className="tool__note">{s.densityNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.densityNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1947,7 +1947,7 @@ export function SlopeGradeTool() {
           <ResultRow label={s.permille} value={`${proNum(result.permille, 3)}${s.unitPermille}`} />
           <ResultRow label={s.degrees} value={`${proNum(result.degrees, 6)}${s.unitDeg}`} />
           {result.ratio !== undefined && <ResultRow label={s.ratio} value={`1:${proNum(result.ratio, 4)}`} />}
-          <p className="tool__note">{s.ratioNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.ratioNote}</p>
           <ResultRow label={s.rise} value={proUnit(proNum(result.rise, 4), s.unitM)} />
           <ResultRow label={s.run} value={proUnit(proNum(result.run, 4), s.unitM)} />
           <ResultRow label={s.slant} value={proUnit(proNum(result.slant, 5), s.unitM)} />
@@ -2392,7 +2392,7 @@ export function TileCountTool() {
           {result.surplusArea !== undefined && (
             <ResultRow label={s.surplusArea} value={proUnit(proNum(result.surplusArea, 3), s.unitM2)} />
           )}
-          <p className="tool__note">{s.gridNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.gridNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -2643,7 +2643,7 @@ export function WallUValueTool() {
           {result.outerSurfaceTemperature !== undefined && (
             <ResultRow label={s.outerSurfaceTemperature} value={`${proNum(result.outerSurfaceTemperature, 3)}${s.unitC}`} />
           )}
-          <p className="tool__note">{s.scopeNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.scopeNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}

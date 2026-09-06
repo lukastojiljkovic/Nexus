@@ -188,7 +188,7 @@ export function BarbellPlateLoadingTool() {
       {load.ok && (
         <ToolSection title={s.results}>
           {load.perSide.length === 0 ? (
-            <p className="tool__note">{s.noPlates}</p>
+            <p className="nx-hint nx-hint--prose">{s.noPlates}</p>
           ) : (
             <ToolTable
               head={[s.headMass, s.headCount]}
@@ -538,7 +538,7 @@ export function CadenceStrideLengthTool() {
         ]}
       />
       <ToolInput label={s.speedValue} hint={s.speedValueHint} value={speedValue} onChange={setSpeedValue} />
-      <p className="tool__note">{s.fieldsHint}</p>
+      <p className="nx-hint nx-hint--prose">{s.fieldsHint}</p>
 
       {failure !== undefined && <ToolFailure>{failure}</ToolFailure>}
 
@@ -546,7 +546,7 @@ export function CadenceStrideLengthTool() {
         <ToolSection title={s.results}>
           <ResultRow label={s.resolvedCadence} value={proUnit(proNum(result.cadence, 1), s.unitStepsPerMin)} />
           <ResultRow label={s.resolvedStep} value={proUnit(proNum(result.stepLength, 3), s.unitM)} />
-          <p className="tool__note">{s.stepNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.stepNote}</p>
           <ResultRow label={s.speedMps} value={proUnit(proNum(result.speedMps, 2), s.unitMps)} />
           <ResultRow label={s.speedKmh} value={proUnit(proNum(result.speedKmh, 2), s.unitKmh)} />
           <ResultRow label={s.pacePerKm} value={`${clockMinSec(result.pacePerKm)}${s.unitPerKm}`} />
@@ -616,7 +616,7 @@ export function ErgSplitWattsTool() {
       <ToolInput label={s.split} hint={s.splitHint} value={split} onChange={setSplit} />
       <ToolInput label={s.power} hint={s.powerHint} value={power} onChange={setPower} />
       <ToolInput label={s.distance} hint={s.distanceHint} value={distance} onChange={setDistance} />
-      <p className="tool__note">{s.fieldsHint}</p>
+      <p className="nx-hint nx-hint--prose">{s.fieldsHint}</p>
 
       {failure !== undefined && <ToolFailure>{failure}</ToolFailure>}
 
@@ -626,9 +626,9 @@ export function ErgSplitWattsTool() {
           <ResultRow label={s.split2} value={clockMinSecFrac(result.split, 1)} />
           <ResultRow label={s.pace} value={proUnit(proNum(result.pace, 4), s.unitSPerM)} />
           <ResultRow label={s.projected} value={clockMinSecFrac(result.projected, 1)} />
-          <p className="tool__note">{s.projectedNote}</p>
-          <p className="tool__note">{fill(s.coefficientNote, { coefficient: proNum(result.coefficient, 2) })}</p>
-          <p className="tool__note">{fill(s.referenceNote, { reference: proNum(result.referenceMetres, 0) })}</p>
+          <p className="nx-hint nx-hint--prose">{s.projectedNote}</p>
+          <p className="nx-hint nx-hint--prose">{fill(s.coefficientNote, { coefficient: proNum(result.coefficient, 2) })}</p>
+          <p className="nx-hint nx-hint--prose">{fill(s.referenceNote, { reference: proNum(result.referenceMetres, 0) })}</p>
 
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
@@ -797,7 +797,7 @@ export function IntervalSessionTimingTool() {
           <ResultRow label={s.total} value={result.totalClock} />
           <ResultRow label={s.repRatio} value={`1:${proNum(result.repRestRatio, 2)}`} />
           <ResultRow label={s.sessionRatio} value={`1:${proNum(result.sessionRestRatio, 2)}`} />
-          <p className="tool__note">{s.ratioNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.ratioNote}</p>
 
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
@@ -873,7 +873,7 @@ export function JumpHeightFlightTimeTool() {
     <>
       <ToolInput label={s.flightTime} hint={s.flightTimeHint} value={flightTime} onChange={setFlightTime} />
       <ToolInput label={s.height} hint={s.heightHint} value={height} onChange={setHeight} />
-      <p className="tool__note">{s.fieldsHint}</p>
+      <p className="nx-hint nx-hint--prose">{s.fieldsHint}</p>
       <ToolInput label={s.contactTime} hint={s.contactTimeHint} value={contactTime} onChange={setContactTime} />
       <ToolInput label={s.gravity} hint={s.gravityHint} value={gravity} onChange={setGravity} />
 
@@ -980,7 +980,7 @@ export function LimbSymmetryIndexTool() {
           <ResultRow label={s.shortfall} value={`${proNum(result.shortfall, 1)} %`} />
           <ResultRow label={s.needed} value={withUnit(proNum(result.needed, 2))} />
           <ResultRow label={s.gap} value={withUnit(proNum(result.gap, 2))} />
-          <p className="tool__note">{s.unitNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.unitNote}</p>
 
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
@@ -1073,8 +1073,8 @@ export function OneRepMaxTableTool() {
         <ToolSection title={s.results}>
           <ResultRow label={s.epley} value={proUnit(proNum(result.epley, 1), s.unitKg)} />
           <ResultRow label={s.brzycki} value={proUnit(proNum(result.brzycki, 1), s.unitKg)} />
-          {proParse(reps) === 1 && <p className="tool__note">{s.singleRepNote}</p>}
-          {known1RmProvided && <p className="tool__note">{s.knownNote}</p>}
+          {proParse(reps) === 1 && <p className="nx-hint nx-hint--prose">{s.singleRepNote}</p>}
+          {known1RmProvided && <p className="nx-hint nx-hint--prose">{s.knownNote}</p>}
           <ToolTable
             head={[s.headPercent, s.headExact, s.headLoadable]}
             rows={result.rows.map((row) => [
@@ -1194,7 +1194,7 @@ export function RunningPaceSplitsTool() {
           { id: "perMile", label: s.paceUnitPerMile },
         ]}
       />
-      <p className="tool__note">{s.fieldsHint}</p>
+      <p className="nx-hint nx-hint--prose">{s.fieldsHint}</p>
       <ToolInput label={s.splitStep} value={splitStep} onChange={setSplitStep} />
       <ToolSelect<"m" | "km">
         label={s.splitStepUnit}
@@ -1313,7 +1313,7 @@ export function SetTempoTutTool() {
           <ResultRow label={s.tutPerSet} value={result.tutPerSetClock} />
           <ResultRow label={s.totalTut} value={result.totalTutClock} />
           <ResultRow label={s.block} value={result.blockClock} />
-          <p className="tool__note">{s.definitionNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.definitionNote}</p>
 
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
@@ -1466,7 +1466,7 @@ export function SweatRateHydrationTool() {
 
       {result.ok && (
         <ToolSection title={s.results}>
-          <p className="tool__note">{s.conventionNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.conventionNote}</p>
           <ResultRow label={s.massLost} value={proUnit(proNum(result.massLost, 3), s.unitKg)} />
           <ResultRow label={s.percentBodyMass} value={`${proNum(result.percentBodyMass, 2)} %`} />
           <ResultRow label={s.sweatGrams} value={proUnit(proNum(result.sweatGrams, 0), s.unitG)} />
@@ -1642,7 +1642,7 @@ export function WeightClassCutTool() {
 
       {result.ok && (
         <ToolSection title={s.results}>
-          <p className="tool__note">{differenceNote}</p>
+          <p className="nx-hint nx-hint--prose">{differenceNote}</p>
           {/* Value beside the user's own limit, and nothing but that — the
               limit is a regulated figure a federation owns, never a default. */}
           <ToolAgainstLimit
@@ -1662,7 +1662,7 @@ export function WeightClassCutTool() {
             <ResultRow label={s.perWeek} value={proUnit(proNum(result.perWeek, 3), s.unitKg)} />
           )}
           <ResultRow label={s.daysUsed} value={proNum(result.days, 0)} />
-          {result.perWeekExtrapolated === true && <p className="tool__note">{s.extrapolatedNote}</p>}
+          {result.perWeekExtrapolated === true && <p className="nx-hint nx-hint--prose">{s.extrapolatedNote}</p>}
 
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho

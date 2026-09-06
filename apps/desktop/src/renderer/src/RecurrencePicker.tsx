@@ -314,7 +314,7 @@ export function RecurrencePicker({ value, onChange, anchor }: RecurrencePickerPr
         </select>
       </label>
 
-      {!usable && <p className="recur__caption">{s.needsDate}</p>}
+      {!usable && <p className="nx-hint">{s.needsDate}</p>}
 
       {usable && preset === "custom" && freq !== null && end !== null && (
         <div className="recur__custom">

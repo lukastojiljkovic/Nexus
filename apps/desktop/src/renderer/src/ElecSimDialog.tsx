@@ -96,7 +96,7 @@ export function ElecSimDialog({ bench, onClose }: ElecSimDialogProps) {
         </h2>
 
         {bench.kind === "refused" ? (
-          <p className="elec-code__refused">{s.refused[bench.reason]}</p>
+          <p className="nx-hint nx-hint--prose">{s.refused[bench.reason]}</p>
         ) : (
           <SimBody model={bench} />
         )}
@@ -173,7 +173,7 @@ function SimBody({ model }: { model: SimModel }) {
 
   return (
     <div className="elec-code__body">
-      <p className="elec-code__description">{s.description}</p>
+      <p className="nx-hint nx-hint--prose">{s.description}</p>
 
       <section className="elec-code__section">
         <h3 className="nx-eyebrow elec-code__heading">

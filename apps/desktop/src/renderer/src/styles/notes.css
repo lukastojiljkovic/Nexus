@@ -504,11 +504,10 @@
 }
 /* The neutral twin of the line above: a result that is not a failure — how many
    tasks „Pretvori u zadatke“ made, or that there was no checklist to make them
-   from. Same place, same size, quiet text instead of danger. */
+   from. Same place as the error, quiet text instead of danger — which makes it
+   `.nx-hint`, plus the gap that separates it from the list it reports on. */
 .note__list-notice {
   margin: var(--nx-space-2) 0 0;
-  font-size: var(--nx-font-size-body-sm);
-  color: var(--nx-text-muted);
 }
 
 /* Delete + undo: the inline, token-styled undo bar (mirrors the tasks pattern). */
@@ -1372,11 +1371,10 @@
   border-radius: var(--nx-radius-md);
   font-size: var(--nx-font-size-body-sm);
 }
+/* `.nx-hint` inset to the list's own row padding, so the empty line starts
+   where a template's name would. */
 .note__templates-empty {
-  margin: 0;
   padding: var(--nx-space-2) var(--nx-space-3);
-  color: var(--nx-text-muted);
-  font-size: var(--nx-font-size-body-sm);
 }
 
 /* ProseMirror content — THE WRITTEN PAGE ---------------------------------

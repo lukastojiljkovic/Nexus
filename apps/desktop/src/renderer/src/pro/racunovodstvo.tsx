@@ -451,7 +451,7 @@ export function AmountInWordsTool() {
           <ResultRow label={s.resultWhole} value={wholeFigure(result.figures)} />
           <ResultRow label={s.resultSubunits} value={proNum(result.figures.subunits, 0)} />
           <ToolFormula>{s.formula}</ToolFormula>
-          <p className="tool__note">{s.source}</p>
+          <p className="nx-hint nx-hint--prose">{s.source}</p>
           <ToolInputEcho
             title={s.inputs}
             entries={[
@@ -602,7 +602,7 @@ export function FinancialRatiosTool() {
           <ResultRow label={s.roePercent} value={result.roePercent === undefined ? "—" : `${proNum(result.roePercent, 4)} %`} />
           <ResultRow label={s.netMarginPercent} value={result.netMarginPercent === undefined ? "—" : `${proNum(result.netMarginPercent, 4)} %`} />
           <ResultRow label={s.ebitMarginPercent} value={result.ebitMarginPercent === undefined ? "—" : `${proNum(result.ebitMarginPercent, 4)} %`} />
-          <p className="tool__note">{s.averageNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.averageNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho title={s.inputs} entries={[{ label: s.days, value: days === 365 ? s.days365 : s.days360 }]} />
           <CopyButton value={copyText} />
@@ -776,7 +776,7 @@ export function FxDifferenceTool() {
           <ResultRow label={s.bookedDifference} value={proNum(result.bookedDifference, 2)} />
           <ResultRow label={s.exactDifference} value={proNum(result.exactDifference, 2)} />
           <ResultRow label={s.exactDifferenceRaw} value={proNum(result.exactDifferenceRaw, 6)} />
-          <p className="tool__note">{s.roundingNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.roundingNote}</p>
           <ResultRow label={s.magnitude} value={proNum(result.magnitude, 2)} />
           <ResultRow label={s.effect} value={effectLabel(result.effect)} />
           <ResultRow label={s.rateChangePercent} value={`${proNum(result.rateChangePercent, 4)} %`} />
@@ -909,7 +909,7 @@ export function CheckDigitsIdTool() {
           {kind === "jmbg" && (
             <ResultRow label={s.jmbgTenBranch} value={result.jmbgTenBranch ? s.matchesYes : s.matchesNo} />
           )}
-          <p className="tool__note">{s.jmbgNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.jmbgNote}</p>
           <ToolFormula>{kind === "jmbg" ? s.formulaJmbg : s.formulaMod1110}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1086,7 +1086,7 @@ export function DepreciationScheduleTool() {
           )}
           <ResultRow label={s.writtenOff} value={proNum(result.writtenOff, 2)} />
           <ToolFormula>{s.formula}</ToolFormula>
-          <p className="tool__note">{s.noRateNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.noRateNote}</p>
           <ToolInputEcho
             title={s.inputs}
             entries={[
@@ -1296,7 +1296,7 @@ export function BreakevenCvpTool() {
           <ResultRow label={s.breakevenUnitsWhole} value={result.breakevenUnitsWhole} />
           <ResultRow label={s.breakevenRevenue} value={proNum(result.breakevenRevenue, 2)} />
           <ResultRow label={s.breakevenRevenueAtWholeUnits} value={proNum(result.breakevenRevenueAtWholeUnits, 2)} />
-          <p className="tool__note">{s.revenueNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.revenueNote}</p>
           <ResultRow label={s.targetUnits} value={proNum(result.targetUnits, 4)} />
           <ResultRow label={s.targetRevenue} value={proNum(result.targetRevenue, 2)} />
           {result.marginOfSafetyPercent !== undefined && (
@@ -1306,7 +1306,7 @@ export function BreakevenCvpTool() {
             <ResultRow label={s.operatingLeverage} value={proNum(result.operatingLeverage, 4)} />
           )}
           <ToolFormula>{s.formula}</ToolFormula>
-          <p className="tool__note">{s.singleProductNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.singleProductNote}</p>
           <ToolInputEcho
             title={s.inputs}
             entries={[
@@ -1551,7 +1551,7 @@ export function GrossUpTool() {
           <ResultRow label={s.netCheck} value={proNum(result.netCheck, 2)} />
           {result.totalCost !== undefined && <ResultRow label={s.totalCost} value={proNum(result.totalCost, 2)} />}
           <ToolFormula>{model === "A" ? s.formulaA : s.formulaB}</ToolFormula>
-          <p className="tool__note">{s.rateNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.rateNote}</p>
           <ToolInputEcho
             title={s.inputs}
             entries={[
@@ -1663,7 +1663,7 @@ export function RateConversionTool() {
           <ResultRow label={s.nominalPercent} value={`${proNum(result.nominalPercent, 6)} %`} />
           <ResultRow label={s.proportionalPeriodicPercent} value={`${proNum(result.proportionalPeriodicPercent, 6)} %`} />
           <ResultRow label={s.conformalPeriodicPercent} value={`${proNum(result.conformalPeriodicPercent, 6)} %`} />
-          <p className="tool__note">{s.periodicNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.periodicNote}</p>
           <ResultRow label={s.continuousEffectivePercent} value={`${proNum(result.continuousEffectivePercent, 6)} %`} />
           <ResultRow label={s.periodsPerYear} value={result.periodsPerYear} />
           <ToolFormula>{s.formula}</ToolFormula>
@@ -1826,13 +1826,13 @@ export function InterestPeriodsTool() {
           <ResultRow label={s.totalDays} value={result.totalDays} />
           <ResultRow label={s.totalInterestRows} value={proNum(result.totalInterestRows, 2)} />
           <ResultRow label={s.totalInterestExact} value={proNum(result.totalInterestExact, 2)} />
-          <p className="tool__note">{s.totalsNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.totalsNote}</p>
           <ResultRow label={s.totalDue} value={proNum(result.totalDue, 2)} />
           <ResultRow label={s.earliestFrom} value={dateLabel(result.earliestFrom)} />
           <ResultRow label={s.latestTo} value={dateLabel(result.latestTo)} />
           <ResultRow label={s.overlapDays} value={result.overlapDays} />
           <ResultRow label={s.uncoveredDays} value={result.uncoveredDays} />
-          <p className="tool__note">{s.coverageNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.coverageNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1981,7 +1981,7 @@ export function InventoryCostingTool() {
           <ResultRow label={s.costDifference} value={proNum(result.costDifference, 2)} />
           <ResultRow label={s.closingDifference} value={proNum(result.closingDifference, 2)} />
           <ResultRow label={s.purchaseValue} value={proNum(result.purchaseValue, 2)} />
-          <p className="tool__note">{s.policyNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.policyNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -2122,7 +2122,7 @@ export function LoanScheduleTool() {
           <ResultRow label={s.periodicRate} value={`${proNum(result.periodicRatePercent, 6)} %`} />
           <ResultRow label={s.totalPaid} value={proNum(result.totalPaid, 2)} />
           <ResultRow label={s.totalInterest} value={proNum(result.totalInterest, 2)} />
-          <p className="tool__note">{s.notAprNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.notAprNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -2301,7 +2301,7 @@ export function RebateChainTool() {
             />
             <ResultRow label={s.netPrice} value={proNum(chainResult.netPrice, 2)} />
             <ResultRow label={s.effectiveRebatePercent} value={`${proNum(chainResult.effectiveRebatePercent, 4)} %`} />
-            <p className="tool__note">{s.effectiveNote}</p>
+            <p className="nx-hint nx-hint--prose">{s.effectiveNote}</p>
             <ToolFormula>{s.formulaChain}</ToolFormula>
             <ToolInputEcho title={s.inputs} entries={[{ label: s.listPrice, value: proNum(proParse(listPriceText) ?? 0, 2) }]} />
             <CopyButton value={chainCopyText} />
@@ -2424,7 +2424,7 @@ export function TrialBalanceCheckTool() {
           <ResultRow label={s.difference} value={proNum(diagnostics.difference, decimals)} />
           <ResultRow label={s.magnitude} value={proNum(diagnostics.magnitude, decimals)} />
           {diagnostics.balanced ? (
-            <p className="tool__note">{s.balancedNote}</p>
+            <p className="nx-hint nx-hint--prose">{s.balancedNote}</p>
           ) : (
             <>
               {diagnostics.reversedItem !== undefined && (
@@ -2449,7 +2449,7 @@ export function TrialBalanceCheckTool() {
                   prose={[4]}
                 />
               )}
-              <p className="tool__note">{s.necessaryNote}</p>
+              <p className="nx-hint nx-hint--prose">{s.necessaryNote}</p>
             </>
           )}
           <ToolFormula>{s.formula}</ToolFormula>

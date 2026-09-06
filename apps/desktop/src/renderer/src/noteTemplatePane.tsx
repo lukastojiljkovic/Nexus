@@ -248,7 +248,7 @@ export function NoteTemplatePane({
   }
 
   if (entries === null) {
-    return <p className="app__muted">{strings.app.loading}</p>;
+    return <p className="nx-hint">{strings.app.loading}</p>;
   }
 
   // The overwrite warning only applies to the save form: comparing the
@@ -269,7 +269,7 @@ export function NoteTemplatePane({
         {builtinEntries.map(renderRow)}
         <div className="note__templates-group">{strings.notes.templatesUserGroup}</div>
         {userEntries.length === 0 ? (
-          <p className="note__templates-empty">{strings.notes.templatesUserEmpty}</p>
+          <p className="nx-hint note__templates-empty">{strings.notes.templatesUserEmpty}</p>
         ) : (
           userEntries.map(renderRow)
         )}
@@ -302,7 +302,7 @@ export function NoteTemplatePane({
       <div className="note__templates-preview">
         {selected !== null &&
           (selected.content === null ? (
-            <p className="app__muted">{strings.notes.templateBroken}</p>
+            <p className="nx-hint">{strings.notes.templateBroken}</p>
           ) : (
             <TemplatePreview
               key={selected.id}

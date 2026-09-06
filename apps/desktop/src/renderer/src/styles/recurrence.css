@@ -58,11 +58,6 @@
   font-size: var(--nx-font-size-body-sm);
   color: var(--nx-text-muted);
 }
-.recur__caption {
-  margin: 0;
-  font-size: var(--nx-font-size-body-sm);
-  color: var(--nx-text-muted);
-}
 /* The Prilagođeno panel: its own full-width line under the preset select. */
 .recur__custom {
   flex-basis: 100%;
@@ -172,13 +167,6 @@
   line-height: var(--nx-font-leading-tight);
   font-weight: var(--nx-font-weight-semibold);
   color: var(--nx-text);
-}
-.recur-dialog__question,
-.tasks__dialog-question,
-.ntf__appetite-question {
-  margin: 0;
-  font-size: var(--nx-font-size-body-sm);
-  color: var(--nx-text-muted);
 }
 /* Which record the question is about (the list being deleted, the note being
    deleted) — full-strength text between the title and the muted question, so

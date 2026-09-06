@@ -96,8 +96,8 @@ export function TypedConfirmDialog({
           {title}
         </h2>
         <p className="recur-dialog__name">„{name}“</p>
-        <p className="recur-dialog__question">{warning}</p>
-        {note != null && <p className="recur-dialog__question">{note}</p>}
+        <p className="nx-hint">{warning}</p>
+        {note != null && <p className="nx-hint">{note}</p>}
         <TextField
           label={confirmLabel}
           placeholder={confirmPlaceholder}

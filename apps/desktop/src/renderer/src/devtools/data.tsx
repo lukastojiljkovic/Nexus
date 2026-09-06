@@ -288,7 +288,7 @@ function JsonEditorTool() {
       ) : primary === null ? null : !primary.ok ? (
         <ToolFailure>{formatStructuredError(s.errors, s.position, primary.error)}</ToolFailure>
       ) : mode === "validate" ? (
-        <p className="tool__note">{t.valid}</p>
+        <p className="nx-hint nx-hint--prose">{t.valid}</p>
       ) : (
         <ToolOutput label={strings.pro.common.result} value={primary.value} multiline />
       )}
@@ -308,7 +308,7 @@ function JsonEditorTool() {
             </ToolFailure>
           ) : (
             <>
-              <p className="tool__note">
+              <p className="nx-hint nx-hint--prose">
                 {queryResult.value.length === 0
                   ? t.noHits
                   : `${t.hits}: ${queryResult.value.length}`}
@@ -385,7 +385,7 @@ function YamlEditorTool() {
       }
     >
       {documents.length > 1 && (
-        <p className="tool__note">{`${t.documents}: ${documents.length}`}</p>
+        <p className="nx-hint nx-hint--prose">{`${t.documents}: ${documents.length}`}</p>
       )}
       {!hasSource ? (
         <ToolOutput
@@ -472,7 +472,7 @@ function XmlEditorTool() {
       ) : primary === null ? null : !primary.ok ? (
         <ToolFailure>{formatStructuredError(s.errors, s.position, primary.error)}</ToolFailure>
       ) : mode === "validate" ? (
-        <p className="tool__note">{t.valid}</p>
+        <p className="nx-hint nx-hint--prose">{t.valid}</p>
       ) : (
         <ToolOutput label={strings.pro.common.result} value={primary.value} multiline />
       )}
@@ -492,7 +492,7 @@ function XmlEditorTool() {
             </ToolFailure>
           ) : (
             <>
-              <p className="tool__note">
+              <p className="nx-hint nx-hint--prose">
                 {queryResult.value.length === 0
                   ? t.noHits
                   : `${t.hits}: ${queryResult.value.length}`}
@@ -607,7 +607,7 @@ function DataFormatTool() {
       {limits.length > 0 && (
         <ToolSection title={t.limitsTitle}>
           {limits.map((code) => (
-            <p key={code} className="tool__note">
+            <p key={code} className="nx-hint nx-hint--prose">
               {t.limits[code]}
             </p>
           ))}

@@ -315,7 +315,7 @@ export function LatePaymentInterestTool() {
 
       {result.ok && (
         <ToolSection title={s.results}>
-          <p className="tool__note">{s.countingRuleNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.countingRuleNote}</p>
           <ResultRow label={s.days2} value={String(result.days)} />
           <ResultRow label={s.yearFraction} value={proNum(result.yearFraction, 6)} />
           <ResultRow label={s.interest} value={proNum(result.interest, 2)} />
@@ -326,7 +326,7 @@ export function LatePaymentInterestTool() {
             value={result.interestPerDay === undefined ? s.interestPerDayNone : proNum(result.interestPerDay, 2)}
           />
           {method === "conformal" && result.compoundsAnnually && (
-            <p className="tool__note">{s.compoundsAnnuallyNote}</p>
+            <p className="nx-hint nx-hint--prose">{s.compoundsAnnuallyNote}</p>
           )}
           {result.impliedPaymentDate !== undefined && (
             <ResultRow label={s.impliedPaymentDate} value={formatDate(result.impliedPaymentDate)} />
@@ -441,12 +441,12 @@ export function LeaseTermDatesTool() {
       {result.ok && (
         <ToolSection title={s.results}>
           <ResultRow label={s.expiry} value={formatDate(result.expiry)} />
-          {result.expiryDayClamped && <p className="tool__note">{s.expiryClampedNote}</p>}
+          {result.expiryDayClamped && <p className="nx-hint nx-hint--prose">{s.expiryClampedNote}</p>}
           <ResultRow label={s.lastValidDay} value={formatDate(result.lastValidDay)} />
           {result.noticeDeadline !== undefined && (
             <ResultRow label={s.noticeDeadline} value={formatDate(result.noticeDeadline)} />
           )}
-          {result.noticeBeforeStart === true && <p className="tool__note">{s.noticeBeforeStartNote}</p>}
+          {result.noticeBeforeStart === true && <p className="nx-hint nx-hint--prose">{s.noticeBeforeStartNote}</p>}
           <ResultRow label={s.totalDays} value={String(result.totalDays)} />
           {result.installments.length > 0 && (
             <>
@@ -454,7 +454,7 @@ export function LeaseTermDatesTool() {
                 head={[s.colInstallmentNo, s.colInstallmentDate]}
                 rows={result.installments.map((date, i) => [String(i + 1), formatDate(date)])}
               />
-              <p className="tool__note">{s.installmentsAdvanceNote}</p>
+              <p className="nx-hint nx-hint--prose">{s.installmentsAdvanceNote}</p>
             </>
           )}
           <ToolFormula>{s.formula}</ToolFormula>
@@ -561,7 +561,7 @@ export function LoanAmortizationTool() {
 
       {result.ok && (
         <ToolSection title={s.results}>
-          <p className="tool__note">{s.conventionNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.conventionNote}</p>
           <ResultRow label={s.payment} value={proNum(result.payment, 2)} />
           <ResultRow label={s.totalPaid} value={proNum(result.totalPaid, 2)} />
           <ResultRow label={s.totalInterest} value={proNum(result.totalInterest, 2)} />
@@ -582,7 +582,7 @@ export function LoanAmortizationTool() {
           {effect?.kind === "closes" && (
             <>
               <ResultRow label={s.payoff} value={proNum(effect.payoff, 2)} />
-              <p className="tool__note">{s.closesNote}</p>
+              <p className="nx-hint nx-hint--prose">{s.closesNote}</p>
             </>
           )}
           {effect?.kind === "options" && (
@@ -811,7 +811,7 @@ export function ParcelPolygonAreaTool() {
           <ResultRow label={s.hectares} value={proUnit(proNum(result.hectares, 6), s.unitHa)} />
           <ResultRow label={s.perimeter} value={proUnit(proNum(result.perimeter, 2), s.unitM)} />
           <ResultRow label={s.orientation} value={orientationText} />
-          <p className="tool__note">{s.orientationNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.orientationNote}</p>
           <ToolTable
             head={[s.colEdge, s.colLength]}
             rows={result.edges.map((edge) => [
@@ -912,7 +912,7 @@ export function PlotDensityIndexTool() {
 
       {result.ok && (
         <ToolSection title={s.results}>
-          <p className="tool__note">{s.brgpScopeNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.brgpScopeNote}</p>
           {result.ratio !== undefined && <ResultRow label={s.ratio} value={proNum(result.ratio, 2)} />}
           {result.coverage !== undefined && (
             <ResultRow label={s.coverage} value={`${proNum(result.coverage, 2)}%`} />
@@ -1195,7 +1195,7 @@ export function RentEscalationTool() {
 
       {result.ok && (
         <ToolSection title={s.results}>
-          <p className="tool__note">{s.conventionNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.conventionNote}</p>
           <ToolTable
             head={[s.colPeriod, s.colRent]}
             rows={result.rents.map((rent, t) => [String(t + 1), proNum(rent, 2)])}
@@ -1408,12 +1408,12 @@ export function RentalYieldTool() {
             <ResultRow label={s.paybackYears} value={proNum(result.paybackYears, 2)} />
           )}
           {result.paybackYears === undefined && result.netOperatingIncome <= 0 && (
-            <p className="tool__note">{s.negativeNoiNote}</p>
+            <p className="nx-hint nx-hint--prose">{s.negativeNoiNote}</p>
           )}
           {result.valueAtCapRate !== undefined && (
             <ResultRow label={s.valueAtCapRate} value={proNum(result.valueAtCapRate, 2)} />
           )}
-          <p className="tool__note">{s.costsAreYoursNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.costsAreYoursNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1519,7 +1519,7 @@ export function RoomQuadAreaTool() {
           <ResultRow label={s.deviationFrom90} value={`${proNum(result.deviationFrom90, 2)}${s.unitDeg}`} />
           <ResultRow label={s.angleD} value={`${proNum(result.angleD, 2)}${s.unitDeg}`} />
           <ResultRow label={s.deviationFrom90AtD} value={`${proNum(result.deviationFrom90AtD, 2)}${s.unitDeg}`} />
-          <p className="tool__note">{s.reentrantNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.reentrantNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1664,12 +1664,12 @@ export function WallCeilingAreaTool() {
           <ResultRow label={s.wallsNet} value={proUnit(proNum(result.wallsNet, 2), s.unitM2)} />
           <ResultRow label={s.wallsNetRoundingGap} value={proUnit(proNum(result.wallsNetRoundingGap, 2), s.unitM2)} />
           <ResultRow label={s.ceiling} value={proUnit(proNum(result.ceiling, 2), s.unitM2)} />
-          {!result.ceilingIncluded && <p className="tool__note">{s.ceilingNotIncludedNote}</p>}
+          {!result.ceilingIncluded && <p className="nx-hint nx-hint--prose">{s.ceilingNotIncludedNote}</p>}
           <ResultRow label={s.total} value={proUnit(proNum(result.total, 2), s.unitM2)} />
           {result.material !== undefined && (
             <>
               <ResultRow label={s.material} value={proNum(result.material, 2)} />
-              <p className="tool__note">{s.materialNote}</p>
+              <p className="nx-hint nx-hint--prose">{s.materialNote}</p>
             </>
           )}
           {result.packageCount !== undefined && (
@@ -1797,7 +1797,7 @@ export function WeightedAreaTool() {
 
       {result.ok && (
         <ToolSection title={s.results}>
-          <p className="tool__note">{s.coefficientNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.coefficientNote}</p>
           <ToolTable
             head={[s.colName, s.colArea, s.colCoefficient, s.colContribution]}
             rows={result.rows.map((row, i) => [
@@ -1917,7 +1917,7 @@ export function CostAllocationTool() {
           />
           <ResultRow label={s.checkSum} value={proNum(result.checkSum, 2)} />
           <ResultRow label={s.remainderUnits} value={String(result.remainderUnits)} />
-          <p className="tool__note">{s.remainderRuleNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.remainderRuleNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}

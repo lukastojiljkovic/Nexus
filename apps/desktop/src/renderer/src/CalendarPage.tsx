@@ -1584,7 +1584,7 @@ className="nx-segmented__option cal__source"
           unaffected by an overlay fetch failing — the guests just say why
           they are missing. */}
       {overlayFailed && overlayOn && (
-        <p className="app__muted" role="status">
+        <p className="nx-hint" role="status">
           {strings.calendar.overlay.loadError}
         </p>
       )}

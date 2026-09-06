@@ -439,7 +439,7 @@ export function AxleLoadDistributionTool() {
       )}
 
       <ToolSection title={s.targetTitle}>
-        <p className="tool__note">{s.targetHint}</p>
+        <p className="nx-hint nx-hint--prose">{s.targetHint}</p>
         <ToolInput label={s.itemIndex} hint={s.itemIndexHint} value={itemIndex} onChange={setItemIndex} />
         <ToolInput
           label={mode === "rigid" ? s.targetRear : s.targetBogie}
@@ -450,7 +450,7 @@ export function AxleLoadDistributionTool() {
           <>
             <ResultRow label={s.targetDistance} value={m(target.distance)} />
             <ResultRow label={s.targetShift} value={m(target.shift)} />
-            {target.distanceOutOfBounds && <p className="tool__note">{s.targetOutOfBounds}</p>}
+            {target.distanceOutOfBounds && <p className="nx-hint nx-hint--prose">{s.targetOutOfBounds}</p>}
             {"newFront" in target && (
               <ResultRow label={s.newFront} value={kg(target.newFront)} />
             )}
@@ -604,7 +604,7 @@ export function CargoCentreOfGravityTool() {
           {result.halfTrackOverHeight !== undefined && (
             <>
               <ResultRow label={s.geometricRatio} value={proNum(result.halfTrackOverHeight, 4)} />
-              <p className="tool__note">{s.geometricRatioNote}</p>
+              <p className="nx-hint nx-hint--prose">{s.geometricRatioNote}</p>
             </>
           )}
           {result.combined !== undefined && (
@@ -1105,9 +1105,9 @@ export function DrivingHoursPlannerTool() {
           />
           <ResultRow label={s.continuousLimitReachedAt} value={clockLabel(result.continuousLimitReachedAt)} />
           <ResultRow label={s.dailyLimitReachedAt} value={clockLabel(result.dailyLimitReachedAt)} />
-          {result.truncated && <p className="tool__note">{s.truncatedNote}</p>}
+          {result.truncated && <p className="nx-hint nx-hint--prose">{s.truncatedNote}</p>}
           {result.unplacedOtherWork.length > 0 && (
-            <p className="tool__note">{s.unplacedNote}</p>
+            <p className="nx-hint nx-hint--prose">{s.unplacedNote}</p>
           )}
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
@@ -1233,7 +1233,7 @@ export function EtaWithBreaksTool() {
               {result.target.requiredSpeed !== undefined ? (
                 <ResultRow label={s.requiredSpeed} value={kmh(result.target.requiredSpeed)} />
               ) : (
-                <p className="tool__note">{s.noRequiredSpeed}</p>
+                <p className="nx-hint nx-hint--prose">{s.noRequiredSpeed}</p>
               )}
             </ToolSection>
           )}
@@ -1468,7 +1468,7 @@ export function GearRatioRoadSpeedTool() {
           <ResultRow label={s.totalRatio} value={proNum(result.totalRatio, 4)} />
           <ResultRow label={s.wheelRpm} value={rpm(result.wheelRpm)} />
           <ResultRow label={s.speed} value={kmh(result.speed)} />
-          <p className="tool__note">{s.speedNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.speedNote}</p>
           <ResultRow label={s.speedPer1000Rpm} value={kmh(result.speedPer1000Rpm)} />
           {result.rpmAtDesiredSpeed !== undefined && (
             <ResultRow label={s.rpmAtDesiredSpeed} value={rpm(result.rpmAtDesiredSpeed)} />
@@ -1680,7 +1680,7 @@ export function GvwPayloadTool() {
           {result.minCargoHeadroom !== undefined && (
             <ResultRow label={s.minCargoHeadroom} value={kg(result.minCargoHeadroom)} />
           )}
-          <p className="tool__note">{s.densityNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.densityNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1762,7 +1762,7 @@ export function LoadLashingForceTool() {
     <ToolSection title={label} key={label}>
       <ResultRow label={s.drivingForce} value={daN(dir.drivingForce)} />
       <ResultRow label={s.remainingForce} value={`${daN(dir.remainingForce)} / ${kN(dir.remainingForceKn)}`} />
-      {dir.remainingForce <= 0 && <p className="tool__note">{s.noRemainingForce}</p>}
+      {dir.remainingForce <= 0 && <p className="nx-hint nx-hint--prose">{s.noRemainingForce}</p>}
       {dir.quotient !== undefined && <ResultRow label={s.quotient} value={proNum(dir.quotient, 3)} />}
       {dir.setRatio !== undefined && <ResultRow label={s.setRatio} value={proNum(dir.setRatio, 3)} />}
     </ToolSection>
@@ -1840,7 +1840,7 @@ export function LoadLashingForceTool() {
           {direction(s.forward, result.forward)}
           {direction(s.backward, result.backward)}
           {direction(s.lateral, result.lateral)}
-          <p className="tool__note">{s.slidingOnlyNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.slidingOnlyNote}</p>
           <ToolFormula>{method === "topOver" ? s.formulaTopOver : method === "direct" ? s.formulaDirect : s.formulaBlocking}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1954,10 +1954,10 @@ export function LoadingSpaceUtilisationTool() {
           )}
           <ResultRow label={s.largestBasis} value={basisLabel(result.largestBasis)} />
           {result.lines.some((line) => line.widerThanSpace) && (
-            <p className="tool__note">{s.widerNote}</p>
+            <p className="nx-hint nx-hint--prose">{s.widerNote}</p>
           )}
           {result.lines.some((line) => line.tallerThanSpace) && (
-            <p className="tool__note">{s.tallerNote}</p>
+            <p className="nx-hint nx-hint--prose">{s.tallerNote}</p>
           )}
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
@@ -2106,18 +2106,18 @@ export function PalletLoadPlanTool() {
 
       {result.ok && (
         <ToolSection title={s.results}>
-          <p className="tool__note">{s.geometryOnlyNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.geometryOnlyNote}</p>
           {layout(s.lengthwise, result.lengthwise)}
           {layout(s.crosswise, result.crosswise)}
           {result.combined !== undefined && (
             <>
               {layout(s.combined, result.combined)}
               <ResultRow label={s.combinedBands} value={`${result.combinedLengthwiseBands} + ${result.combinedCrosswiseBands}`} />
-              <p className="tool__note">{s.combinedNote}</p>
+              <p className="nx-hint nx-hint--prose">{s.combinedNote}</p>
             </>
           )}
           <ResultRow label={s.layers} value={String(result.layers)} />
-          {result.layers === 0 && <p className="tool__note">{s.zeroLayersNote}</p>}
+          {result.layers === 0 && <p className="nx-hint nx-hint--prose">{s.zeroLayersNote}</p>}
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -2227,7 +2227,7 @@ export function ReeferFuelConsumptionTool() {
           <ResultRow label={s.litres} value={l(result.litres)} />
           <ResultRow label={s.hours} value={`${proNum(result.hours, 1)} ${s.unitH}`} />
           {result.omittedModes.length > 0 && (
-            <p className="tool__note">
+            <p className="nx-hint nx-hint--prose">
               {s.omittedNote} {result.omittedModes.map((m) => `${modeLabel(m.mode)} (${proNum(m.hours, 1)} ${s.unitH})`).join(", ")}
             </p>
           )}
@@ -2412,7 +2412,7 @@ export function ServiceIntervalKmHoursTool() {
           {result.hoursIntervalInKm !== undefined && (
             <ResultRow label={s.hoursIntervalInKm} value={proUnit(proNum(result.hoursIntervalInKm, 1), s.unitKm)} />
           )}
-          <p className="tool__note">{s.averagesNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.averagesNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -2529,13 +2529,13 @@ export function SpeedometerTyreDeviationTool() {
             label={s.replacementCircumference}
             value={`${mm(result.replacementCircumference)} (${result.replacementFromMeasurement ? s.sourceMeasured : s.sourceGeometry})`}
           />
-          {result.mixedSource && <p className="tool__note">{s.mixedSourceNote}</p>}
+          {result.mixedSource && <p className="nx-hint nx-hint--prose">{s.mixedSourceNote}</p>}
           <ResultRow label={s.currentRevsPerKm} value={proNum(result.currentRevsPerKm, 2)} />
           <ResultRow label={s.replacementRevsPerKm} value={proNum(result.replacementRevsPerKm, 2)} />
           <ResultRow label={s.circumferenceRatio} value={proNum(result.circumferenceRatio, 6)} />
           <ResultRow label={s.diameterChange} value={`${mm(result.diameterChange)} (${proNum(result.diameterChangeShare * 100, 2)} %)`} />
           <ResultRow label={s.axleHeightChange} value={mm(result.axleHeightChange)} />
-          <p className="tool__note">{s.axleHeightNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.axleHeightNote}</p>
           <ResultRow label={s.trueSpeed} value={kmh(result.trueSpeed)} />
           {result.indicatedForDesired !== undefined && (
             <ResultRow label={s.indicatedForDesired} value={kmh(result.indicatedForDesired)} />
@@ -2545,7 +2545,7 @@ export function SpeedometerTyreDeviationTool() {
           {result.wOverRatio !== undefined && (
             <ResultRow label={s.wOverRatio} value={proNum(result.wOverRatio, 4)} />
           )}
-          <p className="tool__note">{s.calibrationNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.calibrationNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -2692,11 +2692,11 @@ export function TankVolumeByLevelTool() {
           {result.mass !== undefined && <ResultRow label={s.mass} value={`${proNum(result.mass, 2)} ${s.unitKg}`} />}
           {result.value !== undefined && <ResultRow label={s.value} value={`${proNum(result.value, 2)} ${s.currency}`} />}
           <ResultRow label={s.sensitivity} value={proUnit(proNum(result.sensitivityLPerMm, 3), s.unitLmm)} />
-          {result.levelAboveCapacity && <p className="tool__note">{s.levelAboveCapacityNote}</p>}
+          {result.levelAboveCapacity && <p className="nx-hint nx-hint--prose">{s.levelAboveCapacityNote}</p>}
           {result.levelForTarget !== undefined && (
             <ResultRow label={s.levelForTarget} value={proUnit(proNum(result.levelForTarget, 0), s.unitMm)} />
           )}
-          <p className="tool__note">{s.calibrationNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.calibrationNote}</p>
           <ToolFormula>{kind === "lying-cylinder" ? s.formulaLying : s.formulaOther}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -2872,7 +2872,7 @@ export function TripCostQuoteTool() {
 
       {result.ok && (
         <ToolSection title={s.results}>
-          <p className="tool__note">{s.doubleCountingNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.doubleCountingNote}</p>
           <ResultRow label={s.totalKm} value={proUnit(proNum(result.totalKm, 0), s.unitKm)} />
           <ToolTable
             head={[s.colGroup, s.colAmount]}
@@ -2890,7 +2890,7 @@ export function TripCostQuoteTool() {
               [s.priceAtMarkup, result.priceAtMarkup === undefined ? "—" : rsd(result.priceAtMarkup)],
             ]}
           />
-          <p className="tool__note">{s.marginEquivalenceNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.marginEquivalenceNote}</p>
           <ResultRow label={s.priceBeforeVat} value={rsd(result.priceBeforeVat)} mono />
           {result.vat !== undefined && <ResultRow label={s.vat} value={rsd(result.vat)} />}
           {result.priceWithVat !== undefined && (
@@ -2917,7 +2917,7 @@ export function TripCostQuoteTool() {
           {result.pricePerTonne !== undefined && (
             <ResultRow label={s.pricePerTonne} value={rsd(result.pricePerTonne)} />
           )}
-          <p className="tool__note">{s.regulatedFiguresNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.regulatedFiguresNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}

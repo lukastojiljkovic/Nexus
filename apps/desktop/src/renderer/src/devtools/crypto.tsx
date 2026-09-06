@@ -497,7 +497,7 @@ function PasswordGenTool() {
                     mono={false}
                   />
                 </div>
-                <p className="tool__note">
+                <p className="nx-hint nx-hint--prose">
                   {fill(s.entropyNote, { size: passwordResult.value.alphabetSize })}
                 </p>
               </>
@@ -539,7 +539,7 @@ function PasswordGenTool() {
                     mono={false}
                   />
                 </div>
-                <p className="tool__note">
+                <p className="nx-hint nx-hint--prose">
                   {fill(s.entropyNoteWords, { size: passphraseResult.value.listSize })}
                 </p>
               </>
@@ -697,7 +697,7 @@ function JwtTool() {
             />
           </div>
           {decoded.value.validity.unreadable.length > 0 && (
-            <p className="tool__note">
+            <p className="nx-hint nx-hint--prose">
               {fill(s.unreadable, { claims: decoded.value.validity.unreadable.join(", ") })}
             </p>
           )}
@@ -776,7 +776,7 @@ function JwtTool() {
               )}
             </ToolSection>
           ) : (
-            <p className="tool__note">{unsupportedAlgorithmNote(s, decoded.value.support)}</p>
+            <p className="nx-hint nx-hint--prose">{unsupportedAlgorithmNote(s, decoded.value.support)}</p>
           )}
         </>
       )}
@@ -862,7 +862,7 @@ function HashingTool() {
         strings.devtools.crypto.shared.webCryptoFailure,
       )}
       {unavailableNotes.map((note) => (
-        <p key={note} className="tool__note">
+        <p key={note} className="nx-hint nx-hint--prose">
           {note}
         </p>
       ))}
@@ -1057,7 +1057,7 @@ function AesTool() {
           )}
         </>
       )}
-      <p className="tool__note">{s.ivNote}</p>
+      <p className="nx-hint nx-hint--prose">{s.ivNote}</p>
     </>
   );
 }
@@ -1101,7 +1101,7 @@ function RsaKeygenTool() {
 
   return (
     <>
-      <p className="tool__note">{s.warning}</p>
+      <p className="nx-hint nx-hint--prose">{s.warning}</p>
 
       <ToolSection title={s.sectionRsa}>
         <div className="tool__pair">
@@ -1122,7 +1122,7 @@ function RsaKeygenTool() {
           />
         </div>
         <ToolSelect label={s.hash} value={hash} options={hashOptions} onChange={setHash} />
-        {modulusBits === 4096 && <p className="tool__note">{s.working}</p>}
+        {modulusBits === 4096 && <p className="nx-hint nx-hint--prose">{s.working}</p>}
         <Button onClick={handleGenerateRsa} disabled={rsaState.pending}>
           {rsaState.pending ? strings.devtools.crypto.shared.working : s.generate}
         </Button>
@@ -1389,7 +1389,7 @@ function SignatureTool() {
       />
       {ecdsa ? (
         <>
-          <p className="tool__note">{s.ecdsaNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.ecdsaNote}</p>
           <Button onClick={handleGenerateEc} disabled={ecState.pending}>
             {ecState.pending ? strings.devtools.crypto.shared.working : s.generateEc}
           </Button>

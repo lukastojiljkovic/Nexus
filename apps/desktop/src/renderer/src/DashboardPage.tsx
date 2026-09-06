@@ -526,7 +526,7 @@ function DashboardSetDeleteDialog({ set, onConfirm, onCancel }: DashboardSetDele
           {s.title}
         </h2>
         <p className="recur-dialog__name">„{set.name}“</p>
-        <p id={questionId} className="recur-dialog__question">
+        <p id={questionId} className="nx-hint">
           {s.question}
         </p>
         <div className="recur-dialog__choices">
@@ -621,7 +621,7 @@ function WidgetGallery({
         </h2>
 
         {groups.length === 0 ? (
-          <p className="recur-dialog__question">{s.empty}</p>
+          <p className="nx-hint">{s.empty}</p>
         ) : (
           <div className="dash-gallery__body">
             {groups.map(({ manifest, widgets }) => (
@@ -1406,7 +1406,7 @@ export function DashboardPage({
       {(layoutFailed || actionFailed || setsActionFailed || defaultRestored) && (
         <div className="dash__notices">
           {layoutFailed && (
-            <p className="dash__status" role="alert">
+            <p className="nx-hint dash__status" role="alert">
               {s.layoutError}
               <Button size="sm" onClick={() => setLayoutAttempt((value) => value + 1)}>
                 {s.widget.retry}
@@ -1414,17 +1414,17 @@ export function DashboardPage({
             </p>
           )}
           {actionFailed && (
-            <p className="dash__status" role="alert">
+            <p className="nx-hint dash__status" role="alert">
               {s.edit.failed}
             </p>
           )}
           {setsActionFailed && (
-            <p className="dash__status" role="alert">
+            <p className="nx-hint dash__status" role="alert">
               {s.sets.failed}
             </p>
           )}
           {defaultRestored && (
-            <p className="dash__status" role="status">
+            <p className="nx-hint dash__status" role="status">
               {s.edit.defaultRestored}
             </p>
           )}

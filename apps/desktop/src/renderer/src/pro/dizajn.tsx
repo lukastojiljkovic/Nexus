@@ -1396,7 +1396,7 @@ export function FontMetricsTrimTool() {
           />
           <ResultRow label={s.marginTop} value={proNum(result.marginTop, 6)} />
           <ResultRow label={s.marginBottom} value={proNum(result.marginBottom, 6)} />
-          <p className="tool__note">{s.gapCancelsNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.gapCancelsNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1974,7 +1974,7 @@ export function PrintResolutionTool() {
           <ResultRow label={s.megapixels} value={proNum(result.megapixels, 2)} />
           <ResultRow label={s.bytes} value={proNum(result.bytes, 0)} />
           <ResultRow label={s.mebibytes} value={proNum(result.mebibytes, 2)} />
-          <p className="tool__note">{s.bytesNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.bytesNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}

@@ -570,13 +570,6 @@
    warning. Secondary tier and READABLE — it had been 11px, the tier that exists
    for eyebrows and counts, and the loan caveat is three lines of prose a person
    is expected to actually read before trusting the figure above it. */
-.tool__note {
-  margin: 0;
-  max-width: 64ch;
-  font-size: var(--nx-font-size-body-sm);
-  line-height: var(--nx-font-leading-normal);
-  color: var(--nx-text-muted);
-}
 .tool__error {
   margin: 0;
   font-size: var(--nx-font-size-body-sm);
@@ -597,13 +590,6 @@
    blokovi" says nothing until a sentence says it. Secondary tier, measured, and
    sitting under the title as a subtitle rather than as the first line of the
    tool. */
-.tool__surface-blurb {
-  margin: 0;
-  max-width: 64ch;
-  font-size: var(--nx-font-size-body-sm);
-  line-height: var(--nx-font-leading-normal);
-  color: var(--nx-text-muted);
-}
 
 /* Anything read character by character — hex, base64, a key, a path. On a
    `TextField` this class lands on the WRAPPER, which is what the component does

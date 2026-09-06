@@ -105,7 +105,7 @@ export function ProfileSwitchDialog({ profile, onVerified, onCancel }: ProfileSw
           {s.switchTitle}
         </h2>
         <p className="recur-dialog__name">„{profileDisplayName(profile)}“</p>
-        <p id={questionId} className="recur-dialog__question">
+        <p id={questionId} className="nx-hint">
           {s.switchQuestion}
         </p>
         <form className="app__profile-dialog-form" onSubmit={(event) => void submit(event)}>
@@ -118,7 +118,7 @@ export function ProfileSwitchDialog({ profile, onVerified, onCancel }: ProfileSw
             onChange={(event) => setPasscode(event.target.value)}
           />
           {stillLocked && (
-            <p className="recur-dialog__question">
+            <p className="nx-hint">
               {strings.auth.unlock.retryPrefix} {formatCountdown(lockedForMs)}
             </p>
           )}

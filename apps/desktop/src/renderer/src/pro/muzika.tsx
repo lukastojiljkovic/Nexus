@@ -271,11 +271,11 @@ export function AudioLevelReferenceTool() {
           <ResultRow label={s.resultVrms} value={proUnit(proNum(result.vrms, 4), s.unitV)} />
           <ResultRow label={s.resultVpeak} value={proUnit(proNum(result.vpeak, 4), s.unitV)} />
           <ResultRow label={s.resultVpp} value={proUnit(proNum(result.vpp, 4), s.unitV)} />
-          <p className="tool__note">{s.peakNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.peakNote}</p>
           {result.dbm !== undefined && (
             <>
               <ResultRow label={s.resultDbm} value={proUnit(proNum(result.dbm, 3), s.unitDbm)} />
-              <p className="tool__note">{s.dbmNote}</p>
+              <p className="nx-hint nx-hint--prose">{s.dbmNote}</p>
             </>
           )}
           {result.dbfs !== undefined && (
@@ -689,7 +689,7 @@ export function CentsRatioTool() {
         <>
           <ToolInput label={s.frequencyA} value={frequencyAText} onChange={setFrequencyAText} />
           <ToolInput label={s.frequencyB} value={frequencyBText} onChange={setFrequencyBText} />
-          <p className="tool__note">{s.baseFrequencyFromA}</p>
+          <p className="nx-hint nx-hint--prose">{s.baseFrequencyFromA}</p>
         </>
       ) : (
         <>
@@ -715,7 +715,7 @@ export function CentsRatioTool() {
           <ResultRow label={s.resultCents} value={proUnit(proNum(result.cents, 3), s.unitCent)} />
           <ResultRow label={s.resultSemitones} value={proUnit(proNum(result.semitones, 4), s.unitSemitone)} />
           <ResultRow label={s.resultRatio} value={proNum(result.ratio, 6)} />
-          <p className="tool__note">{s.signNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.signNote}</p>
           {result.baseFrequency !== undefined && (
             <ResultRow
               label={s.resultBaseFrequency}
@@ -728,7 +728,7 @@ export function CentsRatioTool() {
           {result.beatHz !== undefined && (
             <>
               <ResultRow label={s.resultBeatHz} value={proUnit(proNum(result.beatHz, 3), s.unitHz)} />
-              <p className="tool__note">{s.beatNote}</p>
+              <p className="nx-hint nx-hint--prose">{s.beatNote}</p>
             </>
           )}
           <ToolFormula>{s.formula}</ToolFormula>
@@ -837,7 +837,7 @@ export function CompressorCurveTool() {
               value={proUnit(proNum(result.makeupToReference, 3), s.unitDb)}
             />
           )}
-          <p className="tool__note">{s.scopeNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.scopeNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -949,7 +949,7 @@ export function DecibelRatioTool() {
       {sum.ok && (
         <ToolSection title={s.resultsSum}>
           <ResultRow label={s.resultSum} value={proUnit(proNum(sum.sum, 4), s.unitDb)} />
-          <p className="tool__note">{s.sumNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.sumNote}</p>
           <ToolTable
             head={[s.colLevel, s.colShare]}
             rows={sum.shares.map((share) => [proNum(share.level, 2), proNum(share.percent, 2)])}
@@ -1114,7 +1114,7 @@ export function NoteFrequencyTool() {
           <ResultRow label={s.resultFlatName} value={result.flatName ?? "—"} />
           <ResultRow label={s.resultMidi} value={result.midi} />
           <ResultRow label={s.resultFrequency} value={proUnit(proNum(result.frequency, 3), s.unitHz)} />
-          {result.outsideMidiRange && <p className="tool__note">{s.outsideMidiRangeNote}</p>}
+          {result.outsideMidiRange && <p className="nx-hint nx-hint--prose">{s.outsideMidiRangeNote}</p>}
           {nearest !== undefined && (
             <>
               <ResultRow label={s.resultMidiExact} value={proNum(nearest.midiExact, 4)} />
@@ -1303,7 +1303,7 @@ export function PcmFileSizeTool() {
               <ResultRow label={s.resultGigabytes} value={proUnit(proNum(result.gigabytes, 3), s.unitGb)} />
               <ResultRow label={s.resultMebibytes} value={proUnit(proNum(result.mebibytes, 3), s.unitMib)} />
               <ResultRow label={s.resultGibibytes} value={proUnit(proNum(result.gibibytes, 3), s.unitGib)} />
-              {result.exceedsWav32BitRange && <p className="tool__note">{s.exceedsNote}</p>}
+              {result.exceedsWav32BitRange && <p className="nx-hint nx-hint--prose">{s.exceedsNote}</p>}
               <ResultRow label={s.resultBitrate} value={proUnit(proNum(result.bitrateKbps, 3), s.unitKbps)} />
             </>
           ) : (
@@ -1431,8 +1431,8 @@ export function ReverbTimeTool() {
               band.eyring === undefined ? s.noValue : proNum(band.eyring, 3),
             ])}
           />
-          <p className="tool__note">{s.sabineLimitNote}</p>
-          <p className="tool__note">{s.divergenceNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.sabineLimitNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.divergenceNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1535,7 +1535,7 @@ export function RoomModesTool() {
               mode.spacing === undefined ? "—" : proNum(mode.spacing, 2),
             ])}
           />
-          <p className="tool__note">{s.idealizationNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.idealizationNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1639,7 +1639,7 @@ export function SampleBufferLatencyTool() {
           {buffer.roundTripMs !== undefined && (
             <ResultRow label={s.resultRoundTripMs} value={proUnit(proNum(buffer.roundTripMs, 4), s.unitMs)} />
           )}
-          <p className="tool__note">{s.theoreticalNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.theoreticalNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1676,7 +1676,7 @@ export function SampleBufferLatencyTool() {
           {"samples" in convertResult ? (
             <>
               <ResultRow label={s.resultSamples} value={proNum(convertResult.samples, 4)} />
-              {!convertResult.wholeSamples && <p className="tool__note">{s.wholeSamplesNote}</p>}
+              {!convertResult.wholeSamples && <p className="nx-hint nx-hint--prose">{s.wholeSamplesNote}</p>}
             </>
           ) : (
             <ResultRow label={s.resultMilliseconds} value={proUnit(proNum(convertResult.milliseconds, 4), s.unitMs)} />
@@ -1894,7 +1894,7 @@ export function ScaleChordSpellerTool() {
             head={[s.colDegree, s.colNote, s.colSemitones]}
             rows={result.notes.map((note, index) => [String(index + 1), note.name ?? s.unspellableCell, String(note.semitones)])}
           />
-          {result.notes.some((note) => note.name === undefined) && <p className="tool__note">{s.unspellableNote}</p>}
+          {result.notes.some((note) => note.name === undefined) && <p className="nx-hint nx-hint--prose">{s.unspellableNote}</p>}
 
           {scale !== undefined && (
             <ToolSection title={s.keySignatureTitle}>
@@ -1904,8 +1904,8 @@ export function ScaleChordSpellerTool() {
                 <>
                   <ResultRow label={s.resultSharps} value={scale.keySignature.sharps} />
                   <ResultRow label={s.resultFlats} value={scale.keySignature.flats} />
-                  {scale.keySignature.mixed && <p className="tool__note">{s.mixedNote}</p>}
-                  {scale.keySignatureIsRelative && <p className="tool__note">{s.relativeNote}</p>}
+                  {scale.keySignature.mixed && <p className="nx-hint nx-hint--prose">{s.mixedNote}</p>}
+                  {scale.keySignatureIsRelative && <p className="nx-hint nx-hint--prose">{s.relativeNote}</p>}
                 </>
               )}
             </ToolSection>
@@ -2174,7 +2174,7 @@ export function SpeakerLoadTool() {
               c.power === undefined ? "—" : proNum(c.power, 3),
             ])}
           />
-          <p className="tool__note">{s.modelNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.modelNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -2333,7 +2333,7 @@ export function SplDistanceTool() {
               value={proUnit(proNum(result.secondDifferenceDb, 2), s.unitDb)}
             />
           )}
-          <p className="tool__note">{s.freeFieldNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.freeFieldNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -2583,14 +2583,14 @@ export function TranspositionTool() {
             <>
               <ResultRow label={s.resultText} value={result.text} />
               <ResultRow label={s.resultUnspellable} value={result.unspellable} />
-              {result.unspellable > 0 && <p className="tool__note">{s.unspellableNote}</p>}
+              {result.unspellable > 0 && <p className="nx-hint nx-hint--prose">{s.unspellableNote}</p>}
             </>
           ) : (
             <>
               <ResultRow label={s.resultName} value={result.name ?? "—"} />
               <ResultRow label={s.resultOctave} value={result.octave} />
               <ResultRow label={s.resultMidi} value={result.midi} />
-              {result.name === undefined && <p className="tool__note">{s.pitchUnspellableNote}</p>}
+              {result.name === undefined && <p className="nx-hint nx-hint--prose">{s.pitchUnspellableNote}</p>}
             </>
           )}
           <ToolFormula>{s.formula}</ToolFormula>
@@ -2625,7 +2625,7 @@ export function TranspositionTool() {
           <>
             <ResultRow label={s.resultKeyTonic} value={keyResult.tonic ?? "—"} />
             {keyResult.signature === undefined ? (
-              <p className="tool__note">{s.keyUnspellableNote}</p>
+              <p className="nx-hint nx-hint--prose">{s.keyUnspellableNote}</p>
             ) : (
               <>
                 <ResultRow label={s.resultKeySharps} value={keyResult.signature.sharps} />
@@ -2769,7 +2769,7 @@ export function VarispeedRepitchTool() {
               <ResultRow label={s.resultLengthFormatted} value={result.lengthFormatted ?? "—"} />
             </>
           )}
-          <p className="tool__note">{s.speedNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.speedNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}

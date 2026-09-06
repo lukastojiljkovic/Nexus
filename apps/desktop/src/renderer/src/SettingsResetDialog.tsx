@@ -63,7 +63,7 @@ export function SettingsResetDialog({
           {s.title}
         </h2>
         <p className="recur-dialog__name">„{sectionTitle}“</p>
-        <p id={questionId} className="recur-dialog__question">
+        <p id={questionId} className="nx-hint">
           {s.question}
         </p>
         <div className="recur-dialog__choices">

@@ -361,11 +361,6 @@
   -webkit-line-clamp: 2;
   overflow: hidden;
 }
-.canv-card__detail {
-  margin: 0;
-  font-size: var(--nx-font-size-body-sm);
-  color: var(--nx-text-muted);
-}
 /* Pinned to the bottom so every card's action sits on the same line, whatever
    the title's height turned out to be. */
 .canv-card__actions {

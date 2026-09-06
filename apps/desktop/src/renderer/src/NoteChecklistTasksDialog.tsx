@@ -103,17 +103,17 @@ export function NoteChecklistTasksDialog({
           {s.title}
         </h2>
         <p className="recur-dialog__name">„{noteTitle}“</p>
-        <p id={questionId} className="recur-dialog__question">
+        <p id={questionId} className="nx-hint">
           {counted}. {s.question} {s.keepNote}
         </p>
         {lists === null ? (
-          <p className="recur-dialog__question">{strings.app.loading}</p>
+          <p className="nx-hint">{strings.app.loading}</p>
         ) : failed ? (
-          <p className="recur-dialog__question" role="alert">
+          <p className="nx-hint" role="alert">
             {s.loadError}
           </p>
         ) : lists.length === 0 ? (
-          <p className="recur-dialog__question">{s.noLists}</p>
+          <p className="nx-hint">{s.noLists}</p>
         ) : (
           // Focus lands here, not on „Pretvori“: the list is what there is to
           // answer, and it is answerable from the keyboard without Enter

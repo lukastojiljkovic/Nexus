@@ -113,7 +113,7 @@ export function RecoveryKitPanel({ code, onContinue }: RecoveryKitPanelProps) {
   return (
     <div className="auth__recovery-kit">
       <h1 className="auth__title">{strings.auth.recoveryKit.title}</h1>
-      <p className="auth__note">{strings.auth.recoveryKit.description}</p>
+      <p className="nx-hint nx-hint--prose">{strings.auth.recoveryKit.description}</p>
       <pre className="auth__code">{code}</pre>
       <Button size="sm" onClick={() => void copy()}>
         {copied ? strings.auth.recoveryKit.copied : strings.auth.recoveryKit.copy}
@@ -157,7 +157,7 @@ function CreateForm({ status, additional, onBack, onCreated }: CreateFormProps) 
     return (
       <>
         <h1 className="auth__title">{strings.auth.keystoreUnavailable.title}</h1>
-        <p className="auth__note">{strings.auth.keystoreUnavailable.description}</p>
+        <p className="nx-hint nx-hint--prose">{strings.auth.keystoreUnavailable.description}</p>
         {additional && (
           <Button variant="ghost" size="sm" type="button" onClick={onBack}>
             {strings.auth.picker.back}
@@ -206,7 +206,7 @@ function CreateForm({ status, additional, onBack, onCreated }: CreateFormProps) 
       <h1 className="auth__title">
         {additional ? strings.auth.create.additionalTitle : strings.auth.create.title}
       </h1>
-      <p className="auth__note">
+      <p className="nx-hint nx-hint--prose">
         {additional ? strings.auth.create.additionalIntro : strings.auth.create.intro}
       </p>
       <TextField
@@ -218,7 +218,7 @@ function CreateForm({ status, additional, onBack, onCreated }: CreateFormProps) 
         required
         onChange={(event) => setLabel(event.target.value)}
       />
-      <p className="auth__note">{strings.auth.create.labelNote}</p>
+      <p className="nx-hint nx-hint--prose">{strings.auth.create.labelNote}</p>
       <TextField
         type="password"
         label={strings.auth.create.passcodeLabel}
@@ -235,7 +235,7 @@ function CreateForm({ status, additional, onBack, onCreated }: CreateFormProps) 
         required
         onChange={(event) => setConfirm(event.target.value)}
       />
-      <p className="auth__note">{strings.auth.create.note}</p>
+      <p className="nx-hint nx-hint--prose">{strings.auth.create.note}</p>
       {error != null && (
         <p className="auth__error" role="alert">
           {error}
@@ -357,10 +357,10 @@ function AccountPicker({ status, onStatusChange, onSelected, onAdd, onEmptied }:
         }}
       >
         <h1 className="auth__title">{strings.auth.picker.deleteTitle}</h1>
-        <p className="auth__note">
+        <p className="nx-hint nx-hint--prose">
           <strong>{deleting.label}</strong> — {strings.auth.picker.deleteWarning}
         </p>
-        <p className="auth__note">{strings.auth.picker.deleteExportNote}</p>
+        <p className="nx-hint nx-hint--prose">{strings.auth.picker.deleteExportNote}</p>
         <TextField
           label={strings.auth.picker.deleteConfirmLabel}
           placeholder={strings.auth.picker.deleteConfirmPlaceholder}
@@ -400,7 +400,7 @@ function AccountPicker({ status, onStatusChange, onSelected, onAdd, onEmptied }:
         }}
       >
         <h1 className="auth__title">{strings.auth.picker.rename}</h1>
-        <p className="auth__note">{strings.auth.create.labelNote}</p>
+        <p className="nx-hint nx-hint--prose">{strings.auth.create.labelNote}</p>
         <TextField
           label={strings.auth.picker.renameFieldLabel}
           value={draftLabel}
@@ -427,7 +427,7 @@ function AccountPicker({ status, onStatusChange, onSelected, onAdd, onEmptied }:
   return (
     <div className="auth__form">
       <h1 className="auth__title">{strings.auth.picker.title}</h1>
-      <p className="auth__note">{strings.auth.picker.description}</p>
+      <p className="nx-hint nx-hint--prose">{strings.auth.picker.description}</p>
       <div>
         {status.accounts.map((account) => (
           <ListRow
@@ -465,7 +465,7 @@ function AccountPicker({ status, onStatusChange, onSelected, onAdd, onEmptied }:
                 gap does the spacing. */}
             <Button disabled={busy} onClick={() => void select(account.id)}>
               {account.label}
-              <span className="auth__note">
+              <span className="nx-hint nx-hint--prose">
                 {accountStateLine(account, status.keystoreAvailable)}
               </span>
             </Button>
@@ -550,7 +550,7 @@ function UnlockForm({
   return (
     <form className="auth__form" onSubmit={(event) => void submit(event)}>
       <h1 className="auth__title">{accountLabel ?? strings.auth.unlock.title}</h1>
-      <p className="auth__note">{strings.auth.unlock.description}</p>
+      <p className="nx-hint nx-hint--prose">{strings.auth.unlock.description}</p>
       <TextField
         type="password"
         label={strings.auth.unlock.passcodeLabel}
@@ -562,7 +562,7 @@ function UnlockForm({
         onChange={(event) => setPasscode(event.target.value)}
       />
       {stillLocked && (
-        <p className="auth__note">
+        <p className="nx-hint nx-hint--prose">
           {strings.auth.unlock.retryPrefix} {formatCountdown(lockedForMs)}
         </p>
       )}
@@ -632,7 +632,7 @@ function RecoveryForm({ forced, onBack, onUnlocked }: RecoveryFormProps) {
   return (
     <form className="auth__form" onSubmit={(event) => void submit(event)}>
       <h1 className="auth__title">{strings.auth.recovery.title}</h1>
-      <p className="auth__note">
+      <p className="nx-hint nx-hint--prose">
         {forced ? strings.auth.recovery.descriptionOtherDevice : strings.auth.recovery.descriptionForgot}
       </p>
       <TextField

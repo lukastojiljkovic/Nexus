@@ -1280,7 +1280,7 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
                 {strings.notes.checklistTasks.error}
               </p>
             ) : (
-              <p className="note__list-notice" role="status">
+              <p className="nx-hint note__list-notice" role="status">
                 {checklistNotice.kind === "empty"
                   ? strings.notes.checklistTasks.empty
                   : formatChecklistResult(checklistNotice.result)}

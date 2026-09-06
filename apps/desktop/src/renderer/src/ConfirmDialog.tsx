@@ -75,10 +75,10 @@ export function ConfirmDialog({
           {title}
         </h2>
         {name != null && <p className="recur-dialog__name">„{name}“</p>}
-        <p id={questionId} className="recur-dialog__question">
+        <p id={questionId} className="nx-hint">
           {question}
         </p>
-        {note != null && <p className="recur-dialog__question">{note}</p>}
+        {note != null && <p className="nx-hint">{note}</p>}
         <div className="recur-dialog__choices">
           <Button className="recur-dialog__choice" onClick={onConfirm}>
             {confirmLabel}

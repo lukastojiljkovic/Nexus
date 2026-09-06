@@ -185,11 +185,11 @@ export function NotificationCenter({ profileId, onNavigate }: NotificationCenter
         <div className="ntf__panel" role="region" aria-label={s.bellLabel}>
           <div className="ntf__list">
             {failed ? (
-              <p className="ntf__quiet" role="alert">
+              <p className="nx-hint ntf__quiet" role="alert">
                 {s.loadError}
               </p>
             ) : notifications === null ? (
-              <p className="ntf__quiet">{strings.app.loading}</p>
+              <p className="nx-hint ntf__quiet">{strings.app.loading}</p>
             ) : centerRows.length === 0 ? (
               <EmptyState variant="inline" title={s.empty} />
             ) : (
@@ -204,7 +204,7 @@ export function NotificationCenter({ profileId, onNavigate }: NotificationCenter
                       <span className="ntf__row-title">{notification.title}</span>
                       <Chip>{s.sourceTag[notification.source]}</Chip>
                     </div>
-                    <p className="ntf__row-body">{notification.body}</p>
+                    <p className="nx-hint">{notification.body}</p>
                     <div className="ntf__row-meta">
                       <span>{formatNotificationWhen(notification.deliveredAt)}</span>
                       {notification.status === "snoozed" && notification.snoozedUntil != null && (

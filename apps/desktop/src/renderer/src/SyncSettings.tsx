@@ -282,7 +282,7 @@ export function SyncSection({ hits }: SyncSectionProps) {
   }
 
   if (loadFailed) return <p className="set__error">{s.error}</p>;
-  if (status === null) return <p className="app__muted">{strings.app.loading}</p>;
+  if (status === null) return <p className="nx-hint">{strings.app.loading}</p>;
 
   const card = syncCardState({ status, recoveryCode });
   const adopting = mode === "adopt";
@@ -292,7 +292,7 @@ export function SyncSection({ hits }: SyncSectionProps) {
     return (
       <div className="set__restore-block">
         <h3 className="nx-eyebrow set__module-group-title">{s.recoveryTitle}</h3>
-        <p className="app__description">{s.recoveryIntro}</p>
+        <p className="nx-hint">{s.recoveryIntro}</p>
         <pre className="auth__code">{card.code}</pre>
         <Button
           size="sm"
@@ -327,14 +327,14 @@ export function SyncSection({ hits }: SyncSectionProps) {
 
   return (
     <>
-      <p className="app__description">{s.description}</p>
+      <p className="nx-hint">{s.description}</p>
 
       {/* The house boolean row: name on the left, why-it-matters under it, the
           box on the trailing edge with every other control on the page. */}
       <div className="set__module-row">
         <div className="set__module-info">
           <span className={labelClass("set__module-name", hits.has("sync-cloud"))}>{s.cloudLabel}</span>
-          <span className="set__module-desc">{s.cloudHint}</span>
+          <span className="nx-hint">{s.cloudHint}</span>
         </div>
         <Checkbox
           checked={status.cloudEnabled}
@@ -343,9 +343,9 @@ export function SyncSection({ hits }: SyncSectionProps) {
           onChange={(event) => void toggleCloud(event.target.checked)}
         />
       </div>
-      {status.cloudRestartRequired && <p className="set__section-caption">{s.cloudRestart}</p>}
+      {status.cloudRestartRequired && <p className="nx-hint">{s.cloudRestart}</p>}
 
-      {card.kind === "unconfigured" && <p className="set__section-caption">{s.unconfigured}</p>}
+      {card.kind === "unconfigured" && <p className="nx-hint">{s.unconfigured}</p>}
 
       {/* One form, two modes. The four fields, the two hints and the whole
           submit discipline are identical between „turn sync on here" and „join
@@ -371,7 +371,7 @@ export function SyncSection({ hits }: SyncSectionProps) {
             >
               {adopting ? s.adoptTitle : s.enableTitle}
             </h3>
-            <p className="app__description">{adopting ? s.adoptIntro : s.enableIntro}</p>
+            <p className="nx-hint">{adopting ? s.adoptIntro : s.enableIntro}</p>
             <div className="set__security-form">
               <TextField
                 type="email"
@@ -416,9 +416,9 @@ export function SyncSection({ hits }: SyncSectionProps) {
                 onChange={(event) => setDeviceName(event.target.value)}
               />
             </div>
-            <p className="set__section-caption">{s.passwordHint}</p>
-            {adopting && <p className="set__section-caption">{s.recoveryCodeHint}</p>}
-            <p className="set__section-caption">{s.deviceNameHint}</p>
+            <p className="nx-hint">{s.passwordHint}</p>
+            {adopting && <p className="nx-hint">{s.recoveryCodeHint}</p>}
+            <p className="nx-hint">{s.deviceNameHint}</p>
             <Button
               type="submit"
               size="sm"
@@ -448,7 +448,7 @@ export function SyncSection({ hits }: SyncSectionProps) {
               >
                 {adopting ? s.enableTitle : s.adoptChoiceTitle}
               </span>
-              <span className="set__module-desc">
+              <span className="nx-hint">
                 {adopting ? s.enableIntro : s.adoptChoiceHint}
               </span>
             </div>
@@ -469,7 +469,7 @@ export function SyncSection({ hits }: SyncSectionProps) {
 
       {card.kind === "enabled" && (
         <div className="set__restore-block">
-          <p className="set__section-caption">{s.statusOn}</p>
+          <p className="nx-hint">{s.statusOn}</p>
           <dl className="app__facts">
             <div>
               <dt>{s.accountLabel}</dt>
@@ -486,9 +486,9 @@ export function SyncSection({ hits }: SyncSectionProps) {
               <dd>{formatArchiveInstant(card.account.enabledAt)}</dd>
             </div>
           </dl>
-          {resuming && <p className="set__section-caption">{s.connecting}</p>}
+          {resuming && <p className="nx-hint">{s.connecting}</p>}
           {!card.signedIn && !resuming && !card.reconnectable && (
-            <p className="set__section-caption">{s.signedOut}</p>
+            <p className="nx-hint">{s.signedOut}</p>
           )}
 
           {card.reconnectable && !resuming && (
@@ -504,7 +504,7 @@ export function SyncSection({ hits }: SyncSectionProps) {
               >
                 {s.reconnectTitle}
               </h3>
-              <p className="app__description">{s.reconnectIntro}</p>
+              <p className="nx-hint">{s.reconnectIntro}</p>
               <div className="set__security-form">
                 <TextField
                   type="password"
@@ -522,7 +522,7 @@ export function SyncSection({ hits }: SyncSectionProps) {
                   onChange={(event) => setDeviceName(event.target.value)}
                 />
               </div>
-              <p className="set__section-caption">{s.reconnectPasswordHint}</p>
+              <p className="nx-hint">{s.reconnectPasswordHint}</p>
               <Button
                 type="submit"
                 size="sm"
@@ -539,7 +539,7 @@ export function SyncSection({ hits }: SyncSectionProps) {
           <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("sync-disconnect"))}>
             {s.disconnectTitle}
           </h3>
-          <p className="app__description">{s.disconnectWarning}</p>
+          <p className="nx-hint">{s.disconnectWarning}</p>
           <Button size="sm" disabled={busy} onClick={() => setConfirmingDisconnect(true)}>
             {s.disconnect}
           </Button>
@@ -647,14 +647,14 @@ function SyncActivityPanel({ hits }: SyncSectionProps) {
       <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("sync-activity"))}>
         {s.title}
       </h3>
-      <p className="app__description">{headline}</p>
+      <p className="nx-hint">{headline}</p>
       {activity.phase === "waiting" && activity.nextRunAt !== null && (
-        <p className="set__section-caption">
+        <p className="nx-hint">
           {fill(s.nextAt, { time: formatClockTime(new Date(activity.nextRunAt)) })}
         </p>
       )}
       {activity.phase !== "waiting" && activity.lastRunAt !== null && (
-        <p className="set__section-caption">
+        <p className="nx-hint">
           {fill(s.lastAt, { time: formatClockTime(new Date(activity.lastRunAt)) })}
         </p>
       )}

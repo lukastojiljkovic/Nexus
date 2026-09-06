@@ -97,7 +97,7 @@ export function ToolField({
       {error !== undefined ? (
         <p className="tool__error">{error}</p>
       ) : hint !== undefined ? (
-        <p className="tool__note">{hint}</p>
+        <p className="nx-hint nx-hint--prose">{hint}</p>
       ) : null}
     </div>
   );
@@ -245,7 +245,7 @@ export function ToolSelect<T extends string>({
           </option>
         ))}
       </Select>
-      {hint !== undefined && <p className="tool__note">{hint}</p>}
+      {hint !== undefined && <p className="nx-hint nx-hint--prose">{hint}</p>}
     </div>
   );
 }
@@ -333,7 +333,7 @@ export function ToolOutput({
         <CopyButton value={value} />
       </div>
       {value === "" && empty !== undefined ? (
-        <p className="tool__note">{empty}</p>
+        <p className="nx-hint nx-hint--prose">{empty}</p>
       ) : (
         <output
           className={`tool__mono tool__output-body${multiline ? " tool__output-body--block" : ""}`}
@@ -458,7 +458,7 @@ export function ToolTable({
         </table>
       </div>
       {rows.length > shown.length && (
-        <p className="tool__note">
+        <p className="nx-hint nx-hint--prose">
           {fill(strings.pro.common.tableCapped, {
             shown: shown.length,
             total: rows.length,

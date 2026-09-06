@@ -518,7 +518,7 @@ export function FilesPage({ profileId, onOpenOwner }: FilesPageProps) {
         <LoadingState label={strings.app.loading} rows={6} />
       ) : state.status === "failed" ? (
         <div className="doc__failure" role="alert">
-          <p className="doc__error">{s.error}</p>
+          <p className="nx-hint">{s.error}</p>
           <Button size="sm" onClick={() => setAttempt((value) => value + 1)}>
             {s.retry}
           </Button>

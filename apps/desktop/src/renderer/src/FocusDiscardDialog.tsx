@@ -56,7 +56,7 @@ export function FocusDiscardDialog({ onConfirm, onCancel }: FocusDiscardDialogPr
         <h2 id={titleId} className="recur-dialog__title">
           {s.title}
         </h2>
-        <p id={questionId} className="recur-dialog__question">
+        <p id={questionId} className="nx-hint">
           {s.question}
         </p>
         <div className="recur-dialog__choices">

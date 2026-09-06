@@ -179,7 +179,7 @@ export function BackwardsTimelineTool() {
           />
           <ResultRow label={s.totalLabel} value={result.totalLabel} />
           <ResultRow label={s.jobStart} value={timelineMomentText(result.start, s)} />
-          <p className="tool__note">{s.wallClockNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.wallClockNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -383,7 +383,7 @@ export function BakersPercentageTool() {
           <ResultRow label={s.flourWeight} value={proUnit(proNum(result.flourWeight, 2), s.unitG)} />
           <ResultRow label={s.doughMass} value={proUnit(proNum(result.doughMass, 2), s.unitG)} />
           <ResultRow label={s.hydration} value={`${proNum(result.hydration, 1)}%`} />
-          <p className="tool__note">{s.hydrationNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.hydrationNote}</p>
           {result.rawPieceMass !== undefined && (
             <ResultRow label={s.rawPieceMass} value={proUnit(proNum(result.rawPieceMass, 2), s.unitG)} />
           )}
@@ -630,7 +630,7 @@ export function CoffeeExtractionTool() {
           {result.weighingShortfall !== undefined && (
             <>
               <ResultRow label={s.weighingShortfall} value={proUnit(proNum(result.weighingShortfall, 1), s.unitG)} />
-              <p className="tool__note">{s.weighingShortfallNote}</p>
+              <p className="nx-hint nx-hint--prose">{s.weighingShortfallNote}</p>
             </>
           )}
           {result.waterForTarget !== undefined && (
@@ -787,7 +787,7 @@ export function DoughWaterTempTool() {
           {result.waterTemp !== undefined && (
             <>
               <ResultRow label={s.waterTemp} value={proUnit(proNum(result.waterTemp, 1), s.unitC)} />
-              {result.belowFreezingPoint && <p className="tool__note">{s.belowFreezingNote}</p>}
+              {result.belowFreezingPoint && <p className="nx-hint nx-hint--prose">{s.belowFreezingNote}</p>}
             </>
           )}
           {result.frictionFactor !== undefined && mode === "frictionFactor" && (
@@ -1076,7 +1076,7 @@ export function LaminationLayersTool() {
               ])}
             />
           )}
-          <p className="tool__note">{s.constantWidthNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.constantWidthNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1415,7 +1415,7 @@ export function NutritionPerPortionTool() {
             })}
             prose={[0]}
           />
-          <p className="tool__note">{s.notADeclarationNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.notADeclarationNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1675,7 +1675,7 @@ export function PanAreaVolumeTool() {
           {result.massB !== undefined && (
             <>
               <ResultRow label={s.massB} value={proUnit(proNum(result.massB, 1), s.unitG)} />
-              <p className="tool__note">{s.massBNote}</p>
+              <p className="nx-hint nx-hint--prose">{s.massBNote}</p>
             </>
           )}
           {result.volumeAtHeight !== undefined && (
@@ -1684,7 +1684,7 @@ export function PanAreaVolumeTool() {
           {result.heightForVolume !== undefined && (
             <ResultRow label={s.heightForVolume} value={proUnit(proNum(result.heightForVolume, 2), s.unitCm)} />
           )}
-          <p className="tool__note">{s.straightWalledNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.straightWalledNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1845,7 +1845,7 @@ export function PlateCostTool() {
           <ResultRow label={s.total} value={proUnit(proNum(result.total, 2), s.unitCurrency)} />
           <ResultRow label={s.costPerPortion} value={proUnit(proNum(result.costPerPortion, 2), s.unitCurrency)} />
           <ResultRow label={s.sellingPrice} value={proUnit(proNum(result.sellingPrice, 2), s.unitCurrency)} />
-          <p className="tool__note">{s.netPriceNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.netPriceNote}</p>
           <ResultRow label={s.margin} value={proUnit(proNum(result.margin, 2), s.unitCurrency)} />
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
@@ -2359,7 +2359,7 @@ export function SolutionConcentrationTool() {
       {needsMass && <ToolInput label={s.mass} value={massText} onChange={setMassText} />}
       {mode === "blend" && <ToolInput label={s.targetMass} value={targetMassText} onChange={setTargetMassText} />}
       <ToolInput label={s.concentrationLimit} hint={s.limitHint} value={concentrationLimitText} onChange={setConcentrationLimitText} />
-      {mode === "concentrate" && <p className="tool__note">{s.concentrateNote}</p>}
+      {mode === "concentrate" && <p className="nx-hint nx-hint--prose">{s.concentrateNote}</p>}
 
       {failure !== undefined && <ToolFailure>{failure}</ToolFailure>}
 
@@ -2540,7 +2540,7 @@ export function UsCustomaryKitchenUnitsTool() {
                 : proUnit(proNum(result.value, to === "l" || to === "kg" ? 4 : 2), targetUnitText)
             }
           />
-          <p className="tool__note">
+          <p className="nx-hint nx-hint--prose">
             {result.factor === undefined
               ? s.relationTemperature
               : `${s.relationPrefix} 1 ${usSourceLabel(from, s)} = ${proNum(result.factor, 6)} ${result.dimension === "mass" ? s.unitG : s.unitMl}`}
@@ -2657,7 +2657,7 @@ export function YieldTrimCookTool() {
           )}
           <ResultRow label={s.combinedYield} value={`${proNum(result.combinedYield, 2)}%`} />
           <ResultRow label={s.combinedLossPercent} value={`${proNum(result.combinedLossPercent, 2)}%`} />
-          <p className="tool__note">{s.yieldLossPairNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.yieldLossPairNote}</p>
           {result.portions !== undefined && <ResultRow label={s.portions} value={proNum(result.portions, 0)} />}
           {result.leftover !== undefined && (
             <ResultRow label={s.leftover} value={proUnit(proNum(result.leftover, 2), s.unitG)} />

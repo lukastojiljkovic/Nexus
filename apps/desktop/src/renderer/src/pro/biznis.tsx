@@ -463,10 +463,10 @@ export function ChainedDiscountTool() {
           <ResultRow label={s.finalPrice} value={proNum(result.finalPrice, 2)} />
           <ResultRow label={totalLabel} value={totalValue} />
           <ResultRow label={equivalentLabel} value={equivalentValue} />
-          <p className="tool__note">{s.orderNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.orderNote}</p>
           {/* factor = 0 means a 100 % step zeroed the price — read off core's
               own computed factor rather than re-scanning the typed steps. */}
-          {result.factor === 0 && <p className="tool__note">{s.fullStepNote}</p>}
+          {result.factor === 0 && <p className="nx-hint nx-hint--prose">{s.fullStepNote}</p>}
 
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
@@ -719,7 +719,7 @@ export function HourlyRateTargetTool() {
           <ResultRow label={s.hourlyRate} value={proNum(result.hourlyRate, 2)} />
           <ResultRow label={s.dayRate} value={proNum(result.dayRate, 2)} />
           <ResultRow label={s.monthlyRevenue} value={proNum(result.monthlyRevenue, 2)} />
-          <p className="tool__note">{s.revenueNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.revenueNote}</p>
 
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
@@ -986,7 +986,7 @@ export function MarginMarkupTool() {
         value={minMarginPercent}
         onChange={setMinMarginPercent}
       />
-      <p className="tool__note">{s.fieldsHint}</p>
+      <p className="nx-hint nx-hint--prose">{s.fieldsHint}</p>
 
       {failure !== undefined && <ToolFailure>{failure}</ToolFailure>}
 
@@ -1045,7 +1045,7 @@ export function MarginMarkupTool() {
               value={proUnit(proNum(discountResult.marginAfterDiscountPercent, 2), s.unitPercent)}
             />
           )}
-          {discountResult.exactDiscountPercent <= 0 && <p className="tool__note">{s.belowNote}</p>}
+          {discountResult.exactDiscountPercent <= 0 && <p className="nx-hint nx-hint--prose">{s.belowNote}</p>}
 
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
@@ -1221,11 +1221,11 @@ export function PaymentDueDateTool() {
           <ResultRow label={s.dueWeekday} value={weekdayLabel(result.dueWeekday)} />
           <ResultRow label={s.dueDateBeforeShift} value={formatDate(result.dueDateBeforeShift)} />
           <ResultRow label={s.shiftedDays} value={proNum(result.shiftedDays, 0)} />
-          {result.capReached && <p className="tool__note">{s.capReachedNote}</p>}
+          {result.capReached && <p className="nx-hint nx-hint--prose">{s.capReachedNote}</p>}
           <ResultRow label={s.totalDays} value={proNum(result.totalDays, 0)} />
           <ResultRow label={s.daysLate} value={proNum(result.daysLate, 0)} />
           <ResultRow label={s.daysUntilDue} value={proNum(result.daysUntilDue, 0)} />
-          <p className="tool__note">{s.note}</p>
+          <p className="nx-hint nx-hint--prose">{s.note}</p>
 
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
@@ -1309,7 +1309,7 @@ export function PaymentReference97Tool() {
         <ToolSection title={s.results}>
           <ResultRow label={s.checkDigits} value={computeResult.checkDigitsText} />
           <ResultRow label={s.formatted} value={computeResult.formatted} />
-          {computeResult.overTwentyDigits && <p className="tool__note">{s.overTwentyNote}</p>}
+          {computeResult.overTwentyDigits && <p className="nx-hint nx-hint--prose">{s.overTwentyNote}</p>}
 
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
@@ -1325,7 +1325,7 @@ export function PaymentReference97Tool() {
           <ResultRow label={s.enteredCheckDigits} value={pad2(verifyResult.enteredCheckDigits)} />
           <ResultRow label={s.computedCheckDigits} value={pad2(verifyResult.computedCheckDigits)} />
           <ResultRow label={s.matches} value={verifyResult.matches ? s.yes : s.no} />
-          {verifyResult.overTwentyDigits && <p className="tool__note">{s.overTwentyNote}</p>}
+          {verifyResult.overTwentyDigits && <p className="nx-hint nx-hint--prose">{s.overTwentyNote}</p>}
 
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho title={s.inputs} entries={[{ label: s.value, value: value.trim() }]} />
@@ -1538,7 +1538,7 @@ export function SimpleInterestDaysTool() {
           <ResultRow label={s.interest} value={proNum(result.interest, 2)} />
           <ResultRow label={s.dailyInterest} value={proNum(result.dailyInterest, 2)} />
           <ResultRow label={s.total} value={proNum(result.total, 2)} />
-          <p className="tool__note">{s.note}</p>
+          <p className="nx-hint nx-hint--prose">{s.note}</p>
 
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho

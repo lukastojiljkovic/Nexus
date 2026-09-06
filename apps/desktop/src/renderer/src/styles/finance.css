@@ -1040,11 +1040,6 @@
   align-items: flex-start;
   gap: var(--nx-space-2);
 }
-.doc__error {
-  margin: 0;
-  font-size: var(--nx-font-size-body-sm);
-  color: var(--nx-text-muted);
-}
 /* --- Lista --------------------------------------------------------------- */
 /* One grid template for the head and every row, so the columns line up without
    a table: name takes the slack, the three facts are sized to their content,

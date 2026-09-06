@@ -383,7 +383,7 @@ export function GlassPaneWeightTool() {
             value={proUnit(proNum(result.glassThicknessSum, 1), s.unitMm)}
           />
           <ResultRow label={s.pvbThicknessSum} value={proUnit(proNum(result.pvbThicknessSum, 2), s.unitMm)} />
-          <p className="tool__note">{s.temperingNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.temperingNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -573,7 +573,7 @@ export function Iso286FitsTool() {
           <ResultRow label={s.maxClearance} value={proUnit(proNum(result.maxClearance, 1), s.unitUm)} />
           <ResultRow label={s.minClearance} value={proUnit(proNum(result.minClearance, 1), s.unitUm)} />
           <ResultRow label={s.meanClearance} value={proUnit(proNum(result.meanClearance, 1), s.unitUm)} />
-          <p className="tool__note">{s.signedNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.signedNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -704,7 +704,7 @@ export function LinearCuttingStockTool() {
           />
           <ResultRow label={s.barCount} value={result.barCount} />
           <ResultRow label={s.lowerBoundBars} value={result.lowerBoundBars} />
-          <p className="tool__note">{s.lowerBoundNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.lowerBoundNote}</p>
           <ResultRow label={s.usableLength} value={proUnit(proNum(result.usableLength, 1), s.unitMm)} />
           <ResultRow label={s.totalCutLength} value={proUnit(proNum(result.totalCutLength, 1), s.unitMm)} />
           <ResultRow
@@ -890,7 +890,7 @@ export function MitreAnglesTool() {
             value={`${proNum(result.sawMitreComplement, 2)}${s.unitDeg}`}
           />
           <ResultRow label={s.sawBevelAngle} value={`${proNum(result.sawBevelAngle, 2)}${s.unitDeg}`} />
-          <p className="tool__note">{s.scaleConventionNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.scaleConventionNote}</p>
           {result.lengths !== undefined && (
             <>
               {/* Two rows, not three. „Spoljašnja mera" and „mera do duge
@@ -904,8 +904,8 @@ export function MitreAnglesTool() {
                 label={s.lengthToShortPoint}
                 value={proUnit(proNum(result.lengths.toShortPoint, 2), s.unitMm)}
               />
-              <p className="tool__note">{`${s.centeredMeasureNote} ${s.centeredOutsideWidth}`}</p>
-              {!result.lengthsAvailable && <p className="tool__note">{s.lengthsCautionNote}</p>}
+              <p className="nx-hint nx-hint--prose">{`${s.centeredMeasureNote} ${s.centeredOutsideWidth}`}</p>
+              {!result.lengthsAvailable && <p className="nx-hint nx-hint--prose">{s.lengthsCautionNote}</p>}
             </>
           )}
           <ResultRow label={s.tanM0} value={proNum(result.tanM0, 6)} />
@@ -1359,7 +1359,7 @@ export function PanelCuttingYieldTool() {
           <ResultRow label={s.cutCount} value={result.cutCount} />
           <ResultRow label={s.cutLength} value={proUnit(proNum(result.cutLength, 2), s.unitM)} />
           <ResultRow label={s.totalCutLength} value={proUnit(proNum(result.totalCutLength, 2), s.unitM)} />
-          <p className="tool__note">{s.guillotineNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.guillotineNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1537,7 +1537,7 @@ export function SheetMetalBendTool() {
         <ToolSection title={s.reverseResults}>
           <ResultRow label={s.kFactorFromSample} value={proNum(reverseResult.kFactor, 3)} />
           <ResultRow label={s.radiusToThickness} value={proNum(reverseResult.radiusToThickness, 3)} />
-          <p className="tool__note">{s.kFactorScopeNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.kFactorScopeNote}</p>
           <ToolFormula>{s.reverseFormula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1773,7 +1773,7 @@ export function ShelfDeflectionTool() {
             label={s.reaction}
             value={`${proUnit(proNum(result.reaction, 1), s.unitN)} · ${proUnit(proNum(result.reactionMass, 2), s.unitKg)}`}
           />
-          <p className="tool__note">{s.modelNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.modelNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}

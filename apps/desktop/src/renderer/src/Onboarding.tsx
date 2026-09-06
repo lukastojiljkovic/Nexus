@@ -637,7 +637,7 @@ export function Onboarding({
                 <h1 className="onb__title">
                   {rerun ? s.rerunTitle : business ? s.titleBusiness : s.title}
                 </h1>
-                <p className="onb__desc">
+                <p className="nx-hint nx-hint--prose">
                   {rerun ? s.rerunDescription : business ? s.descriptionBusiness : s.description}
                 </p>
                 <TextField
@@ -673,7 +673,7 @@ export function Onboarding({
             {state.step === "nedelja" && (
               <>
                 <h1 className="onb__title">{s.week.title}</h1>
-                <p className="onb__desc">{s.week.description}</p>
+                <p className="nx-hint nx-hint--prose">{s.week.description}</p>
                 {/* The card is the DRAWER's block (`.pro-kit`, `tools.css`), not
                     a local one: a chosen thing looks the same everywhere in this
                     app, and a second copy under an `.onb__` name is how two
@@ -703,7 +703,7 @@ export function Onboarding({
             {state.step === "posao" && (
               <>
                 <h1 className="onb__title">{s.trade.title}</h1>
-                <p className="onb__desc">{s.trade.description}</p>
+                <p className="nx-hint nx-hint--prose">{s.trade.description}</p>
                 {/* One field instead of eighteen toolkit cards. The cards were
                     „the same taxonomy with fewer boxes" — a person outside the
                     eighteen still had nowhere to be — where a field fails OPEN:
@@ -769,7 +769,7 @@ export function Onboarding({
             {state.step === "ritam" && (
               <>
                 <h1 className="onb__title">{s.tempo.title}</h1>
-                <p className="onb__desc">{s.tempo.description}</p>
+                <p className="nx-hint nx-hint--prose">{s.tempo.description}</p>
                 <div className="pro-kits" role="group" aria-label={s.tempo.title}>
                   {TEMPOS.map((option) => {
                     const copy = s.tempo.options[option];
@@ -795,7 +795,7 @@ export function Onboarding({
             {state.step === "oko" && (
               <>
                 <h1 className="onb__title">{s.keep.title}</h1>
-                <p className="onb__desc">{s.keep.description}</p>
+                <p className="nx-hint nx-hint--prose">{s.keep.description}</p>
                 <div className="pro-kits" role="group" aria-label={s.keep.title}>
                   {KEEPS.map((keep) => {
                     const copy = s.keep.options[keep];
@@ -821,7 +821,7 @@ export function Onboarding({
             {state.step === "podsetnici" && (
               <>
                 <h1 className="onb__title">{s.remindersTitle}</h1>
-                <p className="onb__desc">{s.remindersDescription}</p>
+                <p className="nx-hint nx-hint--prose">{s.remindersDescription}</p>
                 <div className="onb__choices" role="group" aria-label={s.remindersTitle}>
                   {NOTIFICATION_PRESETS.map((preset) => (
                     <Button
@@ -912,7 +912,7 @@ export function Onboarding({
           <div className="onb__form">
             <span className="onb__brand" aria-hidden="true">✦</span>
             <h1 className="onb__title">{s.reveal.title}</h1>
-            <p className="onb__desc">{s.reveal.description}</p>
+            <p className="nx-hint nx-hint--prose">{s.reveal.description}</p>
             {/* What it HEARD, before anything it decided — and in the person's
                 own spelling. „„stolar" → Zanatstvo, Gradnja" reads as
                 recognition; „Uključeni paketi: Zanatstvo" reads as a setting
@@ -975,7 +975,7 @@ export function Onboarding({
           >
             <span className="onb__brand" aria-hidden="true">✦</span>
             <h1 className="onb__title">{s.advancedTitle}</h1>
-            <p className="onb__desc">{s.advancedDescription}</p>
+            <p className="nx-hint nx-hint--prose">{s.advancedDescription}</p>
             <h2 className="onb__module-group-title">{strings.pro.picker.title}</h2>
             {/* Uncapped: the card scrolls, and a scroller inside a scroller cut
                 this grid in half mid-row at every window size. */}
@@ -1086,7 +1086,7 @@ function PrepareScreen({ stage, name }: { stage: PrepareStage; name: string }) {
     <div className="onb__form">
       <span className="onb__brand" aria-hidden="true">✦</span>
       <h1 className="onb__title">{s.title}</h1>
-      <p className="onb__desc">
+      <p className="nx-hint nx-hint--prose">
         {name.length > 0 ? `${name} — ${s.description}` : s.description}
       </p>
       <div

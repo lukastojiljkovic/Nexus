@@ -64,7 +64,7 @@ export function RecurrenceScopeDialog({ action, onChoose, onCancel }: Recurrence
         <h2 id={titleId} className="recur-dialog__title">
           {s.title}
         </h2>
-        <p id={questionId} className="recur-dialog__question">
+        <p id={questionId} className="nx-hint">
           {action === "delete" ? s.questionDelete : s.questionEdit}
         </p>
         <div className="recur-dialog__choices">

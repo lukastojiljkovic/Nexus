@@ -2502,7 +2502,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
             description={strings.study.loadCardsError}
           />
         ) : cards === null ? (
-          <p className="app__muted">{strings.app.loading}</p>
+          <p className="nx-hint">{strings.app.loading}</p>
         ) : (
           <>
             {cards.length === 0 ? (
@@ -2931,7 +2931,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
           >
             {(close) =>
               candidates.length === 0 ? (
-                <p className="study__linked-picker-empty">{copy.pickerEmpty}</p>
+                <p className="nx-hint study__linked-picker-empty">{copy.pickerEmpty}</p>
               ) : (
                 candidates.map((note) => (
                   <button
@@ -3033,7 +3033,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
               {copy.loadError}
             </p>
           ) : logDays.length === 0 ? (
-            <p className="study__log-empty">{logLoading ? strings.app.loading : copy.empty}</p>
+            <p className="nx-hint study__log-empty">{logLoading ? strings.app.loading : copy.empty}</p>
           ) : (
             <>
               <div className="study__log-list">
@@ -3242,7 +3242,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
           description={strings.study.loadError}
         />
       ) : loading ? (
-        <p className="app__muted">{strings.app.loading}</p>
+        <p className="nx-hint">{strings.app.loading}</p>
       ) : sortedSubjects.length === 0 ? (
         <EmptyState
           sigil="study"
@@ -3765,7 +3765,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                     {/* How much of the syllabus the user has taken out of this
                         plan (STUDY-004) — a fact beside the health sentence,
                         undone one row at a time by „Vrati u plan". */}
-                    {scopeLine !== null && <p className="study__plan-scope">{scopeLine}</p>}
+                    {scopeLine !== null && <p className="nx-hint">{scopeLine}</p>}
                     <Button
                       size="sm"
                       className="study__plan-toggle"
@@ -3955,7 +3955,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                     <h4 className="study__topics-heading">{strings.study.topics.title}</h4>
                     <p className="study__topics-hint">{strings.study.topics.hint}</p>
                     {formTopics === null ? (
-                      <p className="app__muted">{strings.app.loading}</p>
+                      <p className="nx-hint">{strings.app.loading}</p>
                     ) : (
                       <>
                         {formTopics.length === 0 ? (
@@ -4545,7 +4545,7 @@ function PracticeDialog({ decks, countsFor, onStart, onClose }: PracticeDialogPr
         <h2 id={titleId} className="recur-dialog__title">
           {s.title}
         </h2>
-        <p className="recur-dialog__question">
+        <p className="nx-hint">
           {s.decksLabel}
           {/* The hub's špil legend, in the one other place the same two figures
               are listed per špil — one construct, so the pair reads identically
@@ -4682,12 +4682,12 @@ function ScopeCutDialog({ proposal, rows, failed, onAccept, onClose }: ScopeCutD
             {s.loadError}
           </p>
         ) : proposal === null ? (
-          <p className="app__muted">{strings.app.loading}</p>
+          <p className="nx-hint">{strings.app.loading}</p>
         ) : !acceptable ? (
-          <p className="app__muted">{s.empty}</p>
+          <p className="nx-hint">{s.empty}</p>
         ) : (
           <>
-            <p className="recur-dialog__question">{s.intro}</p>
+            <p className="nx-hint">{s.intro}</p>
             <div className="study-cut__rows">
               {rows.map((row) => (
                 <div key={row.id} className="study-cut__row">
@@ -4932,7 +4932,7 @@ function ReviewSession({ profileId, scope, practice, decks, onExit }: ReviewSess
   if (queue === null) {
     return (
       <div className="review">
-        <p className="app__muted">{strings.app.loading}</p>
+        <p className="nx-hint">{strings.app.loading}</p>
       </div>
     );
   }
@@ -4961,7 +4961,7 @@ function ReviewSession({ profileId, scope, practice, decks, onExit }: ReviewSess
     return (
       <div className="review review--complete">
         <p className="review__complete-title">{strings.study.reviewCompleteTitle}</p>
-        <p className="review__complete-count">
+        <p className="nx-hint">
           {strings.study.reviewCompleteLabel}: {completedCount}
         </p>
         {/* The detail only exists once something was actually graded — a queue
@@ -4981,7 +4981,7 @@ function ReviewSession({ profileId, scope, practice, decks, onExit }: ReviewSess
               ))}
             </dl>
             {finishedAt !== null && (
-              <p className="review__summary-duration">
+              <p className="nx-hint">
                 {summary.durationLabel}: {formatElapsed(finishedAt - startedAtRef.current)}
               </p>
             )}
@@ -4989,7 +4989,7 @@ function ReviewSession({ profileId, scope, practice, decks, onExit }: ReviewSess
         )}
         {/* STUDY-007: said out loud, because "nothing left" and "today's ceiling
             is spent" are different reasons for the same empty queue. */}
-        {capReached && <p className="review__summary-cap">{summary.capReached}</p>}
+        {capReached && <p className="nx-hint">{summary.capReached}</p>}
         <div className="review__complete-actions">
           {historyRef.current.length > 0 && (
             <Button onClick={() => void undoLast()}>{strings.study.reviewUndo}</Button>

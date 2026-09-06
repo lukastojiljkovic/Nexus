@@ -321,7 +321,7 @@ export function BaleCountStorageTool() {
               {result.shortfall !== undefined && (
                 <ResultRow label={s.shortfall} value={proNum(result.shortfall, 0)} />
               )}
-              <p className="tool__note">{s.stackingNote}</p>
+              <p className="nx-hint nx-hint--prose">{s.stackingNote}</p>
             </ToolSection>
           )}
           <ToolFormula>{s.formula}</ToolFormula>
@@ -430,7 +430,7 @@ export function CadastralAreaUnitsTool() {
           <ResultRow label={s.resultHvat2} value={proUnit(proNum(result.hvat2, 3), s.unitHvat2)} />
           <ResultRow label={s.resultJutro} value={proUnit(proNum(result.jutro, 6), s.unitJutro)} />
           <ResultRow label={s.jutroUsed} value={proUnit(proNum(result.jutroM2Used, 4), s.unitM2)} />
-          <p className="tool__note">{s.sourceNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.sourceNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -576,7 +576,7 @@ export function GrainMoistureShrinkTool() {
             label={s.shrinkPercentMassIndependent}
             value={`${proNum(result.shrinkPercentMassIndependent, 4)}${s.unitPercent}`}
           />
-          <p className="tool__note">{s.physicalModelNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.physicalModelNote}</p>
           <ToolSection title={s.impuritiesFirst}>
             <ResultRow
               label={s.impurityDeductionKg}
@@ -824,7 +824,7 @@ export function HoneyMassMoistureTool() {
               value={proUnit(proNum(result.measuredDensityKgL, 4), s.unitKgL)}
             />
           )}
-          <p className="tool__note">{s.independenceNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.independenceNote}</p>
           <ResultRow label={s.waterMassKg} value={proUnit(proNum(result.waterMassKg, 3), s.unitKg)} />
           <ResultRow label={s.dryMatterMassKg} value={proUnit(proNum(result.dryMatterMassKg, 3), s.unitKg)} />
           {result.drying !== undefined && (
@@ -1613,7 +1613,7 @@ export function OrchardTrellisLayoutTool() {
 
       {result.ok && (
         <ToolSection title={s.results}>
-          {result.zeroRows && <p className="tool__note">{s.zeroRowsNote}</p>}
+          {result.zeroRows && <p className="nx-hint nx-hint--prose">{s.zeroRowsNote}</p>}
           <ResultRow label={s.rowsCount} value={proNum(result.rowsCount, 0)} />
           <ResultRow label={s.rowLengthM} value={proUnit(proNum(result.rowLengthM, 2), s.unitM)} />
           <ResultRow label={s.totalRowLengthM} value={proUnit(proNum(result.totalRowLengthM, 1), s.unitM)} />
@@ -1644,7 +1644,7 @@ export function OrchardTrellisLayoutTool() {
           <ResultRow label={s.usedAreaHa} value={proUnit(proNum(result.usedAreaHa, 3), s.unitHa)} />
           <ResultRow label={s.densityPerHa} value={proNum(result.densityPerHa, 1)} />
           <ResultRow label={s.theoreticalDensityPerHa} value={proNum(result.theoreticalDensityPerHa, 1)} />
-          <p className="tool__note">{s.geometryNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.geometryNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1765,7 +1765,7 @@ export function PlantSpacingDensityTool() {
               <ResultRow label={s.actualDensityPerHa} value={proNum(result.onParcel.actualDensityPerHa, 2)} />
             </ToolSection>
           )}
-          {pattern === "triangular" && <p className="tool__note">{s.triangularNote}</p>}
+          {pattern === "triangular" && <p className="nx-hint nx-hint--prose">{s.triangularNote}</p>}
           {result.desired !== undefined && (
             <ToolSection title={s.reverse}>
               <ResultRow
@@ -1909,7 +1909,7 @@ export function PolygonAreaTool() {
           )}
           <ResultRow label={s.perimeterM} value={proUnit(proNum(result.perimeterM, 3), s.unitM)} />
           {result.centroid === undefined ? (
-            <p className="tool__note">{s.centroidUndefined}</p>
+            <p className="nx-hint nx-hint--prose">{s.centroidUndefined}</p>
           ) : (
             <ResultRow
               label={s.centroid}
@@ -2467,7 +2467,7 @@ export function TankMixDoseTool() {
           <ResultRow label={s.remainderAreaHa} value={proUnit(proNum(result.remainderAreaHa, 3), s.unitHa)} />
           <ResultRow label={s.fullTankCarrierL} value={proUnit(proNum(result.fullTankCarrierL, 1), s.unitL)} />
           <ResultRow label={s.totalCarrierL} value={proUnit(proNum(result.totalCarrierL, 1), s.unitL)} />
-          <p className="tool__note">{s.labelNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.labelNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -2760,7 +2760,7 @@ export function FertiliserNutrientBlendTool() {
               />
             </ToolSection>
           )}
-          <p className="tool__note">{s.userInputNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.userInputNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -2952,7 +2952,7 @@ export function GrowingDegreeDaysTool() {
                   />
                 </>
               )}
-              <p className="tool__note">{s.projectionNote}</p>
+              <p className="nx-hint nx-hint--prose">{s.projectionNote}</p>
             </ToolSection>
           )}
           <ToolFormula>{s.formula}</ToolFormula>
@@ -3120,7 +3120,7 @@ export function BeeSyrupMixTool() {
           <ResultRow label={s.syrupMassKg} value={proUnit(proNum(result.syrupMassKg, 3), s.unitKg)} />
           <ResultRow label={s.syrupVolumeL} value={proUnit(proNum(result.syrupVolumeL, 3), s.unitL)} />
           <ResultRow label={s.densityKgL} value={proUnit(proNum(result.densityKgL, 4), s.unitKgL)} />
-          <p className="tool__note">{s.densityNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.densityNote}</p>
           <ResultRow
             label={s.concentrationPercent}
             value={`${proNum(result.concentrationPercent, 2)}${s.unitPercent}`}
@@ -3354,7 +3354,7 @@ export function YieldEstimateSamplesTool() {
           <ResultRow label={s.minTHa} value={proUnit(proNum(result.minTHa, 3), s.unitTHa)} />
           <ResultRow label={s.maxTHa} value={proUnit(proNum(result.maxTHa, 3), s.unitTHa)} />
           {result.spread === undefined ? (
-            <p className="tool__note">{s.singleSampleNote}</p>
+            <p className="nx-hint nx-hint--prose">{s.singleSampleNote}</p>
           ) : (
             <>
               <ResultRow

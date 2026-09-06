@@ -471,7 +471,7 @@ export function ToolsPage({ drawer, enabledModules, packs, packEditor }: ToolsPa
                       „Mikroskalirani blokovi" is unreadable without one. Rendered
                       from the registration so a tool that declares none simply has
                       none, instead of an empty line reserving space for it. */}
-                  {selected.blurb !== undefined && <p className="tool__surface-blurb">{selected.blurb}</p>}
+                  {selected.blurb !== undefined && <p className="nx-hint nx-hint--prose">{selected.blurb}</p>}
                   {/* Above the body, in the same place on every affected tool,
                       and drawn from the REGISTRATION — so a tool cannot ship
                       without its notice and cannot ship with the wrong one.

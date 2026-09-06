@@ -98,7 +98,7 @@ export function NoteVersionHistory({
   }, [profileId, noteId, selectedSeq]);
 
   if (versions === null) {
-    return <p className="app__muted">{strings.app.loading}</p>;
+    return <p className="nx-hint">{strings.app.loading}</p>;
   }
   if (listError) {
     return (
@@ -147,7 +147,7 @@ export function NoteVersionHistory({
             {strings.notes.historyError}
           </div>
         ) : selectedBytes === null ? (
-          <p className="app__muted">{strings.app.loading}</p>
+          <p className="nx-hint">{strings.app.loading}</p>
         ) : (
           <VersionPreview
             key={selectedSeq}

@@ -171,7 +171,7 @@ function FinCsvMappingDialog({
           {s.mapTitle}
         </h2>
         <p className="recur-dialog__name app__path">{preview.fileName}</p>
-        <p id={questionId} className="recur-dialog__question">
+        <p id={questionId} className="nx-hint">
           {s.mapQuestion}
         </p>
 
@@ -242,8 +242,8 @@ function FinCsvMappingDialog({
               </div>
             );
           })}
-          {!ready.date && <p className="set__section-caption">{s.dateRequired}</p>}
-          {!ready.amount && <p className="set__section-caption">{s.amountRequired}</p>}
+          {!ready.date && <p className="nx-hint">{s.dateRequired}</p>}
+          {!ready.amount && <p className="nx-hint">{s.amountRequired}</p>}
 
           <div className="csv-map__list">
             {/* Labelled ONCE — same fix as the delimiter select above: the
@@ -263,7 +263,7 @@ function FinCsvMappingDialog({
                 </option>
               ))}
             </Select>
-            <p className="set__section-caption">{s.accountHint}</p>
+            <p className="nx-hint">{s.accountHint}</p>
           </div>
 
           {signed && (
@@ -293,7 +293,7 @@ function FinCsvMappingDialog({
             <div className="csv-map__refusal">
               <h4 className="nx-eyebrow set__module-group-title">{s.refusalTitle}</h4>
               <p className="set__error">{s.refusals[refusal.code]}</p>
-              <p className="set__section-caption">
+              <p className="nx-hint">
                 {s.refusalColumnPrefix}{" "}
                 {columnName(preview.columns[refusal.column]?.header ?? null, refusal.column)} ·{" "}
                 {s.refusalSamplePrefix} <span className="app__path">{refusal.sample}</span>
@@ -502,10 +502,10 @@ export function FinCsvImportSection({ profileId, titleClassName }: FinCsvImportS
   return (
     <div className="set__import-block">
       <h3 className={titleClassName ?? "nx-eyebrow set__module-group-title"}>{s.title}</h3>
-      <p className="app__muted">{s.description}</p>
+      <p className="nx-hint">{s.description}</p>
 
       {accounts.length === 0 ? (
-        <p className="set__section-caption">{s.noAccounts}</p>
+        <p className="nx-hint">{s.noAccounts}</p>
       ) : (
         !planned &&
         state.phase !== "applied" && (
@@ -524,10 +524,10 @@ export function FinCsvImportSection({ profileId, titleClassName }: FinCsvImportS
 
       {state.phase === "picked" && (
         <>
-          <p className="set__section-caption">
+          <p className="nx-hint">
             {shared.pickedPrefix} <span className="app__path">{state.fileName}</span>
           </p>
-          {state.busy && <p className="app__muted">{s.reading}</p>}
+          {state.busy && <p className="nx-hint">{s.reading}</p>}
           {state.error != null && <p className="set__error">{state.error}</p>}
         </>
       )}
@@ -594,7 +594,7 @@ export function FinCsvImportSection({ profileId, titleClassName }: FinCsvImportS
             </tbody>
           </table>
           {state.plan.blankRows > 0 && (
-            <p className="set__section-caption">
+            <p className="nx-hint">
               {s.blankRowsPrefix} {state.plan.blankRows}
             </p>
           )}
@@ -623,7 +623,7 @@ export function FinCsvImportSection({ profileId, titleClassName }: FinCsvImportS
           {state.plan.skips.length > 0 && (
             <>
               <h4 className="nx-eyebrow set__module-group-title">{s.skipsTitle}</h4>
-              <p className="set__section-caption">{s.skipsCaption}</p>
+              <p className="nx-hint">{s.skipsCaption}</p>
               <ul className="set__restore-problems">
                 {state.plan.skips.map((skip, index) => (
                   <li className="set__import-skip" key={`${skip.row}-${skip.code}-${index}`}>
@@ -668,7 +668,7 @@ export function FinCsvImportSection({ profileId, titleClassName }: FinCsvImportS
                 {state.phase === "applying" ? s.applying : s.applyButton}
               </Button>
             ) : (
-              <p className="set__section-caption">{s.nothingToImport}</p>
+              <p className="nx-hint">{s.nothingToImport}</p>
             )}
             {state.phase === "planned" && (
               <>
@@ -696,7 +696,7 @@ export function FinCsvImportSection({ profileId, titleClassName }: FinCsvImportS
         </>
       )}
 
-      {state.phase === "applied" && <p className="app__muted">{s.applied}</p>}
+      {state.phase === "applied" && <p className="nx-hint">{s.applied}</p>}
     </div>
   );
 }

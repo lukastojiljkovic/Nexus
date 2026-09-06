@@ -242,7 +242,7 @@ export function BeamSpotTool() {
                 label={s.coveredLength}
                 value={proUnit(proNum(result.array.coveredLengthM, 3), s.unitM)}
               />
-              <p className="tool__note">{s.axisNote}</p>
+              <p className="nx-hint nx-hint--prose">{s.axisNote}</p>
             </>
           )}
           <ToolFormula>{s.formula}</ToolFormula>
@@ -799,7 +799,7 @@ export function GeneratorSizingTool() {
             <ResultRow label={s.fuelTotal} value={proUnit(proNum(result.fuelLitresTotal, 1), s.unitL)} />
           )}
           {result.loadPct !== undefined && <ResultRow label={s.loadPct} value={`${proNum(result.loadPct, 1)}%`} />}
-          <p className="tool__note">{s.fuelNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.fuelNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1001,7 +1001,7 @@ export function IceChillingTool() {
         <ToolSection title={s.results}>
           <ResultRow label={s.heatToRemove} value={proUnit(proNum(result.heatToRemoveKj, 1), s.unitKj)} />
           <ResultRow label={s.icePulldown} value={proUnit(proNum(result.icePulldownKg, 3), s.unitKg)} />
-          {result.noCoolingNeeded && <p className="tool__note">{s.noCoolingNeededNote}</p>}
+          {result.noCoolingNeeded && <p className="nx-hint nx-hint--prose">{s.noCoolingNeededNote}</p>}
           {result.iceHoldingMeltKg !== undefined && (
             <ResultRow label={s.iceHoldingMelt} value={proUnit(proNum(result.iceHoldingMeltKg, 3), s.unitKg)} />
           )}
@@ -1016,7 +1016,7 @@ export function IceChillingTool() {
             <ResultRow label={s.dilution} value={`${proNum(result.dilutionPct, 1)}%`} />
           )}
           <ResultRow label={s.iceToDrinkRatio} value={proNum(result.iceToDrinkRatio, 3)} />
-          <p className="tool__note">{s.boundsNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.boundsNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1211,7 +1211,7 @@ export function LedWallTool() {
           {result.currentAvgA !== undefined && (
             <ResultRow label={s.currentAvg} value={proUnit(proNum(result.currentAvgA, 2), s.unitA)} />
           )}
-          <p className="tool__note">{s.inrushNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.inrushNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1442,7 +1442,7 @@ export function ParkingCloakroomTool() {
               )}
             </ToolSection>
           )}
-          <p className="tool__note">{s.throughputNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.throughputNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1668,7 +1668,7 @@ export function ProjectorThrowScreenTool() {
           {result.onScreenContrast !== undefined && (
             <>
               <ResultRow label={s.onScreenContrast} value={`${proNum(result.onScreenContrast, 2)}:1`} />
-              {result.ambientUsesGainApproximation && <p className="tool__note">{s.gainApproxNote}</p>}
+              {result.ambientUsesGainApproximation && <p className="nx-hint nx-hint--prose">{s.gainApproxNote}</p>}
             </>
           )}
           {result.requiredLumensForTarget !== undefined && (
@@ -1677,7 +1677,7 @@ export function ProjectorThrowScreenTool() {
           {result.viewingAngleDeg !== undefined && (
             <ResultRow label={s.viewingAngle} value={`${proNum(result.viewingAngleDeg, 2)}${s.unitDeg}`} />
           )}
-          <p className="tool__note">{s.axisNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.axisNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1875,7 +1875,7 @@ export function SlingForceTool() {
                     label={s.twoLegShare}
                     value={`${proNum(result.hang.fourLeg.twoLegShareKgf, 2)} ${s.unitKgf}`}
                   />
-                  <p className="tool__note">{s.fourLegNote}</p>
+                  <p className="nx-hint nx-hint--prose">{s.fourLegNote}</p>
                 </>
               )}
             </>
@@ -1897,7 +1897,7 @@ export function SlingForceTool() {
             </>
           )}
           <ResultRow label={s.horizontal} value={`${proNum(result.horizontalKgf, 2)} ${s.unitKgf}`} />
-          <p className="tool__note">{s.horizontalNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.horizontalNote}</p>
           {result.hang.kind === "single" && result.hang.legLengthM !== undefined && (
             <ResultRow label={s.legLength} value={proUnit(proNum(result.hang.legLengthM, 3), s.unitM)} />
           )}
@@ -2361,7 +2361,7 @@ export function ThreePhaseLoadBalanceTool() {
           {result.imbalancePct !== undefined && (
             <ResultRow label={s.imbalance} value={`${proNum(result.imbalancePct, 2)}%`} />
           )}
-          <p className="tool__note">{s.modelNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.modelNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -2527,7 +2527,7 @@ export function TentBayLayoutTool() {
           <ResultRow label={s.sideWallArea} value={proUnit(proNum(result.sideWallAreaM2, 2), s.unitM2)} />
           <ResultRow label={s.gableEndsArea} value={proUnit(proNum(result.gableEndsAreaM2, 2), s.unitM2)} />
           <ResultRow label={s.totalSheeting} value={proUnit(proNum(result.totalSheetingM2, 2), s.unitM2)} />
-          <p className="tool__note">{s.sheetingNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.sheetingNote}</p>
           <ResultRow label={s.legs} value={proNum(result.legs, 0)} />
           {result.usableWidthAtHeadHeightM !== undefined && (
             <ResultRow label={s.usableWidth} value={proUnit(proNum(result.usableWidthAtHeadHeightM, 2), s.unitM)} />
@@ -2701,7 +2701,7 @@ export function StageDeckLayoutTool() {
           <ResultRow label={s.requiredArea} value={proUnit(proNum(result.requiredAreaM2, 2), s.unitM2)} />
           <ResultRow label={s.perimeter} value={proUnit(proNum(result.perimeterM, 1), s.unitM)} />
           <ResultRow label={s.skirtArea} value={proUnit(proNum(result.skirtAreaM2, 2), s.unitM2)} />
-          <p className="tool__note">{s.mixedNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.mixedNote}</p>
           <StageOrientationRows s={s} label={s.positionA} o={result.positionA} />
           <StageOrientationRows s={s} label={s.positionB} o={result.positionB} />
           <ResultRow
@@ -2710,7 +2710,7 @@ export function StageDeckLayoutTool() {
           />
           {result.udlKgM2 !== undefined && (
             <>
-              <p className="tool__note">{s.udlAreaNote}</p>
+              <p className="nx-hint nx-hint--prose">{s.udlAreaNote}</p>
               {udlLimit.trim() === "" ? (
                 <ResultRow label={s.udl} value={proUnit(proNum(result.udlKgM2, 2), s.unitKgM2)} />
               ) : (
@@ -2863,7 +2863,7 @@ export function TrussHoistReactionsTool() {
           <ResultRow label={s.totalMass} value={proUnit(proNum(result.totalMassKg, 2), s.unitKg)} />
           <ResultRow label={s.pointMass} value={proUnit(proNum(result.pointMassKg, 2), s.unitKg)} />
           <ResultRow label={s.distributedMass} value={proUnit(proNum(result.distributedMassKg, 2), s.unitKg)} />
-          {result.swappedSupports && <p className="tool__note">{s.swappedNote}</p>}
+          {result.swappedSupports && <p className="nx-hint nx-hint--prose">{s.swappedNote}</p>}
           <ResultRow
             label={s.reactionA}
             value={`${proUnit(proNum(result.reactionAKg, 2), s.unitKg)} (${proUnit(proNum(result.reactionAKn, 4), s.unitKn)})${result.reactionAKg < 0 ? ` — ${s.uplift}` : ""}`}
@@ -2903,7 +2903,7 @@ export function TrussHoistReactionsTool() {
           )}
           {result.legTension !== undefined && (
             <>
-              <p className="tool__note">{s.legTensionNote}</p>
+              <p className="nx-hint nx-hint--prose">{s.legTensionNote}</p>
               <ResultRow
                 label={s.legTensionA}
                 value={proUnit(proNum(result.legTension.legTensionAKg, 2), s.unitKg)}
@@ -3226,7 +3226,7 @@ export function VoltageDropTool() {
           <ResultRow label={s.dropVolts} value={proUnit(proNum(result.dropVolts, 4), s.unitV)} />
           {result.dropVoltsPerPhase !== undefined && (
             <>
-              <p className="tool__note">{s.perPhaseNote}</p>
+              <p className="nx-hint nx-hint--prose">{s.perPhaseNote}</p>
               <ResultRow label={s.dropVoltsPerPhase} value={proUnit(proNum(result.dropVoltsPerPhase, 4), s.unitV)} />
             </>
           )}

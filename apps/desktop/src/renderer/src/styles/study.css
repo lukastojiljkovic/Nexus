@@ -454,11 +454,10 @@
   padding: 2px var(--nx-space-2);
   font-size: var(--nx-font-size-body-sm);
 }
+/* `.nx-hint` inset to a picker row, and held on one line: the popover sizes
+   itself to its content, so a wrapped empty line would make it change shape. */
 .study__linked-picker-empty {
-  margin: 0;
   padding: var(--nx-space-2) var(--nx-space-3);
-  color: var(--nx-text-muted);
-  font-size: var(--nx-font-size-body-sm);
   white-space: nowrap;
 }
 .study__linked-list {
@@ -551,11 +550,9 @@
 .study__log-more.nx-button {
   align-self: flex-start;
 }
+/* `.nx-hint`, inset to the log's row rhythm. */
 .study__log-empty {
-  margin: 0;
   padding: var(--nx-space-2) 0;
-  color: var(--nx-text-muted);
-  font-size: var(--nx-font-size-body-sm);
 }
 /* Same recipe as .study__linked-error, scoped to this section's channel. */
 .study__log-error {
@@ -748,13 +745,6 @@
 }
 /* A passed exam's unabsorbed backlog is a fact, not an alarm — muted, no button. */
 .study__plan-health--passed {
-  color: var(--nx-text-muted);
-}
-/* How many topics the user cut out of this plan: a standing fact under the
-   health sentence, muted like the rest of the card's meta. */
-.study__plan-scope {
-  margin: 0;
-  font-size: var(--nx-font-size-body-sm);
   color: var(--nx-text-muted);
 }
 /* Exam-week rows = the house picked recipe (accent border + soft background),
@@ -1453,11 +1443,6 @@
   font-weight: var(--nx-font-weight-semibold);
   margin: 0;
 }
-.review__complete-count {
-  margin: 0;
-  color: var(--nx-text-muted);
-  font-size: var(--nx-font-size-body-sm);
-}
 .review__complete-actions {
   display: flex;
   align-items: center;
@@ -1492,10 +1477,4 @@
   font-family: var(--nx-font-family-mono);
   font-variant-numeric: tabular-nums;
   color: var(--nx-text);
-}
-.review__summary-duration,
-.review__summary-cap {
-  margin: 0;
-  font-size: var(--nx-font-size-body-sm);
-  color: var(--nx-text-muted);
 }

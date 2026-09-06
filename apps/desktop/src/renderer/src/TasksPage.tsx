@@ -854,7 +854,7 @@ function SubtaskCompletionDialog({ onChoose, onCancel }: SubtaskCompletionDialog
         <h2 id={titleId} className="tasks__dialog-title">
           {s.title}
         </h2>
-        <p id={questionId} className="tasks__dialog-question">
+        <p id={questionId} className="nx-hint">
           {s.question}
         </p>
         <div className="tasks__dialog-choices">
@@ -1049,7 +1049,7 @@ function TaskListDeleteDialog({ list, inboxName, onChoose, onCancel }: TaskListD
           {s.title}
         </h2>
         <p className="tasks__dialog-name">„{list.name}“</p>
-        <p id={questionId} className="tasks__dialog-question">
+        <p id={questionId} className="nx-hint">
           {s.question}
         </p>
         <div className="tasks__dialog-choices">
@@ -3295,7 +3295,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
         <span className="tasks__deps-label">{s.label}</span>
         <div className="tasks__dep-list">
           {blockers.length === 0 ? (
-            <p className="tasks__deps-caption">{s.none}</p>
+            <p className="nx-hint">{s.none}</p>
           ) : (
             blockers.map((blocker) => (
               <span key={blocker.id} className="tasks__dep-row">
@@ -3369,7 +3369,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
           </NotePopover>
         </div>
         {depFailed && (
-          <p className="tasks__deps-caption tasks__deps-error" role="status">
+          <p className="nx-hint tasks__deps-error" role="status">
             {s.actionError}
           </p>
         )}
@@ -4660,7 +4660,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                       })}
                     </div>
                   ) : (
-                    <p className="tasks__reminders-caption">{strings.tasks.reminders.needsDate}</p>
+                    <p className="nx-hint">{strings.tasks.reminders.needsDate}</p>
                   )}
                 </div>
 
@@ -5056,7 +5056,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
             description={strings.tasks.loadError}
           />
         ) : tasks === null || lists === null ? (
-          <p className="app__muted">{strings.app.loading}</p>
+          <p className="nx-hint">{strings.app.loading}</p>
         ) : view === "list" ? (
           // The body first, then each section by its own position — sections are
           // what a task row cannot order itself by (see `TaskGroup`).
@@ -5104,7 +5104,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                 thing to say is how far down this list currently reaches. */}
             {completedTruncated && (
               <div className="tasks__more">
-                <p className="tasks__more-note">
+                <p className="nx-hint">
                   {strings.tasks.smart.shownPrefix} {shownRecent.length}{" "}
                   {strings.tasks.smart.shownOf} {recentTasks.length}
                 </p>
@@ -5138,7 +5138,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                 {archiveOpen && renderGroup({ section: null, roots: [...shownArchived] })}
                 {archiveTruncated && (
                   <div className="tasks__more">
-                    <p className="tasks__more-note">
+                    <p className="nx-hint">
                       {strings.tasks.smart.shownPrefix} {shownArchived.length}{" "}
                       {strings.tasks.smart.shownOf} {archivedTasks.length}
                     </p>

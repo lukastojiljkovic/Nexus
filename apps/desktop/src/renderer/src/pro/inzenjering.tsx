@@ -197,8 +197,8 @@ export function AwgConverterTool() {
             label={s.resistance}
             value={proUnit(proNum(forward.resistanceOhmPerKm, 5), s.unitOhmKm)}
           />
-          <p className="tool__note">{s.resistanceNote}</p>
-          <p className="tool__note">{s.tableNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.resistanceNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.tableNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -217,7 +217,7 @@ export function AwgConverterTool() {
           <ResultRow label={s.areaMm2} value={proUnit(proNum(reverse.areaMm2, 5), s.unitMm2)} />
           <ResultRow label={s.fractionalGauge} value={proNum(reverse.gauge, 3)} />
           {reverse.nearest === undefined ? (
-            <p className="tool__note">{s.outsideSeriesNote}</p>
+            <p className="nx-hint nx-hint--prose">{s.outsideSeriesNote}</p>
           ) : (
             <>
               <ResultRow label={s.nearestGauge} value={proNum(reverse.nearest.gauge, 0)} />
@@ -235,7 +235,7 @@ export function AwgConverterTool() {
             label={s.resistance}
             value={proUnit(proNum(reverse.resistanceOhmPerKm, 5), s.unitOhmKm)}
           />
-          <p className="tool__note">{s.resistanceNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.resistanceNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -398,11 +398,11 @@ export function BatteryBankRuntimeTool() {
                 label={s.hoursWithoutPeukert}
                 value={`${proNum(result.hoursWithoutPeukert, 4)} ${s.unitH}`}
               />
-              <p className="tool__note">{s.peukertNote}</p>
+              <p className="nx-hint nx-hint--prose">{s.peukertNote}</p>
             </>
           )}
-          <p className="tool__note">{s.efficiencyNote}</p>
-          <p className="tool__note">{s.modelNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.efficiencyNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.modelNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -600,7 +600,7 @@ export function BeltAndGearDriveTool() {
               {belt.drivenTorqueNm !== undefined && (
                 <ResultRow label={s.drivenTorque} value={proUnit(proNum(belt.drivenTorqueNm, 3), s.unitNm)} />
               )}
-              <p className="tool__note">{s.beltPitchNote}</p>
+              <p className="nx-hint nx-hint--prose">{s.beltPitchNote}</p>
               <ToolFormula>{s.beltFormula}</ToolFormula>
               <ToolInputEcho
                 title={s.inputs}
@@ -656,7 +656,7 @@ export function BeltAndGearDriveTool() {
               {gear.drivenTorqueNm !== undefined && (
                 <ResultRow label={s.drivenTorque} value={proUnit(proNum(gear.drivenTorqueNm, 3), s.unitNm)} />
               )}
-              <p className="tool__note">{s.gearCentreDistanceNote}</p>
+              <p className="nx-hint nx-hint--prose">{s.gearCentreDistanceNote}</p>
               <ToolFormula>{s.gearFormula}</ToolFormula>
               <ToolInputEcho
                 title={s.inputs}
@@ -791,7 +791,7 @@ export function CableCrossSectionTool() {
           <ResultRow label={s.loopFactor} value={kLabel(result.loopFactor)} />
           <ResultRow label={s.maxDrop} value={proUnit(proNum(result.maxDropV, 4), s.unitV)} />
           <ResultRow label={s.minimumArea} value={proUnit(proNum(result.minimumAreaMm2, 4), s.unitMm2)} />
-          <p className="tool__note">{s.roundUpNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.roundUpNote}</p>
           {result.dropAtChosenPct !== undefined && (
             <ToolAgainstLimit
               label={s.dropAtChosenPct}
@@ -805,10 +805,10 @@ export function CableCrossSectionTool() {
           {result.dropAtChosenV !== undefined && (
             <ResultRow label={s.dropAtChosenV} value={proUnit(proNum(result.dropAtChosenV, 5), s.unitV)} />
           )}
-          <p className="tool__note">{s.reactanceNote}</p>
-          <p className="tool__note">{s.temperatureNote}</p>
-          <p className="tool__note">{s.lengthNote}</p>
-          <p className="tool__note">{s.systemNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.reactanceNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.temperatureNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.lengthNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.systemNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -951,7 +951,7 @@ export function InductionMotorTool() {
             label={s.torque}
             value={`${proUnit(proNum(result.torqueNm, 4), s.unitNm)} (${measuredSpeedRpm.trim() === "" ? s.atSynchronous : s.atMeasured})`}
           />
-          <p className="tool__note">{s.currentNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.currentNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1101,7 +1101,7 @@ export function JunctionTemperatureTool() {
           <ResultRow label={s.junctionTemp} value={`${proNum(forward.junctionC, 2)}${s.unitDeg}`} />
           <ResultRow label={s.caseTemp} value={`${proNum(forward.caseC, 2)}${s.unitDeg}`} />
           <ResultRow label={s.sinkTemp} value={`${proNum(forward.sinkC, 2)}${s.unitDeg}`} />
-          <p className="tool__note">{s.modelNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.modelNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1124,7 +1124,7 @@ export function JunctionTemperatureTool() {
             label={s.requiredSink}
             value={proUnit(proNum(sink.requiredSinkResistance, 4), s.unitKW)}
           />
-          <p className="tool__note">{s.modelNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.modelNote}</p>
           <ToolFormula>{s.sinkFormula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1149,7 +1149,7 @@ export function JunctionTemperatureTool() {
         <ToolSection title={s.results}>
           <ResultRow label={s.totalRth} value={proUnit(proNum(power.totalResistance, 4), s.unitKW)} />
           <ResultRow label={s.maxDissipation} value={proUnit(proNum(power.maxDissipationW, 3), s.unitW)} />
-          <p className="tool__note">{s.modelNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.modelNote}</p>
           <ToolFormula>{s.powerFormula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1246,18 +1246,18 @@ export function MetricThreadTool() {
           {result.forceKn !== undefined && (
             <>
               <ResultRow label={s.force} value={proUnit(proNum(result.forceKn, 4), s.unitKn)} />
-              <p className="tool__note">{s.forceNote}</p>
+              <p className="nx-hint nx-hint--prose">{s.forceNote}</p>
             </>
           )}
           {result.engagement !== undefined && (
             <>
               <ResultRow label={s.engagement} value={`${proNum(result.engagement.isoPct, 4)} %`} />
-              <p className="tool__note">{s.engagementNote}</p>
+              <p className="nx-hint nx-hint--prose">{s.engagementNote}</p>
               <ResultRow
                 label={s.engagementWorkshop}
                 value={`${proNum(result.engagement.workshopPct, 4)} %`}
               />
-              <p className="tool__note">{s.engagementWorkshopNote}</p>
+              <p className="nx-hint nx-hint--prose">{s.engagementWorkshopNote}</p>
             </>
           )}
           <ToolFormula>{s.formula}</ToolFormula>
@@ -1488,20 +1488,20 @@ export function PipeFlowTool() {
             value={`${proUnit(proNum(result.areaMm2, 3), s.unitMm2)} · ${proUnit(proNum(result.areaM2, 6), s.unitM2)}`}
           />
           <ResultRow label={s.velocity} value={proUnit(proNum(result.velocityMs, 5), s.unitMs)} />
-          <p className="tool__note">{s.velocityNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.velocityNote}</p>
           <ResultRow label={s.flowLs} value={proUnit(proNum(result.flowLs, 5), s.unitLs)} />
           <ResultRow label={s.flowLmin} value={proUnit(proNum(result.flowLmin, 4), s.unitLmin)} />
           <ResultRow label={s.flowM3h} value={proUnit(proNum(result.flowM3h, 5), s.unitM3h)} />
           <ResultRow label={s.flowM3s} value={proUnit(proNum(result.flowM3s, 8), s.unitM3s)} />
           {result.reynolds !== undefined && <ResultRow label={s.reynolds} value={proNum(result.reynolds, 1)} />}
-          {result.reynolds === undefined && <p className="tool__note">{s.reynoldsHint}</p>}
+          {result.reynolds === undefined && <p className="nx-hint nx-hint--prose">{s.reynoldsHint}</p>}
           {result.massFlow !== undefined && (
             <>
               <ResultRow label={s.massFlowKgS} value={proUnit(proNum(result.massFlow.kgS, 5), s.unitKgS)} />
               <ResultRow label={s.massFlowKgH} value={proUnit(proNum(result.massFlow.kgH, 3), s.unitKgH)} />
             </>
           )}
-          <p className="tool__note">{s.roundDuctNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.roundDuctNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1619,8 +1619,8 @@ export function PowerFactorCorrectionTool() {
           <ResultRow label={s.capacitance} value={proUnit(proNum(result.capacitancePerPhaseUf, 3), s.unitUf)} />
           <ResultRow label={s.currentBefore} value={proUnit(proNum(result.currentBeforeA, 4), s.unitA)} />
           <ResultRow label={s.currentAfter} value={proUnit(proNum(result.currentAfterA, 4), s.unitA)} />
-          <p className="tool__note">{s.starDeltaNote}</p>
-          <p className="tool__note">{s.harmonicsNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.starDeltaNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.harmonicsNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -1787,7 +1787,7 @@ export function PressurePistonForceTool() {
                 label={s.retractForce}
                 value={`${proUnit(proNum(force.retractForceN, 1), s.unitN)} (${proUnit(proNum(force.retractForceN / 1000, 4), s.unitKn)})`}
               />
-              <p className="tool__note">{s.theoreticalForceNote}</p>
+              <p className="nx-hint nx-hint--prose">{s.theoreticalForceNote}</p>
               <ToolFormula>{s.forceFormula}</ToolFormula>
               <ToolInputEcho
                 title={s.inputs}
@@ -2062,7 +2062,7 @@ export function ResistorColourCodeTool() {
             <ToolSection title={s.results}>
               <ResultRow label={s.value} value={proUnit(proNum(forward.ohms, 2), s.unitOhm)} />
               <ResultRow label={s.tolerance} value={`±${proNum(forward.tolerancePct, 2)} %`} />
-              {count === 3 && <p className="tool__note">{s.unmarkedToleranceNote}</p>}
+              {count === 3 && <p className="nx-hint nx-hint--prose">{s.unmarkedToleranceNote}</p>}
               <ResultRow
                 label={s.range}
                 value={`${proUnit(proNum(forward.minOhms, 2), s.unitOhm)} – ${proUnit(proNum(forward.maxOhms, 2), s.unitOhm)}`}
@@ -2256,7 +2256,7 @@ export function RlcImpedanceTool() {
           )}
           <ResultRow label={s.impedance} value={proUnit(proNum(result.impedanceOhm, 5), s.unitOhm)} />
           <ResultRow label={s.phase} value={`${proNum(result.phaseDeg, 4)}${s.unitDeg}`} />
-          <p className="tool__note">{s.phaseSignNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.phaseSignNote}</p>
           {result.resonanceHz !== undefined && (
             <ResultRow label={s.resonance} value={proUnit(proNum(result.resonanceHz, 5), s.unitHz)} />
           )}
@@ -2268,7 +2268,7 @@ export function RlcImpedanceTool() {
           )}
           {result.rc !== undefined && <ResultRow label={s.cornerRc} value={cornerText(result.rc)} />}
           {result.rl !== undefined && <ResultRow label={s.cornerRl} value={cornerText(result.rl)} />}
-          <p className="tool__note">{s.absentNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.absentNote}</p>
           <ToolFormula>{connection === "series" ? s.formulaSeries : s.formulaParallel}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -2486,7 +2486,7 @@ export function SectionModulusTool() {
           <ToolInput label={s.depth} value={depthMm} onChange={setDepthMm} />
           <ToolInput label={s.flangeThickness} value={flangeThicknessMm} onChange={setFlangeThicknessMm} />
           <ToolInput label={s.webThickness} value={webThicknessMm} onChange={setWebThicknessMm} />
-          <p className="tool__note">{s.iSectionNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.iSectionNote}</p>
         </>
       )}
 
@@ -2513,7 +2513,7 @@ export function SectionModulusTool() {
           <ResultRow label={s.radiusOfGyrationX} value={proUnit(proNum(result.radiusOfGyrationXMm, 4), s.unitMm)} />
           <ResultRow label={s.radiusOfGyrationY} value={proUnit(proNum(result.radiusOfGyrationYMm, 4), s.unitMm)} />
           {result.polar === undefined ? (
-            <p className="tool__note">{s.noPolarNote}</p>
+            <p className="nx-hint nx-hint--prose">{s.noPolarNote}</p>
           ) : (
             <>
               <ResultRow label={s.polarMoment} value={proUnit(proNum(result.polar.momentMm4, 5), s.unitMm4)} />
@@ -2540,7 +2540,7 @@ export function SectionModulusTool() {
           {result.torsionalStressMpa !== undefined && (
             <ResultRow label={s.torsionalStress} value={proUnit(proNum(result.torsionalStressMpa, 4), s.unitMpa)} />
           )}
-          <p className="tool__note">{s.modelNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.modelNote}</p>
           <ToolFormula>{formula}</ToolFormula>
           <ToolInputEcho title={s.inputs} entries={dimensionEntries} />
           <CopyButton value={copyText} />
@@ -2671,7 +2671,7 @@ export function SeriesParallelNetworkTool() {
           {network.ok && (
             <ToolSection title={s.results}>
               <ResultRow label={s.equivalent} value={proUnit(proNum(network.equivalent, 5), unit)} />
-              <p className="tool__note">{s.zeroNote}</p>
+              <p className="nx-hint nx-hint--prose">{s.zeroNote}</p>
               <ToolFormula>{s.formula}</ToolFormula>
               <ToolInputEcho
                 title={s.inputs}
@@ -2700,7 +2700,7 @@ export function SeriesParallelNetworkTool() {
           {divider.ok && (
             <ToolSection title={s.results}>
               <ResultRow label={s.outputVoltage} value={proUnit(proNum(divider.outputVoltageV, 4), s.unitV)} />
-              <p className="tool__note">{s.unloadedNote}</p>
+              <p className="nx-hint nx-hint--prose">{s.unloadedNote}</p>
               <ResultRow label={s.current} value={proUnit(proNum(divider.currentA, 6), s.unitA)} />
               <ResultRow label={s.upperPower} value={proUnit(proNum(divider.upperPowerW, 5), s.unitW)} />
               <ResultRow label={s.lowerPower} value={proUnit(proNum(divider.lowerPowerW, 5), s.unitW)} />
@@ -2837,8 +2837,8 @@ export function ThreePhasePowerTool() {
           <ResultRow label={s.tanPhi} value={proNum(result.tanPhi, 6)} />
           <ResultRow label={s.phaseVoltage} value={proUnit(proNum(result.phaseVoltageV, 4), s.unitV)} />
           <ResultRow label={s.phaseCurrent} value={proUnit(proNum(result.phaseCurrentA, 5), s.unitA)} />
-          <p className="tool__note">{s.inductiveNote}</p>
-          <p className="tool__note">{s.balancedNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.inductiveNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.balancedNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}
@@ -2927,7 +2927,7 @@ export function TorqueSpeedPowerTool() {
             label={s.power}
             value={`${proUnit(proNum(result.powerW, 5), s.unitW)} = ${proUnit(proNum(result.powerKw, 5), s.unitKw)} = ${proUnit(proNum(result.powerMetricHp, 5), s.unitKs)} = ${proUnit(proNum(result.powerMechanicalHp, 5), s.unitHp)}`}
           />
-          <p className="tool__note">{s.hpNote}</p>
+          <p className="nx-hint nx-hint--prose">{s.hpNote}</p>
           <ToolFormula>{s.formula}</ToolFormula>
           <ToolInputEcho
             title={s.inputs}

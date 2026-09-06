@@ -104,7 +104,7 @@ export function ElecCodeDialog({
         </h2>
 
         {code.kind === "refused" ? (
-          <p className="elec-code__refused">{s.refused[code.reason]}</p>
+          <p className="nx-hint nx-hint--prose">{s.refused[code.reason]}</p>
         ) : (
           <div className="elec-code__body">
             {code.kind === "sketch" ? (
@@ -186,7 +186,7 @@ function SketchBody({
   const s = strings.electronics.code.sketch;
   return (
     <>
-      <p className="elec-code__description">{s.description}</p>
+      <p className="nx-hint nx-hint--prose">{s.description}</p>
 
       {sketch.libraries.length > 0 && (
         <section className="elec-code__section">
@@ -284,7 +284,7 @@ function PackageBody({
 
   return (
     <>
-      <p className="elec-code__description">{s.description}</p>
+      <p className="nx-hint nx-hint--prose">{s.description}</p>
 
       {rospkg.pins.length > 0 && (
         <section className="elec-code__section">
@@ -384,7 +384,7 @@ function PackageBody({
           <p className="elec-code__hint">{s.urdfNone}</p>
         ) : (
           <>
-            <p className="elec-code__description">{s.urdfIntro}</p>
+            <p className="nx-hint nx-hint--prose">{s.urdfIntro}</p>
             {rospkg.robot.sensors.length > 0 && (
               <>
                 <h4 className="nx-eyebrow elec-code__heading">{s.urdfSensorsHeading}</h4>

@@ -124,7 +124,7 @@ function UnitConverter({ kind, from, to }: ConverterSpec) {
 
   return (
     <>
-      {kind === "data" && <p className="tool__note">{s.dataNote}</p>}
+      {kind === "data" && <p className="nx-hint nx-hint--prose">{s.dataNote}</p>}
       <TextField
         label={s.convert.valueLabel}
         value={text}
@@ -314,7 +314,7 @@ function PdvTool() {
           <ResultRow label={s.pdv.grossLabel} value={formatToolAmount(breakdown.gross)} />
         </div>
       )}
-      <p className="tool__note">{s.pdv.note}</p>
+      <p className="nx-hint nx-hint--prose">{s.pdv.note}</p>
     </>
   );
 }
@@ -385,7 +385,7 @@ function LoanTool() {
       ) : allTyped ? (
         <p className="tool__error">{s.loan.invalid}</p>
       ) : null}
-      <p className="tool__note">{s.loan.caveat}</p>
+      <p className="nx-hint nx-hint--prose">{s.loan.caveat}</p>
     </>
   );
 }
@@ -515,7 +515,7 @@ function UnitPriceTool() {
       ) : anyTyped && complete.length < offers.length ? (
         <p className="tool__error">{s.unitPrice.invalid}</p>
       ) : null}
-      <p className="tool__note">{s.unitPrice.note}</p>
+      <p className="nx-hint nx-hint--prose">{s.unitPrice.note}</p>
     </>
   );
 }
