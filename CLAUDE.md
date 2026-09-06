@@ -200,16 +200,24 @@ choice of backend**; whatever in them is about the data model still applies.
   `exactOptionalPropertyTypes`), React 19, Vite 7, electron-vite, Vitest.
   Packages: `tokens`, `core` (registry, contracts, headless views engine), `db`
   (encrypted SQLite), `ui`. Apps: `desktop`, `gallery`.
-- **Electron is pinned to ^42** (ABI 146). Dependabot ignores electron majors.
-  **Do not bump without asking the founder** — but the REASON written here for
-  four months („43/ABI 148 has no prebuild for `better-sqlite3-multiple-ciphers`“)
-  stopped being true on 2026-09-04, and was measured rather than assumed: the
-  same `prebuilds/win32-x64.node` file, byte-identical, loaded under Node 24
-  (ABI 137), Electron 43 (148) and Electron 44 (149), and in all three opened a
-  database written by 12.11.1, read a Serbian row back and wrote one. Electron
-  42 leaves support on **2026-10-20**, which is the one deadline on this project
-  that arrives whether or not anyone works on it, so the pin is now a decision
-  waiting on him rather than a constraint.
+- **Electron is pinned to ^44** (ABI 149) since 2026-09-06; it was ^42 (ABI 146)
+  for four months. Dependabot still ignores electron majors, but for the true
+  reason rather than the old one: an Electron major is two Chromium majors of
+  layout and font behaviour landing in an app that is audited by PHOTOGRAPH, and
+  CI cannot run `shots`, so a green Dependabot check would be green on the half
+  of the verification that does not decide anything here. The reason written in
+  this file for four months — „43/ABI 148 has no prebuild for
+  `better-sqlite3-multiple-ciphers`“ — stopped being true on 2026-09-04, and the
+  bump was measured rather than assumed twice over: first the same
+  `prebuilds/win32-x64.node` file, byte-identical, loaded under Node 24 (ABI 137),
+  Electron 43 (148) and Electron 44 (149) and in all three opened a database
+  written by 12.11.1; then 44 itself took the full gate set, `smoke`, `dist` and a
+  2712-frame sweep. **Do not bump the major without asking the founder** — and
+  when he says yes, the sweep is part of the bump, not a follow-up. Electron
+  supports a major until N+3 ships, on an 8-week cadence, so 42's 2026-10-20 was
+  v45's release date and 44 lives until v47 — two cycles later, **around
+  2027-02**. That is a derivation from the published cadence, not a date Electron
+  has announced.
 - **Shell quirk (Windows):** pnpm is under `%APPDATA%\npm` and not on the tool PATH.
   Prefix every command: `$env:Path += ";$env:APPDATA\npm"; pnpm …`.
 - **The native ABI dance is GONE** (2026-09-04). `better-sqlite3-multiple-ciphers`

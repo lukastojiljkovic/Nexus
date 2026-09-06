@@ -11,8 +11,16 @@ updates:
         applies-to: version-updates
         update-types: ["minor", "patch"]
     ignore:
-      # Electron is pinned to 42.x: better-sqlite3-multiple-ciphers has no
-      # prebuild for Electron 43's ABI (148) yet. Revisit when one ships.
+      # Electron majors stay manual — but for a NEW reason, and the old one is
+      # worth stating so nobody restores it: this said „no prebuild for Electron
+      # 43's ABI“ for four months, and that stopped being true on 2026-09-04 when
+      # better-sqlite3-multiple-ciphers 13.0.3 (a Node-API addon, one prebuild per
+      # platform, no ABI in the key) was measured loading unchanged under 43 and
+      # 44. What still holds is that an Electron major is two Chromium majors of
+      # layout and font behaviour landing in an app that is audited by
+      # PHOTOGRAPH, and CI cannot run `shots`. A green Dependabot PR would
+      # therefore be a green check on the half of the verification that does not
+      # matter here. Bump by hand, sweep, look.
       - dependency-name: "electron"
         update-types: ["version-update:semver-major"]
       # Vite is pinned to 7.x by electron-vite, which builds the whole desktop
