@@ -17,6 +17,22 @@
     // Vite/electron-vite inline the files at build time, exactly as they do any
     // other module.
     "resolveJsonModule": true,
+    // NOTHING is picked up from the `@types` type-root walk unless a package
+    // asks for it by name. Without this line tsc auto-includes every
+    // `@types/*` it can reach, which in a pnpm workspace is whatever the
+    // hoisting happened to place — so a package's access to `Buffer`,
+    // `TextEncoder` and the rest was a side effect of having tests (they pull
+    // `vitest`, which pulls `@types/node`), which nobody chose and nothing
+    // stated. Two failures came out of that: `@nexus/sync-engine` would not
+    // compile on the day it was created because it had no tests yet, and a
+    // devDependency bump on 2026-08-31 took the whole set away from the sync
+    // packages at once. Ambient globals are now declared where they are used:
+    // `lib` for the platform surface (the sync stack targets the WEB one on
+    // purpose), `types` for real `@types` packages — `["node"]` in `core`,
+    // `db`, `sync-transport` and desktop main, `["vite/client"]` in the
+    // renderers. A renderer package must NOT be able to name `process` by
+    // accident, so the default is empty rather than `["node"]`.
+    "types": [],
     "skipLibCheck": true,
     "declaration": true,
     "sourceMap": true

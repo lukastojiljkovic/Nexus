@@ -1,9 +1,18 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
-  // The one shared ESLint flat config lives at the repo root, outside every
-  // package, so no package's own inputs can hash it. Naming it here is what
-  // makes a rule change invalidate the lint cache instead of replaying it.
-  "globalDependencies": ["eslint.config.mjs"],
+  // Shared configuration lives at the repo root, OUTSIDE every package, so no
+  // package's own inputs can hash it. Naming a file here is what makes a change
+  // to it invalidate the cache instead of replaying a result computed against
+  // the previous version — which is the worst possible failure, because it is
+  // reported as green.
+  //
+  // `eslint.config.mjs` was listed alone for a month; `tsconfig.base.json` has
+  // exactly the same shape and was not, so on 2026-09-06 a change to the shared
+  // compiler options (`types`) re-ran ONE of thirteen typecheck tasks and
+  // replayed twelve. `scripts/root-config.test.mjs` now derives this list from
+  // the tree instead of trusting it: every `extends` that escapes a package
+  // resolves to a path that must appear below.
+  "globalDependencies": ["eslint.config.mjs", "tsconfig.base.json"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
