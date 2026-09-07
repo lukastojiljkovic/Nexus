@@ -77,6 +77,14 @@ export const SHOT_SCENES: readonly ShotScene[] = [
   { id: "dashboard", module: "dashboard", fanout: null },
   { id: "tasks", module: "tasks" },
   {
+    // „Priliv i odliv", which the landing no longer draws by itself.
+    id: "tasks-overview",
+    module: "tasks",
+    prepare: OPEN_OVERVIEW(),
+    fanout: null,
+    cleanup: CLOSE_OVERVIEW(),
+  },
+  {
     id: "tasks-detail",
     module: "tasks",
     // The detail pane only exists once a row is selected, and it is where most
@@ -138,6 +146,14 @@ export const SHOT_SCENES: readonly ShotScene[] = [
   { id: "calendar", module: "calendar" },
   { id: "notes", module: "notes" },
   {
+    // „Ritam pisanja" — the heatmap, its caption and its legend.
+    id: "notes-overview",
+    module: "notes",
+    prepare: OPEN_OVERVIEW(),
+    fanout: null,
+    cleanup: CLOSE_OVERVIEW(),
+  },
+  {
     id: "notes-open",
     module: "notes",
     prepare: OPEN_FIRST(".note__item-row, .notes__row, .nx-list-row"),
@@ -178,6 +194,14 @@ export const SHOT_SCENES: readonly ShotScene[] = [
   { id: "priv", module: "priv", fanout: null },
   { id: "files", module: "files" },
   { id: "study", module: "study", fanout: null },
+  {
+    // „Plan i stvarnost" — planned minutes against measured ones.
+    id: "study-overview",
+    module: "study",
+    prepare: OPEN_OVERVIEW(),
+    fanout: null,
+    cleanup: CLOSE_OVERVIEW(),
+  },
   // UČE's four hub forms. All by TEXT: „Dodaj ispit", „Dodaj špil" and „Dodaj
   // karticu" share the class `study__add-exam`, which is a copy-paste the
   // stylesheet does not mind and a selector cannot survive — one of the three
@@ -274,6 +298,14 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     cleanup: CLICK_THEN("text:Otkaži", ".fin__segmented .nx-segmented__option"),
   },
   { id: "habits", module: "habits", fanout: null },
+  {
+    // The wall: every live habit's month, the one picture of the regimen.
+    id: "habits-overview",
+    module: "habits",
+    prepare: OPEN_OVERVIEW(),
+    fanout: null,
+    cleanup: CLOSE_OVERVIEW(),
+  },
   {
     id: "habits-new",
     module: "habits",
@@ -712,6 +744,54 @@ function CLICK_THEN(...steps: readonly string[]): string {
       if (target) target.click();
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     }
+    return true;
+  })()`;
+}
+
+/**
+ * Opens a module landing's „Pregled" fold, and waits for it to BE open.
+ *
+ * The fold is why these scenes exist. NOTE's heatmap, TASK's flow chart,
+ * NAVIKE's wall and UČENJE's plan-against-actual used to be permanently drawn
+ * on their landings, so the sweep photographed all four without being asked;
+ * folding them (`overviewPrefs.ts`) took four graphics OUT of the sweep on the
+ * same commit. A fix that quietly stops four surfaces being photographed has
+ * traded one defect for a blind spot, so each fold gets a scene that opens it.
+ *
+ * Not `CLICK_THEN`, for the reason `OPEN_CODE_DIALOG` is not either: that
+ * helper clicks and hopes. A click that misses here produces the LANDING again
+ * — a perfectly ordinary frame under a name that says the fold is open — which
+ * is the quietest way for a scene to be wrong. This asks `aria-expanded`
+ * afterwards and says „none" when the answer is not what it asked for.
+ *
+ * The first `.nx-disclosure` is the fold on all four landings; TASK's second
+ * one is its archive, further down and inside the list.
+ */
+function OPEN_OVERVIEW(): string {
+  return `(async () => {
+    const trigger = document.querySelector(".nx-disclosure");
+    if (!trigger) return "none: no .nx-disclosure on this landing";
+    if (trigger.getAttribute("aria-expanded") !== "true") {
+      trigger.click();
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    }
+    return trigger.getAttribute("aria-expanded") === "true" ? "open" : "none: it stayed closed";
+  })()`;
+}
+
+/**
+ * Puts it back, and this one is not optional.
+ *
+ * The fold is a DEVICE preference: opening it writes `nexus.<module>.overview`
+ * in the sweep profile's storage, and a scene that left it open would hand the
+ * next run a different app — every later frame of that module folded out, with
+ * nothing in the report to say why. The click is the user's own path back, so
+ * it exercises the persist in both directions.
+ */
+function CLOSE_OVERVIEW(): string {
+  return `(() => {
+    const trigger = document.querySelector(".nx-disclosure");
+    if (trigger && trigger.getAttribute("aria-expanded") === "true") trigger.click();
     return true;
   })()`;
 }

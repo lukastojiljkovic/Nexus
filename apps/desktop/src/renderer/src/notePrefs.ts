@@ -18,6 +18,8 @@
 
 import type { NoteFolderView } from "../../shared/ipc.js";
 
+import { clearStoredOverviewOpen } from "./overviewPrefs.js";
+
 const WIDTH_KEY = "nexus.noteWidth";
 const MARKDOWN_KEY = "nexus.noteMarkdownShortcuts";
 const ROOT_VIEW_KEY = "nexus.notes.rootView";
@@ -137,5 +139,6 @@ export function clearStoredNotePreferences(): void {
   localStorage.removeItem(WIDTH_KEY);
   localStorage.removeItem(MARKDOWN_KEY);
   localStorage.removeItem(ROOT_VIEW_KEY);
+  clearStoredOverviewOpen("notes");
   document.documentElement.setAttribute("data-note-width", readStoredNoteWidth());
 }

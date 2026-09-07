@@ -8,6 +8,7 @@
  * read by the page (it feeds `selectSmartList`'s `includeBlocked`), never by
  * the stylesheet — the same split `persistWeekStart` lives under.
  */
+import { clearStoredOverviewOpen } from "./overviewPrefs.js";
 
 const BLOCKED_IN_TODAY_KEY = "nexus.tasks.blockedInToday";
 
@@ -39,6 +40,7 @@ export function persistBlockedInToday(preference: BlockedInToday): void {
 /** Forgets this card's one key, so the next read hides blocked tasks again — „Zadaci“'s „Vrati na podrazumevano“ (SET §5). */
 export function clearStoredTaskPreferences(): void {
   localStorage.removeItem(BLOCKED_IN_TODAY_KEY);
+  clearStoredOverviewOpen("tasks");
 }
 
 /** The form `selectSmartList` takes — the one place the preference's spelling meets the query's flag. */

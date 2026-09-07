@@ -315,7 +315,13 @@ export function FocusPage({ profileId, enabledModules }: FocusPageProps) {
           : phase.label;
 
     return (
-      <section className="foc__now" aria-label={s.running.heading}>
+      // `data-nx-content` (`shots/audit.ts`). FOKUS is the NEGATIVE CONTROL
+      // for that rule: this page was already ordered the way the other four
+      // now are — the thing you act on first, the figures after it, the
+      // picture last — so it is the surface that proves the rule is the
+      // app's own rather than an import. If a later change ever moves a
+      // graphic above this panel, the audit says so on the same run.
+      <section className="foc__now" aria-label={s.running.heading} data-nx-content>
         <div className="foc__now-head">
           <span className="foc__heading">
             {progress.isPaused ? s.running.pausedHeading : s.running.heading}
@@ -402,7 +408,7 @@ export function FocusPage({ profileId, enabledModules }: FocusPageProps) {
   /** Nothing runs: what the cycle suggests, what to attach to it, and the three explicit starts. */
   function renderIdle(): ReactNode {
     return (
-      <section className="foc__now" aria-label={s.idle.heading}>
+      <section className="foc__now" aria-label={s.idle.heading} data-nx-content>
         <div className="foc__now-head">
           <span className="foc__heading">{s.idle.heading}</span>
           <Chip variant={suggestion.kind === "work" ? "accent" : "data"}>

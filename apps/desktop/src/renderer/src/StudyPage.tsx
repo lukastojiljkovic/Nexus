@@ -17,6 +17,7 @@ import {
   Button,
   Checkbox,
   Chip,
+  Disclosure,
   EmptyState,
   Icon,
   ListRow,
@@ -82,6 +83,7 @@ import { NotePopover } from "./notePopover.js";
 import { ConfirmDialog } from "./ConfirmDialog.js";
 import { TypedConfirmDialog } from "./TypedConfirmDialog.js";
 import { scrollRevealedIntoView, useRevealedRow } from "./reveal.js";
+import { persistOverviewOpen, readStoredOverviewOpen } from "./overviewPrefs.js";
 import { intervalLabel, isDueWithinSession } from "./reviewIntervals.js";
 import { countUnit, dayUnit, strings } from "./strings.js";
 import { STUDY_LOG_WINDOW_DAYS, studyLogExamLabels, studyLogFacts } from "./studyLog.js";
@@ -580,6 +582,10 @@ export interface StudyPageProps {
  * (`syncAllPlans` runs before every plan read so missed blocks are labelled).
  */
 export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: StudyPageProps) {
+  // Read once, at mount: the stored value is this machine's answer, and
+  // re-reading it on every render would let a second window's write change
+  // this page under the reader mid-session.
+  const [overviewOpen, setOverviewOpen] = useState(() => readStoredOverviewOpen("study"));
   const [subjects, setSubjects] = useState<Subject[] | null>(null);
   const [exams, setExams] = useState<Exam[] | null>(null);
   const [decks, setDecks] = useState<Deck[] | null>(null);
@@ -3265,12 +3271,28 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
               further down already owns that name, and two landmarks answering to
               one name is worse for a screen reader than no landmark at all. The
               band's own labels and the chart's title carry the meaning. */}
+          {/* The chart folds, the band does not — see `overviewPrefs.ts`. At
+              900x600 the band, the chart, its caption and its legend put the
+              subject list entirely below the fold, on the page whose subject IS
+              the subject list. */}
           <div className="study__overview">
             <StatBand stats={summaryStats} />
-            <StudyPlanVsActual profileId={profileId} />
+            <Disclosure
+              label={strings.app.overviewToggle}
+              open={overviewOpen}
+              onToggle={(next) => {
+                setOverviewOpen(next);
+                persistOverviewOpen("study", next);
+              }}
+            >
+              <StudyPlanVsActual profileId={profileId} />
+            </Disclosure>
           </div>
 
-          <div className="study__subjects">
+          {/* `data-nx-content` (`shots/audit.ts`): the subject list is what
+              this page IS, and the audit refuses a landing that opens
+              without it. */}
+          <div className="study__subjects" data-nx-content>
             {activeSubjects.map((subject) => {
               const subjectExams = examsForSubject(subject.id);
               const subjectDecks = decksForSubject(subject.id);

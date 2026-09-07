@@ -6,6 +6,7 @@ import {
   CardsView,
   Checkbox,
   Chip,
+  Disclosure,
   EmptyState,
   Icon,
   KanbanCard,
@@ -104,6 +105,7 @@ import { readStoredBlockedInToday, toIncludeBlocked } from "./taskPrefs.js";
 import { useFocusTrap } from "./useFocusTrap.js";
 import { moduleName } from "./moduleName.js";
 import { TaskFlow } from "./TaskFlow.js";
+import { persistOverviewOpen, readStoredOverviewOpen } from "./overviewPrefs.js";
 import { readStoredWeekStart, toWeekStart } from "./weekStart.js";
 
 // --- Field orderings (renderer mirror of @nexus/db) -------------------------
@@ -1127,6 +1129,10 @@ export interface TasksPageProps {
  * notice bar reports because the row has moved rather than been struck through.
  */
 export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps) {
+  // Read once, at mount: the stored value is this machine's answer, and
+  // re-reading it on every render would let a second window's write change
+  // this page under the reader mid-session.
+  const [overviewOpen, setOverviewOpen] = useState(() => readStoredOverviewOpen("tasks"));
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [failed, setFailed] = useState(false);
   /** Every list of the profile and every section of those lists — one fetch, see `TaskListsSnapshot`. */
@@ -4452,10 +4458,26 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
             fetch is still in flight or has failed: a figure drawn over data
             that is not actually in hand yet would be a number about nothing,
             which is the one thing a 24px numeral must never be. */}
+        {/* The chart FOLDS and the band does not. Drawn out together they are
+            about four hundred pixels, and at the 900x600 floor that left the
+            quick-add line on the bottom edge with no task above it — a task
+            page whose first screen has no task on it. The three figures are
+            what „kako stojim" needs and they cost one row; the picture is the
+            follow-up question, so it is one click away and stays open once
+            somebody opens it (`overviewPrefs.ts`). */}
         {!failed && tasks !== null && (
           <>
             <StatBand stats={summaryStats} />
-            <TaskFlow tasks={tasks} today={todayKey} weekStart={weekStart} />
+            <Disclosure
+              label={strings.app.overviewToggle}
+              open={overviewOpen}
+              onToggle={(next) => {
+                setOverviewOpen(next);
+                persistOverviewOpen("tasks", next);
+              }}
+            >
+              <TaskFlow tasks={tasks} today={todayKey} weekStart={weekStart} />
+            </Disclosure>
           </>
         )}
         {/* The add/edit form is hidden inside a VIEW while nothing is being
@@ -5049,263 +5071,275 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
           </div>
         )}
 
-        {failed ? (
-          <EmptyState
-            sigil="tasks"
-            title={strings.tasks.emptyTitle}
-            description={strings.tasks.loadError}
-          />
-        ) : tasks === null || lists === null ? (
-          <p className="nx-hint">{strings.app.loading}</p>
-        ) : view === "list" ? (
-          // The body first, then each section by its own position — sections are
-          // what a task row cannot order itself by (see `TaskGroup`).
-          <>
-            {/* An empty list still shows whatever headings it has, and the way to
-                add one: the empty state stands in only when there is nothing at
-                all to draw. A filter that matches nothing says so instead —
-                including where the list does have headings, since empty ones
-                would only be noise under an answer of "no rows". */}
-            {completedSplit !== null && recentTasks.length === 0 && archivedTasks.length > 0 ? (
-              // „Završeno“ with everything aged past the boundary: not "nothing
-              // was ever finished" — the archive right beneath holds it all,
-              // and the empty state says so instead.
-              <EmptyState
-                sigil="tasks"
-                title={strings.tasks.smart.names.zavrseno}
-                description={`${strings.tasks.smart.allArchivedPrefix} ${TASK_ARCHIVE_AFTER_DAYS} ${strings.tasks.smart.allArchivedSuffix}`}
-              />
-            ) : filterHidesEverything ? (
-              <EmptyState
-                sigil="tasks"
-                title={strings.tasks.emptyTitle}
-                description={filterEmptyDescription}
-              />
-            ) : smartListId !== null && visibleTasks.length === 0 ? (
-              // A view's own calm statement of fact, never the list's „zapiši
-              // prvi zadatak“ invitation: there is no field to type into here.
-              <EmptyState
-                sigil="tasks"
-                title={strings.tasks.smart.names[smartListId]}
-                description={strings.tasks.smart.empty[smartListId]}
-              />
-            ) : listTasks.length === 0 && listSections.length === 0 ? (
-              <EmptyState
-                sigil="tasks"
-                title={strings.tasks.emptyTitle}
-                description={strings.tasks.emptyDescription}
-              />
-            ) : (
-              groups.map((group) => renderGroup(group))
-            )}
-            {/* The „Završeno“ bound (ADR-039 §4): a quiet line saying what is on
-                screen out of what there is, and one step that widens it. Never a
-                page count — the rows are already in memory, and the only honest
-                thing to say is how far down this list currently reaches. */}
-            {completedTruncated && (
-              <div className="tasks__more">
-                <p className="nx-hint">
-                  {strings.tasks.smart.shownPrefix} {shownRecent.length}{" "}
-                  {strings.tasks.smart.shownOf} {recentTasks.length}
-                </p>
-                <Button
-                  size="sm"
-                  className="tasks__more-action"
-                  onClick={() => setCompletedShown((shown) => shown + COMPLETED_PAGE_STEP)}
-                >
-                  {strings.tasks.smart.showMore}
-                </Button>
-              </div>
-            )}
-            {/* The archive: everything completed before the 30-day boundary,
-                beneath the recent rows and collapsed by default. A quiet
-                typographic disclosure — the export module picker's own idiom,
-                no chrome — and expanding it draws the same rows the view draws,
-                under the same paging recipe. The open state lives and dies with
-                this mount. */}
-            {archivedTasks.length > 0 && (
-              <>
-                <button
-                  type="button"
-                  className="tasks__archive-toggle"
-                  aria-expanded={archiveOpen}
-                  onClick={() => setArchiveOpen((open) => !open)}
-                >
-                  <span className="tasks__archive-mark" aria-hidden="true" />
-                  {strings.tasks.smart.archiveTitle}
-                  <span className="tasks__archive-count">({archivedTasks.length})</span>
-                </button>
-                {archiveOpen && renderGroup({ section: null, roots: [...shownArchived] })}
-                {archiveTruncated && (
-                  <div className="tasks__more">
-                    <p className="nx-hint">
-                      {strings.tasks.smart.shownPrefix} {shownArchived.length}{" "}
-                      {strings.tasks.smart.shownOf} {archivedTasks.length}
-                    </p>
-                    <Button
-                      size="sm"
-                      className="tasks__more-action"
-                      onClick={() => setArchiveShown((shown) => shown + COMPLETED_PAGE_STEP)}
-                    >
-                      {strings.tasks.smart.showMore}
-                    </Button>
-                  </div>
-                )}
-              </>
-            )}
-            {selectedId !== null &&
-              (sectionEditing?.mode === "new" ? (
-                <InlineNameForm
-                  value={sectionDraft}
-                  placeholder={strings.tasks.lists.sectionNamePlaceholder}
-                  label={strings.tasks.lists.newSection}
-                  onChange={setSectionDraft}
-                  onSubmit={() => submitNewSection(selectedId)}
-                  onCancel={closeSectionEditor}
+        {/* Everything the module is FOR, in one box.
+
+            The box exists for `data-nx-content` (`shots/audit.ts`): the rows
+            are the thing a task page has to be showing, and until this
+            wrapper there was no element to point at — the branches are a
+            conditional whose arms are a fragment, four components and three
+            empty states, so „the rows" had no box in the document at all.
+            That is also why the defect could be photographed at 900x600 for
+            months without being seen.
+
+            Layout-neutral by construction: `.tasks__main` is a column with
+            `--nx-space-4` between its items, and so is this, so the arms sit
+            exactly where they sat as direct children of it. */}
+        <div className="tasks__rows" data-nx-content>
+          {failed ? (
+            <EmptyState
+              sigil="tasks"
+              title={strings.tasks.emptyTitle}
+              description={strings.tasks.loadError}
+            />
+          ) : tasks === null || lists === null ? (
+            <p className="nx-hint">{strings.app.loading}</p>
+          ) : view === "list" ? (
+            // The body first, then each section by its own position — sections are
+            // what a task row cannot order itself by (see `TaskGroup`).
+            <>
+              {/* An empty list still shows whatever headings it has, and the way to
+                  add one: the empty state stands in only when there is nothing at
+                  all to draw. A filter that matches nothing says so instead —
+                  including where the list does have headings, since empty ones
+                  would only be noise under an answer of "no rows". */}
+              {completedSplit !== null && recentTasks.length === 0 && archivedTasks.length > 0 ? (
+                // „Završeno“ with everything aged past the boundary: not "nothing
+                // was ever finished" — the archive right beneath holds it all,
+                // and the empty state says so instead.
+                <EmptyState
+                  sigil="tasks"
+                  title={strings.tasks.smart.names.zavrseno}
+                  description={`${strings.tasks.smart.allArchivedPrefix} ${TASK_ARCHIVE_AFTER_DAYS} ${strings.tasks.smart.allArchivedSuffix}`}
+                />
+              ) : filterHidesEverything ? (
+                <EmptyState
+                  sigil="tasks"
+                  title={strings.tasks.emptyTitle}
+                  description={filterEmptyDescription}
+                />
+              ) : smartListId !== null && visibleTasks.length === 0 ? (
+                // A view's own calm statement of fact, never the list's „zapiši
+                // prvi zadatak“ invitation: there is no field to type into here.
+                <EmptyState
+                  sigil="tasks"
+                  title={strings.tasks.smart.names[smartListId]}
+                  description={strings.tasks.smart.empty[smartListId]}
+                />
+              ) : listTasks.length === 0 && listSections.length === 0 ? (
+                <EmptyState
+                  sigil="tasks"
+                  title={strings.tasks.emptyTitle}
+                  description={strings.tasks.emptyDescription}
                 />
               ) : (
-                <Button size="sm" className="tasks__new-section" onClick={beginNewSection}>
-                  {strings.tasks.lists.newSection}
-                </Button>
-              ))}
-          </>
-        ) : visibleTasks.length === 0 ? (
-          // The other three shapes have nothing to hold headings or an "add"
-          // affordance for, so an empty list is the empty state there, as it was
-          // for the board before TASK-004 — and a filter that hides everything
-          // says which of the two it is.
-          <EmptyState
-            sigil="tasks"
-            title={strings.tasks.emptyTitle}
-            description={
-              filterHidesEverything ? filterEmptyDescription : strings.tasks.emptyDescription
-            }
-          />
-        ) : view === "kanban" ? (
-          // The board stays flat: a subtask is a real task with a status of its
-          // own, and a card in Za rad whose parent sits in U toku belongs in Za
-          // rad. Only the roll-up chip travels here, so a parent card still says
-          // how much of it is actually finished. What the columns ARE is now the
-          // list's own choice (ADR-050) — status, prioritet or sekcija — while a
-          // card's place WITHIN one is still not something the board lets the
-          // user set.
-          <KanbanView<TaskFields>
-            items={visibleTasks}
-            schema={kanbanSchema}
-            config={kanbanConfig}
-            columnTitle={kanbanColumnTitle}
-            ungroupedTitle={kanbanUngroupedTitle}
-            // The column head's own „⋯“ (ADR-060): one action, „Sakrij kolonu“,
-            // disabled on the last drawn column. The keyless „Telo liste“
-            // bucket cannot be hidden, so it gets no menu rather than a menu
-            // of nothing.
-            columnActions={(value) =>
-              value === null ? null : (
-                <NotePopover
-                  label={`${strings.tasks.controls.columnMenuLabel} ${kanbanColumnTitle(value)}`}
-                  triggerClassName="tasks__column-menu"
-                >
-                  {(close) => (
-                    <button
-                      className="note__menu-item"
-                      role="menuitem"
-                      type="button"
-                      disabled={kanbanHideRefused}
-                      onClick={() => {
-                        toggleKanbanColumn(value);
-                        close();
-                      }}
-                    >
-                      {strings.tasks.controls.hideColumn}
-                    </button>
+                groups.map((group) => renderGroup(group))
+              )}
+              {/* The „Završeno“ bound (ADR-039 §4): a quiet line saying what is on
+                  screen out of what there is, and one step that widens it. Never a
+                  page count — the rows are already in memory, and the only honest
+                  thing to say is how far down this list currently reaches. */}
+              {completedTruncated && (
+                <div className="tasks__more">
+                  <p className="nx-hint">
+                    {strings.tasks.smart.shownPrefix} {shownRecent.length}{" "}
+                    {strings.tasks.smart.shownOf} {recentTasks.length}
+                  </p>
+                  <Button
+                    size="sm"
+                    className="tasks__more-action"
+                    onClick={() => setCompletedShown((shown) => shown + COMPLETED_PAGE_STEP)}
+                  >
+                    {strings.tasks.smart.showMore}
+                  </Button>
+                </div>
+              )}
+              {/* The archive: everything completed before the 30-day boundary,
+                  beneath the recent rows and collapsed by default. A quiet
+                  typographic disclosure — the export module picker's own idiom,
+                  no chrome — and expanding it draws the same rows the view draws,
+                  under the same paging recipe. The open state lives and dies with
+                  this mount. */}
+              {archivedTasks.length > 0 && (
+                <>
+                  <Disclosure
+                    label={strings.tasks.smart.archiveTitle}
+                    open={archiveOpen}
+                    onToggle={setArchiveOpen}
+                    summary={String(archivedTasks.length)}
+                  >
+                    {renderGroup({ section: null, roots: [...shownArchived] })}
+                  </Disclosure>
+                  {archiveTruncated && (
+                    <div className="tasks__more">
+                      <p className="nx-hint">
+                        {strings.tasks.smart.shownPrefix} {shownArchived.length}{" "}
+                        {strings.tasks.smart.shownOf} {archivedTasks.length}
+                      </p>
+                      <Button
+                        size="sm"
+                        className="tasks__more-action"
+                        onClick={() => setArchiveShown((shown) => shown + COMPLETED_PAGE_STEP)}
+                      >
+                        {strings.tasks.smart.showMore}
+                      </Button>
+                    </div>
                   )}
-                </NotePopover>
-              )
-            }
-            itemKey={(task) => task.id}
-            renderCard={(task, { groupValue, columnValues }) => (
-              <KanbanCard
-                tag={taskChips({
-                  task,
-                  children: childrenOf(task.id),
-                  tags: tagsOf(task.id),
-                  attachmentCount: attachmentCountOf(task.id),
-                  blocked: isBlocked(task.id),
-                  today: todayKey,
-                  // The board only ever shows ONE list, so its own name would be
-                  // on every card and say nothing.
-                  listName: null,
-                })}
-              >
-                <span className="tasks__card-title">
-                  <span
-                    id={taskRowDomId(task.id)}
-                    className={revealedId === task.id ? "nx-revealed" : undefined}
-                  >
-                    {task.title}
-                  </span>
-                  {/* The keyboard way to do what the drag does (ADR-050) — the
-                      board's own a11y gap, deferred from TASK-005 and closed
-                      here, where the card is actually rendered. */}
-                  <ColumnMoveMenu
-                    columnValues={columnValues}
-                    groupValue={groupValue}
-                    onMove={(toGroupValue) =>
-                      applyKanbanMove(task, moveBetweenGroups(task, toGroupValue, kanbanConfig))
-                    }
+                </>
+              )}
+              {selectedId !== null &&
+                (sectionEditing?.mode === "new" ? (
+                  <InlineNameForm
+                    value={sectionDraft}
+                    placeholder={strings.tasks.lists.sectionNamePlaceholder}
+                    label={strings.tasks.lists.newSection}
+                    onChange={setSectionDraft}
+                    onSubmit={() => submitNewSection(selectedId)}
+                    onCancel={closeSectionEditor}
                   />
-                </span>
-              </KanbanCard>
-            )}
-            onMove={applyKanbanMove}
-          />
-        ) : view === "cards" ? (
-          // The same rows as the list, one card each: the checkbox (the primary
-          // action belongs on every rendering of a task), the title, and the
-          // chip cluster verbatim. Deliberately no description excerpt — a card
-          // that quotes half a body is a card the eye stops reading.
-          <CardsView<TaskFields>
-            items={visibleTasks}
-            schema={TASK_SCHEMA}
-            config={cardsConfig}
-            itemKey={(task) => task.id}
-            renderItem={(task) => (
-              <>
-                <Checkbox
-                  checked={task.done}
-                  done={task.done}
-                  onChange={(event) => void toggleDone(task, event.target.checked)}
-                >
-                  <span
-                    id={taskRowDomId(task.id)}
-                    className={revealedId === task.id ? "nx-revealed" : undefined}
+                ) : (
+                  <Button size="sm" className="tasks__new-section" onClick={beginNewSection}>
+                    {strings.tasks.lists.newSection}
+                  </Button>
+                ))}
+            </>
+          ) : visibleTasks.length === 0 ? (
+            // The other three shapes have nothing to hold headings or an "add"
+            // affordance for, so an empty list is the empty state there, as it was
+            // for the board before TASK-004 — and a filter that hides everything
+            // says which of the two it is.
+            <EmptyState
+              sigil="tasks"
+              title={strings.tasks.emptyTitle}
+              description={
+                filterHidesEverything ? filterEmptyDescription : strings.tasks.emptyDescription
+              }
+            />
+          ) : view === "kanban" ? (
+            // The board stays flat: a subtask is a real task with a status of its
+            // own, and a card in Za rad whose parent sits in U toku belongs in Za
+            // rad. Only the roll-up chip travels here, so a parent card still says
+            // how much of it is actually finished. What the columns ARE is now the
+            // list's own choice (ADR-050) — status, prioritet or sekcija — while a
+            // card's place WITHIN one is still not something the board lets the
+            // user set.
+            <KanbanView<TaskFields>
+              items={visibleTasks}
+              schema={kanbanSchema}
+              config={kanbanConfig}
+              columnTitle={kanbanColumnTitle}
+              ungroupedTitle={kanbanUngroupedTitle}
+              // The column head's own „⋯“ (ADR-060): one action, „Sakrij kolonu“,
+              // disabled on the last drawn column. The keyless „Telo liste“
+              // bucket cannot be hidden, so it gets no menu rather than a menu
+              // of nothing.
+              columnActions={(value) =>
+                value === null ? null : (
+                  <NotePopover
+                    label={`${strings.tasks.controls.columnMenuLabel} ${kanbanColumnTitle(value)}`}
+                    triggerClassName="tasks__column-menu"
                   >
-                    {task.title}
+                    {(close) => (
+                      <button
+                        className="note__menu-item"
+                        role="menuitem"
+                        type="button"
+                        disabled={kanbanHideRefused}
+                        onClick={() => {
+                          toggleKanbanColumn(value);
+                          close();
+                        }}
+                      >
+                        {strings.tasks.controls.hideColumn}
+                      </button>
+                    )}
+                  </NotePopover>
+                )
+              }
+              itemKey={(task) => task.id}
+              renderCard={(task, { groupValue, columnValues }) => (
+                <KanbanCard
+                  tag={taskChips({
+                    task,
+                    children: childrenOf(task.id),
+                    tags: tagsOf(task.id),
+                    attachmentCount: attachmentCountOf(task.id),
+                    blocked: isBlocked(task.id),
+                    today: todayKey,
+                    // The board only ever shows ONE list, so its own name would be
+                    // on every card and say nothing.
+                    listName: null,
+                  })}
+                >
+                  <span className="tasks__card-title">
+                    <span
+                      id={taskRowDomId(task.id)}
+                      className={revealedId === task.id ? "nx-revealed" : undefined}
+                    >
+                      {task.title}
+                    </span>
+                    {/* The keyboard way to do what the drag does (ADR-050) — the
+                        board's own a11y gap, deferred from TASK-005 and closed
+                        here, where the card is actually rendered. */}
+                    <ColumnMoveMenu
+                      columnValues={columnValues}
+                      groupValue={groupValue}
+                      onMove={(toGroupValue) =>
+                        applyKanbanMove(task, moveBetweenGroups(task, toGroupValue, kanbanConfig))
+                      }
+                    />
                   </span>
-                </Checkbox>
-                {taskChips({
-                  task,
-                  children: childrenOf(task.id),
-                  tags: tagsOf(task.id),
-                  attachmentCount: attachmentCountOf(task.id),
-                  blocked: isBlocked(task.id),
-                  today: todayKey,
-                  listName: null,
-                })}
-              </>
-            )}
-          />
-        ) : (
-          <TaskMonthGrid
-            items={calendarBars}
-            undated={calendarUndated}
-            onOpen={(taskId) => {
-              const task = visibleTasks.find((row) => row.id === taskId);
-              if (task !== undefined) startEdit(task);
-            }}
-            onMoveToDay={(taskId, dayKey) => void moveTaskToDay(taskId, dayKey)}
-          />
-        )}
+                </KanbanCard>
+              )}
+              onMove={applyKanbanMove}
+            />
+          ) : view === "cards" ? (
+            // The same rows as the list, one card each: the checkbox (the primary
+            // action belongs on every rendering of a task), the title, and the
+            // chip cluster verbatim. Deliberately no description excerpt — a card
+            // that quotes half a body is a card the eye stops reading.
+            <CardsView<TaskFields>
+              items={visibleTasks}
+              schema={TASK_SCHEMA}
+              config={cardsConfig}
+              itemKey={(task) => task.id}
+              renderItem={(task) => (
+                <>
+                  <Checkbox
+                    checked={task.done}
+                    done={task.done}
+                    onChange={(event) => void toggleDone(task, event.target.checked)}
+                  >
+                    <span
+                      id={taskRowDomId(task.id)}
+                      className={revealedId === task.id ? "nx-revealed" : undefined}
+                    >
+                      {task.title}
+                    </span>
+                  </Checkbox>
+                  {taskChips({
+                    task,
+                    children: childrenOf(task.id),
+                    tags: tagsOf(task.id),
+                    attachmentCount: attachmentCountOf(task.id),
+                    blocked: isBlocked(task.id),
+                    today: todayKey,
+                    listName: null,
+                  })}
+                </>
+              )}
+            />
+          ) : (
+            <TaskMonthGrid
+              items={calendarBars}
+              undated={calendarUndated}
+              onOpen={(taskId) => {
+                const task = visibleTasks.find((row) => row.id === taskId);
+                if (task !== undefined) startEdit(task);
+              }}
+              onMoveToDay={(taskId, dayKey) => void moveTaskToDay(taskId, dayKey)}
+            />
+          )}
+        </div>
       </div>
 
       {completePrompt !== null && (

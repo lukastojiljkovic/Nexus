@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { JSONContent } from "@tiptap/core";
 import type { CardsViewConfig, CollectionSchema } from "@nexus/core";
-import { Button, CardsView, EmptyState, Icon, LoadingState, PageHeader } from "@nexus/ui";
+import {
+  Button,
+  CardsView,
+  Disclosure,
+  EmptyState,
+  Icon,
+  LoadingState,
+  PageHeader,
+} from "@nexus/ui";
 import type {
   NoteCardDisposition,
   NoteCategory,
@@ -17,6 +25,7 @@ import { NoteChecklistTasksDialog } from "./NoteChecklistTasksDialog.js";
 import { NoteEditor } from "./NoteEditor.js";
 import { NOTE_ORGANIZER_PANE_ID, NoteOrganizer, type FolderSelection } from "./NoteOrganizer.js";
 import { NoteRhythm, localDayOf } from "./NoteRhythm.js";
+import { persistOverviewOpen, readStoredOverviewOpen } from "./overviewPrefs.js";
 import { PRIV_LOCKED_EVENT } from "./PrivPage.js";
 import { TypedConfirmDialog } from "./TypedConfirmDialog.js";
 import { localTodayKey, shiftDayKey } from "./examDates.js";
@@ -289,6 +298,10 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
   // (see `.note` in app.css). The state exists at every width; above the
   // breakpoint the pane is a column and CSS ignores it, toggle included.
   const [organizerOpen, setOrganizerOpen] = useState(false);
+  // Read once, at mount: the stored value is this machine's answer, and
+  // re-reading it on every render would let a second window's write change
+  // this page under the reader mid-session.
+  const [overviewOpen, setOverviewOpen] = useState(() => readStoredOverviewOpen("notes"));
   const organizerToggleRef = useRef<HTMLButtonElement>(null);
   const [notes, setNotes] = useState<NoteMeta[] | null>(null);
   const [failed, setFailed] = useState(false);
@@ -1181,9 +1194,31 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
       />
       {/* The library's own summary, not any one note's — a page-level sibling of
           the three-pane grid rather than a child of any one pane, so it reads as
-          being about the whole profile regardless of which folder is selected. */}
-      <NoteRhythm profileId={profileId} />
-      <div className="note" data-organizer={organizerOpen ? "open" : "closed"}>
+          being about the whole profile regardless of which folder is selected.
+
+          FOLDED, and closed until this machine says otherwise. Drawn out, the
+          band and the heatmap are about five hundred pixels, which at the
+          900x600 floor and at the 1120x720 the app opens at left the note list
+          entirely below the fold — a notes page whose first screen has no note
+          on it. `overviewPrefs.ts` has the whole argument. */}
+      <Disclosure
+        label={strings.app.overviewToggle}
+        open={overviewOpen}
+        onToggle={(next) => {
+          setOverviewOpen(next);
+          persistOverviewOpen("notes", next);
+        }}
+      >
+        <NoteRhythm profileId={profileId} />
+      </Disclosure>
+      {/* `data-nx-content`: the three panes ARE the module, so the audit
+          asserts they reach the first screen at every swept size
+          (`shots/audit.ts`, `below-fold`). */}
+      <div
+        className="note"
+        data-nx-content
+        data-organizer={organizerOpen ? "open" : "closed"}
+      >
         <NoteOrganizer
           profileId={profileId}
           folders={folders}

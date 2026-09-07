@@ -1309,6 +1309,12 @@ export const MODULE_SETTINGS_PANELS: Record<string, SettingsPanelRenderer> = {
   notes: { Body: NotesSettingsPanel, resetDevice: clearStoredNotePreferences },
   priv: { Body: PrivSettingsPanel },
   files: { Body: FilesSettingsPanel, resetDevice: clearStoredFilePreferences },
+  // NO `resetDevice`, and it is the panel that decides: UČENJE's three controls
+  // are all PROFILE values (`STUDY_SETTINGS`), so the card is not device-only
+  // and „Vrati na podrazumevano" would appear over three settings it cannot
+  // touch. The module does now keep one device preference — whether its
+  // overview is folded open (`overviewPrefs.ts`) — and that one is set and
+  // unset by its own control on the page, in view, one click away.
   study: { Body: StudySettingsPanel },
   finance: { Body: FinanceSettingsPanel, resetDevice: clearStoredFinancePreferences },
   habits: { Body: HabitsSettingsPanel, resetDevice: clearStoredHabitPreferences },

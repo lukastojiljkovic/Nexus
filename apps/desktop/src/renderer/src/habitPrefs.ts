@@ -26,6 +26,7 @@
  * enough to be a last call rather than an interruption. Nothing here claims it is
  * optimal — a user who disagrees moves it, which is the entire point of the card.
  */
+import { clearStoredOverviewOpen } from "./overviewPrefs.js";
 
 const DEFAULT_REMINDER_KEY = "nexus.habits.defaultReminder";
 
@@ -57,4 +58,5 @@ export function persistDefaultReminder(time: string): void {
 /** Forgets this card's one key, so the next read opens on 20:00 again — „Navike"'s „Vrati na podrazumevano" (SET §5). */
 export function clearStoredHabitPreferences(): void {
   localStorage.removeItem(DEFAULT_REMINDER_KEY);
+  clearStoredOverviewOpen("habits");
 }

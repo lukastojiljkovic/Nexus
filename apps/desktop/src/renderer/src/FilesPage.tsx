@@ -290,7 +290,7 @@ export function FilesPage({ profileId, onOpenOwner }: FilesPageProps) {
 
   function renderList(entries: readonly DocAttachmentEntry[]) {
     return (
-      <div className="doc__list">
+      <div className="doc__list" data-nx-content>
         <div className="doc__list-head" aria-hidden="true">
           <span>{s.columns.name}</span>
           <span>{s.columns.owner}</span>
@@ -315,7 +315,7 @@ export function FilesPage({ profileId, onOpenOwner }: FilesPageProps) {
 
   function renderGrid(entries: readonly DocAttachmentEntry[]) {
     return (
-      <div className="doc__grid">
+      <div className="doc__grid" data-nx-content>
         {entries.map((entry) => {
           const mark = fileExtensionMark(entry.fileName);
           return (

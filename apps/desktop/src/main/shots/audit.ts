@@ -23,6 +23,9 @@
  *                     in the coordinates it was authored in rather than in
  *                     painted pixels, so a canvas the user zooms is judged on
  *                     its design and not on the zoom it happens to be at
+ *  - `below-fold`     a region marked `data-nx-content` — the thing a module
+ *                     is FOR — that does not reach the first screen of a
+ *                     page nobody has expanded anything on
  *
  * The script is a string rather than an imported module because it is evaluated
  * in the RENDERER's world through `executeJavaScript`, where the main process's
@@ -32,7 +35,13 @@
 
 /** One thing the page's own geometry says is wrong. */
 export interface AuditFinding {
-  kind: "offscreen" | "clipped-text" | "escapes-parent" | "overlap" | "small-target";
+  kind:
+    | "offscreen"
+    | "clipped-text"
+    | "escapes-parent"
+    | "overlap"
+    | "small-target"
+    | "below-fold";
   /** A CSS-ish path to the element, built from tag + class, for grepping the source. */
   where: string;
   /** The second element, for `overlap`; empty otherwise. */
@@ -413,6 +422,64 @@ export const AUDIT_SCRIPT = `(() => {
       // that means anything.
       boxes.push({ el: el, rect: visibleRect(el, rect), z: style.zIndex });
     }
+  }
+
+  // --- A module's own subject, on the first screen ---------------------------
+  //
+  // Every other rule here is a claim the geometry contradicts by itself. This
+  // one needs to be TOLD which box a page is for, because "the notes are the
+  // point of the notes page" is not a fact about any rectangle. That is the
+  // same admission OVERLAY_SELECTOR makes above, and the marker is the better
+  // shape of it: intent stated at the element, in the file that renders it,
+  // rather than in a selector list far away that a new surface has to be added
+  // to by somebody who knows this file exists.
+  //
+  // What it caught: four landings drew a stat row, a full-width chart, a
+  // caption and a legend before the list, and at 900x600 and at the 1120x720
+  // the app opens at, NOTE showed no note and TASK showed no task. Nothing was
+  // clipped, nothing escaped, nothing overlapped, no target was small — every
+  // rule above passed on a page that was not showing its own subject.
+  //
+  // The floor is the 24px this file already owns. It is the smallest box the
+  // app is willing to put under a pointer, so it is also the smallest slice of
+  // a region that could be carrying a usable row; borrowing it rather than
+  // inventing a second number keeps the audit speaking with one voice about
+  // how small is too small.
+  const lastLine = viewHeight - 24;
+  const marked = Array.prototype.slice.call(document.querySelectorAll("[data-nx-content]"));
+  const opened = Array.prototype.slice.call(
+    document.querySelectorAll('[aria-expanded="true"]'),
+  );
+  for (const region of marked) {
+    // The claim is about a LANDING — the page as it arrives. A reader who
+    // opens the fold over the chart, or TASK's „Detalji" fields, has asked
+    // for the thing that pushes the list down and has been told what it
+    // costs by the triangle they clicked. Reporting that is reporting the
+    // fold working, and a rule that names its own fix as a defect is a rule
+    // nobody reads twice — the second sweep after the fold landed said so in
+    // three rows.
+    //
+    // The DOM already states what the reader opened, so this is a rule and
+    // not a list: an expanded control PRECEDING the region (an ancestor
+    // counts, a descendant does not — \`compareDocumentPosition\` separates
+    // them). A note editor's own collapsed block sits INSIDE \`.note\` and
+    // therefore says nothing about why \`.note\` is where it is, which is
+    // exactly the distinction a document-wide test would have lost.
+    const above = opened.some(
+      (el) =>
+        (region.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_PRECEDING) !== 0,
+    );
+    if (above) continue;
+    const regionRect = region.getBoundingClientRect();
+    // A region that is not rendered has nothing to say. A zero box is
+    // \`display: none\` or a branch with nothing in it, and both are the page's
+    // own choice rather than a layout going wrong.
+    if (regionRect.width === 0 || regionRect.height === 0) continue;
+    // The VISIBLE top, for the same reason the overlap pass uses it: a region
+    // inside a pane that has scrolled reports where it WOULD be, and where it
+    // would be is not what anybody is looking at.
+    const top = visibleRect(region, regionRect).top;
+    if (top > lastLine) add("below-fold", region, null, top - lastLine);
   }
 
   // --- Two pieces of text sharing pixels ------------------------------------

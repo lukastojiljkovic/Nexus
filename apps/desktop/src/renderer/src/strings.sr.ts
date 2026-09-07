@@ -81,6 +81,20 @@ export const sr = {
      * says why, and where somebody changes it.
      */
     navPinned: "Za tebe",
+    /**
+     * The fold over a module landing's chart — NOTE, TASK, UČENJE and NAVIKE.
+     *
+     * One word, and the SAME word on all four, because it is one control the
+     * user learns once. It is deliberately not each chart's own name: the chart
+     * still carries that above itself when it opens, and a trigger repeating
+     * the heading it is about to reveal reads as the page saying „Ritam
+     * pisanja" twice.
+     *
+     * A noun and not a verb („Prikaži…") because the triangle already says the
+     * verb and says it in both directions, which a label cannot do without
+     * changing under the pointer.
+     */
+    overviewToggle: "Pregled",
     themeToggle: "Promeni temu",
     themeDan: "Dan",
     themeNoc: "Noć",

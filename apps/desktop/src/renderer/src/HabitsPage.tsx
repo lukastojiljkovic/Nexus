@@ -4,6 +4,7 @@ import { ACCENT_IDS } from "@nexus/tokens";
 import {
   Button,
   Checkbox,
+  Disclosure,
   EmptyState,
   Icon,
   ListRow,
@@ -48,6 +49,7 @@ import {
   type HabitEntryIndex,
 } from "./habitDone.js";
 import { HabitWall } from "./HabitWall.js";
+import { persistOverviewOpen, readStoredOverviewOpen } from "./overviewPrefs.js";
 import { habitDayPhrase, habitPeriodPhrase, habitWeekPhrase } from "./habitFormat.js";
 import { readStoredDefaultReminder } from "./habitPrefs.js";
 import { strings } from "./strings.js";
@@ -234,6 +236,10 @@ export interface HabitsPageProps {
 export function HabitsPage({ profileId }: HabitsPageProps) {
   const s = strings.habits;
 
+  // Read once, at mount: the stored value is this machine's answer, and
+  // re-reading it on every render would let a second window's write change
+  // this page under the reader mid-session.
+  const [overviewOpen, setOverviewOpen] = useState(() => readStoredOverviewOpen("habits"));
   const [habits, setHabits] = useState<Habit[] | null>(null);
   const [entries, setEntries] = useState<HabitEntry[]>([]);
   const [failed, setFailed] = useState(false);
@@ -1067,13 +1073,27 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
           already loaded the rows for. */}
       {!noHabits && <StatBand stats={summaryStats} />}
 
-      {/* The regimen before its parts. „Danas" and „Sve navike" are both lists
-          of one habit at a time; the wall is the only thing on this page that
-          shows the shape of the whole thing, so it opens the page. Live habits
-          only — an archived one is no longer part of the regimen. */}
+      {/* The regimen before its parts: „Danas" and „Sve navike" are both lists
+          of one habit at a time, and the wall is the only thing on this page
+          that shows the shape of the whole thing. That argument is why it comes
+          first and it still holds — what it did not survive is being MEASURED.
+          At 900x600 the band, the wall, its caption, its legend and its own
+          note reach the bottom edge, and „Danas" — the one part of this page a
+          person ACTS on — begins below it. So the wall keeps its place and
+          folds, closed until this machine says otherwise (`overviewPrefs.ts`).
+          Live habits only — an archived one is no longer part of the regimen. */}
       {liveHabits.length > 0 && (
         <section className="hab__section" aria-label={s.wall.heading}>
-          <HabitWall habits={liveHabits} index={index} today={today} weekStart={weekStart} />
+          <Disclosure
+            label={strings.app.overviewToggle}
+            open={overviewOpen}
+            onToggle={(next) => {
+              setOverviewOpen(next);
+              persistOverviewOpen("habits", next);
+            }}
+          >
+            <HabitWall habits={liveHabits} index={index} today={today} weekStart={weekStart} />
+          </Disclosure>
         </section>
       )}
 
@@ -1084,7 +1104,11 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
           „Nova navika" button under the next heading, two filled primaries on
           one surface saying the same word. */}
       {!noHabits && (
-        <section className="hab__section" aria-label={s.today.heading}>
+        // `data-nx-content` (`shots/audit.ts`) goes on „Danas" rather than on
+        // „Sve navike": the register is this module's archive, while this is
+        // the part a person ACTS on — and it is the one the wall pushed off the
+        // first screen.
+        <section className="hab__section" aria-label={s.today.heading} data-nx-content>
           <div className="hab__heading">{s.today.heading}</div>
           <p className="hab__note">{s.today.caption}</p>
           {todayHabits.length === 0 ? (
