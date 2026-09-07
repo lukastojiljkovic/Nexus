@@ -156,7 +156,7 @@
 .set__index {
   position: sticky;
   top: 0;
-  z-index: 2;
+  z-index: var(--nx-layer-raised);
   display: flex;
   flex-wrap: wrap;
   gap: var(--nx-space-1) var(--nx-space-2);

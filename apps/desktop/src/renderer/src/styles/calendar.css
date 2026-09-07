@@ -407,7 +407,7 @@
 .cal__day-header {
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: var(--nx-layer-figure);
   margin: 0 0 var(--nx-space-1);
   padding: var(--nx-space-1) var(--nx-space-2);
   background: var(--nx-surface-alt);
@@ -1475,12 +1475,13 @@ button.cal__grid-event {
 }
 /* Being dragged (ADR-034): the same accent border + soft background every drop
    affordance in the app uses — never a glow — plus enough transparency to read
-   the hour lines it is passing over, and a stacking order that keeps the ghost
-   above the blocks of whichever column it is crossing into. Qualified with
+   the hour lines it is passing over, and `raised`, which is the layer for a box
+   lifted over siblings that are themselves pinned or positioned — here the
+   blocks of whichever column it is crossing into. Qualified with
    `button` to match the specificity of `button.cal__grid-event` above, whose
    `border: none` and `cursor: pointer` a bare class would lose to. */
 button.cal__grid-event--dragging {
-  z-index: 2;
+  z-index: var(--nx-layer-raised);
   opacity: 0.9;
   border: 1px solid var(--nx-accent);
   cursor: grabbing;

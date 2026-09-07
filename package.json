@@ -24,6 +24,7 @@
     "check:elec": "node scripts/check-elec.mjs",
     "check:controls": "node scripts/check-controls.mjs",
     "check:tiers": "node scripts/check-tiers.mjs",
+    "check:layers": "node scripts/check-layers.mjs",
     "check:css": "node scripts/check-css.mjs",
     "check:egress": "node scripts/check-egress.mjs",
     "check:invisibles": "node scripts/check-invisibles.mjs",

@@ -190,5 +190,18 @@
     "prose": "68ch",
     "measure": "1180px",
     "titlebar": "38px"
+  },
+  "layer": {
+    "under": "-1",
+    "ground": "0",
+    "figure": "1",
+    "raised": "2",
+    "docked": "3",
+    "drawerScrim": "4",
+    "drawer": "5",
+    "panel": "20",
+    "overlay": "50",
+    "dialog": "60",
+    "menu": "70"
   }
 }

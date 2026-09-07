@@ -297,7 +297,7 @@
 .tasks__band-head {
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: var(--nx-layer-figure);
   display: flex;
   align-items: center;
   gap: var(--nx-space-2);

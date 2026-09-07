@@ -162,7 +162,7 @@
 .tool__group-title {
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: var(--nx-layer-figure);
   margin: 0 0 var(--nx-space-1);
   padding: var(--nx-space-1) var(--nx-space-3);
   background: var(--nx-surface);
@@ -729,7 +729,7 @@
 .tool__table thead th {
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: var(--nx-layer-figure);
   background: var(--nx-surface);
 }
 .tool__table {

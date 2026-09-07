@@ -78,12 +78,23 @@ for (const { theme, semantic } of themes) {
 // inline at its call site, so nothing could state what a pane is ALLOWED to
 // shrink to — which is how the notes editor ended up at 75px on the window
 // size this app itself enforces as its minimum. See `docs/STATUS.md` §5 B.
+//
+// `layer` is the same argument about a DIFFERENT axis, and it arrived last
+// because a stacking order is invisible until two things collide. The app used
+// seven positive z-index values — 1, 2, 3, 4, 5, 20, 50, 60, 70 — every one
+// chosen at its own call site, so the only statement of the ladder was prose:
+// five comments in `notes.css` alone re-listed it by hand, and one of them
+// still cited a layer 40 that no rule in the tree had carried for months.
+// Two names may share a number (`figure` and a pinned header are both 1) and
+// that is the point: a token is a name for an INTENT, so moving one intent
+// later cannot silently drag the other with it.
 const primitiveGroups = {
   font: global.font,
   radius: global.radius,
   space: global.space,
   motion: global.motion,
   layout: global.layout,
+  layer: global.layer,
 };
 const primitiveVars = Object.entries(primitiveGroups).flatMap(([group, node]) =>
   flatten(node, `--nx-${kebab(group)}`),
