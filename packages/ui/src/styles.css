@@ -400,14 +400,15 @@ samp {
 /* The module's mark, at the largest of its four scales. It is a GROUND, not a
    figure: `text-faint` is the tier held to the 3:1 non-text floor rather than
    the 4.5:1 body one, and 0.13 on top of that puts it below anything a reader
-   will look at directly. `z-index: 0` against the header's own
+   will look at directly. `ground` — z-index 0 — against the header's own
    `position: relative` places it behind the text without creating a stacking
-   context that would trap the actions' popovers. */
+   context that would trap the actions' popovers. The text and the actions
+   below take `figure`, which is what „over the ground" is called here. */
 .nx-page-header__sigil {
   position: absolute;
   top: 0;
   right: 0;
-  z-index: 0;
+  z-index: var(--nx-layer-ground);
   line-height: 0;
   color: var(--nx-text-faint);
   opacity: 0.13;
@@ -416,7 +417,7 @@ samp {
 .nx-page-header__text,
 .nx-page-header__actions {
   position: relative;
-  z-index: 1;
+  z-index: var(--nx-layer-figure);
 }
 .nx-page-header__text {
   display: flex;
@@ -1918,7 +1919,7 @@ samp {
      background. The host must therefore establish a stacking context — see
      `.app__sidebar` — or a negative z-index would escape to the nearest
      ancestor that has one and the sky would paint behind the whole shell. */
-  z-index: -1;
+  z-index: var(--nx-layer-under);
   display: block;
   width: 100%;
   height: 100%;

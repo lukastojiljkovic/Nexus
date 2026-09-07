@@ -285,7 +285,7 @@
 .fin__ledger-head {
   position: sticky;
   top: 0;
-  z-index: 2;
+  z-index: var(--nx-layer-raised);
   height: var(--fin-head-height);
   /* Opaque, and on the page's own colour: the rows scroll UNDER this, and a
      translucent head would let them show through the labels. */
@@ -301,11 +301,13 @@
   text-align: right;
 }
 /* One day, and what it came to. `surface-alt` is the sticky-header surface, so
-   the rule reads as a band across the table rather than as a row of its own. */
+   the rule reads as a band across the table rather than as a row of its own.
+   It pins under the ledger head, which is the one relationship in this file
+   that two z-index values have to each other: `figure` under `raised`. */
 .fin__day {
   position: sticky;
   top: var(--fin-head-height);
-  z-index: 1;
+  z-index: var(--nx-layer-figure);
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;

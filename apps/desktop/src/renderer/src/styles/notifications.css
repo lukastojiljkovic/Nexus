@@ -78,7 +78,7 @@
   border: 1px solid var(--nx-border);
   border-radius: var(--nx-radius-lg);
   box-shadow: var(--nx-elevation-overlay);
-  z-index: 20;
+  z-index: var(--nx-layer-panel);
 }
 .ntf__list {
   flex: 1;

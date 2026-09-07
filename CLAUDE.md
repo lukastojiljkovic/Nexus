@@ -233,7 +233,7 @@ choice of backend**; whatever in them is about the data model still applies.
   import it raise TS7016.
 - **Verification gates before any commit:** `pnpm typecheck` (13/13), `pnpm lint`
   (13/13), `pnpm test` (all green), `pnpm build` (4/4),
-  `pnpm --filter @nexus/desktop smoke` prints `SMOKE OK`, and **all nineteen
+  `pnpm --filter @nexus/desktop smoke` prints `SMOKE OK`, and **all twenty
   static gates** pass. **`pnpm lint` used to be missing from this line** even
   though CI has always run it, and on 2026-08-14 six real errors shipped red
   because of that — two of them display bugs the linter had named (DC-49,
@@ -272,6 +272,27 @@ choice of backend**; whatever in them is about the data model still applies.
   needs no allowlist at all. A block that declares its own `font-family` has
   said out loud that it is a different tier — `.elec-sim__readout` is a mono
   tick counter — and is not this one),
+  **`check:layers`** (a stacking order is a property of the whole app, and this
+  one existed nowhere: 22 `z-index` values over 11 files, each picked at its own
+  call site, so `1` meant „pinned over my rows" seven times and „the lower of
+  two pinned ranks" an eighth, while `2` meant „the ghost being dragged" twice
+  and „a pinned header" twice more. The only statement of the ladder was PROSE
+  — five comments in `notes.css` re-listed it by hand, one naming a layer 40
+  nothing had carried for months and one recording a hazard that was NEVER
+  real: written from the JSX tree the day after the dialogs it named adopted a
+  component that portals to `document.body`, which is the one construct that
+  makes the React tree and the DOM disagree about who contains whom.
+  Nothing else can see this: every value is a valid integer, and the sweep
+  photographs a correct order and an accidental one identically, because two
+  layers differ only where two boxes meet. Every `z-index` is now `auto` or one
+  `var(--nx-layer-*)`, **and the rule needs no exemption list** — `under` (-1)
+  and `ground` (0) name the two cases that are not ladder positions, so nothing
+  is left over. It reads TS as well as CSS, because `useAnchoredPosition` sets
+  inline styles on exactly the boxes at the top of the ladder; an AST pass, so
+  READING `style.zIndex` — which `shots/audit.ts` does on purpose — is a
+  different node and not a finding. It also checks that the scale is still
+  strictly increasing, which is the half a spelling rule misses: all 22 call
+  sites would go on passing if `dialog` were edited under `drawer`),
   `check:invisibles` (no character that renders as nothing, or as a character it
   is not — the defence review itself cannot make),
   **`check:zeroize`** (no key erased in the middle of the call using it: a

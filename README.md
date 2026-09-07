@@ -197,6 +197,17 @@ text plus weight and nothing else: no fill, no border, no glow. One class
 screen reader is told and the state an eye is shown cannot drift apart. A filled
 button therefore goes on meaning „press this" everywhere in the product.
 
+**Layers are named, never numbered.** Stacking order is a property of the whole
+app, so no surface picks its own: every `z-index` is `auto` or one
+`var(--nx-layer-*)`, from a scale that runs `under` · `ground` · `figure` ·
+`raised` · `docked` · `drawer-scrim` · `drawer` · `panel` · `overlay` ·
+`dialog` · `menu`. Two names may share a number — a pinned header and a figure
+over its ground are both 1 — because a token names an INTENT, and moving one
+intent must not silently drag the other with it. `pnpm check:layers` enforces
+it in CSS and in inline styles set from TS, and also checks that the scale is
+still strictly increasing: every call site would go on passing if a layer were
+edited to sit under the one it is meant to cover.
+
 ## Testing
 
 Vitest across the workspace. Data and store logic is written test-first. The

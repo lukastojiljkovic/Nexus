@@ -122,6 +122,20 @@ jobs:
       # a class that is only ever a `<p>`.
       - run: pnpm check:tiers
 
+      # A stacking order is a property of the whole app, and this one existed
+      # nowhere: twenty-two z-index values across eleven files, each chosen at
+      # its own call site, so `1` meant „pinned over my rows" in seven places
+      # and „the lower of two pinned ranks" in an eighth. The only statement of
+      # the ladder was prose — five comments in notes.css re-listed it by hand,
+      # one still naming a layer 40 nothing had carried for months and one
+      # recording a hazard that was never real — written from the JSX tree the
+      # day after the dialogs it named started portalling to `document.body`.
+      # Invisible to every other check: each value is a valid integer, and the sweep
+      # photographs a correct order and an accidental one identically, because
+      # they differ only where two boxes meet. The scale itself is checked too,
+      # since every call site would still pass if a layer moved under another.
+      - run: pnpm check:layers
+
       # A character that renders as nothing, or as a character it is not. This
       # one has to run here rather than in review, because review is exactly
       # what it defeats: a non-breaking space is a space in every editor, in
