@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { SimChannel } from "@nexus/core";
+import type { SimChannel, SimUnit } from "@nexus/core";
 
 import {
   SIM_PREVIEW_HEIGHT,
@@ -11,6 +11,7 @@ import {
   waveFrom,
   wavePreview,
 } from "./elecSim.js";
+import { strings } from "./strings.js";
 
 const channel = (over: Partial<SimChannel> = {}): SimChannel => ({
   id: "D9",
@@ -202,5 +203,37 @@ describe("formatSimValue", () => {
 
   it("writes the decimal the way the form takes it back", () => {
     expect(formatSimValue("volts", 1.25)).toBe("1,25 V");
+  });
+});
+
+/**
+ * The readout's caption, which is the other half of {@link formatSimValue}.
+ *
+ * The bench used to say „radni ciklus" twice on one card about two different
+ * numbers: `waveDuty` („Radni ciklus (%)") is the square wave's own duty, and
+ * the readout's caption was the same phrase over the value the pin drives at
+ * THIS tick. Both numbers were right. The rule that fixes it is not about
+ * that one phrase, so neither is this test: **the caption names the quantity
+ * only where the number does not already carry it.**
+ *
+ * `units` is `satisfies Record<SimUnit, string | null>`, so iterating it is
+ * iterating every unit — a new one cannot slip past this by being forgotten.
+ */
+describe("the readout caption", () => {
+  const units = strings.electronics.sim.units;
+
+  it("names the quantity exactly where the number does not", () => {
+    for (const [unit, noun] of Object.entries(units)) {
+      const numberCarriesIt = formatSimValue(unit as SimUnit, 1) !== "1";
+      expect({ unit, captioned: noun !== null }).toEqual({
+        unit,
+        captioned: !numberCarriesIt,
+      });
+    }
+  });
+
+  it("lets the percent symbol say it, so one card cannot label two numbers alike", () => {
+    expect(units.percent).toBeNull();
+    expect(strings.electronics.sim.waveDuty).toContain("Radni ciklus");
   });
 });

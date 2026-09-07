@@ -703,12 +703,27 @@ export const electronicsSr = {
       sensor: "ploča čita",
       actuator: "ploča upravlja",
     } satisfies Record<SimFlow, string>,
-    /** What the number means, keyed by `SimUnit`. The symbol is on the value; this is the noun. */
+    /**
+     * What the number means, keyed by `SimUnit` — and `null` wherever the
+     * NUMBER already says it.
+     *
+     * The caption under a readout exists because „1" on its own is not a
+     * sentence. „3,3 V" is: the symbol names the quantity, so „napon" beside it
+     * said volts twice. And „100 %" with „radni ciklus" under it was worse than
+     * redundant — it is the same phrase as `waveDuty` („Radni ciklus (%)"),
+     * three rows above and showing 50, because the field is the square wave's
+     * duty and the readout is what the pin drives at THIS tick. Both numbers
+     * were right and one card carried one label for them.
+     *
+     * So the rule is: the caption names the quantity only when the number
+     * cannot. `string | null` rather than a partial record, because a new
+     * `SimUnit` must still be made to choose.
+     */
     units: {
       level: "stanje",
-      percent: "radni ciklus",
-      volts: "napon",
-    } satisfies Record<SimUnit, string>,
+      percent: null,
+      volts: null,
+    } satisfies Record<SimUnit, string | null>,
     /** The waveform picker, keyed by `SimWave`'s own tag. */
     waves: {
       constant: "Stalna vrednost",

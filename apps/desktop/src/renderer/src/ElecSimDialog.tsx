@@ -419,7 +419,16 @@ function SimChannelRow({
           </svg>
           <p className={`elec-sim__value${over ? " elec-sim__value--over" : ""}`}>
             <span className="elec-sim__number">{formatSimValue(channel.unit, value)}</span>
-            <span className="elec-sim__unit">{over ? s.overLogic : s.units[channel.unit]}</span>
+            {/*
+              The caption is the per-tick warning when there is one, and
+              otherwise the quantity noun — which `units` supplies only where the
+              number does not already carry it. Two of the three units are
+              `null`, so this row is often absent; the readout is a flex column,
+              so the number simply keeps its place.
+            */}
+            {(over || s.units[channel.unit] !== null) && (
+              <span className="elec-sim__unit">{over ? s.overLogic : s.units[channel.unit]}</span>
+            )}
           </p>
         </div>
       </div>
