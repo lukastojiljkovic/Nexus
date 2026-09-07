@@ -1,6 +1,7 @@
 export { Button, type ButtonProps } from "./components/Button.js";
 export { Checkbox, type CheckboxProps } from "./components/Checkbox.js";
 export { Chip, type ChipProps } from "./components/Chip.js";
+export { Disclosure, type DisclosureProps } from "./components/Disclosure.js";
 export { Card, type CardProps } from "./components/Card.js";
 export { NavItem, type NavItemProps } from "./components/NavItem.js";
 export { TextField, type TextFieldProps } from "./components/TextField.js";

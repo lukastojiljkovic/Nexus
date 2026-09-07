@@ -1,7 +1,17 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { createPortal } from "react-dom";
-import { Button, Card, Checkbox, Chip, EmptyState, PageHeader, Select, TextField } from "@nexus/ui";
+import {
+  Button,
+  Card,
+  Checkbox,
+  Chip,
+  Disclosure,
+  EmptyState,
+  PageHeader,
+  Select,
+  TextField,
+} from "@nexus/ui";
 import {
   ARCHIVE_MODULE_IDS,
   buildLlmPrompt,
@@ -310,9 +320,9 @@ interface ResetTarget {
 
 /**
  * The quiet link at the foot of a resettable card. Typographic and muted,
- * exactly like `.set__disclosure` — a reset is available, not advertised — and
- * a plain `<button>` rather than an `nx-button`, since a bordered control here
- * would read heavier than the settings it undoes.
+ * exactly like `Disclosure` without the triangle — a reset is available, not
+ * advertised — and a plain `<button>` rather than an `nx-button`, since a
+ * bordered control here would read heavier than the settings it undoes.
  */
 function ResetLink({ onClick }: { onClick: () => void }) {
   return (
@@ -852,21 +862,16 @@ function BackupSection({ profileId }: BackupSectionProps) {
   return (
     <>
       <p className="nx-hint">{s.description}</p>
-      <button
-        type="button"
-        className="set__disclosure"
-        aria-expanded={modulesOpen}
-        onClick={() => setModulesOpen((open) => !open)}
-      >
-        <span className="set__disclosure-mark" aria-hidden="true" />
-        {s.modulesToggle}
-        <span className="set__disclosure-summary">
-          {modules.size === ARCHIVE_MODULES.length
+      <Disclosure
+        label={s.modulesToggle}
+        open={modulesOpen}
+        onToggle={setModulesOpen}
+        summary={
+          modules.size === ARCHIVE_MODULES.length
             ? s.modulesAll
-            : `${modules.size}/${ARCHIVE_MODULES.length}`}
-        </span>
-      </button>
-      {modulesOpen && (
+            : `${modules.size}/${ARCHIVE_MODULES.length}`
+        }
+      >
         <div className="set__module-picker">
           {ARCHIVE_MODULES.map((module) => (
             <Checkbox
@@ -878,7 +883,7 @@ function BackupSection({ profileId }: BackupSectionProps) {
             </Checkbox>
           ))}
         </div>
-      )}
+      </Disclosure>
       {modules.size === 0 && <p className="nx-hint">{s.modulesEmpty}</p>}
       <Checkbox
         checked={encrypt}
@@ -4641,16 +4646,14 @@ function LicenceGroup({ title, caption, entries, defaultOpen }: LicenceGroupProp
 
   return (
     <div className="set__licence-group">
-      <button
-        type="button"
-        className="set__disclosure"
-        aria-expanded={open}
-        onClick={() => setOpen((wasOpen) => !wasOpen)}
-      >
-        <span className="set__disclosure-mark" aria-hidden="true" />
-        {title}
-        <span className="set__disclosure-summary">{entries.length}</span>
-      </button>
+      {/* No children: the caption belongs between the trigger and the list and
+          is shown whether or not the group is open, so the body stays here. */}
+      <Disclosure
+        label={title}
+        open={open}
+        onToggle={setOpen}
+        summary={String(entries.length)}
+      />
       <p className="nx-hint">{caption}</p>
       {open && (
         <ul className="set__licence-list">
@@ -4661,20 +4664,18 @@ function LicenceGroup({ title, caption, entries, defaultOpen }: LicenceGroupProp
                 {/* No aria-label: the row's own text IS its accessible name
                     (name, version, licence — all three worth announcing), and
                     `aria-expanded` is what states whether it is open. */}
-                <button
-                  type="button"
+                <Disclosure
                   className="set__licence-toggle"
-                  aria-expanded={expanded}
+                  label={entry.name}
+                  summary={`${entry.version} · ${
+                    entry.licence === "UNKNOWN" ? s.unknownLicence : entry.licence
+                  }`}
+                  open={expanded}
                   title={expanded ? s.collapse : s.expand}
-                  onClick={() => setOpenEntry(expanded ? null : entry.id)}
-                >
-                  <span className="set__disclosure-mark" aria-hidden="true" />
-                  <span className="set__licence-name">{entry.name}</span>
-                  <span className="set__licence-meta">
-                    {entry.version} ·{" "}
-                    {entry.licence === "UNKNOWN" ? s.unknownLicence : entry.licence}
-                  </span>
-                </button>
+                  onToggle={(next) => {
+                    setOpenEntry(next ? entry.id : null);
+                  }}
+                />
                 {expanded && (
                   <div className="set__licence-body">
                     {/* The gap is stated where the text would have been, never

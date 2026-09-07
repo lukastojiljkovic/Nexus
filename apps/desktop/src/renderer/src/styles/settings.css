@@ -474,19 +474,19 @@
   font-size: var(--nx-font-size-body-sm);
 }
 /* SET §5: „Vrati na podrazumevano“ at the foot of a device-preference card.
-   Typographic and muted like `.set__disclosure` above — an undo is available,
-   not advertised — and self-aligned so it sits under the controls it undoes
-   rather than stretching across the card. No border, no fill: a bordered
-   control here would read heavier than the settings it resets.
+   Typographic and muted like `.nx-disclosure` — an undo is available, not
+   advertised — and self-aligned so it sits under the controls it undoes rather
+   than stretching across the card. No border, no fill: a bordered control here
+   would read heavier than the settings it resets.
 
    It is deliberately NOT an `nx-button`, and therefore does not inherit that
    primitive's 24px floor: `@nexus/ui` has no quiet/link variant, and every
    bordered variant it does have reads louder than the settings this undoes.
    The floor is restored here by hand — `min-height` plus a negative inline
    margin, so the target grows without the label drifting off the card's left
-   edge. The same three lines appear on `.set__disclosure` and
-   `.set__licence-toggle`, which are the page's two other hand-rolled quiet
-   buttons; see the note on `.set__disclosure`. */
+   edge. THIS IS THE LAST HAND-ROLLED QUIET BUTTON ON THE PAGE: the two that
+   had a triangle are `Disclosure` now, which leaves this one and `.fin__quiet`
+   waiting on the `Button` variant they actually want. */
 .set__reset {
   align-self: flex-start;
   display: inline-flex;
@@ -512,58 +512,15 @@
   outline: 2px solid var(--nx-accent);
   outline-offset: 2px;
 }
-/* Rezervna kopija → „Šta se izvozi" (IMEX-003): a disclosure over the module
-   checkboxes. Typographic, not a button — the default is everything, so this
-   asks for no attention until someone goes looking for it. The triangle is the
-   note toggle's own marker, rotating the same way.
-
-   THE CLASS, not the instance: this page hand-rolls a quiet text button three
-   times (`.set__reset`, this, `.set__licence-toggle`) because the shared
-   `Button` has only bordered variants, and all three shipped under the 24px
-   pointer floor for the same reason — a `padding: 0` text button is exactly as
-   tall as its own line box. Each now states the floor itself; the real fix is a
-   `quiet` variant on the primitive, which is not this file's to add. */
-.set__disclosure {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--nx-space-2);
-  align-self: flex-start;
-  min-height: 24px;
-  margin: 0 0 0 calc(-1 * var(--nx-space-2));
-  padding: 0 var(--nx-space-2);
-  border: none;
-  border-radius: var(--nx-radius-xs);
-  background: transparent;
-  color: var(--nx-text-muted);
-  font: inherit;
-  font-size: var(--nx-font-size-body-sm);
-  cursor: pointer;
-  transition: color var(--nx-motion-fast) var(--nx-motion-ease);
-}
-.set__disclosure:hover {
-  color: var(--nx-text);
-}
-.set__disclosure:focus-visible {
-  outline: 2px solid var(--nx-accent);
-  outline-offset: 2px;
-}
-.set__disclosure-mark {
-  border-style: solid;
-  border-width: 4px 0 4px 6px;
-  border-color: transparent transparent transparent currentColor;
-  transition: transform var(--nx-motion-fast) var(--nx-motion-ease);
-}
-.set__disclosure[aria-expanded="true"] > .set__disclosure-mark {
-  transform: rotate(90deg);
-}
-/* The count beside a disclosure's name — tertiary tier, and a number, so it
-   takes tabular figures like every other count in the product. */
-.set__disclosure-summary {
-  font-size: var(--nx-font-size-label);
-  letter-spacing: var(--nx-font-tracking-label);
-  color: var(--nx-text-subtle);
-  font-variant-numeric: tabular-nums;
-}
+/* Both disclosures on this page — „Šta se izvozi" (IMEX-003) and the licence
+   list — are `Disclosure` from `packages/ui` now. The rule this comment used
+   to carry is still true and is still only half done: the shared `Button` has
+   only BORDERED variants, so a quiet text button (`.set__reset`, and
+   `.fin__quiet` in another file) is hand-rolled at each site and each shipped
+   under the 24px pointer floor for the same reason — a `padding: 0` text
+   button is exactly as tall as its own line box. The disclosures were the half
+   with a triangle and their own semantics; the plain quiet button is a
+   `Button` variant and is recorded in `docs/STATUS.md`, not invented here. */
 /* One row per module while there is width for it, then as many as fit. */
 .set__module-picker {
   display: flex;
@@ -909,55 +866,23 @@
 .set__licence-item + .set__licence-item {
   border-top: 1px solid var(--nx-border-subtle);
 }
-/* The row itself: the same muted triangle-and-label as .set__disclosure, laid
-   out so the name takes the width and the version · licence pair sits at the end. */
+/* `Disclosure` (packages/ui) plus the two things that make it a ROW rather
+   than the inline control: it takes the list's full width, and a button
+   centres its own text, which is wrong the moment a package name wraps.
+   Everything else — the triangle, the floor, the muted ink, the summary tier —
+   is the shared control's, and used to be this file's fourth copy of it. */
 .set__licence-toggle {
   display: flex;
-  align-items: center;
-  gap: var(--nx-space-2);
   width: 100%;
-  /* The 24px pointer floor, for the reason `.set__disclosure` states it. */
-  min-height: 24px;
-  margin: 0 0 0 calc(-1 * var(--nx-space-2));
-  padding: 0 var(--nx-space-2);
-  border: none;
-  border-radius: var(--nx-radius-xs);
-  background: transparent;
-  color: var(--nx-text-muted);
-  font: inherit;
-  font-size: var(--nx-font-size-body-sm);
   text-align: left;
-  cursor: pointer;
-  transition: color var(--nx-motion-fast) var(--nx-motion-ease);
-}
-.set__licence-toggle:hover {
-  color: var(--nx-text);
-}
-.set__licence-toggle:focus-visible {
-  outline: 2px solid var(--nx-accent);
-  outline-offset: 2px;
-}
-.set__licence-toggle[aria-expanded="true"] > .set__disclosure-mark {
-  transform: rotate(90deg);
 }
 /* The open row is marked typographically — accent text plus weight, the app's
-   one active-state recipe. Never a background wash and never a glow. */
-.set__licence-toggle[aria-expanded="true"] > .set__licence-name {
+   one active-state recipe. Never a background wash and never a glow. A page
+   styling a shared control's STATE on one surface, which is not the same thing
+   as a page re-declaring the control. */
+.set__licence-toggle[aria-expanded="true"] > .nx-disclosure__label {
   color: var(--nx-accent-strong);
   font-weight: var(--nx-font-weight-semibold);
-}
-.set__licence-name {
-  flex: 1;
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-/* Version · licence: a number and a short code naming the row, never its
-   content — tertiary tier, and tabular so the versions form a column. */
-.set__licence-meta {
-  flex-shrink: 0;
-  font-size: var(--nx-font-size-label);
-  color: var(--nx-text-subtle);
-  font-variant-numeric: tabular-nums;
 }
 .set__licence-body {
   display: flex;

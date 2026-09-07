@@ -11,10 +11,10 @@
  *
  * WHAT MAKES THIS GATEABLE, when the eyebrow tier's equivalent was not.
  *
- * The ink and the size alone do not identify a hint. `.tasks__archive-toggle`
- * is a BUTTON that borrows both on purpose — the quiet typographic disclosure
- * idiom, shared with `.set__disclosure` — and a rule that fired on it would
- * have an allowlist within a month, which is the shape that stops being read.
+ * The ink and the size alone do not identify a hint. `.nx-disclosure` is a
+ * BUTTON that borrows both on purpose — the quiet typographic disclosure idiom
+ * — and a rule that fired on it would have an allowlist within a month, which
+ * is the shape that stops being read.
  * A `<span>` that carries a timestamp beside a title borrows them too, and an
  * inline box takes neither a margin nor a measure, so folding it would be
  * wrong.

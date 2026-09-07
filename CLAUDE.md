@@ -266,8 +266,8 @@ choice of backend**; whatever in them is about the data model still applies.
   margin. Every copy is token-only and locally correct, so nothing else in the
   tree can see it: only counting them shows anything. The gate reads the MARKUP
   as well as the CSS, because the discriminator is not in the stylesheet — ink
-  and size alone also describe `.tasks__archive-toggle`, which is a disclosure
-  BUTTON, and a rule that fired on it would have an allowlist within a month.
+  and size alone also describe `.nx-disclosure`, which is a disclosure BUTTON,
+  and a rule that fired on it would have an allowlist within a month.
   A class whose every call site is a `<p>` is a paragraph tier, and that pairing
   needs no allowlist at all. A block that declares its own `font-family` has
   said out loud that it is a different tier — `.elec-sim__readout` is a mono

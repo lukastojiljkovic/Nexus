@@ -218,10 +218,10 @@ samp {
    twenty-nine of them are the paragraph tier and folded here. Most of the other
    fifty-eight are inline runs — a timestamp beside a title, a count, a tag —
    and an inline box takes neither a margin nor a measure, so they are a second
-   promotion and a different one. Two are neither: `.tasks__archive-toggle` is a
-   BUTTON that borrows the ink, and `.nx-empty--inline` belongs to a component
-   with its own measure (34ch, narrower on purpose because an empty state is
-   centred).
+   promotion and a different one. Two are neither: `.nx-disclosure` is a BUTTON
+   that borrows the ink and the size on purpose — the quiet typographic
+   disclosure idiom — and `.nx-empty--inline` belongs to a component with its
+   own measure (34ch, narrower on purpose because an empty state is centred).
 
    Adopted with the class, never by copying the block again: a surface that
    wants a variant adds a modifier of its own beside `.nx-hint`. */
@@ -560,6 +560,79 @@ samp {
   padding: 4px 10px;
   font-size: var(--nx-font-size-label);
   min-height: 24px;
+}
+
+/* --- Disclosure -------------------------------------------------------
+   A triangle, a name, an optional count. The whole control, because the four
+   hand-copies it replaces were the whole control four times.
+
+   `min-height: 24px` is the load-bearing declaration and it is here rather
+   than at a call site: a `padding: 0` text button is exactly as tall as its
+   line box — eighteen pixels at 13px/1.35 — so every copy of this control
+   ships under the pointer floor unless somebody remembers the floor. All
+   four did state it, and that is the finding rather than a relief: three
+   stated it in the control's own rule and the fourth in a page-wide pointer
+   block seventy lines further down its file. Neither placement is wrong,
+   which is the point — a property held by whichever rule each file happened
+   to reach for is a property nobody can check.
+
+   The negative left margin is optical, not spacing: the padding that gives the
+   triangle a hit area would otherwise indent the label past the prose it sits
+   under. */
+.nx-disclosure {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  align-self: flex-start;
+  min-height: 24px;
+  margin: 0 0 0 calc(-1 * var(--nx-space-2));
+  padding: 0 var(--nx-space-2);
+  border: none;
+  border-radius: var(--nx-radius-xs);
+  background: transparent;
+  color: var(--nx-text-muted);
+  font: inherit;
+  font-size: var(--nx-font-size-body-sm);
+  cursor: pointer;
+  transition: color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.nx-disclosure:hover {
+  color: var(--nx-text);
+}
+.nx-disclosure:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+/* A border triangle rather than a glyph: it inherits `currentColor`, so it
+   warms with the label on hover without a second rule, and it cannot be
+   missing from a font. */
+.nx-disclosure__mark {
+  border-style: solid;
+  border-width: 4px 0 4px 6px;
+  border-color: transparent transparent transparent currentColor;
+  transition: transform var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.nx-disclosure[aria-expanded="true"] > .nx-disclosure__mark {
+  transform: rotate(90deg);
+}
+/* `flex-grow` with an `auto` basis: no effect in the inline form, which is
+   sized to its content, and in the full-width form it takes the free space so
+   the summary sits at the far end. `overflow-wrap` because a package name is
+   the one label here that can be longer than its row. */
+.nx-disclosure__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+/* The count beside the name — tertiary tier, and a number, so it takes tabular
+   figures like every other count in the product. This is the tier the two live
+   copies disagreed about. */
+.nx-disclosure__summary {
+  flex-shrink: 0;
+  font-size: var(--nx-font-size-label);
+  letter-spacing: var(--nx-font-tracking-label);
+  color: var(--nx-text-subtle);
+  font-variant-numeric: tabular-nums;
 }
 
 /* --- StatBand ---------------------------------------------------------
