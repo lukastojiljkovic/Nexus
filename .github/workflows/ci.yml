@@ -111,6 +111,17 @@ jobs:
       # screenshot sweep does not go.
       - run: pnpm check:controls
 
+      # A shared typographic tier, retyped. `.nx-hint` is muted 13px prose with
+      # the app's leading and a 68ch measure; before it existed, thirty-three
+      # classes across fifteen stylesheets wrote those declarations out by hand,
+      # and had drifted to four leadings, three measures and forty-eight
+      # paragraphs still carrying the UA's `<p>` margin. Every copy uses tokens,
+      # so `check:colours` and `check:tokens` pass it; each one is locally
+      # correct, which is why only counting them shows anything. The rule reads
+      # the markup as well as the CSS, because the discriminator is the element:
+      # a class that is only ever a `<p>`.
+      - run: pnpm check:tiers
+
       # A character that renders as nothing, or as a character it is not. This
       # one has to run here rather than in review, because review is exactly
       # what it defeats: a non-breaking space is a space in every editor, in

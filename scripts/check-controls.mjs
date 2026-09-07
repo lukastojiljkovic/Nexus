@@ -45,6 +45,9 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, extname, join, relative, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+// Where a JSX opening tag ends, which is not where a regex thinks it does.
+import { jsxElements } from "./jsx-elements.mjs";
+
 // The same lexer `check:egress` and `check:elec` use. It matters here for one
 // specific reason: `FitRoutines.tsx` now explains, in the JSX comment above the
 // control it fixed, that an unstyled `input type="checkbox"` renders at 13x13.
@@ -110,42 +113,14 @@ function* walk(dir) {
  * Every `<input …>` in the source, as the text between `<input` and the `>`
  * that closes THAT element.
  *
- * A regex cannot do this, and the reason is worth keeping: the tag's closing
- * `>` is not the first `>` after it. Every control in this codebase carries an
+ * The scan is `scripts/jsx-elements.mjs`, because `check:tiers` needs the same
+ * one and the reason it is not a regex is the same for both: the tag's closing
+ * `>` is not the first `>` after it. Every control here carries an
  * `onChange={(event) => …}`, and the arrow is a `>` inside a JSX expression
- * container. So the scan tracks brace depth and string state — the closing `>`
- * is the one at depth zero outside a quote — which also makes the attribute
- * order irrelevant: `className` may sit before or after `type`, and the props
- * may be spread over nine lines, as they are in every real instance.
+ * container.
  */
 function* inputElements(source) {
-  for (const match of source.matchAll(/<input\b/g)) {
-    const start = match.index;
-    let i = start + match[0].length;
-    let depth = 0;
-    let quote = null;
-    while (i < source.length) {
-      const ch = source[i];
-      if (quote !== null) {
-        if (ch === "\\") {
-          i += 2;
-          continue;
-        }
-        if (ch === quote) quote = null;
-        i += 1;
-        continue;
-      }
-      if (ch === '"' || ch === "'" || ch === "`") quote = ch;
-      else if (ch === "{") depth += 1;
-      else if (ch === "}") depth -= 1;
-      else if (ch === ">" && depth === 0) {
-        i += 1;
-        break;
-      }
-      i += 1;
-    }
-    yield { start, text: source.slice(start, i) };
-  }
+  yield* jsxElements(source, /input/);
 }
 
 export function scanSource(relPath, source) {

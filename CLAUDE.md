@@ -233,7 +233,7 @@ choice of backend**; whatever in them is about the data model still applies.
   import it raise TS7016.
 - **Verification gates before any commit:** `pnpm typecheck` (13/13), `pnpm lint`
   (13/13), `pnpm test` (all green), `pnpm build` (4/4),
-  `pnpm --filter @nexus/desktop smoke` prints `SMOKE OK`, and **all eighteen
+  `pnpm --filter @nexus/desktop smoke` prints `SMOKE OK`, and **all nineteen
   static gates** pass. **`pnpm lint` used to be missing from this line** even
   though CI has always run it, and on 2026-08-14 six real errors shipped red
   because of that — two of them display bugs the linter had named (DC-49,
@@ -258,6 +258,20 @@ choice of backend**; whatever in them is about the data model still applies.
   pointer floor, and nothing else here can see it — it uses no colour, declares
   no token and typechecks, so the only check that ever caught one was the
   screenshot sweep, which does not reach a form three modal steps deep),
+  **`check:tiers`** (a shared typographic tier, retyped. `.nx-hint` is muted
+  13px prose at the app's leading with a 68ch measure; before it existed, 33
+  classes across 15 stylesheets wrote those five declarations out by hand and
+  had already drifted to four leadings, three measures — one of them a raw
+  `64ch` where a token exists — and 48 paragraphs still carrying the UA's `<p>`
+  margin. Every copy is token-only and locally correct, so nothing else in the
+  tree can see it: only counting them shows anything. The gate reads the MARKUP
+  as well as the CSS, because the discriminator is not in the stylesheet — ink
+  and size alone also describe `.tasks__archive-toggle`, which is a disclosure
+  BUTTON, and a rule that fired on it would have an allowlist within a month.
+  A class whose every call site is a `<p>` is a paragraph tier, and that pairing
+  needs no allowlist at all. A block that declares its own `font-family` has
+  said out loud that it is a different tier — `.elec-sim__readout` is a mono
+  tick counter — and is not this one),
   `check:invisibles` (no character that renders as nothing, or as a character it
   is not — the defence review itself cannot make),
   **`check:zeroize`** (no key erased in the middle of the call using it: a
