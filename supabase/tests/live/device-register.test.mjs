@@ -32,6 +32,8 @@ import { after, before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { createHmac, randomUUID } from "node:crypto";
 
+import { awaitFunctions } from "./ready.mjs";
+
 const URL_BASE = process.env["NEXUS_LIVE_SUPABASE_URL"];
 const ANON = process.env["NEXUS_LIVE_ANON_KEY"];
 const SERVICE = process.env["NEXUS_LIVE_SERVICE_KEY"];
@@ -214,6 +216,12 @@ describe(
     let account;
 
     before(async () => {
+      // BOTH functions, because this suite calls both and each boots its own
+      // worker — `enabled()` mints through `sync-enable` before a single test
+      // touches `device-register`. `ready.mjs` carries the argument for why a
+      // suite that asserts on what a function RETURNS may not open with a
+      // request that is also the runtime's first.
+      await awaitFunctions(URL_BASE, ANON, ["sync-enable", "device-register"]);
       account = await enabled();
     });
 

@@ -51,6 +51,8 @@ import { after, before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { createHmac, randomUUID } from "node:crypto";
 
+import { awaitFunctions } from "./ready.mjs";
+
 const URL_BASE = process.env["NEXUS_LIVE_SUPABASE_URL"];
 const ANON = process.env["NEXUS_LIVE_ANON_KEY"];
 const SERVICE = process.env["NEXUS_LIVE_SERVICE_KEY"];
@@ -228,6 +230,10 @@ describe(
     let mintedDeviceSession;
 
     before(async () => {
+      // The one function this suite calls. See `ready.mjs`: the cold boot is
+      // paid by whichever file runs first, which today is `device-register`
+      // only because `d` sorts before `s`.
+      await awaitFunctions(URL_BASE, ANON, ["sync-enable"]);
       account = await provision();
     });
 
