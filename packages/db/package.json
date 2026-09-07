@@ -18,7 +18,7 @@
     "@nexus/sync-crypto": "workspace:*",
     "@nexus/sync-engine": "workspace:*",
     "better-sqlite3-multiple-ciphers": "^13.0.3",
-    "ts-fsrs": "^5.4.1"
+    "ts-fsrs": "^5.4.2"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
