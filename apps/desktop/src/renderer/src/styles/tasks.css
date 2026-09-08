@@ -491,11 +491,82 @@
 .tasks__quick-add .nx-textfield__input {
   flex: 1;
 }
+/* A GRID, and it used to be a wrapping flex row.
+ *
+ * The difference is that a wrap has no columns: each control took its own
+ * natural width and broke wherever the sum ran out, so at the enforced 900px
+ * window the row became five ragged lines and pushed `.tasks__rows` — the task
+ * list, the reason the page exists — 11px below the fold. It was not right at a
+ * wide window either: `align-items: center` centred children of two different
+ * heights, so a labelled control and an unlabelled one sat ten pixels out of
+ * line at every width.
+ *
+ * THE FLOOR IS DERIVED, and it was derived from a PHOTOGRAPH rather than from a
+ * number in a document. At the enforced 900px window this container measures
+ * 382px, not the ~460px the status note recorded — and the first attempt at this
+ * fix trusted the 460, produced a floor of 200px, resolved to ONE column, and
+ * made the form TALLER than the wrap it replaced. Two fields fit when
+ * 2F + gap <= 382, so F <= 187. `--nx-layout-field-min` is 176px: two columns at
+ * the floor with eleven pixels to spare, and still wider than the longest closed
+ * control here (the repetition select reading „Ne ponavlja se"). A token rather
+ * than a number, so the next form that needs a field floor asks for this one.
+ *
+ * `start` rather than `center`: every child here is now the same shape — a
+ * label over a control, some with a hint under it — so aligning the TOPS lines
+ * up the labels and the controls both, and a hint hangs below its own field
+ * instead of pushing that field's control up out of line with its neighbour's.
+ * It was `end` for one release, when the repetition picker was still a
+ * hand-rolled inline pair and the only thing two cells could be made to share
+ * was the bottom of the box.
+ */
 .tasks__fields {
-  display: flex;
-  align-items: center;
-  gap: var(--nx-space-2);
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(var(--nx-layout-field-min), 1fr));
+  align-items: start;
+  gap: var(--nx-space-3) var(--nx-space-2);
+}
+/* The children that are not a field take the whole row. Each already said so
+   with `flex-basis: 100%`, which a grid ignores; this is the same statement in
+   the grid's own words. Both stay, because every one of these selectors is
+   shared with a `.cal__*` or `.recur` surface on a form that is still a
+   wrapping flex row.
+
+   THE LIST IS THE CONTAINER'S CHILDREN, enumerated from the JSX and then
+   checked against the stylesheets for `flex-basis: 100%` — not the ones whose
+   names begin with `tasks__`. Writing it the second way is how `.recur` was
+   missed on the first pass: the repetition picker is the one full-row child
+   that does not carry this page's prefix, so it landed in a single column and
+   wrapped its own hint. */
+.tasks__fields > .tasks__reminders,
+.tasks__fields > .tasks__attachments,
+.tasks__fields > .tasks__deps,
+.tasks__fields > .tasks__form-error {
+  grid-column: 1 / -1;
+}
+/* The repetition picker is the one of the five that is a FIELD most of the
+   time. `.recur`'s own `flex-basis: 100%` is there for one reason, written in
+   its comment: opening „Prilagođeno" unfolds a second editor of six controls,
+   and that has to grow downward rather than shove the submit button around.
+   That reason applies only while the editor is open, and `.recur__custom` is
+   rendered only then — so it is asked for directly. Closed, the picker is a
+   `Select` like the two beside it and sits in one column, which is worth a row
+   of a 562px viewport: given the whole width it left „Prioritet" alone on the
+   line above it. */
+.tasks__fields > .recur:has(.recur__custom) {
+  grid-column: 1 / -1;
+}
+/* In its own forms the picker shrinks to its content, because there it is a
+   full-width row and a select stretched across a whole form is not a control
+   anybody reads as one — at a maximised window that is an eleven-hundred-pixel
+   box holding the word „Prilagođeno…“, which reads as a text field. In a grid
+   CELL the opposite is true: its neighbours are 1fr wide, so a content-width
+   select beside them is the ragged edge this container was built to remove.
+
+   Hence the `:not`, which states the reason rather than a width: it stretches
+   exactly when it HAS a neighbour, and the row above spans it exactly when the
+   Prilagođeno editor is open and it does not. */
+.tasks__fields > .recur:not(:has(.recur__custom)) {
+  align-items: stretch;
 }
 /* Due date read out of the quick-add line itself (TASK-007): a quiet row under
    the title input, borrowing the undo bar's dismiss idiom rather than inventing
@@ -526,8 +597,8 @@
    chosen option's text on four controls. The comment it carried („mirrors
    .documents__select") pointed at a selector that no longer exists, which is
    how the copy outlived the thing it was copied from.
-   Raw selects are styled by `.nx-app select:not(.nx-select__control)` and
-   component ones by `.nx-select__control`, both in packages/ui. */
+   Every select is drawn by `.nx-select__control` in packages/ui, and there is
+   no other kind left to be drawn by anything else. */
 /* Edit-mode cancel: a quiet ghost beside the primary submit (text feel). */
 .tasks__cancel.nx-button {
   background: transparent;

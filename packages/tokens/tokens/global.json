@@ -187,6 +187,7 @@
     "rail": "220px",
     "railWide": "280px",
     "colMin": "260px",
+    "fieldMin": "176px",
     "prose": "68ch",
     "measure": "1180px",
     "titlebar": "38px"

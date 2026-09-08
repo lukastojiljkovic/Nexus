@@ -4583,10 +4583,15 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
 
               {(detailsOpen || editingId !== null) && (
                 <div className="tasks__fields">
+                {/* A VISIBLE label, not an `aria-label`. These two render as two
+                    identical `dd-----yyyy` boxes, and which one is the deadline
+                    was readable only to a screen reader — DC-120, of which this
+                    is one of fourteen. `Select` has refused this since it was
+                    written; `TextField` still allows it. */}
                 <TextField
                   type="date"
+                  label={strings.tasks.dueDateLabel}
                   value={dueDate}
-                  aria-label={strings.tasks.dueDateLabel}
                   onChange={(event) => {
                     const next = event.target.value;
                     setDueDate(next);
@@ -4605,8 +4610,8 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                     from it — so clearing it takes nothing else with it. */}
                 <TextField
                   type="date"
+                  label={strings.tasks.startDateLabel}
                   value={startDate}
-                  aria-label={strings.tasks.startDateLabel}
                   onChange={(event) => setStartDate(event.target.value)}
                 />
                 <Select
