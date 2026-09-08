@@ -21,6 +21,10 @@ import { after, test } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 
+import { readFileSync, readdirSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+
 import { awaitFunctions, probeFunction } from "../live/ready.mjs";
 
 const ANON = "anon-key-that-is-not-a-secret";
@@ -171,4 +175,47 @@ test("does not read a non-JSON body as an answer", async () => {
     () => awaitFunctions(url, ANON, ["sync-enable"], { deadlineMs: 0, intervalMs: 1 }),
     /HTTP 200/,
   );
+});
+
+// ---------------------------------------------------------------------------
+// The rule, over the one directory it can be broken in
+// ---------------------------------------------------------------------------
+
+/**
+ * A helper nothing is obliged to call is a helper the next suite will not call,
+ * and the next suite is the one that will need it: `pair-complete` is the third
+ * function and has no live suite yet, so the file that will forget this has not
+ * been written. Two files is a small enough reachability set that this belongs
+ * here rather than in a twenty-first gate — it is the same enforcement, in the
+ * directory it governs, with no CI step to keep in step with a script.
+ *
+ * It reads the SOURCE rather than importing it, because the thing being checked
+ * is that the wait happens BEFORE anything else in the hook. Importing a live
+ * suite would run it.
+ */
+const LIVE_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "live");
+
+test("every live suite waits for the runtime as the first thing its before hook does", () => {
+  const suites = readdirSync(LIVE_DIR).filter((f) => f.endsWith(".test.mjs"));
+  assert.ok(suites.length > 0, "the live directory has suites to check");
+
+  for (const suite of suites) {
+    const source = readFileSync(join(LIVE_DIR, suite), "utf8");
+    if (!source.includes("/functions/v1/")) continue;
+
+    const lines = source.split(/\r?\n/);
+    const opened = lines.findIndex((line) => line.includes("before(async"));
+    assert.notEqual(opened, -1, `${suite} calls an Edge Function with no before hook to wait in`);
+
+    // Past the comments that explain WHICH functions, to the first statement.
+    let at = opened + 1;
+    while (at < lines.length && /^\s*(\/\/|$)/.test(lines[at])) at++;
+    assert.match(
+      lines[at] ?? "",
+      /^\s*await awaitFunctions\(/,
+      `${suite}:${at + 1} — the before hook's first statement must be ` +
+        "`await awaitFunctions(...)`. Anything ahead of it is an assertion made " +
+        "through a runtime that may not be serving yet; see ready.mjs.",
+    );
+  }
 });
