@@ -10,6 +10,7 @@ import {
   Icon,
   LoadingState,
   PageHeader,
+  Select,
   StatBand,
   TextField,
 } from "@nexus/ui";
@@ -300,6 +301,10 @@ interface WidgetConfigFormProps {
  */
 function WidgetConfigForm({ profileId, contract, config, onApply, onBack }: WidgetConfigFormProps) {
   const s = strings.dashboard.config;
+  // Every count field's name is already on screen as the menu label above it,
+  // so the select is named BY that label rather than by a second rendered copy
+  // of the same word. One generated prefix per form, suffixed by the field key.
+  const labelId = useId();
   const fields = contract.configFields ?? [];
   const needsLists = fields.some((field) => field.kind === "taskLists");
   const [taskLists, setTaskLists] = useState<TaskList[] | null>(null);
@@ -366,27 +371,33 @@ function WidgetConfigForm({ profileId, contract, config, onApply, onBack }: Widg
           for (let n = field.min; n <= field.max; n += 1) range.push(n);
           return (
             <Fragment key={field.key}>
-              <span className="note__menu-label">{fieldLabel(field.key)}</span>
-              <select
-                className="dash__config-select"
-                aria-label={fieldLabel(field.key)}
-                value={Number.isInteger(current) ? String(current) : COUNT_ALL_VALUE}
-                onChange={(event) =>
-                  apply(
-                    field.key,
-                    event.target.value === COUNT_ALL_VALUE
-                      ? field.default
-                      : Number(event.target.value),
-                  )
-                }
-              >
-                {uncappedDefault && <option value={COUNT_ALL_VALUE}>{s.countAll}</option>}
-                {range.map((n) => (
-                  <option key={n} value={String(n)}>
-                    {n}
-                  </option>
-                ))}
-              </select>
+              <span className="note__menu-label" id={`${labelId}-${field.key}`}>
+                {fieldLabel(field.key)}
+              </span>
+              {/* The wrapper carries the inset, not the control: the drawn
+                  chevron is positioned against the control's own box, so a
+                  right margin on the control would put the arrow outside it. */}
+              <div className="dash__config-field">
+                <Select
+                  aria-labelledby={`${labelId}-${field.key}`}
+                  value={Number.isInteger(current) ? String(current) : COUNT_ALL_VALUE}
+                  onChange={(event) =>
+                    apply(
+                      field.key,
+                      event.target.value === COUNT_ALL_VALUE
+                        ? field.default
+                        : Number(event.target.value),
+                    )
+                  }
+                >
+                  {uncappedDefault && <option value={COUNT_ALL_VALUE}>{s.countAll}</option>}
+                  {range.map((n) => (
+                    <option key={n} value={String(n)}>
+                      {n}
+                    </option>
+                  ))}
+                </Select>
+              </div>
             </Fragment>
           );
         }

@@ -13,7 +13,7 @@ import {
   PDV_RATES,
   type UnitKind,
 } from "@nexus/core";
-import { Button, Icon, TextField } from "@nexus/ui";
+import { Button, Icon, Select, TextField } from "@nexus/ui";
 import { useState, type ComponentType, type ReactNode } from "react";
 
 import {
@@ -60,7 +60,14 @@ function ResultRow({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-/** A `<select>` over a fixed set of options — the drawer's only dropdown shape. */
+/**
+ * A `<select>` over a fixed set of options — the drawer's only dropdown shape.
+ *
+ * It used to be `.tool__field` + `.tool__field-label` + a raw `<select>`, which
+ * is `Select` written out by hand: the same stacked label, the same 6px gap and
+ * the same ink, minus the drawn chevron. `.tool__body > .nx-select` was already
+ * in the grid rule beside `.tool__field`, waiting for this.
+ */
 function ToolSelect({
   label,
   value,
@@ -73,22 +80,19 @@ function ToolSelect({
   onChange: (next: string) => void;
 }) {
   return (
-    <label className="tool__field">
-      <span className="tool__field-label">{label}</span>
-      <select
-        className="tool__select"
-        value={value}
-        onChange={(event) => {
-          onChange(event.target.value);
-        }}
-      >
-        {options.map((option) => (
-          <option key={option.id} value={option.id}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </label>
+    <Select
+      label={label}
+      value={value}
+      onChange={(event) => {
+        onChange(event.target.value);
+      }}
+    >
+      {options.map((option) => (
+        <option key={option.id} value={option.id}>
+          {option.label}
+        </option>
+      ))}
+    </Select>
   );
 }
 

@@ -1196,30 +1196,17 @@ samp {
   color: var(--nx-text);
 }
 
-/* Raw `<select>` elements the app still writes by hand, outside the component.
-   Deliberately WITHOUT `appearance: none`: with the native arrow suppressed and
-   no drawn one to replace it, a bare select would read as a text field that
-   silently does nothing — a worse defect than the one being fixed. This takes
-   away the grey Windows slab and leaves the arrow; the remaining call sites
-   move to `Select` and get the drawn chevron with them. */
-.nx-app select:not(.nx-select__control) {
-  font: inherit;
-  font-size: var(--nx-font-size-body-sm);
-  color: var(--nx-text);
-  background: var(--nx-surface);
-  border: 1px solid var(--nx-border);
-  border-radius: var(--nx-radius-md);
-  /* The SAME box as `.nx-textfield__input`, to the pixel. These two sit beside
-     each other in every filter row in the product, and at `6px 10px` against
-     `7px 13px` every such row was two pixels ragged — the kind of difference
-     nobody can name and everybody sees. */
-  padding: 7px 13px;
-  min-height: 30px;
-}
-/* Neither bare selector drew a focus ring, so a keyboard user tabbing through
-   a filter row lost the caret entirely. Stated here rather than in the four
-   module stylesheets that each contain one of these. */
-.nx-app select:not(.nx-select__control):focus-visible,
+/* There is no longer a rule for a raw `<select>`, because there is no longer a
+   raw `<select>`. This block drew the ten the app still wrote by hand — the
+   same box as `.nx-textfield__input` to the pixel, deliberately WITHOUT
+   `appearance: none`, so that the OS arrow it could not replace stayed and the
+   control did not read as a text field that silently does nothing. All ten have
+   moved to `Select`, `check:controls` now refuses a new one, and what the block
+   was compensating for (the grey Windows slab, and the drawn chevron the
+   component owns) is gone rather than mitigated. */
+/* The date and time inputs still draw no focus ring of their own, so a keyboard
+   user tabbing through a filter row loses the caret. Stated here rather than in
+   the module stylesheets that each contain one of them. */
 .nx-app input[type="date"]:focus-visible,
 .nx-app input[type="time"]:focus-visible,
 .nx-app input[type="datetime-local"]:focus-visible,

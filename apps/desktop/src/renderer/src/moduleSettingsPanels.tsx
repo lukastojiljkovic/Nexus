@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { ComponentType, FormEvent } from "react";
 import { PDV_RATES, validateFocusConfig } from "@nexus/core";
 import type { FocusConfig } from "@nexus/core";
-import { Button, Checkbox, TextField } from "@nexus/ui";
+import { Button, Checkbox, Select, TextField } from "@nexus/ui";
 import {
   DEFAULT_TARGET_RETENTION,
   MAX_BACKGROUND_DIM,
@@ -704,6 +704,10 @@ function CalendarSettingsPanel({ profileId, hits }: SettingsPanelProps) {
  */
 function PrivSettingsPanel({ profileId, hits }: SettingsPanelProps) {
   const s = strings.settings.priv;
+  // The knob's name is the heading of the block it sits in, which is on screen
+  // and is also a search-highlight target; a rendered label would print the
+  // same words twice.
+  const autoLockLabelId = useId();
   const [status, setStatus] = useState<PrivStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -761,6 +765,7 @@ function PrivSettingsPanel({ profileId, hits }: SettingsPanelProps) {
       </p>
       <div className="set__security-block">
         <h3
+          id={autoLockLabelId}
           className={labelClass(
             "nx-eyebrow set__module-group-title",
             hits.has(settingsEntryId("priv", "auto-lock")),
@@ -769,10 +774,10 @@ function PrivSettingsPanel({ profileId, hits }: SettingsPanelProps) {
           {s.autoLockLabel}
         </h3>
         <p className="nx-hint">{s.autoLockHint}</p>
-        <select
+        <Select
           className="set__select"
           value={status.autoLockMinutes}
-          aria-label={s.autoLockLabel}
+          aria-labelledby={autoLockLabelId}
           onChange={(event) => void savePrefs(Number(event.target.value), status.lockOnMinimize)}
         >
           {/* The store's whole 1..60 range (migration 045's CHECK) — the select IS the domain, not a curated subset of it. */}
@@ -781,7 +786,7 @@ function PrivSettingsPanel({ profileId, hits }: SettingsPanelProps) {
               {`${s.autoLockOptionPrefix} ${minutes} ${s.minuteUnit}`}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
       <div className="set__module-row">
         <div className="set__module-info">

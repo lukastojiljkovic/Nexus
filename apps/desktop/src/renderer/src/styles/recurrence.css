@@ -1,16 +1,22 @@
 /* Recurrence field + scope dialog (ADR-024) ---------------------------- */
 /* Shared by the task form and the event form, so this family is its own
    (`recur__`) rather than living under either page. Every control reuses the
-   existing form recipes: the selects match .documents__select, the number
+   existing form recipes: every select is the shared `Select`, the number
    inputs are plain .nx-textfield__input, and the weekday chips are the same
    typographic toggle as .cal__source — accent text + weight, never a glow. */
+/* A FIELD, and therefore a COLUMN: label above control, the no-anchor hint
+   under it, the Prilagođeno editor under that. It used to be a wrapping ROW
+   with the label beside the select — which is exactly `Select`'s `inline`
+   layout, hand-rolled — and in the task form that put a differently shaped
+   control next to three stacked ones, at a different height, wearing the
+   operating system's own arrow. `flex-basis: 100%` still makes it a full row of
+   the wrapping forms it sits in, so opening Prilagođeno grows downward instead
+   of shoving the submit button around. */
 .recur {
-  /* Takes a full row inside the wrapping forms it sits in, so opening
-     Prilagođeno grows downward instead of shoving the submit button around. */
   flex-basis: 100%;
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: flex-start;
   gap: var(--nx-space-2);
 }
 .recur__field {
@@ -20,31 +26,19 @@
   font-size: var(--nx-font-size-body-sm);
   color: var(--nx-text);
 }
+/* The controls the picker still hand-rolls — two number inputs, the weekday
+   chip group and the counted input — sit in the Prilagođeno panel beside five
+   `Select`s in their `inline` layout, so their labels are that layout's label
+   to the declaration. Restated rather than shared because these elements are
+   not selects; the day they become `TextField`s the rule leaves with them. */
 .recur__label {
   flex: none;
-  font-size: var(--nx-font-size-label);
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
   letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  white-space: nowrap;
   color: var(--nx-text-muted);
-}
-/* Native select matched to the textfield input (tokens only, no custom arrow;
-   mirrors .documents__select). */
-.recur__select {
-  font: inherit;
-  font-size: var(--nx-font-size-body-sm);
-  color: var(--nx-text);
-  background: var(--nx-surface);
-  border: 1px solid var(--nx-border);
-  border-radius: var(--nx-radius-md);
-  padding: 7px 13px;
-  transition: border-color var(--nx-motion-fast) var(--nx-motion-ease);
-}
-.recur__select:focus-visible {
-  outline: 2px solid var(--nx-accent);
-  outline-offset: 2px;
-}
-.recur__select:disabled {
-  color: var(--nx-text-muted);
-  cursor: not-allowed;
 }
 .recur__number.nx-textfield__input {
   width: 72px;
@@ -58,9 +52,11 @@
   font-size: var(--nx-font-size-body-sm);
   color: var(--nx-text-muted);
 }
-/* The Prilagođeno panel: its own full-width line under the preset select. */
+/* The Prilagođeno panel: its own full-width line under the preset select.
+   `align-self`, not `flex-basis`: the parent is a column now, where a basis of
+   100% is a HEIGHT. */
 .recur__custom {
-  flex-basis: 100%;
+  align-self: stretch;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -413,7 +409,9 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.csv-map__column .set__select {
+/* The WRAPPER, not the control: `Select` puts `className` on the element, so
+   the box that sizes in this row is the one the component draws around it. */
+.csv-map__column .nx-select {
   flex: none;
   width: 180px;
 }

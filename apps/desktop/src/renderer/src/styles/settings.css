@@ -779,20 +779,22 @@
    13px` from here took that reservation away, so the chevron sat on top of the
    chosen option's text. „Jezik" shipped like that.
 
-   Everything the box needs is already stated once, in the right place: raw
-   selects by `.nx-app select:not(.nx-select__control)` and component ones by
-   `.nx-select__control`. What is left here is the one thing this page actually
+   Everything the box needs is already stated once, in the right place:
+   `.nx-select__control`, which since every raw `<select>` was retired is the
+   only select there is. What is left here is the one thing this page actually
    has an opinion about — how wide a control in a settings row is allowed to be
-   — which is why the rule no longer fights either of them. */
+   — which is why the rule no longer fights it. */
 .set__select {
   align-self: flex-start;
   max-width: 100%;
 }
-/* Raw selects keep the focus ring the component's control already has, so the
-   two kinds cannot be told apart by how they answer the keyboard. */
-.set__select:focus-visible {
-  outline: 2px solid var(--nx-accent);
-  outline-offset: 2px;
+/* The private section's auto-lock knob is the one `Select` on this page that
+   sits in a plain column rather than in a `.set__field` grid, and a flex item
+   stretches. `className` lands on the CONTROL, so the width opinion has to be
+   stated about the wrapper — otherwise the knob spans the whole card. */
+.set__security-block > .nx-select {
+  align-self: flex-start;
+  max-width: 100%;
 }
 /* Prečice (ADR-040): one row per remappable action — label, its current chord,
    then the row's own buttons. Same hairline-separated row rhythm as the module

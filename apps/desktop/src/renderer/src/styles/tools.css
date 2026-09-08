@@ -454,23 +454,6 @@
   color: var(--nx-text-muted);
 }
 /*
- * The control itself is DELIBERATELY not styled here any more.
- *
- * `.nx-app select:not(.nx-select__control)` in `@nexus/ui` now draws every raw
- * `<select>` the app still writes by hand — the same box as
- * `.nx-textfield__input` to the pixel, the 30px pointer floor, and a focus ring
- * — at a higher specificity than a single class. Everything this rule used to
- * declare was therefore already dead: a byte-identical copy that could only
- * ever drift away from the shared one. What it needs is the transition the
- * shared rule leaves to the caller, and nothing else.
- */
-.tool__select {
-  transition:
-    border-color var(--nx-motion-fast) var(--nx-motion-ease),
-    background-color var(--nx-motion-fast) var(--nx-motion-ease);
-}
-
-/*
  * THE ANSWER.
  *
  * A converter is two fields and a result, and the result had been drawn as a

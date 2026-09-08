@@ -4,6 +4,13 @@
 //
 // WHY THIS GATE EXISTS.
 //
+// Two natives, one rule: a control the design system has replaced may not be
+// spelled by hand. The radio and the checkbox came first and are answered by a
+// CLASS; the select came second and is answered by a COMPONENT. The reasoning
+// below is the radio's, and the select's is the same argument one layer up —
+// stated again at `SELECT_IS_A_COMPONENT`, because the two fixes differ and a
+// reader who finds only one of them will apply the wrong one.
+//
 // `packages/ui/src/styles.css` replaces the operating system's radio and
 // checkbox with `.nx-radio` and `.nx-checkbox`: a 15px box painted in the
 // theme's tokens, behind a 24x24 transparent `::before` that carries the
@@ -32,14 +39,33 @@
 //
 // So the rule is enforced structurally instead: in the JSX this product ships,
 // a native radio or checkbox must carry the shared class. `ALLOWED` holds the
-// one file where it legitimately does not — the `<Checkbox>` component itself,
-// which paints the class onto the wrapping `<label>`.
+// files where a native legitimately appears — each of the two components that
+// IS the replacement, and only for the element it replaces.
+//
+// SELECT_IS_A_COMPONENT. The same shape, one layer up. `packages/ui` replaces
+// the `<select>` with `Select`, which is a component rather than a class,
+// because there are three things to get right and none of them is paint: the
+// label (an audit on 2026-08-07 found 39 of 74 selects with no visible name),
+// `appearance: none` plus a drawn `Icon` in place of the Windows arrow, and the
+// right-hand padding that reserves room for it. A hand-written `<select>` gets
+// none of the three, and for four months the answer was a fallback rule in
+// `styles.css` that drew the box but deliberately LEFT the OS arrow — because a
+// suppressed arrow with nothing drawn in its place is a worse defect than the
+// one being fixed. That rule was mitigation, and it made the remaining ten call
+// sites invisible: they had a box, they had a name, they looked finished, and
+// they carried a grey Windows triangle into a form beside a control that did
+// not. All ten have adopted the component and the fallback is deleted, so the
+// only way back to a native arrow is to write `<select>` again — which is what
+// this half of the gate refuses. It has no class to accept, because there is no
+// class that would make a raw select correct.
 //
 // WHAT IT CANNOT SEE, stated so nobody mistakes green for proof: a `type` or a
 // `className` computed at runtime (`<input {...props} />`, `type={kind}`) is
 // beyond a lexer, and the rule then rests on review. Both forms are absent from
 // this tree, and the gate refuses the shape that has actually been written
-// three times.
+// three times. The select half has no such hole — a `<select>` is a `<select>`
+// whatever its props say — but it cannot see an element built by
+// `createElement`, which nothing here does.
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, extname, join, relative, sep } from "node:path";
@@ -83,16 +109,22 @@ const REPLACED = new Map([
 const NATIVE_TYPE = /\btype\s*=\s*\{?\s*["'](radio|checkbox)["']/;
 
 /**
- * The `<Checkbox>` component, and nothing else.
+ * The two components that ARE the replacement, each paired with the one native
+ * it is allowed to spell.
  *
- * One entry rather than a directory. `packages/ui` is where the shared controls
- * live, so „anything under `packages/ui`" reads like the obvious rule — and it
- * would admit the next component that reaches for a native input by pattern
- * instead of by decision, in the one package whose whole job is that they do
- * not. The class is on this file's `<label>`; the gate reads the element's own
- * attributes and therefore cannot see it.
+ * Entries rather than a directory, and a PAIRING rather than a file pass.
+ * `packages/ui` is where the shared controls live, so „anything under
+ * `packages/ui`" reads like the obvious rule — and it would admit the next
+ * component that reaches for a native by pattern instead of by decision, in the
+ * one package whose whole job is that they do not. Naming the element too is
+ * the same argument once there are two of them: `Select.tsx` has a reason to
+ * write `<select>` and no reason at all to write a bare checkbox, and a
+ * file-level pass would hand it both.
  */
-export const ALLOWED = new Set(["packages/ui/src/components/Checkbox.tsx"]);
+export const ALLOWED = new Map([
+  ["packages/ui/src/components/Checkbox.tsx", "input"],
+  ["packages/ui/src/components/Select.tsx", "select"],
+]);
 
 function* walk(dir) {
   let entries;
@@ -123,17 +155,36 @@ function* inputElements(source) {
   yield* jsxElements(source, /input/);
 }
 
+/**
+ * Every `<select …>`, by the same scan and for the same reason. Lowercase only:
+ * `jsxElements` matches the tag name case-sensitively, so `<Select>` — the
+ * component, which is the fix — is a different element and never a finding.
+ */
+function* selectElements(source) {
+  yield* jsxElements(source, /select/);
+}
+
+const lineOf = (source, index) => source.slice(0, index).split("\n").length;
+
 export function scanSource(relPath, source) {
-  if (ALLOWED.has(relPath.split(sep).join("/"))) return [];
+  const exempt = ALLOWED.get(relPath.split(sep).join("/"));
   const stripped = stripComments(source);
   const findings = [];
-  for (const element of inputElements(stripped)) {
-    const type = NATIVE_TYPE.exec(element.text)?.[1];
-    if (type === undefined) continue;
-    const expected = REPLACED.get(type);
-    if (new RegExp(`\\b${expected}\\b`).test(element.text)) continue;
-    const line = stripped.slice(0, element.start).split("\n").length;
-    findings.push({ file: relPath, line, type, expected });
+  if (exempt !== "input") {
+    for (const element of inputElements(stripped)) {
+      const type = NATIVE_TYPE.exec(element.text)?.[1];
+      if (type === undefined) continue;
+      const expected = REPLACED.get(type);
+      if (new RegExp(`\\b${expected}\\b`).test(element.text)) continue;
+      const line = lineOf(stripped, element.start);
+      findings.push({ file: relPath, line, native: "input", type, expected });
+    }
+  }
+  if (exempt !== "select") {
+    for (const element of selectElements(stripped)) {
+      const line = lineOf(stripped, element.start);
+      findings.push({ file: relPath, line, native: "select" });
+    }
   }
   return findings;
 }
@@ -156,15 +207,23 @@ if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.a
       `CONTROLS audit FAILED — ${findings.length} native control(s) the design system replaces:\n`,
     );
     for (const f of findings) {
-      console.error(`  ${f.file}:${f.line}  <input type="${f.type}"> without .${f.expected}`);
+      console.error(
+        f.native === "select"
+          ? `  ${f.file}:${f.line}  <select> written by hand, outside <Select>`
+          : `  ${f.file}:${f.line}  <input type="${f.type}"> without .${f.expected}`,
+      );
     }
     console.error(
       "\nA bare radio or checkbox renders as the OS widget: 13x13, grey in both\n" +
         "themes, and its pointer target is under the 24px floor. packages/ui paints\n" +
         'these itself — add className="nx-radio" to the input, or use the <Checkbox>\n' +
-        "component, which carries .nx-checkbox on its label. Nothing else in the\n" +
-        "tree can see this: it uses no colour, declares no token, type-checks, and\n" +
-        "lives in forms the screenshot sweep cannot reach.",
+        "component, which carries .nx-checkbox on its label.\n\n" +
+        "A bare <select> keeps the operating system's own arrow, has no visible\n" +
+        "label unless the call site remembers one, and cannot reserve the padding\n" +
+        "the drawn chevron needs. Use <Select> from @nexus/ui: `label` renders the\n" +
+        "name, or `aria-labelledby` points at a name already on screen.\n\n" +
+        "Nothing else in the tree can see either: they use no colour, declare no\n" +
+        "token, type-check, and live in forms the screenshot sweep cannot reach.",
     );
     process.exit(1);
   }

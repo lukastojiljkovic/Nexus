@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, Icon } from "@nexus/ui";
+import { Button, Icon, Select } from "@nexus/ui";
 import { MAX_RECURRENCE_COUNT, MAX_RECURRENCE_INTERVAL, isValidDayKey, shiftDayKey } from "@nexus/core";
 import type {
   RecurrenceEnd,
@@ -298,43 +298,46 @@ export function RecurrencePicker({ value, onChange, anchor }: RecurrencePickerPr
 
   return (
     <div className="recur">
-      <label className="recur__field">
-        <span className="recur__label">{s.fieldLabel}</span>
-        <select
-          className="recur__select"
-          value={preset}
-          disabled={!usable}
-          onChange={(event) => selectPreset(asPreset(event.target.value))}
-        >
-          {PRESETS.map((option) => (
-            <option key={option} value={option}>
-              {s.preset[option]}
-            </option>
-          ))}
-        </select>
-      </label>
+      {/* STACKED, like every other field in the two forms this sits in. It was
+          a hand-rolled inline pair, and in the task form it landed beside a
+          stacked `Select` reading as a different KIND of control — while
+          carrying the operating system's own arrow, because `appearance: none`
+          and the drawn chevron live in the component and nowhere else. */}
+      <Select
+        label={s.fieldLabel}
+        value={preset}
+        disabled={!usable}
+        onChange={(event) => selectPreset(asPreset(event.target.value))}
+      >
+        {PRESETS.map((option) => (
+          <option key={option} value={option}>
+            {s.preset[option]}
+          </option>
+        ))}
+      </Select>
 
       {!usable && <p className="nx-hint">{s.needsDate}</p>}
 
       {usable && preset === "custom" && freq !== null && end !== null && (
         <div className="recur__custom">
-          <label className="recur__field">
-            <span className="recur__label">{s.freqLabel}</span>
-            <select
-              className="recur__select"
-              value={customFreqOf(freq)}
-              onChange={(event) => {
-                setNumberDraft(null);
-                setFreq(rebuildFreq(asCustomFreq(event.target.value), freq, anchor));
-              }}
-            >
-              {CUSTOM_FREQS.map((option) => (
-                <option key={option} value={option}>
-                  {s.freq[option]}
-                </option>
-              ))}
-            </select>
-          </label>
+          {/* INLINE inside the panel, which is the arrangement `layout` exists
+              for: six stacked labels would make this editor twice the height of
+              the form it drops out of. */}
+          <Select
+            layout="inline"
+            label={s.freqLabel}
+            value={customFreqOf(freq)}
+            onChange={(event) => {
+              setNumberDraft(null);
+              setFreq(rebuildFreq(asCustomFreq(event.target.value), freq, anchor));
+            }}
+          >
+            {CUSTOM_FREQS.map((option) => (
+              <option key={option} value={option}>
+                {s.freq[option]}
+              </option>
+            ))}
+          </Select>
 
           {freq.kind !== "weekdays" && (
             <label className="recur__field">
@@ -366,7 +369,7 @@ export function RecurrencePicker({ value, onChange, anchor }: RecurrencePickerPr
                     <Button
                       key={day}
                       size="sm"
-className="nx-segmented__option recur__day"
+                      className="nx-segmented__option recur__day"
                       aria-pressed={selected}
                       onClick={() => toggleWeeklyDay(freq, day)}
                     >
@@ -379,29 +382,27 @@ className="nx-segmented__option recur__day"
           )}
 
           {(freq.kind === "monthly-date" || freq.kind === "monthly-ordinal") && (
-            <label className="recur__field">
-              <span className="recur__label">{s.monthlyModeLabel}</span>
-              <select
-                className="recur__select"
-                value={freq.kind === "monthly-ordinal" ? "ordinal" : "date"}
-                onChange={(event) => {
-                  setNumberDraft(null);
-                  setFreq(
-                    event.target.value === "ordinal"
-                      ? {
-                          kind: "monthly-ordinal",
-                          interval: freq.interval,
-                          ordinal: ordinalOf(anchor),
-                          weekday: weekdayOf(anchor),
-                        }
-                      : { kind: "monthly-date", interval: freq.interval, day: monthDayOf(anchor) },
-                  );
-                }}
-              >
-                <option value="date">{s.monthlyModeDate}</option>
-                <option value="ordinal">{s.monthlyModeOrdinal}</option>
-              </select>
-            </label>
+            <Select
+              layout="inline"
+              label={s.monthlyModeLabel}
+              value={freq.kind === "monthly-ordinal" ? "ordinal" : "date"}
+              onChange={(event) => {
+                setNumberDraft(null);
+                setFreq(
+                  event.target.value === "ordinal"
+                    ? {
+                        kind: "monthly-ordinal",
+                        interval: freq.interval,
+                        ordinal: ordinalOf(anchor),
+                        weekday: weekdayOf(anchor),
+                      }
+                    : { kind: "monthly-date", interval: freq.interval, day: monthDayOf(anchor) },
+                );
+              }}
+            >
+              <option value="date">{s.monthlyModeDate}</option>
+              <option value="ordinal">{s.monthlyModeOrdinal}</option>
+            </Select>
           )}
 
           {freq.kind === "monthly-date" && (
@@ -426,63 +427,53 @@ className="nx-segmented__option recur__day"
 
           {freq.kind === "monthly-ordinal" && (
             <>
-              <label className="recur__field">
-                <span className="recur__label">{s.ordinalLabel}</span>
-                <select
-                  className="recur__select"
-                  value={String(freq.ordinal)}
-                  onChange={(event) =>
-                    setFreq({ ...freq, ordinal: asOrdinal(event.target.value) })
-                  }
-                >
-                  {ORDINALS.map((ordinal) => (
-                    <option key={ordinal} value={String(ordinal)}>
-                      {lookup(s.ordinal, String(ordinal)) ?? String(ordinal)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="recur__field">
-                <span className="recur__label">{s.weekdayLabel}</span>
-                <select
-                  className="recur__select"
-                  value={String(freq.weekday)}
-                  onChange={(event) =>
-                    setFreq({ ...freq, weekday: asWeekday(event.target.value) })
-                  }
-                >
-                  {WEEKDAYS.map((day) => (
-                    <option key={day} value={String(day)}>
-                      {s.weekday[day]}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <Select
+                layout="inline"
+                label={s.ordinalLabel}
+                value={String(freq.ordinal)}
+                onChange={(event) => setFreq({ ...freq, ordinal: asOrdinal(event.target.value) })}
+              >
+                {ORDINALS.map((ordinal) => (
+                  <option key={ordinal} value={String(ordinal)}>
+                    {lookup(s.ordinal, String(ordinal)) ?? String(ordinal)}
+                  </option>
+                ))}
+              </Select>
+              <Select
+                layout="inline"
+                label={s.weekdayLabel}
+                value={String(freq.weekday)}
+                onChange={(event) => setFreq({ ...freq, weekday: asWeekday(event.target.value) })}
+              >
+                {WEEKDAYS.map((day) => (
+                  <option key={day} value={String(day)}>
+                    {s.weekday[day]}
+                  </option>
+                ))}
+              </Select>
             </>
           )}
 
-          <label className="recur__field">
-            <span className="recur__label">{s.endLabel}</span>
-            <select
-              className="recur__select"
-              value={end.kind}
-              onChange={(event) => {
-                setNumberDraft(null);
-                const next = event.target.value;
-                if (next === "until") {
-                  setEnd({ kind: "until", date: shiftDayKey(anchor, DEFAULT_UNTIL_DAYS) });
-                } else if (next === "count") {
-                  setEnd({ kind: "count", total: DEFAULT_COUNT });
-                } else {
-                  setEnd({ kind: "never" });
-                }
-              }}
-            >
-              <option value="never">{s.endNever}</option>
-              <option value="until">{s.endUntil}</option>
-              <option value="count">{s.endCount}</option>
-            </select>
-          </label>
+          <Select
+            layout="inline"
+            label={s.endLabel}
+            value={end.kind}
+            onChange={(event) => {
+              setNumberDraft(null);
+              const next = event.target.value;
+              if (next === "until") {
+                setEnd({ kind: "until", date: shiftDayKey(anchor, DEFAULT_UNTIL_DAYS) });
+              } else if (next === "count") {
+                setEnd({ kind: "count", total: DEFAULT_COUNT });
+              } else {
+                setEnd({ kind: "never" });
+              }
+            }}
+          >
+            <option value="never">{s.endNever}</option>
+            <option value="until">{s.endUntil}</option>
+            <option value="count">{s.endCount}</option>
+          </Select>
 
           {end.kind === "until" && (
             <label className="recur__field">

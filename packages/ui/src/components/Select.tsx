@@ -3,6 +3,25 @@ import type { SelectHTMLAttributes } from "react";
 import { Icon } from "./Icon.js";
 
 /**
+ * The naming choice, as a type rather than as a rule somebody has to remember:
+ * a rendered `label`, or an `aria-labelledby` pointing at text that is already
+ * rendered. `?: never` on the other arm is what makes them exclusive — without
+ * it an intersection would happily accept both and render a duplicate name.
+ */
+type SelectNaming =
+  | { label: string; "aria-labelledby"?: never }
+  | { label?: never; "aria-labelledby": string };
+
+export type SelectProps = Omit<
+  SelectHTMLAttributes<HTMLSelectElement>,
+  "aria-label" | "aria-labelledby"
+> &
+  SelectNaming & {
+    /** `stacked` puts the label above (a form), `inline` beside it (a controls row). */
+    layout?: "stacked" | "inline";
+  };
+
+/**
  * A `<select>` that cannot ship without a visible label.
  *
  * **Why this exists.** `TextField` has carried a label since the first week, so
@@ -13,13 +32,20 @@ import { Icon } from "./Icon.js";
  * all: the control announced itself to a screen reader and said nothing to
  * everyone else. That is not thirty-nine mistakes, it is one missing component.
  *
- * `label` is REQUIRED and is rendered, so the accessible name and the visible
- * name are the same string by construction. There is deliberately no
- * `aria-label` escape hatch: a control whose only name is invisible is the exact
- * defect this replaces, and a control legitimately named by nearby text (a
- * column header, a row's own heading) wants `aria-labelledby` pointing at that
- * text — which is that call site's own decision and not something to smuggle
- * through here.
+ * A NAME IS NOT OPTIONAL, and it is a choice of exactly two. `label` is
+ * rendered, so the accessible name and the visible name are the same string by
+ * construction. `aria-labelledby` is for the control whose name is already on
+ * screen as somebody else's text — a column header, a settings row's own
+ * heading — where a second rendered copy of that word is the defect. The type
+ * is a union of those two and has no third member, so an unnamed select cannot
+ * be spelled; there is still deliberately no `aria-label`, because a name only
+ * a screen reader can hear is the exact defect this component replaces.
+ *
+ * The `aria-labelledby` arm used to be missing, and the doc said the case was
+ * the call site's own business. It was: four call sites did it correctly, in raw
+ * markup, and paid for the correct decision with the OS chevron, the wrong
+ * ground and their own copy of the box — which is how a component that refuses
+ * a legitimate case ends up policing only the call sites that never needed it.
  *
  * `layout` is the one arrangement choice, and both arrangements are labelled.
  * `stacked` is the form default, matching `TextField`. `inline` is for a
@@ -30,13 +56,6 @@ import { Icon } from "./Icon.js";
  * `TextField`, deliberately): every page that already styles a select styles the
  * element itself, so adopting this component leaves those rules working.
  */
-export interface SelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, "aria-label"> {
-  /** Rendered, and therefore also the accessible name. Not optional — see the component's own doc. */
-  label: string;
-  /** `stacked` puts the label above (a form), `inline` beside it (a controls row). */
-  layout?: "stacked" | "inline";
-}
-
 export function Select({ label, layout = "stacked", id, className, children, ...rest }: SelectProps) {
   const generatedId = useId();
   const selectId = id ?? generatedId;
@@ -44,9 +63,11 @@ export function Select({ label, layout = "stacked", id, className, children, ...
   const control = className ? `nx-select__control ${className}` : "nx-select__control";
   return (
     <div className={wrapper}>
-      <label className="nx-select__label" htmlFor={selectId}>
-        {label}
-      </label>
+      {label !== undefined && (
+        <label className="nx-select__label" htmlFor={selectId}>
+          {label}
+        </label>
+      )}
       {/* The chevron is a real `Icon` laid over the control rather than the
           browser's own arrow: `appearance: none` takes the native one away so
           the closed control stops rendering as a Windows widget, and this puts

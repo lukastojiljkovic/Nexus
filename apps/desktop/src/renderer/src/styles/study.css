@@ -271,8 +271,6 @@
   gap: var(--nx-space-2);
   flex-wrap: wrap;
 }
-/* Native select matched to the textfield input (tokens only, no custom arrow;
-   mirrors .documents__select). */
 /* `.study__select` lived here and is gone with the last raw `<select>` on this
    page. It restated the whole box — font, colour, border, radius, padding —
    which was correct while the controls were raw markup and would have become

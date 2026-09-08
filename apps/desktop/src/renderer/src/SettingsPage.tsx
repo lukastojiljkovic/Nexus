@@ -3021,6 +3021,9 @@ function CsvMappingDialog({
   const shared = strings.settings.restore;
   const titleId = useId();
   const questionId = useId();
+  // One prefix for the column headings, suffixed by index: each role picker is
+  // named by its own column's heading rather than by a rendered label.
+  const columnNameId = useId();
 
   // Focus lands on the first role select: the dialog exists to be answered,
   // and the first answer is the first column's — the trap's own default (the
@@ -3093,21 +3096,23 @@ function CsvMappingDialog({
             return (
               <div className="csv-map__column" key={index}>
                 <div className="csv-map__column-facts">
-                  <span className="csv-map__column-name">{name}</span>
+                  <span className="csv-map__column-name" id={`${columnNameId}-${index}`}>
+                    {name}
+                  </span>
                   <span className="csv-map__samples">
                     {s.samplesLabel} {samples.length > 0 ? samples.join(" · ") : "—"}
                   </span>
                 </div>
-                {/* The one select on this page still written by hand. Its name
-                    is the COLUMN's, already on screen two lines up — which is
-                    the case `Select`'s own doc sends to `aria-labelledby`, and
-                    `Select` has no way to express that. Giving it a rendered
-                    `label` instead would print „Uloga" once per column in a
-                    table whose whole point is the column names. */}
-                <select
+                {/* Named by the COLUMN, whose heading is on screen two lines
+                    up: a rendered `label` would print „Uloga“ once per column
+                    in a table whose whole point is the column names. This is
+                    the case `Select`'s doc had always described and had no way
+                    to express, which is why it was the last hand-written select
+                    on this page. */}
+                <Select
                   className="set__select"
                   value={roles[index] ?? "ignore"}
-                  aria-label={`${s.roleLabel}: ${name}`}
+                  aria-labelledby={`${columnNameId}-${index}`}
                   disabled={busy}
                   onChange={(event) => {
                     const role = CSV_IMPORT_COLUMN_ROLES.find(
@@ -3121,7 +3126,7 @@ function CsvMappingDialog({
                       {s.roles[role]}
                     </option>
                   ))}
-                </select>
+                </Select>
               </div>
             );
           })}

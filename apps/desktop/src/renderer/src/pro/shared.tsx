@@ -232,7 +232,6 @@ export function ToolSelect<T extends string>({
     <div className="tool__field">
       <Select
         label={label}
-        className="tool__select"
         value={value}
         onChange={(event: ChangeEvent<HTMLSelectElement>) => {
           const chosen = options.find((option) => option.id === event.target.value);

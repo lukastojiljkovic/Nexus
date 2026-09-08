@@ -75,6 +75,18 @@ export interface ShotScene {
  */
 export const SHOT_SCENES: readonly ShotScene[] = [
   { id: "dashboard", module: "dashboard", fanout: null },
+  {
+    // „Podesi…" (DASH-004): the per-widget config form, which is the ⋯ menu
+    // flipped into a second mode. Two clicks from a landing the sweep already
+    // visits, and never photographed — so the count picker inside it was
+    // reviewed by opening the app by hand, which is how it kept the operating
+    // system's own arrow while the selects around it stopped having one.
+    id: "dashboard-widget-config",
+    module: "dashboard",
+    prepare: OPEN_WIDGET_CONFIG(),
+    fanout: null,
+    cleanup: LEAVE_EDIT_MODE(),
+  },
   { id: "tasks", module: "tasks" },
   {
     // „Priliv i odliv", which the landing no longer draws by itself.
@@ -101,6 +113,21 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     // open": the probe was right and the page was somewhere else.
     prepare: CLICK_THEN(".nx-segmented__option", "text:Detalji"),
     fanout: null,
+  },
+  {
+    // „Prilagođeno": the recurrence editor, which is the biggest surface in the
+    // product the camera had never been to. It is three steps inside a form —
+    // open the details pane, put a date in the rok, then choose the last option
+    // of the repetition picker — and until this scene existed, six controls,
+    // their labels and the panel around them were reviewed by opening the app
+    // by hand or not at all. That is DC-57's shape, and it is the same argument
+    // `check:controls` makes about a form three modal steps deep: a rule
+    // enforced by photography holds only where the camera goes.
+    id: "tasks-recurrence",
+    module: "tasks",
+    prepare: OPEN_RECURRENCE_EDITOR(),
+    fanout: null,
+    cleanup: CLOSE_RECURRENCE_EDITOR(),
   },
   {
     // The rail's own create forms. The rail is outside the view switch, so it
@@ -620,6 +647,22 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     prepare: SCROLL_TO("#set-section-sync"),
     fanout: null,
   },
+  {
+    // „Privatne beleške", by the same route as the card above it.
+    //
+    // Said plainly, because a frame that shows less than its name promises is
+    // the thing this file keeps warning about: the demo profile has NO private
+    // section, so what this photographs is the card's not-set-up state. The
+    // auto-lock knob — the one `Select` on this page in a plain column rather
+    // than a `.set__field` grid, and therefore the one whose width nothing else
+    // answers — appears only once the section exists. The scene is still worth
+    // having: the card was below the fold and unphotographed either way, and it
+    // starts showing the knob the day the demo seed sets the section up.
+    id: "settings-priv",
+    module: "settings",
+    prepare: SCROLL_TO("#set-section-priv"),
+    fanout: null,
+  },
 
   // --- Overlays -------------------------------------------------------------
   // Surfaces with no sidebar row of their own. Each opens something, is
@@ -925,6 +968,154 @@ function SET_WAVE_KINDS(kinds: readonly string[]): string {
         pickers[index].dispatchEvent(new Event("change", { bubbles: true }));
       }
       await frame();`;
+}
+
+/**
+ * Opens the first widget config form the dashboard actually offers.
+ *
+ * THREE conditions, which is the whole reason this is a helper and not a
+ * `CLICK_THEN`. The ⋯ exists only in EDIT mode, so the scene presses „Uredi"
+ * first — the first draft did not, found no menus, and said so, which is the
+ * behaviour every probe here owes the reader. „Podesi…" is then drawn only for
+ * a widget whose contract declares `configFields` at all, and the control this
+ * scene exists to show only for a `count` field, so it walks the cards instead
+ * of taking the first. A scene that opened the first menu would photograph a
+ * plain action list under a name promising a form — and would go on doing it
+ * silently the day the dashboard's first card changes.
+ *
+ * Each miss closes what it opened before trying the next, and `LEAVE_EDIT_MODE`
+ * presses „Gotovo" afterwards: edit mode is page state, and every later
+ * dashboard frame would otherwise carry a grip and a ⋯ on every card.
+ */
+function OPEN_WIDGET_CONFIG(): string {
+  return `(async () => {
+    const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const button = (text) =>
+      Array.prototype.find.call(
+        document.querySelectorAll("button"),
+        (node) => (node.textContent || "").trim() === text,
+      );
+    const enter = button("Uredi");
+    if (enter) {
+      enter.click();
+      await frame();
+    }
+    const triggers = document.querySelectorAll(".dash__widget-menu");
+    if (triggers.length === 0) return "none: no widget menus even in edit mode";
+    for (const trigger of triggers) {
+      trigger.click();
+      await frame();
+      const configure = button("Podesi…");
+      if (configure) {
+        configure.click();
+        await frame();
+        if (document.querySelector(".dash__config-field")) return "open";
+      }
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      await frame();
+    }
+    return "none: no widget here offers a config form with a count field";
+  })()`;
+}
+
+/** Closes the popover and presses „Gotovo", so the next scene gets a plain dashboard. */
+function LEAVE_EDIT_MODE(): string {
+  return `(async () => {
+    const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await frame();
+    const done = Array.prototype.find.call(
+      document.querySelectorAll("button"),
+      (node) => (node.textContent || "").trim() === "Gotovo",
+    );
+    if (done) {
+      done.click();
+      await frame();
+    }
+    return true;
+  })()`;
+}
+
+/**
+ * Opens TASK's repetition editor, which needs a date before it will open at all.
+ *
+ * Three steps, each of which can miss, so each says so: the details pane has to
+ * be open (it is a toggle, and „Sakrij detalje" is what the button says once it
+ * is — so the click is skipped rather than repeated when the pane is already
+ * there), the rok has to hold a real day before `RecurrencePicker` enables
+ * itself, and only then does choosing „Prilagođeno" unfold the panel. The last
+ * line asks for `.recur__custom` rather than trusting the click: without it a
+ * missed step photographs an ordinary task form under a name that promises an
+ * editor, which is the quietest way for a scene to be wrong.
+ *
+ * Values are written through the prototype's own setter for {@link
+ * SET_WAVE_KINDS}'s reason: React tracks a controlled field's value on the DOM
+ * node and skips the event when what it reads back matches what it last wrote,
+ * so a plain assignment leaves the control showing one thing and the form
+ * holding another.
+ */
+function OPEN_RECURRENCE_EDITOR(): string {
+  return `(async () => {
+    const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const setValue = (node, value) => {
+      const proto = node instanceof HTMLSelectElement ? HTMLSelectElement : HTMLInputElement;
+      Object.getOwnPropertyDescriptor(proto.prototype, "value").set.call(node, value);
+    };
+    if (!document.querySelector(".tasks__fields")) {
+      const toggle = Array.prototype.find.call(
+        document.querySelectorAll("button"),
+        (node) => (node.textContent || "").trim().startsWith("Detalji"),
+      );
+      if (!toggle) return "none: no Detalji toggle on this view";
+      toggle.click();
+      await frame();
+    }
+    const rok = document.querySelector(".tasks__fields input[type='date']");
+    if (!rok) return "none: the details pane has no date field";
+    setValue(rok, "2026-09-15");
+    rok.dispatchEvent(new Event("input", { bubbles: true }));
+    await frame();
+    const picker = document.querySelector(".recur .nx-select__control");
+    if (!picker) return "none: no repetition picker in the form";
+    if (picker.disabled) return "none: the picker stayed disabled, so the date did not land";
+    setValue(picker, "custom");
+    picker.dispatchEvent(new Event("change", { bubbles: true }));
+    await frame();
+    return document.querySelector(".recur__custom") ? "open" : "none: Prilagođeno did not unfold";
+  })()`;
+}
+
+/**
+ * Puts the create form back, and this one is not optional either.
+ *
+ * The form is the page's own draft state, and every TASK scene after this one
+ * would otherwise be photographed with a date in the rok and a rule attached to
+ * it. Clearing the rok is what does the work — `TasksPage` drops the rule and
+ * the reminder ladder with it, since neither can be phased from a date that is
+ * not there — but the preset is put back first so the path exercises the way
+ * out as well as the way in.
+ */
+function CLOSE_RECURRENCE_EDITOR(): string {
+  return `(async () => {
+    const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const setValue = (node, value) => {
+      const proto = node instanceof HTMLSelectElement ? HTMLSelectElement : HTMLInputElement;
+      Object.getOwnPropertyDescriptor(proto.prototype, "value").set.call(node, value);
+    };
+    const picker = document.querySelector(".recur .nx-select__control");
+    if (picker && !picker.disabled) {
+      setValue(picker, "none");
+      picker.dispatchEvent(new Event("change", { bubbles: true }));
+      await frame();
+    }
+    const rok = document.querySelector(".tasks__fields input[type='date']");
+    if (rok) {
+      setValue(rok, "");
+      rok.dispatchEvent(new Event("input", { bubbles: true }));
+      await frame();
+    }
+    return true;
+  })()`;
 }
 
 /**

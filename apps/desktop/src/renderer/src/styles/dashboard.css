@@ -265,22 +265,15 @@
 
 /* „Podesi…" (DASH-004 / ADR-059): the ⋯ menu flips into the per-widget config
    form. Choices and the list checkboxes reuse the menu's own item idioms; the
-   count is the settings page's select recipe (.set__select), inset to the
-   panel's label margins so it lines up with the items above it. */
-.dash__config-select {
-  font: inherit;
-  font-size: var(--nx-font-size-body-sm);
-  color: var(--nx-text);
-  background: var(--nx-surface);
-  border: 1px solid var(--nx-border);
-  border-radius: var(--nx-radius-md);
-  padding: 5px 10px;
+   count is a `Select`, inset to the panel's label margins so it lines up with
+   the items above it.
+
+   The inset is on a WRAPPER rather than on the control, and that is the whole
+   reason this class exists at all: the drawn chevron is positioned against the
+   control's own box, so a right margin on the control would leave the arrow
+   sitting outside it. */
+.dash__config-field {
   margin: 2px 10px 6px;
-  transition: border-color var(--nx-motion-fast) var(--nx-motion-ease);
-}
-.dash__config-select:focus-visible {
-  outline: 2px solid var(--nx-accent);
-  outline-offset: 2px;
 }
 
 /* Drop target = accent border + soft background, the house recipe — never a
