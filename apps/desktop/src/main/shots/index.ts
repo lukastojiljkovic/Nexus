@@ -466,6 +466,31 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     cleanup: CLICK_THEN("text:Otkaži"),
   },
   {
+    // The routine form with ITEMS in it, which „Nova rutina" above can never
+    // show: a new routine starts with none, and a line is only drawn once an
+    // exercise has been picked. So the eight target fields on an item row —
+    // the widest set of controls in the module — had gone unphotographed for
+    // as long as they have existed, and the frame that carries their name says
+    // „Nova rutina" and is a photograph of an empty form.
+    //
+    // Reached by the pencil on the first routine in the list rather than by a
+    // primary button, which is the same reach `calendar-documents-renew` makes
+    // and the third form found this way. The SECTION is named, and that is not
+    // belt-and-braces: „Trening" draws four `.fit__section`s and the first two
+    // belong to `FitTraining`, which has a `.fit__list` of logged sessions with
+    // `.fit__row-action` buttons of its own. A bare `.fit__list .fit__row-action`
+    // clicked one of those, which opens nothing, and the frame came back as a
+    // photograph of the routine LIST filed under the editor's name.
+    id: "fitness-edit-routine",
+    module: "fitness",
+    prepare: OPEN_CREATE_FORM({
+      path: [".fit__section-tab:nth-child(3)"],
+      open: '.fit__section[aria-label="Rutine"] .fit__row-action',
+    }),
+    fanout: null,
+    cleanup: CLICK_THEN("text:Otkaži"),
+  },
+  {
     id: "fitness-new-exercise",
     module: "fitness",
     prepare: OPEN_CREATE_FORM({
