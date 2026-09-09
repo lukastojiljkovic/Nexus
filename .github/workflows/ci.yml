@@ -122,6 +122,19 @@ jobs:
       # a class that is only ever a `<p>`.
       - run: pnpm check:tiers
 
+      # A labelled field is two boxes tall and a bare input, a button or an
+      # `inline` select is one, so a row holding both has children of two
+      # heights — and there `align-items: center` centres the BOXES, which puts
+      # every control on its own baseline, half a label apart. Four forms
+      # shipped that way and none of them looked wrong, because while every
+      # child was one box tall `center` and `end` draw the same picture; they
+      # all went ragged on the afternoon DC-120's labels arrived. Neither half
+      # can see it alone: the stylesheet cannot say what is in the row, and
+      # `center` is right on the fifty-odd toolbars and chip rows that are not
+      # this, while the markup cannot say how the row is laid out. So the rule
+      # reads both, and fires only where the children mix.
+      - run: pnpm check:rows
+
       # A stacking order is a property of the whole app, and this one existed
       # nowhere: twenty-two z-index values across eleven files, each chosen at
       # its own call site, so `1` meant „pinned over my rows" in seven places

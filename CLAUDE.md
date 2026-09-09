@@ -139,7 +139,7 @@ choice of backend**; whatever in them is about the data model still applies.
      layer is unfinished, and that is the more useful answer.
   Record the class in [docs/defect-classes.md](docs/defect-classes.md) so the
   same shape is recognised the next time it appears somewhere else. **A class
-  that can be turned into a gate should be** — seventeen of the hundred-odd
+  that can be turned into a gate should be** — eighteen of the hundred-odd
   already have been, and a rule nobody can forget beats a rule everybody has read.
 - **Concise Serbian status updates** to the founder; the code, comments, and docs
   are in **English**.
@@ -233,7 +233,7 @@ choice of backend**; whatever in them is about the data model still applies.
   import it raise TS7016.
 - **Verification gates before any commit:** `pnpm typecheck` (13/13), `pnpm lint`
   (13/13), `pnpm test` (all green), `pnpm build` (4/4),
-  `pnpm --filter @nexus/desktop smoke` prints `SMOKE OK`, and **all twenty
+  `pnpm --filter @nexus/desktop smoke` prints `SMOKE OK`, and **all twenty-one
   static gates** pass. **`pnpm lint` used to be missing from this line** even
   though CI has always run it, and on 2026-08-14 six real errors shipped red
   because of that — two of them display bugs the linter had named (DC-49,
@@ -272,6 +272,27 @@ choice of backend**; whatever in them is about the data model still applies.
   needs no allowlist at all. A block that declares its own `font-family` has
   said out loud that it is a different tier — `.elec-sim__readout` is a mono
   tick counter — and is not this one),
+  **`check:rows`** (a field row that mixes shapes aligns its CONTROLS, because
+  it cannot align its boxes. A form row here is a wrapping flex row, and where
+  one child is a stacked field — label above input — and its neighbour is a
+  bare input or a button, `align-items: center` centres the tall box against
+  the short one and leaves the input sitting BELOW the control next to it: the
+  two things the user actually touches are the only two not lined up. `end`
+  lines them up, because the control is the last thing inside a stacked box.
+  Four rows shipped centred — the calendar's, DOKUMENTI's and both of
+  STUDIJE's — and nothing else in the tree can see that: `center` is a valid
+  value, every length is a token, and the sweep photographs a centred row and
+  an aligned one as two rows of correct-looking boxes. The gate reads the
+  MARKUP to decide which rows are mixed at all, because a row of all-stacked
+  fields is correct at any alignment and so is a row of all-bare controls; a
+  fragment is transparent, its children being the row's. Its own trap is worth
+  keeping: `\blabel=` also matches `aria-label=` — `\b` sits between the `-`
+  and the `l` — which was five phantom findings before a test owned the case.
+  It also cost the shared JSX lexer a bug, which is the more useful half:
+  `ChangeEvent<HTMLInputElement>` was read as a tag, never self-closed and
+  never closed, so it stayed on the nesting stack and swallowed every following
+  sibling as its child. Gates that ask for one tag name never met it; the first
+  one to walk EVERY tag reported nothing on the form it was written to catch),
   **`check:layers`** (a stacking order is a property of the whole app, and this
   one existed nowhere: 22 `z-index` values over 11 files, each picked at its own
   call site, so `1` meant „pinned over my rows" seven times and „the lower of

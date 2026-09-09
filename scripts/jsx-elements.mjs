@@ -37,6 +37,19 @@ export function* jsxElements(source, tag) {
   const opening = new RegExp(`<(${tag.source})\\b`, "g");
   for (const match of source.matchAll(opening)) {
     const start = match.index;
+    // A TYPE ARGUMENT, not an element. `ChangeEvent<HTMLInputElement>` and
+    // `useState<Task[] | null>` put a `<` in front of a capitalised name in
+    // every file this scans, and the discriminator is the character before it:
+    // a generic's `<` closes up against the name it parameterises, while JSX's
+    // never does — it follows whitespace, `(`, `{`, `,`, or the `>` of the tag
+    // it nests inside, and `>` is therefore NOT excluded here.
+    //
+    // Gates that ask for one specific tag never noticed: `input` and `select`
+    // are not generic type names. The first caller to walk EVERY tag did — the
+    // stray `<HTMLInputElement>` was not self-closing, so it stayed on the
+    // nesting stack and swallowed every following sibling as its child, and
+    // `check:rows` reported nothing on a form it had been written to catch.
+    if (start > 0 && /[A-Za-z0-9_$]/.test(source[start - 1])) continue;
     let i = start + match[0].length;
     let depth = 0;
     let quote = null;
