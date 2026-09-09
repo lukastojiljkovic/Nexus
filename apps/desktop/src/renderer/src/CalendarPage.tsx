@@ -1609,11 +1609,15 @@ className="nx-segmented__option cal__source"
               autoFocus
               onChange={(event: ChangeEvent<HTMLInputElement>) => setTitle(event.target.value)}
             />
+            {/* VISIBLE labels on the three date/time fields, which had names a
+                screen reader could hear and nobody could read — DC-120, and the
+                two `--:--` boxes were the same „two identical controls"
+                shape TASK's „Rok"/„Počinje" were reported for. */}
             <TextField
               type="date"
               value={date}
               required
-              aria-label={strings.calendar.dateLabel}
+              label={strings.calendar.dateLabel}
               onChange={(event) => {
                 const next = event.target.value;
                 setDate(next);
@@ -1632,7 +1636,7 @@ className="nx-segmented__option cal__source"
                 <TextField
                   type="time"
                   value={time}
-                  aria-label={strings.calendar.timeLabel}
+                  label={strings.calendar.timeLabel}
                   onChange={(event) => {
                     const next = event.target.value;
                     setTime(next);
@@ -1644,7 +1648,7 @@ className="nx-segmented__option cal__source"
                 <TextField
                   type="time"
                   value={endTime}
-                  aria-label={strings.calendar.endTimeLabel}
+                  label={strings.calendar.endTimeLabel}
                   onChange={(event) => {
                     setEndTime(event.target.value);
                     setEndTimeTouched(true);

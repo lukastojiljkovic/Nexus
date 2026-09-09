@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { Button, Chip, EmptyState, Icon, ListRow, LoadingState, Select, TextField } from "@nexus/ui";
 import {
@@ -158,6 +158,11 @@ export interface FitMeasurementsProps {
 export function FitMeasurements({ profileId }: FitMeasurementsProps) {
   const s = strings.fitness.measure;
   const today = localTodayKey();
+  // „Mišićna masa" is a `fit__field-label` above the value+unit pair, so the
+  // value field points at it. It used to repeat the same string in an
+  // `aria-label`, which is the same name said twice in two places — and the
+  // second copy is the one that goes stale.
+  const muscleLabelId = useId();
 
   const [range, setRange] = useState<TrendRange>(90);
   const [snapshot, setSnapshot] = useState<MeasureSnapshot | null>(null);
@@ -625,12 +630,14 @@ export function FitMeasurements({ profileId }: FitMeasurementsProps) {
             />
           </div>
 
-          <span className="fit__field-label">{s.entry.muscleLabel}</span>
+          <span className="fit__field-label" id={muscleLabelId}>
+            {s.entry.muscleLabel}
+          </span>
           <div className="fit__start">
             <TextField
               value={entry.muscleValue}
               inputMode="decimal"
-              aria-label={s.entry.muscleLabel}
+              aria-labelledby={muscleLabelId}
               className="fit__set-field"
               onChange={(event) => setEntry({ ...entry, muscleValue: event.target.value })}
             />
@@ -639,7 +646,7 @@ export function FitMeasurements({ profileId }: FitMeasurementsProps) {
               className="fit__select"
               value={entry.muscleUnit}
               onChange={(event) =>
-              setEntry({ ...entry, muscleUnit: event.target.value as "percent" | "kg" })
+                setEntry({ ...entry, muscleUnit: event.target.value as "percent" | "kg" })
               }
             >
               <option value="percent">{s.entry.muscleUnitPercent}</option>

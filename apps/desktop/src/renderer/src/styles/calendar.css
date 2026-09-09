@@ -42,9 +42,20 @@
 }
 
 /* Event form (create + edit) — one wrapping row; the title takes the slack. */
+/* `end`, not `center`, and the reason is the one `.tasks__fields` records from
+   the other side: this line mixes children of two SHAPES — „Datum", „Od" and
+   „Do" are a label over a control, while the title, the place and „Ceo dan" are
+   a control alone — and centring two different heights puts every control on
+   its own baseline. Aligning the BOTTOMS puts the controls on one line and lets
+   the labels float above the three that have them.
+
+   TASK's own field row went the other way, to `start`, once every child there
+   became the same shape; this one gets that treatment when [[DC-120]]'s steps 2
+   and 3 give the title and the place visible names of their own. Until then
+   `end` is the alignment that is true about what is actually in the row. */
 .cal__form {
   display: flex;
-  align-items: center;
+  align-items: end;
   gap: var(--nx-space-2);
   flex-wrap: wrap;
   /* Chrome: it takes the height it needs and the view below gives it up. */
@@ -1583,9 +1594,12 @@ button.cal__grid-event {
 }
 
 /* Add/edit form — one wrapping row; the label field takes the slack. */
+/* `end` for `.cal__form`'s reason: „Ističe" is a label over a control and the
+   name and the note beside it are controls alone, so the controls share a
+   baseline and the one label floats above its own. */
 .documents__form {
   display: flex;
-  align-items: center;
+  align-items: end;
   gap: var(--nx-space-2);
   flex-wrap: wrap;
   /* The form is chrome for the list under it: it takes the height its own

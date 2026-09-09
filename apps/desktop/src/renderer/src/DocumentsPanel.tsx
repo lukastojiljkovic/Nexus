@@ -323,11 +323,14 @@ export function DocumentsPanel({
           aria-label={strings.documents.labelLabel}
           onChange={(event: ChangeEvent<HTMLInputElement>) => setLabel(event.target.value)}
         />
+        {/* A VISIBLE label. „Ističe" is the only field in this form whose name
+            is not also its placeholder, so it was the one box on the row that
+            said nothing at all until it was clicked — DC-120. */}
         <TextField
           type="date"
           value={expiryDate}
           required
-          aria-label={strings.documents.expiryLabel}
+          label={strings.documents.expiryLabel}
           onChange={(event) => setExpiryDate(event.target.value)}
         />
         <TextField

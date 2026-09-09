@@ -918,7 +918,8 @@ export function FitNutrition({ profileId }: FitNutritionProps) {
               <TextField
                 value={itemGramsDraft}
                 inputMode="decimal"
-                aria-label={s.picker.amountLabel}
+                label={s.picker.amountLabel}
+                layout="inline"
                 className="fit__grams-field"
                 autoFocus
                 onChange={(event) => setItemGramsDraft(event.target.value)}

@@ -2245,7 +2245,12 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     titlePlaceholder: "Naziv događaja",
     titleLabel: "Naziv događaja",
     dateLabel: "Datum",
-    timeLabel: "Vreme",
+    /**
+     * „Od", not „Vreme". It was the latter while it was an `aria-label` a
+     * screen reader read on its own; drawn on screen it stands beside
+     * `endTimeLabel`, and „Vreme"/„Do" is half a pair.
+     */
+    timeLabel: "Od",
     /** End-time field (week/day view, ADR-020) — next to the start-time field, timed events only. */
     endTimeLabel: "Do",
     /** Client-side guard mirroring EventStore's own "end must not be before start" check. */

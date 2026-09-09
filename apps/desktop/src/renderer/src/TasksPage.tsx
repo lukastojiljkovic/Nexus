@@ -1129,6 +1129,11 @@ export interface TasksPageProps {
  * notice bar reports because the row has moved rather than been struck through.
  */
 export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps) {
+  // „Rok" inside the batch-edit popover is named by the `note__menu-label`
+  // directly above it, so the field points at that text rather than carrying a
+  // second name of its own — which it did, and it was a DIFFERENT string, so
+  // the screen and the screen reader disagreed about what the box was.
+  const bulkDueLabelId = useId();
   // Read once, at mount: the stored value is this machine's answer, and
   // re-reading it on every render would let a second window's write change
   // this page under the reader mid-session.
@@ -4969,11 +4974,13 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
             >
               {(close) => (
                 <div className="tasks__bulk-due">
-                  <span className="note__menu-label">{strings.tasks.bulk.dueLabel}</span>
+                  <span className="note__menu-label" id={bulkDueLabelId}>
+                    {strings.tasks.bulk.dueLabel}
+                  </span>
                   <TextField
                     type="date"
                     value={bulkDue}
-                    aria-label={strings.tasks.dueDateLabel}
+                    aria-labelledby={bulkDueLabelId}
                     onChange={(event) => setBulkDue(event.target.value)}
                   />
                   <Button

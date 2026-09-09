@@ -3416,11 +3416,14 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                           </option>
                         ))}
                       </Select>
+                      {/* Visible, like the „Vrsta ispita" select beside it:
+                          the row read as one named control and one unexplained
+                          `dd-----yyyy` box (DC-120). */}
                       <TextField
                         type="date"
                         value={examDate}
                         required
-                        aria-label={strings.study.examDateLabel}
+                        label={strings.study.examDateLabel}
                         onChange={(event) => setExamDate(event.target.value)}
                       />
                       <input
@@ -3917,11 +3920,14 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                     ))}
                   </Select>
                 )}
+                {/* Both visible. This row shipped as a named select followed by
+                    a bare date and a bare `60` — and a lone „60" beside a date
+                    is not a field a reader can even guess at (DC-120). */}
                 <TextField
                   type="date"
                   value={planStartDate}
                   required
-                  aria-label={strings.study.planStartLabel}
+                  label={strings.study.planStartLabel}
                   onChange={(event) => setPlanStartDate(event.target.value)}
                 />
                 <TextField
@@ -3931,7 +3937,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                   required
                   min={MIN_PLAN_MINUTES}
                   max={MAX_PLAN_MINUTES}
-                  aria-label={strings.study.planMinutesLabel}
+                  label={strings.study.planMinutesLabel}
                   onChange={(event) => setPlanMinutes(event.target.value)}
                 />
                 <Checkbox checked={planBoost} onChange={(event) => setPlanBoost(event.target.checked)}>

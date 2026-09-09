@@ -264,10 +264,12 @@
   gap: var(--nx-space-1);
 }
 
-/* Inline exam form (add/edit) — revealed under a subject's exam list. */
+/* Inline exam form (add/edit) — revealed under a subject's exam list.
+   `end`, so the inline „Vrsta ispita" select, the stacked „Datum ispita" field
+   and the unlabelled scope input all put their CONTROLS on one baseline. */
 .study__exam-form {
   display: flex;
-  align-items: center;
+  align-items: end;
   gap: var(--nx-space-2);
   flex-wrap: wrap;
 }
@@ -704,9 +706,11 @@
   color: var(--nx-text-muted);
   font-variant-numeric: tabular-nums;
 }
+/* `end`, for `.study__exam-form`'s reason: an inline select beside two stacked
+   fields, which centring puts on three different baselines. */
 .study__plan-form {
   display: flex;
-  align-items: center;
+  align-items: end;
   gap: var(--nx-space-2);
   flex-wrap: wrap;
 }

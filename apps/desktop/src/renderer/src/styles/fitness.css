@@ -266,7 +266,11 @@
 .fit__row-delete.nx-button:hover {
   color: var(--nx-danger);
 }
-.fit__grams-field {
+/* The width belongs to the INPUT, not to the field. `TextField` puts
+   `className` on the wrapper, and since the wrapper became an `inline` row —
+   the caption „KOLIČINA (G)" and the box side by side — a `width` there is the
+   width of BOTH, and 9ch of it would have gone to the caption. */
+.fit__grams-field .nx-textfield__input {
   width: 9ch;
 }
 
