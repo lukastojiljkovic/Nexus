@@ -171,6 +171,43 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     cleanup: CLICK_THEN("text:Otkaži"),
   },
   { id: "calendar", module: "calendar" },
+  // CAL's two template panels, neither of which the sweep had ever seen. They
+  // are the module's only surfaces behind a popover, and a popover closes the
+  // moment anything else is clicked — so the fan-out that photographs every
+  // view could not have caught them on the way past.
+  //
+  // Both name a `view` first, because the scene before this one leaves the
+  // switcher wherever its last fan-out click landed, and neither panel exists
+  // in „Dokumenta" or „Ljudi".
+  {
+    id: "calendar-templates",
+    module: "calendar",
+    prepare: OPEN_CREATE_FORM({
+      path: ["text:Agenda"],
+      open: ".cal__templates-trigger",
+      expect: ".note__menu-panel",
+    }),
+    fanout: null,
+    // The trigger is a toggle, so pressing it again is the way back out.
+    cleanup: CLICK_THEN(".cal__templates-trigger"),
+  },
+  {
+    // The naming line, which exists only for an event the form is HOLDING —
+    // hence the edit click. „Sačuvaj kao šablon" is matched exactly rather than
+    // by prefix: the panel's own submit says „Sačuvaj", and the form's does too.
+    id: "calendar-save-template",
+    module: "calendar",
+    prepare: OPEN_CREATE_FORM({
+      path: ["text:Agenda", ".cal__edit", ".cal__template-menu"],
+      open: "text:Sačuvaj kao šablon",
+      expect: ".cal__template-form",
+    }),
+    fanout: null,
+    // One click, because `resetForm` unmounts the whole popover with the edit
+    // state it belongs to — including the naming prompt, which it clears on
+    // purpose rather than leaving armed for an event the form no longer holds.
+    cleanup: CLICK_THEN(".cal__cancel"),
+  },
   { id: "notes", module: "notes" },
   {
     // „Ritam pisanja" — the heatmap, its caption and its legend.
@@ -1166,6 +1203,19 @@ function CLOSE_RECURRENCE_EDITOR(): string {
 function OPEN_CREATE_FORM(spec: {
   readonly path?: readonly string[];
   readonly open: string;
+  /**
+   * What appeared, where „a `<form>` that was not there before" is not the
+   * answer — given, it is waited for and scrolled to instead.
+   *
+   * CAL's two template panels are the case, and neither is an oversight. The
+   * naming line sits INSIDE the event form, so it is a `<div>` on purpose: a
+   * nested `<form>` is not a thing HTML has, and its own comment says so. The
+   * apply list is a portalled popover and never contained a form at all. Both
+   * were therefore unreachable by the discriminator above, and both had gone
+   * unphotographed for as long as they have existed — which is the same blind
+   * spot this helper was written to close, one layer further in.
+   */
+  readonly expect?: string;
 }): string {
   return `(async () => {
   const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
@@ -1201,12 +1251,17 @@ function OPEN_CREATE_FORM(spec: {
   }
   const open = await waitFor(() => locate(${JSON.stringify(spec.open)}));
   if (!open) return "none: no " + ${JSON.stringify(spec.open)};
+  const expect = ${JSON.stringify(spec.expect ?? null)};
   const before = new Set(document.querySelectorAll("form"));
   open.click();
   const form = await waitFor(() =>
-    Array.prototype.find.call(document.querySelectorAll("form"), (node) => !before.has(node)),
+    expect === null
+      ? Array.prototype.find.call(document.querySelectorAll("form"), (node) => !before.has(node))
+      : document.querySelector(expect),
   );
-  if (!form) return "none: " + ${JSON.stringify(spec.open)} + " opened no new form";
+  if (!form) {
+    return "none: " + ${JSON.stringify(spec.open)} + " opened no " + (expect ?? "new form");
+  }
   form.scrollIntoView({ behavior: "instant", block: "start" });
   await frame();
   return true;
