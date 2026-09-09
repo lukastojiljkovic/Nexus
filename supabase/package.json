@@ -6,6 +6,7 @@
   "description": "Nexus sync server: schema, the RLS wall, and the checks that prove it stands.",
   "scripts": {
     "check": "node scripts/check-rls-wall.mjs",
+    "lint": "eslint scripts tests",
     "test": "node --test \"tests/static/*.test.mjs\"",
     "test:db": "supabase test db"
   }

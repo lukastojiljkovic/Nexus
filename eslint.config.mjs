@@ -142,6 +142,12 @@ export default tseslint.config(
       "apps/desktop/scripts/**/*.mjs",
       ".github/scripts/**/*.mjs",
       "scripts/**/*.mjs",
+      // The sync server's Node half: the RLS wall audit and the suites that
+      // run it. NOT `supabase/functions`, which is Deno — it has its own
+      // `deno.json` per function and its own linter, and lint that declared
+      // Node globals over it would be asserting a runtime it does not have.
+      "supabase/scripts/**/*.mjs",
+      "supabase/tests/**/*.mjs",
     ],
     languageOptions: { globals: { ...globals.node } },
   },

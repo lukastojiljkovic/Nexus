@@ -232,7 +232,8 @@ choice of backend**; whatever in them is about the data model still applies.
   the `types` condition its `exports` map omits; without it the 75 files that
   import it raise TS7016.
 - **Verification gates before any commit:** `pnpm typecheck` (13/13), `pnpm lint`
-  (13/13), `pnpm test` (all green), `pnpm build` (4/4),
+  (14/14 — `@nexus/supabase` joined on 2026-09-09; it has no TS, so typecheck
+  stays 13), `pnpm test` (all green), `pnpm build` (4/4),
   `pnpm --filter @nexus/desktop smoke` prints `SMOKE OK`, and **all twenty-one
   static gates** pass. **`pnpm lint` used to be missing from this line** even
   though CI has always run it, and on 2026-08-14 six real errors shipped red
