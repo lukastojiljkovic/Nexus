@@ -4581,6 +4581,16 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       /** The household measures the picker offers as one-tap amounts. */
       servingsLabel: "Uobičajene mere",
       servingsHint: "Nije obavezno. Brašno se meri, a ne broji.",
+      /**
+       * The two fields of one measure, drawn above their boxes. The
+       * placeholders below them STAY: „1 kašika" and „15" are a worked example
+       * of the pair — a quantity with its unit, and what it weighs — rather
+       * than either field's name, which is the distinction DC-120 step 2 turns
+       * on. Before these existed the example was the only name, so a filled row
+       * read „kašika · 15 · ×".
+       */
+      servingNameLabel: "Mera",
+      servingGramsLabel: "Masa (g)",
       servingLabelPlaceholder: "1 kašika",
       servingGramsPlaceholder: "15",
       addServing: "Dodaj meru",

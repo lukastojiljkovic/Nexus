@@ -1127,11 +1127,16 @@ export function FitNutrition({ profileId }: FitNutritionProps) {
         <span className="fit__field-label">{f.servingsLabel}</span>
         {servingDrafts.map((draft, index) => (
           <div key={index} className="fit__serving-row">
+            {/* Both named above the box, and both KEEP their placeholder:
+                „1 kašika" and „15" are a worked example of the pair rather
+                than either field's name, so they demonstrate where a label
+                labels. Until the labels existed the example was the only name
+                a row had, and a filled one read „kašika · 15 · ×". */}
             <TextField
+              label={f.servingNameLabel}
               value={draft.label}
               placeholder={f.servingLabelPlaceholder}
               maxLength={MAX_FIT_SERVING_LABEL_LENGTH}
-              aria-label={f.servingLabelPlaceholder}
               onChange={(event) =>
                 setServingDrafts((rows) =>
                   rows.map((row, at) => (at === index ? { ...row, label: event.target.value } : row)),
@@ -1139,10 +1144,10 @@ export function FitNutrition({ profileId }: FitNutritionProps) {
               }
             />
             <TextField
+              label={f.servingGramsLabel}
               value={draft.grams}
               inputMode="decimal"
               placeholder={f.servingGramsPlaceholder}
-              aria-label={s.totals.unitGram}
               onChange={(event) =>
                 setServingDrafts((rows) =>
                   rows.map((row, at) => (at === index ? { ...row, grams: event.target.value } : row)),
@@ -1175,6 +1180,7 @@ export function FitNutrition({ profileId }: FitNutritionProps) {
 
         <TextField
           label={f.notesLabel}
+          className="fit__text-field"
           value={notesDraft}
           placeholder={f.notesPlaceholder}
           maxLength={MAX_FIT_FOOD_NOTES_LENGTH}
