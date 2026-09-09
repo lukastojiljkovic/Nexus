@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import type { ChangeEvent, FormEvent } from "react";
+import type { FormEvent } from "react";
 import { createPortal } from "react-dom";
 import {
   Button,
@@ -10,6 +10,7 @@ import {
   EmptyState,
   PageHeader,
   Select,
+  TextArea,
   TextField,
 } from "@nexus/ui";
 import {
@@ -4004,15 +4005,21 @@ function LlmImportSection({ profileId, hits }: LlmImportSectionProps) {
           </div>
         ))}
 
-      <p className="nx-hint">{s.answerLabel}</p>
-      <textarea
-        className="nx-textfield__input set__llm-answer"
+      {/*
+        „Odgovor asistenta" used to be written twice — a `<p class="nx-hint">`
+        above the box and an `aria-label` on it — which is one name for the eye
+        and a second for the reader, free to drift apart at the next edit. The
+        component's label is a real `<label for>`: one string, and clicking it
+        puts the cursor in the box.
+      */}
+      <TextArea
+        className="set__llm-answer"
+        label={s.answerLabel}
         value={answer}
         placeholder={s.answerPlaceholder}
-        aria-label={s.answerLabel}
         maxLength={LLM_IMPORT_MAX_ANSWER_LENGTH}
         disabled={frozen}
-        onChange={(event: ChangeEvent<HTMLTextAreaElement>) => {
+        onChange={(event) => {
           setAnswer(event.target.value);
           invalidatePreview();
         }}

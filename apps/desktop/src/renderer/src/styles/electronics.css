@@ -542,24 +542,17 @@
   color: var(--nx-text-subtle);
   font-variant-numeric: tabular-nums;
 }
+/* The notes field is a `TextArea`, which draws its own label and its own column;
+   what the panel still has to say is that this one field spans it. The panel is
+   `align-items: flex-start`, and a stacked field left to size itself there
+   collapses to the UA's default input width — the same collapse „Fitnes" hit. */
 .elec-inspector__field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nx-space-1);
-  width: 100%;
+  align-self: stretch;
 }
 .elec-inspector__label {
   font-size: var(--nx-font-size-label);
   font-weight: var(--nx-font-weight-medium);
   color: var(--nx-text-muted);
-}
-/* The notes box wears the text field's own input recipe, so a textarea and an
-   input are the same control at two heights rather than two controls. */
-.elec-inspector__textarea {
-  width: 100%;
-  resize: vertical;
-  font-family: inherit;
-  line-height: var(--nx-font-leading-normal);
 }
 .elec-inspector__saved,
 .elec-inspector__ok {

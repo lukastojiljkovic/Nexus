@@ -20,7 +20,7 @@ import {
   isMount,
   WIRE_COLOURS,
 } from "@nexus/core";
-import { Button, Select, TextField } from "@nexus/ui";
+import { Button, Select, TextArea, TextField } from "@nexus/ui";
 
 import { partDisplayName } from "./elecCatalogue.js";
 import type { ElecSelection } from "./ElecBench.js";
@@ -199,17 +199,15 @@ function CircuitPanel({
       >
         {machine.open}
       </Button>
-      <label className="elec-inspector__field">
-        <span className="elec-inspector__label">{s.notesLabel}</span>
-        <textarea
-          className="nx-textfield__input elec-inspector__textarea"
-          rows={5}
-          value={draft}
-          maxLength={MAX_CIRCUIT_NOTES_LENGTH}
-          placeholder={s.notesPlaceholder}
-          onChange={(event) => setDraft(event.target.value)}
-        />
-      </label>
+      <TextArea
+        className="elec-inspector__field"
+        label={s.notesLabel}
+        rows={5}
+        value={draft}
+        maxLength={MAX_CIRCUIT_NOTES_LENGTH}
+        placeholder={s.notesPlaceholder}
+        onChange={(event) => setDraft(event.target.value)}
+      />
       <Button
         variant="ghost"
         disabled={busy || draft === circuit.notes}

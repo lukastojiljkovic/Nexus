@@ -1,4 +1,4 @@
-import { Button, Select, TextField } from "@nexus/ui";
+import { Button, Select, TextArea, TextField } from "@nexus/ui";
 import {
   useEffect,
   useId,
@@ -166,19 +166,25 @@ export function ToolTextArea({
   return (
     <ToolField label={label} hint={hint} error={error}>
       {(id) => (
-        <textarea
+        <TextArea
           id={id}
-          // The house recipe for a raw textarea — `nx-textfield__input` draws
-          // the box, the local class does the rest — which is exactly how
-          // „Učenje" writes its card fields. A private box here would be a
-          // fifth reading of a control the app already has one of.
-          className="nx-textfield__input tool__textarea"
+          // Through the component. This used to be the house recipe for a raw
+          // textarea — `nx-textfield__input` for the box, a local class for the
+          // rest — and „Učenje" wrote its card fields the same way, which is
+          // how four stylesheets came to hold the same three declarations.
+          // `TextArea` owns them now; what is left here is the two this drawer
+          // means: the height, and the mono face.
+          //
+          // No `label` prop: `ToolField` draws the label and owns the `id`, and
+          // two `<label for>` elements pointing at one control is the mess
+          // `Select`'s own comment below refuses for the same reason.
+          className="tool__textarea"
           value={value}
           rows={rows}
           autoComplete="off"
           spellCheck={false}
           {...(placeholder === undefined ? {} : { placeholder })}
-          onChange={(event: ChangeEvent<HTMLTextAreaElement>) => {
+          onChange={(event) => {
             onChange(event.target.value);
           }}
         />

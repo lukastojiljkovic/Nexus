@@ -581,15 +581,18 @@
 .tool__mono {
   font-family: var(--nx-font-family-mono);
 }
-/* The multi-line input is the house's raw-textarea recipe — `nx-textfield__input`
-   for the box, a local class for the rest — the same pairing „Učenje" uses. It
-   is monospace by declaration and not by an added `.tool__mono`, so a surface
-   cannot produce a proportional one by forgetting a class. */
+/* The multi-line input is a `TextArea`, so `resize` and the leading come from
+   the component; two of the four declarations that stood here were the copy it
+   was written to absorb. The face is the same wrapper trick `.tool__mono`
+   explains above — it is declared here rather than added as a `.tool__mono`, so
+   a surface cannot produce a proportional one by forgetting a class — and the
+   height is on the BOX, because the wrapper is a flex column and a min-height
+   on it would stretch the column, not the control inside it. */
 .tool__textarea {
-  min-height: 96px;
-  resize: vertical;
   font-family: var(--nx-font-family-mono);
-  line-height: var(--nx-font-leading-normal);
+}
+.tool__textarea .nx-textarea__input {
+  min-height: 96px;
 }
 
 /*

@@ -736,13 +736,20 @@
 }
 /* The pasted answer. Taller than the study card's textarea because what lands
    here is a whole JSON reply, and a three-line window would make it impossible
-   to see whether the paste arrived whole. */
+   to see whether the paste arrived whole. Mono and one size down for the same
+   reason: it is read character by character.
+
+   `resize` and the leading come from `TextArea` now; these three do not, and
+   two of them have to name the BOX. The component's own rule re-declares
+   `font-size` after its `font: inherit` and sets a one-line `min-height`, so a
+   wrapper declaration of either would be overridden rather than inherited. The
+   face is the exception, and inherits. */
 .set__llm-answer {
-  min-height: 132px;
-  resize: vertical;
   font-family: var(--nx-font-family-mono);
+}
+.set__llm-answer .nx-textarea__input {
+  min-height: 132px;
   font-size: var(--nx-font-size-caption);
-  line-height: var(--nx-font-leading-normal);
 }
 /* The deck choice for kartice — „Postojeći špil / Novi špil" and whichever
    form follows. The `.set__apkg-subject` column's recipe, at the same width,
