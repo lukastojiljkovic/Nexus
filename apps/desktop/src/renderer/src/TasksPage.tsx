@@ -881,7 +881,21 @@ function SubtaskCompletionDialog({ onChoose, onCancel }: SubtaskCompletionDialog
 interface InlineNameFormProps {
   value: string;
   placeholder: string;
-  /** Accessible name of the field — the action being performed ("Nova lista", "Preimenuj sekciju"). */
+  /**
+   * Accessible name of the field — the action being performed ("Nova lista",
+   * "Preimenuj sekciju"). An `aria-label` and NOT a drawn label, at all eight
+   * of this component's homes, and that is a ruling rather than an omission.
+   *
+   * A field takes a drawn label when its neighbours have one; it takes its
+   * POSITION when its neighbours are a headed list. Every home here is the
+   * second case — the line appears inside „LISTE", inside a section's rows,
+   * under „OZNAKE", under the menu's own „Šabloni" heading, in the exact place
+   * the thing being named will sit — so the heading above it already says what
+   * is being typed, and drawing the name again would put a caption on one row
+   * of a list of uncaptioned rows. The first case is what CAL's event-template
+   * line was: a naming box on a row of labelled fields, which is why that one
+   * took a label in the same pass this comment was written.
+   */
   label: string;
   onChange: (value: string) => void;
   onSubmit: () => void;
@@ -3395,14 +3409,19 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
         {/* The same lead as a nested row's, so the line starts exactly where the
             new subtask's checkbox will. */}
         {leadSpacer(depth)}
-        <input
+        {/* Through the component, for `subtaskInputRef` — the reason nine
+            fields in this app had hand-rolled an input before `TextField`
+            could hand one out. Still `aria-label`: the line is indented to
+            where the subtask itself will land, under the row it belongs to,
+            which is `InlineNameForm`'s ruling one list further in. */}
+        <TextField
           ref={subtaskInputRef}
-          className="nx-textfield__input tasks__subtask-input"
+          className="tasks__subtask-input"
           value={subtaskDraft}
           placeholder={strings.tasks.subtaskPlaceholder}
           aria-label={strings.tasks.addSubtaskLabel}
           autoFocus
-          onChange={(event: ChangeEvent<HTMLInputElement>) => setSubtaskDraft(event.target.value)}
+          onChange={(event) => setSubtaskDraft(event.target.value)}
           onKeyDown={(event) => {
             // Its own Enter/Escape handling — the line sits outside the
             // add/edit <form>, so neither key reaches that form from here.
@@ -4498,14 +4517,18 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
           <div className="tasks__toolbar">
             <form className="tasks__form" onSubmit={submitForm}>
               <div className="tasks__quick-add">
-                <input
+                {/* Through the component, for `inputRef`. The placeholder is
+                    kept and no label is drawn: „Novi zadatak — upiši i pritisni
+                    Enter" is an INSTRUCTION, not this field's name, and the row
+                    it sits on holds two buttons and nothing captioned. The
+                    labelled fields are the disclosure BELOW it. */}
+                <TextField
                   ref={inputRef}
-                  className="nx-textfield__input"
                   value={draft}
                   placeholder={strings.tasks.quickAddPlaceholder}
                   aria-label={strings.tasks.quickAddLabel}
                   autoFocus
-                  onChange={(event: ChangeEvent<HTMLInputElement>) => setDraft(event.target.value)}
+                  onChange={(event) => setDraft(event.target.value)}
                 />
                 <Button type="submit" variant="primary" disabled={saving}>
                   {editingId != null ? strings.tasks.save : strings.tasks.quickAddSubmit}

@@ -488,8 +488,14 @@
   align-items: center;
   gap: var(--nx-space-2);
 }
-.tasks__quick-add .nx-textfield__input {
+/* The WRAPPER, not the box: the composer went through `TextField` when the
+   component learned to hand out a `ref`, and `flex` on a box that is no longer
+   a child of this row does nothing at all. `min-width` because a flex item's
+   floor is `auto` — its content — and an input's content is the UA's 20-em
+   default, which would stop the row shrinking to the 900px window. */
+.tasks__quick-add .nx-textfield {
   flex: 1;
+  min-width: 0;
 }
 /* A GRID, and it used to be a wrapping flex row.
  *
@@ -966,6 +972,27 @@ button.tasks__cal-chip:active {
   padding: var(--nx-space-2);
   border-bottom: none;
   border-radius: var(--nx-radius-sm);
+  /* WRAPS, because at the enforced 900px window this row could not fit its
+     title beside its chips and nothing gave. `.nx-list-row__trailing` does not
+     shrink and should not — a chip cluster has no smaller form — so the whole
+     shortfall landed on `.nx-list-row__content`, which shrank to 65px: below
+     the width of the word „diplomski", so a four-word title drew four lines
+     and the chips drew ON TOP of them. A row that cannot fit both on one line
+     puts the metadata on a second line, which is what every list in this app
+     does at that window and what this one now does too.
+     Invisible until 2026-09-09 for a reason worth keeping: the sweep opened
+     TASK on „Inbox", the demo files all forty of its tasks into the five lists
+     below it, and no scene ever moved the rail — so eight frames of this
+     module were photographs of „Nema zadataka", and a task ROW had never been
+     in one. */
+  flex-wrap: wrap;
+}
+/* The title's floor, and the number that decides when the row breaks: the
+   trailing wraps as soon as it and a 240px title cannot share the line. `0`
+   (the primitive's own basis) with `flex-wrap` would never break, because a
+   zero-basis item always fits. */
+.tasks .nx-list-row__content {
+  flex-basis: 240px;
 }
 /* The engine draws the separator from `.nx-list-view__item > .nx-list-row`,
    which is (0,2,0) — the same weight as the rule above, so which of them won
@@ -1103,8 +1130,10 @@ button.tasks__cal-chip:active {
   gap: var(--nx-space-2);
   padding: var(--nx-space-1) 0;
 }
-.tasks__subtask-input.nx-textfield__input {
+/* As `.tasks__quick-add .nx-textfield` above: the class rides the wrapper now. */
+.tasks__subtask-input {
   flex: 1;
+  min-width: 0;
 }
 
 /* Roll-up chip: neutral like the rest of the cluster. Every direct subtask
