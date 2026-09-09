@@ -26,6 +26,9 @@
  *  - `below-fold`     a region marked `data-nx-content` — the thing a module
  *                     is FOR — that does not reach the first screen of a
  *                     page nobody has expanded anything on
+ *  - `hollow-fixture` a page-sized empty state under a summary band reporting
+ *                     a non-zero figure — the page counting N of something and
+ *                     then showing none of it
  *
  * The script is a string rather than an imported module because it is evaluated
  * in the RENDERER's world through `executeJavaScript`, where the main process's
@@ -41,16 +44,18 @@ export interface AuditFinding {
     | "escapes-parent"
     | "overlap"
     | "small-target"
-    | "below-fold";
+    | "below-fold"
+    | "hollow-fixture";
   /** A CSS-ish path to the element, built from tag + class, for grepping the source. */
   where: string;
   /** The second element, for `overlap`; empty otherwise. */
   other: string;
   /**
    * How far, in CSS pixels — how many pixels are lost, escape, or are shared.
-   * The one exception is `small-target` inside an SVG, which reports the
-   * target's size in that SVG's own user units, for the reason given at the
-   * rule itself.
+   * Two exceptions, each said out loud at its own rule: `small-target` inside
+   * an SVG reports the target's size in that SVG's own user units, and
+   * `hollow-fixture` reports the FIGURE the band was showing, because that
+   * rule is about a contradiction rather than about a distance.
    */
   amount: number;
   /** The element's own text, trimmed and capped, so a finding can be found by eye. */
@@ -496,6 +501,42 @@ export const AUDIT_SCRIPT = `(() => {
       if (overlapX > 2 && overlapY > 2) {
         add("overlap", a.el, b.el, Math.min(overlapX, overlapY));
       }
+    }
+  }
+
+  // --- A page that counts N of something and then shows none of it ----------
+  //
+  // The one rule here that is not geometric, and it is here because the defect
+  // it names ([[DC-124]]) is invisible to every rule that is. ZADACI was
+  // photographed eight times per pass, in both themes, at three sizes, and
+  // every single frame was of „Nema zadataka" — the module opens on „Inbox",
+  // the demo files all forty of its tasks into the lists below it, and no scene
+  // ever moved the rail. The audit scored those frames PERFECT, honestly: an
+  // empty state has no clipped text, no overlap and no small target.
+  //
+  // The evidence was inside the picture the whole time. Every one of those
+  // frames carried „OTVORENO 40" across the top and „Nema zadataka" underneath,
+  // and nothing compared the two. So: a page-sized empty state on a page whose
+  // own summary band reports a non-zero figure is either a fixture that never
+  // reached the state it was pointed at, or a page contradicting itself. Both
+  // are worth a line in the report.
+  //
+  // \`--inline\` is excluded, and that is the whole reason \`EmptyState\` has a
+  // variant: an inline empty is ONE list inside a populated page („Danas još
+  // nema upisanih obroka" on a dashboard card), which is a page working
+  // correctly and would otherwise fire on every FIT and DASH frame.
+  //
+  // Counting DIGITS rather than parsing a number is deliberate: Serbian sets
+  // „1.234,56", so every locale-aware parse is a second place to be wrong about
+  // separators, and the question asked here is only „is this figure zero".
+  const pageEmpty = document.querySelector(".nx-empty:not(.nx-empty--inline)");
+  if (pageEmpty !== null) {
+    const figures = Array.prototype.slice.call(document.querySelectorAll(".nx-stat__value"));
+    for (const figure of figures) {
+      const digits = (figure.textContent || "").replace(/[^0-9]/g, "");
+      if (digits === "" || /^0+$/.test(digits)) continue;
+      add("hollow-fixture", pageEmpty, figure, Number(digits.slice(0, 9)));
+      break;
     }
   }
 

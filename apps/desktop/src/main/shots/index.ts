@@ -115,12 +115,22 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     // version of this scene clicked a row and photographed the unchanged list,
     // which is the quietest way for a scene to be wrong: the frame looks like a
     // module with no detail view rather than like a broken probe.
-    // The view switcher is clicked back to its FIRST option first. Landing on
-    // a module that is already open remounts nothing, so this scene inherited
-    // whatever view the fan-out before it ended on — and „Detalji" only exists
-    // on the list view. That is why the run kept printing „found nothing to
-    // open": the probe was right and the page was somewhere else.
-    prepare: CLICK_THEN(".nx-segmented__option", "text:Detalji"),
+    // The list view is clicked BY NAME first. Landing on a module that is
+    // already open remounts nothing, so this scene inherited whatever view the
+    // fan-out before it ended on — and „Detalji" only exists on the list view.
+    // That is why the run kept printing „found nothing to open": the probe was
+    // right and the page was somewhere else.
+    //
+    // It used to say `.nx-segmented__option`, meaning „the first option in the
+    // view switcher", and that was the same index-for-a-name mistake
+    // `clickFanout` was rewritten to stop making: the first wearer of that
+    // class in TASK's header is „Izbor", so the step that was supposed to
+    // return to the list turned the batch mode ON instead. The second step then
+    // missed as well — the fan-out before it had left the fold open, so the
+    // button read „Sakrij detalje" and „Detalji" matched nothing — and the
+    // scene named after TASK's detail form photographed the list, in a mode,
+    // for as long as it has existed.
+    prepare: CLICK_THEN("text:Lista", "text:Detalji"),
     fanout: null,
   },
   {
@@ -514,9 +524,14 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     // — seven numeric fields on one row.
     id: "fitness-new-food",
     module: "fitness",
+    // „Dodaj meru" is pressed as part of opening it, because the two fields of
+    // a household measure do not exist until it is: the frame under this name
+    // used to show the „Uobičajene mere" heading, its hint and its button, and
+    // neither of the controls the block is for.
     prepare: OPEN_CREATE_FORM({
       path: [".fit__section-tab:nth-child(2)"],
       open: "text:Nova namirnica",
+      then: ["text:Dodaj meru"],
     }),
     fanout: null,
     cleanup: CLICK_THEN("text:Otkaži"),
@@ -757,6 +772,25 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     id: "settings-priv",
     module: "settings",
     prepare: SCROLL_TO("#set-section-priv"),
+    fanout: null,
+  },
+  {
+    // „Uvoz iz asistenta", and through it the rest of „Rezervna kopija".
+    //
+    // That one card holds NINE import and export flows — arhiva, kalendar,
+    // vraćanje, ICS, Anki, dva CSV-a, ovaj i Markdown — and the two scenes
+    // above reach neither it nor them, because a settings frame shows one card
+    // and this one is twelve screens down. The anchor is the answer box rather
+    // than the card, for the reason `SCROLL_TO` takes a selector at all: the
+    // card's top would photograph „Napravi rezervnu kopiju" and leave the flow
+    // this scene is named after exactly as unseen as it was.
+    //
+    // It is also the one field on the page whose name used to be written twice
+    // — a `<p class="nx-hint">` above the box and an `aria-label` on it, which
+    // is [[DC-120]] — and it was fixed on a surface no frame had ever shown.
+    id: "settings-import-llm",
+    module: "settings",
+    prepare: SCROLL_TO(".set__llm-answer", "center"),
     fanout: null,
   },
 
@@ -1314,6 +1348,18 @@ function OPEN_CREATE_FORM(spec: {
    * spot this helper was written to close, one layer further in.
    */
   readonly expect?: string;
+  /**
+   * Clicks made INSIDE the form once it is open, each waited for and each
+   * reported when it is not there.
+   *
+   * A create form is not always its own whole surface: FIT's food form draws
+   * „Uobičajene mere" as a heading, a hint and an „Dodaj meru" button, and the
+   * two fields of a measure exist only after that button is pressed. So the
+   * frame filed under this form's name showed the block's chrome and neither
+   * of its controls — the same blind spot `expect` closes for a panel that is
+   * not a `<form>`, one press further in.
+   */
+  readonly then?: readonly string[];
 }): string {
   return `(async () => {
   const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
@@ -1359,6 +1405,12 @@ function OPEN_CREATE_FORM(spec: {
   );
   if (!form) {
     return "none: " + ${JSON.stringify(spec.open)} + " opened no " + (expect ?? "new form");
+  }
+  for (const step of ${JSON.stringify(spec.then ?? [])}) {
+    const node = await waitFor(() => locate(step));
+    if (!node) return "none: the form has no " + step;
+    node.click();
+    await frame();
   }
   form.scrollIntoView({ behavior: "instant", block: "start" });
   await frame();
@@ -1446,12 +1498,21 @@ function CLOSE_AND_RESTORE_CIRCUIT(): string {
  *
  * `behavior: "instant"` is load-bearing — the harness photographs on the next
  * frame, and a smooth scroll would still be in flight.
+ *
+ * `block` defaults to `"start"`, which is right for a CARD: „Podešavanja"
+ * gives `.set__section` a `scroll-margin-top` of the sticky index's measured
+ * height, so a card lands one step below the strip rather than behind it. An
+ * element INSIDE a card carries no such margin, and aligning its top puts it
+ * under the strip — which is what the first frame of the assistant-import box
+ * showed. A field is not a card and does not want to be at the top of the
+ * frame anyway: `"center"` puts the thing the scene is named after in the
+ * middle of the picture, with the flow above and below it for context.
  */
-function SCROLL_TO(selector: string): string {
+function SCROLL_TO(selector: string, block: "start" | "center" = "start"): string {
   return `(async () => {
     const el = document.querySelector(${JSON.stringify(selector)});
     if (!el) return "none";
-    el.scrollIntoView({ behavior: "instant", block: "start" });
+    el.scrollIntoView({ behavior: "instant", block: ${JSON.stringify(block)} });
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     return ${JSON.stringify(selector)};
   })()`;
@@ -1934,28 +1995,83 @@ async function openModule(win: BrowserWindow, moduleId: string): Promise<boolean
   return true;
 }
 
-/** The labels of every switcher option on the current page, in document order. */
-async function fanoutLabels(win: BrowserWindow, selector: string): Promise<string[]> {
-  const raw = await evalIn(
-    win,
-    `Array.from(document.querySelectorAll(${JSON.stringify(selector)})).map(
-       (el) => (el.textContent || "").replace(/\\s+/g, " ").trim(),
-     )`,
-  );
-  return Array.isArray(raw) ? (raw as string[]) : [];
+/** One switcher option: the label a frame is named after, and whether it is the one on screen. */
+interface FanoutOption {
+  readonly label: string;
+  readonly active: boolean;
 }
 
-async function clickFanout(win: BrowserWindow, selector: string, index: number): Promise<void> {
-  await evalIn(
+/**
+ * Every switcher option on the current page, in document order, each with its
+ * own name and its own pressed state.
+ *
+ * The state is read HERE and not assumed, because „the first option is the one
+ * already on screen" is false wherever a switcher offers something that is not
+ * a view. TASK's row is „Izbor · Lista · Tabla · Kartice · Kalendar": Izbor is
+ * a MODE, it is drawn first, and the landing opens on Lista — so the sweep
+ * skipped Izbor as though it had just photographed it, and photographed Lista
+ * twice instead.
+ *
+ * **A DISCLOSURE IS NOT AN OPTION.** The default selector is
+ * `.nx-segmented__option`, which is a LOOK — three unrelated controls in TASK's
+ * header wear it so they read as one row of type — and the fan-out was treating
+ * every wearer as a view to switch to. TASK's „Detalji" is the composer's
+ * detail fold: clicking it opened the fold, the sweep wrote
+ * `tasks--detalji.png` of the list with a form unrolled over it, and the fold
+ * then stayed open for every later scene in the pass. `aria-expanded` is what
+ * says so, and it says it structurally: a control that reports whether
+ * something is OPEN is not a control that reports which of several things is
+ * SHOWING. The frame it used to produce is not lost — `tasks-detail` is the
+ * scene for that surface, and it opens the fold on purpose.
+ */
+async function fanoutOptions(win: BrowserWindow, selector: string): Promise<FanoutOption[]> {
+  const raw = await evalIn(
+    win,
+    `Array.from(document.querySelectorAll(${JSON.stringify(selector)}))
+       .filter((el) => !el.hasAttribute("aria-expanded"))
+       .map((el) => ({
+         label: (el.textContent || "").replace(/\\s+/g, " ").trim(),
+         active:
+           el.getAttribute("aria-pressed") === "true" ||
+           el.getAttribute("aria-current") === "true" ||
+           el.getAttribute("aria-selected") === "true",
+       }))`,
+  );
+  return Array.isArray(raw) ? (raw as FanoutOption[]) : [];
+}
+
+/**
+ * Clicks the option that CARRIES this label, and says whether it found one.
+ *
+ * It used to click by index into a fresh `querySelectorAll`, while the label
+ * the frame was named after came from a list read before any of the clicking
+ * — two addresses for one thing, and they disagree the moment a switcher
+ * changes shape between views. TASK's does: „Izbor" is offered on the list
+ * view and nowhere else, so every index after the first view switch was off by
+ * one. The run wrote `tasks--kartice.png` and photographed the CALENDAR, wrote
+ * `tasks--kalendar.png` and photographed the calendar with the detail fold
+ * open, and „Kartice" — one of the module's four shapes — was never in a frame
+ * at all. Nothing said so: every frame was of a real view, correctly rendered,
+ * under a name that belonged to a different one.
+ *
+ * A label is a stable address in a way an index is not, and it is the SAME
+ * value the frame is named after, so the name and the picture cannot disagree.
+ */
+async function clickFanout(win: BrowserWindow, selector: string, label: string): Promise<boolean> {
+  const clicked = await evalIn(
     win,
     `(() => {
-       const options = document.querySelectorAll(${JSON.stringify(selector)});
-       const option = options[${index}];
-       if (option) option.click();
+       const option = Array.prototype.find.call(
+         document.querySelectorAll(${JSON.stringify(selector)}),
+         (el) => (el.textContent || "").replace(/\\s+/g, " ").trim() === ${JSON.stringify(label)},
+       );
+       if (!option) return false;
+       option.click();
        return true;
      })()`,
   );
   await settle(win);
+  return clicked === true;
 }
 
 /** A file-system-safe stem: the sweep names frames after Serbian switcher labels. */
@@ -2228,7 +2344,7 @@ async function sweep(
         // remembered to list here.
         const selector = scene.fanout === undefined ? DEFAULT_FANOUT : scene.fanout;
         if (selector !== null) {
-          const labels = await fanoutLabels(win, selector);
+          const options = await fanoutOptions(win, selector);
           // A fan-out that matches NOTHING is the quietest way for this sweep
           // to be wrong: the scene still produces its one frame, the run still
           // says „OK", and a whole module's sub-views are simply missing from
@@ -2236,17 +2352,61 @@ async function sweep(
           // scene that genuinely has no switcher says so with `fanout: null`
           // and never reaches this line, so an empty match here is always a
           // selector that has gone stale.
-          if (labels.length === 0) {
+          if (options.length === 0) {
             process.stderr.write(
               `shots: scene "${scene.id}" found nothing to fan out (${selector})
 `,
             );
           }
-          // The first option is already on screen — it is what `shoot` above
-          // just captured — so the sweep starts at the second.
-          for (let index = 1; index < labels.length; index += 1) {
-            await clickFanout(win, selector, index);
-            await shoot(`${scene.id}--${slug(labels[index] ?? String(index))}`);
+          // The ACTIVE option is already on screen — it is what `shoot` above
+          // just captured — so it is the one the sweep skips. Falling back to
+          // the first when nothing is marked keeps every switcher that states
+          // no pressed state working exactly as it did.
+          const home = options.find((option) => option.active) ?? options[0];
+          // What is on screen right now, which is not the same as `home` after
+          // the first exclusive click. It is what tells a MODE apart from a
+          // VIEW below, and it is read from the page rather than declared here.
+          let showing = home;
+          for (const option of options) {
+            if (option === home) continue;
+            // A label that is no longer on the page is REPORTED. It means the
+            // switcher changed shape under the sweep — which is a real thing
+            // (TASK's „Izbor" leaves with the list view) and used to be
+            // invisible, because an index that pointed at nothing clicked
+            // nothing and the frame was taken anyway.
+            if (!(await clickFanout(win, selector, option.label))) {
+              process.stderr.write(
+                `shots: scene "${scene.id}" lost the option "${option.label}" mid-fan-out
+`,
+              );
+              continue;
+            }
+            await shoot(`${scene.id}--${slug(option.label)}`);
+            // A MODE IS NOT A VIEW, AND ONLY THE PAGE KNOWS WHICH THIS WAS.
+            //
+            // The loop's contract is that it leaves the switcher where it found
+            // it, and the one click back to `home` below honours that for a
+            // view — clicking „Lista" replaces „Tabla". It does nothing at all
+            // for a switcher member that toggles INDEPENDENTLY: TASK's „Izbor"
+            // is drawn in the same row, carries the same `aria-pressed`, and
+            // clicking „Lista" afterwards does not turn it off. Whatever the
+            // fan-out switched on stayed on for the rest of the pass, and every
+            // later scene in the module was photographed through it.
+            //
+            // The discriminator is not a list of names: if what was showing
+            // before the click is STILL active, this option did not replace it,
+            // so it added a state and has to be put back. If it did replace it,
+            // this is the view now and the walk carries on from here.
+            const after = await fanoutOptions(win, selector);
+            const replaced = !after.some((o) => o.label === showing?.label && o.active);
+            if (replaced) {
+              showing = option;
+            } else if (!(await clickFanout(win, selector, option.label))) {
+              process.stderr.write(
+                `shots: scene "${scene.id}" could not leave the mode "${option.label}"
+`,
+              );
+            }
           }
           // A SCENE LEAVES THE SWITCHER WHERE IT FOUND IT.
           //
@@ -2269,7 +2429,7 @@ async function sweep(
           // per pass and makes „the first option is already on screen", which
           // the loop above asserts, true in every pass rather than only the
           // first.
-          if (labels.length > 1) await clickFanout(win, selector, 0);
+          if (options.length > 1 && home !== undefined) await clickFanout(win, selector, home.label);
         }
 
         if (scene.cleanup !== undefined) {
