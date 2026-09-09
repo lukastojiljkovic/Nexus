@@ -1816,9 +1816,15 @@ button.cal__grid-event {
 }
 
 /* Add/edit form — one wrapping row; the name field takes the slack. */
+/* `end`, the same statement `.cal__form` and `.documents__form` make: six of
+   this row's seven children draw a label above their control and „Dodaj" does
+   not, so centring would sink every field's control half a label below the
+   button. It was `center` while NOTHING here had a label above it — three
+   selects with their names beside them and three boxes with names inside
+   them — which is the state that made `center` invisible rather than right. */
 .people__form {
   display: flex;
-  align-items: center;
+  align-items: end;
   gap: var(--nx-space-2);
   flex-wrap: wrap;
   flex: none;
@@ -1827,9 +1833,12 @@ button.cal__grid-event {
   flex: 1;
   min-width: 200px;
 }
-/* A year is four digits — it never needs the width a free-text field takes. */
+/* A year is four digits — it never needs the width a free-text field takes.
+   The floor is „Godina (opciono)", not the digits: the label is drawn above
+   the box now, and a field narrower than its own name wraps that name onto
+   two lines and makes one child of the row taller than the rest. */
 .people__year {
-  width: 120px;
+  width: 128px;
 }
 
 /* The four raw `<select>`s these two panels once wrote by hand (a document's

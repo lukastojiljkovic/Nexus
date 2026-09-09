@@ -2449,14 +2449,24 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         birthday: "Rođendan",
         anniversary: "Godišnjica",
       },
+      /**
+       * Drawn above the field (DC-120 step 2). „Ime", not the „Ime osobe"
+       * that used to sit inside it as grey text: a label stands under a
+       * heading that already says whose panel this is, where a placeholder
+       * standing alone had to say „of a person" out loud.
+       */
       nameLabel: "Ime",
-      namePlaceholder: "Ime osobe",
       kindLabel: "Vrsta",
       dayLabel: "Dan",
       monthLabel: "Mesec",
       yearLabel: "Godina (opciono)",
-      notePlaceholder: "Beleška (opciono)",
-      noteLabel: "Beleška",
+      /**
+       * „(opciono)" came from the placeholder this replaced — the one thing
+       * the grey text said that the name did not, said only while the field
+       * was empty. `documents.notesLabel` and `calendar.locationLabel` took
+       * the same parenthesis for the same reason.
+       */
+      noteLabel: "Beleška (opciono)",
       add: "Dodaj",
       save: "Sačuvaj",
       cancel: "Otkaži",

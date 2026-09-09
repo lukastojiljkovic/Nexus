@@ -256,17 +256,24 @@ export function PeoplePanel({ profileId }: PeoplePanelProps) {
   return (
     <div className="people">
       <form className="people__form" onSubmit={submitForm}>
-        <input
+        {/* Through the component rather than around it, for `nameRef` — the
+            same trade DOKUMENTI's name field and CAL's title made, and the
+            same label lost on the way. */}
+        <TextField
           ref={nameRef}
-          className="nx-textfield__input people__name-input"
+          className="people__name-input"
+          label={s.nameLabel}
           value={name}
-          placeholder={s.namePlaceholder}
-          aria-label={s.nameLabel}
-          onChange={(event: ChangeEvent<HTMLInputElement>) => setName(event.target.value)}
+          onChange={(event) => setName(event.target.value)}
         />
+        {/* All three selects are STACKED now, and none of them was before.
+            `inline` put „VRSTA", „DAN" and „MESEC" between the controls, so a
+            row of six boxes read as a run of caption-then-box-then-caption
+            with two unnamed boxes in it — the name and the year, which had
+            placeholders instead. With every name above its own control the
+            row reads as one line of fields, which is what it is. */}
         <Select
           label={s.kindLabel}
-          layout="inline"
           value={kind}
           onChange={(event: ChangeEvent<HTMLSelectElement>) =>
             setKind(asPersonKind(event.target.value))
@@ -280,7 +287,6 @@ export function PeoplePanel({ profileId }: PeoplePanelProps) {
         </Select>
         <Select
           label={s.dayLabel}
-          layout="inline"
           value={day}
           onChange={(event: ChangeEvent<HTMLSelectElement>) => setDay(Number(event.target.value))}
         >
@@ -292,7 +298,6 @@ export function PeoplePanel({ profileId }: PeoplePanelProps) {
         </Select>
         <Select
           label={s.monthLabel}
-          layout="inline"
           value={month}
           onChange={(event: ChangeEvent<HTMLSelectElement>) => setMonth(Number(event.target.value))}
         >
@@ -309,15 +314,13 @@ export function PeoplePanel({ profileId }: PeoplePanelProps) {
           min={MIN_PERSON_YEAR}
           max={MAX_PERSON_YEAR}
           step={1}
-          placeholder={s.yearLabel}
-          aria-label={s.yearLabel}
+          label={s.yearLabel}
           onChange={(event) => setYear(event.target.value)}
         />
         <TextField
           type="text"
           value={note}
-          placeholder={s.notePlaceholder}
-          aria-label={s.noteLabel}
+          label={s.noteLabel}
           onChange={(event) => setNote(event.target.value)}
         />
         <Button type="submit" variant="primary" disabled={!dateIsReal}>
