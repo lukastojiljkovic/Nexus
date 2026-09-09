@@ -293,6 +293,22 @@
   font-size: var(--nx-font-size-body);
   font-weight: var(--nx-font-weight-semibold);
 }
+/* The fields that hold PROSE: a routine's name and note, an exercise's two
+   names and its note, a food's name. `align-items: flex-start` above collapses
+   every child of the form to its intrinsic width, and an `<input>`'s intrinsic
+   width is whatever the UA's `size="20"` comes to — 258px, inside a form three
+   times that. All six showed their first two dozen characters and scrolled the
+   rest; the exercise form did it to its own PLACEHOLDERS, so the example it
+   offered for a name read „npr. Potisak sa klupe usl".
+   Named rather than written as `.fit__form > .nx-textfield`, because the same
+   forms hold fields that are RIGHT at that width and narrower: a date
+   (`.fit__day-field`), a height (`.fit__set-field`), eight targets
+   (`.fit__target-field`). A 480px box for „3" is this bug pointing the other
+   way. */
+.fit__text-field {
+  align-self: stretch;
+  max-width: 480px;
+}
 .fit__form-actions {
   display: flex;
   align-items: center;

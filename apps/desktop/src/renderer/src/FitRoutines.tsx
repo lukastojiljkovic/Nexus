@@ -403,6 +403,14 @@ export function FitRoutines({ profileId, routines, exercises, onChanged }: FitRo
    * write `targetWeightKg` on the wire: the surface asks for a magnitude
    * either way and the READING draws the minus (`targetText`), never the
    * input, the same split `FitTraining.tsx`'s own `SetFields` makes.
+   *
+   * Every field is NAMED, which is the other reader's shape and was not this
+   * one's: `SetFields` has drawn a `label` over each of these quantities since
+   * it was written, while the routine editor put the same words in a
+   * `placeholder` — so a target, once typed, was a bare integer in a row of
+   * bare integers, and „3" beside „90" beside „8" beside „12" is four numbers
+   * with no units and no names. One table, two readers, and only one of them
+   * said what it was asking for.
    */
   function renderItemTargetFields(item: ItemDraft, index: number): ReactNode {
     if (item.metric === null) return null;
@@ -415,18 +423,16 @@ export function FitRoutines({ profileId, routines, exercises, onChanged }: FitRo
               return (
                 <Fragment key="reps">
                   <TextField
+                    label={s.routines.repsMinLabel}
                     value={item.repsMin}
                     inputMode="numeric"
-                    aria-label={s.routines.repsMinLabel}
-                    placeholder={s.routines.repsMinLabel}
                     className="fit__target-field"
                     onChange={(event) => patch({ repsMin: event.target.value })}
                   />
                   <TextField
+                    label={s.routines.repsMaxLabel}
                     value={item.repsMax}
                     inputMode="numeric"
-                    aria-label={s.routines.repsMaxLabel}
-                    placeholder={s.routines.repsMaxLabel}
                     className="fit__target-field"
                     onChange={(event) => patch({ repsMax: event.target.value })}
                   />
@@ -436,10 +442,9 @@ export function FitRoutines({ profileId, routines, exercises, onChanged }: FitRo
               return (
                 <TextField
                   key="weight"
+                  label={s.routines.targetWeightLabel}
                   value={item.weightKg}
                   inputMode="decimal"
-                  aria-label={s.routines.targetWeightLabel}
-                  placeholder={s.routines.targetWeightLabel}
                   className="fit__target-field"
                   onChange={(event) => patch({ weightKg: event.target.value })}
                 />
@@ -448,10 +453,9 @@ export function FitRoutines({ profileId, routines, exercises, onChanged }: FitRo
               return (
                 <TextField
                   key="assist"
+                  label={s.routines.targetAssistLabel}
                   value={item.weightKg}
                   inputMode="decimal"
-                  aria-label={s.routines.targetAssistLabel}
-                  placeholder={s.routines.targetAssistLabel}
                   className="fit__target-field"
                   onChange={(event) => patch({ weightKg: event.target.value })}
                 />
@@ -460,10 +464,9 @@ export function FitRoutines({ profileId, routines, exercises, onChanged }: FitRo
               return (
                 <TextField
                   key="seconds"
+                  label={s.routines.targetSecondsLabel}
                   value={item.seconds}
                   inputMode="decimal"
-                  aria-label={s.routines.targetSecondsLabel}
-                  placeholder={s.routines.targetSecondsLabel}
                   className="fit__target-field"
                   onChange={(event) => patch({ seconds: event.target.value })}
                 />
@@ -472,10 +475,9 @@ export function FitRoutines({ profileId, routines, exercises, onChanged }: FitRo
               return (
                 <TextField
                   key="distance"
+                  label={s.routines.targetDistanceLabel}
                   value={item.distanceM}
                   inputMode="decimal"
-                  aria-label={s.routines.targetDistanceLabel}
-                  placeholder={s.routines.targetDistanceLabel}
                   className="fit__target-field"
                   onChange={(event) => patch({ distanceM: event.target.value })}
                 />
@@ -495,6 +497,7 @@ export function FitRoutines({ profileId, routines, exercises, onChanged }: FitRo
 
         <TextField
           label={s.routines.nameLabel}
+          className="fit__text-field"
           value={nameDraft}
           placeholder={s.routines.namePlaceholder}
           maxLength={MAX_FIT_ROUTINE_NAME_LENGTH}
@@ -502,6 +505,7 @@ export function FitRoutines({ profileId, routines, exercises, onChanged }: FitRo
         />
         <TextField
           label={s.routines.notesLabel}
+          className="fit__text-field"
           value={notesDraft}
           placeholder={s.routines.notesPlaceholder}
           maxLength={MAX_FIT_ROUTINE_NOTES_LENGTH}
@@ -517,19 +521,21 @@ export function FitRoutines({ profileId, routines, exercises, onChanged }: FitRo
                 <span className="fit__item-missing"> · {s.routines.missingExercise}</span>
               )}
             </span>
+            {/* The two every metric has, drawn before the ones only some of
+                them do. `title` on the rest field stays: it explains what an
+                EMPTY box and a zero mean, which is a hint and not a name — the
+                label above it is the name. */}
             <TextField
+              label={s.routines.targetSetsLabel}
               value={item.sets}
               inputMode="numeric"
-              aria-label={s.routines.targetSetsLabel}
-              placeholder={s.routines.targetSetsLabel}
               className="fit__target-field"
               onChange={(event) => setItems(patchItem(items, index, { sets: event.target.value }))}
             />
             <TextField
+              label={s.routines.restSecondsLabel}
               value={item.restSeconds}
               inputMode="numeric"
-              aria-label={s.routines.restSecondsLabel}
-              placeholder={s.routines.restSecondsLabel}
               title={s.routines.restSecondsHint}
               className="fit__target-field"
               onChange={(event) =>
@@ -633,6 +639,7 @@ export function FitRoutines({ profileId, routines, exercises, onChanged }: FitRo
 
         <TextField
           label={f.nameLabel}
+          className="fit__text-field"
           value={exerciseForm.name}
           placeholder={f.namePlaceholder}
           maxLength={MAX_FIT_EXERCISE_NAME_LENGTH}
@@ -640,6 +647,7 @@ export function FitRoutines({ profileId, routines, exercises, onChanged }: FitRo
         />
         <TextField
           label={f.nameEnLabel}
+          className="fit__text-field"
           value={exerciseForm.nameEn}
           placeholder={f.nameEnPlaceholder}
           maxLength={MAX_FIT_EXERCISE_NAME_LENGTH}
@@ -733,6 +741,7 @@ export function FitRoutines({ profileId, routines, exercises, onChanged }: FitRo
 
         <TextField
           label={f.notesLabel}
+          className="fit__text-field"
           value={exerciseForm.notes}
           placeholder={f.notesPlaceholder}
           maxLength={MAX_FIT_EXERCISE_NOTES_LENGTH}

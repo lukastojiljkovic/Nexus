@@ -1077,6 +1077,7 @@ export function FitNutrition({ profileId }: FitNutritionProps) {
 
         <TextField
           label={f.nameLabel}
+          className="fit__text-field"
           value={nameDraft}
           placeholder={f.namePlaceholder}
           maxLength={MAX_FIT_FOOD_NAME_LENGTH}
