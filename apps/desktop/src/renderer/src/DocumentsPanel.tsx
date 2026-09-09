@@ -301,9 +301,15 @@ export function DocumentsPanel({
   return (
     <div className="documents">
       <form className="documents__form" onSubmit={submitForm}>
+        {/* STACKED, and it was `inline` until its three neighbours got labels
+            of their own. `inline` was right while it was the only named child
+            of a row of bare boxes — a caption beside the one control that had
+            a name. Now every field here draws a name above itself, and the
+            odd one out would be this one: an uppercase caption to the left of
+            three sentence-case labels above. The arrangement follows the row,
+            which is what having it as a prop is for. */}
         <Select
           label={strings.documents.typeLabel}
-          layout="inline"
           value={docType}
           onChange={(event: ChangeEvent<HTMLSelectElement>) =>
             setDocType(event.target.value as DocumentType)
@@ -315,17 +321,21 @@ export function DocumentsPanel({
             </option>
           ))}
         </Select>
-        <input
+        {/* Through the component rather than around it. Two call sites focus
+            this field through `labelRef`, and going around `TextField` to get
+            at the input was what cost it the label — the same trade CAL's
+            title made, and the reason `TextField` now takes a `ref`. */}
+        <TextField
           ref={labelRef}
-          className="nx-textfield__input documents__label-input"
+          className="documents__label-input"
+          label={strings.documents.labelLabel}
           value={label}
-          placeholder={strings.documents.labelPlaceholder}
-          aria-label={strings.documents.labelLabel}
-          onChange={(event: ChangeEvent<HTMLInputElement>) => setLabel(event.target.value)}
+          onChange={(event) => setLabel(event.target.value)}
         />
-        {/* A VISIBLE label. „Ističe" is the only field in this form whose name
-            is not also its placeholder, so it was the one box on the row that
-            said nothing at all until it was clicked — DC-120. */}
+        {/* „Ističe" was the FIRST of this form's visible labels, and for a
+            while the only one: it was the one field whose name was not also
+            its placeholder, so it was the one box that said nothing at all
+            until it was clicked — DC-120 step 1. */}
         <TextField
           type="date"
           value={expiryDate}
@@ -336,8 +346,7 @@ export function DocumentsPanel({
         <TextField
           type="text"
           value={notes}
-          placeholder={strings.documents.notesPlaceholder}
-          aria-label={strings.documents.notesLabel}
+          label={strings.documents.notesLabel}
           onChange={(event) => setNotes(event.target.value)}
         />
         <Button type="submit" variant="primary">
@@ -398,14 +407,18 @@ export function DocumentsPanel({
               trailing={
                 renewingId === doc.id ? (
                   <span className="documents__renew">
-                    <input
+                    {/* INLINE, not stacked: this row is a list row's trailing
+                        edge, and a label above the box would make one row of
+                        the list taller than the rest of it while it is open.
+                        Beside the box the name is a caption on the same line
+                        as the two buttons, and the row keeps its height. */}
+                    <TextField
                       type="date"
-                      className="nx-textfield__input documents__renew-input"
+                      layout="inline"
+                      className="documents__renew-input"
                       value={renewDate}
-                      aria-label={strings.documents.renewLabel}
-                      onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                        setRenewDate(event.target.value)
-                      }
+                      label={strings.documents.renewLabel}
+                      onChange={(event) => setRenewDate(event.target.value)}
                     />
                     <Button
                       size="sm"

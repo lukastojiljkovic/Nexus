@@ -2526,16 +2526,34 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       istekao: "Isteklo",
     },
     typeLabel: "Vrsta dokumenta",
-    labelPlaceholder: "Naziv dokumenta",
+    /**
+     * Drawn above the field. It was a `labelPlaceholder` and a `labelLabel`
+     * holding the same string — one grey and gone the moment anything was
+     * typed — until DC-120 step 2 kept the one that stays on screen.
+     */
     labelLabel: "Naziv dokumenta",
     expiryLabel: "Ističe",
-    notesPlaceholder: "Beleška (opciono)",
-    notesLabel: "Beleška",
+    /**
+     * „(opciono)" came from the placeholder this replaced: it was the one
+     * thing the grey text said that the name did not, and it said it only
+     * while the field was empty. `calendar.locationLabel` took the same
+     * parenthesis for the same reason on the same day.
+     */
+    notesLabel: "Beleška (opciono)",
     add: "Dodaj",
     save: "Sačuvaj",
     cancel: "Otkaži",
     renew: "Obnovi",
-    renewLabel: "Novi datum isteka",
+    /**
+     * „Novi rok", not „Novi datum isteka", and the two words came off a
+     * measurement rather than a preference. Drawn (DC-120 step 2) this is a
+     * caption INSIDE a list row's trailing edge, beside the date box and two
+     * buttons, and at the 900px minimum the longer string took enough of the
+     * line that the row's own document name truncated to „Poli…". „Rok" is
+     * the panel's own word for the same thing — the block above the list is
+     * headed „ROKOVI" — so the short form is not a shortening of the meaning.
+     */
+    renewLabel: "Novi rok",
     renewConfirm: "Potvrdi",
     renewCancel: "Otkaži obnovu",
     /**

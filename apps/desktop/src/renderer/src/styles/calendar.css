@@ -1781,7 +1781,11 @@ button.cal__grid-event {
   align-items: center;
   gap: var(--nx-space-1);
 }
-.documents__renew-input {
+/* The width belongs to the INPUT, `.fit__grams-field`'s reason exactly: since
+   the renew field became a `TextField`, `className` lands on the wrapper, and
+   the wrapper is an `inline` pair — the caption and the box. `width: auto`
+   there would be releasing the caption's width, not the date box's. */
+.documents__renew-input .nx-textfield__input {
   width: auto;
 }
 .documents__renew-cancel.nx-button {
