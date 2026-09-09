@@ -5,6 +5,7 @@ export { Disclosure, type DisclosureProps } from "./components/Disclosure.js";
 export { Card, type CardProps } from "./components/Card.js";
 export { NavItem, type NavItemProps } from "./components/NavItem.js";
 export { TextField, type TextFieldProps } from "./components/TextField.js";
+export { TextArea, type TextAreaProps } from "./components/TextArea.js";
 export { Select, type SelectProps } from "./components/Select.js";
 export { EmptyState, type EmptyStateProps } from "./components/EmptyState.js";
 export { LoadingState, type LoadingStateProps } from "./components/LoadingState.js";

@@ -87,6 +87,7 @@ samp {
   .nx-kanban-card,
   .nx-cards-view__card,
   .nx-textfield__input,
+  .nx-textarea__input,
   .nx-select__control,
   .nx-stat-band,
   .nx-hairline {
@@ -1066,8 +1067,17 @@ samp {
   font-variant-numeric: tabular-nums;
 }
 
-/* --- TextField --------------------------------------------------------- */
-.nx-textfield {
+/* --- TextField, and TextArea beside it --------------------------------
+   The two are one control in two shapes: a name above a well, differing only
+   in whether the well holds a line or a paragraph. Every rule below that is
+   about the WELL therefore names both, rather than `TextArea` growing a
+   private copy of a box the app already has one reading of — which is exactly
+   what the seven hand-written textareas were avoiding when they reached for
+   `nx-textfield__input`. `--inline` is the one thing not shared: it puts the
+   name on the same line as the control, and a five-row box has no line to
+   share. */
+.nx-textfield,
+.nx-textarea {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -1081,7 +1091,8 @@ samp {
   align-items: center;
   gap: var(--nx-space-2);
 }
-.nx-textfield__label {
+.nx-textfield__label,
+.nx-textarea__label {
   font-size: var(--nx-font-size-label);
   color: var(--nx-text-muted);
   font-weight: var(--nx-font-weight-medium);
@@ -1101,7 +1112,8 @@ samp {
    step below the card on the ramp, which is the whole reason that token
    exists. The floor height is the pointer-target one every control in the
    product now clears. */
-.nx-textfield__input {
+.nx-textfield__input,
+.nx-textarea__input {
   font: inherit;
   font-size: var(--nx-font-size-body-sm);
   color: var(--nx-text);
@@ -1114,19 +1126,35 @@ samp {
   transition: border-color var(--nx-motion-fast) var(--nx-motion-ease),
     background var(--nx-motion-fast) var(--nx-motion-ease);
 }
-.nx-textfield__input:hover:not(:disabled) {
+.nx-textfield__input:hover:not(:disabled),
+.nx-textarea__input:hover:not(:disabled) {
   border-color: var(--nx-border-strong);
 }
-.nx-textfield__input::placeholder {
+.nx-textfield__input::placeholder,
+.nx-textarea__input::placeholder {
   color: var(--nx-text-muted);
 }
-.nx-textfield__input:focus-visible {
+.nx-textfield__input:focus-visible,
+.nx-textarea__input:focus-visible {
   outline: 2px solid var(--nx-accent);
   outline-offset: 2px;
 }
-.nx-textfield__input:disabled {
+.nx-textfield__input:disabled,
+.nx-textarea__input:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+/* The three declarations every hand-written textarea in the app had made for
+   itself, in four stylesheets, before this component existed. `resize` is
+   vertical only because a horizontal drag inside a wrapping flex row moves the
+   boxes beside it; `font-family: inherit` undoes the UA's monospace default,
+   which is what "the same box as the input above it" actually requires; the
+   leading is the app's, because a paragraph is read and a single line is not.
+   A site that holds CODE says so by naming a mono face itself — three do. */
+.nx-textarea__input {
+  resize: vertical;
+  font-family: inherit;
+  line-height: var(--nx-font-leading-normal);
 }
 
 /* --- Select (one labelled control, so a select cannot ship unlabelled) --
