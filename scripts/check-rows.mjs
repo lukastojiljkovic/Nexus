@@ -236,13 +236,28 @@ export function verdict(declared) {
   return { line: declared.line, align: declared.align ?? "not declared (so: stretch)" };
 }
 
-export function scanRepo() {
+/**
+ * Every mixed row in the tree, by class — the CENSUS, separate from the verdict.
+ *
+ * Exported because a gate that reports nothing looks exactly like a gate that
+ * finds nothing, and this one has already been both: while the shared lexer
+ * read `ChangeEvent<HTMLInputElement>` as an unclosed element, the walk found
+ * ZERO mixed rows and the gate passed a form written to fail it. A test can ask
+ * this for the rows it knows are there; it cannot ask `scanRepo`, whose correct
+ * answer is the empty list.
+ */
+export function repoMixedRows() {
   const mixed = new Map();
   for (const file of walk(join(root, "apps"), [".tsx"])) {
     for (const [cls, line] of mixedRowClasses(readFileSync(file, "utf8"))) {
       if (!mixed.has(cls)) mixed.set(cls, { file: relative(root, file), line });
     }
   }
+  return mixed;
+}
+
+export function scanRepo() {
+  const mixed = repoMixedRows();
 
   const findings = [];
   for (const file of walk(join(root, "apps"), [".css"])) {

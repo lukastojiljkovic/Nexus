@@ -8,6 +8,7 @@ import {
   isStacked,
   layoutByClass,
   mixedRowClasses,
+  repoMixedRows,
   scanRepo,
   verdict,
 } from "./check-rows.mjs";
@@ -211,6 +212,20 @@ describe("verdict", () => {
 describe("the live tree", () => {
   it("has no mixed field row that fails to align its controls", () => {
     expect(scanRepo()).toEqual([]);
+  });
+
+  /**
+   * THE TEST THAT WOULD HAVE CAUGHT THE LEXER. `scanRepo()` returning `[]` is
+   * the correct answer AND the answer a broken walk gives, so the suite has to
+   * ask the other question too: are the rows this gate exists for still being
+   * SEEN? While `jsx-elements.mjs` read a type argument as an unclosed element,
+   * the census was empty and every assertion above still passed.
+   */
+  it("still sees the four rows it was written for, so green is not silence", () => {
+    const seen = [...repoMixedRows().keys()];
+    for (const cls of ["cal__form", "documents__form", "study__exam-form", "study__plan-form"]) {
+      expect(seen).toContain(cls);
+    }
   });
 
   it("still finds the rows it is about, so green means checked", () => {
