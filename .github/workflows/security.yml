@@ -102,5 +102,16 @@ jobs:
       # allow-list names, each with its reasoning and the condition that
       # retires it; an allowance that stops matching fails the job too, so a
       # spent excuse cannot linger. See the script for why this is not a flag.
+      #
+      # A CONDITION here, and it earns its line. These are two steps of one
+      # job, so a failure in the shipped half SKIPS this one — and on
+      # 2026-09-09 that is what happened: one new js-yaml advisory ended the
+      # job, and eight more on @xmldom/xmldom went unreported until the fix
+      # for the first was pushed. Two halves that answer independent questions
+      # should answer them in the same run; a red check that hides a second
+      # red check costs a round trip to learn what the runner already knew.
+      # `!cancelled()` rather than `always()`: a cancelled run should stop,
+      # not start a fresh audit nobody is waiting for.
       - name: Build toolchain
+        if: '!cancelled()'
         run: node .github/scripts/audit-toolchain.mjs
