@@ -2242,7 +2242,12 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     viewAgenda: "Agenda",
     viewDokumenta: "Dokumenta",
     viewLjudi: "Ljudi",
-    titlePlaceholder: "Naziv događaja",
+    /**
+     * Drawn above the field, not inside it. It was both — a `titlePlaceholder`
+     * and a `titleLabel` holding the same string, one of them grey and gone
+     * the moment anything was typed — until DC-120 step 2 kept the one that
+     * stays on screen.
+     */
     titleLabel: "Naziv događaja",
     dateLabel: "Datum",
     /**
@@ -2261,8 +2266,14 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     invalidDate: "Izaberi datum događaja.",
     /** The form's own save failing at the store/IPC boundary. */
     saveError: "Događaj nije sačuvan. Pokušaj ponovo.",
-    locationPlaceholder: "Mesto (opciono)",
-    locationLabel: "Mesto",
+    /**
+     * The parenthesis came from the placeholder this replaced, and is the
+     * reason the label is not simply „Mesto“: it is the one thing the grey
+     * text said that the name did not, and it said it only while the field
+     * was empty. The same shape as `devtools.system.altLabel` and the
+     * finance year field — an optional field says so in its own name.
+     */
+    locationLabel: "Mesto (opciono)",
     allDay: "Ceo dan",
     add: "Dodaj",
     save: "Sačuvaj",
@@ -2344,9 +2355,20 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       saveAs: "Sačuvaj kao šablon",
       /** Accessible name of that „⋯“ menu — the surface it belongs to, said in full. */
       saveMenuLabel: "Šablon ovog događaja",
-      namePlaceholder: "Naziv šablona",
-      /** Accessible name of the name field — the action in full, like `tasks.templates.nameLabel`. */
-      nameLabel: "Sačuvaj događaj kao šablon",
+      /**
+       * DRAWN above the field now (DC-120 step 2), which is what changed the
+       * wording. While it was only heard it was the action in full — „Sačuvaj
+       * događaj kao šablon“ — because a screen reader met the box with no
+       * surrounding text. On screen the surroundings are already there: the
+       * panel is headed „Šabloni“ and the button under the field says
+       * „Sačuvaj“, so a label repeating the action would be the third copy of
+       * it. A label names the field; the button names the action.
+       *
+       * `tasks.templates.nameLabel` is still the old shape, and so are the
+       * seven other names `InlineNameForm` passes to an `aria-label`. That is
+       * the TASK surface, and it changes on its own pass.
+       */
+      nameLabel: "Naziv šablona",
       /** Said BEFORE the fact, not after: saving under an existing name is how a template is edited. */
       overwriteNote: "Postojeći naziv se zamenjuje.",
       /** Tooltip on a template's name in the list — the click applies it. */

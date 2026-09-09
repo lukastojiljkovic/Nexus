@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { ChangeEvent, FormEvent, KeyboardEvent } from "react";
+import type { FormEvent, KeyboardEvent } from "react";
 import {
   Button,
   Checkbox,
@@ -1600,14 +1600,19 @@ className="nx-segmented__option cal__source"
       ) : (
         <>
           <form className="cal__form" onSubmit={submitForm}>
-            <input
+            {/* The title goes THROUGH the component rather than around it. It
+                was hand-written for one reason — six call sites focus it, and
+                `TextField` had no `ref` until `7be8bca` — and hand-writing it
+                cost it the label the component would have drawn. `className`
+                lands on the wrapper, which is what `.cal__title` has always
+                needed to be on: the wrapper is this row's flex item. */}
+            <TextField
               ref={titleRef}
-              className="nx-textfield__input cal__title"
+              className="cal__title"
+              label={strings.calendar.titleLabel}
               value={title}
-              placeholder={strings.calendar.titlePlaceholder}
-              aria-label={strings.calendar.titleLabel}
               autoFocus
-              onChange={(event: ChangeEvent<HTMLInputElement>) => setTitle(event.target.value)}
+              onChange={(event) => setTitle(event.target.value)}
             />
             {/* VISIBLE labels on the three date/time fields, which had names a
                 screen reader could hear and nobody could read — DC-120, and the
@@ -1656,11 +1661,15 @@ className="nx-segmented__option cal__source"
                 />
               </>
             )}
+            {/* The last of this form's placeholder-names. „(opciono)" moves
+                into the label with the rest of the string: it was the one
+                thing the placeholder said that the name did not, and a hint
+                that vanishes the moment the user types is a hint given to
+                everyone except the person filling the field in. */}
             <TextField
               type="text"
               value={location}
-              placeholder={strings.calendar.locationPlaceholder}
-              aria-label={strings.calendar.locationLabel}
+              label={strings.calendar.locationLabel}
               onChange={(event) => setLocation(event.target.value)}
             />
             <Checkbox checked={allDay} onChange={(event) => setAllDay(event.target.checked)}>
@@ -1781,8 +1790,7 @@ className="nx-segmented__option cal__source"
                         <div className="cal__template-form">
                           <TextField
                             value={templateDraft}
-                            placeholder={strings.calendar.templates.namePlaceholder}
-                            aria-label={strings.calendar.templates.nameLabel}
+                            label={strings.calendar.templates.nameLabel}
                             maxLength={MAX_EVENT_TEMPLATE_NAME_LENGTH}
                             autoFocus
                             onChange={(field) => setTemplateDraft(field.target.value)}

@@ -49,10 +49,15 @@
    its own baseline. Aligning the BOTTOMS puts the controls on one line and lets
    the labels float above the three that have them.
 
-   TASK's own field row went the other way, to `start`, once every child there
-   became the same shape; this one gets that treatment when [[DC-120]]'s steps 2
-   and 3 give the title and the place visible names of their own. Until then
-   `end` is the alignment that is true about what is actually in the row. */
+   This comment used to end by predicting the opposite: that the row would go
+   the way `.tasks__fields` went, to `start`, once [[DC-120]]'s steps 2 and 3
+   gave the title and the place visible names of their own. They have (the
+   title through `TextField` rather than around it, so it draws „Naziv
+   događaja“), and the prediction was wrong — because TASK moved its BUTTONS
+   out when it became a grid and this row still holds all of them. „Ceo dan“,
+   „Sačuvaj“, „Otkaži“ and „Šabloni“ are one box tall and always will be, so
+   this row mixes shapes permanently and `end` is its permanent answer. Kept
+   rather than deleted: the same guess is worth not making twice. */
 .cal__form {
   display: flex;
   align-items: end;
@@ -61,6 +66,10 @@
   /* Chrome: it takes the height it needs and the view below gives it up. */
   flex: none;
 }
+/* The WRAPPER, which is what it always had to be: `TextField` puts `className`
+   on its box and the box is this row's flex item. It read identically while
+   the title was a hand-written `<input>` — the input was the flex item then —
+   which is why the rule needed no edit when the title adopted the component. */
 .cal__title {
   flex: 1;
   min-width: 240px;
@@ -354,9 +363,15 @@
 /* The capture prompt lives INSIDE the "⋯" panel, which is far narrower than the
    form row: its buttons would squeeze the field to nothing on one line, so the
    field takes the full width and the pair wraps beneath it. */
+/* `end` rather than `center` for `.cal__form`'s reason, one popover down: the
+   name field draws a label now and the two buttons do not, so the row mixes
+   shapes. It happens to look identical either way — the field takes the whole
+   first line below, leaving the buttons a line of their own, and a line with
+   one item on it has nothing to align against. Said honestly anyway, because
+   the day that `flex-basis` goes is the day the two would share a line. */
 .cal__template-form {
   display: flex;
-  align-items: center;
+  align-items: end;
   flex-wrap: wrap;
   gap: var(--nx-space-1);
   padding: var(--nx-space-1) var(--nx-space-2);
