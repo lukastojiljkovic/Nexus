@@ -87,7 +87,16 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     fanout: null,
     cleanup: LEAVE_EDIT_MODE(),
   },
-  { id: "tasks", module: "tasks" },
+  {
+    // The landing and its five views, and they are one scene because the view
+    // switch is a fan-out. `prepare` is what puts anything in them: see
+    // `OPEN_FIRST_TASK_LIST`. It runs HERE rather than on each of the eight
+    // TASK scenes because a module that is already open is not remounted, so
+    // the selection this makes carries to every scene below it.
+    id: "tasks",
+    module: "tasks",
+    prepare: OPEN_FIRST_TASK_LIST(),
+  },
   {
     // „Priliv i odliv", which the landing no longer draws by itself.
     id: "tasks-overview",
@@ -875,6 +884,45 @@ function CLICK_THEN(...steps: readonly string[]): string {
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     }
     return true;
+  })()`;
+}
+
+/**
+ * Selects the first list in TASK's rail that actually holds a task, and says so
+ * when none does.
+ *
+ * The module opens on „Inbox", the demo files all forty of its tasks into the
+ * five lists BELOW it, and nothing in the sweep ever moved the rail — so every
+ * frame of this module was an empty state. Lista, Tabla, Kartice, Kalendar and
+ * Izbor are one fan-out of the landing, „Detalji" is a pane over it and the
+ * recurrence editor is three steps inside its form: eight scenes, all of them
+ * photographs of „Nema zadataka", in the module the product is most about. A
+ * row, a section heading, a grip, a priority chip, the board's columns and the
+ * card grid had between them never been in a frame.
+ *
+ * It walks the rail rather than naming „Fakultet", because a scene that hard-codes
+ * a seed's copy breaks when the seed is edited and is right for the wrong reason
+ * until then. The OUTCOME is what it waits for — a row in `.tasks__rows` — so a
+ * click that lands on an empty list is a miss it recovers from, and a rail with
+ * nothing in it anywhere is reported instead of photographed.
+ *
+ * The list rows are re-queried each pass: clicking one re-renders the rail, and
+ * a node captured before the click is a node React has replaced.
+ */
+function OPEN_FIRST_TASK_LIST(): string {
+  return `(async () => {
+    const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const lists = () =>
+      document.querySelectorAll(".tasks__rail > .tasks__rail-row .tasks__rail-list");
+    const count = lists().length;
+    for (let index = 0; index < count; index += 1) {
+      const list = lists()[index];
+      if (!list) break;
+      list.click();
+      await frame();
+      if (document.querySelector(".tasks__rows .nx-list-row")) return true;
+    }
+    return "none: no list in the rail drew a row";
   })()`;
 }
 
