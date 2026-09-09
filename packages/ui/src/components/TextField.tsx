@@ -1,11 +1,24 @@
 import { useId } from "react";
-import type { InputHTMLAttributes } from "react";
+import type { InputHTMLAttributes, Ref } from "react";
 
 export interface TextFieldProps extends InputHTMLAttributes<HTMLInputElement> {
   /** Optional label rendered above the input, wired via htmlFor/id. */
   label?: string;
   /** `stacked` puts the label above (a form), `inline` beside it (a controls row). */
   layout?: "stacked" | "inline";
+  /**
+   * The INPUT, not the wrapper — a caller reaching for this wants to focus or
+   * select the control, never to measure the box.
+   *
+   * `Button` has had exactly this, with exactly this comment about React 19
+   * accepting `ref` as a plain prop, since long before this line existed. Nine
+   * call sites needed a ref on a text input and hand-wrote the whole
+   * `<input className="nx-textfield__input">` to get one — CAL's title, TASK's
+   * quick-add and subtask drafts, DOKUMENTI's name, FINANSIJE's amount,
+   * LJUDI's name, UČENJE's subject, and both search surfaces — and every one
+   * of them lost the label with it.
+   */
+  ref?: Ref<HTMLInputElement>;
 }
 
 /**
@@ -32,7 +45,14 @@ export interface TextFieldProps extends InputHTMLAttributes<HTMLInputElement> {
  * `className` lands on the WRAPPER (the opposite of `Select`, deliberately):
  * the pages that style a field style its box, and the box is this div.
  */
-export function TextField({ label, layout = "stacked", id, className, ...rest }: TextFieldProps) {
+export function TextField({
+  label,
+  layout = "stacked",
+  id,
+  className,
+  ref,
+  ...rest
+}: TextFieldProps) {
   const generatedId = useId();
   const inputId = id ?? generatedId;
   const classes = ["nx-textfield"];
@@ -45,7 +65,7 @@ export function TextField({ label, layout = "stacked", id, className, ...rest }:
           {label}
         </label>
       )}
-      <input id={inputId} className="nx-textfield__input" {...rest} />
+      <input ref={ref} id={inputId} className="nx-textfield__input" {...rest} />
     </div>
   );
 }
