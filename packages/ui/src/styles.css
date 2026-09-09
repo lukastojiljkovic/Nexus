@@ -1072,10 +1072,28 @@ samp {
   flex-direction: column;
   gap: 6px;
 }
+/* The same arrangement `.nx-select--inline` names, declared identically on
+   purpose: these two components sit in the same rows, and a field whose label
+   is beside it must look like a select whose label is beside it or the row has
+   two kinds of caption. If either of these blocks changes, both do. */
+.nx-textfield--inline {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
 .nx-textfield__label {
   font-size: var(--nx-font-size-label);
   color: var(--nx-text-muted);
   font-weight: var(--nx-font-weight-medium);
+}
+/* In a row the name is a caption rather than a form label — uppercase and
+   tracked, the same treatment every other caption in the app takes. */
+.nx-textfield--inline .nx-textfield__label {
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 /* A field is a WELL — something recessed you write into — and it had been
    painting the same value as the card around it, so on both themes an input
