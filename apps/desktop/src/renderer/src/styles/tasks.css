@@ -440,6 +440,26 @@
 .tasks__row--picking .nx-checkbox input {
   pointer-events: none;
 }
+/*
+ * The box is disabled in Izbor, and the TITLE is not the box's to grey out.
+ *
+ * `.nx-checkbox input:disabled ~ .nx-checkbox__label` mutes a locked control's
+ * name along with the control, which is right everywhere it was written for —
+ * seven call sites whose label is a short name, „Prvi red je zaglavlje" and the
+ * two text-tool switches among them. Here the label is the row's CONTENT: the
+ * task's own title, put inside the box's label so a screen reader announces the
+ * two as one thing. Inheriting the mute from a control the mode made inert
+ * therefore drew every row of the list at 45% — in the one mode whose whole
+ * job is reading those rows to pick them, and with the pick target being the
+ * row itself, which now looked unavailable.
+ *
+ * Stated here rather than taken out of the component: the component's rule is
+ * correct for a label that NAMES its control, and this page is the only place
+ * that passes one that does not.
+ */
+.tasks__row--picking .nx-checkbox input:disabled ~ .nx-checkbox__label {
+  opacity: 1;
+}
 /* Picked = the house drop-target recipe (accent border + soft background), as
    an outline so a row lighting up never moves the rows under it. Never a glow,
    and never a side bar.
