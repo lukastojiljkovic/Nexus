@@ -19,7 +19,13 @@
  */
 
 import type { RecurrenceRule, RecurrenceWeekday } from "@nexus/core";
-import { CalendarSettingsStore, EventStore, type CreateEventInput } from "@nexus/db";
+import {
+  CalendarSettingsStore,
+  EventStore,
+  EventTemplateStore,
+  type CreateEventInput,
+  type EventTemplatePayload,
+} from "@nexus/db";
 import {
   demoAt,
   demoDay,
@@ -373,6 +379,76 @@ const EVENT_TEMPLATES: readonly EventTemplate[] = [
 /** How many templated filler events to place — the bulk of the ~76-row total. */
 const FILLER_EVENT_COUNT = 60;
 
+// --- Saved templates (CAL-009) --------------------------------------------
+//
+// NOT the `EventTemplate` above, which is this file's own filler recipe and
+// never leaves it. These are the real feature: rows in `event_templates` that
+// the „Šabloni" popover lists and applies to whichever day the user is looking
+// at.
+//
+// Seeded because the popover has been photographed empty for as long as the
+// sweep has been able to reach it, and a demo profile that never exercises a
+// shipped feature shows its empty state as though that were the surface. Three
+// is the number that makes the list read as a LIST — one row cannot show
+// alphabetical order, and the popover's own scroll is not what this is testing.
+//
+// A template carries no date on purpose (the store's `apply` phases it onto the
+// caller's day), so what belongs here is the shape of a thing you arrange
+// again and again rather than a thing that repeats on a schedule. One of the
+// three carries a rule anyway — „Sastanak tima" is weekly wherever it lands —
+// because a captured recurrence is stored UNANCHORED, and a seed that never
+// held one would leave that half of CAL-009 undemonstrated.
+const SAVED_TEMPLATES: readonly {
+  readonly name: string;
+  readonly payload: EventTemplatePayload;
+}[] = [
+  {
+    name: "Individualni trening",
+    payload: {
+      title: "Individualni trening",
+      allDay: false,
+      startTime: "18:30",
+      durationMinutes: 75,
+      location: "Teretana centar",
+      description: null,
+      category: "zdravlje",
+      reminderOffsets: [30],
+      recurrence: null,
+    },
+  },
+  {
+    name: "Konsultacije kod profesora",
+    payload: {
+      title: "Konsultacije kod profesora",
+      allDay: false,
+      startTime: "12:00",
+      durationMinutes: 30,
+      location: "Kabinet 214",
+      description: "Pitanja oko seminarskog rada.",
+      category: "fakultet",
+      reminderOffsets: [10, 60],
+      recurrence: null,
+    },
+  },
+  {
+    name: "Sastanak tima",
+    payload: {
+      title: "Sastanak tima",
+      allDay: false,
+      startTime: "09:30",
+      durationMinutes: 60,
+      location: "Sala za sastanke",
+      description: "Nedeljni pregled zaduženja i blokera.",
+      category: "posao",
+      reminderOffsets: [10],
+      // Monday, and unanchored: applied to a Thursday this means „weekly from
+      // that Thursday", which is the whole point of storing the rule without
+      // the day it was captured on.
+      recurrence: { freq: { kind: "weekly", interval: 1, days: [0] }, end: { kind: "never" } },
+    },
+  },
+];
+
 // --- Seeding engine ----------------------------------------------------
 
 function createRecurringMaster(
@@ -546,5 +622,11 @@ export function seedDemoCalendar(db: DatabaseHandle, ctx: DemoContext): void {
 
   for (let i = 0; i < FILLER_EVENT_COUNT; i += 1) {
     placeFillerEvent(ctx, rnd, events, rnd.of(EVENT_TEMPLATES));
+  }
+
+  const templates = new EventTemplateStore(db, ctx.profileId);
+  const now = new Date(ctx.now).toISOString();
+  for (const seed of SAVED_TEMPLATES) {
+    templates.saveByName(seed.name, seed.payload, now);
   }
 }
