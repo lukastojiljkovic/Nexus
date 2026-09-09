@@ -1542,7 +1542,7 @@ export function CalendarPage({
           <Button
             key={option}
             size="sm"
-className="nx-segmented__option cal__view"
+            className="nx-segmented__option cal__view"
             aria-pressed={view === option}
             onClick={() => selectView(option)}
           >
@@ -1565,7 +1565,7 @@ className="nx-segmented__option cal__view"
               <Button
                 key={source}
                 size="sm"
-className="nx-segmented__option cal__source"
+                className="nx-segmented__option cal__source"
                 aria-pressed={sources.has(source)}
                 onClick={() => toggleSource(source)}
               >
