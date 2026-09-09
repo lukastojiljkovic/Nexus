@@ -33,9 +33,13 @@
   margin-left: var(--nx-space-2);
 }
 /* Subject form (create + edit) — one wrapping row; the name field takes the slack. */
+/* `end`, the alignment three other forms on this page and two on CAL already
+   carry: every field here draws a label above its control and „Sačuvaj" and
+   „Otkaži" do not, so centring the BOXES would put each control on its own
+   baseline. It was `center` while nothing in the row had a label at all. */
 .study__subject-form {
   display: flex;
-  align-items: center;
+  align-items: end;
   gap: var(--nx-space-2);
   flex-wrap: wrap;
 }
@@ -43,8 +47,11 @@
   flex: 1;
   min-width: 200px;
 }
+/* `width: auto` was here to stop the bare input filling the row; the class is
+   on the WRAPPER now, where the box's own `width: 100%` is measured against
+   this element rather than against the form. What is left is the pair that
+   still says something: never grow, never fall under 120px. */
 .study__semester-input {
-  width: auto;
   min-width: 120px;
   flex: none;
 }
@@ -365,9 +372,11 @@
   flex-wrap: wrap;
   justify-content: flex-end;
 }
+/* `end`, `.study__subject-form`'s reason: one labelled field beside two
+   buttons. */
 .study__deck-form {
   display: flex;
-  align-items: center;
+  align-items: end;
   gap: var(--nx-space-2);
   flex-wrap: wrap;
 }
@@ -1167,11 +1176,13 @@
   flex-direction: column;
   gap: var(--nx-space-1);
 }
-.study__textarea {
+/* All that is left of this rule. `resize`, the face and the leading moved into
+   `.nx-textarea__input` when `TextArea` was written — this page had one of the
+   four hand-written copies of those three declarations. The height is the
+   site's own and belongs to the BOX, not to the wrapper the class now lands
+   on: a `min-height` there would be shared with the label above it. */
+.study__textarea .nx-textarea__input {
   min-height: 72px;
-  resize: vertical;
-  font-family: inherit;
-  line-height: var(--nx-font-leading-normal);
 }
 .study__math-preview {
   padding: var(--nx-space-2) var(--nx-space-3);

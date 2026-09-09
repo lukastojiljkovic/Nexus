@@ -25,6 +25,7 @@ import {
   ProportionBar,
   Select,
   StatBand,
+  TextArea,
   TextField,
 } from "@nexus/ui";
 import type { Stat } from "@nexus/ui";
@@ -2604,17 +2605,20 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
 
                 {cardForm === "cloze" ? (
                   <div className="study__card-field">
-                    <textarea
+                    {/* The placeholder STAYS, and that is the distinction this
+                        whole pass turns on: the cloze example is an EXAMPLE,
+                        not the field's name. A label labels and an example
+                        demonstrates; the card fields that had the same string
+                        in both places keep only the label. */}
+                    <TextArea
                       ref={clozeTextareaRef}
-                      className="nx-textfield__input study__textarea"
+                      className="study__textarea"
+                      label={strings.study.clozeLabel}
                       value={clozeText}
                       placeholder={strings.study.clozePlaceholder}
-                      aria-label={strings.study.clozeLabel}
                       maxLength={CARD_TEXT_MAX_LENGTH}
                       autoFocus
-                      onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
-                        setClozeText(event.target.value)
-                      }
+                      onChange={(event) => setClozeText(event.target.value)}
                     />
                     <div className="study__cloze-actions">
                       <Button size="sm" onClick={addClozeBlank}>
@@ -2637,22 +2641,26 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                     {/* The statement: the same `front` a basic card has, named
                         for what it is in a problem card. */}
                     <div className="study__card-field">
-                      <textarea
-                        className="nx-textfield__input study__textarea"
-                        value={cardFront}
-                        placeholder={
-                          cardForm === "problem"
-                            ? strings.study.problemStatementPlaceholder
-                            : strings.study.frontPlaceholder
-                        }
-                        aria-label={
+                      <TextArea
+                        className="study__textarea"
+                        label={
                           cardForm === "problem"
                             ? strings.study.problemStatementLabel
                             : strings.study.frontLabel
                         }
+                        value={cardFront}
+                        // A problem's statement keeps its worked example; a
+                        // basic card's front had a placeholder that was its own
+                        // label word for word, and the label is the copy that
+                        // stays on screen.
+                        placeholder={
+                          cardForm === "problem"
+                            ? strings.study.problemStatementPlaceholder
+                            : undefined
+                        }
                         maxLength={CARD_TEXT_MAX_LENGTH}
                         autoFocus
-                        onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setCardFront(event.target.value)}
+                        onChange={(event) => setCardFront(event.target.value)}
                       />
                       {cardFront.trim().length > 0 && (
                         <div className="study__math-preview">
@@ -2662,15 +2670,13 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                     </div>
                     {cardForm === "problem" ? (
                       <div className="study__card-field">
-                        <textarea
-                          className="nx-textfield__input study__textarea"
+                        <TextArea
+                          className="study__textarea"
+                          label={strings.study.problemStepsLabel}
                           value={problemSteps}
                           placeholder={strings.study.problemStepsPlaceholder}
-                          aria-label={strings.study.problemStepsLabel}
                           maxLength={CARD_TEXT_MAX_LENGTH}
-                          onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
-                            setProblemSteps(event.target.value)
-                          }
+                          onChange={(event) => setProblemSteps(event.target.value)}
                         />
                         {/* The preview reads the steps through the SAME grammar
                             the store does, so it shows them as the reviewer
@@ -2695,13 +2701,12 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                       </div>
                     ) : (
                       <div className="study__card-field">
-                        <textarea
-                          className="nx-textfield__input study__textarea"
+                        <TextArea
+                          className="study__textarea"
+                          label={strings.study.backLabel}
                           value={cardBack}
-                          placeholder={strings.study.backPlaceholder}
-                          aria-label={strings.study.backLabel}
                           maxLength={CARD_TEXT_MAX_LENGTH}
-                          onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setCardBack(event.target.value)}
+                          onChange={(event) => setCardBack(event.target.value)}
                         />
                         {cardBack.trim().length > 0 && (
                           <div className="study__math-preview">
@@ -3100,24 +3105,21 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
 
       {subjectFormOpen && (
         <form className="study__subject-form" onSubmit={(e) => void submitSubjectForm(e)}>
-          <input
+          {/* Through the component rather than around it, for `nameRef`. */}
+          <TextField
             ref={nameRef}
-            className="nx-textfield__input study__name-input"
+            className="study__name-input"
+            label={strings.study.nameLabel}
             value={subjectName}
-            placeholder={strings.study.namePlaceholder}
-            aria-label={strings.study.nameLabel}
             autoFocus
-            onChange={(event: ChangeEvent<HTMLInputElement>) => setSubjectName(event.target.value)}
+            onChange={(event) => setSubjectName(event.target.value)}
           />
           <ColorPicker value={subjectColor} onChange={setSubjectColor} />
-          <input
-            className="nx-textfield__input study__semester-input"
+          <TextField
+            className="study__semester-input"
+            label={strings.study.semesterLabel}
             value={subjectSemester}
-            placeholder={strings.study.semesterPlaceholder}
-            aria-label={strings.study.semesterLabel}
-            onChange={(event: ChangeEvent<HTMLInputElement>) =>
-              setSubjectSemester(event.target.value)
-            }
+            onChange={(event) => setSubjectSemester(event.target.value)}
           />
           <Button type="submit" variant="primary">
             {editingSubjectId != null ? strings.study.save : strings.study.add}
@@ -3399,11 +3401,15 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                       className="study__exam-form"
                       onSubmit={(e) => void submitExamForm(e, subject.id)}
                     >
-                      {/* `inline`: this is a one-line controls row (the date and
-                          scope fields beside it stay this wide too), and a
-                          stacked label would double the row's height. */}
+                      {/* STACKED, DOKUMENTI's type select's reason exactly: it
+                          was the only named control on a row of unexplained
+                          boxes, and it is now the only one that would put its
+                          name beside itself. The comment here used to argue for
+                          `inline` on the grounds that a stacked label would
+                          double the row's height — true when it was the ONLY
+                          label, and no longer true now that its two neighbours
+                          have one each. The row is that tall regardless. */}
                       <Select
-                        layout="inline"
                         label={strings.study.examTypeLabel}
                         value={examType}
                         onChange={(event: ChangeEvent<HTMLSelectElement>) =>
@@ -3426,14 +3432,11 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                         label={strings.study.examDateLabel}
                         onChange={(event) => setExamDate(event.target.value)}
                       />
-                      <input
-                        className="nx-textfield__input study__scope-input"
+                      <TextField
+                        className="study__scope-input"
+                        label={strings.study.examScopeLabel}
                         value={examScope}
-                        placeholder={strings.study.examScopePlaceholder}
-                        aria-label={strings.study.examScopeLabel}
-                        onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                          setExamScope(event.target.value)
-                        }
+                        onChange={(event) => setExamScope(event.target.value)}
                       />
                       <Button type="submit" variant="primary" size="sm">
                         {editingExamId != null ? strings.study.saveExam : strings.study.addExam}
@@ -3565,13 +3568,12 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                       className="study__deck-form"
                       onSubmit={(e) => void submitDeckForm(e, subject.id)}
                     >
-                      <input
-                        className="nx-textfield__input study__deck-name-input"
+                      <TextField
+                        className="study__deck-name-input"
+                        label={strings.study.deckNameLabel}
                         value={deckName}
-                        placeholder={strings.study.deckNamePlaceholder}
-                        aria-label={strings.study.deckNameLabel}
                         autoFocus
-                        onChange={(event: ChangeEvent<HTMLInputElement>) => setDeckName(event.target.value)}
+                        onChange={(event) => setDeckName(event.target.value)}
                       />
                       <Button type="submit" variant="primary" size="sm">
                         {editingDeckId != null ? strings.study.saveDeck : strings.study.addDeck}

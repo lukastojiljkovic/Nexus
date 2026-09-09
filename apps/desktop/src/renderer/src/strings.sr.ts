@@ -2774,10 +2774,18 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       examNoneNote: "nema zakazanih",
     },
     title: "Predmeti",
+    /**
+     * Drawn above the field. It was a `namePlaceholder` and a `nameLabel`
+     * holding one string, the grey copy of which left the moment anything was
+     * typed — DC-120 step 2 keeps the one that stays.
+     */
     nameLabel: "Naziv predmeta",
-    namePlaceholder: "Naziv predmeta",
-    semesterLabel: "Semestar",
-    semesterPlaceholder: "Semestar (opciono)",
+    /**
+     * „(opciono)“ came off the placeholder this replaced: the one thing the
+     * grey text said that the name did not, said only while the field was
+     * empty. Four other fields took the same parenthesis on the same day.
+     */
+    semesterLabel: "Semestar (opciono)",
     colorLabel: "Boja",
     /** Colour-dot names, keyed by subject colour value (labels are presentation). */
     color: {
@@ -2816,8 +2824,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     },
     examTypeLabel: "Vrsta ispita",
     examDateLabel: "Datum ispita",
-    examScopeLabel: "Gradivo",
-    examScopePlaceholder: "Gradivo (opciono)",
+    /** „(opciono)“ from the placeholder, as `semesterLabel` above. */
+    examScopeLabel: "Gradivo (opciono)",
     editExamLabel: "Izmeni ispit",
     deleteExamLabel: "Obriši ispit",
     deletedExamNotice: "Ispit obrisan",
@@ -2919,8 +2927,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     addDeck: "Dodaj špil",
     saveDeck: "Sačuvaj",
     cancelDeck: "Otkaži",
+    /** Drawn above the field; its placeholder held the same string. */
     deckNameLabel: "Naziv špila",
-    deckNamePlaceholder: "Naziv špila",
     editDeckLabel: "Izmeni špil",
     deleteDeckLabel: "Obriši špil",
     deletedDeckNotice: "Špil obrisan",
@@ -2939,10 +2947,14 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     addCard: "Dodaj karticu",
     saveCard: "Sačuvaj",
     cancelCard: "Otkaži",
+    /**
+     * The two card faces, drawn above their boxes. Each had a placeholder
+     * holding its own label word for word; the statement and step fields of a
+     * PROBLEM card kept theirs, because those are worked examples rather than
+     * names, and that is the whole distinction DC-120 step 2 turns on.
+     */
     frontLabel: "Prednja strana",
-    frontPlaceholder: "Prednja strana",
     backLabel: "Zadnja strana",
-    backPlaceholder: "Zadnja strana",
     deckSelectLabel: "Špil",
     mathHint: "Koristi $…$ za matematičke izraze.",
     editCardLabel: "Izmeni karticu",
