@@ -338,10 +338,16 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     // is three states deep — a subject, its deck, then the drill-in — which is
     // exactly the reach DC-57 describes and exactly why a native control could
     // sit in FIT's equivalent for as long as it did.
+    //
+    // It fans out, and this one is worth the three frames: the toggle at the
+    // top swaps the form ENTIRELY — one textarea for a cloze template, two for
+    // a basic card, three for a problem — so a single frame of „Osnovna" was
+    // reporting on a third of the surface. The two it never showed are also
+    // the two whose placeholders are worked examples rather than names.
     id: "study-new-card",
     module: "study",
     prepare: OPEN_CREATE_FORM({ path: ["text:Kartice"], open: "text:Dodaj karticu" }),
-    fanout: null,
+    fanout: ".study__segmented .nx-button",
     cleanup: CLICK_THEN("text:Otkaži", ".study__back"),
   },
   { id: "finance", module: "finance" },
