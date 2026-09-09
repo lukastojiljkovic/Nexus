@@ -208,6 +208,25 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     // purpose rather than leaving armed for an event the form no longer holds.
     cleanup: CLICK_THEN(".cal__cancel"),
   },
+  {
+    // DOKUMENTI's renewal line, which replaces a row's trailing buttons with a
+    // date field and two of its own. Same blind spot, third instance: it is
+    // reached by pressing „Obnovi" on one row, so the panel's own frame shows
+    // the list and never this.
+    id: "calendar-documents-renew",
+    module: "calendar",
+    prepare: OPEN_CREATE_FORM({
+      path: ["text:Dokumenta"],
+      open: ".documents__renew-start",
+      // The ROW, not the renewal line inside it. What is waited for is also
+      // what is scrolled to the top of the frame, and scrolling to the line
+      // cut its own row's title off above the fold — the frame then showed a
+      // renewal for a document it did not name.
+      expect: ".nx-list-row:has(.documents__renew)",
+    }),
+    fanout: null,
+    cleanup: CLICK_THEN(".documents__renew-cancel"),
+  },
   { id: "notes", module: "notes" },
   {
     // „Ritam pisanja" — the heatmap, its caption and its legend.
