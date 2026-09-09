@@ -75,7 +75,24 @@ overrides:
   # ordinary resolution reaches 4.3.1 on its own — the entry exists because the
   # two halves of the tree otherwise settle on one shared 4.3.0 and the build
   # half keeps it there. Retires when nothing resolves below 4.3.1.
-  js-yaml@4: ^4.3.1
+  #
+  # 2026-09-09 — RAISED to 4.3.2 for a SECOND advisory cut on the same feature:
+  # GHSA-2883-xcg3-v3hh, where `maxTotalMergeKeys` does not bound CPU for EMPTY
+  # merge sources. The budget counts keys it copies, so an anchor holding N
+  # empty mappings merged into K targets is O(N*K) work at zero cost to the
+  # counter — 500 KB of YAML for 13 s of CPU. `^4.3.1` already admitted 4.3.2
+  # by caret and the lockfile still would not have moved, which is the quiet
+  # way an override goes stale while looking correct (`nanoid`'s note below
+  # says the same thing about the same mechanism).
+  #
+  # Two advisories now, both on the YAML 1.1 merge machinery and both the same
+  # shape — a guard that measures the wrong quantity — which is a subsystem
+  # finding rather than two bugs. It stays overridden rather than removed
+  # because `electron-updater` reads only the update feed WE publish; there is
+  # no path from a user's document to this parser. 4.3.2 is the `v4-legacy`
+  # tag, and 5.x is a separate major nothing in the tree asks for. Retires when
+  # nothing resolves below 4.3.2.
+  js-yaml@4: ^4.3.2
   # GHSA-4cwx-7wf7-3272 — cross-user information disclosure and a parse-time
   # crash via degenerate private cache directives. Build-time only, through
   # electron-builder's fetch path. 6.x is a separate line with its own tree and
@@ -164,6 +181,35 @@ overrides:
   # functions and none of the changed ones; the suites are what prove it.
   # Retires when chevrotain's own range reaches 4.18.
   lodash-es: ^4.18.1
+  # EIGHT advisories, all cut on the same parser within a day of each other
+  # (2026-09-08/09) and all patched by one release: GHSA-w2rr-34g9-rvrj and
+  # GHSA-4w3w-2rp5-g8jm are `requireWellFormed` bypasses through
+  # `createElement`/`setAttribute` (patched 0.8.14); GHSA-c7q8-3ch8-vqpv and
+  # GHSA-27p8-2357-5qqv are the same bypass through a processing-instruction
+  # target and a DocType name, and GHSA-8344-3jmq-59r6, GHSA-x4fp-j954-r2f4,
+  # GHSA-965w-775f-mr7g and GHSA-93r5-fhx6-vmg9 are quadratic time or memory in
+  # attribute deduplication, the end-tag trim regex, ordinary parsing and the
+  # malformed-input recovery path (all patched 0.8.15).
+  #
+  # Build-time only, and reached only one way: electron-builder >
+  # app-builder-lib > plist, which reads and writes the property lists
+  # electron-builder itself generates. Two of the three dependants
+  # (@electron/osx-sign, @electron/universal) are macOS packaging and never
+  # execute in this repo's builds at all. Neither reachable condition exists
+  # here — nothing builds a document from untrusted input, and no XML this repo
+  # parses comes from anywhere but its own build — but SEC-VER-03 blocks on the
+  # advisory rather than on my reading of it, and the patch is a lockfile bump
+  # away.
+  #
+  # `tar`'s and `browserslist`'s mechanism exactly: `plist` asks for `^0.8.8`,
+  # which has admitted 0.8.15 since the day it was published, so a clean
+  # install with no lockfile lands on the fix by itself. What does not move is
+  # the lockfile — 0.8.13 still satisfies `^0.8.8`, and a resolved version that
+  # still satisfies its range is never re-resolved. 0.8.15 is the `lts` tag;
+  # the 0.9 line is a separate release train with its own vulnerable range
+  # (patched at 0.9.12) that nothing here asks for. Retires when the lockfile's
+  # own resolution clears 0.8.15.
+  "@xmldom/xmldom@0.8": ^0.8.15
 
 # One four-line patch, and it is a TYPES bug rather than a code one. 13.0.3
 # added an `exports` map whose `"."` is a bare `"./lib/index.js"` with no
