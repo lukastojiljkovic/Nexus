@@ -26,9 +26,9 @@
  *  - `below-fold`     a region marked `data-nx-content` — the thing a module
  *                     is FOR — that does not reach the first screen of a
  *                     page nobody has expanded anything on
- *  - `hollow-fixture` a page-sized empty state under a summary band reporting
- *                     a non-zero figure — the page counting N of something and
- *                     then showing none of it
+ *  - `hollow-fixture` a module's content region holding nothing but an empty
+ *                     state while the summary band above it reports a non-zero
+ *                     figure — the module counting N and showing none of it
  *
  * The script is a string rather than an imported module because it is evaluated
  * in the RENDERER's world through `executeJavaScript`, where the main process's
@@ -504,7 +504,7 @@ export const AUDIT_SCRIPT = `(() => {
     }
   }
 
-  // --- A page that counts N of something and then shows none of it ----------
+  // --- A module counting N of something and showing none of it --------------
   //
   // The one rule here that is not geometric, and it is here because the defect
   // it names ([[DC-124]]) is invisible to every rule that is. ZADACI was
@@ -516,28 +516,74 @@ export const AUDIT_SCRIPT = `(() => {
   //
   // The evidence was inside the picture the whole time. Every one of those
   // frames carried „OTVORENO 40" across the top and „Nema zadataka" underneath,
-  // and nothing compared the two. So: a page-sized empty state on a page whose
-  // own summary band reports a non-zero figure is either a fixture that never
-  // reached the state it was pointed at, or a page contradicting itself. Both
-  // are worth a line in the report.
+  // and nothing compared the two. So: a module whose CONTENT REGION holds
+  // nothing but an empty state, under a summary band reporting a non-zero
+  // figure, is either a fixture that never reached the state it was pointed at
+  // or a page contradicting itself. Both are worth a line in the report.
   //
-  // \`--inline\` is excluded, and that is the whole reason \`EmptyState\` has a
-  // variant: an inline empty is ONE list inside a populated page („Danas još
-  // nema upisanih obroka" on a dashboard card), which is a page working
-  // correctly and would otherwise fire on every FIT and DASH frame.
+  // The region is \`data-nx-content\` — the same marker \`below-fold\` reads, a
+  // module saying out loud which box it is FOR. The first version of this rule
+  // asked instead whether the page held ANY page-sized empty state, and that
+  // is a different question with a different answer: it fired on BELEŠKE,
+  // whose editor pane says „Nijedna beleška nije izabrana" beside a list of
+  // 52, and on FIT, whose „Moje vežbe" is empty because the catalogue covers
+  // most of it and whose own copy says exactly that. Neither is showing none
+  // of what it counted; each is one empty BOX inside a populated page, which
+  // is what an empty state is for. Being the region's only content is the
+  // whole claim, so that is what is asked — and it needs no allowlist,
+  // because a page with a populated pane beside the empty one fails it by
+  // construction.
+  //
+  // A \`<form>\` and a \`<button>\` are stepped over on the way up, because an
+  // affordance to ADD something is not something the region is SHOWING. That
+  // is not a refinement anybody guessed: the first sole-content version was
+  // dead on arrival at the very frame it was written for, since
+  // \`tasks-new-section\` photographs the rows box with the section composer
+  // open inside it, and a rule that cannot fire is worse than no rule. It was
+  // caught by pointing the scene back at the empty list on purpose and
+  // demanding the finding.
+  //
+  // The cost is honest: a module that has never declared a content region is
+  // out of reach of this rule exactly as it is out of reach of \`below-fold\`.
+  // The answer to that is a marker on the module, not a heuristic about which
+  // box on an arbitrary page was supposed to be holding the rows.
+  //
+  // \`--inline\` is excluded even inside the region, and that is the whole
+  // reason \`EmptyState\` has a variant: an inline empty is ONE list inside a
+  // populated box („Danas još nema upisanih obroka" on a dashboard card).
   //
   // Counting DIGITS rather than parsing a number is deliberate: Serbian sets
   // „1.234,56", so every locale-aware parse is a second place to be wrong about
   // separators, and the question asked here is only „is this figure zero".
-  const pageEmpty = document.querySelector(".nx-empty:not(.nx-empty--inline)");
-  if (pageEmpty !== null) {
-    const figures = Array.prototype.slice.call(document.querySelectorAll(".nx-stat__value"));
-    for (const figure of figures) {
-      const digits = (figure.textContent || "").replace(/[^0-9]/g, "");
-      if (digits === "" || /^0+$/.test(digits)) continue;
-      add("hollow-fixture", pageEmpty, figure, Number(digits.slice(0, 9)));
-      break;
+  const digitsOf = (node) => (node.textContent || "").replace(/[^0-9]/g, "");
+  const isSoleContentOf = (node, region) => {
+    let child = node;
+    while (child !== region) {
+      const parent = child.parentElement;
+      if (parent === null) return false;
+      const siblings = parent.children;
+      for (let index = 0; index < siblings.length; index += 1) {
+        const sibling = siblings[index];
+        if (sibling === child) continue;
+        if (sibling.tagName === "FORM" || sibling.tagName === "BUTTON") continue;
+        const box = sibling.getBoundingClientRect();
+        if (box.width > 0 && box.height > 0) return false;
+      }
+      child = parent;
     }
+    return true;
+  };
+  const regions = Array.prototype.slice.call(document.querySelectorAll("[data-nx-content]"));
+  const figures = Array.prototype.slice.call(document.querySelectorAll(".nx-stat__value"));
+  for (const region of regions) {
+    const empty = region.querySelector(".nx-empty:not(.nx-empty--inline)");
+    if (empty === null || !isSoleContentOf(empty, region)) continue;
+    const figure = figures.find(
+      (node) => digitsOf(node) !== "" && !/^0+$/.test(digitsOf(node)),
+    );
+    if (figure === undefined) break;
+    add("hollow-fixture", empty, figure, Number(digitsOf(figure).slice(0, 9)));
+    break;
   }
 
   return findings;
