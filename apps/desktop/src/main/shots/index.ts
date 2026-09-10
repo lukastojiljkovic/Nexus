@@ -166,26 +166,33 @@ export const SHOT_SCENES: readonly ShotScene[] = [
   },
   {
     // „Nova sekcija" is the one TASK create form with a precondition: it is
-    // drawn only for a SELECTED list, and the scenes above leave the rail on a
-    // smart view. So the path chooses a list first — and the form then renders
-    // under that list's last group, which is what the scroll is for.
+    // drawn only for a SELECTED list. `OPEN_FIRST_TASK_LIST` on the `tasks`
+    // scene above has already selected one, and a module that is already open
+    // is not remounted, so that selection is still the one on the rail when
+    // this scene runs — the form renders under its last group, which is what
+    // the scroll is for.
     //
-    // The path is child-scoped, not just `.tasks__rail-list`. That class is
-    // worn by BOTH kinds of rail row — the five Pregledi and the real lists —
-    // because they are the same object to the eye and to the stylesheet, and
-    // the Pregledi are drawn first. The short selector therefore chose „Danas",
-    // which selects a smart view, which is precisely the state that removes the
-    // button this scene came to press. Real lists are direct children of
-    // `.tasks__rail`; the smart rows are inside `.tasks__rail-views`.
+    // It used to select the list itself, with a path of
+    // `.tasks__rail > .tasks__rail-row .tasks__rail-list`, and that path
+    // UNDID the selection it was standing in for: the first real list is
+    // „Inbox", the demo files all forty of its tasks into the lists below it,
+    // and so the one TASK form that needs a populated list was photographed
+    // against „Nema zadataka" for its whole life. That is [[DC-124]] again,
+    // one scene further in, and the audit's `hollow-fixture` rule is what
+    // finally said so.
+    //
+    // The dropped path is worth keeping in the record, because the selector
+    // was hard-won: `.tasks__rail-list` is worn by BOTH kinds of rail row —
+    // the five Pregledi and the real lists — since they are the same object
+    // to the eye and to the stylesheet, and the Pregledi are drawn first, so
+    // the short selector chose „Danas", which selects a smart view, which is
+    // precisely the state that removes the button this scene came to press.
     //
     // LAST of the three, because it is the only one that leaves the module in a
     // different state than it found it.
     id: "tasks-new-section",
     module: "tasks",
-    prepare: OPEN_CREATE_FORM({
-      path: [".tasks__rail > .tasks__rail-row .tasks__rail-list"],
-      open: ".tasks__new-section",
-    }),
+    prepare: OPEN_CREATE_FORM({ open: ".tasks__new-section" }),
     fanout: null,
     cleanup: CLICK_THEN("text:Otkaži"),
   },
