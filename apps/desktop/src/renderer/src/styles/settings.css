@@ -474,53 +474,29 @@
   font-size: var(--nx-font-size-body-sm);
 }
 /* SET §5: „Vrati na podrazumevano“ at the foot of a device-preference card.
-   Typographic and muted like `.nx-disclosure` — an undo is available, not
-   advertised — and self-aligned so it sits under the controls it undoes rather
-   than stretching across the card. No border, no fill: a bordered control here
-   would read heavier than the settings it resets.
+   `Button variant="quiet"` carries the whole look — typographic, muted, no
+   border, no fill, and the pointer floor that the hand-rolled version under
+   this comment kept restoring by hand. What is left here is the one thing
+   the primitive cannot know: WHERE this button sits.
 
-   It is deliberately NOT an `nx-button`, and therefore does not inherit that
-   primitive's 24px floor: `@nexus/ui` has no quiet/link variant, and every
-   bordered variant it does have reads louder than the settings this undoes.
-   The floor is restored here by hand — `min-height` plus a negative inline
-   margin, so the target grows without the label drifting off the card's left
-   edge. THIS IS THE LAST HAND-ROLLED QUIET BUTTON ON THE PAGE: the two that
-   had a triangle are `Disclosure` now, which leaves this one and `.fin__quiet`
-   waiting on the `Button` variant they actually want. */
+   Nothing else remains of the block that stood here. It declared the quiet
+   idiom in full, and so did `.fin__quiet` and `.onb__quiet`, and all three
+   said in their own comments that they were waiting on the variant. */
 .set__reset {
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-  /* One step clear of the last control, so it reads as the card's foot rather
+  /* Under the controls it undoes rather than stretched across the card, and
+     one step clear of the last of them so it reads as the card's foot rather
      than as one more caption in the stack. */
-  margin: var(--nx-space-1) 0 0 calc(-1 * var(--nx-space-2));
-  padding: 0 var(--nx-space-2);
-  border: none;
-  border-radius: var(--nx-radius-xs);
-  background: transparent;
-  color: var(--nx-text-muted);
-  font: inherit;
-  font-size: var(--nx-font-size-body-sm);
-  cursor: pointer;
-  transition: color var(--nx-motion-fast) var(--nx-motion-ease);
-}
-.set__reset:hover {
-  color: var(--nx-text);
-}
-.set__reset:focus-visible {
-  outline: 2px solid var(--nx-accent);
-  outline-offset: 2px;
+  align-self: flex-start;
+  margin-top: var(--nx-space-1);
 }
 /* Both disclosures on this page — „Šta se izvozi" (IMEX-003) and the licence
-   list — are `Disclosure` from `packages/ui` now. The rule this comment used
-   to carry is still true and is still only half done: the shared `Button` has
-   only BORDERED variants, so a quiet text button (`.set__reset`, and
-   `.fin__quiet` in another file) is hand-rolled at each site and each shipped
-   under the 24px pointer floor for the same reason — a `padding: 0` text
-   button is exactly as tall as its own line box. The disclosures were the half
-   with a triangle and their own semantics; the plain quiet button is a
-   `Button` variant and is recorded in `docs/STATUS.md`, not invented here. */
+   list — are `Disclosure` from `packages/ui`, and the plain quiet buttons are
+   `Button variant="quiet"`. That closes the rule this comment carried in two
+   halves: the half with a triangle and its own semantics, and the half that
+   is only a control reading as a line of text. Every hand-rolled copy of the
+   second shipped under the 24px pointer floor for one reason — a `padding: 0`
+   text button is exactly as tall as its own line box — and the variant states
+   the floor once, where no call site can drop it. */
 /* One row per module while there is width for it, then as many as fit. */
 .set__module-picker {
   display: flex;

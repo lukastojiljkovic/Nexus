@@ -882,24 +882,24 @@ export function Onboarding({
               </Button>
             </div>
 
-            {/* Quiet and typographic, the `.set__reset` idiom: an exit is
+            {/* Quiet and typographic, `Button variant="quiet"`: an exit is
                 available, not advertised. A first run skips (and prepares with
                 what it has); a rerun cancels (and writes nothing). */}
             {rerun ? (
               onCancel !== null && (
-                <button type="button" className="onb__quiet" onClick={onCancel}>
+                <Button variant="quiet" className="onb__quiet" onClick={onCancel}>
                   {s.cancel}
-                </button>
+                </Button>
               )
             ) : (
-              <button
-                type="button"
+              <Button
+                variant="quiet"
                 className="onb__quiet"
                 disabled={!nameValid}
                 onClick={() => void runPrepare()}
               >
                 {s.skip}
-              </button>
+              </Button>
             )}
           </form>
         )}
@@ -957,9 +957,9 @@ export function Onboarding({
             >
               {s.reveal.enter}
             </Button>
-            <button type="button" className="onb__quiet" onClick={openManual}>
+            <Button variant="quiet" className="onb__quiet" onClick={openManual}>
               {s.reveal.advanced}
-            </button>
+            </Button>
           </div>
         )}
 

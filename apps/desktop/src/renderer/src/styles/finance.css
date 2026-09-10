@@ -73,16 +73,6 @@
   align-self: flex-start;
   flex: none;
 }
-/* Every quiet ghost on this page — cancel, dismiss, „Poništi filtere". */
-.fin__quiet.nx-button {
-  background: transparent;
-  border-color: transparent;
-  color: var(--nx-text-muted);
-}
-.fin__quiet.nx-button:hover:not(:disabled) {
-  background: var(--nx-surface-alt);
-  color: var(--nx-text);
-}
 .fin__error {
   margin: 0;
   font-size: var(--nx-font-size-body-sm);

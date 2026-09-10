@@ -2012,7 +2012,7 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
                 <Button type="submit" size="sm" variant="primary">
                   {s.accounts.save}
                 </Button>
-                <Button type="button" size="sm" className="fin__quiet" onClick={closeAccountEditor}>
+                <Button type="button" size="sm" variant="quiet" onClick={closeAccountEditor}>
                   {s.accounts.cancel}
                 </Button>
               </div>
@@ -2066,12 +2066,7 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
                   <Button type="submit" size="sm" variant="primary">
                     {s.accounts.save}
                   </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="fin__quiet"
-                    onClick={closeCategoryEditor}
-                  >
+                  <Button type="button" size="sm" variant="quiet" onClick={closeCategoryEditor}>
                     {s.accounts.cancel}
                   </Button>
                 </div>
@@ -2115,7 +2110,7 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
               </Button>
               <Button
                 size="sm"
-                className="fin__quiet"
+                variant="quiet"
                 aria-label={s.dismiss}
                 title={s.dismiss}
                 onClick={() => setPendingUndo(null)}
@@ -2273,7 +2268,7 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
                         <Button type="submit" variant="primary">
                           {s.subscriptions.save}
                         </Button>
-                        <Button type="button" className="fin__quiet" onClick={closeSubForm}>
+                        <Button type="button" variant="quiet" onClick={closeSubForm}>
                           {s.subscriptions.cancel}
                         </Button>
                       </div>
@@ -2354,11 +2349,7 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
                   <Icon name="chevronRight" size={14} />
                 </Button>
                 {monthKey !== currentMonthKey && (
-                  <Button
-                    size="sm"
-                    className="fin__quiet"
-                    onClick={() => setMonthKey(currentMonthKey)}
-                  >
+                  <Button size="sm" variant="quiet" onClick={() => setMonthKey(currentMonthKey)}>
                     {s.report.thisMonth}
                   </Button>
                 )}
@@ -2431,7 +2422,7 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
                 </Button>
                 <Button
                   size="sm"
-                  className="fin__quiet"
+                  variant="quiet"
                   aria-expanded={importOpen}
                   onClick={() => setImportOpen((open) => !open)}
                 >
@@ -2499,7 +2490,7 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
                   {filtersActive && (
                     <Button
                       size="sm"
-                      className="fin__quiet"
+                      variant="quiet"
                       onClick={() => {
                         setSelectedAccountId(null);
                         setCategoryFilter(CATEGORY_FILTER_ALL);
@@ -2645,7 +2636,7 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
                     <Button type="submit" variant="primary" disabled={liveAccounts.length === 0}>
                       {editingId === null ? s.form.submitAdd : s.form.submitSave}
                     </Button>
-                    <Button type="button" className="fin__quiet" onClick={closeForm}>
+                    <Button type="button" variant="quiet" onClick={closeForm}>
                       {s.form.cancel}
                     </Button>
                   </div>

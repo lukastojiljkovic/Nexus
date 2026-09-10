@@ -322,14 +322,16 @@ interface ResetTarget {
 /**
  * The quiet link at the foot of a resettable card. Typographic and muted,
  * exactly like `Disclosure` without the triangle — a reset is available, not
- * advertised — and a plain `<button>` rather than an `nx-button`, since a
- * bordered control here would read heavier than the settings it undoes.
+ * advertised — and a plain `<button>` for as long as `Button` had only
+ * bordered variants, since a bordered control here would read heavier than
+ * the settings it undoes. It has `quiet` now, so the class keeps only where
+ * this one SITS: the primitive owns the look and the pointer floor.
  */
 function ResetLink({ onClick }: { onClick: () => void }) {
   return (
-    <button type="button" className="set__reset" onClick={onClick}>
+    <Button variant="quiet" className="set__reset" onClick={onClick}>
       {strings.settings.reset.action}
-    </button>
+    </Button>
   );
 }
 
@@ -4883,8 +4885,8 @@ function SetupSection({ profileId, flags, registry, hits, onRerunOnboarding }: S
           <p className={labelClass("nx-hint", hits.has("setup-forget"))}>
             {s.forgetHint}
           </p>
-          <button
-            type="button"
+          <Button
+            variant="quiet"
             className="set__reset"
             onClick={() => {
               clearStoredSignals(profileId);
@@ -4892,7 +4894,7 @@ function SetupSection({ profileId, flags, registry, hits, onRerunOnboarding }: S
             }}
           >
             {s.forget}
-          </button>
+          </Button>
         </>
       )}
     </>
