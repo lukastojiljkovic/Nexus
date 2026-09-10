@@ -1197,10 +1197,16 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
           being about the whole profile regardless of which folder is selected.
 
           FOLDED, and closed until this machine says otherwise. Drawn out, the
-          band and the heatmap are about five hundred pixels, which at the
-          900x600 floor and at the 1120x720 the app opens at left the note list
-          entirely below the fold — a notes page whose first screen has no note
-          on it. `overviewPrefs.ts` has the whole argument. */}
+          band and the heatmap are about five hundred pixels: at the 1120x720
+          the app opens at that leaves the list a sliver with no row in it, and
+          at the 900x600 floor it leaves it NOTHING — a notes page whose first
+          screen has no note on it. `overviewPrefs.ts` has the whole argument.
+
+          „Entirely below the fold" is what this said of both, and it was wrong
+          in the way that matters: `.note` is a flex item, so it was CRUSHED
+          rather than pushed down, and a crushed item has no box, no scrollbar
+          and nothing to scroll to. It carries a floor now (`notes.css`), which
+          is what makes the sentence true. */}
       <Disclosure
         label={strings.app.overviewToggle}
         open={overviewOpen}

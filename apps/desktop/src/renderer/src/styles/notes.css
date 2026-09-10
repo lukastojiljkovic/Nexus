@@ -42,7 +42,28 @@
 .note {
   position: relative;
   flex: 1;
-  min-height: 0;
+  /* WHY A FLOOR AND NOT `min-height: 0`, the same argument `.cal__grid` makes.
+     `min-height: 0` is what lets the three panes scroll internally — a flex
+     item's automatic minimum is its content — and with nothing else on the
+     page there is nothing for it to cost. „Pregled" is the something else:
+     drawn out, the band and the heatmap are about five hundred pixels, and at
+     the 900x600 the app ENFORCES that leaves this grid a height of ZERO. Not
+     below the fold, which is what the comment beside the disclosure in
+     `NotesPage.tsx` used to say and what a reader would assume — a crushed
+     flex item has no box at all, so there is no scrollbar and nothing to
+     scroll to. The note list simply is not on the page, in a notes app, and
+     the only way back is to fold the panel again.
+
+     The floor makes the failure „the page scrolls" instead of „the module
+     disappears": below it `.app__main`, which is a scroller, takes over.
+     320px is measured off the shipped list rather than picked — the „Nova
+     beleška" button, the view switch, a section head and three rows at the
+     73px pitch a two-line title with its meta actually draws at.
+
+     Found by the audit's `hollow-fixture` rule at `min` in both themes: the
+     region says „Nijedna beleška nije izabrana" while the band above it counts
+     52. It is the only size where it fires, which is the shape of the defect. */
+  min-height: 320px;
   display: grid;
   grid-template-columns:
     var(--nx-layout-rail)
