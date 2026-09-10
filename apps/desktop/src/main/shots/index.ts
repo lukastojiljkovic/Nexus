@@ -800,6 +800,21 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     prepare: SCROLL_TO(".set__llm-answer", "center"),
     fanout: null,
   },
+  {
+    // „Vrati na podrazumevano" — the foot of a resettable card, and the app's
+    // quiet button in the place it is used most. It sits BELOW the controls it
+    // undoes, which is exactly why no frame had ever held one: a settings
+    // frame shows the top of a card, and this is the last line of it.
+    //
+    // The anchor is the button, not its section, for the same reason
+    // `settings-import-llm`'s is the answer box: scrolling to the card would
+    // photograph the settings and leave the control this scene is named after
+    // as unseen as it was.
+    id: "settings-reset",
+    module: "settings",
+    prepare: SCROLL_TO(".set__reset", "center"),
+    fanout: null,
+  },
 
   // --- Overlays -------------------------------------------------------------
   // Surfaces with no sidebar row of their own. Each opens something, is
