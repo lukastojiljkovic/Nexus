@@ -38,6 +38,16 @@ import { AUDIT_SCRIPT, type AuditFinding } from "./audit.js";
 /** The switcher every page builds its sub-views out of (`.nx-segmented`). */
 const DEFAULT_FANOUT = ".nx-segmented__option";
 
+/**
+ * The fan-out re-reads the page after every click rather than walking a list it
+ * captured once, so its loop is bounded by a count rather than by a length. The
+ * ceiling is a guard, not a budget: each round marks exactly one label seen, and
+ * the widest switcher in the product offers eighteen. Reaching it means the page
+ * is producing labels faster than the walk consumes them, which is a defect and
+ * is reported rather than met with a silently truncated set of frames.
+ */
+const MAX_FANOUT_ROUNDS = 64;
+
 export interface ShotScene {
   /** File-name stem, and the name the report refers to the surface by. */
   readonly id: string;
@@ -2079,6 +2089,35 @@ async function fanoutOptions(win: BrowserWindow, selector: string): Promise<Fano
  * A label is a stable address in a way an index is not, and it is the SAME
  * value the frame is named after, so the name and the picture cannot disagree.
  */
+/**
+ * Put one option into the state the walk needs it in, and say so when it will
+ * not go.
+ *
+ * `want` is the whole reason this is not one more `clickFanout`. Restoring a
+ * VIEW means „make this active" and must not press an option that already is —
+ * pressing an active toggle turns it off. Leaving a MODE means „make this
+ * inactive" and must press exactly the option that is still on. One predicate,
+ * two intents, and reading the page again before deciding is what keeps them
+ * apart: the click before this one may already have brought the option along.
+ */
+async function press(
+  win: BrowserWindow,
+  selector: string,
+  scene: string,
+  label: string,
+  want: boolean,
+): Promise<void> {
+  const options = await fanoutOptions(win, selector);
+  const target = options.find((option) => option.label === label);
+  if (target !== undefined && target.active === want) return;
+  if (target === undefined || !(await clickFanout(win, selector, label))) {
+    process.stderr.write(
+      `shots: scene "${scene}" could not ${want ? "return to" : "leave"} "${label}"
+`,
+    );
+  }
+}
+
 async function clickFanout(win: BrowserWindow, selector: string, label: string): Promise<boolean> {
   const clicked = await evalIn(
     win,
@@ -2366,7 +2405,7 @@ async function sweep(
         // remembered to list here.
         const selector = scene.fanout === undefined ? DEFAULT_FANOUT : scene.fanout;
         if (selector !== null) {
-          const options = await fanoutOptions(win, selector);
+          const opening = await fanoutOptions(win, selector);
           // A fan-out that matches NOTHING is the quietest way for this sweep
           // to be wrong: the scene still produces its one frame, the run still
           // says „OK", and a whole module's sub-views are simply missing from
@@ -2374,7 +2413,7 @@ async function sweep(
           // scene that genuinely has no switcher says so with `fanout: null`
           // and never reaches this line, so an empty match here is always a
           // selector that has gone stale.
-          if (options.length === 0) {
+          if (opening.length === 0) {
             process.stderr.write(
               `shots: scene "${scene.id}" found nothing to fan out (${selector})
 `,
@@ -2384,74 +2423,95 @@ async function sweep(
           // just captured — so it is the one the sweep skips. Falling back to
           // the first when nothing is marked keeps every switcher that states
           // no pressed state working exactly as it did.
-          const home = options.find((option) => option.active) ?? options[0];
-          // What is on screen right now, which is not the same as `home` after
-          // the first exclusive click. It is what tells a MODE apart from a
-          // VIEW below, and it is read from the page rather than declared here.
-          let showing = home;
-          for (const option of options) {
-            if (option === home) continue;
+          const landing = opening.find((option) => option.active) ?? opening[0];
+          // A SCENE LEAVES THE SWITCHER WHERE IT FOUND IT — AFTER EVERY OPTION,
+          // NOT ONLY AT THE END.
+          //
+          // The walk used to enumerate once and then click its way along that
+          // list, returning home when it was done. Two things follow from
+          // that, and both shipped. The persisted-preference one is why the
+          // final click exists at all: several of these switchers remember
+          // where they were left, „Kalendar" opens on „Mesec", the month grid
+          // is its whole point, and because the first pass ended on „Ljudi" the
+          // month grid appeared in exactly ONE of 2 423 frames. The same
+          // unevenness reached the fan-out itself — „Ljudi" has no source row
+          // and no create form, so one scene enumerated eighteen options at one
+          // size and six at the next, with nothing saying so.
+          //
+          // The second is [[DC-127]]'s other half, and returning home at the
+          // END cannot answer it: a page can hold TWO switchers wearing one
+          // class. FINANSIJE does — „Knjiga / Izveštaj / Pretplate" in the
+          // header and „Lista / Kartice" inside the ledger — so clicking
+          // „Izveštaj" takes the ledger's two off the page, and every full
+          // sweep printed „lost the option Lista" while FIN's card view went
+          // unphotographed for as long as the scene has existed.
+          //
+          // So the state is re-derived from the page each round, one unseen
+          // option is walked, and whatever the click displaced is put back
+          // before the next: a nested switcher is on the page again by the time
+          // its own options come up. Addressing stays by LABEL throughout
+          // ([[DC-125]]) — the set is re-read, never an index into it.
+          const seen = new Set<string>();
+          if (landing !== undefined) seen.add(landing.label);
+          let walked = false;
+          for (let round = 0; round < MAX_FANOUT_ROUNDS; round += 1) {
+            const options = await fanoutOptions(win, selector);
+            const next = options.find((option) => !seen.has(option.label));
+            if (next === undefined) {
+              walked = true;
+              break;
+            }
+            seen.add(next.label);
+            // A nested switcher has its own active option — the ledger opens on
+            // „Lista" — and it is already in the landing frame.
+            if (next.active) continue;
+            const showing = options.filter((option) => option.active).map((o) => o.label);
             // A label that is no longer on the page is REPORTED. It means the
             // switcher changed shape under the sweep — which is a real thing
             // (TASK's „Izbor" leaves with the list view) and used to be
             // invisible, because an index that pointed at nothing clicked
             // nothing and the frame was taken anyway.
-            if (!(await clickFanout(win, selector, option.label))) {
+            if (!(await clickFanout(win, selector, next.label))) {
               process.stderr.write(
-                `shots: scene "${scene.id}" lost the option "${option.label}" mid-fan-out
+                `shots: scene "${scene.id}" lost the option "${next.label}" mid-fan-out
 `,
               );
               continue;
             }
-            await shoot(`${scene.id}--${slug(option.label)}`);
+            await shoot(`${scene.id}--${slug(next.label)}`);
             // A MODE IS NOT A VIEW, AND ONLY THE PAGE KNOWS WHICH THIS WAS.
             //
-            // The loop's contract is that it leaves the switcher where it found
-            // it, and the one click back to `home` below honours that for a
-            // view — clicking „Lista" replaces „Tabla". It does nothing at all
-            // for a switcher member that toggles INDEPENDENTLY: TASK's „Izbor"
-            // is drawn in the same row, carries the same `aria-pressed`, and
-            // clicking „Lista" afterwards does not turn it off. Whatever the
-            // fan-out switched on stayed on for the rest of the pass, and every
-            // later scene in the module was photographed through it.
+            // Clicking „Lista" replaces „Tabla"; clicking TASK's „Izbor" adds a
+            // batch mode to whatever is showing, carries the same
+            // `aria-pressed` in the same row, and is not turned off by clicking
+            // a view afterwards. Whatever the fan-out switched on stayed on for
+            // the rest of the pass, and every later scene in the module was
+            // photographed through it.
             //
-            // The discriminator is not a list of names: if what was showing
-            // before the click is STILL active, this option did not replace it,
-            // so it added a state and has to be put back. If it did replace it,
-            // this is the view now and the walk carries on from here.
+            // The discriminator is not a list of names but the page's own
+            // answer: whatever was active before the click and is not active
+            // now was DISPLACED, and pressing it names the way back. Nothing
+            // displaced means nothing was replaced — an independent toggle,
+            // undone by pressing it again — unless the switcher marks no state
+            // at all, in which case the landing option is the only address
+            // „back" has.
             const after = await fanoutOptions(win, selector);
-            const replaced = !after.some((o) => o.label === showing?.label && o.active);
-            if (replaced) {
-              showing = option;
-            } else if (!(await clickFanout(win, selector, option.label))) {
-              process.stderr.write(
-                `shots: scene "${scene.id}" could not leave the mode "${option.label}"
-`,
-              );
+            const active = new Set(after.filter((option) => option.active).map((o) => o.label));
+            const displaced = showing.filter((label) => !active.has(label));
+            if (displaced.length > 0) {
+              for (const label of displaced) await press(win, selector, scene.id, label, true);
+            } else if (showing.length === 0 && landing !== undefined) {
+              await press(win, selector, scene.id, landing.label, true);
+            } else {
+              await press(win, selector, scene.id, next.label, false);
             }
           }
-          // A SCENE LEAVES THE SWITCHER WHERE IT FOUND IT.
-          //
-          // The loop above ends on the LAST sub-view, and several of these
-          // switchers are backed by a persisted preference — so the next pass
-          // opened the module there instead of on its default view. The cost
-          // was not one odd frame. „Kalendar" opens on „Mesec", the month grid
-          // is its whole point, and because the first pass ended on „Ljudi" the
-          // month grid appeared in exactly ONE of 2 423 frames: `min/noc`. It
-          // was never photographed at the two larger sizes, never in „Dan", and
-          // the two real findings it carries would have been reported at one
-          // width and called a small-window problem.
-          //
-          // It also made the fan-out itself uneven. „Ljudi" has no source row
-          // and no create form, so the same scene enumerated eighteen options
-          // in the first pass and six in the next — the sweep photographing a
-          // different set of surfaces at each size, with nothing saying so.
-          //
-          // One click back to the first option costs one navigation per scene
-          // per pass and makes „the first option is already on screen", which
-          // the loop above asserts, true in every pass rather than only the
-          // first.
-          if (options.length > 1 && home !== undefined) await clickFanout(win, selector, home.label);
+          if (!walked) {
+            process.stderr.write(
+              `shots: scene "${scene.id}" still had new options after ${MAX_FANOUT_ROUNDS} rounds
+`,
+            );
+          }
         }
 
         if (scene.cleanup !== undefined) {
