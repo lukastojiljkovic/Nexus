@@ -33,6 +33,46 @@
  * measure straight back, which is the shape a fold is supposed to remove. None
  * of the twenty-nine rules the fold did absorb declared a family.
  *
+ * HOW THE SENTENCE IS TESTED, which is not the same question as whether its
+ * words are right. The two halves above were unit-tested in both directions from
+ * the start — `classesDeclaringTheTier` finds a rule, `elementsByClass`
+ * attributes a class to a `<p>` — and the sentence they compose had exactly one
+ * test: `scanRepo()` on the real tree, asserted to be `[]`. That `[]` is the
+ * answer this tree gives AND the answer a join that returns nothing gives, and
+ * no assertion could tell the two apart: a refactor that made the composition
+ * unconditionally silent would have kept this repository entirely green.
+ *
+ * An INVERTED predicate was never the risk here, and why is the useful half: it
+ * would fire on every class the tier is legitimately re-declared for — the
+ * timestamps, the counts, the result labels — and the assertion would have gone
+ * red on the day it landed. Silence is the failure this gate cannot see from the
+ * inside. So `scanRepo(root)` now takes the root it reads, a fixture tree in a
+ * temporary directory can drive the composition, and the census below is
+ * exported beside the verdict.
+ *
+ * THE CENSUS IS NOT A COUNT, and that is deliberate. This gate walks the tree
+ * for two facts — which classes re-declare the tier, and which tags wear them —
+ * and a count of either is INVARIANT under the failure that matters: break the
+ * TSX walk and every CSS declaration is still found, every tag empties, every
+ * row still exists, and „fifty-six declarations of the tier, none on a
+ * paragraph" reads exactly as it does when the walk worked. So a row carries the
+ * fields the verdict is computed FROM — the tags the class was seen on, and
+ * whether it is written beside `nx-hint` — and a test can ask whether the walk
+ * looked at the classes this rule exists to judge, and not only whether it was
+ * quiet.
+ *
+ * TWO CLAUSES THIS TREE HAS NEVER EXERCISED, said plainly so that a green run is
+ * not read as proof of them. Not one class declaring the tier here is written
+ * beside `nx-hint`, so the adoption exclusion has never cleared anything; and not
+ * one is worn by a `<p>` at all — the tier is re-declared for timestamps, counts
+ * and result labels, and a `<span>` claims it legitimately, since an inline box
+ * takes no margin and no measure — so the finding itself has never been produced
+ * by this repository. Sixteen of those fifty-six rows are on a class that no
+ * call site in `apps/` names at all, and they are rows and not omissions on
+ * purpose: „seen on no tag" is a measurement, and a census that dropped them
+ * could not tell that answer from a walk that never opened the file. Both
+ * clauses are exercised by the fixture cases beside this file, and only there.
+ *
  * It does NOT cover:
  *   - `packages/ui/src/styles.css` itself, which is where the tier is declared.
  *   - the eyebrow tier. Sixty-five rules still hand-write uppercase + label
@@ -56,7 +96,12 @@ import { fileURLToPath } from "node:url";
 // exactly like a gate finding nothing.
 import { jsxElements } from "./jsx-elements.mjs";
 
-const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+/**
+ * The repository this gate lives in, and the default both the census and the
+ * verdict read: `scanRepo()` with no argument has to mean the real tree, or a
+ * CI run would be judging whatever fixture was passed last.
+ */
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 /**
  * The tier this gate enforces: the declarations that ARE `.nx-hint`.
@@ -162,8 +207,30 @@ export function elementsByClass(tsx) {
   return byClass;
 }
 
-/** Every class in the live tree that re-declares the tier on a paragraph. */
-export function scanRepo() {
+/**
+ * The census: one row per declaration of the tier in the tree, each carrying the
+ * two facts the verdict is computed from.
+ *
+ * The unit is the DECLARATION and not the class, because that is the unit the
+ * verdict reports and the unit a reader has to open: a class declared in two
+ * stylesheets is two rules, and a finding has always been a `file:line`.
+ *
+ * `tags` is the sorted names of the tags the class was attributed to by
+ * `elementsByClass` — names and not call sites, because a name is the
+ * granularity the rule itself works at („exactly one tag, and it is a `<p>`"),
+ * and a census at a finer grain would be evidence about something the verdict
+ * does not consult. `[]` means the walk read every `.tsx` under `apps/` and the
+ * class is written nowhere under that name.
+ *
+ * `shared` is the other exclusion: `nx-hint` written beside the class in one
+ * className, which is how the app adopts the tier. It is `false` in every row of
+ * the real tree today, so this field is NOT evidence that the exclusion works —
+ * a `carriesShared` that returned nothing would fill the column identically. It
+ * is here because a census is the verdict's INPUTS itemised, and an input left
+ * out is a clause nobody can ask a question about later; the exclusion itself is
+ * pinned by a fixture case beside this file.
+ */
+export function repoTierDeclarations(root = repoRoot) {
   const tags = new Map();
   const carriesShared = new Set();
   for (const file of walk(join(root, "apps"), [".tsx"])) {
@@ -181,33 +248,66 @@ export function scanRepo() {
     }
   }
 
-  const findings = [];
+  const declarations = [];
   for (const file of walk(join(root, "apps"), [".css"])) {
     for (const [cls, line] of classesDeclaringTheTier(readFileSync(file, "utf8"))) {
       const on = tags.get(cls);
-      // Only paragraphs, and at least one of them: a class we cannot see in the
-      // markup is not evidence of anything.
-      if (on === undefined || on.size !== 1 || !on.has("p")) continue;
-      if (carriesShared.has(cls)) continue;
-      findings.push({ file: relative(root, file).split("\\").join("/"), line, cls });
+      declarations.push({
+        file: relative(root, file).split("\\").join("/"),
+        line,
+        cls,
+        tags: on === undefined ? [] : [...on].sort(),
+        shared: carriesShared.has(cls),
+      });
     }
   }
-  return findings;
+  // `readdirSync` order is the filesystem's, not ours, and this is an artifact a
+  // reader and a test both compare. A tie on (file, line) is a selector list,
+  // and `sort` is stable, so those keep the order the stylesheet wrote them in.
+  return declarations.sort(
+    (a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : a.line - b.line),
+  );
+}
+
+/**
+ * The verdict over a census, on its own so a fixture can ask it a question
+ * without a repository.
+ *
+ * A declaration is a finding when the class it declares is worn by exactly ONE
+ * tag and that tag is a `<p>`. Both halves are load-bearing and neither is
+ * enough: ink and size alone describe `.nx-disclosure`, which is a BUTTON, and a
+ * `<span>` claims the tier legitimately because an inline box takes neither a
+ * margin nor a measure. A class seen on no tag is not a finding either — a class
+ * we cannot see in the markup is not evidence of anything.
+ */
+export function findings(declarations) {
+  return declarations.filter((d) => d.tags.length === 1 && d.tags[0] === "p" && !d.shared);
+}
+
+/** Every declaration of the tier in `root` — the real tree unless given one. */
+export function scanRepo(root = repoRoot) {
+  return findings(repoTierDeclarations(root));
 }
 
 function main() {
-  const findings = scanRepo();
-  if (findings.length > 0) {
+  const census = repoTierDeclarations();
+  const reports = findings(census);
+  if (reports.length > 0) {
     console.error(
-      `check-tiers: ${findings.length} class(es) re-declare .nx-hint on an element\n` +
+      `check-tiers: ${reports.length} class(es) re-declare .nx-hint on an element\n` +
         "that is only ever a <p>. The explanation tier is declared once, in\n" +
         "packages/ui/src/styles.css, and adopted by putting `nx-hint` on the\n" +
         "element — a surface that needs a variant adds a modifier beside it.\n",
     );
-    for (const f of findings) console.error(`  ${f.file}:${f.line}: .${f.cls}`);
+    for (const f of reports) console.error(`  ${f.file}:${f.line}: .${f.cls}`);
     process.exit(1);
   }
-  console.log("check-tiers: the explanation tier is declared once and adopted.");
+  // The count is on the line, so that a run which read nothing says so instead
+  // of printing the sentence a run which found nothing prints.
+  console.log(
+    `check-tiers: the explanation tier is declared once and adopted ` +
+      `(${census.length} declaration(s) of it read).`,
+  );
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) main();
