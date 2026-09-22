@@ -271,8 +271,23 @@ function validateLimit(limit: number | undefined): number {
   return Math.min(value, MAX_SEARCH_BROWSE_LIMIT);
 }
 
-/** The nine kind-projection views migration 017 defines, read verbatim — never re-spelled — by both `rebuildSearchIndex` below and the migration's own backfill. */
-const SEARCH_SOURCE_VIEWS = [
+/**
+ * The kind-projection views, read verbatim — never re-spelled — by both
+ * `rebuildSearchIndex` below and the migrations' own backfills.
+ *
+ * Nine of them came from migration 017 and the tenth from 070 (circuits). This
+ * array is one of the six places a new kind must be declared — see 070's class
+ * comment for the list — and the one the compiler cannot check: it is a plain
+ * array of strings, so a kind missing here compiles, and `rebuildSearchIndex`
+ * would then rebuild a WEAKER index than the triggers maintain, silently, only
+ * for the user who ran a repair. `searchStore.test.ts` pins the count against
+ * `SEARCH_KINDS` for exactly that reason.
+ *
+ * It is exported so that test can assert the correspondence rather than
+ * restate the list — a hand-kept copy beside a hand-kept original fails by
+ * omission, which is the defect this array has.
+ */
+export const SEARCH_SOURCE_VIEWS = [
   "search_source_task",
   "search_source_event",
   "search_source_note",
@@ -282,6 +297,7 @@ const SEARCH_SOURCE_VIEWS = [
   "search_source_deck",
   "search_source_card",
   "search_source_attachment",
+  "search_source_circuit",
 ] as const;
 
 const SEARCH_ENTRY_COLUMNS =
@@ -308,10 +324,10 @@ const SEARCH_ENTRY_COLUMNS =
  *  2. Empties `search_entries`. Its own `AFTER DELETE` trigger reissues
  *     `DELETE FROM search_fts WHERE rowid = old.id` per row, which is now a
  *     harmless no-op given step 1 already emptied `search_fts`.
- *  3. Re-runs the exact same nine `INSERT INTO search_entries (...) SELECT
- *     ... FROM search_source_<kind>` projections the migration's own
- *     backfill uses (`SEARCH_SOURCE_VIEWS`, read by name only — never
- *     re-spelled), so this function and that backfill can never drift apart.
+ *  3. Re-runs the exact same `INSERT INTO search_entries (...) SELECT
+ *     ... FROM search_source_<kind>` projections the migrations' own
+ *     backfills use (`SEARCH_SOURCE_VIEWS`, read by name only — never
+ *     re-spelled), so this function and those backfills can never drift apart.
  *
  * View names are a fixed, code-level constant array, never user input, so
  * building the `FROM <view>` clause from them is the same trust level as

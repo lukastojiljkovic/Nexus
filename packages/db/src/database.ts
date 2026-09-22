@@ -41,15 +41,40 @@ export function openDatabase(options: OpenDatabaseOptions): NexusDatabase {
       applyEncryptionKey(db, options.encryptionKey);
     }
     assertReadable(db, options.encryptionKey !== undefined);
-    db.pragma("journal_mode = WAL");
-    db.pragma("foreign_keys = ON");
-    registerSearchFold(db);
+    prepareConnection(db);
     runMigrations(db);
   } catch (error) {
     db.close();
     throw error;
   }
   return new NexusDatabase(db);
+}
+
+/**
+ * Everything `openDatabase` does to a fresh handle short of the encryption key
+ * and the migration run: WAL, foreign keys, and `nx_fold`.
+ *
+ * **Why this is exported, and why it is not just for tests.** A connection that
+ * migrates without `nx_fold` fails on any migration that USES it, and two do:
+ * 017's one-time backfill and 070's circuit projection both call it from SQL.
+ * That makes „register the function before migrating" a property of the
+ * migration list rather than of any one migration — so it belongs to exactly one
+ * function instead of to whatever each call site remembers to write.
+ *
+ * It stopped being remembered on 2026-09-22, and the shape is worth keeping:
+ * the rule was written in a comment beside a test helper that opened a second
+ * connection by hand („migration 017's backfill calls `nx_fold`; this two-stage
+ * open has to do the same"), the helpers that read that comment copied the four
+ * lines into twenty places, and the twenty-first — written months later, when no
+ * migration above 64 used the function — did not. Migration 070 then made it
+ * stale, and the failure surfaced as `SqliteError: no such function: nx_fold`
+ * from a test that had nothing to do with circuits. A rule that twenty sites
+ * restate is a rule that fails at the twenty-first; this is the one site.
+ */
+export function prepareConnection(db: DatabaseHandle): void {
+  db.pragma("journal_mode = WAL");
+  db.pragma("foreign_keys = ON");
+  registerSearchFold(db);
 }
 
 /**

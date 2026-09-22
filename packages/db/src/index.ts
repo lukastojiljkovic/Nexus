@@ -3,6 +3,7 @@ export {
   encryptDatabaseInPlace,
   isPlaintextDatabase,
   openDatabase,
+  prepareConnection,
 } from "./database.js";
 export type { OpenDatabaseOptions } from "./database.js";
 
@@ -653,6 +654,7 @@ export {
   DEFAULT_SEARCH_LIMIT,
   MAX_SEARCH_BROWSE_LIMIT,
   MAX_SEARCH_LIMIT,
+  SEARCH_SOURCE_VIEWS,
   TITLE_BM25_WEIGHT,
   rebuildSearchIndex,
 } from "./search/searchStore.js";

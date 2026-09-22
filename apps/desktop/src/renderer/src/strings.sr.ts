@@ -933,8 +933,20 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
   },
 
   modulePlaceholder: {
+    /**
+     * The guard `App.tsx`'s render chain falls through to, for a module the
+     * registry knows and no branch draws.
+     *
+     * It named a RELEASE until 2026-09-22 — „stiže tokom v0 izgradnje" — in a
+     * product at 1.2.0, which is Class A in the one place a version number is
+     * least likely to be re-read: user-facing copy. The sentence says what is
+     * true of any such module on any build instead, and names no version, so it
+     * cannot go stale the same way twice. The second half is the load-bearing
+     * one — a user who meets this page has to be told the rest of the app is
+     * fine, because a screen that says nothing reads as a broken application.
+     */
     description:
-      "Ovaj modul stiže tokom v0 izgradnje. Navigacija je već spremna — sadržaj sledi.",
+      "Modul je u katalogu, ali njegov ekran još nije napravljen. Ostalo u aplikaciji radi normalno.",
   },
 
   tasks: {
@@ -7635,6 +7647,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       deck: "Špil",
       card: "Kartica",
       attachment: "Prilog",
+      circuit: "Kolo",
     },
     kindPlural: {
       task: "Zadaci",
@@ -7646,6 +7659,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       deck: "Špilovi",
       card: "Kartice",
       attachment: "Prilozi",
+      circuit: "Kola",
     },
     /** `searchCommands.ts`'s fixed command list; "Promeni temu" itself reuses `strings.app.themeToggle` rather than duplicating it here. */
     commands: {

@@ -45,7 +45,7 @@ import { HabitsPage } from "./HabitsPage.js";
 import { FocusPage } from "./FocusPage.js";
 import { ToolsPage } from "./ToolsPage.js";
 import { CanvasPage } from "./CanvasPage.js";
-import { ElectronicsPage } from "./ElectronicsPage.js";
+import { ElectronicsPage, type ElecIntent } from "./ElectronicsPage.js";
 import { FitnessPage } from "./FitnessPage.js";
 import { SettingsPage } from "./SettingsPage.js";
 import { formatArchiveInstant } from "./timeFormat.js";
@@ -87,7 +87,24 @@ type PendingIntent =
   | { module: "calendar"; intent: CalendarIntent }
   | { module: "notes"; intent: NotesIntent }
   | { module: "study"; intent: StudyIntent }
-  | { module: "finance"; intent: FinanceIntent };
+  | { module: "finance"; intent: FinanceIntent }
+  | { module: "electronics"; intent: ElecIntent };
+
+/**
+ * The exhaustiveness guard for a switch over a CLOSED union — `never` reaches it
+ * at compile time, so a member added to the union and not to the switch is a
+ * build failure that names the missing case rather than a branch that does
+ * nothing.
+ *
+ * It is here for `onSearchResult`, which switches over `SearchResult["kind"]`,
+ * and that switch spent its whole life without a `default`: the tenth search
+ * kind (circuits, 2026-09-22) was added to the core union, and the compiler had
+ * nothing to say about the result-opening handler, which would simply have
+ * stopped responding for that kind. The throw is unreachable and says so.
+ */
+function assertNever(value: never): never {
+  throw new Error(`Nexus: unhandled case ${String(value)}`);
+}
 
 /**
  * The full search page's `activeId` (ADR-039 §1). Deliberately NOT a registry
@@ -909,6 +926,19 @@ export function App() {
           },
         });
         return;
+      case "circuit":
+        dispatchIntent({
+          module: "electronics",
+          intent: { kind: "reveal", circuitId: result.entityId },
+        });
+        return;
+      default:
+        // A `SearchKind` this switch does not know is a compile error, not a
+        // result that silently does nothing — which is what the ten-kind switch
+        // did before the tenth arrived and would do again for an eleventh. The
+        // parameter is typed `never` here, so adding a kind to `SEARCH_KINDS`
+        // and forgetting this branch fails `pnpm typecheck` by name.
+        assertNever(result.kind);
     }
   }
 
@@ -1682,13 +1712,22 @@ export function App() {
               onOpenRef={openCanvasRef}
             />
           ) : effectiveId === "electronics" && activeProfile ? (
-            // One prop, and no `theme`: the bench is our own SVG over our own
-            // tokens, so it follows `<html data-theme>` like every other surface
-            // in the app. No `intent` pair either — a circuit is made on the
-            // page, from a name, and nothing deep-links into one yet (ELEC is
-            // absent from `searchCommands.ts` for the same reason it is absent
-            // from the search index: a circuit has no `SearchKind`).
-            <ElectronicsPage key={activeProfile.id} profileId={activeProfile.id} />
+            // No `theme`: the bench is our own SVG over our own tokens, so it
+            // follows `<html data-theme>` like every other surface in the app.
+            //
+            // It HAS an `intent` pair now, and it is the search result that
+            // asked for one: the tenth `SearchKind` (migration 070) made a
+            // circuit reachable from the palette and the search page, and a
+            // result that only switched to the module would leave the user
+            // looking at whichever circuit was open. A circuit is still made on
+            // the page, from a name — ELEC publishes no create command — so
+            // „reveal" is the only arm.
+            <ElectronicsPage
+              key={activeProfile.id}
+              profileId={activeProfile.id}
+              intent={pending?.module === "electronics" ? pending.intent : null}
+              onIntentHandled={clearIntent}
+            />
           ) : effectiveId === SEARCH_PAGE_ID && activeProfile ? (
             <SearchPage
               key={activeProfile.id}

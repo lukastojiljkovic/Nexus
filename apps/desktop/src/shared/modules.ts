@@ -5680,11 +5680,15 @@ const V0_MODULES: ModuleManifest[] = [
   // hit inside a board could only say „somewhere on this board", which is not a
   // result anybody can use. A CIRCUIT is not like that: its name is a phrase
   // the user typed for the express purpose of telling this circuit from that
-  // one, and „Trepćuća dioda" in the palette would open exactly the right
-  // thing. What stands in the way is not the argument but the work — a new
-  // `SearchKind` is a migration and a backfill, not a declaration (see
-  // `contracts/search.ts`) — so it is recorded in `docs/STATUS.md` rather than
-  // half-declared here.
+  // one, and „Trepćuća dioda" in the palette opens exactly the right thing.
+  //
+  // That argument was carried out on 2026-09-22 — the kind, the migration and
+  // the backfill are all in (migration 070). The paragraph is left standing
+  // because the reason it gave for the delay is the useful half and it was
+  // right: „a new `SearchKind` is a migration and a backfill, not a
+  // declaration". The declaration is one line in `@nexus/core`; the other five
+  // places a kind has to be named are the index, and `packages/db/src/migrations/
+  // 070-circuit-search.ts` lists them.
   {
     id: "electronics",
     prefix: "ELEC",

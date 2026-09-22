@@ -26,6 +26,11 @@ export const SEARCH_KIND_MODULE: Readonly<Record<SearchKind, string>> = {
   deck: "study",
   card: "study",
   attachment: "notes",
+  // The tenth kind (migration 070) names ELEC, and ELEC is a module with a flag
+  // like any other — so a profile that has switched the workbench off stops
+  // seeing circuits in search automatically, which is the whole point of this
+  // map being the one place the policy lives.
+  circuit: "electronics",
 };
 
 /**

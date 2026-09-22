@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { foldSearchText } from "./searchText.js";
-import type { ParsedSearchQuery } from "./searchQuery.js";
+import { SEARCH_KINDS, type ParsedSearchQuery } from "./searchQuery.js";
 import {
   KIND_PRIOR,
   rankSearchResults,
@@ -134,12 +134,13 @@ describe("rankSearchResults — title boosts", () => {
 });
 
 describe("rankSearchResults — kind prior", () => {
-  it("orders note, task, event, document, subject, exam, deck, card, attachment strictly descending", () => {
+  it("orders the ten kinds strictly descending", () => {
     const order = [
       "note",
       "task",
       "event",
       "document",
+      "circuit",
       "subject",
       "exam",
       "deck",
@@ -150,6 +151,20 @@ describe("rankSearchResults — kind prior", () => {
       const prevKind = order[i - 1]!;
       const kind = order[i]!;
       expect(KIND_PRIOR[prevKind]).toBeGreaterThan(KIND_PRIOR[kind]);
+    }
+  });
+
+  it("is one uniform ladder: every rung exactly one step below the one above it", () => {
+    // The test above passes if somebody adds a tenth kind by halving the gap
+    // between two rungs, and the table is then two scales welded together —
+    // descending, and no longer the thing its own comment describes. The rungs
+    // ARE the scale: one kind per 0.01, from 0.10 down to 0.01, and the count
+    // is `SEARCH_KINDS`'s rather than a number written here.
+    const values = Object.values(KIND_PRIOR).sort((a, b) => b - a);
+    expect(values).toHaveLength(SEARCH_KINDS.length);
+    expect(values[0]).toBeCloseTo(0.1, 10);
+    for (let i = 1; i < values.length; i++) {
+      expect(values[i - 1]! - values[i]!).toBeCloseTo(0.01, 10);
     }
   });
 

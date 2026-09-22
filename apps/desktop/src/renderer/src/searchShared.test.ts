@@ -67,6 +67,10 @@ describe("KIND_QUERY_PREFIX", () => {
       deck: "s",
       card: "k",
       attachment: "pr",
+      // The shortest of the circuit's six aliases, and NOT `k` — that letter is
+      // the card's, and the lookup is by the whole token before the colon, so
+      // the two coexist. `kolo:` and `k:` are two keys, not two matches for one.
+      circuit: "kol",
     });
   });
 });

@@ -15,7 +15,15 @@ import {
   rankForInteger,
   renderClozeCard,
 } from "@nexus/core";
-import { CardStore, MIGRATIONS, NexusDatabase, openDatabase, runMigrations } from "../index.js";
+import {
+  CardStore,
+  MIGRATIONS,
+  NexusDatabase,
+  SEARCH_SOURCE_VIEWS,
+  openDatabase,
+  prepareConnection,
+  runMigrations,
+} from "../index.js";
 
 /**
  * Derived, not spelled out sixteen times over: every migration's own suite
@@ -27,8 +35,8 @@ import { CardStore, MIGRATIONS, NexusDatabase, openDatabase, runMigrations } fro
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 69 (the runner's per-machine settings), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(69);
+  it("is at version 70 (the circuit search kind), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(70);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -1799,11 +1807,7 @@ describe("migration 019 — event reminders", () => {
    */
   function openAtVersion(path: string, version: number): Handle {
     const raw = new Database(path);
-    raw.pragma("journal_mode = WAL");
-    raw.pragma("foreign_keys = ON");
-    raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
-      typeof value === "string" ? foldSearchText(value) : null,
-    );
+    prepareConnection(raw);
     runMigrations(
       raw,
       MIGRATIONS.filter((migration) => migration.version <= version),
@@ -2056,11 +2060,7 @@ describe("migration 021 — task reminders", () => {
   /** As migration 019's own helper: a connection held at exactly `version`, set up the way `openDatabase` sets one up. */
   function openAtVersion(path: string, version: number): Handle {
     const raw = new Database(path);
-    raw.pragma("journal_mode = WAL");
-    raw.pragma("foreign_keys = ON");
-    raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
-      typeof value === "string" ? foldSearchText(value) : null,
-    );
+    prepareConnection(raw);
     runMigrations(
       raw,
       MIGRATIONS.filter((migration) => migration.version <= version),
@@ -2237,11 +2237,7 @@ describe("migration 022 — task lists", () => {
   /** As migration 021's own helper: a connection held at exactly `version`, set up the way `openDatabase` sets one up. */
   function openAtVersion(path: string, version: number): Handle {
     const raw = new Database(path);
-    raw.pragma("journal_mode = WAL");
-    raw.pragma("foreign_keys = ON");
-    raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
-      typeof value === "string" ? foldSearchText(value) : null,
-    );
+    prepareConnection(raw);
     runMigrations(
       raw,
       MIGRATIONS.filter((migration) => migration.version <= version),
@@ -2662,18 +2658,19 @@ describe("migration 024 — task attachments", () => {
 });
 
 describe("migration 025 — task attachment names inside the task's search entry", () => {
-  /** Every view/trigger migration 017 defined, by name — what "leaves every OTHER view and trigger untouched" is measured against. */
-  const SEARCH_VIEWS = [
-    "search_source_task",
-    "search_source_event",
-    "search_source_note",
-    "search_source_document",
-    "search_source_subject",
-    "search_source_exam",
-    "search_source_deck",
-    "search_source_card",
-    "search_source_attachment",
-  ];
+  /**
+   * Every source view in the schema, by name — what "leaves every OTHER view
+   * and trigger untouched" is measured against.
+   *
+   * It is `SEARCH_SOURCE_VIEWS`, READ rather than restated. This list used to be
+   * a hand-kept copy of the nine names migration 017 defines, which is the same
+   * shape as the defect that array exists to prevent: a copy beside an original
+   * fails by omission, and the tenth kind (070) would have had to be remembered
+   * in two files instead of one. The store's own test asserts the array against
+   * `SEARCH_KINDS` and against `sqlite_master`, so what is read here is already
+   * known to be the schema's real set.
+   */
+  const SEARCH_VIEWS = SEARCH_SOURCE_VIEWS;
 
   const objectSql = (db: NexusDatabase, type: string, name: string): string | undefined =>
     (
@@ -4020,11 +4017,7 @@ describe("migration 037 — security notifications", () => {
   /** As every rebuild migration's own helper: a connection held at exactly `version`, set up the way `openDatabase` sets one up. */
   function openAtVersion(path: string, version: number): Handle {
     const raw = new Database(path);
-    raw.pragma("journal_mode = WAL");
-    raw.pragma("foreign_keys = ON");
-    raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
-      typeof value === "string" ? foldSearchText(value) : null,
-    );
+    prepareConnection(raw);
     runMigrations(
       raw,
       MIGRATIONS.filter((migration) => migration.version <= version),
@@ -4188,11 +4181,7 @@ describe("migration 038 — the four task views", () => {
   /** As every rebuild migration's own helper: a connection held at exactly `version`, set up the way `openDatabase` sets one up. */
   function openAtVersion(path: string, version: number): Handle {
     const raw = new Database(path);
-    raw.pragma("journal_mode = WAL");
-    raw.pragma("foreign_keys = ON");
-    raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
-      typeof value === "string" ? foldSearchText(value) : null,
-    );
+    prepareConnection(raw);
     runMigrations(
       raw,
       MIGRATIONS.filter((migration) => migration.version <= version),
@@ -4358,11 +4347,7 @@ describe("migration 039 — a note folder's default view", () => {
   /** As every upgrade test's helper: a connection held at exactly `version`, set up the way `openDatabase` sets one up. */
   function openAtVersion(path: string, version: number): Handle {
     const raw = new Database(path);
-    raw.pragma("journal_mode = WAL");
-    raw.pragma("foreign_keys = ON");
-    raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
-      typeof value === "string" ? foldSearchText(value) : null,
-    );
+    prepareConnection(raw);
     runMigrations(
       raw,
       MIGRATIONS.filter((migration) => migration.version <= version),
@@ -4560,11 +4545,7 @@ describe("migration 040 — profile picture", () => {
   it("upgrades a database written before it, keeping the profile it already held", () => {
     const path = join(dir, "upgrade-040.db");
     const before = new Database(path);
-    before.pragma("journal_mode = WAL");
-    before.pragma("foreign_keys = ON");
-    before.function("nx_fold", { deterministic: true }, (value: unknown) =>
-      typeof value === "string" ? foldSearchText(value) : null,
-    );
+    prepareConnection(before);
     runMigrations(
       before,
       MIGRATIONS.filter((migration) => migration.version < 40),
@@ -4654,11 +4635,7 @@ describe("migration 041 — the default snooze preset", () => {
   it("upgrades a database written before it, leaving the settings it already held on the default", () => {
     const path = join(dir, "upgrade-041.db");
     const before = new Database(path);
-    before.pragma("journal_mode = WAL");
-    before.pragma("foreign_keys = ON");
-    before.function("nx_fold", { deterministic: true }, (value: unknown) =>
-      typeof value === "string" ? foldSearchText(value) : null,
-    );
+    prepareConnection(before);
     runMigrations(
       before,
       MIGRATIONS.filter((migration) => migration.version < 41),
@@ -4767,11 +4744,7 @@ describe("migration 042 — calendar settings", () => {
   it("upgrades a database written before it, leaving the profile with no row", () => {
     const path = join(dir, "upgrade-042.db");
     const before = new Database(path);
-    before.pragma("journal_mode = WAL");
-    before.pragma("foreign_keys = ON");
-    before.function("nx_fold", { deterministic: true }, (value: unknown) =>
-      typeof value === "string" ? foldSearchText(value) : null,
-    );
+    prepareConnection(before);
     runMigrations(
       before,
       MIGRATIONS.filter((migration) => migration.version < 42),
@@ -4870,11 +4843,7 @@ describe("migration 043 — named dashboards (DASH-008 / ADR-055)", () => {
   it("upgrades a database written before it, leaving existing widget rows on the default set", () => {
     const path = join(dir, "upgrade-043.db");
     const before = new Database(path);
-    before.pragma("journal_mode = WAL");
-    before.pragma("foreign_keys = ON");
-    before.function("nx_fold", { deterministic: true }, (value: unknown) =>
-      typeof value === "string" ? foldSearchText(value) : null,
-    );
+    prepareConnection(before);
     runMigrations(
       before,
       MIGRATIONS.filter((migration) => migration.version < 43),
@@ -5397,13 +5366,13 @@ describe("migration 046 — exam topics (ADR-063)", () => {
     const path = join(dir, "rebuild.db");
     const raw = new Database(path);
     try {
-      raw.pragma("journal_mode = WAL");
-      raw.pragma("foreign_keys = ON");
-      // Migration 017's backfill calls `nx_fold`; `openDatabase` registers it
-      // before migrating, and this two-stage open has to do the same.
-      raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
-        typeof value === "string" ? foldSearchText(value) : null,
-      );
+      // The same preparation `openDatabase` gives a first connection — WAL,
+      // foreign keys and `nx_fold` — because a migration that USES the fold
+      // function has to find it registered, and 017's backfill and 070's view
+      // both do. `prepareConnection` is where that rule lives now; this helper
+      // used to restate it, and the helper at the end of this file that did not
+      // is why it no longer can (see `prepareConnection`'s own comment).
+      prepareConnection(raw);
       runMigrations(raw, MIGRATIONS.slice(0, 45));
       const t = "2026-01-01T00:00:00.000Z";
       raw
@@ -5472,11 +5441,7 @@ describe("migration 047 — cloze deletion numbers (ADR-068)", () => {
    */
   function seeded(name: string): Handle {
     const raw = new Database(join(dir, name));
-    raw.pragma("journal_mode = WAL");
-    raw.pragma("foreign_keys = ON");
-    raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
-      typeof value === "string" ? foldSearchText(value) : null,
-    );
+    prepareConnection(raw);
     runMigrations(raw, MIGRATIONS.slice(0, 46));
     raw
       .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES ('p1', 'personal', 'P', ?)")
@@ -5776,11 +5741,7 @@ describe("migration 048 — attachment text search (SRCH-008)", () => {
    */
   function seeded(name: string, through: number): Handle {
     const raw = new Database(join(dir, name));
-    raw.pragma("journal_mode = WAL");
-    raw.pragma("foreign_keys = ON");
-    raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
-      typeof value === "string" ? foldSearchText(value) : null,
-    );
+    prepareConnection(raw);
     runMigrations(raw, MIGRATIONS.slice(0, through));
     raw
       .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES ('p1', 'personal', 'P', ?)")
@@ -6047,11 +6008,7 @@ describe("migration 049 — note categories (NOTE-002)", () => {
   it("leaves every pre-existing note uncategorized when an older database is migrated", () => {
     const raw = new Database(join(dir, "upgrade.db"));
     try {
-      raw.pragma("journal_mode = WAL");
-      raw.pragma("foreign_keys = ON");
-      raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
-        typeof value === "string" ? foldSearchText(value) : null,
-      );
+      prepareConnection(raw);
       runMigrations(raw, MIGRATIONS.slice(0, 48));
       raw
         .prepare(
@@ -6165,11 +6122,7 @@ describe("migration 050 — search history (SRCH-009)", () => {
   it("leaves an older database with an empty history — nothing to backfill from", () => {
     const raw = new Database(join(dir, "upgrade.db"));
     try {
-      raw.pragma("journal_mode = WAL");
-      raw.pragma("foreign_keys = ON");
-      raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
-        typeof value === "string" ? foldSearchText(value) : null,
-      );
+      prepareConnection(raw);
       runMigrations(raw, MIGRATIONS.slice(0, 49));
       raw
         .prepare(
@@ -6511,11 +6464,7 @@ describe("migration 051 — the finance module's ledger (FIN slice a)", () => {
   it("leaves an older database untouched apart from gaining the four empty tables", () => {
     const raw = new Database(join(dir, "fin-upgrade.db"));
     try {
-      raw.pragma("journal_mode = WAL");
-      raw.pragma("foreign_keys = ON");
-      raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
-        typeof value === "string" ? foldSearchText(value) : null,
-      );
+      prepareConnection(raw);
       runMigrations(
         raw,
         MIGRATIONS.filter((migration) => migration.version < 51),
@@ -6638,11 +6587,7 @@ describe("migration 052 — the finance import fingerprint (FIN slice e)", () =>
   it("upgrades a 051 database in place, every existing transaction reading back keyless", () => {
     const raw = new Database(join(dir, "fin-key-upgrade.db"));
     try {
-      raw.pragma("journal_mode = WAL");
-      raw.pragma("foreign_keys = ON");
-      raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
-        typeof value === "string" ? foldSearchText(value) : null,
-      );
+      prepareConnection(raw);
       runMigrations(
         raw,
         MIGRATIONS.filter((migration) => migration.version < 52),
@@ -6913,11 +6858,7 @@ describe("migration 053 — FIN subscriptions (recurring charges, FIN slice d)",
   it("loses NO row to the two table rebuilds — the ADR-042 hazard, re-checked here", () => {
     const raw = new Database(join(dir, "rec-rebuild.db"));
     try {
-      raw.pragma("journal_mode = WAL");
-      raw.pragma("foreign_keys = ON");
-      raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
-        typeof value === "string" ? foldSearchText(value) : null,
-      );
+      prepareConnection(raw);
       runMigrations(
         raw,
         MIGRATIONS.filter((migration) => migration.version < 53),
@@ -7040,11 +6981,7 @@ describe("migration 054 — pausing a subscription (ADR-074)", () => {
   it("keeps every generated charge attached to its subscription — no rebuild of a referenced parent", () => {
     const raw = new Database(join(dir, "pause-upgrade.db"));
     try {
-      raw.pragma("journal_mode = WAL");
-      raw.pragma("foreign_keys = ON");
-      raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
-        typeof value === "string" ? foldSearchText(value) : null,
-      );
+      prepareConnection(raw);
       runMigrations(
         raw,
         MIGRATIONS.filter((migration) => migration.version < 54),
@@ -7325,11 +7262,7 @@ describe("migration 056 — the habit reminder as a notification source (HABIT s
   it("loses NO row to the two table rebuilds — the ADR-042 hazard, re-checked at version 55", () => {
     const raw = new Database(join(dir, "habit-rebuild.db"));
     try {
-      raw.pragma("journal_mode = WAL");
-      raw.pragma("foreign_keys = ON");
-      raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
-        typeof value === "string" ? foldSearchText(value) : null,
-      );
+      prepareConnection(raw);
       runMigrations(
         raw,
         MIGRATIONS.filter((migration) => migration.version < 56),
@@ -7459,11 +7392,7 @@ describe("migration 057 — the one focus timer", () => {
   /** As every rebuild migration's own helper: a connection held at exactly `version`. */
   function openAtVersion(path: string, version: number): Handle {
     const raw = new Database(path);
-    raw.pragma("journal_mode = WAL");
-    raw.pragma("foreign_keys = ON");
-    raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
-      typeof value === "string" ? foldSearchText(value) : null,
-    );
+    prepareConnection(raw);
     runMigrations(
       raw,
       MIGRATIONS.filter((migration) => migration.version <= version),
@@ -7967,11 +7896,7 @@ describe("migration 059 — canvas boards (CANV slice a)", () => {
   it("adds the table to a database written at 58, whose rows it leaves untouched", () => {
     const path = join(dir, "canvas-upgrade-058.db");
     const before = new Database(path);
-    before.pragma("journal_mode = WAL");
-    before.pragma("foreign_keys = ON");
-    before.function("nx_fold", { deterministic: true }, (value: unknown) =>
-      typeof value === "string" ? foldSearchText(value) : null,
-    );
+    prepareConnection(before);
     runMigrations(
       before,
       MIGRATIONS.filter((migration) => migration.version <= 58),
@@ -8502,11 +8427,7 @@ describe("migration 060 — FIT training and body", () => {
   it("adds the seven tables to a database written at 59, whose rows it leaves untouched", () => {
     const path = join(dir, "fit-upgrade-059.db");
     const before = new Database(path);
-    before.pragma("journal_mode = WAL");
-    before.pragma("foreign_keys = ON");
-    before.function("nx_fold", { deterministic: true }, (value: unknown) =>
-      typeof value === "string" ? foldSearchText(value) : null,
-    );
+    prepareConnection(before);
     runMigrations(
       before,
       MIGRATIONS.filter((migration) => migration.version <= 59),
@@ -8558,11 +8479,7 @@ describe("migration 062 — every hand-orderable scope ranks instead of counting
   /** A connection held at exactly `version`, set up the way `openDatabase` sets one up. */
   function openAtVersion(path: string, version: number): Handle {
     const raw = new Database(path);
-    raw.pragma("journal_mode = WAL");
-    raw.pragma("foreign_keys = ON");
-    raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
-      typeof value === "string" ? foldSearchText(value) : null,
-    );
+    prepareConnection(raw);
     runMigrations(
       raw,
       MIGRATIONS.filter((migration) => migration.version <= version),
@@ -8778,11 +8695,7 @@ describe("migration 065 — the developer drawer becomes one toolkit of „Stru�
   /** A connection held at exactly `version`, the `openAtVersion` recipe above. */
   function openAt(path: string, version: number): Handle {
     const raw = new Database(path);
-    raw.pragma("journal_mode = WAL");
-    raw.pragma("foreign_keys = ON");
-    raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
-      typeof value === "string" ? foldSearchText(value) : null,
-    );
+    prepareConnection(raw);
     runMigrations(
       raw,
       MIGRATIONS.filter((migration) => migration.version <= version),
@@ -8814,7 +8727,12 @@ describe("migration 065 — the developer drawer becomes one toolkit of „Stru�
   /** Runs 65 alone over a file already at 64 — so what is observed is this migration and nothing else. */
   function upgrade(path: string): Handle {
     const raw = new Database(path);
-    raw.pragma("foreign_keys = ON");
+    // `prepareConnection`, not a bare `foreign_keys` — this helper is the reason
+    // it exists. It was written when no migration above 64 called `nx_fold`, and
+    // 070 (the circuit search kind) made that assumption false: the four lines
+    // every other helper in this file had copied by hand were the four this one
+    // never needed, until the day it did.
+    prepareConnection(raw);
     runMigrations(raw, MIGRATIONS);
     return raw;
   }
@@ -8913,11 +8831,7 @@ describe("migration 066 — what a sync round has to survive being interrupted",
 
   function openAt(path: string, version: number): Handle {
     const raw = new Database(path);
-    raw.pragma("journal_mode = WAL");
-    raw.pragma("foreign_keys = ON");
-    raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
-      typeof value === "string" ? foldSearchText(value) : null,
-    );
+    prepareConnection(raw);
     runMigrations(
       raw,
       MIGRATIONS.filter((migration) => migration.version <= version),
@@ -9097,10 +9011,7 @@ describe("migration 068 — the machine a circuit is the electronics of", () => 
 
   function open(): Database.Database {
     const raw = new Database(join(dir, "chassis.db"));
-    raw.pragma("foreign_keys = ON");
-    raw.function("nx_fold", { deterministic: true }, (value: unknown) =>
-      typeof value === "string" ? foldSearchText(value) : null,
-    );
+    prepareConnection(raw);
     runMigrations(raw);
     raw
       .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
@@ -9220,6 +9131,119 @@ describe("migration 068 — the machine a circuit is the electronics of", () => 
     place(null);
     expect(raw.prepare("SELECT COUNT(*) AS n FROM circuit_parts").get()).toEqual({ n: 6 });
     expect(() => place("bottom")).toThrow(/CHECK/);
+    raw.close();
+  });
+});
+
+describe("migration 070 — the circuit search kind", () => {
+  const T = "2026-09-22T09:00:00.000Z";
+
+  /** A database with a profile and one circuit, opened the way `openDatabase` opens one (the fold function is registered by the connection, not by this file). */
+  function open(name: string, through = MIGRATIONS.length): Database.Database {
+    const raw = new Database(join(dir, name));
+    prepareConnection(raw);
+    runMigrations(raw, MIGRATIONS.slice(0, through));
+    raw
+      .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
+      .run("p1", "personal", "P", T);
+    raw
+      .prepare(
+        "INSERT INTO circuits (id, profile_id, name, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+      )
+      .run("c1", "p1", "Merenje temperature", "BMP280 na I2C", T, T);
+    return raw;
+  }
+
+  interface CircuitEntry {
+    title: string;
+    body: string;
+    title_folded: string;
+    parent_id: string | null;
+    context_date: string | null;
+  }
+
+  const entry = (raw: Database.Database): CircuitEntry | undefined =>
+    raw
+      .prepare("SELECT * FROM search_entries WHERE kind = 'circuit' AND entity_id = 'c1'")
+      .get() as CircuitEntry | undefined;
+
+  it("defines the projection view, and it carries the name as title and the notes as body", () => {
+    const raw = open("circuit-view.db");
+    const sql = (
+      raw
+        .prepare("SELECT sql FROM sqlite_master WHERE type = 'view' AND name = ?")
+        .get("search_source_circuit") as { sql: string } | undefined
+    )?.sql;
+    expect(sql).toContain("FROM circuits");
+    expect(sql).toContain("deleted_at IS NULL");
+    expect(sql).toContain("nx_fold");
+    expect(sql).toContain("8000");
+    raw.close();
+  });
+
+  it("carries the same deliberate nulls the projection claims: no parent, no context date", () => {
+    const raw = open("circuit-nulls.db");
+    const row = entry(raw);
+    expect(row?.title).toBe("Merenje temperature");
+    expect(row?.body).toBe("BMP280 na I2C");
+    expect(row?.title_folded).toBe(foldSearchText("Merenje temperature"));
+    expect(row?.parent_id).toBeNull();
+    expect(row?.context_date).toBeNull();
+    raw.close();
+  });
+
+  it("BACKFILLS a circuit that already existed — the half a trigger cannot do", () => {
+    // The whole reason this migration has an `INSERT ... SELECT` at the bottom.
+    // A database migrated to 069, holding a circuit created before this kind
+    // existed, is the state every existing user's file is in; without the
+    // backfill their circuits stay invisible to search until each one happens
+    // to be renamed, because a trigger fires on a WRITE and nothing writes.
+    const raw = open("circuit-backfill.db", 69);
+    expect(entry(raw)).toBeUndefined();
+    runMigrations(raw, MIGRATIONS);
+    expect(raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    expect(entry(raw)?.title).toBe("Merenje temperature");
+    raw.close();
+  });
+
+  it("keeps the index in step on a rename, a notes edit, a soft delete and a restore", () => {
+    const raw = open("circuit-lifecycle.db");
+    raw.prepare("UPDATE circuits SET name = ?, updated_at = ? WHERE id = 'c1'").run("Rover", T);
+    expect(entry(raw)?.title).toBe("Rover");
+    raw.prepare("UPDATE circuits SET notes = ?, updated_at = ? WHERE id = 'c1'").run("HC-SR04", T);
+    expect(entry(raw)?.body).toBe("HC-SR04");
+    // One row either way, never two: the AU is delete-then-reinsert.
+    expect(
+      raw.prepare("SELECT COUNT(*) AS n FROM search_entries WHERE kind = 'circuit'").get(),
+    ).toEqual({ n: 1 });
+
+    raw.prepare("UPDATE circuits SET deleted_at = ?, updated_at = ? WHERE id = 'c1'").run(T, T);
+    expect(entry(raw)).toBeUndefined();
+    raw
+      .prepare("UPDATE circuits SET deleted_at = NULL, updated_at = ? WHERE id = 'c1'")
+      .run(T);
+    expect(entry(raw)?.title).toBe("Rover");
+    raw.close();
+  });
+
+  it("removes the entry when the circuit row is deleted outright", () => {
+    const raw = open("circuit-delete.db");
+    raw.prepare("DELETE FROM circuits WHERE id = 'c1'").run();
+    expect(entry(raw)).toBeUndefined();
+    raw.close();
+  });
+
+  it("does not index a part or a wire — a circuit is one result, not fourteen", () => {
+    const raw = open("circuit-children.db");
+    raw
+      .prepare(
+        `INSERT INTO circuit_parts (id, circuit_id, component_id, label, x, y, rotation, created_at, updated_at)
+         VALUES ('part-1', 'c1', 'resistor', 'R1', 0, 0, 0, ?, ?)`,
+      )
+      .run(T, T);
+    expect(
+      raw.prepare("SELECT COUNT(*) AS n FROM search_entries").get(),
+    ).toEqual({ n: 1 });
     raw.close();
   });
 });

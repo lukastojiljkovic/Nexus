@@ -35,12 +35,32 @@ export const RELEVANCE_WEIGHT = 1;
 export const RECENCY_WEIGHT = 0.3;
 /** Time constant of the recency decay, in days: at this age the boost is down to 1/e of its peak (not a half-life — that would need a ln(2) factor). */
 export const RECENCY_DECAY_DAYS = 14;
-/** A small nudge distinguishing otherwise-equal hits by kind; strictly decreasing, never enough to outrank real relevance. */
+/**
+ * A small nudge distinguishing otherwise-equal hits by kind; strictly
+ * decreasing, never enough to outrank real relevance.
+ *
+ * **The ladder is re-spaced, not re-ordered, and the distinction is load-
+ * bearing.** The tenth kind (`circuit`) needed a rung, and the nine existing
+ * ones filled 0.01…0.09 with no room between any two. Rather than putting the
+ * new kind on the floor at 0.00 — which would have made „last" mean „not on the
+ * ladder at all" — every rung moved up by one step to open a gap, so the ORDER
+ * between the nine is exactly what it was and a circuit sits between a document
+ * and a subject: a saved schematic is a durable thing the user made, like a
+ * document, and the study entities below it are parts of one.
+ *
+ * A uniform shift of the whole table would be a provable no-op on every existing
+ * ranking; this one is not uniform — the five rungs below `circuit` did not
+ * move — so the only scores that change are those where a circuit or a
+ * document/subject comparison was within 0.01. That is the meaning of a prior
+ * this small, and the alternative (a tenth value crammed between 0.05 and 0.06)
+ * would have been a lie about its own units.
+ */
 export const KIND_PRIOR: Readonly<Record<SearchKind, number>> = {
-  note: 0.09,
-  task: 0.08,
-  event: 0.07,
-  document: 0.06,
+  note: 0.1,
+  task: 0.09,
+  event: 0.08,
+  document: 0.07,
+  circuit: 0.06,
   subject: 0.05,
   exam: 0.04,
   deck: 0.03,

@@ -42,11 +42,14 @@ import type { Migration } from "./migrations.js";
  * `body` and `body_folded` — the per-entry body cap — so one huge note or
  * card back can never bloat the index.
  *
- * Each of the nine kinds gets an `<table>_search_ai` / `_au` / `_ad` trigger
- * triple: AI inserts the freshly-created row's projection; AD removes it; AU
- * deletes-then-reinserts from the view, which is what makes a soft delete, an
- * undelete and an ordinary edit all ONE code path — the view's own liveness
- * `WHERE` is what decides whether the reinsert produces a row at all.
+ * Each of the **nine** kinds below gets an `<table>_search_ai` / `_au` / `_ad`
+ * trigger triple: AI inserts the freshly-created row's projection; AD removes
+ * it; AU deletes-then-reinserts from the view, which is what makes a soft
+ * delete, an undelete and an ordinary edit all ONE code path — the view's own
+ * liveness `WHERE` is what decides whether the reinsert produces a row at all.
+ * (A tenth kind, the ELEC circuit, arrived in migration 070 and follows the
+ * same shape there; this file's number stays nine because this file created
+ * nine, and a count is only ever true of the moment it describes.)
  *
  * Two liveness choices are deliberate, not oversights:
  *  - `card` and `attachment` additionally require their PARENT to be alive

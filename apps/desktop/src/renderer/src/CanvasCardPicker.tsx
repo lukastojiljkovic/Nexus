@@ -30,7 +30,7 @@ import { useFocusTrap } from "./useFocusTrap.js";
  * How many hits to ask for.
  *
  * More than the palette's thirty, because this list is FILTERED after it
- * arrives: the search index carries nine kinds and a card can point at three, so
+ * arrives: the search index carries TEN kinds and a card can point at three, so
  * a profile whose recent activity is mostly ispiti and špilovi would otherwise
  * see a nearly empty picker while having plenty to pin. Asking wider is cheaper
  * than a second round trip, and the store's own ceiling is higher still.

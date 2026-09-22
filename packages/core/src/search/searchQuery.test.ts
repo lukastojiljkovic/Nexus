@@ -43,6 +43,21 @@ describe("parseSearchQuery — kind prefixes", () => {
       expect(SEARCH_KINDS).toContain(kind);
     }
   });
+
+  it("gives every SEARCH_KINDS member at least one prefix", () => {
+    // The OTHER direction, and the one nothing enforced until 2026-09-22. The
+    // renderer's `KIND_QUERY_PREFIX` (searchShared.tsx) picks the shortest alias
+    // per kind and CASTS the result to `Record<SearchKind, string>`; a comment
+    // beside that cast says „core's own invariant" guarantees every key is
+    // populated, and no test in the repository ever said so. A kind that lost
+    // its alias would splice the literal text `undefined:` into the query,
+    // which parses as an ordinary search TERM — so a chip click would quietly
+    // search for the word „undefined" and return nothing.
+    const aliased = new Set(Object.values(SEARCH_KIND_PREFIXES));
+    for (const kind of SEARCH_KINDS) {
+      expect(aliased).toContain(kind);
+    }
+  });
 });
 
 describe("parseSearchQuery — command mode", () => {

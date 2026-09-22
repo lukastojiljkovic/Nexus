@@ -8,6 +8,7 @@ import {
   CardStore,
   DeckStore,
   DocumentStore,
+  ElectronicsStore,
   EventStore,
   ExamStore,
   MIGRATIONS,
@@ -108,7 +109,7 @@ const NOW = "2026-07-26T10:00:00.000Z";
 const LATER = "2026-07-26T10:05:00.000Z";
 
 describe("global search index (migration 017)", () => {
-  it("indexes one of each of the nine kinds with the right kind/entity/title/parent/context_date/title_folded", () => {
+  it("indexes one of each of the ten kinds with the right kind/entity/title/parent/context_date/title_folded", () => {
     const profileId = createProfile();
     const tasks = new TaskStore(db.raw, profileId);
     const events = new EventStore(db.raw, profileId);
@@ -119,6 +120,10 @@ describe("global search index (migration 017)", () => {
     const decks = new DeckStore(db.raw, profileId);
     const cards = new CardStore(db.raw, profileId);
     const attachments = new NoteAttachmentStore(db.raw, profileId);
+    // The tenth kind (migration 070) — through the module's own store, like
+    // every other row here, because the property is that an ordinary store call
+    // keeps the index in step and not that a trigger exists.
+    const circuits = new ElectronicsStore(db.raw, profileId);
 
     const task = tasks.create({ title: "Predati izveštaj", dueDate: "2026-08-01" });
     const event = events.create({ title: "Sastanak", startAt: "2026-08-01T09:00:00Z" });
@@ -137,6 +142,10 @@ describe("global search index (migration 017)", () => {
     const attachment = attachments.add(
       note.id,
       { fileName: "skripta.pdf", mime: "application/pdf", sizeBytes: 1024, sha256: "a".repeat(64) },
+      NOW,
+    );
+    const circuit = circuits.createCircuit(
+      { name: "Merenje temperature", notes: "BMP280 na I2C" },
       NOW,
     );
 
@@ -186,7 +195,19 @@ describe("global search index (migration 017)", () => {
     expect(attachmentEntry?.parent_id).toBe(note.id);
     expect(attachmentEntry?.context_date).toBeNull();
 
-    expect(entryCount()).toBe(9);
+    // The circuit's three deliberate nulls are asserted rather than skipped:
+    // `parent_id` because nothing deep-links through a circuit, `context_date`
+    // because a schematic has no date of its own, and the body because `notes`
+    // is the only other text it has.
+    const circuitEntry = entry("circuit", circuit.id);
+    expect(circuitEntry?.title).toBe("Merenje temperature");
+    expect(circuitEntry?.body).toBe("BMP280 na I2C");
+    expect(circuitEntry?.parent_id).toBeNull();
+    expect(circuitEntry?.context_date).toBeNull();
+    expect(circuitEntry?.title_folded).toBe(foldSearchText("Merenje temperature"));
+    expect(circuitEntry?.body_folded).toBe(foldSearchText("BMP280 na I2C"));
+
+    expect(entryCount()).toBe(10);
   });
 
   it("matches a Serbian task title by both a Latin-diacritic term and its dj-substituted Cyrillic-style fold, with search_fts joined back to the right entity", () => {

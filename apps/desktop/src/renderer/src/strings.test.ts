@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { SEARCH_KINDS } from "@nexus/core";
 
 import {
   DEFAULT_LOCALE,
@@ -23,6 +24,34 @@ import { sr } from "./strings.sr.js";
  *    replaced, because getting agreement wrong is a defect no reviewer would
  *    catch by reading and no existing test would notice.
  */
+
+describe("the search kind labels", () => {
+  /**
+   * `kindSingular` and `kindPlural` name every `SearchKind`, and NOTHING typed
+   * them that way until this test.
+   *
+   * The table is `as const` and `Strings` is widened from it, so the compiler
+   * sees ten keys in one file and a `SearchKind` union in another and never
+   * asks whether they are the same set. The chips, the group headings and the
+   * per-row kind tag all index into them with a kind the search core produced,
+   * so a missing label is not a type error — it is the literal text
+   * „undefined" rendered into a chip, which is what a tenth kind would have
+   * done here if only `SEARCH_KINDS` had grown.
+   */
+  it("names every SEARCH_KINDS member, in both numbers", () => {
+    for (const kind of SEARCH_KINDS) {
+      expect(strings.search.kindSingular[kind], `${kind} has no singular label`).toBeTruthy();
+      expect(strings.search.kindPlural[kind], `${kind} has no plural label`).toBeTruthy();
+    }
+  });
+
+  it("names nothing the search core does not have, so no label is dead copy", () => {
+    // The other direction, and the one `check:copy` cannot see: a leaf read
+    // through a computed index is a leaf that gate prints as NOT JUDGED.
+    expect(Object.keys(strings.search.kindSingular).sort()).toEqual([...SEARCH_KINDS].sort());
+    expect(Object.keys(strings.search.kindPlural).sort()).toEqual([...SEARCH_KINDS].sort());
+  });
+});
 
 describe("the table", () => {
   it("serves Serbian by default", () => {

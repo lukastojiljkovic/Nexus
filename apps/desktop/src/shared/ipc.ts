@@ -49,6 +49,7 @@ import type {
   MovementPattern,
   MuscleGroup,
   MuscleReading,
+  SearchKind,
   SetKind,
   TaskViewConfig,
   WireEnd,
@@ -6147,22 +6148,26 @@ export const SEARCH_QUERY_MAX_BYTES = 500;
 export const SEARCH_RESULT_MAX_LIMIT = 100;
 
 /**
- * The kinds of entity global search indexes. MUST equal `SearchKind` in
- * `@nexus/core`: declared on both sides so neither imports the other, the same
- * rule the byte caps above follow. Unlike those, this one cannot drift
- * silently — main assigns a core `SearchKind` into `SearchResult.kind` below,
- * so a member added on one side and not the other fails to compile.
+ * The kinds of entity global search indexes — IMPORTED, and this is a
+ * correction rather than an omission.
+ *
+ * It was declared here with a comment arguing it „cannot drift silently: main
+ * assigns a core `SearchKind` into `SearchResult.kind`, so a member added on
+ * one side and not the other fails to compile". The argument holds for ONE
+ * direction. Adding a kind to core and not here fails, which is what happens
+ * whenever a kind is added properly; adding a kind HERE and not to core
+ * compiles, and the wire would then carry a kind the index cannot produce —
+ * the failing direction is exactly the one nobody would hit by accident, which
+ * is the definition of a copy that costs nothing until it costs everything.
+ *
+ * The tenth kind (circuits, 2026-09-22) is what made that concrete: the
+ * compiler DID catch it, in the harmless direction, and the harmless direction
+ * is the only one there was. It joins the import list above on the rule that
+ * header already states — a closed vocabulary a store enforces is imported,
+ * a flat record is redeclared — and `search_entries.kind` plus the ten
+ * `search_source_<kind>` views are exactly that.
  */
-export type SearchKind =
-  | "task"
-  | "event"
-  | "note"
-  | "document"
-  | "subject"
-  | "exam"
-  | "deck"
-  | "card"
-  | "attachment";
+export type { SearchKind };
 
 /** A half-open `[start, end)` range into the string it accompanies, for highlighting the matched part. */
 export type SearchHighlight = readonly [number, number];

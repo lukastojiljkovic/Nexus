@@ -2,8 +2,21 @@ import { describe, expect, it } from "vitest";
 import { SEARCH_KINDS, type SearchKind } from "@nexus/core";
 import { SEARCH_KIND_MODULE, filterSearchHitsByModules } from "./searchGate.js";
 
-/** Every v0 module id, as the registry registers them — the "everything on" set. */
-const ALL_MODULES = new Set(["dashboard", "tasks", "calendar", "settings", "notes", "study"]);
+/**
+ * The modules that own an indexed kind — the "everything on" set.
+ *
+ * It is exactly `SEARCH_KIND_MODULE`'s image rather than every registered module
+ * (there are sixteen of those, most of which index nothing), because that is the
+ * set this suite's question needs: „does a hit survive when its module is on".
+ * `circuit`/`electronics` joined on 2026-09-22 with the tenth kind.
+ */
+const ALL_MODULES = new Set([
+  "tasks",
+  "calendar",
+  "notes",
+  "study",
+  "electronics",
+]);
 
 function hit(kind: SearchKind): { kind: SearchKind } {
   return { kind };
@@ -25,6 +38,7 @@ describe("SEARCH_KIND_MODULE", () => {
       deck: "study",
       card: "study",
       attachment: "notes",
+      circuit: "electronics",
     });
   });
 });
@@ -44,6 +58,7 @@ describe("filterSearchHitsByModules", () => {
       "note",
       "document",
       "attachment",
+      "circuit",
     ]);
   });
 
@@ -58,7 +73,16 @@ describe("filterSearchHitsByModules", () => {
       "exam",
       "deck",
       "card",
+      "circuit",
     ]);
+  });
+
+  it("drops circuits when ELEKTRONIKA is off — the newest module's rows obey the same gate", () => {
+    const enabled = new Set([...ALL_MODULES].filter((id) => id !== "electronics"));
+    const kept = filterSearchHitsByModules(SEARCH_KINDS.map(hit), enabled);
+    expect(kept.map((entry) => entry.kind)).not.toContain("circuit");
+    // And nothing else moved: a gate is per-kind, not a filter over the list.
+    expect(kept).toHaveLength(SEARCH_KINDS.length - 1);
   });
 
   it("drops events and documents together when CALENDAR is off — documents live on the calendar page", () => {

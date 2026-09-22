@@ -78,8 +78,21 @@ import { countUnit, strings } from "./strings.js";
  * end up calling the same two functions in `elecGeometry.ts`. A view owned by
  * the bench would need an imperative handle for the buttons to reach.
  */
+/**
+ * A pending deep link into the workbench — the palette's and the search page's
+ * way in (021-e), and the shape `NotesIntent` and `StudyIntent` already have.
+ *
+ * One arm, because a circuit is created on the page from a name and nothing
+ * asks for one from elsewhere: the only thing that reaches this module by id is
+ * a search result, and what it wants is the circuit it named.
+ */
+export type ElecIntent = { kind: "reveal"; circuitId: string };
+
 export interface ElectronicsPageProps {
   profileId: string;
+  intent?: ElecIntent | null;
+  /** Reports that `intent` above has been acted on, so the caller (App.tsx) can clear it. */
+  onIntentHandled?: () => void;
 }
 
 /** How much one press of the zoom buttons moves the scale. */
@@ -101,7 +114,7 @@ function boundsOf(parts: readonly CircuitPart[]): ElecBounds | null {
   });
 }
 
-export function ElectronicsPage({ profileId }: ElectronicsPageProps) {
+export function ElectronicsPage({ profileId, intent, onIntentHandled }: ElectronicsPageProps) {
   const s = strings.electronics;
 
   const [circuits, setCircuits] = useState<ElecCircuit[] | null>(null);
@@ -182,6 +195,30 @@ export function ElectronicsPage({ profileId }: ElectronicsPageProps) {
       active = false;
     };
   }, [profileId, s.firstCircuitName]);
+
+  /**
+   * Consumes a pending deep link (021-e): the circuit a search result named.
+   *
+   * It waits for the LIST rather than opening the id blind, because a result can
+   * outlive its circuit — the row was indexed when the query ran, and a delete
+   * between the keystroke and the click is a race a real user wins by being
+   * fast. Trusting the id would open an empty bench and report nothing; checking
+   * it against the list makes that case a stale result, which is what it is: the
+   * intent is reported handled and the page stays where it is rather than
+   * hunting for a row that no longer exists.
+   *
+   * `failed` is in the condition as well as `circuits`, so an unreadable list
+   * does not leave the intent pending forever — the page has said what went
+   * wrong, and re-firing the reveal on a later visit would only say it again.
+   */
+  useEffect(() => {
+    if (!intent) return;
+    if (circuits === null && !failed) return;
+    if (circuits?.some((circuit) => circuit.id === intent.circuitId)) {
+      setActiveId(intent.circuitId);
+    }
+    onIntentHandled?.();
+  }, [intent, circuits, failed, onIntentHandled]);
 
   /**
    * Opens whichever circuit is active, and clears everything that belonged to

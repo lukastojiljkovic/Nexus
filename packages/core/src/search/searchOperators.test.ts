@@ -152,9 +152,12 @@ describe("applySearchOperators — tag filter", () => {
       hit("deck", "dk1", null),
       hit("card", "c1", null),
       hit("attachment", "a1", null),
+      hit("circuit", "circ1", null),
     ];
     const filtered = applySearchOperators(hits, {
-      tagMatches: [tagMatch(["t1", "e1", "doc1", "s1", "x1", "dk1", "c1", "a1"], ["n1"])],
+      tagMatches: [
+        tagMatch(["t1", "e1", "doc1", "s1", "x1", "dk1", "c1", "a1", "circ1"], ["n1"]),
+      ],
     });
     expect(filtered.map((row) => row.entityId)).toEqual(["t1", "n1"]);
   });

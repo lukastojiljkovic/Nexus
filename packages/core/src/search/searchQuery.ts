@@ -24,7 +24,8 @@ export type SearchKind =
   | "exam"
   | "deck"
   | "card"
-  | "attachment";
+  | "attachment"
+  | "circuit";
 
 /** Every indexed kind, in the order the palette groups them. */
 export const SEARCH_KINDS: readonly SearchKind[] = [
@@ -37,6 +38,20 @@ export const SEARCH_KINDS: readonly SearchKind[] = [
   "deck",
   "card",
   "attachment",
+  /**
+   * The Elektronika workbench's circuits — the tenth kind, added 2026-09-22.
+   *
+   * LAST, and the position is the honest one rather than a convenience: this
+   * array is the order the palette's chips and the page's facet counts are
+   * drawn in, and it runs roughly „the things a person searches for most" to
+   * least. ELEC is the newest and narrowest module in the product.
+   *
+   * `docs/STATUS.md` recorded for months that ELEC „has no `SearchKind`, so
+   * circuits are not reachable from Ctrl+K — that needs a migration and a
+   * backfill, not a component", and that reading was exactly right: the kind
+   * is one line here, and the other five files are the index.
+   */
+  "circuit",
 ];
 
 /**
@@ -77,6 +92,18 @@ export const SEARCH_KIND_PREFIXES: Readonly<Record<string, SearchKind>> = {
   pr: "attachment",
   prilog: "attachment",
   prilozi: "attachment",
+  // Six for the tenth kind, because the two words a person reaches for are both
+  // Serbian and neither is a prefix of the other: the thing itself („kolo") and
+  // what it is drawn as („šema", folded to `sema`). `k` was already the card's
+  // and stays so — the lookup is by the WHOLE token before the colon, not by
+  // its first letters, so `k:` and `kolo:` are two keys and not two matches for
+  // one. `elek`/`elektronika` name the module the way the sidebar does.
+  kolo: "circuit",
+  kola: "circuit",
+  kol: "circuit",
+  elek: "circuit",
+  elektronika: "circuit",
+  sema: "circuit",
 };
 
 /** A pasted paragraph must not become a 500-clause query. */

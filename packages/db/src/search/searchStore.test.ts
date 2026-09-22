@@ -2,11 +2,12 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { SearchKind } from "@nexus/core";
+import { SEARCH_KINDS, type SearchKind } from "@nexus/core";
 import {
   CardStore,
   DeckStore,
   DocumentStore,
+  ElectronicsStore,
   EventStore,
   ExamStore,
   MAX_SEARCH_BROWSE_LIMIT,
@@ -14,6 +15,7 @@ import {
   NexusDatabase,
   NoteAttachmentStore,
   NoteStore,
+  SEARCH_SOURCE_VIEWS,
   SearchStore,
   SearchValidationError,
   SubjectStore,
@@ -281,6 +283,27 @@ describe("SearchStore.recent", () => {
 });
 
 describe("rebuildSearchIndex", () => {
+  it("names one source view per search kind, and every one of them exists in the schema", () => {
+    // `SEARCH_SOURCE_VIEWS` is plain strings, so the compiler cannot see it, and
+    // a kind missing from it makes a REBUILD write a weaker index than the
+    // triggers maintain — a defect that lands only for the user who ran a
+    // repair, and only for the kind left out, which is why the test above
+    // (identity against the triggers) would never catch it. Both halves are
+    // asserted: the correspondence to `SEARCH_KINDS` is the omission, and the
+    // `sqlite_master` lookup is the typo. Compared sorted, because the ARRAY's
+    // order is the palette's grouping and has no meaning to this function —
+    // pinning it here would make a palette re-order fail a rebuild test.
+    expect([...SEARCH_SOURCE_VIEWS].sort()).toEqual(
+      SEARCH_KINDS.map((kind) => `search_source_${kind}`).sort(),
+    );
+    for (const view of SEARCH_SOURCE_VIEWS) {
+      const found = db.raw
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'view' AND name = ?")
+        .get(view);
+      expect(found, `${view} is named by SEARCH_SOURCE_VIEWS but does not exist`).toBeDefined();
+    }
+  });
+
   it("restores every entry after search_entries is wiped, returns the right count, and is idempotent", () => {
     const profileId = createProfile();
     const tasks = new TaskStore(db.raw, profileId);
@@ -303,7 +326,7 @@ describe("rebuildSearchIndex", () => {
     expect(allEntries()).toEqual(before);
   });
 
-  it("reproduces entries identical to what the triggers wrote, across all nine kinds", () => {
+  it("reproduces entries identical to what the triggers wrote, across all ten kinds", () => {
     const profileId = createProfile();
     const tasks = new TaskStore(db.raw, profileId);
     const events = new EventStore(db.raw, profileId);
@@ -314,6 +337,7 @@ describe("rebuildSearchIndex", () => {
     const decks = new DeckStore(db.raw, profileId);
     const cards = new CardStore(db.raw, profileId);
     const attachments = new NoteAttachmentStore(db.raw, profileId);
+    const circuits = new ElectronicsStore(db.raw, profileId);
 
     const now = "2026-07-26T10:00:00.000Z";
     tasks.create({ title: "Predati izveštaj", dueDate: "2026-08-01" });
@@ -335,9 +359,10 @@ describe("rebuildSearchIndex", () => {
       { fileName: "skripta.pdf", mime: "application/pdf", sizeBytes: 1024, sha256: "a".repeat(64) },
       now,
     );
+    circuits.createCircuit({ name: "Merenje temperature", notes: "BMP280 na I2C" }, now);
 
     const before = allEntries();
-    expect(before).toHaveLength(9);
+    expect(before).toHaveLength(10);
 
     rebuildSearchIndex(db.raw);
 

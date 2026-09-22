@@ -69,6 +69,7 @@ import { migration066 } from "./066-sync-loop.js";
 import { migration067 } from "./067-electronics.js";
 import { migration068 } from "./068-electronics-chassis.js";
 import { migration069 } from "./069-elec-settings.js";
+import { migration070 } from "./070-circuit-search.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -149,6 +150,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration067,
   migration068,
   migration069,
+  migration070,
 ];
 
 /**

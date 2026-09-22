@@ -306,7 +306,19 @@ describe("canvasRefKindOf", () => {
   });
 
   it("refuses every other indexed kind", () => {
-    for (const kind of ["document", "subject", "exam", "deck", "card", "attachment"] as const) {
+    // Listed rather than derived from `SEARCH_KINDS`, because „every other
+    // kind" is the CLAIM: a `SEARCH_KINDS.filter(...)` would silently follow a
+    // kind that moved into `CANVAS_REF_KINDS`, which is the one thing this test
+    // is for. The circuit (the tenth kind) was added here the day it existed.
+    for (const kind of [
+      "document",
+      "subject",
+      "exam",
+      "deck",
+      "card",
+      "attachment",
+      "circuit",
+    ] as const) {
       expect(canvasRefKindOf(kind)).toBeNull();
     }
   });
