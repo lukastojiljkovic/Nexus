@@ -75,6 +75,15 @@ const TABLE_MAX_ROWS = 512;
  * the primitive refused all of them, and the repair each caller reaches for is
  * a conditional spread — three copies of a workaround for a prop that should
  * have accepted the value.
+ *
+ * **It hands the control TWO ids, and the second is why.** The label names the
+ * field from outside — that is the whole design, and `htmlFor` is what makes
+ * clicking it focus the box — but a `TextField` cannot see a name it does not
+ * draw, and DC-120's contract requires every field to STATE which of the three
+ * arrangements names it. The second argument is the label's own `id`, so the
+ * control can say `aria-labelledby` and satisfy the contract with the name that
+ * is genuinely on screen. It is the same name by a second route, deliberately:
+ * `for` gives the click, `aria-labelledby` states the fact.
  */
 export function ToolField({
   label,
@@ -85,15 +94,16 @@ export function ToolField({
   label: string;
   hint?: string | undefined;
   error?: string | undefined;
-  children: (id: string) => ReactNode;
+  children: (id: string, labelId: string) => ReactNode;
 }) {
   const id = useId();
+  const labelId = `${id}-label`;
   return (
     <div className="tool__field">
-      <label className="tool__field-label" htmlFor={id}>
+      <label className="tool__field-label" htmlFor={id} id={labelId}>
         {label}
       </label>
-      {children(id)}
+      {children(id, labelId)}
       {error !== undefined ? (
         <p className="tool__error">{error}</p>
       ) : hint !== undefined ? (
@@ -124,9 +134,10 @@ export function ToolInput({
 }) {
   return (
     <ToolField label={label} hint={hint} error={error}>
-      {(id) => (
+      {(id, labelId) => (
         <TextField
           id={id}
+          aria-labelledby={labelId}
           className={mono ? "tool__mono" : undefined}
           value={value}
           autoComplete="off"
@@ -165,7 +176,7 @@ export function ToolTextArea({
 }) {
   return (
     <ToolField label={label} hint={hint} error={error}>
-      {(id) => (
+      {(id, labelId) => (
         <TextArea
           id={id}
           // Through the component. This used to be the house recipe for a raw
@@ -177,7 +188,9 @@ export function ToolTextArea({
           //
           // No `label` prop: `ToolField` draws the label and owns the `id`, and
           // two `<label for>` elements pointing at one control is the mess
-          // `Select`'s own comment below refuses for the same reason.
+          // `Select`'s own comment below refuses for the same reason. The name
+          // arrives by reference instead, for `ToolField`'s own reason.
+          aria-labelledby={labelId}
           className="tool__textarea"
           value={value}
           rows={rows}

@@ -11,8 +11,15 @@
   flex-direction: column;
   gap: var(--nx-space-5);
 }
-.searchpage__input.nx-textfield__input {
+/* The caller's class lands on `TextField`'s WRAPPER, so the two declarations
+   below split along the line that decides that: the box spans the column, the
+   TYPE reaches the text. A single font-size on the wrapper would look right and
+   be wrong the day a label is added to this field, because the label is drawn
+   inside the wrapper and would inherit a body size it was never meant to have. */
+.searchpage__input {
   width: 100%;
+}
+.searchpage__input > .nx-textfield__input {
   font-size: var(--nx-font-size-body);
 }
 .searchpage__facets {

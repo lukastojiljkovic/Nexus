@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { parseSearchQuery } from "@nexus/core";
-import { Button, EmptyState, Icon, PageHeader } from "@nexus/ui";
+import { Button, EmptyState, Icon, PageHeader, TextField } from "@nexus/ui";
 import type { SearchHistoryEntry, SearchPageResult, SearchResult } from "../../shared/ipc.js";
 import {
   SEARCH_DEBOUNCE_MS,
@@ -86,6 +86,8 @@ export function SearchPage({
   const [history, setHistory] = useState<readonly SearchHistoryEntry[]>([]);
   const requestIdRef = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  /** Handed to `PageHeader` so the field below can be named by the title. */
+  const titleId = useId();
 
   const parsed = useMemo(() => parseSearchQuery(query), [query]);
   const activeKinds = useMemo(() => new Set(parsed.kinds), [parsed.kinds]);
@@ -250,15 +252,20 @@ export function SearchPage({
     <section className="searchpage">
       <PageHeader
         title={strings.search.page.title}
+        titleId={titleId}
         sigil="search"
         subtitle={`${paletteChordLabel} ${strings.search.page.shortcutHint}`}
       />
-      <input
+      {/* Named BY REFERENCE to the heading, not by a copy of it. The
+          `aria-label` that stood here held the same words as `title`, which is
+          [[DC-120]] exactly: two spellings of one name, and the day either is
+          reworded the screen and the screen reader disagree about what the
+          field is called. `titleId` is what makes the heading the name. */}
+      <TextField
         ref={inputRef}
-        type="text"
-        className="nx-textfield__input searchpage__input"
+        aria-labelledby={titleId}
+        className="searchpage__input"
         placeholder={strings.search.placeholder}
-        aria-label={strings.search.page.title}
         value={query}
         onChange={(event) => setQuery(event.target.value)}
       />

@@ -1,8 +1,8 @@
 import { useEffect, useId, useRef, useState } from "react";
-import type { ComponentType, FormEvent } from "react";
+import type { ComponentType, FormEvent, InputHTMLAttributes } from "react";
 import { PDV_RATES, validateFocusConfig } from "@nexus/core";
 import type { FocusConfig } from "@nexus/core";
-import { Button, Checkbox, Select, TextField, type TextFieldProps } from "@nexus/ui";
+import { Button, Checkbox, Select, TextField } from "@nexus/ui";
 import {
   DEFAULT_TARGET_RETENTION,
   MAX_BACKGROUND_DIM,
@@ -147,7 +147,10 @@ export interface SettingsPanelRenderer {
  * times.
  */
 interface SettingsFieldProps
-  extends Omit<TextFieldProps, "label" | "labelClassName" | "aria-label"> {
+  extends Omit<
+    InputHTMLAttributes<HTMLInputElement>,
+    "aria-label" | "aria-labelledby" | "className"
+  > {
   readonly label: string;
   /** Whether Podešavanja's filter matched this row's name. */
   readonly hit: boolean;
@@ -161,6 +164,12 @@ interface SettingsFieldProps
   readonly hint?: string | undefined;
   /** Drawn under the control when the value is refused. */
   readonly error?: string | undefined;
+  /**
+   * The class the row's width is written in — `set__study-number`,
+   * `set__currency-input`, `set__time-input`, `set__focus-input`. On the WRAPPER,
+   * which is where `TextField` puts a caller's class and where a width belongs.
+   */
+  readonly className?: string;
 }
 
 function SettingsField({ label, hit, hint, error, ...rest }: SettingsFieldProps) {

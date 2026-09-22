@@ -3,7 +3,7 @@ import type { KeyboardEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { foldSearchTag, formatChord, parseSearchQuery, SEARCH_KINDS } from "@nexus/core";
 import type { SearchKind } from "@nexus/core";
-import { Button, EmptyState, Icon } from "@nexus/ui";
+import { Button, EmptyState, Icon, TextField } from "@nexus/ui";
 import type { NoteTag, SearchHistoryEntry, SearchResult, TaskTag } from "../../shared/ipc.js";
 import { REBUILD_COMMAND_ID, matchCommands } from "./searchCommands.js";
 import type { SearchCommand } from "./searchCommands.js";
@@ -883,10 +883,19 @@ export function SearchPalette({
         }}
       >
         <div className="search__input-row">
-          <input
+          {/* The one surface here that names its field INVISIBLY, and it has no
+              choice: an overlay has no heading and no caption beside it, so
+              there is nothing on screen to point `aria-labelledby` at. It had
+              no name at all until now — the `placeholder` was doing the work,
+              and a placeholder is not a name: it is announced as a description,
+              it is gone the moment anything is typed, and it is not required to
+              exist. The word is `navLabel`'s, the same one the sidebar item,
+              the page title and this dialog's own `aria-label` already use, so
+              a reader who hears „Pretraga" hears the place they came from. */}
+          <TextField
             ref={inputRef}
-            type="text"
-            className="nx-textfield__input search__input"
+            aria-label={strings.search.navLabel}
+            className="search__input"
             role="combobox"
             aria-expanded={rows.length > 0}
             aria-controls={listboxId}

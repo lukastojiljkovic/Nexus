@@ -2456,21 +2456,21 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
                       it is drawn as one, and each half keeps its own name. */}
                   <span className="fin__period" role="group" aria-label={s.filters.periodLabel}>
                     <span className="fin__period-label">{s.filters.periodLabel}</span>
-                    <input
+                    <TextField
                       type="date"
+                      aria-label={s.filters.fromLabel}
                       className="fin__period-input"
                       value={fromDraft}
-                      aria-label={s.filters.fromLabel}
                       onChange={(event) => setFromDraft(event.target.value)}
                     />
                     <span className="fin__period-sep" aria-hidden="true">
                       –
                     </span>
-                    <input
+                    <TextField
                       type="date"
+                      aria-label={s.filters.toLabel}
                       className="fin__period-input"
                       value={toDraft}
-                      aria-label={s.filters.toLabel}
                       onChange={(event) => setToDraft(event.target.value)}
                     />
                   </span>

@@ -1,9 +1,41 @@
 import { useId } from "react";
 import type { InputHTMLAttributes, Ref } from "react";
 
-export interface TextFieldProps extends InputHTMLAttributes<HTMLInputElement> {
-  /** Optional label rendered above the input, wired via htmlFor/id. */
-  label?: string;
+/**
+ * Exactly one name, and it is REQUIRED.
+ *
+ * The defect this closes is a text field whose only name is invisible — 38 of
+ * 143 call sites at the last census, one of them with no name at all. `Select`
+ * answered the same question by requiring `label` and omitting `aria-label`
+ * from its props, and for a select that is complete: every select in this app
+ * stands in a form row where a caption belongs.
+ *
+ * A text input does not, and the census is the reason the contract is three
+ * arms rather than one. Seven of the remaining eighteen are search boxes, whose
+ * visible name is their placeholder and whose caption would be the same words
+ * printed twice. Two are cells of a markdown grid, named by their row and their
+ * column. The rest are fields in a headed list, named by their POSITION — the
+ * ruling `definitions` reached for UČENJE's weekday boxes and TASK's list rows
+ * alike. None of those can draw a caption and none has an element to point at,
+ * so `aria-label` is not an escape hatch here; it is the correct spelling, and
+ * a contract that forbade it would be a contract with exceptions.
+ *
+ * What the union makes unrepresentable is the two things that were actually
+ * wrong: NO name, and the ambiguous state of naming a control twice — once
+ * visibly and once invisibly, which is how a screen reader and the screen come
+ * to disagree about what a field is called. Both become type errors, and each
+ * arm says which of the three arrangements the caller chose.
+ */
+type TextFieldName =
+  | { label: string; "aria-labelledby"?: never; "aria-label"?: never }
+  | { label?: never; "aria-labelledby": string; "aria-label"?: never }
+  | { label?: never; "aria-labelledby"?: never; "aria-label": string };
+
+export type TextFieldProps = Omit<
+  InputHTMLAttributes<HTMLInputElement>,
+  "aria-label" | "aria-labelledby"
+> &
+  TextFieldName & {
   /** `stacked` puts the label above (a form), `inline` beside it (a controls row). */
   layout?: "stacked" | "inline";
   /**
@@ -33,7 +65,7 @@ export interface TextFieldProps extends InputHTMLAttributes<HTMLInputElement> {
    * of them lost the label with it.
    */
   ref?: Ref<HTMLInputElement>;
-}
+};
 
 /**
  * A labelled `<input>`.
@@ -50,11 +82,16 @@ export interface TextFieldProps extends InputHTMLAttributes<HTMLInputElement> {
  * comment on the select explaining that its label is visible „rather than
  * smuggled into an `aria-label`" — beside a field doing exactly that.
  *
- * `label` is still OPTIONAL here, unlike `Select`'s, and that is [[DC-120]]
- * rather than a decision: 38 of 143 call sites name themselves invisibly, and
- * the required-name contract lands once they do not. Adding the arrangement
- * first is deliberate — a call site cannot adopt a visible label until there is
- * a shape for the visible label to take.
+ * **The name is REQUIRED now, and it was not until the last call site could
+ * satisfy it.** `Select` could say „my name is the caption I draw" from the day
+ * it was written and this component could not, so two siblings sat in the same
+ * rows under two different contracts for four months; adding the `inline`
+ * arrangement first was deliberate, because a call site cannot adopt a visible
+ * label until there is a shape for the visible label to take. [[DC-120]] is
+ * what closed the gap, and the arms are on `TextFieldName` above — three of
+ * them, because a search box and a grid cell have no caption to draw and no
+ * element to point at, and a contract that forbade `aria-label` would be a
+ * contract with an exception list.
  *
  * `className` lands on the WRAPPER (the opposite of `Select`, deliberately):
  * the pages that style a field style its box, and the box is this div.

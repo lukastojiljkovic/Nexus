@@ -5,6 +5,17 @@ export interface PageHeaderProps {
   /** The page's name. Rendered as the page's only `h1`. */
   title: string;
   /**
+   * An `id` for the rendered `<h1>`, so a control below it can name itself BY
+   * REFERENCE to the title the user is already reading.
+   *
+   * PRETRAGA's own search box is the case it was added for: the field's name IS
+   * the page's name, and an `aria-label` carrying the same string is a copy of
+   * it that drifts the day either one is reworded — with the screen and the
+   * screen reader then disagreeing about what the field is called. The heading
+   * is already on screen; this is what lets it be the name.
+   */
+  titleId?: string;
+  /**
    * The module's own mark, bled off the top-right corner of the header as a
    * watermark.
    *
@@ -44,7 +55,14 @@ export interface PageHeaderProps {
  * same reason — page-level controls that had been scattered into the body now
  * have one declared place to sit.
  */
-export function PageHeader({ title, subtitle, sigil, actions, className }: PageHeaderProps) {
+export function PageHeader({
+  title,
+  titleId,
+  subtitle,
+  sigil,
+  actions,
+  className,
+}: PageHeaderProps) {
   // The modifier is what keeps the actions clear of the mark — see the rule in
   // `styles.css`. Set from `sigil` rather than from a prop, so a page cannot
   // supply one and forget the other.
@@ -73,7 +91,9 @@ export function PageHeader({ title, subtitle, sigil, actions, className }: PageH
         </span>
       )}
       <div className="nx-page-header__text">
-        <h1 className="nx-page-header__title">{title}</h1>
+        <h1 className="nx-page-header__title" id={titleId}>
+          {title}
+        </h1>
         {subtitle != null && <p className="nx-hint nx-page-header__subtitle">{subtitle}</p>}
       </div>
       {actions != null && <div className="nx-page-header__actions">{actions}</div>}

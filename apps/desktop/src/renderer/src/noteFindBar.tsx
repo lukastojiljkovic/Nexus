@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
-import { Icon } from "@nexus/ui";
+import { Icon, TextField } from "@nexus/ui";
 import { Extension } from "@tiptap/core";
 import type { Editor } from "@tiptap/core";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
@@ -473,12 +473,19 @@ export function NoteFindBar({ editor, focusNonce, onClose }: NoteFindBarProps) {
       onKeyDown={handleKeyDown}
     >
       <div className="note__find-row">
-        <input
+        {/* `TextField`, and the class it wears is a MODIFIER now rather than a
+            copy. This field and the replace field below were the last two
+            surfaces in the app drawing their own box, and `notes.css` said so
+            out loud — „the .nx-textfield__input recipe, compacted". That is
+            [[DC-113]]'s shape one layer over: [[DC-113]] is a shared VALUE
+            retyped at every call site and this is a shared COMPONENT's
+            declaration block retyped in one, and both are invisible for the
+            same reason — an exact copy looks exactly right. */}
+        <TextField
           ref={queryRef}
-          type="text"
+          aria-label={find.regionLabel}
           className="note__find-input"
           placeholder={find.placeholder}
-          aria-label={find.regionLabel}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
@@ -538,11 +545,10 @@ export function NoteFindBar({ editor, focusNonce, onClose }: NoteFindBarProps) {
       </div>
       {replaceOpen && (
         <div className="note__find-row">
-          <input
-            type="text"
+          <TextField
+            aria-label={find.replacePlaceholder}
             className="note__find-input"
             placeholder={find.replacePlaceholder}
-            aria-label={find.replacePlaceholder}
             value={replacement}
             onChange={(event) => setReplacement(event.target.value)}
           />

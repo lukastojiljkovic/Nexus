@@ -1709,26 +1709,37 @@
   align-items: center;
   gap: var(--nx-space-2);
 }
-/* The .nx-textfield__input recipe, compacted: the bar is a toolbar row, not a
-   form, so the fields sit tighter than a labelled field would. */
+/* The bar is a toolbar row, not a form, so its fields sit tighter than a
+   labelled one — a MODIFIER on `TextField`, which is what these two were
+   pretending to be. The block that stood here carried eight declarations and
+   called itself „the .nx-textfield__input recipe, compacted". Five of the
+   eight were the primitive's own words — `font`, `font-size`, `color`,
+   `border` and `border-radius` matched it character for character — and
+   `transition` was one of the two properties the primitive names. Two rules
+   went with them, `::placeholder` and `:focus-visible`, both identical to the
+   primitive's. That is why nothing ever caught the copy: a copy that is exact
+   is invisible until the thing it copies changes, and the only two
+   declarations that were never exact were `background` and `padding`.
+
+   What is left is the whole of what „compacted" ever meant — a shallower box
+   on the card instead of a well sunk into it, and tighter padding. The wrapper
+   does the LAYOUT: `flex: 1` is the slack in the row and `min-width: 0` is the
+   floor the growing input would otherwise blow through.
+
+   `min-height: 0` is the one declaration the copy never had and now needs: the
+   primitive floors every field at 30px, this bar's fields sit among 24px
+   buttons, and the copy was never subject to it because it did not carry the
+   class. Adopting the primitive must not move the row, so it is cleared here.
+   Whether it SHOULD be cleared is a separate question with a photograph
+   attached — see STATUS. */
 .note__find-input {
   flex: 1;
   min-width: 0;
-  font: inherit;
-  font-size: var(--nx-font-size-body-sm);
-  color: var(--nx-text);
+}
+.note__find-input > .nx-textfield__input {
   background: var(--nx-surface);
-  border: 1px solid var(--nx-border);
-  border-radius: var(--nx-radius-md);
   padding: 5px 10px;
-  transition: border-color var(--nx-motion-fast) var(--nx-motion-ease);
-}
-.note__find-input::placeholder {
-  color: var(--nx-text-muted);
-}
-.note__find-input:focus-visible {
-  outline: 2px solid var(--nx-accent);
-  outline-offset: 2px;
+  min-height: 0;
 }
 /* „3/17“, or „Nema rezultata.“ in the same slot — one place for the bar to
    answer from, so the eye never has to look for the answer in two spots.
@@ -2100,7 +2111,12 @@
   padding: var(--nx-space-3) var(--nx-space-4) var(--nx-space-2);
   border-bottom: 1px solid var(--nx-border);
 }
-.search__input.nx-textfield__input {
+/* All three declarations name the CONTROL, not the box the caller's class lands
+   on: a size that reaches text, a border that is removed from the input itself,
+   and padding inside it. `.nx-textfield` states where an input IS — a well on a
+   form's card — and the palette is not a form: the dialog already draws the
+   frame, so the field inside it is type, not a second box. */
+.search__input > .nx-textfield__input {
   font-size: var(--nx-font-size-title);
   border: none;
   padding: var(--nx-space-1) 0;
