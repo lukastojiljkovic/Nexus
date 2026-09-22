@@ -234,7 +234,7 @@ choice of backend**; whatever in them is about the data model still applies.
 - **Verification gates before any commit:** `pnpm typecheck` (13/13), `pnpm lint`
   (14/14 — `@nexus/supabase` joined on 2026-09-09; it has no TS, so typecheck
   stays 13), `pnpm test` (all green), `pnpm build` (4/4),
-  `pnpm --filter @nexus/desktop smoke` prints `SMOKE OK`, and **all twenty-one
+  `pnpm --filter @nexus/desktop smoke` prints `SMOKE OK`, and **all twenty-two
   static gates** pass. **`pnpm lint` used to be missing from this line** even
   though CI has always run it, and on 2026-08-14 six real errors shipped red
   because of that — two of them display bugs the linter had named (DC-49,
@@ -315,6 +315,31 @@ choice of backend**; whatever in them is about the data model still applies.
   different node and not a finding. It also checks that the scale is still
   strictly increasing, which is the half a spelling rule misses: all 22 call
   sites would go on passing if `dialog` were edited under `drawer`),
+  **`check:names`** (a field's accessible name is its NAME, never its name and
+  its explanation. A `<label>` that WRAPS its control takes the element's entire
+  text content as the name — that is the feature, and it is why `<label>Email
+  <input></label>` needs no `for` — so a hint inside one is read out as part of
+  it: UČENJE's two daily caps announced themselves as „Novih kartica dnevno
+  Najviše 200 novih kartica dnevno", and PRIVATNO's four credential choices did
+  the same to their radios at the foot of a form where the reader hears „Zasebna
+  šifra za Privatno Zasebna šifra ostaje na ovom uređaju…" as one utterance. The
+  arrangement is exactly what the design asks for — name above, control, hint
+  below — so it renders correctly, uses only tokens, typechecks, lints, and
+  **photographs as the same PNG, because an accessible name is not in the
+  picture**; the failure exists only for a reader who cannot see the screen, and
+  nothing in this repository is that reader. It needs no exemption list, because
+  „a wrapping label holding a control and an explanation" is a statement about
+  what the label CONTAINS. It reads `nx-hint` and the `__error` family as a
+  PATTERN rather than as the thirteen classes it currently matches, for
+  DC-109's reason — a hand-kept list beside a generated one fails by omission,
+  and the fourteenth joins the rule by being written. There are two ways out and
+  it accepts both, because both are correct: the explanation moves out beside
+  the control (what `TextField`, `Select`, `TextArea` and `Checkbox` do by
+  construction, each drawing a `<label for>` BESIDE its input) or the control is
+  named by reference, `aria-labelledby` at the span the user reads — which is
+  what PRIVATNO takes, because the row must stay a `<label>` for the whole box
+  to stay clickable. The census is exported beside the verdict, so a later run
+  can tell „found nothing" from „looked at nothing"),
   `check:invisibles` (no character that renders as nothing, or as a character it
   is not — the defence review itself cannot make),
   **`check:zeroize`** (no key erased in the middle of the call using it: a
