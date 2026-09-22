@@ -84,10 +84,14 @@ describe("duplicateStems", () => {
  *
  * One surface, and the reason it needs saying at all: the maximised frame is the
  * only capture whose subject is the WINDOW STATE, `win.maximize()` is a request
- * to the window manager rather than a setter, and it has been refused in four
- * runs out of five. A refusal takes no frame and says so on stderr — the honest
- * answer — but the headline then reads exactly like a clean run's, and the
- * headline is what a reader takes away.
+ * to the window manager rather than a setter, and it lands by luck — one of four
+ * runs on 2026-09-03 wrote it, both of the two before the retry refused, the four
+ * after it wrote it, and the next one refused again. No ratio over those runs is
+ * stated anywhere, because sweeps ran in between whose outcomes were not
+ * recorded, and the conclusion does not need one: a capture that lands sometimes
+ * is a capture nothing may depend on. A refusal takes no frame and says so on
+ * stderr — the honest answer — but the headline then reads exactly like a clean
+ * run's, and the headline is what a reader takes away.
  */
 describe("missingCoverage", () => {
   /** What a full pass always contains for the dashboard at `noc`. */

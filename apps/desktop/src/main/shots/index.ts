@@ -3203,13 +3203,18 @@ async function sweep(
     // `maximize()` is a REQUEST to the window manager, not a setter, and on
     // Windows it can be swallowed while the window is still settling from the
     // `setSize` of the pass before it. One retry after 800 ms was the whole of
-    // the patience here, and it was measuring the window manager rather than
-    // the app: measured over four runs on 2026-09-03 the frame landed ONCE, and
-    // both of the runs on 2026-09-22 refused too. A refusal is not a wrong
-    // answer — see below, it is the honest one — but four refusals in five
-    // means the surface this frame exists for is not being looked at, which is
-    // the same silence [[DC-129]] describes one file over. A run that still
-    // fails after this says so exactly as it did before.
+    // the patience here, and it was measuring the window manager rather than the
+    // app. The sequence, in the order it was observed: of four runs on
+    // 2026-09-03 the frame was written ONCE; both runs on 2026-09-22 before this
+    // retry refused; the four runs immediately after it all wrote the frame; and
+    // the run of 2026-09-22 21:56 refused again. No ratio over those runs would
+    // be worth stating, because sweeps ran in between whose outcomes were never
+    // recorded — and that is the finding rather than a gap in the notes. **The
+    // frame lands by luck, so nothing may depend on it.** A refusal is not a
+    // wrong answer, it is the honest one, and `missingCoverage` now says so on
+    // the headline the reader actually takes away; the alternative is the same
+    // silence [[DC-129]] describes one file over. A run that still fails after
+    // this says so exactly as it did before.
     for (let attempt = 0; attempt < 3 && !win.isMaximized(); attempt += 1) {
       win.maximize();
       await pause(400 * (attempt + 1));
