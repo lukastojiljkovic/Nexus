@@ -1,7 +1,11 @@
 // Token build: tokens/*.json → dist/css/tokens.css + gen/index.ts.
 // Zero-dependency by deliberate deviation from ADR-006's Style Dictionary
 // mention — see docs/deviations.md entry DEV-001.
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+//
+// `node build.mjs` regenerates both artifacts. `node build.mjs --check` compares
+// the two already in this tree against what these sources produce and writes
+// nothing; the block at the foot of this file says what that is for.
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -130,9 +134,6 @@ for (const { theme, semantic } of themes) {
   }
 }
 
-mkdirSync(join(root, "dist/css"), { recursive: true });
-writeFileSync(join(root, "dist/css/tokens.css"), css);
-
 // --- TypeScript --------------------------------------------------------
 const resolvedThemes = Object.fromEntries(
   themes.map(({ theme, semantic }) => [
@@ -171,8 +172,125 @@ export type AccentId = (typeof ACCENT_IDS)[number];
 export const accents = ${JSON.stringify(resolvedAccents, null, 2)} as const;
 `;
 
-mkdirSync(join(root, "gen"), { recursive: true });
-writeFileSync(join(root, "gen/index.ts"), ts);
+// --- Emit -----------------------------------------------------------------
+// Both artifacts are built in full before either is written, so that `--check`
+// below can compare them with no write path reachable from it. A check that ran
+// between the two writes would have already repaired half of the staleness it
+// was asked to report.
+const outputs = [
+  { label: "dist/css/tokens.css", file: join(root, "dist/css/tokens.css"), text: css },
+  { label: "gen/index.ts", file: join(root, "gen/index.ts"), text: ts },
+];
+
+/**
+ * `--check` is the freshness half of this build, and until now nothing in this
+ * repository asked it. Both artifacts are BUILD OUTPUTS that are committed to
+ * nobody — `.gitignore` ignores `packages/tokens/gen/` and `packages/tokens/dist/`
+ * — so a stale one is invisible to review, to git and to every other gate in the
+ * tree.
+ *
+ * It is not invisible to the product. `gen/index.ts` is what `tsc` compiles into
+ * the `dist/ts` declarations the whole monorepo typechecks against, and
+ * `dist/css/tokens.css` is what `apps/desktop`, `apps/web` and `apps/gallery`
+ * import as `@nexus/tokens/css`. So in a working tree where somebody edited
+ * `tokens/*.json` and then ran neither `pnpm build` nor `pnpm typecheck` — an
+ * electron-vite dev server, `pnpm --filter @nexus/desktop shots` and a bare
+ * `vitest` run all reach the artifact directly — the app renders, the tests
+ * assert and the sweep photographs the OLD tokens, while `check:contrast` and
+ * `check:tokens` read the JSON and report on the new ones. Two answers to one
+ * question, and the one the user meets is the wrong one.
+ *
+ * ABSENT IS NOT STALE, which is why an artifact that has never been generated
+ * here exits 0: nothing was built, so nothing can be out of date, and a gate
+ * that failed there could not run before a build — which is where every static
+ * gate in this repository sits in CI. Absence is REPORTED rather than passed
+ * over in silence, so "compared two files and agreed" and "compared nothing"
+ * never read the same.
+ *
+ * LINE ENDINGS are compared out. Both artifacts are written here with LF and
+ * nothing checks them out, so this guards a future rather than repairing a
+ * present: promote either to a committed file and `* text=auto` hands a Windows
+ * checkout CRLF, at which point a byte comparison answers "stale" to a file that
+ * is exactly current. `generate-licences.mjs` paid for that lesson on a
+ * committed artifact; a carriage return is not a token, and the question here is
+ * whether the artifact still describes the sources.
+ *
+ * Determinism is what makes any of this sound: same sources in, byte-identical
+ * artifacts out, because nothing below observes the clock, the platform or the
+ * filesystem's directory order.
+ *
+ * `scripts/tokens-build.test.mjs` keeps it falsifiable: it mutates one source in
+ * a scratch copy of this package and demands the exact complaint below.
+ */
+const withoutLineEndings = (text) => text.replaceAll("\r\n", "\n");
+
+/**
+ * The first line at which the artifact on disk differs from the one these
+ * sources produce, as `{ line, expected, found }` — or `null` when they agree.
+ * The FIRST difference and not a diff: the repair is to run the build, and
+ * "line 27: expected 12px, found 11px" already tells a reader whether this is
+ * the edit they forgot to rebuild or something they did not do at all.
+ */
+function firstDifference(produced, disk) {
+  const mine = withoutLineEndings(produced).split("\n");
+  const theirs = withoutLineEndings(disk).split("\n");
+  for (let index = 0; index < Math.max(mine.length, theirs.length); index += 1) {
+    if (mine[index] === theirs[index]) continue;
+    return {
+      line: index + 1,
+      expected: mine[index] ?? "(end of file)",
+      found: theirs[index] ?? "(end of file)",
+    };
+  }
+  return null;
+}
+
+if (process.argv.includes("--check")) {
+  const compared = [];
+  const absent = [];
+  const stale = [];
+  for (const { label, file, text } of outputs) {
+    if (!existsSync(file)) {
+      absent.push(label);
+    } else {
+      const difference = firstDifference(text, readFileSync(file, "utf8"));
+      if (difference === null) compared.push(label);
+      else stale.push({ label, difference });
+    }
+  }
+
+  for (const { label, difference } of stale) {
+    console.error(`check-tokens-build: ${label} does not match what tokens/*.json produces.`);
+    console.error(
+      `  line ${difference.line}: expected \`${difference.expected}\`, ` +
+        `found \`${difference.found}\``,
+    );
+  }
+  if (stale.length > 0) {
+    console.error("  Run `pnpm --filter @nexus/tokens build` and let it rewrite the artifact:");
+    console.error("  nothing but this build regenerates it, and it is not a file to edit.");
+    process.exit(1);
+  }
+
+  if (compared.length > 0) {
+    console.log(
+      `check-tokens-build: ${compared.join(" and ")} ${compared.length === 1 ? "is" : "are"} what ` +
+        `tokens/*.json produces (${primitiveVars.length} primitives, ${themes.length} themes, ` +
+        `${accentIds.length} accents).`,
+    );
+  }
+  for (const label of absent) {
+    console.log(
+      `check-tokens-build: ${label} has not been generated in this tree, so there is nothing to compare.`,
+    );
+  }
+  process.exit(0);
+}
+
+for (const { file, text } of outputs) {
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, text);
+}
 
 console.log(
   `tokens: ${primitiveVars.length} primitives, ${themes.length} themes, ${accentIds.length} accents → dist/css/tokens.css, gen/index.ts`,
