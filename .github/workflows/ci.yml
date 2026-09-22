@@ -111,6 +111,20 @@ jobs:
       # screenshot sweep does not go.
       - run: pnpm check:controls
 
+      # The same shape one component over, and the last step of DC-120. The
+      # design system's field was bypassed by hand — eleven times when the
+      # class was counted, and the count was wrong: the rule looked for the
+      # shared class NAME, so two fields wearing a local one were never seen at
+      # all. `noteFindBar.tsx`'s carried the primitive's recipe as prose in
+      # notes.css, eight declarations of which five were the primitive's own
+      # words character for character, which is why no instrument here could
+      # watch it drift. This gate asks what an `<input>` IS — its `type` — and
+      # not what it is called, so a hand-rolled copy is found on the day it is
+      # written whatever it is named. `radio`, `checkbox`, `range` and `file`
+      # are another component's subject or nobody's; everything else, `date` and
+      # `time` included, goes through `TextField`.
+      - run: pnpm check:fields
+
       # A shared typographic tier, retyped. `.nx-hint` is muted 13px prose with
       # the app's leading and a 68ch measure; before it existed, thirty-three
       # classes across fifteen stylesheets wrote those declarations out by hand,
