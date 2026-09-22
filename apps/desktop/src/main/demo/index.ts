@@ -31,6 +31,7 @@ import { seedDemoFitness } from "./fitness.js";
 import { seedDemoFocus } from "./focus.js";
 import { seedDemoPeople } from "./people.js";
 import { seedDemoDocuments } from "./documents.js";
+import { seedDemoAttachments, type DemoAttachmentIo } from "./attachments.js";
 
 /**
  * The name the demo profile carries, re-exported from `shared/ipc.ts` where it
@@ -70,13 +71,28 @@ function enableEverything(flags: SqliteFlagStore, disabledModules: ReadonlySet<s
 /**
  * Fills `profileId` with a complete, believable life.
  *
- * Order matters in exactly one place — TASK before FOCUS, because a focus
- * session may attach itself to a task and cannot attach to one that does not
- * exist yet. Everything else is independent by construction: each seeder draws
- * from its own named random stream (`demoRandom`), so the result does not
- * depend on which ran first.
+ * Order matters in two places, both because a row names another row: TASK
+ * before FOCUS (a focus session may attach itself to a task, and cannot attach
+ * to one that does not exist yet), and NOTE/TASK/STUDY before ATTACHMENTS (a
+ * file hangs off an owner, and the seeder reads that owner's id back rather
+ * than inventing one). Everything else is independent by construction: each
+ * seeder draws from its own named random stream (`demoRandom`), so the result
+ * does not depend on which ran first.
+ *
+ * `io` is the one thing a database cannot give the seed — somewhere to put
+ * bytes. `DemoAttachmentIo`'s own doc has the argument; the short version is
+ * that an attachment's file lives in main's content-addressed blob store and
+ * not in the row that indexes it, so a demo profile with attachments needs the
+ * caller's store, and a caller that has none seeds no files rather than rows
+ * pointing at nothing. That is also why this is `async`: the file is written
+ * before the row that names it, and the write goes through real encryption.
  */
-export function seedDemoProfile(db: DatabaseHandle, profileId: string, now: number): void {
+export async function seedDemoProfile(
+  db: DatabaseHandle,
+  profileId: string,
+  now: number,
+  io: DemoAttachmentIo,
+): Promise<void> {
   const ctx: DemoContext = createDemoContext(profileId, now);
 
   // Every module on. A demo profile exists to show the whole product, and the
@@ -112,6 +128,9 @@ export function seedDemoProfile(db: DatabaseHandle, profileId: string, now: numb
   seedDemoDocuments(db, ctx);
   seedDemoFocus(db, ctx);
   seedDemoElectronics(db, ctx);
+  // Last, because it is the only seeder that points at rows written by OTHER
+  // seeders across all three of NOTE, TASK and STUDY — see the order note above.
+  await seedDemoAttachments(db, ctx, io);
 }
 
 /**

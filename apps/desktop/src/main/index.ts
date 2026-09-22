@@ -716,6 +716,7 @@ import {
 } from "../shared/ipc.js";
 import { businessProfileFlags, createModuleRegistry, LOCKED_MODULE_IDS } from "../shared/modules.js";
 import { DEMO_BUSINESS_PROFILE_NAME, seedDemoBusiness, seedDemoProfile } from "./demo/index.js";
+import type { DemoAttachmentIo } from "./demo/attachments.js";
 import { duplicateStems, runShots } from "./shots/index.js";
 
 /**
@@ -1509,11 +1510,18 @@ async function handleProfilesCreate(kind: ProfileKind, name: string): Promise<Pr
  * renderer to widen: it writes into a NEW profile of the account it is already
  * inside, reads nothing, and cannot name what gets written.
  *
- * The seed is synchronous and takes a moment; it runs at the end of first-run
+ * The seed is asynchronous and takes a moment; it runs at the end of first-run
  * onboarding, where the user has just pressed a button and is expecting a
- * pause, and never on a timer or at startup.
+ * pause, and never on a timer or at startup. (It awaits the blob store because
+ * the profile's files are written into it — `seedDemoProfile`'s own doc.)
+ *
+ * It does NOT set the profile's private section up, and that asymmetry with
+ * `fillDemoProfile` is the honest one: PRIV's setup wraps under the account
+ * passcode, which main holds no copy of — it verifies one and keeps none — so
+ * there is nothing here to derive a wrap from. The user sets it up themselves,
+ * with a credential only they have, which is the same flow everybody else gets.
  */
-function handleProfilesCreateDemo(): Profile {
+async function handleProfilesCreateDemo(): Promise<Profile> {
   const database = requireDb();
   if (listProfiles(database).some((profile) => profile.name === DEMO_PROFILE_NAME)) {
     throw new Error("Invalid IPC payload: this account already has a demo profile.");
@@ -1524,7 +1532,7 @@ function handleProfilesCreateDemo(): Profile {
     DEMO_PROFILE_NAME,
     new Date(now).toISOString(),
   );
-  seedDemoProfile(database.raw, created.id, now);
+  await seedDemoProfile(database.raw, created.id, now, demoBlobSink());
   return created;
 }
 
@@ -7005,7 +7013,7 @@ function registerIpc(): void {
     return handleProfilesCreate(kind, name);
   });
 
-  ipcMain.handle(IpcChannel.profilesCreateDemo, (event): Profile => {
+  ipcMain.handle(IpcChannel.profilesCreateDemo, (event): Promise<Profile> => {
     assertTrustedSender(event);
     // No payload at all — the renderer names nothing about what is written, so
     // there is no field to validate and none to get wrong.
@@ -12783,7 +12791,69 @@ function shotsOutputDir(): string {
 async function runShotsAuthSetup(): Promise<void> {
   const created = await handleAuthCreate(DEMO_ACCOUNT_LABEL, DEMO_PASSCODE);
   if (!created.ok) throw new Error(`shots account creation failed: ${created.reason}`);
-  fillDemoProfile();
+  await fillDemoProfile();
+}
+
+/**
+ * Where the demo seed's attachments put their bytes: this session's own
+ * encrypted, content-addressed blob store — the same one `attach:pick-files`
+ * writes into, over the same unlocked keys, so a demo file is openable,
+ * previewable and content-searchable exactly like one a person attached.
+ * Returns the plaintext SHA-256, which is what the index row quotes.
+ *
+ * A named function rather than an inline literal so the arrow's own `saveBlob`
+ * is unambiguously the imported one — the object's key is not a binding, but
+ * the two names for one thing read badly in a diff.
+ */
+function demoBlobSink(): DemoAttachmentIo {
+  return {
+    saveBlob: async (bytes) => {
+      const { sha256 } = await saveBlob(blobStorePathsFor(), requireBlobKeys(), bytes);
+      return sha256;
+    },
+  };
+}
+
+/**
+ * Puts the demo profile's private section into the state a real one is in once
+ * somebody has set it up: a wrap set on disk, and a section that asks for the
+ * credential before it shows anything.
+ *
+ * WHY THIS IS HERE AND NOT IN `demo/`. Everything else a demo profile holds is a
+ * row, and a row can be written by a seeder that knows nothing but the database.
+ * PRIV's first-time setup is not a row: the wrap it stores is derived from the
+ * ACCOUNT PASSCODE, which lives in this file and in no table — it is verified
+ * against the live session and never kept — so the only callers that can do this
+ * are the ones that just created an account with a passcode they know, which is
+ * `--shots` and `--demo` and nothing else. The renderer's „Dodaj demo profil"
+ * seeds the same profile with the rows and leaves the section unset up, which is
+ * the honest state there: main knows of no credential to wrap under.
+ *
+ * `regenerateKit: false`, deliberately. Minting the Recovery Kit here is possible
+ * and would be a code NOBODY HAS SEEN — the flow shows it exactly once, to the
+ * person who asked for it — so the card would report a kit that opens nothing.
+ * Opting out leaves the kit columns null, and the card then says so.
+ *
+ * LOCKED, immediately, and that is deliberate too. Setup ends by adopting the
+ * DEK with a five-minute idle timer on it, so a sweep that reached the settings
+ * card early would photograph an unlocked section and one that reached it late
+ * would photograph a locked one: the same frame, two answers, decided by how
+ * long the run had been going. Dropping the key here makes both the state the
+ * section is in whenever a person reopens the account, and the state a sweep can
+ * rely on.
+ */
+async function setUpDemoPrivateSection(profileId: string): Promise<void> {
+  const result = await privSetup(privDeps(), profileId, {
+    credential: DEMO_PASSCODE,
+    usesAccountPasscode: true,
+    regenerateKit: false,
+  });
+  if (!result.ok) {
+    throw new Error(
+      `expected the demo profile's private section to set up, got "${result.reason}"`,
+    );
+  }
+  privLock();
 }
 
 /**
@@ -12797,13 +12867,16 @@ async function runShotsAuthSetup(): Promise<void> {
  * person's work, behind the same passcode, with its own data and its own module
  * set. Two accounts would have demonstrated the lock screen, not the profiles.
  */
-function fillDemoProfile(): void {
+async function fillDemoProfile(): Promise<void> {
   const database = requireDb();
   const now = Date.now();
   const profile = listProfiles(database)[0];
   if (profile === undefined) throw new Error("expected a first-run profile to seed");
   renameProfile(database, profile.id, DEMO_PROFILE_NAME);
-  seedDemoProfile(database.raw, profile.id, now);
+  await seedDemoProfile(database.raw, profile.id, now, demoBlobSink());
+  // Only on this path — see the comment on it: the passcode it wraps under is
+  // this file's, and the renderer's own demo-profile button has none.
+  await setUpDemoPrivateSection(profile.id);
 
   const business = new ProfileStore(database.raw).create(
     "business",
@@ -12829,7 +12902,7 @@ async function runDemoSeed(): Promise<void> {
       ? await handleAuthCreate(DEMO_ACCOUNT_LABEL, DEMO_PASSCODE)
       : await handleAuthCreateAdditional(DEMO_ACCOUNT_LABEL, DEMO_PASSCODE);
   if (!created.ok) throw new Error(`demo account creation failed: ${created.reason}`);
-  fillDemoProfile();
+  await fillDemoProfile();
   process.stdout.write(
     `DEMO OK — nalog „${DEMO_ACCOUNT_LABEL}“, lozinka „${DEMO_PASSCODE}“, ` +
       `profili „${DEMO_PROFILE_NAME}“ (lični) i „${DEMO_BUSINESS_PROFILE_NAME}“ (poslovni)\n`,
@@ -13131,7 +13204,12 @@ app.whenReady().then(async () => {
 
     if (isShots) {
       mainWindow.webContents.once("did-finish-load", () => {
-        void runShots(mainWindow!, shotsOutputDir())
+        // The passcode goes WITH the account it opens: `runShotsAuthSetup`
+        // created that account with `DEMO_PASSCODE` a few lines above, and the
+        // sweep's lock scene has to be able to unlock what it locked. It is
+        // handed in rather than written down in `shots/` so that the one copy
+        // of it stays here — see `ShotFixtures`.
+        void runShots(mainWindow!, shotsOutputDir(), { passcode: DEMO_PASSCODE })
           .then((frames) => {
             const findings = frames.reduce((total, frame) => total + frame.findings.length, 0);
             // The duplicate count is on the HEADLINE and not only in the

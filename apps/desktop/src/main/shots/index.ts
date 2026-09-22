@@ -65,7 +65,13 @@ const DEFAULT_FANOUT = ".nx-segmented__option";
  */
 const MAX_FANOUT_ROUNDS = 4096;
 
-export interface ShotScene {
+/**
+ * A scene whose surface is a PAGE — reached by clicking the sidebar row the
+ * module registry puts there.
+ */
+export interface ShotPageScene {
+  /** `"page"` by name, and absent by default, so the sixty entries below read as they always have. */
+  readonly kind?: "page";
   /** File-name stem, and the name the report refers to the surface by. */
   readonly id: string;
   /**
@@ -92,6 +98,50 @@ export interface ShotScene {
   /** Renderer JS to run after the last frame — closes whatever `prepare` opened. */
   readonly cleanup?: string;
 }
+
+/**
+ * The states a person meets BEFORE there is a shell to have a page in: the
+ * first-run questionnaire, and the lock screen.
+ *
+ * They are two values of one kind rather than two kinds because they want the
+ * same thing from the harness — an ENTRY, a SET OF FRAMES, and an EXIT back to
+ * the shell — and nothing else in the walk: neither has a sidebar row, a
+ * switcher, or a `module` to land on.
+ */
+export type ShotShellState = "onboarding" | "lock";
+
+/**
+ * A scene whose surface is NOT a page.
+ *
+ * **Why this kind has to exist.** Every scene above begins with `openModule`,
+ * which means every scene above begins AFTER the shell — and the two screens
+ * that come before it are the product's first impression. That is [[DC-57]]'s
+ * shape exactly: a fixture that can never reach the state, and a run that says
+ * „no findings" about a surface it never saw. The rerun of the questionnaire
+ * (see `ONB_SCREENS`) covers six of the six SCREENS of `Onboarding` and none of
+ * the FIRST RUN — the empty name field, „Preskoči" in place of „Otkaži", the
+ * copy that has no live state behind it yet — and the lock screen had no route
+ * at all: the old note here said it „wants a harness that can unlock again".
+ * This is that harness.
+ *
+ * The mechanics are in `shootShellScene`, one branch per state, and they are
+ * NOT `prepare`/`cleanup` because both states outlive a script: entering one
+ * can reload the renderer, and the questionnaire takes six frames with an
+ * answer typed into five of them.
+ */
+export interface ShotShellScene {
+  readonly kind: "shell";
+  /**
+   * File-name stem, and the prefix of every frame the state produces. It is the
+   * state spelled out rather than derived from it because `id` is what
+   * `NEXUS_SHOTS_SCENES` filters on and what the report calls the surface — a
+   * scene no run can name is a scene nobody can iterate on.
+   */
+  readonly id: string;
+  readonly shell: ShotShellState;
+}
+
+export type ShotScene = ShotPageScene | ShotShellScene;
 
 /**
  * Every surface the sweep visits.
@@ -922,11 +972,21 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     fanout: null,
   },
 
-  // The lock screen is deliberately NOT a scene. Locking ends the session, and
-  // the sweep re-enters this list once per theme and once per window size — so
-  // a scene that locked would leave every frame after it a photograph of the
-  // lock screen. It is worth reviewing, and it wants a harness that can unlock
-  // again; that is not this loop.
+  // --- Before there is a shell ----------------------------------------------
+  //
+  // LAST, and for the reason the lock screen was left out of this list for so
+  // long: both of these RELOAD the renderer (the shell comes back on its
+  // landing rather than wherever the scene before them had walked to), and the
+  // first-run one creates a profile and deletes it again. A scene that changes
+  // the window that much is followed by scenes that do not depend on it, which
+  // is the order this list is written in — so these two are its end.
+  //
+  // A scene that LOCKS is the case the old note here said the loop could not
+  // have: every frame after it would be a photograph of the lock screen. It is
+  // survivable only because the scene unlocks again, which is what
+  // `shootShellScene` does and what needs the fixture passcode.
+  { kind: "shell", id: "onboarding", shell: "onboarding" },
+  { kind: "shell", id: "lock", shell: "lock" },
 ];
 
 /** Fires a keydown on `window` — where the shell's own global handler listens. */
@@ -1654,9 +1714,9 @@ function CLICK(selector: string): string {
 }
 
 /**
- * ADR-086's questionnaire, which nothing else in this sweep can reach.
+ * ADR-086's questionnaire, which no PAGE scene in this sweep can reach.
  *
- * Every scene above is anchored to a sidebar row, and the questionnaire is not
+ * Every page scene is anchored to a sidebar row, and the questionnaire is not
  * a page — it replaces the shell. So eight screens that decide what a new
  * user's whole app looks like had no photograph at all, which is exactly the
  * shape DC-57 named: a harness whose fixture can never reach the state, and a
@@ -1665,7 +1725,13 @@ function CLICK(selector: string): string {
  * The way in is the RERUN (`Podešavanja → Kako je Nexus podešen za tebe`),
  * which mounts the same component in `mode: "rerun"`. That is not a weaker
  * subject than a first run: it is one component with one render site, told
- * apart by a prop, and the rerun is the reachable half.
+ * apart by a prop.
+ *
+ * **And the FIRST RUN is the `onboarding` shell scene**, which reaches the same
+ * six screens with the sentinel still on them — the empty name field, the
+ * „Preskoči" that no rerun draws, the copy that has no live state behind it.
+ * The two passes share this screen list, `ONB_ANSWERS` and the walk below, so a
+ * screen both of them visit cannot be answered two different ways.
  *
  * The pass ANSWERS the questions rather than clicking through them empty. An
  * unanswered flow photographs six screens in the one state none of them is
@@ -1673,7 +1739,8 @@ function CLICK(selector: string): string {
  * the states that carry the design are precisely the ones a person produces by
  * answering. It runs last, and it COMPLETES: „Priprema" and „Evo tvog Nexusa"
  * only exist on the far side of the write, and a rerun over the demo profile in
- * a disposable `userData` is free to make it.
+ * a disposable `userData` is free to make it. A FIRST RUN is not completed —
+ * see `shootShellScene` for why its exit is a delete rather than an „Uđi".
  */
 const ONB_SCREENS = ["ime", "nedelja", "posao", "ritam", "oko", "podsetnici"] as const;
 
@@ -1751,6 +1818,281 @@ const ONB_ANSWERS: Readonly<Record<string, string | null>> = {
   oko: ONB_PICK(".pro-kit", 0, 2),
   podsetnici: ONB_PICK(".onb__choice", 1),
 };
+
+/**
+ * Answers ONE screen, so the frame taken straight after it is of the state a
+ * person produces rather than of an empty page.
+ *
+ * One implementation for both passes through the questionnaire — the rerun and
+ * the first run — because they are the same six screens of the same component:
+ * two copies would be two descriptions of how to answer a question, and the
+ * first one to be corrected would leave the other photographing the old answer.
+ *
+ * Every step reports its own miss rather than returning quietly, for
+ * `OPEN_CREATE_FORM`'s reason: an answer that was never given photographs as a
+ * perfectly ordinary screen, and the reader has no way to tell.
+ */
+async function answerOnboardingScreen(win: BrowserWindow, screen: string): Promise<void> {
+  if (screen === "posao") {
+    if ((await evalIn(win, ONB_TYPE(".onb__form input", ONB_TRADE))) !== "typed") {
+      process.stderr.write("shots: the trade field was not on the „posao“ screen\n");
+    }
+    await settle(win);
+    await evalIn(win, ONB_PICK(".onb__act", 0, 4));
+  }
+  const answer = ONB_ANSWERS[screen];
+  if (answer !== null && answer !== undefined && (await evalIn(win, answer)) !== "picked") {
+    process.stderr.write(`shots: nothing to answer on the „${screen}“ screen\n`);
+  }
+  await settle(win);
+}
+
+/**
+ * Walks the questionnaire's six screens, answering each one and photographing
+ * it, and reports whether it reached the end.
+ *
+ * The step counter is checked on every round rather than assumed from the order
+ * the screens are listed in, and a mismatch ABANDONS the walk — a run that kept
+ * clicking would submit screen N while naming its frames after screen N+1, and
+ * the frames would be of a flow nobody can reach. It answers with a boolean
+ * rather than a message because the two callers want different things from a
+ * failure: a first run has nothing left to photograph and leaves, while the
+ * RERUN carries on to „Priprema" and the reveal, which are on the far side of
+ * the write and exist whether or not the asking phase went to plan.
+ */
+async function walkQuestionnaire(
+  win: BrowserWindow,
+  stemOf: (screen: string) => string,
+  shoot: (stem: string) => Promise<void>,
+  /** Typed into screen one AFTER its frame, for a run whose screen one has no name yet — see `ONB_FIRST_NAME`. Null on a rerun, which opens on the live one. */
+  nameForFirstScreen: string | null,
+): Promise<boolean> {
+  for (let index = 0; index < ONB_SCREENS.length; index += 1) {
+    const screen = ONB_SCREENS[index] ?? "";
+    const step = await evalIn(win, ONB_STEP);
+    if (step !== String(index + 1)) {
+      process.stderr.write(
+        `shots: questionnaire was on step ${String(step)}, not ${String(index + 1)} ("${screen}")\n`,
+      );
+      return false;
+    }
+    // Answered BEFORE the frame: an unanswered screen is the one state none of
+    // these six is interesting in.
+    await answerOnboardingScreen(win, screen);
+    await shoot(stemOf(screen));
+    if (screen === "ime" && nameForFirstScreen !== null) {
+      if ((await evalIn(win, ONB_TYPE(".onb__form input", nameForFirstScreen))) !== "typed") {
+        process.stderr.write("shots: the name field was not on the „ime“ screen\n");
+      }
+      await settle(win);
+    }
+    await evalIn(win, CLICK(".onb__actions .nx-button[type=submit]"));
+    await settle(win);
+  }
+  return true;
+}
+
+/**
+ * The lock screen, and the two halves that make it a subject rather than an
+ * end: locking through the app's own chord, and getting back in.
+ *
+ * The chord is `Ctrl+L` — the `lock` action of ADR-040's binding table, the
+ * same one the shortcuts dialog lists and the sidebar row's „Zaključaj"
+ * invokes. It is dispatched here rather than the row being clicked because the
+ * row lives in `.app__sidebar-foot`, which is a WALK OF TWO ROWS today and of
+ * three whenever the device holds more than one account — an index into it is
+ * the mistake [[DC-125]] was, one surface over.
+ *
+ * The way back is the fixture passcode, and there is deliberately no other.
+ * `lock()` is a session teardown: the data key leaves main's memory, and
+ * nothing in the renderer can put it back — every other exit from the locked
+ * state (a reload, a profile switch, an account switch) either stays locked or
+ * needs the same secret. A scene that could not unlock would leave every frame
+ * after it a photograph of the lock screen, which is why the note this scene
+ * replaces said the loop could not carry one.
+ */
+const LOCK_SCRIPT = DISPATCH_KEY("l", { ctrlKey: true });
+
+/**
+ * Types the passcode into the lock screen's one field and presses its submit,
+ * the way a person does — through the prototype's value setter, because React
+ * listens for the `input` event and a plain assignment fires nothing.
+ *
+ * **Every step that can silently do nothing is checked, and this is the script
+ * that taught the harness why.** It used to end in `form.requestSubmit()` and
+ * return „submitted" whatever happened — and Chromium's `requestSubmit()` fires
+ * no `submit` event at all when the form's DEFAULT BUTTON IS DISABLED, which is
+ * a state the lock screen has on purpose: a throttled gate disables both the
+ * field and the button and counts the wait down. So the one case the scene
+ * exists to see — the app refusing to open — reported „submitted", the frame
+ * after it was the lock screen again, and the message blamed the passcode.
+ *
+ * The button is pressed rather than the form submitted for the same reason: a
+ * click on a disabled control IS the no-op, and it can be told apart from a
+ * refusal because the two leave different things on the page.
+ */
+function UNLOCK_SCRIPT(passcode: string): string {
+  return `(async () => {
+    const field = document.querySelector(".auth__form input");
+    if (field === null) return "none: the lock screen has no passcode field";
+    if (field.disabled) return "none: the passcode field is disabled";
+    const form = field.closest("form");
+    if (form === null) return "none: the passcode field is outside a form";
+    const submit = form.querySelector("button[type=submit]");
+    if (submit === null) return "none: the passcode form has no submit button";
+    if (submit.disabled) return "none: the submit button is disabled";
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+    field.focus();
+    setter.call(field, ${JSON.stringify(passcode)});
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    // Read back rather than assumed: React re-renders the button out of ENABLED
+    // state when the field is filled, and a press that landed on a stale
+    // disabled node would do nothing at all.
+    if (submit.disabled === true) return "none: the submit button stayed disabled with the passcode typed";
+    submit.click();
+    return "submitted";
+  })()`;
+}
+
+/**
+ * What the locked page says about itself: the gate's own refusal sentence if it
+ * drew one, whether its controls are live, and the account status the app
+ * reports behind it.
+ *
+ * Read only when the passcode did not open the session, and read rather than
+ * guessed because „it stayed locked" is a conclusion and this is the reason.
+ * Three readings sit in that one sentence, and each of them points at a
+ * different fix: a gate with no error line and live controls is a probe that
+ * never landed; a gate whose controls are DISABLED is a throttle, and the
+ * countdown beside it is the wait; and a gate that REFUSED is the app
+ * answering — in which case the answer itself is the finding, because it can
+ * be about the account rather than about the passcode. „Nalog na ovom uređaju
+ * još ne postoji" is that third kind: it says the active account's directory
+ * holds no key chain, which no scene in this file can cause and which would
+ * otherwise have been reported, for six passes, as a wrong passcode.
+ *
+ * The status behind it is the same fact told from the app's side: `state` is
+ * `uninitialized` exactly when that key chain is missing, and the account list
+ * says whether the directory it looked in is the one it made at launch.
+ */
+const LOCK_REFUSAL = `(async () => {
+  const bits = [];
+  const error = document.querySelector(".auth__error");
+  if (error !== null) bits.push("the gate says: " + (error.textContent || "").trim());
+  const field = document.querySelector(".auth__form input");
+  if (field === null) bits.push("no passcode field");
+  else bits.push(field.disabled ? "the field is disabled" : "the field is live");
+  const submit = document.querySelector(".auth__form button[type=submit]");
+  if (submit === null) bits.push("no submit button");
+  else bits.push(submit.disabled ? "the submit button is disabled" : "the submit button is live");
+  try {
+    const status = await window.nexus.getAuthStatus();
+    const accounts = status.accounts
+      .map((account) => account.id.slice(0, 8) + "/" + account.label)
+      .join(", ");
+    bits.push(
+      "the app says: state " + status.state +
+      ", selected " + String(status.selectedAccountId) .slice(0, 8) +
+      ", accounts [" + accounts + "]",
+    );
+  } catch (statusError) {
+    bits.push("the status could not be read: " + String(statusError));
+  }
+  const card = document.querySelector(".auth__card, .auth");
+  if (card !== null) bits.push("on screen: " + (card.textContent || "").replace(/\\s+/g, " ").trim());
+  return bits.join("; ");
+})()`;
+
+/**
+ * Enters a FIRST RUN, and answers with the profile it made.
+ *
+ * **What a first run is.** `App` withholds the whole shell while the ACTIVE
+ * profile's name is empty (ADR-058) — that one sentinel is what routes a
+ * profile through the questionnaire, and it is the same sentinel on the
+ * account's very first profile and on a profile created later. So there is no
+ * need to reach the account's own first profile, and no way to: it is the
+ * personal anchor, which the store refuses to delete (ADR-058) and which this
+ * fixture has already renamed „Demo" and filled with several hundred rows.
+ *
+ * What is made here is a NEW business profile, created the way the switcher's
+ * „Napravi poslovni profil" creates one and left unnamed the way that flow
+ * leaves it — `window.nexus.createProfile("business", "")` is the same call,
+ * with the same arguments, that `App.createBusinessProfile` makes. The only
+ * step skipped is the passcode gate in front of entering it; the device pref it
+ * would have written is written here instead, and the reload below is what makes
+ * the app LAUNCH into the state rather than be pushed into it.
+ *
+ * It is a business profile and not a second personal one for two reasons, and
+ * both are the same reason: a personal profile is the account's anchor, so it
+ * could never be deleted again (leaving one dead profile per size and theme for
+ * the life of the fixture), and no path in the product creates one. The cost is
+ * the one the screen itself documents — a business first entry has no theme
+ * group on its first screen, because the theme is device-wide and was chosen
+ * long before a second profile existed.
+ */
+function ENTER_FIRST_RUN(): string {
+  return `(async () => {
+    try {
+      const made = await window.nexus.createProfile("business", "");
+      localStorage.setItem("nexus.activeProfile", made.id);
+      return made.id;
+    } catch (error) {
+      return "none: " + String(error);
+    }
+  })()`;
+}
+
+/**
+ * Leaves a first run: points the device pref back at the account's anchor and
+ * deletes the profile the questionnaire was asked against.
+ *
+ * „Uđi" is the other way out, and it is the wrong one here. It WRITES — a name,
+ * a plan, flag rows, and on a personal profile a welcome note — into a profile
+ * that exists only to be photographed, and it would have to be repeated for
+ * every size and every theme; the frames it would add are the reveal and the
+ * manual override, which the rerun pass already takes. So the run is abandoned
+ * mid-questionnaire, which is a state the product has an answer for: the
+ * in-progress draft is a `localStorage` key per profile, and the next boot
+ * prunes it, because the profile it names is gone.
+ *
+ * The profile to return to is resolved the way the SHELL resolves it
+ * (`resolveActiveProfile`): the personal anchor. Nothing here has to remember
+ * which profile the sweep was standing in, and the anchor is exactly what the
+ * shell itself falls back to — so a scene that was interrupted after the create
+ * still lands where a user would.
+ */
+function LEAVE_FIRST_RUN(profileId: string): string {
+  return `(async () => {
+    try {
+      const profiles = await window.nexus.listProfiles();
+      const anchor = profiles.find((profile) => profile.kind === "personal") ?? profiles[0];
+      if (anchor === undefined) return "none: the account has no profile to return to";
+      localStorage.setItem("nexus.activeProfile", anchor.id);
+      await window.nexus.deleteProfile(${JSON.stringify(profileId)});
+      return anchor.id;
+    } catch (error) {
+      return "none: " + String(error);
+    }
+  })()`;
+}
+
+/**
+ * What a FIRST RUN names itself before its second screen can be reached.
+ *
+ * Screen one is the one screen whose PICTURE differs by mode, and the empty box
+ * is the half a rerun can never show: a rerun opens with the profile's live name
+ * already in the field, while a first run opens on the empty-name sentinel. So
+ * the frame is taken EMPTY and the name is typed after it — screen one cannot be
+ * left without one, by either button: „Nastavi" refuses an empty field, and so
+ * does „Preskoči" („a profile needs its name, and one field is not a flow").
+ *
+ * Not a plausible person's name, deliberately. It lands in the questionnaire's
+ * in-progress draft, which a later reader can find in `localStorage` — and a
+ * marker that is obviously the harness is worth more there than a name that
+ * reads like somebody's, which is `WRITE_MARKER`'s argument one screen over.
+ */
+const ONB_FIRST_NAME = "Snimak — prvo pokretanje";
 
 /**
  * The modules whose create form the write pass exercises, and the marker it
@@ -1862,6 +2204,25 @@ export interface ShotSize {
   readonly id: string;
   readonly width: number;
   readonly height: number;
+}
+
+/**
+ * What the sweep cannot work out for itself, handed in by the entry that owns
+ * the fixture (`main/index.ts`, beside `runShotsAuthSetup`).
+ *
+ * One value, and it is handed in rather than written down here because there is
+ * exactly one place the demo account's passcode exists — the entry that creates
+ * the account with it — and a second copy is a copy that can drift. A harness
+ * holding a stale one does not fail loudly: the app refuses a correct passcode,
+ * and the only trace is the sentence the gate draws about it — which
+ * `shootShellScene`'s read-back now prints verbatim rather than paraphrasing as
+ * „stayed locked" (see `LOCK_REFUSAL`). It is required rather than optional
+ * because a default would be that third copy, and a sweep that runs without it
+ * can only be one that cannot unlock what it locked.
+ */
+export interface ShotFixtures {
+  /** The passcode of the demo account `runShotsAuthSetup` creates. */
+  readonly passcode: string;
 }
 
 /**
@@ -2046,16 +2407,17 @@ async function auditPage(win: BrowserWindow): Promise<AuditFinding[]> {
 }
 
 /**
- * Serves a theme by storing the preference and reloading, rather than by
- * clicking the topbar toggle.
+ * Reloads the renderer and waits for the surface the caller expects to be there
+ * afterwards.
  *
- * The toggle would work, but it is a control whose label and position are part
- * of what this sweep exists to change. A reload goes through `main.tsx`'s
- * `applyStoredThemePreference` — the same path a real launch takes — so the
- * frames show the app as it opens, not as it looks after being poked.
+ * The wait is on a SELECTOR rather than on a fixed pause because what is being
+ * waited for differs by caller and only the page can answer it: a theme lands on
+ * the shell, while a first run lands on a questionnaire that has no shell at all
+ * — `waitFor(".app__sidebar")` there would spend its whole timeout watching for
+ * a sidebar the gate deliberately withholds, and every scene after it would be
+ * taken against an unsettled page.
  */
-async function serveTheme(win: BrowserWindow, theme: ShotTheme): Promise<void> {
-  await evalIn(win, `(() => { localStorage.setItem("nexus.theme", ${JSON.stringify(theme)}); return true; })()`);
+async function reloadAndWait(win: BrowserWindow, selector: string): Promise<void> {
   win.webContents.reload();
   // Bounded for `evalIn`'s reason: a `once` listener for an event that has
   // already fired, or that a suspended page never reaches, waits for ever. The
@@ -2066,8 +2428,116 @@ async function serveTheme(win: BrowserWindow, theme: ShotTheme): Promise<void> {
     EVAL_CEILING_MS,
     undefined,
   );
-  await waitFor(win, ".app__sidebar");
+  await waitFor(win, selector);
   await settle(win);
+}
+
+/**
+ * Serves a theme by storing the preference and reloading, rather than by
+ * clicking the topbar toggle.
+ *
+ * The toggle would work, but it is a control whose label and position are part
+ * of what this sweep exists to change. A reload goes through `main.tsx`'s
+ * `applyStoredThemePreference` — the same path a real launch takes — so the
+ * frames show the app as it opens, not as it looks after being poked.
+ */
+async function serveTheme(win: BrowserWindow, theme: ShotTheme): Promise<void> {
+  await evalIn(win, `(() => { localStorage.setItem("nexus.theme", ${JSON.stringify(theme)}); return true; })()`);
+  await reloadAndWait(win, ".app__sidebar");
+}
+
+/**
+ * Photographs one PRE-SHELL state: in, the frames, and back out to the shell.
+ *
+ * Both branches end with the app unlocked, on the demo profile, standing on its
+ * landing — the state the scene loop expects to find, and the same state every
+ * page scene's `cleanup` is written to restore. A scene that left the app
+ * somewhere else would turn every frame after it into a photograph of the wrong
+ * surface, which is the failure the fan-out walk has been repaired for twice.
+ *
+ * Every way in can fail, and each one is REPORTED and abandoned rather than
+ * photographed: a frame of the shell filed under „lock" reads as a lock screen
+ * that renders the app, which is worse than no frame at all. What it is not is
+ * fatal to the run — an entry that misses is a stale selector or a refused
+ * create, not a reason to lose the two thousand frames taken before it.
+ */
+async function shootShellScene(
+  win: BrowserWindow,
+  scene: ShotShellScene,
+  fixtures: ShotFixtures,
+  shoot: (stem: string) => Promise<void>,
+): Promise<void> {
+  if (scene.shell === "lock") {
+    await evalIn(win, LOCK_SCRIPT);
+    if (!(await waitFor(win, ".auth"))) {
+      process.stderr.write(`shots: scene "${scene.id}" did not reach the lock screen\n`);
+      return;
+    }
+    await settle(win);
+    await shoot(scene.id);
+    const unlocked = await evalIn(win, UNLOCK_SCRIPT(fixtures.passcode));
+    if (unlocked !== "submitted") {
+      process.stderr.write(
+        `shots: scene "${scene.id}" could not unlock again — ${String(unlocked)}\n`,
+      );
+      return;
+    }
+    if (!(await waitFor(win, ".app__sidebar"))) {
+      // Not „stayed locked": WHAT the locked page was doing, because the two
+      // things that produce that sentence want opposite readers. A gate that
+      // drew nothing and whose controls are live is the probe's fault; a gate
+      // that drew a REFUSAL is the app answering, and the sentence it drew is
+      // the answer. It was written after this scene reported „stayed locked"
+      // six passes running on a machine where a SECOND shots run was sharing
+      // the sandbox — the app was saying „no account exists on this device",
+      // which is true, is nothing this scene can cause, and is invisible to
+      // every other line of this file.
+      const refusal = await evalIn(win, LOCK_REFUSAL);
+      process.stderr.write(
+        `shots: scene "${scene.id}" stayed locked after the passcode was submitted — ${String(refusal)}\n`,
+      );
+      return;
+    }
+    await settle(win);
+    return;
+  }
+
+  const created = await evalIn(win, ENTER_FIRST_RUN());
+  if (typeof created !== "string" || created.startsWith("none")) {
+    process.stderr.write(
+      `shots: scene "${scene.id}" could not enter a first run — ${String(created)}\n`,
+    );
+    return;
+  }
+  await reloadAndWait(win, ".onb");
+  // The state this scene exists for is the questionnaire OVER THE SENTINEL —
+  // a profile whose name is still the empty string, which is what withholds
+  // the shell. `ONB_PHASE` is the probe the rerun pass uses, so a reload that
+  // landed on a shell, or on the reveal of a run somebody else started, says so
+  // instead of being photographed as a first run.
+  const phase = await evalIn(win, ONB_PHASE);
+  if (phase !== "asking") {
+    process.stderr.write(
+      `shots: scene "${scene.id}" landed on "${String(phase)}", not on a first run — no frames taken\n`,
+    );
+    return;
+  }
+  const walked = await walkQuestionnaire(
+    win,
+    (screen) => `${scene.id}-${screen}`,
+    shoot,
+    ONB_FIRST_NAME,
+  );
+  if (!walked) {
+    process.stderr.write(`shots: the first run was abandoned before its last screen\n`);
+  }
+
+  const left = await evalIn(win, LEAVE_FIRST_RUN(created));
+  if (typeof left !== "string" || left.startsWith("none")) {
+    process.stderr.write(`shots: scene "${scene.id}" could not leave the first run — ${String(left)}\n`);
+    return;
+  }
+  await reloadAndWait(win, ".app__sidebar");
 }
 
 /** Lands on a module by its stable id, never by its (translated) label. */
@@ -2253,7 +2723,11 @@ function pickBy<T>(all: readonly T[], variable: string, idOf: (item: T) => strin
  * exits non-zero and says what broke, and the reader gets the findings from the
  * part that ran.
  */
-export async function runShots(win: BrowserWindow, outDir: string): Promise<ShotFrame[]> {
+export async function runShots(
+  win: BrowserWindow,
+  outDir: string,
+  fixtures: ShotFixtures,
+): Promise<ShotFrame[]> {
   const plan = {
     scenes: pickBy(SHOT_SCENES, "NEXUS_SHOTS_SCENES", (scene) => scene.id),
     sizes: pickBy(SHOT_SIZES, "NEXUS_SHOTS_SIZES", (size) => size.id),
@@ -2281,7 +2755,7 @@ export async function runShots(win: BrowserWindow, outDir: string): Promise<Shot
 
   const frames: ShotFrame[] = [];
   try {
-    await sweep(win, outDir, frames, plan, partial);
+    await sweep(win, outDir, frames, plan, partial, fixtures);
     // Only on the success path — see {@link pruneStaleFrames}.
     if (!partial) pruneStaleFrames(outDir, frames);
   } finally {
@@ -2347,6 +2821,7 @@ async function sweep(
   frames: ShotFrame[],
   plan: ShotPlan,
   partial: boolean,
+  fixtures: ShotFixtures,
 ): Promise<void> {
   // Every file this run has written. A stem is derived from a LABEL and is
   // therefore not unique by construction, so without this the second frame of
@@ -2371,29 +2846,6 @@ async function sweep(
       mkdirSync(dir, { recursive: true });
 
       for (const scene of plan.scenes) {
-        if (!(await openModule(win, scene.module))) {
-          process.stderr.write(`shots: no sidebar row for module "${scene.module}"\n`);
-          continue;
-        }
-        if (scene.prepare !== undefined) {
-          const outcome = await evalIn(win, scene.prepare);
-          // `OPEN_FIRST` answers "none" when no candidate matched. Said out
-          // loud, because the frame it would otherwise produce looks like a
-          // perfectly ordinary list rather than like a broken scene.
-          //
-          // Anything AFTER „none" is the probe saying which of its steps missed,
-          // and it is printed. A multi-step helper that reports only „none"
-          // makes the reader re-derive the path by hand — which is what the
-          // first two failures of `OPEN_CREATE_FORM` cost, and the whole reason
-          // both of them took a second full sweep to place.
-          if (typeof outcome === "string" && outcome.startsWith("none")) {
-            const why = outcome.slice("none".length).replace(/^:\s*/, "");
-            const detail = why === "" ? "" : ` — ${why}`;
-            process.stderr.write(`shots: scene "${scene.id}" found nothing to open${detail}\n`);
-          }
-          await settle(win);
-        }
-
         const shoot = async (stem: string): Promise<void> => {
           // THE SIZE IS RE-ASSERTED AT EVERY FRAME, not once per pass.
           //
@@ -2457,6 +2909,39 @@ async function sweep(
             findings: await auditPage(win),
           });
         };
+
+        // A PRE-SHELL STATE IS NOT OPENED, IT IS ENTERED, and its frames are
+        // taken by the same `shoot` every page scene uses — which is why that
+        // one is defined above rather than beside its first caller. It is also
+        // the only scene kind with no `module` to open, so it leaves the loop
+        // before `openModule` is reached. See {@link ShotShellScene}.
+        if (scene.kind === "shell") {
+          await shootShellScene(win, scene, fixtures, shoot);
+          continue;
+        }
+
+        if (!(await openModule(win, scene.module))) {
+          process.stderr.write(`shots: no sidebar row for module "${scene.module}"\n`);
+          continue;
+        }
+        if (scene.prepare !== undefined) {
+          const outcome = await evalIn(win, scene.prepare);
+          // `OPEN_FIRST` answers "none" when no candidate matched. Said out
+          // loud, because the frame it would otherwise produce looks like a
+          // perfectly ordinary list rather than like a broken scene.
+          //
+          // Anything AFTER „none" is the probe saying which of its steps missed,
+          // and it is printed. A multi-step helper that reports only „none"
+          // makes the reader re-derive the path by hand — which is what the
+          // first two failures of `OPEN_CREATE_FORM` cost, and the whole reason
+          // both of them took a second full sweep to place.
+          if (typeof outcome === "string" && outcome.startsWith("none")) {
+            const why = outcome.slice("none".length).replace(/^:\s*/, "");
+            const detail = why === "" ? "" : ` — ${why}`;
+            process.stderr.write(`shots: scene "${scene.id}" found nothing to open${detail}\n`);
+          }
+          await settle(win);
+        }
 
         await shoot(scene.id);
 
@@ -2766,33 +3251,14 @@ async function sweep(
         continue;
       }
 
-      for (let index = 0; index < ONB_SCREENS.length; index += 1) {
-        const screen = ONB_SCREENS[index] ?? "";
-        const step = await evalIn(win, ONB_STEP);
-        if (step !== String(index + 1)) {
-          process.stderr.write(
-            `shots: questionnaire was on step ${String(step)}, not ${String(index + 1)} ("${screen}")\n`,
-          );
-          break;
-        }
-        // Answered BEFORE the frame: an unanswered screen is the one state none
-        // of these six is interesting in.
-        if (screen === "posao") {
-          if ((await evalIn(win, ONB_TYPE(".onb__form input", ONB_TRADE))) !== "typed") {
-            process.stderr.write("shots: the trade field was not on the „posao“ screen\n");
-          }
-          await settle(win);
-          await evalIn(win, ONB_PICK(".onb__act", 0, 4));
-        }
-        const answer = ONB_ANSWERS[screen];
-        if (answer !== null && answer !== undefined && (await evalIn(win, answer)) !== "picked") {
-          process.stderr.write(`shots: nothing to answer on the „${screen}“ screen\n`);
-        }
-        await settle(win);
-        await shootOnb(`onb-${screen}`);
-        await evalIn(win, CLICK(".onb__actions .nx-button[type=submit]"));
-        await settle(win);
-      }
+      // The six screens, answered and photographed — the SAME walk the
+      // `onboarding` scene runs, told apart only by where it starts, by what the
+      // frames are called and by the name this one already has (a rerun opens on
+      // the profile's live name; a first run opens on the empty-name sentinel
+      // and has to be given one). Its answer is deliberately ignored here: a walk
+      // that abandons early leaves „Priprema" and the reveal to be photographed
+      // below, which is what `break` did when this loop stood here itself.
+      await walkQuestionnaire(win, (screen) => `onb-${screen}`, shootOnb, null);
 
       // „Priprema“, caught mid-flight. Each stage is held for `STAGE_MS` (520)
       // and there are five, so a frame at ~800 ms lands on the second or third

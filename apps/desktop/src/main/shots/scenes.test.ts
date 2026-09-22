@@ -21,10 +21,19 @@ import { SHOT_SCENES } from "./index.js";
  * of them is a program.
  */
 
-const scripts = SHOT_SCENES.flatMap((scene) => [
-  ...(scene.prepare === undefined ? [] : [[`${scene.id}.prepare`, scene.prepare] as const]),
-  ...(scene.cleanup === undefined ? [] : [[`${scene.id}.cleanup`, scene.cleanup] as const]),
-]);
+const scripts = SHOT_SCENES.flatMap((scene) =>
+  scene.kind === "shell"
+    ? // A SHELL scene has no script fields to compile: its entry, its frames
+      // and its exit are steps in `shootShellScene`, which is ordinary typed
+      // TypeScript in `index.ts` and therefore not this suite's subject. What
+      // the suite still owes them is the assertion above — a shell scene is in
+      // the list like any other, and `NEXUS_SHOTS_SCENES` can name it.
+      []
+    : [
+        ...(scene.prepare === undefined ? [] : [[`${scene.id}.prepare`, scene.prepare] as const]),
+        ...(scene.cleanup === undefined ? [] : [[`${scene.id}.cleanup`, scene.cleanup] as const]),
+      ],
+);
 
 describe("every scene script", () => {
   it("is a script somewhere in the plan, so this suite cannot pass vacuously", () => {
