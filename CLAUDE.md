@@ -139,8 +139,11 @@ choice of backend**; whatever in them is about the data model still applies.
      layer is unfinished, and that is the more useful answer.
   Record the class in [docs/defect-classes.md](docs/defect-classes.md) so the
   same shape is recognised the next time it appears somewhere else. **A class
-  that can be turned into a gate should be** — eighteen of the hundred-odd
-  already have been, and a rule nobody can forget beats a rule everybody has read.
+  that can be turned into a gate should be** — twenty-two of the hundred and
+  thirty-one already have been, and a rule nobody can forget beats a rule
+  everybody has read. (This line said „eighteen of the hundred-odd" until
+  2026-09-22, which is what a figure does when it is copied instead of counted;
+  `docs/defect-classes.md` derives both numbers.)
 - **Concise Serbian status updates** to the founder; the code, comments, and docs
   are in **English**.
 
@@ -405,7 +408,7 @@ choice of backend**; whatever in them is about the data model still applies.
 - **Looking at the app is a command, not a chore.**
   `pnpm --filter @nexus/desktop shots` seeds a demo profile, drives the real
   renderer through every module and sub-view in both themes at three window
-  sizes plus maximised, types into each create form, and writes ~350 PNGs to
+  sizes plus maximised, types into each create form, and writes ~2 800 PNGs to
   `apps/desktop/shots/` with `report.md` — a geometric audit of clipped text,
   boxes escaping their parent, overlapping text and sub-24px targets, grouped
   as classes. `pnpm --filter @nexus/desktop demo` adds a populated „Demo"
