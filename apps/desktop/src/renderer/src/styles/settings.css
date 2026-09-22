@@ -361,10 +361,16 @@
   gap: var(--nx-space-4);
   flex-wrap: wrap;
 }
+/* One rhythm for the three parts of a settings row — name, control, hint.
+   It is 6px because that is `.nx-textfield`'s OWN gap, and the `TextField` is
+   nested inside this box: at 4px the row read 6px from the name to the control
+   and 4px from the control to the hint, which is the one measurement in the app
+   no other field has. A raw value for the same reason `packages/ui` uses one —
+   the scale has no 6, and matching the field is the point. */
 .set__study-field {
   display: flex;
   flex-direction: column;
-  gap: var(--nx-space-1);
+  gap: 6px;
   max-width: 260px;
 }
 .set__study-label {
