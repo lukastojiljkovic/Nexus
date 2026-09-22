@@ -11,14 +11,26 @@ import type { InputHTMLAttributes, Ref } from "react";
  * stands in a form row where a caption belongs.
  *
  * A text input does not, and the census is the reason the contract is three
- * arms rather than one. Seven of the remaining eighteen are search boxes, whose
- * visible name is their placeholder and whose caption would be the same words
- * printed twice. Two are cells of a markdown grid, named by their row and their
- * column. The rest are fields in a headed list, named by their POSITION — the
- * ruling `definitions` reached for UČENJE's weekday boxes and TASK's list rows
- * alike. None of those can draw a caption and none has an element to point at,
- * so `aria-label` is not an escape hatch here; it is the correct spelling, and
- * a contract that forbade it would be a contract with exceptions.
+ * arms rather than one: a text field turns up in FOUR kinds of place, and only
+ * one of them has somewhere to put a caption.
+ *
+ *   - A SEARCH BOX, whose visible name is its placeholder and whose caption
+ *     would be the same words printed twice — DOKUMENTI, PRIVATNO, PODEŠAVANJA,
+ *     the palette, the find bar's query, the tools rail.
+ *   - A CELL OF A MARKDOWN GRID, named by its row and its column — the devtools
+ *     text tool's header and body cells.
+ *   - A FIELD IN A HEADED LIST, named by its POSITION: the ruling `definitions`
+ *     reached for UČENJE's weekday boxes and TASK's list rows alike.
+ *   - A FIELD IN A COMPACT INLINE FORM, named by the section's own word because
+ *     the form appears where the row it makes will land — `InlineNameForm`'s
+ *     recipe, which NOTES' folder, tag and category forms and its template pane
+ *     share. This list said THREE until the census was counted again and the
+ *     fourth was plainly already in it; a comment that enumerates less than the
+ *     tree holds is how the next author reads the extra case as an escape hatch.
+ *
+ * None of those can draw a caption and none has an element to point at, so
+ * `aria-label` is not an escape hatch here; it is the correct spelling for all
+ * four, and a contract that forbade it would be a contract with exceptions.
  *
  * What the union makes unrepresentable is the two things that were actually
  * wrong: NO name, and the ambiguous state of naming a control twice — once
