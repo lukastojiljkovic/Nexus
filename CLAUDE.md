@@ -139,14 +139,15 @@ choice of backend**; whatever in them is about the data model still applies.
      layer is unfinished, and that is the more useful answer.
   Record the class in [docs/defect-classes.md](docs/defect-classes.md) so the
   same shape is recognised the next time it appears somewhere else. **A class
-  that can be turned into a gate should be** — twenty-seven of the hundred and
-  thirty-one already have been, and a rule nobody can forget beats a rule
-  everybody has read. **Both figures are DERIVED in `docs/defect-classes.md`,
-  which is the only place either is written down**; if you need the count, read
-  it there rather than here. This line has now been wrong twice by copying
-  („eighteen of the hundred-odd", then „twenty-two" when the source said
-  twenty-seven and the twenty-two was the count of GATES — a different number
-  again), which is what a figure does when it is copied instead of counted.
+  that can be turned into a gate should be** — a rule nobody can forget beats a
+  rule everybody has read. **Do not write the count here.** This line has been
+  wrong three times by copying: „eighteen of the hundred-odd", then
+  „twenty-two" when the ledger said twenty-seven and twenty-two was the count of
+  GATES, then „twenty-seven of the hundred and thirty-one" for a ledger that had
+  reached a hundred and thirty-five classes and twenty-five gates.
+  `docs/defect-classes.md`
+  states the two numbers it can count directly, and says how it counts them;
+  this file names that file and no figure at all.
 - **Concise Serbian status updates** to the founder; the code, comments, and docs
   are in **English**.
 
@@ -240,7 +241,7 @@ choice of backend**; whatever in them is about the data model still applies.
 - **Verification gates before any commit:** `pnpm typecheck` (13/13), `pnpm lint`
   (14/14 — `@nexus/supabase` joined on 2026-09-09; it has no TS, so typecheck
   stays 13), `pnpm test` (all green), `pnpm build` (4/4),
-  `pnpm --filter @nexus/desktop smoke` prints `SMOKE OK`, and **all twenty-four
+  `pnpm --filter @nexus/desktop smoke` prints `SMOKE OK`, and **all twenty-five
   static gates** pass. **`pnpm lint` used to be missing from this line** even
   though CI has always run it, and on 2026-08-14 six real errors shipped red
   because of that — two of them display bugs the linter had named (DC-49,
@@ -436,7 +437,25 @@ choice of backend**; whatever in them is about the data model still applies.
   within a month. It also refuses a file that declares no number, two files
   declaring the same one, numbers that run backwards against the filenames, and
   a migration missing from the tree listing in `supabase/README.md`, which is
-  hand-kept beside a directory that is not and had already lost four).
+  hand-kept beside a directory that is not and had already lost four), and
+  **`check:copy`** (every leaf of the user-facing copy table is read by
+  something — and no other instrument can see one that is not: an unread leaf
+  typechecks, lints, passes `check:strings`, carries no colour, declares no token
+  and **photographs as NOTHING AT ALL, because it is not on screen**;
+  `waveValuesHint` is what the class costs, the only sentence anywhere saying
+  that a list of readings is separated by semicolons, in a dialog that never drew
+  it, so `0, 1,5` was one reading and no error. A leaf is read when something
+  NAMES its path, when a key is computed against an INDEXED subtree, when a
+  member resolves through a dotted literal a registry carries, or when a subtree
+  is HANDED to a call the walk cannot follow — and the last is NOT JUDGED, printed
+  as such on the same run, because „handed to `formatStructuredError`, which
+  indexes whatever table it is given" is a leaf that is read and „handed to a
+  component that ignores the prop" is one that is not, and there is nothing in
+  the file to tell them apart. The census prints beside the verdict so that „found
+  nothing" and „looked at nothing" are not the same green line. It found 24 the
+  day it was written — four wanted rendering and twenty wanted deleting — and it
+  is allowlist-free, because the rule is a statement about what a leaf is REACHED
+  BY and not a list of exceptions).
 - **Looking at the app is a command, not a chore.**
   `pnpm --filter @nexus/desktop shots` seeds a demo profile, drives the real
   renderer through every module and sub-view in both themes at three window
@@ -447,6 +466,14 @@ choice of backend**; whatever in them is about the data model still applies.
   account to this device (passcode `demo-nexus-2026`). Neither flips anything any
   more — the line that stood here forbade running either beside a test suite,
   and that constraint retired with the ABI dance on 2026-09-04.
+  **One run per verb at a time, and it is enforced.** `launch.mjs` now builds and
+  then launches, holding a lock for the whole of it — so a second `shots` is
+  refused by name rather than allowed to wipe the sandbox the first one is using.
+  That is not politeness: two runs on one sandbox deleted each other's key chain
+  and produced a sweep reporting an app that would not unlock, and the `EPERM`
+  from the wipe went into a callback with no `.catch` and left a window at 0 % CPU
+  (`docs/defect-classes.md`, DC-134 and DC-135). A run and the tests still
+  coexist; two runs of the same verb never do.
   New store logic is **TDD** (tests
   red before green). Serbian sr-Latn sorting/formatting uses
   `Intl.Collator(["sr-Latn","sr"])` — plain `"sr"` mis-tailors Latin š/č/ć.
