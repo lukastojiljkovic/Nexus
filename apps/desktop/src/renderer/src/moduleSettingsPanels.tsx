@@ -134,17 +134,17 @@ export interface SettingsPanelRenderer {
  * query matched, and that class is produced by `labelClass()`, which only the
  * call site knows how to ask for.
  *
- * `className` lands on the WRAPPER (see `TextField`), and moving the four
- * `set__*-input` rules there is not a no-op — it is a change of SUBJECT that
- * each declaration has to be re-read for. `width` and `max-width` size the box
- * and `.nx-textfield__input` is `width: 100%`, so the control follows it
- * exactly as it did when the class sat on the input. `font-variant-numeric`
- * inherits, which is what those three rules wanted anyway. `text-transform`
- * ALSO inherits, and that one is not harmless: `.set__currency-input` carried
- * it alone, so the currency field's own label came out as „PODRAZUMEVANA
- * VALUTA" — shouted and tracked — beside siblings reading „Novih kartica
- * dnevno". It names the control now (`finance.css`), which is where a property
- * that reaches downwards belongs.
+ * `className` lands on the WRAPPER (see `TextField`), so the four rules that
+ * size these fields — STUDY's `set__study-number`, FIN's `set__currency-input`,
+ * HABIT's `set__time-input` and UTIL's `set__focus-input` — changed SUBJECT
+ * when they moved here, and every declaration in them had to be re-read. A
+ * `width` sizes the box and the control follows it, because
+ * `.nx-textfield__input` is `width: 100%`. A property that reaches TEXT does
+ * not: `text-transform` inherits, so the currency field's own label came out as
+ * „PODRAZUMEVANA VALUTA" — shouted and tracked — beside siblings reading
+ * „Novih kartica dnevno". Anything that reaches text names the control in all
+ * four now, and the argument is written beside them once rather than four
+ * times.
  */
 interface SettingsFieldProps
   extends Omit<TextFieldProps, "label" | "labelClassName" | "aria-label"> {

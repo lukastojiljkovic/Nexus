@@ -955,35 +955,44 @@
   color: var(--nx-text);
 }
 
-/* The settings card's currency field — three letters, so it does not need to
-   take a whole column's width.
-   `width` sizes the BOX, which is where `TextField` puts a caller's class by
-   design. The uppercase has to name the CONTROL instead, because
-   `text-transform` INHERITS: on the wrapper it reached the field's own label,
-   and the card read „PODRAZUMEVANA VALUTA" — tracked and shouted — beside
-   siblings reading „Novih kartica dnevno". Of the four properties the four
-   `set__*-input` classes carry, this is the only one a wrapper cannot hold. */
+/* --- The settings card's narrow fields ------------------------------------
+   Four fields holding three or four characters, sized to their own content
+   rather than stretched across a card — a full-width input over a two-digit
+   number reads as a form with something to hide. Three are here; the fourth,
+   STUDY's two daily caps, sits beside the row shape it extends in
+   `settings.css`, and is written the same way.
+   Each rule below is ONE SHAPE, because a caller's class lands on the WRAPPER
+   in `TextField`, by design, and a declaration has to be asked what it is
+   actually sizing. `width` sizes the box, and `.nx-textfield__input` is
+   `width: 100%`, so the control follows it exactly as it did when the class sat
+   on the input. */
+/* FIN's currency code. */
 .set__currency-input {
   width: 96px;
 }
+/* HABIT's default reminder hour — the widest value a time input draws. */
+.set__time-input {
+  width: 132px;
+}
+/* UTIL's four minute fields — the widest value any of them can hold. */
+.set__focus-input {
+  width: 96px;
+}
+
+/* Everything that reaches TEXT names the CONTROL, and that is the half of the
+   shape above that a wrapper must not hold: a property that INHERITS does not
+   stop at the box it was written on. `.set__currency-input` used to carry
+   `text-transform` itself, and the field's own label came out as
+   „PODRAZUMEVANA VALUTA“ — shouted and tracked — beside siblings reading
+   „Novih kartica dnevno“. `font-variant-numeric` inherits for the same reason
+   and is invisible on every label under it today, which is exactly why it is
+   written the same way rather than left for whoever adds a label reading
+   „Najviše 200“ to notice. */
 .set__currency-input .nx-textfield__input {
   text-transform: uppercase;
 }
-
-/* Navike (HABIT): the default reminder hour. Sized to its own content like the
-   currency code beside it, rather than stretching a four-character value across
-   a card. */
-.set__time-input {
-  width: 132px;
-  font-variant-numeric: tabular-nums;
-}
-
-/* Fokus (UTIL): four minute fields. Sized to the widest value any of them can
-   hold (three digits) on the same reasoning as the two above — a card of
-   full-width inputs over two-digit numbers reads as a form with something to
-   hide. */
-.set__focus-input {
-  width: 96px;
+.set__time-input .nx-textfield__input,
+.set__focus-input .nx-textfield__input {
   font-variant-numeric: tabular-nums;
 }
 

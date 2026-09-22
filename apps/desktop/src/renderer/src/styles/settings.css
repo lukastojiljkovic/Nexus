@@ -372,8 +372,14 @@
   color: var(--nx-text-muted);
   font-weight: var(--nx-font-weight-semibold);
 }
+/* The two daily caps (STUDY-007): narrow number fields, written like the three
+   in `finance.css` — the box property here, the digits on the CONTROL there.
+   `font-variant-numeric` inherits, and a property that reaches text belongs
+   where the text is; the argument is written out in full beside its siblings. */
 .set__study-number {
   max-width: 110px;
+}
+.set__study-number .nx-textfield__input {
   font-variant-numeric: tabular-nums;
 }
 
