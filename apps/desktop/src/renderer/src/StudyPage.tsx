@@ -3252,16 +3252,25 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
       ) : loading ? (
         <p className="nx-hint">{strings.app.loading}</p>
       ) : sortedSubjects.length === 0 ? (
-        <EmptyState
-          sigil="study"
-          title={strings.study.emptyTitle}
-          description={strings.study.emptyDescription}
-          action={
-            <Button variant="primary" onClick={startAddSubject}>
-              {strings.study.add}
-            </Button>
-          }
-        />
+        // The subject column in its EMPTY shape — the same box the cards are
+        // drawn in below, because that is what this arm is: the list area with
+        // nothing in it, plus the module's one primary. The marker has to be on
+        // both copies of that box or on neither: with it on the populated one
+        // alone, the landing a profile with no subject yet actually opens is the
+        // one state the audit cannot see, and an unmeasured landing and a fine
+        // one write the same clean report.
+        <div className="study__subjects" data-nx-content>
+          <EmptyState
+            sigil="study"
+            title={strings.study.emptyTitle}
+            description={strings.study.emptyDescription}
+            action={
+              <Button variant="primary" onClick={startAddSubject}>
+                {strings.study.add}
+              </Button>
+            }
+          />
+        </div>
       ) : (
         <>
           {/* The page's ANSWER, before its contents. „Plan i stvarnost" was the
@@ -3293,7 +3302,9 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
 
           {/* `data-nx-content` (`shots/audit.ts`): the subject list is what
               this page IS, and the audit refuses a landing that opens
-              without it. */}
+              without it. The empty shape of the same box carries the marker
+              too — see the arm above — so a profile with nothing in it is
+              measured as well as a full one. */}
           <div className="study__subjects" data-nx-content>
             {activeSubjects.map((subject) => {
               const subjectExams = examsForSubject(subject.id);

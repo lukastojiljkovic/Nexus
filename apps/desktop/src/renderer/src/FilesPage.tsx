@@ -290,7 +290,7 @@ export function FilesPage({ profileId, onOpenOwner }: FilesPageProps) {
 
   function renderList(entries: readonly DocAttachmentEntry[]) {
     return (
-      <div className="doc__list" data-nx-content>
+      <div className="doc__list">
         <div className="doc__list-head" aria-hidden="true">
           <span>{s.columns.name}</span>
           <span>{s.columns.owner}</span>
@@ -315,7 +315,7 @@ export function FilesPage({ profileId, onOpenOwner }: FilesPageProps) {
 
   function renderGrid(entries: readonly DocAttachmentEntry[]) {
     return (
-      <div className="doc__grid" data-nx-content>
+      <div className="doc__grid">
         {entries.map((entry) => {
           const mark = fileExtensionMark(entry.fileName);
           return (
@@ -388,25 +388,39 @@ export function FilesPage({ profileId, onOpenOwner }: FilesPageProps) {
    * result draws NONE of them: a band reading „0 · 0 B" over a bar chart of four
    * zeroes, above a sentence saying there is nothing here, is the page saying
    * the same nothing three times.
+   *
+   * `data-nx-content` is on the wrapper BELOW rather than on the list and the
+   * grid it holds, where it used to sit, and the difference is the arms. The
+   * attribute names the region the module IS, and a marker on a row shape
+   * exists only when there are rows: a DOKUMENTI with nothing in it carried no
+   * marker at all, so the one state in which the page has no rows to show was
+   * also the one `shots/audit.ts` could not measure — no region and a region
+   * above the fold write the same clean report. `.tasks__rows` is the pattern
+   * copied here: one box around every arm, with the populator (the band, the
+   * bar graphic, the cap advice) deliberately outside it.
    */
   function renderBody(data: DocAttachmentList) {
     if (data.entries.length === 0) {
       // Two different situations. „You have no files" and „nothing matches
       // these filters" are not the same sentence, and saying one of them for
       // both would be a lie about whichever it is not.
-      return filtered ? (
-        <EmptyState
-          sigil="files"
-          title={s.noMatchTitle}
-          description={s.noMatchDescription}
-          action={
-            <Button size="sm" onClick={clearFilters}>
-              {s.clearFilters}
-            </Button>
-          }
-        />
-      ) : (
-        <EmptyState sigil="files" title={s.emptyTitle} description={s.emptyDescription} />
+      return (
+        <div className="doc__rows" data-nx-content>
+          {filtered ? (
+            <EmptyState
+              sigil="files"
+              title={s.noMatchTitle}
+              description={s.noMatchDescription}
+              action={
+                <Button size="sm" onClick={clearFilters}>
+                  {s.clearFilters}
+                </Button>
+              }
+            />
+          ) : (
+            <EmptyState sigil="files" title={s.emptyTitle} description={s.emptyDescription} />
+          )}
+        </div>
       );
     }
     return (
@@ -416,7 +430,9 @@ export function FilesPage({ profileId, onOpenOwner }: FilesPageProps) {
             read, no second call. */}
         <FileSpace entries={data.entries} truncated={data.truncated} />
         {data.truncated && <p className="doc__truncated">{s.truncatedAdvice}</p>}
-        {view === "lista" ? renderList(data.entries) : renderGrid(data.entries)}
+        <div className="doc__rows" data-nx-content>
+          {view === "lista" ? renderList(data.entries) : renderGrid(data.entries)}
+        </div>
       </>
     );
   }

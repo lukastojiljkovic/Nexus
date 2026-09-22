@@ -1042,6 +1042,18 @@
   align-items: flex-start;
   gap: var(--nx-space-2);
 }
+/* The rows, the grid and both empty states that stand in for them — one box so
+   the layout audit has something to point at (`data-nx-content`,
+   `shots/audit.ts`). Declared as a copy of `.doc`'s own column ON PURPOSE: the
+   arms of that conditional were direct children of it, and the marker was on
+   two of the three shapes, so the empty page had no region to measure at all.
+   Anything other than the same direction and the same gap would move them. */
+.doc__rows {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-5);
+}
 /* --- Lista --------------------------------------------------------------- */
 /* One grid template for the head and every row, so the columns line up without
    a table: name takes the slack, the three facts are sized to their content,

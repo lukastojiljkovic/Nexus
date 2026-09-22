@@ -9,12 +9,27 @@ import { describe, expect, it } from "vitest";
  * window on every frame where the region RENDERS, and reports `below-fold`
  * when a landing opens without its own subject on screen.
  *
- * „Where it renders“ is not a hedge — DOKUMENTI is the live case. The sweep's
- * profile has no attachments, so neither `.doc__list` nor `.doc__grid` is ever
- * drawn and neither marker has been measured. That gap predates the marker
- * (the sweep has never photographed either surface) and is recorded in
- * `docs/STATUS.md`; the claim is placed so it starts holding the moment the
- * profile has a file in it.
+ * „Where it renders“ is not a hedge, and DOKUMENTI is why. The marker sat on
+ * `.doc__list` and `.doc__grid`, the two shapes of the rows, so it was absent
+ * exactly when the page was empty: a page whose region does not exist and a
+ * page whose region is above the fold write the same clean report, and only the
+ * second of those is a page that is fine. The fix is the marker's position
+ * rather than a second rule: `.doc__rows` is ONE box written once in each arm,
+ * so the number below did not move — two became two — while what it counts did.
+ * Two row shapes in one arm left the empty page with no region at all; two arms
+ * leave no state of that page uncovered. A number here is a count of WRITINGS,
+ * so it is the reason beside it, and not the number, that has to stay true.
+ *
+ * The one landed page that is NOT in the list below is HABITS, and it is the
+ * case that says what the rule is not. „Danas“ carries the marker and is drawn
+ * only when there is a habit: with none, the page drops its whole middle and
+ * answers in the register's own landing — a box that exists in both states and
+ * is deliberately unmarked, because it is the archive and is legitimately below
+ * the fold. Nothing there is left unprotected: `below-fold` has no subject to
+ * measure on a page that has none, and `hollow-fixture` has no figure to
+ * contradict, because the band is guarded on the very condition the marker is.
+ * That is the page's design rather than a gap in it, and writing it down here
+ * is what keeps the next reader from completing the census.
  *
  * This suite exists because that rule's failure mode is SILENCE. Delete an
  * attribute and the audit stops checking the page; the sweep still runs, still
@@ -57,8 +72,8 @@ const MARKED: ReadonlyArray<readonly [string, number, string]> = [
   ["NotesPage.tsx", 1, "the three-pane grid"],
   ["TasksPage.tsx", 1, "`.tasks__rows`, every view of the list"],
   ["HabitsPage.tsx", 1, "„Danas“, the part a person acts on"],
-  ["StudyPage.tsx", 1, "the subject cards"],
-  ["FilesPage.tsx", 2, "the list and the grid are one region in two shapes"],
+  ["StudyPage.tsx", 2, "`.study__subjects`, populated and empty — one box, two arms"],
+  ["FilesPage.tsx", 2, "`.doc__rows` — the list, the grid, either empty state"],
   ["FocusPage.tsx", 2, "the panel, running and idle — the negative control"],
 ];
 
