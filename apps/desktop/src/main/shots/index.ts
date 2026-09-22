@@ -698,6 +698,28 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     cleanup: DISPATCH_KEY("Escape"),
   },
   {
+    // „Pokretač" (E6) — the external runner, and the ONE screen in this list
+    // that is photographed in its OFF state and must stay that way.
+    //
+    // **The sweep does not enable it, and that is a decision rather than an
+    // omission.** Enabling records a CONSENT — a row saying that a person
+    // agreed to let Nexus start processes on this computer — and a screenshot
+    // harness that wrote one would be granting, on the founder's own machine
+    // and on his behalf, the permission DEV-007 exists to require. The demo
+    // profile has no `elec_settings` row at all, so this is exactly what the
+    // dialog looks like on a machine that has never run anything: the four
+    // promises and the button.
+    //
+    // Which is also why there is no `runnerPlan` to wait for: main refuses one
+    // while the switch is off, and it refuses it WITHOUT consulting the runner
+    // — so this scene spawns nothing even by accident.
+    id: "electronics-runner",
+    module: "electronics",
+    prepare: OPEN_RUNNER_DIALOG(),
+    fanout: null,
+    cleanup: DISPATCH_KEY("Escape"),
+  },
+  {
     // The panel on the right with a PART in it. Three of this module's four
     // surfaces are inside that panel and none of them is reachable without
     // selecting something, so without these two scenes the sweep would report
@@ -1233,6 +1255,29 @@ function OPEN_CHASSIS_DIALOG(): string {
  * needed no equivalent of: „Kod" renders one shape per circuit and „Klupa"
  * renders a FORM whose fields depend on a picker. See {@link SET_WAVE_KINDS}.
  */
+/**
+ * Opens ELEC's „Pokretač" dialog (E6), on {@link OPEN_CODE_DIALOG}'s recipe and
+ * for its two reasons verbatim: the button is disabled until the circuit's IPC
+ * read lands, and the render between `setDoc(null)` and `setDoc(opened)` is
+ * never painted, so the wait is on the OUTCOME rather than on a precondition.
+ *
+ * There is no `after` and no `preamble`, because there is nothing to open it
+ * WITH: the dialog's own state is a settings row, and the sweep seeds none. See
+ * the scene's comment for why a harness must not write that row.
+ */
+function OPEN_RUNNER_DIALOG(): string {
+  return `(async () => {
+  const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  for (let attempt = 0; attempt < 120; attempt += 1) {
+    if (document.querySelector(".elec-runner__panel")) return true;
+    const open = document.querySelector(".elec__runner");
+    if (open && !open.disabled) open.click();
+    await frame();
+  }
+  return "none";
+})()`;
+}
+
 function OPEN_SIM_DIALOG(preamble = "", after = ""): string {
   return `(async () => {
   const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
@@ -3327,6 +3372,39 @@ export function duplicateStems(frames: readonly ShotFrame[]): readonly string[] 
 }
 
 /**
+ * The coverage a full pass owes and did not deliver, derived from the frames.
+ *
+ * ONE SURFACE, and it is the only capture in the sweep whose SUBJECT is the
+ * window state rather than the page: the maximised frame. `win.maximize()` is a
+ * REQUEST to the window manager rather than a setter, and it is refused often —
+ * measured over four runs on 2026-09-03 the frame landed once, and both runs on
+ * 2026-09-22 refused — and when it is refused the sweep says so on stderr and
+ * takes no frame, which is the honest answer rather than a picture filed under a
+ * name that is not true of it.
+ *
+ * What a refusal is not is a reason for the HEADLINE to read like a clean run's,
+ * which is `duplicateStems`' argument one field over: a reader who scans the
+ * last line takes away „2 839 frames, 0 findings" and never learns that the
+ * widest layout in the product was not looked at. So the fact is derived here
+ * and printed beside the frame count — and derived FROM THE FRAMES rather than
+ * passed in as a flag, for the same reason the duplicate count is: nothing has
+ * to remember to hand it over.
+ *
+ * „Owed" is decided by what WAS photographed rather than by what was asked for,
+ * so a partial run — one scene, one size, picked by the env vars — is not
+ * reported as missing coverage it never claimed. The dashboard at `noc` in all
+ * three measured sizes is what a full pass always contains, and the maximised
+ * capture happens to be of that same scene and theme.
+ */
+export function missingCoverage(frames: readonly ShotFrame[]): readonly string[] {
+  const sizes = new Set(
+    frames.filter((frame) => frame.scene === "dashboard" && frame.theme === "noc").map((f) => f.size),
+  );
+  if (!SHOT_SIZES.every((size) => sizes.has(size.id))) return [];
+  return sizes.has("maximized") ? [] : ["maximized"];
+}
+
+/**
  * The findings, grouped so the reader sees CLASSES rather than instances.
  *
  * A defect in a shared component reports once per surface it appears on; a list
@@ -3352,6 +3430,18 @@ function buildReport(frames: readonly ShotFrame[]): string {
     `${frames.length} frames, ${rows.length} distinct findings.`,
     "",
   ];
+  // On this line and not only on stderr, for the reason it is on the headline:
+  // a report that says „0 distinct findings" over a set that is one surface
+  // short reads as a clean bill of health for a coverage that was not taken.
+  const missing = missingCoverage(frames);
+  if (missing.length > 0) {
+    lines.push(
+      `**No \`${missing.join("`, `")}\` frame was taken.** The window manager ` +
+        `refused to maximise, so the widest layout in the product is not in this ` +
+        `set. The frames below are measured, and the coverage is not complete.`,
+      "",
+    );
+  }
   // A collision is not a layout finding and has no place in the table below —
   // but it IS a defect, and the reader must not have to subtract one number
   // from another to notice it, which is how it was noticed the first time.

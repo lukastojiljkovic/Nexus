@@ -27,6 +27,7 @@ import type {
   RosSkip,
   RuleCode,
   RuleSeverity,
+  RunnerProfileId,
   SimFlow,
   SimRefusal,
   SimSkip,
@@ -36,6 +37,14 @@ import type {
   ValueUnit,
   WireColour,
 } from "@nexus/core";
+// The one import here that comes from the IPC contract rather than from the
+// domain model, and for the same reason the table below needs it: a runner
+// refusal has SEVEN members, and four of them are main's own (`not-enabled`,
+// `no-choice`, `no-distro`, `no-package`) because they are facts about the
+// user's settings and their circuit rather than about the command line. Keying
+// the table on core's three-member union would leave half of it untyped — which
+// is exactly how a refusal added to the contract renders as a blank line.
+import type { RunnerRefusal } from "../../../shared/ipc.js";
 
 export const electronicsSr = {
   /** Above the circuit list. Names the SECTION, not the sidebar entry — `strings.modules` owns that. */
@@ -772,5 +781,249 @@ export const electronicsSr = {
       shared: "na liniji je više komponenti",
       "no-direction": "iz šeme se ne vidi smer",
     } satisfies Record<SimSkip, string>,
+  },
+
+  /**
+   * ADR-085 slice E6: the external runner — the one part of Nexus that starts a
+   * process on the user's own machine.
+   *
+   * **The copy IS the feature here.** Everywhere else in this app a sentence
+   * explains a surface; on this screen the sentence carries the consent, so the
+   * four promise lines under `consent` are written to be CHECKED against what
+   * the code does rather than to sound reassuring — a program that runs with
+   * the user's own rights, a build that only ever starts on a click, one
+   * directory touched, and one network operation, named. Nothing is softened
+   * (a screen that persuaded would be the wrong instrument for this) and
+   * nothing is hidden (the Docker pull is the only part of this feature that
+   * leaves the machine, and it is the product's promise that it stays the only
+   * one).
+   *
+   * **Three distinctions the copy must not blur, because each is a place where
+   * the shorter sentence would be a lie.** A probe that never answered is not a
+   * tool that is absent: `wsl.exe` hangs when the WSL service is stopped, and
+   * „nije nađen" would send the user looking for an installation they already
+   * have. A stop that left the work going is not a stop: `docker.exe` exits
+   * while the container it started builds on, which is why the ending is drawn
+   * from `state` and never from the exit code. And a run that ended by itself
+   * is not a run somebody stopped — two facts, two sentences, at the foot of
+   * the log.
+   */
+  runner: {
+    /** The header action, beside „Kod" and „Klupa". */
+    open: "Pokretač",
+    dialogTitle: "Pokretač",
+    close: "Zatvori",
+    /**
+     * Nothing could be read at all — a broken channel rather than a state of
+     * the runner. Says what to do next, because the dialog has no retry.
+     */
+    loadError: "Podešavanja pokretača nisu učitana. Zatvori dijalog i otvori ga ponovo.",
+
+    /**
+     * The switch is OFF, and this block is the whole dialog.
+     *
+     * **A button and not a checkbox, deliberately.** The button IS the consent,
+     * and a checkbox beside it would be a second thing to click that means the
+     * same thing — the shape that teaches a user to tick without reading, on
+     * the one screen in this app where reading is the point. The time of the
+     * click is what gets recorded, which is why the acts are one act.
+     */
+    consent: {
+      heading: "Šta uključivanje znači",
+      external:
+        "Nexus pokreće spoljni program na ovom računaru — sa istim pravima koja imaš i ti.",
+      manual: "Ništa se ne pokreće samo: svaki posao počinje kad ga ti pokreneš.",
+      writes: "Posao čita i piše jedan direktorijum — onaj koji Nexus napravi za taj paket.",
+      network:
+        "Profil Docker pri prvom pokretanju skida sliku sa Docker Hub-a. To je jedini deo " +
+        "pokretača koji ide na mrežu.",
+      enable: "Uključi pokretač",
+      /**
+       * The write that records the consent did not land.
+       *
+       * Its own sentence rather than the dialog's generic failure, because this
+       * is the one write on the screen where „nešto nije uspelo" would leave the
+       * reader unsure of the thing that matters: nothing was turned on. The
+       * button is still there, and the panel says what state it is in.
+       */
+      rejected: "Uključivanje nije zapamćeno — pokretač je ostao isključen.",
+    },
+
+    /**
+     * What is installed, asked of the tools themselves.
+     *
+     * **Nothing is shown until the button is pressed, and that is a fact about
+     * the machine rather than a choice about the layout**: the probe SPAWNS a
+     * process per profile, so it is the user's click that starts it and never
+     * the dialog opening. The empty state therefore has to say what the button
+     * does, because it is the only thing on the screen that explains why the
+     * screen is empty.
+     */
+    detect: {
+      heading: "Šta je na ovom računaru",
+      button: "Proveri okruženje",
+      checking: "Proveravam…",
+      empty:
+        "Nijedan profil se ne prikazuje dok se ne proveri. Provera pokreće po jednu kratku " +
+        "komandu za svaki profil i traje nekoliko sekundi.",
+      /**
+       * The probe's three answers. `found` takes the version beside it when the
+       * tool printed one; `timedOut` is its own answer for the reason the file
+       * header gives — it is the one that is not about installation at all.
+       */
+      states: {
+        found: "nađen",
+        missing: "nije nađen",
+        timedOut: "nije odgovorio na vreme",
+      },
+      /** WSL's second question, per distribution — a list rather than a yes. */
+      distroUsable: "colcon je u njoj",
+      distroUnusable: "colcon nije nađen",
+    },
+
+    /**
+     * Which toolchain the build runs in.
+     *
+     * The choice is a write and the panel shows the ANSWER (see the dialog's
+     * own note): main is the one that validates a distribution, so a rejected
+     * write must be a sentence rather than a radio that quietly snaps back to
+     * where it was.
+     */
+    choice: {
+      heading: "Čime da se gradi",
+      /** Before the probe has run the three rows are disabled, and this says why. */
+      needsDetection: "Prvo proveri okruženje — bez provere se ne zna koji profil radi ovde.",
+      rejected: "Izbor nije prihvaćen. Proveri okruženje ponovo, pa probaj drugi profil.",
+      /** The three profiles, each named by what it IS rather than by its id. */
+      profiles: {
+        native: "Na ovom sistemu",
+        wsl: "WSL",
+        docker: "Docker",
+      } satisfies Record<RunnerProfileId, string>,
+      hints: {
+        native: "colcon koji je već na PATH-u ovog računara.",
+        wsl: "colcon unutar Linux distribucije u Windows-u.",
+        docker: "colcon u kontejneru iz fiksirane ROS 2 slike.",
+      } satisfies Record<RunnerProfileId, string>,
+      distroLabel: "Distribucija",
+      /** The select's empty option, which is what it shows until one is chosen. */
+      distroNone: "Izaberi distribuciju",
+    },
+
+    /** The literal command, and the button that runs it. */
+    command: {
+      heading: "Komanda",
+      /**
+       * The sentence the whole dialog exists for. It says EXACT and not
+       * „example", because the block below is the argv main will spawn —
+       * `runner.ts` guarantees the two are one string, and a user checking a
+       * command against a description has been given nothing to check.
+       */
+      exact:
+        "Ovo je tačna komanda koja se pokreće. Svaki argument stoji u svom redu, pa se " +
+        "vidi gde je koji.",
+      workspaceLabel: "Direktorijum",
+      /** The one thing here that leaves the machine, said above the button that causes it. */
+      pullsImage: "Prvo pokretanje skida sliku sa Docker Hub-a.",
+      start: "Pokreni",
+    },
+
+    /**
+     * Why there is no command line. Each is a fact about the machine or the
+     * circuit rather than a failure, and all seven are refusals rather than
+     * throws for `code.refused`'s reason: a caller with a `switch` is a caller
+     * that has to decide what the app says, and an exception is that decision
+     * made badly and late.
+     */
+    refused: {
+      "path-not-absolute":
+        "Putanja do radnog direktorijuma nije apsolutna, pa komanda ne može da se sastavi.",
+      "path-not-representable":
+        "Ova putanja se ne može zapisati u obliku koji taj profil zahteva.",
+      "distro-leading-dash":
+        "Ime distribucije počinje crtom, pa bi se čitalo kao opcija. Nexus to ne pokreće.",
+      "not-enabled": "Pokretač je isključen, pa nema komande koja bi se pokrenula.",
+      "no-choice": "Nijedan profil nije izabran, pa nema komande koja bi se pokrenula.",
+      "no-distro": "Izabran je WSL, ali nijedna distribucija nije izabrana.",
+      "no-package": "Ovo kolo ne daje ROS 2 paket, pa nema šta da se gradi.",
+    } satisfies Record<RunnerRefusal, string>,
+
+    /**
+     * Why a start did not happen, on top of the six above — every one of which
+     * a start can also answer with, which is why this table holds only the four
+     * a plan cannot give. `not-enabled` is NOT here: it is a refusal like any
+     * other, and one fact drawn from two tables is one fact that can disagree
+     * with itself.
+     */
+    start: {
+      alreadyRunning: "Jedan posao je već u toku — Nexus pokreće jedan po jedan.",
+      writeFailed: "Paket nije napisan na disk, pa posao nije pokrenut.",
+      spawnFailed: "Program nije mogao da se pokrene. Poruka ispod je njegova.",
+      none: "Posao nije pokrenut.",
+    },
+
+    /** The run itself: the phase, the output, and how it ended. */
+    run: {
+      heading: "Posao",
+      /**
+       * The phase word, keyed by the contract's own closed union. `mirno` is
+       * the word for „nothing is running" rather than for „the idea of idle":
+       * the section outlives the run it describes, so it draws the ending of
+       * the last one under this word.
+       */
+      phases: {
+        idle: "mirno",
+        running: "radi",
+        stopping: "zaustavlja se",
+      } satisfies Record<"idle" | "running" | "stopping", string>,
+      /**
+       * Above the log when output was dropped, with the cap filled in: the log
+       * is then a WINDOW on the run — its latest output, with the earliest
+       * gone — and a reader who does not know that reads the end of a build as
+       * the whole of it.
+       */
+      dropped: "Izlaz je veći od {cap} KB, pa je prikazan samo njegov kraj.",
+      /** Before the first chunk arrives. */
+      empty: "Još nema izlaza.",
+      stop: "Zaustavi",
+      /** The stop answered that there was nothing to stop. */
+      stopIdle: "Nema posla koji bi se zaustavio.",
+      /** Who ended it. */
+      endedStopped: "Zaustavljanje je zatraženo.",
+      endedAlone: "Posao se završio sam.",
+      /**
+       * Whether the WORK is gone — the pair this dialog must never blur. For
+       * Docker the process Nexus started can be gone while the container it
+       * started is not, so `workStill` says the build is going rather than
+       * reporting a success nobody established.
+       */
+      workExited: "Posao je završen.",
+      workStill:
+        "Posao još radi — proces preko kojeg ga je Nexus pokrenuo se završio, a ono što je " +
+        "pokrenuto nije.",
+      /** Above the exit code, which is a figure and not a verdict. */
+      exitCodeLabel: "izlazni kod",
+      /**
+       * Whether the build PRODUCED the package, which no exit code can say.
+       *
+       * The pair is the whole reason the field exists: `colcon` exits 0 over a
+       * workspace with nothing in it, so „the code was 0" and „the package is
+       * on the disk" are two different claims, and only the second one is what
+       * the user asked for.
+       */
+      artifactBuilt: "Paket je napravljen — fascikla install postoji u radnom direktorijumu.",
+      artifactMissing:
+        "Izlazni kod je 0, ali paket nije napravljen: u radnom direktorijumu nema fascikle " +
+        "install. colcon prijavljuje uspeh i kad nema šta da gradi.",
+      /** Above the child's own words, printed as they arrived. */
+      messageLabel: "Poruka programa",
+    },
+
+    /** Turning it off again, which stops any run first. */
+    off: {
+      disable: "Isključi pokretač",
+      /** While a run is going: the same act, and the label says it does two things. */
+      disableRunning: "Zaustavi i isključi",
+    },
   },
 } as const;

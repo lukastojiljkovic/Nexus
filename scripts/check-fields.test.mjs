@@ -188,20 +188,26 @@ describe("the live tree", () => {
    * the tree, and the count is exact rather than „greater than zero" for the
    * same reason: a walk that lost one directory would still be non-empty.
    *
-   * EIGHT, and the breakdown is the whole claim this gate makes about the app:
+   * NINE, and the breakdown is the whole claim this gate makes about the app:
    * every intrinsic `<input>` left in it draws something other than a text
-   * entry. Five radios (PRIVATNO's four credential and recovery-kit choices,
-   * ELEKTRONIKA's chassis shape), one range (the dashboard dim slider), one
-   * hidden file picker (NOTE's attachment input) and one checkbox — the
-   * `Checkbox` primitive's own element, which is why the exemption is
-   * `TextField.tsx` alone and this one needs none: a checkbox is allowed by
-   * TYPE, so a second exempt file would have been a second list to keep.
+   * entry. Six radios (PRIVATNO's four credential and recovery-kit choices,
+   * ELEKTRONIKA's chassis shape, and ELEKTRONIKA's runner profile — one element
+   * in source, drawn three times by a `map` over the closed table), one range
+   * (the dashboard dim slider), one hidden file picker (NOTE's attachment input)
+   * and one checkbox — the `Checkbox` primitive's own element, which is why the
+   * exemption is `TextField.tsx` alone and this one needs none: a checkbox is
+   * allowed by TYPE, so a second exempt file would have been a second list to
+   * keep.
+   *
+   * Each radio here carries `.nx-radio`, which the GATE asserts and this census
+   * does not: a bare one renders at 13x13 in the OS widget with an eleven-pixel
+   * hole in its hit area, and this count would go on being green while it did.
    */
-  it("sees exactly the eight inputs the rule deliberately leaves alone", () => {
+  it("sees exactly the nine inputs the rule deliberately leaves alone", () => {
     const census = inputsInRepo();
     const counts = {};
     for (const input of census) counts[input.type] = (counts[input.type] ?? 0) + 1;
-    expect(counts).toEqual({ radio: 5, range: 1, file: 1, checkbox: 1 });
+    expect(counts).toEqual({ radio: 6, range: 1, file: 1, checkbox: 1 });
   });
 
   /**

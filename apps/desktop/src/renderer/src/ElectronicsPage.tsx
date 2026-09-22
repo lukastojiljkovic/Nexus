@@ -30,6 +30,7 @@ import { ElecChassisDialog } from "./ElecChassisDialog.js";
 import { ElecCodeDialog } from "./ElecCodeDialog.js";
 import { ElecInspector } from "./ElecInspector.js";
 import { ElecPalette } from "./ElecPalette.js";
+import { ElecRunnerDialog } from "./ElecRunnerDialog.js";
 import { ElecSimDialog } from "./ElecSimDialog.js";
 import {
   contentBounds,
@@ -116,6 +117,8 @@ export function ElectronicsPage({ profileId }: ElectronicsPageProps) {
   /** The generated-code dialog (E4), and the one line left behind after it closes. */
   const [codeOpen, setCodeOpen] = useState(false);
   const [simOpen, setSimOpen] = useState(false);
+  /** The external runner (E6) — the one dialog here that can start a process. */
+  const [runnerOpen, setRunnerOpen] = useState(false);
   const [codeNotice, setCodeNotice] = useState<string | null>(null);
   /** The chassis form (E4c) — nine numbers saved as one, so it is a dialog rather than nine committed fields. */
   const [chassisOpen, setChassisOpen] = useState(false);
@@ -199,12 +202,15 @@ export function ElectronicsPage({ profileId }: ElectronicsPageProps) {
     setSelection(null);
     setWiring(null);
     setNotesSaved(false);
-    // Both dialogs belong to the circuit that was open. Either would otherwise
-    // stay up and refill itself from a different circuit — the code one with
-    // another board's sketch, the chassis one with another machine's numbers.
+    // All three dialogs belong to the circuit that was open. Each would
+    // otherwise stay up and refill itself from a different circuit — the code
+    // one with another board's sketch, the chassis one with another machine's
+    // numbers, and the runner one with a plan for a workspace this page no
+    // longer has open.
     setCodeOpen(false);
     setCodeNotice(null);
     setChassisOpen(false);
+    setRunnerOpen(false);
     void (async () => {
       try {
         const opened = await window.nexus.openCircuit(profileId, activeId);
@@ -653,6 +659,22 @@ export function ElectronicsPage({ profileId }: ElectronicsPageProps) {
                 >
                   {s.sim.open}
                 </Button>
+                {/* The runner, on the same terms and with one more: it takes
+                    the circuit's ID and nothing else, because what command that
+                    ID becomes is main's decision from the user's own settings.
+                    It is NOT disabled on a circuit with no ROS 2 package — the
+                    refusal is a sentence inside the dialog, and a dead button
+                    would leave the user to guess which of a dozen things they
+                    did wrong. `.elec__runner` is an anchor with no rule behind
+                    it, `.elec__code`'s arrangement. */}
+                <Button
+                  className="elec__runner"
+                  variant="ghost"
+                  disabled={doc === null}
+                  onClick={() => setRunnerOpen(true)}
+                >
+                  {s.runner.open}
+                </Button>
                 <Button
                   variant="ghost"
                   onClick={() => setNaming({ id: active.id, draft: active.name })}
@@ -758,6 +780,19 @@ export function ElectronicsPage({ profileId }: ElectronicsPageProps) {
           onSave={(chassis) => void saveChassis(chassis)}
           onRemove={() => void saveChassis(null)}
           onClose={() => setChassisOpen(false)}
+        />
+      )}
+
+      {runnerOpen && doc !== null && (
+        <ElecRunnerDialog
+          // Keyed by the circuit for the same reason the chassis dialog is, and
+          // for a sharper one: the plan names a workspace derived from this
+          // circuit, so a panel carried over from another one would print the
+          // literal command for a package the user is no longer looking at.
+          key={doc.id}
+          profileId={profileId}
+          circuitId={doc.id}
+          onClose={() => setRunnerOpen(false)}
         />
       )}
 

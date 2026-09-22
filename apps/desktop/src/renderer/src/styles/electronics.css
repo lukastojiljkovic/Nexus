@@ -1116,6 +1116,265 @@
   color: var(--nx-danger);
 }
 
+/* --- „Pokretač": building the generated package (slice E6) ----------------- */
+
+/* The widest of the four dialogs, and for a reason the other three do not
+   have: this one holds a command block whose lines are a Docker invocation —
+   fourteen argv elements — and a log whose lines are a toolchain's. At the code
+   dialog's 720 px the Docker line wrapped through the middle of a `-v`
+   argument, which is the exact reading the block exists to prevent. */
+.elec-runner__panel.recur-dialog__panel {
+  width: min(820px, 94vw);
+  max-height: min(800px, 90vh);
+}
+
+/* The consent block, which is the whole dialog while the switch is off.
+   A card on the alternate surface, because it is one thing being said rather
+   than another section of a form, and one ground is what makes a reader take it
+   as a unit. */
+.elec-runner__consent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  padding: var(--nx-space-4);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+}
+/* The four promises. No bullets: each line is a claim the user is being asked
+   to check, and a bullet would make a promise read as an item of a checklist —
+   the shape this whole screen is written against. */
+.elec-runner__promises {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.elec-runner__promise {
+  font-size: var(--nx-font-size-body-sm);
+  line-height: var(--nx-font-leading-normal);
+  color: var(--nx-text);
+}
+/* Left rather than stretched across the card: a full-width button would read
+   as the panel's primary action, and the panel has no primary action yet. */
+.elec-runner__enable {
+  align-self: flex-start;
+}
+
+/* The probe. It keeps its own line above the findings because it stays
+   pressable once they are there — a machine whose toolchain was installed a
+   minute ago wants a second look rather than a reopened dialog. */
+.elec-runner__probe {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--nx-space-2);
+}
+/* One row per profile, and `baseline` so the name and the word beside it sit on
+   one line rather than on their own box edges. */
+.elec-runner__found {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--nx-font-size-body-sm);
+}
+.elec-runner__found-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nx-space-2);
+}
+.elec-runner__found-name {
+  font-weight: var(--nx-font-weight-medium);
+  color: var(--nx-text);
+}
+.elec-runner__found-state {
+  color: var(--nx-text-muted);
+}
+/* The version, when the tool printed one. Mono because it is a version string
+   and not a word, and `null` here is a tool that printed no version — which is
+   a fact rather than a gap, so the slot is simply absent. */
+.elec-runner__found-detail {
+  font-family: var(--nx-font-family-mono);
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-subtle);
+}
+/* WSL's distributions, wrapped under their own profile rather than laid out in
+   columns: two are common and four are possible, and a wrapped row is the one
+   that reads at both ends of that range. */
+.elec-runner__distros {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-1) var(--nx-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.elec-runner__distro {
+  font-size: var(--nx-font-size-caption);
+  color: var(--nx-text-muted);
+}
+/* A distribution the toolchain was not found in is lighter, not hidden — the
+   reason beside it is the whole point of listing it. */
+.elec-runner__distro--unusable {
+  color: var(--nx-text-subtle);
+}
+
+/* The three profiles. A BLOCK fieldset, for the reason `.elec-chassis__shapes`
+   gives: a rendered `<legend>` is not a flex or grid item, so a flex fieldset
+   paints the label straight through the first row's border. */
+.elec-runner__choices {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.elec-runner__choices > legend {
+  margin-bottom: var(--nx-space-2);
+  padding: 0;
+}
+.elec-runner__choice + .elec-runner__choice {
+  margin-top: var(--nx-space-2);
+}
+/* A radio per profile with its own description — the chassis dialog's shape row
+   exactly, because it is the same control in the same arrangement: name above,
+   control, hint below, and the whole box clickable. */
+.elec-runner__choice-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--nx-space-2);
+  padding: var(--nx-space-2);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  cursor: pointer;
+}
+/* The chosen profile reads as chosen through its border and its ground — never
+   a glow and never an inset bar, the design rules' two banned selection
+   idioms. */
+.elec-runner__choice-row:has(input:checked) {
+  border-color: var(--nx-accent);
+  background: var(--nx-surface-alt);
+}
+.elec-runner__choice-row:focus-within {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+/* A row that cannot be picked points nowhere rather than disappearing — an
+   absent profile is an answer to a question the user came here to ask.
+   Deliberately NOT dimmed (DC-126): the name and the description are what the
+   reader needs in order to understand the absence, and a control's disabled
+   state has no business greying out text that merely sits beside it. */
+.elec-runner__choice-row:has(input:disabled) {
+  cursor: default;
+}
+.elec-runner__choice-name {
+  font-size: var(--nx-font-size-body-sm);
+  font-weight: var(--nx-font-weight-medium);
+  color: var(--nx-text);
+}
+/* Second column, under the name — so the hint lines up with the name rather
+   than with the radio, which keeps one row of its own. */
+.elec-runner__choice-hint {
+  grid-column: 2;
+  font-size: var(--nx-font-size-caption);
+  line-height: var(--nx-font-leading-normal);
+  color: var(--nx-text-subtle);
+}
+/* The distribution picker sits UNDER the WSL row and indented to that row's
+   text column, so it reads as the second half of one choice rather than as a
+   fourth profile. */
+.elec-runner__distro-row {
+  margin-top: var(--nx-space-2);
+  padding-inline-start: var(--nx-space-4);
+}
+.elec-runner__distro-select {
+  min-width: 240px;
+}
+
+/* The command, one argument per line. **This is the block the dialog exists
+   for**, so its two properties are load-bearing rather than decorative:
+   `white-space: pre-wrap` lets a long element wrap INSIDE its own line, which
+   is what keeps a path with a space visibly one argument (the next argument
+   begins a new line, so nothing can be mistaken for a separator), and
+   `overflow-x` catches the element that has no space to break at. Mono on the
+   alternate surface — the app's code recipe — because a path is read character
+   by character. */
+.elec-runner__argv {
+  margin: 0;
+  padding: var(--nx-space-3);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  font-family: var(--nx-font-family-mono);
+  font-size: var(--nx-font-size-body-sm);
+  line-height: var(--nx-font-leading-normal);
+  color: var(--nx-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow-x: auto;
+  -webkit-user-select: all;
+  user-select: all;
+}
+/* A hanging indent, so a wrapped argument is visibly the CONTINUATION of the
+   line above it rather than a new element of its own. */
+.elec-runner__arg {
+  display: block;
+  padding-inline-start: var(--nx-space-3);
+  text-indent: calc(-1 * var(--nx-space-3));
+}
+
+/* The output. Bounded in height and scrolling in both directions, which the
+   command block above is not: a build prints as many lines as it likes, and a
+   block that grew with them would carry the stop button a screen away from the
+   button that started the run. The sunken ground, because this is the one
+   surface in the dialog whose text Nexus did not write. */
+.elec-runner__log {
+  margin: 0;
+  padding: var(--nx-space-3);
+  max-height: 260px;
+  overflow: auto;
+  background: var(--nx-surface-sunken);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  font-family: var(--nx-font-family-mono);
+  font-size: var(--nx-font-size-body-sm);
+  line-height: var(--nx-font-leading-snug);
+  color: var(--nx-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+/* The child's own words, when it could not be started at all. `.elec-code__source`
+   is the mono block it borrows, and this rule comes AFTER that one on purpose:
+   both are single-class selectors, so source order is the only thing deciding
+   whether an OS error scrolls sideways or wraps. */
+.elec-runner__message {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* The phase, on the heading's own line — `.elec-code__filename`'s treatment,
+   for its reason: it is the heading's state rather than a heading. */
+.elec-runner__phase {
+  font-family: var(--nx-font-family-mono);
+  font-size: var(--nx-font-size-caption);
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--nx-text-muted);
+}
+
+/* The action under each block, with whatever it answered beside it. */
+.elec-runner__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+
 /* Narrow windows: two rails either side of a bench are what a 1024px window
    cannot afford, so below three columns' worth of width the panel moves UNDER
    THE DRAWER rather than under the bench.
