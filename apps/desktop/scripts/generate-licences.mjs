@@ -78,13 +78,34 @@ function within(packageDir, absolutePath) {
 // --- 1. the npm packages ------------------------------------------------------
 
 /**
- * `pnpm licenses list --prod --json`, run through Node rather than a shell.
- * Under a pnpm script `npm_execpath` is pnpm's own .cjs entry, which
- * `process.execPath` can execute directly — no `.cmd` and no `shell: true`,
- * which is what keeps the call identical on Windows and CI.
+ * pnpm's own entry point, when the process that launched this one is pnpm.
+ *
+ * `npm_execpath` names the package manager that STARTED this process, and it is
+ * not a synonym for pnpm. Under `pnpm test` it is pnpm's `.cjs` entry, which
+ * `process.execPath` executes directly — no `.cmd` and no `shell: true`, which
+ * is what keeps the call identical on Windows and CI. Under `npx vitest` it is
+ * npm's `cli.js`, and the call below then runs `npm licenses list --prod --json
+ * --filter @nexus/desktop`: npm has no `--filter`, so it exits 1, and the
+ * message that comes out accuses pnpm of a failure npm caused. Measured, not
+ * reasoned — the whole scripts suite is red under `npx vitest` and green under
+ * `pnpm test`, from this one branch.
+ *
+ * `dnpm` and `pnpmx` would pass the test below, and that is deliberate: the
+ * question is which package manager is running, and a name check that demanded
+ * an exact string would be a list to keep. What it must not do is accept npm.
+ */
+function pnpmEntry() {
+  const execpath = process.env.npm_execpath;
+  return execpath !== undefined && /pnpm/i.test(execpath) ? execpath : null;
+}
+
+/**
+ * `pnpm licenses list --prod --json`, run through Node rather than a shell
+ * whenever the launcher is pnpm (see `pnpmEntry` above), and through the `pnpm`
+ * binary otherwise.
  */
 function pnpmLicences() {
-  const viaNode = process.env.npm_execpath;
+  const viaNode = pnpmEntry();
   const options = { cwd: REPO_ROOT, encoding: "utf8", maxBuffer: 256 * 1024 * 1024 };
   const args = ["licenses", "list", "--prod", "--json", "--filter", "@nexus/desktop"];
   const result = viaNode

@@ -133,10 +133,16 @@ let scratchNotices;
 
 /**
  * Runs the gate with the argv `package.json` gives `check:licences`, from
- * whichever tree is under test.
+ * whichever tree is under test. `env` overrides the environment the gate
+ * inherits, which is the whole mechanism of the arm below that hands it
+ * somebody else's package manager.
  */
-function check(script, cwd) {
-  return spawnSync(process.execPath, [script, "--check"], { cwd, encoding: "utf8" });
+function check(script, cwd, env) {
+  return spawnSync(process.execPath, [script, "--check"], {
+    cwd,
+    encoding: "utf8",
+    ...(env === undefined ? {} : { env }),
+  });
 }
 
 /** Replaces the scratch tree's notices with `payload`, serialised as the generator writes them. */
@@ -198,6 +204,35 @@ describe("the committed notices", () => {
     // gate's business to notice and not this suite's to duplicate.
     expect(Number(counts[1])).toBeGreaterThan(100);
     expect(Number(counts[2])).toBeGreaterThan(3);
+  });
+
+  /**
+   * `npm_execpath` names the package manager that LAUNCHED the process, and it
+   * is not a synonym for pnpm: run this suite under `npx vitest` and it is npm's
+   * own `cli.js`. The gate used to take it at face value, so it ran `npm
+   * licenses list --prod --json --filter @nexus/desktop` — npm has no
+   * `--filter`, so it exited 1 and the message accused pnpm of a failure npm
+   * caused. Measured before the repair: this suite was red under `npx vitest`
+   * and green under `pnpm test`, from that one branch.
+   *
+   * The value injected here is `node.exe`, which is not npm and does not need to
+   * be: the contract is „a non-pnpm launcher is ignored“, and `node.exe` is the
+   * one path that exists on every machine this suite can run on. What makes the
+   * arm falsifiable is the comparison — the same gate, on the same tree, has to
+   * behave IDENTICALLY whichever value it is handed, and under the old code it
+   * did not: the injected run executed `node.exe` as a script and died.
+   *
+   * The npm signature is asserted by name rather than by exit code, because a
+   * missing `pnpm` on `PATH` also exits non-zero and would otherwise let this
+   * arm pass while proving the opposite of what it claims.
+   */
+  it("ignores a launcher that is not pnpm, rather than running it", () => {
+    const inherited = check(GATE, REPO_ROOT);
+    const injected = check(GATE, REPO_ROOT, { ...process.env, npm_execpath: process.execPath });
+
+    expect(injected.stderr).not.toContain("Expanding --prod");
+    expect(injected.status, injected.stderr).toBe(inherited.status);
+    expect(injected.stdout).toBe(inherited.stdout);
   });
 });
 
