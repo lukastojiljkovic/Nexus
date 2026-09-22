@@ -650,6 +650,40 @@ export const IpcChannel = {
   // that took „save me a directory" would be a channel a renderer could use to
   // ask for the wrong one.
   elecExportCode: "elec:export-code",
+  // ADR-085 slice E6 — the external runner, and the only channels in this file
+  // through which a process can be started on the user's machine.
+  //
+  // **The three run channels take a circuit id and NOTHING ELSE.** Not a
+  // command, not a profile, not a distribution: which toolchain runs with which
+  // arguments is decided by `@nexus/core`'s closed table from the profile the
+  // user enabled in their own settings, so the renderer cannot influence the
+  // command line at all. DEV-007's third mitigation is that sentence, and this
+  // is where it is enforced rather than intended.
+  //
+  // Detection is its own channel because it SPAWNS: a probe is a process, so
+  // opening a panel must not do it. `elec:runner-plan` is separate from
+  // `elec:runner-start` because the consent screen has to show the literal
+  // command BEFORE anything is started — a screen that showed it afterwards
+  // would be a description rather than a consent.
+  elecRunnerDetect: "elec:runner-detect",
+  elecRunnerPlan: "elec:runner-plan",
+  elecRunnerStart: "elec:runner-start",
+  elecRunnerStop: "elec:runner-stop",
+  elecRunnerState: "elec:runner-state",
+  // Two events, and they travel the other way: `notifications:changed`'s shape.
+  // `output` carries the log as it is produced, because a build's output is the
+  // reason to watch a run at all; `changed` carries the STATE, so a panel
+  // learns that a run ended — or that another window started one — without
+  // polling for it.
+  elecRunnerOutput: "elec:runner-output",
+  elecRunnerChanged: "elec:runner-changed",
+  // The switch, and the choice of profile. Two channels rather than one because
+  // they are two powers: `enable` is the CONSENT (it is what records
+  // `consented_at`, and nothing else may), while `choice` is a preference that
+  // cannot be written on a runner that is off.
+  elecRunnerSettings: "elec:runner-settings",
+  elecRunnerEnable: "elec:runner-enable",
+  elecRunnerChoice: "elec:runner-choice",
   searchQuery: "search:query",
   searchRecent: "search:recent",
   searchPage: "search:page",
@@ -6420,6 +6454,199 @@ export type CodeExportResult =
   | { canceled: false; outcome: "exists"; path: string };
 
 /**
+ * ADR-085 slice E6 — the external runner.
+ *
+ * Redeclared from `@nexus/core`'s `runner.ts` rather than imported, on this
+ * file's standing rule that it imports nothing. The values are the toolchain's
+ * own names because the closed table's ids ARE those names — a second spelling
+ * would be a second table.
+ */
+export const RUNNER_PROFILES = ["native", "wsl", "docker"] as const;
+export type RunnerProfileId = (typeof RUNNER_PROFILES)[number];
+
+/**
+ * One distribution a probe listed, and whether the toolchain is inside it.
+ *
+ * The name is VERBATIM from `wsl.exe -l -q`: it is what `-d` will be asked for,
+ * so an app that trimmed or re-cased it would be asking for something the user
+ * does not have.
+ */
+export interface RunnerDistro {
+  name: string;
+  /**
+   * False when the user's own shell inside it answered with no ROS distribution
+   * — `wslProbe`'s `echo "$ROS_DISTRO"`, which is the question the WSL choice
+   * actually needs answered. The panel shows it as a choice that will not work
+   * rather than as an absent one: the distribution IS there, its shell just has
+   * no toolchain sourced in it.
+   */
+  usable: boolean;
+}
+
+/** What one profile's probe found. Presence is a fact; `detail` is a version when the tool prints one and null when it does not. */
+export interface RunnerDetection {
+  profile: RunnerProfileId;
+  present: boolean;
+  detail: string | null;
+  /**
+   * The probe was started and never answered.
+   *
+   * A third answer rather than a kind of `present: false`: a tool that is
+   * installed but hangs — which is what `wsl.exe` does when the WSL service is
+   * not running — is a different thing to tell the user than one that is not
+   * there at all, and reporting it as „not found" would send them looking for
+   * an installation they already have.
+   */
+  timedOut: boolean;
+  /** WSL only, and empty for every other profile. */
+  distros: RunnerDistro[];
+}
+
+/** The switch, the remembered choice, and when the user consented. `choice` and `distro` are null until the user picks one. */
+export interface RunnerSettings {
+  enabled: boolean;
+  choice: RunnerProfileId | null;
+  distro: string | null;
+  consentedAt: string | null;
+}
+
+/**
+ * Why a command could not be built.
+ *
+ * The first three come from the closed table itself (`@nexus/core`'s
+ * `RunnerRefusal`); the rest are main's own, and each is decided BEFORE the
+ * table is consulted because each is a reason there is no target to build one
+ * for. The plan and the start share this union on purpose: the consent screen
+ * prints the literal command a start would run, so a refusal that stopped one
+ * has to be able to stop the other, and two unions would be two chances for
+ * them to disagree about what „there is no command" means.
+ */
+export type RunnerRefusal =
+  | "path-not-absolute"
+  | "path-not-representable"
+  | "distro-leading-dash"
+  /** The runner is off — the switch, which is a recorded consent and not a preference. */
+  | "not-enabled"
+  /** On, but with no profile chosen yet. */
+  | "no-choice"
+  /**
+   * WSL is chosen and no distribution under it is.
+   *
+   * Its own member rather than a second meaning of `no-choice`, because a
+   * refusal is answered by ONE sentence: „no profile is chosen" beside a radio
+   * that is visibly chosen is a sentence telling the user about a screen they
+   * are not looking at, and the repair (pick one of the distributions the probe
+   * listed) is a different action. It is reachable on the ordinary path —
+   * choosing WSL writes the choice with `distro: null` until one is picked — so
+   * it is not a corner.
+   */
+  | "no-distro"
+  /** The circuit produced no ROS 2 package — the generator's own refusals, collapsed to one. */
+  | "no-package";
+
+/**
+ * The literal command a start would run — what the consent screen prints, and
+ * the reason this channel exists separately from `start`.
+ */
+export type RunnerPlanResult =
+  | { kind: "refused"; reason: RunnerRefusal }
+  | {
+      kind: "command";
+      /** `argv[0]` is the program. Shown to the user verbatim. */
+      argv: string[];
+      cwd: string;
+      /** The directory Nexus generated, and the only value the command line receives. */
+      workspace: string;
+      /** True for the Docker profile, whose image is pulled from a registry the first time. The consent copy must say so. */
+      pullsImage: boolean;
+    };
+
+/**
+ * How a start went. `message` carries the child's own words when there are any
+ * — a spawn failure the user can act on.
+ *
+ * `reason` is `"none"` exactly when `started` is true, so a caller can log the
+ * outcome without narrowing first. `write-failed` covers both halves of
+ * preparing a workspace: the write itself and the confirmation that the
+ * directory is still inside the account's own folder.
+ */
+export interface RunnerStartResult {
+  started: boolean;
+  reason: RunnerRefusal | "already-running" | "write-failed" | "spawn-failed" | "none";
+  message: string | null;
+  workspace: string | null;
+}
+
+/**
+ * What the stop path ACHIEVED, not what it attempted.
+ *
+ * The distinction is the whole of D4 in the threat model: `docker.exe` exiting
+ * on Windows leaves the container running, so „stopped" must be established by
+ * asking the profile whether the work is gone. `still-running` is the honest
+ * answer to „we asked, and it is", and the UI says which of the two it is
+ * rather than printing a success either way.
+ */
+export type RunnerStopState = "exited" | "still-running" | "idle";
+
+/** The run in progress, as any window may see it. `argv` is here so a second window shows the same literal command the first one consented to. */
+export interface RunnerRunView {
+  profileId: string;
+  choice: RunnerProfileId;
+  workspace: string;
+  argv: string[];
+  startedAt: string;
+  /** True once output was dropped to stay inside the cap — the log is then a window on the run rather than all of it. */
+  truncated: boolean;
+}
+
+/**
+ * How a run ENDED — and the distinction it exists for.
+ *
+ * `exitCode` is about the process this app started; `state` is about the WORK.
+ * For Docker they are not the same question: `docker.exe` exiting on Windows
+ * leaves the container going, so a panel that inferred „stopped" from the exit
+ * code would be telling the user something it never checked. `state` is
+ * therefore established by asking the profile, and `still-running` is the
+ * honest answer when the answer is „yes".
+ */
+export interface RunnerOutcome {
+  /** True when the user asked it to stop, false when it ended on its own. */
+  stopped: boolean;
+  exitCode: number | null;
+  state: "exited" | "still-running";
+  /** The child's own words when the process could not be started at all — a missing program, a refused mount. Null otherwise. */
+  message: string | null;
+  /**
+   * Whether the build PRODUCED the package, or only reported that it had.
+   *
+   * `colcon build` exits 0 over a workspace with nothing in it, so an exit status
+   * is a claim about the tool and not about the user's machine — and „uspešno
+   * izgrađeno" is exactly the sentence an exit code cannot support. Main answers
+   * this by looking for `install/<package>` under the workspace, which can only
+   * be the current run's because the workspace is wiped before every run.
+   *
+   * `null` is a third state and not a hedge: a run that exited non-zero, or that
+   * never started, makes NO claim about an artefact, and a panel that printed
+   * „paket nije napravljen" there would be drawing a conclusion from a build that
+   * was never asked the question.
+   */
+  artifact: "present" | "missing" | null;
+}
+
+/** What the runner is doing now. One run at a time, app-wide, enforced in main — `phase` is that fact, not a UI hint. */
+export interface RunnerState {
+  phase: "idle" | "running" | "stopping";
+  run: RunnerRunView | null;
+  /** How the last run ended, until another starts. Null when none has run in this session. */
+  last: RunnerOutcome | null;
+}
+
+/** One chunk of output, already stripped of escapes and control characters by main. Rendered as TEXT, never as markup. */
+export interface RunnerOutputEvent {
+  text: string;
+}
+
+/**
  * The scheduled backup's cadence (SET-011 / ADR-056). Mirrors `@nexus/db`'s
  * `BACKUP_CADENCES` exactly — redeclared rather than imported, the
  * `AuthErrorReason` pattern, because this file deliberately imports nothing;
@@ -9393,6 +9620,54 @@ export interface NexusApi {
    * directory one.
    */
   exportCircuitCode(profileId: string, id: string): Promise<CodeExportResult>;
+  /**
+   * ADR-085 E6 — the external runner.
+   *
+   * Every one of the three run methods takes a circuit id and NOTHING ELSE, and
+   * that is the security property rather than an incidental shape: the command
+   * line is built in main from a closed table and the profile the user enabled
+   * in their own settings, so nothing the renderer sends can reach it. A future
+   * edit that added a `command` or a `profile` parameter here would be the
+   * change DEV-007 exists to prevent.
+   *
+   * `detect` SPAWNS a probe per profile, so it is a method the user's own click
+   * calls rather than something a panel does on mount.
+   */
+  runnerDetect(profileId: string): Promise<RunnerDetection[]>;
+  /** The literal command a start would run, or why there is none. Shown to the user BEFORE anything runs. */
+  runnerPlan(profileId: string, id: string): Promise<RunnerPlanResult>;
+  /** Starts the run the plan described. Refuses when the runner is off, when the plan is refused, and when a run is already going. */
+  runnerStart(profileId: string, id: string): Promise<RunnerStartResult>;
+  /** Asks the run to stop and answers with the STATE achieved — see `RunnerStopState`. A run belonging to another profile is left alone and answered as `idle`. */
+  runnerStop(profileId: string): Promise<RunnerStopState>;
+  /** What the runner is doing now, for a panel that mounted mid-run. */
+  runnerState(profileId: string): Promise<RunnerState>;
+  /** The switch and the remembered choice. */
+  runnerSettings(profileId: string): Promise<RunnerSettings>;
+  /** Turns the runner on or off. Turning it ON records when the user consented; turning it off leaves the record. */
+  runnerEnable(profileId: string, enabled: boolean): Promise<RunnerSettings>;
+  /**
+   * Remembers which profile to run. `null` clears the choice.
+   *
+   * The distribution is STORED AS GIVEN and not re-probed here: it came out of
+   * a probe the renderer had just run, and a name that has since been removed
+   * fails at the run with `wsl.exe`'s own words, which is a better sentence than
+   * anything this layer could write. What is checked here is the SHAPE — a
+   * bounded, non-empty string, and a distribution only on the WSL choice — and
+   * the CHECK constraint behind the store refuses the rest.
+   *
+   * Turning the runner off clears the choice with it, because a remembered
+   * choice on a runner that is off is a choice the user cannot see.
+   */
+  runnerChoice(
+    profileId: string,
+    choice: RunnerProfileId | null,
+    distro: string | null,
+  ): Promise<RunnerSettings>;
+  /** Output arrives as it is produced. Returns the unsubscribe, `onNotificationsChanged`'s shape. */
+  onRunnerOutput(handler: (event: RunnerOutputEvent) => void): () => void;
+  /** The runner's state changes: a run started, a stop was asked for, a run ended. `onNotificationsChanged`'s shape. */
+  onRunnerChanged(handler: (state: RunnerState) => void): () => void;
   /** Runs the query pipeline (parse -> FTS match -> bm25 candidates -> rank), falling back to `searchRecent`'s order when the query has no matchable terms (ADR-021). */
   searchQuery(profileId: string, query: string, limit: number): Promise<SearchResult[]>;
   /** The profile's most recently touched entries, already in their final order — no ranking pass, unlike `searchQuery`. */

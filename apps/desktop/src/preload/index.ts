@@ -2,6 +2,8 @@ import { contextBridge, ipcRenderer } from "electron";
 import {
   IpcChannel,
   type NexusApi,
+  type RunnerOutputEvent,
+  type RunnerState,
   type SyncActivityView,
   type WindowState,
 } from "../shared/ipc.js";
@@ -707,6 +709,33 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.elecSetChassis, { profileId, id, chassis }),
   exportCircuitCode: (profileId, id) =>
     ipcRenderer.invoke(IpcChannel.elecExportCode, { profileId, id }),
+  // ADR-085 E6. Note what these four do NOT carry: the choice of profile, the
+  // distribution, the command, the workspace. All four are main's, from the
+  // user's own settings and the closed table — so `runnerStart` is a method
+  // this bridge can expose without becoming a way to run something.
+  runnerDetect: (profileId) => ipcRenderer.invoke(IpcChannel.elecRunnerDetect, { profileId }),
+  runnerPlan: (profileId, id) => ipcRenderer.invoke(IpcChannel.elecRunnerPlan, { profileId, id }),
+  runnerStart: (profileId, id) => ipcRenderer.invoke(IpcChannel.elecRunnerStart, { profileId, id }),
+  runnerStop: (profileId) => ipcRenderer.invoke(IpcChannel.elecRunnerStop, { profileId }),
+  runnerState: (profileId) => ipcRenderer.invoke(IpcChannel.elecRunnerState, { profileId }),
+  runnerSettings: (profileId) => ipcRenderer.invoke(IpcChannel.elecRunnerSettings, { profileId }),
+  runnerEnable: (profileId, enabled) =>
+    ipcRenderer.invoke(IpcChannel.elecRunnerEnable, { profileId, enabled }),
+  runnerChoice: (profileId, choice, distro) =>
+    ipcRenderer.invoke(IpcChannel.elecRunnerChoice, { profileId, choice, distro }),
+  // Typed at the parameter, `onWindowStateChanged`'s shape: what arrives here
+  // is a hint from main and the renderer treats it as one, but the SHAPE is
+  // checked at the boundary rather than assumed.
+  onRunnerOutput: (handler) => {
+    const listener = (_event: unknown, payload: RunnerOutputEvent): void => handler(payload);
+    ipcRenderer.on(IpcChannel.elecRunnerOutput, listener);
+    return () => ipcRenderer.removeListener(IpcChannel.elecRunnerOutput, listener);
+  },
+  onRunnerChanged: (handler) => {
+    const listener = (_event: unknown, payload: RunnerState): void => handler(payload);
+    ipcRenderer.on(IpcChannel.elecRunnerChanged, listener);
+    return () => ipcRenderer.removeListener(IpcChannel.elecRunnerChanged, listener);
+  },
   searchQuery: (profileId, query, limit) =>
     ipcRenderer.invoke(IpcChannel.searchQuery, { profileId, query, limit }),
   searchRecent: (profileId, limit) =>
