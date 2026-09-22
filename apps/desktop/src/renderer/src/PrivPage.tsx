@@ -265,13 +265,23 @@ function PrivSetup({ profileId, onStatusChange }: PrivSetupProps) {
                       for, and the same one UČENJE's two daily caps had. The label
                       still wraps, because `cursor: pointer` on the whole row is
                       what makes it clickable anywhere; `aria-labelledby` is what
-                      keeps the note out of the name. */}
+                      keeps the note out of the name.
+
+                      Both halves are needed, and the second is the one worth
+                      stating: `aria-labelledby` REPLACES the label's text rather
+                      than filtering it. Naming the span alone would have traded a
+                      concatenated name for a silent note — the reader would hear
+                      „Zasebna šifra za Privatno" and never the sentence saying
+                      what it costs. `aria-describedby` at the hint gives it back
+                      in its own role, which is the role ARIA has for exactly this
+                      arrangement: name above, control, explanation below. */}
                   <label className={choiceRowClass(!useAccountPasscode)}>
                     <input
                       className="nx-radio"
                       type="radio"
                       name="priv-credential"
                       aria-labelledby="priv-cred-separate"
+                      aria-describedby="priv-cred-separate-note"
                       checked={!useAccountPasscode}
                       onChange={() => setUseAccountPasscode(false)}
                     />
@@ -279,7 +289,9 @@ function PrivSetup({ profileId, onStatusChange }: PrivSetupProps) {
                       <span className="priv__choice-name" id="priv-cred-separate">
                         {s.useSeparate}
                       </span>
-                      <span className="nx-hint">{s.useSeparateNote}</span>
+                      <span className="nx-hint" id="priv-cred-separate-note">
+                        {s.useSeparateNote}
+                      </span>
                     </span>
                   </label>
                   <label className={choiceRowClass(useAccountPasscode)}>
@@ -288,6 +300,7 @@ function PrivSetup({ profileId, onStatusChange }: PrivSetupProps) {
                       type="radio"
                       name="priv-credential"
                       aria-labelledby="priv-cred-account"
+                      aria-describedby="priv-cred-account-note"
                       checked={useAccountPasscode}
                       onChange={() => setUseAccountPasscode(true)}
                     />
@@ -295,7 +308,9 @@ function PrivSetup({ profileId, onStatusChange }: PrivSetupProps) {
                       <span className="priv__choice-name" id="priv-cred-account">
                         {s.useAccountPasscode}
                       </span>
-                      <span className="nx-hint">{s.useAccountPasscodeNote}</span>
+                      <span className="nx-hint" id="priv-cred-account-note">
+                        {s.useAccountPasscodeNote}
+                      </span>
                     </span>
                   </label>
                 </fieldset>
@@ -338,6 +353,7 @@ function PrivSetup({ profileId, onStatusChange }: PrivSetupProps) {
                       type="radio"
                       name="priv-kit"
                       aria-labelledby="priv-kit-regenerate"
+                      aria-describedby="priv-kit-regenerate-note"
                       checked={regenerateKit}
                       onChange={() => setRegenerateKit(true)}
                     />
@@ -345,7 +361,9 @@ function PrivSetup({ profileId, onStatusChange }: PrivSetupProps) {
                       <span className="priv__choice-name" id="priv-kit-regenerate">
                         {s.kitRegenerate}
                       </span>
-                      <span className="nx-hint">{s.kitRegenerateNote}</span>
+                      <span className="nx-hint" id="priv-kit-regenerate-note">
+                        {s.kitRegenerateNote}
+                      </span>
                     </span>
                   </label>
                   <label className={choiceRowClass(!regenerateKit)}>
@@ -354,6 +372,7 @@ function PrivSetup({ profileId, onStatusChange }: PrivSetupProps) {
                       type="radio"
                       name="priv-kit"
                       aria-labelledby="priv-kit-optout"
+                      aria-describedby="priv-kit-optout-note"
                       checked={!regenerateKit}
                       onChange={() => setRegenerateKit(false)}
                     />
@@ -361,7 +380,9 @@ function PrivSetup({ profileId, onStatusChange }: PrivSetupProps) {
                       <span className="priv__choice-name" id="priv-kit-optout">
                         {s.kitOptOut}
                       </span>
-                      <span className="nx-hint">{s.kitOptOutNote}</span>
+                      <span className="nx-hint" id="priv-kit-optout-note">
+                        {s.kitOptOutNote}
+                      </span>
                     </span>
                   </label>
                 </fieldset>

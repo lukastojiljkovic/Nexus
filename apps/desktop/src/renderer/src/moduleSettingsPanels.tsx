@@ -227,6 +227,13 @@ function NotesSettingsPanel({ hits }: SettingsPanelProps) {
   const [markdownShortcuts, setMarkdownShortcuts] = useState(() =>
     readStoredNoteMarkdownShortcuts(),
   );
+  // The box takes its name by REFERENCE to the row's own label, which is on
+  // screen and is also a search-highlight target. `aria-label` wrote that name
+  // a second time, and unlike a rendered label the copy is invisible — so the
+  // two could drift apart with nothing to notice: not a gate, not a
+  // screenshot, not the type-checker. `useId` is the mechanism
+  // `PrivSettingsPanel`'s auto-lock knob already names itself with.
+  const markdownLabelId = useId();
 
   return (
     <>
@@ -254,6 +261,7 @@ function NotesSettingsPanel({ hits }: SettingsPanelProps) {
       <div className="set__module-row">
         <div className="set__module-info">
           <span
+            id={markdownLabelId}
             className={labelClass(
               "set__module-name",
               hits.has(settingsEntryId("notes", "markdown")),
@@ -265,7 +273,7 @@ function NotesSettingsPanel({ hits }: SettingsPanelProps) {
         </div>
         <Checkbox
           checked={markdownShortcuts}
-          aria-label={s.markdownLabel}
+          aria-labelledby={markdownLabelId}
           onChange={(event) => {
             persistNoteMarkdownShortcuts(event.target.checked);
             setMarkdownShortcuts(event.target.checked);
@@ -298,6 +306,7 @@ function DashboardSettingsPanel({ profileId, hits }: SettingsPanelProps) {
   const [settings, setSettings] = useState<DashboardSettings | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const dimLabelId = useId();
 
   useEffect(() => {
     let active = true;
@@ -402,6 +411,14 @@ function DashboardSettingsPanel({ profileId, hits }: SettingsPanelProps) {
 
       {backgroundHash !== null && (
         <div className="set__dash-dim">
+          {/* The name is the SPAN, not the label. A label gives the control it
+              names its ENTIRE text content, so the slider was introduced as
+              „Osvetljenost pozadine 40%" — the name and the readout as one
+              string, changing under the reader at every step of a drag, for a
+              number the slider already carries as its own value. The readout
+              stays inside the label because clicking it should still reach the
+              slider; that is what `htmlFor` is for, and it is the reason the
+              fix is `aria-labelledby` rather than moving the span out. */}
           <label
             className={labelClass(
               "set__dash-dim-label",
@@ -409,11 +426,12 @@ function DashboardSettingsPanel({ profileId, hits }: SettingsPanelProps) {
             )}
             htmlFor="set-dash-dim"
           >
-            {s.dimLabel}
+            <span id={dimLabelId}>{s.dimLabel}</span>
             <span className="set__dash-dim-value">{settings.backgroundDim}%</span>
           </label>
           <input
             id="set-dash-dim"
+            aria-labelledby={dimLabelId}
             className="set__dash-slider"
             type="range"
             min={0}
@@ -755,6 +773,12 @@ function PrivSettingsPanel({ profileId, hits }: SettingsPanelProps) {
   // and is also a search-highlight target; a rendered label would print the
   // same words twice.
   const autoLockLabelId = useId();
+  // The second control in this card takes its name the same way, and the
+  // sentence above is the whole reason: the row's own label is on screen and
+  // is the search-highlight target, and a second invisible copy of it is a
+  // copy nothing can check. `aria-label` is a rendered label's worth of text
+  // with none of a rendered label's visibility.
+  const lockMinimizeLabelId = useId();
   const [status, setStatus] = useState<PrivStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -838,6 +862,7 @@ function PrivSettingsPanel({ profileId, hits }: SettingsPanelProps) {
       <div className="set__module-row">
         <div className="set__module-info">
           <span
+            id={lockMinimizeLabelId}
             className={labelClass(
               "set__module-name",
               hits.has(settingsEntryId("priv", "lock-minimize")),
@@ -848,7 +873,7 @@ function PrivSettingsPanel({ profileId, hits }: SettingsPanelProps) {
         </div>
         <Checkbox
           checked={status.lockOnMinimize}
-          aria-label={s.lockOnMinimizeLabel}
+          aria-labelledby={lockMinimizeLabelId}
           onChange={(event) => void savePrefs(status.autoLockMinutes, event.target.checked)}
         />
       </div>

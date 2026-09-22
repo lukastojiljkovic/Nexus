@@ -56,6 +56,9 @@ export function ElecChassisDialog({
 }: ElecChassisDialogProps) {
   const s = strings.electronics.chassis;
   const titleId = useId();
+  // One id for the whole radio group rather than one per row: the rows are a
+  // `map`, and a hook cannot be called inside one.
+  const shapeIds = useId();
   const panelRef = useFocusTrap<HTMLDivElement>({ open: true });
 
   const [shape, setShape] = useState<ChassisShape>(chassis?.shape ?? CHASSIS_SHAPES[0]);
@@ -156,9 +159,26 @@ export function ElecChassisDialog({
                   checked={shape === candidate}
                   disabled={busy}
                   onChange={() => setShape(candidate)}
+                  // The row is a wrapping label, so without these two the radio
+                  // is introduced as „Kocka Kockasto kućište sa zaobljenim
+                  // ivicama" — the name and its description as one utterance.
+                  // Naming the shape span fixes the name, and because
+                  // `aria-labelledby` REPLACES the label's text rather than
+                  // filtering it, the description has to be handed back
+                  // deliberately: `aria-describedby` is what keeps the hint
+                  // audible instead of trading one defect for a silence.
+                  aria-labelledby={`${shapeIds}-${candidate}`}
+                  aria-describedby={`${shapeIds}-${candidate}-hint`}
                 />
-                <span className="elec-chassis__shape-name">{s.shapes[candidate]}</span>
-                <span className="elec-chassis__shape-hint">{s.shapeHints[candidate]}</span>
+                <span className="elec-chassis__shape-name" id={`${shapeIds}-${candidate}`}>
+                  {s.shapes[candidate]}
+                </span>
+                <span
+                  className="elec-chassis__shape-hint"
+                  id={`${shapeIds}-${candidate}-hint`}
+                >
+                  {s.shapeHints[candidate]}
+                </span>
               </label>
             ))}
           </fieldset>
