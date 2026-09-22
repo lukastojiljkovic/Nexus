@@ -249,6 +249,28 @@ jobs:
       # a new egress construct before it ever has to be caught at runtime.
       - run: pnpm check:egress
 
+      # The SECOND capability boundary, and the sharper of the two: a network
+      # call leaves the machine, and a process runs ON it. Until ADR-085 slice E6
+      # the shipped app contained no `child_process` call at all, so this is a
+      # new kind of gate rather than a new file in an old kind.
+      #
+      # Four rules are the deviation's own first sentence — **the command line is
+      # never data** — enforced rather than remembered: the module, the shell
+      # option, the exec family, and a literal program name at a call site. Three
+      # of those four are exempted for NOBODY (a startup check in the gate refuses
+      # an allowlist entry that tries), and the module itself for exactly one file
+      # plus its test. The fifth rule is vocabulary — a file that NAMES a tool is
+      # not a file that runs one — and it is the one with many exemptions, each
+      # carrying its reason in the gate.
+      #
+      # The interaction that does the work is worth naming because it reads like a
+      # coincidence: the one file allowed to import `child_process` is NOT allowed
+      # to contain a toolchain word, so the program it starts can only be `argv[0]`
+      # of a plan that came out of `packages/core/src/electronics/runner.ts`. The
+      # one file permitted to spawn is the one file that may not know what it is
+      # spawning.
+      - run: pnpm check:runner
+
       # Reads the migration SQL as text and needs no database, so it belongs
       # with the other static gates. It catches „the new table's migration
       # forgot a line"; the `database` job below catches „the line is there and
@@ -257,7 +279,7 @@ jobs:
 
       # The server migration series is numbered, unique, in filename order, and
       # every citation of it resolves. This repository has TWO migration series
-      # and both number from 001 — the local SQLite schema is at 068 — so a bare
+      # and both number from 001 — the local SQLite schema is at 069 — so a bare
       # „migration 006" is a sentence that names its evidence by a number the
       # evidence does not carry. One was written that way, in
       # `packages/sync-transport/src/signal.ts`, for the realtime policies that
