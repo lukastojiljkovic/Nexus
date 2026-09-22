@@ -272,9 +272,24 @@ jobs:
       # — not `pnpm test`, not this workflow. `check:rls` proves the current
       # migrations pass; it says nothing about whether a rule could ever fail,
       # and a gate that has never been observed to fail is indistinguishable
-      # from one that cannot. These 38 break the real migrations one line at a
-      # time and demand the specific complaint. (Also reached by `pnpm test`.)
+      # from one that cannot. These 77 — four files, counted by running it
+      # rather than by copying the figure that stood here before — break the
+      # real SQL one line at a time and demand the specific complaint. (Also
+      # reached by `pnpm test`.)
       - run: pnpm test:wall
+
+      # Every leaf of the user-facing copy table is read by something. No other
+      # instrument in the tree can see an unread one: it type-checks, it lints,
+      # it passes `check:strings`, it carries no colour and no token, and it
+      # photographs as nothing at all — because it is not on screen.
+      #
+      # The gate was written before the copy was fixed, and found 24. It was
+      # held out of this file until they were answered, because
+      # `scripts/ci-workflow.test.mjs` derives its step list from `package.json`
+      # and asserts each gate has a step here — so registering it while it was
+      # red would have turned this workflow red for every other workstream at
+      # once. It is registered in the commit that resolves them.
+      - run: pnpm check:copy
 
       - run: pnpm build
 

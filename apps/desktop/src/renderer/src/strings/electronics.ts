@@ -191,9 +191,6 @@ export const electronicsSr = {
     wireFrom: "Sa",
     wireTo: "Na",
     wireColour: "Boja",
-    /** Nothing selected and no circuit open. */
-    emptyTitle: "Ništa nije izabrano",
-    emptyDescription: "Klikni na komponentu ili žicu da vidiš njene podatke.",
     /**
      * Every protocol name, keyed by `BusKind`. Printed as the trade prints them
      * — „I²C" with the superscript, because that is what is on the datasheet.

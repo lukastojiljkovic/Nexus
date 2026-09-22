@@ -90,6 +90,5 @@ export const DEVTOOLS_TIME_SR = {
     unionNote:
       "Kad su i dan u mesecu i dan u nedelji zadati brojem, dan se poklapa čim odgovara " +
       "bilo kojem od njih; čim je jedno od njih zvezdica, traži se poklapanje oba.",
-    invalid: "Neispravan cron izraz.",
   },
 } as const;

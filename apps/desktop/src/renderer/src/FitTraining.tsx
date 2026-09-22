@@ -251,15 +251,23 @@ export function FitTraining({ profileId }: FitTrainingProps) {
     };
   }, [profileId, from, today]);
 
-  /** Runs one mutation: clears the previous refusal, performs it, re-reads. A failure leaves what was typed where it is. */
+  /**
+   * Runs one mutation: clears the previous refusal, performs it, re-reads. A
+   * failure leaves what was typed where it is.
+   *
+   * `fallback` is the sentence to draw when `fitTrainingError` does not
+   * recognise the failure — and it is a parameter rather than a constant
+   * because the three mutations below are not one action: a workout that would
+   * not START has its own line, and this is where that is known.
+   */
   const run = useCallback(
-    async (action: () => Promise<void>): Promise<void> => {
+    async (action: () => Promise<void>, fallback: string): Promise<void> => {
       setActionError(null);
       try {
         await action();
         await reload();
       } catch (error) {
-        setActionError(fitTrainingError(error));
+        setActionError(fitTrainingError(error, fallback));
         console.error("Nexus: a training action failed:", error);
       }
     },
@@ -269,7 +277,7 @@ export function FitTraining({ profileId }: FitTrainingProps) {
   async function startWorkout(routine: FitRoutine | null): Promise<void> {
     await run(async () => {
       await window.nexus.fitStartWorkout(profileId, startDay, routine?.id ?? null);
-    });
+    }, s.start.error);
   }
 
   async function deleteWorkout(workout: FitWorkout): Promise<void> {
@@ -277,7 +285,7 @@ export function FitTraining({ profileId }: FitTrainingProps) {
     await run(async () => {
       await window.nexus.fitDeleteWorkout(profileId, workout.id);
       setPendingUndo({ kind: "workout", id: workout.id });
-    });
+    }, s.exercises.actionError);
   }
 
   async function undoPending(): Promise<void> {
@@ -286,7 +294,7 @@ export function FitTraining({ profileId }: FitTrainingProps) {
     await run(async () => {
       await window.nexus.fitRestoreWorkout(profileId, pending.id);
       setPendingUndo(null);
-    });
+    }, s.exercises.actionError);
   }
 
   if (failed) {
@@ -438,12 +446,12 @@ export function FitTraining({ profileId }: FitTrainingProps) {
                 onReopen={() =>
                   void run(async () => {
                     await window.nexus.fitReopenWorkout(profileId, workout.id);
-                  })
+                  }, s.exercises.actionError)
                 }
                 onCorrectDay={(day) =>
                   void run(async () => {
                     await window.nexus.fitUpdateWorkout(profileId, workout.id, { day });
-                  })
+                  }, s.exercises.actionError)
                 }
                 onDelete={() => void deleteWorkout(workout)}
               />
@@ -672,7 +680,7 @@ function SessionPanel({ profileId, workout, routine, onChanged, onDiscard }: Ses
       }
       await onChanged();
     } catch (logError) {
-      setError(fitTrainingError(logError));
+      setError(fitTrainingError(logError, s.set.actionError));
       console.error("Nexus: failed to log the set:", logError);
     }
   }
@@ -691,7 +699,7 @@ function SessionPanel({ profileId, workout, routine, onChanged, onDiscard }: Ses
       setEditDraft(null);
       await onChanged();
     } catch (updateError) {
-      setError(fitTrainingError(updateError));
+      setError(fitTrainingError(updateError, s.set.actionError));
       console.error("Nexus: failed to correct the set:", updateError);
     }
   }
@@ -705,7 +713,9 @@ function SessionPanel({ profileId, workout, routine, onChanged, onDiscard }: Ses
       await window.nexus.fitRemoveSet(profileId, set.id);
       await onChanged();
     } catch (removeError) {
-      setError(fitTrainingError(removeError));
+      // The generic one, and deliberately: „Serija nije upisana" says the
+      // record was not MADE, which is the wrong claim about a removal.
+      setError(fitTrainingError(removeError, s.exercises.actionError));
       console.error("Nexus: failed to remove the set:", removeError);
     }
   }
@@ -732,7 +742,11 @@ function SessionPanel({ profileId, workout, routine, onChanged, onDiscard }: Ses
       setNotesDraft(trimmed);
       await onChanged();
     } catch (notesError) {
-      setError(fitTrainingError(notesError));
+      // The generic one, and the only site in this file that has no better:
+      // `session` carries a sentence per action („Trening nije mogao da se
+      // završi…") and none for a note that would not save. Named rather than
+      // defaulted so that the gap is visible here rather than in a fallback.
+      setError(fitTrainingError(notesError, s.exercises.actionError));
       console.error("Nexus: failed to save the session note:", notesError);
     }
   }

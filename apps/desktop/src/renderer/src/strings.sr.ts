@@ -356,15 +356,10 @@ export const sr = {
      * The description says what the answer does, on the old line's terms
      * exactly: a suggestion, changeable, and reversible later.
      */
-    packsTitle: "Šta se sve nađe u tvojoj nedelji?",
-    packsDescription:
-      "Izaberi koliko god hoćeš. Svaki izbor donosi skup alatki za taj posao — ništa ne menja tvoje podatke i sve možeš da promeniš kasnije.",
     /** Said out loud, the „remindersNoChoice" idiom: picking nothing is a real answer here, not a skipped step. */
     packsNoChoice: "Ako ništa ne izabereš, Nexus kreće bez stručnih alatki — dodaješ ih kad zatrebaju.",
     /** Screen 3 — oblasti. The module names and one-line descriptions are the gallery's own (`settings.moduleDescriptions`), never respelled. */
     modulesTitle: "Šta ti treba?",
-    modulesDescription:
-      "Izaberi oblasti koje želiš u Nexusu. Uključuješ ih i isključuješ kad god poželiš, u Podešavanjima → Moduli.",
     /** Screen 4 — podsetnici; the three choices reuse `settings.notificationPresets`, so a word means the same set everywhere. */
     /**
      * The demo offer on the last screen — a personal first run only. Says what
@@ -772,8 +767,6 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       title: "Ishrana danas",
       /** Nothing logged today. An invitation, and deliberately not a reminder that you have not eaten. */
       empty: "Danas još nema upisanih obroka",
-      /** Leads the figure: „Danas · 1.480 kcal". */
-      todayLabel: "Danas",
       /** Under the figure when a calorie goal is set — „od 2.000 kcal". */
       ofGoalPrefix: "od",
       /** The chip on a day past its calorie goal. States a fact; there is no advice anywhere on this card. */
@@ -2693,7 +2686,6 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       total: "Ukupno",
       floorNote: "Najmanje — starije datoteke nisu uračunate.",
     },
-    title: "Datoteke",
     caption: "Sve datoteke priložene uz beleške, zadatke i predmete.",
     searchPlaceholder: "Pretraži po nazivu datoteke ili nosiocu…",
     searchLabel: "Pretraga datoteka",
@@ -2810,7 +2802,6 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       examNone: "—",
       examNoneNote: "nema zakazanih",
     },
-    title: "Predmeti",
     /**
      * Drawn above the field. It was a `namePlaceholder` and a `nameLabel`
      * holding one string, the grey copy of which left the moment anything was
@@ -3731,7 +3722,6 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
      * loud in `caption` so nobody looks for a balance that already counts it.
      */
     subscriptions: {
-      heading: "Pretplate",
       newSubscription: "Nova pretplata",
       caption:
         "Naplata se upisuje tek onog dana kada se dogodi — do tada je ovo samo raspored. Upisana naplata je obična transakcija: možeš je izmeniti ili obrisati.",
@@ -3777,8 +3767,6 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       pausedChipTitle: "Naplata je zaustavljena. „Nastavi“ je pokreće od prve naredne.",
       /** What stands where the next charge's date would be, on a row that will not be charged. */
       pausedNext: "Bez naplate",
-      /** The row's own next-charge line; „—" when the series has run out. */
-      nextLabel: "Sledeća naplata",
       /** A series past its `until`/`count` end: nothing more will be charged. */
       finished: "Nema više naplata",
       /** The chip on a row that reminds, beside the lead time. */
@@ -4724,8 +4712,6 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
           "Faktori aktivnosti su najgrublji deo celog računa — vrednosti iz literature se dosta razlikuju.",
         save: "Sačuvaj podatke",
         saved: "Podaci o telu su sačuvani.",
-        emptyTitle: "Podaci o telu još nisu uneti",
-        emptyDescription: "Bez njih ne može da se proceni dnevna potrošnja.",
         invalidHeight: "Upiši visinu u centimetrima.",
         invalidBirth: "Upiši datum rođenja.",
       },
@@ -5026,7 +5012,6 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
        */
       rest: {
         heading: "Odmor",
-        start: "Odmor",
         stop: "Prekini",
         done: "Odmor je gotov",
         lengthLabel: "Dužina odmora",
@@ -5212,8 +5197,6 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         volumeWeekUnitOne: "nedelju",
         volumeWeekUnitFew: "nedelje",
         volumeWeekUnitMany: "nedelja",
-        weekLabel: "Nedelja",
-        setsLabel: "Tvrde serije",
         tonnageLabel: "Tonaža",
         daysLabel: "Dana",
         muscleHeading: "Tvrde serije po mišiću",
@@ -5247,8 +5230,6 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
             "Bledo znači nijedna serija, a ne da je mišić zapostavljen — to zavisi od plana koji Nexus ne zna.",
           front: "Napred",
           back: "Nazad",
-          /** Composed with the counts themselves. */
-          descriptionLead: "Mapa tela, poslednjih",
           descriptionOf: "od",
           descriptionTrained: "mišićnih grupa je dobilo bar jednu tvrdu seriju",
           /** The truth behind the picture, as text and as chips — the map is only the shortcut. */
@@ -5258,7 +5239,6 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
           /** A muscle's own label, read on hover: „Grudi: 6 ser. · poslednji put 5. avg 2026.". */
           lastPrefix: "poslednji put",
           neverTrained: "bez serije u ovom periodu",
-          emptyReason: "Mapa se crta čim upišeš prvu seriju.",
           /**
            * „Mapa tela" as its own section (founder, 2026-08-08). The map used
            * to answer one question — šta nisam trenirao — and now answers the
@@ -5320,7 +5300,6 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       },
       /** One ranked list over the catalogue and the profile's own — one channel, one definition of „best match". */
       picker: {
-        title: "Izaberi vežbu",
         searchLabel: "Pretraga vežbi",
         searchPlaceholder: "npr. potisak, RDL, zgib…",
         idle: "Počni da kucaš da bi našao vežbu.",

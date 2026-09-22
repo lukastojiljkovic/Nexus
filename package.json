@@ -39,6 +39,7 @@
     "check:licences": "node apps/desktop/scripts/generate-licences.mjs --check",
     "check:rls": "node supabase/scripts/check-rls-wall.mjs",
     "check:migrations": "node scripts/check-migrations.mjs",
+    "check:copy": "node scripts/check-copy.mjs",
     "db:reset": "supabase db reset",
     "db:test": "supabase db reset && supabase test db"
   },

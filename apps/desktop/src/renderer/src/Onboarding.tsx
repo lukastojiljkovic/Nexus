@@ -1000,6 +1000,13 @@ export function Onboarding({
                 );
               })}
             </div>
+            {/* The consequence of choosing nothing, said where the choice is
+                being made rather than discovered later in Settings: this grid
+                is the only place it can be said, and it is a real outcome —
+                `applyPackSelection` switches the professional tools off when no
+                pack is chosen. The sentence was written for this slot and was
+                drawn nowhere, which is what `check:copy` now finds. */}
+            <p className="nx-hint nx-hint--prose">{s.packsNoChoice}</p>
             {/* The Settings gallery's own markup and its own copy: the two
                 screens ask the same question, and the locked pair is drawn as an
                 „Uvek uključeno“ chip in both. */}

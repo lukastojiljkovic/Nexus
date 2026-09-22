@@ -126,7 +126,6 @@ export const DEVTOOLS_DESIGN_SR = {
     addColour: "Dodaj boju",
     removeColour: "Ukloni boju",
     weight: "Udeo",
-    space: "Prostor",
     spaceLabel: {
       srgb: "sRGB",
       "linear-rgb": "Linearni RGB",

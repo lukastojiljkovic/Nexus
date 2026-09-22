@@ -454,7 +454,7 @@ function GradientTool() {
 
   return (
     <>
-      <ToolSection>
+      <ToolSection title={s.stops}>
         {stops.map((stop) => (
           <ColourNumberRow
             key={stop.key}

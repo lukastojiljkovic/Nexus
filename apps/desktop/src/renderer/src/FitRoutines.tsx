@@ -114,14 +114,23 @@ export function FitRoutines({ profileId, routines, exercises, onChanged }: FitRo
   const [exerciseForm, setExerciseForm] = useState<ExerciseForm>(EMPTY_EXERCISE_FORM);
   const [exerciseError, setExerciseError] = useState<string | null>(null);
 
-  /** Runs one mutation and re-reads through the section above — the routines list is its state, not this component's. */
-  async function run(action: () => Promise<void>): Promise<void> {
+  /**
+   * Runs one mutation and re-reads through the section above — the routines
+   * list is its state, not this component's.
+   *
+   * `fallback` is `fitTrainingError`'s unrecognised-failure sentence, and it is
+   * a parameter for the same reason it is one in „Trening": the caller knows
+   * which action failed. The three here are all deletes and undos, for which
+   * this product has no sentence more specific than the generic one — said out
+   * loud rather than left to a default.
+   */
+  async function run(action: () => Promise<void>, fallback: string): Promise<void> {
     setActionError(null);
     try {
       await action();
       await onChanged();
     } catch (error) {
-      setActionError(fitTrainingError(error));
+      setActionError(fitTrainingError(error, fallback));
       console.error("Nexus: a training action failed:", error);
     }
   }
@@ -265,7 +274,7 @@ export function FitRoutines({ profileId, routines, exercises, onChanged }: FitRo
       closeRoutineForm();
       await onChanged();
     } catch (error) {
-      setFormError(fitTrainingError(error));
+      setFormError(fitTrainingError(error, s.exercises.actionError));
       console.error("Nexus: failed to save the routine:", error);
     }
   }
@@ -275,7 +284,7 @@ export function FitRoutines({ profileId, routines, exercises, onChanged }: FitRo
     await run(async () => {
       await window.nexus.fitDeleteRoutine(profileId, routine.id);
       setPendingUndo({ kind: "routine", id: routine.id });
-    });
+    }, s.exercises.actionError);
   }
 
   async function undoPending(): Promise<void> {
@@ -285,7 +294,7 @@ export function FitRoutines({ profileId, routines, exercises, onChanged }: FitRo
       if (pending.kind === "routine") await window.nexus.fitRestoreRoutine(profileId, pending.id);
       else await window.nexus.fitRestoreExercise(profileId, pending.id);
       setPendingUndo(null);
-    });
+    }, s.exercises.actionError);
   }
 
   // --- „Moje vežbe" ----------------------------------------------------------
@@ -353,7 +362,7 @@ export function FitRoutines({ profileId, routines, exercises, onChanged }: FitRo
       closeExerciseForm();
       await onChanged();
     } catch (error) {
-      setExerciseError(fitTrainingError(error));
+      setExerciseError(fitTrainingError(error, s.exercises.actionError));
       console.error("Nexus: failed to save the exercise:", error);
     }
   }
@@ -363,7 +372,7 @@ export function FitRoutines({ profileId, routines, exercises, onChanged }: FitRo
     await run(async () => {
       await window.nexus.fitDeleteExercise(profileId, exercise.id);
       setPendingUndo({ kind: "exercise", id: exercise.id });
-    });
+    }, s.exercises.actionError);
   }
 
   // --- What this render draws ------------------------------------------------

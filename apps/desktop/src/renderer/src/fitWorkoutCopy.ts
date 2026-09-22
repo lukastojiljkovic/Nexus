@@ -205,10 +205,23 @@ export function targetText(target: RoutineLineTarget | null): string {
  * `habitErrorMessage`'s before it.
  *
  * UX only. The store stays the authority on what is refused; nothing here
- * decides anything, and an unrecognised failure falls through to the generic
- * line rather than being guessed at.
+ * decides anything, and an unrecognised failure falls through to `fallback`
+ * rather than being guessed at.
+ *
+ * **`fallback` is REQUIRED, and that is the whole point of the parameter.** It
+ * used to be `t.exercises.actionError` — one sentence, „Radnja nije uspela.
+ * Pokušaj ponovo." — for every caller. But the five messages below are the
+ * RECOGNISED refusals, and a store failure that is not one of them is not
+ * necessarily a nameless action: a set that would not save and a workout that
+ * would not start are the two things a person does most here, and the caller
+ * knows which one it was while this function does not. Two such sentences were
+ * written for exactly that and both shipped unread — one for a set that would
+ * not save („Serija nije upisana. Pokušaj ponovo.") and one for a workout that
+ * would not start („Trening nije mogao da se započne. Pokušaj ponovo.") —
+ * because the default answered for every caller and made the question
+ * invisible. A default is what let that happen, so there is none.
  */
-export function fitTrainingError(error: unknown): string {
+export function fitTrainingError(error: unknown, fallback: string): string {
   const message = error instanceof Error ? error.message : "";
   const t = strings.fitness.training;
   if (message.includes("A session is already open")) return t.start.alreadyOpen;
@@ -222,5 +235,5 @@ export function fitTrainingError(error: unknown): string {
   // trip. Kept as well as the client-side check, not instead of it: an
   // interchange import reaches the store without passing that form.
   if (message.includes("rep range that runs backwards")) return t.routines.invalidRange;
-  return t.exercises.actionError;
+  return fallback;
 }
