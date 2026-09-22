@@ -33,6 +33,7 @@
 import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { BrowserWindow } from "electron";
+import { createModuleRegistry } from "../../shared/modules.js";
 import { AUDIT_SCRIPT, type AuditFinding } from "./audit.js";
 
 /** The switcher every page builds its sub-views out of (`.nx-segmented`). */
@@ -841,6 +842,49 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     prepare: SCROLL_TO(".set__reset", "center"),
     fanout: null,
   },
+
+  // --- Every module card on „Podešavanja" -----------------------------------
+  //
+  // ONE FRAME PER CARD, AND THE LIST IS THE REGISTRY'S.
+  //
+  // „Podešavanja" is twenty-odd cards long and a frame shows one, so the five
+  // scenes above were the whole of what the page had ever been seen to be — and
+  // every card no scene happened to name was photographed by NOTHING.
+  //
+  // That is not a hypothetical, and it is how the settings-row rewrite landed
+  // on a surface no frame had ever carried: UČENJE's, FINANSIJE's, NAVIKE's,
+  // FOKUS's and FITNES's cards all sit below the first screenful, so the sweep
+  // reported „0 findings" over all of them for the whole life of the
+  // instrument. The count of cards that were unlooked at is not five, it is
+  // however many the registry happens to declare.
+  //
+  // So the ids are READ from the registry rather than typed here, which is the
+  // rule this file already states for the gallery's icon list. A hand-kept list
+  // mirroring a generated one fails by OMISSION ([[DC-109]]), and an omitted
+  // card looks exactly like a card that is fine. A module that grows a settings
+  // card now gets a frame in the same commit that adds the card.
+  //
+  // The declarations are `shared/modules.ts`, which MAIN also reads — the
+  // `moduleSettingsPanels` map that turns a declaration into a body is renderer
+  // code and deliberately not importable from here, so a declared card with no
+  // body scrolls to an element that is not there and the harness says the probe
+  // missed rather than photographing the page top under the card's name.
+  //
+  // WHAT THIS DOES NOT COVER, said plainly so the next reader is not misled by
+  // a list that looks complete: the SHELL's own cards — Profili, Sigurnost,
+  // Izgled, Obaveštenja, Licence and the rest — are written into
+  // `SettingsPage.tsx` in the renderer, and their ids are in no list main can
+  // read. They stay unphotographed, and they are recorded as such in
+  // `docs/STATUS.md` rather than papered over with a second hand-kept list.
+  ...createModuleRegistry()
+    .all()
+    .filter((manifest) => manifest.settings !== undefined)
+    .map((manifest) => ({
+      id: `settings-card-${manifest.id}`,
+      module: "settings",
+      prepare: SCROLL_TO(`#set-section-${manifest.id}`),
+      fanout: null,
+    })),
 
   // --- Overlays -------------------------------------------------------------
   // Surfaces with no sidebar row of their own. Each opens something, is
