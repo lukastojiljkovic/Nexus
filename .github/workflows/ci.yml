@@ -149,6 +149,21 @@ jobs:
       # since every call site would still pass if a layer moved under another.
       - run: pnpm check:layers
 
+      # A field's accessible name is its NAME, never its name and its
+      # explanation. A `<label>` that WRAPS its control takes the element's
+      # entire text content as the name, so an `.nx-hint` inside one is read out
+      # as part of it: UČENJE's two daily caps announced themselves as „Novih
+      # kartica dnevno Najviše 200 novih kartica dnevno", and PRIVATNO's four
+      # credential choices do it to their radios at the foot of a form where a
+      # screen reader hears „Zasebna šifra za Privatno Zasebna šifra ostaje na
+      # ovom uređaju…" as one utterance. The arrangement is exactly what the
+      # design asks for — name above, control, hint below — so it renders
+      # correctly, lints, typechecks and photographs clean; only the WRAPPING is
+      # wrong, and only for a reader who cannot see it. It needs no exemption
+      # list, because „a wrapping label holding a control and an explanation" is
+      # a statement about what the label contains.
+      - run: pnpm check:names
+
       # A character that renders as nothing, or as a character it is not. This
       # one has to run here rather than in review, because review is exactly
       # what it defeats: a non-breaking space is a space in every editor, in

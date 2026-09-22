@@ -26,6 +26,7 @@
     "check:tiers": "node scripts/check-tiers.mjs",
     "check:rows": "node scripts/check-rows.mjs",
     "check:layers": "node scripts/check-layers.mjs",
+    "check:names": "node scripts/check-names.mjs",
     "check:css": "node scripts/check-css.mjs",
     "check:egress": "node scripts/check-egress.mjs",
     "check:invisibles": "node scripts/check-invisibles.mjs",

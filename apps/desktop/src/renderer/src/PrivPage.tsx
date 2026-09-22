@@ -258,16 +258,27 @@ function PrivSetup({ profileId, onStatusChange }: PrivSetupProps) {
 
                 <fieldset className="priv__choice" role="radiogroup" aria-label={s.credentialLabel}>
                   <legend className="nx-hint nx-hint--prose">{s.credentialLabel}</legend>
+                  {/* The name is the SPAN, not the label. A wrapping label takes
+                      its entire text content as the control's accessible name, so
+                      „Zasebna šifra za Privatno" and the sentence describing it
+                      arrived as ONE utterance — the defect `check:names` exists
+                      for, and the same one UČENJE's two daily caps had. The label
+                      still wraps, because `cursor: pointer` on the whole row is
+                      what makes it clickable anywhere; `aria-labelledby` is what
+                      keeps the note out of the name. */}
                   <label className={choiceRowClass(!useAccountPasscode)}>
                     <input
                       className="nx-radio"
                       type="radio"
                       name="priv-credential"
+                      aria-labelledby="priv-cred-separate"
                       checked={!useAccountPasscode}
                       onChange={() => setUseAccountPasscode(false)}
                     />
                     <span className="priv__choice-text">
-                      <span className="priv__choice-name">{s.useSeparate}</span>
+                      <span className="priv__choice-name" id="priv-cred-separate">
+                        {s.useSeparate}
+                      </span>
                       <span className="nx-hint">{s.useSeparateNote}</span>
                     </span>
                   </label>
@@ -276,11 +287,14 @@ function PrivSetup({ profileId, onStatusChange }: PrivSetupProps) {
                       className="nx-radio"
                       type="radio"
                       name="priv-credential"
+                      aria-labelledby="priv-cred-account"
                       checked={useAccountPasscode}
                       onChange={() => setUseAccountPasscode(true)}
                     />
                     <span className="priv__choice-text">
-                      <span className="priv__choice-name">{s.useAccountPasscode}</span>
+                      <span className="priv__choice-name" id="priv-cred-account">
+                        {s.useAccountPasscode}
+                      </span>
                       <span className="nx-hint">{s.useAccountPasscodeNote}</span>
                     </span>
                   </label>
@@ -323,11 +337,14 @@ function PrivSetup({ profileId, onStatusChange }: PrivSetupProps) {
                       className="nx-radio"
                       type="radio"
                       name="priv-kit"
+                      aria-labelledby="priv-kit-regenerate"
                       checked={regenerateKit}
                       onChange={() => setRegenerateKit(true)}
                     />
                     <span className="priv__choice-text">
-                      <span className="priv__choice-name">{s.kitRegenerate}</span>
+                      <span className="priv__choice-name" id="priv-kit-regenerate">
+                        {s.kitRegenerate}
+                      </span>
                       <span className="nx-hint">{s.kitRegenerateNote}</span>
                     </span>
                   </label>
@@ -336,11 +353,14 @@ function PrivSetup({ profileId, onStatusChange }: PrivSetupProps) {
                       className="nx-radio"
                       type="radio"
                       name="priv-kit"
+                      aria-labelledby="priv-kit-optout"
                       checked={!regenerateKit}
                       onChange={() => setRegenerateKit(false)}
                     />
                     <span className="priv__choice-text">
-                      <span className="priv__choice-name">{s.kitOptOut}</span>
+                      <span className="priv__choice-name" id="priv-kit-optout">
+                        {s.kitOptOut}
+                      </span>
                       <span className="nx-hint">{s.kitOptOutNote}</span>
                     </span>
                   </label>
