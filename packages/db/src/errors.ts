@@ -936,6 +936,22 @@ export class CircuitValidationError extends DatabaseError {}
 export class CircuitNotFoundError extends DatabaseError {}
 
 /**
+ * Thrown when a runner-settings write breaks a rule migration 069's CHECKs
+ * cannot express on their own or would leave the row in a state they forbid
+ * (ADR-085 E6): a `choice` outside `@nexus/core`'s three profiles, an empty or
+ * oversized `distro`, a `consentedAt` that is not an ISO-8601 date-time, a
+ * choice remembered on a runner that is OFF, a distribution beside a choice
+ * that is not `wsl`, and — the one the whole feature exists to make impossible
+ * — **enabled with no consent on record**.
+ *
+ * The store revalidates because renderer input is untrusted (SEC-EL-02), even
+ * though main validates the same fields at the IPC boundary and would never
+ * build a command line from them: a store is never the place that assumes its
+ * caller did.
+ */
+export class ElecSettingsValidationError extends DatabaseError {}
+
+/**
  * Thrown when a USER exercise write is rejected at the store boundary (FIT
  * training, migration 060): an empty or over-80-character `name`, an over-80
  * `nameEn`, over-500-character `notes`, an empty `primaryMuscles` list, any

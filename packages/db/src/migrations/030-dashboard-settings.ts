@@ -20,12 +20,19 @@ import type { Migration } from "./migrations.js";
  * inventory declares every blob by hash AND size, and a hash with no size would
  * make that inventory only partly true.
  *
- * Three CHECKs, each mirroring a rule the store also enforces (a CHECK is what
- * holds when a row arrives through a restore rather than through the store):
- * the three background columns are all null or all set — a hash without a mime
- * is a blob nothing can decide how to serve — and the dim stays inside 0..90,
- * the same closed range `MAX_BACKGROUND_DIM` names. 90 rather than 100 on
- * purpose: a scrim at full opacity is not a dimmed photo, it is no photo.
+ * Four CHECKs, and they are not the same four rules the store enforces (a CHECK
+ * is what holds when a row arrives through a restore rather than through the
+ * store). The first two are the FUSED ones — the three background columns are
+ * all null or all set, because a hash without a mime is a blob nothing can
+ * decide how to serve — and those two are the schema's alone: the store
+ * validates each of the three columns independently (`validateHash`,
+ * `validateMime`, `validateSize`) and never their relationship. That is safe
+ * rather than lucky, because every write it offers passes all three at once, so
+ * this is the layer that keeps the invariant true and the store's three
+ * validators are a second, narrower reading of it. The last two, `size_bytes >
+ * 0` and the dim inside 0..90 — the same closed range `MAX_BACKGROUND_DIM`
+ * names — ARE mirrored by `validateSize` and `validateDim`. 90 rather than 100
+ * on purpose: a scrim at full opacity is not a dimmed photo, it is no photo.
  *
  * `dashboard_settings_background` covers the reverse lookup main's blob
  * reference count and mime resolver both run — "does any profile still name

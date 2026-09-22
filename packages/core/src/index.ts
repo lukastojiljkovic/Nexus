@@ -1150,6 +1150,10 @@ export type { RuleCode, RuleFinding, RuleSeverity, RuleValue } from "./electroni
 // switching on `GeneratedCode`'s tag.
 export { generateCode } from "./electronics/code.js";
 export type { CodeRefusal, GeneratedCode } from "./electronics/code.js";
+// E6 needs the package itself and not only its type: the runner's workspace is
+// WRITTEN from these files, where the export dialog writes them to a directory
+// the user picked. One generator, two destinations.
+export { generateRosPackage } from "./electronics/ros.js";
 export type { Sketch, SketchConnection, SketchRefusal } from "./electronics/sketch.js";
 export type {
   RosFile,
@@ -1200,6 +1204,45 @@ export type {
   SimValue,
   SimWave,
 } from "./electronics/simulate.js";
+// ADR-085 slice E6 — the external runner's CLOSED TABLE. This is the one export
+// in this file that is a security boundary rather than an API: the command
+// lines `colcon`, `ros2`, `docker` and `wsl.exe` are ever invoked with are
+// written down in `runner.ts` and nowhere else, and `buildCommand` is the only
+// way to obtain one. The renderer imports it for the same reason main does —
+// the consent screen must print the command that will actually run, and the
+// only way for those to be one string is for both sides to call this.
+//
+// `RUNNER_IMAGE` goes with it because the consent screen names the image, and
+// a screen that spelled it out again would be a second pin that could drift
+// from the one that runs.
+export {
+  appendLog,
+  buildCommand,
+  CONTAINER_WORKSPACE,
+  containerName,
+  containerProbe,
+  containerRemove,
+  EMPTY_LOG,
+  LOG_CAP_BYTES,
+  logText,
+  outputText,
+  readDistroList,
+  readStatusProbe,
+  rosDistroIn,
+  runnerTarget,
+  RUNNER_IMAGE,
+  RUNNER_PROBES,
+  RUNNER_PROFILES,
+  wslProbe,
+} from "./electronics/runner.js";
+export type {
+  ProbeResult,
+  RunnerLog,
+  RunnerPlan,
+  RunnerProfileId,
+  RunnerRefusal,
+  RunnerTarget,
+} from "./electronics/runner.js";
 
 /**
  * ADR-086 — „Priprema": the signals a first run collects, the lexicon that

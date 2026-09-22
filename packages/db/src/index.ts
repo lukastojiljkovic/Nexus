@@ -38,6 +38,7 @@ export {
   DeckValidationError,
   DocumentNotFoundError,
   DocumentValidationError,
+  ElecSettingsValidationError,
   EventNotFoundError,
   EventTemplateNotFoundError,
   EventTemplateValidationError,
@@ -634,6 +635,17 @@ export type {
   StoredCircuitWire,
   UpdateCircuitPartFields,
 } from "./electronics/electronicsStore.js";
+
+// The external runner's settings, one table over (migration 069, ADR-085 E6) —
+// deliberately NOT folded into the store above: a circuit is the profile's
+// content and travels in an archive, while this row is a fact about the machine
+// (which toolchain exists here, and whether its owner ever agreed to have one
+// run), and it is device-local for that reason.
+export {
+  ElecSettingsStore,
+  MAX_RUNNER_DISTRO_LENGTH,
+} from "./electronics/elecSettingsStore.js";
+export type { ElecSettings, ElecSettingsChanges } from "./electronics/elecSettingsStore.js";
 
 export {
   SearchStore,
