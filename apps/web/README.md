@@ -171,10 +171,21 @@ app only opens sockets to Supabase. That is a prediction. `connect-src` governs
 `WebAssembly.instantiateStreaming(fetch("/assets/argon2.wasm"))` — a same-origin
 `fetch`, blocked by this policy. So the directive that was widened *for* Argon2id
 (`'wasm-unsafe-eval'`) sits beside one that can stop it loading at all.
-`packages/sync-crypto` currently declares `argon2id` as an abstract `CryptoPort`
-method with no browser implementation, so the choice is still open: either the
-implementation must inline its WASM as a `data:`/base64 payload (no fetch), or
-`connect-src` gains `'self'`. Decide it before the KDF is written, not after.
+**It is answered, and it was answered the way this paragraph hoped.** The
+browser implementation exists — `packages/sync-port/src/webCryptoPort.ts`, a
+`CryptoPort` over `hash-wasm` — and `hash-wasm`'s shipped entry inlines its WASM
+as base64 rather than fetching it: `dist/index.esm.js` contains no `fetch(` and
+no `.wasm`, and the build emits no `.wasm` asset at all, so there is nothing for
+`connect-src` to block and `'self'` is not needed for the KDF. `pica`'s resizer,
+the other WASM consumer in this tree, does the same
+(`WebAssembly.compile(self.__base64decode(module3.wasm_src))`).
+
+What keeps it true is worth stating, because nothing here would notice it
+changing: the guarantee comes from the library's build, not from a decision of
+ours, so swapping `hash-wasm` for a build that loads `argon2.wasm` over the wire
+would not fail a typecheck, a test or a gate — it would fail at the KDF, in a
+browser, against a CSP that was right all along. If that dependency ever moves,
+this paragraph and `connect-src` move with it.
 
 **3. HSTS `preload` is a commitment, not a header.** `max-age=63072000;
 includeSubDomains; preload` asks browser vendors to hard-code the domain — and

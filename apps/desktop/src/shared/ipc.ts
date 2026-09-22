@@ -4840,9 +4840,12 @@ export type HabitSchedule =
  * „Danas". There is no `deletedAt` here at all, because a deleted habit is not
  * returned.
  *
- * `reminderTime` rides this wire and is deliberately NOT offered by any form in
- * this slice: nothing reads it until slice c wires the notification source, and
- * a control that silently does nothing is worse than an absent one.
+ * `reminderTime` rides this wire and was deliberately offered by NO form when
+ * this slice landed — nothing read it yet, and a control that silently does
+ * nothing is worse than an absent one. It has one now, and that is the rule
+ * working rather than the rule being broken: `habitReminder.ts` turns the field
+ * into reminder rows and `notifications.ts` delivers them, so HABITS' header
+ * switch reveals a `type="time"` field for it.
  */
 export interface Habit {
   id: string;
@@ -4855,7 +4858,7 @@ export interface Habit {
   target: number | null;
   /** What `target` counts, or null. Never set without a target. */
   unit: string | null;
-  /** Wall-clock `HH:MM`, or null. Read by slice c's notification source; no form in this slice writes it. */
+  /** Wall-clock `HH:MM`, or null. Written by HABITS' reminder switch, read by `habitReminder.ts`. */
   reminderTime: string | null;
   /** When the user finished with this habit, or null while it is current. */
   archivedAt: string | null;

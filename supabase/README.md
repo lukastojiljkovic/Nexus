@@ -552,10 +552,14 @@ deliberately does not do, written down so that „not built" is never mistaken f
 
 ### 6.1 The pairing rendezvous — the protocol is not closed
 
-`pair-complete` is the only Edge Function here, and it is deliberately the last
-step of the handshake: it exchanges a completion token for a desktop session, and
-it accepts the desktop's ephemeral public key and confirmation MAC in the same
-call so the browser can verify the short authentication string afterwards.
+`pair-complete` is deliberately the last step of the handshake: it exchanges a
+completion token for a desktop session, and it accepts the desktop's ephemeral
+public key and confirmation MAC in the same call so the browser can verify the
+short authentication string afterwards.
+
+It is not the only function here. Three sit in `supabase/functions/`:
+`device-register`, which hands out a `platform = 'desktop'` row to whoever
+already holds the account's master key; `sync-enable` (§6.6); and this one.
 
 What is **not** built here is how the desktop obtains the *initiator's* half —
 `pairing.initiator_pub` and `sealed_payload` — before it can complete the ECDH.
@@ -645,11 +649,18 @@ immediately after `supabase db push`**, before pointing a client at the project.
 ### 6.6 The master-key mint — built; what still is not
 
 `public.nexus_mk_mint` (migration 011) and the `sync-enable` Edge Function are
-the whole of it, covered by `05_mk_mint.test.sql` (19 pgTAP assertions, each of
-its seven guards proved by removing that guard and watching one named assertion
-go red) and by `tests/live/sync-enable.test.mjs`, which runs the real thing
-against real GoTrue sessions. **The desktop client half is not written**, so no
-account can sync yet; what exists is the server end of it.
+the server end of it, covered by `05_mk_mint.test.sql` (19 pgTAP assertions,
+each of its seven guards proved by removing that guard and watching one named
+assertion go red) and by `tests/live/sync-enable.test.mjs`, which runs the real
+thing against real GoTrue sessions.
+
+**The desktop client half exists as well**, which this paragraph denied for
+months: `apps/desktop/src/main/sync/enable.ts` derives `K_auth` and `K_wrap` in
+two separate Argon2id runs, walks the five-step order `sync-enable`'s own header
+derives, and stores nothing, because storage is a database concern and that file
+has no database in it. What stands between this and a syncing account is the
+switch rather than a missing half: cloud is off by default on the desktop, and
+the web surface that issues a pairing code is on hold.
 
 The three decisions below are recorded because they are the kind that get quietly
 reversed by someone making the honest path smoother.
