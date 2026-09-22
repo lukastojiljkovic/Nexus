@@ -6,17 +6,18 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   acquire,
+  HARNESS_KINDS,
   holder,
-  LOCKED_KINDS,
   lockPath,
   release,
   running,
 } from "../apps/desktop/scripts/run-lock.mjs";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+const LAUNCH = join(REPO_ROOT, "apps", "desktop", "scripts", "launch.mjs");
 
 /**
- * `run-lock` is the guard that keeps two harness runs off one sandbox.
+ * `run-lock` is the guard that keeps two harness runs off one machine.
  *
  * The class it closes is a SHARED RESOURCE with no owner: `--smoke` and
  * `--shots` each resolve the same `app.getPath("userData")/<kind>` and each wipe
@@ -40,74 +41,74 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-/** Take `kind` in the scratch directory, with liveness answered by the caller. */
+/** Take the lock in the scratch directory, with liveness answered by the caller. */
 const take = (kind, options = {}) => acquire(kind, { dir, uid: null, ...options });
 
 describe("lockPath", () => {
-  it("names the kind, so two kinds never share one lock", () => {
-    expect(lockPath("shots", dir, null)).toBe(join(dir, "nexus-harness-shots.lock"));
-    expect(lockPath("smoke", dir, null)).not.toBe(lockPath("shots", dir, null));
+  it("is ONE lock for the whole harness — the kind is not part of the name", () => {
+    // The property that matters, and the one a well-meaning „give each verb its
+    // own lock" would break: every verb builds into the same `out/`, so two
+    // verbs running together corrupt a resource neither owns alone.
+    expect(lockPath(dir, null)).toBe(join(dir, "nexus-harness.lock"));
   });
 
   it("carries the uid where there is one, because a POSIX temp directory is not per-user", () => {
-    expect(lockPath("shots", dir, 1000)).toBe(join(dir, "nexus-harness-shots-1000.lock"));
-    expect(lockPath("shots", dir, 1001)).not.toBe(lockPath("shots", dir, 1000));
+    expect(lockPath(dir, 1000)).toBe(join(dir, "nexus-harness-1000.lock"));
+    expect(lockPath(dir, 1001)).not.toBe(lockPath(dir, 1000));
   });
 });
 
 describe("holder", () => {
-  it("reads back the pid a lock names", () => {
-    const path = lockPath("shots", dir, null);
-    writeFileSync(path, "4242\n");
-    expect(holder(path)).toBe(4242);
+  it("reads back the pid and the kind a lock names", () => {
+    const path = lockPath(dir, null);
+    writeFileSync(path, "4242 shots\n");
+    expect(holder(path)).toEqual({ pid: 4242, kind: "shots" });
   });
 
-  it("answers null for a file that names nothing — empty, prose, or gone", () => {
-    const path = lockPath("shots", dir, null);
-    // All three are one answer to a caller: this lock has no live holder, so it
+  it("answers null for a file that names nobody — empty, prose, an older format, or gone", () => {
+    const path = lockPath(dir, null);
+    // All four are one answer to a caller: this lock has no live holder, so it
     // is free. A truncated file is the shape a crash between `openSync` and
     // `writeSync` leaves, and treating it as a holder would deadlock the machine
     // on a file that names nobody.
-    writeFileSync(path, "");
-    expect(holder(path)).toBeNull();
-    writeFileSync(path, "held by someone, probably\n");
-    expect(holder(path)).toBeNull();
-    writeFileSync(path, "12abc\n");
-    expect(holder(path)).toBeNull();
+    for (const debris of ["", "held by someone, probably\n", "4242\n", "4242 ORCHESTRA\n"]) {
+      writeFileSync(path, debris);
+      expect(holder(path), JSON.stringify(debris)).toBeNull();
+    }
     rmSync(path);
     expect(holder(path)).toBeNull();
   });
 });
 
 describe("acquire", () => {
-  it("takes a free lock and writes this process's pid into it", () => {
+  it("takes a free lock and writes this process's pid and the kind into it", () => {
     const lock = take("shots");
     expect(lock.ok).toBe(true);
     expect(lock.release).toBeTypeOf("function");
-    expect(holder(lock.path)).toBe(process.pid);
+    expect(holder(lock.path)).toEqual({ pid: process.pid, kind: "shots" });
   });
 
   it("refuses against a LIVE holder, and leaves its lock alone", () => {
     const first = take("shots");
-    const second = take("shots", { alive: () => true });
+    const second = take("smoke", { alive: () => true });
     expect(second.ok).toBe(false);
-    expect(second.heldBy).toBe(process.pid);
+    expect(second.holder).toEqual({ pid: process.pid, kind: "shots" });
     // The refusal must not be a take: a loser that deleted the winner's lock on
-    // its way out would let the next run in beside it.
-    expect(holder(first.path)).toBe(process.pid);
+    // its way out would let the next run in beside it. And the kind is the
+    // WINNER's, so the message names what is actually in the way.
+    expect(holder(first.path)).toEqual({ pid: process.pid, kind: "shots" });
   });
 
   it("takes over a lock whose holder is gone", () => {
-    const dead = take("shots", { alive: () => true });
-    expect(dead.ok).toBe(true);
+    expect(take("shots", { alive: () => true }).ok).toBe(true);
     // The same file, now naming a process that no longer exists.
-    const next = take("shots", { alive: () => false });
+    const next = take("smoke", { alive: () => false });
     expect(next.ok).toBe(true);
-    expect(holder(next.path)).toBe(process.pid);
+    expect(holder(next.path)).toEqual({ pid: process.pid, kind: "smoke" });
   });
 
-  it("takes over a lock that names nothing at all", () => {
-    writeFileSync(lockPath("shots", dir, null), "");
+  it("takes over a lock that names nobody at all", () => {
+    writeFileSync(lockPath(dir, null), "");
     expect(take("shots").ok).toBe(true);
   });
 
@@ -128,8 +129,8 @@ describe("acquire", () => {
 
 describe("release", () => {
   it("removes a lock this process owns", () => {
-    const path = lockPath("shots", dir, null);
-    writeFileSync(path, `${String(process.pid)}\n`);
+    const path = lockPath(dir, null);
+    writeFileSync(path, `${String(process.pid)} shots\n`);
     release(path);
     expect(existsSync(path)).toBe(false);
   });
@@ -138,33 +139,47 @@ describe("release", () => {
     // A run that was killed leaves its lock; a later run takes it over; then the
     // first run's exit handler runs. Without this, that handler would delete the
     // lock of the run that is still going — the same defect, one layer up.
-    const path = lockPath("shots", dir, null);
-    writeFileSync(path, "999999\n");
+    const path = lockPath(dir, null);
+    writeFileSync(path, "999999 shots\n");
     release(path);
-    expect(readFileSync(path, "utf8")).toBe("999999\n");
+    expect(readFileSync(path, "utf8")).toBe("999999 shots\n");
   });
 
   it("says nothing when the lock is already gone", () => {
-    expect(() => release(lockPath("shots", dir, null))).not.toThrow();
+    expect(() => release(lockPath(dir, null))).not.toThrow();
   });
 });
 
-describe("the set of locked kinds", () => {
-  it("recognises this process, which is the one thing `running` can be asked for cheaply", () => {
-    expect(running(process.pid)).toBe(true);
+describe("the launcher that uses it", () => {
+  const source = readFileSync(LAUNCH, "utf8");
+
+  it("takes the lock before it builds, which is the only place that order is visible", () => {
+    // Two properties, both load-bearing and both invisible from the outside: the
+    // lock must be held during the BUILD (or `out/` is unguarded while the code
+    // reads as though it were guarded), and it must be released on the way out
+    // of every path — including the throw, which is why the release is in a
+    // `finally` and the `process.exit` is outside it.
+    const acquired = source.indexOf("acquire(kind)");
+    const built = source.indexOf('"build"]');
+    expect(acquired, "launch.mjs no longer acquires a lock").toBeGreaterThan(-1);
+    expect(built, "launch.mjs no longer builds — re-derive this test").toBeGreaterThan(-1);
+    expect(acquired).toBeLessThan(built);
+    expect(source.indexOf("lock.release()")).toBeGreaterThan(-1);
   });
 
-  it("covers every harness verb `package.json` can launch, so a fourth one cannot ship unlocked", () => {
-    // THE PIN THAT MATTERS. `launch.mjs` locks a run by the flag it was given,
-    // and a verb added to `package.json` without being added here would launch
-    // with no lock at all — silently, because a run that takes no lock and a run
-    // that takes one and releases it are the same run from the outside.
+  it("knows every verb `package.json` launches, so a fourth one cannot ship unnamed", () => {
     const scripts = JSON.parse(readFileSync(join(REPO_ROOT, "apps/desktop/package.json"), "utf8"))
       .scripts;
     const launched = Object.values(scripts)
       .map((command) => /scripts\/launch\.mjs --([a-z]+)/.exec(command)?.[1])
       .filter((kind) => kind !== undefined);
     expect(launched.length).toBeGreaterThan(0);
-    expect(new Set(launched)).toEqual(new Set(LOCKED_KINDS));
+    expect(new Set(launched)).toEqual(new Set(HARNESS_KINDS));
+  });
+});
+
+describe("running", () => {
+  it("recognises this process, which is the one pid it can be asked for cheaply", () => {
+    expect(running(process.pid)).toBe(true);
   });
 });
