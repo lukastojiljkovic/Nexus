@@ -1571,6 +1571,18 @@ describe("RestoreStore", () => {
     //    rows for objects the restore did NOT touch — which are precisely the
     //    ones still owed to the server, and losing them is exactly the defect
     //    the table was added to close.
+    //  - elec_settings (migration 069 / ADR-085 E6): DEVICE-LOCAL, on
+    //    `sync_account`'s terms and then further. Every column describes THIS
+    //    COMPUTER — which of the three profiles its toolchain runs under, which
+    //    of ITS WSL distributions the build happens in, and when a person here
+    //    agreed to let Nexus start a process at all. A distribution name is
+    //    meaningless on a machine that does not have it, and the consent is the
+    //    sharpest of the three: carried by an archive it would become somebody
+    //    else's yes, and a desktop that never gave one would run builds because
+    //    another one did. That is DEV-007's whole subject, and a restore is not
+    //    a thing that may grant it. It is also not CONTENT in the archive's
+    //    sense: nothing here is something the user wrote, so there is no
+    //    version of it an archive could hold and no journal trigger on it.
     const allowlist = new Set<string>([
       "meta",
       "profiles",
@@ -1591,6 +1603,7 @@ describe("RestoreStore", () => {
       "sync_cursor",
       "sync_outbox",
       "sync_quarantine",
+      "elec_settings",
     ]);
 
     const wipeTables = new Set<string>(RESTORE_WIPE_TABLES);
