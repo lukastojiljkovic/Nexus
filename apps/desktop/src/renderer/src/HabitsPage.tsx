@@ -568,7 +568,7 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
         ))}
         <button
           type="button"
-          className="nx-swatch note__swatch--none"
+          className="nx-swatch nx-swatch--none"
           aria-label={s.form.noColor}
           aria-pressed={colorDraft === null}
           onClick={() => setColorDraft(null)}

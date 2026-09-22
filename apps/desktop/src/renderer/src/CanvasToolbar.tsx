@@ -191,7 +191,7 @@ export function CanvasToolbar({ editor, state, onMermaid, onAddCard }: CanvasToo
       {channel === "background" && (
         <button
           type="button"
-          className={swatchClass(sameCanvasColour(current, CANVAS_TRANSPARENT))}
+          className={`${swatchClass(sameCanvasColour(current, CANVAS_TRANSPARENT))} nx-swatch--none`}
           aria-label={s.fillNone}
           title={s.fillNone}
           aria-pressed={sameCanvasColour(current, CANVAS_TRANSPARENT)}
@@ -356,14 +356,18 @@ function keepEditorFocus(event: { preventDefault: () => void }): void {
 }
 
 /**
- * The shared swatch box (`.nx-swatch`), plus what this bar puts inside it.
+ * The shared swatch box (`.nx-swatch`) and its chosen state.
  *
- * The size, the edge, the hover and the chosen ring are the product's, not this
- * page's — `.canv__swatch` used to restate all four, and it restated the 20px
- * they were written at before the pointer floor existed.
+ * Everything this bar used to put inside a swatch is the product's now: the box
+ * and its 24px, and the centred muted glyph the colourless tile carries
+ * (`.nx-swatch--none`). `.canv__swatch` restated all of it — including the 20px
+ * the box was written at before the pointer floor existed — and it was applied
+ * to the colour tiles too, where nothing inside them reads it. What a colour
+ * tile still owns is `canv__swatch--colour` below, and that is a rule about
+ * dark-theme inversion rather than about layout.
  */
 function swatchClass(selected: boolean): string {
-  return selected ? "nx-swatch nx-swatch--selected canv__swatch" : "nx-swatch canv__swatch";
+  return selected ? "nx-swatch nx-swatch--selected" : "nx-swatch";
 }
 
 /** The element fields a change writes — the counterpart of the `currentItem*` default beside it. */

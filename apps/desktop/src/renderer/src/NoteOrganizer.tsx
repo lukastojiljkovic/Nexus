@@ -477,7 +477,7 @@ export function NoteOrganizer({
       ))}
       <button
         type="button"
-        className="nx-swatch note__swatch--none"
+        className="nx-swatch nx-swatch--none"
         aria-label={strings.notes.noColor}
         aria-pressed={current === null}
         onClick={() => onPick(null)}

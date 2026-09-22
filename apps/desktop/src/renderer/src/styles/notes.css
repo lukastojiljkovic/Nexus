@@ -267,32 +267,24 @@
 }
 
 /* Folder colour picker: the eight accent swatches + a "no colour" option,
-   mirroring the Settings accent row. Selection = 2px text-coloured ring, no glow. */
+   mirroring the Settings accent row. Selection = 2px text-coloured ring, no glow.
+   What this rule owns is the ROW — the wrapping, the gap, the depth indent.
+
+   Both things inside it are `@nexus/ui`'s now. The swatch BOX — its 24px
+   pointer floor, its edge and its chosen ring — was written here first and
+   copied to the canvas bar, where the copy shipped at 20px and had to be
+   corrected on its own; the workbench asking for the same control a third time
+   is what moved it. The recipe INSIDE the „no colour" tile moved on
+   2026-09-22 for the same reason: `.note__swatch--none` here and
+   `.canv__swatch` next door were six identical declarations on two pages, and
+   both are `.nx-swatch--none` now. This page's two call sites (the folder
+   picker and the habit colour row) already carried `nx-swatch` beside the
+   modifier, which is how the move stayed a move. */
 .note__swatch-row {
   display: flex;
   flex-wrap: wrap;
   gap: var(--nx-space-2);
   padding: var(--nx-space-2) 0 var(--nx-space-2) calc(var(--nx-space-3) * var(--note-depth, 0));
-}
-/* The swatch BOX — its 24px pointer floor, its edge and its chosen ring — is
-   `.nx-swatch` in `@nexus/ui`. It was written here first and copied to the
-   canvas bar, where the copy shipped at 20px and had to be corrected on its
-   own; the workbench asking for the same control a third time is what moved it.
-   What stays here is the row and the „no colour" option's own dot.
-
-   The modifier keeps its `note__` name although the block it modifies is now
-   `.nx-swatch`, because what it holds is still this page's: the ×-glyph recipe.
-   That recipe is ALSO the whole of `.canv__swatch` — six identical declarations
-   on the surface next door — and sharing it is a cascade move that has to be
-   looked at rather than reasoned about, so it is recorded in `docs/STATUS.md`
-   instead of done blind here. */
-.note__swatch--none {
-  display: grid;
-  place-items: center;
-  background: var(--nx-surface);
-  color: var(--nx-text-muted);
-  font-size: var(--nx-font-size-body-sm);
-  line-height: 1;
 }
 
 /* Default-template picker (ADR-036): the second-level row the folder menu's

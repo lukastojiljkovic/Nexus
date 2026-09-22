@@ -968,6 +968,24 @@ samp {
   outline: 2px solid var(--nx-accent);
   outline-offset: 2px;
 }
+/* A swatch whose content is a centred glyph rather than a fill — the option at
+   the end of a row that clears the colour, drawn as `Icon name="swatchNone"`.
+   Its six declarations are here for the reason the box's four are: they were
+   the same six in two pages. `.note__swatch--none` held them for the folder
+   picker and the habit colour row, `.canv__swatch` held them for the CANVAS
+   bar's „bez ispune" tile — identical property for property, differing only in
+   the order they were written — and the canvas copy was applied to its COLOUR
+   tiles as well, where nothing inside the box reads them. A recipe two pages
+   write is a recipe neither owns, and this is the third piece of this control
+   to move here after the box and the size. */
+.nx-swatch--none {
+  display: grid;
+  place-items: center;
+  background: var(--nx-surface);
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+  line-height: 1;
+}
 
 /* --- Card / widget frame ------------------------------------------------ */
 /* The one raised surface in the product. `--nx-elevation-raised` replaces the

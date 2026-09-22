@@ -213,24 +213,20 @@
   font-variant-numeric: tabular-nums;
 }
 /*
- * What this bar puts INSIDE a swatch. The box itself — its 24px, its edge, its
- * hover and its chosen ring — is `.nx-swatch` in `@nexus/ui`, which is where it
- * moved once the workbench became the third page to want the same control.
+ * What this bar puts INSIDE a swatch is nothing of its own any more.
  *
- * The size in particular is not this page's to hold: this rule used to say 20px
- * because it was copied from `.note__swatch` before the pointer floor existed,
- * and the two copies were then corrected separately, months apart, for the same
- * reason. What stays here is the „bez ispune" dot's own grid — a swatch with no
- * colour carries a × instead.
+ * The box — its 24px, its edge, its hover and its chosen ring — is `.nx-swatch`
+ * in `@nexus/ui`, which is where it moved once the workbench became the third
+ * page to want the same control; the size in particular was not this page's to
+ * hold, because this rule used to say 20px from a copy of `.note__swatch` taken
+ * before the pointer floor existed, and the two were then corrected separately,
+ * months apart, for the same reason. The six declarations that followed it —
+ * the centred, muted glyph a swatch with no colour carries — were the same six
+ * in the folder picker next door, and they are `.nx-swatch--none` now.
+ *
+ * One modifier of this page's own is left, and it is a COLOUR rule rather than
+ * a layout one:
  */
-.canv__swatch {
-  background: var(--nx-surface);
-  color: var(--nx-text-muted);
-  display: grid;
-  place-items: center;
-  font-size: var(--nx-font-size-body-sm);
-  line-height: 1;
-}
 /* A colour dot shows the colour the stroke will BE, which under Noć is not the
    colour we hand the editor.
 
