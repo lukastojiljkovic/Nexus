@@ -29,6 +29,25 @@ const DOCUMENT_TYPES: readonly DocumentType[] = [
   "custom",
 ];
 
+/**
+ * Per-type default reminder ladders, mirrored for the same reason and in the
+ * same shape as the type list above (SEC-EL-02). This is what the chips show
+ * while the form is still following the type — and it is shown rather than
+ * merely known because the store applies this very table when a create carries
+ * no `reminderOffsets`. Touch no chip and the store writes its own copy of
+ * this; a drift between the two tables is then a chip row promising a lead
+ * time the document will not have.
+ */
+const DEFAULT_REMINDER_LADDERS: Record<DocumentType, readonly number[]> = {
+  licna_karta: [90, 30, 7],
+  pasos: [90, 30, 7],
+  vozacka: [90, 30, 7],
+  registracija: [30, 14, 3],
+  kartica: [30, 7],
+  polisa: [30, 7],
+  custom: [30, 7],
+};
+
 // Status → Chip variant: on time reads as data, the reminder window as accent,
 // an expired document as danger. The colour is the Chip's; never hand-rolled.
 const STATUS_VARIANT: Record<DocumentStatus, "data" | "accent" | "danger"> = {
@@ -69,6 +88,40 @@ function daysUntilLabel(days: number): string {
   return `${d.pastPrefix} ${ago} ${dayUnit(ago, d.unitOne, d.unitMany)}`;
 }
 
+// --- Podsetnici (the per-document reminder ladder) --------------------------
+
+/**
+ * The offered lead times, in whole DAYS before the rok — the union of every
+ * value the per-type defaults use (3, 7, 14, 30, 90) plus 1. It differs from
+ * TASK's ladder in exactly one place, and deliberately: there is no 0 chip.
+ * A warning on the day a document expires arrives when there is nothing left to
+ * do about it, and a task's due day is the day the task is about.
+ */
+const REMINDER_LADDER: readonly number[] = [1, 3, 7, 14, 30, 90];
+
+/**
+ * A lead time as its chip label: „Na dan roka“, „7 dana ranije“. Zero is its
+ * own wording — there is nothing „ranije“ about the expiry day itself — and it
+ * is reachable only through the union below, since no chip offers it. The
+ * counted noun comes from `days`, the same block `daysUntilLabel` counts in, so
+ * the ladder and the row's countdown agree on „dan“ and „dana“.
+ */
+function documentReminderLabel(days: number): string {
+  const d = strings.documents.days;
+  if (days === 0) return strings.documents.reminders.atDue;
+  return `${days} ${dayUnit(days, d.unitOne, d.unitMany)} ${strings.documents.reminders.before}`;
+}
+
+/**
+ * The chips to draw: the fixed ladder plus every offset the edited document
+ * carries that the ladder cannot say, in ascending order. Without that union an
+ * edit would silently drop a lead time merely because no chip could express it.
+ */
+function reminderChoices(selected: readonly number[]): number[] {
+  const extra = selected.filter((days) => !REMINDER_LADDER.includes(days));
+  return [...new Set([...REMINDER_LADDER, ...extra])].sort((a, b) => a - b);
+}
+
 /** DOM id for a document's row, for `scrollRevealedIntoView`. */
 function documentRowDomId(documentId: string): string {
   return `document-row-${documentId}`;
@@ -98,7 +151,8 @@ export interface DocumentsPanelProps {
  * expiry with a derived status chip, per-row renew, and delete-with-undo. Every
  * write goes through the documents:* IPC allowlist, so the store stays the
  * single source of truth (it derives status/daysUntilExpiry and applies the
- * per-type reminder ladder). Per-document ladder editing is deferred.
+ * per-type reminder ladder). The ladder itself is editable on this form, per
+ * document — see `REMINDER_LADDER`.
  */
 export function DocumentsPanel({
   profileId,
@@ -116,7 +170,31 @@ export function DocumentsPanel({
   const [label, setLabel] = useState("");
   const [expiryDate, setExpiryDate] = useState("");
   const [notes, setNotes] = useState("");
+  /**
+   * The ladder the user has built, or `null` while the form is still following
+   * the TYPE's default. One piece of state rather than a list beside a
+   * `touched` flag, because those two can disagree and this cannot: „untouched“
+   * is the absence of a ladder here, not a second fact about one.
+   *
+   * It is also what makes the rule both halves of the form need true by
+   * construction — a type change re-seeds the chips while this is `null` and
+   * cannot touch them once it is not, and an edit loads the document's own
+   * ladder, which is why a type change inside an edit never overwrites what the
+   * record already says.
+   */
+  const [reminderOffsets, setReminderOffsets] = useState<number[] | null>(null);
   const labelRef = useRef<HTMLInputElement>(null);
+
+  /**
+   * The ladder the chips draw and the form will send: the user's own once a
+   * chip has been touched, the type's default until then. The same rule
+   * `DocumentStore.create` applies, where the default is used only when the
+   * create carries no `reminderOffsets` — so the untouched state IS the store's
+   * default, and the chips show it as their SELECTION rather than leaving every
+   * chip unlit: a new pasoš has to read as 90, 30 and 7 days, because that is
+   * what it is about to be created with.
+   */
+  const ladder = reminderOffsets ?? DEFAULT_REMINDER_LADDERS[docType];
 
   // Inline renew: one row at a time reveals a date input + confirm affordance.
   const [renewingId, setRenewingId] = useState<string | null>(null);
@@ -147,16 +225,39 @@ export function DocumentsPanel({
     setLabel("");
     setExpiryDate("");
     setNotes("");
+    setReminderOffsets(null);
   }
 
-  /** Loads a document into the shared form and switches it to edit mode. */
+  /**
+   * Loads a document into the shared form and switches it to edit mode. The
+   * document's OWN ladder comes with it: a stored record carries an explicit
+   * ladder whatever the type's default is today, so the form takes it as the
+   * user's own rather than re-deriving it from the type.
+   */
   function startEdit(doc: TrackedDocument): void {
     setEditingId(doc.id);
     setDocType(doc.docType);
     setLabel(doc.label);
     setExpiryDate(doc.expiryDate.slice(0, 10));
     setNotes(doc.notes ?? "");
+    setReminderOffsets([...doc.reminderOffsets]);
     labelRef.current?.focus();
+  }
+
+  /**
+   * One chip. The first click is what makes the ladder the user's: up to it the
+   * form was SHOWING the type's default, and from it the chips and the record
+   * are one list. Un-ticking a chip is therefore also a decision — `reminderOffsets`
+   * becomes `[]`, which is a real answer („no warning at all“) and not the same
+   * thing as the `null` above.
+   */
+  function toggleReminder(days: number): void {
+    setReminderOffsets((prev) => {
+      const current = prev ?? DEFAULT_REMINDER_LADDERS[docType];
+      return current.includes(days)
+        ? current.filter((offset) => offset !== days)
+        : [...current, days];
+    });
   }
 
   // Consumes a pending deep-link (021-e, CAL's "document" search results):
@@ -197,16 +298,28 @@ export function DocumentsPanel({
           docType,
           label: trimmedLabel,
           expiryDate,
+          // The form's own ladder, which in edit mode IS the record's —
+          // `startEdit` loaded it — so a type change made here cannot overwrite
+          // the lead times the document was stored with.
+          reminderOffsets: [...ladder],
           notes: trimmedNotes.length > 0 ? trimmedNotes : null,
         };
         const updated = await window.nexus.updateDocument(profileId, editingId, changes);
         setDocuments((prev) => prev && prev.map((d) => (d.id === updated.id ? updated : d)));
         resetForm();
       } else {
-        // No reminderOffsets — the store applies the per-type default ladder.
         const fields: NewDocumentFields = { docType, label: trimmedLabel, expiryDate };
         // Only send notes when present (exactOptionalPropertyTypes).
         if (trimmedNotes.length > 0) fields.notes = trimmedNotes;
+        // And the ladder always, touched or not. Untouched, `ladder` IS the
+        // type's default, which the chips above are showing as their selection
+        // — so this is not the form second-guessing the store's own table, it
+        // is the form writing the row the user was looking at while they made
+        // it. (The two agree today, and the moment they stop agreeing, the one
+        // that must win is the one on screen: a document created under a chip
+        // row that promised 90/30/7 and got something else is a record nobody
+        // can account for.)
+        fields.reminderOffsets = [...ladder];
         const created = await window.nexus.createDocument(profileId, fields);
         setDocuments((prev) => (prev ? [...prev, created] : [created]));
         resetForm();
@@ -349,6 +462,42 @@ export function DocumentsPanel({
           label={strings.documents.notesLabel}
           onChange={(event) => setNotes(event.target.value)}
         />
+        {/* Podsetnici — the ladder. The store has held `reminderOffsets` since
+            the first migration and BOTH wires carry it, so this block is not a
+            new capability, it is the missing half of one: without it every
+            document kept its type's default for its whole life, and a pasoš
+            said „Uskoro ističe“ from ninety days out whether or not that was
+            any use to its owner.
+
+            A full row of the form, like CAL's and TASK's own ladders, so the
+            chips wrap under themselves rather than shoving the submit button
+            around. The selection is the DERIVED ladder, not the user's list:
+            untouched, the chips show what the type will be created with.
+
+            No `<label>` element here on purpose — the name is a plain span and
+            the control is a group of buttons, which is how the other two
+            ladders are named as well. A wrapping `<label>` would also take the
+            whole row as the accessible name of the first control in it. */}
+        <div className="documents__reminders">
+          <span className="documents__reminders-label">{strings.documents.reminders.label}</span>
+          <div
+            className="documents__reminder-chips"
+            role="group"
+            aria-label={strings.documents.reminders.label}
+          >
+            {reminderChoices(ladder).map((days) => (
+              <Button
+                key={days}
+                size="sm"
+                className="nx-segmented__option documents__reminder"
+                aria-pressed={ladder.includes(days)}
+                onClick={() => toggleReminder(days)}
+              >
+                {documentReminderLabel(days)}
+              </Button>
+            ))}
+          </div>
+        </div>
         <Button type="submit" variant="primary">
           {editingId != null ? strings.documents.save : strings.documents.add}
         </Button>

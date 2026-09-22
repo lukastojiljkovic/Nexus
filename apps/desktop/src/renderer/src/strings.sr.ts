@@ -2596,6 +2596,43 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       unitOne: "dan",
       unitMany: "dana",
     },
+    /**
+     * „Podsetnici“ — the per-document reminder ladder, in whole days before the
+     * rok. It is the one thing about a document the store has always been able
+     * to hold and no screen could set: `reminderOffsets` travels on the create
+     * and the update wire alike, and the form sent neither, so every document
+     * kept whatever its type's default was on the day it was made. Worth a
+     * control at all because the list's own chip turns over at the WIDEST lead
+     * time — a ladder is what decides when a row starts saying „Uskoro ističe“.
+     *
+     * Worded like `tasks.reminders` and `calendar.reminders`, one module over
+     * and for their reason: one ladder of lead times, one set of words, only
+     * the unit differs. The counted noun is this panel's own `days` block
+     * („7 dana ranije“), and only the trailing word and the zero case are new.
+     * „rok“ is already this panel's word for the expiry date — the horizon
+     * above the list is headed „Rokovi“ and the renew form's field is „Novi
+     * rok“ — so the expiry day is „Na dan roka“ here exactly as the due day is
+     * there.
+     *
+     * PLURAL, where TASK says „Podsetnik“: what a document carries is a SET of
+     * warnings, which is what the chip row shows, and it is the form CAL's
+     * event ladder already wears.
+     */
+    reminders: {
+      label: "Podsetnici",
+      /**
+       * The zero-day chip. No chip offers it — the offered set starts at one
+       * day, because a warning on the expiry day tells nobody anything they can
+       * still act on — so this is reachable only through the union, for a
+       * ladder that arrived from another device carrying one.
+       */
+      atDue: "Na dan roka",
+      /**
+       * Trailing word of every non-zero lead time; the counted day noun is
+       * `days.unitOne` / `days.unitMany`, the block the row's countdown uses.
+       */
+      before: "ranije",
+    },
   },
 
   /**

@@ -74,16 +74,17 @@
   flex: 1;
   min-width: 240px;
 }
-/* Reminder chip row — the event form's "Podsetnici" (CAL-006) and the task
-   form's "Podsetnik" (ADR-028) share this recipe outright, the way the house
-   dialog is shared further down: one ladder of lead times, one look, only the
-   unit differs (an event counts minutes, a task counts days). The same
-   typographic toggle as .cal__source and .recur__day: accent text + weight when
-   on, never a glow. Takes a full row of the wrapping form, like .recur does, so
-   a long ladder wraps under itself instead of pushing the submit button
-   around. */
+/* Reminder chip row — the event form's "Podsetnici" (CAL-006), the task form's
+   "Podsetnik" (ADR-028) and the document form's own ladder (CAL-004) share this
+   recipe outright, the way the house dialog is shared further down: one ladder
+   of lead times, one look, only the unit differs (an event counts minutes, a
+   task and a document count days). The same typographic toggle as .cal__source
+   and .recur__day: accent text + weight when on, never a glow. Takes a full row
+   of the wrapping form, like .recur does, so a long ladder wraps under itself
+   instead of pushing the submit button around. */
 .cal__reminders,
-.tasks__reminders {
+.tasks__reminders,
+.documents__reminders {
   flex-basis: 100%;
   display: flex;
   align-items: center;
@@ -91,21 +92,24 @@
   gap: var(--nx-space-2);
 }
 .cal__reminders-label,
-.tasks__reminders-label {
+.tasks__reminders-label,
+.documents__reminders-label {
   flex: none;
   font-size: var(--nx-font-size-label);
   letter-spacing: var(--nx-font-tracking-label);
   color: var(--nx-text-muted);
 }
 .cal__reminder-chips,
-.tasks__reminder-chips {
+.tasks__reminder-chips,
+.documents__reminder-chips {
   display: inline-flex;
   align-items: center;
   gap: var(--nx-space-1);
   flex-wrap: wrap;
 }
 .cal__reminder.nx-button,
-.tasks__reminder.nx-button {
+.tasks__reminder.nx-button,
+.documents__reminder.nx-button {
   padding: 2px 8px;
 }
 /* Prilozi on the task form (migration 024) — the NOTE panel's rows
