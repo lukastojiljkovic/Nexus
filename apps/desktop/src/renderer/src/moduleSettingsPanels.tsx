@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { ComponentType, FormEvent } from "react";
 import { PDV_RATES, validateFocusConfig } from "@nexus/core";
 import type { FocusConfig } from "@nexus/core";
-import { Button, Checkbox, Select, TextField } from "@nexus/ui";
+import { Button, Checkbox, Select, TextField, type TextFieldProps } from "@nexus/ui";
 import {
   DEFAULT_TARGET_RETENTION,
   MAX_BACKGROUND_DIM,
@@ -108,6 +108,69 @@ export interface SettingsPanelRenderer {
    * controls show the defaults live rather than only after a reload.
    */
   resetDevice?: () => void;
+}
+
+// --- The settings row ---------------------------------------------------------
+
+/**
+ * One row of a settings card: a name, a control, and whatever the row has to
+ * say underneath it.
+ *
+ * SIX COPIES BECAME ONE, and the copies had a defect between them. Each row was
+ * hand-built as a WRAPPING `<label>` holding a `<span>` name, an `<input>` and a
+ * `<span class="nx-hint">` — and a wrapping label takes its ENTIRE text content
+ * as its control's accessible name, so two of the six announced themselves as
+ * „Novih kartica dnevno Najviše 200 novih kartica dnevno". The other four
+ * escaped by accident: each carried an `aria-label` repeating its own visible
+ * name, which overrode the label's text and made the name right while leaving
+ * two mechanisms to drift apart — which is [[DC-120]]'s own defect, a name
+ * written twice, and the reason dropping the `aria-label` is part of the fix
+ * rather than extra to it.
+ *
+ * So the hint and the error are SIBLINGS of the field rather than things inside
+ * its name; the name is the `<label>` `TextField` draws and wires by `for`; and
+ * no row needs an `aria-label` at all. `labelClassName` is the one thing the
+ * component could not supply — Podešavanja's search marks the name of the row a
+ * query matched, and that class is produced by `labelClass()`, which only the
+ * call site knows how to ask for.
+ *
+ * `className` lands on the WRAPPER (see `TextField`), and moving the four
+ * `set__*-input` rules there is not a no-op — it is a change of SUBJECT that
+ * each declaration has to be re-read for. `width` and `max-width` size the box
+ * and `.nx-textfield__input` is `width: 100%`, so the control follows it
+ * exactly as it did when the class sat on the input. `font-variant-numeric`
+ * inherits, which is what those three rules wanted anyway. `text-transform`
+ * ALSO inherits, and that one is not harmless: `.set__currency-input` carried
+ * it alone, so the currency field's own label came out as „PODRAZUMEVANA
+ * VALUTA" — shouted and tracked — beside siblings reading „Novih kartica
+ * dnevno". It names the control now (`finance.css`), which is where a property
+ * that reaches downwards belongs.
+ */
+interface SettingsFieldProps
+  extends Omit<TextFieldProps, "label" | "labelClassName" | "aria-label"> {
+  readonly label: string;
+  /** Whether Podešavanja's filter matched this row's name. */
+  readonly hit: boolean;
+  /**
+   * Drawn under the control, outside the label — see above. Both of these
+   * accept an explicit `undefined` because both are computed at the call site:
+   * `error` is a validation result that only exists while the field is refused,
+   * and `exactOptionalPropertyTypes` reads that as a different type from an
+   * omitted prop unless it is said out loud, the same way `ListRow` says it.
+   */
+  readonly hint?: string | undefined;
+  /** Drawn under the control when the value is refused. */
+  readonly error?: string | undefined;
+}
+
+function SettingsField({ label, hit, hint, error, ...rest }: SettingsFieldProps) {
+  return (
+    <div className="set__study-field">
+      <TextField label={label} labelClassName={labelClass("set__study-label", hit)} {...rest} />
+      {hint !== undefined && <span className="nx-hint">{hint}</span>}
+      {error !== undefined && <span className="set__error">{error}</span>}
+    </div>
+  );
 }
 
 // --- TASK ---------------------------------------------------------------------
@@ -502,54 +565,38 @@ function StudySettingsPanel({ profileId, hits }: SettingsPanelProps) {
       <p className="nx-hint">{s.retentionHint}</p>
 
       <div className="set__study-fields">
-        <label className="set__study-field">
-          <span
-            className={labelClass(
-              "set__study-label",
-              hits.has(settingsEntryId("study", "new-per-day")),
-            )}
-          >
-            {s.newPerDayLabel}
-          </span>
-          <input
-            type="number"
-            inputMode="numeric"
-            className="nx-textfield__input set__study-number"
-            min={0}
-            max={MAX_NEW_PER_DAY}
-            value={newPerDayDraft}
-            onChange={(event) => changeNewPerDay(event.target.value)}
-            onBlur={() => setNewPerDayDraft(String(current.newPerDay))}
-          />
-          <span className="nx-hint">{s.newPerDayHint}</span>
-        </label>
+        <SettingsField
+          label={s.newPerDayLabel}
+          hit={hits.has(settingsEntryId("study", "new-per-day"))}
+          hint={s.newPerDayHint}
+          type="number"
+          inputMode="numeric"
+          className="set__study-number"
+          min={0}
+          max={MAX_NEW_PER_DAY}
+          value={newPerDayDraft}
+          onChange={(event) => changeNewPerDay(event.target.value)}
+          onBlur={() => setNewPerDayDraft(String(current.newPerDay))}
+        />
 
-        <label className="set__study-field">
-          <span
-            className={labelClass(
-              "set__study-label",
-              hits.has(settingsEntryId("study", "review-cap")),
-            )}
-          >
-            {s.reviewCapLabel}
-          </span>
-          <input
-            type="number"
-            inputMode="numeric"
-            className="nx-textfield__input set__study-number"
-            min={1}
-            max={MAX_REVIEWS_PER_DAY}
-            placeholder={s.reviewCapPlaceholder}
-            value={reviewCapDraft}
-            onChange={(event) => changeReviewCap(event.target.value)}
-            onBlur={() =>
-              setReviewCapDraft(
-                current.maxReviewsPerDay === null ? "" : String(current.maxReviewsPerDay),
-              )
-            }
-          />
-          <span className="nx-hint">{s.reviewCapHint}</span>
-        </label>
+        <SettingsField
+          label={s.reviewCapLabel}
+          hit={hits.has(settingsEntryId("study", "review-cap"))}
+          hint={s.reviewCapHint}
+          type="number"
+          inputMode="numeric"
+          className="set__study-number"
+          min={1}
+          max={MAX_REVIEWS_PER_DAY}
+          placeholder={s.reviewCapPlaceholder}
+          value={reviewCapDraft}
+          onChange={(event) => changeReviewCap(event.target.value)}
+          onBlur={() =>
+            setReviewCapDraft(
+              current.maxReviewsPerDay === null ? "" : String(current.maxReviewsPerDay),
+            )
+          }
+        />
       </div>
 
       <p className="nx-hint">{s.retroNotice}</p>
@@ -846,32 +893,23 @@ function FinanceSettingsPanel({ hits }: SettingsPanelProps) {
     <>
       <p className="nx-hint">{s.caption}</p>
       <div className="set__study-fields">
-        <label className="set__study-field">
-          <span
-            className={labelClass(
-              "set__study-label",
-              hits.has(settingsEntryId("finance", "primary-currency")),
-            )}
-          >
-            {s.primaryCurrencyLabel}
-          </span>
-          <input
-            className="nx-textfield__input set__currency-input"
-            value={draft}
-            maxLength={3}
-            spellCheck={false}
-            autoComplete="off"
-            aria-label={s.primaryCurrencyLabel}
-            onChange={(event) => commit(event.target.value)}
-            // A half-typed code is not a value; blur puts the stored one back
-            // rather than leaving the field showing something nothing holds.
-            onBlur={() => {
-              setDraft(readStoredPrimaryCurrency());
-              setMessage(null);
-            }}
-          />
-          <span className="nx-hint">{s.primaryCurrencyHint}</span>
-        </label>
+        <SettingsField
+          label={s.primaryCurrencyLabel}
+          hit={hits.has(settingsEntryId("finance", "primary-currency"))}
+          hint={s.primaryCurrencyHint}
+          className="set__currency-input"
+          value={draft}
+          maxLength={3}
+          spellCheck={false}
+          autoComplete="off"
+          onChange={(event) => commit(event.target.value)}
+          // A half-typed code is not a value; blur puts the stored one back
+          // rather than leaving the field showing something nothing holds.
+          onBlur={() => {
+            setDraft(readStoredPrimaryCurrency());
+            setMessage(null);
+          }}
+        />
       </div>
       {message !== null && (
         <p className={message.failed ? "set__error" : "nx-hint"}>{message.text}</p>
@@ -946,32 +984,23 @@ function HabitsSettingsPanel({ hits }: SettingsPanelProps) {
     <>
       <p className="nx-hint">{s.caption}</p>
       <div className="set__study-fields">
-        <label className="set__study-field">
-          <span
-            className={labelClass(
-              "set__study-label",
-              hits.has(settingsEntryId("habits", "default-reminder")),
-            )}
-          >
-            {s.defaultReminderLabel}
-          </span>
-          <input
-            type="time"
-            className="nx-textfield__input set__time-input"
-            value={time}
-            aria-label={s.defaultReminderLabel}
-            onChange={(event) => {
-              const next = event.target.value;
-              setTime(next);
-              // An empty field is the picker mid-edit, not a preference; the
-              // stored value simply stays where it was until a real time lands.
-              if (!isReminderTime(next)) return;
-              persistDefaultReminder(next);
-              setSaved(true);
-            }}
-          />
-          <span className="nx-hint">{s.defaultReminderHint}</span>
-        </label>
+        <SettingsField
+          label={s.defaultReminderLabel}
+          hit={hits.has(settingsEntryId("habits", "default-reminder"))}
+          hint={s.defaultReminderHint}
+          type="time"
+          className="set__time-input"
+          value={time}
+          onChange={(event) => {
+            const next = event.target.value;
+            setTime(next);
+            // An empty field is the picker mid-edit, not a preference; the
+            // stored value simply stays where it was until a real time lands.
+            if (!isReminderTime(next)) return;
+            persistDefaultReminder(next);
+            setSaved(true);
+          }}
+        />
       </div>
       {saved && <p className="nx-hint">{s.saved}</p>}
     </>
@@ -1048,40 +1077,32 @@ function FocusSettingsPanel({ hits }: SettingsPanelProps) {
       <p className="nx-hint">{s.caption}</p>
       <div className="set__study-fields">
         {FOCUS_FIELDS.map((field) => (
-          <label key={field.key} className="set__study-field">
-            <span
-              className={labelClass(
-                "set__study-label",
-                hits.has(settingsEntryId("focus", field.entry)),
-              )}
-            >
-              {s[field.label]}
-            </span>
-            <input
-              type="number"
-              className="nx-textfield__input set__focus-input"
-              value={draft[field.key]}
-              inputMode="numeric"
-              aria-label={s[field.label]}
-              aria-invalid={invalidField === field.key}
-              onChange={(event) => commit(field.key, event.target.value)}
-              // A half-typed number is not a value; blur puts the STORED one
-              // back rather than leaving the field showing something nothing
-              // holds — `FinanceSettingsPanel`'s own rule, and the reason a
-              // refusal here never survives leaving the field.
-              onBlur={() => {
-                const stored = readStoredFocusConfig();
-                setDraft({
-                  workMinutes: String(stored.workMinutes),
-                  shortBreakMinutes: String(stored.shortBreakMinutes),
-                  longBreakMinutes: String(stored.longBreakMinutes),
-                  cyclesBeforeLongBreak: String(stored.cyclesBeforeLongBreak),
-                });
-                setInvalidField(null);
-              }}
-            />
-            {invalidField === field.key && <span className="set__error">{s.invalid}</span>}
-          </label>
+          <SettingsField
+            key={field.key}
+            label={s[field.label]}
+            hit={hits.has(settingsEntryId("focus", field.entry))}
+            error={invalidField === field.key ? s.invalid : undefined}
+            type="number"
+            className="set__focus-input"
+            value={draft[field.key]}
+            inputMode="numeric"
+            aria-invalid={invalidField === field.key}
+            onChange={(event) => commit(field.key, event.target.value)}
+            // A half-typed number is not a value; blur puts the STORED one back
+            // rather than leaving the field showing something nothing holds —
+            // `FinanceSettingsPanel`'s own rule, and the reason a refusal here
+            // never survives leaving the field.
+            onBlur={() => {
+              const stored = readStoredFocusConfig();
+              setDraft({
+                workMinutes: String(stored.workMinutes),
+                shortBreakMinutes: String(stored.shortBreakMinutes),
+                longBreakMinutes: String(stored.longBreakMinutes),
+                cyclesBeforeLongBreak: String(stored.cyclesBeforeLongBreak),
+              });
+              setInvalidField(null);
+            }}
+          />
         ))}
       </div>
       <p className="nx-hint">{s.hint}</p>
@@ -1222,25 +1243,17 @@ function FitnessSettingsPanel({ profileId, hits }: SettingsPanelProps) {
       <p className="nx-hint">{s.caption}</p>
       <div className="set__study-fields">
         {FITNESS_GOALS.map((field) => (
-          <label key={field.key} className="set__study-field">
-            <span
-              className={labelClass(
-                "set__study-label",
-                hits.has(settingsEntryId("fitness", field.entry)),
-              )}
-            >
-              {s[field.label]}
-            </span>
-            <input
-              className="nx-textfield__input set__focus-input"
-              value={draft[field.key]}
-              inputMode="decimal"
-              aria-label={s[field.label]}
-              aria-invalid={invalidField === field.key}
-              onChange={(event) => commit(field.key, event.target.value)}
-            />
-            {invalidField === field.key && <span className="set__error">{s.invalid}</span>}
-          </label>
+          <SettingsField
+            key={field.key}
+            label={s[field.label]}
+            hit={hits.has(settingsEntryId("fitness", field.entry))}
+            error={invalidField === field.key ? s.invalid : undefined}
+            className="set__focus-input"
+            value={draft[field.key]}
+            inputMode="decimal"
+            aria-invalid={invalidField === field.key}
+            onChange={(event) => commit(field.key, event.target.value)}
+          />
         ))}
       </div>
       <p className="nx-hint">{s.hint}</p>

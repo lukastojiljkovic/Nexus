@@ -956,9 +956,17 @@
 }
 
 /* The settings card's currency field — three letters, so it does not need to
-   take a whole column's width. */
+   take a whole column's width.
+   `width` sizes the BOX, which is where `TextField` puts a caller's class by
+   design. The uppercase has to name the CONTROL instead, because
+   `text-transform` INHERITS: on the wrapper it reached the field's own label,
+   and the card read „PODRAZUMEVANA VALUTA" — tracked and shouted — beside
+   siblings reading „Novih kartica dnevno". Of the four properties the four
+   `set__*-input` classes carry, this is the only one a wrapper cannot hold. */
 .set__currency-input {
   width: 96px;
+}
+.set__currency-input .nx-textfield__input {
   text-transform: uppercase;
 }
 

@@ -7,6 +7,20 @@ export interface TextFieldProps extends InputHTMLAttributes<HTMLInputElement> {
   /** `stacked` puts the label above (a form), `inline` beside it (a controls row). */
   layout?: "stacked" | "inline";
   /**
+   * Extra classes for the rendered `<label>`, alongside `nx-textfield__label`.
+   *
+   * Podešavanja's search highlights the row a query matched by adding a class
+   * to the name it draws, and that class is produced by `labelClass()` at the
+   * call site. The component could not express it, so six settings rows drew
+   * their own `<label>`, their own `<span>` and their own `<input>` to get one
+   * — and the six turned out to be one skeleton with one defect between them:
+   * the hint and the error sat INSIDE the wrapping `<label>`, so the accessible
+   * name of two of those fields was the label and its explanation run together.
+   * They are one component now (`SettingsField`), and this prop is the half of
+   * it that only this component could supply.
+   */
+  labelClassName?: string;
+  /**
    * The INPUT, not the wrapper — a caller reaching for this wants to focus or
    * select the control, never to measure the box.
    *
@@ -50,6 +64,7 @@ export function TextField({
   layout = "stacked",
   id,
   className,
+  labelClassName,
   ref,
   ...rest
 }: TextFieldProps) {
@@ -58,10 +73,12 @@ export function TextField({
   const classes = ["nx-textfield"];
   if (layout === "inline") classes.push("nx-textfield--inline");
   if (className) classes.push(className);
+  const labelClasses = ["nx-textfield__label"];
+  if (labelClassName) labelClasses.push(labelClassName);
   return (
     <div className={classes.join(" ")}>
       {label != null && (
-        <label className="nx-textfield__label" htmlFor={inputId}>
+        <label className={labelClasses.join(" ")} htmlFor={inputId}>
           {label}
         </label>
       )}
