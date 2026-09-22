@@ -13070,8 +13070,26 @@ app.whenReady().then(async () => {
   const sandboxDir = isSmoke ? "smoke" : isShots ? "shots" : null;
   if (sandboxDir !== null) {
     const sandboxUserDataPath = join(app.getPath("userData"), sandboxDir);
-    rmSync(sandboxUserDataPath, { recursive: true, force: true });
-    mkdirSync(sandboxUserDataPath, { recursive: true });
+    try {
+      rmSync(sandboxUserDataPath, { recursive: true, force: true });
+      mkdirSync(sandboxUserDataPath, { recursive: true });
+    } catch (error) {
+      // `force` forgives a MISSING path, not a BUSY one. On Windows a directory
+      // holding a file another process has open cannot be removed at all, and
+      // the `EPERM` that raises names neither the file nor the run holding it —
+      // so a second `shots` run against the first run's sandbox read as an
+      // inexplicable crash. It is a refusal, and it has to be one: a run whose
+      // sandbox still holds the previous run's key chain is not the
+      // deterministic run its frames claim to be. `scripts/run-lock.mjs` keeps
+      // two runs from reaching this at all; this is what happens if they do.
+      process.stderr.write(
+        `Nexus: the ${sandboxDir} sandbox could not be cleared — ${String(error)}\n` +
+          `  Another ${sandboxDir} run is probably using it. Refusing to start rather\n` +
+          `  than running against a sandbox that still holds its files.\n`,
+      );
+      app.exit(1);
+      return;
+    }
     app.setPath("userData", sandboxUserDataPath);
   }
 
@@ -13251,6 +13269,25 @@ app.whenReady().then(async () => {
       mainWindow = createWindow();
     }
   });
+}).catch((error: unknown) => {
+  // THE `try` INSIDE THE CALLBACK DOES NOT COVER THE CALLBACK. It begins after
+  // the sandbox wipe, the proxy switch and the spellcheck switch, and a throw in
+  // any of those — or in the listener registrations at the end — used to surface
+  // as an unhandled rejection: Electron reports that to a console nobody is
+  // reading, and the application stops half started, with a window at 0 % CPU,
+  // no message and no exit. That is not a hypothetical shape; it has cost this
+  // project three runs — twice through `setSpellCheckerDictionaryDownloadURL`,
+  // whose rejected promise cannot be caught at the call site because the method
+  // returns `void`, and once through a sandbox `rmSync` two `shots` runs were
+  // fighting over.
+  //
+  // This is the guard that makes the class impossible rather than merely absent.
+  // From here on, every throw out of startup ends the process with a sentence and
+  // a non-zero code, whatever it was.
+  process.stderr.write(
+    `Startup failed: ${error instanceof Error ? error.message : String(error)}\n`,
+  );
+  shutdown(1);
 });
 
 app.on("window-all-closed", () => {

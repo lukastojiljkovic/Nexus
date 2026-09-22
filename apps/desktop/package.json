@@ -15,9 +15,9 @@
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-    "smoke": "electron-vite build && node scripts/launch.mjs --smoke",
-    "shots": "electron-vite build && node scripts/launch.mjs --shots",
-    "demo": "electron-vite build && node scripts/launch.mjs --demo",
+    "smoke": "node scripts/launch.mjs --smoke",
+    "shots": "node scripts/launch.mjs --shots",
+    "demo": "node scripts/launch.mjs --demo",
     "licences": "node scripts/generate-licences.mjs",
     "dist": "node scripts/dist.mjs"
   },
