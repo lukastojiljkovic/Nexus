@@ -65,9 +65,16 @@ export const SIGNAL_SOCKET_PATH = "/realtime/v1/websocket";
 export const SIGNAL_PROTOCOL_VERSION = "1.0.0";
 
 /**
- * The topic namespace, fixed by migration 006's policies: `realtime.topic()`
- * sees `nexus:<user_id>`, and the channel a client joins is that with Phoenix's
- * own `realtime:` prefix.
+ * The topic namespace, fixed by the realtime policies in
+ * `20260808090300_storage_realtime_rls.sql`: `realtime.topic()` sees
+ * `nexus:<user_id>`, and the channel a client joins is that with Phoenix's own
+ * `realtime:` prefix.
+ *
+ * Cited by FILENAME rather than by number because this repository has TWO
+ * migration series — the local SQLite one in `packages/db/src/migrations/` and
+ * this server one — and both number from 001. „Migration 006" was written here
+ * once already and resolves to nothing: the server series carries no 006, and
+ * the only 006 in the tree is the local flashcards migration.
  */
 export const SIGNAL_TOPIC_PREFIX = "realtime:nexus:";
 

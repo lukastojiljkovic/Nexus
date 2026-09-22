@@ -139,11 +139,14 @@ choice of backend**; whatever in them is about the data model still applies.
      layer is unfinished, and that is the more useful answer.
   Record the class in [docs/defect-classes.md](docs/defect-classes.md) so the
   same shape is recognised the next time it appears somewhere else. **A class
-  that can be turned into a gate should be** — twenty-two of the hundred and
+  that can be turned into a gate should be** — twenty-seven of the hundred and
   thirty-one already have been, and a rule nobody can forget beats a rule
-  everybody has read. (This line said „eighteen of the hundred-odd" until
-  2026-09-22, which is what a figure does when it is copied instead of counted;
-  `docs/defect-classes.md` derives both numbers.)
+  everybody has read. **Both figures are DERIVED in `docs/defect-classes.md`,
+  which is the only place either is written down**; if you need the count, read
+  it there rather than here. This line has now been wrong twice by copying
+  („eighteen of the hundred-odd", then „twenty-two" when the source said
+  twenty-seven and the twenty-two was the count of GATES — a different number
+  again), which is what a figure does when it is copied instead of counted.
 - **Concise Serbian status updates** to the founder; the code, comments, and docs
   are in **English**.
 
@@ -237,7 +240,7 @@ choice of backend**; whatever in them is about the data model still applies.
 - **Verification gates before any commit:** `pnpm typecheck` (13/13), `pnpm lint`
   (14/14 — `@nexus/supabase` joined on 2026-09-09; it has no TS, so typecheck
   stays 13), `pnpm test` (all green), `pnpm build` (4/4),
-  `pnpm --filter @nexus/desktop smoke` prints `SMOKE OK`, and **all twenty-two
+  `pnpm --filter @nexus/desktop smoke` prints `SMOKE OK`, and **all twenty-four
   static gates** pass. **`pnpm lint` used to be missing from this line** even
   though CI has always run it, and on 2026-08-14 six real errors shipped red
   because of that — two of them display bugs the linter had named (DC-49,
@@ -262,6 +265,17 @@ choice of backend**; whatever in them is about the data model still applies.
   pointer floor, and nothing else here can see it — it uses no colour, declares
   no token and typechecks, so the only check that ever caught one was the
   screenshot sweep, which does not reach a form three modal steps deep),
+  **`check:fields`** (the last step of [[DC-120]], and the only one that is a
+  rule rather than a repair: a surface may not draw its own text field. Seven
+  hand-rolled `<input>` elements sat outside `TextField` — so outside the name
+  contract, the hint beside the control, and the shared box — and the thing that
+  hid them was a CENSUS: the gate that came before asked whether an input wore
+  the shared class, and these had a local one. This one asks what the element
+  IS, `type` and nothing else, which is why the two search fields and the two
+  date fields it converted were invisible to the previous rule and are a finding
+  here. `type="radio"`, `"checkbox"`, `"range"` and `"file"` are somebody
+  else's subject and are excluded by TYPE, so the primitive is the only file
+  exempted and it needs no exemption list),
   **`check:tiers`** (a shared typographic tier, retyped. `.nx-hint` is muted
   13px prose at the app's leading with a 68ch measure; before it existed, 33
   classes across 15 stylesheets wrote those five declarations out by hand and
@@ -404,7 +418,25 @@ choice of backend**; whatever in them is about the data model still applies.
   argument that no regex can split, and a text rule would also fire on the
   documentation of the defect in `core/src/ids.ts`. `packages/db` is out of
   scope on purpose: a store's validator reads an argument from MAIN, which is
-  not this boundary).
+  not this boundary), and **`check:migrations`** (a citation that names its
+  evidence by a number the evidence does not carry. This repository has TWO
+  migration series and **both number from 001**: the local SQLite schema in
+  `packages/db/src/migrations/` is at 068 and the server's in
+  `supabase/migrations/` at 013, so a bare „migration 006" resolves to whichever
+  one the author had in mind and to nothing at all if they had neither.
+  `packages/sync-transport/src/signal.ts` cited „migration 006's policies" for
+  the realtime topic namespace, and the realtime policies are in the server's
+  004 — a reader grepping it landed on a table of Anki decks. Where the two
+  series could be confused the fix is to cite the FILE, which is unambiguous
+  because only one series has timestamps for names. Scope is the `supabase/`
+  tree alone and says so in its own header, because which series a citation
+  means is a property of what the citing file is ABOUT — `packages/sync/push.ts`
+  cites the server while its sibling `collections.ts` cites the local schema, in
+  one directory and one idiom — so a wider rule would need an exemption list
+  within a month. It also refuses a file that declares no number, two files
+  declaring the same one, numbers that run backwards against the filenames, and
+  a migration missing from the tree listing in `supabase/README.md`, which is
+  hand-kept beside a directory that is not and had already lost four).
 - **Looking at the app is a command, not a chore.**
   `pnpm --filter @nexus/desktop shots` seeds a demo profile, drives the real
   renderer through every module and sub-view in both themes at three window

@@ -59,7 +59,7 @@ function joined(now = 0): SignalSession {
 }
 
 describe("the join", () => {
-  it("names the topic migration 006's policies confine", () => {
+  it("names the topic the realtime policies confine", () => {
     // `realtime.topic()` sees `nexus:<user_id>`; Phoenix adds its own prefix.
     expect(session().topic).toBe(`realtime:nexus:${USER}`);
   });
@@ -196,9 +196,10 @@ describe("notify", () => {
   });
 
   it("reports a broadcast the server did not accept", () => {
-    // The read and the write are two separate policies in migration 006, so a
-    // send can be refused by a channel that was joinable. `ack: true` is what
-    // makes that visible instead of silent.
+    // The read and the write are two separate policies in
+    // `20260808090300_storage_realtime_rls.sql`, so a send can be refused by a
+    // channel that was joinable. `ack: true` is what makes that visible instead
+    // of silent.
     const live = joined();
     const ref = String(frames(live.notify({ profileId: PROFILE, collections: ["tasks"] }))[0]!["ref"]);
     const nack = JSON.stringify({ ref, event: "phx_reply", payload: { status: "error", response: {} }, topic: TOPIC });

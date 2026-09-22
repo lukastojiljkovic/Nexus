@@ -33,8 +33,11 @@ export default defineConfig({
      *
      * Nothing here is a unit test. Every gate walks the whole repository and
      * most of them parse what they find, so the cost is I/O and CPU contention
-     * rather than anything about the code under test — and twenty-three of them
-     * run at once. `check:quotes` takes 2.7 s alone on this machine and timed
+     * rather than anything about the code under test — and thirty-one of them
+     * run at once (`find scripts -name "*.test.mjs"`, which is the glob above;
+     * this said „twenty-three" for a while and was then bumped to „twenty-four"
+     * by an agent adding one file, which is the same copied figure one digit
+     * later. Count it). `check:quotes` takes 2.7 s alone on this machine and timed
      * out at 5 s in a full run on 2026-09-03, with a message („Test timed out")
      * that names neither the gate's subject nor the real cause. A CI runner
      * with fewer cores is the same failure with less warning.

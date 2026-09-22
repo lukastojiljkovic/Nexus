@@ -38,6 +38,7 @@
     "check:pro-flags": "node scripts/check-pro-flags.mjs",
     "check:licences": "node apps/desktop/scripts/generate-licences.mjs --check",
     "check:rls": "node supabase/scripts/check-rls-wall.mjs",
+    "check:migrations": "node scripts/check-migrations.mjs",
     "db:reset": "supabase db reset",
     "db:test": "supabase db reset && supabase test db"
   },

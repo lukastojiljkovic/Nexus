@@ -255,6 +255,19 @@ jobs:
       # Postgres disagrees". Both, because they are not the same claim.
       - run: pnpm check:rls
 
+      # The server migration series is numbered, unique, in filename order, and
+      # every citation of it resolves. This repository has TWO migration series
+      # and both number from 001 — the local SQLite schema is at 068 — so a bare
+      # „migration 006" is a sentence that names its evidence by a number the
+      # evidence does not carry. One was written that way, in
+      # `packages/sync-transport/src/signal.ts`, for the realtime policies that
+      # are in this series' 004; a reader grepping it landed on the flashcards
+      # table. Scope is the `supabase/` tree alone, where there is one series and
+      # nothing to exempt. It also keeps the README's tree listing complete,
+      # because that listing is hand-kept beside a directory that is not and had
+      # already lost four migrations by omission.
+      - run: pnpm check:migrations
+
       # And the mutation suite BEHIND that checker, which until now nothing ran
       # — not `pnpm test`, not this workflow. `check:rls` proves the current
       # migrations pass; it says nothing about whether a rule could ever fail,

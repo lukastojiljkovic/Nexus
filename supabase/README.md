@@ -135,11 +135,38 @@ supabase/
     …090400_pair_complete_rpcs    three service-role-only routines the Edge Function calls
     …120000_sync_state_touch      updated_at on sync_state becomes the server's clock, not a claim
     …140000_key_wraps_salt_by_slot  a salt belongs to mk_under_src alone; the web slot derives its own
-  functions/pair-complete/        the one Edge Function, and the only holder of a service-role key
+    …160000_key_wraps_writes…     authoring a wrap is a desktop operation, and a re-wrap cannot date itself
+    …180000_mk_mint               the master key, minted exactly once per account
+    …200000_kdf_params_ceiling    the KDF parameters bounded from ABOVE too, not only below
+    …220000_device_register       how a desktop gets its device row back when its session dies
+  functions/                      three Edge Functions, and all three read a service-role key
+    pair-complete/                the pairing handshake's three routines
+    device-register/              hands out a desktop device row, priced at the master key (013)
+    sync-enable/                  the only way an account's master key comes into existence (011)
   scripts/check-rls-wall.mjs      static drift guard — no database required
   tests/static/                   node:test suite; proves the guard can fail
   tests/database/                 pgTAP; proves the wall against a live Postgres
 ```
+
+### The numbering is logical steps, not a file count
+
+The thirteen files carry eleven numbers: `003` is spread over three files (`003`,
+`003b`, `003c`), and `006` and `007` were never written. The number is the
+logical STEP and it is what prose cites; the filename's timestamp is the order
+the server applies them in. `pnpm check:migrations` holds the two against each
+other — it fails if a file declares no number, if two declare the same one, if
+the numbers do not increase with the filenames, if anything under `supabase/`
+cites a number no file carries, or if a file is missing from the tree above,
+which is how this listing came to be missing four of them.
+
+**A bare number is ambiguous in this repository**, which is the trap that rule
+exists for: the local SQLite schema in `packages/db/src/migrations/` numbers from
+001 as well and has reached 068. The local series' **006** is the flashcards
+table; this series has no 006 at all, so a reader who resolves that number lands
+on Anki decks a schema away from anything to do with sync. One citation was
+written that way — in `packages/sync-transport/src/signal.ts`, for the realtime
+policies that live in this series' 004 — and it is the reason `check:migrations`
+exists. Where both trees could be meant, **cite the file by name**.
 
 ### The wall, in one paragraph
 
