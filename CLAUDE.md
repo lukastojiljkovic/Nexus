@@ -241,7 +241,7 @@ choice of backend**; whatever in them is about the data model still applies.
 - **Verification gates before any commit:** `pnpm typecheck` (13/13), `pnpm lint`
   (14/14 — `@nexus/supabase` joined on 2026-09-09; it has no TS, so typecheck
   stays 13), `pnpm test` (all green), `pnpm build` (4/4),
-  `pnpm --filter @nexus/desktop smoke` prints `SMOKE OK`, and **all twenty-five
+  `pnpm --filter @nexus/desktop smoke` prints `SMOKE OK`, and **all twenty-six
   static gates** pass. **`pnpm lint` used to be missing from this line** even
   though CI has always run it, and on 2026-08-14 six real errors shipped red
   because of that — two of them display bugs the linter had named (DC-49,
@@ -422,7 +422,7 @@ choice of backend**; whatever in them is about the data model still applies.
   not this boundary), and **`check:migrations`** (a citation that names its
   evidence by a number the evidence does not carry. This repository has TWO
   migration series and **both number from 001**: the local SQLite schema in
-  `packages/db/src/migrations/` is at 068 and the server's in
+  `packages/db/src/migrations/` is at 069 and the server's in
   `supabase/migrations/` at 013, so a bare „migration 006" resolves to whichever
   one the author had in mind and to nothing at all if they had neither.
   `packages/sync-transport/src/signal.ts` cited „migration 006's policies" for
@@ -455,7 +455,45 @@ choice of backend**; whatever in them is about the data model still applies.
   nothing" and „looked at nothing" are not the same green line. It found 24 the
   day it was written — four wanted rendering and twenty wanted deleting — and it
   is allowlist-free, because the rule is a statement about what a leaf is REACHED
-  BY and not a list of exceptions).
+  BY and not a list of exceptions), and **`check:runner`** (DEV-007's first
+  mitigation, enforced rather than promised: **the command line is never data**.
+  Until the Elektronika runner landed the shipped app had exactly one capability
+  boundary — the network, off by default, guarded by `check:egress` — and this is
+  the second, and the sharper: a network call leaves the machine and a process
+  runs ON it. Five rules. `child-process` is one file and its two tests; `shell`,
+  `exec-family` and `spawn-literal` are exempted for NOBODY, asserted at import
+  by `assertNoSecurityExemptions()` because the shortest path from a red gate to
+  a green one is to add a rule id to the map, and that path in this gate would
+  paper over the deviation itself. The `exec-family` rule needs a negative
+  lookbehind — `re.exec(text)` is a regular expression, `runner.ts` alone calls
+  it twice, and the repair a reader reaches for when a gate cries wolf is not a
+  narrower gate but an exemption, and then a second one. **The interaction
+  between two rules is what does the work, and it reads like a coincidence and is
+  not one: the file allowed to import `child_process` is NOT allowed to contain a
+  toolchain word, so the program it spawns cannot be a literal it wrote — it can
+  only be `argv[0]` of a plan that came out of the table.** The one file
+  permitted to spawn is the one file that may not know what it is spawning. The
+  fifth rule, `toolchain-name` (`colcon|ros2|gazebo|docker|wsl\.exe`), is
+  vocabulary and not security — a file that NAMES a tool is not a file that runs
+  one — so it has many allowlist entries, each with its reason beside it in the
+  gate rather than in a comment at the site. Its word boundaries are load-bearing
+  and cost something: case-insensitive, because a capital letter must not defeat
+  a rule and the copy says „Docker" while the table says `docker`; but `colcon`
+  under that match is also the first six characters of `colConcentration` and
+  `colContribution`, two Serbian column keys, and a boundary-free version reports
+  those four lines and nothing else. Four findings no honest exemption covers, in
+  a gate whose output is then a fifth noise — worse than not having it, because
+  it also carries the authority of having run. The price is the welded
+  identifiers (`gazebo_ros`, `colcon_ws`), which is near zero: an invocation is a
+  program followed by a space. Comments are stripped before matching, for
+  `check:egress`'s reason — `core/src/index.ts` re-states the boundary in prose,
+  `main/index.ts` explains twice why a package is a directory, and a gate that
+  fires on its own documentation teaches people to stop writing the
+  documentation. **What it is not:** a proof. It reads source text and cannot see
+  a command line assembled at runtime, because such a line looks like an
+  ordinary string to any reader. It is for the hurried edit that imports
+  `child_process` into a module with no business starting anything, and the
+  literal that puts a program name at a call site.)
 - **Looking at the app is a command, not a chore.**
   `pnpm --filter @nexus/desktop shots` seeds a demo profile, drives the real
   renderer through every module and sub-view in both themes at three window
