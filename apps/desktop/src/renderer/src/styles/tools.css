@@ -574,25 +574,48 @@
    sitting under the title as a subtitle rather than as the first line of the
    tool. */
 
-/* Anything read character by character — hex, base64, a key, a path. On a
-   `TextField` this class lands on the WRAPPER, which is what the component does
-   with `className`; the control picks the family up because
-   `.nx-textfield__input` declares `font: inherit`. */
-.tool__mono {
+/* Anything read character by character — hex, base64, a key, a path.
+ *
+ * ONE CLASS, TWO SHAPES, and in both of them the face belongs to the element
+ * that HOLDS the text. On a leaf — the `<span>` a hash or a regex match is drawn
+ * in — that element IS the span. On a FIELD it is the CONTROL, never the
+ * wrapper: a caller's `className` lands on `TextField`'s wrapper (that is what
+ * the component does with it, by design), and `font-family` INHERITS, so a
+ * declaration written there does not stop at the box it was written on — it
+ * reaches the field's own LABEL too, and a name is not something anyone reads
+ * character by character. The wrapper is excluded below and the control is
+ * named for it: the same split `.set__currency-input` arrived at when
+ * `text-transform` on its wrapper shipped „PODRAZUMEVANA VALUTA“ beside
+ * siblings reading „Novih kartica dnevno“.
+ *
+ * The control is NAMED rather than left to inherit, though `.nx-textfield__input`
+ * declares `font: inherit` and would pick the family up either way — which is
+ * exactly why the leak went unnoticed. Nothing puts the label back afterwards,
+ * deliberately: a counter-declaration would be a second answer to a question
+ * this rule already answers. */
+.tool__mono:not(.nx-textfield) {
+  font-family: var(--nx-font-family-mono);
+}
+.tool__mono .nx-textfield__input {
   font-family: var(--nx-font-family-mono);
 }
 /* The multi-line input is a `TextArea`, so `resize` and the leading come from
    the component; two of the four declarations that stood here were the copy it
-   was written to absorb. The face is the same wrapper trick `.tool__mono`
-   explains above — it is declared here rather than added as a `.tool__mono`, so
-   a surface cannot produce a proportional one by forgetting a class — and the
-   height is on the BOX, because the wrapper is a flex column and a min-height
-   on it would stretch the column, not the control inside it. */
-.tool__textarea {
-  font-family: var(--nx-font-family-mono);
-}
+   was written to absorb. The face is declared on the CONTROL, and the wrapper
+   declares nothing at all: `TextArea` renders a `<label>` INSIDE its own box
+   whenever it is given one, so a family on the wrapper reaches that name by
+   inheritance — the hole `.tool__mono`'s comment above opens with, and the same
+   one that put a currency field's label into capitals. That this drawer's
+   textarea happens to be named from `ToolField`, beside the control rather than
+   inside it, is a fact about one call site and nothing enforces it; naming the
+   control removes the precondition instead of documenting it. It is declared
+   here rather than added as a `.tool__mono` so a surface cannot produce a
+   proportional one by forgetting a class, and the height is on the BOX, because
+   the wrapper is a flex column and a min-height on it would stretch the column,
+   not the control inside it. */
 .tool__textarea .nx-textarea__input {
   min-height: 96px;
+  font-family: var(--nx-font-family-mono);
 }
 
 /*

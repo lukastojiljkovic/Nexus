@@ -727,17 +727,30 @@
    to see whether the paste arrived whole. Mono and one size down for the same
    reason: it is read character by character.
 
-   `resize` and the leading come from `TextArea` now; these three do not, and
-   two of them have to name the BOX. The component's own rule re-declares
-   `font-size` after its `font: inherit` and sets a one-line `min-height`, so a
-   wrapper declaration of either would be overridden rather than inherited. The
-   face is the exception, and inherits. */
-.set__llm-answer {
-  font-family: var(--nx-font-family-mono);
-}
+   `resize` and the leading come from `TextArea` now; the three below do not,
+   and all three name the CONTROL. The first two always did: the component's own
+   rule re-declares `font-size` after its `font: inherit` and sets a one-line
+   `min-height`, so a wrapper declaration of either would be overridden rather
+   than inherited — a property that loses does not reach anywhere.
+
+   The face is where that test is passed and the argument was still wrong.
+   „The face is the exception, and inherits" stood here, and it is TRUE: the
+   control inherits it, and the control is the only element that sentence was
+   thinking about. Inheritance is not a delivery mechanism to one element — it
+   goes to everything inside — and `TextArea` draws its `<label>` INSIDE the
+   wrapper, so the face reached the field's own name as well. „Odgovor
+   asistenta" was drawn in monospace from the day this row was given its `label`
+   prop until this rule moved the face onto the control — and that prop is the
+   whole point of the name (`TextArea`'s is a real `<label for>`, and clicking
+   it puts the cursor in the box). What makes that sentence read as a complete
+   argument when it is half of one is that „inherits" answers *does it arrive at
+   the control* and not *where else does it arrive*; a property that reaches
+   TEXT belongs on the element holding the text, and for this component that
+   element is the box. */
 .set__llm-answer .nx-textarea__input {
   min-height: 132px;
   font-size: var(--nx-font-size-caption);
+  font-family: var(--nx-font-family-mono);
 }
 /* The deck choice for kartice — „Postojeći špil / Novi špil" and whichever
    form follows. The `.set__apkg-subject` column's recipe, at the same width,
