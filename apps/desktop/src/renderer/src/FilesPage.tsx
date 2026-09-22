@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { MIME_FAMILIES, isInlineImageMime } from "@nexus/core";
-import { Button, EmptyState, LoadingState, PageHeader, StatBand } from "@nexus/ui";
+import { Button, EmptyState, LoadingState, PageHeader, StatBand, TextField } from "@nexus/ui";
 import type { Stat } from "@nexus/ui";
 import { DOC_ATTACHMENT_LIST_LIMIT } from "../../shared/ipc.js";
 import type {
@@ -464,9 +464,22 @@ export function FilesPage({ profileId, onOpenOwner }: FilesPageProps) {
       />
 
       <div className="doc__filters">
-        <input
-          type="text"
-          className="nx-textfield__input doc__search"
+        {/* The primitive, not a hand-written `<input>` wearing its class — and
+            the difference is one of ownership rather than of pixels: a caller's
+            `className` lands on `TextField`'s WRAPPER, which is why
+            `.doc__search`'s own `width: 100%` sizes this field while the control
+            inside it takes `.nx-textfield__input`'s width the way every other
+            field in the app does.
+
+            The name stays invisible, as it does on both of the app's browse
+            surfaces: PRETRAGA carries its page's title in an `aria-label`, PRIV
+            its own „Pretraga privatnih beležaka“. „Pretraga datoteka“ as a
+            visible caption would be a line above the box saying what the
+            placeholder under it already says — and the one heading here,
+            „Datoteke“, is the MODULE's name, so a field named by it would
+            announce the page rather than the search. */}
+        <TextField
+          className="doc__search"
           placeholder={s.searchPlaceholder}
           aria-label={s.searchLabel}
           value={query}

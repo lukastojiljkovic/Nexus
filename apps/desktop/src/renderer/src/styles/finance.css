@@ -199,21 +199,14 @@
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
-/* One field written by hand rather than through `TextField` — the amount, which
-   needs a `ref` the component does not forward. The two rules below are
-   `.nx-textfield`'s own, so the hand-written field is indistinguishable from
-   its neighbours and stays that way if the component's spacing changes. */
-.fin__field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-}
-.fin__field-label {
-  font-size: var(--nx-font-size-label);
-  font-weight: var(--nx-font-weight-medium);
-  color: var(--nx-text-muted);
-}
+/* `.fin__field` and `.fin__field-label` stood here: a hand-written twin of
+   `.nx-textfield` and `.nx-textfield__label`, written for the ledger's amount
+   while `TextField` forwarded no `ref`. It forwards the input's now, so the
+   amount is the component like every field around it, and the twin is deleted
+   rather than kept — two rules held in agreement by hand are the thing a
+   component exists to replace. The two rules above it stay, unchanged and
+   already on the right side of the line: the width sizes the box, the figures
+   name the control. */
 .fin__payee-input.nx-textfield {
   flex: 1 1 220px;
   min-width: 0;
@@ -1654,11 +1647,21 @@
   align-items: center;
   gap: var(--nx-space-2);
 }
-/* Chained with the primitive it modifies: `.nx-textfield__input` sets
-   `width: 100%` from packages/ui, and a bare `.hab__time` would be a tie decided
-   by which stylesheet happened to be imported last. */
-.nx-textfield__input.hab__time {
-  width: auto;
+/* The reminder's hour. `TextField` puts a caller's class on its WRAPPER, so the
+   old rule splits the way the `set__*` block above spells out: `width` sized the
+   box, and `font-variant-numeric` reaches the text.
+
+   The width is gone rather than restated. It was undoing the primitive's
+   `width: 100%` on the INPUT, which inside this row would have stretched the
+   field across the form; on the wrapper there is nothing to undo, because
+   `.hab__reminder` shrink-wraps and the field is sized by the clock it holds.
+
+   The figures name the CONTROL: a clock is a column of digits or it is not read
+   at all. `packages/ui` says the same for every `type="time"` in the app, and it
+   is said again here for the `set__*` block's reason — the property inherits,
+   and the next label to arrive under this field should find it on the element
+   it belongs to. */
+.hab__time .nx-textfield__input {
   font-variant-numeric: tabular-nums;
 }
 .hab__legend-item {

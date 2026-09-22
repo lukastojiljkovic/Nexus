@@ -1192,15 +1192,26 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
                 {s.form.reminderLabel}
               </Checkbox>
               {reminderDraft !== "" && (
-                <span className="hab__reminder">
-                  <input
+                // The row is a `div` rather than the `span` it was, because the
+                // primitive brings a wrapper element with it and a wrapper is a
+                // block. Nothing about the row's own layout moves: `.hab__reminder`
+                // states its `display` itself.
+                <div className="hab__reminder">
+                  {/* The primitive, like every other field in this form — this
+                      one was hand-written because `.nx-textfield__input` is only
+                      a class, and a class can be typed onto any `<input>`, which
+                      is how a control that belongs to a component comes to live
+                      outside it. The name stays an `aria-label`: the field shares
+                      its line with the switch that reveals it, and
+                      „Vreme podsetnika“ names it rather than captioning it. */}
+                  <TextField
                     type="time"
-                    className="nx-textfield__input hab__time"
+                    className="hab__time"
                     value={reminderDraft}
                     aria-label={s.form.reminderTimeLabel}
                     onChange={(event) => setReminderDraft(event.target.value)}
                   />
-                </span>
+                </div>
               )}
             </div>
             <span className="hab__field-hint">{s.form.reminderHint}</span>

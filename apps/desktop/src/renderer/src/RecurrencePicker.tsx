@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, Icon, Select } from "@nexus/ui";
+import { Button, Icon, Select, TextField } from "@nexus/ui";
 import { MAX_RECURRENCE_COUNT, MAX_RECURRENCE_INTERVAL, isValidDayKey, shiftDayKey } from "@nexus/core";
 import type {
   RecurrenceEnd,
@@ -339,24 +339,29 @@ export function RecurrencePicker({ value, onChange, anchor }: RecurrencePickerPr
             ))}
           </Select>
 
+          {/* The fields in this panel are `TextField`s in their `inline` layout,
+              like the `Select`s around them: it is a controls row, and a stacked
+              field in the middle of one doubles the editor's height. Note where
+              `className` lands — on the component's WRAPPER, not on the box —
+              which is why `recur__number` names the whole field, and why the
+              width it carries is dealt with in recurrence.css rather than here. */}
           {freq.kind !== "weekdays" && (
-            <label className="recur__field">
-              <span className="recur__label">{s.intervalLabel}</span>
-              <input
-                type="number"
-                inputMode="numeric"
-                className="nx-textfield__input recur__number"
-                min={1}
-                max={MAX_RECURRENCE_INTERVAL}
-                value={numberText("interval", freq.interval)}
-                onChange={(event) =>
-                  editNumber("interval", event.target.value, MAX_RECURRENCE_INTERVAL, (parsed) =>
-                    setFreq(withInterval(freq, parsed)),
-                  )
-                }
-                onBlur={() => setNumberDraft(null)}
-              />
-            </label>
+            <TextField
+              layout="inline"
+              className="recur__number"
+              label={s.intervalLabel}
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={MAX_RECURRENCE_INTERVAL}
+              value={numberText("interval", freq.interval)}
+              onChange={(event) =>
+                editNumber("interval", event.target.value, MAX_RECURRENCE_INTERVAL, (parsed) =>
+                  setFreq(withInterval(freq, parsed)),
+                )
+              }
+              onBlur={() => setNumberDraft(null)}
+            />
           )}
 
           {freq.kind === "weekly" && (
@@ -406,23 +411,22 @@ export function RecurrencePicker({ value, onChange, anchor }: RecurrencePickerPr
           )}
 
           {freq.kind === "monthly-date" && (
-            <label className="recur__field">
-              <span className="recur__label">{s.monthDayLabel}</span>
-              <input
-                type="number"
-                inputMode="numeric"
-                className="nx-textfield__input recur__number"
-                min={1}
-                max={31}
-                value={numberText("monthDay", freq.day)}
-                onChange={(event) =>
-                  editNumber("monthDay", event.target.value, 31, (parsed) =>
-                    setFreq({ kind: "monthly-date", interval: freq.interval, day: parsed }),
-                  )
-                }
-                onBlur={() => setNumberDraft(null)}
-              />
-            </label>
+            <TextField
+              layout="inline"
+              className="recur__number"
+              label={s.monthDayLabel}
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={31}
+              value={numberText("monthDay", freq.day)}
+              onChange={(event) =>
+                editNumber("monthDay", event.target.value, 31, (parsed) =>
+                  setFreq({ kind: "monthly-date", interval: freq.interval, day: parsed }),
+                )
+              }
+              onBlur={() => setNumberDraft(null)}
+            />
           )}
 
           {freq.kind === "monthly-ordinal" && (
@@ -476,43 +480,40 @@ export function RecurrencePicker({ value, onChange, anchor }: RecurrencePickerPr
           </Select>
 
           {end.kind === "until" && (
-            <label className="recur__field">
-              <span className="recur__label">{s.endUntilLabel}</span>
-              <input
-                type="date"
-                className="nx-textfield__input"
-                value={end.date}
-                onChange={(event) => {
-                  // A cleared date input reports "": keep the rule as it stands
-                  // rather than writing an end the engine would throw on.
-                  const next = event.target.value;
-                  if (isValidDayKey(next)) setEnd({ kind: "until", date: next });
-                }}
-              />
-            </label>
+            <TextField
+              layout="inline"
+              label={s.endUntilLabel}
+              type="date"
+              value={end.date}
+              onChange={(event) => {
+                // A cleared date input reports "": keep the rule as it stands
+                // rather than writing an end the engine would throw on.
+                const next = event.target.value;
+                if (isValidDayKey(next)) setEnd({ kind: "until", date: next });
+              }}
+            />
           )}
 
           {end.kind === "count" && (
-            <label className="recur__field">
-              <span className="recur__label">{s.endCountLabel}</span>
-              <span className="recur__counted">
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  className="nx-textfield__input recur__number"
-                  min={1}
-                  max={MAX_RECURRENCE_COUNT}
-                  value={numberText("count", end.total)}
-                  onChange={(event) =>
-                    editNumber("count", event.target.value, MAX_RECURRENCE_COUNT, (parsed) =>
-                      setEnd({ kind: "count", total: parsed }),
-                    )
-                  }
-                  onBlur={() => setNumberDraft(null)}
-                />
-                <span className="recur__unit">{s.endCountUnit}</span>
-              </span>
-            </label>
+            <span className="recur__counted">
+              <TextField
+                layout="inline"
+                className="recur__number"
+                label={s.endCountLabel}
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={MAX_RECURRENCE_COUNT}
+                value={numberText("count", end.total)}
+                onChange={(event) =>
+                  editNumber("count", event.target.value, MAX_RECURRENCE_COUNT, (parsed) =>
+                    setEnd({ kind: "count", total: parsed }),
+                  )
+                }
+                onBlur={() => setNumberDraft(null)}
+              />
+              <span className="recur__unit">{s.endCountUnit}</span>
+            </span>
           )}
         </div>
       )}

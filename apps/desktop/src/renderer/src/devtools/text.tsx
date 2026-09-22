@@ -49,7 +49,7 @@ import {
   type DiffRun,
 } from "@nexus/core/devtools/textDiff";
 import { parseToolNumber } from "@nexus/core";
-import { Button, Checkbox, Chip, Icon } from "@nexus/ui";
+import { Button, Checkbox, Chip, Icon, TextField } from "@nexus/ui";
 import { useMemo, useState, type ComponentType } from "react";
 
 import {
@@ -412,11 +412,20 @@ function MarkdownTableTool() {
               <tr>
                 {table.header.map((cell, col) => (
                   <th key={col} scope="col">
-                    <input
-                      className="nx-textfield__input tool__mono"
+                    {/* Both grid fields — this one and the body cell below — name
+                        themselves with `aria-label` rather than a `label`: a
+                        caption per cell is a caption per column and per row,
+                        while the grid's own headings are what the reader is
+                        already looking at. `tool__mono` marks a value read
+                        character by character, and the face it names arrives on
+                        the control, not on this field's box (see `tools.css`). */}
+                    <TextField
+                      className="tool__mono"
                       value={cell}
                       placeholder={s.headerPlaceholder}
                       aria-label={`${s.headerPlaceholder} ${col + 1}`}
+                      autoComplete="off"
+                      spellCheck={false}
                       onChange={(event) =>
                         applyTable(setHeaderCell(table, col, event.target.value))
                       }
@@ -453,10 +462,12 @@ function MarkdownTableTool() {
                 <tr key={ri}>
                   {row.map((cell, ci) => (
                     <td key={ci}>
-                      <input
-                        className="nx-textfield__input tool__mono"
+                      <TextField
+                        className="tool__mono"
                         value={cell}
                         aria-label={`${s.grid} ${ri + 1}·${ci + 1}`}
+                        autoComplete="off"
+                        spellCheck={false}
                         onChange={(event) =>
                           applyTable(setBodyCell(table, ri, ci, event.target.value))
                         }

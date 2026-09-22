@@ -1,9 +1,10 @@
 /* Recurrence field + scope dialog (ADR-024) ---------------------------- */
 /* Shared by the task form and the event form, so this family is its own
    (`recur__`) rather than living under either page. Every control reuses the
-   existing form recipes: every select is the shared `Select`, the number
-   inputs are plain .nx-textfield__input, and the weekday chips are the same
-   typographic toggle as .cal__source — accent text + weight, never a glow. */
+   existing form recipes: every select is the shared `Select`, every text,
+   number and date field is the shared `TextField`, and the weekday chips are
+   the same typographic toggle as .cal__source — accent text + weight, never a
+   glow. */
 /* A FIELD, and therefore a COLUMN: label above control, the no-anchor hint
    under it, the Prilagođeno editor under that. It used to be a wrapping ROW
    with the label beside the select — which is exactly `Select`'s `inline`
@@ -19,6 +20,12 @@
   align-items: flex-start;
   gap: var(--nx-space-2);
 }
+/* The picker's one hand-rolled caption-and-control row: the weekday chip group.
+   A segmented control is not a text field, so it can neither be a `TextField`
+   nor be captioned by one, and that is the whole of why the caption rule below
+   is still written out here. The two number fields, the counted field and the
+   end date are `TextField`s in that component's `inline` layout now, drawing
+   the row — caption, gap, box — that this one builds by hand. */
 .recur__field {
   display: inline-flex;
   align-items: center;
@@ -26,11 +33,12 @@
   font-size: var(--nx-font-size-body-sm);
   color: var(--nx-text);
 }
-/* The controls the picker still hand-rolls — two number inputs, the weekday
-   chip group and the counted input — sit in the Prilagođeno panel beside five
-   `Select`s in their `inline` layout, so their labels are that layout's label
-   to the declaration. Restated rather than shared because these elements are
-   not selects; the day they become `TextField`s the rule leaves with them. */
+/* The inline caption, to the declaration of the one `TextField` and `Select`
+   draw in their `inline` layouts (`.nx-textfield--inline .nx-textfield__label`
+   and `.nx-select--inline .nx-select__label`), because a row of chips beside a
+   row of fields reads as two kinds of caption the moment the two drift. The
+   number inputs and the counted input have left this rule — they are
+   `TextField`s now, and the component draws their captions itself. */
 .recur__label {
   flex: none;
   font-size: var(--nx-font-size-caption);
@@ -40,9 +48,21 @@
   white-space: nowrap;
   color: var(--nx-text-muted);
 }
-.recur__number.nx-textfield__input {
+/* The number box's width, and it stays on the CONTROL. `recur__number` is the
+   `TextField` WRAPPER now, and in the `inline` layout that wrapper IS the row —
+   the caption and the box. A width there would size the two together, and the
+   caption, being `nowrap`, gives up none of it: what is left over for the box
+   would be nothing. Same declaration and same reason as
+   `.documents__renew-input` in calendar.css. */
+.recur__number .nx-textfield__input {
   width: 72px;
 }
+/* The counted end's row: the field, then the unit it is counted in. A suffix is
+   the one thing `TextField` has no slot for, so the row is still hand-made —
+   and the unit sits BESIDE the field rather than inside it, which is the
+   accessibility as much as the layout: inside the field's own `<label>`, the
+   box's accessible name was „Broj ponavljanja ponavljanja“ — the name and its
+   unit read out as one string. */
 .recur__counted {
   display: inline-flex;
   align-items: center;

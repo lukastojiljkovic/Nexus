@@ -2544,28 +2544,27 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
                   </div>
 
                   <div className="fin__quick-add">
-                    {/* Written by hand rather than through `TextField`, which
-                        forwards no `ref` — and the caret has to be able to land
-                        here, both from the palette's „Nova transakcija" and
-                        after every filed row. `.fin__field` restates the
-                        component's own two rules so the field is
-                        indistinguishable from its neighbours.
+                    {/* The caret has to be able to land here, both from the
+                        palette's „Nova transakcija“ and after every filed row,
+                        and that is the whole reason this field was hand-written:
+                        `TextField` had no `ref` to forward. It forwards the
+                        INPUT's now — the element the caret actually has to
+                        reach — so the amount is the component like every field
+                        around it, and the hand-written twin of the component's
+                        own two rules (`.fin__field`) is gone with the `<label>`
+                        that wrapped the control to name it.
 
                         Which money the amount is in — the account's own — is
                         said in the label rather than left to be assumed. */}
-                    <label className="fin__field fin__amount-input">
-                      <span className="fin__field-label">
-                        {`${s.form.amountLabel} · ${formCurrency}`}
-                      </span>
-                      <input
-                        ref={amountRef}
-                        className="nx-textfield__input"
-                        value={amountDraft}
-                        inputMode="decimal"
-                        placeholder={s.form.amountPlaceholder}
-                        onChange={(event) => setAmountDraft(event.target.value)}
-                      />
-                    </label>
+                    <TextField
+                      ref={amountRef}
+                      className="fin__amount-input"
+                      label={`${s.form.amountLabel} · ${formCurrency}`}
+                      value={amountDraft}
+                      inputMode="decimal"
+                      placeholder={s.form.amountPlaceholder}
+                      onChange={(event) => setAmountDraft(event.target.value)}
+                    />
                     <TextField
                       className="fin__payee-input"
                       label={s.form.payeeLabel}
