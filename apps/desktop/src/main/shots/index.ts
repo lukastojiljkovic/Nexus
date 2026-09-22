@@ -40,13 +40,29 @@ const DEFAULT_FANOUT = ".nx-segmented__option";
 
 /**
  * The fan-out re-reads the page after every click rather than walking a list it
- * captured once, so its loop is bounded by a count rather than by a length. The
- * ceiling is a guard, not a budget: each round marks exactly one label seen, and
- * the widest switcher in the product offers eighteen. Reaching it means the page
- * is producing labels faster than the walk consumes them, which is a defect and
- * is reported rather than met with a silently truncated set of frames.
+ * captured once, so its loop is bounded by a count rather than by a length. This
+ * ceiling exists for the one failure the `seen` set cannot catch — a page that
+ * MINTS a label per look, so the set never covers it and the walk never ends —
+ * and it is therefore set an order of magnitude above any list this product
+ * renders, never near one.
+ *
+ * It was 64, and the reasoning written beside it was „the widest switcher in the
+ * product offers eighteen". That sentence was true about `.nx-segmented__option`
+ * and false about the selector the scene actually names: „Stručne alatke" fans
+ * out over `.tool__item`, and its catalogue is nearly four hundred. So the guard
+ * did exactly what a budget does — it stopped at the sixty-fourth tool and the
+ * other three hundred were never photographed — and the run still printed
+ * `SHOTS OK` over a set that was 58% empty. Measured against the frames this
+ * harness used to write before the walk was rewritten: 2 423, then 1 162.
+ *
+ * A guard derived from the widest population anyone happened to think of IS a
+ * budget, whichever way it is written down. So the correction is not a bigger
+ * number, which would fail the same way the next time a catalogue grows: it is
+ * that REACHING THIS ONE STOPS THE RUN, below. A ceiling that cannot be exceeded
+ * quietly is the only kind worth having, and a scan that ends early is not a
+ * scan that found nothing.
  */
-const MAX_FANOUT_ROUNDS = 64;
+const MAX_FANOUT_ROUNDS = 4096;
 
 export interface ShotScene {
   /** File-name stem, and the name the report refers to the surface by. */
@@ -2506,10 +2522,27 @@ async function sweep(
               await press(win, selector, scene.id, next.label, false);
             }
           }
+          // AND A WALK THAT ENDED EARLY IS A FAILED WALK.
+          //
+          // This was a stderr line, and a stderr line is not a verdict: the run
+          // went on to print `SHOTS OK — 1 162 frames, 0 findings`, exit zero,
+          // and be believed. „Pro" was photographed to the sixty-fourth of its
+          // four hundred tools for as long as the cap existed, with every frame
+          // correct and the audit finding nothing — because everything it did
+          // look at was fine. That is [[DC-124]] one level up: not an instrument
+          // pointed at a fixture whose default state exercises nothing, but an
+          // instrument that stops measuring and reports success. A scan is only
+          // as good as the set it covers, so the set is no longer allowed to
+          // shrink in silence.
+          //
+          // (The sibling report below — „lost the option … mid-fan-out" — is
+          // deliberately NOT fatal. There the page took the option away, so
+          // whether a frame was owed is a question about the surface; here the
+          // page still offers it and the walk simply stopped looking.)
           if (!walked) {
-            process.stderr.write(
-              `shots: scene "${scene.id}" still had new options after ${MAX_FANOUT_ROUNDS} rounds
-`,
+            throw new Error(
+              `scene "${scene.id}" still had new options after ${MAX_FANOUT_ROUNDS} rounds — ` +
+                "the page is minting labels, and the frames taken so far are a truncated set",
             );
           }
         }
