@@ -178,6 +178,7 @@ import {
   type DueQueueOptions,
   type EffectiveExamTopic,
   ElectronicsStore,
+  ElecSettingsStore,
   type NewCircuitPart,
   type NewCircuitWire,
   encryptDatabaseInPlace,
@@ -467,6 +468,8 @@ import {
 } from "./attachmentText.js";
 import { localToday } from "./clock.js";
 import { toCircuitDocument, toWireDocument } from "./elecDocument.js";
+import { createElecRunner } from "./elecRunner.js";
+import { createElecRunnerIpc, type ElecRunnerIpc } from "./elecRunnerIpc.js";
 import {
   decodePreviewText,
   isAllowedPreviewNavigation,
@@ -689,6 +692,12 @@ import {
   type RestoreStatus,
   type RestoreUndoResult,
   type ReviewQueue,
+  type RunnerDetection,
+  type RunnerPlanResult,
+  type RunnerSettings,
+  type RunnerStartResult,
+  type RunnerState,
+  type RunnerStopState,
   type RunningFocusSession,
   type SaveAttachmentResult,
   SEARCH_PAGE_MAX_RESULTS,
@@ -717,7 +726,7 @@ import {
 import { businessProfileFlags, createModuleRegistry, LOCKED_MODULE_IDS } from "../shared/modules.js";
 import { DEMO_BUSINESS_PROFILE_NAME, seedDemoBusiness, seedDemoProfile } from "./demo/index.js";
 import type { DemoAttachmentIo } from "./demo/attachments.js";
-import { duplicateStems, runShots } from "./shots/index.js";
+import { duplicateStems, missingCoverage, runShots } from "./shots/index.js";
 
 /**
  * Reads a harness flag off the command line — and answers false for every one
@@ -5308,6 +5317,71 @@ function syncService(): SyncService {
     },
   });
   return syncServiceInstance;
+}
+
+// --- Elektronika's external runner (ADR-085 E6, DEV-007) ---------------------
+//
+// ONE runner, built once per launch, on `syncService`'s terms and for a sharper
+// reason: it is the app's second capability boundary — the network was the first
+// — and a second instance would be a second process table the app could not see
+// the whole of. `stopping` is not per-window and not per-profile; it is a fact
+// about this computer.
+//
+// The timeouts are here rather than in `elecRunner.ts` because they are
+// decisions about a USER's machine and not about the runner's logic: how long a
+// stop waits before it stops believing the CLI, and how long a probe may take
+// before the panel is told the tool did not answer. The consent copy's promise
+// is that nothing runs without the user asking; these three numbers are what the
+// app does when the thing it asked does not answer.
+let elecRunnerIpc: ElecRunnerIpc | null = null;
+
+function runnerIpc(): ElecRunnerIpc {
+  elecRunnerIpc ??= createElecRunnerIpc({
+    runner: createElecRunner(
+      {
+        // A `docker.exe` that will not die is not evidence that the container
+        // did; this is how long the ladder waits before asking the container.
+        stopTimeoutMs: 5_000,
+        // A tool that is installed but hangs — which is what `wsl.exe` does
+        // with the WSL service stopped — must not leave the panel silent.
+        probeTimeoutMs: 10_000,
+        // The container's own probe, against a local daemon. A daemon that is
+        // not answering is a daemon whose answer is „still running", which is
+        // what the threat model asks for rather than a clean bill of health.
+        containerTimeoutMs: 10_000,
+      },
+      {
+        // A window that has gone away is simply not sent to, `syncService`'s
+        // arrangement: the run belongs to main and outlives any one window.
+        output: (text) => {
+          mainWindow?.webContents.send(IpcChannel.elecRunnerOutput, { text });
+        },
+        changed: (state) => {
+          mainWindow?.webContents.send(IpcChannel.elecRunnerChanged, state);
+        },
+      },
+    ),
+    // A fresh store per call, exactly like every other store literal in this
+    // file: `requireDb()` throws while locked, and a handle captured once would
+    // be a handle to a database the user has since closed.
+    settings: (profileId) => elecSettingsStore(profileId).get(),
+    save: (profileId, changes, now) => elecSettingsStore(profileId).update(changes, now),
+    circuit: (profileId, id) => toCircuitDocument(electronicsStore(profileId).read(id)),
+    accountDir: activeAccountDir,
+    now: () => new Date().toISOString(),
+  });
+  return elecRunnerIpc;
+}
+
+/**
+ * `elec_settings` — the runner's switch, choice and consent (migration 069).
+ *
+ * A fresh store per call, `electronicsStore`'s own arrangement: the handle has
+ * to be resolved at the moment of use, because a database the user has locked
+ * between two calls must not be written through a handle captured before it.
+ */
+function elecSettingsStore(profileId: string): ElecSettingsStore {
+  return new ElecSettingsStore(requireDb().raw, profileId);
 }
 
 // --- Search (ADR-021): the query pipeline -----------------------------------
@@ -10851,6 +10925,75 @@ function registerIpc(): void {
     return { canceled: false, outcome: "package", path: root, files: code.files.length };
   });
 
+  // The external runner (ADR-085 slice E6, DEV-007). Ten channels over one
+  // stateful object, and the ONLY ones in this file through which a process can
+  // be started on the user's machine.
+  //
+  // **The three run channels carry a circuit id and NOTHING ELSE**, which is
+  // DEV-007's third mitigation: the command line comes from `@nexus/core`'s
+  // closed table, the profile comes from the user's own settings row, and the
+  // renderer cannot influence either. `assertTrustedSender`, `asRecord` and
+  // `asId` are everything this file does to the payload; what a field may BE is
+  // decided in `elecRunnerIpc.ts`, beside the code that acts on it.
+  //
+  // The two settings writes are separate channels because they are two powers:
+  // `enable` is the CONSENT — it is what records `consented_at`, and nothing
+  // else may — while `choice` is a preference that cannot even be stored on a
+  // runner that is off.
+  ipcMain.handle(IpcChannel.elecRunnerDetect, (event, payload): Promise<RunnerDetection[]> => {
+    assertTrustedSender(event);
+    const profileId = asId(asRecord(payload).profileId, "profileId");
+    return runnerIpc().detect(profileId);
+  });
+
+  ipcMain.handle(IpcChannel.elecRunnerPlan, (event, payload): RunnerPlanResult => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
+    return runnerIpc().plan(profileId, id);
+  });
+
+  ipcMain.handle(IpcChannel.elecRunnerStart, (event, payload): RunnerStartResult => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asId(body.profileId, "profileId");
+    const id = asId(body.id, "id");
+    return runnerIpc().start(profileId, id);
+  });
+
+  ipcMain.handle(IpcChannel.elecRunnerStop, (event, payload): Promise<RunnerStopState> => {
+    assertTrustedSender(event);
+    const profileId = asId(asRecord(payload).profileId, "profileId");
+    return runnerIpc().stop(profileId);
+  });
+
+  ipcMain.handle(IpcChannel.elecRunnerState, (event, payload): RunnerState => {
+    assertTrustedSender(event);
+    const profileId = asId(asRecord(payload).profileId, "profileId");
+    return runnerIpc().state(profileId);
+  });
+
+  ipcMain.handle(IpcChannel.elecRunnerSettings, (event, payload): RunnerSettings => {
+    assertTrustedSender(event);
+    const profileId = asId(asRecord(payload).profileId, "profileId");
+    return runnerIpc().settings(profileId);
+  });
+
+  ipcMain.handle(IpcChannel.elecRunnerEnable, (event, payload): RunnerSettings => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asId(body.profileId, "profileId");
+    return runnerIpc().enable(profileId, body.enabled);
+  });
+
+  ipcMain.handle(IpcChannel.elecRunnerChoice, (event, payload): RunnerSettings => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asId(body.profileId, "profileId");
+    return runnerIpc().choice(profileId, body.choice, body.distro);
+  });
+
   // Global search (ADR-021 / PRD 08 SRCH-001/002): `runSearchQuery`/
   // `runRecentSearch` own the actual pipeline (see their doc comments) so the
   // smoke rehearsal can call the exact same code the renderer does.
@@ -13237,9 +13380,18 @@ app.whenReady().then(async () => {
             const duplicates = duplicateStems(frames);
             const collided =
               duplicates.length === 0 ? "" : `, ${String(duplicates.length)} duplicate stems`;
+            // And the coverage that is owed and was not taken, on the same
+            // argument one field over: the headline is what a reader takes away,
+            // and „0 findings" over a set that is one surface short is a clean
+            // bill of health for something that was not looked at. A refused
+            // maximise reports itself on stderr; that is where a reader who is
+            // already suspicious looks, and the headline is where everyone does.
+            const missing = missingCoverage(frames);
+            const absent =
+              missing.length === 0 ? "" : `, NO ${missing.join("/")} frame (the window would not maximise)`;
             process.stdout.write(
               `SHOTS OK — ${String(frames.length)} frames, ${String(findings)} findings` +
-                `${collided} → ${shotsOutputDir()}\n`,
+                `${collided}${absent} → ${shotsOutputDir()}\n`,
             );
             shutdown(0);
           })
@@ -13304,6 +13456,12 @@ app.on("before-quit", () => {
 
 app.on("will-quit", () => {
   releaseGlobalCapture(); // Electron requires the registration be given back before the process exits
+  // A simulation left running after the window closed is a process the user
+  // cannot see and did not keep. `dispose` is synchronous by construction:
+  // nothing here may await, and the container profile's removal is issued
+  // detached so that it outlives this process. `?.` because the runner is built
+  // lazily — a launch where nobody opened Elektronika has none to stop.
+  elecRunnerIpc?.dispose();
   stopNotificationScheduler();
   cancelIdleCompactions(); // same reasoning as `performLock` — about to close `db`
   clearRestoreState(); // likewise: decrypted archive bytes and a plaintext undo snapshot must not outlive the session

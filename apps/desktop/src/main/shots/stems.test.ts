@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { duplicateStems, type ShotFrame, type ShotTheme } from "./index.js";
+import { duplicateStems, missingCoverage, type ShotFrame, type ShotTheme } from "./index.js";
 
 /**
  * The reconciliation the sweep could not do for itself.
@@ -76,5 +76,57 @@ describe("duplicateStems", () => {
     ];
     expect(duplicateStems(frames)).toEqual(["min/dan/a-tool", "wide/noc/b-tool"]);
     expect(duplicateStems([...frames].reverse())).toEqual(duplicateStems(frames));
+  });
+});
+
+/**
+ * The coverage that is owed and was not taken.
+ *
+ * One surface, and the reason it needs saying at all: the maximised frame is the
+ * only capture whose subject is the WINDOW STATE, `win.maximize()` is a request
+ * to the window manager rather than a setter, and it has been refused in four
+ * runs out of five. A refusal takes no frame and says so on stderr — the honest
+ * answer — but the headline then reads exactly like a clean run's, and the
+ * headline is what a reader takes away.
+ */
+describe("missingCoverage", () => {
+  /** What a full pass always contains for the dashboard at `noc`. */
+  const measured = [
+    frame("min", "noc", "dashboard"),
+    frame("default", "noc", "dashboard"),
+    frame("wide", "noc", "dashboard"),
+  ];
+
+  it("is quiet when the maximised frame landed", () => {
+    expect(missingCoverage([...measured, frame("maximized", "noc", "dashboard")])).toEqual([]);
+  });
+
+  it("names it when the three measured sizes are there and it is not", () => {
+    expect(missingCoverage(measured)).toEqual(["maximized"]);
+  });
+
+  /**
+   * THE TEST THAT KEEPS THE DERIVATION USABLE. A partial run — one scene, one
+   * size, chosen by the env vars — is not a run that owes the maximised pass, and
+   * a rule that reported it as missing coverage would put a warning on every
+   * forty-second subset run until somebody removed the warning. That is the
+   * failure mode `check:tiers` names when it refuses an allowlist: a gate whose
+   * output is noise is worse than no gate, because it also carries the authority
+   * of having run.
+   */
+  it("is quiet about a subset run, which never claimed that coverage", () => {
+    expect(missingCoverage([frame("min", "noc", "dashboard")])).toEqual([]);
+    expect(missingCoverage([frame("min", "dan", "dashboard")])).toEqual([]);
+    expect(missingCoverage([])).toEqual([]);
+  });
+
+  it("is quiet about a subset that is not the dashboard at all", () => {
+    expect(
+      missingCoverage([
+        frame("min", "noc", "tasks-new-section"),
+        frame("default", "noc", "tasks-new-section"),
+        frame("wide", "noc", "tasks-new-section"),
+      ]),
+    ).toEqual([]);
   });
 });
