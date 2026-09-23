@@ -426,6 +426,34 @@ describe("scanRepo on a tree of its own", () => {
   });
 });
 
+/**
+ * THE LIVE TREE IS WALKED ONCE, and this memo is the whole of why.
+ *
+ * It was walked three times — once for the census, and twice inside the
+ * verdict's test, because `scanRepo()` is `findings(repoCopyLeaves())` and the
+ * call beside it walked the tree again. One walk measures 7.3 s here against
+ * this suite's ~15 900 leaves, so the file spent 22 of its 35 seconds doing the
+ * same work on the same unchanged tree: two walks to answer one question, and
+ * the third to ask it about a tree the second had already read.
+ *
+ * Locally the verdict's test sat at 14.7 s against `testTimeout`'s 30 s and
+ * passed. On CI's four-core runner, where all thirty-three files walk the
+ * repository at once, it crossed 30 s and the run went red with „Test timed
+ * out" — a message naming neither the gate's subject nor the real cause, which
+ * is the failure `vitest.scripts.config.mjs` had already met once and answered
+ * by raising the budget. Raising it again would answer it the same way twice.
+ *
+ * The memo is not a cache for speed alone: the census and the verdict now
+ * describe the SAME walk, so „found nothing" and „looked at less than it
+ * should" cannot come from two different readings of the tree. The tree does
+ * not change while the file runs, so one walk is the honest number of walks.
+ */
+let liveCensus = null;
+function liveTree() {
+  liveCensus ??= repoCopyLeaves();
+  return liveCensus;
+}
+
 describe("the live tree", () => {
   /**
    * THE CENSUS FIRST, because the verdict below is a red list and a red list is
@@ -434,7 +462,7 @@ describe("the live tree", () => {
    * keep in step with the table.
    */
   it("reads the two tables whole, and says how each leaf is read", () => {
-    const census = repoCopyLeaves();
+    const census = liveTree();
     expect(census.length).toBeGreaterThan(15_000);
     // `read` is total: every leaf is cleared by a clause or is `null`. A walk
     // that forgot to write the column would show up here and nowhere else.
@@ -478,9 +506,13 @@ describe("the live tree", () => {
    * shrank, which is a question about this gate and not about the copy.
    */
   it("finds nothing unread in this tree, and can prove it looked", () => {
-    const census = repoCopyLeaves();
+    const census = liveTree();
     const count = (clause) => census.filter((leaf) => leaf.read === clause).length;
-    expect(scanRepo()).toEqual([]);
+    // `findings(census)` rather than `scanRepo()`: the entry point is the same
+    // composition — `scanRepo(root)` is `findings(repoCopyLeaves(root))` — and
+    // asking the census this file already holds is what keeps the verdict and
+    // the floors below describing one walk instead of two.
+    expect(findings(census)).toEqual([]);
     expect(census.length).toBeGreaterThan(15_000);
     expect(count("named")).toBeGreaterThan(13_000);
     // The gate's own admission, bounded: a leaf under a subtree handed out of
