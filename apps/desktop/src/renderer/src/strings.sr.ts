@@ -938,8 +938,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
      * registry knows and no branch draws.
      *
      * It named a RELEASE until 2026-09-22 — „stiže tokom v0 izgradnje" — in a
-     * product at 1.2.0, which is Class A in the one place a version number is
-     * least likely to be re-read: user-facing copy. The sentence says what is
+     * product that was then at 1.2.0, which is Class A in the one place a
+     * version number is least likely to be re-read: user-facing copy. The sentence says what is
      * true of any such module on any build instead, and names no version, so it
      * cannot go stale the same way twice. The second half is the load-bearing
      * one — a user who meets this page has to be told the rest of the app is
