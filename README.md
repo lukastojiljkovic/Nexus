@@ -4,10 +4,12 @@ An offline-first, modular life-management app. One workspace for tasks,
 calendar, notes, studying, files, habits, fitness, finance and a canvas — all
 stored on your own device, all working with the network off.
 
-The desktop app (Electron + React) is complete and in daily use. The web app is
-being built out of *this* codebase rather than as a rewrite, with Supabase
-behind it and end-to-end encrypted sync between the two — the server holds
-ciphertext and never plaintext content.
+The desktop app (Electron + React) is complete and in daily use. The web app
+and sync are built out of *this* codebase rather than as a rewrite, with Supabase
+behind them and end-to-end encrypted sync between the two — the server holds
+ciphertext and never plaintext content. **They are paused** by the founder's
+decision of 2026-08-31 until the desktop feature set is finished: everything
+already built for them stays built, stays tested and stays off by default.
 
 **Cloud is off by default and can be switched off entirely**, and that is
 structural rather than a promise: the local-only path is not *able* to reach the
@@ -28,9 +30,10 @@ exactly the offline app described above.
 pnpm install
 ```
 
-`pnpm install` runs a postinstall step that provisions the Electron binary. It
-does **not** decide which ABI the native SQLite module is built against — see
-**Native ABI** below before running the app or the tests.
+`pnpm install` runs a postinstall step that provisions the Electron binary.
+There is no ABI dance to perform: since 13.0.3 the native SQLite module is a
+Node-API addon, and one prebuilt file serves both Node (what the tests run on)
+and Electron (what the app runs on). See **The native module** below.
 
 ## Everyday commands
 

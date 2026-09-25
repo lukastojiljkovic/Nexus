@@ -6,13 +6,22 @@ add what is specific to this repository. When the two agree, follow both; when
 this file is more specific, it wins.
 
 Nexus is Luka's commercial, offline-first, all-in-one life-management platform.
-The single source of truth for *what* the product is: [docs/VISION.md](docs/VISION.md)
-and [docs/SPECIFICATION.md](docs/SPECIFICATION.md). For *where we are*:
-[docs/STATUS.md](docs/STATUS.md). For a plain-language explanation:
-[docs/OVERVIEW.md](docs/OVERVIEW.md). **[docs/README.md](docs/README.md) maps
-every document there** and says which are live and which are history —
-reorganised 2026-08-16, when `STATUS.md` was cut from 9 855 lines back to being
-a status rather than a journal.
+
+## Read these before touching anything
+
+| | |
+| --- | --- |
+| Where the project is, and what is left | [docs/STATUS.md](docs/STATUS.md) — §1 for state, §4 for the queue |
+| What Nexus is, in everyday language | [docs/OVERVIEW.md](docs/OVERVIEW.md) |
+| What Nexus will be | [docs/SPECIFICATION.md](docs/SPECIFICATION.md) and [docs/VISION.md](docs/VISION.md) |
+| In what order | [docs/roadmap.md](docs/roadmap.md) |
+| Every other document, and which are live | [docs/README.md](docs/README.md) |
+
+**The docs are version-controlled with the code.** They entered git on
+2026-09-26, reversing the 2026-07-04 decision that kept them local-only. That is
+acceptable only because the repository is private — several documents describe
+security posture and unreleased product — so making the repository public has to
+be decided with that in mind.
 
 ## Current focus (2026-08-31 — the founder changed it; supersedes 2026-08-08)
 
@@ -118,7 +127,9 @@ choice of backend**; whatever in them is about the data model still applies.
   gate set, and review UI work by eye against the design rules (tokens, banned
   hues, patterns matching existing pages). A subagent's report is a claim, not
   evidence.
-- **Agents never touch git** — not even read-only — and never touch `docs/`.
+- **Git is governed by the Git section below.** Commits are allowed for work
+  that is finished and verified; push, pull requests and merges need an explicit,
+  one-time authorization from the founder.
 - **A reported bug is a sample, never an incident** (founder, 2026-08-06).
   *„necu samo da se otkloni taj bug, nego i da se proveri uzrok i sta je sve
   potencijalno zahvaceno."* Every defect — his or mine — is worked in this
@@ -161,9 +172,10 @@ choice of backend**; whatever in them is about the data model still applies.
   `Co-Authored-By` trailers or "Generated with Claude Code" footers.
 - **Stage explicit paths only** — never `git add .`. English conventional-commit
   messages, one scoped concern per commit (e.g. `feat(db): …`, `feat(desktop): …`).
-- **`docs/` is private and gitignored — never commit or push anything under it.**
-  This includes SPECIFICATION/STATUS/OVERVIEW. `CLAUDE.md` (this file) lives at the
-  repo root and may be committed.
+- **`docs/` is version-controlled** since 2026-09-26, and is covered by the
+  repository's secret scan. Update it in the same pass as the work it describes:
+  a document that has stopped being true is a defect, not a stale note.
+  `CLAUDE.md` lives at the repo root.
 
 ## Design rules (binding — the app must never read as "AI slop")
 

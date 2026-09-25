@@ -1,5 +1,7 @@
-# Private documentation — never committed or pushed (founder decision, 2026-07-04)
-docs/
+# Documentation used to be local-only (founder decision, 2026-07-04). The
+# founder reversed that on 2026-09-26: docs/ is version-controlled with the
+# code. The repository is private, and that must be revisited if it is ever
+# made public — the docs describe security posture and unreleased product.
 
 # Dependencies & build output
 node_modules/
@@ -18,8 +20,8 @@ apps/desktop/shots/
 .env
 .env.*
 
-# Transient agent worktrees (parallel build lanes; never part of the repo)
-.claude/worktrees/
+# Agent-local state (settings, transient worktrees); never part of the repo
+.claude/
 
 # OS junk
 .DS_Store
