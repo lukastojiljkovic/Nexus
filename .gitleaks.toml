@@ -85,4 +85,16 @@ regexes = [
   '''^s\.directionPer100ToPortion$''',
   '''^s\.directionPortionToPer100$''',
   '''^s\.sensitivityReference283v$''',
+
+  # A FOURTH key of the same shape, and this one is a correction. DC-53 recorded
+  # it as one that does NOT fire, because every one of its call sites is
+  # followed by `}` rather than by a delimiter the rule accepts — which is still
+  # true of the code. It stopped being true of the repository on 2026-09-26,
+  # when docs/ entered version control: `docs/defect-classes.md` quotes the key
+  # in prose, where a backtick closes it, and the whole-history scan opens on
+  # that. The fix belongs here rather than in the sentence, because a later
+  # commit cannot un-scan an earlier one. Measured 2026-09-26: with this line
+  # the scan is 0 findings; without it, 1, at
+  # defect-classes.md:1546.
+  '''^s\.targetMinusDeliveredP2o5$''',
 ]

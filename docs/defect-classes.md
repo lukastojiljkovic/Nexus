@@ -1548,6 +1548,15 @@ does **not** fire, and only because every one of its call sites is followed by
 `}` rather than by a delimiter the rule accepts. So the risk set is „24-character
 key carrying a digit, before a space or a quote", not „24-character key".
 
+**One correction, 2026-09-26.** That statement is about the CODE and it is still
+true there — but it stopped being true of the repository when `docs/` entered
+version control, because this entry quotes the key in prose, where a backtick
+closes it and the rule opens. So the fourth literal is now named in
+`.gitleaks.toml` as well, and the population that can fire is not only call
+sites: **any file the scan reads, documentation included.** The line stayed
+because the history scan is why the exemption is in the config rather than in
+this sentence — a later commit cannot un-scan an earlier one.
+
 **Fixed by naming the three literals** in `.gitleaks.toml`, which keeps the rule
 armed — a real Vault token in this repository is still a failure. Measured both
 ways at the pinned 8.24.3 before and after: history scan 6 → 0, working tree
