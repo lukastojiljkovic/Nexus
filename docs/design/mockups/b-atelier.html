@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="sr" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Direction B — Atelier</title>
+<style>
+  :root[data-theme="light"] {
+    --bg: #f8f4ec; --surface: #fffdf8; --surface2: #f1ebdf;
+    --border: #e4dccb; --text: #2b2622; --text2: #7d7264;
+    --accent: #8c3b34; --accent-soft: #f4e4e0; --accent-text: #7c3029;
+    --gold: #b97a2a; --gold-soft: #f5e9d6;
+    --shadow: 0 1px 3px rgba(90, 70, 40, 0.08), 0 4px 14px rgba(90, 70, 40, 0.06);
+  }
+  :root[data-theme="dark"] {
+    --bg: #201b16; --surface: #292219; --surface2: #322a20;
+    --border: #3d3428; --text: #ede6da; --text2: #a3947e;
+    --accent: #d08a4e; --accent-soft: #3d2c1c; --accent-text: #e0a76e;
+    --gold: #d08a4e; --gold-soft: #3d2f1d;
+    --shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "Source Serif Pro", Georgia, "Times New Roman", serif;
+    background: var(--bg); color: var(--text); font-size: 14.5px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .ui { font-family: "Segoe UI", system-ui, sans-serif; }
+  .note-strip {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 20px; border-bottom: 1px solid var(--border);
+    background: var(--surface); font-size: 12.5px; color: var(--text2);
+    font-family: "Segoe UI", system-ui, sans-serif;
+  }
+  .note-strip b { color: var(--text); }
+  .toggle {
+    border: 1px solid var(--border); background: var(--surface2);
+    color: var(--text); padding: 5px 14px; border-radius: 999px;
+    cursor: pointer; font: inherit; font-size: 12px;
+  }
+  .frame { display: flex; height: calc(100vh - 42px); }
+  .side {
+    width: 228px; background: transparent; border-right: 1px solid var(--border);
+    padding: 18px 12px; flex-shrink: 0; overflow-y: auto;
+    font-family: "Segoe UI", system-ui, sans-serif; font-size: 13.5px;
+  }
+  .logo {
+    font-family: Georgia, serif; font-weight: 700; font-size: 17px;
+    font-style: italic; padding: 4px 12px 16px; letter-spacing: 0.01em;
+  }
+  .logo span { color: var(--accent); }
+  .navgroup { margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border); }
+  .navgroup:first-of-type { margin-top: 0; padding-top: 0; border-top: none; }
+  .navlabel {
+    font-size: 11px; letter-spacing: 0.06em; font-variant: small-caps;
+    color: var(--text2); padding: 0 12px 7px;
+  }
+  .nav a {
+    display: flex; justify-content: space-between; padding: 7px 12px;
+    border-radius: 999px; color: var(--text); text-decoration: none; margin-bottom: 2px;
+  }
+  .nav a.active { background: var(--accent-soft); color: var(--accent-text); font-weight: 600; }
+  .nav a:hover:not(.active) { background: var(--surface2); }
+  .badge { font-size: 11.5px; color: var(--text2); }
+  .main { flex: 1; overflow-y: auto; }
+  .topbar {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 28px; font-family: "Segoe UI", system-ui, sans-serif;
+  }
+  .search {
+    border: 1px solid var(--border); background: var(--surface); color: var(--text2);
+    border-radius: 999px; padding: 8px 16px; width: 300px; font-size: 12.5px;
+    box-shadow: var(--shadow);
+  }
+  .avatar {
+    width: 32px; height: 32px; border-radius: 50%; background: var(--accent);
+    color: #fff8f0; display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 600;
+  }
+  .content { padding: 10px 28px 28px; }
+  h1 { font-family: Georgia, serif; font-size: 26px; font-weight: 600; margin-bottom: 4px; }
+  .sub { color: var(--text2); font-size: 13.5px; margin-bottom: 22px; font-style: italic; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .widget {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 20px; box-shadow: var(--shadow);
+  }
+  .widget.wide { grid-column: span 2; }
+  .wtitle {
+    font-family: Georgia, serif; font-size: 15px; font-weight: 600;
+    margin-bottom: 14px; color: var(--text);
+  }
+  .wtitle small { color: var(--text2); font-weight: 400; font-size: 12px; font-style: italic; margin-left: 6px; }
+  .item { display: flex; gap: 12px; align-items: center; padding: 8px 0; font-family: "Segoe UI", system-ui, sans-serif; font-size: 13.5px; }
+  .check { width: 17px; height: 17px; border: 1.5px solid var(--text2); border-radius: 50%; flex-shrink: 0; }
+  .check.done { background: var(--accent); border-color: var(--accent); }
+  .item .t { flex: 1; }
+  .item .t.done { color: var(--text2); text-decoration: line-through; }
+  .chip {
+    font-size: 11.5px; padding: 3px 10px; border-radius: 999px;
+    background: var(--surface2); color: var(--text2);
+  }
+  .chip.hot { background: var(--gold-soft); color: var(--gold); }
+  .count { display: flex; justify-content: space-between; align-items: baseline; padding: 10px 0; border-bottom: 1px dashed var(--border); font-family: "Segoe UI", system-ui, sans-serif; font-size: 13.5px; }
+  .count:last-child { border-bottom: none; }
+  .count .n { font-family: Georgia, serif; font-size: 26px; font-weight: 600; color: var(--accent-text); }
+  .count .n small { font-size: 11.5px; color: var(--text2); font-weight: 400; margin-left: 4px; font-family: "Segoe UI", sans-serif; }
+  .kb { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; font-family: "Segoe UI", system-ui, sans-serif; }
+  .kbcol { background: var(--surface2); border-radius: 12px; padding: 10px; }
+  .kbhead { font-size: 12px; color: var(--text2); margin-bottom: 10px; display: flex; justify-content: space-between; font-variant: small-caps; letter-spacing: 0.04em; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 12px; margin-bottom: 8px; font-size: 13px; box-shadow: var(--shadow);
+  }
+  .card .tag { font-size: 11px; color: var(--gold); margin-top: 3px; }
+  .bars { display: flex; align-items: flex-end; gap: 10px; height: 90px; margin-top: 6px; }
+  .bar { flex: 1; background: linear-gradient(to top, var(--accent), var(--gold)); border-radius: 6px 6px 0 0; opacity: 0.9; }
+  .bar.mut { background: var(--surface2); }
+  .xlab { display: flex; gap: 10px; margin-top: 8px; font-family: "Segoe UI", sans-serif; }
+  .xlab span { flex: 1; text-align: center; font-size: 11px; color: var(--text2); }
+  .habit { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; font-family: "Segoe UI", system-ui, sans-serif; font-size: 13.5px; }
+  .dots { display: flex; gap: 5px; }
+  .dot { width: 11px; height: 11px; border-radius: 50%; background: var(--surface2); border: 1px solid var(--border); }
+  .dot.on { background: var(--gold); border-color: var(--gold); }
+  .streak { font-size: 11.5px; color: var(--gold); font-style: italic; font-family: Georgia, serif; }
+  .qa { display: flex; flex-direction: column; gap: 10px; font-family: "Segoe UI", system-ui, sans-serif; }
+  .qa button {
+    text-align: left; border: 1px solid var(--border); background: var(--surface);
+    color: var(--text); border-radius: 999px; padding: 10px 16px; font: inherit;
+    font-size: 13px; cursor: pointer; box-shadow: var(--shadow);
+  }
+  .qa button b { color: var(--accent-text); margin-right: 8px; }
+</style>
+</head>
+<body>
+<div class="note-strip">
+  <div><b>Direction B — Atelier</b> · topao papirni radni prostor · Fraunces + serif body (aproks. Georgia) · bordo + ćilibar akcenti · komforna gustina · meke senke</div>
+  <button class="toggle" onclick="const r=document.documentElement;r.dataset.theme=r.dataset.theme==='light'?'dark':'light'">Tema: svetla/tamna</button>
+</div>
+<div class="frame">
+  <aside class="side">
+    <div class="logo">Nexus<span>.</span></div>
+    <div class="navgroup">
+      <div class="navlabel">Osnovno</div>
+      <nav class="nav">
+        <a class="active" href="#">Dashboard</a>
+        <a href="#">Zadaci <span class="badge">7</span></a>
+        <a href="#">Beleške</a>
+        <a href="#">Kalendar <span class="badge">2</span></a>
+      </nav>
+    </div>
+    <div class="navgroup">
+      <div class="navlabel">Učenje</div>
+      <nav class="nav">
+        <a href="#">Study Hub <span class="badge">23</span></a>
+      </nav>
+    </div>
+    <div class="navgroup">
+      <div class="navlabel">Život</div>
+      <nav class="nav">
+        <a href="#">Finansije</a>
+        <a href="#">Navike</a>
+      </nav>
+    </div>
+    <div class="navgroup">
+      <nav class="nav">
+        <a href="#">Podešavanja</a>
+      </nav>
+    </div>
+  </aside>
+  <main class="main">
+    <div class="topbar">
+      <input class="search" placeholder="Pretraži…  (Ctrl+K)">
+      <div class="avatar">L</div>
+    </div>
+    <div class="content">
+      <h1>Dobro jutro, Luka</h1>
+      <div class="sub">nedelja, 5. jul — tri obaveze danas · sledeći ispit za 41 dan</div>
+      <div class="grid">
+        <div class="widget">
+          <div class="wtitle">Danas</div>
+          <div class="item"><div class="check done"></div><div class="t done">Pregled: sopstvene vrednosti</div></div>
+          <div class="item"><div class="check"></div><div class="t">Algebra — grupe, 2. poglavlje</div><span class="chip hot">10:00</span></div>
+          <div class="item"><div class="check"></div><div class="t">Kombinatorika — 12 kartica</div><span class="chip">review</span></div>
+          <div class="item"><div class="check"></div><div class="t">Produžiti registraciju auta</div><span class="chip">rok 30 dana</span></div>
+        </div>
+        <div class="widget">
+          <div class="wtitle">Odbrojavanja <small>ispiti</small></div>
+          <div class="count"><span>Algebra</span><span class="n">41<small>dana</small></span></div>
+          <div class="count"><span>Linearna algebra i AG</span><span class="n">48<small>dana</small></span></div>
+          <div class="count"><span>Kombinatorika i teorija grafova</span><span class="n">55<small>dana</small></span></div>
+        </div>
+        <div class="widget">
+          <div class="wtitle">Brze akcije</div>
+          <div class="qa">
+            <button><b>N</b> Novi zadatak</button>
+            <button><b>B</b> Nova beleška</button>
+            <button><b>F</b> Fokus sesija (25 min)</button>
+          </div>
+        </div>
+        <div class="widget wide">
+          <div class="wtitle">Kombinatorika — teme <small>kanban</small></div>
+          <div class="kb">
+            <div class="kbcol">
+              <div class="kbhead"><span>Za učenje</span><span>3</span></div>
+              <div class="card">Teorija grafova — bojenja<div class="tag">plan: 12. jul</div></div>
+              <div class="card">Generativne funkcije<div class="tag">plan: 15. jul</div></div>
+              <div class="card">Rekurentne relacije<div class="tag">plan: 18. jul</div></div>
+            </div>
+            <div class="kbcol">
+              <div class="kbhead"><span>U toku</span><span>1</span></div>
+              <div class="card">Princip uključenja–isključenja<div class="tag">8 kartica · 2 zadatka</div></div>
+            </div>
+            <div class="kbcol">
+              <div class="kbhead"><span>Naučeno</span><span>2</span></div>
+              <div class="card">Permutacije i kombinacije</div>
+              <div class="card">Dirihleov princip</div>
+            </div>
+          </div>
+        </div>
+        <div class="widget">
+          <div class="wtitle">Fokus <small>poslednjih 7 dana</small></div>
+          <div class="bars">
+            <div class="bar" style="height:45%"></div>
+            <div class="bar" style="height:70%"></div>
+            <div class="bar mut" style="height:8%"></div>
+            <div class="bar" style="height:55%"></div>
+            <div class="bar" style="height:85%"></div>
+            <div class="bar" style="height:60%"></div>
+            <div class="bar" style="height:30%"></div>
+          </div>
+          <div class="xlab"><span>po</span><span>ut</span><span>sr</span><span>če</span><span>pe</span><span>su</span><span>ne</span></div>
+        </div>
+        <div class="widget wide">
+          <div class="wtitle">Navike</div>
+          <div class="habit"><span>Učenje pre podneva</span><div class="dots"><div class="dot on"></div><div class="dot on"></div><div class="dot"></div><div class="dot on"></div><div class="dot on"></div><div class="dot on"></div><div class="dot"></div></div><span class="streak">niz: 3</span></div>
+          <div class="habit"><span>Trening</span><div class="dots"><div class="dot on"></div><div class="dot"></div><div class="dot on"></div><div class="dot"></div><div class="dot on"></div><div class="dot"></div><div class="dot"></div></div><span class="streak">niz: 1</span></div>
+          <div class="habit"><span>Bez telefona posle 23h</span><div class="dots"><div class="dot on"></div><div class="dot on"></div><div class="dot on"></div><div class="dot on"></div><div class="dot"></div><div class="dot on"></div><div class="dot on"></div></div><span class="streak">niz: 2</span></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>
