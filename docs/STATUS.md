@@ -576,28 +576,28 @@ None of this blocks anything, and none of it is a new feature. It is the set of
 loose ends recorded while the product was being finished. The order below is a
 suggestion, cheapest and highest-leverage first.
 
-1. **`sideEffects` is absent from every `package.json`.** One line per package;
-   the work is the measurement, not the edit. Nothing can be tree-shaken today,
-   which is part of why the bundles below are the size they are.
-2. **Route-level code splitting.** The renderer loads one eager entry chunk and
+1. **Route-level code splitting.** The renderer loads one eager entry chunk and
    contains exactly one dynamic `import()` (`./licences.js`). Measured
    2026-09-26 on the 1.3.0 build: `out/renderer/assets/index-ClaOtFso.js` is
    **11 261 086 bytes (11.26 MB)** raw. Done means each route is its own chunk.
-3. **Excalidraw and mermaid placement.** Excalidraw is inside that eager entry
+   `sideEffects` is no longer the lever here: every package declares it since
+   2026-09-26 and the eager chunk moved by 1 608 bytes, because the desktop
+   renderer really does reach most of `@nexus/core` — only splitting can defer it.
+2. **Excalidraw and mermaid placement.** Excalidraw is inside that eager entry
    chunk (verified 2026-09-26). Mermaid is code-split into lazy chunks that ship
    in the installer anyway; the installer size in the table above is what that
    choice weighs. The founder chose to keep mermaid, so this item is about
    placement, not removal.
-4. **The sizing contract.** DC-06 closed one pane at one breakpoint; what is
+3. **The sizing contract.** DC-06 closed one pane at one breakpoint; what is
    missing is the rule that would have prevented all of them — what a pane's
    floor is, and what happens below it. This is also the desktop half of the
    responsive work the web app will need.
-5. **A gate for Class A: a claim about the code that is right where it is
+4. **A gate for Class A: a claim about the code that is right where it is
    written and stale where it is repeated.** Five instances were found on
    2026-09-22 and fixed by hand, four more the same day. Nothing in the tree can
    check a sentence, and a figure has no type, no import and no call site. The
    owed gate is a rule over the specific shapes that have now shipped twice.
-6. **A gate for Class C: a contract field no screen can reach.** The worked
+5. **A gate for Class C: a contract field no screen can reach.** The worked
    example is `NewDocumentFields.reminderOffsets` and
    `DocumentFieldChanges.reminderOffsets` — declared in `shared/ipc.ts`,
    accepted by main, validated by the store, asserted by
@@ -606,29 +606,29 @@ suggestion, cheapest and highest-leverage first.
    already asks this question inside the professional drawer; the owed gate is
    the generalisation: every exported IPC interface field must have a renderer
    call site that sets it.
-7. **`searchIndexers` is declared and nothing fills it.**
+6. **`searchIndexers` is declared and nothing fills it.**
    `ModuleManifest.searchIndexers` exists in `@nexus/core`, and no module
    manifest populates it — circuits reach search through migration 070 by
    another route. So the slot is dead rather than pending. Either a module uses
    it or the field is removed.
-8. **The duplicated Serbian numeral lexicon.** `pravo.ts` and
+7. **The duplicated Serbian numeral lexicon.** `pravo.ts` and
    `racunovodstvo.ts` each embed their own numeral lexicon (both citing
    *Pravopis srpskoga jezika*, 2010), their own `stripSeparators`, and their
    own digit-at-a-time ISO 7064 MOD 97-10 under names one character apart. This
    is a consolidation rather than a defect, and it is not urgent — it is what
    declining to retire one of each colliding tool pair costs.
-9. **The shell's own settings cards are in no screenshot.** Twelve per-module
+8. **The shell's own settings cards are in no screenshot.** Twelve per-module
    settings scenes were added and are derived from the registry, which is why
    they cannot go stale. The shell's cards — Profili, Sigurnost, Izgled,
    Obaveštenja, Licence and the rest — have their ids written into
    `SettingsPage.tsx` in the renderer and appear in no list the main process
    can read, so the same derivation cannot reach them. Recorded rather than
    papered over with a second hand-kept list.
-10. **„Dalje" sits below the fold on onboarding step 3 at 900 × 600.** Measured
-    and reachable by scrolling, deliberately left: the card is the scroller, step
-    3 is the only step whose actions do not fit, and a sticky action bar would
-    change the first screen a user ever sees.
-11. **Mixed line endings within files**, despite `core.autocrlf=true`. Every
+9. **„Dalje" sits below the fold on onboarding step 3 at 900 × 600.** Measured
+   and reachable by scrolling, deliberately left: the card is the scroller, step
+   3 is the only step whose actions do not fit, and a sticky action bar would
+   change the first screen a user ever sees.
+10. **Mixed line endings within files**, despite `core.autocrlf=true`. Every
     scripted edit has to be EOL-aware; it has already cost two redoes. A standing
     hazard rather than a defect.
 

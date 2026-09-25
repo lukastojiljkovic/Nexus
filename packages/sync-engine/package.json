@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "sideEffects": false,
   "description": "The loop: one sync round as sweep, pull, push, over an injected local store, HttpPort and CryptoPort. Holds no database and no network of its own, so the same round runs in the Electron main process against SQLite and in a browser tab against whatever the web app keeps locally.",
   "exports": {
     ".": "./src/index.ts",

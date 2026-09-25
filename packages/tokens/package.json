@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "sideEffects": [
+    "**/*.css"
+  ],
   "description": "Nexus design tokens — Direction D v2 (Dan/Noc). Single source of truth for all styling; raw hex values are forbidden outside this package.",
   "exports": {
     ".": {

@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "sideEffects": false,
   "description": "The wire between @nexus/sync and Supabase: PostgREST paging/pushing over sync_objects and sync_state, and the Realtime broadcast that says 'pull again'. Pure — it holds no origin, no fetch and no socket, only an injected HttpPort, so a build that never hands it one cannot reach the network.",
   "exports": {
     ".": "./src/index.ts"
