@@ -362,8 +362,7 @@ describes the intended product in full.
   the budgets in [architecture/overview.md](architecture/overview.md) are targets
   nothing measures; installers are **unsigned**, so nothing may be distributed
   beyond the founder's own machines until code signing and notarization are set
-  up; and the Electron 42 pin has a support deadline of **2026-10-20**
-  ([STATUS.md](STATUS.md) §6).
+  up.
 
 ---
 
