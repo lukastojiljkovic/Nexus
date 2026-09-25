@@ -4875,12 +4875,12 @@ export type HabitSchedule =
  * „Danas". There is no `deletedAt` here at all, because a deleted habit is not
  * returned.
  *
- * `reminderTime` rides this wire and was deliberately offered by NO form when
- * this slice landed — nothing read it yet, and a control that silently does
- * nothing is worse than an absent one. It has one now, and that is the rule
- * working rather than the rule being broken: `habitReminder.ts` turns the field
- * into reminder rows and `notifications.ts` delivers them, so HABITS' header
- * switch reveals a `type="time"` field for it.
+ * `reminderTime` rides this wire. When this slice landed nothing read it, so no
+ * form offered it — a control that silently does nothing is worse than an absent
+ * one. It has a control now, and that is the rule working rather than the rule
+ * being broken: HABITS' header switch reveals a `type="time"` field for it,
+ * `habitReminder.ts` turns the field into reminder rows, and `notifications.ts`
+ * delivers them.
  */
 export interface Habit {
   id: string;
