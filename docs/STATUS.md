@@ -14,8 +14,9 @@ the binding rules) → §1 and §2 below (where we are, what exists) → §4 (wh
 left) → §5 (what needs the founder). [README.md](README.md) maps every other
 document.
 
-**Last updated:** 2026-09-26. The state below was verified against `main` at
-`eceb07e` on that date.
+**Last updated:** 2026-09-26. The state below was verified against `main` on
+that date. Deliberately no commit sha: a sha in a header goes stale the moment
+anything is pushed, which is the defect class this file keeps recording.
 
 **Read alongside:** [OVERVIEW.md](OVERVIEW.md) (plain-language tour) ·
 [SPECIFICATION.md](SPECIFICATION.md) (the whole product) ·
@@ -63,7 +64,7 @@ blocking; both are §5 items.
 | Server | 13 Supabase migrations, 3 Edge Functions, 109 pgTAP assertions |
 | Static gates | **26**, each its own CI step |
 | Commits | 653 |
-| Unpushed work | none — `main` is level with `origin/main`; CI and Security green on `eceb07e` |
+| Unpushed work | none — `main` is level with `origin/main`; CI and Security green on `main` |
 | Open pull requests | none |
 | Git tags / GitHub releases | none — no version has ever been released (§5) |
 
@@ -720,7 +721,7 @@ quality is.
   the window between push and merge is the window in which the branch can be
   recreated underneath the fix.
 - **Nothing is unpushed and no pull request is open** as of 2026-09-26, and both
-  CI and Security are green on `eceb07e`.
+  CI and Security are green on `main`.
 
 ## 5. Open questions for the founder
 
