@@ -9,7 +9,7 @@ import {
   unlink as unlinkAsync,
   writeFile as writeFileAsync,
 } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, isAbsolute, join, relative } from "node:path";
 import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, protocol, session } from "electron";
 import type { IpcMainInvokeEvent, OpenDialogOptions } from "electron";
 // `electron-updater` is deliberately NOT imported — see the disarmed
@@ -833,14 +833,66 @@ protocol.registerSchemesAsPrivileged([
 // getPath("userData") call.
 app.setName("Nexus");
 
+// The harness sandbox: never the developer's real `%APPDATA%\Nexus`, but a
+// nested, disposable directory, one per harness. Wiped up front (Electron only
+// auto-creates the DEFAULT userData path, not one redirected here, and a
+// leftover keychain.json from a previous run would make the very first smoke
+// assertion false on the second run onward) then recreated, since nothing else
+// will create it before the first file write into it.
+//
+// **AT MODULE SCOPE, BEFORE `ready`, and it was not until 2026-09-26.** It used
+// to run inside `app.whenReady()`, after the default session already existed —
+// and Chromium's session data does not follow a `userData` changed after that.
+// So the app's own files (accounts, key chains, databases) went into the
+// sandbox, while everything the RENDERER keeps — `localStorage`, session
+// storage, the HTTP cache — went into the real directory beside it. Every
+// `smoke` and `shots` run wrote its active profile, its theme and its tool
+// history into the localStorage of the app a person actually uses, and every
+// sweep began from whatever the previous one had left there: two sweeps of one
+// build photographed „Alatke" landing on different tools. `sessionData` is set
+// as well as `userData` so the two cannot come apart again, and everything
+// below that reads `userData` before `ready` now reads the sandbox — `cloud.json`
+// among it, which a harness has no business inheriting from the real install.
+//
+// `--demo` is deliberately absent: its whole purpose is an account that is
+// still there after the process exits, so it writes where a real launch reads.
+// It stays safe by being additive — a new account is a new directory with its
+// own key chain (ADR-044).
+const HARNESS_SANDBOX = isSmoke ? "smoke" : isShots ? "shots" : null;
+if (HARNESS_SANDBOX !== null) {
+  const sandboxPath = join(app.getPath("userData"), HARNESS_SANDBOX);
+  try {
+    rmSync(sandboxPath, { recursive: true, force: true });
+    mkdirSync(sandboxPath, { recursive: true });
+  } catch (error) {
+    // `force` forgives a MISSING path, not a BUSY one. On Windows a directory
+    // holding a file another process has open cannot be removed at all, and
+    // the `EPERM` that raises names neither the file nor the run holding it —
+    // so a second `shots` run against the first run's sandbox read as an
+    // inexplicable crash. It is a refusal, and it has to be one: a run whose
+    // sandbox still holds the previous run's key chain is not the
+    // deterministic run its frames claim to be. `scripts/run-lock.mjs` keeps
+    // two runs from reaching this at all; this is what happens if they do.
+    // `process.exit`, not `app.exit`: nothing is running yet to be closed.
+    process.stderr.write(
+      `Nexus: the ${HARNESS_SANDBOX} sandbox could not be cleared — ${String(error)}\n` +
+        `  Another ${HARNESS_SANDBOX} run is probably using it. Refusing to start rather\n` +
+        `  than running against a sandbox that still holds its files.\n`,
+    );
+    process.exit(1);
+  }
+  app.setPath("userData", sandboxPath);
+  app.setPath("sessionData", sandboxPath);
+}
+
 // SEC-NET: the resolver-level layer of the cloud-off boundary.
 //
 // MUST run at module scope, for the same reason the scheme registration above
 // does: a Chromium command-line switch is read once while the browser process
 // is starting, and appending it after `ready` changes nothing while looking
-// like it changed something. And it MUST run after `app.setName`, because
-// `shouldBlockResolver` reads `cloud.json` out of `userData` and that path is
-// what the line above decides.
+// like it changed something. And it MUST run after `app.setName` and the
+// harness sandbox, because `shouldBlockResolver` reads `cloud.json` out of
+// `userData` and that path is what those two decide.
 //
 // This is the layer that cannot be lifted at runtime, and the asymmetry is the
 // design rather than a shortcoming: the state this product has to be able to
@@ -13115,6 +13167,19 @@ async function runSmoke(win: BrowserWindow): Promise<void> {
     throw new Error("renderer IPC round-trip did not succeed");
   }
 
+  // Everything the renderer keeps — `localStorage`, session storage, the cache —
+  // is inside the sandbox. From the first smoke run until 2026-09-26 it was not:
+  // the sandbox was applied after `ready`, the default session had already
+  // settled on the REAL `userData`, and every run wrote its keys into the
+  // localStorage of the app a person uses (the sandbox block says more). The
+  // accounts landed in the sandbox either way, which is why nothing noticed.
+  const sandbox = app.getPath("userData");
+  const storage = session.defaultSession.storagePath;
+  const within = storage === null ? null : relative(sandbox, storage);
+  if (within === null || within.startsWith("..") || isAbsolute(within)) {
+    throw new Error(`renderer storage is outside the harness sandbox: ${String(storage)} (sandbox ${sandbox})`);
+  }
+
   const unlockedStatus = computeAuthStatus();
   if (unlockedStatus.state !== "unlocked") {
     throw new Error(`expected "unlocked" status, got "${unlockedStatus.state}"`);
@@ -13436,43 +13501,6 @@ app.whenReady().then(async () => {
   // down at startup is not defence in depth — it is the control breaking the
   // product it protects.
   session.defaultSession.setSpellCheckerEnabled(false);
-
-  // Never the developer's real `%APPDATA%\Nexus` — a nested, disposable
-  // directory, one per harness. Wiped up front (Electron only auto-creates the
-  // DEFAULT userData path, not one redirected here, and a leftover
-  // keychain.json from a previous run would make the very first smoke
-  // assertion below false on the second run onward) then recreated, since
-  // nothing else will create it before the first file write into it.
-  //
-  // `--demo` is deliberately absent: its whole purpose is an account that is
-  // still there after the process exits, so it writes where a real launch
-  // reads. It stays safe by being additive — a new account is a new directory
-  // with its own key chain (ADR-044).
-  const sandboxDir = isSmoke ? "smoke" : isShots ? "shots" : null;
-  if (sandboxDir !== null) {
-    const sandboxUserDataPath = join(app.getPath("userData"), sandboxDir);
-    try {
-      rmSync(sandboxUserDataPath, { recursive: true, force: true });
-      mkdirSync(sandboxUserDataPath, { recursive: true });
-    } catch (error) {
-      // `force` forgives a MISSING path, not a BUSY one. On Windows a directory
-      // holding a file another process has open cannot be removed at all, and
-      // the `EPERM` that raises names neither the file nor the run holding it —
-      // so a second `shots` run against the first run's sandbox read as an
-      // inexplicable crash. It is a refusal, and it has to be one: a run whose
-      // sandbox still holds the previous run's key chain is not the
-      // deterministic run its frames claim to be. `scripts/run-lock.mjs` keeps
-      // two runs from reaching this at all; this is what happens if they do.
-      process.stderr.write(
-        `Nexus: the ${sandboxDir} sandbox could not be cleared — ${String(error)}\n` +
-          `  Another ${sandboxDir} run is probably using it. Refusing to start rather\n` +
-          `  than running against a sandbox that still holds its files.\n`,
-      );
-      app.exit(1);
-      return;
-    }
-    app.setPath("userData", sandboxUserDataPath);
-  }
 
   try {
     // ADR-044, and strictly before anything answers the renderer: bring the
