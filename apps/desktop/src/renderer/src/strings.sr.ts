@@ -164,6 +164,16 @@ export const sr = {
     loadErrorTitle: "Pokretanje nije uspelo",
     loadErrorDescription:
       "Veza sa lokalnom bazom podataka nije uspostavljena. Zatvori aplikaciju i pokreni je ponovo.",
+    /**
+     * One page could not be drawn — its file did not load, or it failed while
+     * rendering (`PageSlot` in `routes.tsx`). The shell around it still works,
+     * which is why the copy points at the sidebar first: another module is one
+     * click away, and a restart is the remedy only if this page is the one
+     * that is needed.
+     */
+    pageErrorTitle: "Ekran nije učitan",
+    pageErrorDescription:
+      "Ovaj deo aplikacije nije mogao da se prikaže. Izaberi drugi modul u bočnoj traci ili zatvori aplikaciju i pokreni je ponovo.",
   },
 
   /**

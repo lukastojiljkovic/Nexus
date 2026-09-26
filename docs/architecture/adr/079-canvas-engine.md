@@ -312,6 +312,13 @@ Renderer **218 files / 18.16 MB**; eager chunk **5.97 MB** (Excalidraw is
 largest lazy chunks `subset-shared` 1.84 MB, `cynefin` 1.30 MB, `cytoscape`
 0.96 MB.
 
+*2026-09-26:* the deferral this paragraph names is done. Every page became its
+own chunk, and Excalidraw now arrives with the canvas route rather than at
+startup — its JavaScript (1 679 165 bytes, in a chunk Rollup names after one of
+Excalidraw's own modules, `percentages-*`) and its stylesheet (144 661) both.
+The canvas frames are pixel-identical to the single-stylesheet build. See
+[log/2026-09.md](../../log/2026-09.md), „Every page is its own chunk".
+
 ### 11.8 Still open at slice a
 
 **Condition 8 — the eight bundled font licences — is NOT done.** The spike did

@@ -102,6 +102,10 @@ protecting deliberately:
    annoyance; on a phone over mobile data it is the difference between a product
    and a bounce. This is the one item that is fully desktop polish *and* fully
    web preparation, so it goes first and needs no cloud decision behind it.
+   *Done at route level on 2026-09-26:* the startup chunk went from 11 261 086
+   bytes to 2 330 636, each page loading on first open. Half of what remains is
+   the copy table, which is still one table — [STATUS.md](../../STATUS.md) §4.1
+   carries it, with the tools route and minification.
 2. **Prove the renderer builds without Electron.** Not ship it — *build* it, so
    the blockers become a list instead of an assumption. Nobody has ever checked.
 3. **Keep `@nexus/db` behind a narrow driver seam.** On the web the database is

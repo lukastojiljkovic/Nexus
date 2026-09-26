@@ -18,6 +18,7 @@ import { PrivNoteEditor } from "./PrivNoteEditor.js";
 import { TypedConfirmDialog } from "./TypedConfirmDialog.js";
 import { strings } from "./strings.js";
 import { moduleName } from "./moduleName.js";
+import { PRIV_LOCKED_EVENT } from "./privEvents.js";
 
 /**
  * The „Privatno" section page (PRIV v1 / ADR-057 §5): one component, three
@@ -34,9 +35,6 @@ import { moduleName } from "./moduleName.js";
  * worst a race can produce is an error line and an immediate flip to the
  * lock screen.
  */
-
-/** The custom event `App` dispatches after running the `privLock` shortcut, so a mounted section flips to the lock screen without polling. */
-export const PRIV_LOCKED_EVENT = "nexus-priv-locked";
 
 /** How long the clipboard guard waits before its best-effort clear (PRIV-012) — stated in the notice copy. */
 const CLIPBOARD_CLEAR_MS = 30_000;

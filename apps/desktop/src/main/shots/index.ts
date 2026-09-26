@@ -2389,8 +2389,49 @@ async function waitFor(win: BrowserWindow, selector: string, timeoutMs = 8000): 
   return false;
 }
 
-/** Two animation frames plus a fixed tail — long enough for a CSS transition to finish. */
+/**
+ * What is on screen while the main pane is not yet the page that was asked for.
+ *
+ * Every page is its own chunk (`renderer/src/routes.tsx`), so a click on a
+ * sidebar row can land before the page does. `App` keeps the page being left on
+ * screen and marks the pane `aria-busy` until the new one is ready, and the
+ * skeleton stands in for a page when there is nothing to keep — the first page
+ * after unlock. A frame taken while either is present is a frame of the wrong
+ * page filed under the right name, and it would photograph as a perfectly
+ * ordinary page, which is what makes it expensive.
+ */
+const PAGE_PENDING = '.app__main[aria-busy="true"], .app__page-pending';
+
+/** How long a page may take to arrive before the sweep says so and moves on. */
+const PAGE_WAIT_MS = 8000;
+
+let pageWaitReported = false;
+
+/**
+ * The page that was asked for, then two animation frames plus a fixed tail —
+ * long enough for a CSS transition to finish.
+ *
+ * The page wait is here rather than in `openModule` because a navigation is not
+ * only a sidebar click: a scene's `prepare` can open the search page, and a
+ * dashboard card opens its own module. Every one of those is followed by a
+ * settle, so waiting here covers the ones nobody lists.
+ */
 async function settle(win: BrowserWindow): Promise<void> {
+  const deadline = Date.now() + PAGE_WAIT_MS;
+  const probe = `document.querySelector(${JSON.stringify(PAGE_PENDING)}) !== null`;
+  while ((await evalIn(win, probe)) === true) {
+    if (Date.now() >= deadline) {
+      if (!pageWaitReported) {
+        pageWaitReported = true;
+        process.stderr.write(
+          `shots: a page was still loading after ${PAGE_WAIT_MS} ms — frames taken ` +
+            `before it arrives show the page before it.\n`,
+        );
+      }
+      break;
+    }
+    await pause(40);
+  }
   await evalIn(
     win,
     `new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(true))))`,

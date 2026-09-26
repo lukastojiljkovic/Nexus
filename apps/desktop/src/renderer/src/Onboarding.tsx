@@ -5,10 +5,8 @@ import {
   TEMPOS,
   TRADE_ACTIVITIES,
   WEEK_SHAPES,
-  buildNoteUpdate,
   buildProfilePlan,
   keeps,
-  parseMarkdownNote,
   recognizeTrades,
   tempoOf,
   weekShapes,
@@ -1145,6 +1143,11 @@ function PrepareScreen({ stage, name }: { stage: PrepareStage; name: string }) {
  */
 async function writeWelcomeNote(profileId: string): Promise<void> {
   try {
+    // Loaded here, not imported at the top: this runs once per profile, and a
+    // static import would keep the note document model in the startup chunk
+    // for every session after it (`markdownNote.ts`). Inside the `try`, so a
+    // chunk that fails to load is the same best-effort miss as any other.
+    const { buildNoteUpdate, parseMarkdownNote } = await import("./markdownNote.js");
     const parsed = parseMarkdownNote(
       strings.onboarding.welcomeNote.body,
       strings.onboarding.welcomeNote.title,

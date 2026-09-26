@@ -12774,8 +12774,9 @@ async function runSmokeMultiAccountRehearsal(): Promise<void> {
  * runs. Proves, in order: (1) the window reaches `did-finish-load`; (2) no
  * download started and the renderer did not crash getting there; (3)
  * `performLock` closes the window — ADR-064's closed-on-every-lock rule — and
- * the account re-unlocks afterwards. Runs LAST, after the multi-account
- * rehearsal has settled which account (and passcode) is open.
+ * the account re-unlocks afterwards. Runs after the multi-account rehearsal
+ * has settled which account (and passcode) is open, and before the page walk,
+ * which reloads the renderer and so has to come last.
  */
 async function runSmokeDocPreviewRehearsal(): Promise<void> {
   const [profile] = listProfiles(requireDb());
@@ -12859,6 +12860,148 @@ async function runSmokeDocPreviewRehearsal(): Promise<void> {
   noteStore(profile.id).softDelete(note.id, new Date().toISOString());
 }
 
+/** What the page walk names a profile the questionnaire never named — the shell only exists for a named one. */
+const SMOKE_PROFILE_NAME = "Smoke";
+
+/** One page the walk opened, as the renderer reports it back. */
+interface SmokePageVisit {
+  readonly id: string;
+  /** The pane showed this page, not busy and not a skeleton, before the deadline. */
+  readonly shown: boolean;
+  /** The pane showed the page boundary's failure state instead (`PageSlot`). */
+  readonly failed: boolean;
+}
+
+/**
+ * Opens every page of the BUILT renderer, the way a person does: a click on its
+ * sidebar row.
+ *
+ * Every page is its own chunk (`renderer/src/routes.tsx`), and loading one is
+ * the thing no other check here can see. Vitest reads source; `pnpm dev` is
+ * served over http with no CSP of its own making; only the packaged page loads
+ * its chunks from `file://` under the production policy, and a chunk that
+ * cannot be fetched there is a page that opens in development and never in the
+ * installer. Before the split this walk would have proved one thing — the
+ * startup chunk loads, which `__nexusReady` already proves. Now it proves one
+ * per page, and that each page MOUNTS against a real database without the
+ * boundary catching anything, which nothing proved before.
+ *
+ * The rehearsals above leave the renderer on the questionnaire — the smoke
+ * account's profile was never named, and the shell does not exist for an
+ * unnamed one — and with two modules switched off by default. So this names the
+ * profile, switches every module on, reloads, and walks. It runs last because
+ * it changes all three; the smoke directory is thrown away when the run ends.
+ */
+async function runSmokePageWalk(win: BrowserWindow): Promise<void> {
+  const database = requireDb();
+  const profiles = listProfiles(database);
+  if (profiles.length === 0) throw new Error("expected a profile for the page walk");
+  for (const profile of profiles) {
+    if (profile.name.trim() === "") renameProfile(database, profile.id, SMOKE_PROFILE_NAME);
+    const flags = flagStore(profile.id);
+    for (const manifest of moduleRegistry.all()) await flags.set(manifest.id, true);
+  }
+
+  const loaded = new Promise<void>((resolve) => {
+    win.webContents.once("did-finish-load", () => resolve());
+  });
+  win.webContents.reload();
+  await loaded;
+
+  // Polled on timers rather than animation frames: this window is not
+  // `backgroundThrottling: false` the way the sweep's is, and a frame callback
+  // in a window Chromium thinks is hidden may never run.
+  const answer: unknown = await win.webContents.executeJavaScript(
+    `(async () => {
+       const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+       const until = async (test, ms) => {
+         const end = Date.now() + ms;
+         while (Date.now() < end) {
+           if (test()) return true;
+           await pause(25);
+         }
+         return test();
+       };
+       const ready = await until(
+         () => window.__nexusReady === true || window.__nexusError === true, 10000);
+       if (!ready || window.__nexusError === true) return "the renderer did not become ready";
+       if (!(await until(() => document.querySelector(".app__sidebar") !== null, 10000))) {
+         return "the shell did not render — the questionnaire is still in front of it";
+       }
+       const pane = document.querySelector(".app__main");
+       if (pane === null) return "the shell has no main pane";
+       const shown = (id) => pane.dataset.page === id &&
+         pane.getAttribute("aria-busy") !== "true" &&
+         pane.querySelector(".app__page-pending") === null;
+       // The first page after a reload has nothing to keep on screen, so it
+       // may show the skeleton; it has to be gone before counting starts.
+       const settled = await until(() => pane.getAttribute("aria-busy") !== "true" &&
+         pane.querySelector(".app__page-pending") === null, 15000);
+       if (!settled) return "the first page never arrived";
+       let skeletons = 0;
+       const observer = new MutationObserver((records) => {
+         for (const record of records) {
+           for (const node of record.addedNodes) {
+             if (node.nodeType === 1 && (node.matches(".app__page-pending") ||
+                 node.querySelector(".app__page-pending") !== null)) skeletons += 1;
+           }
+         }
+       });
+       observer.observe(pane, { childList: true, subtree: true });
+       const visits = [];
+       const open = async (id, row) => {
+         if (row === null) {
+           visits.push({ id, shown: false, failed: false });
+           return;
+         }
+         row.click();
+         const ok = await until(() => shown(id), 15000);
+         const failed = document.querySelector(".app__main .app__page-failed") !== null;
+         visits.push({ id, shown: ok, failed });
+       };
+       const ids = Array.from(document.querySelectorAll("[data-module-id]"),
+         (row) => row.getAttribute("data-module-id"));
+       for (const id of ids) {
+         await open(id, document.querySelector('[data-module-id="' + id + '"]'));
+       }
+       // The search page has no module row; it is the first row of the foot.
+       await open("search", document.querySelector(".app__sidebar-foot .nx-nav-item"));
+       observer.disconnect();
+       return { visits, skeletons };
+     })()`,
+  );
+  if (typeof answer === "string") throw new Error(`page walk: ${answer}`);
+  const { visits, skeletons } = answer as {
+    readonly visits: readonly SmokePageVisit[];
+    readonly skeletons: number;
+  };
+
+  const visited = new Set(visits.map((visit) => visit.id));
+  const unreached = [...moduleRegistry.all().map((manifest) => manifest.id), "search"].filter(
+    (id) => !visited.has(id),
+  );
+  if (unreached.length > 0) {
+    throw new Error(`page walk: no sidebar row reached ${unreached.join(", ")}`);
+  }
+  const broken = visits.filter((visit) => !visit.shown || visit.failed);
+  if (broken.length > 0) {
+    throw new Error(
+      `page walk: ${broken
+        .map((visit) => `${visit.id} ${visit.failed ? "failed to draw" : "never arrived"}`)
+        .join("; ")}`,
+    );
+  }
+  // What `App`'s deferred page id is FOR: a navigation keeps the page being left
+  // on screen until the next one has arrived. Every page after the first was
+  // opened cold, so each one was a chance for the pane to blank.
+  if (skeletons > 0) {
+    throw new Error(
+      `page walk: the pane blanked to the skeleton ${String(skeletons)} time(s) while ` +
+        `navigating — the page being left is not held on screen`,
+    );
+  }
+}
+
 async function runSmoke(win: BrowserWindow): Promise<void> {
   const profiles = listProfiles(requireDb());
   if (profiles.length < 1) {
@@ -12914,6 +13057,7 @@ async function runSmoke(win: BrowserWindow): Promise<void> {
   await runSmokeSearchRehearsal();
   await runSmokeMultiAccountRehearsal();
   await runSmokeDocPreviewRehearsal();
+  await runSmokePageWalk(win);
 }
 
 // --- `--shots` and `--demo` --------------------------------------------------

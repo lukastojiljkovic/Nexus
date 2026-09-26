@@ -1,6 +1,6 @@
 # The defect-class ledger
 
-**One hundred and forty-two recurring failure shapes, each recorded the first
+**One hundred and forty-three recurring failure shapes, each recorded the first
 time it was recognised.** Opened 2026-08-07 on the founder's rule that *a reported bug is a
 sample and never an incident* — so the entry here is never the bug, it is the
 **rule that was wrong**, written so the next instance is something we spot
@@ -15,7 +15,7 @@ rather than something we discover.
 >
 > **How many of them are executable is not the gate count, and the arithmetic is
 > worth stating because it does not match — and is not meant to.** There are
-> **twenty-six** `check:` scripts and **one hundred and forty-two** classes
+> **twenty-six** `check:` scripts and **one hundred and forty-three** classes
 > below, and neither number is the other's inverse. `check:contrast` answers no
 > class at all, because it came from a design rule rather than from an observed
 > failure; `check:controls` answers TWO, [[DC-98]]'s native control that skips
@@ -31,10 +31,12 @@ rather than something we discover.
 > directory of two files, so it is a test inside that directory's own suite
 > rather than a script plus a CI step to keep in step with it; [[DC-119]]'s
 > oracle is a FORMATTER the same module already exports, so the test asks it
-> instead of restating what it answers; and [[DC-135]]'s is a pin in
+> instead of restating what it answers; [[DC-135]]'s is a pin in
 > `scripts/run-lock.test.mjs`, because what it guards is that a harness verb
 > cannot be ADDED without a lock, which is a statement about `package.json` and
-> not about any source file. A
+> not about any source file; and [[DC-143]]'s is a walk of one app's import graph
+> in `routes.test.ts`, beside the lazy table it protects, because the rule is
+> about a single entry point and not about the tree. A
 > class that can be made executable should be: a rule nobody can forget beats a
 > rule everybody has read — and „executable“ is the requirement, „one more
 > `check:` script“ only the usual way of meeting it.
@@ -5451,6 +5453,44 @@ switch's `default` calls it.
 [[DC-141]] (the duplicate union that hid the same growth), [[DC-36]] (a failure
 whose shape is silence).
 
+**DC-143 — a lazy boundary that one static import defeats, and nothing fails
+when it does (2026-09-26).** Splitting the renderer by page made every page an
+`import()` in `routes.tsx`. Two static imports would have kept the work from
+doing anything, and neither would have failed a build, a test or a screen.
+`App` and `NotesPage` imported `PRIV_LOCKED_EVENT` — one string constant — from
+`PrivPage.tsx`, and a value import of a module is an import of all of it, so the
+private-notes page would have ridden along with whichever chunk the importer
+landed in. And `Onboarding` imported two functions from `@nexus/core` that it
+calls once per profile, ever, which kept Yjs and the markdown importer — about
+270 kB — in the startup chunk after every page had left it. Vite warns about
+the first shape, a module both imported and `import()`ed, in a build log nobody
+is made to read. About the second it says nothing at all, because nothing is
+imported both ways: it is a dependency the startup path reaches for a reason no
+one would guess from the name of the file doing it.
+
+*Root cause, as the rule that was wrong:* „this module is loaded lazily" was
+read as a property of the `import()` that names it. It is a property of the
+whole static graph from the entry — a module is lazy only while nothing on the
+startup path imports it by value, and a constant is an import.
+
+*Fix:* the constant lives in `privEvents.ts`; the welcome note reaches its two
+functions through `import("./markdownNote.js")`, a module of the app's own,
+because `@nexus/core` is already imported statically and a dynamic import of it
+moves nothing. `routes.test.ts` is the gate for the first shape and the named
+half of the second: it walks the static value-import graph from `main.tsx` in
+source (`import type` is not an edge) and fails if that graph reaches any module
+the renderer `import()`s, if any `…Page.tsx` file is not loaded lazily — derived
+from the directory, not listed — or if the startup path imports Excalidraw,
+KaTeX, TipTap, ProseMirror or Yjs directly. What it cannot see is a package
+reached THROUGH `@nexus/core`'s barrel, which is exactly how Yjs arrived; that
+one was found by attributing the built chunk's bytes through its sourcemap, and
+that measurement is the instrument for the unnamed half.
+
+*Related:* the type-only `LicenceEntry` import in `SettingsPage.tsx`, which
+stated this rule in a comment the day the licence notices became a chunk — a
+comment and not a gate, so it covered one file; [[DC-36]] (a failure whose
+shape is silence).
+
 **Still open in C, and the only part of it that is:** item 14 (Tasks' capture
 form — its four bare selects are fixed, see DC-05), item 15 (Focus's two side-by-side primaries,
 the calendar's byte-identical stacked switchers, Files' two contradictory
@@ -5493,7 +5533,10 @@ direction, and none of it should wait for one.
      resolve from their own `.woff2` metadata, and **Liberation Sans is dropped**
      because its licence cannot be established at all. 320 packages get their
      notices too. This was the last release blocker ADR-079 left open.
-  2. **Excalidraw sits in the eager chunk** — +1.67 MB at app start, on a page
+  2. ~~**Excalidraw sits in the eager chunk**~~ — **closed 2026-09-26**: every
+     page is its own chunk and Excalidraw arrives with the canvas route; see
+     [log/2026-09.md](log/2026-09.md), „Every page is its own chunk". The
+     original note, as written: +1.67 MB at app start, on a page
      most users open rarely. `React.lazy` would defer it; the cost is a loading
      state on a route that currently has none, so it is a deliberate follow-up
      rather than an oversight. The renderer's eager chunk is **6,080,364 bytes

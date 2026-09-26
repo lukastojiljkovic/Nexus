@@ -92,8 +92,8 @@ feature twice.
 - **Electron 44.** 2026-09-06, six weeks before Electron 42 left support.
 - **Installers 1.2.0 (2026-08-31) and 1.3.0 (2026-09-23)** — built, unsigned,
   untagged.
-- **The first desktop loose end.** 2026-09-26: every package declares its side
-  effects, and a test keeps each declaration true.
+- **The first desktop loose ends.** 2026-09-26: every package declares its side
+  effects, every page is its own chunk, and Excalidraw left the startup path.
 
 ---
 

@@ -26,7 +26,7 @@ import { NoteEditor } from "./NoteEditor.js";
 import { NOTE_ORGANIZER_PANE_ID, NoteOrganizer, type FolderSelection } from "./NoteOrganizer.js";
 import { NoteRhythm, localDayOf } from "./NoteRhythm.js";
 import { persistOverviewOpen, readStoredOverviewOpen } from "./overviewPrefs.js";
-import { PRIV_LOCKED_EVENT } from "./PrivPage.js";
+import { PRIV_LOCKED_EVENT } from "./privEvents.js";
 import { TypedConfirmDialog } from "./TypedConfirmDialog.js";
 import { localTodayKey, shiftDayKey } from "./examDates.js";
 import { formatClockTime } from "./timeFormat.js";
