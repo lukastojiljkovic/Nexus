@@ -14,15 +14,25 @@ import { PRO_SURFACE_FILES } from "./proToolSurfaces.js";
  * registration whose file has no surface would be a row that opens onto a
  * thrown error the first time anybody clicks it.
  */
+/**
+ * One test per file, with a budget of its own. Loading a surface file is a COLD
+ * transform of a toolkit's whole source, and all of them in one test took 3.5 s
+ * alone and over the default 5 s inside the full parallel suite — a timeout
+ * that says nothing about the files. Split, a slow file is a slow file by name
+ * (the first pays for the imports they share), and the budget is stated rather
+ * than inherited.
+ */
+const LOAD_BUDGET_MS = 20_000;
+
 describe("the professional surface files", () => {
-  it("each export exactly the tools their registrations say they hold", async () => {
-    for (const file of PRO_SURFACE_FILES) {
+  it.each(PRO_SURFACE_FILES.map((file) => [file.file, file] as const))(
+    "%s exports exactly the tools its registrations say it holds",
+    async (_name, file) => {
       const surfaces = await file.load();
-      expect(Object.keys(surfaces).sort(), file.file).toEqual(
-        file.tools.map((tool) => tool.id).sort(),
-      );
-    }
-  });
+      expect(Object.keys(surfaces).sort()).toEqual(file.tools.map((tool) => tool.id).sort());
+    },
+    LOAD_BUDGET_MS,
+  );
 
   it("cover every professional registration once, and nothing else", () => {
     const filed = PRO_SURFACE_FILES.flatMap((file) => file.tools.map((tool) => tool.id));
