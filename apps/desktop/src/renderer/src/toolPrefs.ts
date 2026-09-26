@@ -65,8 +65,7 @@ export function clearStoredToolPreferences(): void {
  * The tools this device has opened, newest first.
  *
  * **Why the drawer needs one at all.** „Alatke" has eleven tools and „Stručne
- * alatke" has two hundred and seventy-four. At eleven a rail is a menu; at
- * two hundred and seventy-four it is an index, and the four or five tools a
+ * alatke" has hundreds. At eleven a rail is a menu; at hundreds it is an index, and the four or five tools a
  * particular electrician actually uses are somewhere inside it every single
  * time. Nothing else in the drawer can know which those are, because the answer
  * is not in the catalogue — it is in what this person did last week.

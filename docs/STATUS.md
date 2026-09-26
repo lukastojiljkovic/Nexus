@@ -91,10 +91,11 @@ blocking; both are §5 items.
   through a frozen, one-method-per-channel, per-field-validated IPC bridge.
 - **A renderer loaded by page** (2026-09-26) — startup parses the shell and
   nothing else; each of the sixteen pages is its own chunk, loaded the first
-  time it is opened (`routes.tsx`), and `routes.test.ts` fails if anything the
-  shell imports reaches one statically. `smoke` opens every page from the built
-  renderer, under the production CSP, and fails if one does not arrive or does
-  not draw. Every package declares `sideEffects`, and
+  time it is opened (`routes.tsx`), and so is each professional toolkit, the
+  first time one of its tools is (`proToolSurfaces.tsx`). `routes.test.ts`
+  fails if anything the shell imports reaches a page statically. `smoke` opens
+  every page and every tool from the built renderer, under the production CSP,
+  and fails if one does not arrive or does not draw. Every package declares `sideEffects`, and
   `scripts/package-side-effects.test.mjs` keeps each declaration true.
 - **Design tokens** — a three-tier Dan/Noć pipeline to CSS variables; every
   colour, space, radius and type value is a `--nx-*` token, with a gate that
@@ -217,7 +218,7 @@ onboarding — which is a flow rather than a module and so carries no manifest.
 | **Fitness** (FIT) | Complete — a 426-entry public-domain food catalogue with per-number provenance, meal logging, a 230-exercise Serbian catalogue, sessions and routines, personal records and 1RM trend, body measurements with measured energy expenditure. |
 | **Focus** (FOCUS) | Built — one timer for the whole app; a study session and a Pomodoro phase are the same row. |
 | **Tools** (UTIL) | Built — the everyday drawer of converters and calculators. Eleven tools, so it opens ON one: the tool this device used last, or the first in the rail. |
-| **Professional tools** (PRO) | Built — 18 toolkits, **274 tools**, 1 991 hand-derived assertions. `riskClass` is a required contract field that draws the tool's notice, the line appended to every copied result, the Settings long form, and whether a surface may render a verdict at all. Its resting surface is the drawer's own index — the toolkits this profile chose, who each is for, and what it gave them — over „Nedavno". |
+| **Professional tools** (PRO) | Built — 18 toolkits, **322 tools** (counted 2026-09-26: 274 across the seventeen professions, 48 in the developer toolkit), 1 991 hand-derived assertions. Each toolkit's surfaces are fetched the first time one of its tools is opened. `riskClass` is a required contract field that draws the tool's notice, the line appended to every copied result, the Settings long form, and whether a surface may render a verdict at all. Its resting surface is the drawer's own index — the toolkits this profile chose, who each is for, and what it gave them — over „Nedavno". |
 | **Canvas** (CANV) | Whole — Excalidraw driven through its imperative API behind our own Serbian toolbar, with notes, tasks and events as live cards that arrows bind to. |
 | **Electronics** (ELEC) | **All six slices complete** ([ADR-085](architecture/adr/085-electronics-module.md)) — a 153-component catalogue, a pan/zoom bench with rotation and snapping, two-click wiring in the trade's nine jumper colours, a panel that reports the *electrical* faults too (thirteen rules over a derived net model, from a 5 V rail on a 3.3 V part to two I²C devices strapped to the same address), and „Kod": the code the wiring implies — an Arduino sketch for a microcontroller, a ROS 2 `ament_python` package for a board that runs Linux — previewed in the app and written out through the native dialog the artefact calls for (a save dialog for the `.ino`, a directory picker for the package, and main decides which from the stored circuit). And „Mašina": two parametric chassis and nine measured numbers turn the mounted sensors into a URDF that ships inside the ROS 2 package, listing what it has no honest geometry for rather than guessing at it (ADR-085 §8, answered 2026-09-01). And „Klupa" (E5): the same derivation running on a deterministic clock — one channel per board pin that carries a signal, with its direction, its unit, its ROS topic and a waveform the *user* declares, plus the one warning a static rule cannot give (a value above the board’s logic level at THIS tick). And **E6, the external runner**: the module can hand the generated workspace to a real toolchain — `colcon build`, natively, through WSL2 or in a Docker container pinned by digest — with the command line written down in one table in source, off until the user consents once, one run at a time, and killed on quit. All six slices are complete. |
 | **Settings** (SET) | Built — themes, accent, module switches, per-module preferences, remappable shortcuts, notification appetite and quiet hours, profiles, scheduled encrypted backups, third-party notices. |
@@ -598,13 +599,7 @@ suggestion, cheapest and highest-leverage first.
    means per-surface subtables that join the table when their page loads, and
    that reaches `check:strings`, `check:copy` and the locale machinery. A
    design, not an edit.
-3. **„Alatke" and „Profesionalno" are one 3.2 MB route.** Both drawers are
-   `ToolsPage`, which imports every pack's surfaces and the developer drawer
-   statically, so opening the everyday utilities loads every profession's
-   tools (3 239 250 bytes). A chunk per drawer, then per pack, is the next
-   split, and it has the same trap `routes.tsx` documents: one value import
-   from the shared host puts it all back.
-4. **In a full screenshot sweep, „Tabla" draws nothing after the first size.**
+3. **In a full screenshot sweep, „Tabla" draws nothing after the first size.**
    Found 2026-09-26 by comparing two full sweeps in a Linux container: the demo
    board „Arhitektura sistema" is drawn in both `min` frames and is an empty
    canvas in every `default` and `wide` frame — on the 1.3.0 code and on the
@@ -614,16 +609,16 @@ suggestion, cheapest and highest-leverage first.
    harness or the app — and if it is an autosave writing an empty scene over a
    stored board, it is data loss, which is why it is at the head of this list's
    defects rather than filed with the harness.
-5. **The sizing contract.** DC-06 closed one pane at one breakpoint; what is
+4. **The sizing contract.** DC-06 closed one pane at one breakpoint; what is
    missing is the rule that would have prevented all of them — what a pane's
    floor is, and what happens below it. This is also the desktop half of the
    responsive work the web app will need.
-6. **A gate for Class A: a claim about the code that is right where it is
+5. **A gate for Class A: a claim about the code that is right where it is
    written and stale where it is repeated.** Five instances were found on
    2026-09-22 and fixed by hand, four more the same day. Nothing in the tree can
    check a sentence, and a figure has no type, no import and no call site. The
    owed gate is a rule over the specific shapes that have now shipped twice.
-7. **A gate for Class C: a contract field no screen can reach.** The worked
+6. **A gate for Class C: a contract field no screen can reach.** The worked
    example is `NewDocumentFields.reminderOffsets` and
    `DocumentFieldChanges.reminderOffsets` — declared in `shared/ipc.ts`,
    accepted by main, validated by the store, asserted by
@@ -632,29 +627,29 @@ suggestion, cheapest and highest-leverage first.
    already asks this question inside the professional drawer; the owed gate is
    the generalisation: every exported IPC interface field must have a renderer
    call site that sets it.
-8. **`searchIndexers` is declared and nothing fills it.**
+7. **`searchIndexers` is declared and nothing fills it.**
    `ModuleManifest.searchIndexers` exists in `@nexus/core`, and no module
    manifest populates it — circuits reach search through migration 070 by
    another route. So the slot is dead rather than pending. Either a module uses
    it or the field is removed.
-9. **The duplicated Serbian numeral lexicon.** `pravo.ts` and
+8. **The duplicated Serbian numeral lexicon.** `pravo.ts` and
    `racunovodstvo.ts` each embed their own numeral lexicon (both citing
    *Pravopis srpskoga jezika*, 2010), their own `stripSeparators`, and their
    own digit-at-a-time ISO 7064 MOD 97-10 under names one character apart. This
    is a consolidation rather than a defect, and it is not urgent — it is what
    declining to retire one of each colliding tool pair costs.
-10. **The shell's own settings cards are in no screenshot.** Twelve per-module
-    settings scenes were added and are derived from the registry, which is why
-    they cannot go stale. The shell's cards — Profili, Sigurnost, Izgled,
-    Obaveštenja, Licence and the rest — have their ids written into
-    `SettingsPage.tsx` in the renderer and appear in no list the main process
-    can read, so the same derivation cannot reach them. Recorded rather than
-    papered over with a second hand-kept list.
-11. **„Dalje" sits below the fold on onboarding step 3 at 900 × 600.** Measured
+9. **The shell's own settings cards are in no screenshot.** Twelve per-module
+   settings scenes were added and are derived from the registry, which is why
+   they cannot go stale. The shell's cards — Profili, Sigurnost, Izgled,
+   Obaveštenja, Licence and the rest — have their ids written into
+   `SettingsPage.tsx` in the renderer and appear in no list the main process
+   can read, so the same derivation cannot reach them. Recorded rather than
+   papered over with a second hand-kept list.
+10. **„Dalje" sits below the fold on onboarding step 3 at 900 × 600.** Measured
     and reachable by scrolling, deliberately left: the card is the scroller, step
     3 is the only step whose actions do not fit, and a sticky action bar would
     change the first screen a user ever sees.
-12. **Mixed line endings within files**, despite `core.autocrlf=true`. Every
+11. **Mixed line endings within files**, despite `core.autocrlf=true`. Every
     scripted edit has to be EOL-aware; it has already cost two redoes. A standing
     hazard rather than a defect.
 
@@ -762,7 +757,7 @@ implemented until the founder says otherwise.
 | SEC-VER-01: threat-model passes for the modules | Binding on paper, one instance, unenforced. Needs a decision: queue item or aspiration. |
 | The secret scanner and our own naming | Open. Recommendation: keep naming the literals, revisit if it fires a second time. |
 | The screenshot sweep cannot reach the sync forms | Open. Recommendation: (a), a placeholder project, gated on the harness refusing to run in a packaged build. |
-| Two packs may still have built one computation under two names | Recorded, not urgent. Sweeping all 274 tools is larger than the four fixes already done. |
+| Two packs may still have built one computation under two names | Recorded, not urgent. Sweeping the seventeen professions' 274 tools is larger than the four fixes already done. |
 | The medicine toolkit | Recommendation (b) is implemented: survivors folded into `trening` as wellness. Confirm the refusal list stands. |
 | Electronics: URDF geometry | **Answered** 2026-09-01 and built (parametric chassis, ADR-085 §8). |
 | Electronics: what comes next after E5 | **Answered** 2026-08-31 (E3), then superseded by the desktop-first pause. |

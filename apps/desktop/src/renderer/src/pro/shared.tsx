@@ -219,7 +219,7 @@ export function ToolTextArea({
  *
  * **This used to end `onChange(event.target.value as T)`, and that cast was the
  * whole class.** A `DOMString` is not a `T`; the assertion said it was, once, in
- * the file every one of the 274 surfaces imports. An audit of the toolkits found
+ * the file every professional surface imports. An audit of the toolkits found
  * 129 places where an unrecognised selector value does not fail but silently
  * picks a branch — copper instead of aluminium, compound instead of simple
  * interest, a cantilever instead of a simply supported beam — because a

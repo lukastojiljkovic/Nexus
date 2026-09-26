@@ -2390,17 +2390,22 @@ async function waitFor(win: BrowserWindow, selector: string, timeoutMs = 8000): 
 }
 
 /**
- * What is on screen while the main pane is not yet the page that was asked for.
+ * What is on screen while the main pane is not yet what was asked for.
  *
  * Every page is its own chunk (`renderer/src/routes.tsx`), so a click on a
  * sidebar row can land before the page does. `App` keeps the page being left on
  * screen and marks the pane `aria-busy` until the new one is ready, and the
  * skeleton stands in for a page when there is nothing to keep — the first page
- * after unlock. A frame taken while either is present is a frame of the wrong
- * page filed under the right name, and it would photograph as a perfectly
- * ordinary page, which is what makes it expensive.
+ * after unlock. One level down, every professional toolkit is a file fetched the
+ * first time one of its tools opens, and the tool surface does the same with its
+ * own `aria-busy` — which is why this matches a busy region ANYWHERE in the pane
+ * rather than naming the one it knows about. A frame taken while any of these is
+ * present is a frame of the wrong page or the wrong tool filed under the right
+ * name, and it would photograph as a perfectly ordinary one, which is what makes
+ * it expensive.
  */
-const PAGE_PENDING = '.app__main[aria-busy="true"], .app__page-pending';
+const PAGE_PENDING =
+  '.app__main[aria-busy="true"], .app__main [aria-busy="true"], .app__page-pending';
 
 /** How long a page may take to arrive before the sweep says so and moves on. */
 const PAGE_WAIT_MS = 8000;

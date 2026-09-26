@@ -93,7 +93,8 @@ feature twice.
 - **Installers 1.2.0 (2026-08-31) and 1.3.0 (2026-09-23)** — built, unsigned,
   untagged.
 - **The first desktop loose ends.** 2026-09-26: every package declares its side
-  effects, every page is its own chunk, and Excalidraw left the startup path.
+  effects, every page is its own chunk, Excalidraw left the startup path, and
+  each professional toolkit is fetched when one of its tools is opened.
 
 ---
 

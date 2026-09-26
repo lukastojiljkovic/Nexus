@@ -276,7 +276,7 @@ describes the intended product in full.
   property of the contract and not copy somebody has to remember. Constants have
   three tiers: physical embeds, published embeds with its source on screen, and
   **regulated is never embedded and never defaulted** — the user types the rate
-  or the deadline that applies to their case. 274 tools; see PRD 30 and
+  or the deadline that applies to their case. Several hundred tools; see PRD 30 and
   [STATUS.md](STATUS.md) §2.
 - **Password Vault (VLT) — Later.** *Plain:* store passwords securely. *Technical:*
   built on the same zero-knowledge crypto as private notes; deferred until later.

@@ -64,6 +64,7 @@ import {
   MUSCLE_GROUPS,
   normalizeChordKey,
   openPrivBlob,
+  packFlagKey,
   PART_ROTATIONS,
   parseCanvasScene,
   parseExerciseRef,
@@ -81,6 +82,7 @@ import {
   sniffMime,
   toFtsMatchExpression,
   TOOL_PACKS,
+  toolDrawer,
   validateArchivePassphrase,
   validateHabitSchedule,
   validateRecurrenceRule,
@@ -12863,6 +12865,14 @@ async function runSmokeDocPreviewRehearsal(): Promise<void> {
 /** What the page walk names a profile the questionnaire never named — the shell only exists for a named one. */
 const SMOKE_PROFILE_NAME = "Smoke";
 
+/** One tool the walk opened, by the name its rail row shows. */
+interface SmokeToolVisit {
+  readonly drawer: "tools" | "pro";
+  readonly name: string;
+  readonly shown: boolean;
+  readonly failed: boolean;
+}
+
 /** One page the walk opened, as the renderer reports it back. */
 interface SmokePageVisit {
   readonly id: string;
@@ -12900,6 +12910,8 @@ async function runSmokePageWalk(win: BrowserWindow): Promise<void> {
     if (profile.name.trim() === "") renameProfile(database, profile.id, SMOKE_PROFILE_NAME);
     const flags = flagStore(profile.id);
     for (const manifest of moduleRegistry.all()) await flags.set(manifest.id, true);
+    // Every toolkit too, so the professional drawer lists every tool it has.
+    for (const pack of TOOL_PACKS) await flags.set(packFlagKey(pack), true);
   }
 
   const loaded = new Promise<void>((resolve) => {
@@ -12967,13 +12979,41 @@ async function runSmokePageWalk(win: BrowserWindow): Promise<void> {
        // The search page has no module row; it is the first row of the foot.
        await open("search", document.querySelector(".app__sidebar-foot .nx-nav-item"));
        observer.disconnect();
-       return { visits, skeletons };
+
+       // Every tool in both drawers, one click each. A professional toolkit's
+       // surfaces are a file fetched the first time one of its tools opens
+       // (\`proToolSurfaces.tsx\`), so this is the only place each of those
+       // files is loaded from \`file://\` under the production policy.
+       const tools = [];
+       for (const drawer of ["tools", "pro"]) {
+         await open(drawer, document.querySelector('[data-module-id="' + drawer + '"]'));
+         if (!shown(drawer)) continue;
+         const count = document.querySelectorAll(".tool__item").length;
+         for (let index = 0; index < count; index += 1) {
+           const item = document.querySelectorAll(".tool__item")[index];
+           if (item === undefined) break;
+           const name = item.textContent.trim();
+           item.click();
+           const surface = document.querySelector(".tool__surface");
+           const ok = await until(() => {
+             const title = document.querySelector(".tool__surface-title");
+             return surface !== null && surface.getAttribute("aria-busy") !== "true" &&
+               surface.querySelector('[aria-busy="true"]') === null &&
+               title !== null && title.textContent.trim() === name;
+           }, 15000);
+           const failed = document.querySelector(".app__main .app__page-failed") !== null;
+           tools.push({ drawer, name, shown: ok, failed });
+           if (failed) break;
+         }
+       }
+       return { visits, skeletons, tools };
      })()`,
   );
   if (typeof answer === "string") throw new Error(`page walk: ${answer}`);
-  const { visits, skeletons } = answer as {
+  const { visits, skeletons, tools } = answer as {
     readonly visits: readonly SmokePageVisit[];
     readonly skeletons: number;
+    readonly tools: readonly SmokeToolVisit[];
   };
 
   const visited = new Set(visits.map((visit) => visit.id));
@@ -12999,6 +13039,30 @@ async function runSmokePageWalk(win: BrowserWindow): Promise<void> {
       `page walk: the pane blanked to the skeleton ${String(skeletons)} time(s) while ` +
         `navigating — the page being left is not held on screen`,
     );
+  }
+
+  // Every registered tool was opened and drew, in the drawer it belongs to.
+  const declared = moduleRegistry.all().flatMap((manifest) => manifest.tools ?? []);
+  for (const [drawer, kind] of [
+    ["tools", "utilities"],
+    ["pro", "professional"],
+  ] as const) {
+    const expected = declared.filter((tool) => toolDrawer(tool) === kind).length;
+    const opened = tools.filter((tool) => tool.drawer === drawer);
+    const bad = opened.filter((tool) => !tool.shown || tool.failed);
+    if (bad.length > 0) {
+      throw new Error(
+        `page walk: in ${drawer}, ${bad
+          .slice(0, 10)
+          .map((tool) => `„${tool.name}“ ${tool.failed ? "failed to draw" : "never arrived"}`)
+          .join("; ")}`,
+      );
+    }
+    if (opened.length !== expected) {
+      throw new Error(
+        `page walk: ${drawer} listed ${String(opened.length)} tools, and ${String(expected)} are registered`,
+      );
+    }
   }
 }
 
