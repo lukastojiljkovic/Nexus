@@ -1,6 +1,6 @@
 # The defect-class ledger
 
-**One hundred and forty-five recurring failure shapes, each recorded the first
+**One hundred and forty-seven recurring failure shapes, each recorded the first
 time it was recognised.** Opened 2026-08-07 on the founder's rule that *a reported bug is a
 sample and never an incident* — so the entry here is never the bug, it is the
 **rule that was wrong**, written so the next instance is something we spot
@@ -15,7 +15,7 @@ rather than something we discover.
 >
 > **How many of them are executable is not the gate count, and the arithmetic is
 > worth stating because it does not match — and is not meant to.** There are
-> **twenty-six** `check:` scripts and **one hundred and forty-five** classes
+> **twenty-six** `check:` scripts and **one hundred and forty-seven** classes
 > below, and neither number is the other's inverse. `check:contrast` answers no
 > class at all, because it came from a design rule rather than from an observed
 > failure; `check:controls` answers TWO, [[DC-98]]'s native control that skips
@@ -5598,6 +5598,78 @@ tests beside the three homes.
 *Related:* [[DC-02]] (a rule written twice), [[DC-109]] (a hand-kept list beside
 a generated one — the search map was one, beside a slot meant to generate it),
 [[DC-141]] (a copy under a comment vouching for it).
+
+**DC-146 — a path redirected after the thing that reads it has already read it
+(2026-09-26).** `--smoke` and `--shots` moved `userData` into a disposable
+sandbox — inside `app.whenReady()`, a few lines after the handler had already
+touched `session.defaultSession`. Chromium settles a session's storage path when
+the session is created, and a later `setPath` does not move it. So the redirect
+worked for everything MAIN writes (accounts, key chains, databases, all in the
+sandbox) and did nothing for everything the RENDERER keeps: `localStorage`,
+session storage and the HTTP cache went into the real `userData` beside the
+sandbox. Every harness run wrote its active profile, its theme and its tool
+history into the localStorage of the app a person uses — the development build
+and the installed one share `%APPDATA%\Nexus` — and every sweep began from the
+previous run's leftovers, so two sweeps of one build landed „Alatke" on
+different tools and drew „Nedavno" in one and not the other.
+
+*The rule:* **a redirect is only as early as the first reader of what it
+redirects.** A setting that is read once — a Chromium switch, a scheme
+privilege, a storage path — has to be applied before its first read, and „it
+works" is not evidence when the half that moved is the half anyone checks.
+This file already knew the rule for switches and schemes (the resolver block
+and the scheme registration both say „module scope, before `ready`, or
+Electron ignores it"); the sandbox was the one reader nobody listed.
+
+*Why nothing noticed:* the sandbox's own contents were right. Smoke asserts
+about accounts, and the accounts were in the sandbox; the part that leaked
+was data no assertion read, in a directory no assertion looked at.
+
+*Fix:* the redirect runs at module scope, before `ready`, and sets
+`sessionData` as well as `userData`, so the two cannot come apart again; the
+sandbox also stops inheriting the real install's `cloud.json`. `smoke` now
+asserts that `session.defaultSession.storagePath` is inside the sandbox.
+Negative control, the old ordering restored — the handler touching the session
+before redirecting: `SMOKE FAIL: renderer storage is outside the harness
+sandbox`. Measured on disk: after a run the real directory holds the sandbox
+and nothing else.
+
+*Related:* [[DC-135]] (the same sandbox, owned by nobody), [[DC-57]] (a harness
+that reports on a state it never set up).
+
+**DC-147 — an order decided by a tie-break nobody chose (2026-09-26).** Stores
+list rows by a timestamp and then by `id`, and `uuidv7` put 74 random bits
+after its millisecond. For rows written in different milliseconds the id was
+the order they were written in; for rows written in the SAME millisecond it was
+a shuffle — and a batch writes a great deal in one millisecond. The demo
+profile seeds a circuit's parts and wires under one timestamp and a day's
+transactions under one date: the bench drew its parts in a new order on every
+seed, and „Fotokopirnica" and „Kineski restoran" swapped places in the ledger
+between two sweeps of one build. Nothing was wrong on any one screen. Every
+screen was right and no two runs agreed.
+
+*The rule:* **the last key of an ORDER BY is a decision, and a random one is a
+decision to shuffle.** An id that is only unique makes a tie-break that is only
+arbitrary. RFC 9562 §6.2 says a UUIDv7 generator SHOULD be monotonic when ids
+are created in batches, which is the case the ORDER BYs here were quietly
+relying on.
+
+*Fix:* `uuidv7` counts within a millisecond — a 12-bit sequence in `rand_a`
+(the RFC's method 1), a clock that steps back keeps counting on the last
+millisecond, the 4 097th id borrows the next one — and keeps 62 CSPRNG bits.
+`ids.test.ts` mints 5 000 ids in one frozen millisecond and requires them sorted
+in minting order; against the old generator that fails every time. The
+electronics demo test pins the order where it is SEEN, and fails three runs out
+of three against the old generator.
+
+*Blast radius:* every `ORDER BY …, id` in `packages/db` inherits the fix, which
+is the point of putting it in the generator. The v4 ids minted elsewhere
+(`crypto.randomUUID()` — canvas elements, flashcard keys, account and blob ids)
+were read for the same shape: none is the last key of a listing except the
+private notes' (`updated_at DESC, id DESC`), whose timestamps come from each
+note's own edits rather than from a batch.
+
+*Related:* [[DC-146]] (the other half of why two sweeps disagreed), [[DC-57]].
 
 **Still open in C, and the only part of it that is:** item 14 (Tasks' capture
 form — its four bare selects are fixed, see DC-05), item 15 (Focus's two side-by-side primaries,
