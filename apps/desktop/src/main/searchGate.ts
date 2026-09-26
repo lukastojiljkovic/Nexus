@@ -1,37 +1,29 @@
 import type { SearchKind } from "@nexus/core";
+import { createModuleRegistry } from "../shared/modules.js";
 
 /**
  * ADR-058 §5 (the recon's live inconsistency, fixed): global-search RESULTS
  * honour the per-profile enabled-module gate (SET-007) that the palette's
- * COMMANDS have always applied renderer-side. This map is the whole policy —
- * each indexed kind names the module that owns its page, which is also where
- * `App.tsx`'s `onSearchResult` would deep-link the row:
+ * COMMANDS have always applied renderer-side. Each indexed kind belongs to the
+ * module that owns its page — which is also where `App.tsx`'s `onSearchResult`
+ * deep-links the row — and a hit is shown only while that module is on.
  *
- *  - `document` is "calendar", not a module of its own: tracked documents live
- *    on the calendar page's Dokumenta view.
- *  - `attachment` is "notes", decided honestly rather than hedged: migration
- *    017's `search_source_attachment` projects NOTE attachments only (its
- *    `parent_id` is `note_id`, its profile comes through `notes`), and the
- *    shell opens an attachment hit via `openNote` — task and subject
- *    attachments are not indexed at all. If another parent kind ever joins the
- *    index, this entry must become per-row.
+ * **Which module owns a kind is the manifest's to say**, in its
+ * `searchIndexers` slot (`shared/modules.ts`, ADR-008). Until 2026-09-26 it was
+ * a hand-kept `Record<SearchKind, string>` here while that slot sat declared
+ * and empty in every manifest — the same fact with two homes, one of them
+ * dead. The reasons behind the two non-obvious owners (`document` →
+ * calendar, `attachment` → notes) moved with the declarations.
+ *
+ * One registry for the life of the process: the manifests are compiled in, so
+ * the answer cannot change while it runs.
  */
-export const SEARCH_KIND_MODULE: Readonly<Record<SearchKind, string>> = {
-  task: "tasks",
-  event: "calendar",
-  document: "calendar",
-  note: "notes",
-  subject: "study",
-  exam: "study",
-  deck: "study",
-  card: "study",
-  attachment: "notes",
-  // The tenth kind (migration 070) names ELEC, and ELEC is a module with a flag
-  // like any other — so a profile that has switched the workbench off stops
-  // seeing circuits in search automatically, which is the whole point of this
-  // map being the one place the policy lives.
-  circuit: "electronics",
-};
+const MODULES = createModuleRegistry();
+
+/** The module whose flag gates a kind's hits, or `undefined` if no module in this build owns it. */
+export function searchKindModule(kind: SearchKind): string | undefined {
+  return MODULES.searchKindOwner(kind);
+}
 
 /**
  * The one shared module gate over search hits — `search:page`, the palette's
@@ -39,11 +31,14 @@ export const SEARCH_KIND_MODULE: Readonly<Record<SearchKind, string>> = {
  * copy of the rule. Pure: the enabled set is the caller's (main resolves it
  * from the profile's flag store via `resolveEnabled`), so a business profile
  * with STUDY off stops surfacing subject/exam/deck/card rows everywhere at
- * once.
+ * once. A kind no module owns is shown by no enabled module, so it is dropped.
  */
 export function filterSearchHitsByModules<T extends { readonly kind: SearchKind }>(
   hits: readonly T[],
   enabledModuleIds: ReadonlySet<string>,
 ): T[] {
-  return hits.filter((hit) => enabledModuleIds.has(SEARCH_KIND_MODULE[hit.kind]));
+  return hits.filter((hit) => {
+    const owner = searchKindModule(hit.kind);
+    return owner !== undefined && enabledModuleIds.has(owner);
+  });
 }

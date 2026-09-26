@@ -5408,6 +5408,7 @@ const V0_MODULES: ModuleManifest[] = [
     defaultEnabled: true,
     widgets: TASKS_WIDGETS,
     settings: TASKS_SETTINGS,
+    searchIndexers: [{ kind: "task" }],
   },
   {
     id: "calendar",
@@ -5416,6 +5417,9 @@ const V0_MODULES: ModuleManifest[] = [
     defaultEnabled: true,
     widgets: CALENDAR_WIDGETS,
     settings: CALENDAR_SETTINGS,
+    // `document` is the calendar's, not a module of its own: tracked documents
+    // live on this page's „Dokumenta" view, which is where a hit opens.
+    searchIndexers: [{ kind: "event" }, { kind: "document" }],
   },
   // SET itself publishes no settings card: the page it renders IS the surface,
   // and a „Podešavanja" card inside Podešavanja would be a mirror facing a
@@ -5428,6 +5432,14 @@ const V0_MODULES: ModuleManifest[] = [
     defaultEnabled: true,
     widgets: NOTES_WIDGETS,
     settings: NOTES_SETTINGS,
+    // `attachment` is decided honestly rather than hedged: migration 017's
+    // `search_source_attachment` projects NOTE attachments only (its
+    // `parent_id` is `note_id`, its profile comes through `notes`), and the
+    // shell opens an attachment hit via `openNote` — task and subject
+    // attachments are not indexed at all. If another parent kind ever joins
+    // the index, ownership has to become per-row and this line stops being
+    // enough. It is not „Datoteke"'s, for the reason that module gives below.
+    searchIndexers: [{ kind: "note" }, { kind: "attachment" }],
   },
   // Private notes (ADR-057): OFF by default — first enabled from the Moduli
   // gallery, deliberately. It contributes NO widgets and NO searchIndexers:
@@ -5484,6 +5496,7 @@ const V0_MODULES: ModuleManifest[] = [
     defaultEnabled: true,
     widgets: STUDY_WIDGETS,
     settings: STUDY_SETTINGS,
+    searchIndexers: [{ kind: "subject" }, { kind: "exam" }, { kind: "deck" }, { kind: "card" }],
   },
   // Finansije (FIN slice b). ON by default, like every other built module and
   // unlike PRIV: PRIV is off because it is a sealed section with a credential
@@ -5685,26 +5698,23 @@ const V0_MODULES: ModuleManifest[] = [
   // that slot — the interchange is assembled in `@nexus/core` from
   // `ProfileData`, not from manifests.
   //
-  // `searchIndexers` is the one that is „not yet" rather than „never", and it
-  // is worth being precise about the difference. „Tabla" declines one because a
-  // hit inside a board could only say „somewhere on this board", which is not a
-  // result anybody can use. A CIRCUIT is not like that: its name is a phrase
-  // the user typed for the express purpose of telling this circuit from that
-  // one, and „Trepćuća dioda" in the palette opens exactly the right thing.
+  // `searchIndexers` IS filled, where „Tabla" declines one: a hit inside a
+  // board could only say „somewhere on this board", which is not a result
+  // anybody can use. A CIRCUIT is not like that: its name is a phrase the user
+  // typed for the express purpose of telling this circuit from that one, and
+  // „Trepćuća dioda" in the palette opens exactly the right thing.
   //
-  // That argument was carried out on 2026-09-22 — the kind, the migration and
-  // the backfill are all in (migration 070). The paragraph is left standing
-  // because the reason it gave for the delay is the useful half and it was
-  // right: „a new `SearchKind` is a migration and a backfill, not a
-  // declaration". The declaration is one line in `@nexus/core`; the other five
-  // places a kind has to be named are the index, and `packages/db/src/migrations/
-  // 070-circuit-search.ts` lists them.
+  // The kind waited for its index — a new `SearchKind` is a migration and a
+  // backfill, not a declaration — and both landed on 2026-09-22 (migration
+  // 070, whose header lists every place a kind is named). This line is what
+  // makes the kind ELEKTRONIKA's: its flag gates the hits, its page opens them.
   {
     id: "electronics",
     prefix: "ELEC",
     category: "Professional & utilities",
     defaultEnabled: true,
     widgets: ELEC_WIDGETS,
+    searchIndexers: [{ kind: "circuit" }],
   },
   // „Stručne alatke" (UTIL slice d) — the professional drawer itself, host to
   // every toolkit as its pack ships rather than a drawer of its own kind. Its

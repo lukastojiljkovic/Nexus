@@ -14,7 +14,7 @@ import {
   resolveEnabled,
 } from "@nexus/core";
 import type { CanvasRef } from "@nexus/core";
-import { Button, EmptyState, Icon, NavItem, StarField, type IconName } from "@nexus/ui";
+import { Button, EmptyState, Icon, NavItem, StarField } from "@nexus/ui";
 import type { ThemeName } from "@nexus/tokens";
 import { DEMO_PROFILE_NAME } from "../../shared/ipc.js";
 import type {
@@ -34,6 +34,7 @@ import { NotePopover } from "./notePopover.js";
 import { applyProfileAccent, defaultAccent, seedAccent } from "./accent.js";
 import { PINNED_GROUP_KEY, readPinnedModules, sidebarGroups } from "./navPrefs.js";
 import { pruneOnboardingDrafts } from "./onboardingDraft.js";
+import { moduleIconName } from "./moduleIcon.js";
 import { moduleName } from "./moduleName.js";
 import {
   persistActiveProfile,
@@ -188,35 +189,10 @@ function reportActiveProfile(profileId: string): void {
  */
 export { moduleName };
 
-/**
- * Which drawn icon a module wears in the rail. Deliberately a lookup and not a
- * field on the manifest: `@nexus/core` must not learn about a renderer's icon
- * set, and a module the set does not cover renders its name alone rather than
- * a placeholder box.
- */
-const MODULE_ICONS: Record<string, IconName> = {
-  dashboard: "dashboard",
-  tasks: "tasks",
-  calendar: "calendar",
-  settings: "settings",
-  notes: "notes",
-  priv: "priv",
-  files: "files",
-  study: "study",
-  finance: "finance",
-  habits: "habits",
-  fitness: "fitness",
-  tools: "tools",
-  pro: "pro",
-  focus: "focus",
-  canvas: "canvas",
-  electronics: "electronics",
-};
-
 /** The rail's icon for a module, or nothing at all if the set does not cover it. */
 function moduleIcon(id: string): ReactNode {
-  const name = MODULE_ICONS[id];
-  return name == null ? null : <Icon name={name} size={16} />;
+  const name = moduleIconName(id);
+  return name === undefined ? null : <Icon name={name} size={16} />;
 }
 
 export function App() {

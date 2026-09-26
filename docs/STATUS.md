@@ -634,29 +634,39 @@ suggestion, cheapest and highest-leverage first.
    already asks this question inside the professional drawer; the owed gate is
    the generalisation: every exported IPC interface field must have a renderer
    call site that sets it.
-6. **`searchIndexers` is declared and nothing fills it.**
-   `ModuleManifest.searchIndexers` exists in `@nexus/core`, and no module
-   manifest populates it — circuits reach search through migration 070 by
-   another route. So the slot is dead rather than pending. Either a module uses
-   it or the field is removed.
-7. **The duplicated Serbian numeral lexicon.** `pravo.ts` and
+6. **The sr-Latn date formatters are written out page by page.** 40
+   `new Intl.DateTimeFormat(…)` constructions in 27 files, measured 2026-09-26
+   while working [[DC-145]] — the long day label („petak, 18. septembar 2026.")
+   alone is spelled identically in the calendar, nutrition, habits and study
+   pages, and the two version-history lists share a timestamp formatter by
+   copy. [[DC-02]] already consolidated the clock formatter
+   (`formatClockTime`); the date labels are the same move at a larger size,
+   and one helper module with named formats is the shape it takes.
+7. **`ModuleManifest.imex` is declared and nothing fills it.** The archive
+   was built in `@nexus/core` from `ProfileData`, one interchange version for
+   the whole profile, not from per-module handlers — so the slot ADR-008 lists
+   is unreachable by anything in the product. What is open is whether the
+   plugin path still needs it (a third-party module's rows cannot ride
+   `ProfileData`), which is a decision about PLUG rather than a cleanup: either
+   the contract states what a plugin would implement, or it goes.
+8. **The duplicated Serbian numeral lexicon.** `pravo.ts` and
    `racunovodstvo.ts` each embed their own numeral lexicon (both citing
    *Pravopis srpskoga jezika*, 2010), their own `stripSeparators`, and their
    own digit-at-a-time ISO 7064 MOD 97-10 under names one character apart. This
    is a consolidation rather than a defect, and it is not urgent — it is what
    declining to retire one of each colliding tool pair costs.
-8. **The shell's own settings cards are in no screenshot.** Twelve per-module
+9. **The shell's own settings cards are in no screenshot.** Twelve per-module
    settings scenes were added and are derived from the registry, which is why
    they cannot go stale. The shell's cards — Profili, Sigurnost, Izgled,
    Obaveštenja, Licence and the rest — have their ids written into
    `SettingsPage.tsx` in the renderer and appear in no list the main process
    can read, so the same derivation cannot reach them. Recorded rather than
    papered over with a second hand-kept list.
-9. **„Dalje" sits below the fold on onboarding step 3 at 900 × 600.** Measured
-   and reachable by scrolling, deliberately left: the card is the scroller, step
-   3 is the only step whose actions do not fit, and a sticky action bar would
-   change the first screen a user ever sees.
-10. **Mixed line endings within files**, despite `core.autocrlf=true`. Every
+10. **„Dalje" sits below the fold on onboarding step 3 at 900 × 600.** Measured
+    and reachable by scrolling, deliberately left: the card is the scroller, step
+    3 is the only step whose actions do not fit, and a sticky action bar would
+    change the first screen a user ever sees.
+11. **Mixed line endings within files**, despite `core.autocrlf=true`. Every
     scripted edit has to be EOL-aware; it has already cost two redoes. A standing
     hazard rather than a defect.
 

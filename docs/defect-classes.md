@@ -1,6 +1,6 @@
 # The defect-class ledger
 
-**One hundred and forty-four recurring failure shapes, each recorded the first
+**One hundred and forty-five recurring failure shapes, each recorded the first
 time it was recognised.** Opened 2026-08-07 on the founder's rule that *a reported bug is a
 sample and never an incident* — so the entry here is never the bug, it is the
 **rule that was wrong**, written so the next instance is something we spot
@@ -15,7 +15,7 @@ rather than something we discover.
 >
 > **How many of them are executable is not the gate count, and the arithmetic is
 > worth stating because it does not match — and is not meant to.** There are
-> **twenty-six** `check:` scripts and **one hundred and forty-four** classes
+> **twenty-six** `check:` scripts and **one hundred and forty-five** classes
 > below, and neither number is the other's inverse. `check:contrast` answers no
 > class at all, because it came from a design rule rather than from an observed
 > failure; `check:controls` answers TWO, [[DC-98]]'s native control that skips
@@ -38,7 +38,9 @@ rather than something we discover.
 > in `routes.test.ts`, beside the lazy table it protects, because the rule is
 > about a single entry point and not about the tree; and [[DC-144]]'s needs a
 > BUILT renderer tearing a real editor down over a real database, so it is a
-> check inside `smoke`'s page walk. A
+> check inside `smoke`'s page walk; and [[DC-145]]'s is three tests, one beside
+> each fact it gave a single home, because what can be executed is „that home is
+> complete" and not „there is no second one". A
 > class that can be made executable should be: a rule nobody can forget beats a
 > rule everybody has read — and „executable“ is the requirement, „one more
 > `check:` script“ only the usual way of meeting it.
@@ -5537,6 +5539,65 @@ editors hold their own document and are right; nothing else writes on unmount.
 
 *Related:* [[DC-36]] (silence), [[DC-114]] (a check that needs a rendered page —
 this one needed a DATA path, which is why the gate is `smoke` and not the sweep).
+
+**DC-145 — a fact whose single home is asserted in prose while the code keeps
+two (2026-09-26).** Three at once, found while working one STATUS item:
+
+- `ModuleManifest.searchIndexers`. ADR-008 has SRCH's indexer wiring
+  „generated from [the manifest] — one source of truth", and the contract's own
+  doc said „a real declaration is what a module manifest carries". No manifest
+  carried one. Which module owns each search kind — the one fact the slot exists
+  for — was a hand-kept `Record<SearchKind, string>` in `main/searchGate.ts`,
+  and the slot's two fields, `id` and `kindKey`, were read by nothing.
+- `NOTIFICATION_SOURCE_MODULE`. Its header said the map „lived privately inside
+  `NotificationCenter.tsx`" — past tense — and was now „stated once and
+  shared". The private copy was still there, identical, driving the deep-link.
+- The dashboard's `MODULE_SIGILS` said in prose that a card's mark is „the SAME
+  glyph the sidebar lists that module under", and was a second table beside the
+  rail's `MODULE_ICONS`.
+
+None had drifted: every entry the copies shared agreed. That is the finding,
+not the reassurance — nothing would have noticed when one did, because the
+sentence claiming one home is what a reader checks, and it was true of the
+intent and false of the tree.
+
+*The rule:* [[DC-02]] and [[DC-141]] one step further — **a sentence saying
+where a fact lives („moved", „the same as", „generated from") is a claim about
+the TREE, and is checked the way one is: by searching for the fact's VALUES, not
+for the names the sentence uses.** Searching for `SEARCH_KIND_MODULE` finds one
+map; searching for `"study-day": "study"` finds two.
+
+*Fix:* one home each, made complete by a test rather than by prose. Search
+ownership is the manifests' (`searchIndexers: [{ kind }]` — the contract reduced
+to the one field that means something); `ModuleRegistry.register` refuses a kind
+that two modules claim, `searchGate.ts` asks `searchKindOwner` and keeps
+nothing, and `searchGate.test.ts` requires an owner for every `SearchKind` —
+the check the compiler made while the map was a `Record`, and cannot make over
+manifests. `NotificationCenter` imports the shared map. `moduleIcon.ts` is the
+one icon table, with a test that every registered module wears a mark.
+
+*Blast radius, measured rather than assumed:* every object literal of four or
+more string or number entries in `apps/*/src` and `packages/*/src` (tests and
+copy tables excluded), compared with every literal in ANOTHER file for four or
+more identical entries. On the tree before this fix: 49 pairs, and all three
+instances above among them. After it: 45, none about module ownership. What is
+left is mostly one family — `Intl.DateTimeFormat` option bags, 40 constructions
+in 27 files, the long sr-Latn day label written out page by page, and the two
+version-history lists' timestamp formatter — which is DC-02's clock-formatter
+instance at a larger size and is an item of its own in STATUS §4.1. The one
+overlap that is legitimate is worth naming: search kinds and notification
+sources share four entity names (`task`, `event`, `document`, `exam`) with the
+same owners, and they stay two tables because they are two vocabularies —
+`security` is nobody's module and `study-day` is not an entity.
+
+*Not a gate, deliberately:* at the shape the scan can read, most of its pairs
+are legitimate option bags, and a rule that needs an allowlist on its first day
+is the gate this repository declines to write. The executable part is the three
+tests beside the three homes.
+
+*Related:* [[DC-02]] (a rule written twice), [[DC-109]] (a hand-kept list beside
+a generated one — the search map was one, beside a slot meant to generate it),
+[[DC-141]] (a copy under a comment vouching for it).
 
 **Still open in C, and the only part of it that is:** item 14 (Tasks' capture
 form — its four bare selects are fixed, see DC-05), item 15 (Focus's two side-by-side primaries,
