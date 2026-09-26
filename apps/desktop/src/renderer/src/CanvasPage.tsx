@@ -17,6 +17,7 @@ import type { ClipboardData } from "@excalidraw/excalidraw/clipboard";
 import type {
   ExcalidrawImperativeAPI,
   ExcalidrawInitialDataState,
+  ExcalidrawProps,
 } from "@excalidraw/excalidraw/types";
 import "@excalidraw/excalidraw/index.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -26,6 +27,7 @@ import type { ThemeName } from "@nexus/tokens";
 import { Button, EmptyState, Icon, LoadingState, PageHeader, SaveIndicator, type SaveStatus, TextField } from "@nexus/ui";
 import { MAX_CANVAS_BOARD_NAME_LENGTH, MAX_CANVAS_SCENE_LENGTH } from "../../shared/ipc.js";
 import type { CanvasBoard, CanvasRefCard } from "../../shared/ipc.js";
+import { CanvasAutosave, type SceneObservation } from "./canvasAutosave.js";
 import { looksLikeMermaid } from "./canvasBoards.js";
 import { neighbourAfterDelete, resolveOpenItem } from "./pickedList.js";
 import { moduleName } from "./moduleName.js";
@@ -52,7 +54,6 @@ import {
   canvasSceneRefs,
   sameCanvasRefs,
   type CanvasPickerRow,
-  type CanvasSceneElement,
 } from "./canvasCards.js";
 import {
   CANVAS_BACKGROUND,
@@ -66,7 +67,6 @@ import {
   CANVAS_TRANSPARENT,
   canvasToolbarStateOf,
   sameCanvasToolbarState,
-  type CanvasToolbarAppState,
   type CanvasToolbarState,
 } from "./canvasTools.js";
 import { strings } from "./strings.js";
@@ -164,6 +164,21 @@ type RestoreInput = NonNullable<Parameters<typeof restore>[0]>;
 type RestoreElements = Exclude<RestoreInput["elements"], undefined>;
 type RestoreFiles = Exclude<RestoreInput["files"], undefined>;
 
+/** What the editor hands `onChange` — the elements, the whole app state and the files — in its own types. */
+type ChangeArgs = Parameters<NonNullable<ExcalidrawProps["onChange"]>>;
+
+/**
+ * One board's drawing as the autosave keeps it: exactly what `onChange` was
+ * handed, by reference. It is serialized only when it is written, never per
+ * pointer move — and it is the ONLY thing a write can serialize, which is the
+ * fix (`canvasAutosave.ts`).
+ */
+interface CanvasScene {
+  readonly elements: ChangeArgs[0];
+  readonly appState: ChangeArgs[1];
+  readonly files: ChangeArgs[2];
+}
+
 /** No board has cards yet, or the one open has none — one frozen empty map rather than a new one per render. */
 const NO_CARDS: ReadonlyMap<string, CanvasRefCard> = new Map();
 
@@ -250,16 +265,39 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const api = useRef<ExcalidrawImperativeAPI | null>(null);
-  /**
-   * The scene version last written, per board. `-1` means „nothing written yet",
-   * which is deliberately NOT the version of an empty scene (that is 0): a board
-   * opened and immediately closed must not be re-saved, and one whose first
-   * stroke lands must.
-   */
-  const savedVersion = useRef(-1);
-  const saveTimer = useRef<number | null>(null);
 
   const { boards, activeId } = state;
+
+  /**
+   * The board on screen, for the one reader that runs outside a render: a write
+   * that lands after a switch must not put „Sačuvano" on the board it did not
+   * write to.
+   */
+  const activeIdRef = useRef(activeId);
+  useEffect(() => {
+    activeIdRef.current = activeId;
+  }, [activeId]);
+
+  /**
+   * When to write a board and what (`canvasAutosave.ts`). One instance for the
+   * page's life — lazy state, so it is built once and never during a later
+   * render — whose writer reaches the CURRENT `writeScene` through a ref.
+   *
+   * It holds no editor and cannot read one. Until 2026-09-26 the page's own
+   * flush read the scene out of the editor's API from an unmount cleanup, after
+   * Excalidraw had already replaced its scene with an empty one — so opening a
+   * board and leaving within the autosave delay wrote an empty drawing over it.
+   */
+  const writeRef = useRef<(observation: SceneObservation<CanvasScene>) => Promise<boolean>>(
+    () => Promise.resolve(false),
+  );
+  const [autosave] = useState(
+    () =>
+      new CanvasAutosave<CanvasScene>(
+        (observation) => writeRef.current(observation),
+        AUTOSAVE_DELAY_MS,
+      ),
+  );
 
   /** Re-reads the board list, keeping whatever board was open when it is still there. */
   const reload = useCallback(async (): Promise<void> => {
@@ -301,18 +339,16 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
   }, [profileId, s.firstBoardName]);
 
   /**
-   * A board switch resets the write bookkeeping BEFORE the new scene arrives, so
-   * the incoming board's first `onChange` cannot be mistaken for an edit to the
-   * one just closed. Whatever was pending is FLUSHED first, by the switch itself
-   * (`flushPending`), while the old board is still the open one.
+   * A board switch clears what belonged to the board being left. The WRITE
+   * bookkeeping is not here: the autosave tells boards apart by the id each
+   * report carries, so the incoming board's first `onChange` is its baseline
+   * whenever it arrives — this effect runs after the commit, and a reset here
+   * would race the new editor's first report.
    */
   useEffect(() => {
-    if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
-    saveTimer.current = null;
-    savedVersion.current = -1;
-    // The cards go with the board, for the same reason: the incoming board's
-    // first `onChange` must not find the outgoing one's references still
-    // standing, or a card would draw the previous board's title for a frame.
+    // The cards go with the board: the incoming board's first `onChange` must
+    // not find the outgoing one's references still standing, or a card would
+    // draw the previous board's title for a frame.
     setRefs([]);
     setCards(NO_CARDS);
     // And so does the save line. „Sačuvano u 14:32" carried across a switch
@@ -396,29 +432,28 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
   );
 
   /**
-   * Writes the editor's current document. Called by the debounce and by nothing
-   * else, so there is exactly one path from „the drawing changed" to „the
-   * drawing is on disk".
+   * Writes one board's drawing, as the autosave observed it. Called by the
+   * autosave and by nothing else, so there is exactly one path from „the
+   * drawing changed" to „the drawing is on disk" — and that path serializes the
+   * scene it is HANDED. It never reads the editor, which may be gone by the time
+   * a flush runs (`canvasAutosave.ts` has the defect this replaced).
    *
-   * A failure is SAID rather than retried: silently retrying would leave the
-   * user believing a drawing is saved while it is not, and the one refusal they
-   * can actually cause — a scene past the size ceiling, which in practice means
-   * pasted images — needs a sentence they can act on rather than a spinner.
+   * A failure is SAID rather than retried here: silently retrying would leave
+   * the user believing a drawing is saved while it is not, and the one refusal
+   * they can actually cause — a scene past the size ceiling, which in practice
+   * means pasted images — needs a sentence they can act on rather than a
+   * spinner. The edit stays owed to the autosave, so the next change or the
+   * next way out of the board sends it again.
    */
   const writeScene = useCallback(
-    async (boardId: string, version: number): Promise<void> => {
-      const editor = api.current;
-      if (editor === null) return;
-      const scene = serializeAsJSON(
-        editor.getSceneElements(),
-        editor.getAppState(),
-        editor.getFiles(),
-        "local",
-      );
-      setSaveStatus("saving");
+    async ({ boardId, scene }: SceneObservation<CanvasScene>): Promise<boolean> => {
+      const json = serializeAsJSON(scene.elements, scene.appState, scene.files, "local");
+      // The save line speaks for the board on screen. A write for the board
+      // just left still happens; it just does not put „Sačuvano" on this one.
+      const onScreen = (): boolean => boardId === activeIdRef.current;
+      if (onScreen()) setSaveStatus("saving");
       try {
-        const saved = await window.nexus.saveCanvasScene(profileId, boardId, scene);
-        savedVersion.current = version;
+        const saved = await window.nexus.saveCanvasScene(profileId, boardId, json);
         // The write answers with the board's own metadata, and the board list
         // shows when each board was last drawn on — so the answer is folded
         // back in rather than dropped. Without this the switcher would keep
@@ -435,9 +470,12 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
                 boards: previous.boards.map((board) => (board.id === saved.id ? saved : board)),
               },
         );
-        setSaveError(null);
-        setSavedAt(new Date().toISOString());
-        setSaveStatus("saved");
+        if (onScreen()) {
+          setSaveError(null);
+          setSavedAt(new Date().toISOString());
+          setSaveStatus("saved");
+        }
+        return true;
       } catch (error) {
         // Two sentences, told apart by the one refusal a user can cause on
         // purpose: a scene past the wire's ceiling, which in practice means
@@ -447,21 +485,36 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
         // board actions (create, rename, delete) and is dismissible. A failed
         // autosave must not be dismissible: dismissing it would leave the page
         // claiming nothing while the drawing is still only on screen.
-        setSaveError(scene.length > MAX_CANVAS_SCENE_LENGTH ? s.tooLarge : s.saveError);
-        setSaveStatus("error");
+        const tooLarge = json.length > MAX_CANVAS_SCENE_LENGTH;
+        if (onScreen()) {
+          setSaveError(tooLarge ? s.tooLarge : s.saveError);
+          setSaveStatus("error");
+        } else {
+          // The board was left before its last edit landed. Its save line went
+          // with it, and so did the drawing — so the one place left to say it
+          // is the page's own notice, which the switch does not clear. Saying
+          // nothing here would be the quiet lie this whole block exists to
+          // avoid, told about a drawing the user can no longer see.
+          setActionError(tooLarge ? s.leftTooLarge : s.leftSaveError);
+        }
         console.error("Nexus: failed to save canvas scene:", error);
+        return false;
       }
     },
-    [profileId, s.saveError, s.tooLarge],
+    [profileId, s.leftSaveError, s.leftTooLarge, s.saveError, s.tooLarge],
   );
+  useEffect(() => {
+    writeRef.current = writeScene;
+  }, [writeScene]);
 
   /**
    * Excalidraw's per-pointer-move change hook. Everything expensive is behind
    * the version check — see the file header for why both halves are needed.
    *
-   * The version is computed from the elements the callback was handed rather
-   * than read back off the API, so the number the timer eventually records is
-   * the one that was current when the change happened.
+   * The version is computed from the elements the callback was handed, and the
+   * autosave keeps those very elements, app state and files: what is eventually
+   * written is what was on screen when the change happened, not whatever the
+   * editor holds by the time the write goes out.
    *
    * The toolbar snapshot is behind the SAME kind of guard, for the same reason:
    * it is taken on every pointer move, so it is only committed when it
@@ -471,10 +524,7 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
    * snapshot changes, so our highlight moves.
    */
   const onChange = useCallback(
-    (
-      elements: readonly (CanvasSceneElement & { version: number })[],
-      appState: CanvasToolbarAppState & { openSidebar: SidebarState },
-    ) => {
+    (elements: ChangeArgs[0], appState: ChangeArgs[1], files: ChangeArgs[2]) => {
       closeLibrarySidebar(api.current, appState.openSidebar);
       const snapshot = canvasToolbarStateOf(appState);
       setToolbar((previous) =>
@@ -488,48 +538,25 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
       const sceneRefs = canvasSceneRefs(elements);
       setRefs((previous) => (sameCanvasRefs(previous, sceneRefs) ? previous : sceneRefs));
       if (activeId === null) return;
-      const version = sceneVersionOf(elements);
-      if (version === savedVersion.current) return;
-      if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
-      saveTimer.current = window.setTimeout(() => {
-        saveTimer.current = null;
-        void writeScene(activeId, version);
-      }, AUTOSAVE_DELAY_MS);
+      autosave.observe({
+        boardId: activeId,
+        version: sceneVersionOf(elements),
+        scene: { elements, appState, files },
+      });
     },
-    [activeId, writeScene],
+    [activeId, autosave],
   );
 
   /**
-   * Writes whatever the debounce is still holding, right now.
-   *
-   * Called on the two deliberate ways out of a board — switching to another one
-   * and leaving the page — because both would otherwise drop up to
-   * `AUTOSAVE_DELAY_MS` of drawing on the floor. A stroke finished half a second
-   * before somebody clicks the next tab is not a stroke they expect to lose.
-   *
-   * Called SYNCHRONOUSLY, before `activeId` moves, so `api.current` is still the
-   * editor holding the board being written.
+   * Leaving the page writes whatever the autosave still owes, from what it
+   * observed — safe after the editor is gone, which is exactly when a cleanup
+   * runs. Deliberately a flush and not a teardown: in development React runs
+   * this cleanup once on a mount it immediately repeats, and an autosave that
+   * refused to work afterwards would lose every drawing made in `pnpm dev`.
    */
-  const flushPending = useCallback(() => {
-    if (saveTimer.current === null) return;
-    window.clearTimeout(saveTimer.current);
-    saveTimer.current = null;
-    const editor = api.current;
-    if (editor === null || activeId === null) return;
-    void writeScene(activeId, sceneVersionOf(editor.getSceneElements()));
-  }, [activeId, writeScene]);
-
-  /**
-   * The unmount flush, through a ref so the effect can depend on nothing and
-   * still call the CURRENT `flushPending`. An effect that listed it as a
-   * dependency would tear down and re-run on every board switch, and its
-   * cleanup would then fire at exactly the moment the editor is being replaced.
-   */
-  const flushRef = useRef(flushPending);
-  flushRef.current = flushPending;
   useEffect(() => {
-    return () => flushRef.current();
-  }, []);
+    return () => autosave.flush();
+  }, [autosave]);
 
   /**
    * The paste interception. `true` lets Excalidraw handle the paste as it
@@ -667,10 +694,10 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
     [activeId, loadScene],
   );
 
-  /** Switches boards, flushing whatever the old one still had pending. */
+  /** Switches boards, writing whatever the old one still owes at the click. */
   function openBoard(id: string): void {
     if (id === activeId) return;
-    flushPending();
+    autosave.flush();
     setState((previous) => ({ ...previous, activeId: id }));
   }
 
@@ -692,6 +719,9 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
     if (name.length === 0) return;
     const target = naming.id;
     setNaming(null);
+    // A new board is opened the moment it exists, so what the current one
+    // still owes is written first — the same as a click on another board.
+    autosave.flush();
     await run(async () => {
       if (target === null) {
         const created = await window.nexus.createCanvasBoard(profileId, name);
@@ -706,6 +736,10 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
     // Computed against the list as it stands NOW, which is what makes „the one
     // after it" mean anything (`neighbourAfterDelete`).
     const next = neighbourAfterDelete(boards ?? [], id);
+    // Written BEFORE the delete, and on purpose into the board being deleted:
+    // the delete is soft and has an undo, and the drawing the undo brings back
+    // should be the one that was on screen, not the one from 800 ms earlier.
+    autosave.flush();
     await run(async () => {
       await window.nexus.deleteCanvasBoard(profileId, id);
       setState((previous) => ({ ...previous, activeId: next }));
@@ -715,6 +749,7 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
 
   async function undoDelete(id: string): Promise<void> {
     setPendingUndoId(null);
+    autosave.flush();
     await run(async () => {
       await window.nexus.restoreCanvasBoard(profileId, id);
       setState((previous) => ({ ...previous, activeId: id }));

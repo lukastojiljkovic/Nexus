@@ -1,6 +1,6 @@
 # The defect-class ledger
 
-**One hundred and forty-three recurring failure shapes, each recorded the first
+**One hundred and forty-four recurring failure shapes, each recorded the first
 time it was recognised.** Opened 2026-08-07 on the founder's rule that *a reported bug is a
 sample and never an incident* — so the entry here is never the bug, it is the
 **rule that was wrong**, written so the next instance is something we spot
@@ -15,7 +15,7 @@ rather than something we discover.
 >
 > **How many of them are executable is not the gate count, and the arithmetic is
 > worth stating because it does not match — and is not meant to.** There are
-> **twenty-six** `check:` scripts and **one hundred and forty-three** classes
+> **twenty-six** `check:` scripts and **one hundred and forty-four** classes
 > below, and neither number is the other's inverse. `check:contrast` answers no
 > class at all, because it came from a design rule rather than from an observed
 > failure; `check:controls` answers TWO, [[DC-98]]'s native control that skips
@@ -34,9 +34,11 @@ rather than something we discover.
 > instead of restating what it answers; [[DC-135]]'s is a pin in
 > `scripts/run-lock.test.mjs`, because what it guards is that a harness verb
 > cannot be ADDED without a lock, which is a statement about `package.json` and
-> not about any source file; and [[DC-143]]'s is a walk of one app's import graph
+> not about any source file; [[DC-143]]'s is a walk of one app's import graph
 > in `routes.test.ts`, beside the lazy table it protects, because the rule is
-> about a single entry point and not about the tree. A
+> about a single entry point and not about the tree; and [[DC-144]]'s needs a
+> BUILT renderer tearing a real editor down over a real database, so it is a
+> check inside `smoke`'s page walk. A
 > class that can be made executable should be: a rule nobody can forget beats a
 > rule everybody has read — and „executable“ is the requirement, „one more
 > `check:` script“ only the usual way of meeting it.
@@ -5490,6 +5492,51 @@ that measurement is the instrument for the unnamed half.
 stated this rule in a comment the day the licence notices became a chunk — a
 comment and not a gate, so it covered one file; [[DC-36]] (a failure whose
 shape is silence).
+
+**DC-144 — a flush that reads what it is saving from the thing being torn down
+(2026-09-26).** „Tabla" wrote a board's pending edit from an unmount cleanup,
+and it got the drawing by asking the editor: `api.current.getSceneElements()`.
+A `useEffect` cleanup runs AFTER React has torn the subtree down, and
+Excalidraw's own `componentWillUnmount` ends with `this.scene.destroy();
+this.scene = new Scene()` — so the editor answered with an empty drawing, and
+the empty drawing was written over the board. Because the load itself reports a
+change, merely OPENING a board and clicking another module within the 800 ms
+autosave delay was enough. Measured on the 1.3.0 build: „Arhitektura sistema",
+14 elements, then 0 — in three gestures out of three. The flush on leaving dates
+from CANV slice a (ADR-079 §11.6, 2026-08-01), where it was the fix for
+dropping the last 800 ms of drawing; the installed app has carried it since.
+
+It was on screen for weeks and read as something else. Every full screenshot
+sweep photographed „Tabla" as an empty canvas at its second and third window
+size — the sweep leaves the page quickly, which is the whole gesture — and the
+audit is geometric, so an empty board is a perfectly well-laid-out frame.
+
+*Root cause, as the rule that was wrong:* a flush treated „what is on screen"
+as something it could ask for at flush time. It is not: at the moment a flush
+is most needed — the page going away — the thing that would answer is the thing
+being destroyed. What a flush writes has to be captured when the change
+HAPPENS. `NoteEditor` and `PrivNoteEditor` always did this: the note flush sends
+update bytes collected as they were produced, from a `Y.Doc` the component owns
+and destroys only after the flush's synchronous prologue. The canvas was the one
+editor whose document lived inside a third-party component.
+
+*Fix:* `canvasAutosave.ts` — the decision of when to write and what, with no
+editor in it. An observation carries the scene `onChange` was handed, so there
+is no way to write the board that reads the editor late. The first report of a
+board is its baseline, not an edit (the documented „opened and closed is not
+rewritten", which the old code never did), and a report for a different board is
+a switch the autosave sees itself rather than waits to be told about. Creating,
+deleting and restoring a board now flush first; they used to drop the edit.
+Gated twice: `canvasAutosave.test.ts` owns the rules, and `smoke` seeds the demo
+boards, walks every page — leaving „Tabla" the moment it is shown — and fails if
+any board has fewer elements afterwards. Against the old page it prints
+`„Arhitektura sistema“ 14 → 0`.
+
+*Blast radius:* every cleanup in the renderer that flushes was read. The two note
+editors hold their own document and are right; nothing else writes on unmount.
+
+*Related:* [[DC-36]] (silence), [[DC-114]] (a check that needs a rendered page —
+this one needed a DATA path, which is why the gate is `smoke` and not the sweep).
 
 **Still open in C, and the only part of it that is:** item 14 (Tasks' capture
 form — its four bare selects are fixed, see DC-05), item 15 (Focus's two side-by-side primaries,

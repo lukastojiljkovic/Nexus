@@ -5468,6 +5468,15 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
      * anybody can act on.
      */
     tooLarge: "Tabla je prevelika da bi se sačuvala — ubačene slike zauzimaju previše prostora.",
+    /**
+     * The same two failures, for a board that was LEFT before its last write
+     * landed — a switch within the autosave delay. That board's save line is
+     * gone and so is its drawing, so these go in the page notice instead, and
+     * say which board they mean without claiming the one now open failed.
+     */
+    leftSaveError: "Poslednje izmene na prethodnoj tabli nisu sačuvane. Otvori je i proveri crtež.",
+    leftTooLarge:
+      "Poslednje izmene na prethodnoj tabli nisu sačuvane — ubačene slike zauzimaju previše prostora.",
     /** Nothing drawn yet, and no board either. */
     emptyTitle: "Još nema nijedne table",
     emptyDescription: "Napravi tablu i crtaj — dijagrami, skice, mape ideja.",

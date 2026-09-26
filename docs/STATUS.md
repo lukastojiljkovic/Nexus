@@ -14,8 +14,9 @@ the binding rules) → §1 and §2 below (where we are, what exists) → §4 (wh
 left) → §5 (what needs the founder). [README.md](README.md) maps every other
 document.
 
-**Last updated:** 2026-09-26. The state below was verified against `main` on
-that date. Deliberately no commit sha: a sha in a header goes stale the moment
+**Last updated:** 2026-09-26. The state below was verified on that date against
+`main`, and against the branch named under „Unmerged work" for what is not on
+`main` yet. Deliberately no commit sha: a sha in a header goes stale the moment
 anything is pushed, which is the defect class this file keeps recording.
 
 **Read alongside:** [OVERVIEW.md](OVERVIEW.md) (plain-language tour) ·
@@ -49,6 +50,17 @@ project: nothing here has `MAIN_VITE_SUPABASE_URL` set, so every round refuses
 `cloud_off` before making a request. That is the boundary working, and also why
 no round has run for real. It is the head of the web/sync queue.
 
+**The installed 1.3.0 can erase a board in „Tabla", and the fix is not in an
+installer yet** (found and fixed 2026-09-26, [[DC-144]] in
+[defect-classes.md](defect-classes.md)). Opening a board — or changing one — and
+then going to another module within about a second wrote an empty drawing over
+it. It is proven on 1.3.0; the exit flush that does it dates from the canvas's
+first slice (ADR-079 §11.6), so every installer since then is likely to carry
+it. Until the next build, wait two seconds after opening or changing a board
+before going to another module — opening counts as a change. A board that is
+already empty can only come back from a backup (`.nexus.zip`) taken before it
+emptied.
+
 **Elektronika, the sixteenth module, is complete.** E1–E6 are all built and
 verified, and the module is in the 1.3.0 installer. Two open ends remain, neither
 blocking; both are §5 items.
@@ -64,7 +76,7 @@ blocking; both are §5 items.
 | Server | 13 Supabase migrations, 3 Edge Functions, 109 pgTAP assertions |
 | Static gates | **26**, each its own CI step |
 | Commits | 653 |
-| Unpushed work | none — `main` is level with `origin/main`; CI and Security green on `main` |
+| Unmerged work | `main` is level with `origin/main`, CI and Security green on it. The 2026-09-26 work — the docs entering git, the route split, the canvas data-loss fix — is on branch `claude/relaxed-planck-wu4q2j` and not yet on `main` |
 | Open pull requests | none |
 | Git tags / GitHub releases | none — no version has ever been released (§5) |
 
@@ -599,16 +611,12 @@ suggestion, cheapest and highest-leverage first.
    means per-surface subtables that join the table when their page loads, and
    that reaches `check:strings`, `check:copy` and the locale machinery. A
    design, not an edit.
-3. **In a full screenshot sweep, „Tabla" draws nothing after the first size.**
-   Found 2026-09-26 by comparing two full sweeps in a Linux container: the demo
-   board „Arhitektura sistema" is drawn in both `min` frames and is an empty
-   canvas in every `default` and `wide` frame — on the 1.3.0 code and on the
-   split build alike, so it predates the split. A partial sweep of the canvas
-   scenes alone (`min` then `default`) draws it at both sizes, so something
-   between the two visits empties it. Not yet known whether that is the
-   harness or the app — and if it is an autosave writing an empty scene over a
-   stored board, it is data loss, which is why it is at the head of this list's
-   defects rather than filed with the harness.
+3. **One scene of the screenshot sweep photographs a different subject each
+   run.** `electronics-part` taps the first `.elec-part__body` in the DOM, and
+   three full sweeps on 2026-09-26 selected three different parts (BMP280,
+   „Pasivna zujalica", Raspberry Pi 4). The frame is correct each time and
+   comparable with nothing, which is what matters for a sweep compared with its
+   predecessor; the scene should name the part it wants.
 4. **The sizing contract.** DC-06 closed one pane at one breakpoint; what is
    missing is the rule that would have prevented all of them — what a pane's
    floor is, and what happens below it. This is also the desktop half of the

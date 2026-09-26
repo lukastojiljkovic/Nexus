@@ -727,6 +727,8 @@ import {
 } from "../shared/ipc.js";
 import { businessProfileFlags, createModuleRegistry, LOCKED_MODULE_IDS } from "../shared/modules.js";
 import { DEMO_BUSINESS_PROFILE_NAME, seedDemoBusiness, seedDemoProfile } from "./demo/index.js";
+import { seedDemoCanvas } from "./demo/canvas.js";
+import { createDemoContext } from "./demo/context.js";
 import type { DemoAttachmentIo } from "./demo/attachments.js";
 import { duplicateStems, missingCoverage, runShots } from "./shots/index.js";
 
@@ -12914,6 +12916,25 @@ async function runSmokePageWalk(win: BrowserWindow): Promise<void> {
     for (const pack of TOOL_PACKS) await flags.set(packFlagKey(pack), true);
   }
 
+  // Drawings the walk must NOT destroy. The walk opens „Tabla" and leaves the
+  // moment it is shown, which is the exact gesture that emptied a board in 1.3.0:
+  // the page's unmount flush read the editor after Excalidraw had replaced its
+  // scene with an empty one, and wrote that over the board
+  // (`renderer/src/canvasAutosave.ts`). The demo boards are what the founder's
+  // own install lost, so they are what is checked.
+  const drawn = profiles[0];
+  if (drawn === undefined) throw new Error("expected a profile to draw on");
+  seedDemoCanvas(database.raw, createDemoContext(drawn.id, Date.now()));
+  const elementsOf = (id: string): number =>
+    (JSON.parse(canvasStore(drawn.id).readScene(id).scene) as { elements?: unknown[] }).elements
+      ?.length ?? 0;
+  const drawings = canvasStore(drawn.id)
+    .listActive()
+    .map((board) => ({ id: board.id, name: board.name, elements: elementsOf(board.id) }));
+  if (drawings.length === 0 || drawings.some((board) => board.elements === 0)) {
+    throw new Error("page walk: the demo boards were not seeded with drawings");
+  }
+
   const loaded = new Promise<void>((resolve) => {
     win.webContents.once("did-finish-load", () => resolve());
   });
@@ -13038,6 +13059,15 @@ async function runSmokePageWalk(win: BrowserWindow): Promise<void> {
     throw new Error(
       `page walk: the pane blanked to the skeleton ${String(skeletons)} time(s) while ` +
         `navigating — the page being left is not held on screen`,
+    );
+  }
+
+  const emptied = drawings.filter((board) => elementsOf(board.id) < board.elements);
+  if (emptied.length > 0) {
+    throw new Error(
+      `page walk: leaving „Tabla“ lost drawing — ${emptied
+        .map((board) => `„${board.name}“ ${String(board.elements)} → ${String(elementsOf(board.id))}`)
+        .join("; ")}`,
     );
   }
 

@@ -305,6 +305,12 @@ promise and a promise is a value the render creates. And the debounce dropped up
 to 800 ms of drawing when switching boards or leaving the page. Both fixed, the
 second by flushing synchronously on either exit.
 
+*2026-09-26:* the exit flush was itself a defect, and a worse one — it read the
+scene out of the editor from an unmount cleanup, after Excalidraw had replaced
+its scene with an empty one, and wrote that over the board. Replaced by
+`canvasAutosave.ts`, which writes the scene `onChange` observed and never reads
+the editor ([[DC-144]] in `docs/defect-classes.md`).
+
 ### 11.7 Measured weight
 
 Renderer **218 files / 18.16 MB**; eager chunk **5.97 MB** (Excalidraw is
