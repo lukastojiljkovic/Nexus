@@ -48,10 +48,13 @@ import { REPO_ROOT, repoRelative } from "./check-colours.mjs";
  * checked the same way and that import is its first finding.
  *
  * **What it does not see:** a module-scope effect hidden inside a declaration
- * — `const x = register(...)` — because an initializer that calls an import is
- * also how `const SESSION_INFO = utf8("…")` computes a constant, and no reader
- * of the text can tell the two apart. Nor does it follow a call into a local
- * function's body: `init()` at module scope is reported as a call, not traced.
+ * — `const x = register(...)`, or `export default register(...)`, which is the
+ * same initializer with no name — because an initializer that calls an import
+ * is also how `const SESSION_INFO = utf8("…")` computes a constant, and no
+ * reader of the text can tell the two apart. Nor does it follow a call into a
+ * local function's body: `init()` at module scope is reported as a call, not
+ * traced — whether `init` was declared with `function` or is a `const` holding
+ * an arrow, which the first version of this rule took for a local table.
  */
 
 /** Every workspace member that has a `package.json`, as `{ dir, rel, pkg }`. */
@@ -203,7 +206,11 @@ export function importTimeEffects(text, fileName = "module.ts") {
       if (ts.isVariableDeclaration(node)) boundNames(node.name, local);
       if (ts.isFunctionLike(node) && node !== statement) return; // a body defined here is not RUN here
       if (ts.isCallExpression(node)) {
-        const root = rootIdentifier(node.expression);
+        // A METHOD on a local value (`MAP.set`) stays local. Calling a local
+        // binding itself (`init()`) runs a body this walk does not follow, so it
+        // is judged like any other call — a `const` holding an arrow is still a
+        // function.
+        const root = ts.isIdentifier(node.expression) ? null : rootIdentifier(node.expression);
         if (root === null || !local.has(root)) escapes.push(node.expression.getText(source));
       }
       if (ts.isBinaryExpression(node) && ASSIGNMENT_OPERATORS.has(node.operatorToken.kind)) {
@@ -292,8 +299,25 @@ describe("importTimeEffects", () => {
   });
 
   it("reports a call on a local function, because what it does is not followed", () => {
-    const text = ["function setUp() {}", "setUp();"].join("\n");
-    expect(importTimeEffects(text)).toEqual([{ line: 2, rule: "escaping-statement", text: "setUp" }]);
+    const text = [
+      "function setUp() {}",
+      "setUp();",
+      'import { register } from "./registry.js";',
+      "const init = () => register();",
+      "init();",
+    ].join("\n");
+    expect(importTimeEffects(text)).toEqual([
+      { line: 2, rule: "escaping-statement", text: "setUp" },
+      { line: 5, rule: "escaping-statement", text: "init" },
+    ]);
+  });
+
+  it("reads the names an object pattern binds, at module scope and in a loop", () => {
+    const text = [
+      "const { rows, byKind: kinds } = { rows: [], byKind: new Map() };",
+      "for (const { kind, label: name } of rows) kinds.set(kind, name);",
+    ].join("\n");
+    expect(importTimeEffects(text)).toEqual([]);
   });
 
   it("does not count a function DEFINED in a statement as run by it", () => {
