@@ -131,3 +131,123 @@ describe("CanvasAutosave", () => {
     expect(writes.map((write) => write.version)).toEqual([15]);
   });
 });
+
+/**
+ * The same machine against a writer whose answers the test releases by hand,
+ * in whatever order it likes — the only way to put a report or a second write
+ * BETWEEN a write leaving and landing, which is where each of these lived.
+ */
+describe("CanvasAutosave, with writes still on the wire", () => {
+  let sent: { boardId: string; version: number; land: (saved: boolean) => void }[];
+  let autosave: CanvasAutosave<Scene>;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    sent = [];
+    autosave = new CanvasAutosave<Scene>(
+      (observation) =>
+        new Promise<boolean>((resolve) => {
+          sent.push({ boardId: observation.boardId, version: observation.version, land: resolve });
+        }),
+      800,
+    );
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const versions = (): string[] => sent.map((write) => `${write.boardId}${String(write.version)}`);
+
+  async function land(index: number, saved = true): Promise<void> {
+    sent[index]?.land(saved);
+    await vi.runAllTimersAsync();
+  }
+
+  it("writes an undo back to what was on disk, when it comes while the edit is still out", async () => {
+    autosave.observe(observed("a", 14));
+    autosave.observe(observed("a", 15));
+    await vi.advanceTimersByTimeAsync(800);
+    // Undone before the write of 15 lands: the screen is 14 again, which is
+    // what the disk held — but it will not be, once 15 lands.
+    autosave.observe(observed("a", 14));
+    await vi.advanceTimersByTimeAsync(800);
+    await land(0);
+    expect(versions()).toEqual(["a15", "a14"]);
+  });
+
+  it("keeps one write on the wire per board, and sends the newest when it lands", async () => {
+    autosave.observe(observed("a", 14));
+    autosave.observe(observed("a", 15));
+    await vi.advanceTimersByTimeAsync(800);
+    autosave.observe(observed("a", 16));
+    await vi.advanceTimersByTimeAsync(800);
+    autosave.flush();
+    // 16 waits: were it sent now, it could land BEFORE 15 and leave 15 on disk.
+    expect(versions()).toEqual(["a15"]);
+    await land(0);
+    expect(versions()).toEqual(["a15", "a16"]);
+    await land(1);
+    autosave.flush();
+    await vi.runAllTimersAsync();
+    expect(versions()).toEqual(["a15", "a16"]);
+  });
+
+  it("writes the last edit of a board left while its previous edit was still out", async () => {
+    autosave.observe(observed("a", 14));
+    autosave.observe(observed("a", 15));
+    await vi.advanceTimersByTimeAsync(800);
+    autosave.observe(observed("a", 16, "a's last edit"));
+    autosave.observe(observed("b", 3));
+    await land(0);
+    expect(versions()).toEqual(["a15", "a16"]);
+  });
+
+  it("does not let one board's write landing release another board's", async () => {
+    // Both boards reach version 6, so the only thing telling the two writes
+    // apart is which board each belongs to.
+    autosave.observe(observed("a", 5));
+    autosave.observe(observed("a", 6));
+    await vi.advanceTimersByTimeAsync(800);
+    autosave.observe(observed("b", 5));
+    autosave.observe(observed("b", 6));
+    await vi.advanceTimersByTimeAsync(800);
+    expect(versions()).toEqual(["a6", "b6"]);
+    await land(0);
+    autosave.flush();
+    await vi.runAllTimersAsync();
+    expect(versions()).toEqual(["a6", "b6"]);
+  });
+
+  it("does not resend a write that failed just because the page was left while it was out", async () => {
+    autosave.observe(observed("a", 14));
+    autosave.observe(observed("a", 15));
+    await vi.advanceTimersByTimeAsync(800);
+    autosave.flush();
+    await land(0, false);
+    expect(versions()).toEqual(["a15"]);
+    // Still owed, though: the next report or flush tries again.
+    autosave.flush();
+    await vi.runAllTimersAsync();
+    expect(versions()).toEqual(["a15", "a15"]);
+  });
+
+  it("is not wedged by a writer that throws instead of answering", async () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    let calls = 0;
+    const throwing = new CanvasAutosave<Scene>(async (observation) => {
+      calls += 1;
+      if (calls === 1) throw new Error("serialization failed");
+      sent.push({ boardId: observation.boardId, version: observation.version, land: () => {} });
+      return true;
+    }, 800);
+    throwing.observe(observed("a", 14));
+    throwing.observe(observed("a", 15));
+    await vi.advanceTimersByTimeAsync(800);
+    throwing.observe(observed("a", 16));
+    await vi.advanceTimersByTimeAsync(800);
+    expect(versions()).toEqual(["a16"]);
+    expect(errors).toHaveBeenCalledOnce();
+    errors.mockRestore();
+  });
+});

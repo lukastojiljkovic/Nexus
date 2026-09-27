@@ -35,6 +35,12 @@
  *    when the next board has loaded.
  *  - A write that fails leaves the edit owed; the next report or flush sends it
  *    again rather than dropping it.
+ *  - One write per board is on the wire at a time. A send asked for while one
+ *    is out is made when it lands, from the newest report — so writes land in
+ *    the order they left, and an undo made while its edit was still out is
+ *    written after it rather than mistaken for what is already on disk. The
+ *    first version of this module (2026-09-26) let a second write overtake the
+ *    first and recorded whichever landed LAST as the version on disk.
  */
 
 /** One `onChange`, as the autosave keeps it: the board it belongs to, its version, and the scene itself. */
@@ -48,21 +54,69 @@ export interface SceneObservation<S> {
 /** Writes one observation to disk. Resolves `true` when it is there. */
 export type SceneWriter<S> = (observation: SceneObservation<S>) => Promise<boolean>;
 
-export class CanvasAutosave<S> {
-  /** The last report, whatever it was. What a flush writes. */
-  private latest: SceneObservation<S> | null = null;
-  /** The version on disk for the current board: the baseline, or the last successful write. */
-  private written = -1;
-  /** Whether the current board has reported at all yet. */
-  private hasBaseline = false;
-  private timer: ReturnType<typeof setTimeout> | null = null;
+/**
+ * One board, from its first report until the next board's — and past that, for
+ * as long as a write it owes is still on the wire. Its bookkeeping is its own,
+ * so a write landing for one board can never be mistaken for another's.
+ */
+class BoardAutosave<S> {
+  /** The last report. What a send writes. */
+  latest: SceneObservation<S>;
+  /** The version on disk: the baseline, or the last write that landed. */
+  private written: number;
+  /** The write on the wire. At most one, so writes land in the order they left. */
+  private inFlight: SceneObservation<S> | null = null;
+  /** A send was asked for while a write was out; it is made when that one lands. */
+  private resend = false;
+
+  constructor(
+    baseline: SceneObservation<S>,
+    private readonly write: SceneWriter<S>,
+  ) {
+    this.latest = baseline;
+    this.written = baseline.version;
+  }
+
   /**
-   * Bumped on every board change. A write that lands after one must not record
-   * its version against the board that is open NOW.
+   * Whether a send may still have something to do. A write on the wire counts
+   * whatever the screen says: an undo back to the version on disk is an edit
+   * too, once the write it undid lands.
    */
-  private generation = 0;
-  /** The version a write is on the wire for, so a flush behind the timer does not send it twice. */
-  private sending: number | null = null;
+  get owes(): boolean {
+    return this.inFlight !== null || this.latest.version !== this.written;
+  }
+
+  send(): void {
+    if (this.inFlight !== null) {
+      this.resend = true;
+      return;
+    }
+    const observation = this.latest;
+    if (observation.version === this.written) return;
+    this.inFlight = observation;
+    void this.write(observation)
+      .catch((error: unknown) => {
+        // A writer that throws has not written. Left on the wire, it would
+        // hold every later edit of this board behind a write that never lands.
+        console.error("Nexus: canvas autosave writer threw:", error);
+        return false;
+      })
+      .then((saved) => {
+        this.inFlight = null;
+        if (saved) this.written = observation.version;
+        const resend = this.resend;
+        this.resend = false;
+        // Only for a NEWER report: the one that just failed is not retried by
+        // itself, it stays owed to the next report or flush.
+        if (resend && this.latest !== observation) this.send();
+      });
+  }
+}
+
+export class CanvasAutosave<S> {
+  /** The board on screen, or none before its first report. */
+  private board: BoardAutosave<S> | null = null;
+  private timer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     private readonly write: SceneWriter<S>,
@@ -71,50 +125,30 @@ export class CanvasAutosave<S> {
 
   /** Every `onChange` goes through here. Cheap: it keeps references and, at most, restarts a timer. */
   observe(observation: SceneObservation<S>): void {
-    if (this.latest !== null && observation.boardId !== this.latest.boardId) {
+    if (this.board !== null && observation.boardId !== this.board.latest.boardId) {
       // A different board is on screen: settle the previous one from its own
       // last report, then start this one from nothing.
       this.flush();
-      this.latest = null;
-      this.written = -1;
-      this.hasBaseline = false;
-      this.sending = null;
-      this.generation += 1;
-    }
-    this.latest = observation;
-    if (!this.hasBaseline) {
-      this.hasBaseline = true;
-      this.written = observation.version;
-      return;
-    }
-    if (observation.version === this.written) {
-      // Back to what is on disk (or never left it): nothing is owed.
-      this.clearTimer();
-      return;
+      this.board = null;
     }
     this.clearTimer();
+    if (this.board === null) {
+      this.board = new BoardAutosave(observation, this.write);
+      return;
+    }
+    const board = this.board;
+    board.latest = observation;
+    if (!board.owes) return;
     this.timer = setTimeout(() => {
       this.timer = null;
-      this.send();
+      board.send();
     }, this.delayMs);
   }
 
   /** Writes an owed edit NOW. Safe to call at any time, including after the editor is gone. */
   flush(): void {
     this.clearTimer();
-    this.send();
-  }
-
-  private send(): void {
-    const observation = this.latest;
-    if (observation === null || !this.hasBaseline || observation.version === this.written) return;
-    if (observation.version === this.sending) return;
-    const generation = this.generation;
-    this.sending = observation.version;
-    void this.write(observation).then((saved) => {
-      if (this.sending === observation.version) this.sending = null;
-      if (saved && generation === this.generation) this.written = observation.version;
-    });
+    this.board?.send();
   }
 
   private clearTimer(): void {
