@@ -1,40 +1,51 @@
 # Nexus Roadmap
 
 **What order things happen in, and why.** For what is *true today* read
-[STATUS.md](STATUS.md); this file is only about sequence. Re-cut **2026-08-16**
-against what actually shipped — the previous cut was made on 2026-08-02 and had
-gone stale on the one question that matters most, still saying the cloud half
-was untouched after thirteen server migrations and four sync packages had
-landed.
+[STATUS.md](STATUS.md); this file is only about sequence. Re-cut **2026-09-26**
+against what actually shipped. The previous cut, 2026-08-16, still said the
+desktop was at 1.1.0, that the desktop sync wiring and electronics E3–E6 had not
+started, that the founder had yet to choose between the two, and that the
+Electron 42 deadline was open — all five had been settled for weeks, and on
+2026-08-31 the founder had re-ordered everything. What that cut said is kept,
+verbatim, in [log/superseded-status-sections.md](log/superseded-status-sections.md).
 
-The original 2026-07-05 slicing (M0 / v0 / v0.x / v1) is preserved in
-[log/superseded-status-sections.md](log/superseded-status-sections.md). It is
-worth reading for the reasoning, and it was overshot in almost every direction:
-everything v0 cut shipped, and so did most of what v0 explicitly excluded.
+**This file carries no running figures.** Commits, migrations, frames and bytes
+live in [STATUS.md](STATUS.md) §1, where they are measured; a figure copied here
+is right on the day it is copied and wrong a week later, which is the defect
+class that retired the last cut.
+
+The original 2026-07-05 slicing (M0 / v0 / v0.x / v1) is preserved in the same
+archive. It is worth reading for the reasoning, and it was overshot in almost
+every direction: everything v0 cut shipped, and so did most of what v0
+explicitly excluded.
 
 ---
 
 ## Where we are
 
-**497 commits, 67 local migrations + 13 server ones, 16 registered modules,
-desktop at 1.1.0.** The
-desktop app is a finished product in daily use and has been since 2026-08-02.
-Nothing is released — no tags, no downloads, no signature.
+The desktop app is a finished product in daily use and has been since
+2026-08-02. Nothing is released — no tags, no downloads, no signature.
 
-Two founder sentences set the current sequence, and the second supersedes the
-first on scope while leaving it in force on quality:
+Three founder sentences set the sequence, each one on top of the last:
 
 > *„generalno je ceo UI dosta jednostavan i bazican, samo su nabacani dugmici i
 > sve, deluje sirovo app bas."* (2026-08-02, after the first real install)
-
-Then, six days later:
 
 > *„resi sve sto je ostalo… da bude clean slate potpuno, i onda da pripremis
 > back i front za sajt… supabase za backend… da se pripremi sync desktop app i
 > webapp, da bude ful usluga."* (2026-08-08)
 
+> *„web/sync je za sada trajno na hold-u, dok ne završimo sve feature za
+> desktop, lako ćemo ih posle portovati na sajt jer je electron osnova."*
+> (2026-08-31)
+
 So: **breadth is not the constraint and has not been since 2026-08-02** — finish
-quality is — and **the web app and its backend are in scope** since 2026-08-08.
+quality is. **The web app and its backend are in scope** since 2026-08-08, and
+**they come after every remaining desktop item** since 2026-08-31. The reason for
+the last one is the load-bearing part: the renderer is one React codebase and
+Electron is only its shell, so a feature finished on the desktop is a feature the
+web app inherits, and building the web surface first would mean building each
+feature twice.
 
 ---
 
@@ -52,103 +63,59 @@ quality is — and **the web app and its backend are in scope** since 2026-08-08
   koliko dobro mora da bude"*) and rebuilt; the instruction that changed the
   method was *„nadji nacin da ti sam vidis screenshotove apsolutno svega u
   app"*, which is why `pnpm --filter @nexus/desktop shots` exists and why
-  looking at the app is now a command rather than a favour. What P2.5 still owes
-  is small and is listed in [STATUS.md](STATUS.md) §4.
+  looking at the app is now a command rather than a favour.
 - **PRO — the professional drawer.** Out of band, 2026-08-13/15, because the
-  founder asked for it directly after seeing the developer drawer. 18 toolkits,
-  274 tools, 1 991 hand-derived assertions, and disclaimers made a property of
-  the contract rather than copy somebody has to remember. Core, surfaces and
-  wiring all shipped — including `cents-ratio`, whose screen was the one open
-  question here and was built on 2026-08-14.
-- **The server side.** Thirteen Supabase migrations executed against a real
-  Postgres 17, an RLS wall proved by 109 pgTAP assertions running in CI, three
-  Edge Functions, and `@nexus/sync-transport` measured against a live PostgREST
-  rather than written from the documentation.
+  founder asked for it directly after seeing the developer drawer. Profession
+  toolkits, with disclaimers made a property of the contract rather than copy
+  somebody has to remember.
+- **The server side.** Supabase migrations executed against a real Postgres 17,
+  an RLS wall proved by pgTAP assertions running in CI, Edge Functions, and
+  `@nexus/sync-transport` measured against a live PostgREST rather than written
+  from the documentation.
 - **Linux.** An AppImage, a tarball and a real Gentoo ebuild, all built and
   verified.
-- **v1.1.0**, built 2026-08-16 after the pushes were green.
-- **W1 — Recovery-Code adoption, end to end.** Closed 2026-08-16. The protocol
-  layer had been finished for a week and no screen reached it; now the desktop
-  can be recovered from the Recovery Kit, proved by nine tests that run two
-  machines against one fake server.
-- **W2 — the sync engine.** Closed 2026-08-16, and it went further than the
-  slice this file scheduled. The apply path landed with its four rules
-  (transactionally co-located state, no echo, refuse a stale object, write the
-  state even when the row is unchanged) and DC-14's deterministic repair; then
-  the loop itself landed on top of it, so **`@nexus/sync-engine` now carries a
-  row between two real databases**.
-- **The scheduler.** Closed 2026-08-17 (`8697a75`) — the first half of what W3
-  was scheduled to be. What the second half turned into is W3 as it now stands.
-- **The profile's content key.** Closed 2026-08-17, both halves: the wire
-  (`6b4fd25`) and the desktop's fetch-or-mint (`3f5f65b`). Found while
-  wiring the scheduler — `syncOnce` wanted `contentKey`, `ckEpoch` and `keyFor`
-  and nothing in the product produced any of them. **The server needed nothing**:
-  the „missing insert grant" was a false finding from a line-grep against a
-  two-line statement (DC-62), and the wall now carries a rule that would have
-  answered it. The rule the module makes structural is that the only path to a
-  usable key is unwrapping a wrap the server already holds, so a row can never be
-  sealed under a key no peer can fetch.
-- **ELEC E1 and E2 — the electronics workbench.** Closed 2026-08-21
-  (`8fa6b25` … `4e20e26`). **Not part of the sequence above**: the founder asked
-  for an Arduino/Raspberry module on its own terms, and it was built on its own
-  terms — the model and its 153-part catalogue, then the bench, the drawer and
-  the inspector. Slices E3–E6 (electrical rules, sketch generation, simulation,
-  the external ROS 2 runner) are **not** started and are sequenced below.
+- **W1 — Recovery-Code adoption, end to end.** Closed 2026-08-16.
+- **W2 — the sync engine.** Closed 2026-08-16: `@nexus/sync-engine` carries a
+  row between two real databases.
+- **The scheduler and the profile's content key.** Closed 2026-08-17.
+- **W3 — the desktop wiring.** Closed 2026-08-30. A round is built, run and
+  reported from the main process, the scheduler opens on unlock and closes on
+  lock, and „Stanje sinhronizacije" in Podešavanja shows it — all behind the
+  cloud-off boundary. What it has never done is run against the deployed
+  project; that is the head of the paused queue below.
+- **ELEC — the electronics workbench, E1 through E6.** E1 and E2 closed
+  2026-08-21; E3 and E4a on 2026-08-31; E4b and E4c on 2026-09-01; E5, the
+  in-app simulation, on 2026-09-03; and E6, the external ROS 2 runner, on
+  2026-09-22. E6 is the app's second capability boundary — the first that
+  starts a process — and it was built the way the cloud-off boundary was:
+  before the feature, with its own gate (`check:runner`).
+- **Electron 44.** 2026-09-06, six weeks before Electron 42 left support.
+- **Installers 1.2.0 (2026-08-31) and 1.3.0 (2026-09-23)** — built, unsigned,
+  untagged.
+- **The first desktop loose ends.** 2026-09-26: every package declares its side
+  effects, every page is its own chunk, Excalidraw left the startup path, and
+  each professional toolkit is fetched when one of its tools is opened.
 
 ---
 
-## Now
+## Now — the desktop, until it is done
 
-### W3 — the desktop wiring
+[STATUS.md](STATUS.md) §4.1 is the queue, in the order to take it, and it is not
+repeated here: a list kept in two files is two lists within a week. What this
+file adds is the rule the order follows — **cheapest and highest-leverage
+first, and none of it a new feature.** It is the set of loose ends recorded
+while the product was being finished, and the desktop is done when it is empty.
 
-Every piece a round needs now exists — the engine, the scheduler, the wire, the
-content key — and **nothing constructs any of them.** What is left is mechanical
-and it is the whole of the distance between the mechanism and a user having sync:
-`syncStoreFor` and an `HttpPort` in the main process, the content key opened per
-round and closed when it ends, `createSyncLoop` driving them, a round and its
-report over IPC, all behind the cloud-off boundary — a build with sync off
-constructs no ports.
+## Next — web and sync, paused since 2026-08-31
 
-The Realtime signal lands on `SyncLoop.nudge` afterwards; it makes sync instant,
-the interval is what makes it correct.
-
-### W4 — pairing, or the decision not to build it
-
-The two halves of the pairing subsystem implement two different protocols, and
-the hole they were both aimed at now has a route that needs neither. Whether
-desktop→desktop pairing is still wanted is a founder question and it is in
-[STATUS.md](STATUS.md) §5. If it is, the rendezvous table gets reshaped to the
-protocol that is actually implemented and tested.
-
-### W5 — web auth and the web `NexusApi`
-
-`apps/web` is a shell with a typed proxy that throws. Everything behind it is
-unwritten, and it is the first work in this sequence that a user could see.
-
-### W6 — deployment on Cloudflare Workers
-
-The target is chosen and nothing is deployed. **This is where the unsigned-build
-rule stops being theoretical**: it is the first release surface beyond the
-founder's own machines.
-
-### E3–E6 — the rest of the electronics module
-
-Sequenced after W3 rather than beside it, because ELEC was an insertion into a
-phase the founder opened first and W3 is the older commitment. The order inside
-it is fixed by dependency: **E3** electrical rules (the catalogue already carries
-`supply`, `current`, `logicVolts` and per-pin `volts` and nothing reads them),
-then **E4** sketch generation, then **E5** in-app simulation, then **E6** the
-external ROS 2 runner.
-
-**E6 is the one slice that needs a design decision before any of it is written.**
-A runner spawns a process and talks to it; the product's standing guarantee is
-that a build with cloud off can reach neither. DEV-007 admits the spawn in
-principle, and the boundary that admits it has to be built the way the cloud-off
-packet boundary was — before the feature, not around it — with its own gate
-(`check:runner`).
-
-Which of W3 and E3 goes first is a founder question, in
-[STATUS.md](STATUS.md) §5. The recommendation there is W3.
+Paused, not cancelled: everything built for it stays built, tested, green in CI
+and off by default, and nothing new is added until the desktop is done. When it
+resumes, the order is fixed by dependency and carried in
+[STATUS.md](STATUS.md) §4.2 — a first round against the deployed project, then
+pairing (or the decision not to build it, a founder question in §5), then web
+auth and the web `NexusApi`, then deployment on Cloudflare Workers. The last is
+**where the unsigned-build rule stops being theoretical**: it is the first
+release surface beyond the founder's own machines.
 
 ---
 
@@ -158,18 +125,17 @@ Which of W3 and E3 goes first is a founder question, in
   Today's installers are unsigned.
 - **No performance claim before a harness measures it.** The budgets in
   [architecture/overview.md](architecture/overview.md) are targets nothing
-  checks.
-- **The Electron 42 pin has a deadline** — support ends 2026-10-20. Not started;
-  it is the one item here that arrives whether or not anyone works on it.
+  checks — which is why the 2026-09-26 split is recorded in bytes and not in
+  milliseconds.
+- **An Electron major is a founder decision, and the screenshot sweep is part
+  of it.** CI cannot run `shots`, so a green check on a Chromium bump is green on
+  the half of the verification that decides nothing here. 44 is supported until
+  v47 ships — around 2027-02, derived from the published cadence rather than
+  announced.
 
 ---
 
 ## Not in the sequence, and deliberately
-
-Route-level code splitting, the layer scale and the sizing contract are real
-work that serves both the desktop app and the web build — they are in
-[STATUS.md](STATUS.md) §4 rather than here because they are debts, not phases,
-and they get paid inside whichever wave next opens the files they live in.
 
 The rest of the module catalogue — goals, time tracking, health, car, travel,
 inventory, shopping, read-later, library, the password vault, entertainment,

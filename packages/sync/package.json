@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "sideEffects": false,
   "description": "The sync engine's pure half: what syncs and as what (the collection map), and the merge planning over @nexus/sync-crypto's HLC/LWW primitives. No SQLite, no network, no platform — so the same engine runs in the Electron main process and in a browser tab.",
   "exports": {
     ".": "./src/index.ts"

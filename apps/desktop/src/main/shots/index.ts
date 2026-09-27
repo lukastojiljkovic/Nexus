@@ -725,25 +725,37 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     // selecting something, so without these two scenes the sweep would report
     // „2 000 frames, all fine" about a module whose inspector it never saw —
     // which is the shape DC-57 named.
+    //
+    // The rover's board, BY NAME. This used to tap the first `.elec-part__body`
+    // in the DOM, on the belief that the first was the board; three sweeps on
+    // 2026-09-26 photographed three different parts, because the demo seeds a
+    // circuit under one timestamp, the store breaks that tie by id, and ids
+    // minted in one millisecond sorted at random until `uuidv7` counted within
+    // it. They sort in minting order now, and the scene says which part it
+    // means anyway — a frame compared with its predecessor has to be of the
+    // same subject, and „whatever is first" is a promise about an order this
+    // list does not own.
     id: "electronics-part",
     module: "electronics",
-    prepare: POINTER_TAP(".elec-part__body"),
+    prepare: POINTER_TAP('[aria-label="Raspberry Pi 4 Model B"] .elec-part__body'),
     fanout: null,
   },
   {
     // And with a WIRE in it, which is also the only screen the nine jumper
-    // colours appear on twice — once as the swatch row, once as the wire.
+    // colours appear on twice — once as the swatch row, once as the wire. The
+    // FIRST wire, which is stable only because ids now sort in minting order
+    // (see the scene above); a wire has no name of its own to ask for.
     id: "electronics-wire",
     module: "electronics",
     prepare: POINTER_TAP(".elec-wire__hit"),
     fanout: null,
   },
   {
-    // The mount picker (E4c), which the scene above cannot reach: it is drawn
-    // only for a part the simulator has physics for, and `.elec-part__body`
-    // takes whichever the DOM lists first — the rover's Raspberry Pi, which is
-    // a board. By `aria-label`, because that is the part's own name on the
-    // bench and the only stable way to ask for ONE of five identical rects.
+    // The mount picker (E4c), which `electronics-part` cannot reach: it is
+    // drawn only for a part the simulator has physics for, and the rover's
+    // Raspberry Pi is a board. By `aria-label`, because that is the part's own
+    // name on the bench and the only stable way to ask for ONE of five
+    // identical rects.
     id: "electronics-mount",
     module: "electronics",
     prepare: POINTER_TAP('[aria-label="VL53L0X"] .elec-part__body'),
@@ -2389,8 +2401,54 @@ async function waitFor(win: BrowserWindow, selector: string, timeoutMs = 8000): 
   return false;
 }
 
-/** Two animation frames plus a fixed tail — long enough for a CSS transition to finish. */
+/**
+ * What is on screen while the main pane is not yet what was asked for.
+ *
+ * Every page is its own chunk (`renderer/src/routes.tsx`), so a click on a
+ * sidebar row can land before the page does. `App` keeps the page being left on
+ * screen and marks the pane `aria-busy` until the new one is ready, and the
+ * skeleton stands in for a page when there is nothing to keep — the first page
+ * after unlock. One level down, every professional toolkit is a file fetched the
+ * first time one of its tools opens, and the tool surface does the same with its
+ * own `aria-busy` — which is why this matches a busy region ANYWHERE in the pane
+ * rather than naming the one it knows about. A frame taken while any of these is
+ * present is a frame of the wrong page or the wrong tool filed under the right
+ * name, and it would photograph as a perfectly ordinary one, which is what makes
+ * it expensive.
+ */
+const PAGE_PENDING =
+  '.app__main[aria-busy="true"], .app__main [aria-busy="true"], .app__page-pending';
+
+/** How long a page may take to arrive before the sweep says so and moves on. */
+const PAGE_WAIT_MS = 8000;
+
+let pageWaitReported = false;
+
+/**
+ * The page that was asked for, then two animation frames plus a fixed tail —
+ * long enough for a CSS transition to finish.
+ *
+ * The page wait is here rather than in `openModule` because a navigation is not
+ * only a sidebar click: a scene's `prepare` can open the search page, and a
+ * dashboard card opens its own module. Every one of those is followed by a
+ * settle, so waiting here covers the ones nobody lists.
+ */
 async function settle(win: BrowserWindow): Promise<void> {
+  const deadline = Date.now() + PAGE_WAIT_MS;
+  const probe = `document.querySelector(${JSON.stringify(PAGE_PENDING)}) !== null`;
+  while ((await evalIn(win, probe)) === true) {
+    if (Date.now() >= deadline) {
+      if (!pageWaitReported) {
+        pageWaitReported = true;
+        process.stderr.write(
+          `shots: a page was still loading after ${PAGE_WAIT_MS} ms — frames taken ` +
+            `before it arrives show the page before it.\n`,
+        );
+      }
+      break;
+    }
+    await pause(40);
+  }
   await evalIn(
     win,
     `new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(true))))`,

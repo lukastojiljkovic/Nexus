@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "sideEffects": false,
   "description": "Nexus sync cryptographic core: web-password KDF split, key-committing key wrapping, row AEAD, the device-pairing handshake, the hybrid logical clock and field-level LWW merge. Zero runtime dependencies — every primitive arrives through an injected CryptoPort. No React, DOM, or Node APIs.",
   "exports": {
     ".": "./src/index.ts",

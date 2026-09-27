@@ -47,6 +47,35 @@ afterEach(() => {
 });
 
 describe("seedDemoElectronics", () => {
+  /**
+   * The bench draws parts and wires in the store's order, `created_at` then
+   * `id`, and the seeder writes a circuit under one timestamp — so the ID is the
+   * order. Until `uuidv7` counted within a millisecond it was a shuffle: three
+   * screenshot sweeps tapped „the first part" and photographed three different
+   * ones, and the SVG stacking of overlapping rows moved with it. Pinned here
+   * as well as in `ids.test.ts` because this is where the order is SEEN.
+   */
+  it("lists the rover's parts and its first wire in the order the seeder placed them", () => {
+    const store = new ElectronicsStore(db.raw, profileId);
+    const rover = store.listActive().find((circuit) => circuit.name === "Malina: rover");
+    expect(rover).toBeDefined();
+    const { parts, wires } = store.read(rover?.id ?? "");
+    expect(parts.map((part) => part.componentId)).toEqual([
+      "raspberry-pi-4b",
+      "ttp223",
+      "buzzer-passive",
+      "bmp280",
+      "vl53l0x",
+    ]);
+    // The first wire the spec runs: the board's 3V3 to the touch sensor's VCC.
+    expect(wires[0]).toMatchObject({
+      fromPartId: parts[0]?.id,
+      fromPinId: "3V3",
+      toPartId: parts[1]?.id,
+      toPinId: "VCC",
+    });
+  });
+
   it("seeds three circuits, each with parts and wires on it", () => {
     const circuits = new ElectronicsStore(db.raw, profileId).listActive();
     expect(circuits.map((circuit) => circuit.name).sort()).toEqual([

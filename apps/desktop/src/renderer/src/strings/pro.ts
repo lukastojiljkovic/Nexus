@@ -69,8 +69,8 @@ export const proSr = {
    * The directory that fills the surface before a tool is chosen — and the
    * reason that surface stopped being empty.
    *
-   * With two hundred and seventy-four tools behind one rail, „izaberi alatku sa
-   * liste" is the hardest sentence in the drawer. The professional drawer
+   * With hundreds of tools behind one rail, „izaberi alatku sa liste" is the
+   * hardest sentence in the drawer. The professional drawer
    * indexes itself by TOOLKIT rather than by subject, because the toolkits are
    * what this person chose and the rail already groups by subject — the two
    * views answer different questions instead of repeating one.

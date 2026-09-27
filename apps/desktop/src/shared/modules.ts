@@ -5124,34 +5124,44 @@ const PRO_EVENT_TOOLS: ToolRegistration[] = [
 ];
 
 /**
- * The professional drawer's contents, one array per subject.
+ * The professional drawer's contents, one array per subject — named, because
+ * each array is also one FILE of surfaces in the renderer.
  *
- * A single concatenation rather than a per-pack module list, because `packs`
- * already carries everything the host needs to route a tool and a second
- * grouping would be a second answer to the same question — the kind that drifts
- * out of agreement with the first. The order here is the order the drawer draws
- * within a category, and it is deliberately the order toolkits shipped in.
+ * This is not a second answer to „where does a tool go": `packs` still routes
+ * every tool, and nothing here decides a drawer, a rail heading or who sees
+ * what. What it answers is which file holds a tool's surface — `dev` is the
+ * nine `renderer/src/devtools/` files, one per `category`, and every other key
+ * is `renderer/src/pro/<key>.tsx` — which `proToolSurfaces.tsx` needs to know
+ * BEFORE loading the file, because loading a pack's file the first time one of
+ * its tools is opened is the whole point: the drawer used to carry every
+ * profession's arithmetic to show a list of names.
+ *
+ * The order is the order the drawer draws within a category, and it is
+ * deliberately the order toolkits shipped in; `PRO_TOOLS` below is derived from
+ * it rather than written beside it, so the two cannot disagree.
  */
-const PRO_TOOLS: ToolRegistration[] = [
-  ...PRO_DEV_TOOLS,
-  ...PRO_GRADNJA_TOOLS,
-  ...PRO_INZENJERING_TOOLS,
-  ...PRO_DIZAJN_TOOLS,
-  ...PRO_FOTO_TOOLS,
-  ...PRO_MUZIKA_TOOLS,
-  ...PRO_PROSVETA_TOOLS,
-  ...PRO_TEKST_TOOLS,
-  ...PRO_TRENING_TOOLS,
-  ...PRO_KUHINJA_TOOLS,
-  ...PRO_PRAVO_TOOLS,
-  ...PRO_RACUNOVODSTVO_TOOLS,
-  ...PRO_BIZNIS_TOOLS,
-  ...PRO_NEKRETNINE_TOOLS,
-  ...PRO_TRANSPORT_TOOLS,
-  ...PRO_AGRO_TOOLS,
-  ...PRO_ZANAT_TOOLS,
-  ...PRO_EVENT_TOOLS,
-];
+export const PRO_TOOL_GROUPS = {
+  dev: PRO_DEV_TOOLS,
+  gradnja: PRO_GRADNJA_TOOLS,
+  inzenjering: PRO_INZENJERING_TOOLS,
+  dizajn: PRO_DIZAJN_TOOLS,
+  foto: PRO_FOTO_TOOLS,
+  muzika: PRO_MUZIKA_TOOLS,
+  prosveta: PRO_PROSVETA_TOOLS,
+  tekst: PRO_TEKST_TOOLS,
+  trening: PRO_TRENING_TOOLS,
+  kuhinja: PRO_KUHINJA_TOOLS,
+  pravo: PRO_PRAVO_TOOLS,
+  racunovodstvo: PRO_RACUNOVODSTVO_TOOLS,
+  biznis: PRO_BIZNIS_TOOLS,
+  nekretnine: PRO_NEKRETNINE_TOOLS,
+  transport: PRO_TRANSPORT_TOOLS,
+  agro: PRO_AGRO_TOOLS,
+  zanat: PRO_ZANAT_TOOLS,
+  event: PRO_EVENT_TOOLS,
+} as const satisfies Record<string, readonly ToolRegistration[]>;
+
+const PRO_TOOLS: ToolRegistration[] = Object.values(PRO_TOOL_GROUPS).flat();
 
 /**
  * UTIL slice c's card. ONE control, and the restraint is FIN's and DOC's
@@ -5398,6 +5408,7 @@ const V0_MODULES: ModuleManifest[] = [
     defaultEnabled: true,
     widgets: TASKS_WIDGETS,
     settings: TASKS_SETTINGS,
+    searchIndexers: [{ kind: "task" }],
   },
   {
     id: "calendar",
@@ -5406,6 +5417,9 @@ const V0_MODULES: ModuleManifest[] = [
     defaultEnabled: true,
     widgets: CALENDAR_WIDGETS,
     settings: CALENDAR_SETTINGS,
+    // `document` is the calendar's, not a module of its own: tracked documents
+    // live on this page's „Dokumenta" view, which is where a hit opens.
+    searchIndexers: [{ kind: "event" }, { kind: "document" }],
   },
   // SET itself publishes no settings card: the page it renders IS the surface,
   // and a „Podešavanja" card inside Podešavanja would be a mirror facing a
@@ -5418,6 +5432,14 @@ const V0_MODULES: ModuleManifest[] = [
     defaultEnabled: true,
     widgets: NOTES_WIDGETS,
     settings: NOTES_SETTINGS,
+    // `attachment` is decided honestly rather than hedged: migration 017's
+    // `search_source_attachment` projects NOTE attachments only (its
+    // `parent_id` is `note_id`, its profile comes through `notes`), and the
+    // shell opens an attachment hit via `openNote` — task and subject
+    // attachments are not indexed at all. If another parent kind ever joins
+    // the index, ownership has to become per-row and this line stops being
+    // enough. It is not „Datoteke"'s, for the reason that module gives below.
+    searchIndexers: [{ kind: "note" }, { kind: "attachment" }],
   },
   // Private notes (ADR-057): OFF by default — first enabled from the Moduli
   // gallery, deliberately. It contributes NO widgets and NO searchIndexers:
@@ -5474,6 +5496,7 @@ const V0_MODULES: ModuleManifest[] = [
     defaultEnabled: true,
     widgets: STUDY_WIDGETS,
     settings: STUDY_SETTINGS,
+    searchIndexers: [{ kind: "subject" }, { kind: "exam" }, { kind: "deck" }, { kind: "card" }],
   },
   // Finansije (FIN slice b). ON by default, like every other built module and
   // unlike PRIV: PRIV is off because it is a sealed section with a credential
@@ -5675,26 +5698,23 @@ const V0_MODULES: ModuleManifest[] = [
   // that slot — the interchange is assembled in `@nexus/core` from
   // `ProfileData`, not from manifests.
   //
-  // `searchIndexers` is the one that is „not yet" rather than „never", and it
-  // is worth being precise about the difference. „Tabla" declines one because a
-  // hit inside a board could only say „somewhere on this board", which is not a
-  // result anybody can use. A CIRCUIT is not like that: its name is a phrase
-  // the user typed for the express purpose of telling this circuit from that
-  // one, and „Trepćuća dioda" in the palette opens exactly the right thing.
+  // `searchIndexers` IS filled, where „Tabla" declines one: a hit inside a
+  // board could only say „somewhere on this board", which is not a result
+  // anybody can use. A CIRCUIT is not like that: its name is a phrase the user
+  // typed for the express purpose of telling this circuit from that one, and
+  // „Trepćuća dioda" in the palette opens exactly the right thing.
   //
-  // That argument was carried out on 2026-09-22 — the kind, the migration and
-  // the backfill are all in (migration 070). The paragraph is left standing
-  // because the reason it gave for the delay is the useful half and it was
-  // right: „a new `SearchKind` is a migration and a backfill, not a
-  // declaration". The declaration is one line in `@nexus/core`; the other five
-  // places a kind has to be named are the index, and `packages/db/src/migrations/
-  // 070-circuit-search.ts` lists them.
+  // The kind waited for its index — a new `SearchKind` is a migration and a
+  // backfill, not a declaration — and both landed on 2026-09-22 (migration
+  // 070, whose header lists every place a kind is named). This line is what
+  // makes the kind ELEKTRONIKA's: its flag gates the hits, its page opens them.
   {
     id: "electronics",
     prefix: "ELEC",
     category: "Professional & utilities",
     defaultEnabled: true,
     widgets: ELEC_WIDGETS,
+    searchIndexers: [{ kind: "circuit" }],
   },
   // „Stručne alatke" (UTIL slice d) — the professional drawer itself, host to
   // every toolkit as its pack ships rather than a drawer of its own kind. Its

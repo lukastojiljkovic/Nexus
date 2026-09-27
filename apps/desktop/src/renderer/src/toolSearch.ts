@@ -18,7 +18,8 @@
  * stair tool only because somebody had hand-written that exact phrase into its
  * keyword list, and found nothing at all in a toolkit whose keywords were single
  * words. That made findability depend on whether an author had guessed the
- * user's phrasing, which is not a property a search should have at 274 tools.
+ * user's phrasing, which is not a property a search should have at hundreds
+ * of tools.
  * Conjunctive terms is also what `matchCommands` already does for the command
  * palette, so the app now answers „does this text match" one way instead of two.
  */

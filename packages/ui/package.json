@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "sideEffects": [
+    "**/*.css"
+  ],
   "description": "Nexus design system components. Consumes @nexus/tokens exclusively — raw hex/color values are forbidden here.",
   "exports": {
     ".": "./src/index.ts",

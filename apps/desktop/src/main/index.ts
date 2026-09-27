@@ -9,7 +9,7 @@ import {
   unlink as unlinkAsync,
   writeFile as writeFileAsync,
 } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, isAbsolute, join, relative } from "node:path";
 import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, protocol, session } from "electron";
 import type { IpcMainInvokeEvent, OpenDialogOptions } from "electron";
 // `electron-updater` is deliberately NOT imported — see the disarmed
@@ -64,6 +64,7 @@ import {
   MUSCLE_GROUPS,
   normalizeChordKey,
   openPrivBlob,
+  packFlagKey,
   PART_ROTATIONS,
   parseCanvasScene,
   parseExerciseRef,
@@ -81,6 +82,7 @@ import {
   sniffMime,
   toFtsMatchExpression,
   TOOL_PACKS,
+  toolDrawer,
   validateArchivePassphrase,
   validateHabitSchedule,
   validateRecurrenceRule,
@@ -725,6 +727,8 @@ import {
 } from "../shared/ipc.js";
 import { businessProfileFlags, createModuleRegistry, LOCKED_MODULE_IDS } from "../shared/modules.js";
 import { DEMO_BUSINESS_PROFILE_NAME, seedDemoBusiness, seedDemoProfile } from "./demo/index.js";
+import { seedDemoCanvas } from "./demo/canvas.js";
+import { createDemoContext } from "./demo/context.js";
 import type { DemoAttachmentIo } from "./demo/attachments.js";
 import { duplicateStems, missingCoverage, runShots } from "./shots/index.js";
 
@@ -829,14 +833,66 @@ protocol.registerSchemesAsPrivileged([
 // getPath("userData") call.
 app.setName("Nexus");
 
+// The harness sandbox: never the developer's real `%APPDATA%\Nexus`, but a
+// nested, disposable directory, one per harness. Wiped up front (Electron only
+// auto-creates the DEFAULT userData path, not one redirected here, and a
+// leftover keychain.json from a previous run would make the very first smoke
+// assertion false on the second run onward) then recreated, since nothing else
+// will create it before the first file write into it.
+//
+// **AT MODULE SCOPE, BEFORE `ready`, and it was not until 2026-09-26.** It used
+// to run inside `app.whenReady()`, after the default session already existed —
+// and Chromium's session data does not follow a `userData` changed after that.
+// So the app's own files (accounts, key chains, databases) went into the
+// sandbox, while everything the RENDERER keeps — `localStorage`, session
+// storage, the HTTP cache — went into the real directory beside it. Every
+// `smoke` and `shots` run wrote its active profile, its theme and its tool
+// history into the localStorage of the app a person actually uses, and every
+// sweep began from whatever the previous one had left there: two sweeps of one
+// build photographed „Alatke" landing on different tools. `sessionData` is set
+// as well as `userData` so the two cannot come apart again, and everything
+// below that reads `userData` before `ready` now reads the sandbox — `cloud.json`
+// among it, which a harness has no business inheriting from the real install.
+//
+// `--demo` is deliberately absent: its whole purpose is an account that is
+// still there after the process exits, so it writes where a real launch reads.
+// It stays safe by being additive — a new account is a new directory with its
+// own key chain (ADR-044).
+const HARNESS_SANDBOX = isSmoke ? "smoke" : isShots ? "shots" : null;
+if (HARNESS_SANDBOX !== null) {
+  const sandboxPath = join(app.getPath("userData"), HARNESS_SANDBOX);
+  try {
+    rmSync(sandboxPath, { recursive: true, force: true });
+    mkdirSync(sandboxPath, { recursive: true });
+  } catch (error) {
+    // `force` forgives a MISSING path, not a BUSY one. On Windows a directory
+    // holding a file another process has open cannot be removed at all, and
+    // the `EPERM` that raises names neither the file nor the run holding it —
+    // so a second `shots` run against the first run's sandbox read as an
+    // inexplicable crash. It is a refusal, and it has to be one: a run whose
+    // sandbox still holds the previous run's key chain is not the
+    // deterministic run its frames claim to be. `scripts/run-lock.mjs` keeps
+    // two runs from reaching this at all; this is what happens if they do.
+    // `process.exit`, not `app.exit`: nothing is running yet to be closed.
+    process.stderr.write(
+      `Nexus: the ${HARNESS_SANDBOX} sandbox could not be cleared — ${String(error)}\n` +
+        `  Another ${HARNESS_SANDBOX} run is probably using it. Refusing to start rather\n` +
+        `  than running against a sandbox that still holds its files.\n`,
+    );
+    process.exit(1);
+  }
+  app.setPath("userData", sandboxPath);
+  app.setPath("sessionData", sandboxPath);
+}
+
 // SEC-NET: the resolver-level layer of the cloud-off boundary.
 //
 // MUST run at module scope, for the same reason the scheme registration above
 // does: a Chromium command-line switch is read once while the browser process
 // is starting, and appending it after `ready` changes nothing while looking
-// like it changed something. And it MUST run after `app.setName`, because
-// `shouldBlockResolver` reads `cloud.json` out of `userData` and that path is
-// what the line above decides.
+// like it changed something. And it MUST run after `app.setName` and the
+// harness sandbox, because `shouldBlockResolver` reads `cloud.json` out of
+// `userData` and that path is what those two decide.
 //
 // This is the layer that cannot be lifted at runtime, and the asymmetry is the
 // design rather than a shortcoming: the state this product has to be able to
@@ -12774,8 +12830,9 @@ async function runSmokeMultiAccountRehearsal(): Promise<void> {
  * runs. Proves, in order: (1) the window reaches `did-finish-load`; (2) no
  * download started and the renderer did not crash getting there; (3)
  * `performLock` closes the window — ADR-064's closed-on-every-lock rule — and
- * the account re-unlocks afterwards. Runs LAST, after the multi-account
- * rehearsal has settled which account (and passcode) is open.
+ * the account re-unlocks afterwards. Runs after the multi-account rehearsal
+ * has settled which account (and passcode) is open, and before the page walk,
+ * which reloads the renderer and so has to come last.
  */
 async function runSmokeDocPreviewRehearsal(): Promise<void> {
   const [profile] = listProfiles(requireDb());
@@ -12859,6 +12916,238 @@ async function runSmokeDocPreviewRehearsal(): Promise<void> {
   noteStore(profile.id).softDelete(note.id, new Date().toISOString());
 }
 
+/** What the page walk names a profile the questionnaire never named — the shell only exists for a named one. */
+const SMOKE_PROFILE_NAME = "Smoke";
+
+/** One tool the walk opened, by the name its rail row shows. */
+interface SmokeToolVisit {
+  readonly drawer: "tools" | "pro";
+  readonly name: string;
+  readonly shown: boolean;
+  readonly failed: boolean;
+}
+
+/** One page the walk opened, as the renderer reports it back. */
+interface SmokePageVisit {
+  readonly id: string;
+  /** The pane showed this page, not busy and not a skeleton, before the deadline. */
+  readonly shown: boolean;
+  /** The pane showed the page boundary's failure state instead (`PageSlot`). */
+  readonly failed: boolean;
+}
+
+/**
+ * Opens every page of the BUILT renderer, the way a person does: a click on its
+ * sidebar row.
+ *
+ * Every page is its own chunk (`renderer/src/routes.tsx`), and loading one is
+ * the thing no other check here can see. Vitest reads source; `pnpm dev` is
+ * served over http with no CSP of its own making; only the packaged page loads
+ * its chunks from `file://` under the production policy, and a chunk that
+ * cannot be fetched there is a page that opens in development and never in the
+ * installer. Before the split this walk would have proved one thing — the
+ * startup chunk loads, which `__nexusReady` already proves. Now it proves one
+ * per page, and that each page MOUNTS against a real database without the
+ * boundary catching anything, which nothing proved before.
+ *
+ * The rehearsals above leave the renderer on the questionnaire — the smoke
+ * account's profile was never named, and the shell does not exist for an
+ * unnamed one — and with two modules switched off by default. So this names the
+ * profile, switches every module on, reloads, and walks. It runs last because
+ * it changes all three; the smoke directory is thrown away when the run ends.
+ */
+async function runSmokePageWalk(win: BrowserWindow): Promise<void> {
+  const database = requireDb();
+  const profiles = listProfiles(database);
+  if (profiles.length === 0) throw new Error("expected a profile for the page walk");
+  for (const profile of profiles) {
+    if (profile.name.trim() === "") renameProfile(database, profile.id, SMOKE_PROFILE_NAME);
+    const flags = flagStore(profile.id);
+    for (const manifest of moduleRegistry.all()) await flags.set(manifest.id, true);
+    // Every toolkit too, so the professional drawer lists every tool it has.
+    for (const pack of TOOL_PACKS) await flags.set(packFlagKey(pack), true);
+  }
+
+  // Drawings the walk must NOT destroy. The walk opens „Tabla" and leaves the
+  // moment it is shown, which is the exact gesture that emptied a board in 1.3.0:
+  // the page's unmount flush read the editor after Excalidraw had replaced its
+  // scene with an empty one, and wrote that over the board
+  // (`renderer/src/canvasAutosave.ts`). The demo boards are what the founder's
+  // own install lost, so they are what is checked.
+  const drawn = profiles[0];
+  if (drawn === undefined) throw new Error("expected a profile to draw on");
+  seedDemoCanvas(database.raw, createDemoContext(drawn.id, Date.now()));
+  const elementsOf = (id: string): number =>
+    (JSON.parse(canvasStore(drawn.id).readScene(id).scene) as { elements?: unknown[] }).elements
+      ?.length ?? 0;
+  const drawings = canvasStore(drawn.id)
+    .listActive()
+    .map((board) => ({ id: board.id, name: board.name, elements: elementsOf(board.id) }));
+  if (drawings.length === 0 || drawings.some((board) => board.elements === 0)) {
+    throw new Error("page walk: the demo boards were not seeded with drawings");
+  }
+
+  const loaded = new Promise<void>((resolve) => {
+    win.webContents.once("did-finish-load", () => resolve());
+  });
+  win.webContents.reload();
+  await loaded;
+
+  // Polled on timers rather than animation frames: this window is not
+  // `backgroundThrottling: false` the way the sweep's is, and a frame callback
+  // in a window Chromium thinks is hidden may never run.
+  const answer: unknown = await win.webContents.executeJavaScript(
+    `(async () => {
+       const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+       const until = async (test, ms) => {
+         const end = Date.now() + ms;
+         while (Date.now() < end) {
+           if (test()) return true;
+           await pause(25);
+         }
+         return test();
+       };
+       const ready = await until(
+         () => window.__nexusReady === true || window.__nexusError === true, 10000);
+       if (!ready || window.__nexusError === true) return "the renderer did not become ready";
+       if (!(await until(() => document.querySelector(".app__sidebar") !== null, 10000))) {
+         return "the shell did not render — the questionnaire is still in front of it";
+       }
+       const pane = document.querySelector(".app__main");
+       if (pane === null) return "the shell has no main pane";
+       const shown = (id) => pane.dataset.page === id &&
+         pane.getAttribute("aria-busy") !== "true" &&
+         pane.querySelector(".app__page-pending") === null;
+       // The first page after a reload has nothing to keep on screen, so it
+       // may show the skeleton; it has to be gone before counting starts.
+       const settled = await until(() => pane.getAttribute("aria-busy") !== "true" &&
+         pane.querySelector(".app__page-pending") === null, 15000);
+       if (!settled) return "the first page never arrived";
+       let skeletons = 0;
+       const observer = new MutationObserver((records) => {
+         for (const record of records) {
+           for (const node of record.addedNodes) {
+             if (node.nodeType === 1 && (node.matches(".app__page-pending") ||
+                 node.querySelector(".app__page-pending") !== null)) skeletons += 1;
+           }
+         }
+       });
+       observer.observe(pane, { childList: true, subtree: true });
+       const visits = [];
+       const open = async (id, row) => {
+         if (row === null) {
+           visits.push({ id, shown: false, failed: false });
+           return;
+         }
+         row.click();
+         const ok = await until(() => shown(id), 15000);
+         const failed = document.querySelector(".app__main .app__page-failed") !== null;
+         visits.push({ id, shown: ok, failed });
+       };
+       const ids = Array.from(document.querySelectorAll("[data-module-id]"),
+         (row) => row.getAttribute("data-module-id"));
+       for (const id of ids) {
+         await open(id, document.querySelector('[data-module-id="' + id + '"]'));
+       }
+       // The search page has no module row; it is the first row of the foot.
+       await open("search", document.querySelector(".app__sidebar-foot .nx-nav-item"));
+       observer.disconnect();
+
+       // Every tool in both drawers, one click each. A professional toolkit's
+       // surfaces are a file fetched the first time one of its tools opens
+       // (\`proToolSurfaces.tsx\`), so this is the only place each of those
+       // files is loaded from \`file://\` under the production policy.
+       const tools = [];
+       for (const drawer of ["tools", "pro"]) {
+         await open(drawer, document.querySelector('[data-module-id="' + drawer + '"]'));
+         if (!shown(drawer)) continue;
+         const count = document.querySelectorAll(".tool__item").length;
+         for (let index = 0; index < count; index += 1) {
+           const item = document.querySelectorAll(".tool__item")[index];
+           if (item === undefined) break;
+           const name = item.textContent.trim();
+           item.click();
+           const surface = document.querySelector(".tool__surface");
+           const ok = await until(() => {
+             const title = document.querySelector(".tool__surface-title");
+             return surface !== null && surface.getAttribute("aria-busy") !== "true" &&
+               surface.querySelector('[aria-busy="true"]') === null &&
+               title !== null && title.textContent.trim() === name;
+           }, 15000);
+           const failed = document.querySelector(".app__main .app__page-failed") !== null;
+           tools.push({ drawer, name, shown: ok, failed });
+           if (failed) break;
+         }
+       }
+       return { visits, skeletons, tools };
+     })()`,
+  );
+  if (typeof answer === "string") throw new Error(`page walk: ${answer}`);
+  const { visits, skeletons, tools } = answer as {
+    readonly visits: readonly SmokePageVisit[];
+    readonly skeletons: number;
+    readonly tools: readonly SmokeToolVisit[];
+  };
+
+  const visited = new Set(visits.map((visit) => visit.id));
+  const unreached = [...moduleRegistry.all().map((manifest) => manifest.id), "search"].filter(
+    (id) => !visited.has(id),
+  );
+  if (unreached.length > 0) {
+    throw new Error(`page walk: no sidebar row reached ${unreached.join(", ")}`);
+  }
+  const broken = visits.filter((visit) => !visit.shown || visit.failed);
+  if (broken.length > 0) {
+    throw new Error(
+      `page walk: ${broken
+        .map((visit) => `${visit.id} ${visit.failed ? "failed to draw" : "never arrived"}`)
+        .join("; ")}`,
+    );
+  }
+  // What `App`'s deferred page id is FOR: a navigation keeps the page being left
+  // on screen until the next one has arrived. Every page after the first was
+  // opened cold, so each one was a chance for the pane to blank.
+  if (skeletons > 0) {
+    throw new Error(
+      `page walk: the pane blanked to the skeleton ${String(skeletons)} time(s) while ` +
+        `navigating — the page being left is not held on screen`,
+    );
+  }
+
+  const emptied = drawings.filter((board) => elementsOf(board.id) < board.elements);
+  if (emptied.length > 0) {
+    throw new Error(
+      `page walk: leaving „Tabla“ lost drawing — ${emptied
+        .map((board) => `„${board.name}“ ${String(board.elements)} → ${String(elementsOf(board.id))}`)
+        .join("; ")}`,
+    );
+  }
+
+  // Every registered tool was opened and drew, in the drawer it belongs to.
+  const declared = moduleRegistry.all().flatMap((manifest) => manifest.tools ?? []);
+  for (const [drawer, kind] of [
+    ["tools", "utilities"],
+    ["pro", "professional"],
+  ] as const) {
+    const expected = declared.filter((tool) => toolDrawer(tool) === kind).length;
+    const opened = tools.filter((tool) => tool.drawer === drawer);
+    const bad = opened.filter((tool) => !tool.shown || tool.failed);
+    if (bad.length > 0) {
+      throw new Error(
+        `page walk: in ${drawer}, ${bad
+          .slice(0, 10)
+          .map((tool) => `„${tool.name}“ ${tool.failed ? "failed to draw" : "never arrived"}`)
+          .join("; ")}`,
+      );
+    }
+    if (opened.length !== expected) {
+      throw new Error(
+        `page walk: ${drawer} listed ${String(opened.length)} tools, and ${String(expected)} are registered`,
+      );
+    }
+  }
+}
+
 async function runSmoke(win: BrowserWindow): Promise<void> {
   const profiles = listProfiles(requireDb());
   if (profiles.length < 1) {
@@ -12876,6 +13165,19 @@ async function runSmoke(win: BrowserWindow): Promise<void> {
   );
   if (rendererOk !== true) {
     throw new Error("renderer IPC round-trip did not succeed");
+  }
+
+  // Everything the renderer keeps — `localStorage`, session storage, the cache —
+  // is inside the sandbox. From the first smoke run until 2026-09-26 it was not:
+  // the sandbox was applied after `ready`, the default session had already
+  // settled on the REAL `userData`, and every run wrote its keys into the
+  // localStorage of the app a person uses (the sandbox block says more). The
+  // accounts landed in the sandbox either way, which is why nothing noticed.
+  const sandbox = app.getPath("userData");
+  const storage = session.defaultSession.storagePath;
+  const within = storage === null ? null : relative(sandbox, storage);
+  if (within === null || within.startsWith("..") || isAbsolute(within)) {
+    throw new Error(`renderer storage is outside the harness sandbox: ${String(storage)} (sandbox ${sandbox})`);
   }
 
   const unlockedStatus = computeAuthStatus();
@@ -12914,6 +13216,7 @@ async function runSmoke(win: BrowserWindow): Promise<void> {
   await runSmokeSearchRehearsal();
   await runSmokeMultiAccountRehearsal();
   await runSmokeDocPreviewRehearsal();
+  await runSmokePageWalk(win);
 }
 
 // --- `--shots` and `--demo` --------------------------------------------------
@@ -13198,43 +13501,6 @@ app.whenReady().then(async () => {
   // down at startup is not defence in depth — it is the control breaking the
   // product it protects.
   session.defaultSession.setSpellCheckerEnabled(false);
-
-  // Never the developer's real `%APPDATA%\Nexus` — a nested, disposable
-  // directory, one per harness. Wiped up front (Electron only auto-creates the
-  // DEFAULT userData path, not one redirected here, and a leftover
-  // keychain.json from a previous run would make the very first smoke
-  // assertion below false on the second run onward) then recreated, since
-  // nothing else will create it before the first file write into it.
-  //
-  // `--demo` is deliberately absent: its whole purpose is an account that is
-  // still there after the process exits, so it writes where a real launch
-  // reads. It stays safe by being additive — a new account is a new directory
-  // with its own key chain (ADR-044).
-  const sandboxDir = isSmoke ? "smoke" : isShots ? "shots" : null;
-  if (sandboxDir !== null) {
-    const sandboxUserDataPath = join(app.getPath("userData"), sandboxDir);
-    try {
-      rmSync(sandboxUserDataPath, { recursive: true, force: true });
-      mkdirSync(sandboxUserDataPath, { recursive: true });
-    } catch (error) {
-      // `force` forgives a MISSING path, not a BUSY one. On Windows a directory
-      // holding a file another process has open cannot be removed at all, and
-      // the `EPERM` that raises names neither the file nor the run holding it —
-      // so a second `shots` run against the first run's sandbox read as an
-      // inexplicable crash. It is a refusal, and it has to be one: a run whose
-      // sandbox still holds the previous run's key chain is not the
-      // deterministic run its frames claim to be. `scripts/run-lock.mjs` keeps
-      // two runs from reaching this at all; this is what happens if they do.
-      process.stderr.write(
-        `Nexus: the ${sandboxDir} sandbox could not be cleared — ${String(error)}\n` +
-          `  Another ${sandboxDir} run is probably using it. Refusing to start rather\n` +
-          `  than running against a sandbox that still holds its files.\n`,
-      );
-      app.exit(1);
-      return;
-    }
-    app.setPath("userData", sandboxUserDataPath);
-  }
 
   try {
     // ADR-044, and strictly before anything answers the renderer: bring the

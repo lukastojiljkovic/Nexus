@@ -164,6 +164,16 @@ export const sr = {
     loadErrorTitle: "Pokretanje nije uspelo",
     loadErrorDescription:
       "Veza sa lokalnom bazom podataka nije uspostavljena. Zatvori aplikaciju i pokreni je ponovo.",
+    /**
+     * One page could not be drawn — its file did not load, or it failed while
+     * rendering (`PageSlot` in `routes.tsx`). The shell around it still works,
+     * which is why the copy points at the sidebar first: another module is one
+     * click away, and a restart is the remedy only if this page is the one
+     * that is needed.
+     */
+    pageErrorTitle: "Ekran nije učitan",
+    pageErrorDescription:
+      "Ovaj deo aplikacije nije mogao da se prikaže. Izaberi drugi modul u bočnoj traci ili zatvori aplikaciju i pokreni je ponovo.",
   },
 
   /**
@@ -5458,6 +5468,15 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
      * anybody can act on.
      */
     tooLarge: "Tabla je prevelika da bi se sačuvala — ubačene slike zauzimaju previše prostora.",
+    /**
+     * The same two failures, for a board that was LEFT before its last write
+     * landed — a switch within the autosave delay. That board's save line is
+     * gone and so is its drawing, so these go in the page notice instead, and
+     * say which board they mean without claiming the one now open failed.
+     */
+    leftSaveError: "Poslednje izmene na prethodnoj tabli nisu sačuvane. Otvori je i proveri crtež.",
+    leftTooLarge:
+      "Poslednje izmene na prethodnoj tabli nisu sačuvane — ubačene slike zauzimaju previše prostora.",
     /** Nothing drawn yet, and no board either. */
     emptyTitle: "Još nema nijedne table",
     emptyDescription: "Napravi tablu i crtaj — dijagrami, skice, mape ideja.",

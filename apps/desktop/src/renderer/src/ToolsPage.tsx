@@ -9,8 +9,8 @@ import {
   type ToolRegistration,
   type ToolRiskClass,
 } from "@nexus/core";
-import { Button, EmptyState, PageHeader, TextField } from "@nexus/ui";
-import { useMemo, useState, type ComponentType } from "react";
+import { Button, EmptyState, LoadingState, PageHeader, TextField } from "@nexus/ui";
+import { Suspense, useDeferredValue, useMemo, useState, type ComponentType } from "react";
 
 import { createModuleRegistry } from "../../shared/modules.js";
 import { ProPackDialog } from "./ProPacks.js";
@@ -59,8 +59,8 @@ import { ToolRiskNotice, ToolRiskProvider } from "./toolRisk.js";
  * It had been a header, then a search field floating in its own strip of
  * nothing, then a two-pane list that simply ran off the bottom of the window,
  * taking the header with it whenever anybody scrolled. Three objects with no
- * relationship, and at two hundred and seventy-four tools the middle one was
- * a rail ten thousand pixels long. Now the layout is one bordered box that
+ * relationship, and at a few hundred tools the middle one was a rail ten
+ * thousand pixels long. Now the layout is one bordered box that
  * fills the pane; the rail and the surface scroll inside it independently, and
  * the search sits at the head of the rail because the rail is what it filters.
  *
@@ -244,10 +244,9 @@ export function ToolsPage({ drawer, enabledModules, packs, packEditor }: ToolsPa
    * so an index of them beside it is the same eleven names twice on one screen:
    * worse than the empty pane it was meant to replace, because it looks like
    * content. A drawer that small opens ON a tool instead — the one this device
-   * used last, or the first in the rail. „Stručne alatke" has two hundred and
-   * seventy-four behind a scroller, so its index is exactly what the rail cannot
-   * be, and opening one of two hundred and seventy-four at random would be noise
-   * rather than a head start.
+   * used last, or the first in the rail. „Stručne alatke" has hundreds behind a
+   * scroller, so its index is exactly what the rail cannot be, and opening one
+   * of hundreds at random would be noise rather than a head start.
    *
    * DERIVED and never written. Choosing this is not an act by the user: it must
    * not enter „Nedavno", and it must not become a selection the drawer switch
@@ -265,7 +264,17 @@ export function ToolsPage({ drawer, enabledModules, packs, packEditor }: ToolsPa
         TOOL_CATEGORIES.flatMap((category) => tools.filter((tool) => tool.category === category))[0]
           ?.id ??
         null);
-  const selected = tools.find((tool) => tool.id === openId) ?? null;
+  /**
+   * The tool the surface DRAWS, which trails `openId` by as long as the tool's
+   * file takes to arrive — `App`'s `shownId`, one level down, and for the same
+   * reason: every professional toolkit is fetched the first time one of its
+   * tools is opened (`proToolSurfaces.tsx`), and the tool being left stays on
+   * screen until the next one is ready instead of the pane blanking. The rail's
+   * active row reads `openId` and moves on the click; `aria-busy` on the surface
+   * says so while the two differ, and the screenshot sweep waits on it.
+   */
+  const surfaceId = useDeferredValue(openId);
+  const selected = tools.find((tool) => tool.id === surfaceId) ?? null;
   const Surface = selected === null ? undefined : surfaces[selected.id];
 
   /** Opens a tool and records that this device did — one path, for the rail and the directory alike. */
@@ -367,7 +376,7 @@ export function ToolsPage({ drawer, enabledModules, packs, packEditor }: ToolsPa
                 }}
               />
             </div>
-            {/* The scroller. The rail is two hundred and seventy-four rows long
+            {/* The scroller. The rail is hundreds of rows long
                 and the page is not: this box scrolls, the instrument around it
                 does not move, and the open tool beside it stays where it was. */}
             <div className="tool__list-scroll">
@@ -449,62 +458,78 @@ export function ToolsPage({ drawer, enabledModules, packs, packEditor }: ToolsPa
             </div>
           </nav>
 
-          <section className="tool__surface">
+          <section
+            className="tool__surface"
+            aria-busy={surfaceId !== openId ? true : undefined}
+          >
             {/* One scroller for whatever the surface is showing — an open tool
                 or the directory — so the answer to a long form and the index of
                 a long drawer scroll the same way and neither moves the rail. */}
             <div className="tool__surface-scroll">
-              {selected !== null && Surface !== undefined ? (
-                <>
-                  <header className="tool__surface-head">
-                    <h3 className="tool__surface-title">{selected.name}</h3>
-                    {/* Which subject the open tool came from. It is the rail's
-                        own heading, restated where the reader is now looking:
-                        with the rail scrolled to somewhere else, nothing on the
-                        surface said what kind of thing this is. */}
-                    <span className="nx-eyebrow tool__surface-kind">
-                      {strings.tools.category[selected.category]}
-                    </span>
-                  </header>
-                  {/* The blurb is the developer drawer's, and it earns its place
-                      there rather than here: „Dužina" needs no sentence, while
-                      „Mikroskalirani blokovi" is unreadable without one. Rendered
-                      from the registration so a tool that declares none simply has
-                      none, instead of an empty line reserving space for it. */}
-                  {selected.blurb !== undefined && <p className="nx-hint nx-hint--prose">{selected.blurb}</p>}
-                  {/* Above the body, in the same place on every affected tool,
-                      and drawn from the REGISTRATION — so a tool cannot ship
-                      without its notice and cannot ship with the wrong one.
-                      Draws nothing at all for the tools that endanger nobody. */}
-                  <ToolRiskNotice riskClass={selected.riskClass} />
-                  {/* The measure belongs to the HOST, not to each tool. Every
-                      surface used to open with its own `.tool__body` wrapper, which
-                      is a structural rule fifty-three separate files were each
-                      expected to remember — and the one that forgot would have got
-                      a full-width form with no gap between its fields, looking
-                      broken for a reason nobody would find. Written once here, it
-                      cannot be forgotten. */}
-                  {/* The surface, wrapped in its own risk class, which is what
-                      makes the copy button's trailing line unforgettable —
-                      `CopyButton` reads it through `useCopySuffix` from
-                      wherever it sits inside whichever tool is open. */}
-                  <ToolRiskProvider value={selected.riskClass}>
-                    <div className="tool__body">
-                      <Surface />
-                    </div>
-                  </ToolRiskProvider>
-                  {/* Under the answer, where the professional checking it is
-                      already looking: the exact source and edition of any
-                      published table this tool embeds. Provenance, never a
-                      compliance claim — „prema SRPS EN 10080" is protective,
-                      „u skladu sa standardom" is a warranty. */}
-                  {selected.source !== undefined && (
-                    <p className="tool__surface-source">{selected.source}</p>
-                  )}
-                </>
-              ) : (
-                <ToolDirectory packs={packs} visible={visible} recentIds={recent} onOpen={openTool} />
-              )}
+              {/* This pane's own boundary, so a toolkit's file arriving never
+                  suspends the page around it. Never keyed, for `PageSlot`'s
+                  reason: a boundary already showing a tool keeps it while the
+                  next one loads. Its fallback is seen only when there was
+                  nothing to keep — a drawer that opens straight onto a tool. */}
+              <Suspense
+                fallback={
+                  <div aria-busy="true">
+                    <LoadingState label={strings.app.loading} rows={4} />
+                  </div>
+                }
+              >
+                {selected !== null && Surface !== undefined ? (
+                  <>
+                    <header className="tool__surface-head">
+                      <h3 className="tool__surface-title">{selected.name}</h3>
+                      {/* Which subject the open tool came from. It is the rail's
+                          own heading, restated where the reader is now looking:
+                          with the rail scrolled to somewhere else, nothing on the
+                          surface said what kind of thing this is. */}
+                      <span className="nx-eyebrow tool__surface-kind">
+                        {strings.tools.category[selected.category]}
+                      </span>
+                    </header>
+                    {/* The blurb is the developer drawer's, and it earns its place
+                        there rather than here: „Dužina" needs no sentence, while
+                        „Mikroskalirani blokovi" is unreadable without one. Rendered
+                        from the registration so a tool that declares none simply has
+                        none, instead of an empty line reserving space for it. */}
+                    {selected.blurb !== undefined && <p className="nx-hint nx-hint--prose">{selected.blurb}</p>}
+                    {/* Above the body, in the same place on every affected tool,
+                        and drawn from the REGISTRATION — so a tool cannot ship
+                        without its notice and cannot ship with the wrong one.
+                        Draws nothing at all for the tools that endanger nobody. */}
+                    <ToolRiskNotice riskClass={selected.riskClass} />
+                    {/* The measure belongs to the HOST, not to each tool. Every
+                        surface used to open with its own `.tool__body` wrapper, which
+                        is a structural rule fifty-three separate files were each
+                        expected to remember — and the one that forgot would have got
+                        a full-width form with no gap between its fields, looking
+                        broken for a reason nobody would find. Written once here, it
+                        cannot be forgotten. */}
+                    {/* The surface, wrapped in its own risk class, which is what
+                        makes the copy button's trailing line unforgettable —
+                        `CopyButton` reads it through `useCopySuffix` from
+                        wherever it sits inside whichever tool is open. */}
+                    <ToolRiskProvider value={selected.riskClass}>
+                      <div className="tool__body">
+                        <Surface />
+                      </div>
+                    </ToolRiskProvider>
+                    {/* Under the answer, where the professional checking it is
+                        already looking: the exact source and edition of any
+                        published table this tool embeds. Provenance, never a
+                        compliance claim — „prema SRPS EN 10080" is protective,
+                        „u skladu sa standardom" is a warranty. */}
+                    {selected.source !== undefined && (
+                      <p className="tool__surface-source">{selected.source}</p>
+                    )}
+                  </>
+                ) : (
+                  <ToolDirectory packs={packs} visible={visible} recentIds={recent} onOpen={openTool} />
+                )}
+              </Suspense>
             </div>
           </section>
         </div>
@@ -526,8 +551,7 @@ export function ToolsPage({ drawer, enabledModules, packs, packEditor }: ToolsPa
  *
  * **Professional only, and that is the whole reason it exists.** „Alatke" has
  * eleven tools and a rail that shows all eleven, so it opens on one instead; see
- * `openId`. Two hundred and seventy-four behind a scroller is the case an index
- * answers.
+ * `openId`. Hundreds behind a scroller is the case an index answers.
  *
  * **It groups by a different thing from the rail, on purpose.** The rail is
  * ordered by SUBJECT, which is the right order once you know what you are

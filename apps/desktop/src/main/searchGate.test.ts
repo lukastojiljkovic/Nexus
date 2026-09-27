@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { SEARCH_KINDS, type SearchKind } from "@nexus/core";
-import { SEARCH_KIND_MODULE, filterSearchHitsByModules } from "./searchGate.js";
+import { filterSearchHitsByModules, searchKindModule } from "./searchGate.js";
 
 /**
  * The modules that own an indexed kind — the "everything on" set.
  *
- * It is exactly `SEARCH_KIND_MODULE`'s image rather than every registered module
+ * It is exactly the image of `searchKindModule` rather than every registered module
  * (there are sixteen of those, most of which index nothing), because that is the
  * set this suite's question needs: „does a hit survive when its module is on".
  * `circuit`/`electronics` joined on 2026-09-22 with the tenth kind.
@@ -22,13 +22,20 @@ function hit(kind: SearchKind): { kind: SearchKind } {
   return { kind };
 }
 
-describe("SEARCH_KIND_MODULE", () => {
-  it("maps every indexed kind — the Record type enforces it at compile time, this pins it at run time", () => {
-    expect(Object.keys(SEARCH_KIND_MODULE).sort()).toEqual([...SEARCH_KINDS].sort());
+describe("searchKindModule", () => {
+  /**
+   * The check the compiler used to make. Ownership was a `Record<SearchKind,
+   * string>` until 2026-09-26, so a kind with no owner did not compile; it is
+   * the manifests' `searchIndexers` now, and a manifest that forgets a kind is
+   * well-typed. A kind nobody owns is a hit no flag can show — so the tenth kind
+   * would have vanished from the palette with every gate green but this one.
+   */
+  it("finds an owner for every indexed kind in the shipping registry", () => {
+    expect(SEARCH_KINDS.filter((kind) => searchKindModule(kind) === undefined)).toEqual([]);
   });
 
   it("maps each kind onto the module that owns its page", () => {
-    expect(SEARCH_KIND_MODULE).toEqual({
+    expect(Object.fromEntries(SEARCH_KINDS.map((kind) => [kind, searchKindModule(kind)]))).toEqual({
       task: "tasks",
       event: "calendar",
       document: "calendar",

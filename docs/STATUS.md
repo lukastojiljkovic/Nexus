@@ -14,8 +14,9 @@ the binding rules) → §1 and §2 below (where we are, what exists) → §4 (wh
 left) → §5 (what needs the founder). [README.md](README.md) maps every other
 document.
 
-**Last updated:** 2026-09-26. The state below was verified against `main` on
-that date. Deliberately no commit sha: a sha in a header goes stale the moment
+**Last updated:** 2026-09-26. The state below was verified on that date against
+`main`, and against the branch named under „Unmerged work" for what is not on
+`main` yet. Deliberately no commit sha: a sha in a header goes stale the moment
 anything is pushed, which is the defect class this file keeps recording.
 
 **Read alongside:** [OVERVIEW.md](OVERVIEW.md) (plain-language tour) ·
@@ -49,6 +50,17 @@ project: nothing here has `MAIN_VITE_SUPABASE_URL` set, so every round refuses
 `cloud_off` before making a request. That is the boundary working, and also why
 no round has run for real. It is the head of the web/sync queue.
 
+**The installed 1.3.0 can erase a board in „Tabla", and the fix is not in an
+installer yet** (found and fixed 2026-09-26, [[DC-144]] in
+[defect-classes.md](defect-classes.md)). Opening a board — or changing one — and
+then going to another module within about a second wrote an empty drawing over
+it. It is proven on 1.3.0; the exit flush that does it dates from the canvas's
+first slice (ADR-079 §11.6), so every installer since then is likely to carry
+it. Until the next build, wait two seconds after opening or changing a board
+before going to another module — opening counts as a change. A board that is
+already empty can only come back from a backup (`.nexus.zip`) taken before it
+emptied.
+
 **Elektronika, the sixteenth module, is complete.** E1–E6 are all built and
 verified, and the module is in the 1.3.0 installer. Two open ends remain, neither
 blocking; both are §5 items.
@@ -64,7 +76,7 @@ blocking; both are §5 items.
 | Server | 13 Supabase migrations, 3 Edge Functions, 109 pgTAP assertions |
 | Static gates | **26**, each its own CI step |
 | Commits | 653 |
-| Unpushed work | none — `main` is level with `origin/main`; CI and Security green on `main` |
+| Unmerged work | `main` is level with `origin/main`, CI and Security green on it. The 2026-09-26 work — the docs entering git, the route split, the canvas data-loss fix — is on branch `claude/relaxed-planck-wu4q2j` and not yet on `main` |
 | Open pull requests | none |
 | Git tags / GitHub releases | none — no version has ever been released (§5) |
 
@@ -89,6 +101,17 @@ blocking; both are §5 items.
   `nodeIntegration` off, navigation and window-open locked, strict production
   CSP. The database lives only in the main process; the renderer reaches it
   through a frozen, one-method-per-channel, per-field-validated IPC bridge.
+- **A renderer loaded by page** (2026-09-26) — startup parses the shell and
+  nothing else; each of the sixteen pages is its own chunk, loaded the first
+  time it is opened (`routes.tsx`), and so is each professional toolkit, the
+  first time one of its tools is (`proToolSurfaces.tsx`). `routes.test.ts`
+  fails if anything the shell imports reaches a page statically. `smoke` opens
+  every page and every tool from the built renderer, under the production CSP,
+  and fails if one does not arrive or does not draw. Every package declares `sideEffects`, and
+  `scripts/package-side-effects.test.mjs` keeps each declaration true. The
+  renderer is minified; the main process deliberately is not, so the crash
+  dialog Electron shows for an uncaught main-process error still names its
+  functions (`electron.vite.config.ts` says why).
 - **Design tokens** — a three-tier Dan/Noć pipeline to CSS variables; every
   colour, space, radius and type value is a `--nx-*` token, with a gate that
   keeps raw hex out of the tree.
@@ -210,7 +233,7 @@ onboarding — which is a flow rather than a module and so carries no manifest.
 | **Fitness** (FIT) | Complete — a 426-entry public-domain food catalogue with per-number provenance, meal logging, a 230-exercise Serbian catalogue, sessions and routines, personal records and 1RM trend, body measurements with measured energy expenditure. |
 | **Focus** (FOCUS) | Built — one timer for the whole app; a study session and a Pomodoro phase are the same row. |
 | **Tools** (UTIL) | Built — the everyday drawer of converters and calculators. Eleven tools, so it opens ON one: the tool this device used last, or the first in the rail. |
-| **Professional tools** (PRO) | Built — 18 toolkits, **274 tools**, 1 991 hand-derived assertions. `riskClass` is a required contract field that draws the tool's notice, the line appended to every copied result, the Settings long form, and whether a surface may render a verdict at all. Its resting surface is the drawer's own index — the toolkits this profile chose, who each is for, and what it gave them — over „Nedavno". |
+| **Professional tools** (PRO) | Built — 18 toolkits, **322 tools** (counted 2026-09-26: 274 across the seventeen professions, 48 in the developer toolkit), 1 991 hand-derived assertions. Each toolkit's surfaces are fetched the first time one of its tools is opened. `riskClass` is a required contract field that draws the tool's notice, the line appended to every copied result, the Settings long form, and whether a surface may render a verdict at all. Its resting surface is the drawer's own index — the toolkits this profile chose, who each is for, and what it gave them — over „Nedavno". |
 | **Canvas** (CANV) | Whole — Excalidraw driven through its imperative API behind our own Serbian toolbar, with notes, tasks and events as live cards that arrows bind to. |
 | **Electronics** (ELEC) | **All six slices complete** ([ADR-085](architecture/adr/085-electronics-module.md)) — a 153-component catalogue, a pan/zoom bench with rotation and snapping, two-click wiring in the trade's nine jumper colours, a panel that reports the *electrical* faults too (thirteen rules over a derived net model, from a 5 V rail on a 3.3 V part to two I²C devices strapped to the same address), and „Kod": the code the wiring implies — an Arduino sketch for a microcontroller, a ROS 2 `ament_python` package for a board that runs Linux — previewed in the app and written out through the native dialog the artefact calls for (a save dialog for the `.ino`, a directory picker for the package, and main decides which from the stored circuit). And „Mašina": two parametric chassis and nine measured numbers turn the mounted sensors into a URDF that ships inside the ROS 2 package, listing what it has no honest geometry for rather than guessing at it (ADR-085 §8, answered 2026-09-01). And „Klupa" (E5): the same derivation running on a deterministic clock — one channel per board pin that carries a signal, with its direction, its unit, its ROS topic and a waveform the *user* declares, plus the one warning a static rule cannot give (a value above the board’s logic level at THIS tick). And **E6, the external runner**: the module can hand the generated workspace to a real toolchain — `colcon build`, natively, through WSL2 or in a Docker container pinned by digest — with the command line written down in one table in source, off until the user consents once, one run at a time, and killed on quit. All six slices are complete. |
 | **Settings** (SET) | Built — themes, accent, module switches, per-module preferences, remappable shortcuts, notification appetite and quiet hours, profiles, scheduled encrypted backups, third-party notices. |
@@ -576,28 +599,56 @@ None of this blocks anything, and none of it is a new feature. It is the set of
 loose ends recorded while the product was being finished. The order below is a
 suggestion, cheapest and highest-leverage first.
 
-1. **`sideEffects` is absent from every `package.json`.** One line per package;
-   the work is the measurement, not the edit. Nothing can be tree-shaken today,
-   which is part of why the bundles below are the size they are.
-2. **Route-level code splitting.** The renderer loads one eager entry chunk and
-   contains exactly one dynamic `import()` (`./licences.js`). Measured
-   2026-09-26 on the 1.3.0 build: `out/renderer/assets/index-ClaOtFso.js` is
-   **11 261 086 bytes (11.26 MB)** raw. Done means each route is its own chunk.
-3. **Excalidraw and mermaid placement.** Excalidraw is inside that eager entry
-   chunk (verified 2026-09-26). Mermaid is code-split into lazy chunks that ship
-   in the installer anyway; the installer size in the table above is what that
-   choice weighs. The founder chose to keep mermaid, so this item is about
-   placement, not removal.
-4. **The sizing contract.** DC-06 closed one pane at one breakpoint; what is
+1. **An editor's way out can lose its last edit, and cannot say so.** Found
+   2026-09-27 reviewing PR #36 ([[DC-148]]'s blast radius). Both note editors
+   are mounted per note, and their unmount flush returns when a write is out,
+   leaving the rest to a continuation that runs after the document is
+   destroyed: `NoteEditor` then writes the owed edit under an empty title
+   (the note's name blanks in the list) and `PrivNoteEditor` writes nothing at
+   all (the edit is lost, after the close capture took its version without
+   it). The window is one IPC write, a few milliseconds. And all three
+   write-behind editors — the two note editors and „Tabla" — report a failed
+   final write to the page that just unmounted, so a write that fails on the
+   way OUT of a page is visible nowhere and retried by nothing. One exit path
+   for all three: what is owed is captured before the teardown and outlives
+   it, and a failure is reported by the shell rather than by the page it left.
+2. **Most of the startup chunk is copy.** Every page is its own chunk since
+   2026-09-26, but the strings table is not. Measured on the minified build the
+   same day: 760 464 of the startup chunk's 1 284 233 bytes (59 %) are
+   `strings.sr.ts` and `strings/*.ts`, and 606 355 of those are for the
+   professional packs, the developer drawer and Elektronika — pages that load
+   on demand while their words load at startup. Minification made the share
+   LARGER, not smaller: it strips the code's names and comments, and a string
+   literal has neither. `strings.ts` clones ONE table so a locale switch can
+   rewrite its leaves in place; splitting it means per-surface subtables that
+   join the table when their page loads, and that reaches `check:strings`,
+   `check:copy` and the locale machinery. A design, not an edit.
+3. **A bench wire is pointer-only.** In Elektronika a part is a
+   `role="button"` with a tab stop and Enter/Space; a wire is an invisible hit
+   path with an `onPointerDown` and nothing else. So a keyboard user can select
+   no wire, and therefore recolour or remove none. Found 2026-09-26 while making
+   the wire scene deterministic. The answer is a focus model for a canvas of
+   many small targets — which order, and a name for a wire (its two ends) —
+   not an attribute.
+4. **The sweep has no comparison mode.** Every comparison of two sweeps this
+   month was a script in a scratch directory, and each one had to re-learn what
+   noise looks like. Measured 2026-09-26 on two partial sweeps of one build: 157
+   of 342 frames differ, every one by at most 100 pixels and, in all but one, by
+   no more than 32 of 255 levels in any channel — anti-aliasing noise from
+   software rendering, not content; two more differ by design (the
+   placeholder-text generator, and the tool that shows the time). A
+   `shots`-side comparison with that tolerance, against the previous run's
+   frames, would turn „is this change visible anywhere" into one command.
+5. **The sizing contract.** DC-06 closed one pane at one breakpoint; what is
    missing is the rule that would have prevented all of them — what a pane's
    floor is, and what happens below it. This is also the desktop half of the
    responsive work the web app will need.
-5. **A gate for Class A: a claim about the code that is right where it is
+6. **A gate for Class A: a claim about the code that is right where it is
    written and stale where it is repeated.** Five instances were found on
    2026-09-22 and fixed by hand, four more the same day. Nothing in the tree can
    check a sentence, and a figure has no type, no import and no call site. The
    owed gate is a rule over the specific shapes that have now shipped twice.
-6. **A gate for Class C: a contract field no screen can reach.** The worked
+7. **A gate for Class C: a contract field no screen can reach.** The worked
    example is `NewDocumentFields.reminderOffsets` and
    `DocumentFieldChanges.reminderOffsets` — declared in `shared/ipc.ts`,
    accepted by main, validated by the store, asserted by
@@ -606,29 +657,39 @@ suggestion, cheapest and highest-leverage first.
    already asks this question inside the professional drawer; the owed gate is
    the generalisation: every exported IPC interface field must have a renderer
    call site that sets it.
-7. **`searchIndexers` is declared and nothing fills it.**
-   `ModuleManifest.searchIndexers` exists in `@nexus/core`, and no module
-   manifest populates it — circuits reach search through migration 070 by
-   another route. So the slot is dead rather than pending. Either a module uses
-   it or the field is removed.
-8. **The duplicated Serbian numeral lexicon.** `pravo.ts` and
-   `racunovodstvo.ts` each embed their own numeral lexicon (both citing
-   *Pravopis srpskoga jezika*, 2010), their own `stripSeparators`, and their
-   own digit-at-a-time ISO 7064 MOD 97-10 under names one character apart. This
-   is a consolidation rather than a defect, and it is not urgent — it is what
-   declining to retire one of each colliding tool pair costs.
-9. **The shell's own settings cards are in no screenshot.** Twelve per-module
-   settings scenes were added and are derived from the registry, which is why
-   they cannot go stale. The shell's cards — Profili, Sigurnost, Izgled,
-   Obaveštenja, Licence and the rest — have their ids written into
-   `SettingsPage.tsx` in the renderer and appear in no list the main process
-   can read, so the same derivation cannot reach them. Recorded rather than
-   papered over with a second hand-kept list.
-10. **„Dalje" sits below the fold on onboarding step 3 at 900 × 600.** Measured
+8. **The sr-Latn date formatters are written out page by page.** 40
+   `new Intl.DateTimeFormat(…)` constructions in 27 files, measured 2026-09-26
+   while working [[DC-145]] — the long day label („petak, 18. septembar 2026.")
+   alone is spelled identically in the calendar, nutrition, habits and study
+   pages, and the two version-history lists share a timestamp formatter by
+   copy. [[DC-02]] already consolidated the clock formatter
+   (`formatClockTime`); the date labels are the same move at a larger size,
+   and one helper module with named formats is the shape it takes.
+9. **`ModuleManifest.imex` is declared and nothing fills it.** The archive
+   was built in `@nexus/core` from `ProfileData`, one interchange version for
+   the whole profile, not from per-module handlers — so the slot ADR-008 lists
+   is unreachable by anything in the product. What is open is whether the
+   plugin path still needs it (a third-party module's rows cannot ride
+   `ProfileData`), which is a decision about PLUG rather than a cleanup: either
+   the contract states what a plugin would implement, or it goes.
+10. **The duplicated Serbian numeral lexicon.** `pravo.ts` and
+    `racunovodstvo.ts` each embed their own numeral lexicon (both citing
+    *Pravopis srpskoga jezika*, 2010), their own `stripSeparators`, and their
+    own digit-at-a-time ISO 7064 MOD 97-10 under names one character apart. This
+    is a consolidation rather than a defect, and it is not urgent — it is what
+    declining to retire one of each colliding tool pair costs.
+11. **The shell's own settings cards are in no screenshot.** Twelve per-module
+    settings scenes were added and are derived from the registry, which is why
+    they cannot go stale. The shell's cards — Profili, Sigurnost, Izgled,
+    Obaveštenja, Licence and the rest — have their ids written into
+    `SettingsPage.tsx` in the renderer and appear in no list the main process
+    can read, so the same derivation cannot reach them. Recorded rather than
+    papered over with a second hand-kept list.
+12. **„Dalje" sits below the fold on onboarding step 3 at 900 × 600.** Measured
     and reachable by scrolling, deliberately left: the card is the scroller, step
     3 is the only step whose actions do not fit, and a sticky action bar would
     change the first screen a user ever sees.
-11. **Mixed line endings within files**, despite `core.autocrlf=true`. Every
+13. **Mixed line endings within files**, despite `core.autocrlf=true`. Every
     scripted edit has to be EOL-aware; it has already cost two redoes. A standing
     hazard rather than a defect.
 
@@ -736,7 +797,7 @@ implemented until the founder says otherwise.
 | SEC-VER-01: threat-model passes for the modules | Binding on paper, one instance, unenforced. Needs a decision: queue item or aspiration. |
 | The secret scanner and our own naming | Open. Recommendation: keep naming the literals, revisit if it fires a second time. |
 | The screenshot sweep cannot reach the sync forms | Open. Recommendation: (a), a placeholder project, gated on the harness refusing to run in a packaged build. |
-| Two packs may still have built one computation under two names | Recorded, not urgent. Sweeping all 274 tools is larger than the four fixes already done. |
+| Two packs may still have built one computation under two names | Recorded, not urgent. Sweeping the seventeen professions' 274 tools is larger than the four fixes already done. |
 | The medicine toolkit | Recommendation (b) is implemented: survivors folded into `trening` as wellness. Confirm the refusal list stands. |
 | Electronics: URDF geometry | **Answered** 2026-09-01 and built (parametric chassis, ADR-085 §8). |
 | Electronics: what comes next after E5 | **Answered** 2026-08-31 (E3), then superseded by the desktop-first pause. |

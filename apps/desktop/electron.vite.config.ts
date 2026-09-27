@@ -244,5 +244,23 @@ export default defineConfig({
       },
     },
     plugins: [react(), rendererHardening(), excalidrawFonts()],
+    /**
+     * MINIFIED, which electron-vite's renderer default is not (`minify: false`,
+     * beside the Chromium target it picks). Measured 2026-09-26: the startup
+     * chunk 2 331 423 → 1 283 478 bytes, all renderer JS 21.9 → 13.2 MB, the CSS
+     * 873 395 → 439 826. Keeping identifiers would have kept 337 KB of that
+     * startup chunk, and it was measured too.
+     *
+     * The price of full minification is a stack trace that names `a3` rather
+     * than `buildProfilePlan`, and in this renderer nobody reads one: the menu
+     * is `null`, so the shipped app opens no DevTools; nothing in `src` reads
+     * `.stack`; and no renderer console is forwarded to a log. A defect in the
+     * renderer is diagnosed in `pnpm dev`, which Vite never minifies. MAIN is the
+     * other case and stays unminified on purpose: an uncaught exception there is
+     * shown to the user in Electron's own dialog, stack and all, and a
+     * screenshot of that dialog is the one bug report this product can actually
+     * receive — so its names have to survive.
+     */
+    build: { minify: "esbuild" },
   },
 });

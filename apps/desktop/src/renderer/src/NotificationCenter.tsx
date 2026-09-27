@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button, Chip, EmptyState, Icon } from "@nexus/ui";
-import type { NotificationRecord, NotificationSource, SnoozePreset } from "../../shared/ipc.js";
+import type { NotificationRecord, SnoozePreset } from "../../shared/ipc.js";
+import { NOTIFICATION_SOURCE_MODULE } from "../../shared/notificationModules.js";
 import {
   ALWAYS_ON_NOTIFICATION_SOURCES,
   bellCountLabel,
@@ -9,26 +10,6 @@ import {
 } from "./notificationFormat.js";
 import { NotificationSettingsControls } from "./NotificationSettingsControls.js";
 import { strings } from "./strings.js";
-
-/**
- * Deep-link target module per source (NTF a3: exam/study-day → study,
- * document/event → calendar, task → tasks). A security notice (NTF-007) opens
- * Settings — the page holding the PIN, the Recovery Kit and the account list,
- * which is where every one of those events can actually be acted on. A renewal
- * reminder (FIN slice d) opens Finansije, where the subscription lives and
- * where the charge will land. A habit nudge (HABIT slice c) opens Navike, where
- * „Danas" is — the one screen on which the thing it is asking for can be ticked.
- */
-const SOURCE_MODULE: Record<NotificationSource, string> = {
-  document: "calendar",
-  exam: "study",
-  "study-day": "study",
-  event: "calendar",
-  task: "tasks",
-  security: "settings",
-  subscription: "finance",
-  habit: "habits",
-};
 
 export interface NotificationCenterProps {
   profileId: string;
@@ -159,7 +140,7 @@ export function NotificationCenter({ profileId, onNavigate }: NotificationCenter
   }
 
   function navigate(record: NotificationRecord): void {
-    onNavigate(SOURCE_MODULE[record.source]);
+    onNavigate(NOTIFICATION_SOURCE_MODULE[record.source]);
     setOpen(false);
   }
 

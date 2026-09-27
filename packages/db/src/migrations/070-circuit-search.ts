@@ -19,10 +19,13 @@ import type { Migration } from "./migrations.js";
  * projection for a kind 017 had already created, and neither minted one. The
  * circuit is the first new kind in fifty-three migrations, which is why the
  * checklist is written out here rather than assumed: `SEARCH_KINDS` (the union
- * and the array), `SEARCH_KIND_PREFIXES`, `KIND_PRIOR`, `SEARCH_KIND_MODULE`,
- * `SEARCH_SOURCE_VIEWS` and this file — six places, and the three that the
- * compiler does not check are named in `searchStore.ts` and `App.tsx` beside
- * themselves.
+ * and the array), `SEARCH_KIND_PREFIXES`, `KIND_PRIOR`, the owning module's
+ * `searchIndexers` entry in `apps/desktop/src/shared/modules.ts`,
+ * `SEARCH_SOURCE_VIEWS` and this file — six places. The owner used to be a
+ * `Record<SearchKind, …>` in the main process, which the compiler checked; since
+ * 2026-09-26 it is the manifest, and a desktop test checks it instead (every
+ * kind, exactly one owner). The places neither of those checks are named in
+ * `searchStore.ts` and `App.tsx` beside themselves.
  *
  * **What the projection carries.** A circuit's `name` is its title and its
  * `notes` is its body — those are the only two pieces of text a circuit owns,

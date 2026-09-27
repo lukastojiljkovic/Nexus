@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "sideEffects": false,
   "description": "The one real CryptoPort: WebCrypto for SHA-256, HMAC, HKDF and X25519; hash-wasm's WASM Argon2id; @noble/ciphers for XChaCha20-Poly1305, the one primitive WebCrypto does not have. Separate from @nexus/sync-crypto so that package keeps its zero-runtime-dependency claim honestly, and so 'what crypto does sync use' is answered by reading one file.",
   "exports": {
     ".": "./src/index.ts"

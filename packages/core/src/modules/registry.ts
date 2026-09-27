@@ -1,4 +1,5 @@
 import type { WidgetContract } from "../contracts/widgets.js";
+import type { SearchKind } from "../search/searchQuery.js";
 import {
   MODULE_CATEGORIES,
   type ModuleCategory,
@@ -16,6 +17,8 @@ const NO_WIDGETS: readonly WidgetContract[] = [];
 export class ModuleRegistry {
   private readonly byId = new Map<string, ModuleManifest>();
   private readonly order: ModuleManifest[] = [];
+  /** Which module owns each indexed search kind, as the manifests declare it (`searchIndexers`). */
+  private readonly searchOwners = new Map<SearchKind, string>();
 
   /**
    * Registers a module. Throws on a duplicate id — that one is load-bearing,
@@ -41,6 +44,22 @@ export class ModuleRegistry {
     if (this.byId.has(manifest.id)) {
       throw new Error(`Module id "${manifest.id}" is already registered.`);
     }
+    // Every claim is checked before any is recorded, so a refused manifest
+    // leaves the registry exactly as it found it.
+    const claimed = new Set<SearchKind>();
+    for (const { kind } of manifest.searchIndexers ?? []) {
+      const owner = this.searchOwners.get(kind);
+      if (owner !== undefined) {
+        throw new Error(
+          `Search kind "${kind}" is claimed by "${owner}" and "${manifest.id}"; one module owns each kind.`,
+        );
+      }
+      if (claimed.has(kind)) {
+        throw new Error(`Search kind "${kind}" is claimed twice by "${manifest.id}".`);
+      }
+      claimed.add(kind);
+    }
+    for (const kind of claimed) this.searchOwners.set(kind, manifest.id);
     this.byId.set(manifest.id, manifest);
     this.order.push(manifest);
   }
@@ -85,6 +104,21 @@ export class ModuleRegistry {
     return this.widgetsOf(qualifiedId.slice(0, separator)).find(
       (widget) => widget.id === widgetId,
     );
+  }
+
+  /**
+   * The module that owns an indexed search kind — whose flag decides whether a
+   * hit of that kind is shown, and whose page opens it (ADR-058 §5) — or
+   * `undefined` when no registered module declares it.
+   *
+   * `undefined` is an answer and not an error, for `findWidget`'s reason: a
+   * build without the module still has the kind's index (a migration made it),
+   * so its rows can exist, and a hit owned by no module is a hit no enabled
+   * module shows. That the SHIPPING registry leaves no kind unowned is pinned by
+   * the desktop app's own tests, where the complete set of modules is.
+   */
+  searchKindOwner(kind: SearchKind): string | undefined {
+    return this.searchOwners.get(kind);
   }
 
   /**

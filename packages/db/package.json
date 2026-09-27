@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "sideEffects": false,
   "description": "Nexus desktop/Node storage layer: SQLCipher-compatible encrypted SQLite, forward-only migrations, UUIDv7 ids, and the SQLite-backed FlagStore. Electron main-process side only (ADR-001).",
   "exports": {
     ".": "./src/index.ts"

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { ModuleRegistry } from "./registry.js";
 import type { ModuleCategory, ModuleManifest } from "./manifest.js";
 import type { WidgetContract } from "../contracts/widgets.js";
+import type { SearchKind } from "../search/searchQuery.js";
 
 function mod(
   id: string,
@@ -136,5 +137,46 @@ describe("ModuleRegistry widgets (ADR-045)", () => {
 
   it("splits at the FIRST colon, so a trailing one cannot resolve to a real widget", () => {
     expect(registry().findWidget("calendar:danas:extra")).toBeUndefined();
+  });
+});
+
+describe("ModuleRegistry search ownership (ADR-008, ADR-058 §5)", () => {
+  function owning(id: string, ...kinds: SearchKind[]): ModuleManifest {
+    return { ...mod(id, id.toUpperCase(), "Core experience"), searchIndexers: kinds.map((kind) => ({ kind })) };
+  }
+
+  it("answers with the module a manifest says owns the kind", () => {
+    const reg = new ModuleRegistry();
+    reg.register(owning("notes", "note", "attachment"));
+    reg.register(owning("study", "subject", "exam"));
+    expect(reg.searchKindOwner("note")).toBe("notes");
+    expect(reg.searchKindOwner("attachment")).toBe("notes");
+    expect(reg.searchKindOwner("exam")).toBe("study");
+  });
+
+  it("answers undefined for a kind no registered module owns — a hit no flag can switch on", () => {
+    const reg = new ModuleRegistry();
+    reg.register(owning("notes", "note"));
+    reg.register(mod("canvas", "CANV", "Content & knowledge"));
+    expect(reg.searchKindOwner("circuit")).toBeUndefined();
+  });
+
+  it("rejects a kind two modules claim, naming both — „which page opens it“ would have no answer", () => {
+    const reg = new ModuleRegistry();
+    reg.register(owning("notes", "note", "attachment"));
+    expect(() => reg.register(owning("files", "attachment"))).toThrow(/attachment.*notes.*files/);
+  });
+
+  it("rejects a kind one module claims twice", () => {
+    const reg = new ModuleRegistry();
+    expect(() => reg.register(owning("study", "deck", "deck"))).toThrow(/deck/);
+  });
+
+  it("leaves nothing half-registered when a claim is refused", () => {
+    const reg = new ModuleRegistry();
+    reg.register(owning("notes", "note"));
+    expect(() => reg.register(owning("files", "task", "note"))).toThrow();
+    expect(reg.get("files")).toBeUndefined();
+    expect(reg.searchKindOwner("task")).toBeUndefined();
   });
 });

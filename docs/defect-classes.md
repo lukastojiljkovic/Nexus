@@ -1,6 +1,6 @@
 # The defect-class ledger
 
-**One hundred and forty-two recurring failure shapes, each recorded the first
+**One hundred and forty-eight recurring failure shapes, each recorded the first
 time it was recognised.** Opened 2026-08-07 on the founder's rule that *a reported bug is a
 sample and never an incident* — so the entry here is never the bug, it is the
 **rule that was wrong**, written so the next instance is something we spot
@@ -15,7 +15,7 @@ rather than something we discover.
 >
 > **How many of them are executable is not the gate count, and the arithmetic is
 > worth stating because it does not match — and is not meant to.** There are
-> **twenty-six** `check:` scripts and **one hundred and forty-two** classes
+> **twenty-six** `check:` scripts and **one hundred and forty-eight** classes
 > below, and neither number is the other's inverse. `check:contrast` answers no
 > class at all, because it came from a design rule rather than from an observed
 > failure; `check:controls` answers TWO, [[DC-98]]'s native control that skips
@@ -31,10 +31,16 @@ rather than something we discover.
 > directory of two files, so it is a test inside that directory's own suite
 > rather than a script plus a CI step to keep in step with it; [[DC-119]]'s
 > oracle is a FORMATTER the same module already exports, so the test asks it
-> instead of restating what it answers; and [[DC-135]]'s is a pin in
+> instead of restating what it answers; [[DC-135]]'s is a pin in
 > `scripts/run-lock.test.mjs`, because what it guards is that a harness verb
 > cannot be ADDED without a lock, which is a statement about `package.json` and
-> not about any source file. A
+> not about any source file; [[DC-143]]'s is a walk of one app's import graph
+> in `routes.test.ts`, beside the lazy table it protects, because the rule is
+> about a single entry point and not about the tree; and [[DC-144]]'s needs a
+> BUILT renderer tearing a real editor down over a real database, so it is a
+> check inside `smoke`'s page walk; and [[DC-145]]'s is three tests, one beside
+> each fact it gave a single home, because what can be executed is „that home is
+> complete" and not „there is no second one". A
 > class that can be made executable should be: a rule nobody can forget beats a
 > rule everybody has read — and „executable“ is the requirement, „one more
 > `check:` script“ only the usual way of meeting it.
@@ -5451,6 +5457,275 @@ switch's `default` calls it.
 [[DC-141]] (the duplicate union that hid the same growth), [[DC-36]] (a failure
 whose shape is silence).
 
+**DC-143 — a lazy boundary that one static import defeats, and nothing fails
+when it does (2026-09-26).** Splitting the renderer by page made every page an
+`import()` in `routes.tsx`. Two static imports would have kept the work from
+doing anything, and neither would have failed a build, a test or a screen.
+`App` and `NotesPage` imported `PRIV_LOCKED_EVENT` — one string constant — from
+`PrivPage.tsx`, and a value import of a module is an import of all of it, so the
+private-notes page would have ridden along with whichever chunk the importer
+landed in. And `Onboarding` imported two functions from `@nexus/core` that it
+calls once per profile, ever, which kept Yjs and the markdown importer — about
+270 kB — in the startup chunk after every page had left it. Vite warns about
+the first shape, a module both imported and `import()`ed, in a build log nobody
+is made to read. About the second it says nothing at all, because nothing is
+imported both ways: it is a dependency the startup path reaches for a reason no
+one would guess from the name of the file doing it.
+
+*Root cause, as the rule that was wrong:* „this module is loaded lazily" was
+read as a property of the `import()` that names it. It is a property of the
+whole static graph from the entry — a module is lazy only while nothing on the
+startup path imports it by value, and a constant is an import.
+
+*Fix:* the constant lives in `privEvents.ts`; the welcome note reaches its two
+functions through `import("./markdownNote.js")`, a module of the app's own,
+because `@nexus/core` is already imported statically and a dynamic import of it
+moves nothing. `routes.test.ts` is the gate for the first shape and the named
+half of the second: it walks the static value-import graph from `main.tsx` in
+source (`import type` is not an edge) and fails if that graph reaches any module
+the renderer `import()`s, if any `…Page.tsx` file is not loaded lazily — derived
+from the directory, not listed — or if the startup path imports Excalidraw,
+KaTeX, TipTap, ProseMirror or Yjs directly. What it cannot see is a package
+reached THROUGH `@nexus/core`'s barrel, which is exactly how Yjs arrived; that
+one was found by attributing the built chunk's bytes through its sourcemap, and
+that measurement is the instrument for the unnamed half.
+
+*Related:* the type-only `LicenceEntry` import in `SettingsPage.tsx`, which
+stated this rule in a comment the day the licence notices became a chunk — a
+comment and not a gate, so it covered one file; [[DC-36]] (a failure whose
+shape is silence).
+
+**DC-144 — a flush that reads what it is saving from the thing being torn down
+(2026-09-26).** „Tabla" wrote a board's pending edit from an unmount cleanup,
+and it got the drawing by asking the editor: `api.current.getSceneElements()`.
+A `useEffect` cleanup runs AFTER React has torn the subtree down, and
+Excalidraw's own `componentWillUnmount` ends with `this.scene.destroy();
+this.scene = new Scene()` — so the editor answered with an empty drawing, and
+the empty drawing was written over the board. Because the load itself reports a
+change, merely OPENING a board and clicking another module within the 800 ms
+autosave delay was enough. Measured on the 1.3.0 build: „Arhitektura sistema",
+14 elements, then 0 — in three gestures out of three. The flush on leaving dates
+from CANV slice a (ADR-079 §11.6, 2026-08-01), where it was the fix for
+dropping the last 800 ms of drawing; the installed app has carried it since.
+
+It was on screen for weeks and read as something else. Every full screenshot
+sweep photographed „Tabla" as an empty canvas at its second and third window
+size — the sweep leaves the page quickly, which is the whole gesture — and the
+audit is geometric, so an empty board is a perfectly well-laid-out frame.
+
+*Root cause, as the rule that was wrong:* a flush treated „what is on screen"
+as something it could ask for at flush time. It is not: at the moment a flush
+is most needed — the page going away — the thing that would answer is the thing
+being destroyed. What a flush writes has to be captured when the change
+HAPPENS. `NoteEditor` and `PrivNoteEditor` always did this: the note flush sends
+update bytes collected as they were produced, from a `Y.Doc` the component owns
+and destroys only after the flush's synchronous prologue. The canvas was the one
+editor whose document lived inside a third-party component.
+
+*Fix:* `canvasAutosave.ts` — the decision of when to write and what, with no
+editor in it. An observation carries the scene `onChange` was handed, so there
+is no way to write the board that reads the editor late. The first report of a
+board is its baseline, not an edit (the documented „opened and closed is not
+rewritten", which the old code never did), and a report for a different board is
+a switch the autosave sees itself rather than waits to be told about. Creating,
+deleting and restoring a board now flush first; they used to drop the edit.
+Gated twice: `canvasAutosave.test.ts` owns the rules, and `smoke` seeds the demo
+boards, walks every page — leaving „Tabla" the moment it is shown — and fails if
+any board has fewer elements afterwards. Against the old page it prints
+`„Arhitektura sistema“ 14 → 0`.
+
+*Blast radius:* every cleanup in the renderer that flushes was read. The two note
+editors hold their own document and are right; nothing else writes on unmount.
+
+*Related:* [[DC-36]] (silence), [[DC-114]] (a check that needs a rendered page —
+this one needed a DATA path, which is why the gate is `smoke` and not the sweep).
+
+**DC-145 — a fact whose single home is asserted in prose while the code keeps
+two (2026-09-26).** Three at once, found while working one STATUS item:
+
+- `ModuleManifest.searchIndexers`. ADR-008 has SRCH's indexer wiring
+  „generated from [the manifest] — one source of truth", and the contract's own
+  doc said „a real declaration is what a module manifest carries". No manifest
+  carried one. Which module owns each search kind — the one fact the slot exists
+  for — was a hand-kept `Record<SearchKind, string>` in `main/searchGate.ts`,
+  and the slot's two fields, `id` and `kindKey`, were read by nothing.
+- `NOTIFICATION_SOURCE_MODULE`. Its header said the map „lived privately inside
+  `NotificationCenter.tsx`" — past tense — and was now „stated once and
+  shared". The private copy was still there, identical, driving the deep-link.
+- The dashboard's `MODULE_SIGILS` said in prose that a card's mark is „the SAME
+  glyph the sidebar lists that module under", and was a second table beside the
+  rail's `MODULE_ICONS`.
+
+None had drifted: every entry the copies shared agreed. That is the finding,
+not the reassurance — nothing would have noticed when one did, because the
+sentence claiming one home is what a reader checks, and it was true of the
+intent and false of the tree.
+
+*The rule:* [[DC-02]] and [[DC-141]] one step further — **a sentence saying
+where a fact lives („moved", „the same as", „generated from") is a claim about
+the TREE, and is checked the way one is: by searching for the fact's VALUES, not
+for the names the sentence uses.** Searching for `SEARCH_KIND_MODULE` finds one
+map; searching for `"study-day": "study"` finds two.
+
+*Fix:* one home each, made complete by a test rather than by prose. Search
+ownership is the manifests' (`searchIndexers: [{ kind }]` — the contract reduced
+to the one field that means something); `ModuleRegistry.register` refuses a kind
+that two modules claim, `searchGate.ts` asks `searchKindOwner` and keeps
+nothing, and `searchGate.test.ts` requires an owner for every `SearchKind` —
+the check the compiler made while the map was a `Record`, and cannot make over
+manifests. `NotificationCenter` imports the shared map. `moduleIcon.ts` is the
+one icon table, with a test that every registered module wears a mark.
+
+*Blast radius, measured rather than assumed:* every object literal of four or
+more string or number entries in `apps/*/src` and `packages/*/src` (tests and
+copy tables excluded), compared with every literal in ANOTHER file for four or
+more identical entries. On the tree before this fix: 49 pairs, and all three
+instances above among them. After it: 45, none about module ownership. What is
+left is mostly one family — `Intl.DateTimeFormat` option bags, 40 constructions
+in 27 files, the long sr-Latn day label written out page by page, and the two
+version-history lists' timestamp formatter — which is DC-02's clock-formatter
+instance at a larger size and is an item of its own in STATUS §4.1. The one
+overlap that is legitimate is worth naming: search kinds and notification
+sources share four entity names (`task`, `event`, `document`, `exam`) with the
+same owners, and they stay two tables because they are two vocabularies —
+`security` is nobody's module and `study-day` is not an entity.
+
+*Not a gate, deliberately:* at the shape the scan can read, most of its pairs
+are legitimate option bags, and a rule that needs an allowlist on its first day
+is the gate this repository declines to write. The executable part is the three
+tests beside the three homes.
+
+*Related:* [[DC-02]] (a rule written twice), [[DC-109]] (a hand-kept list beside
+a generated one — the search map was one, beside a slot meant to generate it),
+[[DC-141]] (a copy under a comment vouching for it).
+
+**DC-146 — a path redirected after the thing that reads it has already read it
+(2026-09-26).** `--smoke` and `--shots` moved `userData` into a disposable
+sandbox — inside `app.whenReady()`, a few lines after the handler had already
+touched `session.defaultSession`. Chromium settles a session's storage path when
+the session is created, and a later `setPath` does not move it. So the redirect
+worked for everything MAIN writes (accounts, key chains, databases, all in the
+sandbox) and did nothing for everything the RENDERER keeps: `localStorage`,
+session storage and the HTTP cache went into the real `userData` beside the
+sandbox. Every harness run wrote its active profile, its theme and its tool
+history into the localStorage of the app a person uses — the development build
+and the installed one share `%APPDATA%\Nexus` — and every sweep began from the
+previous run's leftovers, so two sweeps of one build landed „Alatke" on
+different tools and drew „Nedavno" in one and not the other.
+
+*The rule:* **a redirect is only as early as the first reader of what it
+redirects.** A setting that is read once — a Chromium switch, a scheme
+privilege, a storage path — has to be applied before its first read, and „it
+works" is not evidence when the half that moved is the half anyone checks.
+This file already knew the rule for switches and schemes (the resolver block
+and the scheme registration both say „module scope, before `ready`, or
+Electron ignores it"); the sandbox was the one reader nobody listed.
+
+*Why nothing noticed:* the sandbox's own contents were right. Smoke asserts
+about accounts, and the accounts were in the sandbox; the part that leaked
+was data no assertion read, in a directory no assertion looked at.
+
+*Fix:* the redirect runs at module scope, before `ready`, and sets
+`sessionData` as well as `userData`, so the two cannot come apart again; the
+sandbox also stops inheriting the real install's `cloud.json`. `smoke` now
+asserts that `session.defaultSession.storagePath` is inside the sandbox.
+Negative control, the old ordering restored — the handler touching the session
+before redirecting: `SMOKE FAIL: renderer storage is outside the harness
+sandbox`. Measured on disk: after a run the real directory holds the sandbox
+and nothing else.
+
+*Related:* [[DC-135]] (the same sandbox, owned by nobody), [[DC-57]] (a harness
+that reports on a state it never set up).
+
+**DC-147 — an order decided by a tie-break nobody chose (2026-09-26).** Stores
+list rows by a timestamp and then by `id`, and `uuidv7` put 74 random bits
+after its millisecond. For rows written in different milliseconds the id was
+the order they were written in; for rows written in the SAME millisecond it was
+a shuffle — and a batch writes a great deal in one millisecond. The demo
+profile seeds a circuit's parts and wires under one timestamp and a day's
+transactions under one date: the bench drew its parts in a new order on every
+seed, and „Fotokopirnica" and „Kineski restoran" swapped places in the ledger
+between two sweeps of one build. Nothing was wrong on any one screen. Every
+screen was right and no two runs agreed.
+
+*The rule:* **the last key of an ORDER BY is a decision, and a random one is a
+decision to shuffle.** An id that is only unique makes a tie-break that is only
+arbitrary. RFC 9562 §6.2 says a UUIDv7 generator SHOULD be monotonic when ids
+are created in batches, which is the case the ORDER BYs here were quietly
+relying on.
+
+*Fix:* `uuidv7` counts within a millisecond — a 12-bit sequence in `rand_a`
+(the RFC's method 1), a clock that steps back keeps counting on the last
+millisecond, the 4 097th id borrows the next one — and keeps 62 CSPRNG bits.
+`ids.test.ts` mints 5 000 ids in one frozen millisecond and requires them sorted
+in minting order; against the old generator that fails every time. The
+electronics demo test pins the order where it is SEEN, and fails three runs out
+of three against the old generator.
+
+*Blast radius:* every `ORDER BY …, id` in `packages/db` inherits the fix, which
+is the point of putting it in the generator. The v4 ids minted elsewhere
+(`crypto.randomUUID()` — canvas elements, flashcard keys, account and blob ids)
+were read for the same shape: none is the last key of a listing except the
+private notes' (`updated_at DESC, id DESC`), whose timestamps come from each
+note's own edits rather than from a batch.
+
+*Related:* [[DC-146]] (the other half of why two sweeps disagreed), [[DC-57]].
+
+**DC-148 — a write's answer taken for the state of the disk NOW, when the thing
+it wrote may have moved while it was out (2026-09-27).** The canvas autosave
+that [[DC-144]] introduced sent a board's edit on a timer and, when the write
+answered, recorded that version as what the disk held. Three things can happen
+while a write is on the wire, and the first version of the machine had a state
+for none of them:
+
+- **An undo back to the loaded drawing.** The report equalled the version the
+  autosave believed was on disk, so it cancelled the timer and owed nothing —
+  and then the write of the undone edit landed and was recorded as current. The
+  undone drawing stayed on disk while the screen showed the other one.
+- **A second edit.** Its timer sent it BESIDE the first, and whichever answered
+  LAST set the recorded version: a slow first write left the newer drawing
+  marked unsaved, and had the main process ever reordered the two, the older
+  drawing would have been the one on disk.
+- **A board switch.** „On the wire" was a version NUMBER, cleared by the
+  switch, so the previous board's write answering could clear the new board's
+  marker whenever the two versions happened to be equal, and a flush then sent
+  the same edit twice.
+
+*Root cause, as the rule that was wrong:* a write's answer is a statement about
+the state that was SENT, and the machine read it as a statement about the state
+now. Between sending and answering the subject can be edited, undone or
+replaced, and a writer with no notion of „out" cannot tell „this landed" from
+„this is what the disk has".
+
+*Fix:* `canvasAutosave.ts` keeps its bookkeeping per board (`BoardAutosave`),
+and that bookkeeping outlives a switch for as long as a write it owes is out.
+One write per board is on the wire; a send asked for while one is out is made
+when it lands, from the newest report, so writes land in the order they left;
+a write on the wire counts as owed, so an undo made during one is written after
+it; a write that FAILED is not retried by itself; and a writer that throws is a
+failed write rather than a wedged board. `canvasAutosave.test.ts` drives it
+with a writer whose answers the test releases by hand — the only way to put a
+report between a write leaving and landing — and the undo, the second edit and
+the equal-version switch were each red against the first version. Found in
+review (on PR #36) before any installer carried it.
+
+*Blast radius:* the renderer's other two write-behind editors. `NoteEditor` and
+`PrivNoteEditor` were single-flight already, and a Yjs update commutes, so
+neither can land out of order. But both carry the other half of the shape, on
+the way OUT: each is mounted per note, and the unmount flush RETURNS when a
+write is out, leaving the rest to a continuation that runs after the cleanup
+has destroyed the document and nulled `docRef`. So on a note left while a
+write is out, an edit made during that write reaches disk under the title
+`deriveTitle(null)` gives — the empty string, which blanks the note's name in
+the list — and `PrivNoteEditor`'s continuation finds no document and writes
+nothing, after the close capture has already taken its version without it.
+The window is one IPC write, a few milliseconds. Worked as its own item
+(STATUS §4), together with the gap all three share: a final write that fails
+after its page is gone has nowhere left to say so, and nothing left to retry it.
+
+*Related:* [[DC-144]] (the same flush, one defect earlier), [[DC-101]] (a poll
+that answers with the state before the change it waits for).
+
 **Still open in C, and the only part of it that is:** item 14 (Tasks' capture
 form — its four bare selects are fixed, see DC-05), item 15 (Focus's two side-by-side primaries,
 the calendar's byte-identical stacked switchers, Files' two contradictory
@@ -5493,7 +5768,10 @@ direction, and none of it should wait for one.
      resolve from their own `.woff2` metadata, and **Liberation Sans is dropped**
      because its licence cannot be established at all. 320 packages get their
      notices too. This was the last release blocker ADR-079 left open.
-  2. **Excalidraw sits in the eager chunk** — +1.67 MB at app start, on a page
+  2. ~~**Excalidraw sits in the eager chunk**~~ — **closed 2026-09-26**: every
+     page is its own chunk and Excalidraw arrives with the canvas route; see
+     [log/2026-09.md](log/2026-09.md), „Every page is its own chunk". The
+     original note, as written: +1.67 MB at app start, on a page
      most users open rarely. `React.lazy` would defer it; the cost is a loading
      state on a route that currently has none, so it is a deliberate follow-up
      rather than an oversight. The renderer's eager chunk is **6,080,364 bytes

@@ -39,6 +39,7 @@ export interface ModuleManifest {
   widgets?: WidgetContract[];
   /** The module's own settings card (SET), composed from this declaration rather than hand-written into the page. */
   settings?: SettingsPanel;
+  /** The search kinds this module owns (SRCH): its flag gates their hits, its page opens them. One owner per kind. */
   searchIndexers?: SearchIndexer[];
   statsContributions?: StatsContribution[];
   automation?: AutomationCatalog;

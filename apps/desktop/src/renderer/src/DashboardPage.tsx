@@ -14,7 +14,7 @@ import {
   StatBand,
   TextField,
 } from "@nexus/ui";
-import type { IconName, Stat } from "@nexus/ui";
+import type { Stat } from "@nexus/ui";
 import { DASHBOARD_SET_NAME_MAX_LENGTH, DASHBOARD_WIDGET_SPANS } from "../../shared/ipc.js";
 import type {
   DashboardSetsState,
@@ -36,6 +36,7 @@ import { dashboardSummary } from "./dashboardSummary.js";
 import { buildTaskListTree, flattenTaskListTree } from "./taskListTree.js";
 import { DASHBOARD_WIDGETS, type DashboardWidgetBodyProps } from "./dashboardWidgets.js";
 import { localTodayKey } from "./examDates.js";
+import { moduleIconName } from "./moduleIcon.js";
 import { NotePopover } from "./notePopover.js";
 import { lookup, strings } from "./strings.js";
 import { useFocusTrap } from "./useFocusTrap.js";
@@ -59,37 +60,6 @@ const STRIP_SOURCES: ReadonlySet<CalendarSource> = new Set<CalendarSource>(["eve
 
 /** How often the header re-reads the clock — the strip's whole refresh (DASH-009). */
 const STRIP_TICK_MS = 60_000;
-
-/**
- * The module mark drawn beside a card's caption, keyed by the module half of a
- * placement's `moduleId:widgetId`.
- *
- * Nine cards that differ only in an eleven-pixel uppercase caption are a wall of
- * text. The mark is the one thing on a card a reader finds without reading, and
- * it is the SAME glyph the sidebar lists that module under and the page header
- * watermarks — so „which module is this" is answered by recognition rather than
- * by reading, at no cost in new drawing.
- *
- * A module this map does not name draws no mark rather than a wrong one: this
- * is the RENDERER's list of what it can draw, exactly as `DASHBOARD_WIDGETS` is,
- * and a widget from a module added later must degrade to a plain caption rather
- * than to somebody else's identity.
- */
-const MODULE_SIGILS: Readonly<Record<string, IconName>> = {
-  calendar: "calendar",
-  tasks: "tasks",
-  notes: "notes",
-  study: "study",
-  focus: "focus",
-  finance: "finance",
-  habits: "habits",
-  fitness: "fitness",
-  files: "files",
-  canvas: "canvas",
-  electronics: "electronics",
-  priv: "priv",
-  tools: "tools",
-};
 
 /**
  * The three size presets over the TWELVE-column grid the board switches to past
@@ -1460,7 +1430,7 @@ export function DashboardPage({
             if (dropId === entry.instanceId) classes.push("dash__widget--drop");
             // The module the placement belongs to, from the module half of its
             // qualified id — the same split `DASHBOARD_WIDGETS` is keyed on.
-            const sigil = MODULE_SIGILS[entry.widgetId.split(":")[0] ?? ""];
+            const sigil = moduleIconName(entry.widgetId.split(":")[0] ?? "");
             return (
               <Card
                 key={entry.instanceId}
