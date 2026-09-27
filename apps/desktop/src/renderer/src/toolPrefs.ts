@@ -65,9 +65,9 @@ export function clearStoredToolPreferences(): void {
  * The tools this device has opened, newest first.
  *
  * **Why the drawer needs one at all.** „Alatke" has eleven tools and „Stručne
- * alatke" has hundreds. At eleven a rail is a menu; at hundreds it is an index, and the four or five tools a
- * particular electrician actually uses are somewhere inside it every single
- * time. Nothing else in the drawer can know which those are, because the answer
+ * alatke" has hundreds. At eleven a rail is a menu; at hundreds it is an
+ * index, and the four or five tools a particular electrician actually uses are
+ * somewhere inside it every single time. Nothing else in the drawer can know which those are, because the answer
  * is not in the catalogue — it is in what this person did last week.
  *
  * **A device preference, not a profile row**, on `readStoredDefaultVatRate`'s

@@ -1,6 +1,6 @@
 # The defect-class ledger
 
-**One hundred and forty-seven recurring failure shapes, each recorded the first
+**One hundred and forty-eight recurring failure shapes, each recorded the first
 time it was recognised.** Opened 2026-08-07 on the founder's rule that *a reported bug is a
 sample and never an incident* — so the entry here is never the bug, it is the
 **rule that was wrong**, written so the next instance is something we spot
@@ -15,7 +15,7 @@ rather than something we discover.
 >
 > **How many of them are executable is not the gate count, and the arithmetic is
 > worth stating because it does not match — and is not meant to.** There are
-> **twenty-six** `check:` scripts and **one hundred and forty-seven** classes
+> **twenty-six** `check:` scripts and **one hundred and forty-eight** classes
 > below, and neither number is the other's inverse. `check:contrast` answers no
 > class at all, because it came from a design rule rather than from an observed
 > failure; `check:controls` answers TWO, [[DC-98]]'s native control that skips
@@ -5670,6 +5670,61 @@ private notes' (`updated_at DESC, id DESC`), whose timestamps come from each
 note's own edits rather than from a batch.
 
 *Related:* [[DC-146]] (the other half of why two sweeps disagreed), [[DC-57]].
+
+**DC-148 — a write's answer taken for the state of the disk NOW, when the thing
+it wrote may have moved while it was out (2026-09-27).** The canvas autosave
+that [[DC-144]] introduced sent a board's edit on a timer and, when the write
+answered, recorded that version as what the disk held. Three things can happen
+while a write is on the wire, and the first version of the machine had a state
+for none of them:
+
+- **An undo back to the loaded drawing.** The report equalled the version the
+  autosave believed was on disk, so it cancelled the timer and owed nothing —
+  and then the write of the undone edit landed and was recorded as current. The
+  undone drawing stayed on disk while the screen showed the other one.
+- **A second edit.** Its timer sent it BESIDE the first, and whichever answered
+  LAST set the recorded version: a slow first write left the newer drawing
+  marked unsaved, and had the main process ever reordered the two, the older
+  drawing would have been the one on disk.
+- **A board switch.** „On the wire" was a version NUMBER, cleared by the
+  switch, so the previous board's write answering could clear the new board's
+  marker whenever the two versions happened to be equal, and a flush then sent
+  the same edit twice.
+
+*Root cause, as the rule that was wrong:* a write's answer is a statement about
+the state that was SENT, and the machine read it as a statement about the state
+now. Between sending and answering the subject can be edited, undone or
+replaced, and a writer with no notion of „out" cannot tell „this landed" from
+„this is what the disk has".
+
+*Fix:* `canvasAutosave.ts` keeps its bookkeeping per board (`BoardAutosave`),
+and that bookkeeping outlives a switch for as long as a write it owes is out.
+One write per board is on the wire; a send asked for while one is out is made
+when it lands, from the newest report, so writes land in the order they left;
+a write on the wire counts as owed, so an undo made during one is written after
+it; a write that FAILED is not retried by itself; and a writer that throws is a
+failed write rather than a wedged board. `canvasAutosave.test.ts` drives it
+with a writer whose answers the test releases by hand — the only way to put a
+report between a write leaving and landing — and the undo, the second edit and
+the equal-version switch were each red against the first version. Found in
+review (on PR #36) before any installer carried it.
+
+*Blast radius:* the renderer's other two write-behind editors. `NoteEditor` and
+`PrivNoteEditor` were single-flight already, and a Yjs update commutes, so
+neither can land out of order. But both carry the other half of the shape, on
+the way OUT: each is mounted per note, and the unmount flush RETURNS when a
+write is out, leaving the rest to a continuation that runs after the cleanup
+has destroyed the document and nulled `docRef`. So on a note left while a
+write is out, an edit made during that write reaches disk under the title
+`deriveTitle(null)` gives — the empty string, which blanks the note's name in
+the list — and `PrivNoteEditor`'s continuation finds no document and writes
+nothing, after the close capture has already taken its version without it.
+The window is one IPC write, a few milliseconds. Worked as its own item
+(STATUS §4), together with the gap all three share: a final write that fails
+after its page is gone has nowhere left to say so, and nothing left to retry it.
+
+*Related:* [[DC-144]] (the same flush, one defect earlier), [[DC-101]] (a poll
+that answers with the state before the change it waits for).
 
 **Still open in C, and the only part of it that is:** item 14 (Tasks' capture
 form — its four bare selects are fixed, see DC-05), item 15 (Focus's two side-by-side primaries,

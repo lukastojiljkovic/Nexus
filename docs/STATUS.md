@@ -599,7 +599,20 @@ None of this blocks anything, and none of it is a new feature. It is the set of
 loose ends recorded while the product was being finished. The order below is a
 suggestion, cheapest and highest-leverage first.
 
-1. **Most of the startup chunk is copy.** Every page is its own chunk since
+1. **An editor's way out can lose its last edit, and cannot say so.** Found
+   2026-09-27 reviewing PR #36 ([[DC-148]]'s blast radius). Both note editors
+   are mounted per note, and their unmount flush returns when a write is out,
+   leaving the rest to a continuation that runs after the document is
+   destroyed: `NoteEditor` then writes the owed edit under an empty title
+   (the note's name blanks in the list) and `PrivNoteEditor` writes nothing at
+   all (the edit is lost, after the close capture took its version without
+   it). The window is one IPC write, a few milliseconds. And all three
+   write-behind editors — the two note editors and „Tabla" — report a failed
+   final write to the page that just unmounted, so a write that fails on the
+   way OUT of a page is visible nowhere and retried by nothing. One exit path
+   for all three: what is owed is captured before the teardown and outlives
+   it, and a failure is reported by the shell rather than by the page it left.
+2. **Most of the startup chunk is copy.** Every page is its own chunk since
    2026-09-26, but the strings table is not. Measured on the minified build the
    same day: 760 464 of the startup chunk's 1 284 233 bytes (59 %) are
    `strings.sr.ts` and `strings/*.ts`, and 606 355 of those are for the
@@ -610,14 +623,14 @@ suggestion, cheapest and highest-leverage first.
    rewrite its leaves in place; splitting it means per-surface subtables that
    join the table when their page loads, and that reaches `check:strings`,
    `check:copy` and the locale machinery. A design, not an edit.
-2. **A bench wire is pointer-only.** In Elektronika a part is a
+3. **A bench wire is pointer-only.** In Elektronika a part is a
    `role="button"` with a tab stop and Enter/Space; a wire is an invisible hit
    path with an `onPointerDown` and nothing else. So a keyboard user can select
    no wire, and therefore recolour or remove none. Found 2026-09-26 while making
    the wire scene deterministic. The answer is a focus model for a canvas of
    many small targets — which order, and a name for a wire (its two ends) —
    not an attribute.
-3. **The sweep has no comparison mode.** Every comparison of two sweeps this
+4. **The sweep has no comparison mode.** Every comparison of two sweeps this
    month was a script in a scratch directory, and each one had to re-learn what
    noise looks like. Measured 2026-09-26 on two partial sweeps of one build: 157
    of 342 frames differ, every one by at most 100 pixels and, in all but one, by
@@ -626,16 +639,16 @@ suggestion, cheapest and highest-leverage first.
    placeholder-text generator, and the tool that shows the time). A
    `shots`-side comparison with that tolerance, against the previous run's
    frames, would turn „is this change visible anywhere" into one command.
-4. **The sizing contract.** DC-06 closed one pane at one breakpoint; what is
+5. **The sizing contract.** DC-06 closed one pane at one breakpoint; what is
    missing is the rule that would have prevented all of them — what a pane's
    floor is, and what happens below it. This is also the desktop half of the
    responsive work the web app will need.
-5. **A gate for Class A: a claim about the code that is right where it is
+6. **A gate for Class A: a claim about the code that is right where it is
    written and stale where it is repeated.** Five instances were found on
    2026-09-22 and fixed by hand, four more the same day. Nothing in the tree can
    check a sentence, and a figure has no type, no import and no call site. The
    owed gate is a rule over the specific shapes that have now shipped twice.
-6. **A gate for Class C: a contract field no screen can reach.** The worked
+7. **A gate for Class C: a contract field no screen can reach.** The worked
    example is `NewDocumentFields.reminderOffsets` and
    `DocumentFieldChanges.reminderOffsets` — declared in `shared/ipc.ts`,
    accepted by main, validated by the store, asserted by
@@ -644,7 +657,7 @@ suggestion, cheapest and highest-leverage first.
    already asks this question inside the professional drawer; the owed gate is
    the generalisation: every exported IPC interface field must have a renderer
    call site that sets it.
-7. **The sr-Latn date formatters are written out page by page.** 40
+8. **The sr-Latn date formatters are written out page by page.** 40
    `new Intl.DateTimeFormat(…)` constructions in 27 files, measured 2026-09-26
    while working [[DC-145]] — the long day label („petak, 18. septembar 2026.")
    alone is spelled identically in the calendar, nutrition, habits and study
@@ -652,31 +665,31 @@ suggestion, cheapest and highest-leverage first.
    copy. [[DC-02]] already consolidated the clock formatter
    (`formatClockTime`); the date labels are the same move at a larger size,
    and one helper module with named formats is the shape it takes.
-8. **`ModuleManifest.imex` is declared and nothing fills it.** The archive
+9. **`ModuleManifest.imex` is declared and nothing fills it.** The archive
    was built in `@nexus/core` from `ProfileData`, one interchange version for
    the whole profile, not from per-module handlers — so the slot ADR-008 lists
    is unreachable by anything in the product. What is open is whether the
    plugin path still needs it (a third-party module's rows cannot ride
    `ProfileData`), which is a decision about PLUG rather than a cleanup: either
    the contract states what a plugin would implement, or it goes.
-9. **The duplicated Serbian numeral lexicon.** `pravo.ts` and
-   `racunovodstvo.ts` each embed their own numeral lexicon (both citing
-   *Pravopis srpskoga jezika*, 2010), their own `stripSeparators`, and their
-   own digit-at-a-time ISO 7064 MOD 97-10 under names one character apart. This
-   is a consolidation rather than a defect, and it is not urgent — it is what
-   declining to retire one of each colliding tool pair costs.
-10. **The shell's own settings cards are in no screenshot.** Twelve per-module
+10. **The duplicated Serbian numeral lexicon.** `pravo.ts` and
+    `racunovodstvo.ts` each embed their own numeral lexicon (both citing
+    *Pravopis srpskoga jezika*, 2010), their own `stripSeparators`, and their
+    own digit-at-a-time ISO 7064 MOD 97-10 under names one character apart. This
+    is a consolidation rather than a defect, and it is not urgent — it is what
+    declining to retire one of each colliding tool pair costs.
+11. **The shell's own settings cards are in no screenshot.** Twelve per-module
     settings scenes were added and are derived from the registry, which is why
     they cannot go stale. The shell's cards — Profili, Sigurnost, Izgled,
     Obaveštenja, Licence and the rest — have their ids written into
     `SettingsPage.tsx` in the renderer and appear in no list the main process
     can read, so the same derivation cannot reach them. Recorded rather than
     papered over with a second hand-kept list.
-11. **„Dalje" sits below the fold on onboarding step 3 at 900 × 600.** Measured
+12. **„Dalje" sits below the fold on onboarding step 3 at 900 × 600.** Measured
     and reachable by scrolling, deliberately left: the card is the scroller, step
     3 is the only step whose actions do not fit, and a sticky action bar would
     change the first screen a user ever sees.
-12. **Mixed line endings within files**, despite `core.autocrlf=true`. Every
+13. **Mixed line endings within files**, despite `core.autocrlf=true`. Every
     scripted edit has to be EOL-aware; it has already cost two redoes. A standing
     hazard rather than a defect.
 
