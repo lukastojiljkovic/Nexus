@@ -14,6 +14,7 @@ import {
 import type { PrivNoteListEntry, PrivStatus } from "../../shared/ipc.js";
 import { formatCountdown, passcodeMeetsPolicy, RecoveryKitPanel } from "./AuthGate.js";
 import { NotePopover } from "./notePopover.js";
+import { flushOpenEditors } from "./openEditors.js";
 import { PrivNoteEditor } from "./PrivNoteEditor.js";
 import { TypedConfirmDialog } from "./TypedConfirmDialog.js";
 import { strings } from "./strings.js";
@@ -588,6 +589,8 @@ function PrivSection({ profileId, onStatusChange, onRecheck }: PrivSectionProps)
   }, [query, profileId, onRecheck]);
 
   const lock = useCallback(async () => {
+    // DC-149: the lock drops the key the open note's write is sealed under.
+    await flushOpenEditors();
     try {
       await window.nexus.privLock();
       onStatusChange(await window.nexus.privStatus(profileId));

@@ -50,7 +50,10 @@ import { mergeTemplateEntries, stripAttachmentNodes, type TemplateEntry } from "
 import { NoteVersionHistory } from "./noteVersionHistory.js";
 import { formatClockTime } from "./timeFormat.js";
 import { ConfirmDialog } from "./ConfirmDialog.js";
-import { strings } from "./strings.js";
+import { registerOpenEditor } from "./openEditors.js";
+import { OwedWrites } from "./owedWrites.js";
+import { fill, strings } from "./strings.js";
+import { reportUnsavedExit } from "./unsavedExits.js";
 
 /**
  * The TipTap editor for one open note (NOTE slice a2 / ADR-012). One `Y.Doc`
@@ -70,6 +73,12 @@ const FLUSH_DEBOUNCE_MS = 800;
 
 /** A single collected update that alone exceeds the wire cap (e.g. a giant paste). */
 class OversizeUpdateError extends Error {}
+
+/** What a write owes: the updates, and the title they leave the note with. */
+interface OwedNote {
+  readonly updates: readonly Uint8Array[];
+  readonly title: string;
+}
 
 /**
  * Persists a batch of Yjs updates. The batch is merged into one blob when it
@@ -125,6 +134,34 @@ function deriveTitle(doc: Y.Doc | null): string {
     if (text.length > 0) return text.slice(0, 200);
   }
   return "";
+}
+
+/**
+ * Sends again what a note's last write, made as it was left, could not land —
+ * the shell's „Pokušaj ponovo" (DC-148). The note is no longer open, so there
+ * is no live document to read the title from, and the title the failed write
+ * carried is not the one to send: a later edit of the same note may have
+ * replaced it. It is derived from what the note will BE once the updates land,
+ * its stored state and the owed updates merged. Links and generated cards are
+ * not reported again — the note's next save reconciles both
+ * (`lastSentLinksRef` and `lastSentCardsRef` start null on every mount), as it
+ * does when either report fails inside the editor.
+ */
+async function resendOwed(
+  profileId: string,
+  noteId: string,
+  updates: readonly Uint8Array[],
+): Promise<void> {
+  const stored = await window.nexus.loadNote(profileId, noteId);
+  const doc = new Y.Doc();
+  try {
+    if (stored.snapshot !== null) Y.applyUpdate(doc, stored.snapshot);
+    for (const update of stored.updates) Y.applyUpdate(doc, update);
+    for (const update of updates) Y.applyUpdate(doc, update);
+    await sendBatch(profileId, noteId, updates, deriveTitle(doc));
+  } finally {
+    doc.destroy();
+  }
 }
 
 /** Locale-aware one-decimal formatter for the KB/MB branches of `formatBytes`. */
@@ -273,7 +310,27 @@ export function NoteEditor({
 
   const pendingRef = useRef<Uint8Array[]>([]);
   const timerRef = useRef<number | null>(null);
-  const inFlightRef = useRef(false);
+  /**
+   * Whether this editor is still on screen. A write that fails after it is not
+   * has no save line left to say so, so it goes to the shell
+   * (`unsavedExits.ts`). Set by the load effect, cleared first thing in its
+   * cleanup.
+   */
+  const openRef = useRef(false);
+  const failedRef = useRef<(owed: OwedNote, error: unknown) => void>(() => undefined);
+  // One instance per mount, and a mount is one note: what a failed write owed
+  // is carried onto the next write of THIS note and no other. Lazy state, so it
+  // is built once.
+  const [writes] = useState(
+    () =>
+      new OwedWrites<OwedNote>({
+        carry: (failed, next) => ({
+          updates: [...failed.updates, ...next.updates],
+          title: next.title,
+        }),
+        onFailed: (owed, error) => failedRef.current(owed, error),
+      }),
+  );
   const docRef = useRef<Y.Doc | null>(null);
   const flushRef = useRef<() => Promise<void>>(() => Promise.resolve());
   const editorRef = useRef<Editor | null>(null);
@@ -529,6 +586,11 @@ export function NoteEditor({
       setRestoreError(false);
       try {
         await flushRef.current();
+        // A checkpoint taken without the edits that did not save would make the
+        // restore the one step that cannot be undone.
+        if (writes.owesFailure) {
+          throw new Error("the edits the safety checkpoint must hold did not save");
+        }
         await window.nexus.captureNoteVersion(profileId, noteId);
         replaceNoteContent(docRef.current, versionSnapshot);
         setMode("edit");
@@ -539,7 +601,7 @@ export function NoteEditor({
         setRestoring(false);
       }
     },
-    [profileId, noteId, restoring],
+    [profileId, noteId, restoring, writes],
   );
 
   // Stable identity so `EditorCanvas`'s apply-effect (below) doesn't re-fire
@@ -560,42 +622,70 @@ export function NoteEditor({
     }, FLUSH_DEBOUNCE_MS);
   }, []);
 
-  const flush = useCallback(async () => {
-    if (pendingRef.current.length === 0) return;
-    // In-flight guard: updates arriving mid-flush are re-queued and re-sent by
-    // the success branch below (Yjs updates commute, so ordering is safe).
-    if (inFlightRef.current) return;
-    inFlightRef.current = true;
-    setSaveStatus("saving");
-    const batch = pendingRef.current;
+  // A write failed and no later one was asked for to carry it (`OwedWrites`).
+  // On screen the save line says it, and the next edit sends it again; once the
+  // note is closed the shell says it, naming the note. A retry is offered only
+  // where it can help: an oversize update can never land. `subject: null`,
+  // because two failed exits of one note owe two different edits.
+  const onWriteFailed = useCallback(
+    (owed: OwedNote, error: unknown) => {
+      const tooLarge = error instanceof OversizeUpdateError;
+      if (!tooLarge) console.error("Nexus: failed to persist note update:", error);
+      if (openRef.current) {
+        setSaveStatus("error");
+        setSaveError(tooLarge ? "tooLarge" : "generic");
+        return;
+      }
+      reportUnsavedExit({
+        profileId,
+        subject: null,
+        message: fill(
+          tooLarge ? strings.app.unsavedExit.noteTooLarge : strings.app.unsavedExit.note,
+          { title: owed.title === "" ? strings.notes.untitled : owed.title },
+        ),
+        retry: tooLarge ? null : () => resendOwed(profileId, noteId, owed.updates),
+      });
+    },
+    [profileId, noteId],
+  );
+
+  useEffect(() => {
+    failedRef.current = onWriteFailed;
+  }, [onWriteFailed]);
+
+  const flush = useCallback((): Promise<void> => {
+    const liveDoc = docRef.current;
+    if (liveDoc === null || (pendingRef.current.length === 0 && !writes.owesFailure)) {
+      return writes.settled();
+    }
+    const updates = pendingRef.current;
     pendingRef.current = [];
-    // Title, outbound link ids, AND the generated card set are all derived in
-    // this sync prologue, like the batch: the cleanup flush on unmount runs
-    // while the doc is still alive, but the doc is destroyed before
-    // `sendBatch` resolves — extracting after the await would silently skip
-    // the final report of a closing note. (Each store rejects a raw array
-    // over its cap; a doc genuinely over it indexes only its first capped
-    // entries, in document order.)
-    const title = deriveTitle(docRef.current);
-    const ids =
-      docRef.current !== null
-        ? collectNoteLinkIds(docRef.current).slice(0, NOTE_LINKS_MAX_COUNT)
-        : null;
-    const cards =
-      docRef.current !== null
-        ? collectNoteCards(docRef.current).slice(0, NOTE_CARDS_MAX_COUNT)
-        : null;
-    try {
-      await sendBatch(profileId, noteId, batch, title);
-      setSaveError(null);
-      setSavedAt(new Date().toISOString());
-      setSaveStatus("saved");
+    // Everything the write reports — the title, the outbound link ids AND the
+    // generated card set — is taken here, with the batch, while the doc is
+    // alive: the cleanup flush on unmount destroys it on the next line, and a
+    // write that waits its turn behind one still out can no longer read it.
+    // (Each store rejects a raw array over its cap; a doc genuinely over it
+    // indexes only its first capped entries, in document order.)
+    const title = deriveTitle(liveDoc);
+    const ids = collectNoteLinkIds(liveDoc).slice(0, NOTE_LINKS_MAX_COUNT);
+    const cards = collectNoteCards(liveDoc).slice(0, NOTE_CARDS_MAX_COUNT);
+    if (openRef.current) setSaveStatus("saving");
+    // Edits made while a write is out each scheduled a flush of their own, and
+    // it now queues behind that write instead of returning. A failure is
+    // carried onto the next write by `OwedWrites`, so nothing is put back here.
+    return writes.send({ updates, title }, async (owed) => {
+      await sendBatch(profileId, noteId, owed.updates, owed.title);
+      if (openRef.current) {
+        setSaveError(null);
+        setSavedAt(new Date().toISOString());
+        setSaveStatus("saved");
+        void loadMeta();
+      }
       onSavedRef.current();
-      void loadMeta();
 
       // Outbound wiki-links are reported only when the set changed since the
       // last successful send.
-      if (ids !== null && !sameLinkSet(lastSentLinksRef.current, ids)) {
+      if (!sameLinkSet(lastSentLinksRef.current, ids)) {
         try {
           await window.nexus.setNoteLinks(profileId, noteId, ids);
           lastSentLinksRef.current = ids;
@@ -610,7 +700,7 @@ export function NoteEditor({
       // NOTE-006c): only once a deck is chosen, and only when the set changed
       // since the last successful send.
       const deckId = cardDeckRef.current;
-      if (cards !== null && deckId !== null && !sameCardSet(lastSentCardsRef.current, cards)) {
+      if (deckId !== null && !sameCardSet(lastSentCardsRef.current, cards)) {
         try {
           await window.nexus.syncNoteCards(profileId, noteId, deckId, cards);
           lastSentCardsRef.current = cards;
@@ -620,34 +710,18 @@ export function NoteEditor({
           console.error("Nexus: failed to sync note cards:", error);
         }
       }
-
-      if (pendingRef.current.length > 0) scheduleFlush();
-    } catch (error) {
-      // Never drop: put the batch back (chronological) to retry on the next edit.
-      pendingRef.current = [...batch, ...pendingRef.current];
-      setSaveStatus("error");
-      if (error instanceof OversizeUpdateError) {
-        setSaveError("tooLarge");
-      } else {
-        setSaveError("generic");
-        console.error("Nexus: failed to persist note update:", error);
-      }
-    } finally {
-      inFlightRef.current = false;
-    }
-  }, [profileId, noteId, scheduleFlush, loadMeta]);
+    });
+  }, [profileId, noteId, writes, loadMeta]);
 
   useEffect(() => {
     flushRef.current = flush;
   }, [flush]);
 
-  // Flush before the window unloads (best-effort — the sync prologue captures
-  // the batch and title before any await).
-  useEffect(() => {
-    const onBeforeUnload = () => void flushRef.current();
-    window.addEventListener("beforeunload", onBeforeUnload);
-    return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, []);
+  // DC-149: every exit — a lock, the panic shortcut, closing the window — waits
+  // for this editor's flush through the registry before it tears down what the
+  // write goes through. This replaces a best-effort `beforeunload` flush, which
+  // ran after main had already begun to.
+  useEffect(() => registerOpenEditor(() => flushRef.current()), []);
 
   // Load + hydrate the doc, then attach the local-edit listener. Order matters:
   // snapshot + stored updates are applied BEFORE the listener is attached, so
@@ -656,6 +730,7 @@ export function NoteEditor({
     let cancelled = false;
     let created: Y.Doc | null = null;
     let handler: ((update: Uint8Array) => void) | null = null;
+    openRef.current = true;
     setDoc(null);
     setLoadFailed(false);
     setSaveError(null);
@@ -686,12 +761,16 @@ export function NoteEditor({
 
     return () => {
       cancelled = true;
+      openRef.current = false;
       if (timerRef.current !== null) {
         window.clearTimeout(timerRef.current);
         timerRef.current = null;
       }
-      // Final flush for a note switch / unmount (captures pending before the
-      // doc is torn down); the pending update bytes were already collected.
+      // Final flush for a note switch / unmount. It takes the batch and
+      // everything its write reports while the doc is alive, and the write waits
+      // behind any still out, so destroying the doc on the next line costs it
+      // nothing. If that write fails there is no page left to say so: the shell
+      // does (`onWriteFailed`).
       void flushRef.current();
       if (created !== null && handler !== null) created.off("update", handler);
       if (created !== null) created.destroy();

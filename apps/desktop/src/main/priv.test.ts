@@ -109,11 +109,34 @@ function makeDeps(overrides: Partial<PrivDeps> = {}): PrivDeps {
       list: async () => [...privBlobFiles.keys()],
     },
     privateUndoPending: () => false,
+    flushEditors: () => Promise.resolve(),
     stillThisSession: () => true,
     now: () => new Date(),
     ...overrides,
   };
 }
+
+/** A `flushEditors` the test answers by hand — the renderer's write still in flight — and how many times it was asked. */
+function heldFlush(): {
+  flushEditors: () => Promise<void>;
+  release: () => void;
+  asked: () => number;
+} {
+  const waiting: (() => void)[] = [];
+  let asked = 0;
+  return {
+    flushEditors: () =>
+      new Promise<void>((resolve) => {
+        asked += 1;
+        waiting.push(resolve);
+      }),
+    release: () => waiting.splice(0).forEach((resolve) => resolve()),
+    asked: () => asked,
+  };
+}
+
+/** Lets an answered `flushEditors` run its way through to the lock it was holding. */
+const settle = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
 
 function envelope(overrides: Partial<PrivNoteEnvelope> = {}): PrivNoteEnvelope {
   return {
@@ -333,7 +356,21 @@ describe("privLock", () => {
     const deps = makeDeps();
     await setUp(deps);
     expect(privStatus(deps, profileId).unlocked).toBe(true);
-    vi.advanceTimersByTime(5 * 60_000 + 1);
+    await vi.advanceTimersByTimeAsync(5 * 60_000 + 1);
+    expect(privStatus(deps, profileId).unlocked).toBe(false);
+  });
+
+  it("asks the editors what they owe before the idle lock, and locks once they have answered (DC-149)", async () => {
+    vi.useFakeTimers();
+    const flush = heldFlush();
+    const deps = makeDeps({ flushEditors: flush.flushEditors });
+    await setUp(deps);
+    await vi.advanceTimersByTimeAsync(5 * 60_000 + 1);
+    // The clock ran out but the renderer has not answered: the section is open.
+    expect(flush.asked()).toBe(1);
+    expect(privStatus(deps, profileId).unlocked).toBe(true);
+    flush.release();
+    await vi.advanceTimersByTimeAsync(0);
     expect(privStatus(deps, profileId).unlocked).toBe(false);
   });
 });
@@ -521,6 +558,7 @@ describe("privSetLockPrefs / privHandleMinimize", () => {
     const deps = makeDeps();
     await setUp(deps);
     privHandleMinimize(deps); // default lockOnMinimize: true
+    await settle();
     expect(privStatus(deps, profileId).unlocked).toBe(false);
 
     const unlocked = await privUnlock(deps, profileId, PASSPHRASE);
@@ -531,7 +569,57 @@ describe("privSetLockPrefs / privHandleMinimize", () => {
     });
     expect(status).toMatchObject({ autoLockMinutes: 30, lockOnMinimize: false });
     privHandleMinimize(deps);
+    await settle();
     expect(privStatus(deps, profileId).unlocked).toBe(true);
+  });
+
+  it("leaves the section open for the edit still in the editor, and locks once the editors have answered (DC-149)", async () => {
+    const flush = heldFlush();
+    const deps = makeDeps({ flushEditors: flush.flushEditors });
+    await setUp(deps);
+    const { id } = await privWrite(deps, profileId, null, envelope({ title: "before" }));
+
+    privHandleMinimize(deps);
+    await settle();
+    expect(privStatus(deps, profileId).unlocked).toBe(true);
+    expect(flush.asked()).toBe(1);
+
+    // The debounced write the minimize would have beaten: it lands on the open section.
+    await privWrite(deps, profileId, id, envelope({ title: "typed just before minimizing" }));
+    expect((await privRead(deps, profileId, id)).title).toBe("typed just before minimizing");
+
+    // Answered: the lock follows through the closing capture the two writes
+    // owe, which seals before it drops the key — so it lands a little later.
+    flush.release();
+    await vi.waitFor(() => expect(privStatus(deps, profileId).unlocked).toBe(false));
+    const versions = new PrivateNoteStore(db.raw, profileId).listVersions(id);
+    expect(versions.length).toBeGreaterThan(0);
+  });
+
+  it("leaves a NEW session alone when the section was locked and unlocked again during the flush", async () => {
+    const flush = heldFlush();
+    const deps = makeDeps({ flushEditors: flush.flushEditors });
+    await setUp(deps);
+
+    privHandleMinimize(deps);
+    privLock(); // an app lock, or the panic path, got there first
+    const unlocked = await privUnlock(deps, profileId, PASSPHRASE);
+    expect(unlocked.ok).toBe(true);
+
+    flush.release();
+    await settle();
+    expect(privStatus(deps, profileId).unlocked).toBe(true);
+  });
+
+  it("still locks when asking the editors fails", async () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const deps = makeDeps({ flushEditors: () => Promise.reject(new Error("the window is gone")) });
+    await setUp(deps);
+    privHandleMinimize(deps);
+    await settle();
+    expect(privStatus(deps, profileId).unlocked).toBe(false);
+    expect(errors).toHaveBeenCalledOnce();
+    errors.mockRestore();
   });
 });
 

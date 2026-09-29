@@ -21,6 +21,15 @@ function observed(boardId: string, version: number, label = `v${String(version)}
   return { boardId, version, scene: { label } };
 }
 
+/** Whether the promise has settled yet, read without waiting on it. */
+function watch(promise: Promise<void>): { settled: () => boolean } {
+  let done = false;
+  void promise.then(() => {
+    done = true;
+  });
+  return { settled: () => done };
+}
+
 describe("CanvasAutosave", () => {
   let writes: { boardId: string; label: string; version: number }[];
   let results: boolean[];
@@ -47,7 +56,7 @@ describe("CanvasAutosave", () => {
   it("writes nothing for a board that was opened and closed", async () => {
     // The first thing the editor reports is the board as it was loaded.
     autosave.observe(observed("a", 14));
-    autosave.flush();
+    void autosave.flush();
     await vi.runAllTimersAsync();
     expect(writes).toEqual([]);
   });
@@ -66,7 +75,7 @@ describe("CanvasAutosave", () => {
     autosave.observe(observed("a", 14, "the loaded drawing"));
     autosave.observe(observed("a", 15, "the drawing, edited"));
     // The editor is gone by now; the autosave never asked it for anything.
-    autosave.flush();
+    void autosave.flush();
     await vi.runAllTimersAsync();
     expect(writes).toEqual([{ boardId: "a", label: "the drawing, edited", version: 15 }]);
   });
@@ -77,7 +86,7 @@ describe("CanvasAutosave", () => {
     await vi.advanceTimersByTimeAsync(800);
     // A pan, a zoom or a selection: the callback fires, the version does not move.
     autosave.observe(observed("a", 15));
-    autosave.flush();
+    void autosave.flush();
     await vi.runAllTimersAsync();
     expect(writes.map((write) => write.version)).toEqual([15]);
   });
@@ -85,7 +94,7 @@ describe("CanvasAutosave", () => {
   it("files the edit under the board it was made on, across a switch", async () => {
     autosave.observe(observed("a", 14));
     autosave.observe(observed("a", 15, "edit on a"));
-    autosave.flush(); // the click that switches boards
+    void autosave.flush(); // the click that switches boards
     autosave.observe(observed("b", 7, "b as loaded"));
     await vi.runAllTimersAsync();
     expect(writes).toEqual([{ boardId: "a", label: "edit on a", version: 15 }]);
@@ -104,7 +113,7 @@ describe("CanvasAutosave", () => {
   it("treats the next board's first report as its baseline, not as an edit", async () => {
     autosave.observe(observed("a", 14));
     autosave.observe(observed("b", 7));
-    autosave.flush();
+    void autosave.flush();
     await vi.runAllTimersAsync();
     expect(writes).toEqual([]);
   });
@@ -116,7 +125,7 @@ describe("CanvasAutosave", () => {
     await vi.advanceTimersByTimeAsync(800);
     expect(writes.map((write) => write.version)).toEqual([15]);
     // Nothing new was drawn, but the drawing on screen is still not on disk.
-    autosave.flush();
+    void autosave.flush();
     await vi.runAllTimersAsync();
     expect(writes.map((write) => write.version)).toEqual([15, 15]);
   });
@@ -126,7 +135,7 @@ describe("CanvasAutosave", () => {
     autosave.observe(observed("a", 15));
     // The timer fires and its write is on the wire; the page is left before it lands.
     vi.advanceTimersByTime(800);
-    autosave.flush();
+    void autosave.flush();
     await vi.runAllTimersAsync();
     expect(writes.map((write) => write.version)).toEqual([15]);
   });
@@ -182,13 +191,13 @@ describe("CanvasAutosave, with writes still on the wire", () => {
     await vi.advanceTimersByTimeAsync(800);
     autosave.observe(observed("a", 16));
     await vi.advanceTimersByTimeAsync(800);
-    autosave.flush();
+    void autosave.flush();
     // 16 waits: were it sent now, it could land BEFORE 15 and leave 15 on disk.
     expect(versions()).toEqual(["a15"]);
     await land(0);
     expect(versions()).toEqual(["a15", "a16"]);
     await land(1);
-    autosave.flush();
+    void autosave.flush();
     await vi.runAllTimersAsync();
     expect(versions()).toEqual(["a15", "a16"]);
   });
@@ -214,7 +223,7 @@ describe("CanvasAutosave, with writes still on the wire", () => {
     await vi.advanceTimersByTimeAsync(800);
     expect(versions()).toEqual(["a6", "b6"]);
     await land(0);
-    autosave.flush();
+    void autosave.flush();
     await vi.runAllTimersAsync();
     expect(versions()).toEqual(["a6", "b6"]);
   });
@@ -223,13 +232,76 @@ describe("CanvasAutosave, with writes still on the wire", () => {
     autosave.observe(observed("a", 14));
     autosave.observe(observed("a", 15));
     await vi.advanceTimersByTimeAsync(800);
-    autosave.flush();
+    void autosave.flush();
     await land(0, false);
     expect(versions()).toEqual(["a15"]);
     // Still owed, though: the next report or flush tries again.
-    autosave.flush();
+    void autosave.flush();
     await vi.runAllTimersAsync();
     expect(versions()).toEqual(["a15", "a15"]);
+  });
+
+  // What `flush` PROMISES an exit (DC-149): that nothing it asked for is still
+  // on the wire when it resolves. The exit tears down what the write goes
+  // through, so a flush that resolved early would be the defect over again.
+  it("resolves a flush only after the write it asked for has answered", async () => {
+    autosave.observe(observed("a", 14));
+    autosave.observe(observed("a", 15));
+    const flushed = watch(autosave.flush());
+    await vi.advanceTimersByTimeAsync(0);
+    expect(versions()).toEqual(["a15"]);
+    expect(flushed.settled()).toBe(false);
+    await land(0);
+    expect(flushed.settled()).toBe(true);
+  });
+
+  it("resolves a flush after the resend it triggered lands, and not before", async () => {
+    autosave.observe(observed("a", 14));
+    autosave.observe(observed("a", 15));
+    await vi.advanceTimersByTimeAsync(800);
+    autosave.observe(observed("a", 16));
+    // 15 is out, so 16 waits behind it; the flush is for what the canvas owes,
+    // and that is both.
+    const flushed = watch(autosave.flush());
+    await land(0);
+    expect(versions()).toEqual(["a15", "a16"]);
+    expect(flushed.settled()).toBe(false);
+    await land(1);
+    expect(flushed.settled()).toBe(true);
+  });
+
+  it("resolves a flush at once when nothing is owed", async () => {
+    // Before any report at all, and for a board opened and left as it was loaded.
+    const untouched = watch(autosave.flush());
+    autosave.observe(observed("a", 14));
+    const loaded = watch(autosave.flush());
+    await vi.advanceTimersByTimeAsync(0);
+    expect(untouched.settled()).toBe(true);
+    expect(loaded.settled()).toBe(true);
+    expect(versions()).toEqual([]);
+  });
+
+  it("resolves a flush once a write that failed has answered", async () => {
+    autosave.observe(observed("a", 14));
+    autosave.observe(observed("a", 15));
+    const flushed = watch(autosave.flush());
+    await land(0, false);
+    // It answered `false`: the edit stays owed, and the exit is not held for it.
+    expect(flushed.settled()).toBe(true);
+    expect(versions()).toEqual(["a15"]);
+  });
+
+  it("makes a flush after a board switch wait for the board that was left as well", async () => {
+    autosave.observe(observed("a", 14));
+    autosave.observe(observed("a", 15, "edit on a"));
+    autosave.observe(observed("b", 7));
+    // `a`'s write left at the switch and is still out; `b` owes nothing.
+    expect(versions()).toEqual(["a15"]);
+    const flushed = watch(autosave.flush());
+    await vi.advanceTimersByTimeAsync(0);
+    expect(flushed.settled()).toBe(false);
+    await land(0);
+    expect(flushed.settled()).toBe(true);
   });
 
   it("is not wedged by a writer that throws instead of answering", async () => {

@@ -161,6 +161,28 @@ export const sr = {
      */
     saveSaving: "Čuvanje…",
     saveSavedPrefix: "Sačuvano u",
+    /**
+     * An editor's last write failed after its page was gone (DC-148). The shell
+     * says it, because the page that would have is not there, and names the
+     * note or the board, because nothing else on screen points at it. A private
+     * note is never named: its title is private content, and this line is shown
+     * above every page.
+     */
+    unsavedExit: {
+      note: "Poslednje izmene u belešci „{title}“ nisu sačuvane.",
+      noteTooLarge:
+        "Poslednje izmene u belešci „{title}“ nisu sačuvane — deo je prevelik da bi se sačuvao odjednom.",
+      privNote:
+        "Poslednje izmene u jednoj privatnoj belešci nisu sačuvane. Naslov se ne prikazuje van Privatnog.",
+      privNoteTooLarge:
+        "Poslednje izmene u jednoj privatnoj belešci nisu sačuvane — beleška je prevelika. Naslov se ne prikazuje van Privatnog.",
+      board: "Poslednje izmene na tabli „{name}“ nisu sačuvane. Otvori je i proveri crtež.",
+      boardTooLarge:
+        "Poslednje izmene na tabli „{name}“ nisu sačuvane — ubačene slike zauzimaju previše prostora.",
+      retry: "Pokušaj ponovo",
+      retryFailed: "Ni ponovni pokušaj nije uspeo.",
+      dismiss: "Zatvori obaveštenje",
+    },
     loadErrorTitle: "Pokretanje nije uspelo",
     loadErrorDescription:
       "Veza sa lokalnom bazom podataka nije uspostavljena. Zatvori aplikaciju i pokreni je ponovo.",

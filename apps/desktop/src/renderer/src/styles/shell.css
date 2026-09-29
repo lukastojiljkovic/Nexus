@@ -649,12 +649,15 @@ body {
   word-break: break-all;
 }
 
-/* Restore undo banner (IMEX slice 3d): sits at the top of the main column on
-   every page, since a restore replaces the whole profile and the offer to take
-   it back belongs wherever the user happens to be. Deliberately the same shell
-   as the per-page undo bars (.tasks__undo and friends) — surface-alt fill,
+/* The shell's banner: sits at the top of the main column on every page. Used by
+   the restore undo (IMEX slice 3d) — a restore replaces the whole profile, so
+   the offer to take it back belongs wherever the user happens to be — and by
+   unsaved exits (DC-148), the word on an edit that failed to save after its
+   page was gone. Both are app-wide statements that outlive any page. Stacked
+   banners are spaced by `.app__main`'s own gap. Deliberately the same shell as
+   the per-page undo bars (.tasks__undo and friends) — surface-alt fill,
    hairline border, no glow — because it is the same promise, only app-wide. */
-.app__restore-banner {
+.app__banner {
   flex: none;
   display: flex;
   align-items: center;
@@ -664,25 +667,25 @@ body {
   border: 1px solid var(--nx-border);
   border-radius: var(--nx-radius-md);
 }
-.app__restore-banner-text {
+.app__banner-text {
   flex: 1;
   font-size: var(--nx-font-size-body-sm);
   color: var(--nx-text);
 }
-.app__restore-banner-when {
+.app__banner-when {
   color: var(--nx-text-muted);
 }
-.app__restore-banner-error {
+.app__banner-error {
   color: var(--nx-danger);
   font-size: var(--nx-font-size-body-sm);
 }
-.app__restore-banner-dismiss.nx-button {
+.app__banner-dismiss.nx-button {
   background: transparent;
   border-color: transparent;
   color: var(--nx-text-muted);
   padding: 2px 8px;
 }
-.app__restore-banner-dismiss.nx-button:hover {
+.app__banner-dismiss.nx-button:hover {
   background: var(--nx-surface);
   color: var(--nx-text);
 }

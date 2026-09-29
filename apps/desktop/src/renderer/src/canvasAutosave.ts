@@ -32,7 +32,10 @@
  *    once the reports stop for `delayMs` — a continuous stroke is one write.
  *  - `flush` writes an owed edit now: on leaving the page, and before anything
  *    replaces the board on screen, so a switch writes at the click rather than
- *    when the next board has loaded.
+ *    when the next board has loaded. It also ANSWERS: it resolves once no write
+ *    of any board it has handled is on the wire, so an exit that must not tear
+ *    anything down under a write in flight can wait for what the canvas owes
+ *    (DC-149).
  *  - A write that fails leaves the edit owed; the next report or flush sends it
  *    again rather than dropping it.
  *  - One write per board is on the wire at a time. A send asked for while one
@@ -68,6 +71,8 @@ class BoardAutosave<S> {
   private inFlight: SceneObservation<S> | null = null;
   /** A send was asked for while a write was out; it is made when that one lands. */
   private resend = false;
+  /** Callers of `settled`, released the next time nothing is on the wire. */
+  private waiting: (() => void)[] = [];
 
   constructor(
     baseline: SceneObservation<S>,
@@ -109,7 +114,16 @@ class BoardAutosave<S> {
         // Only for a NEWER report: the one that just failed is not retried by
         // itself, it stays owed to the next report or flush.
         if (resend && this.latest !== observation) this.send();
+        // Only once nothing is out: a resend has just put a newer write on the
+        // wire, and a caller waiting for what this board owes is waiting for it.
+        if (this.inFlight === null) this.waiting.splice(0).forEach((release) => release());
       });
+  }
+
+  /** Resolves once no write of this board is on the wire — at once when none is, otherwise when the write out, and any resend it triggers, has answered. */
+  settled(): Promise<void> {
+    if (this.inFlight === null) return Promise.resolve();
+    return new Promise<void>((resolve) => this.waiting.push(resolve));
   }
 }
 
@@ -117,6 +131,8 @@ export class CanvasAutosave<S> {
   /** The board on screen, or none before its first report. */
   private board: BoardAutosave<S> | null = null;
   private timer: ReturnType<typeof setTimeout> | null = null;
+  /** The flush made when the previous board was left, for as long as its write is out — so a flush after a switch still waits for it. */
+  private leaving: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly write: SceneWriter<S>,
@@ -128,7 +144,7 @@ export class CanvasAutosave<S> {
     if (this.board !== null && observation.boardId !== this.board.latest.boardId) {
       // A different board is on screen: settle the previous one from its own
       // last report, then start this one from nothing.
-      this.flush();
+      this.leaving = this.flush();
       this.board = null;
     }
     this.clearTimer();
@@ -145,10 +161,18 @@ export class CanvasAutosave<S> {
     }, this.delayMs);
   }
 
-  /** Writes an owed edit NOW. Safe to call at any time, including after the editor is gone. */
-  flush(): void {
+  /**
+   * Writes an owed edit NOW, and resolves once no write of any board handled so
+   * far is on the wire: the one this asked for, a resend made after it lands, and
+   * a board left by a switch whose write is still out. A write that failed
+   * answers too — what it leaves owed is the next report's or flush's — so this
+   * never rejects. Safe to call at any time, including after the editor is gone.
+   */
+  flush(): Promise<void> {
     this.clearTimer();
-    this.board?.send();
+    const board = this.board;
+    board?.send();
+    return Promise.all([this.leaving, board?.settled()]).then(() => undefined);
   }
 
   private clearTimer(): void {

@@ -23,6 +23,15 @@
  * somebody walked away from. Two more things die with the key on every path:
  * the pending-capture marks and the session search index.
  *
+ * There is one step earlier than that, and it is the edit still in the editor
+ * (DC-149). The two locks MAIN starts — the idle timer and the minimize hook —
+ * run before any renderer event could tell an open note to write, so they ask
+ * the renderer first (`PrivDeps.flushEditors`, `main/editorFlush.ts`) and lock
+ * once it has answered or the grace has run out. The locks the RENDERER starts
+ * — the section's button, the panic shortcut, and the app lock whose
+ * `performLock` closes the very database the editors write through — flush
+ * before they ask main to lock.
+ *
  * Wrong-attempt throttling reuses `unlockThrottle`'s state machine
  * (`registerFailedAttempt`/`remainingLockMs`) but keeps its state IN MEMORY,
  * per profile — deliberately NOT the keystore counter: PRIV has no permanent
@@ -147,6 +156,8 @@ export interface PrivDeps {
    * nothing in the live tables references them right now.
    */
   privateUndoPending(profileId: string): boolean;
+  /** Asks the renderer to send what its open editors owe, and resolves when they have or when the grace runs out (`main/editorFlush.ts`, DC-149). Never rejects — a lock that waits on it must not be stopped by it. */
+  flushEditors(): Promise<void>;
   /** The `db === session` identity guard (the house idiom for work outliving a lock). */
   stillThisSession(): boolean;
   now(): Date;
@@ -264,18 +275,46 @@ function armIdleTimer(deps: PrivDeps): void {
     // The app may have locked (performLock already ran privLock) — the guard
     // just spares a redundant wipe; privLock is idempotent either way.
     if (!deps.stillThisSession()) return;
-    lockAfterPendingCaptures(deps);
+    lockWhenEditorsFlushed(deps);
   }, minutes * 60_000);
   idleTimer.unref?.();
 }
 
 /**
- * The lock both of main's OWN lock paths (the idle timer and the minimize
- * hook) take: with nothing pending it is the plain synchronous wipe; with a
- * capture owed it seals that first and drops the key immediately after. The
- * key living for the length of one seal is the price of not losing the last
- * edits somebody walked away from — and `privCaptureAndLock` locks in a
- * `finally`, so no failure can leave the section open.
+ * Main's own lock paths wait for the edit in flight first (DC-149). The idle
+ * timer and the minimize hook fire in main, on a clock or an OS event, with the
+ * renderer's debounced note write still ahead of them — so they ask the
+ * renderer to send what its open editors owe, and lock once that is answered.
+ * The wait is bounded by the grace, and a failed ask locks all the same: that
+ * is what the `catch` ahead of the `then` is for. The section is still open
+ * meanwhile, so the write that arrives is an ordinary `privWrite`.
+ */
+function lockWhenEditorsFlushed(deps: PrivDeps): void {
+  const session = privSession;
+  if (session === null) return;
+  void deps
+    .flushEditors()
+    .catch((error: unknown) => {
+      console.error("Failed to flush the open editors before locking the private section:", error);
+    })
+    .then(() => {
+      // Locked meanwhile (an app lock, the panic path), or a different section
+      // adopted: this lock is not ours to take, and taking it would end a
+      // session nobody asked to end.
+      if (privSession !== session) return;
+      lockAfterPendingCaptures(deps);
+    });
+}
+
+/**
+ * What both of main's OWN lock paths (the idle timer and the minimize hook)
+ * end in once the editors have flushed: with nothing pending it is the plain
+ * synchronous wipe; with a capture owed it seals that first and drops the key
+ * immediately after. The key living for up to one editor flush — bounded by the
+ * grace — plus one seal is the price of not losing the last edits somebody
+ * walked away from, the same trade ADR-066 §3 made for the close capture — and
+ * `privCaptureAndLock` locks in a `finally`, so no failure can leave the
+ * section open.
  */
 function lockAfterPendingCaptures(deps: PrivDeps): void {
   if (!privHasPendingCaptures()) {
@@ -991,12 +1030,12 @@ export function privSetLockPrefs(
   return privStatus(deps, profileId);
 }
 
-/** The BrowserWindow 'minimize' hook: locks the open section when its profile's preference says so — through `lockAfterPendingCaptures`, since a minimize IS somebody walking away from the surface. A missing row (unreachable while unlocked) locks defensively — the fail-safe direction. */
+/** The BrowserWindow 'minimize' hook: locks the open section when its profile's preference says so — after the open editors have flushed and through `lockAfterPendingCaptures`, since a minimize IS somebody walking away from the surface, and the realistic way to lose an edit is to type and minimize within the write's debounce (DC-149). A missing row (unreachable while unlocked) locks defensively — the fail-safe direction. */
 export function privHandleMinimize(deps: PrivDeps): void {
   const session = privSession;
   if (session === null) return;
   const settings = deps.privateSettings(session.profileId).get();
-  if (settings === null || settings.lockOnMinimize) lockAfterPendingCaptures(deps);
+  if (settings === null || settings.lockOnMinimize) lockWhenEditorsFlushed(deps);
 }
 
 // --- Recovery Kit regeneration across the account ----------------------------

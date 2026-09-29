@@ -76,6 +76,7 @@ function makePrivDeps(): PrivDeps {
       list: async () => [...privBlobFiles.keys()],
     },
     privateUndoPending: () => false,
+    flushEditors: () => Promise.resolve(),
     stillThisSession: () => true,
     now: () => new Date(),
   };

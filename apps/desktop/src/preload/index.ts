@@ -873,6 +873,20 @@ const api: NexusApi = {
     return () => ipcRenderer.removeListener(IpcChannel.windowStateChanged, handler);
   },
   windowView: (command) => ipcRenderer.invoke(IpcChannel.windowView, { command }),
+  onEditorsFlushRequested: (listener) => {
+    // Main's request carries an id the answer has to name, so the payload is
+    // re-validated here rather than trusted: anything that is not a positive
+    // safe integer is not a request main made, and is dropped.
+    const handler = (_event: unknown, payload: unknown): void => {
+      const requestId = (payload as { requestId?: unknown } | null)?.requestId;
+      if (typeof requestId === "number" && Number.isSafeInteger(requestId) && requestId >= 1) {
+        listener(requestId);
+      }
+    };
+    ipcRenderer.on(IpcChannel.editorsFlushRequested, handler);
+    return () => ipcRenderer.removeListener(IpcChannel.editorsFlushRequested, handler);
+  },
+  editorsFlushed: (requestId) => ipcRenderer.invoke(IpcChannel.editorsFlushed, { requestId }),
   // Sync. One-line shims like every other method here: the whole protocol — the
   // derivations, both sign-ins, the step-up, the mint or the recovery unwrap,
   // and the byte-for-byte readback — happens in main, and what crosses this

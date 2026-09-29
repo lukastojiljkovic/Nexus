@@ -924,6 +924,19 @@ export const IpcChannel = {
   // and each one is a bare enum with no other field to validate. Four channels
   // would be four handlers repeating the same three lines.
   windowView: "window:view",
+  // Every exit waits for what the open editors owe (DC-149). The renderer's own
+  // exits — the lock, the panic shortcut, the private section's button — flush
+  // before they ask main to lock, and need no channel for it. Main's own exits
+  // (the private section's idle lock, lock-on-minimize, closing the window) run
+  // before any renderer event could, so main asks: `editors:flush-requested` is
+  // pushed with a request id, and `editors:flushed` answers that id once every
+  // open editor's write has answered.
+  //
+  // The answer is honoured in ANY auth state, because all it does is resolve a
+  // promise main is already holding; it opens nothing and reads nothing. And
+  // main never waits past `EDITOR_FLUSH_GRACE_MS` for it.
+  editorsFlushRequested: "editors:flush-requested",
+  editorsFlushed: "editors:flushed",
   // Sync (the cloud half). The smallness is the design — no count here, because
   // the number in this line was wrong for two channels before anyone noticed.
   //
@@ -975,6 +988,17 @@ export const IpcChannel = {
 } as const;
 
 export type IpcChannel = (typeof IpcChannel)[keyof typeof IpcChannel];
+
+/**
+ * The longest any exit waits for the editors that are open to send what they
+ * owe (DC-149) — a lock, closing the window, the private section's idle timer.
+ * Main's request and the renderer's own flush both use it.
+ *
+ * Bounded because a lock must never be refused, or held hostage, by a write that
+ * does not answer: past the grace the exit goes ahead without it. Long enough
+ * for one IPC write, sealing a private note included, on a loaded machine.
+ */
+export const EDITOR_FLUSH_GRACE_MS = 1_500;
 
 /**
  * The local account's session state (ADR-018): `"uninitialized"` (no account
@@ -10038,6 +10062,10 @@ export interface NexusApi {
   onWindowStateChanged(listener: (state: WindowState) => void): () => void;
   /** Zoom or full screen for the calling window. The resulting state arrives through `onWindowStateChanged`, never as a reply — one path, so the strip can never disagree with itself. */
   windowView(command: WindowViewCommand): Promise<void>;
+  /** Subscribes to main asking for what the open editors owe, pushed before an exit main starts itself: the private section's idle lock, lock-on-minimize, closing the window (DC-149). Answer with {@link NexusApi.editorsFlushed}. Returns an unsubscribe function. */
+  onEditorsFlushRequested(listener: (requestId: number) => void): () => void;
+  /** Answers one {@link NexusApi.onEditorsFlushRequested} request, once every open editor's write has answered. */
+  editorsFlushed(requestId: number): Promise<void>;
   /** Whether cloud is on for this launch, whether this build has a project, and which account this computer belongs to. Answers while locked. */
   syncStatus(): Promise<SyncStatusView>;
   /** Writes the cloud switch and answers with the whole status. Takes effect on the NEXT launch — `cloudRestartRequired` comes back true in both directions, and the settings card says so. */

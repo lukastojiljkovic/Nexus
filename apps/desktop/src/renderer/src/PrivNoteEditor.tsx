@@ -22,10 +22,13 @@ import { readStoredNoteMarkdownShortcuts } from "./notePrefs.js";
 import { createSlashExtension, SlashMenu, type SlashRenderState } from "./noteSlashMenu.js";
 import { NoteTableOfContents } from "./noteTableOfContents.js";
 import { Toggle, ToggleContent, ToggleSummary } from "./noteToggle.js";
+import { registerOpenEditor } from "./openEditors.js";
+import { OwedWrites } from "./owedWrites.js";
 import { PrivAttachmentImage, PrivAttachmentProvider } from "./privAttachmentImage.js";
 import { PrivVersionHistory } from "./privVersionHistory.js";
 import { strings } from "./strings.js";
 import { formatClockTime } from "./timeFormat.js";
+import { reportUnsavedExit } from "./unsavedExits.js";
 
 /**
  * The private editor (PRIV v1 / ADR-057): `NoteEditor.tsx`'s TipTap surface
@@ -153,7 +156,22 @@ export function PrivNoteEditor({ profileId, noteId, onSaved, onMaybeLocked }: Pr
 
   const docRef = useRef<Y.Doc | null>(null);
   const dirtyRef = useRef(false);
-  const inFlightRef = useRef(false);
+  /**
+   * Whether this editor is still on screen; a write that fails after it is not
+   * goes to the shell (`unsavedExits.ts`). Set by the load effect, cleared first
+   * thing in its cleanup.
+   */
+  const openRef = useRef(false);
+  const failedRef = useRef<(error: unknown) => void>(() => undefined);
+  // A private note is written WHOLE, so a newer state supersedes a failed one.
+  // One instance per mount, which is one note; lazy state, so it is built once.
+  const [writes] = useState(
+    () =>
+      new OwedWrites<PrivNoteEnvelopePayload>({
+        carry: (_failed, next) => next,
+        onFailed: (_owed, error) => failedRef.current(error),
+      }),
+  );
   const timerRef = useRef<number | null>(null);
   const flushRef = useRef<() => Promise<void>>(() => Promise.resolve());
   // `flush` runs from the unmount cleanup too, after React stops re-rendering
@@ -174,13 +192,42 @@ export function PrivNoteEditor({ profileId, noteId, onSaved, onMaybeLocked }: Pr
     }, FLUSH_DEBOUNCE_MS);
   }, []);
 
-  const flush = useCallback(async () => {
-    if (!dirtyRef.current || inFlightRef.current) return;
+  // A write failed and no later one was asked for to supersede it
+  // (`OwedWrites`). On screen the save line says it, and the next edit writes
+  // the note again. Once the note is closed the shell says it — never with a
+  // retry, because the owed write is the note's plaintext, which must not
+  // outlive the section's lock in a closure the shell holds; and never with the
+  // title, because it is private content and the banner shows on every page.
+  const onWriteFailed = useCallback(
+    (error: unknown) => {
+      console.error("Nexus: failed to persist private note:", error);
+      onMaybeLockedRef.current();
+      if (openRef.current) {
+        setSaveError("generic");
+        setSaveStatus("error");
+      } else {
+        reportUnsavedExit({
+          profileId,
+          subject: `priv:${noteId}`,
+          message: strings.app.unsavedExit.privNote,
+          retry: null,
+        });
+      }
+    },
+    [profileId, noteId],
+  );
+
+  useEffect(() => {
+    failedRef.current = onWriteFailed;
+  }, [onWriteFailed]);
+
+  const flush = useCallback((): Promise<void> => {
     const liveDoc = docRef.current;
-    if (liveDoc === null) return;
+    if (liveDoc === null || (!dirtyRef.current && !writes.owesFailure)) return writes.settled();
     // The whole prologue is synchronous, BEFORE any await: the unmount
     // cleanup calls this and then destroys the doc, so nothing may read it
-    // past the first suspension point.
+    // past the first suspension point — and a write that waits its turn behind
+    // one still out can no longer read it at all.
     const state = Y.encodeStateAsUpdate(liveDoc);
     const yjsState = toBase64(state);
     // The derived plaintext IS the search mirror; `mergeNoteState` is the one
@@ -192,47 +239,51 @@ export function PrivNoteEditor({ profileId, noteId, onSaved, onMaybeLocked }: Pr
       // goes to `error` here rather than `saving`, because this refusal happens
       // BEFORE anything is in flight — a „Čuvanje…" that never resolves would
       // be the same silence in a more reassuring costume.
-      setSaveError("tooLarge");
-      setSaveStatus("error");
-      return;
+      if (openRef.current) {
+        setSaveError("tooLarge");
+        setSaveStatus("error");
+      } else {
+        reportUnsavedExit({
+          profileId,
+          subject: `priv:${noteId}`,
+          message: strings.app.unsavedExit.privNoteTooLarge,
+          retry: null,
+        });
+      }
+      return writes.settled();
     }
-    const envelope = {
+    const envelope: PrivNoteEnvelopePayload = {
       title: deriveTitle(plaintext),
       yjsState,
       plaintext,
       attachments: attachmentsRef.current,
     };
     dirtyRef.current = false;
-    inFlightRef.current = true;
-    setSaveStatus("saving");
-    try {
-      await window.nexus.privWrite(profileId, noteId, envelope);
-      setSaveError(null);
-      setSavedAt(new Date().toISOString());
-      setSaveStatus("saved");
+    if (openRef.current) setSaveStatus("saving");
+    // An edit made while a write is out marked the note dirty and scheduled its
+    // own flush, which queues behind that write instead of returning; a failed
+    // write is superseded by the newer state or said once, by `OwedWrites` — so
+    // nothing is marked dirty again or re-scheduled here.
+    return writes.send(envelope, async (owed) => {
+      await window.nexus.privWrite(profileId, noteId, owed);
+      if (openRef.current) {
+        setSaveError(null);
+        setSavedAt(new Date().toISOString());
+        setSaveStatus("saved");
+      }
       onSavedRef.current();
-      if (dirtyRef.current) scheduleFlush();
-    } catch (error) {
-      dirtyRef.current = true; // never drop — the next edit or flush retries
-      setSaveError("generic");
-      setSaveStatus("error");
-      console.error("Nexus: failed to persist private note:", error);
-      onMaybeLockedRef.current();
-    } finally {
-      inFlightRef.current = false;
-    }
-  }, [profileId, noteId, scheduleFlush]);
+    });
+  }, [profileId, noteId, writes]);
 
   useEffect(() => {
     flushRef.current = flush;
   }, [flush]);
 
-  // Best-effort final flush before the window unloads (the prologue is sync).
-  useEffect(() => {
-    const onBeforeUnload = () => void flushRef.current();
-    window.addEventListener("beforeunload", onBeforeUnload);
-    return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, []);
+  // DC-149: every exit — a lock, the panic shortcut, closing the window — waits
+  // for this editor's flush through the registry before it tears down what the
+  // write goes through, the section's key included. This replaces a best-effort
+  // `beforeunload` flush, which ran after main had already begun to.
+  useEffect(() => registerOpenEditor(() => flushRef.current()), []);
 
   // Load: one fresh doc, seeded from the envelope, listener attached AFTER
   // seeding so hydration never marks the note dirty.
@@ -240,6 +291,7 @@ export function PrivNoteEditor({ profileId, noteId, onSaved, onMaybeLocked }: Pr
     let cancelled = false;
     let created: Y.Doc | null = null;
     let handler: (() => void) | null = null;
+    openRef.current = true;
     setDoc(null);
     setLoadFailed(false);
     setSaveError(null);
@@ -281,6 +333,7 @@ export function PrivNoteEditor({ profileId, noteId, onSaved, onMaybeLocked }: Pr
 
     return () => {
       cancelled = true;
+      openRef.current = false;
       if (timerRef.current !== null) {
         window.clearTimeout(timerRef.current);
         timerRef.current = null;
@@ -288,9 +341,12 @@ export function PrivNoteEditor({ profileId, noteId, onSaved, onMaybeLocked }: Pr
       // Final flush on unmount/switch — its prologue reads the doc before
       // this cleanup destroys it (see `flush`) — and then the CLOSE CAPTURE
       // (ADR-057): the surface is being left, so what was written since the
-      // last capture becomes a version, the flush included. Best-effort, like
-      // the flush itself: main refuses while locked, which costs nothing —
-      // every lock path captures on its own way out.
+      // last capture becomes a version, the flush included. The capture now
+      // really follows the final write, because the flush resolves only once
+      // every write asked for has answered — one that was still out when the
+      // note was left included. Best-effort, like the flush itself: main
+      // refuses while locked, which costs nothing — every lock path captures
+      // on its own way out.
       void flushRef.current()
         .then(() => window.nexus.privCaptureVersion(profileId, noteId))
         .catch((error: unknown) => {
@@ -321,6 +377,12 @@ export function PrivNoteEditor({ profileId, noteId, onSaved, onMaybeLocked }: Pr
       setRestoreError(false);
       try {
         await flushRef.current();
+        // Still dirty after a flush means the too-large refusal. Either way a
+        // checkpoint taken without those edits would make the restore the one
+        // step that cannot be undone.
+        if (dirtyRef.current || writes.owesFailure) {
+          throw new Error("the edits the safety checkpoint must hold did not save");
+        }
         await window.nexus.privCaptureVersion(profileId, noteId);
         // Re-checked after the awaits: a note switched away in the meantime
         // destroyed that doc, and writing into it would be an edit to a note
@@ -345,7 +407,7 @@ export function PrivNoteEditor({ profileId, noteId, onSaved, onMaybeLocked }: Pr
         setRestoring(false);
       }
     },
-    [profileId, noteId, restoring],
+    [profileId, noteId, restoring, writes],
   );
 
   /** „Priloži": main picks and seals, the reference lands in the envelope through an IMMEDIATE flush — a reference that waited out a debounce could die with a crash. */

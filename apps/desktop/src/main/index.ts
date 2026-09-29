@@ -426,6 +426,7 @@ import {
   unlockWithRecovery,
   verifyPasscode,
 } from "./auth.js";
+import { createEditorFlush } from "./editorFlush.js";
 import {
   privAddAttachment,
   privCaptureAndLock,
@@ -599,6 +600,7 @@ import {
   type DocMimeFamily,
   type DocTextContent,
   DEMO_PROFILE_NAME,
+  EDITOR_FLUSH_GRACE_MS,
   type ElecCircuit,
   type ElecCircuitDocument,
   type ExportResult,
@@ -938,6 +940,18 @@ const iconPath = join(app.getAppPath(), iconFile);
 
 let db: NexusDatabase | null = null;
 let mainWindow: BrowserWindow | null = null;
+
+/**
+ * What every exit main starts itself asks of the renderer first (DC-149): the
+ * private section's idle lock, lock-on-minimize, and closing the window. The
+ * protocol lives in `editorFlush.ts`; this is only the delivery — the request
+ * goes to the main window, and there being none is an answer, not an error.
+ */
+const editorFlush = createEditorFlush((requestId) => {
+  if (mainWindow === null || mainWindow.isDestroyed()) return false;
+  mainWindow.webContents.send(IpcChannel.editorsFlushRequested, { requestId });
+  return true;
+}, EDITOR_FLUSH_GRACE_MS);
 
 /**
  * The unlocked session's data key (hex), held only for as long as the
@@ -6837,6 +6851,7 @@ function privDeps(): PrivDeps {
     // undo slot `restore.ts` owns is the only thing that can put sealed rows
     // — and therefore blob references — back after they left the tables.
     privateUndoPending,
+    flushEditors: () => editorFlush.request(),
     stillThisSession: () => db === session,
     now: () => new Date(),
   };
@@ -11961,6 +11976,16 @@ function registerIpc(): void {
     }
   });
 
+  // The renderer's answer to `editors:flush-requested` (DC-149). Honoured in ANY
+  // auth state, so there is no `requireDb()`: all it does is resolve a promise
+  // main is already holding, it reads nothing and opens nothing, and an exit
+  // that is waiting on it must never be kept waiting because the database
+  // closed in the meantime. An id nobody is waiting for is ignored.
+  ipcMain.handle(IpcChannel.editorsFlushed, (event, payload): void => {
+    assertTrustedSender(event);
+    editorFlush.acknowledge(asPositiveInteger(asRecord(payload).requestId, "requestId"));
+  });
+
   // Sync (the cloud half). Validation shims over `main/sync/service.ts`, which
   // holds the ports, the session and the whole protocol. Deliberately no count
   // in this sentence: it said „four" through two channels being added, which is
@@ -12240,20 +12265,28 @@ function createWindow(): BrowserWindow {
     if (db !== null) privHandleMinimize(privDeps());
   });
 
-  // The private section's close capture on the way out (ADR-057): closing the
-  // window leaves the private surface exactly as locking does, and the capture
-  // it owes has to be SEALED before the process stops being able to. The close
-  // is deferred exactly once, and only when something is actually owed —
-  // `closing` makes the second pass unconditional, and the `finally` closes the
-  // window whatever the capture did, so this can never strand a window open.
+  // Closing the window is an exit, like a lock (DC-149, ADR-057): what it tears
+  // down is the page whose editors still owe a debounced write, and then the
+  // process that seals the private section's close capture. So the close is
+  // deferred exactly once, and in that order — first the open editors send what
+  // they owe, bounded by the grace, then the capture seals — and the `finally`
+  // closes the window whatever either did, so this can never strand a window
+  // open. `closing` makes the second pass unconditional. Locked (`db === null`)
+  // means no editor is open and nothing is owed. Electron emits the window's
+  // `close` BEFORE the page's `beforeunload`, which is why main can ask first,
+  // and why the editors no longer carry a `beforeunload` flush of their own.
   let closing = false;
   win.on("close", (event) => {
-    if (closing || db === null || !privHasPendingCaptures()) return;
+    if (closing || db === null) return;
     closing = true;
     event.preventDefault();
-    void privCaptureAndLock(privDeps())
+    void editorFlush
+      .request()
+      .then(() =>
+        db !== null && privHasPendingCaptures() ? privCaptureAndLock(privDeps()) : undefined,
+      )
       .catch((error: unknown) => {
-        console.error("Failed to capture closing private-note versions on window close:", error);
+        console.error("Failed to seal closing private-note versions on window close:", error);
       })
       .finally(() => {
         if (!win.isDestroyed()) win.close();

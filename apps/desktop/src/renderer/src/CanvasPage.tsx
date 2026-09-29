@@ -29,6 +29,7 @@ import { MAX_CANVAS_BOARD_NAME_LENGTH, MAX_CANVAS_SCENE_LENGTH } from "../../sha
 import type { CanvasBoard, CanvasRefCard } from "../../shared/ipc.js";
 import { CanvasAutosave, type SceneObservation } from "./canvasAutosave.js";
 import { looksLikeMermaid } from "./canvasBoards.js";
+import { registerOpenEditor } from "./openEditors.js";
 import { neighbourAfterDelete, resolveOpenItem } from "./pickedList.js";
 import { moduleName } from "./moduleName.js";
 import { NotePopover } from "./notePopover.js";
@@ -69,7 +70,8 @@ import {
   sameCanvasToolbarState,
   type CanvasToolbarState,
 } from "./canvasTools.js";
-import { strings } from "./strings.js";
+import { fill, strings } from "./strings.js";
+import { reportUnsavedExit } from "./unsavedExits.js";
 
 /**
  * Tabla (CANV slices a–b1) — the infinite canvas, over an embedded Excalidraw.
@@ -299,6 +301,24 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
       ),
   );
 
+  /**
+   * Whether the page is still mounted. `onScreen()` cannot tell: `activeIdRef`
+   * stops changing when the page goes, and still names the board that was open.
+   */
+  const openRef = useRef(false);
+  useEffect(() => {
+    openRef.current = true;
+    return () => {
+      openRef.current = false;
+    };
+  }, []);
+
+  /** The board names, for the one reader that runs after the page is gone. */
+  const boardsRef = useRef(boards);
+  useEffect(() => {
+    boardsRef.current = boards;
+  }, [boards]);
+
   /** Re-reads the board list, keeping whatever board was open when it is still there. */
   const reload = useCallback(async (): Promise<void> => {
     const listed = await window.nexus.listCanvasBoards(profileId);
@@ -443,7 +463,9 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
    * they can actually cause — a scene past the size ceiling, which in practice
    * means pasted images — needs a sentence they can act on rather than a
    * spinner. The edit stays owed to the autosave, so the next change or the
-   * next way out of the board sends it again.
+   * next way out of the board sends it again. When the failing write is the
+   * one made as the page unmounts, nothing here is left to show it, and the
+   * shell does (`unsavedExits.ts`).
    */
   const writeScene = useCallback(
     async ({ boardId, scene }: SceneObservation<CanvasScene>): Promise<boolean> => {
@@ -486,7 +508,24 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
         // autosave must not be dismissible: dismissing it would leave the page
         // claiming nothing while the drawing is still only on screen.
         const tooLarge = json.length > MAX_CANVAS_SCENE_LENGTH;
-        if (onScreen()) {
+        if (!openRef.current) {
+          // The page itself is gone (DC-148), so the shell says it. Never with a
+          // retry: a board is written whole, and a replay after it was reopened
+          // and drawn on would put the older drawing over the newer. A board no
+          // longer listed was deleted, and there is nothing left to go back to.
+          const name = boardsRef.current?.find((board) => board.id === boardId)?.name;
+          if (name !== undefined) {
+            reportUnsavedExit({
+              profileId,
+              subject: `canvas:${boardId}`,
+              message: fill(
+                tooLarge ? strings.app.unsavedExit.boardTooLarge : strings.app.unsavedExit.board,
+                { name },
+              ),
+              retry: null,
+            });
+          }
+        } else if (onScreen()) {
           setSaveError(tooLarge ? s.tooLarge : s.saveError);
           setSaveStatus("error");
         } else {
@@ -555,8 +594,14 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
    * refused to work afterwards would lose every drawing made in `pnpm dev`.
    */
   useEffect(() => {
-    return () => autosave.flush();
+    return () => void autosave.flush();
   }, [autosave]);
+
+  // DC-149: every exit — a lock, the panic shortcut, closing the window — waits
+  // for the board's write to answer through the registry, before it tears down
+  // what that write goes through. The unmount flush above only covers leaving
+  // the page, and the canvas never had a `beforeunload` flush at all.
+  useEffect(() => registerOpenEditor(() => autosave.flush()), [autosave]);
 
   /**
    * The paste interception. `true` lets Excalidraw handle the paste as it
@@ -697,7 +742,7 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
   /** Switches boards, writing whatever the old one still owes at the click. */
   function openBoard(id: string): void {
     if (id === activeId) return;
-    autosave.flush();
+    void autosave.flush();
     setState((previous) => ({ ...previous, activeId: id }));
   }
 
@@ -721,7 +766,7 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
     setNaming(null);
     // A new board is opened the moment it exists, so what the current one
     // still owes is written first — the same as a click on another board.
-    autosave.flush();
+    void autosave.flush();
     await run(async () => {
       if (target === null) {
         const created = await window.nexus.createCanvasBoard(profileId, name);
@@ -739,7 +784,7 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
     // Written BEFORE the delete, and on purpose into the board being deleted:
     // the delete is soft and has an undo, and the drawing the undo brings back
     // should be the one that was on screen, not the one from 800 ms earlier.
-    autosave.flush();
+    void autosave.flush();
     await run(async () => {
       await window.nexus.deleteCanvasBoard(profileId, id);
       setState((previous) => ({ ...previous, activeId: next }));
@@ -749,7 +794,7 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
 
   async function undoDelete(id: string): Promise<void> {
     setPendingUndoId(null);
-    autosave.flush();
+    void autosave.flush();
     await run(async () => {
       await window.nexus.restoreCanvasBoard(profileId, id);
       setState((previous) => ({ ...previous, activeId: id }));

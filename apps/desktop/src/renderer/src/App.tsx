@@ -69,12 +69,14 @@ import {
   TasksPage,
   ToolsPage,
 } from "./routes.js";
+import { answerEditorFlushRequests, flushOpenEditors } from "./openEditors.js";
 import { PRIV_LOCKED_EVENT } from "./privEvents.js";
 import { formatArchiveInstant } from "./timeFormat.js";
 import { NotificationCenter } from "./NotificationCenter.js";
 import { NotificationAppetiteDialog } from "./NotificationAppetiteDialog.js";
 import { SearchPalette } from "./SearchPalette.js";
 import { ShortcutsDialog } from "./ShortcutsDialog.js";
+import { UnsavedExitBanners } from "./UnsavedExitBanners.js";
 import { buildSearchCommands } from "./searchCommands.js";
 import { createModuleRegistry } from "../../shared/modules.js";
 import { ProfileAvatar } from "./profileAvatar.js";
@@ -360,6 +362,11 @@ export function App() {
     };
   }, []);
 
+  // Answers main's request for what the open editors owe, ahead of an exit main
+  // starts itself (DC-149). For the app's lifetime: main asks while unlocked
+  // only, and an answer with no editor open is an immediate one.
+  useEffect(() => answerEditorFlushRequests(), []);
+
   /** `AuthGate`'s `onUnlocked`: re-reads status and, once it is genuinely "unlocked", loads app data — the same path the bootstrap effect takes when the smoke run is already unlocked at load. */
   async function handleUnlocked(): Promise<void> {
     try {
@@ -378,6 +385,8 @@ export function App() {
 
   /** The sidebar's manual Zaključaj action, and the idle auto-lock's own trigger. */
   async function handleLock(): Promise<void> {
+    // DC-149: the lock closes the database the open editors write through.
+    await flushOpenEditors();
     try {
       await window.nexus.lock();
     } catch (error) {
@@ -1020,13 +1029,20 @@ export function App() {
         void handleLock();
         return;
       case "privLock":
-        // The PRIV panic path (ADR-057 §5): drop the held DEK in main first,
-        // then tell a mounted „Privatno" page to swap the lock screen in —
-        // the event is presentation only, the lock already happened.
-        void window.nexus.privLock().catch((error: unknown) => {
-          console.error("Nexus: failed to lock the private section:", error);
-        });
-        window.dispatchEvent(new Event(PRIV_LOCKED_EVENT));
+        // The PRIV panic path (ADR-057 §5). The lock waits for the open editors
+        // to send what they owe (DC-149, bounded), THEN drops the held DEK in
+        // main, and only then tells a mounted „Privatno" page to swap the lock
+        // screen in — the event is presentation only, so it follows the lock
+        // instead of racing it.
+        void (async () => {
+          await flushOpenEditors();
+          try {
+            await window.nexus.privLock();
+          } catch (error) {
+            console.error("Nexus: failed to lock the private section:", error);
+          }
+          window.dispatchEvent(new Event(PRIV_LOCKED_EVENT));
+        })();
         return;
       case "settings":
         setActiveId("settings");
@@ -1560,15 +1576,15 @@ export function App() {
           aria-busy={shownId !== effectiveId ? true : undefined}
         >
           {restoreUndo != null && !restoreBannerHidden && (
-            <div className="app__restore-banner" role="status">
-              <span className="app__restore-banner-text">
+            <div className="app__banner" role="status">
+              <span className="app__banner-text">
                 {restoreUndoBanners()[restoreUndo.kind]}{" "}
-                <span className="app__restore-banner-when">
+                <span className="app__banner-when">
                   {formatArchiveInstant(restoreUndo.appliedAt)}
                 </span>
               </span>
               {restoreUndoError != null && (
-                <span className="app__restore-banner-error">{restoreUndoError}</span>
+                <span className="app__banner-error">{restoreUndoError}</span>
               )}
               <Button
                 size="sm"
@@ -1580,7 +1596,7 @@ export function App() {
               </Button>
               <Button
                 size="sm"
-                className="app__restore-banner-dismiss"
+                className="app__banner-dismiss"
                 aria-label={strings.settings.restore.undoDismiss}
                 onClick={() => setRestoreBannerHidden(true)}
               >
@@ -1588,6 +1604,7 @@ export function App() {
               </Button>
             </div>
           )}
+          <UnsavedExitBanners profileId={activeProfile?.id ?? null} />
           {/* Every page is keyed by the active profile (ADR-058 §1): a switch
               remounts it, so page-local state — a selected task, an open note,
               a half-typed filter — never leaks across profiles. */}
