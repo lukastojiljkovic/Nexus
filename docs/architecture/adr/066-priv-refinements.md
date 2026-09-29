@@ -61,6 +61,19 @@ zeroed is a lost capture.** The capture is therefore sequenced ahead of
 `performLock`'s teardown, and the ordering itself is tested — not just the
 capture.
 
+*Addendum 2026-09-29 — the edit still in the editor ([[DC-149]]).* The
+ordering rule extends one step earlier: a capture takes what the section holds,
+and the section does not yet hold what the editor has typed and not yet written
+(the note editors write behind an ~800 ms debounce). So main's own locks — the
+idle timer and lock-on-minimize — and the window's close first ask the renderer
+for the open editors' owed writes and wait at most `EDITOR_FLUSH_GRACE_MS`; only
+then does the capture seal and the key drop. The renderer's own locks (manual,
+panic, the section's button) flush before they ask main to lock. It is the same
+trade the capture made: the key lives for up to one bounded flush longer, in
+return for not losing the last edit somebody walked away from. A renderer that
+never answers costs the grace and nothing else — it cannot extend the section's
+life past it, and it can write only what it could already write while unlocked.
+
 ## 4. The search index (3) — it lives and dies with the unlock
 
 Private notes must stay invisible to FTS *by construction*. So they get their

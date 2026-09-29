@@ -1,6 +1,6 @@
 # The defect-class ledger
 
-**One hundred and forty-eight recurring failure shapes, each recorded the first
+**One hundred and forty-nine recurring failure shapes, each recorded the first
 time it was recognised.** Opened 2026-08-07 on the founder's rule that *a reported bug is a
 sample and never an incident* — so the entry here is never the bug, it is the
 **rule that was wrong**, written so the next instance is something we spot
@@ -15,7 +15,7 @@ rather than something we discover.
 >
 > **How many of them are executable is not the gate count, and the arithmetic is
 > worth stating because it does not match — and is not meant to.** There are
-> **twenty-six** `check:` scripts and **one hundred and forty-eight** classes
+> **twenty-six** `check:` scripts and **one hundred and forty-nine** classes
 > below, and neither number is the other's inverse. `check:contrast` answers no
 > class at all, because it came from a design rule rather than from an observed
 > failure; `check:controls` answers TWO, [[DC-98]]'s native control that skips
@@ -40,7 +40,10 @@ rather than something we discover.
 > BUILT renderer tearing a real editor down over a real database, so it is a
 > check inside `smoke`'s page walk; and [[DC-145]]'s is three tests, one beside
 > each fact it gave a single home, because what can be executed is „that home is
-> complete" and not „there is no second one". A
+> complete" and not „there is no second one"; and [[DC-149]]'s is a source scan
+> in `openEditors.test.ts`, because the rule is about WHICH MODULES construct a
+> write-behind, and that is a statement about the renderer's own sources and not
+> about how any one of them behaves. A
 > class that can be made executable should be: a rule nobody can forget beats a
 > rule everybody has read — and „executable“ is the requirement, „one more
 > `check:` script“ only the usual way of meeting it.
@@ -5719,12 +5722,92 @@ write is out, an edit made during that write reaches disk under the title
 `deriveTitle(null)` gives — the empty string, which blanks the note's name in
 the list — and `PrivNoteEditor`'s continuation finds no document and writes
 nothing, after the close capture has already taken its version without it.
-The window is one IPC write, a few milliseconds. Worked as its own item
-(STATUS §4), together with the gap all three share: a final write that fails
-after its page is gone has nowhere left to say so, and nothing left to retry it.
+The window is one IPC write, a few milliseconds. *Resolved 2026-09-29.* The
+in-flight flag is replaced by `OwedWrites` (`owedWrites.ts`): writes queue and
+answer in order, what a failed write owed is carried onto the next, and a failure
+is said once — so a flush takes everything its write reports (batch, title,
+links, cards) while the document is alive, and a write that waits its turn no
+longer needs the document. The gap all three surfaces shared, a final write that
+fails after its page is gone, is closed by the shell: the failure goes to
+`unsavedExits.ts` and shows as a banner (`UnsavedExitBanners`), with „Pokušaj
+ponovo“ only for a public note — Yjs updates merge, so a late or doubled replay
+is safe, and the retry derives the title from stored state plus what is owed —
+and never for a board (written whole: a replay after it was reopened would put
+the older drawing over the newer) or a private note (its plaintext must not
+outlive the section's lock in a closure the shell holds; its title is never
+named). Both note version restores now refuse to take their safety checkpoint
+when the flush before it did not land, because a checkpoint without those edits
+would make the restore the one step that cannot be undone.
 
 *Related:* [[DC-144]] (the same flush, one defect earlier), [[DC-101]] (a poll
 that answers with the state before the change it waits for).
+
+**DC-149 — a teardown that does not wait for the write-behind it tears down
+(2026-09-29).** The three write-behind editors — the two note editors and the
+canvas — each hold an edit for about 800 ms before it is written, and an exit
+inside that window tears down what the write needs before the write is made.
+Six exits reached it, three that the renderer starts and three that main does:
+
+- **The app lock.** `handleLock` awaited `window.nexus.lock()`, main's
+  `performLock` closed the database, and only then did the pages unmount — so
+  the editors' unmount flush wrote into a closed file. The same for the idle
+  auto-lock, which is the same function.
+- **The private section's lock button** and **the panic shortcut.** Each called
+  `privLock()` before the editor unmounted, so the flush found the key already
+  zeroed and had nothing to seal under.
+- **The private section's idle timer** and **lock-on-minimize.** Both run in
+  main, on a clock or an OS event, before any renderer event could tell an open
+  note to write. Lock-on-minimize is the realistic one: type, then minimize
+  within 800 ms. `lockAfterPendingCaptures` waited for the close CAPTURE to seal
+  (ADR-066 §3's ordering rule, which is about a version row) and for nothing
+  the editor still owed.
+- **Closing the window.** `close` deferred only for a private close capture. The
+  note editors' answer was a best-effort `beforeunload` flush that main never
+  waited for, and the canvas had none at all.
+
+Before [[DC-148]] the lost edit was lost silently; since it, the editor's shell
+banner says so. Either way the edit was typed, was on screen, and is not on
+disk.
+
+*Root cause, as the rule that was wrong:* every exit tore down what the write
+needs — the database, the DEK, the process — and left the editor's debounced
+write to a path that runs after. The editors had one guard, a flush on unmount
+or on `beforeunload`, and that guard runs AFTER the teardown on every path
+except plain navigation. Whoever added each exit was right that the editor
+flushes on the way out; nobody was responsible for the ORDER, because nothing
+said that an exit has to wait for what an open editor owes.
+
+*Fix:* one registry, `openEditors.ts`. An open editor registers what it owes;
+`flushOpenEditors` sends all of it and resolves once every write has answered.
+The renderer's three exits call it before they ask main to lock — `handleLock`,
+the panic shortcut, `PrivSection.lock` — and main's three ask through a
+request/answer pair (`editors:flush-requested` pushed, `editors:flushed`
+invoked, ids from `main/editorFlush.ts`): the private idle timer and the
+minimize hook lock only once the renderer has answered, and `close` defers for
+it before the private capture seals. Every wait is bounded by
+`EDITOR_FLUSH_GRACE_MS`, on both sides, because a lock must never be held
+hostage by a write that does not answer — a renderer that never answers costs
+the grace and nothing else. The editors' `beforeunload` handlers are gone: one
+mechanism, not two. And `CanvasAutosave.flush()` now returns a promise that
+resolves only when no write of any board it has handled is on the wire — a
+resend made after the flushed write lands included, and a board left by a
+switch whose write is still out — because a registry that answered before the
+write did would be the defect over again. The answer is honoured in any auth
+state, since all it does is resolve a promise main is already holding.
+
+*Executable:* `openEditors.test.ts` scans every renderer source and requires
+that a module which constructs `OwedWrites` or `CanvasAutosave` also calls
+`registerOpenEditor` — with a floor on how many it must find, so „found
+nothing“ cannot pass. The protocol has its own tests (`editorFlush.test.ts`:
+ids, the bound to the millisecond, a send that fails; `priv.test.ts`: the lock
+waits, a lock that arrives during the wait leaves a new session alone, a failed
+ask still locks; `canvasAutosave.test.ts`: the flush's promise against a writer
+released by hand). The React wiring has no DOM test, and nothing in this
+repository can put a real edit 700 ms before a real minimize.
+
+*Related:* [[DC-148]] (the same window, the other half: what the last write
+says when it fails), [[DC-144]] (a flush that reads its subject after the
+subject is gone).
 
 **Still open in C, and the only part of it that is:** item 14 (Tasks' capture
 form — its four bare selects are fixed, see DC-05), item 15 (Focus's two side-by-side primaries,
