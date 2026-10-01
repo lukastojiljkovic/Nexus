@@ -1,0 +1,14 @@
+# Blank issues are off, so every report arrives with the fields that make it
+# actionable — and so a security problem cannot be filed as an ordinary one.
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/lukastojiljkovic/Nexus/security/advisories/new
+    about: Privately, please. A public issue is a working-exploit notice for everyone running the app.
+  - name: Questions, ideas and showing what you built
+    url: https://github.com/lukastojiljkovic/Nexus/discussions
+    about: Discussions opens with the public launch. Until then, an issue is the only channel.
+  - name: Read how to contribute
+    url: https://github.com/lukastojiljkovic/Nexus/blob/main/CONTRIBUTING.md
+    about: Build commands, the rules the gates enforce, and what must pass before a pull request.
+

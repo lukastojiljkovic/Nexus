@@ -1,0 +1,76 @@
+name: Bug report
+description: Something in Nexus does not do what it should.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this.
+
+        **Please do not paste personal data.** No note contents, no file names
+        you would not publish, no encryption keys, no Recovery Kit codes, and
+        nothing from a database file. If a log line looks like a key or a
+        token, replace it with `[redacted]`.
+
+  - type: input
+    id: version
+    attributes:
+      label: Nexus version
+      description: Shown in the About card in Settings. If you built it yourself, the commit is more useful.
+      placeholder: "1.3.0, or the commit you built from"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - Linux (AppImage)
+        - Linux (tarball or Gentoo ebuild)
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: What you did
+      description: The steps that lead to the problem, in order. A screenshot helps.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected to happen
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Optional. Redact anything personal first.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Before submitting
+      options:
+        - label: I am running a build of this repository, not a modified fork.
+          required: false
+        - label: I have removed personal data and secrets from anything I pasted above.
+          required: true
+
