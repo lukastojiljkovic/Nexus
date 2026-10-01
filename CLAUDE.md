@@ -5,7 +5,8 @@ Project-specific rules for Claude on **Nexus**. These sit on top of the global
 add what is specific to this repository. When the two agree, follow both; when
 this file is more specific, it wins.
 
-Nexus is Luka's commercial, offline-first, all-in-one life-management platform.
+Nexus is Luka's offline-first, all-in-one life-management platform, licensed
+under Apache-2.0.
 
 ## Read these before touching anything
 

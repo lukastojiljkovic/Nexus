@@ -137,7 +137,8 @@ carry the full titles.
 - **Cross-cutting** — [064](adr/064-file-preview.md) in-app file preview ·
   [079](adr/079-canvas-engine.md) CANV's engine ·
   [080](adr/080-third-party-notices.md) third-party notices ·
-  [084](adr/084-web-readiness.md) preparing for the web app
+  [084](adr/084-web-readiness.md) preparing for the web app ·
+  [087](adr/087-apache-2.0-open-source.md) the Apache-2.0 licence
 
 ## Monorepo layout
 
