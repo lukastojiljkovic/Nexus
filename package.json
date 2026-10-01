@@ -4,6 +4,14 @@
   "license": "Apache-2.0",
   "version": "0.0.0",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lukastojiljkovic/Nexus.git"
+  },
+  "homepage": "https://lukastojiljkovic.github.io/Nexus/",
+  "bugs": {
+    "url": "https://github.com/lukastojiljkovic/Nexus/issues"
+  },
   "engines": {
     "node": ">=24",
     "pnpm": ">=11"
