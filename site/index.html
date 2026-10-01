@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Nexus: offline-first organizer for tasks, calendar, notes and study</title>
+    <meta name="description" content="Nexus puts tasks, calendar, notes, studying, finance, habits, fitness and files in one encrypted workspace on your own computer. Works fully offline, on Windows and Linux. Free and open source.">
+    <meta name="author" content="Luka Stojiljković">
+    <link rel="canonical" href="https://lukastojiljkovic.github.io/Nexus/">
+
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Nexus">
+    <meta property="og:title" content="Nexus: the app you open first in the morning">
+    <meta property="og:description" content="Tasks, calendar, notes, studying, finance, habits and fitness in one encrypted, offline-first desktop app. Free and open source.">
+    <meta property="og:url" content="https://lukastojiljkovic.github.io/Nexus/">
+    <meta property="og:image" content="https://lukastojiljkovic.github.io/Nexus/images/dashboard.png">
+    <meta property="og:image:alt" content="The Nexus dashboard with today's agenda, upcoming tasks, expiring documents and exams">
+    <meta name="twitter:card" content="summary_large_image">
+
+    <link rel="icon" type="image/png" href="icon.png">
+    <link rel="apple-touch-icon" href="icon.png">
+    <link rel="preload" href="fonts/geist.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="site.css">
+    <style>:root { --app: #8a6410; --app-dark: #e5bf62; }</style>
+
+    <script>
+        // Theme before first paint: the stored choice (shared with the portfolio), else the system setting.
+        try {
+            const t = localStorage.getItem('theme');
+            document.documentElement.dataset.theme = t === 'dark' || t === 'light' ? t
+                : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        } catch (_) {}
+    </script>
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@graph": [
+            {
+                "@type": "SoftwareApplication",
+                "name": "Nexus",
+                "description": "Offline-first desktop app that combines tasks, calendar, notes, a private encrypted vault, studying with spaced-repetition flashcards, finance, habits, fitness, files, tools and a canvas in one workspace, stored in an encrypted database on the user's own computer.",
+                "applicationCategory": "LifestyleApplication",
+                "operatingSystem": "Windows 10, Windows 11, Linux",
+                "inLanguage": "sr-Latn",
+                "url": "https://lukastojiljkovic.github.io/Nexus/",
+                "downloadUrl": "https://github.com/lukastojiljkovic/Nexus/releases/latest",
+                "screenshot": "https://lukastojiljkovic.github.io/Nexus/images/dashboard.png",
+                "license": "https://github.com/lukastojiljkovic/Nexus/blob/main/LICENSE",
+                "isAccessibleForFree": true,
+                "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
+                "author": { "@type": "Person", "name": "Luka Stojiljković", "url": "https://lukastojiljkovic.github.io/CV/" },
+                "sameAs": ["https://github.com/lukastojiljkovic/Nexus"]
+            },
+            {
+                "@type": "FAQPage",
+                "mainEntity": [
+                    { "@type": "Question", "name": "Is Nexus free?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Nexus is free and open source under the Apache License 2.0. It has no ads, no online account and no telemetry." } },
+                    { "@type": "Question", "name": "Does Nexus need the internet?", "acceptedAnswer": { "@type": "Answer", "text": "No. Every feature works with the network off. The local app has no code path that reaches the network, and a CI check enforces it." } },
+                    { "@type": "Question", "name": "Is Nexus available in English?", "acceptedAnswer": { "@type": "Answer", "text": "Not yet. The interface is in Serbian. All of its text is kept in one place, so an English translation is an extraction rather than a rewrite. The code and documentation are in English." } },
+                    { "@type": "Question", "name": "Which platforms does Nexus run on?", "acceptedAnswer": { "@type": "Answer", "text": "Windows 10 and 11 (a per-user installer) and Linux (an AppImage, a tarball and a Gentoo ebuild), all x64." } },
+                    { "@type": "Question", "name": "How is my data protected?", "acceptedAnswer": { "@type": "Answer", "text": "Everything is stored in one encrypted database on your computer that opens only with your passcode or your Recovery Kit, and attachments are encrypted with AES-256-GCM. Private notes are encrypted so that only you can read them." } },
+                    { "@type": "Question", "name": "Can I take my data with me?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Nexus exports everything into a single sealed archive that you can restore later, on the same computer or another one, or merge into an existing profile. Encrypted backups can also run on a schedule." } }
+                ]
+            }
+        ]
+    }
+    </script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="bar">
+    <div class="bar-inner">
+        <a class="mark" href="#top"><img src="icon.png" alt="" width="24" height="24">Nexus</a>
+        <nav class="nav" aria-label="Sections">
+            <a href="#features">Features</a>
+            <a href="#how">How it works</a>
+            <a href="#limits">Limits</a>
+            <a href="#faq">FAQ</a>
+        </nav>
+        <div class="bar-actions">
+            <button class="theme" id="theme" type="button"><span class="theme-light">Dark</span><span class="theme-dark">Light</span></button>
+            <a class="btn btn-small" href="https://github.com/lukastojiljkovic/Nexus">GitHub</a>
+            <a class="btn btn-small btn-primary" href="#download">Download</a>
+        </div>
+    </div>
+</header>
+
+<main id="main">
+    <section class="wrap hero" id="top">
+        <div class="hero-copy">
+            <p class="eyebrow">Offline-first organizer for <b>Windows and Linux</b></p>
+            <h1>The app you open first in the morning.</h1>
+            <p class="lede">Nexus puts your tasks, calendar, notes, studying, money, habits and training in one workspace on your own computer: encrypted, connected to each other, and working with the network off.</p>
+            <div class="actions">
+                <a class="btn btn-primary" href="https://github.com/lukastojiljkovic/Nexus/releases/latest">Download Nexus</a>
+                <a class="btn" href="https://github.com/lukastojiljkovic/Nexus">View the source</a>
+            </div>
+            <p class="fine">Free and open source (Apache-2.0) · Windows and Linux · Interface in Serbian</p>
+        </div>
+        <div class="hero-media">
+            <figure class="frame frame-shot">
+                <div class="frame-bar"><span>Nexus</span><span>Kontrolna tabla</span></div>
+                <img src="images/dashboard.png" width="1600" height="1000" alt="The Nexus dashboard with today's agenda, upcoming tasks, expiring documents, exams and study time" fetchpriority="high">
+            </figure>
+            <dl class="frame readout">
+                <div class="row"><dt>Modules</dt><dd>16, switched on per profile</dd></div>
+                <div class="row"><dt>Storage</dt><dd>Encrypted, on your computer</dd></div>
+                <div class="row"><dt>Network</dt><dd>Never required</dd></div>
+                <div class="row"><dt>Data sent</dt><dd><b>None</b></dd></div>
+            </dl>
+        </div>
+    </section>
+
+    <section class="wrap section" id="features">
+        <h2 class="section-title">What it does</h2>
+        <p class="section-lede">Most people run their week across a dozen apps, each with its own account and its own server. In Nexus a task, an exam and an expiring passport share one calendar, one search box and one set of reminders.</p>
+        <div class="cells">
+            <article class="cell">
+                <p class="cell-n">01</p>
+                <h3>Tasks and calendar</h3>
+                <p>To-dos with priorities, subtasks, recurrence and dependencies, as a list, a board or a calendar. Month, week, day and agenda views, with events you drag and resize.</p>
+            </article>
+            <article class="cell">
+                <p class="cell-n">02</p>
+                <h3>Notes and a private vault</h3>
+                <p>Notes with folders, tags, backlinks and version history. Private notes are encrypted so only you can read them, with a Recovery Kit of their own.</p>
+            </article>
+            <article class="cell">
+                <p class="cell-n">03</p>
+                <h3>Study</h3>
+                <p>Exam countdowns, spaced-repetition flashcards, typeset maths and Anki import, plus a planner that books study time before each exam and re-plans when you fall behind.</p>
+            </article>
+            <article class="cell">
+                <p class="cell-n">04</p>
+                <h3>Life admin</h3>
+                <p>Accounts, budgets and subscriptions, with every currency kept separate. Habits with forgiving streaks, and reminders weeks before your ID, passport or registration expires.</p>
+            </article>
+            <article class="cell">
+                <p class="cell-n">05</p>
+                <h3>Food and training</h3>
+                <p>426 foods with the source of every number, 230 exercises, routines and personal records, and an energy estimate measured from your own weight trend.</p>
+            </article>
+            <article class="cell">
+                <p class="cell-n">06</p>
+                <h3>Tools and a canvas</h3>
+                <p>Calculators, eighteen professional toolkits you opt into, an infinite canvas with live cards, and an electronics bench that writes the Arduino or ROS 2 code your wiring implies.</p>
+            </article>
+        </div>
+        <div class="screens">
+            <figure>
+                <img class="frame" src="images/tasks.png" width="1600" height="1000" alt="Task lists with sections, subtasks, tags, priorities and due dates" loading="lazy">
+                <figcaption><span>Fig. 1</span>Tasks in lists and sections, with subtasks, tags and due dates.</figcaption>
+            </figure>
+            <figure>
+                <img class="frame" src="images/study.png" width="1600" height="1000" alt="The study page with cards due for review, the next exam and each subject's exams and decks" loading="lazy">
+                <figcaption><span>Fig. 2</span>Study: what's due for review, the next exam, and each subject's decks.</figcaption>
+            </figure>
+            <figure>
+                <img class="frame" src="images/finance.png" width="1600" height="1000" alt="Finance ledger with accounts in two currencies, categories and budgets, in the dark theme" loading="lazy">
+                <figcaption><span>Fig. 3</span>Finance in the dark theme, with accounts in two currencies.</figcaption>
+            </figure>
+            <figure>
+                <img class="frame" src="images/electronics.png" width="1600" height="1000" alt="Electronics workbench: a Raspberry Pi wired to four sensors, in the dark theme" loading="lazy">
+                <figcaption><span>Fig. 4</span>The electronics bench: a Raspberry Pi wired to four sensors.</figcaption>
+            </figure>
+        </div>
+    </section>
+
+    <section class="wrap section" id="how">
+        <h2 class="section-title">How it works</h2>
+        <p class="section-lede">Your privacy in Nexus comes from how the code is built, not from a promise in a policy.</p>
+        <ol class="steps">
+            <li><div><h3>Your computer is the server</h3><p>Everything lives in one encrypted SQLite database on your computer that opens only with your passcode or your Recovery Kit. Attachments are encrypted with AES-256-GCM.</p></div></li>
+            <li><div><h3>No way out to the network</h3><p>The local app has no code path that reaches the network, and CI enforces it. Sync between devices is being built end-to-end encrypted, and will stay off unless you turn it on.</p></div></li>
+            <li><div><h3>Only what you need</h3><p>A short setup asks about your week and switches on the modules that fit. Personal and business profiles keep their data apart, and several accounts can share one computer.</p></div></li>
+            <li><div><h3>A locked-down interface</h3><p>The interface runs sandboxed and never touches the database. It asks the main process through an allowlist of typed requests, each validated field by field, and every query binds its values.</p></div></li>
+            <li><div><h3>Yours to take away</h3><p>Export everything into one sealed archive and restore it anywhere, or merge another archive into yours. Encrypted backups can run on a schedule.</p></div></li>
+        </ol>
+    </section>
+
+    <section class="wrap section" id="limits">
+        <h2 class="section-title">Tested, and honest about limits</h2>
+        <div class="split">
+            <div>
+                <h3>How it's verified</h3>
+                <ul>
+                    <li><b>Vitest</b> in every package, with data and store logic written test-first.</li>
+                    <li><b>26 static checks</b> run in CI beside the build, type checks, lint and tests, along with a secret scan and a dependency audit.</li>
+                    <li><b>A smoke test</b> launches the built app, opens every page under the production content security policy and exercises the real database.</li>
+                </ul>
+            </div>
+            <div>
+                <h3>What it can't do yet</h3>
+                <ul>
+                    <li><b>English.</b> The interface is in Serbian only.</li>
+                    <li><b>Sync and the web app.</b> Both are paused until the desktop app is finished. The desktop app is complete without them.</li>
+                    <li><b>macOS.</b> Installers are built for Windows and Linux only, and the Windows installer isn't code-signed yet.</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <section class="wrap section" id="faq">
+        <h2 class="section-title">Questions</h2>
+        <div class="faq">
+            <details><summary>Is Nexus free?</summary><p>Yes. Nexus is free and open source under the <a href="https://github.com/lukastojiljkovic/Nexus/blob/main/LICENSE">Apache License 2.0</a>. It has no ads, no online account and no telemetry.</p></details>
+            <details><summary>Does Nexus need the internet?</summary><p>No. Every feature works with the network off. The local app has no code path that reaches the network, and a CI check enforces it.</p></details>
+            <details><summary>Is Nexus available in English?</summary><p>Not yet. The interface is in Serbian. All of its text is kept in one place, so an English translation is an extraction rather than a rewrite. The code and documentation are in English.</p></details>
+            <details><summary>Which platforms does Nexus run on?</summary><p>Windows 10 and 11 (a per-user installer) and Linux (an AppImage, a tarball and a Gentoo ebuild), all x64.</p></details>
+            <details><summary>How is my data protected?</summary><p>Everything is stored in one encrypted database on your computer that opens only with your passcode or your Recovery Kit, and attachments are encrypted with AES-256-GCM. Private notes are encrypted so that only you can read them.</p></details>
+            <details><summary>Can I take my data with me?</summary><p>Yes. Nexus exports everything into a single sealed archive that you can restore later, on the same computer or another one, or merge into an existing profile. Encrypted backups can also run on a schedule.</p></details>
+        </div>
+    </section>
+
+    <section class="wrap get" id="download">
+        <div class="get-copy">
+            <h2>Get Nexus</h2>
+            <p class="lede">A per-user installer on Windows, or an AppImage on Linux. Uninstalling keeps your data unless you choose to remove it.</p>
+            <div class="actions">
+                <a class="btn btn-primary" href="https://github.com/lukastojiljkovic/Nexus/releases/latest">Download the latest release</a>
+                <a class="btn" href="https://github.com/lukastojiljkovic/Nexus#readme">Read the docs</a>
+            </div>
+        </div>
+        <dl>
+            <div><dt>Requires</dt><dd>Windows 10 or 11, or a Linux desktop with a keyring, x64</dd></div>
+            <div><dt>Language</dt><dd>Serbian (Latin)</dd></div>
+            <div><dt>License</dt><dd>Apache-2.0, source on GitHub</dd></div>
+            <div><dt>Network</dt><dd>Not needed for anything</dd></div>
+        </dl>
+    </section>
+</main>
+
+<footer class="wrap">
+    <div class="foot">
+        <span>© 2026 <a href="https://lukastojiljkovic.github.io/CV/">Luka Stojiljković</a></span>
+        <nav aria-label="Legal">
+            <a href="https://github.com/lukastojiljkovic/Nexus/blob/main/LICENSE">License</a>
+            <a href="https://github.com/lukastojiljkovic/Nexus/blob/main/NOTICE">Notice</a>
+        </nav>
+        <p>Windows is a trademark of the Microsoft group of companies. Linux is a registered trademark of Linus Torvalds. Nexus isn't affiliated with other products named Nexus.</p>
+    </div>
+</footer>
+
+<script>
+    (() => {
+        const root = document.documentElement;
+        const button = document.getElementById('theme');
+        const sync = () => button.setAttribute('aria-label', `Switch to ${root.dataset.theme === 'dark' ? 'light' : 'dark'} theme`);
+        sync();
+        button.addEventListener('click', () => {
+            root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+            try { localStorage.setItem('theme', root.dataset.theme); } catch (_) {}
+            sync();
+        });
+    })();
+</script>
+</body>
+</html>

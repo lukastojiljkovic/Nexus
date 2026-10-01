@@ -1,0 +1,28 @@
+# Nexus
+
+> Nexus is a free, open-source (Apache-2.0), offline-first desktop app by Luka Stojiljković that combines tasks, calendar, notes, studying, finance, habits, fitness, files, tools and a canvas in one workspace. Everything is stored in an encrypted database on the user's own computer, and every feature works with the network off. It runs on Windows 10 and 11 and on Linux, and its interface is in Serbian.
+
+Key facts:
+
+- 16 modules, switched on per profile: Kontrolna tabla (dashboard), Zadaci (tasks), Kalendar (calendar with a document-expiry tracker), Beleške (notes), Privatno (encrypted private notes), Datoteke (file previews), Učenje (study), Finansije (finance), Navike (habits), Fitnes (food and training), Fokus (Pomodoro timer), Alatke (calculators), Stručne alatke (eighteen professional toolkits), Tabla (infinite canvas), Elektronika (electronics workbench that generates Arduino sketches and ROS 2 packages) and Podešavanja (settings).
+- Study: exam countdowns, spaced-repetition flashcards, cloze and step-by-step cards, typeset maths, Anki deck import, and an exam planner that schedules study blocks and re-plans when the user falls behind.
+- Storage: one SQLite database encrypted at rest that opens only with the user's passcode (argon2id) or a Recovery Kit code. Attachments are AES-256-GCM encrypted. Private notes have their own Recovery Kit.
+- Network: the local app has no code path that reaches the network, enforced by a CI check. It collects no data and has no online account. Sync between devices is being built with end-to-end encryption and is paused until the desktop app is finished.
+- Data portability: a full export into one sealed archive that can be restored or merged, plus scheduled encrypted backups.
+- Platforms: Windows 10 and 11 (per-user installer) and Linux (AppImage, tarball and a Gentoo ebuild), x64. No macOS build. The Windows installer isn't code-signed yet.
+- Built with Electron, React 19 and TypeScript in a pnpm and Turborepo monorepo.
+
+## Download
+
+- [Latest release](https://github.com/lukastojiljkovic/Nexus/releases/latest): Windows installer and Linux AppImage
+
+## Documentation
+
+- [README](https://raw.githubusercontent.com/lukastojiljkovic/Nexus/main/README.md): building, architecture, testing and the release process
+- [Plain-language guide](https://raw.githubusercontent.com/lukastojiljkovic/Nexus/main/docs/OVERVIEW.md): what Nexus is and what each module does
+- [License](https://raw.githubusercontent.com/lukastojiljkovic/Nexus/main/LICENSE)
+
+## Optional
+
+- [Source code](https://github.com/lukastojiljkovic/Nexus)
+- [Author's portfolio](https://lukastojiljkovic.github.io/CV/)

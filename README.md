@@ -16,6 +16,16 @@ structural rather than a promise: the local-only path is not *able* to reach the
 network, and a CI gate enforces it. A user who never turns sync on is running
 exactly the offline app described above.
 
+<p>
+  <img src="docs/images/dashboard.png" width="49%" alt="Nexus dashboard: today's events, upcoming tasks, expiring documents and exams">
+  <img src="docs/images/tasks.png" width="49%" alt="Task lists with sections, subtasks, tags, priorities and due dates">
+  <img src="docs/images/finance.png" width="49%" alt="Finance ledger with accounts in two currencies, categories and budgets, in the dark theme">
+  <img src="docs/images/electronics.png" width="49%" alt="Electronics workbench: a Raspberry Pi wired to four sensors, in the dark theme">
+</p>
+
+The UI is in Serbian (see **Language**). The screenshots show the demo profile
+rendered by the screenshot harness (`pnpm --filter @nexus/desktop shots`).
+
 ---
 
 ## Requirements
@@ -238,4 +248,6 @@ English.
 
 ## Licence
 
-Proprietary. All rights reserved.
+Apache License 2.0. See [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE). Third-party
+notices ship inside the app (Podešavanja → Licence) and are regenerated with
+`pnpm --filter @nexus/desktop licences`.
