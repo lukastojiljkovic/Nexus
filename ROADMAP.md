@@ -1,0 +1,62 @@
+# Roadmap
+
+This is the public, high-level plan. It deliberately carries **no dates**: the
+project is maintained by one person, and a date that slips is worse than no date.
+The detailed, dated working notes stay in the repository's own `docs/` tree.
+
+## Where the project is
+
+The desktop application is **finished and in daily use**, and it has not been
+released yet. Sixteen modules — tasks, calendar, notes, documents, study, habits,
+focus, fitness, finance, electronics and the rest — run against a local
+encrypted database with no network path at all. It installs like an ordinary
+Windows program, and builds exist for Linux as an AppImage, a tarball and a
+Gentoo ebuild.
+
+The user interface is **Serbian only**. That is a product decision, not a
+missing translation.
+
+## Now — the first public release
+
+Everything on this list is preparation rather than features:
+
+- the open-source paperwork: licence, security policy, contribution rules,
+  privacy statement, terms, changelog;
+- the release pipeline: a tagged build that produces the Windows installer and
+  the Linux artefacts, with checksums, an SBOM, build provenance and the
+  third-party notices generated from the exact released tree;
+- Windows code signing, so the installer stops triggering a SmartScreen warning;
+- the repository's own settings: branch protection, secret scanning, Dependabot,
+  private vulnerability reporting, Discussions.
+
+**Nothing is downloadable from here until signing is settled** — an unsigned
+installer is not something to hand to strangers.
+
+## Next — optional sync, and the web app
+
+The desktop app's sync engine, its cryptography and its server schema are built
+and tested. What has never happened is a round against a real deployed backend,
+because no hosted project exists and the shipped build cannot be pointed at one.
+
+That is **paused, not cancelled**, and it resumes after the desktop's own loose
+ends are done. The work already built stays built, stays tested and stays off by
+default: a user who never turns sync on is running exactly the offline product.
+
+## Later — the wider catalogue
+
+The full product ambition is much larger than the sixteen modules that exist:
+goals, time tracking, health, car, travel, inventory, shopping, read-later,
+library, a password vault, entertainment, sharing, analytics, automation, an AI
+assistant and a plugin system. Several of them genuinely depend on sync existing
+first. None of them is next.
+
+## What will not change
+
+- **Local-first.** Your data lives on your device, encrypted, and the app works
+  with the network off.
+- **Cloud is off by default**, and off means the local path cannot reach the
+  network at all — enforced in CI, not promised in copy.
+- **The server holds ciphertext.** Metadata in the clear is accepted; content
+  never is.
+- **No telemetry, no analytics, no crash reporting.**
+
