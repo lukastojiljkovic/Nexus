@@ -1,0 +1,311 @@
+name: Release
+
+on:
+  # Tags only. A release is a deliberate act, so nothing here can be triggered
+  # by a branch push or by a pull request.
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+# EVERY `uses:` IS PINNED TO A 40-CHARACTER COMMIT SHA with the human-readable
+# tag as a comment, the rule ci.yml explains at length.
+#
+# THIS IS THE ONLY WORKFLOW THAT HOLDS A WRITE TOKEN, and it holds it in ONE
+# job, for one purpose: uploading a DRAFT release. Two consequences worth
+# stating, because they are the reason this file is shaped the way it is.
+#
+#  1. **The build jobs write nothing.** They have `contents: read`, so a
+#     compromised build step cannot publish anything.
+#  2. **The publishing job runs no third-party action.** It is `gh` — the
+#     GitHub CLI that is already on the runner — because at the moment a job
+#     holds `contents: write`, every third-party action in it is a path to that
+#     token. `actions/*` and `github/*` are GitHub's own; everything else in
+#     this workflow lives in a job that cannot write.
+#
+# THE DRAFT IS THE POINT. Nothing here publishes a release; it creates one in
+# draft so a human can read the artefacts, the checksums and the notes and then
+# press publish.
+#
+# WHAT IS DELIBERATELY MISSING: code signing. The Windows installer is unsigned,
+# so Windows shows a SmartScreen warning on first run. That is a stated
+# limitation of this release, not an oversight, and the place it plugs in is
+# marked in the Windows job.
+
+env:
+  NODE_VERSION: "24"
+
+jobs:
+  windows:
+    name: Windows installer
+    runs-on: windows-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # The tag and the app's own version must agree. A `v1.4.0` tag on a tree
+      # whose package.json still says 1.3.0 produces an installer named 1.3.0
+      # inside a release called 1.4.0 — which is exactly the ambiguity the
+      # project already paid for once, when a rebuild under an old number
+      # reported the old version from `app.getVersion()`.
+      - name: The tag matches the application version
+        shell: bash
+        run: |
+          set -euo pipefail
+          declared="v$(node -p 'require("./apps/desktop/package.json").version')"
+          if [ "$declared" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} does not match apps/desktop/package.json (${declared})"
+            exit 1
+          fi
+          echo "tag and version agree: ${declared}"
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Order matters and the Makefile is the statement of it: `pnpm build`
+      # first, because workspace packages resolve through their built `dist/`
+      # and `dist.mjs` calls electron-vite directly rather than through turbo.
+      # Skipping it fails inside Vite with "failed to resolve entry for package"
+      # and no hint that a workspace package was simply not built.
+      - run: pnpm build
+
+      - name: Build the NSIS installer
+        run: pnpm --filter @nexus/desktop dist
+
+      # --- CODE SIGNING GOES HERE ---------------------------------------------
+      # Nothing is signed. Windows therefore shows a SmartScreen warning on the
+      # first run, and the project's own standing rule is that no public
+      # download happens before signing is settled.
+      #
+      # Where it plugs in: electron-builder signs from `win.certificateFile` /
+      # `win.certificatePassword` (or, for a cloud signer, `win.sign` with a
+      # custom sign hook). The certificate or the signing credential belongs in
+      # repository secrets, used here and nowhere else, and it must never be
+      # echoed. The conditions the auto-updater's own design already states —
+      # an Authenticode signature whose `publisherName` matches the update
+      # config — make this a prerequisite for re-arming updates, not merely a
+      # warning-suppression step.
+      # ------------------------------------------------------------------------
+
+      - name: Check the installer exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          ls -l apps/desktop/release/Nexus-Setup-*.exe
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows
+          path: apps/desktop/release/Nexus-Setup-*.exe
+          if-no-files-found: error
+          retention-days: 7
+
+  linux:
+    name: Linux artefacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: The tag matches the application version
+        shell: bash
+        run: |
+          set -euo pipefail
+          declared="v$(node -p 'require("./apps/desktop/package.json").version')"
+          if [ "$declared" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} does not match apps/desktop/package.json (${declared})"
+            exit 1
+          fi
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm build
+
+      # This must run ON Linux, and it does: the packaged app carries a
+      # platform-specific build of the native SQLite module, so a cross-built
+      # artefact would ship the wrong `.node` and fail at the first query.
+      - name: Build the AppImage and the tarball
+        run: pnpm --filter @nexus/desktop dist
+
+      - name: Check the artefacts exist
+        shell: bash
+        run: |
+          set -euo pipefail
+          ls -l apps/desktop/release/*.AppImage apps/desktop/release/*.tar.gz
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: linux
+          # Only what a user downloads. electron-builder also writes
+          # `latest*.yml` and `.blockmap` files for an updater this build does
+          # not use; shipping them would advertise an update channel that is
+          # disarmed.
+          path: |
+            apps/desktop/release/*.AppImage
+            apps/desktop/release/*.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Draft the release
+    needs: [windows, linux]
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      # To create the draft release and upload assets.
+      contents: write
+      # For the build-provenance attestation.
+      id-token: write
+      attestations: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # The committed notices must still describe the tree being released.
+      # This runs the generator and compares bytes, so a release cannot ship a
+      # notices file that names a version the installer no longer contains —
+      # which is exactly what happened on 2026-08-15, when the Licence screen
+      # credited four packages at versions the build had already patched.
+      - name: The committed notices describe this tree
+        run: pnpm check:licences
+
+      # Rendered from `licences.json`, never written by hand, and rendered from
+      # THIS tree rather than from a file somebody kept up to date.
+      - name: Render the third-party notices
+        run: node apps/desktop/scripts/render-notices.mjs THIRD-PARTY-NOTICES.md
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: SBOM in CycloneDX format
+        run: |
+          set -euo pipefail
+          # `@cdxgen/cdxgen` is the CycloneDX project's own generator
+          # (github.com/CycloneDX/cdxgen, Apache-2.0). Chosen over the npm-only
+          # alternatives because it reads `pnpm-lock.yaml` and walks the whole
+          # workspace, which is the shape of this repository; verified against
+          # this tree before it was wired in, where it produced a valid
+          # CycloneDX 1.7 document.
+          #
+          # It is invoked through `npx` rather than `pnpm dlx` because it
+          # declares `engines.pnpm >= 12` and this repository pins pnpm 11.10.0;
+          # `pnpm dlx` refuses to run it at all. The version is pinned exactly,
+          # so the tool cannot move under a release.
+          #
+          # No secret is in this step's environment, deliberately: cdxgen reads
+          # the whole tree, and its own documentation warns against handing it
+          # credentials.
+          npx --yes "@cdxgen/cdxgen@13.2.0" -o release-assets/sbom.cdx.json .
+          node -e 'const b=require("./release-assets/sbom.cdx.json"); if(!b.components?.length) { throw new Error("SBOM has no components"); } console.log(`SBOM: CycloneDX ${b.specVersion}, ${b.components.length} components`);'
+
+      - name: Copy the notices into the release assets
+        run: cp THIRD-PARTY-NOTICES.md release-assets/THIRD-PARTY-NOTICES.md
+
+      - name: Checksums over every artefact
+        run: |
+          set -euo pipefail
+          cd release-assets
+          # Sorted so the same artefacts always produce the same file, and
+          # SHA256SUMS.txt itself is excluded because it cannot contain its own
+          # hash.
+          find . -maxdepth 1 -type f ! -name SHA256SUMS.txt -printf '%P\n' | sort > /tmp/asset-list.txt
+          sha256sum $(cat /tmp/asset-list.txt) > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      # Build provenance: a signed statement, verifiable later, that these
+      # exact bytes were produced by this workflow in this repository at this
+      # commit. It is the one artefact-related claim that does not depend on
+      # trusting the upload.
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: release-assets/*
+
+      - name: Write the release notes
+        run: |
+          set -euo pipefail
+          electron="$(node -p 'require("./apps/desktop/package.json").devDependencies.electron || "see package.json"')"
+          {
+            echo "## Nexus ${GITHUB_REF_NAME}"
+            echo
+            echo "Built by CI from \`${GITHUB_SHA}\`. **This is a draft**: nothing is published until a human publishes it."
+            echo
+            echo "### Requirements"
+            echo
+            echo "- **Windows** — x64. NSIS installer."
+            echo "- **Linux** — x64 with glibc. An AppImage, and a tarball that the Gentoo ebuild installs."
+            echo
+            echo "### Before you install"
+            echo
+            echo "- The interface is **Serbian only**. That is a product decision, not a missing translation."
+            echo "- The installer is **not code-signed**, so Windows SmartScreen warns on first run."
+            echo "- Sync is **off by default and unreachable in this build**: no backend project is compiled in, and the app makes no network call at all."
+            echo "- Auto-update is **disarmed** on purpose. Updating means downloading the next release."
+            echo
+            echo "### Toolchain"
+            echo
+            echo "Node $(node -v), pnpm $(pnpm -v), Electron ${electron} (declared in \`apps/desktop/package.json\`)."
+            echo
+            echo "### Files and checksums"
+            echo
+            echo '```'
+            cat release-assets/SHA256SUMS.txt
+            echo '```'
+            echo
+            echo "### Verify what you downloaded"
+            echo
+            echo '```sh'
+            echo "sha256sum -c SHA256SUMS.txt"
+            echo "gh attestation verify <file> --repo ${GITHUB_REPOSITORY}"
+            echo '```'
+            echo
+            echo "### Documentation"
+            echo
+            echo "- [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/CHANGELOG.md)"
+            echo "- [LICENSE](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/LICENSE) · [NOTICE](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/NOTICE)"
+            echo "- [PRIVACY.md](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/PRIVACY.md) · [TERMS.md](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/TERMS.md)"
+            echo "- [SECURITY.md](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/SECURITY.md) · [SUPPORT.md](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/SUPPORT.md)"
+            echo "- Third-party notices are attached as \`THIRD-PARTY-NOTICES.md\`, and are also shown in the application under Podešavanja → Licence."
+          } > release-notes.md
+
+      # `gh` rather than a release action, for the reason at the top of this
+      # file: this job holds `contents: write`.
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create "${GITHUB_REF_NAME}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --draft \
+            --title "Nexus ${GITHUB_REF_NAME}" \
+            --notes-file release-notes.md \
+            release-assets/*
