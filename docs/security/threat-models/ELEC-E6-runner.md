@@ -91,8 +91,9 @@ spawn, the workspace path, output capture, the stop path, and the quit path.
   hurry.
 - **T2. Argument injection through the path.** The path is data, so it is the one
   place injection can still enter. Three conditions, all necessary: argv arrays
-  and **never** `shell: true` (a space in `C:\Users\Luka Fajlovi\…` must not be a
-  word split); no string interpolation of the path into a command string even
+  and **never** `shell: true` (a space in a path such as
+  `C:\Users\<user>\My Projects\robot` must not be a word split); no string
+  interpolation of the path into a command string even
   where argv would have been safe; and a path that begins with `-` must be
   rejected rather than escaped, because a leading dash is an option to `ros2`,
   `colcon` and `docker` alike.
