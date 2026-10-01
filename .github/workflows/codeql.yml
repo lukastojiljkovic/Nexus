@@ -1,0 +1,59 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # A weekly sweep as well as the diff-scoped runs, because a query pack can
+    # start finding something in code that has not changed.
+    - cron: "0 5 * * 2"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+# EVERY `uses:` IS PINNED TO A 40-CHARACTER COMMIT SHA with the human-readable
+# tag as a comment, the same rule ci.yml explains at length: a tag is a mutable
+# pointer, and the action runs inside a workflow that holds a token.
+#
+# WHY THIS JOB NO-OPS TODAY. Code scanning is a GitHub Advanced Security
+# feature, and on a PRIVATE repository it needs a GHAS licence — this repository
+# has none, and enabling it would be a change to the owner's billing rather than
+# a commit. The gate is `!github.event.repository.private`, the same one
+# pages.yml uses: the job is skipped while the repository is private and starts
+# working by itself on the day it becomes public, with no edit.
+
+jobs:
+  analyze:
+    name: Analyze JavaScript and TypeScript
+    if: ${{ !github.event.repository.private }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      # Required to upload the results to the code-scanning API.
+      security-events: write
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # No build step and no compilation database: `javascript-typescript`
+      # analyses the source as written. That matters here because the app's own
+      # build needs Electron's binary and a native SQLite module, neither of
+      # which this job should have to fetch to read TypeScript.
+      - uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          languages: javascript-typescript
+          # `security-extended` rather than the default pack: this codebase
+          # handles encryption keys and untrusted documents, where the extra
+          # queries are the point. It costs CI minutes, not correctness.
+          queries: security-extended
+
+      - uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          category: "/language:javascript-typescript"
+
