@@ -12,10 +12,19 @@
 # `files` below keeps the 14 MB amalgamation it would only need in order to
 # compile one out of the installer, and says why the seven unusable binaries stay.
 #
-# publish: documented plan of record (GitHub provider, lukastojiljkovic/
-# nexus-releases). That repo does not exist yet (founder decision pending) —
-# local builds always pass --publish never (see scripts/dist.mjs) so a build
-# never attempts to reach it.
+# publish: GitHub releases in THIS repository (lukastojiljkovic/Nexus).
+#
+# It used to name a separate `nexus-releases` repository, a plan of record from
+# when Nexus was proprietary. That repository was never created and is no
+# longer wanted: once the source repository is public there is no reason for a
+# second one, and `site/`'s download buttons already point at this repository's
+# `releases/latest`.
+#
+# This is a DECLARATION and nothing more. Local builds always pass
+# `--publish never` (see scripts/dist.mjs), so a build never contacts GitHub;
+# the release workflow uploads a DRAFT release instead; and auto-update stays
+# disarmed (the SEC-EL-07 comment in src/main/index.ts lists the three
+# conditions for re-arming it).
 
 appId: rs.stojiljkovic.nexus
 productName: Nexus
@@ -173,4 +182,4 @@ appImage:
 publish:
   provider: github
   owner: lukastojiljkovic
-  repo: nexus-releases
+  repo: Nexus
