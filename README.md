@@ -1,20 +1,21 @@
 # Nexus
 
-An offline-first, modular life-management app. One workspace for tasks,
-calendar, notes, studying, files, habits, fitness, finance and a canvas — all
-stored on your own device, all working with the network off.
+An offline-first life-management app for your own computer. Tasks, calendar,
+notes, documents, studying, habits, a focus timer, fitness, finance, a canvas
+and an electronics workbench — one workspace, stored in a single encrypted
+database on your device, working with the network off.
 
-The desktop app (Electron + React) is complete and in daily use. The web app
-and sync are built out of *this* codebase rather than as a rewrite, with Supabase
-behind them and end-to-end encrypted sync between the two — the server holds
-ciphertext and never plaintext content. **They are paused** by the founder's
-decision of 2026-08-31 until the desktop feature set is finished: everything
-already built for them stays built, stays tested and stays off by default.
+**The interface is in Serbian only.** That is a product decision, not a missing
+translation: the copy is centralised in one file, so an English locale is an
+extraction rather than a rewrite, and it is welcome as a contribution. Code,
+comments and documentation are in English.
 
-**Cloud is off by default and can be switched off entirely**, and that is
-structural rather than a promise: the local-only path is not *able* to reach the
-network, and a CI gate enforces it. A user who never turns sync on is running
-exactly the offline app described above.
+The desktop application is complete and in daily use. **It has not been
+released yet** — there is no published build, no tag and no code signature, and
+the first public release is being prepared now. The web app and its optional
+end-to-end-encrypted sync are built out of this same codebase and are paused
+until the desktop is finished; what exists for them stays built, tested and off
+by default.
 
 <p>
   <img src="docs/images/dashboard.png" width="49%" alt="Nexus dashboard: today's events, upcoming tasks, expiring documents and exams">
@@ -23,27 +24,88 @@ exactly the offline app described above.
   <img src="docs/images/electronics.png" width="49%" alt="Electronics workbench: a Raspberry Pi wired to four sensors, in the dark theme">
 </p>
 
-The UI is in Serbian (see **Language**). The screenshots show the demo profile
-rendered by the screenshot harness (`pnpm --filter @nexus/desktop shots`).
+The screenshots are the demo profile rendered by the screenshot harness
+(`pnpm --filter @nexus/desktop shots`), which drives the real application
+through every screen and audits the result.
 
----
+## Download
+
+[**Releases**](https://github.com/lukastojiljkovic/Nexus/releases/latest) —
+Windows installer, Linux AppImage and Linux tarball.
+
+**Nothing is downloadable yet.** The first public release is pending: it waits
+on this repository's open-source preparation and on Windows code signing, and
+the project's own rule is that no public download happens before signing is
+settled. Until then, build from source — see below.
 
 ## Requirements
 
 | | |
 | --- | --- |
-| Node | `>= 24` |
-| pnpm | `11.10.0` (pinned via `packageManager`) |
-| OS | Windows, macOS or Linux |
+| Windows | 10 or 11, x64 |
+| Linux | x64 with glibc, a desktop with a working Secret Service keyring (gnome-keyring, KWallet, KeePassXC). Without one the app refuses to create an account rather than weaken the key chain |
+| macOS | Not built. Nothing here has produced or opened a macOS artefact |
+
+## Privacy and security, briefly
+
+- **Local by default.** Your data is one encrypted SQLite database on your own
+  device. The local path cannot reach the network, and that is enforced in CI
+  rather than promised in copy.
+- **No telemetry, no analytics, no crash reporting.**
+- **Cloud is off by default**, and in the build this repository produces it
+  cannot be turned on at all: no backend project is compiled in. Optional sync
+  is end-to-end encrypted, and the server holds ciphertext only.
+
+Read [PRIVACY.md](PRIVACY.md) for exactly what is stored where, and
+[SECURITY.md](SECURITY.md) to report a vulnerability privately.
+[TERMS.md](TERMS.md) covers the distributed binaries.
+
+## Contributing
+
+Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the build
+commands, the rules the static gates enforce, and what has to pass before a pull
+request. Participation is covered by
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). Questions go to
+[SUPPORT.md](SUPPORT.md).
+
+## Licence
+
+Apache License 2.0. See [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).
+
+Third-party notices are generated from the shipped dependency tree, never
+written by hand: they are shown inside the application under **Podešavanja →
+Licence**, attached to each release as `THIRD-PARTY-NOTICES.md`, and regenerated
+with `pnpm --filter @nexus/desktop licences`.
+
+---
+
+# For developers
+
+## Build from source
+
+Requirements: **Node >= 24** and **pnpm 11.10.0** (pinned through the root
+`package.json`'s `packageManager` field, so `corepack enable` is enough).
 
 ```sh
-pnpm install
+pnpm install --frozen-lockfile
+pnpm build
+pnpm typecheck
+pnpm lint
+pnpm test
 ```
 
-`pnpm install` runs a postinstall step that provisions the Electron binary.
-There is no ABI dance to perform: since 13.0.3 the native SQLite module is a
-Node-API addon, and one prebuilt file serves both Node (what the tests run on)
-and Electron (what the app runs on). See **The native module** below.
+Then run the app, or check that it starts and works end to end:
+
+```sh
+pnpm --filter @nexus/desktop dev      # electron-vite dev server
+pnpm --filter @nexus/desktop smoke    # build + launch + end-to-end check → "SMOKE OK"
+pnpm --filter @nexus/desktop shots    # ~2,800 screenshots + a geometric audit
+```
+
+`pnpm install` provisions the Electron binary in a postinstall step. There is
+no ABI dance to perform: since 13.0.3 the native SQLite module is a Node-API
+addon, and one prebuilt file serves both Node (what the tests run on) and
+Electron (what the app runs on). See **The native module** below.
 
 ## Everyday commands
 
@@ -51,21 +113,13 @@ Run from the repo root; each fans out over the workspace through Turborepo.
 
 ```sh
 pnpm typecheck      # tsc --noEmit, strict, every package
-pnpm test           # Vitest — core, db, desktop
+pnpm test           # Vitest — core, db, desktop, and the script suites
 pnpm lint           # ESLint, every package
 pnpm build          # production build — tokens, desktop, gallery
 ```
 
-Desktop app:
-
-```sh
-pnpm --filter @nexus/desktop dev        # electron-vite dev server
-pnpm --filter @nexus/desktop smoke      # build + launch + end-to-end check → "SMOKE OK"
-pnpm --filter @nexus/desktop dist       # electron-builder installer
-pnpm --filter @nexus/desktop licences   # regenerate the third-party notices
-```
-
-Component gallery — the design-system review surface, not shipped to users:
+The component gallery is the design-system review surface, not shipped to
+users:
 
 ```sh
 pnpm --filter @nexus/gallery dev
@@ -122,6 +176,11 @@ no VM. Run `make linux` from the WSL shell.
 The Makefile needs GNU make and a POSIX shell, which on Windows means Git Bash
 or WSL, not cmd.exe. Nothing depends on it: every target is one documented pnpm
 script, and `pnpm --filter @nexus/desktop dist` remains the direct route.
+
+Tagged releases are built by CI (`.github/workflows/release.yml`), which
+produces the installers, a `SHA256SUMS` file, a CycloneDX SBOM, build-provenance
+attestations and the rendered third-party notices, and uploads them to a
+**draft** release for a human to publish.
 
 The full Linux guide — the AppImage's sandbox and FUSE behaviour, the keyring
 requirement, and installing the Gentoo overlay — is in
@@ -228,26 +287,32 @@ desktop `smoke` script is the end-to-end check: it builds the app, launches
 Electron, exercises the real IPC surface against a real database, and prints
 `SMOKE OK`.
 
+Beyond the unit tests there are the **static gates** — `check:colours`,
+`check:egress`, `check:runner` and the rest, listed in the root `package.json`
+under `check:*` — each of which is a rule this project states somewhere in
+prose, made executable. They need no build output and each runs as its own CI
+step, so a red check names the rule that broke. `pnpm test` also runs a
+wall-mutation suite that breaks the server SQL one line at a time and demands
+the specific complaint.
+
 Serbian text is sorted and compared with `Intl.Collator(["sr-Latn", "sr"])` —
 plain `"sr"` mis-tailors the Latin diacritics (š, č, ć, ž, đ).
 
 ## CI
 
-- **CI** (`.github/workflows/ci.yml`) — a single `verify` job on `ubuntu-latest`:
-  the raw-colour check, build, typecheck, lint, tests, on every push to `main`
-  and every pull request. It never launches Electron, so the smoke check is a
-  local gate.
-- **Security** (`.github/workflows/security.yml`) — gitleaks secret scan plus a
-  dependency audit, on every push and on a schedule.
+- **CI** (`.github/workflows/ci.yml`) — `verify`: every static gate, the build,
+  typecheck, lint and the full test suite, on every push to `main` and every
+  pull request. It never launches Electron, so the smoke check is a local gate.
+- **Security** (`.github/workflows/security.yml`) — a whole-history gitleaks
+  secret scan plus a dependency audit, on every push and on a schedule.
+- **CodeQL**, **Dependency review** and **Scorecard** are wired up and
+  deliberately inert while the repository is private: code scanning and
+  dependency review need GitHub Advanced Security, and Scorecard reads public
+  repositories. Each is gated on the repository being public, so all three
+  switch themselves on with the visibility change.
 
 ## Language
 
-All user-facing copy is Serbian and lives in `strings.ts`, centralized so a
+All user-facing copy is Serbian and lives in `strings.sr.ts`, centralized so a
 later i18n extraction is mechanical. Code, comments and documentation are in
 English.
-
-## Licence
-
-Apache License 2.0. See [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE). Third-party
-notices ship inside the app (Podešavanja → Licence) and are regenerated with
-`pnpm --filter @nexus/desktop licences`.
