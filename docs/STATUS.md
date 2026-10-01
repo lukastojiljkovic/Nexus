@@ -14,7 +14,7 @@ the binding rules) → §1 and §2 below (where we are, what exists) → §4 (wh
 left) → §5 (what needs the founder). [README.md](README.md) maps every other
 document.
 
-**Last updated:** 2026-09-26. The state below was verified on that date against
+**Last updated:** 2026-10-02. The state below was verified on that date against
 `main`, and against the branch named under „Unmerged work" for what is not on
 `main` yet. Deliberately no commit sha: a sha in a header goes stale the moment
 anything is pushed, which is the defect class this file keeps recording.
@@ -585,6 +585,23 @@ anyone remembering to read this list. What is left is four designs that are owed
 ---
 
 ## 4. What remains
+
+**The first public release is prepared and in review (2026-10-02).** Everything
+a stranger needs — the Apache-2.0 licence and ADR-087, the policies
+(`SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `PRIVACY.md`,
+`TERMS.md`, `SUPPORT.md`, `ROADMAP.md`, `CHANGELOG.md`), the issue forms, the
+tagged release pipeline with SBOM and build provenance, the CodeQL / dependency
+review / Scorecard workflows, and a file-by-file classification of this docs
+tree — is in one pull request against `main`.
+[OPEN-SOURCE-READINESS.md](OPEN-SOURCE-READINESS.md) §7 and §8 carry the status
+of every line of it, and the narrative is in [log/2026-10.md](log/2026-10.md).
+
+**What that leaves is the founder's, and it is three things:** the decision on
+the name (`docs/open-source/name-check.md` — the collision risk in software is
+high), the code-signing route (`SignPath Foundation` is free for open-source
+projects; Azure Artifact Signing is the alternative), and the visibility switch
+itself, with the repository settings and the first `v*` tag. None of them is
+blocked on anything in this repository.
 
 **Order of work.** On 2026-08-31 the founder paused web and sync: *„web/sync je
 za sada trajno na hold-u, dok ne završimo sve feature za desktop, lako ćemo ih

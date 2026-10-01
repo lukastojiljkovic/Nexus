@@ -28,7 +28,8 @@ stops being read, and then it stops being true.
 | --- | --- |
 | [2026-07.md](2026-07.md) | The docs-first phase, the monorepo, and modules ONE through TEN — through 2026-07-31. |
 | [2026-08.md](2026-08.md) | The polish arcs, v1.0.0, the sync subsystem, the professional drawer, v1.1.0, „Elektronika" through E4a — to 2026-08-31. |
-| [2026-09.md](2026-09.md) | Everything since. |
+| [2026-09.md](2026-09.md) | Through 2026-09-30: the loose ends, E6, the 1.3.0 installer, and the documentation entering version control. |
+| [2026-10.md](2026-10.md) | The open-source preparation: the licence premise, the policies, the release pipeline, and the name check. |
 
 ## How to read it
 
