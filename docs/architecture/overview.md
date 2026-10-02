@@ -35,8 +35,8 @@ backup as an enhancement, never a dependency; local SQLite is the source of
 truth on every client, and the server is a relay and authority for sync, auth
 and blob storage. Private notes cross the wire only as ciphertext (SEC-ZK).
 
-**The server half is now built and executed** — thirteen Supabase migrations
-against a real Postgres 17, an RLS wall proved by 109 pgTAP assertions in CI,
+**The server half is now built and executed** — fifteen Supabase migrations
+against a real Postgres 17, an RLS wall proved by 177 pgTAP assertions in CI,
 three Edge Functions, and the PostgREST wire measured rather than assumed. What
 does not exist is the *client* path that would let a user switch any of it on.
 **Cloud stays off by default and switchable off entirely, structurally** — the
@@ -45,100 +45,11 @@ of the four layers holding that. See `../STATUS.md` §2 and §3.
 
 ## Decision index
 
-### Foundations (001–011)
-
-| ADR | Decision | Choice |
-| --- | --- | --- |
-| [001](adr/001-local-storage-engine.md) | Local storage engine & data model | SQLite everywhere; encrypted at rest for local accounts; Yjs docs + relational rows + content-addressed blobs |
-| [002](adr/002-sync-engine.md) | Sync & conflict resolution | PowerSync (self-hosted Open Edition) for rows; Yjs for documents; ciphertext blobs for PRIV — *unbuilt* |
-| [003](adr/003-backend-stack.md) | Backend | Go + PostgreSQL (founder revision 2026-07-05); REST + OpenAPI-generated TS client; EU Docker hosting — *unbuilt* |
-| [004](adr/004-auth.md) | Auth (cloud + local) | Argon2id, opaque server-side sessions, anti-enumeration; local PIN + OS keystore. The local half is built and **superseded in detail by [018](adr/018-local-account-passcode.md)**; the cloud half is unbuilt |
-| [005](adr/005-private-notes-crypto.md) | Zero-knowledge crypto | libsodium: Argon2id KDF, XChaCha20-Poly1305, DEK/KEK + Recovery Kit. **Primitives superseded by [057](adr/057-private-notes-local.md)**, which built PRIV local-first with no libsodium dependency |
-| [006](adr/006-code-sharing.md) | Code sharing across platforms | TS monorepo: shared core + React UI for desktop/web; Android = React Native (gated re-check at kickoff) |
-| [007](adr/007-file-preview-pipeline.md) | File preview pipeline | Originally PDF.js / mammoth / SheetJS / zip.js. **Superseded by [064](adr/064-file-preview.md)**: tier 0 + tier 1 built with **zero new dependencies** |
-| [008](adr/008-feature-flags-and-plugins.md) | Feature flags → plugin architecture | Typed module manifests + contract registry; flags per profile; sandbox deferred with PLUG |
-| [009](adr/009-import-export-formats.md) | Import/export formats & versioning | ZIP container: semver manifest + NDJSON + Markdown/CSV mirrors + blobs; N-2 import support. Sealing added by [022](adr/022-export-completeness-and-encryption.md) |
-| [010](adr/010-landing-page-stack.md) | Landing page stack | Astro static + islands; Plausible (EU) analytics; direct download distribution — *unbuilt, and the hosting target has since moved* (see `docs/STATUS.md`) |
-| [011](adr/011-canvas-engine-spikes.md) | Canvas engine | Deferred to spikes. **Resolved by [079](adr/079-canvas-engine.md): Excalidraw, as a canvas rather than as a UI** |
-
-### Module and feature decisions (012–082)
-
-Every ADR from 012 on is a decision made *while building* the thing it names,
-so each is the authority on its own surface. Grouped by area; the file names
-carry the full titles.
-
-- **NOTE** — [012](adr/012-note-editor-and-substrate.md) block editor & Yjs ·
-  [013](adr/013-note-wiki-links.md) wiki-links & backlinks ·
-  [014](adr/014-note-attachments.md) attachments & blob store ·
-  [015](adr/015-note-version-history.md) version history ·
-  [016](adr/016-note-templates.md) templates ·
-  [017](adr/017-inline-flashcards.md) inline flashcards ·
-  [036](adr/036-note-preferences.md) preferences ·
-  [068](adr/068-explicit-cloze-numbering.md) explicit cloze numbering ·
-  [070](adr/070-note-version-thinning.md) checkpoint thinning ·
-  [072](adr/072-note-categories.md) categories
-- **AUTH / PRIV** — [018](adr/018-local-account-passcode.md) the local account ·
-  [019](adr/019-encrypted-blob-store.md) encrypted blob store ·
-  [044](adr/044-multiple-local-accounts.md) multiple accounts on one device ·
-  [048](adr/048-account-deletion.md) in-app account deletion ·
-  [057](adr/057-private-notes-local.md) PRIV v1 ·
-  [058](adr/058-business-profile.md) the business profile ·
-  [066](adr/066-priv-refinements.md) PRIV refinements
-- **CAL / NTF** — [020](adr/020-calendar-grid-views.md) grid views ·
-  [024](adr/024-recurrence.md) recurrence ·
-  [025](adr/025-event-reminders.md) event reminders ·
-  [026](adr/026-people-lite-birthdays.md) people-lite & birthdays ·
-  [033](adr/033-ntf-first-ask.md) the appetite ask ·
-  [034](adr/034-time-grid-drag.md) drag & resize ·
-  [054](adr/054-fixed-semester.md) semester dates ·
-  [061](adr/061-ics-import.md) ICS import
-- **TASK** — [027](adr/027-quick-add-dates.md) natural-language dates ·
-  [028](adr/028-task-reminders.md) per-task reminders ·
-  [029](adr/029-task-lists.md) lists, sections, ordering ·
-  [031](adr/031-task-attachments.md) attachments ·
-  [035](adr/035-task-templates.md) templates ·
-  [037](adr/037-task-dependencies.md) dependencies ·
-  [038](adr/038-task-batch-operations.md) batch operations ·
-  [049](adr/049-task-smart-lists.md) smart lists ·
-  [053](adr/053-completed-archive.md) the archive ·
-  [060](adr/060-kanban-columns.md) kanban configuration
-- **SRCH** — [021](adr/021-global-search.md) index, analyzer, palette ·
-  [030](adr/030-search-operators.md) operators ·
-  [032](adr/032-task-attachment-search.md) task attachments ·
-  [039](adr/039-search-facets-page.md) the full page with facets ·
-  [069](adr/069-attachment-content-search.md) attachment content
-- **IMEX** — [022](adr/022-export-completeness-and-encryption.md) the archive's shape and its
-  passphrase · [023](adr/023-archive-restore.md) restoring ·
-  [043](adr/043-foreign-import.md) merging another account's archive ·
-  [051](adr/051-import-duplicates.md) duplicate detection ·
-  [062](adr/062-csv-task-import.md) CSV column mapping
-- **STUDY** — [042](adr/042-cloze-cards.md) cloze cards ·
-  [046](adr/046-problem-cards.md) problem cards ·
-  [047](adr/047-interleaved-practice.md) interleaved practice ·
-  [052](adr/052-anki-import.md) Anki `.apkg` ·
-  [063](adr/063-exam-topics-planner.md) topics & the honest planner ·
-  [067](adr/067-planner-refinements.md) planner refinements
-- **DASH / SET** — [040](adr/040-keyboard-shortcuts.md) shortcuts & remapping ·
-  [041](adr/041-dashboard-background.md) background & dim ·
-  [045](adr/045-dashboard-edit-mode.md) edit mode & the widget contract ·
-  [050](adr/050-task-views.md) the views-engine iteration ·
-  [055](adr/055-named-dashboards.md) named dashboards ·
-  [056](adr/056-scheduled-backups.md) scheduled encrypted backups ·
-  [059](adr/059-widget-config.md) per-widget configuration ·
-  [065](adr/065-onboarding-questionnaire.md) the four-screen onboarding ·
-  [071](adr/071-module-settings-contract.md) the per-module settings contract
-- **Life hubs & tools** — [073](adr/073-fin-module.md) FIN, the arc design ·
-  [074](adr/074-subscription-pause.md) pausing a subscription ·
-  [075](adr/075-doc-module-page.md) „Datoteke" ·
-  [076](adr/076-habit-module.md) HABIT ·
-  [077](adr/077-focus-timer.md) one focus timer ·
-  [078](adr/078-nutrition.md) the FIT nutrition layer ·
-  [081](adr/081-fitness-training.md) FIT training & measurements
-- **Cross-cutting** — [064](adr/064-file-preview.md) in-app file preview ·
-  [079](adr/079-canvas-engine.md) CANV's engine ·
-  [080](adr/080-third-party-notices.md) third-party notices ·
-  [084](adr/084-web-readiness.md) preparing for the web app ·
-  [087](adr/087-apache-2.0-open-source.md) the Apache-2.0 licence
+Every decision that shapes the system is one file in [`adr/`](adr/). The index
+— number, title, status and date, each read from the ADR's own status line —
+is one table in [adr/README.md](adr/README.md). ADRs 001–011 are the
+foundations and the earlier drafts, and several of them are superseded in
+part; each file's status says where it stands, and the table repeats it.
 
 ## Monorepo layout
 
@@ -148,19 +59,21 @@ What exists today:
 nexus/
 ├── apps/
 │   ├── desktop/          # Electron shell — main, preload, renderer; owns the database
+│   ├── web/              # Web shell — the same renderer, served from a Worker (ADR-084)
 │   └── gallery/          # Component gallery — design review only, not shipped
 ├── packages/
 │   ├── core/             # Domain logic, module registry, contracts, views engine (platform-free)
 │   ├── db/               # Schema, forward-only migrations, per-module stores (Node + SQLite)
 │   ├── ui/               # Design system components (React)
 │   └── tokens/           # Design tokens — the only place a raw colour may appear
-├── .github/workflows/    # ci.yml (verify) + security.yml (gitleaks, audit)
-└── docs/                 # PRIVATE — gitignored, never committed (founder rule)
+├── .github/workflows/    # ci.yml (verify); security, codeql, scorecard, release, pages
+├── site/                 # The project website, published by pages.yml
+└── docs/                 # Specification, ADRs, journal, status, security, design, research, prompts
 ```
 
 Directories the original draft anticipated and which **do not exist**:
-`apps/web`, `apps/landing`, `packages/crypto`, `packages/interchange`,
-`backend/`, `android/`, `e2e/`. Three of those were absorbed rather than
+`apps/landing`, `packages/crypto`, `packages/interchange`,
+`backend/`, `android/`, `e2e/`. Three of them were absorbed rather than
 deferred, and the reasons are worth keeping:
 
 - **`packages/crypto`** — PRIV shipped on WebCrypto through
@@ -197,24 +110,24 @@ script stays the authority because it alone covers CSS and HTML.
 
 ## Build, release & CI
 
-- **CI:** GitHub Actions, one `verify` job on `ubuntu-latest` — install with
-  `--frozen-lockfile` (SEC-SC-02), then build, typecheck, lint, test. It sets
-  `ELECTRON_SKIP_BINARY_DOWNLOAD` and never launches Electron, so **the smoke
-  check and the colour grep are local-only gates**. A separate `security`
-  workflow runs a gitleaks secret scan and a dependency audit on push and on a
-  schedule. There is **no build matrix** (win/macOS/Linux) yet, and no backend
-  tests, because there is no backend. `docs/` is gitignored so CI never sees it.
+- **CI:** GitHub Actions. `ci.yml` runs one `verify` job on `ubuntu-latest` —
+  install with `--frozen-lockfile` (SEC-SC-02), then the static gates, build,
+  typecheck, lint and the test suites, and last the pgTAP, wire and Edge Function
+  suites against a local Supabase stack. It sets `ELECTRON_SKIP_BINARY_DOWNLOAD`
+  and never launches Electron, so the smoke run and the packaged-build checks
+  happen on a host rather than in CI. `security.yml` adds the gitleaks secret
+  scan and the dependency audit; `codeql.yml`, `scorecard.yml` and
+  `dependency-review.yml` are the public-repository checks; `release.yml` builds
+  and drafts a tagged release; `pages.yml` publishes `site/`.
 - **Desktop packaging:** electron-vite for dev/build, electron-builder for
   installers (`pnpm --filter @nexus/desktop dist`), electron-updater present as
-  a dependency but **no update feed is configured**. SEC-SC-03/04 still stand:
-  code signing on Windows and notarization on macOS are a hard gate before any
-  public download, and neither is set up — **today's installers are unsigned and
-  must not be distributed beyond the founder's own machines.**
-- **Native ABI:** `better-sqlite3-multiple-ciphers` compiles against either
-  Node's ABI (Vitest) or Electron's (the app), never both. Only
-  `rebuild:node` / `rebuild:electron` / `smoke` may flip it. Electron is pinned
-  to **^42** (ABI 146) because 43 (ABI 148) has no prebuild; Dependabot ignores
-  Electron majors.
+  a dependency but **no update feed is configured**. The 1.4.0 installer is
+  unsigned, so Windows shows a SmartScreen warning on first run; code signing
+  (SEC-SC-03/04) is still open work, and the release notes say so.
+- **Native module:** `better-sqlite3-multiple-ciphers` ships one prebuild per
+  platform and architecture, with no ABI in the key, so one `.node` serves both
+  Vitest and Electron and nothing has to be flipped between them. Electron is on
+  **^44**.
 - **Web:** *unbuilt.* COOP/COEP headers are required for SQLite-WASM OPFS
   (ADR-001), which is a hosting constraint the target must satisfy — see
   [ADR-084](adr/084-web-readiness.md).
