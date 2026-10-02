@@ -1301,7 +1301,7 @@ describe("payload builders", () => {
   });
 
   it("builds a tel: URI, dropping spaces and keeping the RFC's visual separators", () => {
-    expect(qrTelPayload("+381 64 123 4567")).toBe("tel:+381641234567");
+    expect(qrTelPayload("+381 60 000 0000")).toBe("tel:+381600000000");
     expect(qrTelPayload("011 / 123")).toBeNull();
     expect(qrTelPayload("(011) 123-4567")).toBe("tel:(011)123-4567");
     expect(qrTelPayload("192")).toBe("tel:192");
@@ -1311,12 +1311,12 @@ describe("payload builders", () => {
   });
 
   it("builds an SMSTO: payload and leaves colons in the body alone", () => {
-    expect(qrSmsPayload({ number: "064123456" })).toBe("SMSTO:064123456");
-    expect(qrSmsPayload({ number: "064 123 456", message: "Stižem u 18:30" })).toBe(
-      "SMSTO:064123456:Stižem u 18:30",
+    expect(qrSmsPayload({ number: "060000000" })).toBe("SMSTO:060000000");
+    expect(qrSmsPayload({ number: "060 000 000", message: "Stižem u 18:30" })).toBe(
+      "SMSTO:060000000:Stižem u 18:30",
     );
-    expect(qrSmsPayload({ number: "064123456", message: "Prvi\nDrugi" })).toBe(
-      "SMSTO:064123456:Prvi\nDrugi",
+    expect(qrSmsPayload({ number: "060000000", message: "Prvi\nDrugi" })).toBe(
+      "SMSTO:060000000:Prvi\nDrugi",
     );
     expect(qrSmsPayload({ number: "abc" })).toBeNull();
   });
@@ -1340,7 +1340,7 @@ describe("payload builders", () => {
       lastName: "Stojiljković",
       organization: "Nexus",
       jobTitle: "Inženjer",
-      phone: "+381641234567",
+      phone: "+381600000000",
       email: "luka@example.com",
       address: {
         street: "Kralja Petra 1",
@@ -1356,7 +1356,7 @@ describe("payload builders", () => {
       "FN:Luka Stojiljković",
       "ORG:Nexus",
       "TITLE:Inženjer",
-      "TEL;TYPE=CELL,VOICE:+381641234567",
+      "TEL;TYPE=CELL,VOICE:+381600000000",
       "EMAIL;TYPE=INTERNET:luka@example.com",
       "ADR;TYPE=HOME:;;Kralja Petra 1;Beograd;;11000;Srbija",
       "END:VCARD",
@@ -1410,10 +1410,10 @@ describe("payload builders", () => {
       qrUrlPayload("https://example.com/nexus"),
       qrWifiPayload({ ssid: "Kuća;1", security: "WPA", password: "tajna:123" }),
       qrMailtoPayload({ to: "luka@example.com", subject: "Zdravo" }),
-      qrTelPayload("+381 64 123 4567"),
-      qrSmsPayload({ number: "064123456", message: "Stižem" }),
+      qrTelPayload("+381 60 000 0000"),
+      qrSmsPayload({ number: "060000000", message: "Stižem" }),
       qrGeoPayload({ latitude: 44.8176, longitude: 20.4569 }),
-      qrVCardPayload({ firstName: "Luka", lastName: "Stojiljković", phone: "+381641234567" }),
+      qrVCardPayload({ firstName: "Luka", lastName: "Stojiljković", phone: "+381600000000" }),
     ];
     for (const payload of payloads) {
       expect(payload).not.toBeNull();
