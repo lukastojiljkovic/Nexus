@@ -1,5 +1,5 @@
 /**
- * „Dizajn i priprema za štampu" — the Serbian copy of this toolkit's surfaces.
+ * „Dizajn i priprema za štampu" — the English copy of this toolkit's surfaces.
  *
  * One entry per tool id, keyed exactly as the assignment spells it. The tool's
  * NAME and its one-line blurb are not here: those live in a table another

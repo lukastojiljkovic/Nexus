@@ -1,5 +1,5 @@
 /**
- * „Kuhinja i pekara" — the Serbian copy of this toolkit's surfaces.
+ * „Kuhinja i pekara" — the English copy of this toolkit's surfaces.
  *
  * One entry per tool id, keyed exactly as the assignment spells the
  * registration. The tool's NAME and its one-line blurb are not here: those
@@ -123,7 +123,7 @@ export const PRO_KUHINJA_EN = {
     sugarPercentHint: "Optional, on the same basis as the salt. Calculated independently of the salt.",
     percentLimit: "Your limit",
     percentLimitHint:
-      "From the regulation you apply. Neagle does not know which regulation that is and offers no value.",
+      "From the regulation you apply. Nexus does not know which regulation that is and offers no value.",
 
     results: "Result",
     saltMass: "Mass of salt",
@@ -378,7 +378,7 @@ export const PRO_KUHINJA_EN = {
       "Optional. If the number of servings per package is also entered, the two must agree.",
     portionsPerPackage: "Number of servings per package",
     referencePrefix: "Reference daily intake —",
-    referenceHint: "From the regulation you apply. Neagle has no table and offers no value.",
+    referenceHint: "From the regulation you apply. Nexus has no table and offers no value.",
     digits: "Number of decimals to show",
     digitsHint:
       "A display choice, not rounding of a legal declaration — what and how it must appear on the package is set by a regulation this tool does not know.",
@@ -651,7 +651,7 @@ export const PRO_KUHINJA_EN = {
     mass: "Mass of component 1",
     targetMass: "Target total mass",
     concentrationLimit: "Regulatory maximum",
-    limitHint: "From the regulation you apply. Neagle does not know which regulation that is and offers no value.",
+    limitHint: "From the regulation you apply. Nexus does not know which regulation that is and offers no value.",
     concentrateNote: "Assumption: only the solvent evaporates, the dissolved matter is not lost.",
     results: "Result",
     componentMass1: "Mass of component 1",

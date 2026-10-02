@@ -336,6 +336,16 @@ export const ALLOWLIST = new Map([
     ["toolchain-name"],
   ],
   [
+    // The SAME copy in English, and the same exemption for the same reason:
+    // the profile labels read "colcon that is already on this computer's PATH"
+    // and "Docker", and a translation that could not name the toolchain it is
+    // describing would be a worse translation than the one the user cannot
+    // understand. Which tool it names is decided by the probe, never by the
+    // renderer — this file is a leaf of the copy table and imports nothing.
+    "apps/desktop/src/renderer/src/strings/electronics.en.ts",
+    ["toolchain-name"],
+  ],
+  [
     // The wire contract, which REDECLARES the profile ids rather than importing
     // them: it imports nothing, by its own standing rule, so a type it needs is
     // a type it writes down. What it writes down is the feature's vocabulary —

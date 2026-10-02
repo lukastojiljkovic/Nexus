@@ -1,9 +1,9 @@
 /**
- * „Zanat" — the Serbian copy of this toolkit's surfaces.
+ * „Zanat" — the English copy of this toolkit's surfaces.
  *
  * One entry per tool id, keyed exactly as `shared/modules.ts` spells the
  * registration. The tool's NAME and its one-line blurb are not here: those
- * live in the `name` and `blurb` tables of `./pro.ts`.
+ * live in the `name` and `blurb` tables of `./pro.en.ts`.
  *
  * **A unit is copy, not a constant.** „mm", „cm", „kg" are written here rather
  * than concatenated in the surface.
@@ -501,7 +501,7 @@ export const PRO_ZANAT_EN = {
     deflectionLimit: "Custom deflection limit",
     deflectionLimitDivisor: "Custom deflection limit as L/x",
     stressLimit: "Custom stress limit",
-    limitHint: "From the regulation you apply. Neagle does not know which regulation that is and offers no value.",
+    limitHint: "From the regulation you apply. Nexus does not know which regulation that is and offers no value.",
 
     results: "Result",
     inertia: "Second moment of area I (mm⁴)",

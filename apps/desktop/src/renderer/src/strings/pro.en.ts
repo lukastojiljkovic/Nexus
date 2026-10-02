@@ -1,24 +1,27 @@
 /**
- * „Stručne alatke" — the professional drawer's own copy: its chrome, the words
- * every one of its surfaces shares, and the name of each toolkit.
+ * Professional tools - the English copy of the professional drawer's own table:
+ * its chrome, the words every one of its surfaces shares, and the name of each
+ * toolkit.
  *
- * **Why this is a group of its own and not part of `devtools`.** It used to be:
- * the drawer was „Programerske alatke", its chrome and its shared surface words
- * sat in `strings/devtools.ts` beside the forty-eight tool names, and that was
- * right for as long as the drawer and the toolkit were the same thing. They are
- * not any more — `devtools` is now the copy of ONE pack (`softver`), and this is
- * the copy of the drawer that hosts it and seventeen others. A pack's tool names
- * stay with the pack; the search field, the empty state and „Kopirano" belong to
- * the room they are all standing in.
+ * **Why this is a group of its own and not part of `devtools`.** It used to
+ * be: the drawer was "Programmer's tools", its chrome and its shared surface
+ * words sat in `strings/devtools.ts` beside the forty-eight tool names, and
+ * that was right for as long as the drawer and the toolkit were the same thing.
+ * They are not any more - `devtools` is now the copy of ONE pack
+ * (`softver`), and this is the copy of the drawer that hosts it and seventeen
+ * others. A pack's tool names stay with the pack; the search field, the empty
+ * state and "Copied" belong to the room they are all standing in.
  *
- * That split is also why `titleKey: "devtools.name.riscv"` did not have to move.
- * A tool names a string in its own family's group (`ToolRegistration`), and the
- * RISC-V decoder's family did not change when its neighbours arrived.
+ * That split is also why `titleKey: "devtools.name.riscv"` did not have to
+ * move. A tool names a string in its own family's group
+ * (`ToolRegistration`), and the RISC-V decoder's family did not change when
+ * its neighbours arrived.
  *
- * Nothing here is a second copy layer. This is one leaf of the same table —
- * `strings.sr.ts` spreads it in as `pro`, `strings.ts` clones the whole thing,
- * and the locale switch rewrites these leaves exactly as it rewrites the rest. A
- * consumer reads `strings.pro.…` and never imports this file.
+ * Nothing here is a second copy layer. This is one leaf of the same table -
+ * `strings.en.ts` imports it as `pro`, and `strings.ts` installs that whole
+ * table when the reader picks English, so a locale switch rewrites these leaves
+ * exactly as it rewrites the rest. A consumer reads `strings.pro.…` and never
+ * imports this file.
  */
 
 import { PRO_GRADNJA_EN } from "./pro.gradnja.en.js";
@@ -267,14 +270,14 @@ export const proEn = {
         "A calculation from the values you enter. It does not replace the calculation, checking or responsibility of a chartered engineer.",
       note:
         "The tools in this group calculate a size from the data you enter yourself. They do not choose a regulation, set a limit or judge whether something complies — that is the work of a chartered designer or contractor, who is responsible for that decision. The limits you enter are shown beside the result so you can see what it was derived from.",
-      export: "Neagle — an informational calculation. It does not replace a chartered engineer's calculation.",
+      export: "Nexus — an informational calculation. It does not replace a chartered engineer's calculation.",
     },
     wellness: {
       label: "Body and fitness",
       line: "An informational calculation. It is not medical or training advice.",
       note:
         "The tools in this group calculate numbers about your own body — mass, ratios, training load — from the values you enter yourself. They do not diagnose, do not prescribe treatment and do not replace a doctor. For health questions, see a doctor.",
-      export: "Neagle — an informational calculation. It is not medical advice.",
+      export: "Nexus — an informational calculation. It is not medical advice.",
     },
     "legal-procedure": {
       label: "Deadlines",
@@ -282,7 +285,7 @@ export const proEn = {
         "Calculates dates by the rule you choose. Choosing the rule and checking the deadline are legal questions.",
       note:
         "The tools in this group add and subtract dates by the counting rule you choose yourself — whether the first day counts, how a deadline falling on a non-working day moves. That choice is a legal question and remains yours; the tool only applies it and writes it beside the result. This is not legal advice.",
-      export: "Neagle — an informational date calculation. It is not legal advice.",
+      export: "Nexus — an informational date calculation. It is not legal advice.",
     },
     financial: {
       label: "Money",
@@ -290,14 +293,14 @@ export const proEn = {
         "An informational calculation from the rates and amounts you enter. It is not tax or accounting advice.",
       note:
         "The tools in this group calculate from the rates and amounts you enter yourself. No rate is built into the program — which rate applies today and to your case is a question of regulation and your decision, so the entered rate is written beside the result. This is not tax, accounting or financial advice.",
-      export: "Neagle — an informational calculation. It is not tax or accounting advice.",
+      export: "Nexus — an informational calculation. It is not tax or accounting advice.",
     },
     "food-safety": {
       label: "Food safety",
       line: "A calculation from the values you enter. Food safety is determined by your HACCP plan and by regulations.",
       note:
         "The tools in this group calculate quantities and times from the values you enter yourself. They do not determine a safe temperature, time or procedure — your HACCP plan and regulations do, and that judgement remains yours.",
-      export: "Neagle — an informational calculation. It does not determine food safety.",
+      export: "Nexus — an informational calculation. It does not determine food safety.",
     },
   },
 

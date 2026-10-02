@@ -1,17 +1,19 @@
 /**
- * „Elektronika" — the workbench's own copy (ELEC, migration 067).
+ * Electronics - the English copy of the workbench's own table (ELEC, migration
+ * 067).
  *
- * A group of its own rather than another section of `strings.sr.ts`, on
- * `strings/pro.ts`' terms: this is one module's whole vocabulary, and four of
- * its tables are keyed by a closed list `@nexus/core` owns — component kinds,
- * pin functions, bus kinds, wire colours. Each is declared `satisfies
- * Record<…, string>`, so a member added to the model is a compile error here
- * rather than a blank label on the screen.
+ * A group of its own rather than another section of `strings.en.ts`, on
+ * `pro.en.ts`'s terms: this is one module's whole vocabulary, and four of its
+ * tables are keyed by a closed list `@nexus/core` owns - component kinds, pin
+ * functions, bus kinds, wire colours. Each is declared `satisfies Record<…,
+ * string>`, so a member added to the model is a compile error here rather than
+ * a blank label on the screen.
  *
- * Nothing here is a second copy layer. This is one leaf of the same table —
- * `strings.sr.ts` spreads it in as `electronics`, `strings.ts` clones the whole
- * thing, and the locale switch rewrites these leaves exactly as it rewrites the
- * rest. A consumer reads `strings.electronics.…` and never imports this file.
+ * Nothing here is a second copy layer. This is one leaf of the same table -
+ * `strings.en.ts` imports it as `electronics`, and `strings.ts` installs
+ * that whole table when the reader picks English, so a locale switch rewrites
+ * these leaves exactly as it rewrites the rest. A consumer reads
+ * `strings.electronics.…` and never imports this file.
  */
 
 import type {
@@ -272,7 +274,7 @@ export const electronicsEn = {
       part: "The wire leads to a component that is not in this circuit.",
       pin: "The wire leads to a pin that component does not have.",
       self: "The wire connects a pin to itself.",
-      component: "This version of Neagle does not know that component — it is drawn as an empty frame.",
+      component: "This version of Nexus does not know that component — it is drawn as an empty frame.",
       value: "The value is missing, or it is written on a component that does not have one.",
     } satisfies Record<CircuitProblemCode, string>,
   },
@@ -355,7 +357,7 @@ export const electronicsEn = {
      * dimension a simulator treats as measured.
      */
     description:
-      "The circuit describes the electronics, and this describes the machine that electronics sits on. The numbers go into the model the simulator reads, so every one must come from a tape measure — Neagle assumes none of them.",
+      "The circuit describes the electronics, and this describes the machine that electronics sits on. The numbers go into the model the simulator reads, so every one must come from a tape measure — Nexus assumes none of them.",
     /** In the inspector when there is no machine — a fact, not a prompt. */
     none: "No machine is described for this circuit.",
     shapeLabel: "Shape",
@@ -414,7 +416,7 @@ export const electronicsEn = {
      * Why a face is enough. The origin is derived from the body's own
      * dimensions, so nobody types three coordinates per sensor.
      */
-    mountHint: "From the side and the body measurements Neagle computes where the sensor sits on the model.",
+    mountHint: "From the side and the body measurements Nexus computes where the sensor sits on the model.",
   },
 
   /**
@@ -462,7 +464,7 @@ export const electronicsEn = {
       "no-board": "There is no board in the circuit, so there is no program to write for one.",
       "many-boards": "The circuit has several boards, and one program goes to one board.",
       "not-programmable":
-        "The catalogue does not say which toolchain this board is programmed with, so Neagle does not choose for it.",
+        "The catalogue does not say which toolchain this board is programmed with, so Nexus does not choose for it.",
       "not-ros": "This board is a microcontroller — it gets a sketch, not a ROS 2 package.",
     } satisfies Record<CodeRefusal, string>,
 
@@ -501,7 +503,7 @@ export const electronicsEn = {
        */
       machineHeading: "Machine model",
       machineNone:
-        "The machine is described, but the sketch does not use it: the model is read by the simulator, and that comes with the ROS 2 package — which Neagle makes for Linux boards. The measurements stay with the circuit.",
+        "The machine is described, but the sketch does not use it: the model is read by the simulator, and that comes with the ROS 2 package — which Nexus makes for Linux boards. The measurements stay with the circuit.",
       /** Above the code itself, with the file name the save dialog will suggest. */
       sourceHeading: "Sketch",
       saved: "The sketch was saved.",
@@ -615,7 +617,7 @@ export const electronicsEn = {
        * their own node beside `wiring.py`, so overwriting would destroy work
        * Nexus itself asked for.
        */
-      exists: "A directory with that name already exists there. Neagle does not write over it.",
+      exists: "A directory with that name already exists there. Nexus does not write over it.",
     },
   },
 
@@ -640,7 +642,7 @@ export const electronicsEn = {
      * behaviour — and this is that sentence for a thing that moves.
      */
     description:
-      "The bench shows how the signal travels through the circuit while the clock runs: what the board reads from the sensors and what it sends to the component it drives. You supply the values — Neagle does not assume what your program does, so this checks the connections, not the logic.",
+      "The bench shows how the signal travels through the circuit while the clock runs: what the board reads from the sensors and what it sends to the component it drives. You supply the values — Nexus does not assume what your program does, so this checks the connections, not the logic.",
     /** Why there is no bench. `soleBoard`'s two refusals, in the dialog's own voice. */
     refused: {
       "no-board": "There is no board in the circuit, so there are no pins whose signals could be traced.",
@@ -810,9 +812,9 @@ export const electronicsEn = {
     consent: {
       heading: "What switching it on means",
       external:
-        "Neagle runs an external program on this computer — with the same rights you have.",
+        "Nexus runs an external program on this computer — with the same rights you have.",
       manual: "Nothing runs on its own: every job starts when you start it.",
-      writes: "The job reads and writes one directory — the one Neagle makes for that package.",
+      writes: "The job reads and writes one directory — the one Nexus makes for that package.",
       network:
         "The Docker profile pulls an image from Docker Hub on first run. That is the only part of the runner that goes to the network.",
       enable: "Enable the runner",
@@ -917,7 +919,7 @@ export const electronicsEn = {
       "path-not-representable":
         "This path cannot be written in the form that profile needs.",
       "distro-leading-dash":
-        "The distribution name starts with a dash, so it would be read as an option. Neagle does not run it.",
+        "The distribution name starts with a dash, so it would be read as an option. Nexus does not run it.",
       "not-enabled": "The runner is off, so there is no command to run.",
       "no-choice": "No profile is chosen, so there is no command to run.",
       "no-distro": "WSL is chosen, but no distribution is chosen.",
@@ -932,7 +934,7 @@ export const electronicsEn = {
      * with itself.
      */
     start: {
-      alreadyRunning: "One job is already running — Neagle runs one at a time.",
+      alreadyRunning: "One job is already running — Nexus runs one at a time.",
       writeFailed: "The package was not written to disk, so the job was not started.",
       spawnFailed: "The program could not start. The message below is its own.",
       none: "The job was not started.",
@@ -975,7 +977,7 @@ export const electronicsEn = {
        */
       workExited: "The job has finished.",
       workStill:
-        "The job is still running — the process Neagle started it through has exited, but what it started has not.",
+        "The job is still running — the process Nexus started it through has exited, but what it started has not.",
       /** Above the exit code, which is a figure and not a verdict. */
       exitCodeLabel: "exit code",
       /**

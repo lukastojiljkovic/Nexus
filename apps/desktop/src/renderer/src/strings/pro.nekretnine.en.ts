@@ -1,5 +1,5 @@
 /**
- * „Nekretnine" — the Serbian copy of this toolkit's surfaces.
+ * „Nekretnine" — the English copy of this toolkit's surfaces.
  *
  * One entry per tool id, keyed exactly as the assignment and `nekretnine.tsx`
  * spell it. The tool's NAME and its one-line blurb are not here: those live in
@@ -7,7 +7,7 @@
  *
  * **A unit is copy, not a constant** — written here, never concatenated raw in
  * the surface. **Nothing in here judges**: every regulated figure (a rate, an
- * index, a coefficient, a notice period) is „koje uneseš"/„koji uneseš", never
+ * index, a coefficient, a notice period) is "the one you enter", never
  * described as correct or permitted, and every comparison against the user's
  * own limit is a bare ratio with no sentence about what it means.
  */
@@ -88,7 +88,7 @@ export const PRO_NEKRETNINE_EN = {
     debt: "Debt amount",
     annualRate: "Annual interest rate",
     annualRateHint:
-      "From the contract or the regulation you apply. Neagle knows and offers none.",
+      "From the contract or the regulation you apply. Nexus knows and offers none.",
     dueDate: "Due date",
     dateHint: "Format dd.mm.yyyy.",
     paymentDate: "Payment date",
@@ -138,7 +138,7 @@ export const PRO_NEKRETNINE_EN = {
     dateHint: "Format dd.mm.yyyy.",
     months: "Duration (months)",
     noticeAmount: "Notice period",
-    noticeHint: "From your contract. Neagle knows and suggests no period.",
+    noticeHint: "From your contract. Nexus knows and suggests no period.",
     noticeUnit: "Unit of the notice period",
     noticeUnitDays: "days",
     noticeUnitMonths: "months",
@@ -176,7 +176,7 @@ export const PRO_NEKRETNINE_EN = {
   "loan-amortization": {
     principal: "Loan amount",
     annualRate: "Nominal annual interest rate",
-    annualRateHint: "A contractual/market figure. Neagle remembers and offers none.",
+    annualRateHint: "A contractual/market figure. Nexus remembers and offers none.",
     months: "Number of monthly instalments",
     balanceMonth: "Month for which the remaining debt is wanted",
     balanceMonthHint: "A whole number from 0 to the number of instalments. Optional.",
@@ -299,7 +299,7 @@ export const PRO_NEKRETNINE_EN = {
     footprint: "Footprint area",
     planRatio: "Building index from the plan",
     planLimitHint:
-      "From the planning document for that plot. Neagle knows and offers no index.",
+      "From the planning document for that plot. Nexus knows and offers no index.",
     planCoverage: "Coverage index from the plan",
 
     results: "Result",
@@ -368,7 +368,7 @@ export const PRO_NEKRETNINE_EN = {
     modeFixed: "fixed percentage",
     modeList: "list per period",
     fixedIndex: "Index per period",
-    indexHint: "Percentage per period. Neagle knows and remembers no index.",
+    indexHint: "Percentage per period. Nexus knows and remembers no index.",
     listMode: "List of indices",
     listHint:
       "One percentage per line, as many lines as there are periods. The first line is not used (period 1 is not indexed) — write anything, e.g. a dash.",
@@ -402,9 +402,9 @@ export const PRO_NEKRETNINE_EN = {
     net: "Net amount (that remains)",
     costPercent: "Percentage of recognised (standard) costs",
     costPercentHint:
-      "From the regulation you apply. Neagle knows and offers no percentage.",
+      "From the regulation you apply. Nexus knows and offers no percentage.",
     taxRate: "Rate",
-    taxRateHint: "From the regulation you apply. Neagle knows and offers no rate.",
+    taxRateHint: "From the regulation you apply. Nexus knows and offers no rate.",
 
     results: "Result",
     base: "Base",
@@ -440,7 +440,7 @@ export const PRO_NEKRETNINE_EN = {
       "The tool assumes no cost — it adds only what you enter, in full regardless of occupancy.",
     annualCosts: "Annual costs",
     capRate: "Cap rate for the reverse direction",
-    capRateHint: "Your rate. Neagle assumes none.",
+    capRateHint: "Your rate. Nexus assumes none.",
 
     results: "Result",
     grossPotentialIncome: "Annual gross potential income (GPI)",
@@ -520,7 +520,7 @@ export const PRO_NEKRETNINE_EN = {
     no: "no",
     coverage: "Material coverage",
     coverageHint:
-      "m² per litre or per kilogram, FOR ONE COAT, from the product label. Neagle assumes none.",
+      "m² per litre or per kilogram, FOR ONE COAT, from the product label. Nexus assumes none.",
     coats: "Number of coats",
     coatsHint: "A whole number from 1 to 10. Default 1.",
     packageSize: "Package",

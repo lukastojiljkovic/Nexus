@@ -1,9 +1,9 @@
 /**
- * „Prosveta i nastava" — the Serbian copy of this toolkit's surfaces.
+ * „Prosveta i nastava" — the English copy of this toolkit's surfaces.
  *
  * One entry per tool id, keyed exactly as `shared/modules.ts` spells the
  * registration. The tool's NAME and its one-line blurb are not here: those
- * live in the `name` and `blurb` tables of `./pro.ts`.
+ * live in the `name` and `blurb` tables of `./pro.en.ts`.
  *
  * **A unit is copy, not a constant** — written here rather than concatenated
  * in the surface. **A regulated figure's hint always says the same thing**:
@@ -143,7 +143,7 @@ export const PRO_PROSVETA_EN = {
     stepHint: "Typically 1 or 0.5. An empty field calculates with a step of 1.",
     thresholds: "Thresholds (label; threshold in %)",
     thresholdsHint:
-      "One row per threshold — label and percentage separated by a semicolon, e.g. “5; 91”. The thresholds are set by the institution's or ministry's rulebook; Neagle has no built-in scale.",
+      "One row per threshold — label and percentage separated by a semicolon, e.g. “5; 91”. The thresholds are set by the institution's or ministry's rulebook; Nexus has no built-in scale.",
     scoredPoints: "Score achieved",
     scoredPointsHint: "Optional — the score for which the label from the scale is wanted.",
 
@@ -179,7 +179,7 @@ export const PRO_PROSVETA_EN = {
       "Grades or scores, separated by a space, a semicolon or a new line. A comma is the decimal mark — “3,5” is one value.",
     passThreshold: "Pass threshold",
     passThresholdHint:
-      "Optional. The limit is set by the institution or ministry; Neagle does not assume it.",
+      "Optional. The limit is set by the institution or ministry; Nexus does not assume it.",
 
     results: "Result",
     count: "n",
@@ -290,13 +290,13 @@ export const PRO_PROSVETA_EN = {
       "One row per day: the day of the week (1 = Monday … 7 = Sunday, ISO 8601) and the number of lessons, separated by a semicolon — e.g. “2; 1”.",
     excludedDates: "Excluded dates",
     excludedDatesHint:
-      "One date per line, format DD.MM.YYYY. Neagle has no built-in holiday calendar — only the dates entered here are counted.",
+      "One date per line, format DD.MM.YYYY. Nexus has no built-in holiday calendar — only the dates entered here are counted.",
     makeupDays: "Days that follow another day's schedule",
     makeupDaysHint:
       "One row per day: the date and the day of the week whose schedule applies, separated by a semicolon — e.g. “15.10.2026; 1”.",
     lessonMinutes: "Lesson duration (minutes)",
     prescribedHours: "Prescribed lesson fund",
-    prescribedHoursHint: "Optional — the annual fund from the curriculum; Neagle does not know it.",
+    prescribedHoursHint: "Optional — the annual fund from the curriculum; Nexus does not know it.",
 
     results: "Result",
     colWeekday: "Day",
@@ -322,7 +322,7 @@ export const PRO_PROSVETA_EN = {
     hoursDifferenceLabel: "Difference calculated − prescribed",
     hoursRatioLabel: "Ratio calculated/prescribed",
     noHolidayNote:
-      "Neagle has no built-in holiday calendar — only the dates you enter are deducted.",
+      "Nexus has no built-in holiday calendar — only the dates you enter are deducted.",
     weekdayNames: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
 
     inputs: "Entered",
@@ -454,7 +454,7 @@ export const PRO_PROSVETA_EN = {
     sheetsPerPack: "Sheets per pack",
     sheetsPerPackHint: "Read from the paper pack.",
     price: "Price per sheet",
-    priceHint: "Optional — the market price; Neagle does not know or remember it.",
+    priceHint: "Optional — the market price; Nexus does not know or remember it.",
 
     results: "Result",
     sheetsPerCopy: "Sheets per copy",

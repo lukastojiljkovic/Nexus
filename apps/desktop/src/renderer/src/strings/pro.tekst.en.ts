@@ -1,9 +1,9 @@
 /**
- * „Tekst i prevod" — the Serbian copy of this toolkit's surfaces.
+ * „Tekst i prevod" — the English copy of this toolkit's surfaces.
  *
  * One entry per tool id, keyed exactly as `shared/modules.ts` spells the
  * registration. The tool's NAME and its one-line blurb are not here: those live
- * in the `name` and `blurb` tables of `./pro.ts`, needed before any surface is
+ * in the `name` and `blurb` tables of `./pro.en.ts`, needed before any surface is
  * opened.
  *
  * None of this pack's tools carries `life-safety` or `food-safety` risk, so
@@ -39,7 +39,7 @@ export const PRO_TEKST_EN = {
 
     inputs: "Entered",
     formula:
-      "stack: opener → push; closer → pop if it matches the top, otherwise report and leave the stack alone     „ and ' are resolved by the top of the stack; the straight quotes \" and ' are counted by parity within a paragraph",
+      "stack: opener → push; closer → pop if it matches the top, otherwise report and leave the stack alone     “ and ' are resolved by the top of the stack; the straight quotes \" and ' are counted by parity within a paragraph",
 
     errorText: "The text may have at most 500000 code points.",
   },
@@ -350,7 +350,7 @@ export const PRO_TEKST_EN = {
     maxDuration: "Longest duration (ms)",
     maxCps: "Maximum characters per second",
     minGap: "Smallest gap to the next (ms)",
-    limitHint: "The limit is set by the client or broadcaster for this job. Neagle offers no value.",
+    limitHint: "The limit is set by the client or broadcaster for this job. Nexus offers no value.",
     countTags: "Count characters inside <i> tags",
     countTagsHint: "Off removes <i> and ASS commands before counting characters.",
     on: "On",

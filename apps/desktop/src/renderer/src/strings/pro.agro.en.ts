@@ -1,9 +1,9 @@
 /**
- * „Agro" — the Serbian copy of this toolkit's surfaces.
+ * „Agro" — the English copy of this toolkit's surfaces.
  *
  * One entry per tool id, keyed exactly as `shared/modules.ts` spells the
  * registration. The tool's NAME and its one-line blurb are not here: those
- * live in `./pro.ts`'s `name`/`blurb` tables, because the drawer's rail needs
+ * live in `./pro.en.ts`'s `name`/`blurb` tables, because the drawer's rail needs
  * them before any surface is opened.
  *
  * **A unit is copy, not a constant** — written here rather than concatenated
@@ -36,7 +36,7 @@ export const PRO_AGRO_EN = {
     measuredMassKg: "Mass of one bale",
     densityKgM3: "Bale density",
     densityKgM3Hint:
-      "Measured for a specific material and baler, 30 to 400 kg/m³. Neagle does not assume it.",
+      "Measured for a specific material and baler, 30 to 400 kg/m³. Nexus does not assume it.",
     quantityMode: "Method of setting the yield",
     quantityModeYield: "Yield per hectare",
     quantityModeTotal: "Total mass",
@@ -51,7 +51,7 @@ export const PRO_AGRO_EN = {
     storageWidthM: "Store width",
     storageHeightM: "Usable stacking height",
     storageHeightMHint:
-      "Your input — Neagle does not determine it and does not check the load capacity or stacking stability.",
+      "Your input — Nexus does not determine it and does not check the load capacity or stacking stability.",
 
     results: "Result",
     baleVolume: "Volume of one bale",
@@ -239,7 +239,7 @@ export const PRO_AGRO_EN = {
     targetMinusDeliveredP2o5: "Target − supplied (P₂O₅)",
     targetMinusDeliveredK2o: "Target − supplied (K₂O)",
     userInputNote:
-      "The target quantities and the fertiliser composition are your input from the label and the recommendation. Neagle does not know, remember or suggest them.",
+      "The target quantities and the fertiliser composition are your input from the label and the recommendation. Nexus does not know, remember or suggest them.",
 
     inputs: "Entered",
     formula:
@@ -268,11 +268,11 @@ export const PRO_AGRO_EN = {
     grossMassKg: "Gross mass",
     measuredMoisturePercent: "Measured moisture",
     targetMoisturePercent: "Target (contract) moisture",
-    targetMoisturePercentHint: "From the purchase contract. Neagle does not know or suggest it.",
+    targetMoisturePercentHint: "From the purchase contract. Nexus does not know or suggest it.",
     impuritiesPercent: "Impurities",
     impuritiesFreeLimitPercent: "Impurities without deduction",
     impuritiesFreeLimitPercentHint:
-      "From the purchase contract or the buyer's rulebook. Neagle does not know or suggest it.",
+      "From the purchase contract or the buyer's rulebook. Nexus does not know or suggest it.",
     order: "Order of deductions",
     orderImpuritiesFirst: "Impurities first, then moisture",
     orderMoistureFirst: "Moisture first, then impurities",
@@ -330,7 +330,7 @@ export const PRO_AGRO_EN = {
       "Paste one row per day: date;maximum °C;minimum °C. The separator is a tab, semicolon or comma, the date in the form DD.MM.YYYY.",
     baseTempC: "Base temperature",
     baseTempCHint:
-      "Your choice by crop. Neagle does not choose a crop and does not claim 10 °C is right for any.",
+      "Your choice by crop. Nexus does not choose a crop and does not claim 10 °C is right for any.",
     upperLimitC: "Upper limit (modified method)",
     targetSum: "Target sum",
     averageWindowDays: "Averaging period for the projection",
@@ -391,7 +391,7 @@ export const PRO_AGRO_EN = {
     jarVolumeMl: "Jar volume",
     jarDeclaredNetMassG: "Declared net mass of the jar",
     jarToleranceG: "Allowed deviation per jar",
-    jarToleranceGHint: "From a regulation or an agreement with the buyer. Neagle does not know or suggest it.",
+    jarToleranceGHint: "From a regulation or an agreement with the buyer. Nexus does not know or suggest it.",
     pricePerKg: "Price per kilogram",
 
     results: "Result",
@@ -445,10 +445,10 @@ export const PRO_AGRO_EN = {
 
   "irrigation-depth-volume": {
     normMm: "Irrigation rate",
-    normMmHint: "Your input, 0.5 to 200 mm. Neagle does not suggest it.",
+    normMmHint: "Your input, 0.5 to 200 mm. Nexus does not suggest it.",
     areaHa: "Area",
     efficiencyPercent: "System efficiency",
-    efficiencyPercentHint: "A property of the specific system, 30 to 100%. Neagle does not assume it.",
+    efficiencyPercentHint: "A property of the specific system, 30 to 100%. Nexus does not assume it.",
     flowUnit: "Unit of the available flow",
     flowUnitM3h: "m³/h",
     flowUnitLs: "l/s",
@@ -519,7 +519,7 @@ export const PRO_AGRO_EN = {
     intakeModePercent: "% of body mass",
     intakeModeKg: "kg DM per head per day",
     intakeValue: "Intake value",
-    intakeValueHint: "Your choice — Neagle does not suggest it.",
+    intakeValueHint: "Your choice — Nexus does not suggest it.",
     feedsText: "Feeds",
     feedsTextHint:
       "Paste one row per feed: name;DM content %;share of the ration by DM %;price per kg fresh mass (optional);package mass in kg (optional).",
@@ -640,7 +640,7 @@ export const PRO_AGRO_EN = {
     headlandM: "Headland at each end of the row",
     boundaryOffsetM: "Distance of the first row from the boundary",
     postSpacingM: "Post spacing along the row",
-    postSpacingMHint: "Your choice — Neagle does not suggest it.",
+    postSpacingMHint: "Your choice — Nexus does not suggest it.",
     wireRows: "Number of wire rows",
     wireDiameterMm: "Wire diameter",
     wireSlackPercent: "Wire allowance for tying and tensioning",
@@ -796,7 +796,7 @@ export const PRO_AGRO_EN = {
     standModePerM2: "plants/m²",
     standModePerHa: "plants/ha",
     standValue: "Target stand",
-    standValueHint: "Your choice by crop and variety. Neagle does not suggest it.",
+    standValueHint: "Your choice by crop and variety. Nexus does not suggest it.",
     tkwGrams: "Thousand-grain mass (TKW)",
     germinationPercent: "Germination",
     purityPercent: "Purity",
@@ -870,7 +870,7 @@ export const PRO_AGRO_EN = {
       "An independently measured width — it is compared with the number of nozzles × spacing, not silently replacing it.",
     speedKmh: "Travel speed",
     targetRateLHa: "Target spray rate (from the label)",
-    limitHint: "From the regulation you apply. Neagle does not know which regulation that is and offers no value.",
+    limitHint: "From the regulation you apply. Nexus does not know which regulation that is and offers no value.",
     tankVolumeL: "Tank volume",
 
     results: "Result",
@@ -918,7 +918,7 @@ export const PRO_AGRO_EN = {
       "Paste one product per line: name;l or kg;dose method (ha, % or ml);value. The “ha” method is a dose per hectare, “%” is a concentration in percent, “ml” is a dose per litre of spray (ml or g per litre). Up to 10 products.",
     productsTextPlaceholder: "Product A;l;ha;1.5\nProduct B;kg;%;0.625",
     sprayRateLHa: "Spray rate (water use)",
-    limitHint: "From the regulation you apply. Neagle does not know which regulation that is and offers no value.",
+    limitHint: "From the regulation you apply. Nexus does not know which regulation that is and offers no value.",
     tankVolumeL: "Tank volume",
     areaHa: "Area to treat",
 
@@ -943,7 +943,7 @@ export const PRO_AGRO_EN = {
     fullTankCarrierL: "Water per full tank (after adding the products)",
     totalCarrierL: "Total water for the whole area",
     labelNote:
-      "The spray is water plus all the added products — the water volume is the tank volume less the liquid products it contains, not the whole tank volume. You enter the dose and the spray rate from the product label; Neagle does not know, remember or suggest them.",
+      "The spray is water plus all the added products — the water volume is the tank volume less the liquid products it contains, not the whole tank volume. You enter the dose and the spray rate from the product label; Nexus does not know, remember or suggest them.",
 
     inputs: "Entered",
     productCount: "Number of products",
@@ -985,7 +985,7 @@ export const PRO_AGRO_EN = {
     sampleMoisturePercentHint:
       "The moisture of the harvested and measured sample — the basis from which the conversion to the reference moisture starts for this method.",
     referenceMoisturePercent: "Reference moisture for the conversion",
-    limitHint: "From the purchase contract or the buyer's rulebook. Neagle does not know or suggest it.",
+    limitHint: "From the purchase contract or the buyer's rulebook. Nexus does not know or suggest it.",
     harvestLossPercent: "Harvest loss (optional)",
     plotAreaHa: "Plot area",
 

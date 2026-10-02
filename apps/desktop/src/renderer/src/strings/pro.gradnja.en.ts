@@ -1,23 +1,21 @@
 /**
- * „Gradnja i projektovanje" — the Serbian copy of this toolkit's surfaces.
+ * Construction and design - the English copy of this toolkit's surfaces.
  *
  * One entry per tool id, keyed exactly as `shared/modules.ts` spells the
  * registration. The tool's NAME and its one-line blurb are not here: those live
- * in the `name` and `blurb` tables of `./pro.ts`, because the drawer's rail
- * needs them before any surface is opened.
+ * in the `name` and `blurb` tables of `./pro.en.ts`, because the drawer's
+ * rail needs them before any surface is opened.
  *
- * **A unit is copy, not a constant.** „mm" and „m" are written here rather than
- * concatenated in the surface, so the day this table has a second locale the
- * units move with it — and because a unit hard-coded in a component is a string
- * `check:strings` cannot see and a translator cannot find.
+ * **A unit is copy, not a constant.** "mm" and "m" are written here rather than
+ * concatenated in the surface, so a translator can find every one of them and a
+ * unit hard-coded in a component is a string `check:strings` cannot see.
  *
  * **Nothing in here judges.** Every tool in this pack that touches a load, a
  * height or a fall is `life-safety`, so its copy may name a quantity and may
  * name the user's own limit, and may not say what the two mean together
- * (`toolForbidsVerdict`). Where a limit appears below it is always „tvoja
- * granica" — whose it is, said in the label. The possessive, never „koju si
- * uneo": a Serbian l-participle agrees with the addressee's gender, so that
- * phrasing addressed every user as a man (`check:address` enforces this).
+ * (`toolForbidsVerdict`). Where a limit appears below it is always "your
+ * limit" - whose it is, said in the label - and never a verdict word such as
+ * "satisfies", "safe" or "within regulation".
  */
 export const PRO_GRADNJA_EN = {
   "stair-geometry": {
@@ -33,7 +31,7 @@ export const PRO_GRADNJA_EN = {
     topLanding: "Onto a landing level with the last rise",
     riserLimit: "Your limit for the riser height",
     goingLimit: "Your limit for the tread",
-    limitHint: "From the regulation you apply. Neagle does not know which regulation that is and offers no value.",
+    limitHint: "From the regulation you apply. Nexus does not know which regulation that is and offers no value.",
     roundTo: "Rounding step",
     roundToHint: "At what riser height the marks are drawn on the rod. Default 1 mm.",
 
@@ -136,7 +134,7 @@ export const PRO_GRADNJA_EN = {
     modeMaxGap: "Largest clear spacing (infill)",
     maxSpacing: "Your largest spacing",
     maxGap: "Your largest clear spacing",
-    limitHint: "From the regulation you apply. Neagle does not know which regulation that is and offers no value.",
+    limitHint: "From the regulation you apply. Nexus does not know which regulation that is and offers no value.",
     countLabel: "Number of pieces",
     layout: "Layout",
     layoutEnds: "Pieces at both ends",
@@ -193,7 +191,7 @@ export const PRO_GRADNJA_EN = {
     sectionModulusHint: "Optional, when the section is not rectangular. Without it the stress is not shown.",
     stressLimit: "Your stress limit",
     deflectionRatioLimit: "Your limit for the L/f ratio",
-    limitHint: "From the regulation you apply. Neagle does not know which regulation that is and offers no value.",
+    limitHint: "From the regulation you apply. Nexus does not know which regulation that is and offers no value.",
 
     results: "Result",
     reaction: "Support reaction",

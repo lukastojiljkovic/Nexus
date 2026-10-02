@@ -1,5 +1,5 @@
 /**
- * „Event i produkcija" — the Serbian copy of this toolkit's surfaces.
+ * „Event i produkcija" — the English copy of this toolkit's surfaces.
  *
  * One entry per tool id, keyed exactly as the assignment spells the
  * registration. The tool's NAME and its one-line blurb are not here: those live
@@ -83,7 +83,7 @@ export const PRO_EVENT_EN = {
     reserve: "Reserve",
     taxRate: "Tax rate",
     taxRateHint:
-      "The user's input — Neagle holds no tax rate and does not know which one applies.",
+      "The user's input — Nexus holds no tax rate and does not know which one applies.",
     taxBaseMode: "Tax basis",
     taxBaseModeHint:
       "The reserve never enters the “marked items only” basis — the markup is on the whole budget.",
@@ -573,7 +573,7 @@ export const PRO_EVENT_EN = {
       "From the job's rules. Without it only the static (unfactored) force is shown.",
     dynamicFactorNone: "not entered",
     wllPerLeg: "Nameplate limit (WLL) per leg",
-    wllHint: "From the sling's nameplate. Neagle holds no load table.",
+    wllHint: "From the sling's nameplate. Nexus holds no load table.",
     wllUnit: "Limit unit",
 
     results: "Result",
@@ -692,7 +692,7 @@ export const PRO_EVENT_EN = {
     seatWidth: "Seat width per guest",
     clearance: "Clear space around the table",
     clearanceHint:
-      "The user's planning dimension for chairs and circulation, per side of the table. Neagle does not offer it as a recommendation — it is not an escape-route width and the tool does not call it one.",
+      "The user's planning dimension for chairs and circulation, per side of the table. Nexus does not offer it as a recommendation — it is not an escape-route width and the tool does not call it one.",
     availableArea: "Available area for tables",
     availableAreaHint: "Optional, only to compare with the area needed.",
     availableWidth: "Available space — width",
@@ -752,7 +752,7 @@ export const PRO_EVENT_EN = {
     udlLimit: "Uniform-load limit from the deck manufacturer's table",
     occupancyDensity: "Occupant density on the platform",
     regulatedHint:
-      "From the regulation you apply. Neagle does not know which regulation that is and offers no value.",
+      "From the regulation you apply. Nexus does not know which regulation that is and offers no value.",
 
     results: "Result",
     requiredArea: "Required stage area",
@@ -867,7 +867,7 @@ export const PRO_EVENT_EN = {
     consumersHint:
       "One row each: name; power in W or kW; connection (L1 / L2 / L3 / three-phase / L1L2 / L2L3 / L3L1); power factor cos φ (0.1 to 1.0, negative for a leading load); simultaneity in % (default 100).",
     ratedBreaker: "Rated fuse current per phase",
-    regulatedHint: "Copied from the distribution board. Neagle has no fuse list and offers no value.",
+    regulatedHint: "Copied from the distribution board. Nexus has no fuse list and offers no value.",
 
     results: "Result per phase",
     colPhase: "Phase",
@@ -926,7 +926,7 @@ export const PRO_EVENT_EN = {
     extraDistributedHint: "Cables, drapery and the like, kg/m.",
     hoistCapacityA: "Motor capacity at point A",
     hoistCapacityB: "Motor capacity at point B",
-    regulatedHint: "From the motor's nameplate. Neagle has no motor list and offers no value.",
+    regulatedHint: "From the motor's nameplate. Nexus has no motor list and offers no value.",
     slingAngle: "Sling angle from vertical",
     slingAngleHint: "Optional — gives the force in the sling instead of the vertical reaction alone.",
 
@@ -1049,7 +1049,7 @@ export const PRO_EVENT_EN = {
     conductorTempHint: "An empty field counts as 20 °C, the reference temperature for the resistance.",
     dropLimit: "Voltage-drop limit you apply",
     regulatedHint:
-      "From a regulation, a design or the job's conditions. Neagle does not offer it even as a default.",
+      "From a regulation, a design or the job's conditions. Nexus does not offer it even as a default.",
 
     results: "Result",
     resistance: "Line resistance",

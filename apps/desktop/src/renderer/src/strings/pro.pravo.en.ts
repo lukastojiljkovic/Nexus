@@ -1,9 +1,9 @@
 /**
- * „Pravo i pravna praksa" — the Serbian copy of this toolkit's surfaces.
+ * „Pravo i pravna praksa" — the English copy of this toolkit's surfaces.
  *
  * One entry per tool id, keyed exactly as `shared/modules.ts` spells the
  * registration. The tool's NAME and its one-line blurb are not here: those
- * live in the `name` and `blurb` tables of `./pro.ts`.
+ * live in the `name` and `blurb` tables of `./pro.en.ts`.
  *
  * **A unit is copy, not a constant**, and a currency amount in this pack
  * carries none — every tool works in „the currency the user typed the amount
@@ -19,7 +19,7 @@ export const PRO_PRAVO_EN = {
   "anuitet-otplatni-plan": {
     principal: "Principal",
     rate: "Nominal annual interest rate",
-    rateHint: "Contractual or statutory rate, in percent. Neagle offers no value.",
+    rateHint: "Contractual or statutory rate, in percent. Nexus offers no value.",
     instalments: "Number of instalments",
     paymentsPerYear: "Instalments per year",
     freqMonthly: "12 (monthly)",
@@ -204,7 +204,7 @@ export const PRO_PRAVO_EN = {
     creditedDaysHint: "The number of days counted towards the sentence.",
     creditRatio: "Credit ratio",
     creditRatioHint:
-      "How many days of the sentence one day of deprivation of liberty removes. From the regulation you apply — Neagle does not know which regulation that is and offers no value.",
+      "How many days of the sentence one day of deprivation of liberty removes. From the regulation you apply — Nexus does not know which regulation that is and offers no value.",
     countFirstDay: "Count the first day",
     countFirstDayHint: "A counting convention, not a regulation — chosen explicitly.",
     fracNum: "Fraction to check — numerator",
@@ -513,7 +513,7 @@ export const PRO_PRAVO_EN = {
     text: "Text",
     textHint: "Pasted text, up to 2 000 000 characters.",
     charactersPerPage: "Characters per billing page",
-    charactersPerPageHint: "From the tariff you apply. Neagle offers no value.",
+    charactersPerPageHint: "From the tariff you apply. Nexus offers no value.",
     countSpaces: "Count spaces",
     countSpacesHint: "There are two practices and the difference is large.",
     yes: "Yes",
@@ -613,7 +613,7 @@ export const PRO_PRAVO_EN = {
   "ugovorna-kazna": {
     base: "Base",
     dailyRate: "Daily rate",
-    dailyRateHint: "Percentage per day, from the contract. Neagle offers no value.",
+    dailyRateHint: "Percentage per day, from the contract. Nexus offers no value.",
     dataSource: "Source of the day count",
     dataSourceDays: "Number of days",
     dataSourceDates: "Pair of dates",
@@ -623,7 +623,7 @@ export const PRO_PRAVO_EN = {
     dateHint: "Format YYYY-MM-DD.",
     capPercent: "Cap (percentage of the base)",
     capPercentHint:
-      "From the contract or regulation. Optional — without it the penalty is not capped. Neagle offers no value.",
+      "From the contract or regulation. Optional — without it the penalty is not capped. Nexus offers no value.",
     includeCompletionDay: "Include the performance day",
     yes: "Yes",
     no: "No",

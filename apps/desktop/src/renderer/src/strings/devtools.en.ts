@@ -1,27 +1,28 @@
 /**
- * The copy of the `softver` pack — the forty-eight developer tools — composed
- * from one file per category. This is no longer the copy of a drawer: the
- * drawer is „Stručne alatke", and its chrome and shared surface words live in
- * `./pro.ts`.
+ * The English copy of the `softver` pack - the forty-eight developer tools -
+ * composed from one file per category. This is the copy of ONE pack, not of a
+ * drawer: the drawer is "Professional tools" (`./pro.en.ts`), and that table
+ * holds its chrome and the words every surface shares.
  *
- * **Why this is not simply another group in `strings.sr.ts`.** Forty-eight
+ * **Why this is not simply another group in `strings.en.ts`.** Forty-eight
  * tools carry more copy than the eleven modules above them put together: field
  * labels, hints, table headings and one refusal per surface. Written inline it
  * would be a fifth of that file and would bury every other module's strings in
  * the scroll. The split is by CATEGORY, which is also how the drawer groups its
- * rail, so „where does this label live" has the same answer as „where does this
+ * rail, so "where does this label live" has the same answer as "where does this
  * tool live".
  *
  * **Why the group is still called `devtools`.** Tools register with
- * `titleKey: "devtools.name.…"` and `blurbKey: "devtools.blurb.…"` — a tool
+ * `titleKey: "devtools.name.…"` and `blurbKey: "devtools.blurb.…"` - a tool
  * names a string in its own family's group, and this family did not change
  * when its neighbours arrived. Renaming it would have said the tools changed,
  * when only the room did.
  *
- * Nothing here is a second copy layer. This is one leaf of the same table —
- * `strings.sr.ts` spreads it in as `devtools`, `strings.ts` clones the whole
- * thing, and the locale switch rewrites these leaves exactly as it rewrites the
- * rest. A consumer still reads `strings.devtools.…` and never imports this file.
+ * Nothing here is a second copy layer. This is one leaf of the same table -
+ * `strings.en.ts` imports it as `devtools`, and `strings.ts` installs that
+ * whole table when the reader picks English, so a locale switch rewrites these
+ * leaves exactly as it rewrites the rest. A consumer still reads
+ * `strings.devtools.…` and never imports this file.
  */
 import { DEVTOOLS_NUMBERS_EN } from "./devtools.numbers.en.js";
 import { DEVTOOLS_RISCV_EN } from "./devtools.riscv.en.js";

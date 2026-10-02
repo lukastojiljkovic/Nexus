@@ -1,9 +1,9 @@
 /**
- * „Trening i sport" — the Serbian copy of this toolkit's surfaces.
+ * „Trening i sport" — the English copy of this toolkit's surfaces.
  *
  * One entry per tool id, keyed exactly as `shared/modules.ts` spells the
  * registration. The tool's NAME and its one-line blurb are not here: those
- * live in the `name` and `blurb` tables of `./pro.ts`, because the drawer's
+ * live in the `name` and `blurb` tables of `./pro.en.ts`, because the drawer's
  * rail needs them before any surface is opened.
  *
  * **A unit is copy, not a constant.** Written here rather than concatenated
@@ -326,7 +326,7 @@ export const PRO_TRENING_EN = {
     referenceHint: "In the same unit as the tested value.",
     target: "Target ratio",
     targetHint:
-      "From the criterion you apply. Neagle does not know which criterion that is and offers no value.",
+      "From the criterion you apply. Nexus does not know which criterion that is and offers no value.",
     unit: "Unit",
     unitHint:
       "Free text (kg, cm, N, °…). Units are not converted — both values must be in the same one.",
@@ -571,7 +571,7 @@ export const PRO_TRENING_EN = {
     massHint: "In kilograms.",
     limit: "Category limit",
     limitHint:
-      "From the competition rules you apply. Neagle does not know which rules those are and offers no value.",
+      "From the competition rules you apply. Nexus does not know which rules those are and offers no value.",
     days: "Number of days to weigh-in",
     daysHint: "A whole number of days. The weigh-in day is not counted in the division.",
 

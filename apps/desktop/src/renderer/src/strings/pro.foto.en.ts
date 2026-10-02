@@ -1,5 +1,5 @@
 /**
- * „Fotografija i video" — the Serbian copy of this toolkit's surfaces.
+ * „Fotografija i video" — the English copy of this toolkit's surfaces.
  *
  * One entry per tool id, keyed exactly as the assignment spells it. The
  * tool's NAME and its one-line blurb are not here — those live in a
@@ -245,7 +245,7 @@ export const PRO_FOTO_EN = {
     shutter: "Shutter time",
     calibrationConstant: "Meter calibration constant C",
     calibrationConstantHint:
-      "From your light meter's manual — around 250 for a flat receiver, around 340 for a dome. Neagle does not choose this value and offers no default.",
+      "From your light meter's manual — around 250 for a flat receiver, around 340 for a dome. Nexus does not choose this value and offers no default.",
 
     results: "Result",
     lux: "Lux",

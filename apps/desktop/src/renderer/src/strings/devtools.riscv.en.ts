@@ -1,21 +1,24 @@
 /**
- * „RISC-V" — the Serbian copy of this category's tool surfaces.
+ * RISC-V - the English copy of this category's tool surfaces.
  *
  * One entry per tool id, keyed exactly as the registration in
- * `shared/modules.ts` spells it. The tool's NAME and its one-line blurb are not
- * here: those live in the `name` and `blurb` tables of `./devtools.ts`, because
- * the drawer's rail needs them before any surface is opened.
+ * `shared/modules.ts` spells it. The tool's NAME and its one-line blurb are
+ * not here: those live in the `name` and `blurb` tables of
+ * `./devtools.en.ts`, because the drawer's rail needs them before any surface
+ * is opened.
  *
  * **`errors` is the odd one out.** `@nexus/core/devtools/{riscv,riscvAssemble,
  * riscvCompressed}` refuse with a free-text English `reason` rather than a
- * discrete code — there is no finite `Record<code, string>` to write. What IS
+ * discrete code - there is no finite `Record<code, string>` to write. What IS
  * finite is the set of message TEMPLATES those three modules can produce (every
- * `fail(...)` call site was read to build this list), so `riscv.tsx` matches the
- * raw reason against that closed set of shapes and calls the matching entry
+ * `fail(...)` call site was read to build this list), so `riscv.tsx` matches
+ * the raw reason against that closed set of shapes and calls the matching entry
  * here with the pieces of data the message carries (a mnemonic, a range, a bit
- * count) — never the English prose itself. `line` renders the line number the
- * assembler names its refusal by; `operandWord` is the three Serbian forms
- * `countUnit` (`../strings.js`) chooses between for an operand count.
+ * count) - never the English prose itself. `line` renders the line number the
+ * assembler names its refusal by; `operandWord` is the three forms
+ * `countUnit` (`../strings.js`) chooses between for an operand count -
+ * English answers with `one` or `other`, and `few` carries the same plural
+ * as `many` so all three slots stay filled.
  */
 export const DEVTOOLS_RISCV_EN = {
   modeGroupLabel: "Mode",

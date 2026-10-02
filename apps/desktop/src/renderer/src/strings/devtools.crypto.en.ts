@@ -1,9 +1,9 @@
 /**
- * „Kriptografija" — the Serbian copy of this category's tool surfaces.
+ * „Kriptografija" — the English copy of this category's tool surfaces.
  *
  * One entry per tool id, keyed exactly as the registration in
  * `shared/modules.ts` spells it. The tool's NAME and its one-line blurb are not
- * here: those live in the `name` and `blurb` tables of `./devtools.ts`, because
+ * here: those live in the `name` and `blurb` tables of `./devtools.en.ts`, because
  * the drawer's rail needs them before any surface is opened.
  *
  * `shared` holds the two sentences every ASYNC tool in this file can need and
@@ -115,7 +115,7 @@ export const DEVTOOLS_CRYPTO_EN = {
       "The “{subject}” part is not valid base64url — JWS does not use “=” padding.",
     errNotJson: "The “{subject}” part is not a JSON object.",
     errAlgNone:
-      "alg: none means “no signature”. Neagle does not accept it under any circumstances — accepting it is the classic JWT vulnerability.",
+      "alg: none means “no signature”. Nexus does not accept it under any circumstances — accepting it is the classic JWT vulnerability.",
     errAlgMissing: "The header has no alg.",
     errAlgUnsupported: "Algorithm {subject} is not supported.",
     errKeyMismatch: "{subject} needs a different kind of key.",
@@ -135,7 +135,7 @@ export const DEVTOOLS_CRYPTO_EN = {
     hex: "Hex",
     base64: "Base64",
     errUnavailable:
-      "{subject} is not available: WebCrypto does not have it, and Neagle does not write its own implementation of an algorithm that was broken long ago.",
+      "{subject} is not available: WebCrypto does not have it, and Nexus does not write its own implementation of an algorithm that was broken long ago.",
   },
 
   aes: {
@@ -189,7 +189,7 @@ export const DEVTOOLS_CRYPTO_EN = {
     publicKey: "Public key (SPKI)",
     copyPrivate: "Copy private key",
     copyPublic: "Copy public key",
-    warning: "The private key exists only here — Neagle does not store it or send it anywhere.",
+    warning: "The private key exists only here — Nexus does not store it or send it anywhere.",
     working: "Generating 4096 bits can take a few seconds.",
     errUnsupported: "{subject} is not an offered value.",
   },

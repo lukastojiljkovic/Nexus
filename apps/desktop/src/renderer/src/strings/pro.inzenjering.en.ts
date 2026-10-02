@@ -1,9 +1,9 @@
 /**
- * „Inženjering i elektrotehnika" — the Serbian copy of this toolkit's surfaces.
+ * „Inženjering i elektrotehnika" — the English copy of this toolkit's surfaces.
  *
  * One entry per tool id, keyed exactly as `shared/modules.ts` spells the
  * registration. The tool's NAME and its one-line blurb are not here: those
- * live in the `name` and `blurb` tables of `./pro.ts`.
+ * live in the `name` and `blurb` tables of `./pro.en.ts`.
  *
  * **Almost everything in this pack is `life-safety`.** A conductor, a
  * fastener, a pressure vessel, a belt guard — a wrong number here is not a
@@ -68,7 +68,7 @@ export const PRO_INZENJERING_EN = {
     parallelHint: "An empty field means 1.",
     depthOfDischarge: "Allowed depth of discharge",
     depthOfDischargeHint:
-      "A datum about the cell chemistry and the manufacturer's guarantee — Neagle does not guess it. Without it there is no result.",
+      "A datum about the cell chemistry and the manufacturer's guarantee — Nexus does not guess it. Without it there is no result.",
     loadKind: "Load kind",
     loadPower: "power [W]",
     loadCurrent: "current [A]",
@@ -180,7 +180,7 @@ export const PRO_INZENJERING_EN = {
       "In a three-phase system this is the LINE voltage of a balanced load. A single-phase load from a three-phase board is calculated in the single-phase system, at the phase voltage.",
     permittedDrop: "Allowed voltage drop ΔU_allowed",
     permittedDropHint:
-      "From the regulation you apply. Neagle does not know which regulation that is and offers no value.",
+      "From the regulation you apply. Nexus does not know which regulation that is and offers no value.",
     temperature: "Conductor temperature θ",
     temperatureHint:
       "The temperature of the CONDUCTOR under load, not the ambient. An empty field means 20 °C, the reference temperature at which the resistance is defined — it gives the smallest possible result.",
@@ -228,7 +228,7 @@ export const PRO_INZENJERING_EN = {
     voltageSingle: "Supply voltage U",
     voltageThree: "Line voltage U",
     powerFactor: "Power factor cos φ",
-    plateHint: "From the nameplate — Neagle does not guess it from the IE class or anything else.",
+    plateHint: "From the nameplate — Nexus does not guess it from the IE class or anything else.",
     efficiency: "Efficiency η",
     poles: "Number of poles",
     polesHint: "An even whole number, at least 2.",
@@ -316,7 +316,7 @@ export const PRO_INZENJERING_EN = {
     pitchHint: "Coarse or fine pitch — the user chooses, no pitch table is needed.",
     strength: "Yield strength or tensile strength R",
     strengthHint:
-      "The strength-class value of the fastener as bought (e.g. 8.8 → R_p0.2 = 640 MPa). Neagle does not choose the class.",
+      "The strength-class value of the fastener as bought (e.g. 8.8 → R_p0.2 = 640 MPa). Nexus does not choose the class.",
     drill: "Drill diameter",
     drillHint:
       "For the row about the percentage of thread engagement. It must be between the minor diameter D₁ and the nominal d.",
@@ -625,7 +625,7 @@ export const PRO_INZENJERING_EN = {
       "Right angles between flange and web are assumed, without root fillets — a rolled section has slightly more area and I than this calculation gives.",
     allowableStress: "Allowable stress σ_allow",
     allowableStressHint:
-      "Chosen by the material standard and the regulation you calculate by. Neagle does not suggest it.",
+      "Chosen by the material standard and the regulation you calculate by. Nexus does not suggest it.",
     bendingMoment: "Bending moment M",
     torsionMoment: "Torsional moment T",
     torsionHint:

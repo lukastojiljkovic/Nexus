@@ -1,16 +1,18 @@
 /**
- * „Vreme" — the Serbian copy of this category's tool surfaces.
+ * Time - the English copy of this category's tool surfaces.
  *
  * One entry per tool id, keyed exactly as the registration in
- * `shared/modules.ts` spells it. The tool's NAME and its one-line blurb are not
- * here: those live in the `name` and `blurb` tables of `./devtools.ts`, because
- * the drawer's rail needs them before any surface is opened.
+ * `shared/modules.ts` spells it. The tool's NAME and its one-line blurb are
+ * not here: those live in the `name` and `blurb` tables of
+ * `./devtools.en.ts`, because the drawer's rail needs them before any surface
+ * is opened.
  *
- * Neither tool's GENERATED sentences live here — `explainCronSr` and
- * `formatRelativeSr` build their own Serbian prose inside
- * `@nexus/core/devtools/datetime.ts`, with the plural and case arithmetic that
- * needs. This table holds only what a flat table CAN hold: field labels,
- * option names and fixed refusal headings.
+ * Neither tool's GENERATED sentences live here. `@nexus/core/devtools/datetime`
+ * builds them, in both languages: `formatRelativeEn`/`explainCronEn` beside
+ * the Serbian originals, and `formatRelative`/`explainCron` pick by the
+ * caller's locale, with the plural arithmetic each language needs. This table
+ * holds only what a flat table CAN hold: field labels, option names and fixed
+ * refusal headings.
  */
 export const DEVTOOLS_TIME_EN = {
   datetime: {

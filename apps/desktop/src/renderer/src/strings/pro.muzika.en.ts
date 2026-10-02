@@ -1,9 +1,9 @@
 /**
- * „Muzika i produkcija" — the Serbian copy of this toolkit's surfaces.
+ * „Muzika i produkcija" — the English copy of this toolkit's surfaces.
  *
  * One entry per tool id, keyed exactly as `shared/modules.ts` spells the
  * registration. The tool's NAME and its one-line blurb are not here: those
- * live in the `name` and `blurb` tables of `./pro.ts`.
+ * live in the `name` and `blurb` tables of `./pro.en.ts`.
  *
  * **A unit is copy, not a constant.** Written here rather than concatenated
  * in the surface, so a unit hard-coded in a component is not a string
@@ -44,7 +44,7 @@ export const PRO_MUZIKA_EN = {
     calibrationDbfsAtPlus4: "dBFS at +4 dBu",
     calibrationValue: "Alignment value",
     calibrationHint:
-      "A house convention: +4 dBu at −18 dBFS is the EBU/SMPTE music convention, −20 dBFS is the SMPTE film convention. Neagle assumes neither.",
+      "A house convention: +4 dBu at −18 dBFS is the EBU/SMPTE music convention, −20 dBFS is the SMPTE film convention. Nexus assumes neither.",
 
     results: "Result",
     resultDbu: "dBu",
@@ -396,7 +396,7 @@ export const PRO_MUZIKA_EN = {
     temperatureHint: "Default 20 °C. Feeds the speed of sound.",
     surfaces: "Surfaces",
     surfacesHint:
-      "One row per surface: area;α125;α250;α500;α1000;α2000;α4000. The coefficients come from the specific product's label, per octave band, and apply to that range — Neagle does not build them in.",
+      "One row per surface: area;α125;α250;α500;α1000;α2000;α4000. The coefficients come from the specific product's label, per octave band, and apply to that range — Nexus does not build them in.",
     airAbsorption: "Air absorption per band (optional)",
     airAbsorptionHint:
       "m per metre, per octave band — depends on humidity and temperature. Above about 2 kHz in a large room it dominates.",
@@ -652,7 +652,7 @@ export const PRO_MUZIKA_EN = {
     powerHint: "From the amplifier's power table for the resulting impedance. Never assumed.",
     minimumLoad: "Lowest impedance the amplifier tolerates",
     minimumLoadHint:
-      "From your amplifier's specification. Neagle does not know that number and offers no value.",
+      "From your amplifier's specification. Nexus does not know that number and offers no value.",
 
     results: "Result",
     resultTotalImpedance: "Total impedance",
@@ -696,7 +696,7 @@ export const PRO_MUZIKA_EN = {
     secondDistance: "Second distance",
     secondDistanceHint: "Optional — for the difference relative to the first distance.",
     limit: "Your level limit",
-    limitHint: "From the regulation you apply. Neagle does not know which regulation that is and offers no value.",
+    limitHint: "From the regulation you apply. Nexus does not know which regulation that is and offers no value.",
 
     results: "Result",
     resultSensitivity1W: "Sensitivity referred to 1 W/1 m",

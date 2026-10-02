@@ -1,9 +1,9 @@
 /**
- * „Biznis i kancelarija" — the Serbian copy of this toolkit's surfaces.
+ * „Biznis i kancelarija" — the English copy of this toolkit's surfaces.
  *
  * One entry per tool id, keyed exactly as the assignment and
  * `@nexus/core/pro/biznis.ts` spell it. The tool's NAME and its one-line blurb
- * are not here — those live in `./pro.ts`, owned by another process.
+ * are not here — those live in `./pro.en.ts`, owned by another process.
  *
  * **A unit is copy, not a constant.** Money, minutes, percent, days — every one
  * of them is a string written here and passed to `proUnit` at the call site,
@@ -214,7 +214,7 @@ export const PRO_BIZNIS_EN = {
     iban: "IBAN",
     ibanHint: "Letters may be lowercase; they are converted to uppercase. Spaces are removed.",
     countryCode: "Country code",
-    countryCodeHint: "Two letters, A–Z. Neagle has no built-in list of countries.",
+    countryCodeHint: "Two letters, A–Z. Nexus has no built-in list of countries.",
     bban: "BBAN",
     bbanHint: "The domestic account number — digits and uppercase letters.",
 
@@ -308,7 +308,7 @@ export const PRO_BIZNIS_EN = {
       "Numbers 0–6 separated by commas; 0 is Monday, 6 is Sunday. Empty means no day of the week is non-working under this rule.",
     nonWorkingDays: "Non-working days (holidays)",
     nonWorkingDaysHint:
-      "One date per line, in the form DD.MM.YYYY. Neagle has no built-in holiday calendar.",
+      "One date per line, in the form DD.MM.YYYY. Nexus has no built-in holiday calendar.",
     referenceDateDay: "Reference date — day",
     referenceDateMonth: "Reference date — month",
     referenceDateYear: "Reference date — year",
@@ -325,7 +325,7 @@ export const PRO_BIZNIS_EN = {
     daysLate: "Days late relative to the reference date",
     daysUntilDue: "Days to the due date relative to the reference date",
     note:
-      "The term, the moving rule and the list of non-working days are data you enter — Neagle does not know which term applies or whether a right has expired.",
+      "The term, the moving rule and the list of non-working days are data you enter — Nexus does not know which term applies or whether a right has expired.",
 
     weekdayNames: [
       "Monday",
@@ -412,7 +412,7 @@ export const PRO_BIZNIS_EN = {
     principal: "Principal",
     annualRatePercent: "Annual rate",
     annualRatePercentHint:
-      "The statutory or contractual rate that you choose and enter — Neagle knows no rate and offers none.",
+      "The statutory or contractual rate that you choose and enter — Nexus knows no rate and offers none.",
     fromDay: "Date from — day",
     fromMonth: "Date from — month",
     fromYear: "Date from — year",
@@ -436,7 +436,7 @@ export const PRO_BIZNIS_EN = {
     dailyInterest: "Daily interest",
     total: "Principal + interest",
     note:
-      "The interest is SIMPLE, with no compounding. The rate is the one you enter — Neagle does not choose it and does not say whether the claim exists.",
+      "The interest is SIMPLE, with no compounding. The rate is the one you enter — Nexus does not choose it and does not say whether the claim exists.",
 
     inputs: "Entered",
     formula:
@@ -457,7 +457,7 @@ export const PRO_BIZNIS_EN = {
     modeCompute: "Calculate the check digit from the prefix",
     totalDigits: "Total number of digits",
     totalDigitsHint:
-      "For a PIB enter 9, for a company registration number 8. Neagle assumes no length. In calculate mode this is the total length of the FINISHED number, so the prefix has one digit fewer.",
+      "For a PIB enter 9, for a company registration number 8. Nexus assumes no length. In calculate mode this is the total length of the FINISHED number, so the prefix has one digit fewer.",
     value: "Number",
     valueHint: "As many digits as entered above. Spaces are removed.",
     prefix: "Prefix",

@@ -1,8 +1,8 @@
 /**
- * „Transport i logistika" — the Serbian copy of this toolkit's surfaces.
+ * „Transport i logistika" — the English copy of this toolkit's surfaces.
  *
  * One entry per tool id, keyed exactly as the assignment spells it. The tool's
- * NAME and one-line blurb live in `./pro.ts`, not here.
+ * NAME and one-line blurb live in `./pro.en.ts`, not here.
  *
  * **Half of this pack is `life-safety`.** Its copy may name a quantity and the
  * user's own limit, and may never say what the pair means — no „zadovoljava",
@@ -31,7 +31,7 @@ export const PRO_TRANSPORT_EN = {
     trailerTareCentre: "Centre of gravity of the empty semi-trailer from the kingpin",
     frontLimit: "Front axle limit",
     limitHint:
-      "From the regulation you apply and from the vehicle registration. Neagle does not know them and offers no value.",
+      "From the regulation you apply and from the vehicle registration. Nexus does not know them and offers no value.",
     rearLimit: "Rear axle limit",
     driveLimit: "Drive axle limit",
     bogieLimit: "Semi-trailer axle-group limit",
@@ -268,7 +268,7 @@ export const PRO_TRANSPORT_EN = {
     averageSpeed: "Average speed",
     continuousLimit: "Continuous-driving limit (h:mm)",
     limitHint:
-      "The limit is set by drivers' hours regulations and changes. Neagle does not know it and offers no value.",
+      "The limit is set by drivers' hours regulations and changes. Nexus does not know it and offers no value.",
     breakMinutes: "Break duration (min)",
     splitBreak: "Splitting the break into two parts",
     yes: "Yes",
@@ -482,7 +482,7 @@ export const PRO_TRANSPORT_EN = {
     packaging: "Tare of the packaging and pallets",
     cargo: "Load",
     vehicleLimit: "Total vehicle mass limit",
-    limitHint: "From the registration and the weight regulations. Neagle does not know them and offers no value.",
+    limitHint: "From the registration and the weight regulations. Nexus does not know them and offers no value.",
     trailerLimit: "Trailer or semi-trailer mass limit",
     combinationLimit: "Combination mass limit",
 
@@ -527,7 +527,7 @@ export const PRO_TRANSPORT_EN = {
     mass: "Load mass",
     forwardC: "Forward acceleration coefficient",
     coefficientHint:
-      "A number from the cargo-securing standard you apply. Neagle does not know it and offers no value.",
+      "A number from the cargo-securing standard you apply. Nexus does not know it and offers no value.",
     backwardC: "Backward acceleration coefficient",
     lateralC: "Lateral acceleration coefficient",
     friction: "Friction coefficient μ",
@@ -922,7 +922,7 @@ export const PRO_TRANSPORT_EN = {
     waitingRate: "Price per hour of waiting",
     days: "Number of days on the road",
     perDiem: "Per diem",
-    perDiemHint: "The amount is set by the state and changes. Neagle does not know it and offers no value.",
+    perDiemHint: "The amount is set by the state and changes. Nexus does not know it and offers no value.",
     nights: "Number of overnight stays",
     nightRate: "Price per overnight stay",
     otherCosts: "Other costs",
@@ -932,7 +932,7 @@ export const PRO_TRANSPORT_EN = {
     marginOnPrice: "Margin on the price",
     markupOnCost: "Margin on the cost (markup)",
     vatRate: "VAT rate",
-    vatRateHint: "The rate is set by the state and changes. Neagle does not know it and offers no value.",
+    vatRateHint: "The rate is set by the state and changes. Nexus does not know it and offers no value.",
     cargoTonnes: "Load mass",
 
     results: "Result",
@@ -964,7 +964,7 @@ export const PRO_TRANSPORT_EN = {
     pricePerLadenKm: "Price per kilometre under load",
     pricePerTonne: "Price per tonne",
     regulatedFiguresNote:
-      "The per-diem amount and the VAT rate are numbers you enter — Neagle does not claim that any amount is tax-deductible or that the rate is correct.",
+      "The per-diem amount and the VAT rate are numbers you enter — Nexus does not claim that any amount is tax-deductible or that the rate is correct.",
 
     formula:
       "C = Ku·c + (PUT+TRJ+NAK+hw·pw+OTHER) + (nd·Dn+nn·Pn)     Pn = C/(1−m) or C·(1+u)     Z = Pn−C     VAT = Pn·v     Ps = Pn·(1+v)",

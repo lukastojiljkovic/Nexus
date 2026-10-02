@@ -1,9 +1,9 @@
 /**
- * „Strukturirani podaci" — the Serbian copy of this category's tool surfaces.
+ * „Strukturirani podaci" — the English copy of this category's tool surfaces.
  *
  * One entry per tool id, keyed exactly as the registration in
  * `shared/modules.ts` spells it. The tool's NAME and its one-line blurb are not
- * here: those live in the `name` and `blurb` tables of `./devtools.ts`, because
+ * here: those live in the `name` and `blurb` tables of `./devtools.en.ts`, because
  * the drawer's rail needs them before any surface is opened.
  *
  * `position` and `errors` are hoisted OUT of the six tools below them, rather

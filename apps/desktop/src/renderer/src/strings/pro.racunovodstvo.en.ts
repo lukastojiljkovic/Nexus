@@ -1,21 +1,21 @@
 /**
- * „Računovodstvo i finansije" — the Serbian copy of this toolkit's surfaces.
+ * Accounting and finance - the English copy of this toolkit's surfaces.
  *
  * One entry per tool id, keyed exactly as `shared/modules.ts` spells the
  * registration. The tool's NAME and its one-line blurb are not here: those live
- * in the `name` and `blurb` tables of `./pro.ts`, because the drawer's rail
- * needs them before any surface is opened.
+ * in the `name` and `blurb` tables of `./pro.en.ts`, because the drawer's
+ * rail needs them before any surface is opened.
  *
- * **A unit is copy, not a constant.** „%" and „dana" are written here rather
- * than concatenated in the surface, so the day this table has a second locale
- * the units move with it — and because a unit hard-coded in a component is a
- * string `check:strings` cannot see and a translator cannot find.
+ * **A unit is copy, not a constant.** "%" and the day unit are written here
+ * rather than concatenated in the surface, so a translator can find every one
+ * of them and a unit hard-coded in a component is a string `check:strings`
+ * cannot see.
  *
  * **Nothing in here judges.** Every tool in this pack is `riskClass:
- * "financial"` except `benford-first-digit` (`"none"`) — none of the seventeen
- * may say a number is good, bad, over a threshold or a finding. A refusal
- * names the input that made the answer impossible, never a verdict on the
- * user's business. Where the assignment's own corrections insist on a
+ * "financial"` except `benford-first-digit` (`"none"`) - none of the
+ * seventeen may say a number is good, bad, over a threshold or a finding. A
+ * refusal names the input that made the answer impossible, never a verdict on
+ * the user's business. Where the assignment's own corrections insist on a
  * distinction (necessary vs. sufficient, booked vs. exact, computed vs.
  * verified), that distinction is carried into the copy, not silently dropped.
  */
