@@ -304,6 +304,27 @@ const ROUTINE_NOTES: Record<RoutineKey, string> = {
   cond: "Kondicija i hvat — girje, veslački ergometar i traka.",
 };
 
+/** The same four routines in English, keyed by the Serbian text above. */
+const EN: Readonly<Record<string, string>> = {
+  "Gornje telo": "Upper body",
+  "Donje telo": "Lower body",
+  "Celo telo": "Full body",
+  "Kondicioni trening": "Conditioning workout",
+  "Guranje i povlačenje za gornji deo tela, dva puta nedeljno.":
+    "Push and pull for the upper body, twice a week.",
+  "Noge i stomak, sa akcentom na čučanj i zadnju ložu.":
+    "Legs and core, with the squat and the hamstrings in focus.",
+  "Treći trening nedeljno — mrtvo dizanje, zgibovi i noge u jednoj sesiji.":
+    "The third workout of the week — deadlift, pull-ups and legs in one session.",
+  "Kondicija i hvat — girje, veslački ergometar i traka.":
+    "Conditioning and grip — kettlebells, rowing erg and treadmill.",
+};
+
+/** The seeded text for the active locale. */
+function text(ctx: DemoContext, sr: string): string {
+  return ctx.locale === "en" ? (EN[sr] ?? sr) : sr;
+}
+
 const ROUTINE_START_HOUR: Record<RoutineKey, number> = {
   upper: 18,
   lower: 18,
@@ -642,32 +663,32 @@ function seedTraining(db: DatabaseHandle, ctx: DemoContext, rng: DemoRandom): vo
   const routines: Record<RoutineKey, { readonly id: string; readonly name: string }> = {
     upper: routineStore.create(
       {
-        name: ROUTINE_NAMES.upper,
-        notes: ROUTINE_NOTES.upper,
+        name: text(ctx, ROUTINE_NAMES.upper),
+        notes: text(ctx, ROUTINE_NOTES.upper),
         items: UPPER_LINES.map(routineItem),
       },
       createdAt,
     ),
     lower: routineStore.create(
       {
-        name: ROUTINE_NAMES.lower,
-        notes: ROUTINE_NOTES.lower,
+        name: text(ctx, ROUTINE_NAMES.lower),
+        notes: text(ctx, ROUTINE_NOTES.lower),
         items: LOWER_LINES.map(routineItem),
       },
       createdAt,
     ),
     full: routineStore.create(
       {
-        name: ROUTINE_NAMES.full,
-        notes: ROUTINE_NOTES.full,
+        name: text(ctx, ROUTINE_NAMES.full),
+        notes: text(ctx, ROUTINE_NOTES.full),
         items: FULL_BODY_LINES.map(routineItem),
       },
       createdAt,
     ),
     cond: routineStore.create(
       {
-        name: ROUTINE_NAMES.cond,
-        notes: ROUTINE_NOTES.cond,
+        name: text(ctx, ROUTINE_NAMES.cond),
+        notes: text(ctx, ROUTINE_NOTES.cond),
         items: CONDITIONING_LINES.map(routineItem),
       },
       createdAt,

@@ -24,6 +24,7 @@ import type Database from "better-sqlite3-multiple-ciphers";
 import { CardStore, DeckStore, ExamStore, PlanStore, SubjectStore, TopicStore } from "@nexus/db";
 import type { CardRating } from "@nexus/db";
 import { demoAt, demoDay, demoRandom, type DemoContext, type DemoRandom } from "./context.js";
+import { STUDY_EN, type DemoDeckKey, type DemoExamKey } from "./study.en.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -409,7 +410,23 @@ function instantForDate(dateKey: string, hour: number, minute: number): string {
 
 // --- Entry point -----------------------------------------------------------
 
+/**
+ * Fills STUDY's slice of a demo profile in the language the run asked for.
+ *
+ * The Serbian path is the original seeder, unchanged; the English path mirrors
+ * its shape with the copy in `study.en.ts`. Both drive the same stores, the
+ * same review-history simulation and the same study plans, so the two profiles
+ * differ only in language.
+ */
 export function seedDemoStudy(db: DatabaseHandle, ctx: DemoContext): void {
+  if (ctx.locale === "en") {
+    seedDemoStudyEnglish(db, ctx);
+    return;
+  }
+  seedDemoStudySerbian(db, ctx);
+}
+
+function seedDemoStudySerbian(db: DatabaseHandle, ctx: DemoContext): void {
   const rng = demoRandom("study");
   const nowIso = new Date(ctx.now).toISOString();
 
@@ -619,4 +636,170 @@ function seedTopics(topicStore: TopicStore, seeds: readonly TopicSeed[], now: st
       );
     }
   }
+}
+
+/**
+ * The English counterpart of the seeder above.
+ *
+ * Same subjects, exams, decks, topics and plans, filled from `study.en.ts`
+ * instead of the Serbian literals — the schedule itself is shared, because
+ * `simulateReviewHistory`, `seedPlan` and `seedTopics` take no copy. The topic
+ * list is data here rather than an inline array: an English topic names its
+ * exam and deck by key, which the map below resolves against the ids this run
+ * created.
+ */
+function seedDemoStudyEnglish(db: DatabaseHandle, ctx: DemoContext): void {
+  const rng = demoRandom("study");
+  const nowIso = new Date(ctx.now).toISOString();
+
+  const subjectStore = new SubjectStore(db, ctx.profileId);
+  const examStore = new ExamStore(db, ctx.profileId);
+  const deckStore = new DeckStore(db, ctx.profileId);
+  const cardStore = new CardStore(db, ctx.profileId);
+  const topicStore = new TopicStore(db, ctx.profileId);
+  const planStore = new PlanStore(db, ctx.profileId);
+
+  // --- Subjects --------------------------------------------------------------
+  const s = STUDY_EN.subjects;
+  const nbp = subjectStore.create({ name: s.nbp.name, color: "jade", semester: s.nbp.semester });
+  const ml = subjectStore.create({ name: s.ml.name, color: "gold", semester: s.ml.semester });
+  const ds = subjectStore.create({ name: s.ds.name, color: "bronze", semester: s.ds.semester });
+  const pr = subjectStore.create({ name: s.pr.name, color: "burgundy", semester: s.pr.semester });
+  const bis = subjectStore.create({ name: s.bis.name, color: "crimson", semester: s.bis.semester });
+  const si = subjectStore.create({ name: s.si.name, color: "graphite", semester: s.si.semester });
+  const rg = subjectStore.create({ name: s.rg.name, color: "jade", semester: s.rg.semester });
+
+  // --- Exams — six already passed, three still ahead -------------------------
+  const sc = STUDY_EN.scopes;
+  const examNbp = examStore.create({
+    subjectId: nbp.id,
+    examType: "kolokvijum",
+    examDate: demoDay(ctx, NBP_EXAM_OFFSET),
+    scope: sc.nbp,
+  });
+  examStore.create({
+    subjectId: ml.id,
+    examType: "pismeni",
+    examDate: demoDay(ctx, ML_PISMENI_OFFSET),
+    scope: sc.mlPismeni,
+  });
+  examStore.create({
+    subjectId: ds.id,
+    examType: "kolokvijum",
+    examDate: demoDay(ctx, DS_KOLOKVIJUM_OFFSET),
+    scope: sc.dsKolokvijum,
+  });
+  const examPr = examStore.create({
+    subjectId: pr.id,
+    examType: "pismeni",
+    examDate: demoDay(ctx, PR_EXAM_OFFSET),
+    scope: sc.pr,
+  });
+  const examBis = examStore.create({
+    subjectId: bis.id,
+    examType: "usmeni",
+    examDate: demoDay(ctx, BIS_EXAM_OFFSET),
+    scope: sc.bis,
+  });
+  const examSi = examStore.create({
+    subjectId: si.id,
+    examType: "pismeni",
+    examDate: demoDay(ctx, SI_EXAM_OFFSET),
+    scope: sc.si,
+  });
+
+  const examRg = examStore.create({
+    subjectId: rg.id,
+    examType: "kolokvijum",
+    examDate: demoDay(ctx, RG_EXAM_OFFSET),
+    scope: sc.rg,
+  });
+  const examDsUsmeni = examStore.create({
+    subjectId: ds.id,
+    examType: "usmeni",
+    examDate: demoDay(ctx, DS_USMENI_OFFSET),
+    scope: sc.dsUsmeni,
+  });
+  const examMlUsmeni = examStore.create({
+    subjectId: ml.id,
+    examType: "usmeni",
+    examDate: demoDay(ctx, ML_USMENI_OFFSET),
+    scope: sc.mlUsmeni,
+  });
+  // The furthest exam out, deliberately absent from the plan calls below — see
+  // the Serbian seeder's note beside the same call.
+  examStore.create({
+    subjectId: si.id,
+    examType: "usmeni",
+    examDate: demoDay(ctx, SI_USMENI_OFFSET),
+    scope: sc.siUsmeni,
+  });
+
+  // --- Decks + cards ---------------------------------------------------------
+  const cards = STUDY_EN.cards;
+  const deckNbp = deckStore.create({ subjectId: nbp.id, name: nbp.name });
+  seedCards(cardStore, deckNbp.id, cards.nbp.basics, cards.nbp.clozes, cards.nbp.problem, nowIso);
+
+  const deckMl = deckStore.create({ subjectId: ml.id, name: ml.name });
+  seedCards(cardStore, deckMl.id, cards.ml.basics, cards.ml.clozes, cards.ml.problem, nowIso);
+
+  const deckDs = deckStore.create({ subjectId: ds.id, name: ds.name });
+  seedCards(cardStore, deckDs.id, cards.ds.basics, cards.ds.clozes, cards.ds.problem, nowIso);
+
+  const deckPr = deckStore.create({ subjectId: pr.id, name: pr.name });
+  seedCards(cardStore, deckPr.id, cards.pr.basics, cards.pr.clozes, cards.pr.problem, nowIso);
+
+  const deckBis = deckStore.create({ subjectId: bis.id, name: bis.name });
+  seedCards(cardStore, deckBis.id, cards.bis.basics, cards.bis.clozes, cards.bis.problem, nowIso);
+
+  const deckSi = deckStore.create({ subjectId: si.id, name: si.name });
+  seedCards(cardStore, deckSi.id, cards.si.basics, cards.si.clozes, cards.si.problem, nowIso);
+
+  // --- Exam topics (ADR-063) --------------------------------------------------
+  const examIds: Partial<Record<DemoExamKey, string>> = {
+    nbp: examNbp.id,
+    pr: examPr.id,
+    bis: examBis.id,
+    si: examSi.id,
+    rg: examRg.id,
+    dsUsmeni: examDsUsmeni.id,
+    mlUsmeni: examMlUsmeni.id,
+  };
+  const deckIds: Partial<Record<DemoDeckKey, string>> = {
+    nbp: deckNbp.id,
+    ml: deckMl.id,
+    ds: deckDs.id,
+    pr: deckPr.id,
+    bis: deckBis.id,
+    si: deckSi.id,
+  };
+  seedTopics(
+    topicStore,
+    STUDY_EN.topics.map((topic) => {
+      const examId = examIds[topic.exam];
+      if (examId === undefined) {
+        throw new Error(`The English demo names no exam for the topic "${topic.name}".`);
+      }
+      const deckId = topic.deck === undefined ? undefined : deckIds[topic.deck];
+      if (topic.deck !== undefined && deckId === undefined) {
+        throw new Error(`The English demo names no deck for the topic "${topic.name}".`);
+      }
+      return {
+        examId,
+        name: topic.name,
+        confidence: topic.confidence,
+        ...(deckId === undefined ? {} : { deckId }),
+      };
+    }),
+    nowIso,
+  );
+
+  // --- Review history and study plans — the same schedule either way ----------
+  simulateReviewHistory(cardStore, rng, ctx);
+
+  seedPlan(planStore, examRg.id, 60, null, rng, ctx);
+  seedPlan(planStore, examDsUsmeni.id, 90, null, rng, ctx);
+  seedPlan(planStore, examMlUsmeni.id, 70, [90, 90, 90, 90, 60, 30, 30], rng, ctx);
+
+  planStore.syncAll(nowIso, ctx.today);
 }

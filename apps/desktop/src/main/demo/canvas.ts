@@ -423,6 +423,7 @@ interface CardSlot {
 }
 
 function buildWeeklyPlanScene(
+  ctx: DemoContext,
   rnd: DemoRandom,
   updated: number,
   cards: WeeklyPlanCards,
@@ -439,7 +440,7 @@ function buildWeeklyPlanScene(
           y: 40,
           width: STICKY_WIDTH,
           height: 28,
-          text: column.heading,
+          text: text(ctx, column.heading),
           fontSize: 22,
           color: INK,
           seed: nextSeed(rnd),
@@ -449,8 +450,19 @@ function buildWeeklyPlanScene(
       ),
     );
     const [top, bottom] = column.stickies;
-    elements.push(...sticky(`wk-${index}-a`, column.x, STICKY_Y_TOP, top, rnd, updated));
-    elements.push(...sticky(`wk-${index}-b`, column.x, STICKY_Y_BOTTOM, bottom, rnd, updated));
+    elements.push(
+      ...sticky(`wk-${index}-a`, column.x, STICKY_Y_TOP, { ...top, text: text(ctx, top.text) }, rnd, updated),
+    );
+    elements.push(
+      ...sticky(
+        `wk-${index}-b`,
+        column.x,
+        STICKY_Y_BOTTOM,
+        { ...bottom, text: text(ctx, bottom.text) },
+        rnd,
+        updated,
+      ),
+    );
   });
 
   elements.push(
@@ -462,7 +474,7 @@ function buildWeeklyPlanScene(
         y: CARDS_HEAD_Y,
         width: 300,
         height: 23,
-        text: "Iz Nexusa",
+        text: text(ctx, "Iz Nexusa"),
         fontSize: 18,
         color: INK,
         seed: nextSeed(rnd),
@@ -646,10 +658,20 @@ function archArrowElements(spec: ArchArrow, rnd: DemoRandom, updated: number): S
   ];
 }
 
-function buildArchitectureScene(rnd: DemoRandom, updated: number): CanvasScene {
+function buildArchitectureScene(
+  ctx: DemoContext,
+  rnd: DemoRandom,
+  updated: number,
+): CanvasScene {
   const elements: SceneElement[] = [];
-  for (const box of ARCH_BOXES) elements.push(...archBoxElements(box, rnd, updated));
-  for (const line of ARCH_ARROWS) elements.push(...archArrowElements(line, rnd, updated));
+  for (const box of ARCH_BOXES) {
+    elements.push(...archBoxElements({ ...box, text: text(ctx, box.text) }, rnd, updated));
+  }
+  for (const line of ARCH_ARROWS) {
+    elements.push(
+      ...archArrowElements({ ...line, label: text(ctx, line.label) }, rnd, updated),
+    );
+  }
   return scene(elements);
 }
 
@@ -749,7 +771,11 @@ const MIND_BRANCHES: readonly MindBranch[] = [
   },
 ];
 
-function buildMindMapScene(rnd: DemoRandom, updated: number): CanvasScene {
+function buildMindMapScene(
+  ctx: DemoContext,
+  rnd: DemoRandom,
+  updated: number,
+): CanvasScene {
   const elements: SceneElement[] = [];
   const centralTextId = `${MIND_CENTRAL_ID}-text`;
   const centralBound: BoundRef[] = [
@@ -784,7 +810,7 @@ function buildMindMapScene(rnd: DemoRandom, updated: number): CanvasScene {
         y: MIND_CENTRAL_Y + (MIND_CENTRAL_HEIGHT - centralTextHeight) / 2,
         width: centralTextWidth,
         height: centralTextHeight,
-        text: MIND_CENTRAL_TEXT,
+        text: text(ctx, MIND_CENTRAL_TEXT),
         fontSize: 22,
         color: INK,
         seed: nextSeed(rnd),
@@ -793,7 +819,8 @@ function buildMindMapScene(rnd: DemoRandom, updated: number): CanvasScene {
     ),
   );
 
-  for (const branch of MIND_BRANCHES) {
+  for (const branchSpec of MIND_BRANCHES) {
+    const branch = { ...branchSpec, text: text(ctx, branchSpec.text) };
     const textId = `${branch.id}-text`;
     const arrowId = `${branch.id}-arrow`;
     const palette = accents.dan[branch.accent];
@@ -858,6 +885,49 @@ function buildMindMapScene(rnd: DemoRandom, updated: number): CanvasScene {
 
 // --- Entry point --------------------------------------------------------
 
+/**
+ * English text for the three boards, keyed by the Serbian literals the scene
+ * tables above use. The two Nexus cards are found by TITLE, so the keys here
+ * are the same ones `tasks.ts` and `notes.ts` translate - one vocabulary, not
+ * a second copy that could drift.
+ */
+const EN: Readonly<Record<string, string>> = {
+  Ponedeljak: "Monday",
+  Sreda: "Wednesday",
+  Petak: "Friday",
+  "Sastanak sa mentorom": "Meeting with the supervisor",
+  "Vežbe iz baza podataka": "Databases exercises",
+  "Domaći: mašinsko učenje": "Homework: machine learning",
+  "Teretana posle posla": "Gym after work",
+  "Radni sati — izveštaj": "Timesheet — report",
+  "Generalno čišćenje": "Deep cleaning",
+  "Iz Nexusa": "From Nexus",
+  "Desktop aplikacija": "Desktop app",
+  "Web aplikacija": "Web app",
+  Supabase: "Supabase",
+  "PostgreSQL baza": "PostgreSQL database",
+  "Sinhronizacija (E2EE)": "Sync (E2EE)",
+  "HTTPS / REST": "HTTPS / REST",
+  Upiti: "Queries",
+  "Sledeći koraci": "Next steps",
+  Sinhronizacija: "Sync",
+  "Veb aplikacija": "Web app",
+  "Deljeni profili?": "Shared profiles?",
+  "AI asistent": "AI assistant",
+  "Mobilna verzija?": "Mobile version?",
+  "Nedeljni plan": "Weekly plan",
+  "Arhitektura sistema": "System architecture",
+  "Mapa ideja": "Idea map",
+  "Ažurirati CV i portfolio": "Update the CV and portfolio",
+  "Priprema za tehnički intervju": "Preparing for the technical interview",
+  "Priprema za odbranu diplomskog rada": "Preparing for the thesis defence",
+};
+
+/** The seeded text for the active locale. */
+function text(ctx: DemoContext, sr: string): string {
+  return ctx.locale === "en" ? (EN[sr] ?? sr) : sr;
+}
+
 /** The id of the row whose `title` matches, or null — never a uuid this file invented. */
 function refFor(
   kind: CanvasRefKind,
@@ -878,16 +948,16 @@ export function seedDemoCanvas(db: DatabaseHandle, ctx: DemoContext): void {
   const tasks = new TaskStore(db, ctx.profileId).listActive();
   const notes = new NoteStore(db, ctx.profileId).list();
   const cards: WeeklyPlanCards = {
-    cv: refFor("task", tasks, "Ažurirati CV i portfolio"),
-    interview: refFor("task", tasks, "Priprema za tehnički intervju"),
-    thesis: refFor("note", notes, "Priprema za odbranu diplomskog rada"),
+    cv: refFor("task", tasks, text(ctx, "Ažurirati CV i portfolio")),
+    interview: refFor("task", tasks, text(ctx, "Priprema za tehnički intervju")),
+    thesis: refFor("note", notes, text(ctx, "Priprema za odbranu diplomskog rada")),
   };
 
-  const weeklyPlan = serializeCanvasScene(buildWeeklyPlanScene(rnd, ctx.now, cards));
-  const architecture = serializeCanvasScene(buildArchitectureScene(rnd, ctx.now));
-  const mindMap = serializeCanvasScene(buildMindMapScene(rnd, ctx.now));
+  const weeklyPlan = serializeCanvasScene(buildWeeklyPlanScene(ctx, rnd, ctx.now, cards));
+  const architecture = serializeCanvasScene(buildArchitectureScene(ctx, rnd, ctx.now));
+  const mindMap = serializeCanvasScene(buildMindMapScene(ctx, rnd, ctx.now));
 
-  boards.create({ name: "Nedeljni plan", scene: weeklyPlan }, nowIso);
-  boards.create({ name: "Arhitektura sistema", scene: architecture }, nowIso);
-  boards.create({ name: "Mapa ideja", scene: mindMap }, nowIso);
+  boards.create({ name: text(ctx, "Nedeljni plan"), scene: weeklyPlan }, nowIso);
+  boards.create({ name: text(ctx, "Arhitektura sistema"), scene: architecture }, nowIso);
+  boards.create({ name: text(ctx, "Mapa ideja"), scene: mindMap }, nowIso);
 }

@@ -375,6 +375,92 @@ osvežava ručno, pa planer ume da pogreši red veličine.
 
 // --- The catalogue -----------------------------------------------------------
 
+/** The English script that replaces `GRAPH_SEARCH_SCRIPT` on an English run. */
+const GRAPH_SEARCH_SCRIPT_EN = `# Graph search — exercise notes
+
+A condensed version of the note, for revision before the exam.
+
+## Graph representations
+
+- Adjacency list: space O(V + E), checking one edge O(deg(v)).
+- Adjacency matrix: space O(V squared), checking an edge O(1) — worth it only
+  for dense graphs.
+
+## DFS — depth-first search
+
+Recursively or with an explicit stack. Complexity O(V + E).
+
+- colours: white (unvisited), grey (on the stack), black (finished)
+- edges: tree, back, forward, cross
+- a back edge means a cycle in a directed graph
+
+Uses: topological sorting, connected components, cycle detection.
+
+## BFS — breadth-first search
+
+Queue (FIFO). Complexity O(V + E). In an unweighted, undirected graph it gives
+the shortest path to every node.
+
+## Dijkstra
+
+Priority queue (min-heap), complexity O((V + E) log V). It does not work with
+negative edge weights.
+
+## Bellman-Ford
+
+Complexity O(V * E). It works with negative weights too, and reports a negative
+cycle reachable from the source as a result.
+
+## What the exam asks for
+
+1. Draw the algorithm's trace on a given graph, step by step.
+2. Fill in the distance and parent table.
+3. Justify the choice of algorithm for a particular shape of problem.
+`;
+
+/** The English script that replaces `INDEX_SCRIPT` on an English run. */
+const INDEX_SCRIPT_EN = `# B-trees and indexes — exercise notes
+
+Subject: Advanced Databases. The material covers indexing and query planning,
+which is asked both in the midterm and in the oral exam.
+
+## Why an index
+
+Without an index every query with a condition does a full table scan. An index
+is an extra structure that keeps the keys sorted and so changes the cost of a
+search from O(n) to O(log n), but it is paid for on every write — every INSERT,
+UPDATE and DELETE must maintain the index too.
+
+## B-tree
+
+- each node holds several keys, so the height stays small even for millions of
+  rows
+- all leaves are at the same depth (the tree is balanced by construction)
+- search, insert and delete are O(log n)
+
+## B+ tree
+
+- the data is ONLY in the leaves; internal nodes hold copies of keys for
+  navigation
+- the leaves are linked into a list, so a range scan is cheap
+- that is why relational databases as a rule use a B+ tree for the primary key
+
+## When an index does not help
+
+- when selectivity is low (a column with two values, say)
+- when the query returns most of the table — then a full scan is cheaper than
+  jumping through the index and back into the table
+- when a function wraps the column in the condition (an index on the column is
+  not used)
+
+## The execution plan
+
+EXPLAIN shows whether the index was used at all and how many rows are
+estimated. For expensive queries the estimate is often the main problem —
+statistics are refreshed by hand, so the planner can be wrong by an order of
+magnitude.
+`;
+
 /**
  * Five files over the three owner kinds, in three mime families — and no
  * coincidence in any of the five: each file is the thing its owner is about.
@@ -448,6 +534,56 @@ const DEMO_ATTACHMENTS: readonly DemoAttachmentSpec[] = [
   },
 ];
 
+/**
+ * The English version of each fixture, keyed by the Serbian file name the
+ * catalogue above uses.
+ *
+ * `ownerTitle` is a claim about what another seeder writes, so it must be the
+ * SAME translation those seeders produce: `notes.ts`, `tasks.ts` and
+ * `study.en.ts` are the source of the words, and this map mirrors them.
+ * `bytes` is omitted where the bytes are language-independent (the PNG) and
+ * provided where the file itself carries text.
+ */
+const EN: Readonly<
+  Record<string, { ownerTitle: string; fileName: string; bytes?: Uint8Array }>
+> = {
+  "Odbrana diplomskog rada.pdf": {
+    ownerTitle: "Preparing for the thesis defence",
+    fileName: "Thesis defence.pdf",
+    bytes: textPdfBytes("Thesis defence", [
+      "Topic: an agent for organising study",
+      "Defence flow: introduction, method, results, discussion",
+      "Committee questions and prepared answers",
+      "Demo of the application on the laptop",
+    ]),
+  },
+  "skica-portfolija.png": {
+    ownerTitle: "Set up a personal website",
+    fileName: "portfolio-sketch.png",
+  },
+  "CV.pdf": {
+    ownerTitle: "Update the CV and portfolio",
+    fileName: "CV.pdf",
+    bytes: textPdfBytes("CV", [
+      "Education: university, computer science",
+      "Technologies: Java, Kotlin, TypeScript, Python, C++",
+      "Projects: Nexus, web app, compiler",
+      "Languages: Serbian, English",
+      "Contact: GitHub and portfolio",
+    ]),
+  },
+  "B-stabla i indeksi - skripta.md": {
+    ownerTitle: "Advanced Databases",
+    fileName: "B-trees and indexes - notes.md",
+    bytes: new TextEncoder().encode(INDEX_SCRIPT_EN),
+  },
+  "Pretraga grafova - skripta.md": {
+    ownerTitle: "Graph search algorithms",
+    fileName: "Graph search - notes.md",
+    bytes: new TextEncoder().encode(GRAPH_SEARCH_SCRIPT_EN),
+  },
+};
+
 // --- The seeder --------------------------------------------------------------
 
 /** One owner as the three stores agree on it: an id, and the title an attachment row will quote. */
@@ -520,21 +656,25 @@ export async function seedDemoAttachments(
   };
 
   for (const spec of DEMO_ATTACHMENTS) {
-    const ownerId = requireOwnerId(owners, spec.ownerKind, spec.ownerTitle);
+    const english = ctx.locale === "en" ? EN[spec.fileName] : undefined;
+    const ownerTitle = english?.ownerTitle ?? spec.ownerTitle;
+    const fileName = english?.fileName ?? spec.fileName;
+    const bytes = english?.bytes ?? spec.bytes;
+    const ownerId = requireOwnerId(owners, spec.ownerKind, ownerTitle);
 
-    const sniffed = sniffMime(spec.bytes);
+    const sniffed = sniffMime(bytes);
     if (sniffed !== spec.mime) {
       throw new Error(
-        `seedDemoAttachments: "${spec.fileName}" sniffs as ${sniffed}, not the ` +
+        `seedDemoAttachments: "${fileName}" sniffs as ${sniffed}, not the ` +
           `${spec.mime} its row would claim.`,
       );
     }
 
-    const sha256 = await io.saveBlob(spec.bytes);
+    const sha256 = await io.saveBlob(bytes);
     const row = {
-      fileName: spec.fileName,
+      fileName,
       mime: spec.mime,
-      sizeBytes: spec.bytes.byteLength,
+      sizeBytes: bytes.byteLength,
       sha256,
     };
     const at = new Date(demoAt(ctx, -spec.attachedDaysAgo, spec.attachedHour, 20)).toISOString();

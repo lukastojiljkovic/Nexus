@@ -194,12 +194,44 @@ const CIRCUITS: readonly DemoCircuit[] = [
   },
 ];
 
+/**
+ * English circuit names, notes and part labels, keyed by the Serbian text the
+ * Serbian scene uses, so `ctx.locale === "sr"` writes exactly what it always
+ * did. Part labels are catalogue identifiers ("R1") or empty, and both pass
+ * through unchanged.
+ */
+const EN: Readonly<Record<string, string>> = {
+  "Stanica za vlažnost": "Humidity station",
+  ["DHT22 na D2, signalna dioda na D9 preko otpornika od 220 Ω. " +
+  "Dioda svetli dok je vlažnost iznad praga."]:
+    "DHT22 on D2, indicator LED on D9 through a 220 Ω resistor. " +
+    "The LED lights while the humidity is above the threshold.",
+  "Merenje razdaljine": "Distance measurement",
+  ["HC-SR04: TRIG na D10, ECHO na D11. Senzor traži punih 5 V. " +
+  "Senzor gleda napred sa malog rovera."]:
+    "HC-SR04: TRIG on D10, ECHO on D11. The sensor wants a full 5 V. " +
+    "The sensor looks forward from a small rover.",
+  "Malina: rover": "Raspberry Pi: rover",
+  ["TTP223 na GPIO27, pasivna zujalica na GPIO18, BMP280 i VL53L0X preko I²C. " +
+  "Sve na 3,3 V — Malina nema 5 V logiku. Daljinomer gleda napred."]:
+    "TTP223 on GPIO27, passive buzzer on GPIO18, BMP280 and VL53L0X over I²C. " +
+    "Everything at 3.3 V - the Pi has no 5 V logic. The ranger looks forward.",
+};
+
+/** The seeded text for the active locale. */
+function text(ctx: DemoContext, sr: string): string {
+  return ctx.locale === "en" ? (EN[sr] ?? sr) : sr;
+}
+
 export function seedDemoElectronics(db: DatabaseHandle, ctx: DemoContext): void {
   const nowIso = new Date(ctx.now).toISOString();
   const circuits = new ElectronicsStore(db, ctx.profileId);
 
   for (const spec of CIRCUITS) {
-    const circuit = circuits.createCircuit({ name: spec.name, notes: spec.notes }, nowIso);
+    const circuit = circuits.createCircuit(
+      { name: text(ctx, spec.name), notes: text(ctx, spec.notes) },
+      nowIso,
+    );
     // The ids are minted by the store, so the wires below can only be run once
     // the parts exist — which is also the order the foreign keys require, and
     // the order the archive carries them in.
@@ -209,7 +241,7 @@ export function seedDemoElectronics(db: DatabaseHandle, ctx: DemoContext): void 
         circuit.id,
         {
           componentId: part.componentId,
-          label: part.label,
+          label: text(ctx, part.label),
           x: part.x,
           y: part.y,
           rotation: 0,

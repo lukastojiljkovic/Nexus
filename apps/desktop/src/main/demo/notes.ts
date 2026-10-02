@@ -4,6 +4,7 @@ import type { NoteFolderColor } from "@nexus/db";
 import { compactNow } from "../notes.js";
 import { demoAt, demoRandom } from "./context.js";
 import type { DatabaseHandle, DemoContext, DemoRandom } from "./context.js";
+import { NOTE_BODIES_EN } from "./notes.en.js";
 
 /**
  * NOTE's demo slice: a second brain across eight areas of an ordinary life —
@@ -1245,7 +1246,7 @@ export function seedDemoNotes(db: DatabaseHandle, ctx: DemoContext): void {
   const folderIds = new Map<string, string>();
   for (const folder of FOLDERS) {
     const created = org.createFolder(
-      { parentId: null, name: folder.name, color: folder.color },
+      { parentId: null, name: text(ctx, folder.name), color: folder.color },
       stamp(ctx, rnd, folder.createdOffsetDays),
     );
     folderIds.set(folder.key, created.id);
@@ -1257,12 +1258,12 @@ export function seedDemoNotes(db: DatabaseHandle, ctx: DemoContext): void {
   const resolveTag = (name: string, now: string): string => {
     const existing = tagIds.get(name);
     if (existing !== undefined) return existing;
-    const tag = org.createTag(name, now);
+    const tag = org.createTag(text(ctx, name), now);
     tagIds.set(name, tag.id);
     return tag.id;
   };
 
-  for (const spec of NOTES) {
+  for (const [index, spec] of NOTES.entries()) {
     const createdAt = stamp(ctx, rnd, spec.createdOffsetDays);
     // A note nobody revisited keeps ONE instant for both stamps — `create`
     // and `appendUpdate` are still two calls (the only way the store writes a
@@ -1272,7 +1273,8 @@ export function seedDemoNotes(db: DatabaseHandle, ctx: DemoContext): void {
         ? createdAt
         : stamp(ctx, rnd, Math.min(0, spec.createdOffsetDays + spec.revisitAfterDays));
 
-    const parsed = parseMarkdownNote(spec.body.trim(), "Beleška");
+    const body = ctx.locale === "en" ? englishBody(index) : spec.body;
+    const parsed = parseMarkdownNote(body.trim(), text(ctx, "Beleška"));
     const update = buildNoteUpdate(parsed.blocks);
 
     const note = notes.create(createdAt);
@@ -1289,4 +1291,54 @@ export function seedDemoNotes(db: DatabaseHandle, ctx: DemoContext): void {
     // version-history checkpoint, so a demo note is whole from its first byte.
     compactNow(notes, note.id);
   }
+}
+
+/**
+ * English folder names and note tags, keyed by the Serbian text the scene
+ * above uses. Tags are get-or-create, so the Serbian name stays the cache key
+ * and only the value that reaches the store is translated.
+ */
+const EN: Readonly<Record<string, string>> = {
+  Fakultet: "University",
+  Čitanje: "Reading",
+  "Lični razvoj": "Personal growth",
+  Putovanja: "Travel",
+  Ideje: "Ideas",
+  Recepti: "Recipes",
+  Finansije: "Finance",
+  Projekti: "Projects",
+  faks: "university",
+  učenje: "study",
+  hitno: "urgent",
+  projekat: "project",
+  ideja: "idea",
+  posao: "work",
+  recept: "recipe",
+  putovanje: "travel",
+  knjiga: "book",
+  lično: "personal",
+  zdravlje: "health",
+  finansije: "finance",
+  Beleška: "Note",
+};
+
+/** The seeded text for the active locale. */
+function text(ctx: DemoContext, sr: string): string {
+  return ctx.locale === "en" ? (EN[sr] ?? sr) : sr;
+}
+
+/**
+ * The English body for one note. The arrays are aligned by index and a missing
+ * entry is a hard failure rather than a silent fall back to Serbian: a
+ * half-translated notebook would read as a bug in the app, and this is a demo
+ * whose whole purpose is to look whole.
+ */
+function englishBody(index: number): string {
+  const body = NOTE_BODIES_EN[index];
+  if (body === undefined) {
+    throw new Error(
+      `seedDemoNotes: no English body for note #${index} - NOTE_BODIES_EN must stay aligned with NOTES.`,
+    );
+  }
+  return body;
 }

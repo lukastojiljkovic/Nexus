@@ -33,7 +33,20 @@ export interface DemoContext {
   readonly today: DayKey;
   /** The profile every row is written under. */
   readonly profileId: string;
+  /**
+   * The language the seeded CONTENT is written in.
+   *
+   * A demo profile is read, not just clicked: its note bodies, task titles and
+   * habit names are prose a person sees. A renderer in English that produced a
+   * Serbian demo would be the one surface in the app that ignored the choice,
+   * which is why every seeder carries both languages and picks by this field.
+   * Date and number shapes follow it too.
+   */
+  readonly locale: DemoLocale;
 }
+
+/** The two languages the demo content is written in. */
+export type DemoLocale = "sr" | "en";
 
 /**
  * Builds the one context a seeding run shares.
@@ -43,11 +56,15 @@ export interface DemoContext {
  * where the person is standing — so a UTC key would put the evening's rows on
  * tomorrow for anyone east of Greenwich, which is everyone this app is for.
  */
-export function createDemoContext(profileId: string, now: number): DemoContext {
+export function createDemoContext(
+  profileId: string,
+  now: number,
+  locale: DemoLocale = "sr",
+): DemoContext {
   const anchor = new Date(now);
   const month = `${anchor.getMonth() + 1}`.padStart(2, "0");
   const day = `${anchor.getDate()}`.padStart(2, "0");
-  return { now, profileId, today: `${anchor.getFullYear()}-${month}-${day}` };
+  return { now, profileId, locale, today: `${anchor.getFullYear()}-${month}-${day}` };
 }
 
 /** A seeded, reproducible source of the small choices demo content is made of. */

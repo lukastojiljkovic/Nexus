@@ -108,6 +108,44 @@ const DOCUMENTS: readonly DemoDocumentSpec[] = [
 ];
 
 /**
+ * English labels and notes, keyed by the Serbian text the Serbian scene uses,
+ * so `ctx.locale === "sr"` writes exactly what it always did. Keys are unique
+ * across the two fields, and a missing key falls back to the Serbian text.
+ */
+const EN: Readonly<Record<string, string>> = {
+  "Lična karta": "Identity card",
+  Pasoš: "Passport",
+  "Biometrijski, izdat u MUP Beograd.": "Biometric, issued by the Belgrade police.",
+  "Vozačka dozvola": "Driving licence",
+  "Bankovna kartica": "Bank card",
+  "Glavni tekući račun.": "Main current account.",
+  "Diploma srednje škole": "Secondary-school diploma",
+  "Overena kopija čuva se uz original.": "The certified copy is kept with the original.",
+  "Zdravstvena knjižica": "Health-insurance booklet",
+  "Fitnes članska kartica": "Gym membership card",
+  "Teretana — polugodišnja članarina.": "Gym - six-month membership.",
+  Indeks: "Student record book",
+  "Overa naredne godine studija.": "Enrolment stamp for the next academic year.",
+  "Studentska kartica": "Student card",
+  "Polisa auto-osiguranja": "Car insurance policy",
+  "AMS osiguranje, godišnja polisa.": "AMS insurance, annual policy.",
+  "Ugovor o zakupu stana": "Flat lease agreement",
+  "Produžava se sa stanodavcem na godinu dana.": "Renewed with the landlord for a year.",
+  "Mesečna karta za javni prevoz": "Monthly public-transport pass",
+  "Registracija vozila": "Vehicle registration",
+  "Tehnički pregled + registracija, Fiat Punto.": "Technical inspection + registration, Fiat Punto.",
+  "Potvrda o studiranju": "Certificate of enrolment",
+  "Potrebna za studentski popust i stipendiju.": "Needed for the student discount and the scholarship.",
+  "Polisa putnog osiguranja": "Travel insurance policy",
+  "Kupljena za put u Grčku.": "Bought for a trip to Greece.",
+};
+
+/** The seeded text for the active locale. */
+function text(ctx: DemoContext, sr: string): string {
+  return ctx.locale === "en" ? (EN[sr] ?? sr) : sr;
+}
+
+/**
  * Populates ~15 tracked documents through `DocumentStore.create`/`renew` —
  * CAL-004's deadline module, with all three derived states represented and
  * the majority carrying real renewal history for the „Rokovi" horizon to draw
@@ -120,9 +158,9 @@ export function seedDemoDocuments(db: DatabaseHandle, ctx: DemoContext): void {
     const [firstOffset, ...renewalOffsets] = spec.expiryOffsets;
     const created = store.create({
       docType: spec.docType,
-      label: spec.label,
+      label: text(ctx, spec.label),
       expiryDate: demoDay(ctx, firstOffset),
-      notes: spec.notes,
+      notes: spec.notes === null ? null : text(ctx, spec.notes),
     });
 
     for (const offset of renewalOffsets) {
