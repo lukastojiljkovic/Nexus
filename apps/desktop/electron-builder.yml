@@ -94,6 +94,44 @@ asarUnpack:
 
 npmRebuild: false
 
+# ---------------------------------------------------------------------------
+# Electron fuses
+# ---------------------------------------------------------------------------
+# Flipped at packaging time by electron-builder's `electronFuses` option
+# (supported since 24.8; this project is on 26.15.3), which drives
+# `@electron/fuses`. A fuse is a byte in the executable that Electron reads
+# before any application code runs, so these are the switches that still hold
+# if the main process is compromised or replaced. They are applied right
+# before signing, on the packaged output — never by hand.
+#
+#   RunAsNode off          `ELECTRON_RUN_AS_NODE=1 Nexus.exe` no longer starts
+#                          a Node.js interpreter; the executable is the app.
+#   NODE_OPTIONS off       the environment can no longer inject `--require` (or
+#                          any switch) into a double-clicked app's main process.
+#   CLI inspect off        `--inspect` on the command line cannot open a
+#                          debugger port for a local process to attach to.
+#   Cookie encryption on   Chromium cookies at rest go through the OS keystore
+#                          (DPAPI) instead of lying in the profile in the clear.
+#   Asar integrity on      the `app.asar` header's SHA-256 is embedded in the
+#                          executable and checked at load, so an edited archive
+#                          refuses to start rather than running its new contents.
+#   Only load from asar    the app may not be loaded from a loose `app/`
+#                          directory beside the executable — the shape used to
+#                          sidestep the integrity check above.
+#
+# `GrantFileProtocolExtraPrivileges` stays ON, deliberately: the renderer is
+# loaded from `file://` (electron-vite's production output), and turning this
+# off breaks a file:// page's access to its own resources. Revisit it only when
+# the renderer is served from a custom protocol or a real origin.
+electronFuses:
+  runAsNode: false
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableCookieEncryption: true
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  grantFileProtocolExtraPrivileges: true
+
 win:
   target:
     - target: nsis
