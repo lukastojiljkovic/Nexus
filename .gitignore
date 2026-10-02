@@ -1,7 +1,6 @@
 # Documentation used to be local-only (founder decision, 2026-07-04). The
 # founder reversed that on 2026-09-26: docs/ is version-controlled with the
-# code. The repository is private, and that must be revisited if it is ever
-# made public — the docs describe security posture and unreleased product.
+# code, and the repository is public.
 
 # Dependencies & build output
 node_modules/

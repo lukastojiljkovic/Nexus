@@ -23,15 +23,24 @@ anything is pushed, which is the defect class this file keeps recording.
 [SPECIFICATION.md](SPECIFICATION.md) (the whole product) ·
 [roadmap.md](roadmap.md) (what order).
 
+**Where things stand (2026-10-02).** The desktop application is finished and
+the repository is public. The first public release, **1.4.0**, is prepared on
+`chore/open-source-readiness`: the version, the changelog, the release pipeline
+and the website name it, and it waits on the maintainer to merge the branch,
+push a `v1.4.0` tag and let the release workflow draft the release. The
+installer is still unsigned, web and sync are paused, and no version has ever
+been tagged.
+
 ---
 
 ## 1. Where the project is
 
-**The desktop app is finished and unreleased.** Sixteen modules, all usable end
-to end, on an encrypted local SQLite database with no network path at all. It
-installs like an ordinary Windows program and the founder has used it daily
-since 2026-08-02. The current installer is **1.3.0**, built 2026-09-23 from
-`eceb07e`.
+**The desktop app is finished, and the repository is public.** Sixteen modules,
+all usable end to end, on an encrypted local SQLite database with no network
+path at all. It installs like an ordinary Windows program and the founder has
+used it daily since 2026-08-02. The last installer built is **1.3.0**, built
+2026-09-23 from `eceb07e`; the tree now declares **1.4.0**, the first public
+release, prepared but not yet tagged (§4).
 
 **Web and sync are paused, not cancelled** (founder, 2026-08-31). Desktop work
 comes first, because the renderer is one React codebase and Electron is only its
@@ -39,8 +48,8 @@ shell — a feature finished on the desktop is one the web app inherits later.
 §4.2 is the queue that resumes when the desktop is done.
 
 **What exists of sync is real, and it has never run against the real server.**
-The server half ran against a real Postgres 17: 13 migrations, an RLS wall
-proved by 109 pgTAP assertions in CI, and the wire measured against a running
+The server half ran against a real Postgres 17: 15 migrations, an RLS wall
+proved by 177 pgTAP assertions in CI, and the wire measured against a running
 PostgREST. On the client side, `@nexus/sync-engine` drives sweep → pull → push,
 `syncRound.test.ts` runs two real SQLite databases against one server (a
 creation, a deletion and a two-device merge), and the scheduler
@@ -50,16 +59,16 @@ project: nothing here has `MAIN_VITE_SUPABASE_URL` set, so every round refuses
 `cloud_off` before making a request. That is the boundary working, and also why
 no round has run for real. It is the head of the web/sync queue.
 
-**The installed 1.3.0 can erase a board in „Tabla", and the fix is not in an
-installer yet** (found and fixed 2026-09-26, [[DC-144]] in
+**The installed 1.3.0 can erase a board in „Tabla"; the fix is in the tree and
+not in any installer yet** (found and fixed 2026-09-26, [[DC-144]] in
 [defect-classes.md](defect-classes.md)). Opening a board — or changing one — and
 then going to another module within about a second wrote an empty drawing over
-it. It is proven on 1.3.0; the exit flush that does it dates from the canvas's
-first slice (ADR-079 §11.6), so every installer since then is likely to carry
-it. Until the next build, wait two seconds after opening or changing a board
-before going to another module — opening counts as a change. A board that is
-already empty can only come back from a backup (`.nexus.zip`) taken before it
-emptied.
+it. It is proven on 1.3.0, the last installer built; the exit flush that does it
+dates from the canvas's first slice (ADR-079 §11.6), so every installer built so
+far is likely to carry it, and 1.4.0 is the first that will not. Until 1.4.0 is
+installed, wait two seconds after opening or changing a board before going to
+another module — opening counts as a change. A board that is already empty can
+only come back from a backup (`.nexus.zip`) taken before it emptied.
 
 **Elektronika, the sixteenth module, is complete.** E1–E6 are all built and
 verified, and the module is in the 1.3.0 installer. Two open ends remain, neither
@@ -68,17 +77,17 @@ blocking; both are §5 items.
 
 |  |  |
 | --- | --- |
-| Desktop version | **1.3.0** — Windows NSIS installer, unsigned |
-| Installer bytes | 183 821 644 · `sha256` B66B0AAB… — see §4.4 |
+| Desktop version | **1.4.0** in `apps/desktop/package.json`; the last installer built is **1.3.0**, unsigned |
+| Installer bytes | 183 821 644 (1.3.0) · `sha256` B66B0AAB… — see §4.4 |
 | Linux | AppImage, tarball and a Gentoo ebuild, all built and verified |
 | Modules registered | **16** |
 | Local migrations | **70** (latest `070-circuit-search`) |
-| Server | 13 Supabase migrations, 3 Edge Functions, 109 pgTAP assertions |
+| Server | 15 Supabase migrations, 3 Edge Functions, 177 pgTAP assertions |
 | Static gates | **26**, each its own CI step |
-| Commits | 685 |
-| Unmerged work | none — everything is on `main`, which is level with `origin/main` |
-| Open pull requests | none |
-| Git tags / GitHub releases | none — no version has ever been released (§5) |
+| Commits | **703** on this branch |
+| Unmerged work | **15 commits on `chore/open-source-readiness`**, plus the uncommitted public-release changes |
+| Open pull requests | The public-release pull request against `main` |
+| Git tags / GitHub releases | none yet — `v1.4.0`, the first, is prepared (§4) |
 
 ---
 
@@ -253,8 +262,9 @@ all 327 surfaces; none of them was edited.
 
 Built, executed, and not yet reachable from any screen.
 
-- **13 Supabase migrations** applied to a real Postgres 17, with **109 pgTAP
-  assertions** running in CI against the whole stack rather than a bare
+- **15 Supabase migrations** applied to a real Postgres 17, with **177 pgTAP
+  assertions** (the sum of `select plan(…)` across `tests/database/`) running in
+  CI against the whole stack rather than a bare
   container. Running it rather than reading it is what proved that
   `storage.objects` and `realtime.messages` can never be FORCED on a Supabase
   project, and that `anon` is refused at the privilege layer before any policy
@@ -586,22 +596,24 @@ anyone remembering to read this list. What is left is four designs that are owed
 
 ## 4. What remains
 
-**The first public release is prepared and in review (2026-10-02).** Everything
-a stranger needs — the Apache-2.0 licence and ADR-087, the policies
-(`SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `PRIVACY.md`,
-`TERMS.md`, `SUPPORT.md`, `ROADMAP.md`, `CHANGELOG.md`), the issue forms, the
-tagged release pipeline with SBOM and build provenance, the CodeQL / dependency
-review / Scorecard workflows, and a file-by-file classification of this docs
-tree — is in one pull request against `main`.
-[OPEN-SOURCE-READINESS.md](OPEN-SOURCE-READINESS.md) §7 and §8 carry the status
-of every line of it, and the narrative is in [log/2026-10.md](log/2026-10.md).
+**The repository is public, and the first public release is 1.4.0
+(2026-10-02).** Everything a stranger needs — the Apache-2.0 licence and
+ADR-087, the policies (`SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`,
+`PRIVACY.md`, `TERMS.md`, `SUPPORT.md`, `ROADMAP.md`, `CHANGELOG.md`), the issue
+forms, the tagged release pipeline with SBOM and build provenance, the CodeQL /
+dependency review / Scorecard workflows, a file-by-file classification of this
+docs tree, a hardened Electron package (fuses and asar integrity) and two closed
+server gaps (the housekeeping schedule is now a migration; revoking a device
+ends its auth session) — is in one pull request against `main`, on
+`chore/open-source-readiness`. The narrative is in
+[log/2026-10.md](log/2026-10.md).
 
-**What that leaves is the founder's, and it is three things:** the decision on
-the name (`docs/open-source/name-check.md` — the collision risk in software is
-high), the code-signing route (`SignPath Foundation` is free for open-source
-projects; Azure Artifact Signing is the alternative), and the visibility switch
-itself, with the repository settings and the first `v*` tag. None of them is
-blocked on anything in this repository.
+**What that leaves is the maintainer's, and it is three things:** the
+code-signing route (`SignPath Foundation` is free for open-source projects;
+Azure Artifact Signing is the alternative), the merge of
+`chore/open-source-readiness` and the repository settings that live in the web
+UI ([ops/github-setup.md](ops/github-setup.md)), and the first `v*` tag,
+`v1.4.0`. None of the three is blocked on anything in this repository.
 
 **Order of work.** On 2026-08-31 the founder paused web and sync: *„web/sync je
 za sada trajno na hold-u, dok ne završimo sve feature za desktop, lako ćemo ih
@@ -777,11 +789,23 @@ quality is.
   `eceb07e` built twice produced 183 821 582 and 183 821 644 bytes. Size and
   hash identify an artifact, never a revision. That matters the day an update
   feed publishes a digest.
-- **No version has ever been tagged or released.** There are no git tags and no
-  GitHub releases, so „1.3.0" is a number the installer reports and nothing a
-  user could verify against. The Gentoo ebuild's `SRC_URI` points at
-  `lukastojiljkovic/nexus-releases`, a repository that does not exist, so the
-  ebuild is a hand-installed recipe. §5 carries the decision.
+- **The Electron fuses have not been read back on a packaged build.** The
+  configuration is in `electron-builder.yml` (RunAsNode, NODE_OPTIONS and CLI
+  inspect off; cookie encryption, embedded asar integrity and only-load-from-asar
+  on), and the 1.3.0 executable was read back and had all six wrong. The machine
+  this pass ran on cannot build at all (see `log/2026-10.md`), so before the
+  first public release is tagged: run `pnpm --filter @nexus/desktop dist`, then
+  `npx @electron/fuses read --app apps/desktop/release/win-unpacked/Nexus.exe`,
+  and launch the result.
+- **No version has ever been tagged or released, and `v1.4.0` would be the
+  first.** There are no git tags and no GitHub releases, so „1.3.0" is a number
+  the installer reports and nothing a user could verify against; the tree now
+  declares 1.4.0 and the changelog entry is written, but the tag has not been
+  pushed. The Gentoo ebuild's `SRC_URI` points at this repository's releases (the
+  separate `nexus-releases` repository was never created and is no longer
+  wanted), but the ebuild itself is still `nexus-bin-1.3.0`: it needs a 1.4.0
+  bump and a regenerated `Manifest` before a `v1.4.0` tag makes it an ordinary
+  `emerge`. Until then the ebuild is a hand-installed recipe.
 - **`check:licences` fails every bump of a packaged dependency, by
   construction.** Dependabot cannot regenerate a generated artifact, so the
   third-party notices must be regenerated on the branch
@@ -814,9 +838,9 @@ implemented until the founder says otherwise.
 | Electronics: should a bench setup persist? | Open, not blocking. E5 stores nothing, so an eight-channel setup is lost on close. |
 | E6 ships with two open ends | Open, not blocking. See the section below. |
 | Five smaller confirmations | Open. Three items: the tier-constants doctrine, one agro domain question, desktop→desktop pairing. |
-| Linux | Open. Three items: does `nexus-releases` get created, is Linux supported or a courtesy build, code signing. |
+| Linux | Open. Two items: is Linux supported or a courtesy build, and code signing. The separate releases repository is settled — releases publish in this repository. |
 | The developer drawer | Open. `lf8` naming, the `tf19`/`tf32` label, and `MXINT8`. |
-| Version numbering and tagging | Open. `1.3.0` reports a version nothing can be verified against. Should a release be cut, and where? |
+| Version numbering and tagging | Resolved in the tree: `1.4.0` is the first public release, prepared with its changelog entry. The `v1.4.0` tag is the maintainer's. |
 | `gitleaks-action` carries a commercial EULA | Irrelevant while the repository is personal; a licence question the day it moves under an organisation. |
 
 ### SEC-VER-01 is binding on paper and has one instance (2026-09-22)
@@ -1101,13 +1125,12 @@ are questions rather than defects.
 
 All three artifacts exist and work without an answer.
 
-1. **Does `lukastojiljkovic/nexus-releases` get created?** The ebuild's
-   `SRC_URI` and `electron-builder.yml`'s `publish` block both name it and it
-   does not exist. Until it does, the tarball is hand-placed into
+1. **Does `lukastojiljkovic/nexus-releases` get created?** **Answered
+   2026-10-02: no.** The ebuild's `SRC_URI` and `electron-builder.yml`'s
+   `publish` block now both point at this repository, which is public. Until a
+   `v*` tag exists the tarball is hand-placed into
    `/var/cache/distfiles/` — fine for one machine, and the thing standing
    between „an ebuild" and „an `emerge` that works on somebody else's computer".
-   Private vs public changes the answer: a private release repo needs a token in
-   `SRC_URI`, which an ebuild cannot carry.
 2. **Is Linux a supported target or a courtesy build?** Supporting it
    commercially means every release gets a Linux run and the keyring requirement
    becomes a support question.
@@ -1150,9 +1173,10 @@ released.** There are no git tags and no GitHub releases, so „1.3.0" is a
 number the installer reports and nothing a user could verify against anything.
 Two consequences are already live rather than hypothetical:
 
-- the Gentoo ebuild's `SRC_URI` points at
-  `github.com/lukastojiljkovic/nexus-releases/releases/download/v${PV}/…`, a URL
-  that has never resolved for any version;
+- the Gentoo ebuild's `SRC_URI` now points at this repository's releases
+  (`github.com/lukastojiljkovic/Nexus/releases/download/v${PV}/…`), a URL that
+  resolves as soon as the first tag is cut — it pointed at the never-created
+  `nexus-releases` repository until 2026-10-02;
 - its `Manifest` was deleted with this bump rather than carried forward, because
   it digested `nexus-1.1.0-linux-x64.tar.gz` and no later ebuild fetches that
   file. It has to be regenerated where the Linux tarball is built —
@@ -1160,9 +1184,9 @@ Two consequences are already live rather than hypothetical:
   module is built for the host it runs on.
 
 So the open question is no longer „should we bump" but **„should a release be
-cut at all, and where"** — a tag plus a `nexus-releases` upload would make the
-Linux packaging work as written; leaving it means the ebuild stays a
-hand-installed recipe.
+cut at all"** — the ebuild's `SRC_URI` is settled, and a `v*` tag makes the Linux
+packaging work as written; leaving it means the ebuild stays a hand-installed
+recipe.
 
 ### `gitleaks-action` carries a commercial EULA
 
@@ -1176,9 +1200,11 @@ becomes a licence question the day it moves under an organisation.
 These outrank everything in §3 and §4. No piece of work may trade one of them
 away for being convenient.
 
-- **No public download before code signing and notarization** (SEC-SC-03/04).
-  Today's installers are unsigned, so nothing may be distributed beyond the
-  founder's own machines.
+- **Code signing is still open, and it is the one constraint 1.4.0 does not
+  meet** (SEC-SC-03/04). The 1.4.0 installer is unsigned, so Windows shows a
+  SmartScreen warning on first run and the release notes state it; macOS builds
+  do not exist. Re-arming the update feed, and asking a user to trust a
+  publisher name, stay behind signing.
 - **No performance claim before a harness measures it.** The budgets in
   [architecture/overview.md](architecture/overview.md) are targets nothing
   checks.

@@ -18,11 +18,13 @@ under Apache-2.0.
 | In what order | [docs/roadmap.md](docs/roadmap.md) |
 | Every other document, and which are live | [docs/README.md](docs/README.md) |
 
-**The docs are version-controlled with the code.** They entered git on
-2026-09-26, reversing the 2026-07-04 decision that kept them local-only. That is
-acceptable only because the repository is private — several documents describe
-security posture and unreleased product — so making the repository public has to
-be decided with that in mind.
+**The docs are version-controlled with the code, in public.** They entered git
+on 2026-09-26, reversing the 2026-07-04 decision that kept them local-only.
+Seven working documents that described security posture or unreleased product
+were moved out on 2026-10-02, before the repository was published;
+[docs/README.md](docs/README.md) says which and why. What remains is written to
+be read by anyone, and a dated record that no longer describes the present is
+kept as evidence rather than deleted.
 
 ## Current focus (2026-08-31 — the founder changed it; supersedes 2026-08-08)
 
@@ -32,7 +34,7 @@ lako ćemo ih posle portovati na sajt jer je electron osnova."*
 **Every remaining DESKTOP feature comes first.** The web app, the Supabase
 backend and pairing are **on hold** — not cancelled, and not to be treated as
 dead code: everything already built for them (`sync-crypto`, `sync-transport`,
-`sync-engine`, `sync-port`, the 13 server migrations, the desktop sync round and
+`sync-engine`, `sync-port`, the 15 server migrations, the desktop sync round and
 scheduler) stays built, stays tested, stays green in CI, and stays OFF by
 default. Nothing new is added to it until the desktop is complete.
 
