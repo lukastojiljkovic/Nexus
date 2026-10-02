@@ -502,21 +502,11 @@ import {
   type SecurityNotificationDeps,
 } from "./notifications.js";
 import { filterSearchHitsByModules } from "./searchGate.js";
+import { setMainLocale } from "./locale.js";
 import { asCanvasRefs } from "./canvasRefs.js";
 import { focusPhaseEndCopy, restEndCopy } from "./notificationStrings.js";
 import type { SecurityNotice } from "./notificationStrings.js";
-import {
-  ANKI_DECK_FILTER_NAME,
-  ARCHIVE_FILTER_NAME,
-  CALENDAR_FILTER_NAME,
-  CSV_TABLE_FILTER_NAME,
-  IMAGE_FILTER_NAME,
-  ROS_WORKSPACE_DIALOG_BUTTON,
-  ROS_WORKSPACE_DIALOG_TITLE,
-  SKETCH_FILTER_NAME,
-  STATEMENT_DIALOG_TITLE,
-  STATEMENT_FILTER_NAME,
-} from "./shellStrings.js";
+import { shellStrings } from "./shellStrings.js";
 import { computeSnoozeUntil, resolveDefaultSnoozePreset } from "./snooze.js";
 import { pickProfilePicture } from "./profilePicture.js";
 import {
@@ -4612,8 +4602,8 @@ function asCircuitNotes(value: unknown, field: string): string {
  * than in a terminal first; macOS shows the button, Windows always has one.
  */
 const ROS_WORKSPACE_DIALOG: OpenDialogOptions = {
-  title: ROS_WORKSPACE_DIALOG_TITLE,
-  buttonLabel: ROS_WORKSPACE_DIALOG_BUTTON,
+    title: shellStrings().rosWorkspaceDialogTitle,
+    buttonLabel: shellStrings().rosWorkspaceDialogButton,
   properties: ["openDirectory", "createDirectory"],
 };
 
@@ -6503,7 +6493,7 @@ function restoreDeps(): ImportDeps {
       // file's own magic bytes, never by its extension.
       const options: OpenDialogOptions = {
         properties: ["openFile"],
-        filters: [{ name: ARCHIVE_FILTER_NAME, extensions: ["nexus", "zip"] }],
+    filters: [{ name: shellStrings().archiveFilterName, extensions: ["nexus", "zip"] }],
       };
       const { canceled, filePaths } = mainWindow
         ? await dialog.showOpenDialog(mainWindow, options)
@@ -6517,7 +6507,7 @@ function restoreDeps(): ImportDeps {
     pickApkgFile: async () => {
       const options: OpenDialogOptions = {
         properties: ["openFile"],
-        filters: [{ name: ANKI_DECK_FILTER_NAME, extensions: ["apkg"] }],
+    filters: [{ name: shellStrings().ankiDeckFilterName, extensions: ["apkg"] }],
       };
       const { canceled, filePaths } = mainWindow
         ? await dialog.showOpenDialog(mainWindow, options)
@@ -6531,7 +6521,7 @@ function restoreDeps(): ImportDeps {
     pickCsvFile: async () => {
       const options: OpenDialogOptions = {
         properties: ["openFile"],
-        filters: [{ name: CSV_TABLE_FILTER_NAME, extensions: ["csv", "txt"] }],
+    filters: [{ name: shellStrings().csvTableFilterName, extensions: ["csv", "txt"] }],
       };
       const { canceled, filePaths } = mainWindow
         ? await dialog.showOpenDialog(mainWindow, options)
@@ -6547,8 +6537,8 @@ function restoreDeps(): ImportDeps {
     pickFinCsvFile: async () => {
       const options: OpenDialogOptions = {
         properties: ["openFile"],
-        title: STATEMENT_DIALOG_TITLE,
-        filters: [{ name: STATEMENT_FILTER_NAME, extensions: ["csv", "txt"] }],
+    title: shellStrings().statementDialogTitle,
+    filters: [{ name: shellStrings().statementFilterName, extensions: ["csv", "txt"] }],
       };
       const { canceled, filePaths } = mainWindow
         ? await dialog.showOpenDialog(mainWindow, options)
@@ -6562,7 +6552,7 @@ function restoreDeps(): ImportDeps {
     pickIcsFile: async () => {
       const options: OpenDialogOptions = {
         properties: ["openFile"],
-        filters: [{ name: CALENDAR_FILTER_NAME, extensions: ["ics"] }],
+    filters: [{ name: shellStrings().calendarFilterName, extensions: ["ics"] }],
       };
       const { canceled, filePaths } = mainWindow
         ? await dialog.showOpenDialog(mainWindow, options)
@@ -6947,7 +6937,12 @@ async function handlePrivAttachmentPick(profileId: string): Promise<PrivAttachme
 async function handleDashboardPick(profileId: string): Promise<DashboardPickResult> {
   const options: OpenDialogOptions = {
     properties: ["openFile"],
-    filters: [{ name: IMAGE_FILTER_NAME, extensions: ["png", "jpg", "jpeg", "gif", "webp"] }],
+    filters: [
+      {
+        name: shellStrings().imageFilterName,
+        extensions: ["png", "jpg", "jpeg", "gif", "webp"],
+      },
+    ],
   };
   const { canceled, filePaths } = mainWindow
     ? await dialog.showOpenDialog(mainWindow, options)
@@ -7203,6 +7198,20 @@ function registerIpc(): void {
       startNotificationScheduler(notificationSchedulerDeps());
       syncService().openProfile(profileId);
     }
+  });
+
+  // The renderer is untrusted, so the payload is re-validated here rather than
+  // trusted to be one of the two codes: an unknown value is refused outright,
+  // never stored and never used to pick a table. Like `profiles:set-active`
+  // above, this is a report - main only changes the language of copy it writes
+  // next.
+  ipcMain.handle(IpcChannel.localeSet, (event, payload): void => {
+    assertTrustedSender(event);
+    const locale = asRecord(payload).locale;
+    if (locale !== "sr" && locale !== "en") {
+      throw new Error("locale:set expects the locale to be 'sr' or 'en'");
+    }
+    setMainLocale(locale);
   });
 
   ipcMain.handle(IpcChannel.profilesRename, (event, payload): void => {
@@ -10953,7 +10962,7 @@ function registerIpc(): void {
     if (code.kind === "sketch") {
       const dialogOptions = {
         defaultPath: code.filename,
-        filters: [{ name: SKETCH_FILTER_NAME, extensions: ["ino"] }],
+    filters: [{ name: shellStrings().sketchFilterName, extensions: ["ino"] }],
       };
       const { canceled, filePath } = mainWindow
         ? await dialog.showSaveDialog(mainWindow, dialogOptions)
@@ -13442,6 +13451,16 @@ function shutdown(code: number): void {
 // --- Lifecycle --------------------------------------------------------------
 
 app.whenReady().then(async () => {
+  // The language main writes its own copy in, seeded from the OS. The renderer
+  // reports the STORED choice as soon as it serves it (`locale:set`), which is
+  // authoritative; this seed only covers the moment before that - a native
+  // dialog opened by an automated run, or the first launch's splash-time
+  // notification. Automated runs keep the Serbian default (see `locale.ts`),
+  // because their output is pinned to the language the snapshots were taken in.
+  if (!isAutomatedRun) {
+    setMainLocale(app.getLocale().toLowerCase().startsWith("sr") ? "sr" : "en");
+  }
+
   // SEC-EL: kill Electron's stock application menu, and answer no to every web
   // permission.
   //

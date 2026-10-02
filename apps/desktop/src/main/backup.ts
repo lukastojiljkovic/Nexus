@@ -30,7 +30,7 @@ import { join } from "node:path";
 import { sanitizePathSegment, type ExportArchiveInput } from "@nexus/core";
 import { KeyUnwrapError } from "@nexus/core/auth";
 import type { BackupSettingsStore } from "@nexus/db";
-import { BACKUP_PROFILE_SLUG_FALLBACK } from "./shellStrings.js";
+import { shellStrings } from "./shellStrings.js";
 import type { BackupCadence, BackupRunErrorCode } from "../shared/ipc.js";
 
 /** The exact extension the manual ENCRYPTED export writes (`handleExport`'s `.nexus` dialog filter) — a scheduled archive is the same file. */
@@ -60,7 +60,7 @@ const CADENCE_PERIOD_MS: Record<BackupCadence, number> = {
  * `Moj Profil` names its archives `nexus-auto-moj-profil-…`.
  */
 export function backupProfileSlug(profileName: string): string {
-  return sanitizePathSegment(profileName, BACKUP_PROFILE_SLUG_FALLBACK)
+  return sanitizePathSegment(profileName, shellStrings().backupProfileSlugFallback)
     .replace(/\s+/g, "-")
     .toLowerCase();
 }

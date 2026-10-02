@@ -12,7 +12,7 @@ import {
   writeSync,
 } from "node:fs";
 import { join } from "node:path";
-import { DEFAULT_ACCOUNT_LABEL as SHELL_DEFAULT_ACCOUNT_LABEL } from "./shellStrings.js";
+import { shellStrings } from "./shellStrings.js";
 
 /**
  * The local-account registry and the one-way move from the old flat layout
@@ -54,10 +54,13 @@ export const ACCOUNTS_DIR_NAME = "accounts";
  * name costs the user one rename and never costs them their data.
  *
  * Text lives in `shellStrings.ts` (the main process's shell/persisted-default
- * copy table) — re-exported under this name so every existing call site and
- * test import is untouched.
+ * copy table) and is read through this accessor at the moment an account is
+ * created, so the language the row is born in is the language the user was
+ * reading.
  */
-export const DEFAULT_ACCOUNT_LABEL = SHELL_DEFAULT_ACCOUNT_LABEL;
+export function defaultAccountLabel(): string {
+  return shellStrings().defaultAccountLabel;
+}
 
 /** Same cap as a profile name (`asProfileName`) — the two are the same kind of short, user-chosen title. */
 export const MAX_ACCOUNT_LABEL_LENGTH = 80;
@@ -253,7 +256,7 @@ export function sweepDeletedAccountDirs(userData: string): void {
  * 1. An entry whose directory is gone is dropped — the user deleted the folder,
  *    and listing an account that cannot be unlocked helps nobody.
  * 2. A directory that holds a key chain but has no entry is ADOPTED under
- *    `DEFAULT_ACCOUNT_LABEL`. That is a create (or a legacy migration) that died
+ *    `defaultAccountLabel()`. That is a create (or a legacy migration) that died
  *    between writing the key chain and writing the entry; the data is intact and
  *    a lost label is not a reason to strand it.
  * 3. A `lastActiveId` naming no surviving account is cleared.
@@ -269,7 +272,11 @@ export function loadRegistry(userData: string): AccountRegistry {
   const known = new Set(kept.map((entry) => entry.id));
   const adopted = [...onDisk]
     .filter((name) => !known.has(name) && holdsKeychain(accountDir(userData, name)))
-    .map((name) => ({ id: name, label: DEFAULT_ACCOUNT_LABEL, createdAt: new Date().toISOString() }));
+    .map((name) => ({
+      id: name,
+      label: defaultAccountLabel(),
+      createdAt: new Date().toISOString(),
+    }));
 
   const accounts = [...kept, ...adopted];
   const lastActiveId =
@@ -488,7 +495,7 @@ export function resumeAccountsMigration(userData: string): AccountRegistry {
     moveIntoAccount(userData, accountId, BLOBS_DIR_NAME);
     moveIntoAccount(userData, accountId, LEGACY_BLOBS_DIR_NAME);
     moveIntoAccount(userData, accountId, KEYCHAIN_FILE_NAME);
-    registry = registerAccount(userData, accountId, DEFAULT_ACCOUNT_LABEL, new Date().toISOString());
+    registry = registerAccount(userData, accountId, defaultAccountLabel(), new Date().toISOString());
   }
 
   const [owner] = registry.accounts;

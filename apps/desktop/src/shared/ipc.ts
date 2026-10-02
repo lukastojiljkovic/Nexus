@@ -74,6 +74,16 @@ import type { AuthRefusal, DeviceRegisterRefusal, SyncEnableRefusal } from "@nex
  */
 export const DEMO_PROFILE_NAME = "Demo";
 
+/**
+ * Every language the copy layer can serve, as its locale codes.
+ *
+ * The renderer derives the same union from its own `LOCALES` record; this is
+ * the copy the IPC contract can see, and the value a `locale:set` payload is
+ * validated against. A third language is one entry there, one entry here, and
+ * a compile error wherever the two are compared.
+ */
+export type AppLocale = "sr" | "en";
+
 export const IpcChannel = {
   authStatus: "auth:status",
   authCreate: "auth:create",
@@ -110,6 +120,13 @@ export const IpcChannel = {
   // renderer may read, so there is nothing here for a compromised renderer
   // to widen.
   profilesSetActive: "profiles:set-active",
+  // The renderer reports the language it is serving (the renderer's own
+  // `LOCALES`, mirrored here as a closed union because the two sides must agree
+  // before any copy is written in it). Main's dialogs and OS notifications are
+  // composed there and cannot read the renderer's preference, so this is how
+  // they learn it. A report, not a request, like `profiles:set-active`: it
+  // changes what main writes NEXT and nothing the renderer may read.
+  localeSet: "locale:set",
   profilesRename: "profiles:rename",
   profilesPicturePick: "profiles:picture-pick",
   profilesPictureClear: "profiles:picture-clear",
@@ -8672,6 +8689,8 @@ export interface NexusApi {
   verifyProfileSwitch(passcode: string): Promise<AuthResult>;
   /** Reports which profile the shell is standing in (ADR-058, NTF active-profile rule) — at unlock landing and on every verified switch — so main serves notifications for the active profile only. */
   setActiveProfile(profileId: string): Promise<void>;
+  /** Reports the language the interface is being served in, so main's native dialogs and OS notifications follow the same choice. */
+  setLocale(locale: AppLocale): Promise<void>;
   renameProfile(id: string, name: string): Promise<void>;
   /**
    * Opens the native picker and, if the user chooses a file, stores the square

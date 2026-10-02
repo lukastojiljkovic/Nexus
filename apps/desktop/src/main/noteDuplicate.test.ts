@@ -20,7 +20,7 @@ import {
 } from "@nexus/db";
 import type { NoteMeta } from "@nexus/db";
 
-import { duplicateNote, NOTE_COPY_SUFFIX } from "./noteDuplicate.js";
+import { duplicateNote, noteCopySuffix } from "./noteDuplicate.js";
 import type { NoteDuplicateDeps } from "./noteDuplicate.js";
 
 /**
@@ -162,11 +162,11 @@ describe("duplicateNote — the document", () => {
     const copy = duplicateOrFail(source.id);
 
     expect(copy.id).not.toBe(source.id);
-    expect(copy.title).toBe(`Sastanak${NOTE_COPY_SUFFIX}`);
+    expect(copy.title).toBe(`Sastanak${noteCopySuffix()}`);
     // Stored, not merely derivable: `compactNow` ran, so the copy is in the
     // search index from the moment it lands (ADR-021 / SRCH-002).
     expect(stores().notes.storedPlaintext(copy.id)).toBe(
-      `Sastanak${NOTE_COPY_SUFFIX}\nDogovoreno je sve.`,
+      `Sastanak${noteCopySuffix()}\nDogovoreno je sve.`,
     );
     // The original is untouched by its own copy — including its own snapshot,
     // which a duplicate has no business compacting.
@@ -366,7 +366,7 @@ describe("duplicateNote — history and lifecycle", () => {
     const versions = stores().notes.listVersions(copy.id);
     expect(versions).toHaveLength(1);
     expect(versions[0]?.coveredSeq).toBe(1);
-    expect(versions[0]?.title).toBe(`Istorija${NOTE_COPY_SUFFIX}`);
+    expect(versions[0]?.title).toBe(`Istorija${noteCopySuffix()}`);
   });
 
   it("duplicates a note that has no document state yet", () => {
