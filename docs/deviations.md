@@ -267,3 +267,29 @@ child's environment drops `DOCKER_*` and `WSLENV` — both are *redirections*, a
 a `DOCKER_CONTEXT` pointing at another machine would make every path in the
 argv, and every answer about „is the container still there", be about a computer
 the user is not sitting at.
+
+## DEV-008 — 1.4.0 is released without a code signature
+
+- **Date:** 2026-10-02 · **Status:** **confirmed by founder 2026-10-02**
+  (*„Napravi release i kaži da je signing trenutno stopiran ali da je projekat
+  sada open source za sve koji žele da se uvere da je sa kodom sve u redu"*).
+- **What:** SEC-EL-07 requires releases to be code-signed, and SEC-SC-05
+  releases only CI-built, signed artifacts. The 1.4.0 Windows installer and the
+  Linux files are CI-built but carry no signature, and Windows shows a
+  SmartScreen warning on first run.
+- **Why accepted:** no signing route is in place yet, and the source of the
+  release is public. Anyone can read what the installer does, and the files can
+  be tied to the code they came from without trusting a publisher name.
+- **Mitigations:**
+  1. **CI-built only.** The release workflow builds from the tagged commit, and
+     no file is uploaded by hand.
+  2. **Verifiable provenance.** Every file ships with `SHA256SUMS.txt`, a
+     CycloneDX SBOM and a build-provenance attestation
+     (`gh attestation verify <file> --repo lukastojiljkovic/Nexus`).
+  3. **Said where it is downloaded.** The release notes, the README and the
+     website state that signing is paused.
+  4. **Auto-update stays disarmed.** An update feed is only re-armed behind a
+     signature check (SEC-EL-07), so an unsigned build never updates itself.
+- **Revisit trigger:** a signing route (SignPath Foundation for open-source
+  projects, or Azure Artifact Signing). The first signed release closes this
+  deviation, and auto-update is not re-armed before it.

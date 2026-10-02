@@ -77,7 +77,7 @@ blocking; both are §5 items.
 
 |  |  |
 | --- | --- |
-| Desktop version | **1.4.0** in `apps/desktop/package.json`; the last installer built is **1.3.0**, unsigned |
+| Desktop version | **1.4.0** in `apps/desktop/package.json`; the last installer built is **1.4.0**, unsigned, with its fuses read back |
 | Installer bytes | 183 821 644 (1.3.0) · `sha256` B66B0AAB… — see §4.4 |
 | Linux | AppImage, tarball and a Gentoo ebuild, all built and verified |
 | Modules registered | **16** |
@@ -1134,9 +1134,10 @@ All three artifacts exist and work without an answer.
 2. **Is Linux a supported target or a courtesy build?** Supporting it
    commercially means every release gets a Linux run and the keyring requirement
    becomes a support question.
-3. **Code signing.** The Windows installer is unsigned, so SmartScreen warns on
-   first run. Linux has no equivalent to buy. If a certificate is coming, the
-   packaging config is where it plugs in and it is a ten-minute change.
+3. **Code signing.** Answered for 1.4.0 on 2026-10-02: it ships unsigned under
+   [DEV-008](deviations.md), with signing paused and the source public. Still
+   open is the route for a later release; the packaging config is where a
+   certificate plugs in, and it is a ten-minute change.
 
 ### The developer drawer (2026-08-10)
 
@@ -1200,11 +1201,11 @@ becomes a licence question the day it moves under an organisation.
 These outrank everything in §3 and §4. No piece of work may trade one of them
 away for being convenient.
 
-- **Code signing is still open, and it is the one constraint 1.4.0 does not
-  meet** (SEC-SC-03/04). The 1.4.0 installer is unsigned, so Windows shows a
-  SmartScreen warning on first run and the release notes state it; macOS builds
-  do not exist. Re-arming the update feed, and asking a user to trust a
-  publisher name, stay behind signing.
+- **Code signing is still open, and 1.4.0 ships without it under
+  [DEV-008](deviations.md)** (SEC-EL-07, SEC-SC-05), confirmed by the founder on
+  2026-10-02. The installer is unsigned, so Windows shows a SmartScreen warning
+  on first run, and the release notes, the README and the website say so; macOS
+  builds do not exist. Re-arming the update feed stays behind signing.
 - **No performance claim before a harness measures it.** The budgets in
   [architecture/overview.md](architecture/overview.md) are targets nothing
   checks.
