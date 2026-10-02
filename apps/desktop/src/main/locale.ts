@@ -7,11 +7,10 @@
  * variable, for the two modules that compose copy - `shellStrings.ts` and
  * `notificationStrings.ts`.
  *
- * The initial value is Serbian, which is what an automated run (`--shots`,
- * `--demo`) gets: those never report a locale, and their output is pinned to
- * the language the existing snapshots were taken in. A real launch replaces it
- * before the first dialog opens - `index.ts` seeds it from the OS locale, and
- * the renderer reports the stored choice as soon as it serves it.
+ * The initial value is Serbian. `index.ts` replaces it before the first dialog
+ * opens: an automated run (`--shots`, `--demo`) with the language it was pinned
+ * to (Serbian, or English under `--locale=en`), a real launch with the OS
+ * locale. The renderer then reports the stored choice as soon as it serves it.
  */
 
 export type MainLocale = "sr" | "en";

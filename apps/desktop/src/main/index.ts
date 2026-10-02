@@ -916,6 +916,18 @@ if (isShots) {
   app.commandLine.appendSwitch("disable-renderer-backgrounding");
 }
 
+// `--locale=en`: run a harness in English; without it, every harness run is
+// Serbian whatever the machine speaks. Both halves are pinned because neither
+// follows the other in time: main seeds the demo profile in ITS locale before
+// any window exists, and the renderer's first run follows the system language,
+// so an unpinned sweep on an English Windows photographed English chrome around
+// Serbian rows. `lang` is what Chromium answers `navigator.language` with.
+if (isAutomatedRun) {
+  const harnessLocale = developmentFlag("--locale=en") ? "en" : "sr";
+  setMainLocale(harnessLocale);
+  app.commandLine.appendSwitch("lang", harnessLocale === "en" ? "en-GB" : "sr");
+}
+
 // Interim brand glyph (four-pointed star, see build/make-icon.ps1). Resolved
 // via getAppPath() so the same relative path works unpacked (dev/smoke, app
 // root = apps/desktop) and packaged (app root = the asar root; electron-builder
@@ -13453,10 +13465,10 @@ function shutdown(code: number): void {
 app.whenReady().then(async () => {
   // The language main writes its own copy in, seeded from the OS. The renderer
   // reports the STORED choice as soon as it serves it (`locale:set`), which is
-  // authoritative; this seed only covers the moment before that - a native
-  // dialog opened by an automated run, or the first launch's splash-time
-  // notification. Automated runs keep the Serbian default (see `locale.ts`),
-  // because their output is pinned to the language the snapshots were taken in.
+  // authoritative; this seed only covers the moment before that, such as the
+  // first launch's splash-time notification. An automated run was pinned at
+  // module scope instead (`--locale=en`), because its output may not depend on
+  // the machine it ran on.
   if (!isAutomatedRun) {
     setMainLocale(app.getLocale().toLowerCase().startsWith("sr") ? "sr" : "en");
   }
