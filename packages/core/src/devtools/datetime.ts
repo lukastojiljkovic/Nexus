@@ -1089,6 +1089,33 @@ function joinSr(parts: readonly string[]): string {
   return `${parts.slice(0, -1).join(", ")} i ${parts[parts.length - 1] ?? ""}`;
 }
 
+/**
+ * The two languages this module's generated prose can be written in.
+ *
+ * The value the drawer's own locale resolves to, mirrored rather than imported:
+ * `@nexus/core` has no locale state and must not reach for the renderer's, so a
+ * caller passes its own answer in. The type is a closed union for the same
+ * reason the plural tables are: a third language added to `LOCALES` without a
+ * counterpart here is a compile error at the call site.
+ */
+export type ProseLocale = "sr" | "en";
+
+/** "3 days", "1 hour" - a count with the English noun form it takes. */
+function enCount(count: number, unit: CountableUnit): string {
+  return `${count} ${unit}${Math.abs(count) === 1 ? "" : "s"}`;
+}
+
+/** "every 15 minutes", "every 2 hours" - the determiner English puts in front of a step. */
+function enEvery(step: number, unit: CountableUnit): string {
+  return `every ${enCount(step, unit)}`;
+}
+
+/** "a, b and c" - the English list. */
+function joinEn(parts: readonly string[]): string {
+  if (parts.length <= 1) return parts[0] ?? "";
+  return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1] ?? ""}`;
+}
+
 // ---------------------------------------------------------------------------
 // Relative time
 // ---------------------------------------------------------------------------
@@ -1189,6 +1216,35 @@ export function formatRelativeSr(instant: Instant, now: Instant): string {
   const past = span.direction === "past";
   const noun = (past ? SR_RELATIVE_PAST : SR_RELATIVE_FUTURE)[span.unit][srPlural(span.count)];
   return `${past ? "pre" : "za"} ${span.count} ${noun}`;
+}
+
+/** English relative-time nouns. English has no case split, so one table serves both directions. */
+const EN_RELATIVE_NOUNS: Readonly<Record<RelativeUnit, string>> = {
+  second: "second",
+  minute: "minute",
+  hour: "hour",
+  day: "day",
+  week: "week",
+  month: "month",
+  year: "year",
+};
+
+/** "3 days ago", "in 2 hours", "just now" - `relativeSpan` said in English. */
+export function formatRelativeEn(instant: Instant, now: Instant): string {
+  const span = relativeSpan(instant, now);
+  if (span.direction === "now") return "just now";
+  const noun = EN_RELATIVE_NOUNS[span.unit];
+  const counted = `${span.count} ${noun}${span.count === 1 ? "" : "s"}`;
+  return span.direction === "past" ? `${counted} ago` : `in ${counted}`;
+}
+
+/** `formatRelative`'s Serbian or English reading, chosen by the caller's locale. */
+export function formatRelative(
+  instant: Instant,
+  now: Instant,
+  locale: ProseLocale,
+): string {
+  return locale === "en" ? formatRelativeEn(instant, now) : formatRelativeSr(instant, now);
 }
 
 // ---------------------------------------------------------------------------
@@ -1331,6 +1387,24 @@ export function formatDurationSr(ms: number): string {
       .map((part) => srCount(part.count, part.noun))
       .join(" ")
   );
+}
+
+/** The same duration in English words - "1 hour 30 minutes", "0 seconds". */
+export function formatDurationEn(ms: number): string {
+  if (!Number.isInteger(ms)) return "";
+  if (ms === 0) return enCount(0, "second");
+  const sign = ms < 0 ? "-" : "";
+  return (
+    sign +
+    breakDown(ms)
+      .map((part) => enCount(part.count, part.noun))
+      .join(" ")
+  );
+}
+
+/** `formatDuration`'s Serbian or English reading, chosen by the caller's locale. */
+export function formatDuration(ms: number, locale: ProseLocale): string {
+  return locale === "en" ? formatDurationEn(ms) : formatDurationSr(ms);
 }
 
 // ---------------------------------------------------------------------------
@@ -2099,4 +2173,224 @@ export function explainCronSr(spec: CronSpec): string {
   ]
     .filter((clause) => clause !== "")
     .join(", ");
+}
+
+// ---------------------------------------------------------------------------
+// Cron: the English reading
+// ---------------------------------------------------------------------------
+
+/** English weekday names, Sunday first, as cron numbers them. */
+const EN_WEEKDAYS = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+] as const;
+
+const EN_MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+] as const;
+
+/** 1 -> "1st", 2 -> "2nd", 11 -> "11th" - the English ordinal. */
+function ordinalEn(value: number): string {
+  const mod100 = Math.abs(value) % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${value}th`;
+  switch (Math.abs(value) % 10) {
+    case 1:
+      return `${value}st`;
+    case 2:
+      return `${value}nd`;
+    case 3:
+      return `${value}rd`;
+    default:
+      return `${value}th`;
+  }
+}
+
+function describeSecondsEn(shape: FieldShape): string {
+  switch (shape.kind) {
+    case "all":
+      return "every second";
+    case "single":
+      return `at second ${shape.value}`;
+    case "range":
+      return `from second ${shape.from} to second ${shape.to}`;
+    case "step":
+      return enEvery(shape.step, "second");
+    case "list":
+      return `at seconds ${joinEn(shape.values.map(String))}`;
+  }
+}
+
+function describeMinutesEn(shape: FieldShape): string {
+  switch (shape.kind) {
+    case "all":
+      return "every minute";
+    case "single":
+      return `at minute ${shape.value}`;
+    case "range":
+      return `from minute ${shape.from} to minute ${shape.to}`;
+    case "step":
+      return enEvery(shape.step, "minute");
+    case "list":
+      return `at minutes ${joinEn(shape.values.map(String))}`;
+  }
+}
+
+function describeHoursEn(shape: FieldShape): string {
+  switch (shape.kind) {
+    case "all":
+      return "every hour";
+    case "single":
+      return `at ${pad(shape.value, 2)}:00`;
+    case "range":
+      return `from ${pad(shape.from, 2)}:00 to ${pad(shape.to, 2)}:00`;
+    case "step":
+      return enEvery(shape.step, "hour");
+    case "list":
+      return `at ${joinEn(shape.values.map((value) => `${pad(value, 2)}:00`))}`;
+  }
+}
+
+function describeDaysOfMonthEn(shape: FieldShape): string {
+  switch (shape.kind) {
+    case "all":
+      return "";
+    case "single":
+      return `the ${ordinalEn(shape.value)} of the month`;
+    case "range":
+      return `from the ${ordinalEn(shape.from)} to the ${ordinalEn(shape.to)} of the month`;
+    case "step":
+      return `every ${ordinalEn(shape.step)} day of the month`;
+    case "list":
+      return `the ${joinEn(shape.values.map(ordinalEn))} of the month`;
+  }
+}
+
+function describeDaysOfWeekEn(shape: FieldShape): string {
+  const weekday = (day: number): string => EN_WEEKDAYS[day] ?? "";
+  switch (shape.kind) {
+    case "all":
+      return "";
+    case "single":
+      return `on ${weekday(shape.value)}`;
+    case "range":
+      return `from ${weekday(shape.from)} to ${weekday(shape.to)}`;
+    case "step":
+      return `every ${ordinalEn(shape.step)} day of the week`;
+    case "list":
+      return `on ${joinEn(shape.values.map(weekday))}`;
+  }
+}
+
+function describeMonthsEn(shape: FieldShape): string {
+  const month = (value: number): string => EN_MONTHS[value - 1] ?? "";
+  switch (shape.kind) {
+    case "all":
+      return "";
+    case "single":
+      return `in ${month(shape.value)}`;
+    case "range":
+      return `from ${month(shape.from)} to ${month(shape.to)}`;
+    case "step":
+      return `every ${ordinalEn(shape.step)} month`;
+    case "list":
+      return `in ${joinEn(shape.values.map(month))}`;
+  }
+}
+
+function describeTimeOfDayEn(spec: CronSpec): string {
+  const seconds = classifyField(spec.seconds, 0, 59);
+  const minutes = classifyField(spec.minutes, 0, 59);
+  const hours = classifyField(spec.hours, 0, 23);
+  const secondsAreDefault = spec.seconds.length === 1 && spec.seconds[0] === 0;
+
+  if (seconds.kind === "all" && minutes.kind === "all" && hours.kind === "all") {
+    return "every second";
+  }
+  if (secondsAreDefault && minutes.kind === "all" && hours.kind === "all") {
+    return "every minute";
+  }
+  if (secondsAreDefault && minutes.kind === "single" && hours.kind === "all") {
+    return `every hour at :${pad(minutes.value, 2)}`;
+  }
+
+  const enumerable =
+    spec.seconds.length === 1 &&
+    spec.minutes.length * spec.hours.length <= CLOCK_TIME_BUDGET;
+  if (enumerable) {
+    const second = spec.seconds[0] ?? 0;
+    const times: string[] = [];
+    for (const hour of spec.hours) {
+      for (const minute of spec.minutes) {
+        times.push(
+          `${pad(hour, 2)}:${pad(minute, 2)}${secondsAreDefault ? "" : `:${pad(second, 2)}`}`,
+        );
+      }
+    }
+    return `at ${joinEn(times)}`;
+  }
+
+  const parts: string[] = [];
+  if (!secondsAreDefault) parts.push(describeSecondsEn(seconds));
+  if (minutes.kind !== "all" || secondsAreDefault) parts.push(describeMinutesEn(minutes));
+  if (hours.kind !== "all") parts.push(describeHoursEn(hours));
+  return parts.join(", ");
+}
+
+/**
+ * The English day clause - `describeDays`' branch, word for word.
+ *
+ * The union/intersection distinction Vixie's two day fields carry is the whole
+ * point of the sentence, and it is said the same way in either language: "or"
+ * for the union of the two fields, "and" when a leading star has made the
+ * expression mean both at once.
+ */
+function describeDaysEn(spec: CronSpec): string {
+  const monthShape = classifyField(spec.daysOfMonth, 1, 31);
+  const weekShape = classifyField(spec.daysOfWeek, 0, 6);
+  const everyDay =
+    spec.dayOfMonthStar || spec.dayOfWeekStar
+      ? monthShape.kind === "all" && weekShape.kind === "all"
+      : monthShape.kind === "all" || weekShape.kind === "all";
+  if (everyDay) {
+    return spec.dayOfMonthStar && spec.dayOfWeekStar ? "" : "every day";
+  }
+
+  const monthPart = describeDaysOfMonthEn(monthShape);
+  const weekPart = describeDaysOfWeekEn(weekShape);
+  if (monthPart === "") return weekPart;
+  if (weekPart === "") return monthPart;
+  const union = !spec.dayOfMonthStar && !spec.dayOfWeekStar;
+  return `${monthPart} ${union ? "or" : "and"} ${weekPart}`;
+}
+
+/** A crontab expression read out in English - "at 00:00, the 1st of the month or on Friday". */
+export function explainCronEn(spec: CronSpec): string {
+  return [
+    describeTimeOfDayEn(spec),
+    describeDaysEn(spec),
+    describeMonthsEn(classifyField(spec.months, 1, 12)),
+  ]
+    .filter((clause) => clause !== "")
+    .join(", ");
+}
+
+/** `explainCron`'s Serbian or English reading, chosen by the caller's locale. */
+export function explainCron(spec: CronSpec, locale: ProseLocale): string {
+  return locale === "en" ? explainCronEn(spec) : explainCronSr(spec);
 }
