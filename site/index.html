@@ -57,7 +57,7 @@
                 "mainEntity": [
                     { "@type": "Question", "name": "Is Nexus free?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Nexus is free and open source under the Apache License 2.0. It has no ads, no online account and no telemetry." } },
                     { "@type": "Question", "name": "Does Nexus need the internet?", "acceptedAnswer": { "@type": "Answer", "text": "No. Every feature works with the network off. The local app has no code path that reaches the network, and a CI check enforces it." } },
-                    { "@type": "Question", "name": "Is Nexus available in English?", "acceptedAnswer": { "@type": "Answer", "text": "Not yet. The interface is in Serbian. All of its text is kept in one place, so an English translation is an extraction rather than a rewrite. The code and documentation are in English." } },
+                    { "@type": "Question", "name": "Is Nexus available in English?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. The interface ships in Serbian and English: on first run it follows the system language (Serbian when the system locale is sr*, English otherwise) and remembers the choice, which you can change in Settings. The code and documentation are in English." } },
                     { "@type": "Question", "name": "Which platforms does Nexus run on?", "acceptedAnswer": { "@type": "Answer", "text": "Windows 10 and 11 (a per-user installer) and Linux (an AppImage, a tarball and a Gentoo ebuild), all x64." } },
                     { "@type": "Question", "name": "How is my data protected?", "acceptedAnswer": { "@type": "Answer", "text": "Everything is stored in one encrypted database on your computer that opens only with your passcode or your Recovery Kit, and attachments are encrypted with AES-256-GCM. Private notes are encrypted so that only you can read them." } },
                     { "@type": "Question", "name": "Can I take my data with me?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Nexus exports everything into a single sealed archive that you can restore later, on the same computer or another one, or merge into an existing profile. Encrypted backups can also run on a schedule." } }
@@ -94,7 +94,7 @@
 
         <div class="get-it">
             <p class="free">Free and open source</p>
-            <p class="where">Apache-2.0. Windows 10 and 11, and Linux, x64. Interface in Serbian.</p>
+            <p class="where">Apache-2.0. Windows 10 and 11, and Linux, x64. Interface in Serbian and English.</p>
             <div class="band-actions">
                 <a class="btn btn-app" href="https://github.com/lukastojiljkovic/Nexus/releases/latest">Download Nexus</a>
                 <a class="btn btn-line" href="https://github.com/lukastojiljkovic/Nexus">View the source</a>
@@ -200,7 +200,7 @@
             <div>
                 <h3>What it can't do yet</h3>
                 <ul>
-                    <li><b>English.</b> The interface is in Serbian only.</li>
+                    <li><b>Other languages.</b> The interface is in Serbian and English; no other language ships yet.</li>
                     <li><b>Sync and the web app.</b> Both are paused until the desktop app is finished. The desktop app is complete without them.</li>
                     <li><b>macOS.</b> Installers are built for Windows and Linux only, and code signing for the Windows installer is paused for now. The source is open, so anyone can check what it does.</li>
                 </ul>
@@ -213,7 +213,7 @@
         <div class="faq">
             <details><summary>Is Nexus free?</summary><p>Yes. Nexus is free and open source under the <a href="https://github.com/lukastojiljkovic/Nexus/blob/main/LICENSE">Apache License 2.0</a>. It has no ads, no online account and no telemetry.</p></details>
             <details><summary>Does Nexus need the internet?</summary><p>No. Every feature works with the network off. The local app has no code path that reaches the network, and a CI check enforces it.</p></details>
-            <details><summary>Is Nexus available in English?</summary><p>Not yet. The interface is in Serbian. All of its text is kept in one place, so an English translation is an extraction rather than a rewrite. The code and documentation are in English.</p></details>
+            <details><summary>Is Nexus available in English?</summary><p>Yes. The interface ships in Serbian and English: on first run it follows the system language (Serbian when the system locale is sr*, English otherwise) and remembers the choice, which you can change in Settings. The code and documentation are in English.</p></details>
             <details><summary>Which platforms does Nexus run on?</summary><p>Windows 10 and 11 (a per-user installer) and Linux (an AppImage, a tarball and a Gentoo ebuild), all x64.</p></details>
             <details><summary>How is my data protected?</summary><p>Everything is stored in one encrypted database on your computer that opens only with your passcode or your Recovery Kit, and attachments are encrypted with AES-256-GCM. Private notes are encrypted so that only you can read them.</p></details>
             <details><summary>Can I take my data with me?</summary><p>Yes. Nexus exports everything into a single sealed archive that you can restore later, on the same computer or another one, or merge into an existing profile. Encrypted backups can also run on a schedule.</p></details>
@@ -234,7 +234,7 @@
         </div>
         <dl class="get-facts">
             <div><dt>Requires</dt><dd>Windows 10 or 11, or a Linux desktop with a keyring, x64</dd></div>
-            <div><dt>Language</dt><dd>Serbian (Latin)</dd></div>
+            <div><dt>Language</dt><dd>Serbian (Latin) and English</dd></div>
             <div><dt>License</dt><dd>Apache-2.0, source on GitHub</dd></div>
             <div><dt>Network</dt><dd>Not needed for anything</dd></div>
         </dl>

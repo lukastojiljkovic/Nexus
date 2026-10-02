@@ -265,7 +265,7 @@ jobs:
             echo
             echo "### Before you install"
             echo
-            echo "- The interface is **Serbian only**. That is a product decision, not a missing translation."
+            echo "- The interface is in **Serbian and English**. On first run it follows the system language, and Settings switches it at any time."
             echo "- **Code signing is paused for now**, so Windows SmartScreen warns on first run (More info, then Run anyway). Nexus is open source: anyone who wants to make sure the code does what it says can read all of it in this repository, and every file below was built by CI from the tagged commit, with an attestation that proves which commit and workflow produced it."
             echo "- Sync is **off by default and unreachable in this build**: no backend project is compiled in, and the app makes no network call at all."
             echo "- Auto-update is **disarmed** on purpose. Updating means downloading the next release."

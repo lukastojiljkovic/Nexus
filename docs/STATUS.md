@@ -42,6 +42,15 @@ used it daily since 2026-08-02. The last installer built is **1.3.0**, built
 2026-09-23 from `eceb07e`; the tree now declares **1.4.0**, the first public
 release, prepared but not yet tagged (§4).
 
+**The interface ships in two languages** (2026-10-02). English joins Serbian as
+a whole second table, `strings.en.ts`, checked against the Serbian-derived
+`Strings` type so a leaf left untranslated or a key invented is one compile
+error each. First run follows the system language — Serbian when it reads `sr*`,
+English otherwise — and the device remembers the choice from then on, with
+Settings → Appearance switching it at runtime. The main process learns the
+choice over a `locale:set` report, so native dialogs and OS notifications follow
+the same language, and the demo profile seeds its content in it too.
+
 **Web and sync are paused, not cancelled** (founder, 2026-08-31). Desktop work
 comes first, because the renderer is one React codebase and Electron is only its
 shell — a feature finished on the desktop is one the web app inherits later.
@@ -638,6 +647,10 @@ suggestion, cheapest and highest-leverage first.
    rewrite its leaves in place; splitting it means per-surface subtables that
    join the table when their page loads, and that reaches `check:strings`,
    `check:copy` and the locale machinery. A design, not an edit.
+   The English table (2026-10-02) roughly doubles that payload and rides in the
+   same startup chunk, because `strings.ts` imports both locales eagerly — so
+   the split this item proposes is worth more, not less, and a lazy per-locale
+   load is the other half of the same design.
 2. **A bench wire is pointer-only.** In Elektronika a part is a
    `role="button"` with a tab stop and Enter/Space; a wire is an invisible hit
    path with an `onPointerDown` and nothing else. So a keyboard user can select
@@ -713,6 +726,15 @@ suggestion, cheapest and highest-leverage first.
 12. **Mixed line endings within files**, despite `core.autocrlf=true`. Every
     scripted edit has to be EOL-aware; it has already cost two redoes. A standing
     hazard rather than a defect.
+13. **The business demo profile's content is still Serbian only.** The English
+    locale reaches the personal demo profile end to end (`DemoContext.locale`,
+    and every seeder under `apps/desktop/src/main/demo/` except `business.ts`),
+    and `business.ts` is seeded only by the `--demo` CLI for the business
+    profile of ADR-058. Finishing it is the same mechanical job the other
+    seeders already had: an `EN` map keyed by the Serbian literal plus a
+    `text(ctx, …)` accessor at each store call, with the Serbian path left
+    byte-identical. Not urgent: `--demo` is an automated run and keeps the
+    Serbian default.
 
 **Not on the desktop list:** SEC-VER-01 (threat models), the sync transport's
 error model, and the pairing redesign are all web/sync work and stay paused with

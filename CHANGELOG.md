@@ -22,6 +22,11 @@ carries the Apache-2.0 licence, the release pipeline and the corrections below.
   other large surfaces left the startup path. The tools drawer fetches a
   toolkit when one of its tools is opened, and it no longer ships with the
   rest of the shell.
+- **The interface ships in English as well as Serbian**, and the language is a
+  first-class preference: on first run the app follows the system language
+  (Serbian for `sr*`, English otherwise), remembers the choice, and switches at
+  runtime from Settings → Appearance — including the main process's native
+  dialogs, OS notifications and the demo profile's seeded content.
 
 ### Fixed
 
