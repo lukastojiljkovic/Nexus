@@ -1,64 +1,67 @@
 # Nexus
 
-An offline-first life-management app for your own computer. Tasks, calendar,
-notes, documents, studying, habits, a focus timer, fitness, finance, a canvas
-and an electronics workbench — one workspace, stored in a single encrypted
-database on your device, working with the network off.
+Nexus is a desktop application that keeps your tasks, calendar, notes, documents, study, habits, fitness, finance, a canvas and an electronics workbench in one workspace on your own computer. Everything is stored in a single encrypted SQLite database, the application works with the network off, and the interface is in Serbian.
 
-**The interface is in Serbian only.** That is a product decision, not a missing
-translation: the copy is centralised in one file, so an English locale is an
-extraction rather than a rewrite, and it is welcome as a contribution. Code,
-comments and documentation are in English.
-
-The desktop application is complete and in daily use. **It has not been
-released yet** — there is no published build, no tag and no code signature, and
-the first public release is being prepared now. The web app and its optional
-end-to-end-encrypted sync are built out of this same codebase and are paused
-until the desktop is finished; what exists for them stays built, tested and off
-by default.
-
-<p>
-  <img src="docs/images/dashboard.png" width="49%" alt="Nexus dashboard: today's events, upcoming tasks, expiring documents and exams">
-  <img src="docs/images/tasks.png" width="49%" alt="Task lists with sections, subtasks, tags, priorities and due dates">
-  <img src="docs/images/finance.png" width="49%" alt="Finance ledger with accounts in two currencies, categories and budgets, in the dark theme">
-  <img src="docs/images/electronics.png" width="49%" alt="Electronics workbench: a Raspberry Pi wired to four sensors, in the dark theme">
-</p>
-
-The screenshots are the demo profile rendered by the screenshot harness
-(`pnpm --filter @nexus/desktop shots`), which drives the real application
-through every screen and audits the result.
+<img src="docs/images/dashboard.png" width="100%" alt="The Nexus dashboard: today's events, upcoming tasks, expiring documents, exams and study time">
 
 ## Download
 
-[**Releases**](https://github.com/lukastojiljkovic/Nexus/releases/latest) —
-Windows installer, Linux AppImage and Linux tarball.
+[**Releases**](https://github.com/lukastojiljkovic/Nexus/releases/latest) — the first public release is **1.4.0**:
 
-**Nothing is downloadable yet.** The first public release is pending: it waits
-on this repository's open-source preparation and on Windows code signing, and
-the project's own rule is that no public download happens before signing is
-settled. Until then, build from source — see below.
-
-## Requirements
-
-| | |
+| File | Platform |
 | --- | --- |
-| Windows | 10 or 11, x64 |
-| Linux | x64 with glibc, a desktop with a working Secret Service keyring (gnome-keyring, KWallet, KeePassXC). Without one the app refuses to create an account rather than weaken the key chain |
-| macOS | Not built. Nothing here has produced or opened a macOS artefact |
+| `Nexus-Setup-1.4.0.exe` | Windows 10 or 11, x64 — per-user NSIS installer |
+| `Nexus-1.4.0-x86_64.AppImage` | Linux x64 with glibc — mark it executable and run it |
+| `nexus-1.4.0-linux-x64.tar.gz` | Linux x64 — the payload the Gentoo ebuild installs |
+
+Every release also carries `SHA256SUMS.txt`, a CycloneDX SBOM, the rendered `THIRD-PARTY-NOTICES.md`, and build-provenance attestations. On Linux the app needs a running Secret Service keyring (gnome-keyring, KWallet, KeePassXC with Secret Service enabled); without one it refuses to create an account rather than weaken the key chain. The Windows installer is not code-signed, so SmartScreen warns on first run, and the release notes say so. macOS is not built: nothing here has produced or opened a macOS artefact.
+
+## What it does
+
+Sixteen modules, switched on per profile.
+
+| Module | What it holds |
+| --- | --- |
+| Dashboard | The page you open first: today's agenda, upcoming tasks, expiring documents, exams and study time, composed from widgets you place yourself. |
+| Tasks | Lists, sections, subtasks, priorities, tags, recurrence and dependencies, shown as a list, a board, a calendar or a smart list, with per-task reminders. |
+| Calendar | Month, week, day and agenda views, events you drag and resize, recurrence and reminders, and the tracked documents whose expiry dates appear on it. |
+| Notes | Folders, tags, backlinks, templates, version history and inline flashcards. |
+| Private vault | Notes encrypted so only you can read them, with a Recovery Kit of their own. |
+| Documents | Attachments with in-app preview, and content search for the formats that need no dependency. |
+| Study | Exam countdowns, spaced-repetition decks with Anki import, cloze and problem cards, typeset maths, and a planner that books study time before each exam. |
+| Finance | Accounts, transactions, categories, budgets and subscriptions, each currency kept separate, with CSV statement import. |
+| Habits | Habits with forgiving streaks, completion history and dashboard widgets. |
+| Fitness | Exercise and training tracking, personal records, body measurements, and a food catalogue that names the source of every number. |
+| Focus | One Pomodoro timer, shared by the study session and the utilities drawer. |
+| Tools | A drawer of calculators and converters. |
+| Canvas | An infinite board with live notes, cards and connectors. |
+| Electronics | A wiring bench that derives an Arduino sketch, a ROS 2 package and a URDF from a circuit, and can run the plan on your own toolchain. |
+| Professional toolkits | Opt-in toolkits for a profession — law, construction, agriculture, photography, music, education and others. |
+| Settings | Profiles, themes, module settings and the licence screen. |
 
 ## Privacy and security, briefly
 
-- **Local by default.** Your data is one encrypted SQLite database on your own
-  device. The local path cannot reach the network, and that is enforced in CI
-  rather than promised in copy.
+- **Local by default.** Your data is one encrypted SQLite database on your own device. The local path cannot reach the network, and that is enforced in CI rather than promised in copy.
 - **No telemetry, no analytics, no crash reporting.**
-- **Cloud is off by default**, and in the build this repository produces it
-  cannot be turned on at all: no backend project is compiled in. Optional sync
-  is end-to-end encrypted, and the server holds ciphertext only.
+- **Cloud is off by default**, and in the build this repository produces it cannot be turned on at all: no backend project is compiled in. Optional sync is end-to-end encrypted, and the server holds ciphertext only.
 
 Read [PRIVACY.md](PRIVACY.md) for exactly what is stored where, and
 [SECURITY.md](SECURITY.md) to report a vulnerability privately.
 [TERMS.md](TERMS.md) covers the distributed binaries.
+
+## How it was built
+
+The repository holds the full working record, and a reader can follow it end to end:
+
+- **Specification and PRDs** — [docs/SPECIFICATION.md](docs/SPECIFICATION.md) and [docs/prd/](docs/prd/): 37 numbered requirements documents plus a glossary; `prd/00-overview.md` is the module registry.
+- **Architecture and the ADR index** — [docs/architecture/overview.md](docs/architecture/overview.md), with [one table for all 87 decisions and their status](docs/architecture/adr/README.md).
+- **The engineering journal** — [docs/log/README.md](docs/log/README.md): four months of entries, kept by month, recording why each decision was made.
+- **The defect ledger and the gates** — [docs/defect-classes.md](docs/defect-classes.md): 149 recurring failure shapes, and the 26 `check:` scripts that enforce the ones a static check can answer.
+- **The security baseline** — [docs/security/baseline.md](docs/security/baseline.md): the binding `SEC-*` rules.
+- **Threat models and signed deviations** — [docs/security/threat-models/](docs/security/threat-models/) and [docs/deviations.md](docs/deviations.md).
+- **The design direction** — [docs/design/direction-brief.md](docs/design/direction-brief.md); the direction that won is now the token set in `packages/tokens`.
+- **The prompt pipeline** — [docs/prompts/README.md](docs/prompts/README.md): the prompts that produced the PRDs, the research passes and the ADRs.
+- **The map** — [docs/README.md](docs/README.md) groups all of it by what you want to do.
 
 ## Contributing
 
@@ -305,11 +308,9 @@ plain `"sr"` mis-tailors the Latin diacritics (š, č, ć, ž, đ).
   pull request. It never launches Electron, so the smoke check is a local gate.
 - **Security** (`.github/workflows/security.yml`) — a whole-history gitleaks
   secret scan plus a dependency audit, on every push and on a schedule.
-- **CodeQL**, **Dependency review** and **Scorecard** are wired up and
-  deliberately inert while the repository is private: code scanning and
-  dependency review need GitHub Advanced Security, and Scorecard reads public
-  repositories. Each is gated on the repository being public, so all three
-  switch themselves on with the visibility change.
+- **CodeQL**, **Dependency review** and **Scorecard** run on the public
+  repository. Each is gated on `!github.event.repository.private`, so the
+  repository being public is the switch that turns them on.
 
 ## Language
 
