@@ -3,7 +3,7 @@
 **Date:** 2026-09-22 · **Author:** Claude (Opus), for founder review
 **Slice:** E6 of ADR-085 — the external runner (`ros2` / `colcon` / Gazebo, native
 or through WSL2 or Docker).
-**Authorising decision:** [DEV-007](../deviations.md), confirmed by the founder
+**Authorising decision:** [DEV-007](../../deviations.md), confirmed by the founder
 2026-08-19, including its four mitigations and its revisit trigger.
 **Required by:** SEC-VER-01. **This is the first document in this directory** —
 see §7, which is a finding about the rule rather than about this slice.
@@ -227,7 +227,7 @@ ships:
 
 ## 8. Related
 
-- [DEV-007](../deviations.md) — the authorising decision and its trigger.
+- [DEV-007](../../deviations.md) — the authorising decision and its trigger.
 - [SEC-EL-02](../baseline.md) — the IPC contract every new channel inherits.
 - [SEC-LOC-04](../baseline.md) — the no-network assertion the runner must not
   weaken.

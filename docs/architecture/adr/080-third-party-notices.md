@@ -7,7 +7,7 @@ release blocker the canvas engine left open ·
 
 > Only the premise changed. §1 called Nexus a commercial, closed-source product;
 > it is now Apache-2.0, and the repository becomes public at the first release
-> (step 12 of `docs/OPEN-SOURCE-READINESS.md`). **The obligation this ADR
+> (step 12 of the open-source readiness audit). **The obligation this ADR
 > describes is untouched** — MIT, BSD, Apache-2.0 and the OFL require the notice
 > to travel with the distribution whatever the distributor's own licence is — so
 > the generator, the scoping rules, the font invariant and the „Licence" screen

@@ -21,7 +21,7 @@ so, and the repository is published.
   product actually designs against is a server that *can* read user content, and
   the answer to that is the ciphertext-only protocol — not a licence.
 - **Compatible with the tree.** The readiness audit measured the mix
-  ([OPEN-SOURCE-READINESS.md](../../OPEN-SOURCE-READINESS.md) §1): every
+  (§1 of the audit as carried in pull request #39): every
   production dependency of the packaged app is permissive, with no GPL, AGPL,
   SSPL or Commons-Clause anywhere, in the shipped tree or in the build
   toolchain. `check:licences` re-derives the shipped half from the tree on every
