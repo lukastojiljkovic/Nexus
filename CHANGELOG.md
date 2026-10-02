@@ -4,10 +4,10 @@ All notable changes to this project are documented here. The format is
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.4.0] - Unreleased
 
-Preparation for the first public release. Nothing here changes what the
-application does.
+The first public release. No earlier version was tagged or published; this one
+carries the Apache-2.0 licence, the release pipeline and the corrections below.
 
 ### Added
 
@@ -17,6 +17,38 @@ application does.
   `CODE_OF_CONDUCT.md`, `PRIVACY.md`, `TERMS.md`, `SUPPORT.md`, `ROADMAP.md`.
 - Issue templates and a release workflow that produces checksums, an SBOM,
   build provenance and the third-party notices for a tagged release.
+- A project website, published with the repository by a Pages workflow.
+- Every page in the renderer is its own chunk, so the canvas engine and the
+  other large surfaces left the startup path. The tools drawer fetches a
+  toolkit when one of its tools is opened, and it no longer ships with the
+  rest of the shell.
+
+### Fixed
+
+- **Revoking a device now ends its auth session**, not only the access tokens
+  its RLS wall refuses: the revocation path deletes the matching
+  `auth.sessions` row, so the refresh token dies with it.
+- **The sync housekeeping job is scheduled by a migration** rather than by hand
+  in the SQL editor, idempotently and with the `pg_cron` extension created if
+  needed.
+- The Supabase README no longer claims the migration forces RLS on
+  `storage.objects` and `realtime.messages` — it cannot, and the migration's
+  header says so.
+- Row ids minted in the same millisecond sort in the order they were minted.
+- Leaving a canvas board no longer writes an empty board, and the canvas
+  autosave keeps one write per board on the wire.
+- Every exit that closes an editor waits for the last edit to reach disk, so
+  closing a note or a canvas no longer loses it.
+- The harness sandbox is applied before `ready`, so renderer storage lands in
+  the sandbox rather than in the developer's own profile.
+
+### Security
+
+- **The packaged executable is hardened with Electron fuses**: `RunAsNode`,
+  `NODE_OPTIONS` and the CLI inspect arguments are off, cookie encryption is on,
+  embedded asar integrity validation is on, and the app loads only from the
+  asar. `GrantFileProtocolExtraPrivileges` stays on because the renderer still
+  loads from `file://`.
 
 ## 1.3.0 - 2026-09-23
 
@@ -44,4 +76,4 @@ tags and no downloads.
   shown in the application, rather than written by hand.
 - **Linux builds** — AppImage, tarball and a Gentoo ebuild.
 
-[Unreleased]: https://github.com/lukastojiljkovic/Nexus/commits/main
+[1.4.0]: https://github.com/lukastojiljkovic/Nexus/releases/tag/v1.4.0
