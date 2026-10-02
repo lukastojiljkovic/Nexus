@@ -15,7 +15,7 @@ failure shapes those entries produced live in
 | [2026-07.md](2026-07.md) | The founding: the docs-first phase (vision, PRDs, research, ADRs 001–011), the monorepo and its gates, encryption at rest, and modules one through ten. |
 | [2026-08.md](2026-08.md) | The desktop becoming a product: the polish arcs, the drawn-data layer, v1.0.0, twelve sync slices, the eighteen-toolkit professional drawer, Linux packaging, and v1.1.0. |
 | [2026-09.md](2026-09.md) | The loose ends and the electronics arc: the editor-exit defects, E4b/E4c/E6, page-level chunking, the screenshot sweep and the gates it produced, the 1.3.0 installer, and the documentation entering version control. |
-| [2026-10.md](2026-10.md) | Preparing the public release: Apache-2.0, the policies and issue forms, the release pipeline, the hardened Electron package, two closed server gaps, the website, and the seven working documents moved out of the repository. |
+| [2026-10.md](2026-10.md) | Preparing the public release: Apache-2.0, the policies and issue forms, the release pipeline, the hardened Electron package, the scheduled housekeeping job, the website, and the seven working documents moved out of the repository. |
 | [superseded-status-sections.md](superseded-status-sections.md) | The sections cut out of `STATUS.md` when it was reorganised, kept verbatim — including the finished-work sections moved out on 2026-09-26 and the roadmap as cut on 2026-08-16. |
 
 ## How the journal is kept

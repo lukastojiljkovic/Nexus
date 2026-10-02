@@ -140,7 +140,6 @@ supabase/
     …200000_kdf_params_ceiling    the KDF parameters bounded from ABOVE too, not only below
     …220000_device_register       how a desktop gets its device row back when its session dies
     …090000_housekeeping_schedule (2026-10-02) the housekeeping job schedules itself; warns if pg_cron cannot exist
-    …090100_device_revoke_ends…  (2026-10-02) revoking a device deletes the GoTrue session it is bound to
   functions/                      three Edge Functions, and all three read a service-role key
     pair-complete/                the pairing handshake's three routines
     device-register/              hands out a desktop device row, priced at the master key (013)
@@ -152,7 +151,7 @@ supabase/
 
 ### The numbering is logical steps, not a file count
 
-The fifteen files carry thirteen numbers: `003` is spread over three files
+The fourteen files carry twelve numbers: `003` is spread over three files
 (`003`, `003b`, `003c`), and `006` and `007` were never written. The number is the
 logical STEP and it is what prose cites; the filename's timestamp is the order
 the server applies them in. `pnpm check:migrations` holds the two against each
@@ -607,28 +606,15 @@ statement that the step is missing rather than an invented answer.
 **Until it exists, `pair-complete` is unreachable on the honest path**, and
 therefore so is every desktop session. The schema is ahead of the protocol.
 
-### 6.2 Revocation ends the auth session — CLOSED
+### 6.2 Revocation does not end the auth session
 
-**Closed by migration 015.** `devices.revoked_at` stops a session reading
-anything, because the restrictive policies consult it on every statement — and
-the transition that sets it now also deletes the matching `auth.sessions` row,
-so the refresh token in that client's hands dies with the access tokens (GoTrue's
-`auth.refresh_tokens.session_id` is `on delete cascade`).
-
-The delete is a `security definer` trigger function in `private`, not an Edge
-Function calling the admin API. The desktop revokes over PostgREST by PATCHing
-the timestamp, and a revocation whose second half depends on the revoked party
-making one more request is not a revocation. The helper is not an RPC: EXECUTE
-is revoked from PUBLIC, `anon` and `authenticated`, and it lives in a schema
-PostgREST does not route to.
-
-`tests/database/07_device_revoke.test.sql` asserts that the session goes, the
-sibling desktop on the same account keeps its session, another account is
-untouched, a row naming an already-gone session is a quiet no-op (the
-device-register "stranded" path), the device row itself survives, and
-`authenticated` cannot call the helper. The column stays terminal (`NX201`,
-migration 003c), so the pair is one-way: the machine comes back by pairing
-again, with a new session and a new row.
+`devices.revoked_at` stops a session reading anything, because four restrictive
+policies consult it on every statement. It does **not** invalidate the GoTrue
+session: the refresh token in that client's hands keeps working and keeps minting
+access tokens, which are simply refused by the wall. The trigger makes the column
+terminal (`NX201`) so the refusal cannot be undone, but the correct end state is
+that revoking a device also calls the admin sign-out API for that `session_id`.
+That needs an authenticated Edge Function and is not built.
 
 ### 6.3 `mk_*` wraps are readable by any session that passes the gate — CLOSED, with a stated limit
 

@@ -34,7 +34,7 @@ lako ćemo ih posle portovati na sajt jer je electron osnova."*
 **Every remaining DESKTOP feature comes first.** The web app, the Supabase
 backend and pairing are **on hold** — not cancelled, and not to be treated as
 dead code: everything already built for them (`sync-crypto`, `sync-transport`,
-`sync-engine`, `sync-port`, the 15 server migrations, the desktop sync round and
+`sync-engine`, `sync-port`, the 14 server migrations, the desktop sync round and
 scheduler) stays built, stays tested, stays green in CI, and stays OFF by
 default. Nothing new is added to it until the desktop is complete.
 
@@ -438,7 +438,7 @@ choice of backend**; whatever in them is about the data model still applies.
   evidence by a number the evidence does not carry. This repository has TWO
   migration series and **both number from 001**: the local SQLite schema in
   `packages/db/src/migrations/` is at 069 and the server's in
-  `supabase/migrations/` at 013, so a bare „migration 006" resolves to whichever
+  `supabase/migrations/` at 014, so a bare „migration 006" resolves to whichever
   one the author had in mind and to nothing at all if they had neither.
   `packages/sync-transport/src/signal.ts` cited „migration 006's policies" for
   the realtime topic namespace, and the realtime policies are in the server's

@@ -48,8 +48,8 @@ shell — a feature finished on the desktop is one the web app inherits later.
 §4.2 is the queue that resumes when the desktop is done.
 
 **What exists of sync is real, and it has never run against the real server.**
-The server half ran against a real Postgres 17: 15 migrations, an RLS wall
-proved by 177 pgTAP assertions in CI, and the wire measured against a running
+The server half ran against a real Postgres 17: 14 migrations, an RLS wall
+proved by 165 pgTAP assertions in CI, and the wire measured against a running
 PostgREST. On the client side, `@nexus/sync-engine` drives sweep → pull → push,
 `syncRound.test.ts` runs two real SQLite databases against one server (a
 creation, a deletion and a two-device merge), and the scheduler
@@ -82,7 +82,7 @@ blocking; both are §5 items.
 | Linux | AppImage, tarball and a Gentoo ebuild, all built and verified |
 | Modules registered | **16** |
 | Local migrations | **70** (latest `070-circuit-search`) |
-| Server | 15 Supabase migrations, 3 Edge Functions, 177 pgTAP assertions |
+| Server | 14 Supabase migrations, 3 Edge Functions, 165 pgTAP assertions |
 | Static gates | **26**, each its own CI step |
 | Commits | **703** on this branch |
 | Unmerged work | **15 commits on `chore/open-source-readiness`**, plus the uncommitted public-release changes |
@@ -262,7 +262,7 @@ all 327 surfaces; none of them was edited.
 
 Built, executed, and not yet reachable from any screen.
 
-- **15 Supabase migrations** applied to a real Postgres 17, with **177 pgTAP
+- **14 Supabase migrations** applied to a real Postgres 17, with **165 pgTAP
   assertions** (the sum of `select plan(…)` across `tests/database/`) running in
   CI against the whole stack rather than a bare
   container. Running it rather than reading it is what proved that
@@ -602,9 +602,8 @@ ADR-087, the policies (`SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`,
 `PRIVACY.md`, `TERMS.md`, `SUPPORT.md`, `ROADMAP.md`, `CHANGELOG.md`), the issue
 forms, the tagged release pipeline with SBOM and build provenance, the CodeQL /
 dependency review / Scorecard workflows, a file-by-file classification of this
-docs tree, a hardened Electron package (fuses and asar integrity) and two closed
-server gaps (the housekeeping schedule is now a migration; revoking a device
-ends its auth session) — is in one pull request against `main`, on
+docs tree, a hardened Electron package (fuses and asar integrity) and a closed server gap (the housekeeping
+schedule is now a migration) — is in one pull request against `main`, on
 `chore/open-source-readiness`. The narrative is in
 [log/2026-10.md](log/2026-10.md).
 

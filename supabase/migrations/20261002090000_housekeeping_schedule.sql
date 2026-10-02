@@ -1,4 +1,4 @@
--- Neagle sync — migration 014: the housekeeping job schedules itself.
+-- Nexus sync — migration 014: the housekeeping job schedules itself.
 --
 -- WHY THIS IS A MIGRATION AND NOT A DASHBOARD STEP.
 -- `public.nexus_sync_housekeeping()` reaps spent pairing rows and stale
@@ -44,7 +44,7 @@ exception
   when insufficient_privilege or feature_not_supported or undefined_file
     or invalid_schema_name or duplicate_object then
     raise warning
-      'Neagle: pg_cron could not be created (%). Enable the pg_cron extension '
+      'Nexus: pg_cron could not be created (%). Enable the pg_cron extension '
       'from the Supabase dashboard (Database -> Extensions) and re-run '
       '`supabase db push`; the sync housekeeping job is NOT scheduled until '
       'then.', sqlerrm;
@@ -61,7 +61,7 @@ do $$
 begin
   if to_regnamespace('cron') is null then
     raise warning
-      'Neagle: pg_cron is not installed, so the sync housekeeping job was not '
+      'Nexus: pg_cron is not installed, so the sync housekeeping job was not '
       'scheduled. See the warning above; the job is the only thing that bounds '
       'private.pair_rate_limit.';
     return;

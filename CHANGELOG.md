@@ -25,9 +25,6 @@ carries the Apache-2.0 licence, the release pipeline and the corrections below.
 
 ### Fixed
 
-- **Revoking a device now ends its auth session**, not only the access tokens
-  its RLS wall refuses: the revocation path deletes the matching
-  `auth.sessions` row, so the refresh token dies with it.
 - **The sync housekeeping job is scheduled by a migration** rather than by hand
   in the SQL editor, idempotently and with the `pg_cron` extension created if
   needed.

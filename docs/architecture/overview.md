@@ -35,8 +35,8 @@ backup as an enhancement, never a dependency; local SQLite is the source of
 truth on every client, and the server is a relay and authority for sync, auth
 and blob storage. Private notes cross the wire only as ciphertext (SEC-ZK).
 
-**The server half is now built and executed** — fifteen Supabase migrations
-against a real Postgres 17, an RLS wall proved by 177 pgTAP assertions in CI,
+**The server half is now built and executed** — fourteen Supabase migrations
+against a real Postgres 17, an RLS wall proved by 165 pgTAP assertions in CI,
 three Edge Functions, and the PostgREST wire measured rather than assumed. What
 does not exist is the *client* path that would let a user switch any of it on.
 **Cloud stays off by default and switchable off entirely, structurally** — the
