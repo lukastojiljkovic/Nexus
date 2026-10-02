@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { SEARCH_KINDS } from "@nexus/core";
 
 import {
@@ -12,6 +12,12 @@ import {
   strings,
 } from "./strings.js";
 import { sr } from "./strings.sr.js";
+
+afterEach(() => {
+  // Any test that switched to English puts the process back where the rest of
+  // the suite expects it.
+  applyLocale(DEFAULT_LOCALE);
+});
 
 /**
  * The locale layer's contract. Two things here are load-bearing and neither is
@@ -81,10 +87,58 @@ describe("the table", () => {
   });
 
   it("registers exactly the locales the app can actually serve", () => {
-    // English is deliberately absent until it is translated: a locale in this
+    // English is in the record because it IS translated: a locale in this
     // record is one the settings toggle offers, and offering „English" that
-    // renders Serbian is worse than offering nothing.
-    expect(Object.keys(LOCALES)).toEqual(["sr"]);
+    // renders Serbian is worse than offering nothing. Completeness is the
+    // compiler's job — `LOCALES` is a `Record<Locale, Strings>` — so this pins
+    // only the list and its order.
+    expect(Object.keys(LOCALES)).toEqual(["sr", "en"]);
+  });
+});
+
+describe("the English table", () => {
+  it("is a whole translation, not a copy of Serbian", () => {
+    applyLocale("en");
+    expect(activeLocale()).toBe("en");
+    expect(strings.app.navLabel).toBe("Main navigation");
+    expect(strings.tasks.emptyTitle).not.toBe(sr.tasks.emptyTitle);
+    // The product name is the one leaf that is deliberately identical.
+    expect(strings.app.brand).toBe(sr.app.brand);
+  });
+
+  it("names every module in English", () => {
+    applyLocale("en");
+    expect(strings.modules.dashboard).toBe("Dashboard");
+    expect(strings.modules.canvas).toBe("Board");
+    expect(strings.modules.pro).toBe("Professional tools");
+  });
+
+  it("names both languages in the language the table itself serves", () => {
+    applyLocale("en");
+    expect(lookup(strings.settings.appearance.languageNames, "sr")).toBe("Serbian");
+    expect(lookup(strings.settings.appearance.languageNames, "en")).toBe("English");
+    applyLocale("sr");
+    expect(lookup(strings.settings.appearance.languageNames, "sr")).toBe("Srpski");
+    expect(lookup(strings.settings.appearance.languageNames, "en")).toBe("English");
+  });
+
+  it("switches back and forth without leaking either language", () => {
+    const serbianNav = strings.app.navLabel;
+    applyLocale("en");
+    expect(strings.app.navLabel).toBe("Main navigation");
+    applyLocale("sr");
+    expect(strings.app.navLabel).toBe(serbianNav);
+  });
+
+  it("agrees with English numeral rules: one against everything else", () => {
+    applyLocale("en");
+    expect(dayUnit(1, "day", "days")).toBe("day");
+    expect(dayUnit(0, "day", "days")).toBe("days");
+    expect(dayUnit(2, "day", "days")).toBe("days");
+    // English has no paucal, so `countUnit`'s `few` slot must never be chosen.
+    expect(countUnit(1, "gap", "gaps", "gaps")).toBe("gap");
+    expect(countUnit(3, "gap", "gaps", "gaps")).toBe("gaps");
+    expect(countUnit(11, "gap", "gaps", "gaps")).toBe("gaps");
   });
 });
 

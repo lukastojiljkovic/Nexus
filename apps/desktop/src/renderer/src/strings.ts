@@ -34,22 +34,36 @@
  * invented — there is no way to half-add a locale and not know it.
  */
 import { sr, type Strings } from "./strings.sr.js";
+import { en } from "./strings.en.js";
 
 export type { Strings } from "./strings.sr.js";
 
 /**
  * Every locale the app can serve.
  *
- * Serbian alone today. English is deliberately NOT stubbed as a copy of
- * Serbian: a locale present in this record is a locale the settings toggle
- * offers, and offering „English" that renders Serbian is a worse product than
- * offering nothing. The machinery is what was missing and the machinery is
- * here; the translation is content, and content is written, not generated.
+ * Serbian and English, each a whole table typed `Strings`; the compiler
+ * reports one error per leaf a locale has not translated and one per key it
+ * invented, so there is no way to half-add a locale and not know it. The order
+ * is the order the settings row offers, and `DEFAULT_LOCALE` below is what an
+ * unrecognised stored value falls back to.
+ *
+ * The union is written out rather than derived from the record with
+ * `keyof typeof LOCALES`, because a record of two full tables is thousands of
+ * literal types and the declaration emitter refuses to serialize a `keyof` of
+ * it (TS7056). Drift is still impossible: `LOCALES` is typed
+ * `Record<Locale, Strings>`, so a code missing from the union, missing from the
+ * record, or present only in the record is one compile error each.
  */
-export const LOCALES = { sr } satisfies Record<string, Strings>;
+export type Locale = "sr" | "en";
 
-export type Locale = keyof typeof LOCALES;
+export const LOCALES: Record<Locale, Strings> = { sr, en };
 
+/**
+ * The fallback: the table the process starts on and the table an unrecognised
+ * stored code resolves to. First-run detection (system locale `sr*` keeps
+ * Serbian, anything else starts English) lives in `localePrefs.ts`, beside the
+ * storage it belongs to - this module touches no browser API.
+ */
 export const DEFAULT_LOCALE: Locale = "sr";
 
 /**
@@ -63,6 +77,7 @@ export const DEFAULT_LOCALE: Locale = "sr";
  */
 const INTL_TAGS: Record<Locale, readonly string[]> = {
   sr: ["sr-Latn", "sr"],
+  en: ["en-GB", "en"],
 };
 
 /**

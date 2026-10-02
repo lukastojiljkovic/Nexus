@@ -146,6 +146,7 @@ import {
   clearStoredLocale,
   persistLocale,
   readStoredLocale,
+  reportLocaleToMain,
 } from "./localePrefs.js";
 import { useFocusTrap } from "./useFocusTrap.js";
 import { moduleName } from "./moduleName.js";
@@ -5087,8 +5088,10 @@ export function SettingsPage({
       // that redraws is already in the restored language rather than in the
       // one that was just discarded.
       clearStoredLocale();
-      applyLocale(readStoredLocale());
-      setLocale(readStoredLocale());
+      const restoredLocale = readStoredLocale();
+      applyLocale(restoredLocale);
+      reportLocaleToMain(restoredLocale);
+      setLocale(restoredLocale);
       onLocaleChanged();
       setAccent(readStoredAccent(profileId, activeKind));
       setWeekStart(readStoredWeekStart());
@@ -5209,13 +5212,13 @@ export function SettingsPage({
         className={sectionClass(sections.has("appearance"))}
       >
         {/* First in the card, because it governs every other word on the page.
-            One option today; the row is shown all the same — it is the answer
-            to „gde se menja jezik", and a settings row reading „Jezik: Srpski"
-            is an ordinary thing for a one-language product to say. A locale
-            added to `LOCALES` appears here without this block changing.
+            The list is `availableLocales()`, so a locale added to `LOCALES`
+            appears here without this block changing, and the stored choice is
+            what the rest of the app reads on the next render.
             `applyLocale` runs BEFORE the state bump on purpose: the table is
             rewritten in place, so the render that follows reads the new copy
-            (see `strings.ts`). */}
+            (see `strings.ts`), and `reportLocaleToMain` tells the main process
+            so its dialogs and OS notifications follow. */}
         <div
           className={hits.has("appearance-language") ? "set__field set__hit-field" : "set__field"}
         >
@@ -5232,6 +5235,7 @@ export function SettingsPage({
               const next = event.target.value as Locale;
               persistLocale(next);
               applyLocale(next);
+              reportLocaleToMain(next);
               setLocale(next);
               onLocaleChanged();
             }}

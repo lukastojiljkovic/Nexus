@@ -27,19 +27,66 @@ export function availableLocales(): Locale[] {
   return Object.keys(LOCALES) as Locale[];
 }
 
-/** The stored choice, or Serbian for anything unrecognized (including nothing stored yet). */
+/** The system language, or "" where there is no `navigator` (the Node test environment). */
+function systemLanguage(): string {
+  return typeof navigator === "undefined" ? "" : (navigator.language ?? "");
+}
+
+/**
+ * The language a device that has never been asked starts in.
+ *
+ * The system locale decides, and only once: `sr`/`sr-Latn`/`sr-Cyrl` all read
+ * as "this person already reads Serbian", and every other system language
+ * starts in English, because a reader of `de` is likelier to read English than
+ * Serbian. The answer is never written down - it is the absence of a stored
+ * choice, not a decision the app made for the user.
+ */
+function firstRunLocale(): Locale {
+  return systemLanguage().toLowerCase().startsWith("sr") ? "sr" : "en";
+}
+
+/**
+ * The stored choice; on a device that has never stored one, the system language
+ * decides. A value that IS stored but not a locale this build serves (a code
+ * removed from `LOCALES`, or one typed into localStorage by hand) falls back to
+ * `DEFAULT_LOCALE` rather than to the system language: the user has already
+ * answered the question once, and re-asking it because the answer went stale
+ * would flip their interface on them.
+ */
 export function readStoredLocale(): Locale {
   const stored = localStorage.getItem(STORAGE_KEY);
-  return isLocale(stored) ? stored : DEFAULT_LOCALE;
+  if (isLocale(stored)) return stored;
+  if (stored !== null) return DEFAULT_LOCALE;
+  return firstRunLocale();
 }
 
 export function persistLocale(locale: Locale): void {
   localStorage.setItem(STORAGE_KEY, locale);
 }
 
-/** Forgets the choice, so the next read is Serbian again — „Izgled“'s „Vrati na podrazumevano“. */
+/**
+ * Forgets the choice, so the next read is a first run again: the system
+ * language decides (Serbian for `sr*`, otherwise English), exactly as on a
+ * device that has never stored one. This is "Vrati na podrazumevano".
+ */
 export function clearStoredLocale(): void {
   localStorage.removeItem(STORAGE_KEY);
+}
+
+/**
+ * Tells the main process which language the interface is in.
+ *
+ * Main composes the native file-dialog chrome and the OS notifications, and it
+ * cannot import this table (a separate bundle, browser-only build), so it has
+ * to be told. A report and not a request, like `profiles:set-active`: it changes
+ * what main writes next, never what the renderer may read, so there is nothing
+ * in it for a compromised renderer to widen. The call is fire-and-forget - the
+ * table is already switched by the time it lands, and a main process that is
+ * slow to hear is a stale dialog title, not a failed render.
+ */
+export function reportLocaleToMain(locale: Locale): void {
+  if (typeof window === "undefined") return;
+  void window.nexus?.setLocale(locale);
 }
 
 /**
@@ -52,5 +99,7 @@ export function clearStoredLocale(): void {
  * the whole suite depend on a DOM it does not have.
  */
 export function applyStoredLocale(): void {
-  applyLocale(readStoredLocale());
+  const locale = readStoredLocale();
+  applyLocale(locale);
+  reportLocaleToMain(locale);
 }
