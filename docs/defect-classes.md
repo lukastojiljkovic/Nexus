@@ -66,7 +66,172 @@ it out is what let the status document go back to being one.
 [security/baseline.md](security/baseline.md) (the `SEC-*` rules, which are
 binding requirements rather than observed failure shapes).
 
+## How to read this ledger
+
+Each entry opens with a bold rule — the sentence that would have caught the
+defect *somewhere else* — and then the instances that produced it.
+The `*Fix:*` line inside an entry names what enforces the rule now; the full
+set of gates that run is the `check:*` scripts in
+[package.json](../package.json). `[[DC-nn]]` is a cross-reference inside this
+file, and the class numbers are permanent: they are never reused.
+
+## Index
+
+| Class | Rule |
+| --- | --- |
+| [DC-01](#dc-01) | A gate that silently covers nothing still reports success. |
+| [DC-02](#dc-02) | A rule written twice is a rule that has already begun to drift. |
+| [DC-03](#dc-03) | A mirror of a private number is a number that drifts. |
+| [DC-04](#dc-04) | Failures were said; successes never were. |
+| [DC-05](#dc-05) | A primitive that was never built is a rule every page invented for itself. |
+| [DC-06](#dc-06) | A pane that can be squeezed will be squeezed to nothing; the question is only which pane. |
+| [DC-07](#dc-07) | An open item that is never re-read stops being a record and becomes a rumour. |
+| [DC-08](#dc-08) | A rule applied on one path is not applied; it is only present. |
+| [DC-09](#dc-09) | A figure whose SOURCE is lossy reads as a total unless the drawing says otherwise, in the same breath. |
+| [DC-10](#dc-10) | A structural fact read out of a display library depends on which binary happens to be running. |
+| [DC-11](#dc-11) | A recovery path that rewrites rows the user did not touch destroys the distinction between "they reordered" and "the system re-spaced". |
+| [DC-12](#dc-12) | Two constants kept in step by a test are two constants, and one of them will be bumped alone. |
+| [DC-13](#dc-13) | A monotone-forward column an untrusted session can write is a one-way ratchet, and the attacker's move is always to slam it to the far end. |
+| [DC-14](#dc-14) | A constraint that reads two columns is a constraint field-level LWW cannot see. |
+| [DC-15](#dc-15) | A guard that also refuses the correct action will be switched off by the person it is protecting. |
+| [DC-16](#dc-16) | A defence applied per-operation, when its hazard is per-session, moves the operation's own baseline. |
+| [DC-17](#dc-17) | „Suppressed" and „skipped" both look identical to „considered". |
+| [DC-18](#dc-18) | Evidence about a party, writable by that party, is not evidence — and a default is not a writer. |
+| [DC-19](#dc-19) | An assertion whose fixture violates two rules at once proves neither, and reads as if it proves the one it is named after. |
+| [DC-20](#dc-20) | A bound stated on one side is not a range, and the unstated side is where the permanent failure lives. |
+| [DC-21](#dc-21) | A test suite that skips when its dependency is absent stops being a test the moment its dependency changes underneath it. |
+| [DC-22](#dc-22) | User-facing copy is a claim about behaviour, and nothing in the build checks it. |
+| [DC-23](#dc-23) | A constant standing in for a dimension that is measured at runtime is right at exactly one viewport. |
+| [DC-24](#dc-24) | A one-shot transaction is the only place a future recovery can be prepared, and it never runs again. |
+| [DC-25](#dc-25) | A sentinel of the same type as a valid value is not a sentinel; it is a valid value that happens to be wrong. |
+| [DC-26](#dc-26) | A cap applied at the call site fixes the calls that were noticed; the class lives in the component. |
+| [DC-27](#dc-27) | Where the discipline is „refuse", every narrowing is a defect, and narrowings are invisible. |
+| [DC-28](#dc-28) | A type derived from an overloaded platform declaration means whatever the ambient `lib` set says it means. |
+| [DC-29](#dc-29) | A type that permits what the runtime cannot carry is a crash waiting for the first author who believes the type. |
+| [DC-30](#dc-30) | A result must describe itself; a view that measures a live field to describe a finished computation is right only until the next keystroke. |
+| [DC-31](#dc-31) | A field written for developers becomes product copy the moment a packaging tool reads it, and nothing in the build says which audience a string belongs to. |
+| [DC-32](#dc-32) | A response that bundles facts of two different lifetimes fails whole whenever the shorter-lived one is absent, and the caller that needed only the long-lived half pays for it. |
+| [DC-33](#dc-33) | An unset packaging field is not empty; it ships the toolchain's own answer under the product's name. |
+| [DC-34](#dc-34) | A gate scoped to a window reports success as soon as the problem leaves the window, so a failure nobody acts on the same day stops existing. |
+| [DC-35](#dc-35) | A test whose runtime is dominated by its assertion rather than by the behaviour under test is a flake waiting for a slow machine. |
+| [DC-36](#dc-36) | One byte can make a whole file invisible to every text-based gate, and the gate reports nothing rather than reporting a gap. |
+| [DC-37](#dc-37) | A name only one side of the app knows fails silently in whichever direction it was broken, and both directions look like „it works". |
+| [DC-38](#dc-38) | A helper that cannot be imported gets written again, once per file, with a different bug in each copy. |
+| [DC-39](#dc-39) | A regex deletion with an optional prefix deletes from the first candidate in the FILE, not from the nearest one. |
+| [DC-40](#dc-40) | A formatter and a parser written apart are not inverses, and the failure renders as an empty field. |
+| [DC-41](#dc-41) | A partition by a field that may be absent drops the row instead of failing. |
+| [DC-42](#dc-42) | Guarding every input proves nothing about a product of inputs. Finiteness is a property of the RESULT. |
+| [DC-43](#dc-43) | A string union is a claim the caller makes, and an `===` chain always ends on a branch. 129 sites, and the whole class was admitted by one cast. |
+| [DC-44](#dc-44) | 168 confirmed findings, four of them reachable. Severity is a property of the repro, and an audit that does not grade it turns signal into volume. |
+| [DC-45](#dc-45) | (title on the next line) |
+| [DC-46](#dc-46) | (title on the next line) |
+| [DC-47](#dc-47) | (title on the next line) |
+| [DC-48](#dc-48) | (title on the next line) |
+| [DC-49](#dc-49) | A free-text vocabulary the surface restates instead of reading, so the word the hint asks for and the word the tool accepts have two authors. |
+| [DC-50](#dc-50) | (title on the next line) |
+| [DC-51](#dc-51) | A file read with the wrong encoding and written back, which every gate, every test and the build passed (2026-08-14). |
+| [DC-52](#dc-52) | (title on the next line) |
+| [DC-53](#dc-53) | (title on the next line) |
+| [DC-54](#dc-54) | (title on the next line) |
+| [DC-55](#dc-55) | (title on the next line) |
+| [DC-56](#dc-56) | (title on the next line) |
+| [DC-57](#dc-57) | (title on the next line) |
+| [DC-58](#dc-58) | (title on the next line) |
+| [DC-59](#dc-59) | (title on the next line) |
+| [DC-60](#dc-60) | (title on the next line) |
+| [DC-61](#dc-61) | A rule enforced over a reachability set permits everything outside the set, and the violation is planted long before it fires (2026-08-17). |
+| [DC-62](#dc-62) | (title on the next line) |
+| [DC-63](#dc-63) | (title on the next line) |
+| [DC-64](#dc-64) | (title on the next line) |
+| [DC-65](#dc-65) | (title on the next line) |
+| [DC-66](#dc-66) | An operation treated as a read when it is a request to another process, which is entitled to answer with nothing (2026-08-21).** `capturePage()` reads like a getter: no arguments, returns the picture. It is not. It asks Chromium's compositor to *produce* a bitmap, and the compositor may decline — as a rejected promise whose message is `VizSentEmptyBitmap`, or, worse, as a **successful |
+| [DC-67](#dc-67) | (title on the next line) |
+| [DC-68](#dc-68) | (title on the next line) |
+| [DC-69](#dc-69) | (title on the next line) |
+| [DC-70](#dc-70) | (title on the next line) |
+| [DC-71](#dc-71) | (title on the next line) |
+| [DC-72](#dc-72) | (title on the next line) |
+| [DC-73](#dc-73) | (title on the next line) |
+| [DC-74](#dc-74) | (title on the next line) |
+| [DC-75](#dc-75) | (title on the next line) |
+| [DC-76](#dc-76) | (title on the next line) |
+| [DC-77](#dc-77) | (title on the next line) |
+| [DC-78](#dc-78) | (title on the next line) |
+| [DC-79](#dc-79) | (title on the next line) |
+| [DC-80](#dc-80) | (title on the next line) |
+| [DC-81](#dc-81) | (title on the next line) |
+| [DC-82](#dc-82) | (title on the next line) |
+| [DC-83](#dc-83) | A gate that reads text cannot tell code from a comment ABOUT that code, so the file documenting the trap is the file that fails (2026-08-30). |
+| [DC-84](#dc-84) | A hand-written list that must contain every workspace dependency, beside the `package.json` that already declares them (2026-08-30). |
+| [DC-85](#dc-85) | A type that ARRIVED rather than being declared, from a package nobody asked for it (2026-08-31). |
+| [DC-86](#dc-86) | Pinning the fetcher and not what it fetches (2026-08-31). |
+| [DC-87](#dc-87) | (title on the next line) |
+| [DC-88](#dc-88) | Reading one end's CAPABILITY as the wiring's INTENT (2026-08-31). |
+| [DC-89](#dc-89) | (title on the next line) |
+| [DC-90](#dc-90) | A portal hangs outside the element that sets the colour (2026-09-01). |
+| [DC-91](#dc-91) | (title on the next line) |
+| [DC-92](#dc-92) | (title on the next line) |
+| [DC-93](#dc-93) | (title on the next line) |
+| [DC-94](#dc-94) | (title on the next line) |
+| [DC-95](#dc-95) | (title on the next line) |
+| [DC-96](#dc-96) | A promise in shared copy that only one branch keeps (2026-09-02). |
+| [DC-97](#dc-97) | A member inserted above a doc comment orphans it (2026-09-02). |
+| [DC-98](#dc-98) | (title on the next line) |
+| [DC-99](#dc-99) | (title on the next line) |
+| [DC-100](#dc-100) | (title on the next line) |
+| [DC-101](#dc-101) | (title on the next line) |
+| [DC-102](#dc-102) | (title on the next line) |
+| [DC-103](#dc-103) | A class chosen for how something LOOKS is not a name for what it IS, and selecting by it selects everything that looks the same (2026-09-02). |
+| [DC-104](#dc-104) | (title on the next line) |
+| [DC-105](#dc-105) | (title on the next line) |
+| [DC-106](#dc-106) | (title on the next line) |
+| [DC-107](#dc-107) | (title on the next line) |
+| [DC-108](#dc-108) | (title on the next line) |
+| [DC-109](#dc-109) | (title on the next line) |
+| [DC-110](#dc-110) | (title on the next line) |
+| [DC-111](#dc-111) | (title on the next line) |
+| [DC-112](#dc-112) | (title on the next line) |
+| [DC-113](#dc-113) | (title on the next line) |
+| [DC-114](#dc-114) | (title on the next line) |
+| [DC-115](#dc-115) | (title on the next line) |
+| [DC-116](#dc-116) | (title on the next line) |
+| [DC-117](#dc-117) | (title on the next line) |
+| [DC-118](#dc-118) | (title on the next line) |
+| [DC-119](#dc-119) | (title on the next line) |
+| [DC-120](#dc-120) | (title on the next line) |
+| [DC-121](#dc-121) | (title on the next line) |
+| [DC-122](#dc-122) | (title on the next line) |
+| [DC-123](#dc-123) | (title on the next line) |
+| [DC-124](#dc-124) | (title on the next line) |
+| [DC-125](#dc-125) | (title on the next line) |
+| [DC-126](#dc-126) | (title on the next line) |
+| [DC-127](#dc-127) | (title on the next line) |
+| [DC-128](#dc-128) | (title on the next line) |
+| [DC-129](#dc-129) | (title on the next line) |
+| [DC-130](#dc-130) | (title on the next line) |
+| [DC-131](#dc-131) | (title on the next line) |
+| [DC-132](#dc-132) | a citation that names its evidence by a number two namespaces both carry (2026-09-22).** `packages/sync-transport/src/signal.ts` fixes the realtime topic namespace and cited „migration 006" for it. This repository has **two |
+| [DC-133](#dc-133) | a sentence written for a slot nothing draws (2026-09-22). |
+| [DC-134](#dc-134) | an asynchronous entry point with no failure route (2026-09-22). |
+| [DC-135](#dc-135) | (title on the next line) |
+| [DC-136](#dc-136) | (title on the next line) |
+| [DC-137](#dc-137) | (title on the next line) |
+| [DC-138](#dc-138) | (title on the next line) |
+| [DC-139](#dc-139) | a marker written on the arms that have something in them, so the state with nothing in it is the one the instrument cannot see (2026-09-22). |
+| [DC-140](#dc-140) | (title on the next line) |
+| [DC-141](#dc-141) | a closed vocabulary declared twice, where the second declaration carries a comment vouching that the copy cannot drift (2026-09-22). |
+| [DC-142](#dc-142) | a `switch` over a closed union with no arm at the end, so a member added later is handled by falling out of the statement (2026-09-22). |
+| [DC-143](#dc-143) | (title on the next line) |
+| [DC-144](#dc-144) | (title on the next line) |
+| [DC-145](#dc-145) | (title on the next line) |
+| [DC-146](#dc-146) | (title on the next line) |
+| [DC-147](#dc-147) | (title on the next line) |
+| [DC-148](#dc-148) | (title on the next line) |
+| [DC-149](#dc-149) | (title on the next line) |
+
 ---
+
+<a name="dc-01"></a>
 
 **DC-01 — A gate that silently covers nothing still reports success.**
 *Three instances in two days, and every one of them was introduced by work whose
@@ -83,6 +248,8 @@ never been seen refusing something has not been tested; it has been written.
 Corollary: an include list is a promise about where tests may be written, so a
 directory absent from one is a directory whose tests do not run.
 
+<a name="dc-02"></a>
+
 **DC-02 — A rule written twice is a rule that has already begun to drift.**
 Instances this wave: the muscle-list JSON parser (two copies, differing only in
 which error they raised); `isUniqueConstraintViolation` (three copies);
@@ -97,12 +264,16 @@ dangerous copy is the one under a comment saying the copy is safe — the tenth
 search kind met `SearchKind` declared in `@nexus/core` and again on the IPC
 wire, which is [[DC-141]].
 
+<a name="dc-03"></a>
+
 **DC-03 — A mirror of a private number is a number that drifts.**
 `MAX_FIT_WORKOUT_NOTES_LENGTH` on the IPC wire said 1 000 and its comment
 claimed it mirrored the store. The store's cap was 500 and it was not exported
 at all, so the „mirror" was invented. A wire looser than its store turns a clean
 refusal into a confusing one. *The rule:* a constant that is mirrored is
 exported from the side that ENFORCES it, and the mirror cites it by name.
+
+<a name="dc-04"></a>
 
 **DC-04 — Failures were said; successes never were.**
 The canvas autosave announced every refusal and announced no write, so the
@@ -111,6 +282,8 @@ the app had had all along. The same shape exists wherever a surface writes
 without being asked. *The rule:* if a screen saves by itself, it says WHEN — and
 the line carries a clock, because a bare „Sačuvano" is still true an hour later
 and therefore proves nothing.
+
+<a name="dc-05"></a>
 
 **DC-05 — A primitive that was never built is a rule every page invented for
 itself.**
@@ -153,6 +326,8 @@ proven). The remaining audit, to be worked with the overhaul:
 - **35 more are correctly labelled by hand** and should adopt the primitive so
   there is one pattern rather than five.
 
+<a name="dc-06"></a>
+
 **DC-06 — A pane that can be squeezed will be squeezed to nothing; the question
 is only which pane.**
 The notes page has been fixed twice for the same defect and the second fix was
@@ -180,6 +355,8 @@ than guessed: three other page rails, all of them fixed tracks beside a
 `minmax(0, 1fr)`, which is the safe half of this class — the content column
 absorbs the loss and no rail becomes a sliver.
 
+<a name="dc-07"></a>
+
 **DC-07 — An open item that is never re-read stops being a record and becomes
 a rumour.**
 On 2026-08-07 the founder asked a plain question — *„da li je ostalo bilo šta da
@@ -200,6 +377,8 @@ paid for itself**: it found the seventh silent failure in item 5 — `SearchPage
 still had the defect `SearchPalette` had been fixed for — which nobody would
 have gone looking for, because the item said the work was done.
 
+<a name="dc-08"></a>
+
 **DC-08 — A rule applied on one path is not applied; it is only present.**
 Every finding of 2026-08-07's two sweeps has this shape, which is why they are
 one class and not nineteen defects. Quiet hours were computed and then consulted
@@ -216,6 +395,8 @@ cheap: every one of these was found by asking which two artifacts should agree
 and then walking both sides. **The corollary is where the cost actually is:**
 a rule that exists in only one place is indistinguishable, from inside that
 place, from a rule that is followed everywhere.
+
+<a name="dc-09"></a>
 
 **DC-09 — A figure whose SOURCE is lossy reads as a total unless the drawing
 says otherwise, in the same breath.**
@@ -239,6 +420,8 @@ sentence) rather than carrying a permanent hedge that is wrong most of the time.
 always to clamp, average or interpolate the gap away, and each of those turns a
 figure that is honestly short into one that is quietly wrong.
 
+<a name="dc-10"></a>
+
 **DC-10 — A structural fact read out of a display library depends on which
 binary happens to be running.**
 *One instance, and it was money.* `currencyMinorDigits` answered „how many minor
@@ -260,6 +443,8 @@ process does, and the test process is not the shipping process. *The regression
 test that makes the class unrepresentable here:* it asserts the app's answer AND
 reads `Intl`'s answer beside it, so an implementation that merely forwards ICU
 cannot satisfy both on both runtimes.
+
+<a name="dc-11"></a>
 
 **DC-11 — A recovery path that rewrites rows the user did not touch destroys the
 distinction between "they reordered" and "the system re-spaced".**
@@ -285,6 +470,8 @@ the same day, in schema 62, deliberately before a single row had ever synced —
 afterwards it would have been a migration of every task on every device,
 coordinated across a network.*
 
+<a name="dc-12"></a>
+
 **DC-12 — Two constants kept in step by a test are two constants, and one of
 them will be bumped alone.**
 `exportArchive.ts` and `importArchive.ts` each hold the interchange schema
@@ -302,6 +489,8 @@ should get the next time either side is touched.
 
 *Recognised 2026-08-08, caught by `importArchive.test.ts`'s own pin before any
 build shipped.*
+
+<a name="dc-13"></a>
 
 **DC-13 — A monotone-forward column an untrusted session can write is a one-way
 ratchet, and the attacker's move is always to slam it to the far end.**
@@ -323,6 +512,8 @@ constraint to a column an untrusted session can write, name what happens when
 that session slams every row to the far end, and who can undo it.
 
 *Recognised 2026-08-09 while rewriting the `sync_objects` guard.*
+
+<a name="dc-14"></a>
 
 **DC-14 — A constraint that reads two columns is a constraint field-level LWW
 cannot see.**
@@ -362,6 +553,8 @@ and a `kind='cloze'` with no cloze text needs text nobody wrote. **Repairs are
 per TABLE, not per CHECK**, because `cards`' three constraints all read `kind`
 and repairing them independently lets one undo another.
 
+<a name="dc-15"></a>
+
 **DC-15 — A guard that also refuses the correct action will be switched off by
 the person it is protecting.**
 The web app's `no-restricted-imports` rule was first written as
@@ -388,6 +581,8 @@ specifiers instead of reading its configuration. Reading it would never have
 found this: the config says what it means, and the semantics are in the `ignore`
 package.*
 
+<a name="dc-16"></a>
+
 **DC-16 — A defence applied per-operation, when its hazard is per-session, moves
 the operation's own baseline.**
 `pullPage` subtracted the 64-row cursor overlap on every request. The overlap
@@ -408,6 +603,8 @@ person who sees the value it protects.
 *Recognised 2026-08-09, by a live test walking five rows two at a time. Nothing
 smaller finds it: the defect needs a page limit below the overlap, and every
 unit fixture used the default.*
+
+<a name="dc-17"></a>
 
 **DC-17 — „Suppressed" and „skipped" both look identical to „considered".**
 Two instances in one slice, and they are the same shape. (a) The live test
@@ -432,6 +629,8 @@ scans nothing, while this is about a gate that was never asked to scan.
 directive" warning, which is the only reason it was ever visible; (b) came from
 reading a green run's per-file line instead of its summary.*
 
+<a name="dc-18"></a>
+
 **DC-18 — Evidence about a party, writable by that party, is not evidence — and
 a default is not a writer.**
 `sync_state.updated_at` is commented „when the device last synced" and is the one
@@ -454,6 +653,8 @@ rather than one rule and one exception nobody wrote down.
 transport should send for `updated_at`. The answer „nothing, the server stamps
 it" turned out to be true of the comment and false of the schema.*
 
+<a name="dc-19"></a>
+
 **DC-19 — An assertion whose fixture violates two rules at once proves neither,
 and reads as if it proves the one it is named after.**
 `05_mk_mint.test.sql` asserted „an aal1 session cannot mint" against a fixture
@@ -472,6 +673,8 @@ seven mutations, ten minutes — and it is the only way this was ever going to b
 found.
 
 *Recognised 2026-08-09, mutating the mint's guards one at a time.*
+
+<a name="dc-20"></a>
 
 **DC-20 — A bound stated on one side is not a range, and the unstated side is
 where the permanent failure lives.**
@@ -496,6 +699,8 @@ repeated.
 should restate the floor. The answer — „no, the database owns it" — only holds if
 the database owns all of it.*
 
+<a name="dc-21"></a>
+
 **DC-21 — A test suite that skips when its dependency is absent stops being a
 test the moment its dependency changes underneath it.**
 `packages/sync-transport/src/live.test.ts` measures the rules this whole layer
@@ -519,6 +724,8 @@ time something forced it to run.
 *Recognised 2026-08-09, running the transport's live suite for the first time
 since migration 010, while adding one test to it.*
 
+<a name="dc-22"></a>
+
 **DC-22 — User-facing copy is a claim about behaviour, and nothing in the build
 checks it.**
 `strings.settings.privacy.offline` told every user that „Nexus proverava samo da
@@ -541,6 +748,8 @@ feature is *removed*, the sweep is „what does the product SAY about this",
 including copy, and copy is the part with no compiler.
 
 *Recognised 2026-08-09, writing the sync section's copy directly beneath it.*
+
+<a name="dc-23"></a>
 
 **DC-23 — A constant standing in for a dimension that is measured at runtime is
 right at exactly one viewport.**
@@ -575,6 +784,8 @@ is why neither has been seen. They are the next adoption of `useStickyBarHeight`
 
 *Recognised 2026-08-09, from the first shots scene that scrolls a page.*
 
+<a name="dc-24"></a>
+
 **DC-24 — A one-shot transaction is the only place a future recovery can be
 prepared, and it never runs again.**
 `nexus_mk_mint` is an atomic singleton by construction — one master key per
@@ -603,6 +814,8 @@ future per-profile content key minted once and wrapped thereafter.
 
 *Recognised 2026-08-09, closing the device-stranding hole.*
 
+<a name="dc-25"></a>
+
 **DC-25 — A sentinel of the same type as a valid value is not a sentinel; it is
 a valid value that happens to be wrong.**
 `parseIntStrict` in the crypto drawer returned `NaN` for „the field does not hold
@@ -622,6 +835,8 @@ agree. Sibling of DC-13 in shape (a value that reads as ordinary) but the fix is
 at the type, not the schema.
 
 *Recognised 2026-08-10, reviewing the crypto surfaces of the developer drawer.*
+
+<a name="dc-26"></a>
 
 **DC-26 — A cap applied at the call site fixes the calls that were noticed; the
 class lives in the component.**
@@ -643,6 +858,8 @@ a table that stops silently misreports its input.
 *Recognised 2026-08-10, sweeping every `<ToolTable rows={…}>` in the drawer after
 one report about one table.*
 
+<a name="dc-27"></a>
+
 **DC-27 — Where the discipline is „refuse", every narrowing is a defect, and
 narrowings are invisible.**
 The whole `@nexus/core/devtools` layer refuses rather than repairs. Four places
@@ -662,6 +879,8 @@ skip the check it would otherwise have written.
 
 *Recognised 2026-08-10, from one report about a 33-bit disassembler input.*
 
+<a name="dc-28"></a>
+
 **DC-28 — A type derived from an overloaded platform declaration means whatever
 the ambient `lib` set says it means.**
 `type KeyUsages = Parameters<SubtleCrypto["importKey"]>[4]` looks like „whatever
@@ -678,6 +897,8 @@ unrelated argument is part of the class: overload resolution reports the *last*
 candidate's failure, never the one the author had in mind.
 
 *Recognised 2026-08-09, bisecting a `tsconfig` change against a probe file.*
+
+<a name="dc-29"></a>
 
 **DC-29 — A type that permits what the runtime cannot carry is a crash waiting
 for the first author who believes the type.**
@@ -697,6 +918,8 @@ data, not behaviour.
 
 *Recognised 2026-08-09, when 29 test files went red at once.*
 
+<a name="dc-30"></a>
+
 **DC-30 — A result must describe itself; a view that measures a live field to
 describe a finished computation is right only until the next keystroke.**
 The RSA-OAEP surface showed „Iskorišćeno: {actual} od {limit} bajtova" under a
@@ -712,6 +935,8 @@ gets to make the same mistake, and it is the kind that no test written from the
 same misunderstanding will catch.
 
 *Recognised 2026-08-10, reviewing the crypto surfaces.*
+
+<a name="dc-31"></a>
 
 **DC-31 — A field written for developers becomes product copy the moment a
 packaging tool reads it, and nothing in the build says which audience a string
@@ -738,6 +963,8 @@ written for humans on the other side of the product.
 *Recognised 2026-08-10, reading the generated .desktop entry out of the AppImage
 — then confirmed against the shipped `Nexus-Setup-1.1.0.exe` rather than assumed.*
 
+<a name="dc-32"></a>
+
 **DC-32 — A response that bundles facts of two different lifetimes fails whole
 whenever the shorter-lived one is absent, and the caller that needed only the
 long-lived half pays for it.**
@@ -759,6 +986,8 @@ until the session is unlocked — `appInfo` was the only mixed-scope response.
 *Recognised 2026-08-10, from the main-process log of the first Linux launch —
 found by RUNNING the packaged build, which is a thing the Windows exe had never
 been asked to do on a machine with no account on it.*
+
+<a name="dc-33"></a>
 
 **DC-33 — An unset packaging field is not empty; it ships the toolchain's own
 answer under the product's name.**
@@ -785,6 +1014,8 @@ records having done.
 *Recognised 2026-08-10, by walking DC-31's own neighbour list instead of
 treating DC-31 as finished.*
 
+<a name="dc-34"></a>
+
 **DC-34 — A gate scoped to a window reports success as soon as the problem
 leaves the window, so a failure nobody acts on the same day stops existing.**
 `gitleaks-action` scans `base^..head` on `push` and the whole history only on
@@ -804,6 +1035,8 @@ coverage delta, a migration check keyed to the current branch point.
 
 *Recognised 2026-08-10, from the scheduled and push runs of the same workflow
 disagreeing 90 seconds apart, each reporting a finding the other could not see.*
+
+<a name="dc-35"></a>
 
 **DC-35 — A test whose runtime is dominated by its assertion rather than by the
 behaviour under test is a flake waiting for a slow machine.**
@@ -842,6 +1075,8 @@ memo: one walk per file, 8.9 s, and the census and the verdict now describe the
 SAME walk, so „found nothing" and „looked at less than it should" cannot come
 from two different readings of the tree.
 
+<a name="dc-36"></a>
+
 **DC-36 — One byte can make a whole file invisible to every text-based gate,
 and the gate reports nothing rather than reporting a gap.**
 `packages/core/src/devtools/jsonTypes.test.ts` held a raw `0x00` at offset 2876
@@ -863,6 +1098,8 @@ not a fact that was assumed.
 *Recognised 2026-08-10, by a NUL-byte sweep run precisely because grep would
 have been blind to the same file — grep prints „Binary file X matches" and
 suppresses the lines, so four separate content sweeps had silently skipped it.*
+
+<a name="dc-37"></a>
 
 **DC-37 — A name only one side of the app knows fails silently in whichever
 direction it was broken, and both directions look like „it works".**
@@ -889,6 +1126,8 @@ languages, never only the one being edited.
 
 *Recognised 2026-08-13, while renaming „Programerske alatke". None of the three
 had a failing test, and two of them had been shipped in 1.0.0.*
+
+<a name="dc-38"></a>
 
 **DC-38 — A helper that cannot be imported gets written again, once per file,
 with a different bug in each copy.**
@@ -918,6 +1157,8 @@ not on `Math.floor(a / b)`, which was measured at 137 sites, nearly all integer
 calendar arithmetic, and a gate with 137 findings on its first run is a gate
 somebody switches off.
 
+<a name="dc-39"></a>
+
 **DC-39 — A regex deletion with an optional prefix deletes from the first
 candidate in the FILE, not from the nearest one.**
 The codemod that removed those private copies was
@@ -937,6 +1178,8 @@ a comment terminator (`(?:/\*\*(?:(?!\*/)[\s\S])*\*/\n)?`). Recovery was possibl
 only because a pre-damage copy happened to exist in the scratchpad; `git` held a
 130-line ancestor that predated the work.
 
+<a name="dc-40"></a>
+
 **DC-40 — A formatter and a parser written apart are not inverses, and the
 failure renders as an empty field.**
 `proNum` formats in `sr-Latn`, which groups with a full stop: 1 234 567,89 prints
@@ -953,6 +1196,8 @@ pair, repeated separator is grouping, and the one genuinely ambiguous shape
 (`\d{1,3}.\d{3}`) is resolved towards the app's own output because that is the
 misreading a user can actually reach by copying inside the app.
 
+<a name="dc-41"></a>
+
 **DC-41 — A partition by a field that may be absent drops the row instead of
 failing.**
 The generator that writes the three shared files groups the catalogue by
@@ -966,6 +1211,8 @@ input, and derives a missing key where the rule for deriving it is already
 written down.** Ownership is „the first pack in `TOOL_PACKS` order", which has no
 judgement in it, so the generator now derives it — and still refuses the run if
 any entry lands in no group.
+
+<a name="dc-42"></a>
 
 **DC-42 — Guarding every input proves nothing about a product of inputs.
 Finiteness is a property of the RESULT.**
@@ -1004,6 +1251,8 @@ a zero or non-finite divisor **and** checks its own result, so routing a
 dangerous division through it is both the fix and something `check:pro-math`
 recognises. The audit is therefore a read-and-re-derive pass over the seams, not
 a regex.
+
+<a name="dc-43"></a>
 
 **DC-43 — A string union is a claim the caller makes, and an `===` chain always
 ends on a branch. 129 sites, and the whole class was admitted by one cast.**
@@ -1050,6 +1299,8 @@ wrong answer rather than a refusal if it ever becomes reachable; they are the
 standing work item, and the discipline until then is that a selector's branches
 are exhaustive with a refusal at the end, never a fallthrough.
 
+<a name="dc-44"></a>
+
 **DC-44 — 168 confirmed findings, four of them reachable. Severity is a property
 of the repro, and an audit that does not grade it turns signal into volume.**
 DC-42's blast radius was measured properly: eighteen readers over
@@ -1070,9 +1321,10 @@ mattered were, in the returned list, indistinguishable from a hectare count of
 changed the work from „143 seams" into „two regexes" — both fixed where the bound
 belongs, in the pattern, so that a non-finite number cannot be *parsed* rather
 than being caught downstream of a parse that already produced one. The other 164
-are kept in full in [dc42-findings.md](dc42-findings.md) with each one's reach
-marked: they are real, they are cheap to close when a file is next opened, and
-re-deriving them would cost another 3.7M tokens.
+are kept in full in the DC-42 findings list (moved out of the repository on
+2026-10-02) with each one's reach marked: they are real, they are cheap to
+close when a file is next opened, and re-deriving them would cost another 3.7M
+tokens.
 *The second-order finding, which is about `isPositive`:* all 163 have one shape —
 an input guarded `isPositive` (finite, above zero, **no ceiling**) multiplied by
 another input guarded the same way. `isInRange` sat in the same kit, unused. That
@@ -1081,6 +1333,8 @@ easiest to reach, in a drawer that has no notion of a plausible magnitude for a
 physical quantity. The standing item is that every physical input carries a real
 band — which is also the better product behaviour, since a band catches the typo
 that a positivity check waves through.
+
+<a name="dc-45"></a>
 
 **DC-45 — An absolute epsilon on a magnitude-dependent value, in a layer the
 gate could not see.** The Serbian amount-in-words tool decided whether a typed
@@ -1111,6 +1365,8 @@ arguments. Measured after the fix: **2 epsilon sites in 42 800 lines of surface
 code**, one of them the defect and one a legitimate tolerance between two
 constants 0.27 apart. *A gate's reach is part of the gate.* A rule that reads
 half the tree reports success about the other half.
+
+<a name="dc-46"></a>
 
 **DC-46 — A core default restated in the surface, so „the default" has two
 authors.** `zanat.tsx` echoed the shelf raster the user did not type as
@@ -1165,6 +1421,8 @@ Two things only appeared once the type was made to state the truth:
     surface IS the single author and its echo reports its own value. The
     distinguishing question is never „is there a literal in the surface" but
     „who chose it".
+
+<a name="dc-47"></a>
 
 **DC-47 — Correlated optional fields declared independently, so a wrong guard
 type-checks and prints a number that is not true.** `grainMoistureShrink`
@@ -1274,6 +1532,8 @@ its place immediately: `agro.test.ts` held two byte-identical assertions,
 `orchardTrellisLayout`, whose `rowsCount` is required and must not move. The
 run stopped instead of silently editing the wrong tool.
 
+<a name="dc-48"></a>
+
 **DC-48 — The layout audit reported 726 surfaces overlapping, and every one of
 them was the app working.** DC-01's inverse for the second time, and worth its
 own entry because the *reason* is new. The audit skipped an element when it was
@@ -1343,6 +1603,8 @@ verbatim and a negative control the old check could not have failed.
 inherits that example's coordinates.** Ask what the defect looks like somewhere
 else in the file before deciding the gate covers the class.
 
+<a name="dc-49"></a>
+
 **DC-49 — A free-text vocabulary the surface restates instead of reading, so
 the word the hint asks for and the word the tool accepts have two authors.**
 Found in `pro/kuhinja.tsx`, four times, and it is DC-02 with a specific and
@@ -1380,6 +1642,8 @@ against the strings table it must agree with.
 user-facing copy lives in `strings.ts` — including when its other job is to be
 a map key.**
 
+<a name="dc-50"></a>
+
 **DC-50 — One member of a formatted family that formats its answer differently,
 under a label that says otherwise.** `pro/format.ts` has `proRatio` precisely so
 a computed value against the user's own limit prints as a plain quotient:
@@ -1412,6 +1676,8 @@ cover (it renders as a space and IS one, so it fails that gate's stated test)
 and which eslint does. **An unused import is a question, not a nit: it is
 usually the name of a feature somebody wrote half of.** Both of this arc's most
 expensive display defects were found by reading one.
+
+<a name="dc-51"></a>
 
 **DC-51 — A file read with the wrong encoding and written back, which every
 gate, every test and the build passed (2026-08-14).**
@@ -1453,6 +1719,8 @@ the ellipsis and the „č" all firing, and the three real texts that must not.
 encoding you have not stated.** On this machine that means: no `Get-Content` /
 `Set-Content` without `-Encoding utf8`, and edits go through the editing tools
 or a Node script with an explicit `"utf8"` on both ends.
+
+<a name="dc-52"></a>
 
 **DC-52 — Two things given the same corner by two different positioning systems,
 where only one of them can see the other (2026-08-14).** `PageHeader` draws the
@@ -1539,6 +1807,8 @@ arc retired the week-opening arithmetic, which had reached **four** copies
 into one `weekOpeningDayKey` in `@nexus/core`, with `weekStartKey` kept as a
 named re-export so no HABIT call site moved.
 
+<a name="dc-53"></a>
+
 **DC-53 — A security rule whose pattern is also a name this codebase uses
 everywhere, so the gate fires on copy changes (2026-08-15).** gitleaks'
 `vault-service-token` matches a legacy HashiCorp Vault token: the letter `s`, a
@@ -1581,6 +1851,8 @@ workflow, and is exactly how the 2026-07-31 finding sat in a green repository
 for ten days. It is listed in §5 as a question for the founder rather than
 settled unilaterally, because every remaining option trades away real detection.
 
+<a name="dc-54"></a>
+
 **DC-54 — An override pinned to the current edge of an advisory range, where
 the range is somebody else's moving claim (2026-08-15).** `nanoid` was raised to
 `^3.3.17` on 2026-08-08 for GHSA-2v37-7h3g-55p8, whose text then read „patched
@@ -1622,6 +1894,8 @@ override is the only mechanism, which makes the „ordinary resolution already
 reaches the patch" carve-out in `pnpm-workspace.yaml` narrower than it reads:
 it is true of a fresh install and false of every existing checkout.
 
+<a name="dc-55"></a>
+
 **DC-55 — A result field the core computes deliberately to stop a misreading,
 that no surface names (2026-08-14/15).** The counterpart to DC-47, and invisible
 to everything DC-47 was visible to. `angleOfView` returns `farIsInfinite`
@@ -1652,6 +1926,8 @@ cannot render the third as if it were the second.
 *The rule:* **a caveat is not a field, it is a sentence on a screen.** If the
 core computes one, the surface owes it words; if the surface owes it nothing,
 the core should not compute it.
+
+<a name="dc-56"></a>
 
 **DC-56 — A generated file that is committed, with an intention instead of an
 enforcement (2026-08-15).** `licences.json` — the only thing the app's „Licence"
@@ -1690,6 +1966,8 @@ and it leaves no trace in any diff. Anywhere this repo commits generated output,
 the question to ask is not „is it correct" but „what would notice if it stopped
 being".
 
+<a name="dc-57"></a>
+
 **DC-57 — A visual harness whose fixture can never reach the state the surface
 is for (2026-08-16).** `pnpm --filter @nexus/desktop shots` photographs 394
 surfaces per theme and reports „2 406 frames, 2 distinct findings". One of those
@@ -1726,6 +2004,8 @@ boundary the harness currently enjoys unconditionally. That trade is the
 founder's, and it is in [STATUS.md](STATUS.md) §5 rather than decided at the end
 of an unrelated piece of work.
 
+<a name="dc-58"></a>
+
 **DC-58 — A probe that can fail for its own reasons answers „failed" to every
 question you ask it (2026-08-16).** The test proving the DC-14 repair against the
 real schema builds a temp table from `table`'s columns plus `table`'s CHECKs,
@@ -1758,6 +2038,8 @@ to carry its evidence. This is the third instrument this arc that reported a fal
 failure: `check-makefile.mjs` (a `$(shell …)` value compared against its own
 source text), the sync service's fake PostgREST (a `kind=` filter it ignored), and
 now this one. **A red result from a tool I wrote is a claim about the tool first.**
+
+<a name="dc-59"></a>
 
 **DC-59 — A green check is evidence about a gate set, not about a branch
 (2026-08-16).** Five Dependabot pull requests were resolved; GitHub reported PRs
@@ -1803,6 +2085,8 @@ failure was that GitHub said `CLEAN` and I believed it, so the signal is the fix
 would have caught this one. The manual backstop stays either way: run the gates
 locally after merging, which is how it was caught.
 
+<a name="dc-60"></a>
+
 **DC-60 — A reported number bounded by how it was computed rather than by what it
 measures (2026-08-16).** `SyncRoundReport` has five counters, and running the loop
 against two real databases proved two of them could not answer their own question.
@@ -1840,6 +2124,8 @@ This is DC-58 in the numeric register — there the instrument answered
 it is the same discipline that closes both: what a probe reports has to carry the
 rule it applied, not just a value.
 
+<a name="dc-61"></a>
+
 **DC-61 — A rule enforced over a reachability set permits everything outside the
 set, and the violation is planted long before it fires (2026-08-17).**
 `@nexus/sync-transport` needed a profile's content-key wrap off the wire, and the
@@ -1873,6 +2159,8 @@ diff somebody reviews rather than a silent change of what was being checked.
 scope, and a package that is one `dependencies` line away from being in scope.
 Ask of any gate that walks a graph: what is it NOT walking, and what would
 change that?
+
+<a name="dc-62"></a>
 
 **DC-62 — An absence established by a search whose window is smaller than the
 construct is not an absence, and everything built on it inherits the error
@@ -1935,6 +2223,8 @@ by asserting a REFUSAL: a refusal is the same output whether the rule under test
 fired or a gate two layers up did, so pgTAP proving „a client cannot write another
 user's wrap" would pass identically if no client could write any wrap at all.
 
+<a name="dc-63"></a>
+
 **DC-63 — A `finally` runs at the RETURN STATEMENT, not when the returned promise
 settles, so a release inside one releases what the call is still using
 (2026-08-17).** `openContentKey` opens the master key, uses it, and erases it:
@@ -1981,6 +2271,8 @@ result of another async call — and, from the other end, a decryption failure t
 is data-dependent within one batch. „The first one worked" is a statement about
 timing at least as often as it is a statement about data.
 
+<a name="dc-64"></a>
+
 **DC-64 — A gate that compares a generated artefact byte-for-byte against a
 checkout whose encoding the platform decides. It is right on CI and wrong on
 every developer machine, which is the inverse of the failure it exists to catch
@@ -2025,6 +2317,8 @@ what it measures. The instinct is „my environment is dirty"; the question to a
 first is what the gate compares, and whether both sides of the comparison came
 through the same door.
 
+<a name="dc-65"></a>
+
 **DC-65 — A tool that writes its SUMMARY only on the success path, beside outputs
 it writes incrementally. A failure between the two rates leaves a set that is
 internally inconsistent, and silently so (2026-08-21).** The screenshot sweep
@@ -2054,6 +2348,8 @@ output is, because the reader's next question is whether anything survived.
 *The tell:* an output directory in which two files carry timestamps from
 different runs — and a tool that prints `FAIL` without saying what it left
 behind.
+
+<a name="dc-66"></a>
 
 **DC-66 — An operation treated as a read when it is a request to another process,
 which is entitled to answer with nothing (2026-08-21).** `capturePage()` reads
@@ -2109,6 +2405,8 @@ collection step and is supposed to end the run.
 the value is produced somewhere else, the call is a request — and a request can
 go unanswered.
 
+<a name="dc-67"></a>
+
 **DC-67 — A responsive fallback that reflows along the dimension the surface is
 already short of (2026-08-21).** Below 1 180 px the Elektronika instrument moved
 its inspector panel out from the right rail and put it under the BENCH, capped
@@ -2139,6 +2437,8 @@ ratio — which is a thing to measure, not to guess.
 broken, and a fit-to-content zoom reading far below 100 % at the smallest
 supported window. The zoom figure is the instrument here: it reports the
 layout's real geometry in one number.
+
+<a name="dc-68"></a>
 
 **DC-68 — A deadline checked only between calls, on a loop whose calls can block
 for ever. It reads as a bounded wait and is not (2026-08-21).** The screenshot
@@ -2186,6 +2486,8 @@ stack that names none of this.
 happens if the awaited call returns never — not late, never. If the answer is
 „the loop stops looping", the deadline is decoration.
 
+<a name="dc-69"></a>
+
 **DC-69 — A guard whose comment states a bound that only holds while an upstream
 invariant does, and nothing states the invariant (2026-08-21).** `SeriesPlot`
 clamps its axis labels into the drawing:
@@ -2223,6 +2525,8 @@ a hope. A test asserting the small displacement makes it worse: it pins the
 arithmetic and says nothing about the range, so it stays green through the
 defect.
 
+<a name="dc-70"></a>
+
 **DC-70 — A threshold applied to a rendered measurement that the viewer
 controls: the instrument reports on the viewer's state, not on the design
 (2026-08-21).** The layout audit's pointer-target floor read
@@ -2251,6 +2555,8 @@ window size or a scroll position is the second, and a fixed threshold against it
 is a measurement of the user. (The repair was correct and the eighteen findings
 survived it anyway, for a reason belonging to the instrument rather than to this
 class — see DC-73.)
+
+<a name="dc-71"></a>
 
 **DC-71 — A rule written over a CLASS NAME is a rule over a naming convention,
 and a convention with two spellings covers exactly the half you looked at
@@ -2289,6 +2595,8 @@ and not broken. Written the other way round — cell by default, span by
 exception — the first unlisted control would be squeezed into half a column with
 nothing on screen to say why.
 
+<a name="dc-72"></a>
+
 **DC-72 — A layout validated at the size the first feature happened to be, then
 inherited by features an order of magnitude larger (2026-08-21).** `.tool__body`
 was a flex column: every control at the body's whole measure, one per line. For
@@ -2314,6 +2622,8 @@ actually is, never the typical one. If nobody can say, the layout was designed
 for the smallest — and the surface that proves it is never the one in the
 screenshot, because the screenshot is of the feature the layout was written for.
 
+<a name="dc-73"></a>
+
 **DC-73 — A threshold compared against a value the code RECONSTRUCTED, on a
 design that sits exactly on the threshold (2026-08-21).** DC-70's repair divided
 the zoom out of the pointer-target measurement, and the sweep went on reporting
@@ -2337,6 +2647,8 @@ second tell is structural: any `x / scale < LIMIT` where the design states `x` a
 an exact multiple of that same scale — a float round trip is not an identity, and
 the one design guaranteed to sit on the boundary is the one drawn from the
 constant the boundary was chosen for.
+
+<a name="dc-74"></a>
 
 **DC-74 — A property asserted ONCE and then assumed for hundreds of observations
 that are each LABELLED with it (2026-08-21).** The screenshot sweep sets the
@@ -2378,6 +2690,8 @@ that can push past the work area — a thing no merely-wide window can show — 
 wide window in that folder is not a weaker frame, it is the one frame that cannot
 be right. It now retries once and, failing that, writes NO frame and says why: a
 missing observation is a gap, a mislabelled one is a false answer.
+
+<a name="dc-75"></a>
 
 **DC-75 — A catalogue assembled PACK BY PACK has no uniqueness rule, so the same
 tool gets built twice under two ids (2026-08-21).** „Stručne alatke" ships four
@@ -2451,6 +2765,8 @@ INSTRUMENT, and fixing the subject makes the instrument look fixed** — the
 reconciliation reconciled again the moment the four tools were renamed, and
 nothing about the overwrite had changed.
 
+<a name="dc-76"></a>
+
 **DC-76 — `1fr` is `minmax(auto, 1fr)`, so „these columns are equal" is a
 request that one cell's content can refuse (2026-08-23).** The calendar's month
 grid is `grid-template-columns: repeat(7, 1fr)` and the weekday header above it
@@ -2511,6 +2827,8 @@ it obstructs (DC-15).
 *It took a second instrument fix to become visible at all.* The finding existed
 in exactly one frame of 2 423 — see DC-77.
 
+<a name="dc-77"></a>
+
 **DC-77 — A sweep whose steps are not independent: every observation after the
 first is conditioned on the one before it, and only the first is honest
 (2026-08-23).** The screenshot harness photographs each module, then clicks
@@ -2546,6 +2864,8 @@ only the first.
 TOTAL and disagree on the breakdown. A count that is stable because two errors
 cancel is the hardest kind to notice, and comparing per-scene counts across
 passes is one command.
+
+<a name="dc-78"></a>
 
 **DC-78 — An absence that is a REFUSAL, written down in the file the change is
 about to edit (2026-08-23).** ADR-086's plan needed dashboard cards to compose a
@@ -2595,6 +2915,8 @@ groups, the render iterates them, and the shortcut list is
 build the same list from the same source, far enough apart that neither mentions
 the other.
 
+<a name="dc-79"></a>
+
 **DC-79 — A container that cannot scroll, worked around ONE CHILD AT A TIME
 (2026-08-23).** The onboarding shell is a centred grid, and „the shell is a
 centred grid with no scroll of its own" was written down **three times** in
@@ -2631,6 +2953,8 @@ caption size) and dropped the `min-height: 24px` that makes it a control rather
 than a link; the comment above it even names `.set__reset` as its source. Every
 other bare-text button in the tree states that minimum. *Tell:* a comment that
 names the pattern it copied — check what else that pattern says.
+
+<a name="dc-80"></a>
 
 **DC-80 — A language with NO NEUTRAL FORM, and a house convention that quietly
 picked one (2026-08-23).** Serbian's past tense is an l-participle that agrees
@@ -2692,6 +3016,8 @@ defect lives in. The class is „a sentence picks the reader's gender"; the firs
 implementation read one grammatical form inside one syntax node, and the two
 gaps are exactly the two ways a sentence can be bigger than that.
 
+<a name="dc-81"></a>
+
 **DC-81 — A hand-written list of CAUSES beside a computation that already knows
 its own inputs (2026-08-30).** ADR-086's fourth law is „every reason names at
 least one signal", and `buildProfilePlan` broke it on its own first screen.
@@ -2726,6 +3052,8 @@ dataflow question over one function, and no cheap textual check states it. What
 does state it is the test that now exists: a plan built from trades ALONE, with
 `expect(reason.causedBy.length).toBeGreaterThan(0)` for every reason in it.
 
+<a name="dc-82"></a>
+
 **DC-82 — A function whose DOC COMMENT names its call sites, and which has none
 (2026-08-30).** `clearPinnedModules` was exported, tested, and documented as
 „„Vrati na podrazumevano" (SET §5), and the „Napredno" escape hatch". Neither
@@ -2757,6 +3085,8 @@ tree does not carry (and would fire on every barrel). The rule that DOES fire is
 the one already in `CLAUDE.md`: treat an unused import — or an unused export —
 as a question, not a nit, because it is usually half a feature. Here it was half
 a feature that turned out to be whole somewhere else.
+
+<a name="dc-83"></a>
 
 **DC-83 — A gate that reads text cannot tell code from a comment ABOUT that
 code, so the file documenting the trap is the file that fails (2026-08-30).**
@@ -2802,6 +3132,8 @@ line UNDER a comment describing it is still reported at its own line number.
 the question is „what does this do to a file that explains the rule?", and the
 answer should be `stripComments`.
 
+<a name="dc-84"></a>
+
 **DC-84 — A hand-written list that must contain every workspace dependency,
 beside the `package.json` that already declares them (2026-08-30).**
 `electron.vite.config.ts` externalises node modules and BUNDLES workspace
@@ -2835,6 +3167,8 @@ first-party package names. Also the general one: **a green gate set is evidence
 about what the gates execute.** Four of the five gates never run the shipped
 artefact, and the fifth is the reason this took twenty minutes instead of a
 user's bug report.
+
+<a name="dc-85"></a>
 
 **DC-85 — A type that ARRIVED rather than being declared, from a package nobody
 asked for it (2026-08-31).**
@@ -2890,6 +3224,8 @@ to obtain a one-line cast.
 **an accident that works is indistinguishable from a decision until something
 removes it.**
 
+<a name="dc-86"></a>
+
 **DC-86 — Pinning the fetcher and not what it fetches (2026-08-31).**
 `.github/workflows/ci.yml` opens with a paragraph explaining that every `uses:`
 in this repository is pinned to a 40-character commit SHA, and why: a tag is a
@@ -2933,6 +3269,8 @@ fetches.** `actions/setup-node` is the same shape and is fine here only because
 `node-version: 24` is a deliberate line and pnpm's version comes from
 `packageManager` in `package.json`, which is exact.
 
+<a name="dc-87"></a>
+
 **DC-87 — Asking whether a part is ON the net, when the property meant is where
 it sits IN the path (2026-08-31).** E3's `led-unprotected` rule fires when a LED
 is driven with no series resistor. The first implementation asked: is there a
@@ -2967,6 +3305,8 @@ engine is an empty list, and an empty list is also what a dead engine returns.
 *Tell, for the next instance:* a predicate that scans a collection for a member
 with the right *type* in order to conclude something about *order*, *series* or
 *between*. E4 and E5 read the same nets and will want the same shortcut.
+
+<a name="dc-88"></a>
 
 **DC-88 — Reading one end's CAPABILITY as the wiring's INTENT (2026-08-31).**
 Two defects, in two modules, from one rule. E4's sketch generator asked „can this
@@ -3013,6 +3353,8 @@ or `x.roles.includes(…)` used to decide something about a **relationship**. If
 the sentence you would write has two nouns in it — „this wire is a bus", „this
 pin drives that one" — a predicate over one noun cannot be the whole answer.
 
+<a name="dc-89"></a>
+
 **DC-89 — Waiting for the control to be AVAILABLE instead of for the state to
 have ARRIVED (2026-08-31).** A sweep scene had to switch to another circuit and
 then open that circuit's generated sketch. It selected the circuit, polled until
@@ -3053,6 +3395,8 @@ happened. If the wait would pass on the old page, it is not a wait — and if th
 answer to that is a cleverer precondition rather than the outcome itself, expect
 to write this entry twice.
 
+<a name="dc-90"></a>
+
 **DC-90 — A portal hangs outside the element that sets the colour (2026-09-01).**
 The sketch dialog's wiring table has three columns; two carry a class of their
 own and the middle one, a part's name, carries none. In Noć it rendered a shade
@@ -3081,6 +3425,8 @@ it is the one a light-mode reviewer never opens.**
 any „this text looks slightly off but matches no token". Both are the same
 question — *what is this element's nearest ancestor that names a colour, and is
 it inside the app at all?*
+
+<a name="dc-91"></a>
 
 **DC-91 — A word that says what a wire CARRIES is read as which way it GOES
 (2026-09-01).** DC-88's sibling, one slice later, and found the same way: by
@@ -3115,6 +3461,8 @@ also contains protocol names. Ask of each entry: *does this word name an END, or
 does it name a SIGNAL?* If it names a signal, it belongs in neither list, and a
 list is the wrong shape for the question.
 
+<a name="dc-92"></a>
+
 **DC-92 — Matching a pin by its NAME where its FUNCTION was meant
 (2026-09-01).** The demo seeder's test asserted the trade's wire colours by
 looking for a pin literally spelled `"5V"`, with `find`, once per circuit. It
@@ -3139,6 +3487,8 @@ identifier from a data table — a pin id, a component id, a category key — us
 to select the thing a semantic field already describes. Ask whether the assertion
 would survive a second row being added to that table, because the demo profile
 gaining a third circuit is the whole of what happened here.
+
+<a name="dc-93"></a>
 
 **DC-93 — A generator that overwrites in place leaves an orphan when a name
 changes (2026-09-01).** The screenshot sweep writes each frame to a path derived
@@ -3168,6 +3518,8 @@ name that a human can change — a scene id, a slug, a locale code — that does
 also own deletion. „Regenerate" that only ever creates and overwrites is a
 half-implemented operation, and the half it is missing shows up as a file
 nobody will question because it looks exactly like the ones beside it.
+
+<a name="dc-94"></a>
 
 **DC-94 — A new child table under an existing parent leaves the parent's
 BEFORE DELETE trigger describing the children that existed when it was written
@@ -3201,6 +3553,8 @@ a hand-written enumeration of a set — a `CASE` over record types, a wipe list,
 `SELECT` naming sibling tables — is stale the moment the set grows, and only the
 ones that live next to a test that derives the set can say so.
 
+<a name="dc-95"></a>
+
 **DC-95 — A prose count that describes the list it sits beside, and is never
 re-counted (2026-09-01).** `packages/sync/src/collections.ts` documents its own
 map in sentences: „Forty-four of the fifty-four collections", „the eight
@@ -3229,6 +3583,8 @@ is a test that never runs. Prefer a sentence that does not need a number
 genuinely helps a reader, put it where a test can reach it — the way
 `OPEN_QUESTIONS` is asserted non-empty rather than described as non-empty.
 
+<a name="dc-96"></a>
+
 **DC-96 — A promise in shared copy that only one branch keeps (2026-09-02).**
 „Mašina" is offered on every circuit and its description says the nine numbers
 *„idu u model koji simulator čita"*. The model is a file of the ROS 2 package,
@@ -3254,6 +3610,8 @@ copy once per artefact and ask whether the sentence is still true. A promise
 made in a shared surface is made by every branch that surface reaches, and the
 branch that cannot keep it has to say so out loud.
 
+<a name="dc-97"></a>
+
 **DC-97 — A member inserted above a doc comment orphans it (2026-09-02).**
 `chassis` was added to `strings/electronics.ts` immediately before the E4
 `code:` block — and immediately AFTER the four-paragraph comment that documents
@@ -3276,6 +3634,8 @@ headers, mostly) did not have to be read one by one.
 interface, look at the line ABOVE the insertion, not only at the lines you
 wrote. `*/` on the line before your new `/**` means you have taken someone
 else's comment. It is a two-command check and it is the only signal there is.
+
+<a name="dc-98"></a>
 
 **DC-98 — A new surface reaches for the native control the design system
 already replaced (2026-09-02).** `packages/ui` replaces the OS radio and
@@ -3317,6 +3677,8 @@ element is a CLASS, the class is a convention and conventions are not enforced
 by anything. Either make it a component the type system can require, or make it
 a gate. „Every other one in the tree does it correctly" is the description of a
 rule that has never been checked, not evidence that it holds.
+
+<a name="dc-99"></a>
 
 **DC-99 — An instrument whose COVERAGE follows the wall clock reports
 intermittently about code that is not intermittent (2026-09-02).** The
@@ -3360,6 +3722,8 @@ geometry and saying why in the code. **Ambient state inherited from iteration
 order is still ambient state** — and a filtered run is the cheapest way to find
 out that a pass has been passing for a reason nobody chose.
 
+<a name="dc-100"></a>
+
 **DC-100 — A timeout charged to a shared worker's LIFETIME fails whichever
 request happens to be in flight, and names the wrong subject (2026-09-02).** The
 `database` job went red twice in three days on two unrelated assertions —
@@ -3388,6 +3752,8 @@ resource the number belongs to, and ask whether its budget is charged per
 request or per lifetime; a per-lifetime budget on a shared thing always fails a
 victim chosen at random.
 
+<a name="dc-101"></a>
+
 **DC-101 — A poll that runs its first probe before the change it is waiting for
 can succeed on the STALE value, and a stale success is worse than a timeout
 (2026-09-02).** The sweep's `OPEN_CREATE_FORM` walks a path of clicks and then
@@ -3414,6 +3780,8 @@ placed after an action needs one settle before its first read. Note the shape of
 the report too: it accused the SUBJECT of a fault in the INSTRUMENT's timing,
 the same inversion as DC-99 one layer down.
 
+<a name="dc-102"></a>
+
 **DC-102 — A visibility guard on the target but not on the control that reveals
 it (2026-09-02).** The sweep's write probe looks for the first visible text
 field inside a form; finding none, it presses the first button whose label opens
@@ -3437,6 +3805,8 @@ elements, still has text, still has handlers, and still answers a click. Any
 code that takes „the first X" and acts on it is choosing from a set that
 includes everything hidden.
 
+<a name="dc-103"></a>
+
 **DC-103 — A class chosen for how something LOOKS is not a name for what it IS,
 and selecting by it selects everything that looks the same (2026-09-02).**
 `.tasks__rail-list` is worn by both kinds of row in TASK's rail: the five
@@ -3458,6 +3828,8 @@ the answer is „something that looks identical and behaves differently", the
 class is the wrong handle and the structure or a `data-*` is the right one. The
 tell is a selector that reads like a noun from the domain („the list", „the
 card", „the row") — domain nouns are exactly what stylesheets do not encode.
+
+<a name="dc-104"></a>
 
 **DC-104 — When only one half of a paired mark is on the keyboard, the half
 that is gets typed, and the escape it needs makes it look deliberate
@@ -3493,6 +3865,8 @@ found the last three was the gate's own TEST. `joins()` matched a bare „+" whi
 a concatenation's gap carries the two literals' delimiters as well, so it saw no
 `+` chain anywhere and reported the tree clean — green for a reason nobody chose,
 until a test built the shape by hand.
+
+<a name="dc-105"></a>
 
 **DC-105 — A field nobody thinks of as input gets the check that asks whether
 it exists, and the call then LOOKS validated (2026-09-03).** An identifier is
@@ -3540,6 +3914,8 @@ WE do with a value, never about where it came from.
 
 ---
 
+<a name="dc-106"></a>
+
 **DC-106 — A warning whose threshold is also the bound applied to the value it
 warns about is structurally always false, and nothing about it looks wrong
 (2026-09-03).** ADR-085's E5 bench reports one thing a static rule cannot: that
@@ -3584,6 +3960,8 @@ on both sides of the pipeline — as a clamp somewhere upstream and as a
 threshold here. Also any warning added in the same commit as the range it is
 measured against, which is when one number is most tempting to use twice.
 
+<a name="dc-107"></a>
+
 **DC-107 — A rule the shared component already got right is not inherited by a
 bespoke drawing beside it, and the drawing looks finished (2026-09-03).** E5's
 per-channel waveform preview maps a value onto a 24-unit-tall `viewBox` and
@@ -3621,6 +3999,8 @@ are coordinates, and which of those can reach an edge, is value-range reasoning
 over arbitrary arithmetic. The tell is cheap instead: **any new `<svg>` that is
 not a `ChartFrame`.** Ask what its extreme values draw as before asking whether
 it looks right — at rest, it will look right.
+
+<a name="dc-108"></a>
 
 **DC-108 — A picture of a value and the value itself, computed by two different
 calls (2026-09-03).** E5's channel row draws a waveform strip and prints the
@@ -3664,6 +4044,8 @@ bespoke visualisation is where both classes live, because it is the one place
 that gets written from scratch beside code that has already answered the
 question.
 
+<a name="dc-109"></a>
+
 **DC-109 — A hand-kept list mirroring a generated one guards against the wrong
 failure (2026-09-04).** The Makefile's `GATES` named the static gates for `make
 verify`, written by hand with a comment saying why: a RENAMED gate would then
@@ -3696,6 +4078,8 @@ same defect wearing a new mechanism.
 that could be read.** Ask which one a new entry gets added to first. If the
 answer is „the other one“, the copy is already stale or shortly will be.
 
+<a name="dc-110"></a>
+
 **DC-110 — A narrowing config key that REPLACES the list it appears to refine
 (2026-09-04).** `electron-builder.yml` excluded seven of the native module's
 eight prebuilds by adding a `files:` under `win:` and under `linux:`, on the
@@ -3724,6 +4108,8 @@ Verified in both directions — the deliberately inverted probe excluded exactly
 *The tell:* **an array-valued key that also exists on a narrower scope.** Before
 using the narrower one, package the thing and read what came out.
 
+<a name="dc-111"></a>
+
 **DC-111 — The last build stage produces the only artifact nobody reads back
 (2026-09-04).** Found while fixing [[DC-110]], and the more useful half of it.
 `smoke` proves the app runs — against `out/`, which is not what ships. Between
@@ -3748,6 +4134,8 @@ the artifact, so it lives at the end of the script that makes one, not in
 
 *The tell:* **the last step of a pipeline whose output no test opens.** Ask what
 the final artifact would have to be missing for every green check to stay green.
+
+<a name="dc-112"></a>
 
 **DC-112 — A shared config outside every package invalidates no cache, so the
 tool replays a result computed against the version that no longer exists
@@ -3790,6 +4178,8 @@ it is measuring the previous edit.
 *Related:* [[DC-109]] (the hand-kept list), [[DC-01]] (a gate that silently
 covers nothing still reports success — same disease, one layer down: here it is
 the CACHE that covers nothing).
+
+<a name="dc-113"></a>
 
 **DC-113 — A shared typographic TIER, retyped at every call site: every copy
 uses tokens, every copy is locally correct, and only counting them shows
@@ -3861,6 +4251,8 @@ reviewing instances and count them.
 *Related:* [[DC-02]] (the eyebrow tier — the same class, one tier up),
 [[DC-01]] (a rule that covers nothing reports success; here every gate the
 repo had covered these rules and passed them all).
+
+<a name="dc-114"></a>
 
 **DC-114 — „Summary before detail" applied without MEASURING the summary: a
 landing that photographs perfectly while showing none of its own subject
@@ -3935,6 +4327,8 @@ establish; the four `*-overview` scenes verify `aria-expanded` for that reason),
 zero-finding sweep looks like, and why the 6 and 14 findings of the two earlier
 runs are written down as the negative control).
 
+<a name="dc-115"></a>
+
 **DC-115 — a ladder that exists only in prose: seven z-index values, each
 chosen at its own call site, and five comments keeping the order in step by
 hand (2026-09-07).** Twenty-two `z-index` declarations across eleven files. `1`
@@ -3995,6 +4389,8 @@ every call site, invisible because each copy is locally correct), [[DC-116]]
 reports success — this gate went green on its first run, which is why its
 tests exist to show it FIRING).
 
+<a name="dc-116"></a>
+
 **DC-116 — a stacking claim written from the COMPONENT tree, describing a
 document that does not exist (2026-09-07).** `notes.css` carried a documented,
 carefully hedged hazard for a month: that the three typed-name confirmations
@@ -4036,6 +4432,8 @@ arguing about what a stylesheet stacks above what, is a claim nobody re-derived
 
 *Related:* [[DC-115]] (the pass that found it), [[DC-74]] (an artifact filed
 under a name that says more than the run established).
+
+<a name="dc-117"></a>
 
 **DC-117 — a document stating a fact the test suite already asserts the
 NEGATION of, green, on every run (2026-09-07).** `STATUS.md` carried
@@ -4085,6 +4483,8 @@ own oracle should be resolved by reading the oracle, not by being re-read.
 *Related:* [[DC-116]] (the same shape in a comment, and the same cause — an
 assertion nothing re-derives), [[DC-01]] (a rule that covers nothing reports
 success; here a rule that DID cover it reported success into a void).
+
+<a name="dc-118"></a>
 
 **DC-118 — a test establishing a precondition by ASSERTING through it: the
 first request to a lazily-booted service was also a claim about what that
@@ -4149,6 +4549,8 @@ The two that catch it had to be added after a mutation survived.
 *Related:* [[DC-01]] (a check that covers nothing reports success), [[DC-117]]
 (the previous entry, and the same week: a claim nothing re-derived).
 
+<a name="dc-119"></a>
+
 **DC-119 — a lookup table made TOTAL over an enum, where totality was mistaken
 for completeness (2026-09-07).** `strings.electronics.sim.units` gave every
 `SimUnit` a noun. Two of the three did not need one: `formatSimValue` already
@@ -4183,6 +4585,8 @@ number, and it will eventually be the same name as some other field's.
 
 *Related:* [[DC-113]] (a shared value whose copies were each locally correct),
 [[DC-117]] (a statement whose own oracle already answered it).
+
+<a name="dc-120"></a>
 
 **DC-120 — a contract decided for one primitive and never carried to its
 sibling, plus the class name that lets callers skip the primitive entirely
@@ -4302,6 +4706,8 @@ question the type system answered instead of the one that mattered),
 [[DC-122]] (what step 1 exposed: the labels changed a child's HEIGHT, and four
 rows had been aligning boxes that until then were all the same size).
 
+<a name="dc-121"></a>
+
 **DC-121 — a mitigation that made the remaining call sites invisible: a
 fallback rule drawing what the component draws, minus the part that could not
 be faked (2026-09-08).** `Select` replaced the native `<select>` for three
@@ -4366,6 +4772,8 @@ the private-notes card.
 contract — the same component, read from the other side), [[DC-57]] (a rule
 enforced by photography holds only where the camera goes), [[DC-98]] (the
 native control that skips the shared class, which is this class one layer down).
+
+<a name="dc-122"></a>
 
 **DC-122 — a flex row that aligns its BOXES where the user aligns by its
 CONTROLS: `align-items` chosen for a row whose children are two different
@@ -4450,6 +4858,8 @@ what those labels exposed, not what they caused), [[DC-36]] (the gate whose
 silence reads as a clean tree), [[DC-57]] (a rule enforced by photography holds
 only where the camera goes).
 
+<a name="dc-123"></a>
+
 **DC-123 — two independent checks as consecutive steps of one job, so the
 second is only ever reported when the first passes: a red check that hides a
 red check (2026-09-09).** The `Dependency audit` job runs „Shipped
@@ -4490,6 +4900,8 @@ future job that legitimately is a pipeline.
 *Related:* [[DC-36]] (a check whose silence is indistinguishable from a pass),
 [[DC-122]] (the same week, and the same shape one layer down: a gate that
 reported nothing looked exactly like a clean tree).
+
+<a name="dc-124"></a>
 
 **DC-124 — an instrument pointed at a fixture whose DEFAULT state exercises
 nothing, so every frame it takes is of an empty case (2026-09-09).** The
@@ -4576,6 +4988,8 @@ camera goes), [[DC-125]] (found in the same run, one layer down: of the frames
 the camera DID take, two were filed under the wrong name), [[DC-36]] (an
 instrument whose silence and whose pass look identical).
 
+<a name="dc-125"></a>
+
 **DC-125 — a name read at one moment and dereferenced at another, through an
 address that is only stable if nothing moved (2026-09-09).** The sweep's
 fan-out read every switcher option's LABEL once, up front, and then clicked
@@ -4618,6 +5032,8 @@ ladder whose positions were chosen at each call site and meant different things
 at each), [[DC-36]] (a wrong answer that is indistinguishable from a right
 one).
 
+<a name="dc-126"></a>
+
 **DC-126 — a control's unavailable state reaching content that merely sits
 inside it (2026-09-09).** `Checkbox` renders its label as a sibling of the box
 inside one `<label>`, and the shared rule
@@ -4659,6 +5075,8 @@ harder to see.
 *Related:* [[DC-124]] (the frame that made it visible), [[DC-120]] (the other
 half of „what is this label FOR" — there, a field with no name; here, a name
 belonging to something else).
+
+<a name="dc-127"></a>
 
 **DC-127 — a set enumerated by the class its members share for LOOKS, and
 walked as though every member were exclusive (2026-09-09).** The sweep's
@@ -4703,6 +5121,8 @@ which said `.nx-segmented__option` meaning „the first view", now names „List
 *Related:* [[DC-125]] (the same instrument, one layer up), [[DC-124]] (a scene
 that photographed a state nobody had navigated to), [[DC-98]] (a class that is
 a LOOK being asked to carry a meaning).
+
+<a name="dc-128"></a>
 
 **DC-128 — a flex item whose minimum is zero, under something that can grow: it
 is crushed rather than pushed, and a crushed box is not a scrolled one
@@ -4756,6 +5176,8 @@ Two independent instances is what makes this a class rather than a bug.
 *Related:* [[DC-124]] (the instrument that found it), [[DC-115]] (a value
 chosen at each call site, meaning something different at each), [[DC-36]] (a
 defect whose evidence is the absence of something).
+
+<a name="dc-129"></a>
 
 **DC-129 — a guard sized from the widest case the author had in mind, applied to
 a population a CALLER chooses: it stops being a guard and becomes a budget, and
@@ -4822,6 +5244,8 @@ fixture that exercises nothing rather than a walk that stops early), [[DC-127]]
 (the same walk, when its enumeration was wrong), [[DC-115]] (a value chosen where
 it was needed, meaning something different at each site), [[DC-110]] (a config
 key that replaces the list it appears to refine).
+
+<a name="dc-130"></a>
 
 **DC-130 — a rule written for a CONTROL, moved onto the box around it: the
 declarations that INHERIT change what they mean, and they do it silently,
@@ -4899,6 +5323,8 @@ omission — the second half of this entry is that defect in a grep), [[DC-120]]
 call site, meaning something different at each), [[DC-107]] (a rule the shared
 component already answered, not carried into the bespoke drawing beside it).
 
+<a name="dc-131"></a>
+
 **DC-131 — a wrapping `<label>` takes the element's entire text content as the
 control's accessible name, so anything else inside the label joins the name —
 and the arrangement that puts it there is the one the design asks for
@@ -4961,6 +5387,8 @@ call site), [[DC-98]] (a native control that skips the shared component, whose
 gate this one sits beside), [[DC-124]] (an instrument that photographs without
 reading).
 
+<a name="dc-132"></a>
+
 **DC-132 — a citation that names its evidence by a number two namespaces both
 carry (2026-09-22).** `packages/sync-transport/src/signal.ts` fixes the realtime
 topic namespace and cited „migration 006" for it. This repository has **two**
@@ -5010,6 +5438,8 @@ written — in the README paragraph explaining the numbering, which itself said
 *Related:* [[DC-109]] (a hand-kept list beside a generated one), [[DC-117]] (a
 fact stated in prose that nothing could check), [[DC-133]] (the same shape one
 layer up: a rule whose SUBJECT is not in the file that states it).
+
+<a name="dc-133"></a>
 
 **DC-133 — a sentence written for a slot nothing draws (2026-09-22).**
 `waveValuesHint` — „Razdvoj vrednosti tačkom i zarezom: 0; 1,5; 3,3" — is the
@@ -5066,6 +5496,8 @@ silence unrepresentable rather than merely absent.
 [[DC-117]], [[DC-124]] (an instrument that photographs without reading — and this
 is the defect that has no picture at all).
 
+<a name="dc-134"></a>
+
 **DC-134 — an asynchronous entry point with no failure route (2026-09-22).**
 `app.whenReady().then(async () => { … })` carried a `try`/`catch` INSIDE the
 callback that begins after the sandbox wipe, the proxy switch and the spellcheck
@@ -5106,6 +5538,8 @@ still be recovered from; the `.catch` is where one cannot.
 
 *Related:* [[DC-135]] (the defect that found this one), [[DC-01]] (a check that
 covers nothing and still reports success — the same shape, one layer up).
+
+<a name="dc-135"></a>
 
 **DC-135 — an exclusive resource two runs both own and neither locks
 (2026-09-22).** `--smoke` and `--shots` each resolve the sandbox
@@ -5174,6 +5608,8 @@ answering it.
 other rule that lives at the end of the script that builds something),
 [[DC-115]] (a rule that existed only in prose — which is what this one was).
 
+<a name="dc-136"></a>
+
 **DC-136 — a control's empty state, spelled in the DOM's vocabulary rather than
 the contract's (2026-09-22).** A `<select>` spells „nothing is selected" as
 `value=""`, because that is the only thing an empty `<option>` can produce. The
@@ -5225,6 +5661,8 @@ that skips the shared component, the other way a `<select>`'s rendering and its
 contract drift apart), [[DC-137]] (the audit that measured this class was itself
 too narrow).
 
+<a name="dc-137"></a>
+
 **DC-137 — the blast radius measured with the construct AS IT WAS WRITTEN at the
 first site (2026-09-22).** [[DC-120]]'s doctrine says to grep for the CONSTRUCT
 and not for the file, and this is the shape of getting that wrong while
@@ -5264,6 +5702,8 @@ is not the class.
 rather than on the thing), [[DC-136]] (the class this audit measured, and the
 sixteenth site it was for), [[DC-124]] (an instrument whose subject is not
 present is an instrument that reports nothing — the same failure direction).
+
+<a name="dc-138"></a>
 
 **DC-138 — a summary computed from what the run PRODUCED cannot report what it
 FAILED to produce (2026-09-22).** The screenshot sweep ends on one line:
@@ -5309,6 +5749,8 @@ never photographed — the same absence, reached by a different route), [[DC-99]
 (an instrument whose coverage follows something other than its declared subject),
 [[DC-129]] (a coverage cap spent in silence — the same shortfall arriving through
 a budget).
+
+<a name="dc-139"></a>
 
 **DC-139 — a marker written on the arms that have something in them, so the state
 with nothing in it is the one the instrument cannot see (2026-09-22).**
@@ -5370,6 +5812,8 @@ rule the marker exists for: a figure contradicting an empty region),
 
 ---
 
+<a name="dc-140"></a>
+
 **DC-140 — a required step that every site performs by hand is a step the site
 written from scratch omits, and a missing line is the one thing a reader cannot
 compare against its neighbours (2026-09-22).** `nx_fold` is a SQL function the
@@ -5408,6 +5852,8 @@ and the structural fix has already removed the exposure it would guard.
 decision repeated at every call site belongs in a component), [[DC-113]] (the
 same duplication where the copies ARE countable).
 
+<a name="dc-141"></a>
+
 **DC-141 — a closed vocabulary declared twice, where the second declaration
 carries a comment vouching that the copy cannot drift (2026-09-22).**
 `SearchKind` lived in `@nexus/core` and again in `apps/desktop/src/shared/ipc.ts`
@@ -5436,6 +5882,8 @@ appeared in `main` the moment core grew.
 grew while this copy sat beside it), [[DC-69]] (a comment stating a guarantee
 that only an invariant nothing declares can keep).
 
+<a name="dc-142"></a>
+
 **DC-142 — a `switch` over a closed union with no arm at the end, so a member
 added later is handled by falling out of the statement (2026-09-22).**
 `onSearchResult` in `App.tsx` opened a search hit by its kind: nine `case` arms,
@@ -5459,6 +5907,8 @@ switch's `default` calls it.
 *Related:* [[DC-43]] (a union widened without its table being widened compiles),
 [[DC-141]] (the duplicate union that hid the same growth), [[DC-36]] (a failure
 whose shape is silence).
+
+<a name="dc-143"></a>
 
 **DC-143 — a lazy boundary that one static import defeats, and nothing fails
 when it does (2026-09-26).** Splitting the renderer by page made every page an
@@ -5497,6 +5947,8 @@ that measurement is the instrument for the unnamed half.
 stated this rule in a comment the day the licence notices became a chunk — a
 comment and not a gate, so it covered one file; [[DC-36]] (a failure whose
 shape is silence).
+
+<a name="dc-144"></a>
 
 **DC-144 — a flush that reads what it is saving from the thing being torn down
 (2026-09-26).** „Tabla" wrote a board's pending edit from an unmount cleanup,
@@ -5542,6 +5994,8 @@ editors hold their own document and are right; nothing else writes on unmount.
 
 *Related:* [[DC-36]] (silence), [[DC-114]] (a check that needs a rendered page —
 this one needed a DATA path, which is why the gate is `smoke` and not the sweep).
+
+<a name="dc-145"></a>
 
 **DC-145 — a fact whose single home is asserted in prose while the code keeps
 two (2026-09-26).** Three at once, found while working one STATUS item:
@@ -5602,6 +6056,8 @@ tests beside the three homes.
 a generated one — the search map was one, beside a slot meant to generate it),
 [[DC-141]] (a copy under a comment vouching for it).
 
+<a name="dc-146"></a>
+
 **DC-146 — a path redirected after the thing that reads it has already read it
 (2026-09-26).** `--smoke` and `--shots` moved `userData` into a disposable
 sandbox — inside `app.whenReady()`, a few lines after the handler had already
@@ -5640,6 +6096,8 @@ and nothing else.
 *Related:* [[DC-135]] (the same sandbox, owned by nobody), [[DC-57]] (a harness
 that reports on a state it never set up).
 
+<a name="dc-147"></a>
+
 **DC-147 — an order decided by a tie-break nobody chose (2026-09-26).** Stores
 list rows by a timestamp and then by `id`, and `uuidv7` put 74 random bits
 after its millisecond. For rows written in different milliseconds the id was
@@ -5673,6 +6131,8 @@ private notes' (`updated_at DESC, id DESC`), whose timestamps come from each
 note's own edits rather than from a batch.
 
 *Related:* [[DC-146]] (the other half of why two sweeps disagreed), [[DC-57]].
+
+<a name="dc-148"></a>
 
 **DC-148 — a write's answer taken for the state of the disk NOW, when the thing
 it wrote may have moved while it was out (2026-09-27).** The canvas autosave
@@ -5741,6 +6201,8 @@ would make the restore the one step that cannot be undone.
 
 *Related:* [[DC-144]] (the same flush, one defect earlier), [[DC-101]] (a poll
 that answers with the state before the change it waits for).
+
+<a name="dc-149"></a>
 
 **DC-149 — a teardown that does not wait for the write-behind it tears down
 (2026-09-29).** The three write-behind editors — the two note editors and the
