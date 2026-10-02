@@ -27,3 +27,10 @@ apps/desktop/src/renderer/src/data/licences.json text eol=lf
 # install fails on Windows and nowhere else — the licences.json rule above,
 # one directory over.
 patches/** text eol=lf
+
+# The two scripts that open with a shebang. The test runner's transform strips
+# that line only when it ends in a bare LF, so with CRLF it kept the CR and
+# `render-notices.test.mjs` failed to load on every Windows checkout and never
+# on CI. Linux reads the same CR as part of the interpreter name.
+.github/scripts/audit-toolchain.mjs text eol=lf
+apps/desktop/scripts/render-notices.mjs text eol=lf

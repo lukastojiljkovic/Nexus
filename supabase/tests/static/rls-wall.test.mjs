@@ -36,6 +36,16 @@ const DESKTOP_ONLY = "20260809160000_key_wraps_writes_are_desktop_only.sql";
 const MK_MINT = "20260809180000_mk_mint.sql";
 
 /**
+ * Read a fixture with LF line endings. The mutations below are written against
+ * LF, and a Windows checkout with `core.autocrlf` hands them CRLF, so every
+ * pattern that spans a line end matched nothing and failed as „drifted" on that
+ * machine and never on CI. The audit itself reads either.
+ */
+function readLf(path) {
+  return readFileSync(path, "utf8").replace(/\r\n/g, "\n");
+}
+
+/**
  * Copy the real migrations, apply one edit, audit the result. The mutation is
  * asserted to have CHANGED something — a `replace` whose pattern has drifted
  * would otherwise silently mutate nothing and the test would be asserting that
@@ -47,7 +57,7 @@ function auditWithMutation(file, mutate) {
   try {
     cpSync(MIGRATIONS, join(dir, "migrations"), { recursive: true });
     const path = join(dir, "migrations", file);
-    const before = readFileSync(path, "utf8");
+    const before = readLf(path);
     const after = mutate(before);
     assert.notEqual(after, before, `mutation of ${file} matched nothing — the test has drifted`);
     writeFileSync(path, after);
@@ -512,7 +522,7 @@ test("catches a pgTAP assertion deleted without lowering the plan", () => {
   try {
     cpSync(join(SUPABASE_ROOT, "tests", "database"), join(dir, "database"), { recursive: true });
     const path = join(dir, "database", "02_guard_trigger.test.sql");
-    const before = readFileSync(path, "utf8");
+    const before = readLf(path);
     const after = before.replace(
       /select throws_ok\(\s*\$\$ update public\.sync_objects set collection = 'notes'[\s\S]*?\);\n/,
       "",
@@ -539,7 +549,7 @@ test("catches a pgTAP file that would leave its fixtures behind", () => {
   try {
     cpSync(join(SUPABASE_ROOT, "tests", "database"), join(dir, "database"), { recursive: true });
     const path = join(dir, "database", "01_two_users.test.sql");
-    const before = readFileSync(path, "utf8");
+    const before = readLf(path);
     // These seed `auth.users` and write real rows; committing them would mutate
     // whatever database the suite was pointed at.
     const after = before.replace(/\nrollback;\n/, "\ncommit;\n");
