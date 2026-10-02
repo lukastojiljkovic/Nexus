@@ -85,3 +85,100 @@ export const strings = {
     notConnected: "Nexus na vebu još nije povezan sa vašim podacima.",
   },
 };
+
+/**
+ * The English counterpart, leaf for leaf. Typed against the table above, so a
+ * key added to one and forgotten here is a compile error rather than a blank.
+ */
+const EN: typeof strings = {
+  app: { name: "Nexus", glyph: strings.app.glyph },
+
+  shell: {
+    title: "Nexus on the web",
+    subtitle: "The same interface as on the desktop. Data arrives once sync works.",
+    navLabel: "Modules",
+    themeLabel: "Theme",
+    themeOptions: { system: "System", dan: "Day", noc: "Night" },
+  },
+
+  modules: {
+    dashboard: "Dashboard",
+    tasks: "Tasks",
+    calendar: "Calendar",
+    notes: "Notes",
+    study: "Study",
+    focus: "Focus",
+    files: "Files",
+    finance: "Finance",
+    habits: "Habits",
+    fitness: "Fitness",
+    canvas: "Board",
+    tools: "Tools",
+    priv: "Private",
+    settings: "Settings",
+  },
+
+  seam: {
+    title: "Data connection",
+    description:
+      "This shell uses the same contract as the desktop app. Every call exists, " +
+      "but nothing answers it yet — so each one refuses instead of returning " +
+      "an empty answer.",
+    action: "Try: load profiles",
+    resultLabel: "Response",
+    unexpected: "Unexpected error — this is not a contract refusal.",
+  },
+
+  page: {
+    emptyTitle: "There is nothing here yet",
+    emptyDescription:
+      "Modules move from the desktop to the web one at a time. This page shows " +
+      "the shell, the themes and the components — not the content.",
+  },
+
+  api: {
+    notConnected: "Nexus on the web is not yet connected to your data.",
+  },
+};
+
+const STORAGE_KEY = "nexus.locale";
+
+/** Copy `source`'s leaves onto `target`, keeping every object identity. */
+function overwriteLeaves(target: Record<string, unknown>, source: Record<string, unknown>): void {
+  for (const key of Object.keys(source)) {
+    const value = source[key];
+    if (value === null || typeof value !== "object") {
+      target[key] = value;
+      continue;
+    }
+    const existing = target[key];
+    if (existing === null || typeof existing !== "object") {
+      target[key] = value;
+      continue;
+    }
+    overwriteLeaves(existing as Record<string, unknown>, value as Record<string, unknown>);
+  }
+}
+
+/**
+ * Which language the web shell serves.
+ *
+ * The same rule as the desktop's `localePrefs.ts`: a stored choice wins, and a
+ * device that has never stored one starts English unless the system language is
+ * `sr*`. The web shell has no settings row, so this resolves once at import and
+ * never changes under a running page.
+ */
+function servesEnglish(): boolean {
+  const stored = typeof localStorage === "undefined" ? null : localStorage.getItem(STORAGE_KEY);
+  if (stored === "en") return true;
+  if (stored === "sr") return false;
+  const language = typeof navigator === "undefined" ? "" : (navigator.language ?? "");
+  return !language.toLowerCase().startsWith("sr");
+}
+
+if (servesEnglish()) {
+  overwriteLeaves(
+    strings as unknown as Record<string, unknown>,
+    EN as unknown as Record<string, unknown>,
+  );
+}
