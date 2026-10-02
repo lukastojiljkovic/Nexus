@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Nexus: offline-first organizer for tasks, calendar, notes and study</title>
+    <title>Nexus: free offline-first organizer for tasks, calendar, notes and study</title>
     <meta name="description" content="Nexus puts tasks, calendar, notes, studying, finance, habits, fitness and files in one encrypted workspace on your own computer. Works fully offline, on Windows and Linux. Free and open source.">
     <meta name="author" content="Luka Stojiljković">
     <link rel="canonical" href="https://lukastojiljkovic.github.io/Nexus/">
@@ -19,8 +19,8 @@
 
     <link rel="icon" type="image/png" href="icon.png">
     <link rel="apple-touch-icon" href="icon.png">
-    <link rel="preload" href="fonts/geist.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="site.css">
+    <link rel="preload" href="fonts/archivo-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="site.css?v=1">
     <style>:root { --app: #8a6410; --app-dark: #e5bf62; }</style>
 
     <script>
@@ -70,105 +70,111 @@
 <body>
 <a class="skip" href="#main">Skip to content</a>
 
-<header class="bar">
-    <div class="bar-inner">
-        <a class="mark" href="#top"><img src="icon.png" alt="" width="24" height="24">Nexus</a>
-        <nav class="nav" aria-label="Sections">
-            <a href="#features">Features</a>
-            <a href="#how">How it works</a>
-            <a href="#limits">Limits</a>
-            <a href="#faq">FAQ</a>
-        </nav>
-        <div class="bar-actions">
-            <button class="theme" id="theme" type="button"><span class="theme-light">Dark</span><span class="theme-dark">Light</span></button>
-            <a class="btn btn-small" href="https://github.com/lukastojiljkovic/Nexus">GitHub</a>
-            <a class="btn btn-small btn-primary" href="#download">Download</a>
+<!-- The title band: what the app does, and the download -->
+<header class="band" id="top">
+    <div class="wrap band-grid">
+        <div class="topline">
+            <a class="mark" href="#top"><img src="icon.png" alt="" width="24" height="24">Nexus</a>
+            <nav class="nav" aria-label="Sections">
+                <a href="#features">Features</a>
+                <a href="#how">How it works</a>
+                <a href="#limits">Limits</a>
+                <a href="#faq">FAQ</a>
+            </nav>
+            <div class="topline-actions">
+                <a href="https://github.com/lukastojiljkovic/Nexus">GitHub</a>
+                <button type="button" id="theme"><span class="theme-light">Dark</span><span class="theme-dark">Light</span></button>
+            </div>
+        </div>
+
+        <div class="title">
+            <h1>The app you open first in the morning.</h1>
+            <p class="sub">Nexus puts your tasks, calendar, notes, studying, money, habits and training in one workspace on your own computer: encrypted, connected to each other, and working with the network off.</p>
+        </div>
+
+        <div class="get-it">
+            <p class="free">Free and open source</p>
+            <p class="where">Apache-2.0. Windows 10 and 11, and Linux, x64. Interface in Serbian.</p>
+            <div class="band-actions">
+                <a class="btn btn-app" href="https://github.com/lukastojiljkovic/Nexus/releases/latest">Download Nexus</a>
+                <a class="btn btn-line" href="https://github.com/lukastojiljkovic/Nexus">View the source</a>
+            </div>
         </div>
     </div>
 </header>
 
 <main id="main">
-    <section class="wrap hero" id="top">
-        <div class="hero-copy">
-            <p class="eyebrow">Offline-first organizer for <b>Windows and Linux</b></p>
-            <h1>The app you open first in the morning.</h1>
-            <p class="lede">Nexus puts your tasks, calendar, notes, studying, money, habits and training in one workspace on your own computer: encrypted, connected to each other, and working with the network off.</p>
-            <div class="actions">
-                <a class="btn btn-primary" href="https://github.com/lukastojiljkovic/Nexus/releases/latest">Download Nexus</a>
-                <a class="btn" href="https://github.com/lukastojiljkovic/Nexus">View the source</a>
-            </div>
-            <p class="fine">Free and open source (Apache-2.0) · Windows and Linux · Interface in Serbian</p>
+    <!-- The app on a plate of its colour, beside what it does at a glance -->
+    <section class="wrap grid lead">
+        <div class="plate plate-hero">
+            <img src="images/dashboard.png" width="1600" height="1000" alt="The Nexus dashboard with today's agenda, upcoming tasks, expiring documents, exams and study time" fetchpriority="high">
         </div>
-        <div class="hero-media">
-            <figure class="frame frame-shot">
-                <div class="frame-bar"><span>Nexus</span><span>Kontrolna tabla</span></div>
-                <img src="images/dashboard.png" width="1600" height="1000" alt="The Nexus dashboard with today's agenda, upcoming tasks, expiring documents, exams and study time" fetchpriority="high">
-            </figure>
-            <dl class="frame readout">
-                <div class="row"><dt>Modules</dt><dd>16, switched on per profile</dd></div>
-                <div class="row"><dt>Storage</dt><dd>Encrypted, on your computer</dd></div>
-                <div class="row"><dt>Network</dt><dd>Never required</dd></div>
-                <div class="row"><dt>Data sent</dt><dd><b>None</b></dd></div>
-            </dl>
-        </div>
+        <dl class="readout">
+            <div class="row"><dt>Modules</dt><dd>16, switched on per profile</dd></div>
+            <div class="row"><dt>Storage</dt><dd>Encrypted, on your computer</dd></div>
+            <div class="row"><dt>Network</dt><dd>Never required</dd></div>
+            <div class="row"><dt>Data sent</dt><dd><b>None</b></dd></div>
+        </dl>
     </section>
 
-    <section class="wrap section" id="features">
+    <section class="wrap grid section" id="features">
         <h2 class="section-title">What it does</h2>
         <p class="section-lede">Most people run their week across a dozen apps, each with its own account and its own server. In Nexus a task, an exam and an expiring passport share one calendar, one search box and one set of reminders.</p>
         <div class="cells">
             <article class="cell">
-                <p class="cell-n">01</p>
                 <h3>Tasks and calendar</h3>
                 <p>To-dos with priorities, subtasks, recurrence and dependencies, as a list, a board or a calendar. Month, week, day and agenda views, with events you drag and resize.</p>
             </article>
             <article class="cell">
-                <p class="cell-n">02</p>
                 <h3>Notes and a private vault</h3>
                 <p>Notes with folders, tags, backlinks and version history. Private notes are encrypted so only you can read them, with a Recovery Kit of their own.</p>
             </article>
             <article class="cell">
-                <p class="cell-n">03</p>
                 <h3>Study</h3>
                 <p>Exam countdowns, spaced-repetition flashcards, typeset maths and Anki import, plus a planner that books study time before each exam and re-plans when you fall behind.</p>
             </article>
             <article class="cell">
-                <p class="cell-n">04</p>
                 <h3>Life admin</h3>
                 <p>Accounts, budgets and subscriptions, with every currency kept separate. Habits with forgiving streaks, and reminders weeks before your ID, passport or registration expires.</p>
             </article>
             <article class="cell">
-                <p class="cell-n">05</p>
                 <h3>Food and training</h3>
                 <p>426 foods with the source of every number, 230 exercises, routines and personal records, and an energy estimate measured from your own weight trend.</p>
             </article>
             <article class="cell">
-                <p class="cell-n">06</p>
                 <h3>Tools and a canvas</h3>
                 <p>Calculators, eighteen professional toolkits you opt into, an infinite canvas with live cards, and an electronics bench that writes the Arduino or ROS 2 code your wiring implies.</p>
             </article>
         </div>
         <div class="screens">
             <figure>
-                <img class="frame" src="images/tasks.png" width="1600" height="1000" alt="Task lists with sections, subtasks, tags, priorities and due dates" loading="lazy">
-                <figcaption><span>Fig. 1</span>Tasks in lists and sections, with subtasks, tags and due dates.</figcaption>
+                <div class="plate">
+                    <img src="images/tasks.png" width="1600" height="1000" alt="Task lists with sections, subtasks, tags, priorities and due dates" loading="lazy">
+                </div>
+                <figcaption>Tasks in lists and sections, with subtasks, tags and due dates.</figcaption>
             </figure>
             <figure>
-                <img class="frame" src="images/study.png" width="1600" height="1000" alt="The study page with cards due for review, the next exam and each subject's exams and decks" loading="lazy">
-                <figcaption><span>Fig. 2</span>Study: what's due for review, the next exam, and each subject's decks.</figcaption>
+                <div class="plate">
+                    <img src="images/study.png" width="1600" height="1000" alt="The study page with cards due for review, the next exam and each subject's exams and decks" loading="lazy">
+                </div>
+                <figcaption>Study: what's due for review, the next exam, and each subject's decks.</figcaption>
             </figure>
             <figure>
-                <img class="frame" src="images/finance.png" width="1600" height="1000" alt="Finance ledger with accounts in two currencies, categories and budgets, in the dark theme" loading="lazy">
-                <figcaption><span>Fig. 3</span>Finance in the dark theme, with accounts in two currencies.</figcaption>
+                <div class="plate">
+                    <img src="images/finance.png" width="1600" height="1000" alt="Finance ledger with accounts in two currencies, categories and budgets, in the dark theme" loading="lazy">
+                </div>
+                <figcaption>Finance in the dark theme, with accounts in two currencies.</figcaption>
             </figure>
             <figure>
-                <img class="frame" src="images/electronics.png" width="1600" height="1000" alt="Electronics workbench: a Raspberry Pi wired to four sensors, in the dark theme" loading="lazy">
-                <figcaption><span>Fig. 4</span>The electronics bench: a Raspberry Pi wired to four sensors.</figcaption>
+                <div class="plate">
+                    <img src="images/electronics.png" width="1600" height="1000" alt="Electronics workbench: a Raspberry Pi wired to four sensors, in the dark theme" loading="lazy">
+                </div>
+                <figcaption>The electronics bench: a Raspberry Pi wired to four sensors.</figcaption>
             </figure>
         </div>
     </section>
 
-    <section class="wrap section" id="how">
+    <section class="wrap grid section" id="how">
         <h2 class="section-title">How it works</h2>
         <p class="section-lede">Your privacy in Nexus comes from how the code is built, not from a promise in a policy.</p>
         <ol class="steps">
@@ -180,7 +186,7 @@
         </ol>
     </section>
 
-    <section class="wrap section" id="limits">
+    <section class="wrap grid section" id="limits">
         <h2 class="section-title">Tested, and honest about limits</h2>
         <div class="split">
             <div>
@@ -202,7 +208,7 @@
         </div>
     </section>
 
-    <section class="wrap section" id="faq">
+    <section class="wrap grid section" id="faq">
         <h2 class="section-title">Questions</h2>
         <div class="faq">
             <details><summary>Is Nexus free?</summary><p>Yes. Nexus is free and open source under the <a href="https://github.com/lukastojiljkovic/Nexus/blob/main/LICENSE">Apache License 2.0</a>. It has no ads, no online account and no telemetry.</p></details>
@@ -213,41 +219,41 @@
             <details><summary>Can I take my data with me?</summary><p>Yes. Nexus exports everything into a single sealed archive that you can restore later, on the same computer or another one, or merge into an existing profile. Encrypted backups can also run on a schedule.</p></details>
         </div>
     </section>
+</main>
 
-    <section class="wrap get" id="download">
+<!-- The closing band mirrors the title band: the download, then the small print -->
+<footer class="band band-close" id="download">
+    <div class="wrap band-grid">
         <div class="get-copy">
-            <h2>Get Nexus</h2>
-            <p class="lede">A per-user installer on Windows, or an AppImage on Linux. Uninstalling keeps your data unless you choose to remove it.</p>
-            <div class="actions">
-                <a class="btn btn-primary" href="https://github.com/lukastojiljkovic/Nexus/releases/latest">Download the latest release</a>
-                <a class="btn" href="https://github.com/lukastojiljkovic/Nexus#readme">Read the docs</a>
+            <h2 class="close-title">Get Nexus</h2>
+            <p class="sub">A per-user installer on Windows, or an AppImage on Linux. Uninstalling keeps your data unless you choose to remove it.</p>
+            <div class="band-actions">
+                <a class="btn btn-app" href="https://github.com/lukastojiljkovic/Nexus/releases/latest">Download the latest release</a>
+                <a class="btn btn-line" href="https://github.com/lukastojiljkovic/Nexus/blob/main/docs/README.md">Read the docs</a>
             </div>
         </div>
-        <dl>
+        <dl class="get-facts">
             <div><dt>Requires</dt><dd>Windows 10 or 11, or a Linux desktop with a keyring, x64</dd></div>
             <div><dt>Language</dt><dd>Serbian (Latin)</dd></div>
             <div><dt>License</dt><dd>Apache-2.0, source on GitHub</dd></div>
             <div><dt>Network</dt><dd>Not needed for anything</dd></div>
         </dl>
-    </section>
-</main>
-
-<footer class="wrap">
-    <div class="foot">
-        <span>© 2026 <a href="https://lukastojiljkovic.github.io/CV/">Luka Stojiljković</a></span>
-        <nav aria-label="Legal">
-            <a href="https://github.com/lukastojiljkovic/Nexus/blob/main/LICENSE">License</a>
-            <a href="https://github.com/lukastojiljkovic/Nexus/blob/main/NOTICE">Notice</a>
-            <a href="https://github.com/lukastojiljkovic/Nexus/blob/main/PRIVACY.md">Privacy</a>
-            <a href="https://github.com/lukastojiljkovic/Nexus/blob/main/TERMS.md">Terms</a>
-            <a href="https://github.com/lukastojiljkovic/Nexus/blob/main/SECURITY.md">Security</a>
-            <!-- The third-party notices are not a file in the repository: they are
-                 generated from the released dependency tree and attached to each
-                 release, so the link goes to the release page rather than to a
-                 copy that would go stale. -->
-            <a href="https://github.com/lukastojiljkovic/Nexus/releases/latest">Third-party notices</a>
-        </nav>
-        <p>Windows is a trademark of the Microsoft group of companies. Linux is a registered trademark of Linus Torvalds. Nexus isn't affiliated with other products named Nexus.</p>
+        <div class="foot">
+            <span>© 2026 <a href="https://lukastojiljkovic.github.io/CV/">Luka Stojiljković</a></span>
+            <nav aria-label="Legal">
+                <a href="https://github.com/lukastojiljkovic/Nexus/blob/main/LICENSE">License</a>
+                <a href="https://github.com/lukastojiljkovic/Nexus/blob/main/NOTICE">Notice</a>
+                <a href="https://github.com/lukastojiljkovic/Nexus/blob/main/PRIVACY.md">Privacy</a>
+                <a href="https://github.com/lukastojiljkovic/Nexus/blob/main/TERMS.md">Terms</a>
+                <a href="https://github.com/lukastojiljkovic/Nexus/blob/main/SECURITY.md">Security</a>
+                <!-- The third-party notices are not a file in the repository: they are
+                     generated from the released dependency tree and attached to each
+                     release, so the link goes to the release page rather than to a
+                     copy that would go stale. -->
+                <a href="https://github.com/lukastojiljkovic/Nexus/releases/latest">Third-party notices</a>
+            </nav>
+            <p>Windows is a trademark of the Microsoft group of companies. Linux is a registered trademark of Linus Torvalds. Nexus isn't affiliated with other products named Nexus.</p>
+        </div>
     </div>
 </footer>
 

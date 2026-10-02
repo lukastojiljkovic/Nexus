@@ -1,8 +1,11 @@
-Copyright 2024 The Geist Project Authors (https://github.com/vercel/geist-font)
+archivo-latin.woff2 and archivo-latin-ext.woff2: Archivo, the variable font (widths 62-125, weights 100-900),
+in the latin and latin-ext subsets that Google Fonts serves. Unmodified.
+
+Copyright 2020 The Archivo Project Authors (https://github.com/Omnibus-Type/Archivo)
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:
-https://openfontlicense.org
+http://scripts.sil.org/OFL
 
 
 -----------------------------------------------------------
