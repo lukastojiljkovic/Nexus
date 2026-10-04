@@ -2,11 +2,13 @@
  * The third-party notices this product owes, and the only thing the „Licence"
  * card reads.
  *
- * **Nexus is closed-source, which is precisely why this file exists.** MIT,
- * BSD, Apache-2.0 and the OFL all give a commercial product everything it needs
+ * **Nexus is Apache-2.0, and this file exists for exactly the reason it always
+ * did.** MIT, BSD, Apache-2.0 and the OFL all give a product everything it needs
  * — except silence: each one requires the copyright notice and the licence text
- * to travel WITH the distribution. Nothing else in the repository discharges
- * that. A screen that lists them does.
+ * to travel WITH the distribution. That obligation belongs to the dependency's
+ * licence, not to ours, so it is as binding on an open-source binary as it was
+ * on a closed one. Nothing else in the repository discharges it. A screen that
+ * lists them does.
  *
  * **Not written — generated.** `scripts/generate-licences.mjs` reads every
  * notice off disk (a package's own `LICENSE`, a font's own OpenType `name`

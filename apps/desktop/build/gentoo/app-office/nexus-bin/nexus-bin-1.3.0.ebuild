@@ -19,13 +19,19 @@ DESKTOP_ID="rs.stojiljkovic.nexus"
 # are separate strings on purpose, not a translation oversight.
 DESCRIPTION="Offline-first, all-in-one life management: notes, tasks, calendar, files"
 DESKTOP_COMMENT="Beleške, zadaci, kalendar, datoteke i finansije — sve na jednom mestu, lokalno i šifrovano."
-HOMEPAGE="https://github.com/lukastojiljkovic/nexus-releases"
-SRC_URI="https://github.com/lukastojiljkovic/nexus-releases/releases/download/v${PV}/${MY_P}.tar.gz"
+HOMEPAGE="https://github.com/lukastojiljkovic/Nexus"
+# Releases live in the source repository once it is public; the separate
+# `nexus-releases` repository was never created. Same asset name, so the
+# Manifest digest is unaffected by the move.
+SRC_URI="https://github.com/lukastojiljkovic/Nexus/releases/download/v${PV}/${MY_P}.tar.gz"
 S="${WORKDIR}/${MY_P}"
 
-# Commercial software. ACCEPT_LICENSE must name it explicitly (it is in the
-# EULA group, which the default profile does not accept).
-LICENSE="all-rights-reserved"
+# Apache-2.0, and it is a FREE licence: the default profile accepts it, so
+# there is no ACCEPT_LICENSE step any more. This said "all-rights-reserved"
+# with a note about the EULA group until 2026-10-02, when Nexus became open
+# source (ADR-087). An ebuild that keeps demanding a proprietary licence for a
+# free package makes portage refuse a package it should simply install.
+LICENSE="Apache-2.0"
 SLOT="0"
 KEYWORDS="-* ~amd64"
 

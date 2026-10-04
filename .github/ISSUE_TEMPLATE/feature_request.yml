@@ -1,0 +1,46 @@
+name: Feature request
+description: Something Nexus should do that it does not.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Lead with the problem. A request that starts from a problem can be
+        solved in a way neither of us has thought of yet; a request that starts
+        from a solution can only be accepted or refused.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: What you are trying to do, and where the app gets in the way.
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you have in mind
+      description: Optional, and welcome — but the problem above is the part that decides.
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you do instead today
+      description: A workaround, another tool, or nothing at all.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope
+      options:
+        - label: I understand the interface is Serbian only, and that this is a product decision.
+          required: false
+        - label: This is about the desktop application or the source in this repository.
+          required: false
+

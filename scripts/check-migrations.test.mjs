@@ -179,7 +179,7 @@ describe("the live series", () => {
     // attached, not a drive-by renumbering of applied migrations.
     expect(declared().map((f) => f.key)).toEqual([
       "001", "002", "003", "003b", "003c", "004", "005",
-      "008", "009", "010", "011", "012", "013",
+      "008", "009", "010", "011", "012", "013", "014",
     ]);
   });
 

@@ -1,0 +1,53 @@
+name: Dependency review
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+# EVERY `uses:` IS PINNED TO A 40-CHARACTER COMMIT SHA with the tag as a
+# comment — see ci.yml for the reasoning.
+#
+# This job answers a question `Security`'s audit cannot: not "does the tree
+# contain a known advisory today", but "does THIS pull request introduce one, or
+# a licence this project cannot ship". It reads the dependency diff, so it only
+# ever speaks about the change in front of it.
+#
+# WHY IT NO-OPS TODAY. Dependency review is a GitHub Advanced Security feature
+# and needs a licence on a private repository; the same
+# `!github.event.repository.private` gate as pages.yml keeps it out of the way
+# until the repository is public, and switches it on by itself then.
+
+jobs:
+  review:
+    name: Review the dependency diff
+    if: ${{ !github.event.repository.private }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          # A high or critical advisory blocks the merge. `low` and `moderate`
+          # are reported in the job summary rather than blocking, because the
+          # `Security` workflow's audit already blocks the shipped tree at
+          # `low` — that is the gate for what reaches a user, and this one is
+          # for what a contributor is about to add.
+          fail-on-severity: high
+          # Nexus is Apache-2.0. These are the licences that cannot be combined
+          # with it in a distributed binary, or that restrict commercial use.
+          # Deliberately NOT a blanket "only allow a list": a permissive licence
+          # nobody thought to enumerate should be reviewed by a human, not
+          # rejected by a rule.
+          deny-licenses: >-
+            AGPL-3.0, AGPL-3.0-only, AGPL-3.0-or-later,
+            GPL-2.0, GPL-2.0-only, GPL-3.0, GPL-3.0-only,
+            LGPL-3.0, LGPL-3.0-only, SSPL-1.0, BUSL-1.1,
+            CC-BY-NC-4.0, Commons-Clause
+          # A summary in the PR body, so a review does not have to open the job.
+          comment-summary-in-pr: on-failure
+

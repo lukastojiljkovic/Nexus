@@ -5,9 +5,9 @@
 
 ## Checklist
 
-- [ ] `pnpm build`, `pnpm typecheck` and `pnpm test` pass locally
+- [ ] `make verify` passes locally (build, typecheck, lint, tests and every `check:*` gate)
 - [ ] Styling uses design tokens only — no raw colors outside `packages/tokens`
 - [ ] No new runtime dependencies (or justified below)
 - [ ] IPC / preload / CSP changes reviewed against the SEC-EL hardening rules
 - [ ] Acceptance criteria of touched requirements are covered by tests
-- [ ] Nothing from `docs/` is committed
+- [ ] `docs/` is updated in the same pass, where the work changes what it says

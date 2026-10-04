@@ -1,0 +1,76 @@
+# Changelog
+
+All notable changes to this project are documented here. The format is
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
+uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.4.0] - Unreleased
+
+The first public release. No earlier version was tagged or published; this one
+carries the Apache-2.0 licence, the release pipeline and the corrections below.
+
+### Added
+
+- The project is licensed under **Apache-2.0** (`LICENSE`, `NOTICE`), and
+  ADR-087 records the decision that supersedes ADR-080's closed-source premise.
+- Community and policy documents: `SECURITY.md`, `CONTRIBUTING.md`,
+  `CODE_OF_CONDUCT.md`, `PRIVACY.md`, `TERMS.md`, `SUPPORT.md`, `ROADMAP.md`.
+- Issue templates and a release workflow that produces checksums, an SBOM,
+  build provenance and the third-party notices for a tagged release.
+- A project website, published with the repository by a Pages workflow.
+- Every page in the renderer is its own chunk, so the canvas engine and the
+  other large surfaces left the startup path. The tools drawer fetches a
+  toolkit when one of its tools is opened, and it no longer ships with the
+  rest of the shell.
+
+### Fixed
+
+- **The sync housekeeping job is scheduled by a migration** rather than by hand
+  in the SQL editor, idempotently and with the `pg_cron` extension created if
+  needed.
+- The Supabase README no longer claims the migration forces RLS on
+  `storage.objects` and `realtime.messages` — it cannot, and the migration's
+  header says so.
+- Row ids minted in the same millisecond sort in the order they were minted.
+- Leaving a canvas board no longer writes an empty board, and the canvas
+  autosave keeps one write per board on the wire.
+- Every exit that closes an editor waits for the last edit to reach disk, so
+  closing a note or a canvas no longer loses it.
+- The harness sandbox is applied before `ready`, so renderer storage lands in
+  the sandbox rather than in the developer's own profile.
+
+### Security
+
+- **The packaged executable is hardened with Electron fuses**: `RunAsNode`,
+  `NODE_OPTIONS` and the CLI inspect arguments are off, cookie encryption is on,
+  embedded asar integrity validation is on, and the app loads only from the
+  asar. `GrantFileProtocolExtraPrivileges` stays on because the renderer still
+  loads from `file://`.
+
+## 1.3.0 - 2026-09-23
+
+The first entry summarises everything up to this version, because the project
+grew from its own first commit in one line rather than through a series of
+announced releases. Nothing before this has ever been published: there are no
+tags and no downloads.
+
+### Added
+
+- **The desktop application**, an offline-first life-management workspace:
+  tasks, calendar, notes, documents, study, habits, focus timer, fitness and
+  nutrition, finance, canvas, the professional toolkits, and Electronics — an
+  Arduino and Raspberry Pi workbench that derives a wiring sketch, a ROS 2
+  package and a URDF from a circuit, and can run a plan on the user's own
+  toolchain.
+- **Encrypted local storage** — one SQLite database under a passcode-derived
+  key, with a Recovery Kit, multiple local accounts, and no network dependency.
+- **The optional sync substrate** — an end-to-end encrypted design in which the
+  server holds ciphertext only, with the local data key, a master sync key and
+  per-profile content keys kept apart. The engine, the transport and the server
+  schema are built and tested; no hosted backend has ever been deployed, and
+  cloud access is off by default.
+- **Generated third-party notices**, read from the shipped dependency tree and
+  shown in the application, rather than written by hand.
+- **Linux builds** — AppImage, tarball and a Gentoo ebuild.
+
+[1.4.0]: https://github.com/lukastojiljkovic/Nexus/releases/tag/v1.4.0

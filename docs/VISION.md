@@ -2,10 +2,9 @@
 
 > **Founder-approved north star, and the one document the others may not
 > contradict.** [SPECIFICATION.md](SPECIFICATION.md) expands it, never disputes
-> it; [STATUS.md](STATUS.md) says how far along it is. Raw ideas live in
-> [notes/raw-spec.md](notes/raw-spec.md); this is their distilled intent.
-> "Nexus" is a codename — the final name is chosen (with trademark and domain
-> checks) before the landing page ships.
+> it; [STATUS.md](STATUS.md) says how far along it is. Raw ideas live in the
+> founder's own notes, outside the repository; this is their distilled intent.
+> **Nexus is the product's name.**
 
 **Nexus is the IDE for your life** — one offline-first workspace that replaces
 the fifty scattered apps people use to run their private and professional lives.

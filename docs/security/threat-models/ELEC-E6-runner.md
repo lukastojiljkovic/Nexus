@@ -3,7 +3,7 @@
 **Date:** 2026-09-22 · **Author:** Claude (Opus), for founder review
 **Slice:** E6 of ADR-085 — the external runner (`ros2` / `colcon` / Gazebo, native
 or through WSL2 or Docker).
-**Authorising decision:** [DEV-007](../deviations.md), confirmed by the founder
+**Authorising decision:** [DEV-007](../../deviations.md), confirmed by the founder
 2026-08-19, including its four mitigations and its revisit trigger.
 **Required by:** SEC-VER-01. **This is the first document in this directory** —
 see §7, which is a finding about the rule rather than about this slice.
@@ -91,8 +91,9 @@ spawn, the workspace path, output capture, the stop path, and the quit path.
   hurry.
 - **T2. Argument injection through the path.** The path is data, so it is the one
   place injection can still enter. Three conditions, all necessary: argv arrays
-  and **never** `shell: true` (a space in `C:\Users\Luka Fajlovi\…` must not be a
-  word split); no string interpolation of the path into a command string even
+  and **never** `shell: true` (a space in a path such as
+  `C:\Users\<user>\My Projects\robot` must not be a word split); no string
+  interpolation of the path into a command string even
   where argv would have been safe; and a path that begins with `-` must be
   rejected rather than escaped, because a leading dash is an option to `ros2`,
   `colcon` and `docker` alike.
@@ -226,7 +227,7 @@ ships:
 
 ## 8. Related
 
-- [DEV-007](../deviations.md) — the authorising decision and its trigger.
+- [DEV-007](../../deviations.md) — the authorising decision and its trigger.
 - [SEC-EL-02](../baseline.md) — the IPC contract every new channel inherits.
 - [SEC-LOC-04](../baseline.md) — the no-network assertion the runner must not
   weaken.

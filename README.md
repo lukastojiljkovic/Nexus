@@ -1,49 +1,114 @@
 # Nexus
 
-An offline-first, modular life-management app. One workspace for tasks,
-calendar, notes, studying, files, habits, fitness, finance and a canvas — all
-stored on your own device, all working with the network off.
+Nexus is a desktop application that keeps your tasks, calendar, notes, documents, study, habits, fitness, finance, a canvas and an electronics workbench in one workspace on your own computer. Everything is stored in a single encrypted SQLite database, the application works with the network off, and the interface is in Serbian.
 
-The desktop app (Electron + React) is complete and in daily use. The web app
-and sync are built out of *this* codebase rather than as a rewrite, with Supabase
-behind them and end-to-end encrypted sync between the two — the server holds
-ciphertext and never plaintext content. **They are paused** by the founder's
-decision of 2026-08-31 until the desktop feature set is finished: everything
-already built for them stays built, stays tested and stays off by default.
+<img src="docs/images/dashboard.png" width="100%" alt="The Nexus dashboard: today's events, upcoming tasks, expiring documents, exams and study time">
 
-**Cloud is off by default and can be switched off entirely**, and that is
-structural rather than a promise: the local-only path is not *able* to reach the
-network, and a CI gate enforces it. A user who never turns sync on is running
-exactly the offline app described above.
+## Download
 
-<p>
-  <img src="docs/images/dashboard.png" width="49%" alt="Nexus dashboard: today's events, upcoming tasks, expiring documents and exams">
-  <img src="docs/images/tasks.png" width="49%" alt="Task lists with sections, subtasks, tags, priorities and due dates">
-  <img src="docs/images/finance.png" width="49%" alt="Finance ledger with accounts in two currencies, categories and budgets, in the dark theme">
-  <img src="docs/images/electronics.png" width="49%" alt="Electronics workbench: a Raspberry Pi wired to four sensors, in the dark theme">
-</p>
+[**Releases**](https://github.com/lukastojiljkovic/Nexus/releases/latest) — the first public release is **1.4.0**:
 
-The UI is in Serbian (see **Language**). The screenshots show the demo profile
-rendered by the screenshot harness (`pnpm --filter @nexus/desktop shots`).
+| File | Platform |
+| --- | --- |
+| `Nexus-Setup-1.4.0.exe` | Windows 10 or 11, x64 — per-user NSIS installer |
+| `Nexus-1.4.0-x86_64.AppImage` | Linux x64 with glibc — mark it executable and run it |
+| `nexus-1.4.0-linux-x64.tar.gz` | Linux x64 — the payload the Gentoo ebuild installs |
+
+Every release also carries `SHA256SUMS.txt`, a CycloneDX SBOM, the rendered `THIRD-PARTY-NOTICES.md`, and build-provenance attestations. On Linux the app needs a running Secret Service keyring (gnome-keyring, KWallet, KeePassXC with Secret Service enabled); without one it refuses to create an account rather than weaken the key chain. Code signing is paused for now, so SmartScreen warns on first run; the source is all here for anyone who wants to check what the installer does, and the attestations tie each file to the commit and workflow that built it. macOS is not built: nothing here has produced or opened a macOS artefact.
+
+## What it does
+
+Sixteen modules, switched on per profile.
+
+| Module | What it holds |
+| --- | --- |
+| Dashboard | The page you open first: today's agenda, upcoming tasks, expiring documents, exams and study time, composed from widgets you place yourself. |
+| Tasks | Lists, sections, subtasks, priorities, tags, recurrence and dependencies, shown as a list, a board, a calendar or a smart list, with per-task reminders. |
+| Calendar | Month, week, day and agenda views, events you drag and resize, recurrence and reminders, and the tracked documents whose expiry dates appear on it. |
+| Notes | Folders, tags, backlinks, templates, version history and inline flashcards. |
+| Private vault | Notes encrypted so only you can read them, with a Recovery Kit of their own. |
+| Documents | Attachments with in-app preview, and content search for the formats that need no dependency. |
+| Study | Exam countdowns, spaced-repetition decks with Anki import, cloze and problem cards, typeset maths, and a planner that books study time before each exam. |
+| Finance | Accounts, transactions, categories, budgets and subscriptions, each currency kept separate, with CSV statement import. |
+| Habits | Habits with forgiving streaks, completion history and dashboard widgets. |
+| Fitness | Exercise and training tracking, personal records, body measurements, and a food catalogue that names the source of every number. |
+| Focus | One Pomodoro timer, shared by the study session and the utilities drawer. |
+| Tools | A drawer of calculators and converters. |
+| Canvas | An infinite board with live notes, cards and connectors. |
+| Electronics | A wiring bench that derives an Arduino sketch, a ROS 2 package and a URDF from a circuit, and can run the plan on your own toolchain. |
+| Professional toolkits | Opt-in toolkits for a profession — law, construction, agriculture, photography, music, education and others. |
+| Settings | Profiles, themes, module settings and the licence screen. |
+
+## Privacy and security, briefly
+
+- **Local by default.** Your data is one encrypted SQLite database on your own device. The local path cannot reach the network, and that is enforced in CI rather than promised in copy.
+- **No telemetry, no analytics, no crash reporting.**
+- **Cloud is off by default**, and in the build this repository produces it cannot be turned on at all: no backend project is compiled in. Optional sync is end-to-end encrypted, and the server holds ciphertext only.
+
+Read [PRIVACY.md](PRIVACY.md) for exactly what is stored where, and
+[SECURITY.md](SECURITY.md) to report a vulnerability privately.
+[TERMS.md](TERMS.md) covers the distributed binaries.
+
+## How it was built
+
+The repository holds the full working record, and a reader can follow it end to end:
+
+- **Specification and PRDs** — [docs/SPECIFICATION.md](docs/SPECIFICATION.md) and [docs/prd/](docs/prd/): 37 numbered requirements documents plus a glossary; `prd/00-overview.md` is the module registry.
+- **Architecture and the ADR index** — [docs/architecture/overview.md](docs/architecture/overview.md), with [one table for all 87 decisions and their status](docs/architecture/adr/README.md).
+- **The engineering journal** — [docs/log/README.md](docs/log/README.md): four months of entries, kept by month, recording why each decision was made.
+- **The defect ledger and the gates** — [docs/defect-classes.md](docs/defect-classes.md): 149 recurring failure shapes, and the 26 `check:` scripts that enforce the ones a static check can answer.
+- **The security baseline** — [docs/security/baseline.md](docs/security/baseline.md): the binding `SEC-*` rules.
+- **Threat models and signed deviations** — [docs/security/threat-models/](docs/security/threat-models/) and [docs/deviations.md](docs/deviations.md).
+- **The design direction** — [docs/design/direction-brief.md](docs/design/direction-brief.md); the direction that won is now the token set in `packages/tokens`.
+- **The prompt pipeline** — [docs/prompts/README.md](docs/prompts/README.md): the prompts that produced the PRDs, the research passes and the ADRs.
+- **The map** — [docs/README.md](docs/README.md) groups all of it by what you want to do.
+
+## Contributing
+
+Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the build
+commands, the rules the static gates enforce, and what has to pass before a pull
+request. Participation is covered by
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). Questions go to
+[SUPPORT.md](SUPPORT.md).
+
+## Licence
+
+Apache License 2.0. See [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).
+
+Third-party notices are generated from the shipped dependency tree, never
+written by hand: they are shown inside the application under **Podešavanja →
+Licence**, attached to each release as `THIRD-PARTY-NOTICES.md`, and regenerated
+with `pnpm --filter @nexus/desktop licences`.
 
 ---
 
-## Requirements
+# For developers
 
-| | |
-| --- | --- |
-| Node | `>= 24` |
-| pnpm | `11.10.0` (pinned via `packageManager`) |
-| OS | Windows, macOS or Linux |
+## Build from source
+
+Requirements: **Node >= 24** and **pnpm 11.10.0** (pinned through the root
+`package.json`'s `packageManager` field, so `corepack enable` is enough).
 
 ```sh
-pnpm install
+pnpm install --frozen-lockfile
+pnpm build
+pnpm typecheck
+pnpm lint
+pnpm test
 ```
 
-`pnpm install` runs a postinstall step that provisions the Electron binary.
-There is no ABI dance to perform: since 13.0.3 the native SQLite module is a
-Node-API addon, and one prebuilt file serves both Node (what the tests run on)
-and Electron (what the app runs on). See **The native module** below.
+Then run the app, or check that it starts and works end to end:
+
+```sh
+pnpm --filter @nexus/desktop dev      # electron-vite dev server
+pnpm --filter @nexus/desktop smoke    # build + launch + end-to-end check → "SMOKE OK"
+pnpm --filter @nexus/desktop shots    # ~2,800 screenshots + a geometric audit
+```
+
+`pnpm install` provisions the Electron binary in a postinstall step. There is
+no ABI dance to perform: since 13.0.3 the native SQLite module is a Node-API
+addon, and one prebuilt file serves both Node (what the tests run on) and
+Electron (what the app runs on). See **The native module** below.
 
 ## Everyday commands
 
@@ -51,21 +116,13 @@ Run from the repo root; each fans out over the workspace through Turborepo.
 
 ```sh
 pnpm typecheck      # tsc --noEmit, strict, every package
-pnpm test           # Vitest — core, db, desktop
+pnpm test           # Vitest — core, db, desktop, and the script suites
 pnpm lint           # ESLint, every package
 pnpm build          # production build — tokens, desktop, gallery
 ```
 
-Desktop app:
-
-```sh
-pnpm --filter @nexus/desktop dev        # electron-vite dev server
-pnpm --filter @nexus/desktop smoke      # build + launch + end-to-end check → "SMOKE OK"
-pnpm --filter @nexus/desktop dist       # electron-builder installer
-pnpm --filter @nexus/desktop licences   # regenerate the third-party notices
-```
-
-Component gallery — the design-system review surface, not shipped to users:
+The component gallery is the design-system review surface, not shipped to
+users:
 
 ```sh
 pnpm --filter @nexus/gallery dev
@@ -122,6 +179,11 @@ no VM. Run `make linux` from the WSL shell.
 The Makefile needs GNU make and a POSIX shell, which on Windows means Git Bash
 or WSL, not cmd.exe. Nothing depends on it: every target is one documented pnpm
 script, and `pnpm --filter @nexus/desktop dist` remains the direct route.
+
+Tagged releases are built by CI (`.github/workflows/release.yml`), which
+produces the installers, a `SHA256SUMS` file, a CycloneDX SBOM, build-provenance
+attestations and the rendered third-party notices, and uploads them to a
+**draft** release for a human to publish.
 
 The full Linux guide — the AppImage's sandbox and FUSE behaviour, the keyring
 requirement, and installing the Gentoo overlay — is in
@@ -228,26 +290,30 @@ desktop `smoke` script is the end-to-end check: it builds the app, launches
 Electron, exercises the real IPC surface against a real database, and prints
 `SMOKE OK`.
 
+Beyond the unit tests there are the **static gates** — `check:colours`,
+`check:egress`, `check:runner` and the rest, listed in the root `package.json`
+under `check:*` — each of which is a rule this project states somewhere in
+prose, made executable. They need no build output and each runs as its own CI
+step, so a red check names the rule that broke. `pnpm test` also runs a
+wall-mutation suite that breaks the server SQL one line at a time and demands
+the specific complaint.
+
 Serbian text is sorted and compared with `Intl.Collator(["sr-Latn", "sr"])` —
 plain `"sr"` mis-tailors the Latin diacritics (š, č, ć, ž, đ).
 
 ## CI
 
-- **CI** (`.github/workflows/ci.yml`) — a single `verify` job on `ubuntu-latest`:
-  the raw-colour check, build, typecheck, lint, tests, on every push to `main`
-  and every pull request. It never launches Electron, so the smoke check is a
-  local gate.
-- **Security** (`.github/workflows/security.yml`) — gitleaks secret scan plus a
-  dependency audit, on every push and on a schedule.
+- **CI** (`.github/workflows/ci.yml`) — `verify`: every static gate, the build,
+  typecheck, lint and the full test suite, on every push to `main` and every
+  pull request. It never launches Electron, so the smoke check is a local gate.
+- **Security** (`.github/workflows/security.yml`) — a whole-history gitleaks
+  secret scan plus a dependency audit, on every push and on a schedule.
+- **CodeQL**, **Dependency review** and **Scorecard** run on the public
+  repository. Each is gated on `!github.event.repository.private`, so the
+  repository being public is the switch that turns them on.
 
 ## Language
 
-All user-facing copy is Serbian and lives in `strings.ts`, centralized so a
+All user-facing copy is Serbian and lives in `strings.sr.ts`, centralized so a
 later i18n extraction is mechanical. Code, comments and documentation are in
 English.
-
-## Licence
-
-Apache License 2.0. See [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE). Third-party
-notices ship inside the app (Podešavanja → Licence) and are regenerated with
-`pnpm --filter @nexus/desktop licences`.

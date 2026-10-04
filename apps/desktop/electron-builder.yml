@@ -12,10 +12,19 @@
 # `files` below keeps the 14 MB amalgamation it would only need in order to
 # compile one out of the installer, and says why the seven unusable binaries stay.
 #
-# publish: documented plan of record (GitHub provider, lukastojiljkovic/
-# nexus-releases). That repo does not exist yet (founder decision pending) —
-# local builds always pass --publish never (see scripts/dist.mjs) so a build
-# never attempts to reach it.
+# publish: GitHub releases in THIS repository (lukastojiljkovic/Nexus).
+#
+# It used to name a separate `nexus-releases` repository, a plan of record from
+# when Nexus was proprietary. That repository was never created and is no
+# longer wanted: once the source repository is public there is no reason for a
+# second one, and `site/`'s download buttons already point at this repository's
+# `releases/latest`.
+#
+# This is a DECLARATION and nothing more. Local builds always pass
+# `--publish never` (see scripts/dist.mjs), so a build never contacts GitHub;
+# the release workflow uploads a DRAFT release instead; and auto-update stays
+# disarmed (the SEC-EL-07 comment in src/main/index.ts lists the three
+# conditions for re-arming it).
 
 appId: rs.stojiljkovic.nexus
 productName: Nexus
@@ -84,6 +93,44 @@ asarUnpack:
   - node_modules/better-sqlite3-multiple-ciphers/**/*
 
 npmRebuild: false
+
+# ---------------------------------------------------------------------------
+# Electron fuses
+# ---------------------------------------------------------------------------
+# Flipped at packaging time by electron-builder's `electronFuses` option
+# (supported since 24.8; this project is on 26.15.3), which drives
+# `@electron/fuses`. A fuse is a byte in the executable that Electron reads
+# before any application code runs, so these are the switches that still hold
+# if the main process is compromised or replaced. They are applied right
+# before signing, on the packaged output — never by hand.
+#
+#   RunAsNode off          `ELECTRON_RUN_AS_NODE=1 Nexus.exe` no longer starts
+#                          a Node.js interpreter; the executable is the app.
+#   NODE_OPTIONS off       the environment can no longer inject `--require` (or
+#                          any switch) into a double-clicked app's main process.
+#   CLI inspect off        `--inspect` on the command line cannot open a
+#                          debugger port for a local process to attach to.
+#   Cookie encryption on   Chromium cookies at rest go through the OS keystore
+#                          (DPAPI) instead of lying in the profile in the clear.
+#   Asar integrity on      the `app.asar` header's SHA-256 is embedded in the
+#                          executable and checked at load, so an edited archive
+#                          refuses to start rather than running its new contents.
+#   Only load from asar    the app may not be loaded from a loose `app/`
+#                          directory beside the executable — the shape used to
+#                          sidestep the integrity check above.
+#
+# `GrantFileProtocolExtraPrivileges` stays ON, deliberately: the renderer is
+# loaded from `file://` (electron-vite's production output), and turning this
+# off breaks a file:// page's access to its own resources. Revisit it only when
+# the renderer is served from a custom protocol or a real origin.
+electronFuses:
+  runAsNode: false
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableCookieEncryption: true
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  grantFileProtocolExtraPrivileges: true
 
 win:
   target:
@@ -173,4 +220,4 @@ appImage:
 publish:
   provider: github
   owner: lukastojiljkovic
-  repo: nexus-releases
+  repo: Nexus

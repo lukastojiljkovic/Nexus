@@ -139,6 +139,7 @@ supabase/
     …180000_mk_mint               the master key, minted exactly once per account
     …200000_kdf_params_ceiling    the KDF parameters bounded from ABOVE too, not only below
     …220000_device_register       how a desktop gets its device row back when its session dies
+    …090000_housekeeping_schedule (2026-10-02) the housekeeping job schedules itself; warns if pg_cron cannot exist
   functions/                      three Edge Functions, and all three read a service-role key
     pair-complete/                the pairing handshake's three routines
     device-register/              hands out a desktop device row, priced at the master key (013)
@@ -150,8 +151,8 @@ supabase/
 
 ### The numbering is logical steps, not a file count
 
-The thirteen files carry eleven numbers: `003` is spread over three files (`003`,
-`003b`, `003c`), and `006` and `007` were never written. The number is the
+The fourteen files carry twelve numbers: `003` is spread over three files
+(`003`, `003b`, `003c`), and `006` and `007` were never written. The number is the
 logical STEP and it is what prose cites; the filename's timestamp is the order
 the server applies them in. `pnpm check:migrations` holds the two against each
 other — it fails if a file declares no number, if two declare the same one, if
@@ -542,15 +543,20 @@ None of this is automated, and none of it should be.
    the rightmost hop is an internal address shared by everybody and the limiter
    collapses into one global bucket. That fails safe (everyone limited together
    rather than nobody limited) but it is an outage, not a control.
-7. **Schedule the housekeeping.** Enable the `pg_cron` extension (Database →
-   Extensions) and then, in the SQL editor, once:
+7. **The housekeeping schedule is a migration** (`…090000_housekeeping_schedule`),
+   so there is nothing to paste: `supabase db push` creates `pg_cron` if the
+   project can and then schedules `public.nexus_sync_housekeeping()` hourly,
+   idempotently (it unschedules by name first). It reaps spent pairings and
+   stale rate-limit buckets; it cannot touch user state, and the drift guard
+   asserts that.
 
-   ```sql
-   select cron.schedule('nexus-sync-housekeeping', '0 * * * *',
-                        $$ select public.nexus_sync_housekeeping() $$);
-   ```
-   It reaps spent pairings and stale rate-limit buckets. It cannot touch user
-   state, and the drift guard asserts that.
+   **If the extension cannot be created** it is not an error: `pg_cron` has to
+   be installed into the `postgres` database with a `shared_preload_libraries`
+   entry, which a hosted project does when the extension is toggled on. The
+   migration warns and schedules nothing rather than aborting the deploy;
+   enable it from Database → Extensions and run `supabase db push` again. A
+   project left without it has a working wall and a `private.pair_rate_limit`
+   that grows one row per caller address forever.
 8. **Turn on MFA enrolment** in Auth settings if it is not already on. This is
    not optional furniture: the restrictive gate's first branch is `aal2` and the
    `pairing` and `devices` INSERTs accept nothing else, so without an enrollable
@@ -661,17 +667,30 @@ letting the closed item read as more than it is.
   (`generateLink().data.properties.hashed_token`, `verifyOtp().data.session`)
   come from the documented v2 API rather than from a run.
 
-### 6.5 `FORCE` on `storage.objects` and `realtime.messages` is unverified
+### 6.5 `FORCE` on `storage.objects` and `realtime.messages` — attempted, not applied
 
-Migration `…090300` forces RLS on two tables this repository does not own, and
-`FORCE` removes the **owner's** exemption. `storage.objects` is owned by
-`supabase_storage_admin` and `realtime.messages` by `supabase_realtime_admin`,
-and those are the roles the Storage and Realtime services themselves connect as.
-If either lacks `BYPASSRLS` on the hosted platform, its own internal writes start
-being evaluated against policies written for `authenticated` and the service
-fails closed. That direction is the safe one — an outage, not a leak — but it is
-an outage, and it has not been observed either way. **Check both services work
-immediately after `supabase db push`**, before pointing a client at the project.
+Migration `…090300` states the wall over two tables this repository does not own.
+`FORCE` would remove the **owner's** exemption from those policies, so the
+migration attempts it — but **on Supabase it always fails and is not applied**.
+That is measured, not inferred: against a live Supabase Postgres 17,
+`alter table … force row level security` answers `must be owner of table
+objects`. `storage.objects` is owned by `supabase_storage_admin` and
+`realtime.messages` by `supabase_realtime_admin`, the migration role is a member
+of neither, and no hosted project issues those two passwords. The file's header
+used to guess that the migration role was a member of both; running it is what
+corrected that.
+
+What **is** applied is everything that carries the wall. `create policy`
+succeeds for a sufficiently privileged non-owner, so the owner policies and the
+restrictive live-session gate on both tables are real, and RLS is already enabled
+on them by the platform. The two `alter table … force` statements are wrapped one
+per block — a single block would roll `enable` back when `force` threw — and each
+raises a warning naming the owner instead of aborting the deploy.
+
+`00_rls_enabled.test.sql` therefore asserts the honest invariant: **FORCED, or
+owned by a role no Nexus identity is a member of.** The day a platform change
+reassigns either table to `postgres`, the gate goes red and `force` becomes both
+possible and mandatory.
 
 ### 6.6 The master-key mint — built; what still is not
 

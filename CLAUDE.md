@@ -5,7 +5,8 @@ Project-specific rules for Claude on **Nexus**. These sit on top of the global
 add what is specific to this repository. When the two agree, follow both; when
 this file is more specific, it wins.
 
-Nexus is Luka's commercial, offline-first, all-in-one life-management platform.
+Nexus is Luka's offline-first, all-in-one life-management platform, licensed
+under Apache-2.0.
 
 ## Read these before touching anything
 
@@ -17,11 +18,13 @@ Nexus is Luka's commercial, offline-first, all-in-one life-management platform.
 | In what order | [docs/roadmap.md](docs/roadmap.md) |
 | Every other document, and which are live | [docs/README.md](docs/README.md) |
 
-**The docs are version-controlled with the code.** They entered git on
-2026-09-26, reversing the 2026-07-04 decision that kept them local-only. That is
-acceptable only because the repository is private — several documents describe
-security posture and unreleased product — so making the repository public has to
-be decided with that in mind.
+**The docs are version-controlled with the code, in public.** They entered git
+on 2026-09-26, reversing the 2026-07-04 decision that kept them local-only.
+Seven working documents that described security posture or unreleased product
+were moved out on 2026-10-02, before the repository was published;
+[docs/README.md](docs/README.md) says which and why. What remains is written to
+be read by anyone, and a dated record that no longer describes the present is
+kept as evidence rather than deleted.
 
 ## Current focus (2026-08-31 — the founder changed it; supersedes 2026-08-08)
 
@@ -31,7 +34,7 @@ lako ćemo ih posle portovati na sajt jer je electron osnova."*
 **Every remaining DESKTOP feature comes first.** The web app, the Supabase
 backend and pairing are **on hold** — not cancelled, and not to be treated as
 dead code: everything already built for them (`sync-crypto`, `sync-transport`,
-`sync-engine`, `sync-port`, the 13 server migrations, the desktop sync round and
+`sync-engine`, `sync-port`, the 14 server migrations, the desktop sync round and
 scheduler) stays built, stays tested, stays green in CI, and stays OFF by
 default. Nothing new is added to it until the desktop is complete.
 
@@ -435,7 +438,7 @@ choice of backend**; whatever in them is about the data model still applies.
   evidence by a number the evidence does not carry. This repository has TWO
   migration series and **both number from 001**: the local SQLite schema in
   `packages/db/src/migrations/` is at 069 and the server's in
-  `supabase/migrations/` at 013, so a bare „migration 006" resolves to whichever
+  `supabase/migrations/` at 014, so a bare „migration 006" resolves to whichever
   one the author had in mind and to nothing at all if they had neither.
   `packages/sync-transport/src/signal.ts` cited „migration 006's policies" for
   the realtime topic namespace, and the realtime policies are in the server's

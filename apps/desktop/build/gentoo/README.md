@@ -118,15 +118,13 @@ masters = gentoo
 auto-sync = no
 ```
 
-### 3.2 Accept the licence
+### 3.2 Licence
 
-Nexus is commercial software, so its licence is in the `EULA` group that the
-default profile does not accept:
-
-```sh
-# /etc/portage/package.license/nexus
-app-office/nexus-bin all-rights-reserved
-```
+Nothing to do. Nexus is Apache-2.0, which is a free licence the default profile
+accepts. **This section used to ask for an `ACCEPT_LICENSE` entry**, because the
+package was proprietary until 2026-10-02; if you have an
+`app-office/nexus-bin all-rights-reserved` line in
+`/etc/portage/package.license/`, it is now unused and can be deleted.
 
 The package is `~amd64`, so it also needs an accept-keywords entry:
 
