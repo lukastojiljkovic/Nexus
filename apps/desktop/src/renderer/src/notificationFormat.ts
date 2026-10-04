@@ -5,6 +5,7 @@
  * focusFormat.ts's small-pure-helper-module idiom.
  */
 import type { NotificationSource, SnoozePreset } from "../../shared/ipc.js";
+import { dateTimeFormat } from "./intl.js";
 import { formatClockTime } from "./timeFormat.js";
 
 /** The seven toggleable NTF sources, in the fixed order every source list/loop uses. */
@@ -98,15 +99,15 @@ function isSameLocalDay(a: Date, b: Date): boolean {
 
 /**
  * An instant for display: bare "HH:MM" when it falls on today's local
- * calendar day, "D. mon, HH:MM" otherwise (sr-Latn, mirrors CalendarPage's
- * formatTime). Raw input on an unparseable string.
+ * calendar day, "D. mon, HH:MM" otherwise (in the ACTIVE locale, mirrors
+ * CalendarPage's formatTime). Raw input on an unparseable string.
  */
 export function formatNotificationWhen(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
   const time = formatClockTime(date);
   if (isSameLocalDay(date, new Date())) return time;
-  const day = new Intl.DateTimeFormat("sr-Latn", { day: "numeric", month: "short" }).format(date);
+  const day = dateTimeFormat({ day: "numeric", month: "short" }).format(date);
   return `${day}, ${time}`;
 }
 

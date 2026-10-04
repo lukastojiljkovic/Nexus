@@ -2,6 +2,7 @@ import { monthGridDays } from "@nexus/core";
 import type { WeekStart } from "@nexus/core";
 import { densityLevel, isWithinTerm } from "./semesterGrid.js";
 import type { DayDensity } from "./semesterGrid.js";
+import { dateTimeFormat } from "./intl.js";
 import { countUnit, strings } from "./strings.js";
 
 /**
@@ -37,23 +38,6 @@ export interface CalendarMiniMonthProps {
   onOpenDay: (dayKey: string) => void;
 }
 
-const monthTitleFormatter = new Intl.DateTimeFormat("sr-Latn", {
-  month: "long",
-  year: "numeric",
-  timeZone: "UTC",
-});
-/** Single-letter weekday initials — all the room seven columns of a mini month have. */
-const weekdayInitialFormatter = new Intl.DateTimeFormat("sr-Latn", {
-  weekday: "narrow",
-  timeZone: "UTC",
-});
-const dayAriaFormatter = new Intl.DateTimeFormat("sr-Latn", {
-  weekday: "long",
-  day: "numeric",
-  month: "long",
-  timeZone: "UTC",
-});
-
 /** Bare-day/month formatting in UTC; degrades to the raw key on bad input (CalendarMonth's own rule). */
 function formatUtcKey(key: string, formatter: Intl.DateTimeFormat): string {
   const date = new Date(key);
@@ -65,7 +49,10 @@ function formatUtcKey(key: string, formatter: Intl.DateTimeFormat): string {
  * and the ring are the only content of the cell, and neither is readable.
  */
 function dayLabel(dayKey: string, density: DayDensity | undefined): string {
-  const date = formatUtcKey(dayKey, dayAriaFormatter);
+  const date = formatUtcKey(
+    dayKey,
+    dateTimeFormat({ weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }),
+  );
   if (density === undefined) return date;
   const s = strings.calendar.semester;
   const items = `${density.count} ${countUnit(density.count, s.itemsOne, s.itemsFew, s.itemsMany)}`;
@@ -81,7 +68,10 @@ export function CalendarMiniMonth({
   onOpenDay,
 }: CalendarMiniMonthProps) {
   const days = monthGridDays(monthKey, weekStart);
-  const title = formatUtcKey(`${monthKey}-01`, monthTitleFormatter);
+  const title = formatUtcKey(
+    `${monthKey}-01`,
+    dateTimeFormat({ month: "long", year: "numeric", timeZone: "UTC" }),
+  );
 
   // The heading names the month; no aria-label beside it, which would only turn
   // each of the four into a landmark of its own.
@@ -92,7 +82,7 @@ export function CalendarMiniMonth({
       <div className="cal__mini-weekdays" aria-hidden="true">
         {days.slice(0, 7).map((day) => (
           <span key={day.key} className="cal__mini-weekday">
-            {formatUtcKey(day.key, weekdayInitialFormatter)}
+            {formatUtcKey(day.key, dateTimeFormat({ weekday: "narrow", timeZone: "UTC" }))}
           </span>
         ))}
       </div>

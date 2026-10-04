@@ -145,11 +145,12 @@ export function clearStoredCalendarPreferences(): void {
  *
  * The 12-hour form is built here rather than handed to `Intl`: the calendar
  * works in minutes-since-midnight everywhere and has no `Date` to give it, the
- * shape is the one `Intl.DateTimeFormat("sr-Latn", { hour: "numeric", minute:
- * "2-digit", hour12: true })` produces anyway ("2:05 PM", "12:09 AM"), and a
- * pure arithmetic rule is testable without depending on which ICU the host
- * shipped. Midnight and noon read as 12, the minute is always padded and the
- * hour never is — the difference a user switching clocks is looking for.
+ * shape is the one `Intl.DateTimeFormat` with `{ hour: "numeric", minute:
+ * "2-digit", hour12: true }` produces anyway in either shipped locale ("2:05
+ * PM", "12:09 AM"), and a pure arithmetic rule is testable without depending on
+ * which ICU the host shipped. Midnight and noon read as 12, the minute is always
+ * padded and the hour never is — the difference a user switching clocks is
+ * looking for.
  */
 export function formatClockLabel(minutes: number, clock: ClockPreference): string {
   if (clock === "24h") return formatClock(minutes);

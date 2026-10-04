@@ -79,6 +79,7 @@ import {
 } from "./examDates.js";
 import { focusSessionMinutes, formatDurationMinutes, formatElapsed, formatFocusSessionWhen } from "./focusFormat.js";
 import { FocusDiscardDialog } from "./FocusDiscardDialog.js";
+import { collator, dateTimeFormat, numberFormat } from "./intl.js";
 import { MathText } from "./MathText.js";
 import { NotePopover } from "./notePopover.js";
 import { ConfirmDialog } from "./ConfirmDialog.js";
@@ -120,9 +121,6 @@ const EXAM_TYPES: readonly ExamType[] = ["pismeni", "usmeni", "kolokvijum"];
 
 // --- Materijali (migration 035 / STUDY-001) ---------------------------------
 
-/** Locale-aware one-decimal formatter for the KB/MB branches of `formatBytes` — the NOTE/TASK panels' own. */
-const BYTES_FORMATTER = new Intl.NumberFormat("sr-Latn", { maximumFractionDigits: 1 });
-
 /**
  * Human-readable file size for the Materijali rows: whole bytes under 1 KB,
  * otherwise KB/MB with at most one decimal. Copied from `TasksPage.tsx` (which
@@ -133,12 +131,9 @@ const BYTES_FORMATTER = new Intl.NumberFormat("sr-Latn", { maximumFractionDigits
 function formatBytes(sizeBytes: number): string {
   if (sizeBytes < 1024) return `${sizeBytes} B`;
   const kb = sizeBytes / 1024;
-  if (kb < 1024) return `${BYTES_FORMATTER.format(kb)} KB`;
-  return `${BYTES_FORMATTER.format(kb / 1024)} MB`;
+  if (kb < 1024) return `${numberFormat({ maximumFractionDigits: 1 }).format(kb)} KB`;
+  return `${numberFormat({ maximumFractionDigits: 1 }).format(kb / 1024)} MB`;
 }
-
-/** sr-Latn collation for the link picker's note titles — plain "sr" mis-tailors Latin š/č/ć. */
-const NOTE_TITLE_COLLATOR = new Intl.Collator(["sr-Latn", "sr"]);
 
 /** Shared empty lists, so a subject with neither materials nor linked notes allocates nothing per render. */
 const NO_MATERIALS: readonly SubjectAttachment[] = [];
@@ -186,11 +181,6 @@ const MAX_WEEKDAY_INPUT = 480;
  */
 const CONFIDENCE_STEPS: readonly number[] = [0, 25, 50, 75, 100];
 
-// Serbian Latin collation for subject/deck names (mirrors @nexus/core's views
-// engine collator) — plain "sr" resolves to the Cyrillic tailoring and
-// misorders š/č/ć.
-const collator = new Intl.Collator(["sr-Latn", "sr"]);
-
 /** Card-state chip label; Learning (1) and Relearning (3) share one label — both read as "in progress". */
 function cardStateLabel(state: CardState): string {
   const labels = strings.study.cardState;
@@ -220,12 +210,12 @@ interface PracticeConfig {
   seed: number;
 }
 
-/** Absolute next-due date+time for a non-New card, Serbian Latin; degrades to the raw string on bad input. */
+/** Absolute next-due date+time for a non-New card, in the active locale; degrades to the raw string on bad input. */
 function formatCardDue(due: string): string {
   const date = new Date(due);
   return Number.isNaN(date.getTime())
     ? due
-    : new Intl.DateTimeFormat("sr-Latn", {
+    : dateTimeFormat({
         day: "2-digit",
         month: "short",
         hour: "2-digit",
@@ -351,7 +341,7 @@ function formatBlockDay(key: string): string {
   const date = new Date(key);
   return Number.isNaN(date.getTime())
     ? key
-    : new Intl.DateTimeFormat("sr-Latn", {
+    : dateTimeFormat({
         weekday: "long",
         day: "numeric",
         month: "long",
@@ -373,7 +363,7 @@ interface SubjectMinutesRow {
  * count), while a subjectId matching no loaded subject (a hard-deleted or
  * foreign row, shouldn't happen but the renderer trusts nothing) rolls into
  * one muted `otherLabel` row instead of being silently dropped. Sorted by
- * minutes descending, ties broken sr-Latn by label.
+ * minutes descending, ties broken by label in the active locale.
  */
 function joinSubjectMinutes(
   subjectMinutes: StudyStats["subjectMinutes"],
@@ -393,7 +383,7 @@ function joinSubjectMinutes(
   if (otherMinutes > 0) {
     rows.push({ id: "__other__", label: otherLabel, minutes: otherMinutes, muted: true });
   }
-  return rows.sort((a, b) => b.minutes - a.minutes || collator.compare(a.label, b.label));
+  return rows.sort((a, b) => b.minutes - a.minutes || collator().compare(a.label, b.label));
 }
 
 /**
@@ -442,9 +432,6 @@ function planRestoreErrorMessage(error: unknown): string {
 }
 
 // --- The hub's summary band (STUDY, „kako stojim" before „šta je na spisku") --
-
-/** Locale grouping for the band's figures — Serbian sets `1.234`, never `1234`. */
-const SUMMARY_FORMATTER = new Intl.NumberFormat("sr-Latn");
 
 /**
  * How close an exam has to be for its figure to take the accent.
@@ -500,7 +487,7 @@ function studySummaryStats(
     if (upcoming.days === 0) examStat.value = countdown.today;
     else if (upcoming.days === 1) examStat.value = countdown.tomorrow;
     else {
-      examStat.value = SUMMARY_FORMATTER.format(upcoming.days);
+      examStat.value = numberFormat().format(upcoming.days);
       examStat.unit = dayUnit(upcoming.days, countdown.unitOne, countdown.unitMany);
     }
     if (upcoming.days <= EXAM_SOON_DAYS) examStat.tone = "accent";
@@ -509,13 +496,13 @@ function studySummaryStats(
   return [
     {
       label: copy.dueLabel,
-      value: SUMMARY_FORMATTER.format(due),
+      value: numberFormat().format(due),
       // Accent only when there is something to act on — a nought in the accent
       // colour would be an alarm about nothing.
       ...(due > 0 ? { tone: "accent" as const } : {}),
     },
-    { label: copy.newLabel, value: SUMMARY_FORMATTER.format(fresh) },
-    { label: copy.matureLabel, value: SUMMARY_FORMATTER.format(matureTotal), note: copy.matureNote },
+    { label: copy.newLabel, value: numberFormat().format(fresh) },
+    { label: copy.matureLabel, value: numberFormat().format(matureTotal), note: copy.matureNote },
     examStat,
   ];
 }
@@ -2236,7 +2223,9 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     statsYear === null ||
     statsRecent === null ||
     focusSessions === null;
-  const sortedSubjects = subjects ? [...subjects].sort((a, b) => collator.compare(a.name, b.name)) : [];
+  const sortedSubjects = subjects
+    ? [...subjects].sort((a, b) => collator().compare(a.name, b.name))
+    : [];
   const activeSubjects = sortedSubjects.filter((s) => !s.archived);
   const archivedSubjects = sortedSubjects.filter((s) => s.archived);
 
@@ -2247,11 +2236,11 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
       .sort((a, b) => a.examDate.localeCompare(b.examDate) || a.id.localeCompare(b.id));
   }
 
-  /** This subject's decks, sr-Latn sorted (create appends optimistically). */
+  /** This subject's decks, active-locale sorted (create appends optimistically). */
   function decksForSubject(subjectId: string): Deck[] {
     return (decks ?? [])
       .filter((deck) => deck.subjectId === subjectId)
-      .sort((a, b) => collator.compare(a.name, b.name));
+      .sort((a, b) => collator().compare(a.name, b.name));
   }
 
   function countsFor(deckId: string): DeckCounts {
@@ -2282,7 +2271,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
         a.exam.examDate.localeCompare(b.exam.examDate) || a.plan.id.localeCompare(b.plan.id),
     );
 
-  /** Today's blocks joined the same way, sr-Latn by subject name (orphans skipped). */
+  /** Today's blocks joined the same way, active-locale by subject name (orphans skipped). */
   const todayEntries = (todayBlocks ?? [])
     .flatMap((block) => {
       const exam = examsById.get(block.examId);
@@ -2291,7 +2280,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     })
     .sort(
       (a, b) =>
-        collator.compare(a.subject.name, b.subject.name) || a.block.id.localeCompare(b.block.id),
+        collator().compare(a.subject.name, b.subject.name) || a.block.id.localeCompare(b.block.id),
     );
 
   /** Future exams with no active plan — the create-select's option set, soonest first. */
@@ -2321,8 +2310,8 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
   const weekdayInputValues = planWeekdays ?? Array.from({ length: 7 }, () => planMinutes);
   /** The form exam's topics, or null while they load (the effect above fetches missing entries). */
   const formTopics = formExamId === "" ? null : (topicsByExam[formExamId] ?? null);
-  /** Every live deck as a topic-link option, sr-Latn sorted; the subject name disambiguates. */
-  const topicDeckOptions = [...(decks ?? [])].sort((a, b) => collator.compare(a.name, b.name));
+  /** Every live deck as a topic-link option, active-locale sorted; the subject name disambiguates. */
+  const topicDeckOptions = [...(decks ?? [])].sort((a, b) => collator().compare(a.name, b.name));
   const scopeCutExamId =
     scopeCut !== null ? (plans?.find((plan) => plan.id === scopeCut.planId)?.examId ?? "") : "";
   const scopeCutDialogRows =
@@ -2335,7 +2324,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
         )
       : [];
 
-  // The idle timer's select falls back to the sr-Latn-first active subject
+  // The idle timer's select falls back to the active-locale-first active subject
   // once the current pick is missing or no longer active/loaded.
   const resolvedFocusSubjectId = activeSubjects.some((s) => s.id === focusSubjectId)
     ? focusSubjectId
@@ -2926,7 +2915,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     const linkedIds = new Set(rows.map((row) => row.id));
     const candidates = profileNotes
       .filter((note) => !linkedIds.has(note.id))
-      .sort((a, b) => NOTE_TITLE_COLLATOR.compare(a.title, b.title));
+      .sort((a, b) => collator().compare(a.title, b.title));
 
     return (
       <div className="study__linked-notes">

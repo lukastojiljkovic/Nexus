@@ -176,9 +176,24 @@ function servesEnglish(): boolean {
   return !language.toLowerCase().startsWith("sr");
 }
 
-if (servesEnglish()) {
+const english = servesEnglish();
+
+if (english) {
   overwriteLeaves(
     strings as unknown as Record<string, unknown>,
     EN as unknown as Record<string, unknown>,
   );
+}
+
+// The document's own language follows the shell, exactly as the desktop's
+// `applyLocale` rewrites it: assistive technology and the browser's hyphenation
+// then read the same language the copy does. `index.html` ships `lang="sr"`
+// because Serbian is the fallback, and this is the first serve's correction —
+// there is no runtime switch here, so it is the only correction the web needs.
+// Guarded rather than assumed, and read off `globalThis` rather than spelled
+// `document`: this module is imported by the Node test program, whose libs have
+// no DOM, and `typeof document` alone still needs the name to exist there.
+const doc = (globalThis as { document?: { documentElement: { lang: string } } }).document;
+if (doc !== undefined) {
+  doc.documentElement.lang = english ? "en-GB" : "sr-Latn";
 }

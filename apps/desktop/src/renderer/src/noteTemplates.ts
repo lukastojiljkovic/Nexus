@@ -1,6 +1,7 @@
 import type { JSONContent } from "@tiptap/core";
 import type { BuiltinNoteTemplateId } from "@nexus/core";
 import type { NoteTemplate } from "../../shared/ipc.js";
+import { collator } from "./intl.js";
 import { strings } from "./strings.js";
 
 /**
@@ -162,9 +163,6 @@ export const BUILTIN_TEMPLATES: readonly BuiltinTemplate[] = [
   },
 ];
 
-/** sr-Latn collation for user templates — plain "sr" mis-tailors Latin š/č/ć. */
-const collator = new Intl.Collator(["sr-Latn", "sr"]);
-
 /** One template row, covering both the built-in and user-defined sources. */
 export interface TemplateEntry {
   id: string;
@@ -176,7 +174,7 @@ export interface TemplateEntry {
 
 /**
  * Built-ins first (their authored order above), then the profile's stored
- * rows sr-Latn sorted by name. A row whose JSON fails to parse is kept with
+ * rows sorted by name in the active locale. A row whose JSON fails to parse is kept with
  * `content: null` rather than dropped, so a corrupt template is still visible
  * to rename or delete. Shared by the Šabloni pane (009-b) and the slash menu
  * (009-c) — the parse/sort/merge logic exists exactly once.
@@ -193,7 +191,7 @@ export function mergeTemplateEntries(rows: readonly NoteTemplate[]): TemplateEnt
       }
       return { id: row.id, name: row.name, builtin: false, content };
     })
-    .sort((a, b) => collator.compare(a.name, b.name));
+    .sort((a, b) => collator().compare(a.name, b.name));
   const builtinEntries: TemplateEntry[] = BUILTIN_TEMPLATES.map((template) => ({
     id: template.id,
     name: template.name,

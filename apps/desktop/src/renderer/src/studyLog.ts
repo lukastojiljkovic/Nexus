@@ -9,9 +9,10 @@ import { countUnit, strings } from "./strings.js";
  * READS as, so the wording is testable without mounting anything.
  *
  * The day heading itself is deliberately not here: a log day is a bare
- * "YYYY-MM-DD", which `examDates.formatExamDate` already renders in sr-Latn
- * ("8. jul 2026."), and a second Intl formatter printing the same value in a
- * second way is exactly the drift these shared modules exist to prevent.
+ * "YYYY-MM-DD", which `examDates.formatExamDate` already renders in the active
+ * locale ("8. jul 2026." or "8 July 2026"), and a second Intl formatter
+ * printing the same value in a second way is exactly the drift these shared
+ * modules exist to prevent.
  */
 
 /**

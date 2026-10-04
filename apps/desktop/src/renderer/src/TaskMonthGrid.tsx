@@ -4,6 +4,7 @@ import { Button, Icon } from "@nexus/ui";
 import { layoutMonthBars, monthGridDays, monthKeyOf, shiftMonthKey } from "@nexus/core";
 import type { MonthGridDay, SpanItem } from "@nexus/core";
 import { localTodayKey } from "./examDates.js";
+import { dateTimeFormat } from "./intl.js";
 import { strings } from "./strings.js";
 import { readStoredWeekStart, toWeekStart } from "./weekStart.js";
 
@@ -30,19 +31,6 @@ export interface TaskMonthGridProps {
   /** A task was dropped on `dayKey` — the page writes it as that task's rok. */
   onMoveToDay: (taskId: string, dayKey: string) => void;
 }
-
-const weekdayFormatter = new Intl.DateTimeFormat("sr-Latn", { weekday: "short", timeZone: "UTC" });
-const dayAriaFormatter = new Intl.DateTimeFormat("sr-Latn", {
-  weekday: "long",
-  day: "numeric",
-  month: "long",
-  timeZone: "UTC",
-});
-const monthLabelFormatter = new Intl.DateTimeFormat("sr-Latn", {
-  month: "long",
-  year: "numeric",
-  timeZone: "UTC",
-});
 
 /** Bare-day/month formatting in UTC; degrades to the raw key on bad input (CalendarPage's own rule). */
 function formatUtcKey(key: string, formatter: Intl.DateTimeFormat): string {
@@ -143,7 +131,12 @@ export function TaskMonthGrid({ items, undated, onOpen, onMoveToDay }: TaskMonth
   return (
     <div className="cal__month">
       <div className="cal__month-nav">
-        <span className="cal__month-label">{formatUtcKey(`${monthKey}-01`, monthLabelFormatter)}</span>
+        <span className="cal__month-label">
+          {formatUtcKey(
+            `${monthKey}-01`,
+            dateTimeFormat({ month: "long", year: "numeric", timeZone: "UTC" }),
+          )}
+        </span>
         <span className="cal__month-nav-actions">
           <Button
             size="sm"
@@ -177,7 +170,7 @@ export function TaskMonthGrid({ items, undated, onOpen, onMoveToDay }: TaskMonth
         <div className="cal__month-weekdays" aria-hidden="true">
           {(weeks[0] ?? []).map((day) => (
             <span key={day.key} className="nx-eyebrow cal__month-weekday">
-              {formatUtcKey(day.key, weekdayFormatter)}
+              {formatUtcKey(day.key, dateTimeFormat({ weekday: "short", timeZone: "UTC" }))}
             </span>
           ))}
         </div>
@@ -204,7 +197,15 @@ export function TaskMonthGrid({ items, undated, onOpen, onMoveToDay }: TaskMonth
                     <div
                       key={day.key}
                       className={classes.join(" ")}
-                      aria-label={formatUtcKey(day.key, dayAriaFormatter)}
+                      aria-label={formatUtcKey(
+                        day.key,
+                        dateTimeFormat({
+                          weekday: "long",
+                          day: "numeric",
+                          month: "long",
+                          timeZone: "UTC",
+                        }),
+                      )}
                       onDragOver={(event) => dayDragOver(event, day.key)}
                       onDragLeave={(event) => dayDragLeave(event, day.key)}
                       onDrop={(event) => dayDrop(event, day.key)}

@@ -4,6 +4,7 @@ import { ageAtOccurrence, birthdayOccurrencesInRange, shiftDayKey } from "@nexus
 import { Button, EmptyState, Icon, ListRow, LoadingState, Select, TextField } from "@nexus/ui";
 import type { NewPersonFields, Person, PersonFieldChanges, PersonKind } from "../../shared/ipc.js";
 import { localTodayKey } from "./examDates.js";
+import { collator, dateTimeFormat } from "./intl.js";
 import { strings } from "./strings.js";
 
 // --- Field orderings (renderer mirror of @nexus/db) -------------------------
@@ -28,25 +29,19 @@ const LEAP_PROBE_YEAR = 2024;
 const MONTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as const;
 const DAYS = Array.from({ length: 31 }, (_, index) => index + 1);
 
-/** Serbian Latin collation — plain `localeCompare` misorders š/č/ć (see the views engine). */
-const collator = new Intl.Collator(["sr-Latn", "sr"]);
-
-const monthNameFormatter = new Intl.DateTimeFormat("sr-Latn", { month: "long", timeZone: "UTC" });
-
 /**
- * The twelve Serbian month names, derived from the same `Intl` source
- * CalendarPage's own nav labels read rather than retyped into strings.ts — one
- * wording for the whole module, and nothing to keep in sync. Serbian month
- * names are already lower-case and nominative in both formatting contexts, so
- * the select and the row labels can share them.
+ * A month's name in the ACTIVE locale, derived from the same `Intl` source
+ * CalendarPage's own nav labels read rather than retyped into strings.ts. It is
+ * asked for at use time, never captured in a module-scope array: the language
+ * switches at runtime, so a frozen list would keep serving Serbian. The select
+ * and the row labels share it because a month is nominative in both contexts,
+ * and it degrades to the number on an out-of-range month (unreachable — the
+ * store bounds it).
  */
-const MONTH_NAMES: readonly string[] = MONTHS.map((month) =>
-  monthNameFormatter.format(new Date(Date.UTC(LEAP_PROBE_YEAR, month - 1, 1))),
-);
-
-/** A month's Serbian name; degrades to its number on an out-of-range month (unreachable — the store bounds it). */
 function monthName(month: number): string {
-  return MONTH_NAMES[month - 1] ?? String(month);
+  const probe = new Date(Date.UTC(LEAP_PROBE_YEAR, month - 1, 1));
+  if (Number.isNaN(probe.getTime())) return String(month);
+  return dateTimeFormat({ month: "long", timeZone: "UTC" }).format(probe);
 }
 
 /** Membership against the closed list, narrowing the kind `<select>`'s raw string without an assertion (the house `asPriority` idiom). */
@@ -102,7 +97,7 @@ export interface PeoplePanelProps {
 
 /**
  * The CAL Ljudi panel (CAL-007, ADR-026): a single form that both adds and
- * edits people, and a list ordered by name with the Serbian collator. A person
+ * edits people, and a list ordered by name with the active locale's collator. A person
  * is a name plus a yearless (month, day) that recurs forever — which is why the
  * form has no date input at all, but a day and a month select: there is no year
  * to pick. Every write goes through the people:* IPC allowlist, so the store
@@ -243,10 +238,13 @@ export function PeoplePanel({ profileId }: PeoplePanelProps) {
   const s = strings.calendar.people;
   const todayKey = localTodayKey();
   // The store returns people by SQLite's binary collation, which mis-tailors
-  // Serbian Latin, and create appends optimistically — so the display order is
-  // re-derived here with the house collator.
+  // Serbian Latin script in any language, and create appends optimistically —
+  // so the display order is re-derived here with the active locale's collator.
   const ordered =
-    people && [...people].sort((a, b) => collator.compare(a.name, b.name) || a.id.localeCompare(b.id));
+    people &&
+    [...people].sort(
+      (a, b) => collator().compare(a.name, b.name) || a.id.localeCompare(b.id),
+    );
 
   // One error line, two causes: an impossible date (live, as the selects move)
   // or a write the store refused.

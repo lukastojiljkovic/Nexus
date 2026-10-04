@@ -1,12 +1,12 @@
 /**
- * „Alatke"'s display edge — the one place a tool's exact result becomes Serbian
- * text.
+ * „Alatke"'s display edge — the one place a tool's exact result becomes text.
  *
  * The model never rounds (`@nexus/core`'s `units.ts` and `calculators.ts` both
  * say so), so every figure the drawer draws passes through here and nowhere
- * else. `Intl` does the formatting, all of it, in the `"sr-Latn"` this renderer
- * spells everywhere: the decimal comma, the group separator and the placement
- * of the minus sign are the locale's, never this file's.
+ * else. `Intl` does the formatting, all of it, in the ACTIVE interface locale
+ * through `intl.ts`: the decimal mark, the group separator and the placement of
+ * the minus sign are the locale's, never this file's, and the language switches
+ * at runtime so each formatter is asked for at use time.
  *
  * **Three formatters, because there are three honestly different figures.** A
  * conversion spans a millionth to a billion and needs SIGNIFICANT digits; money
@@ -16,19 +16,7 @@
  */
 
 import { roundForDisplay } from "@nexus/core";
-
-/** The locale every formatter in this renderer spells (`money.ts`, `fitDay.ts` and friends). */
-const TOOL_LOCALE = "sr-Latn";
-
-const formatters = new Map<string, Intl.NumberFormat>();
-
-function formatterFor(key: string, options: Intl.NumberFormatOptions): Intl.NumberFormat {
-  const existing = formatters.get(key);
-  if (existing !== undefined) return existing;
-  const created = new Intl.NumberFormat(TOOL_LOCALE, options);
-  formatters.set(key, created);
-  return created;
-}
+import { numberFormat } from "./intl.js";
 
 /**
  * A converted quantity — „1.609,344", „0,000001", „1.073.741.824".
@@ -39,7 +27,7 @@ function formatterFor(key: string, options: Intl.NumberFormatOptions): Intl.Numb
  * spend the twelve digits on an artefact (0,1 + 0,2 → 0,30000000000000004).
  */
 export function formatToolNumber(value: number): string {
-  return formatterFor("sig", { maximumSignificantDigits: 12 }).format(roundForDisplay(value));
+  return numberFormat({ maximumSignificantDigits: 12 }).format(roundForDisplay(value));
 }
 
 /**
@@ -48,7 +36,7 @@ export function formatToolNumber(value: number): string {
  * would be a claim it has no basis for.
  */
 export function formatToolAmount(value: number): string {
-  return formatterFor("amount", {
+  return numberFormat({
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value);
@@ -60,7 +48,7 @@ export function formatToolAmount(value: number): string {
  * exact figure the comparison exists to show.
  */
 export function formatToolUnitPrice(value: number): string {
-  return formatterFor("unitPrice", {
+  return numberFormat({
     minimumFractionDigits: 2,
     maximumFractionDigits: 4,
   }).format(value);
@@ -68,5 +56,5 @@ export function formatToolUnitPrice(value: number): string {
 
 /** A percentage to at most two decimals, with the sign the locale places — „17,5%", „−10%". */
 export function formatToolPercent(value: number): string {
-  return `${formatterFor("percent", { maximumFractionDigits: 2 }).format(roundForDisplay(value))}%`;
+  return `${numberFormat({ maximumFractionDigits: 2 }).format(roundForDisplay(value))}%`;
 }

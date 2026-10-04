@@ -3,6 +3,7 @@ import { PluginKey } from "@tiptap/pm/state";
 import { Suggestion } from "@tiptap/suggestion";
 import type { SuggestionProps } from "@tiptap/suggestion";
 import type { NoteMeta } from "../../shared/ipc.js";
+import { lowerCase } from "./intl.js";
 import { SuggestionMenu } from "./suggestionMenu.js";
 import { strings } from "./strings.js";
 
@@ -14,11 +15,11 @@ import { strings } from "./strings.js";
  * would collide with the slash menu's.
  */
 
-/** Case-insensitive sr-Latn substring match on the title; a blank title only ever matches the empty query. */
+/** Case-insensitive substring match on the title, folded in the ACTIVE locale; a blank title only ever matches the empty query. */
 function matchesQuery(note: NoteMeta, needle: string): boolean {
   const title = note.title.trim();
   if (title.length === 0) return needle.length === 0;
-  return note.title.toLocaleLowerCase("sr-Latn").includes(needle);
+  return lowerCase(note.title).includes(needle);
 }
 
 /** The render snapshot handed to React on each open/update of the suggestion. */
@@ -74,7 +75,7 @@ export function createNoteLinkExtension(
           items: async ({ query }) => {
             try {
               const notes = await window.nexus.listNotes(profileId);
-              const needle = query.toLocaleLowerCase("sr-Latn");
+              const needle = lowerCase(query);
               return notes
                 .filter((note) => note.id !== currentNoteId)
                 .filter((note) => matchesQuery(note, needle))

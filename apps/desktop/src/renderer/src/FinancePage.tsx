@@ -43,6 +43,7 @@ import { RecurrencePicker } from "./RecurrencePicker.js";
 import { localTodayKey, shiftDayKey } from "./examDates.js";
 import { FinBalanceFlow } from "./FinBalanceFlow.js";
 import { FinCsvImportSection } from "./FinCsvImport.js";
+import { formatLedgerDay } from "./dateLabels.js";
 import { normalizeCurrencyInput, readStoredPrimaryCurrency } from "./financePrefs.js";
 import {
   buildFinMonthReport,
@@ -230,7 +231,8 @@ function soleValue(values: Iterable<string>): string | null {
  * hue — so the jade on income reinforces the fact instead of being the only
  * thing carrying it. The „+" is prefixed rather than asked of `Intl` because
  * `money.ts` owns every other decision about the string, including where the
- * MINUS goes, and sr-Latn is a prefix-sign locale in both directions.
+ * MINUS goes, and every locale this build serves writes a sign before the
+ * figure.
  *
  * A BALANCE is not a movement and never comes through here: it is a state, and
  * „+123.456,00" for having money is a claim about a direction it is not going
@@ -243,25 +245,6 @@ function signedMoney(minorUnits: number, currency: string, unit: string | null):
   const text =
     unit === null ? formatMoney(minorUnits, currency) : formatMoneyPlain(minorUnits, currency);
   return minorUnits > 0 ? `+${text}` : text;
-}
-
-/**
- * The ledger's dated rule — „ČET, 7. AVG 2026." UTC because a day key is a
- * calendar day and not an instant: parsing it in the local zone would shift the
- * label by one day for anybody east of Greenwich at the wrong hour.
- */
-const LEDGER_DAY_FORMATTER = new Intl.DateTimeFormat("sr-Latn", {
-  weekday: "short",
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-  timeZone: "UTC",
-});
-
-/** A day key as the ledger's rule reads it; degrades to the key itself rather than throwing on a malformed one. */
-function formatLedgerDay(dayKey: string): string {
-  const date = new Date(`${dayKey}T00:00:00Z`);
-  return Number.isNaN(date.getTime()) ? dayKey : LEDGER_DAY_FORMATTER.format(date);
 }
 
 /** One dated run of the ledger, and what that day came to. */
@@ -1296,7 +1279,7 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
     }
   }
   // ISO-4217 codes are ASCII, so a plain code-point comparison IS alphabetical
-  // here — no collator, and none of the sr-Latn tailoring a Serbian word needs.
+  // here — no collator, and none of the Latin tailoring a Serbian word would need.
   const bandGroups = [...bandByCurrency.values()].sort((a, b) =>
     a.currency < b.currency ? -1 : a.currency > b.currency ? 1 : 0,
   );

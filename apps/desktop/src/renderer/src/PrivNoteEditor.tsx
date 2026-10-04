@@ -17,6 +17,7 @@ import {
 } from "../../shared/ipc.js";
 import { Callout } from "./noteCallout.js";
 import { createNoteFindExtension, NoteFindBar } from "./noteFindBar.js";
+import { numberFormat } from "./intl.js";
 import { NoteLink, NoteLinkProvider } from "./noteLink.js";
 import { readStoredNoteMarkdownShortcuts } from "./notePrefs.js";
 import { createSlashExtension, SlashMenu, type SlashRenderState } from "./noteSlashMenu.js";
@@ -59,14 +60,12 @@ import { reportUnsavedExit } from "./unsavedExits.js";
 /** Debounce after the last keystroke before the whole envelope is re-written — the public editor's own cadence. */
 const FLUSH_DEBOUNCE_MS = 800;
 
-/** Locale-aware one-decimal formatter for `formatBytes` — `NoteEditor.tsx`'s own recipe, module-local there too. */
-const BYTES_FORMATTER = new Intl.NumberFormat("sr-Latn", { maximumFractionDigits: 1 });
-
+/** Human-readable file size, formatted in the active locale — `NoteEditor.tsx`'s own recipe. */
 function formatBytes(sizeBytes: number): string {
   if (sizeBytes < 1024) return `${sizeBytes} B`;
   const kb = sizeBytes / 1024;
-  if (kb < 1024) return `${BYTES_FORMATTER.format(kb)} KB`;
-  return `${BYTES_FORMATTER.format(kb / 1024)} MB`;
+  if (kb < 1024) return `${numberFormat({ maximumFractionDigits: 1 }).format(kb)} KB`;
+  return `${numberFormat({ maximumFractionDigits: 1 }).format(kb / 1024)} MB`;
 }
 
 function toBase64(bytes: Uint8Array): string {

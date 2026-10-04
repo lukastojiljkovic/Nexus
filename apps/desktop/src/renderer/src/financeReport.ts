@@ -1,4 +1,5 @@
 import { shiftDayKey, shiftMonthKey } from "@nexus/core";
+import { collator, dateTimeFormat } from "./intl.js";
 import type {
   FinBudget,
   FinCategory,
@@ -37,9 +38,6 @@ import type {
  * between their own accounts can never reach this module as spending. Income
  * arrives from its exact mirror. The two partition the month between them.
  */
-
-/** Serbian Latin ordering for the report's category lines — plain `"sr"` mis-tailors š/č/ć. */
-const REPORT_COLLATOR = new Intl.Collator(["sr-Latn", "sr"]);
 
 /** What the report is built from — four reads of the same month, none of them a transaction. */
 export interface FinMonthReportInput {
@@ -99,17 +97,12 @@ export function monthPeriod(monthKey: string): FinPeriod {
   };
 }
 
-/** „jul 2026." — the locale's own month name, year and trailing period, as the calendar's month nav spells it too. */
-const MONTH_LABEL_FORMATTER = new Intl.DateTimeFormat("sr-Latn", {
-  month: "long",
-  year: "numeric",
-  timeZone: "UTC",
-});
-
-/** The report nav's month label. Degrades to the key itself rather than throwing on a malformed one. */
+/** The report nav's month label: the active locale's own month name and year, as the calendar's month nav spells it too. Degrades to the key itself rather than throwing on a malformed one. */
 export function formatFinMonthLabel(monthKey: string): string {
   const date = new Date(`${monthKey}-01T00:00:00Z`);
-  return Number.isNaN(date.getTime()) ? monthKey : MONTH_LABEL_FORMATTER.format(date);
+  return Number.isNaN(date.getTime())
+    ? monthKey
+    : dateTimeFormat({ month: "long", year: "numeric", timeZone: "UTC" }).format(date);
 }
 
 /** A section under construction: the two figures a line is assembled from, before the ratios are known. */
@@ -212,11 +205,11 @@ function buildSection(currency: string, drafts: LineDraft[], income: number): Fi
   };
 }
 
-/** Named lines sr-Latn alphabetical, the uncategorized leftover last — `spendByCategory`'s own order. */
+/** Named lines alphabetical in the ACTIVE locale, the uncategorized leftover last — `spendByCategory`'s own order. */
 function compareLines(a: FinReportLine, b: FinReportLine): number {
   return (
     Number(a.categoryId === null) - Number(b.categoryId === null) ||
-    REPORT_COLLATOR.compare(a.name ?? "", b.name ?? "") ||
+    collator().compare(a.name ?? "", b.name ?? "") ||
     (a.categoryId ?? "").localeCompare(b.categoryId ?? "")
   );
 }

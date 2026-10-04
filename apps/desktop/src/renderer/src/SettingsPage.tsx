@@ -135,6 +135,7 @@ import {
   readStoredLlmPromptLanguage,
 } from "./llmImportPrefs.js";
 import { FinCsvImportSection } from "./FinCsvImport.js";
+import { collator } from "./intl.js";
 // Type-only, and that is load-bearing: a value import would pull ~650 KB of
 // notice text into the eager renderer chunk. `LicencesSection` reaches for the
 // data with `import()` instead. A type import is erased, so this line costs
@@ -3558,9 +3559,6 @@ function CsvImportSection({ profileId, hits }: CsvImportSectionProps) {
   );
 }
 
-/** sr-Latn collation for the destination list — plain "sr" mis-tailors Latin š/č/ć. */
-const FOLDER_COLLATOR = new Intl.Collator(["sr-Latn", "sr"]);
-
 /**
  * The note folders as flat, full-path options („Fakultet / Beleške"), so two
  * folders that share a name under different parents are told apart without
@@ -3582,7 +3580,7 @@ function folderOptions(folders: readonly NoteFolder[]): { id: string; label: str
   };
   return folders
     .map((folder) => ({ id: folder.id, label: pathOf(folder) }))
-    .sort((a, b) => FOLDER_COLLATOR.compare(a.label, b.label));
+    .sort((a, b) => collator().compare(a.label, b.label));
 }
 
 /** The half of a finished import worth rendering — the canceled arm carries nothing to show. */

@@ -78,6 +78,14 @@ import type { RecurrenceScope } from "./RecurrenceScopeDialog.js";
 import { DocumentsPanel } from "./DocumentsPanel.js";
 import { PeoplePanel } from "./PeoplePanel.js";
 import { daysUntilExam, examCountdownLabel, examCountdownVariant, localTodayKey } from "./examDates.js";
+import {
+  formatCalendarAgendaDay as formatDay,
+  formatCalendarDayLabel as formatDayLabel,
+  formatCalendarMonthLabel as formatMonthLabel,
+  formatCalendarSemesterLabel as formatSemesterLabel,
+  formatCalendarWeekLabel as formatWeekLabel,
+} from "./dateLabels.js";
+import { collator } from "./intl.js";
 import { readStoredWeekStart, toWeekStart } from "./weekStart.js";
 import { formatMoney } from "./money.js";
 import { dayUnit, strings } from "./strings.js";
@@ -101,9 +109,6 @@ function viewLabel(): Record<CalendarView, string> {
 function isPanelView(view: CalendarView): boolean {
   return view === "dokumenta" || view === "ljudi";
 }
-
-/** Serbian Latin tailoring — plain `"sr"` mis-orders š/č/ć (the house pattern every alphabetical list here follows). */
-const collator = new Intl.Collator(["sr-Latn", "sr"]);
 
 // "overlay" is deliberately absent: its label is kind-dependent (CAL-005 —
 // „Poslovni kalendar“ / „Privatni kalendar“), so the page derives it from the
@@ -166,24 +171,6 @@ function groupAgenda(items: readonly CalendarItem[]): [string, CalendarItem[]][]
   return [...groups];
 }
 
-/**
- * Day-section header in Serbian (e.g. "sreda, 8. jul"); raw key on bad input.
- * The key is a bare calendar day, so it is both parsed and formatted in UTC —
- * otherwise `new Date("YYYY-MM-DD")` (UTC midnight) would shift a day back when
- * formatted in a negative-offset timezone.
- */
-function formatDay(key: string): string {
-  const date = new Date(key);
-  return Number.isNaN(date.getTime())
-    ? key
-    : new Intl.DateTimeFormat("sr-Latn", {
-        weekday: "long",
-        day: "numeric",
-        month: "long",
-        timeZone: "UTC",
-      }).format(date);
-}
-
 /** Row time label — "Ceo dan" for all-day, else the device's clock (CAL §5); raw start on bad input. Takes the two fields it reads, so the overlay's minimized rows use the same rule as full events. */
 function formatTime(event: Pick<Event, "allDay" | "startAt">, clock: ClockPreference): string {
   if (event.allDay) return strings.calendar.allDay;
@@ -191,77 +178,6 @@ function formatTime(event: Pick<Event, "allDay" | "startAt">, clock: ClockPrefer
   return Number.isNaN(date.getTime())
     ? event.startAt
     : formatClockLabel(localMinutesOfDay(date), clock);
-}
-
-const monthLabelFormatter = new Intl.DateTimeFormat("sr-Latn", {
-  month: "long",
-  year: "numeric",
-  timeZone: "UTC",
-});
-
-/** Nav header label, e.g. "jul 2026" — Serbian month names are already lower-case. */
-function formatMonthLabel(key: string): string {
-  const date = new Date(key);
-  return Number.isNaN(date.getTime()) ? key : monthLabelFormatter.format(date);
-}
-
-const monthNameFormatter = new Intl.DateTimeFormat("sr-Latn", { month: "long", timeZone: "UTC" });
-
-/** Bare month name (e.g. "avgust"); degrades to the key's month digits on bad input. */
-function formatMonthName(key: string): string {
-  const date = new Date(key);
-  return Number.isNaN(date.getTime()) ? key.slice(5, 7) : monthNameFormatter.format(date);
-}
-
-/**
- * Week nav label: "3 — 9. avgust 2026" within one month, "31. avgust — 6.
- * septembar 2026" when the row crosses a month boundary. Built from day
- * numbers + a bare month name rather than one combined Intl call, because
- * sr-Latn's day+month+year pattern trails a period after the year too (see
- * formatExamDate) — not what either example above shows.
- */
-function formatWeekLabel(weekKeys: readonly string[]): string {
-  const start = weekKeys[0];
-  const end = weekKeys[6];
-  if (start === undefined || end === undefined) return "";
-  const startDay = Number(start.slice(8, 10));
-  const endDay = Number(end.slice(8, 10));
-  const year = end.slice(0, 4);
-  if (start.slice(0, 7) === end.slice(0, 7)) {
-    return `${startDay} — ${endDay}. ${formatMonthName(end)} ${year}`;
-  }
-  return `${startDay}. ${formatMonthName(start)} — ${endDay}. ${formatMonthName(end)} ${year}`;
-}
-
-/**
- * Semester nav label: „jul — oktobar 2026“ within one year, „novembar 2026 —
- * februar 2027“ across a year end. Composed from bare month names for the same
- * reason `formatWeekLabel` is — sr-Latn's combined month+year pattern trails a
- * period this header does not want.
- */
-function formatSemesterLabel(monthKeys: readonly string[]): string {
-  const first = monthKeys[0];
-  const last = monthKeys.at(-1);
-  if (first === undefined || last === undefined) return "";
-  const firstYear = first.slice(0, 4);
-  const lastYear = last.slice(0, 4);
-  const opening =
-    firstYear === lastYear ? formatMonthName(first) : `${formatMonthName(first)} ${firstYear}`;
-  return `${opening} — ${formatMonthName(last)} ${lastYear}`;
-}
-
-const dayLabelFormatter = new Intl.DateTimeFormat("sr-Latn", {
-  weekday: "long",
-  day: "numeric",
-  month: "long",
-  year: "numeric",
-  timeZone: "UTC",
-});
-
-/** Day nav label, e.g. "sreda, 8. jul 2026." */
-function formatDayLabel(key: string): string {
-  const date = new Date(key);
-  return Number.isNaN(date.getTime()) ? key : dayLabelFormatter.format(date);
 }
 
 // Study blocks are fetched over a bounded window around today (the agenda
@@ -1340,7 +1256,7 @@ export function CalendarPage({
   const todayKey = localTodayKey();
   // The store orders by SQLite's binary collation, which mis-tailors Serbian
   // Latin script; the popover re-sorts, as every alphabetical list here does.
-  const sortedTemplates = templates.slice().sort((a, b) => collator.compare(a.name, b.name));
+  const sortedTemplates = templates.slice().sort((a, b) => collator().compare(a.name, b.name));
 
   // Every grid view derives from the one anchor day; cheap to compute all three
   // unconditionally rather than branch on `view` twice below.

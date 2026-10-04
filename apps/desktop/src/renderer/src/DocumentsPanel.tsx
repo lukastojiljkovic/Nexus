@@ -11,6 +11,7 @@ import type {
 } from "../../shared/ipc.js";
 import { DocDeadlines } from "./DocDeadlines.js";
 import { localTodayKey } from "./examDates.js";
+import { formatDocumentDate } from "./dateLabels.js";
 import { scrollRevealedIntoView, useRevealedRow } from "./reveal.js";
 import { dayUnit, strings } from "./strings.js";
 
@@ -55,24 +56,6 @@ const STATUS_VARIANT: Record<DocumentStatus, "data" | "accent" | "danger"> = {
   uskoro: "accent",
   istekao: "danger",
 };
-
-/**
- * Expiry date for the row — "8. jul 2026." in Serbian; raw string on bad input.
- * A tracked expiry is a bare calendar date, so it is parsed and formatted in UTC
- * (mirrors CalendarPage's formatDay) — otherwise UTC midnight would shift a day
- * back when formatted in a negative-offset timezone.
- */
-function formatExpiry(iso: string): string {
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime())
-    ? iso
-    : new Intl.DateTimeFormat("sr-Latn", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-        timeZone: "UTC",
-      }).format(date);
-}
 
 /**
  * Human "time to expiry" hint from the store's derived daysUntilExpiry: future
@@ -625,7 +608,7 @@ export function DocumentsPanel({
                   <span className="documents__type">{strings.documents.type[doc.docType]}</span>
                 </span>
                 <span className="documents__meta">
-                  <span className="documents__expiry">{formatExpiry(doc.expiryDate)}</span>
+                  <span className="documents__expiry">{formatDocumentDate(doc.expiryDate)}</span>
                   <span className="documents__days">{daysUntilLabel(doc.daysUntilExpiry)}</span>
                 </span>
                 {/* The ledger, read only while this row's renew form is open —
@@ -651,7 +634,7 @@ export function DocumentsPanel({
                     ) : (
                       renewals.map((renewal) => (
                         <span key={renewal.id} className="documents__renewal">
-                          {`${formatExpiry(renewal.renewedAt)} — ${strings.documents.renewalsPrevious} ${formatExpiry(renewal.previousExpiry)}`}
+                          {`${formatDocumentDate(renewal.renewedAt)} — ${strings.documents.renewalsPrevious} ${formatDocumentDate(renewal.previousExpiry)}`}
                         </span>
                       ))
                     )}

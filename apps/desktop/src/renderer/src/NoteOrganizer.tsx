@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useState, type CSSProperties, type Re
 import { ACCENT_IDS } from "@nexus/tokens";
 import { Button, Icon, TextField } from "@nexus/ui";
 import type { NoteCategory, NoteFolder, NoteFolderColor, NoteTag } from "../../shared/ipc.js";
+import { collator } from "./intl.js";
 import { NotePopover } from "./notePopover.js";
 import { mergeTemplateEntries, type TemplateEntry } from "./noteTemplates.js";
 import { isDuplicateNameError } from "./storeErrors.js";
@@ -51,9 +52,6 @@ interface FolderNode extends NoteFolder {
  */
 export const NOTE_ORGANIZER_PANE_ID = "note-organizer";
 
-/** sr-Latn collation — plain "sr" mis-tailors Latin š/č/ć. */
-const collator = new Intl.Collator(["sr-Latn", "sr"]);
-
 /**
  * Every id in one subtree, the node itself included — precisely the destinations
  * a move must not offer. `NoteOrgStore.moveFolder` refuses a self-move and a
@@ -81,7 +79,7 @@ function buildTree(folders: NoteFolder[]): FolderNode[] {
   const build = (parentId: string | null): FolderNode[] =>
     (byParent.get(parentId) ?? [])
       .slice()
-      .sort((a, b) => collator.compare(a.name, b.name))
+      .sort((a, b) => collator().compare(a.name, b.name))
       .map((folder) => ({ ...folder, children: build(folder.id) }));
   return build(null);
 }
@@ -172,7 +170,7 @@ export function NoteOrganizer({
   const [pendingDeleteCategory, setPendingDeleteCategory] = useState<NoteCategory | null>(null);
   // The template picker's own list (ADR-036), through the same
   // `mergeTemplateEntries` the Šabloni pane and the slash menu read — built-ins
-  // first, then this profile's rows sr-Latn sorted — so a folder's default is
+  // first, then this profile's rows sorted in the active locale — so a folder's default is
   // named here exactly as it is named everywhere else.
   const [templates, setTemplates] = useState<TemplateEntry[]>([]);
 
@@ -195,8 +193,8 @@ export function NoteOrganizer({
   }, [editing, loadTemplates]);
 
   const tree = buildTree(folders);
-  const sortedTags = tags.slice().sort((a, b) => collator.compare(a.name, b.name));
-  const sortedCategories = categories.slice().sort((a, b) => collator.compare(a.name, b.name));
+  const sortedTags = tags.slice().sort((a, b) => collator().compare(a.name, b.name));
+  const sortedCategories = categories.slice().sort((a, b) => collator().compare(a.name, b.name));
 
   function cancel(): void {
     setEditing(null);
@@ -676,7 +674,7 @@ export function NoteOrganizer({
                       const forbidden = subtreeIds(node);
                       const destinations = folders
                         .filter((candidate) => !forbidden.has(candidate.id) && candidate.id !== node.parentId)
-                        .sort((a, b) => collator.compare(a.name, b.name));
+                        .sort((a, b) => collator().compare(a.name, b.name));
                       if (destinations.length === 0 && node.parentId === null) return null;
                       return (
                         <>

@@ -59,7 +59,7 @@ export function NoteTemplatePane({
 
   // Loads on mount and after every mutation; `mergeTemplateEntries` (shared
   // with the slash menu, 009-c) does the parse/sort/merge — built-ins first,
-  // then sr-Latn sorted user rows, with a corrupt stored row kept as
+  // then user rows sorted in the active locale, with a corrupt stored row kept as
   // `content: null` so it's still visible to rename or delete.
   const load = useCallback(async () => {
     try {

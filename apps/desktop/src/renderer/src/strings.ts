@@ -81,6 +81,17 @@ const INTL_TAGS: Record<Locale, readonly string[]> = {
 };
 
 /**
+ * The BCP-47 tags for a locale, most preferred first.
+ *
+ * `intl.ts` is the one caller: every `Intl` object the renderer builds is
+ * constructed from this list, so `INTL_TAGS` above stays the single source of
+ * the spelling even though the formatters live one module away.
+ */
+export function intlTags(locale: Locale): readonly string[] {
+  return INTL_TAGS[locale];
+}
+
+/**
  * The live table. Same object for the life of the process — see the header.
  * Typed as the deep-readonly `Strings`, so call sites still cannot write to it;
  * the only mutation is `applyLocale`, through one cast, below.
@@ -128,6 +139,14 @@ function overwrite(target: Node, source: Node): void {
 export function applyLocale(locale: Locale): void {
   currentLocale = locale;
   overwrite(strings as unknown as Node, LOCALES[locale] as unknown as Node);
+  // The document's own language follows the interface, so assistive technology
+  // and the browser's own hyphenation read the same language the copy does.
+  // Guarded rather than assumed: this module is imported by Node tests with no
+  // `document`, and it is an explicit call that runs on first serve AND on every
+  // runtime switch, which is exactly where the tag has to be rewritten.
+  if (typeof document !== "undefined") {
+    document.documentElement.lang = INTL_TAGS[locale][0] ?? locale;
+  }
 }
 
 const pluralRules = new Map<Locale, Intl.PluralRules>();

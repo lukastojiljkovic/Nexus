@@ -32,6 +32,7 @@ import type {
   NoteFolderColor,
 } from "../../shared/ipc.js";
 import { localTodayKey } from "./examDates.js";
+import { dateTimeFormat, numberFormat } from "./intl.js";
 import {
   HABIT_WINDOW_DAYS,
   countsAsDone,
@@ -117,14 +118,16 @@ const HISTORY_WEEKS = 12;
 const DAYS_PER_WEEK = 7;
 
 /**
- * Whole counts, grouped the way Serbian sets them — „11.929", not „11929". A
- * measured habit's day is routinely five digits („koraka"), and an ungrouped
- * five-digit numeral beside its five-digit target is two numbers nobody can
- * compare at a glance. Same locale request as `fileRows.ts`'s own formatter, and
- * `maximumFractionDigits: 0` because a target and a tick are both integers by
- * the store's own refusal.
+ * Whole counts, grouped the way the ACTIVE locale sets them — „11.929" in
+ * Serbian, „11,929" in English. A measured habit's day is routinely five digits
+ * („koraka"), and an ungrouped five-digit numeral beside its five-digit target
+ * is two numbers nobody can compare at a glance. Same request as `fileRows.ts`'s
+ * own formatter, and `maximumFractionDigits: 0` because a target and a tick are
+ * both integers by the store's own refusal.
  */
-const COUNT_FORMAT = new Intl.NumberFormat("sr-Latn", { maximumFractionDigits: 0 });
+function formatCount(value: number): string {
+  return numberFormat({ maximumFractionDigits: 0 }).format(value);
+}
 
 /** Which schedule kind the form is editing. The stored value is `HabitSchedule`; this is only what the switch stands on. */
 type ScheduleKind = HabitSchedule["kind"];
@@ -169,7 +172,7 @@ function formatCellDate(day: string): string {
   const date = new Date(`${day}T00:00:00Z`);
   return Number.isNaN(date.getTime())
     ? day
-    : new Intl.DateTimeFormat("sr-Latn", {
+    : dateTimeFormat({
         weekday: "long",
         day: "numeric",
         month: "long",
@@ -616,7 +619,7 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
         </Button>
         <span className="hab__measure">
           <span className={done ? "hab__count hab__count--done" : "hab__count"}>
-            {`${COUNT_FORMAT.format(value)}/${COUNT_FORMAT.format(habit.target)}`}
+            {`${formatCount(value)}/${formatCount(habit.target)}`}
           </span>
           {habit.unit !== null && <span className="hab__unit">{habit.unit}</span>}
         </span>
@@ -868,7 +871,7 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
       .concat(
         habit.target === null
           ? []
-          : [`${COUNT_FORMAT.format(habit.target)}${habit.unit === null ? "" : ` ${habit.unit}`}`],
+          : [`${formatCount(habit.target)}${habit.unit === null ? "" : ` ${habit.unit}`}`],
       )
       .join(" · ");
     const reminder = habit.reminderTime;

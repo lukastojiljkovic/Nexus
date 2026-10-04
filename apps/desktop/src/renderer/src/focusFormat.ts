@@ -10,6 +10,7 @@
  */
 
 import type { FocusPhaseProgress } from "@nexus/core";
+import { dateTimeFormat } from "./intl.js";
 import { formatClockTime } from "./timeFormat.js";
 
 const SECOND_MS = 1000;
@@ -102,15 +103,16 @@ export function focusSessionMinutes(session: {
 }
 
 /**
- * Recent-session row label — sr-Latn weekday, day, month and start time, e.g.
- * "sreda, 8. jul, 14:32". `startedAt` is a real instant (not a bare calendar
- * date), so it is parsed and formatted in the host's local time zone, exactly
- * like `formatCardDue`. Raw input on an unparseable string.
+ * Recent-session row label — weekday, day, month and start time in the ACTIVE
+ * locale, e.g. "sreda, 8. jul, 14:32" or "Wednesday, 8 July, 14:32".
+ * `startedAt` is a real instant (not a bare calendar date), so it is parsed and
+ * formatted in the host's local time zone, exactly like `formatCardDue`. Raw
+ * input on an unparseable string.
  */
 export function formatFocusSessionWhen(startedAt: string): string {
   const date = new Date(startedAt);
   if (Number.isNaN(date.getTime())) return startedAt;
-  const day = new Intl.DateTimeFormat("sr-Latn", {
+  const day = dateTimeFormat({
     weekday: "long",
     day: "numeric",
     month: "long",

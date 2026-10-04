@@ -85,6 +85,7 @@ import { AttachmentPreviewDialog } from "./attachmentPreview.js";
 import { attachmentPreviewKind, type AttachmentPreviewKind } from "./attachmentPreviewKind.js";
 import { localTodayKey } from "./examDates.js";
 import { shiftDay } from "./habitDone.js";
+import { collator, dateTimeFormat, numberFormat } from "./intl.js";
 import {
   hiddenKanbanColumnCount,
   kanbanColumnRows,
@@ -201,9 +202,6 @@ function viewOptions(): readonly { value: TaskListView; label: string }[] {
  */
 const LIST_CONFIG: ListViewConfig = { type: "list" };
 
-/** sr-Latn collation for the tag chips — plain "sr" mis-tailors Latin š/č/ć, and the store orders by SQLite's binary collation. */
-const collator = new Intl.Collator(["sr-Latn", "sr"]);
-
 function isTaskStatus(value: string): value is TaskStatus {
   return (TASK_STATUSES as readonly string[]).includes(value);
 }
@@ -271,9 +269,7 @@ function formatDue(iso: string): string {
   const date = new Date(iso);
   return Number.isNaN(date.getTime())
     ? iso
-    : new Intl.DateTimeFormat("sr-Latn", { day: "2-digit", month: "short", timeZone: "UTC" }).format(
-        date,
-      );
+    : dateTimeFormat({ day: "2-digit", month: "short", timeZone: "UTC" }).format(date);
 }
 
 /**
@@ -286,7 +282,7 @@ function formatQuickDate(dayKey: string): string {
   const date = new Date(dayKey);
   return Number.isNaN(date.getTime())
     ? dayKey
-    : new Intl.DateTimeFormat("sr-Latn", {
+    : dateTimeFormat({
         weekday: "short",
         day: "2-digit",
         month: "short",
@@ -455,9 +451,6 @@ function reminderChoices(selected: readonly number[]): number[] {
 
 // --- Prilozi (migration 024) ------------------------------------------------
 
-/** Locale-aware one-decimal formatter for the KB/MB branches of `formatBytes` — the NOTE panel's own (`NoteEditor.tsx`). */
-const BYTES_FORMATTER = new Intl.NumberFormat("sr-Latn", { maximumFractionDigits: 1 });
-
 /**
  * Human-readable file size for the Prilozi rows: whole bytes under 1 KB,
  * otherwise KB/MB with at most one decimal — no fabricated precision beyond
@@ -468,8 +461,8 @@ const BYTES_FORMATTER = new Intl.NumberFormat("sr-Latn", { maximumFractionDigits
 function formatBytes(sizeBytes: number): string {
   if (sizeBytes < 1024) return `${sizeBytes} B`;
   const kb = sizeBytes / 1024;
-  if (kb < 1024) return `${BYTES_FORMATTER.format(kb)} KB`;
-  return `${BYTES_FORMATTER.format(kb / 1024)} MB`;
+  if (kb < 1024) return `${numberFormat({ maximumFractionDigits: 1 }).format(kb)} KB`;
+  return `${numberFormat({ maximumFractionDigits: 1 }).format(kb / 1024)} MB`;
 }
 
 // --- Subtask tree (TASK-008) ------------------------------------------------
@@ -1509,9 +1502,9 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     if (ids) ids.add(link.tagId);
     else tagIdsByTask.set(link.taskId, new Set([link.tagId]));
   }
-  const sortedTags = tags.slice().sort((a, b) => collator.compare(a.name, b.name));
+  const sortedTags = tags.slice().sort((a, b) => collator().compare(a.name, b.name));
   /** The store orders by SQLite's binary collation, which mis-tailors Serbian Latin — so the popover re-sorts, exactly as the tag chips do. */
-  const sortedTemplates = templates.slice().sort((a, b) => collator.compare(a.name, b.name));
+  const sortedTemplates = templates.slice().sort((a, b) => collator().compare(a.name, b.name));
   const tagsOf = (taskId: string): readonly TaskTag[] => {
     const ids = tagIdsByTask.get(taskId);
     return ids === undefined ? NO_TAGS : sortedTags.filter((tag) => ids.has(tag.id));

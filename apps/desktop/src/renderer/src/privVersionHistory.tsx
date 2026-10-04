@@ -8,6 +8,7 @@ import { TaskItem, TaskList } from "@tiptap/extension-list";
 import type { PrivAttachmentRef, PrivNoteEnvelopePayload, PrivNoteVersionMeta } from "../../shared/ipc.js";
 import { NoteLink, NoteLinkProvider } from "./noteLink.js";
 import { PrivAttachmentImage, PrivAttachmentProvider } from "./privAttachmentImage.js";
+import { dateTimeFormat } from "./intl.js";
 import { strings } from "./strings.js";
 
 /**
@@ -27,15 +28,6 @@ import { strings } from "./strings.js";
  *  - the panel exists only while the section is unlocked: every call behind it
  *    is refused otherwise, and the section unmounts this whole tree on lock.
  */
-
-/** List-row timestamp: sr-Latn day/month/year + time — never plain "sr" (mis-tailors š/č/ć). */
-const HISTORY_DATE_FORMATTER = new Intl.DateTimeFormat("sr-Latn", {
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-});
 
 /** Wiki-links resolve to nothing here, exactly as in the live private canvas: their targets are PUBLIC notes the section never opens. */
 const INERT_NOTE_LINKS = { titles: new Map<string, string>(), onOpenNote: () => {} };
@@ -158,7 +150,13 @@ export function PrivVersionHistory({
               onClick={() => setSelectedSeq(version.seq)}
             >
               <span className="note__history-item-time">
-                {HISTORY_DATE_FORMATTER.format(new Date(version.createdAt))}
+                {dateTimeFormat({
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }).format(new Date(version.createdAt))}
               </span>
             </button>
           );

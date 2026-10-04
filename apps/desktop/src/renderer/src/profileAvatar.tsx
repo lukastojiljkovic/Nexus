@@ -1,3 +1,4 @@
+import { upperCase } from "./intl.js";
 import { strings } from "./strings.js";
 
 /**
@@ -21,19 +22,20 @@ import { strings } from "./strings.js";
  * the first-run profile with a blank name, deliberately, since naming belongs to
  * onboarding).
  *
- * `toLocaleUpperCase` with the Serbian Latin tag rather than plain
- * `toUpperCase`: the codebase's own sr-Latn rule, and the reason the collator is
- * always constructed with `["sr-Latn", "sr"]`.
+ * Cased through `intl.ts` in the ACTIVE locale rather than by plain
+ * `toUpperCase`: a language whose casing rules differ from ASCII's gets them
+ * right, and a runtime switch is followed.
  */
 export function profileInitials(name: string): string {
-  return name
-    .trim()
-    .split(/\s+/)
-    .filter((word) => word.length > 0)
-    .slice(0, 2)
-    .map((word) => [...word][0] ?? "")
-    .join("")
-    .toLocaleUpperCase(["sr-Latn", "sr"]);
+  return upperCase(
+    name
+      .trim()
+      .split(/\s+/)
+      .filter((word) => word.length > 0)
+      .slice(0, 2)
+      .map((word) => [...word][0] ?? "")
+      .join(""),
+  );
 }
 
 export interface ProfileAvatarProps {

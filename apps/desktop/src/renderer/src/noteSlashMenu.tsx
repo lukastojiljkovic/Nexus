@@ -7,6 +7,7 @@ import type { CalloutVariant } from "@nexus/core";
 import { applyCallout } from "./noteCallout.js";
 import { insertClozeDeletion } from "./noteFlashcard.js";
 import { insertToggle } from "./noteToggle.js";
+import { lowerCase } from "./intl.js";
 import { SuggestionMenu } from "./suggestionMenu.js";
 import type { TemplateEntry } from "./noteTemplates.js";
 import { strings } from "./strings.js";
@@ -220,16 +221,16 @@ function templateSlashItems(templates: readonly TemplateEntry[]): SlashItem[] {
 }
 
 /**
- * Case-insensitive sr-Latn substring match over the combined list: the block
- * commands, then every insertable template. Takes the template items
+ * Case-insensitive substring match, folded in the ACTIVE locale, over the
+ * combined list: the block commands, then every insertable template. Takes the template items
  * rather than reaching for a module global, since the live set changes as
  * templates are saved/renamed/deleted.
  */
 function filterSlashItems(query: string, templates: readonly SlashItem[]): SlashItem[] {
   const all = [...SLASH_ITEMS, ...templates];
-  const needle = query.toLocaleLowerCase("sr-Latn");
+  const needle = lowerCase(query);
   if (needle.length === 0) return all;
-  return all.filter((item) => item.label.toLocaleLowerCase("sr-Latn").includes(needle));
+  return all.filter((item) => lowerCase(item.label).includes(needle));
 }
 
 /** The render snapshot handed to React on each open/update of the suggestion. */

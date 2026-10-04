@@ -2449,7 +2449,7 @@ export const en = {
     /**
      * The half-day markers of the 12-hour clock (CAL §5), used only when this
      * device is set to it. „AM“/„PM“ rather than a Serbian phrase on purpose:
-     * they are exactly what `Intl.DateTimeFormat("sr-Latn", { hour12: true })`
+     * they are exactly what `Intl.DateTimeFormat` with `{ hour12: true }`
      * itself produces for this locale, so a user who switches clocks sees the
      * form their OS shows them everywhere else.
      */
@@ -2469,7 +2469,7 @@ export const en = {
     showLess: "Show less",
     /**
      * The Ljudi panel (CAL-007). Month names are NOT listed here: they are
-     * derived from `Intl.DateTimeFormat("sr-Latn", { month: "long" })`, the
+     * derived from `Intl.DateTimeFormat` with `{ month: "long" }`, the
      * same source every other date label on this page already reads, so the
      * select and the rows cannot drift from the calendar's own wording.
      */
