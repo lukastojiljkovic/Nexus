@@ -57,7 +57,7 @@ export const electronicsEn = {
   firstCircuitName: "Circuit",
   newCircuit: "New circuit",
   nameLabel: "Circuit name",
-  namePlaceholder: "Humidity station",
+  namePlaceholder: "Weather station",
   save: "Save",
   cancel: "Cancel",
   rename: "Rename",

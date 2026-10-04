@@ -110,6 +110,7 @@ const EN: Readonly<Record<string, string>> = {
   Štednja: "Savings",
   Ostalo: "Other",
   "Mesečna karta": "Monthly pass",
+  "Taksi/prevoz": "Taxi or ride-share",
   "Kafić u kraju": "Local café",
   "Splav na Savi": "River club on the Sava",
   Picerija: "Pizzeria",

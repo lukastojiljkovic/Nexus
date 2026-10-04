@@ -199,14 +199,18 @@ const CIRCUITS: readonly DemoCircuit[] = [
  * Serbian scene uses, so `ctx.locale === "sr"` writes exactly what it always
  * did. Part labels are catalogue identifiers ("R1") or empty, and both pass
  * through unchanged.
+ *
+ * The circuit list is sorted by name and the bench opens the first, so the
+ * English names sort in the Serbian order: both scenes open on the rover,
+ * which the screenshot harness and the „Mašina" form depend on.
  */
 const EN: Readonly<Record<string, string>> = {
-  "Stanica za vlažnost": "Humidity station",
+  "Stanica za vlažnost": "Weather station",
   ["DHT22 na D2, signalna dioda na D9 preko otpornika od 220 Ω. " +
   "Dioda svetli dok je vlažnost iznad praga."]:
     "DHT22 on D2, indicator LED on D9 through a 220 Ω resistor. " +
     "The LED lights while the humidity is above the threshold.",
-  "Merenje razdaljine": "Distance measurement",
+  "Merenje razdaljine": "Ultrasonic rangefinder",
   ["HC-SR04: TRIG na D10, ECHO na D11. Senzor traži punih 5 V. " +
   "Senzor gleda napred sa malog rovera."]:
     "HC-SR04: TRIG on D10, ECHO on D11. The sensor wants a full 5 V. " +
@@ -215,7 +219,7 @@ const EN: Readonly<Record<string, string>> = {
   ["TTP223 na GPIO27, pasivna zujalica na GPIO18, BMP280 i VL53L0X preko I²C. " +
   "Sve na 3,3 V — Malina nema 5 V logiku. Daljinomer gleda napred."]:
     "TTP223 on GPIO27, passive buzzer on GPIO18, BMP280 and VL53L0X over I²C. " +
-    "Everything at 3.3 V - the Pi has no 5 V logic. The ranger looks forward.",
+    "Everything at 3.3 V — the Pi has no 5 V logic. The ranger looks forward.",
 };
 
 /** The seeded text for the active locale. */

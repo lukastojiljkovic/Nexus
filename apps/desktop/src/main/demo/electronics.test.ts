@@ -86,6 +86,31 @@ describe("seedDemoElectronics", () => {
   });
 
   /**
+   * The bench opens the first circuit in the list, and the list is sorted by
+   * name, so the English names have to sort the way the Serbian ones do: the
+   * screenshot harness and the „Mašina" form both expect the rover open.
+   */
+  it("lists the English circuits in the Serbian order, the rover first", () => {
+    const englishId = uuidv7();
+    db.raw
+      .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
+      .run(englishId, "personal", "Demo", new Date(NOW).toISOString());
+    seedDemoElectronics(db.raw, createDemoContext(englishId, NOW, "en"));
+    const names = (id: string): string[] =>
+      new ElectronicsStore(db.raw, id).listActive().map((circuit) => circuit.name);
+    expect(names(profileId)).toEqual([
+      "Malina: rover",
+      "Merenje razdaljine",
+      "Stanica za vlažnost",
+    ]);
+    expect(names(englishId)).toEqual([
+      "Raspberry Pi: rover",
+      "Ultrasonic rangefinder",
+      "Weather station",
+    ]);
+  });
+
+  /**
    * The one that matters. Every code `circuitProblems` can report is a way the
    * seeder can be wrong without failing: `component` for an id this build does
    * not ship, `pin` for a pin the component does not have, `part` for a wire
