@@ -106,7 +106,7 @@ blocking; both are §5 items.
 | Local migrations | **70** (latest `070-circuit-search`) |
 | Server | 14 Supabase migrations, 3 Edge Functions, 165 pgTAP assertions |
 | Static gates | **26**, each its own CI step |
-| Commits | **737** on `feat/english-locale`, the last branch merged before 1.4.0 |
+| Commits | **739** on `feat/english-locale`, the last branch merged before 1.4.0 |
 | Unmerged work | none — `chore/open-source-readiness` (#39) and `feat/english-locale` were merged for 1.4.0 |
 | Open pull requests | none at the 1.4.0 release |
 | Git tags / GitHub releases | `v1.4.0`, the first (§4) |
