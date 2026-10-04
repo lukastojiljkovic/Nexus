@@ -14,7 +14,7 @@ the binding rules) → §1 and §2 below (where we are, what exists) → §4 (wh
 left) → §5 (what needs the founder). [README.md](README.md) maps every other
 document.
 
-**Last updated:** 2026-10-02. The state below was verified on that date against
+**Last updated:** 2026-10-04. The state below was verified on that date against
 `main`, and against the branch named under „Unmerged work" for what is not on
 `main` yet. Deliberately no commit sha: a sha in a header goes stale the moment
 anything is pushed, which is the defect class this file keeps recording.
@@ -50,6 +50,21 @@ English otherwise — and the device remembers the choice from then on, with
 Settings → Appearance switching it at runtime. The main process learns the
 choice over a `locale:set` report, so native dialogs and OS notifications follow
 the same language, and the demo profile seeds its content in it too.
+
+**The choice reaches the numbers as well as the words** (2026-10-04). Every
+date, time, duration, number, unit, file size and money figure the interface
+draws is produced through one `intl.ts`, and every alphabetical list sorts with
+the active locale's collator — an English reader sees `1,234.50` and
+`2 October`, a Serbian reader `1.234,50` and `2. oktobar` — with nothing
+capturing a formatter at import time, so the switch takes effect without a
+reload. The shipped catalogues carry English names: the 426-entry food table
+(`nameEn`/`labelEn`/`notesEn`), the 230 exercises (their existing `nameEn`), and
+the 153-entry electronics catalogue (`nameEn`/`summaryEn`), with both food and
+component search matching either language. The generated Arduino sketch and ROS
+package take a `GeneratedLanguage` so an English session writes English files,
+and the business demo seeder carries the same `EN` map the others do. `<html
+lang>` follows the locale on both the desktop and the web shell, so assistive
+technology reads the same language the copy does.
 
 **Web and sync are paused, not cancelled** (founder, 2026-08-31). Desktop work
 comes first, because the renderer is one React codebase and Electron is only its
@@ -94,7 +109,7 @@ blocking; both are §5 items.
 | Server | 14 Supabase migrations, 3 Edge Functions, 165 pgTAP assertions |
 | Static gates | **26**, each its own CI step |
 | Commits | **703** on this branch |
-| Unmerged work | **15 commits on `chore/open-source-readiness`**, plus the uncommitted public-release changes |
+| Unmerged work | **28 commits on `chore/open-source-readiness`**, and **10 on `feat/english-locale`** on top of it, plus the uncommitted English-formatting changes |
 | Open pull requests | The public-release pull request against `main` |
 | Git tags / GitHub releases | none yet — `v1.4.0`, the first, is prepared (§4) |
 
@@ -726,15 +741,6 @@ suggestion, cheapest and highest-leverage first.
 12. **Mixed line endings within files**, despite `core.autocrlf=true`. Every
     scripted edit has to be EOL-aware; it has already cost two redoes. A standing
     hazard rather than a defect.
-13. **The business demo profile's content is still Serbian only.** The English
-    locale reaches the personal demo profile end to end (`DemoContext.locale`,
-    and every seeder under `apps/desktop/src/main/demo/` except `business.ts`),
-    and `business.ts` is seeded only by the `--demo` CLI for the business
-    profile of ADR-058. Finishing it is the same mechanical job the other
-    seeders already had: an `EN` map keyed by the Serbian literal plus a
-    `text(ctx, …)` accessor at each store call, with the Serbian path left
-    byte-identical. Not urgent: `--demo` is an automated run and keeps the
-    Serbian default.
 
 **Not on the desktop list:** SEC-VER-01 (threat models), the sync transport's
 error model, and the pairing redesign are all web/sync work and stay paused with
