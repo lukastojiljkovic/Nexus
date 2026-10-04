@@ -293,7 +293,7 @@ jobs:
             echo "- [LICENSE](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/LICENSE) · [NOTICE](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/NOTICE)"
             echo "- [PRIVACY.md](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/PRIVACY.md) · [TERMS.md](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/TERMS.md)"
             echo "- [SECURITY.md](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/SECURITY.md) · [SUPPORT.md](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/SUPPORT.md)"
-            echo "- Third-party notices are attached as \`THIRD-PARTY-NOTICES.md\`, and are also shown in the application under Podešavanja → Licence."
+            echo "- Third-party notices are attached as \`THIRD-PARTY-NOTICES.md\`, and are also shown in the application under Settings → Licences."
           } > release-notes.md
 
       # `gh` rather than a release action, for the reason at the top of this
