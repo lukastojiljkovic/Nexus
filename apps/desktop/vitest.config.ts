@@ -35,5 +35,14 @@ export default defineConfig({
       "src/renderer/src/**/*.test.ts",
       "src/shared/**/*.test.ts",
     ],
+    /**
+     * Raised from Vitest's 5 000 ms default for the reason `packages/db` records
+     * beside its own: the `src/main/demo` suites open a real encrypted database per case
+     * and run every migration. `study.test.ts` takes about 0.6 s a case alone,
+     * and on 2026-10-04 three of its four cases passed the 5 s mark while turbo
+     * ran the core suite beside this one, then passed when rerun. 20 s matches
+     * `packages/db` and still fails a hung test.
+     */
+    testTimeout: 20_000,
   },
 });
