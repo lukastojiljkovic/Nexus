@@ -39,8 +39,24 @@ const MINIMUM_SEVERITY = ["high", "critical"];
  * the advisory stopped appearing at all — at which point this script failed the
  * job on the SPENT allowance rather than letting the excuse sit here unread,
  * which is exactly what it was built to do.
+ *
+ * **One entry since 2026-10-05**, for an advisory with no fix to move to.
  */
-const ALLOWED = [];
+const ALLOWED = [
+  {
+    // max-stale can serve a SHARED cache's security-zeroed entry, Set-Cookie
+    // and all, to another user. Build-time only: electron-builder >
+    // app-builder-lib > @electron/get > got > cacheable-request, the cache in
+    // front of the Electron download on the build machine. That cache has one
+    // user and holds a public binary with no cookie to leak. 4.3.0, published
+    // after the advisory, falls outside its range without touching the
+    // max-stale path, so overriding to it would silence the scan and change
+    // nothing it warns about.
+    ghsa: "GHSA-ch52-4w7c-c8xp",
+    package: "http-cache-semantics",
+    retireWhen: "a release fixes max-stale handling, or @electron/get stops using got",
+  },
+];
 
 /** Runs the audit and returns its JSON report. A non-zero exit is expected whenever findings exist. */
 async function runAudit() {
