@@ -111,6 +111,24 @@ describe("validateComponent — identity", () => {
     expect(codes(withField(bmp280(), "name", "  "))).toContain("shape");
     expect(codes(withField(bmp280(), "summary", ""))).toContain("shape");
   });
+
+  it("accepts a component with no English copy, but never a blank one", () => {
+    // Absent is a real answer: the validator also runs over a component the
+    // user typed into the drawer, and nobody is asked for two names. Blank is
+    // not — an entry that "has" an English name of "" prints as nothing, which
+    // is worse than one that honestly carries none.
+    expect(validateComponent(bmp280())).toEqual([]);
+    const blankName = validateComponent(withField(bmp280(), "nameEn", ""));
+    expect(blankName.map((problem) => [problem.field, problem.code])).toEqual([["nameEn", "shape"]]);
+    expect(codes(withField(bmp280(), "summaryEn", "  "))).toContain("shape");
+    expect(
+      validateComponent({
+        ...bmp280(),
+        nameEn: "BMP280",
+        summaryEn: "Barometric pressure and temperature.",
+      }),
+    ).toEqual([]);
+  });
 });
 
 describe("validateComponent — the electrical envelope", () => {

@@ -31,6 +31,27 @@ describe("the shipped food catalogue", () => {
     expect(failures).toEqual([]);
   });
 
+  // The English half of the catalogue is a shipped artefact, not a nice-to-have,
+  // so the gate proves every row carries it. `validateFoodEntry` already refuses
+  // a blank `nameEn`/`labelEn` or a missing `notesEn`; this test states the
+  // promise directly, so weakening the validator cannot quietly drop it.
+  it("carries an English name, note and serving label for every entry", () => {
+    const missing = FOOD_CATALOGUE.flatMap((food) => {
+      const problems: string[] = [];
+      if (typeof food.nameEn !== "string" || food.nameEn.trim().length === 0) {
+        problems.push(`${food.id}: nameEn`);
+      }
+      if (typeof food.notesEn !== "string") problems.push(`${food.id}: notesEn`);
+      food.servings.forEach((serving, index) => {
+        if (typeof serving.labelEn !== "string" || serving.labelEn.trim().length === 0) {
+          problems.push(`${food.id}: servings[${index}].labelEn`);
+        }
+      });
+      return problems;
+    });
+    expect(missing).toEqual([]);
+  });
+
   it("carries no duplicate id — the reference a logged meal keeps must resolve to one food", () => {
     const seen = new Set<string>();
     const duplicates: string[] = [];

@@ -33,11 +33,24 @@ export const powerOut = (id: string, volts: number, label = id): Pin => ({
   volts,
 });
 
-/** One signal pin with whatever it can do, at the board's logic level. */
-export const pin = (id: string, functions: readonly PinFunction[], volts?: number, label = id): Pin => ({
+/**
+ * One signal pin with whatever it can do, at the board's logic level.
+ *
+ * `labelEn` is passed only by the handful of pins whose label is a Serbian
+ * word rather than the silkscreen's own letters — `Pin.labelEn` says why the
+ * field exists and which ones those are.
+ */
+export const pin = (
+  id: string,
+  functions: readonly PinFunction[],
+  volts?: number,
+  label = id,
+  labelEn?: string,
+): Pin => ({
   id,
   label,
   functions,
+  ...(labelEn === undefined ? {} : { labelEn }),
   ...(volts === undefined ? {} : { volts }),
 });
 

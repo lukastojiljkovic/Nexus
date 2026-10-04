@@ -44,7 +44,7 @@ import { parseToolNumber } from "@nexus/core";
 import { Button, Checkbox } from "@nexus/ui";
 import { useMemo, useState, type ComponentType } from "react";
 
-import { strings } from "../strings.js";
+import { activeLocale, strings } from "../strings.js";
 import {
   ResultRow,
   ToolFailure,
@@ -103,7 +103,7 @@ function HttpStatusTool() {
             entry.official ? entry.name : `${entry.name} (${s.unofficial})`,
             entry.statusClass,
             entry.reference,
-            entry.noteSr,
+            activeLocale() === "en" ? entry.noteEn : entry.noteSr,
           ])}
         />
       )}

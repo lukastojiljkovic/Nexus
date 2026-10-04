@@ -106,7 +106,14 @@ export const EMPTY_MACROS: FoodMacros = Object.freeze({
  * inventing „1 komad" for them would be inventing data.
  */
 export interface FoodServing {
+  /** The Serbian label the catalogue ships. */
   readonly label: string;
+  /**
+   * The same label in English, or undefined for a serving the user typed
+   * themselves. Optional rather than required because a profile's own food
+   * (a different type, sharing this shape) has no English to carry.
+   */
+  readonly labelEn?: string;
   readonly grams: number;
 }
 
@@ -197,6 +204,12 @@ const SOURCE_KINDS: readonly string[] = ["usda", "official", "derived", "stated"
 export interface FoodEntry {
   readonly id: string;
   readonly name: string;
+  /**
+   * The English name, beside the Serbian one for the same reason `strings.en`
+   * sits beside `strings.sr`: the renderer picks by the active locale, and the
+   * catalogue gate proves every shipped entry carries it.
+   */
+  readonly nameEn: string;
   readonly category: FoodCategory;
   readonly per100g: FoodMacros;
   readonly servings: readonly FoodServing[];
@@ -208,6 +221,8 @@ export interface FoodEntry {
    * decoration: it is what makes the deviation pass the gate.
    */
   readonly notes: string;
+  /** The English note. Mirrors `notes`; empty exactly when `notes` is empty. */
+  readonly notesEn: string;
 }
 
 /**
@@ -353,12 +368,24 @@ export function validateFoodEntry(value: unknown): readonly FoodEntryProblem[] {
   if (typeof value["name"] !== "string" || value["name"].trim().length === 0) {
     problems.push({ field: "name", code: "shape" });
   }
+  // Every shipped entry carries English beside the Serbian, and the gate is
+  // where that claim is proved rather than assumed: a missing translation is a
+  // blank row in an English interface, which is exactly what this catches.
+  if (typeof value["nameEn"] !== "string" || value["nameEn"].trim().length === 0) {
+    problems.push({ field: "nameEn", code: "shape" });
+  }
   if (!(FOOD_CATEGORIES as readonly unknown[]).includes(value["category"])) {
     problems.push({ field: "category", code: "category" });
   }
   const notes = value["notes"];
   if (typeof notes !== "string") {
     problems.push({ field: "notes", code: "shape" });
+  }
+  // `notesEn` mirrors `notes`, so an empty Serbian note has an empty English
+  // one; the key itself must be present, which is what a translation being
+  // forgotten would remove.
+  if (typeof value["notesEn"] !== "string") {
+    problems.push({ field: "notesEn", code: "shape" });
   }
 
   // Read before the macros, because an explanation is what licenses a deviation.
@@ -438,6 +465,9 @@ function servingProblems(value: unknown): FoodEntryProblem[] {
     }
     if (typeof serving["label"] !== "string" || serving["label"].trim().length === 0) {
       problems.push({ field: `${path}.label`, code: "shape" });
+    }
+    if (typeof serving["labelEn"] !== "string" || serving["labelEn"].trim().length === 0) {
+      problems.push({ field: `${path}.labelEn`, code: "shape" });
     }
     const grams = serving["grams"];
     if (typeof grams !== "number") {
@@ -533,14 +563,18 @@ function sourceProblems(value: unknown): FoodEntryProblem[] {
  */
 const FOOD_COLLATOR = new Intl.Collator(["sr-Latn", "sr"]);
 
-/** A match and how good it is: 0 = the name STARTS with the query, 1 = it merely contains it. */
+/** A match and how good it is: Serbian name first, then the English name beside it. */
 const RANK_PREFIX = 0;
 const RANK_SUBSTRING = 1;
+const RANK_EN_PREFIX = 2;
+const RANK_EN_SUBSTRING = 3;
 
 /** The least a thing must be for `searchFoods` to rank it: a name to match, and an id to break a tie by. */
 export interface SearchableFood {
   readonly id: string;
   readonly name: string;
+  /** The English name, when there is one. User foods have none, so this is optional. */
+  readonly nameEn?: string;
 }
 
 /**
@@ -573,6 +607,13 @@ export interface SearchableFood {
  * the picker would start ordering results by where the food happened to live.
  * So the caller hands this whatever pool it has and gets one ranking back.
  */
+/**
+ * Both names are searched, as `searchExercises` searches both of its own: an
+ * English interface has to find "Potato chips" by its English name, and a
+ * Serbian one has to keep finding the same entry by "Čips, od krompira". The
+ * Serbian name ranks ahead of the English one so the result does not depend on
+ * which language is active; the active one decides only what is DISPLAYED.
+ */
 export function searchFoods<T extends SearchableFood>(
   entries: readonly T[],
   query: string,
@@ -589,6 +630,16 @@ export function searchFoods<T extends SearchableFood>(
       hits.push({ entry, rank: RANK_PREFIX });
     } else if (folded.includes(needle)) {
       hits.push({ entry, rank: RANK_SUBSTRING });
+    } else {
+      // Part B item 4: an English interface finds the entry by its English name,
+      // and the Serbian name stays searchable too. The English name ranks below
+      // the Serbian one so the order does not depend on which language is
+      // active, exactly as `searchExercises` ranks `nameEn`.
+      const english = entry.nameEn;
+      if (english === undefined) continue;
+      const foldedEn = foldSearchText(english);
+      if (foldedEn.startsWith(needle)) hits.push({ entry, rank: RANK_EN_PREFIX });
+      else if (foldedEn.includes(needle)) hits.push({ entry, rank: RANK_EN_SUBSTRING });
     }
   }
 
