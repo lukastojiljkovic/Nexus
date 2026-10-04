@@ -23,13 +23,11 @@ anything is pushed, which is the defect class this file keeps recording.
 [SPECIFICATION.md](SPECIFICATION.md) (the whole product) ·
 [roadmap.md](roadmap.md) (what order).
 
-**Where things stand (2026-10-02).** The desktop application is finished and
-the repository is public. The first public release, **1.4.0**, is prepared on
-`chore/open-source-readiness`: the version, the changelog, the release pipeline
-and the website name it, and it waits on the maintainer to merge the branch,
-push a `v1.4.0` tag and let the release workflow draft the release. The
-installer is still unsigned, web and sync are paused, and no version has ever
-been tagged.
+**Where things stand (2026-10-05).** The desktop application is finished and
+the repository is public. The first public release, **1.4.0**, is tagged
+`v1.4.0` on `main`, built by the release workflow and published with its
+checksums, SBOM and build provenance. The installer is unsigned, and web and
+sync are paused.
 
 ---
 
@@ -38,9 +36,9 @@ been tagged.
 **The desktop app is finished, and the repository is public.** Sixteen modules,
 all usable end to end, on an encrypted local SQLite database with no network
 path at all. It installs like an ordinary Windows program and the founder has
-used it daily since 2026-08-02. The last installer built is **1.3.0**, built
-2026-09-23 from `eceb07e`; the tree now declares **1.4.0**, the first public
-release, prepared but not yet tagged (§4).
+used it daily since 2026-08-02. The first public release is **1.4.0**, tagged
+`v1.4.0` (§4); every installer before it was built by hand and never tagged,
+the last being 1.3.0, from `eceb07e` on 2026-09-23.
 
 **The interface ships in two languages** (2026-10-02). English joins Serbian as
 a whole second table, `strings.en.ts`, checked against the Serbian-derived
@@ -101,17 +99,17 @@ blocking; both are §5 items.
 
 |  |  |
 | --- | --- |
-| Desktop version | **1.4.0** in `apps/desktop/package.json`; the last installer built is **1.4.0**, unsigned, with its fuses read back |
+| Desktop version | **1.4.0**, released as `v1.4.0`: unsigned, with its fuses read back |
 | Installer bytes | 183 821 644 (1.3.0) · `sha256` B66B0AAB… — see §4.4 |
 | Linux | AppImage, tarball and a Gentoo ebuild, all built and verified |
 | Modules registered | **16** |
 | Local migrations | **70** (latest `070-circuit-search`) |
 | Server | 14 Supabase migrations, 3 Edge Functions, 165 pgTAP assertions |
 | Static gates | **26**, each its own CI step |
-| Commits | **703** on this branch |
-| Unmerged work | `chore/open-source-readiness` (the public-release pull request), and `feat/english-locale` on top of it |
-| Open pull requests | The public-release pull request against `main` |
-| Git tags / GitHub releases | none yet — `v1.4.0`, the first, is prepared (§4) |
+| Commits | **737** on `feat/english-locale`, the last branch merged before 1.4.0 |
+| Unmerged work | none — `chore/open-source-readiness` (#39) and `feat/english-locale` were merged for 1.4.0 |
+| Open pull requests | none at the 1.4.0 release |
+| Git tags / GitHub releases | `v1.4.0`, the first (§4) |
 
 ---
 
@@ -621,22 +619,21 @@ anyone remembering to read this list. What is left is four designs that are owed
 ## 4. What remains
 
 **The repository is public, and the first public release is 1.4.0
-(2026-10-02).** Everything a stranger needs — the Apache-2.0 licence and
+(2026-10-05).** Everything a stranger needs — the Apache-2.0 licence and
 ADR-087, the policies (`SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`,
 `PRIVACY.md`, `TERMS.md`, `SUPPORT.md`, `ROADMAP.md`, `CHANGELOG.md`), the issue
 forms, the tagged release pipeline with SBOM and build provenance, the CodeQL /
 dependency review / Scorecard workflows, a file-by-file classification of this
 docs tree, a hardened Electron package (fuses and asar integrity) and a closed server gap (the housekeeping
-schedule is now a migration) — is in one pull request against `main`, on
-`chore/open-source-readiness`. The narrative is in
-[log/2026-10.md](log/2026-10.md).
+schedule is now a migration) — reached `main` through the public-release pull
+request (#39), the English locale followed it, and `v1.4.0` was tagged from
+the result. The narrative is in [log/2026-10.md](log/2026-10.md).
 
-**What that leaves is the maintainer's, and it is three things:** the
+**What that leaves is the maintainer's, and it is two things:** the
 code-signing route (`SignPath Foundation` is free for open-source projects;
-Azure Artifact Signing is the alternative), the merge of
-`chore/open-source-readiness` and the repository settings that live in the web
-UI ([ops/github-setup.md](ops/github-setup.md)), and the first `v*` tag,
-`v1.4.0`. None of the three is blocked on anything in this repository.
+Azure Artifact Signing is the alternative), and the repository settings that
+live in the web UI ([ops/github-setup.md](ops/github-setup.md)). Neither is
+blocked on anything in this repository.
 
 **Order of work.** On 2026-08-31 the founder paused web and sync: *„web/sync je
 za sada trajno na hold-u, dok ne završimo sve feature za desktop, lako ćemo ih
@@ -808,23 +805,22 @@ quality is.
   `eceb07e` built twice produced 183 821 582 and 183 821 644 bytes. Size and
   hash identify an artifact, never a revision. That matters the day an update
   feed publishes a digest.
-- **The Electron fuses have not been read back on a packaged build.** The
-  configuration is in `electron-builder.yml` (RunAsNode, NODE_OPTIONS and CLI
-  inspect off; cookie encryption, embedded asar integrity and only-load-from-asar
-  on), and the 1.3.0 executable was read back and had all six wrong. The machine
-  this pass ran on cannot build at all (see `log/2026-10.md`), so before the
-  first public release is tagged: run `pnpm --filter @nexus/desktop dist`, then
+- **The Electron fuses are not read back by CI.** The configuration is in
+  `electron-builder.yml` (RunAsNode, NODE_OPTIONS and CLI inspect off; cookie
+  encryption, embedded asar integrity and only-load-from-asar on), and the 1.3.0
+  executable was read back and had all six wrong. 1.4.0's read back as
+  configured, on 2026-10-02 and again on 2026-10-05 from the tree the tag was
+  cut from (see `log/2026-10.md`). After any change to that file or to
+  Electron: run `pnpm --filter @nexus/desktop dist`, then
   `npx @electron/fuses read --app apps/desktop/release/win-unpacked/Nexus.exe`,
   and launch the result.
-- **No version has ever been tagged or released, and `v1.4.0` would be the
-  first.** There are no git tags and no GitHub releases, so „1.3.0" is a number
-  the installer reports and nothing a user could verify against; the tree now
-  declares 1.4.0 and the changelog entry is written, but the tag has not been
-  pushed. The Gentoo ebuild's `SRC_URI` points at this repository's releases (the
-  separate `nexus-releases` repository was never created and is no longer
-  wanted), but the ebuild itself is still `nexus-bin-1.3.0`: it needs a 1.4.0
-  bump and a regenerated `Manifest` before a `v1.4.0` tag makes it an ordinary
-  `emerge`. Until then the ebuild is a hand-installed recipe.
+- **`v1.4.0` is the first tag and the first release.** Every installer before
+  it reports a number nothing could be verified against. The Gentoo ebuild's
+  `SRC_URI` points at this repository's releases (the separate `nexus-releases`
+  repository was never created and is no longer wanted), but the ebuild itself
+  is still `nexus-bin-1.3.0`: it needs a 1.4.0 bump and a `Manifest` digested
+  from the published Linux tarball, which exists only now that the release
+  does. Until then the ebuild is a hand-installed recipe.
 - **`check:licences` fails every bump of a packaged dependency, by
   construction.** Dependabot cannot regenerate a generated artifact, so the
   third-party notices must be regenerated on the branch
@@ -859,7 +855,7 @@ implemented until the founder says otherwise.
 | Five smaller confirmations | Open. Three items: the tier-constants doctrine, one agro domain question, desktop→desktop pairing. |
 | Linux | Open. Two items: is Linux supported or a courtesy build, and code signing. The separate releases repository is settled — releases publish in this repository. |
 | The developer drawer | Open. `lf8` naming, the `tf19`/`tf32` label, and `MXINT8`. |
-| Version numbering and tagging | Resolved in the tree: `1.4.0` is the first public release, prepared with its changelog entry. The `v1.4.0` tag is the maintainer's. |
+| Version numbering and tagging | **Answered** 2026-10-05: `1.4.0` is the first public release, tagged `v1.4.0`. |
 | `gitleaks-action` carries a commercial EULA | Irrelevant while the repository is personal; a licence question the day it moves under an organisation. |
 
 ### SEC-VER-01 is binding on paper and has one instance (2026-09-22)
