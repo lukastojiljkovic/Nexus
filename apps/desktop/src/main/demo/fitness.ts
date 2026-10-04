@@ -197,11 +197,11 @@ interface RoutineLine {
  * Resolves one routine line against `EXERCISE_CATALOGUE` — the same lookup
  * `index.ts`'s `resolveLoggedExercise` runs on the way in from a real IPC call.
  */
-function routineItem(line: RoutineLine): FitRoutineItemInput {
+function routineItem(line: RoutineLine, ctx: DemoContext): FitRoutineItemInput {
   const entry = requireExercise(line.id);
   return {
     exerciseRef: exerciseRefText({ kind: "catalogue", id: entry.id }),
-    label: entry.name,
+    label: ctx.locale === "en" ? entry.nameEn : entry.name,
     targetSets: line.targetSets,
     targetRepsMin: line.targetRepsMin ?? null,
     targetRepsMax: line.targetRepsMax ?? null,
@@ -590,7 +590,7 @@ function buildSessionCalendar(rng: DemoRandom): readonly PlannedSession[] {
  * One catalogue exercise, resolved into the shape `FitWorkoutStore.logSet`
  * wants — `resolveLoggedExercise`'s own return shape.
  */
-function loggedExercise(id: string): {
+function loggedExercise(id: string, ctx: DemoContext): {
   exerciseRef: string;
   label: string;
   metric: ExerciseMetric;
@@ -599,7 +599,7 @@ function loggedExercise(id: string): {
   const entry = requireExercise(id);
   return {
     exerciseRef: exerciseRefText({ kind: "catalogue", id: entry.id }),
-    label: entry.name,
+    label: ctx.locale === "en" ? entry.nameEn : entry.name,
     metric: entry.metric,
     primaryMuscles: [...entry.primaryMuscles],
   };
@@ -625,7 +625,7 @@ function logSession(
 
   const fraction = clampFraction((session.offset + 150) / 150);
   for (const line of ROUTINE_LINES[session.routine]) {
-    const exercise = loggedExercise(line.id);
+    const exercise = loggedExercise(line.id, ctx);
     const plan = EXERCISE_PLANS[line.id];
     if (plan === undefined) {
       throw new Error(`Demo fitness: no set progression for catalogue exercise "${line.id}".`);
@@ -665,7 +665,7 @@ function seedTraining(db: DatabaseHandle, ctx: DemoContext, rng: DemoRandom): vo
       {
         name: text(ctx, ROUTINE_NAMES.upper),
         notes: text(ctx, ROUTINE_NOTES.upper),
-        items: UPPER_LINES.map(routineItem),
+        items: UPPER_LINES.map((line) => routineItem(line, ctx)),
       },
       createdAt,
     ),
@@ -673,7 +673,7 @@ function seedTraining(db: DatabaseHandle, ctx: DemoContext, rng: DemoRandom): vo
       {
         name: text(ctx, ROUTINE_NAMES.lower),
         notes: text(ctx, ROUTINE_NOTES.lower),
-        items: LOWER_LINES.map(routineItem),
+        items: LOWER_LINES.map((line) => routineItem(line, ctx)),
       },
       createdAt,
     ),
@@ -681,7 +681,7 @@ function seedTraining(db: DatabaseHandle, ctx: DemoContext, rng: DemoRandom): vo
       {
         name: text(ctx, ROUTINE_NAMES.full),
         notes: text(ctx, ROUTINE_NOTES.full),
-        items: FULL_BODY_LINES.map(routineItem),
+        items: FULL_BODY_LINES.map((line) => routineItem(line, ctx)),
       },
       createdAt,
     ),
@@ -689,7 +689,7 @@ function seedTraining(db: DatabaseHandle, ctx: DemoContext, rng: DemoRandom): vo
       {
         name: text(ctx, ROUTINE_NAMES.cond),
         notes: text(ctx, ROUTINE_NOTES.cond),
-        items: CONDITIONING_LINES.map(routineItem),
+        items: CONDITIONING_LINES.map((line) => routineItem(line, ctx)),
       },
       createdAt,
     ),
@@ -778,7 +778,7 @@ function logMealItem(
       date: day,
       slot,
       foodRef: foodRefText({ kind: "catalogue", id: food.id }),
-      label: food.name,
+      label: ctx.locale === "en" ? (food.nameEn ?? food.name) : food.name,
       grams: rng.int(option.gramsMin, option.gramsMax),
       per100g: food.per100g,
     },
