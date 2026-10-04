@@ -36,6 +36,7 @@
 
 import type { Circuit } from "./circuit.js";
 import type { ComponentDef } from "./component.js";
+import type { GeneratedLanguage } from "./code.js";
 import { slugify } from "../devtools/text.js";
 import {
   boardWiring,
@@ -45,6 +46,17 @@ import {
   type BoardWire,
   type Placed,
 } from "./wiring.js";
+
+/**
+ * One generated line, in the language the session is being served in.
+ *
+ * The sibling of `ros.ts`'s helper and duplicated on purpose: importing it from
+ * there would tie the sketch to the ROS 2 generator for a two-line function, and
+ * a shared module for it would be a file whose only reason to exist is this.
+ */
+function pick(language: GeneratedLanguage, sr: string, en: string): string {
+  return language === "en" ? en : sr;
+}
 
 /** Why a circuit produced no sketch. Never a failure — see {@link generateSketch}. */
 export type SketchRefusal =
@@ -93,6 +105,7 @@ export type Sketch =
 export function generateSketch(
   circuit: Circuit,
   resolve: (componentId: string) => ComponentDef | undefined,
+  language: GeneratedLanguage = "sr",
 ): Sketch {
   const chosen = soleBoard(circuit, resolve);
   if (chosen.kind === "refused") return { kind: "refused", reason: chosen.reason };
@@ -114,7 +127,7 @@ export function generateSketch(
   return {
     kind: "sketch",
     filename: `${slugify(circuit.name, { maxLength: 60 }) || "kolo"}.ino`,
-    source: render(circuit, board, wired, libraries),
+    source: render(circuit, board, wired, libraries, language),
     connections: wired.map((entry) => ({
       boardPin: entry.boardPin.id,
       part: entry.partName,
@@ -303,6 +316,7 @@ function render(
   board: Placed,
   wired: readonly WiredPin[],
   libraries: readonly string[],
+  language: GeneratedLanguage,
 ): string {
   const buses = busesUsed(wired);
   const baud =
@@ -314,18 +328,48 @@ function render(
   lines.push("/*");
   lines.push(` * ${commentSafe(circuit.name)} — ${commentSafe(board.component.name)}`);
   lines.push(" *");
-  lines.push(" * Ovaj fajl opisuje VEZE, ne program. Pinovi, njihovi smerovi i");
-  lines.push(" * magistrale izvedeni su iz šeme; šta uređaj radi je na tebi.");
-  lines.push(" * Petlja ispod samo očitava ulaze, da se na serijskom monitoru vidi");
-  lines.push(" * da li je sve zaista povezano onako kako šema kaže.");
+  lines.push(
+    pick(
+      language,
+      " * Ovaj fajl opisuje VEZE, ne program. Pinovi, njihovi smerovi i",
+      " * This file describes the WIRING, not the program. The pins, their directions and",
+    ),
+  );
+  lines.push(
+    pick(
+      language,
+      " * magistrale izvedeni su iz šeme; šta uređaj radi je na tebi.",
+      " * buses are derived from the schematic; what the device does is up to you.",
+    ),
+  );
+  lines.push(
+    pick(
+      language,
+      " * Petlja ispod samo očitava ulaze, da se na serijskom monitoru vidi",
+      " * The loop below only reads the inputs, so that the serial monitor shows",
+    ),
+  );
+  lines.push(
+    pick(
+      language,
+      " * da li je sve zaista povezano onako kako šema kaže.",
+      " * whether everything really is connected the way the schematic says.",
+    ),
+  );
   if (libraries.length > 0) {
     lines.push(" *");
-    lines.push(" * Biblioteke (Arduino IDE → Sketch → Include Library → Manage Libraries):");
+    lines.push(
+      pick(
+        language,
+        " * Biblioteke (Arduino IDE → Sketch → Include Library → Manage Libraries):",
+        " * Libraries (Arduino IDE → Sketch → Include Library → Manage Libraries):",
+      ),
+    );
     for (const library of libraries) lines.push(` *   ${commentSafe(library)}`);
   }
   if (wired.length > 0) {
     lines.push(" *");
-    lines.push(" * Veze:");
+    lines.push(pick(language, " * Veze:", " * Connections:"));
     for (const entry of wired) {
       const target = `${commentSafe(entry.partName)} · ${commentSafe(entry.partPin.label)}`;
       lines.push(` *   ${commentSafe(entry.boardPin.label)} → ${target}`);
@@ -367,7 +411,13 @@ function render(
           .map((entry) => commentSafe(entry.partName)),
       ),
     ];
-    lines.push(`  // Pažnja: ${sharing.join(", ")} deli hardverski UART sa serijskim monitorom.`);
+    lines.push(
+      pick(
+        language,
+        `  // Pažnja: ${sharing.join(", ")} deli hardverski UART sa serijskim monitorom.`,
+        `  // Warning: ${sharing.join(", ")} shares the hardware UART with the serial monitor.`,
+      ),
+    );
   }
   lines.push(`  Serial.begin(${baud});`);
   if (buses.i2c) lines.push("  Wire.begin();");
@@ -383,7 +433,13 @@ function render(
   const readable = named.filter(isRead);
   lines.push("void loop() {");
   if (readable.length === 0) {
-    lines.push("  // Nijedan pin se ovde ne očitava: ili su izlazi, ili ih vodi biblioteka.");
+    lines.push(
+      pick(
+        language,
+        "  // Nijedan pin se ovde ne očitava: ili su izlazi, ili ih vodi biblioteka.",
+        "  // No pin is read here: they are either outputs, or a library owns them.",
+      ),
+    );
   }
   for (const entry of readable) {
     lines.push(`  Serial.print("${serialLabel(entry)}: ");`);

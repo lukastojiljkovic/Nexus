@@ -27,10 +27,13 @@ export const PALETTE_KINDS: readonly ComponentKind[] = COMPONENT_KINDS;
 /**
  * The words one component can be found by.
  *
- * Its name and its Serbian summary, because that is what somebody types
- * („vlaga", „ultrazvuk"); its id, because the slugs are what a person who has
- * read the generated sketch will remember; its protocols, because „i2c" is a
- * real way to ask this list a question; and its library.
+ * Its name and its summary in BOTH languages, because that is what somebody
+ * types („vlaga", „ultrazvuk", "humidity", "ultrasonic"), and a field that
+ * understood only the language the UI happens to be in would refuse the other
+ * half of the people who know exactly which part they want. Its id, because the
+ * slugs are what a person who has read the generated sketch will remember; its
+ * protocols, because „i2c" is a real way to ask this list a question; and its
+ * library.
  *
  * **Not the pin labels.** Nearly every part has a GND and a VCC, so folding
  * them in would make those two queries return the whole catalogue — a search
@@ -41,6 +44,8 @@ function searchableText(component: ComponentDef): string {
     [
       component.name,
       component.summary,
+      component.nameEn ?? "",
+      component.summaryEn ?? "",
       component.id,
       component.library ?? "",
       ...component.buses.map((bus) => bus.kind),
@@ -106,13 +111,20 @@ export function groupComponentsByKind(components: readonly ComponentDef[]): Comp
  * copy. The order is the one `CircuitPart.label` documents: an empty label
  * falls back to the part's, which is what somebody who never renamed anything
  * expects to read.
+ *
+ * **The name arrives already resolved.** It is the caller's job to pass it
+ * through `elecLocale.componentName`, because which language to print is a
+ * question about the interface and this module deliberately never reads the
+ * copy table (see the header). Taking the `ComponentDef` here instead would
+ * make the fallback Serbian in an English session, which is the exact defect
+ * this signature exists to prevent.
  */
 export function partDisplayName(
   label: string,
-  component: ComponentDef | undefined,
+  fallbackName: string | undefined,
   unknownName: string,
 ): string {
   const own = label.trim();
   if (own.length > 0) return own;
-  return component?.name ?? unknownName;
+  return fallbackName ?? unknownName;
 }

@@ -644,3 +644,101 @@ describe("generateRosPackage — the machine, when there is one", () => {
     expect(readme).not.toContain("check_urdf");
   });
 });
+
+/** The package again, generated in English — the same circuit, other words. */
+function englishPackageOf(c: Circuit): Extract<RosPackage, { kind: "package" }> {
+  const result = generateRosPackage(c, resolve, "en");
+  if (result.kind !== "package") throw new Error(`refused: ${result.reason}`);
+  return result;
+}
+
+function englishFileOf(c: Circuit, path: string): string {
+  const found = englishPackageOf(c).files.find((file) => file.path === path);
+  if (found === undefined) throw new Error(`no such file: ${path}`);
+  return found.contents;
+}
+
+/**
+ * The language the generator writes its OWN prose in (2026-10-04).
+ *
+ * The structure is what the tests above are about; this is about the words in
+ * it. A session that chose English must not hand the user a Serbian README, and
+ * the Serbian path — the default, and what every caller before the parameter
+ * existed gets — must stay byte-identical.
+ */
+describe("generateRosPackage — the language it is written in", () => {
+  const wired = (): Circuit =>
+    circuit(
+      [part("p1", "raspberry-pi-4b"), part("p2", "button"), part("p3", "relay")],
+      [w(["p1", "GPIO23"], ["p2", "OUT"]), w(["p1", "GPIO17"], ["p3", "IN"])],
+    );
+
+  it("writes the node's prose in English when asked for English", () => {
+    const c = wired();
+    const node = englishFileOf(c, `${englishPackageOf(c).name}/wiring.py`);
+    expect(node).toContain("The node describes the WIRING, not the behaviour.");
+    expect(node).toContain("# How many times a second the inputs are read.");
+    expect(node).toContain("# The queue depth, the same for every topic.");
+    expect(node).not.toContain("Čvor opisuje VEZE");
+  });
+
+  it("writes the README in English, prose and both of its tables", () => {
+    const readme = englishFileOf(wired(), "README.md");
+    expect(readme).toContain("## Topics");
+    expect(readme).toContain("| Topic | Message | Role | Pin | Component |");
+    expect(readme).toContain("input — the node publishes");
+    expect(readme).toContain("output — the node subscribes");
+    expect(readme).toContain("## Running");
+    expect(readme).not.toContain("## Teme");
+  });
+
+  it("writes the manifest's two notes in English", () => {
+    const manifest = englishFileOf(wired(), "package.xml");
+    expect(manifest).toContain("The name and address are here so the package is valid");
+    expect(manifest).toContain("Nexus does not choose a licence for you");
+    expect(manifest).not.toContain("Nexus ne bira licencu umesto tebe");
+  });
+
+  it("translates a skipped wire's reason", () => {
+    const analog = circuit(
+      [part("p1", "raspberry-pi-4b"), part("p2", "lm35")],
+      [w(["p1", "GPIO23"], ["p2", "OUT"])],
+    );
+    const readme = englishFileOf(analog, "README.md");
+    expect(readme).toContain("## What was not derived");
+    expect(readme).toContain("an analogue signal — gpiozero only reads high and low");
+    expect(readme).not.toContain("## Šta nije izvedeno");
+  });
+
+  it("translates the machine's section, sensors and refusal alike", () => {
+    const machine = onWheels(
+      circuit(
+        [part("p1", "raspberry-pi-4b"), part("p2", "hc-sr04", "Prednji", "front")],
+        [w(["p1", "GPIO23"], ["p2", "ECHO"])],
+      ),
+    );
+    const readme = englishFileOf(machine, "README.md");
+    expect(readme).toContain("## The machine — `urdf/merenje_razdaljine.urdf`");
+    expect(readme).toContain("| Sensor | Mount | Topic in the simulation | Message |");
+    expect(readme).toContain("**These topics are not the node's topics above");
+    expect(readme).toContain("the physics knows");
+    expect(readme).not.toContain("Mašina");
+  });
+
+  it("leaves the default Serbian bytes exactly as they were", () => {
+    const c = wired();
+    const node = nodeOf(c);
+    expect(node).toContain("Čvor opisuje VEZE, ne ponašanje.");
+    expect(node).toContain("# Koliko puta u sekundi se ulazi očitavaju.");
+
+    const readme = fileOf(c, "README.md");
+    expect(readme).toContain("## Teme");
+    expect(readme).toContain("| Tema | Poruka | Uloga | Pin | Komponenta |");
+    expect(readme).toContain("ulaz — čvor objavljuje");
+    expect(readme).not.toContain("## Topics");
+
+    // The parameter is optional and defaults to the Serbian path, so a caller
+    // that never learned about it gets the same bytes it always did.
+    expect(generateRosPackage(c, resolve)).toEqual(generateRosPackage(c, resolve, "sr"));
+  });
+});

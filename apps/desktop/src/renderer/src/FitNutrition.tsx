@@ -34,6 +34,8 @@ import type {
   FoodSource,
 } from "../../shared/ipc.js";
 import { localTodayKey, shiftDayKey } from "./examDates.js";
+import { foodOptionName, foodOptionNotes, servingLabel } from "./fitnessLocale.js";
+import { dateTimeFormat } from "./intl.js";
 import {
   canStepForward,
   formatGrams,
@@ -203,7 +205,7 @@ function formatDayLong(day: string): string {
   const date = new Date(`${day}T00:00:00Z`);
   return Number.isNaN(date.getTime())
     ? day
-    : new Intl.DateTimeFormat("sr-Latn", {
+    : dateTimeFormat({
         weekday: "long",
         day: "numeric",
         month: "long",
@@ -774,7 +776,7 @@ export function FitNutrition({ profileId }: FitNutritionProps) {
                   }
                 >
                   <span className="fit__result-body">
-                    <span className="fit__result-name">{option.name}</span>
+                    <span className="fit__result-name">{foodOptionName(option)}</span>
                     <span className="fit__chips">
                       <Chip>{s.category[option.category]}</Chip>
                       <Chip variant="data">
@@ -793,7 +795,7 @@ export function FitNutrition({ profileId }: FitNutritionProps) {
         ) : (
           <div className="fit__chosen">
             <div className="fit__chosen-head">
-              <span className="fit__result-name">{chosen.name}</span>
+              <span className="fit__result-name">{foodOptionName(chosen)}</span>
               {/* „Nazad na listu", not „Otkaži": unchoosing a food and closing
                   the picker are two different acts, and the header above already
                   owns the second one. */}
@@ -826,7 +828,7 @@ export function FitNutrition({ profileId }: FitNutritionProps) {
                       className="fit__serving"
                       onClick={() => setAmountDraft(gramsInputValue(serving.grams))}
                     >
-                      {`${serving.label} · ${formatGrams(serving.grams)} ${s.totals.unitGram}`}
+                      {`${servingLabel(serving)} · ${formatGrams(serving.grams)} ${s.totals.unitGram}`}
                     </Button>
                   ))}
                 </div>
@@ -848,7 +850,7 @@ export function FitNutrition({ profileId }: FitNutritionProps) {
               </div>
             )}
 
-            {renderSource(chosen.source, chosen.notes)}
+            {renderSource(chosen.source, foodOptionNotes(chosen))}
 
             {pickerError !== null && (
               <p className="fit__error" role="alert">

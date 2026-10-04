@@ -23,6 +23,18 @@ import { generateSketch, type Sketch, type SketchRefusal } from "./sketch.js";
 import { soleBoard } from "./wiring.js";
 
 /**
+ * Which language the generated artefact is written in.
+ *
+ * It lives here, on the front door, because it is the one thing both generators
+ * share: the prose inside a sketch and the prose inside a ROS 2 package are the
+ * same sentences about the same circuit, and the caller that chooses the
+ * artefact is the caller that knows the session's language. Serbian is the
+ * default, so a caller that does not know — a script, a test, the runner — gets
+ * exactly the bytes it got before this parameter existed.
+ */
+export type GeneratedLanguage = "sr" | "en";
+
+/**
  * Whatever E4 produced. Discriminated on `kind`, which is `"sketch"`,
  * `"package"` or `"refused"` — so a screen that forgets one is a type error
  * rather than a blank panel.
@@ -40,15 +52,16 @@ export type CodeRefusal = SketchRefusal | RosRefusal;
 export function generateCode(
   circuit: Circuit,
   resolve: (componentId: string) => ComponentDef | undefined,
+  language: GeneratedLanguage = "sr",
 ): GeneratedCode {
   const chosen = soleBoard(circuit, resolve);
   if (chosen.kind === "refused") return { kind: "refused", reason: chosen.reason };
 
   switch (chosen.board.component.programming) {
     case "arduino":
-      return generateSketch(circuit, resolve);
+      return generateSketch(circuit, resolve, language);
     case "linux":
-      return generateRosPackage(circuit, resolve);
+      return generateRosPackage(circuit, resolve, language);
     // A board that names no toolchain. The catalogue gate rejects one of those,
     // so in a shipped build this is a component the user wrote themselves —
     // which is exactly the case where guessing would be worst.

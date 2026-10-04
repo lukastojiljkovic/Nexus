@@ -502,7 +502,7 @@ import {
   type SecurityNotificationDeps,
 } from "./notifications.js";
 import { filterSearchHitsByModules } from "./searchGate.js";
-import { setMainLocale } from "./locale.js";
+import { mainLocale, setMainLocale } from "./locale.js";
 import { asCanvasRefs } from "./canvasRefs.js";
 import { focusPhaseEndCopy, restEndCopy } from "./notificationStrings.js";
 import type { SecurityNotice } from "./notificationStrings.js";
@@ -4021,6 +4021,18 @@ function asFitSetCount(value: unknown, field: string, max: number): number | nul
  * exercise in THIS profile — so a soft-deleted exercise cannot be logged afresh,
  * while every set already logged with it stays exactly as it was.
  */
+/**
+ * A catalogue or user exercise's label in the language main is serving.
+ *
+ * A workout set and a routine item SNAPSHOT the name they were logged under, so
+ * this is written at the moment of the write, in the language `mainLocale()`
+ * holds — the same source the dialogs and notifications read. A user's own
+ * exercise may carry no English name, in which case its own name stands.
+ */
+function localizedExerciseName(name: string, nameEn: string | undefined): string {
+  return mainLocale() === "en" && nameEn !== undefined && nameEn.trim().length > 0 ? nameEn : name;
+}
+
 function resolveLoggedExercise(
   profileId: string,
   reference: unknown,
@@ -4041,7 +4053,7 @@ function resolveLoggedExercise(
     }
     return {
       exerciseRef: reference,
-      label: entry.name,
+      label: localizedExerciseName(entry.name, entry.nameEn),
       metric: entry.metric,
       primaryMuscles: [...entry.primaryMuscles],
     };
@@ -4049,7 +4061,7 @@ function resolveLoggedExercise(
   const own = fitExerciseStore(profileId).get(parsed.id);
   return {
     exerciseRef: reference,
-    label: own.name,
+    label: localizedExerciseName(own.name, own.nameEn),
     metric: own.metric,
     primaryMuscles: own.primaryMuscles,
   };
@@ -4083,13 +4095,17 @@ function fitExerciseLookup(
     if (parsed === null) return null;
     if (parsed.kind === "catalogue") {
       const entry = catalogueExercise(parsed.id);
-      return entry === undefined ? null : { label: entry.name, metric: entry.metric };
+      return entry === undefined
+        ? null
+        : { label: localizedExerciseName(entry.name, entry.nameEn), metric: entry.metric };
     }
     // Read on first use rather than eagerly: a profile with no routines, or one
     // whose routines are all catalogue movements, never touches the table.
     own ??= new Map(fitExerciseStore(profileId).list().map((entry) => [entry.id, entry]));
     const entry = own.get(parsed.id);
-    return entry === undefined ? null : { label: entry.name, metric: entry.metric };
+    return entry === undefined
+      ? null
+      : { label: localizedExerciseName(entry.name, entry.nameEn), metric: entry.metric };
   };
 }
 
@@ -4493,7 +4509,12 @@ function resolveLoggedFood(
     if (food === undefined) {
       throw new Error(`Invalid IPC payload: "foodRef" names no food this build ships.`);
     }
-    return { foodRef: reference, label: food.name, per100g: food.per100g };
+    // The snapshot label is what a diary row reads for the rest of its life, so
+    // it is written in the language main is serving — the same `mainLocale()`
+    // the dialogs and notifications follow. The user-food path below has no
+    // English text to choose from.
+    const label = mainLocale() === "en" ? (food.nameEn ?? food.name) : food.name;
+    return { foodRef: reference, label, per100g: food.per100g };
   }
   const food = fitFoodStore(profileId).get(parsed.id);
   return { foodRef: reference, label: food.name, per100g: food.per100g };
@@ -10155,12 +10176,13 @@ function registerIpc(): void {
     const limit = Math.min(asPositiveInteger(body.limit, "limit"), MAX_FIT_FOOD_RESULTS);
 
     type Candidate =
-      | { id: string; name: string; catalogue: FoodEntry }
-      | { id: string; name: string; user: FitFood };
+      | { id: string; name: string; nameEn?: string; catalogue: FoodEntry }
+      | { id: string; name: string; nameEn?: string; user: FitFood };
     const pool: Candidate[] = [
       ...FOOD_CATALOGUE.map((food) => ({
         id: foodRefText({ kind: "catalogue", id: food.id }),
         name: food.name,
+        nameEn: food.nameEn,
         catalogue: food,
       })),
       ...fitFoodStore(profileId)
@@ -10945,9 +10967,11 @@ function registerIpc(): void {
 
   // ADR-085 E4: the generated code onto disk. The payload is an id and nothing
   // else — main reads the circuit from its own store and generates the text
-  // here, so the bytes written are the circuit as stored rather than a string
-  // the renderer composed. The path comes only from the native dialog (SEC-EL);
-  // `handleIcsExport` in `main/imex.ts` is the shape this follows.
+  // here, and in the language main is serving (`mainLocale()`), so the bytes
+  // written are the circuit as stored rather than a string the renderer
+  // composed, and an English session saves English files. The path comes only
+  // from the native dialog (SEC-EL); `handleIcsExport` in `main/imex.ts` is the
+  // shape this follows.
   //
   // **Which dialog the user sees is derived, never asked for.** A sketch is one
   // file and a ROS 2 package is a directory of eight, so `generateCode` decides
@@ -10966,7 +10990,7 @@ function registerIpc(): void {
     const id = asId(body.id, "id");
 
     const circuit = toCircuitDocument(electronicsStore(profileId).read(id));
-    const code = generateCode(circuit, catalogueComponent);
+    const code = generateCode(circuit, catalogueComponent, mainLocale());
     if (code.kind === "refused") {
       return { canceled: false, outcome: "refused", reason: code.reason };
     }

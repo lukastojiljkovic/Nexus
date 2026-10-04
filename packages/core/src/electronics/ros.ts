@@ -32,6 +32,7 @@
 
 import type { Circuit } from "./circuit.js";
 import type { ComponentDef } from "./component.js";
+import type { GeneratedLanguage } from "./code.js";
 import type { Mount } from "./chassis.js";
 import { generateUrdf, xmlText, type RobotDescription, type UrdfSkip } from "./urdf.js";
 import {
@@ -43,6 +44,18 @@ import {
   type BoardWire,
   type Placed,
 } from "./wiring.js";
+
+/**
+ * One generated line, in the language the session is being served in.
+ *
+ * Taken as a parameter rather than read from a global, so an English package and
+ * a Serbian one can be generated in the same process — the tests below rely on
+ * exactly that — and the Serbian default leaves every existing caller's bytes
+ * untouched.
+ */
+function pick(language: GeneratedLanguage, sr: string, en: string): string {
+  return language === "en" ? en : sr;
+}
 
 /** Why a circuit produced no package. Never a failure — see {@link generateRosPackage}. */
 export type RosRefusal =
@@ -129,6 +142,7 @@ export type RosPackage =
 export function generateRosPackage(
   circuit: Circuit,
   resolve: (componentId: string) => ComponentDef | undefined,
+  language: GeneratedLanguage = "sr",
 ): RosPackage {
   const chosen = soleBoard(circuit, resolve);
   if (chosen.kind === "refused") return { kind: "refused", reason: chosen.reason };
@@ -145,7 +159,7 @@ export function generateRosPackage(
   return {
     kind: "package",
     name,
-    files: renderPackage(name, circuit, board, pins, skipped, robot),
+    files: renderPackage(name, circuit, board, pins, skipped, robot, language),
     pins,
     skipped,
     robot,
@@ -317,26 +331,30 @@ function renderPackage(
   pins: readonly RosPin[],
   skipped: readonly RosSkipped[],
   robot: RobotDescription,
+  language: GeneratedLanguage,
 ): RosFile[] {
   return [
-    { path: "package.xml", contents: renderManifest(name, circuit) },
+    { path: "package.xml", contents: renderManifest(name, circuit, language) },
     { path: "setup.py", contents: renderSetup(name, circuit, robot) },
     { path: "setup.cfg", contents: renderSetupCfg(name) },
     // The ament index marker: an empty file whose PATH is the whole content.
     { path: `resource/${name}`, contents: "" },
     { path: `${name}/__init__.py`, contents: "" },
-    { path: `${name}/wiring.py`, contents: renderNode(circuit, board, pins) },
+    { path: `${name}/wiring.py`, contents: renderNode(circuit, board, pins, language) },
     { path: `launch/wiring.launch.py`, contents: renderLaunch(name) },
     // The robot description, when the user has dimensioned a machine — ADR-085
     // E4c. Inside this package rather than beside it, because that is where a
     // ROS 2 developer looks for one and because it makes a single `colcon
     // build` produce the node and the description together.
     ...(robot.kind === "urdf" ? [{ path: `urdf/${name}.urdf`, contents: robot.xml }] : []),
-    { path: "README.md", contents: renderReadme(name, circuit, board, pins, skipped, robot) },
+    {
+      path: "README.md",
+      contents: renderReadme(name, circuit, board, pins, skipped, robot, language),
+    },
   ];
 }
 
-function renderManifest(name: string, circuit: Circuit): string {
+function renderManifest(name: string, circuit: Circuit, language: GeneratedLanguage): string {
   return `<?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
@@ -344,9 +362,9 @@ function renderManifest(name: string, circuit: Circuit): string {
   <version>0.0.0</version>
   <description>${xmlText(oneLine(circuit.name))}</description>
 
-  <!-- Ime i adresa su ovde da bi paket bio ispravan; upiši svoje. -->
+  <!-- ${pick(language, "Ime i adresa su ovde da bi paket bio ispravan; upiši svoje.", "The name and address are here so the package is valid; write your own.")} -->
   <maintainer email="nobody@example.invalid">Nexus</maintainer>
-  <!-- Nexus ne bira licencu umesto tebe: paket je tvoj. -->
+  <!-- ${pick(language, "Nexus ne bira licencu umesto tebe: paket je tvoj.", "Nexus does not choose a licence for you: the package is yours.")} -->
   <license>Proprietary</license>
 
   <exec_depend>rclpy</exec_depend>
@@ -433,7 +451,12 @@ def generate_launch_description() -> LaunchDescription:
  * without editing generated code — which is the difference between a file the
  * user owns and a file they have to regenerate.
  */
-function renderNode(circuit: Circuit, board: Placed, pins: readonly RosPin[]): string {
+function renderNode(
+  circuit: Circuit,
+  board: Placed,
+  pins: readonly RosPin[],
+  language: GeneratedLanguage,
+): string {
   const inputs = pins.filter((pin) => pin.role === "input");
   const lines: string[] = [];
 
@@ -443,13 +466,43 @@ function renderNode(circuit: Circuit, board: Placed, pins: readonly RosPin[]): s
   lines.push("#!/usr/bin/env python3");
   lines.push(`# ${oneLine(circuit.name)} — ${oneLine(board.component.name)}`);
   lines.push('"""');
-  lines.push("Čvor opisuje VEZE, ne ponašanje.");
+  lines.push(
+    pick(
+      language,
+      "Čvor opisuje VEZE, ne ponašanje.",
+      "The node describes the WIRING, not the behaviour.",
+    ),
+  );
   lines.push("");
-  lines.push("Pinovi i njihovi smerovi izvedeni su iz šeme: ulaz objavljuje temu, izlaz je");
-  lines.push("sluša. Šta mašina radi sa tim temama nije izvedeno ni iz čega — to pišeš ti,");
-  lines.push("u svom čvoru, koji ove teme čita i piše.");
+  lines.push(
+    pick(
+      language,
+      "Pinovi i njihovi smerovi izvedeni su iz šeme: ulaz objavljuje temu, izlaz je",
+      "The pins and their directions are derived from the schematic: an input publishes a topic, an output is",
+    ),
+  );
+  lines.push(
+    pick(
+      language,
+      "sluša. Šta mašina radi sa tim temama nije izvedeno ni iz čega — to pišeš ti,",
+      "listening. What the machine does with those topics is derived from nothing — you write it,",
+    ),
+  );
+  lines.push(
+    pick(
+      language,
+      "u svom čvoru, koji ove teme čita i piše.",
+      "in your own node, which reads and writes these topics.",
+    ),
+  );
   lines.push("");
-  lines.push("Brojevi pinova su BCM i stoje kao parametri, pa se menjaju bez diranja koda.");
+  lines.push(
+    pick(
+      language,
+      "Brojevi pinova su BCM i stoje kao parametri, pa se menjaju bez diranja koda.",
+      "The pin numbers are BCM and stand as parameters, so they change without touching the code.",
+    ),
+  );
   lines.push('"""');
   lines.push("");
   lines.push("import rclpy");
@@ -458,11 +511,19 @@ function renderNode(circuit: Circuit, board: Placed, pins: readonly RosPin[]): s
   for (const line of messageImport(pins)) lines.push(line);
   lines.push("");
   if (inputs.length > 0) {
-    lines.push("# Koliko puta u sekundi se ulazi očitavaju.");
+    lines.push(
+      pick(
+        language,
+        "# Koliko puta u sekundi se ulazi očitavaju.",
+        "# How many times a second the inputs are read.",
+      ),
+    );
     lines.push(`POLL_HZ = ${POLL_HZ}.0`);
     lines.push("");
   }
-  lines.push("# Dubina reda, ista za sve teme.");
+  lines.push(
+    pick(language, "# Dubina reda, ista za sve teme.", "# The queue depth, the same for every topic."),
+  );
   lines.push("QUEUE = 10");
   lines.push("");
   lines.push("");
@@ -499,7 +560,13 @@ function renderNode(circuit: Circuit, board: Placed, pins: readonly RosPin[]): s
 
   if (pins.length === 0) {
     lines.push("");
-    lines.push("        # Nijedan pin nije izveden — pogledaj README.md.");
+    lines.push(
+      pick(
+        language,
+        "        # Nijedan pin nije izveden — pogledaj README.md.",
+        "        # No pin was derived — see README.md.",
+      ),
+    );
   }
 
   if (inputs.length > 0) {
@@ -603,11 +670,34 @@ const SKIP_REASON: Record<RosSkip, string> = {
   "no-number": "pin nema broj, pa nema ni BCM oznaku",
 };
 
+/**
+ * The same six reasons in English.
+ *
+ * A parallel record rather than a bilingual value, so the Serbian table above
+ * stays exactly as it was and a reason that gains a row is a compile error in
+ * both places at once.
+ */
+const SKIP_REASON_EN: Record<RosSkip, string> = {
+  bus: "a bus — the controller drives it, not a single pin",
+  library: "the component's driver handles it, not this node",
+  shared: "more than one component is on the line, so it belongs to none",
+  analog: "an analogue signal — gpiozero only reads high and low",
+  "no-direction": "the direction is not visible from the schematic",
+  "no-number": "the pin has no number, so there is no BCM pin to name",
+};
+
 /** Serbian for each role, for the same table. */
 const ROLE_LABEL: Record<RosRole, string> = {
   input: "ulaz — čvor objavljuje",
   output: "izlaz — čvor sluša",
   pwm: "izlaz (PWM) — čvor sluša",
+};
+
+/** The same three roles in English. */
+const ROLE_LABEL_EN: Record<RosRole, string> = {
+  input: "input — the node publishes",
+  output: "output — the node subscribes",
+  pwm: "output (PWM) — the node subscribes",
 };
 
 const MOUNT_LABEL: Record<Mount, string> = {
@@ -618,9 +708,22 @@ const MOUNT_LABEL: Record<Mount, string> = {
   top: "gore",
 };
 
+const MOUNT_LABEL_EN: Record<Mount, string> = {
+  front: "front",
+  rear: "rear",
+  left: "left",
+  right: "right",
+  top: "top",
+};
+
 const URDF_SKIP_REASON: Record<UrdfSkip, string> = {
   "no-equivalent": "fizika nema šta da simulira umesto njega",
   "no-mount": "nije postavljen ni na jednu stranu mašine",
+};
+
+const URDF_SKIP_REASON_EN: Record<UrdfSkip, string> = {
+  "no-equivalent": "the physics has nothing to simulate in its place",
+  "no-mount": "it is not mounted on any side of the machine",
 };
 
 function renderReadme(
@@ -630,28 +733,55 @@ function renderReadme(
   pins: readonly RosPin[],
   skipped: readonly RosSkipped[],
   robot: RobotDescription,
+  language: GeneratedLanguage,
 ): string {
   const lines: string[] = [];
   lines.push(`# ${oneLine(circuit.name)}`);
   lines.push("");
-  lines.push(`ROS 2 paket izveden iz šeme, za ploču **${oneLine(board.component.name)}**.`);
+  lines.push(
+    pick(
+      language,
+      `ROS 2 paket izveden iz šeme, za ploču **${oneLine(board.component.name)}**.`,
+      `A ROS 2 package derived from the schematic, for the **${oneLine(board.component.name)}** board.`,
+    ),
+  );
   lines.push("");
-  lines.push("Paket opisuje **veze**, ne ponašanje. Svaki pin koji je u šemi zaista");
-  lines.push("povezan dobio je uređaj i temu; šta mašina radi sa tim temama pišeš ti, u");
-  lines.push("svom čvoru koji ih čita i piše.");
+  lines.push(
+    pick(
+      language,
+      "Paket opisuje **veze**, ne ponašanje. Svaki pin koji je u šemi zaista",
+      "The package describes the **wiring**, not the behaviour. Every pin that is really",
+    ),
+  );
+  lines.push(
+    pick(
+      language,
+      "povezan dobio je uređaj i temu; šta mašina radi sa tim temama pišeš ti, u",
+      "connected in the schematic got a device and a topic; what the machine does with those topics you write in",
+    ),
+  );
+  lines.push(
+    pick(language, "svom čvoru koji ih čita i piše.", "your own node that reads and writes them."),
+  );
   lines.push("");
 
-  lines.push("## Teme");
+  lines.push(pick(language, "## Teme", "## Topics"));
   lines.push("");
   if (pins.length === 0) {
-    lines.push("Nijedna — pogledaj tabelu ispod.");
+    lines.push(pick(language, "Nijedna — pogledaj tabelu ispod.", "None — see the table below."));
   } else {
-    lines.push("| Tema | Poruka | Uloga | Pin | Komponenta |");
+    lines.push(
+      pick(
+        language,
+        "| Tema | Poruka | Uloga | Pin | Komponenta |",
+        "| Topic | Message | Role | Pin | Component |",
+      ),
+    );
     lines.push("| --- | --- | --- | --- | --- |");
     for (const pin of pins) {
       const target = `${mdCell(pin.part)} · ${mdCell(pin.partPin)}`;
       lines.push(
-        `| \`~/${pin.topic}\` | \`${pin.message}\` | ${ROLE_LABEL[pin.role]}` +
+        `| \`~/${pin.topic}\` | \`${pin.message}\` | ${pick(language, ROLE_LABEL[pin.role], ROLE_LABEL_EN[pin.role])}` +
           ` | BCM ${pin.gpio} | ${target} |`,
       );
     }
@@ -659,55 +789,143 @@ function renderReadme(
   lines.push("");
 
   if (skipped.length > 0) {
-    lines.push("## Šta nije izvedeno");
+    lines.push(pick(language, "## Šta nije izvedeno", "## What was not derived"));
     lines.push("");
-    lines.push("Ove veze postoje u šemi, ali čvor ih ne dira — svaka bi tražila kod koji");
-    lines.push("se iz šeme ne može izvesti.");
+    lines.push(
+      pick(
+        language,
+        "Ove veze postoje u šemi, ali čvor ih ne dira — svaka bi tražila kod koji",
+        "These connections exist in the schematic, but the node does not touch them — each would need code that",
+      ),
+    );
+    lines.push(
+      pick(language, "se iz šeme ne može izvesti.", "cannot be derived from the schematic."),
+    );
     lines.push("");
-    lines.push("| Pin | Komponenta | Razlog |");
+    lines.push(pick(language, "| Pin | Komponenta | Razlog |", "| Pin | Component | Reason |"));
     lines.push("| --- | --- | --- |");
     for (const entry of skipped) {
       const target = `${mdCell(entry.part)} · ${mdCell(entry.partPin)}`;
-      lines.push(`| ${entry.boardPin} | ${target} | ${SKIP_REASON[entry.reason]} |`);
+      lines.push(
+        `| ${entry.boardPin} | ${target} | ${pick(language, SKIP_REASON[entry.reason], SKIP_REASON_EN[entry.reason])} |`,
+      );
     }
     lines.push("");
   }
 
   if (robot.kind === "urdf") {
-    lines.push("## Mašina — `urdf/" + name + ".urdf`");
+    lines.push(
+      pick(language, "## Mašina — `urdf/", "## The machine — `urdf/") + name + ".urdf`",
+    );
     lines.push("");
-    lines.push("Opis mašine izveden iz dimenzija koje uneseš u Nexusu. Svaka mera dole je");
-    lines.push("tvoja; nijedna nije pretpostavljena. Masa kastera je jedini izuzetak —");
-    lines.push("uzima masu točka, jer diferencijalni pogon bez treće tačke oslonca ne");
-    lines.push("stoji, a ta masa se ne pita posebno.");
+    lines.push(
+      pick(
+        language,
+        "Opis mašine izveden iz dimenzija koje uneseš u Nexusu. Svaka mera dole je",
+        "The machine's description, derived from the dimensions you enter in Nexus. Every figure below is",
+      ),
+    );
+    lines.push(
+      pick(
+        language,
+        "tvoja; nijedna nije pretpostavljena. Masa kastera je jedini izuzetak —",
+        "yours; none is assumed. The caster's mass is the only exception —",
+      ),
+    );
+    lines.push(
+      pick(
+        language,
+        "uzima masu točka, jer diferencijalni pogon bez treće tačke oslonca ne",
+        "it takes the wheel's mass, because a differential drive without a third point of support does not",
+      ),
+    );
+    lines.push(
+      pick(
+        language,
+        "stoji, a ta masa se ne pita posebno.",
+        "stand, and that mass is not asked for separately.",
+      ),
+    );
     lines.push("");
     if (robot.sensors.length > 0) {
-      lines.push("| Senzor | Mesto | Tema u simulaciji | Poruka |");
+      lines.push(
+        pick(
+          language,
+          "| Senzor | Mesto | Tema u simulaciji | Poruka |",
+          "| Sensor | Mount | Topic in the simulation | Message |",
+        ),
+      );
       lines.push("| --- | --- | --- | --- |");
       for (const sensor of robot.sensors) {
         lines.push(
-          `| ${mdCell(sensor.part)} | ${MOUNT_LABEL[sensor.mount]}` +
+          `| ${mdCell(sensor.part)} | ${pick(language, MOUNT_LABEL[sensor.mount], MOUNT_LABEL_EN[sensor.mount])}` +
             ` | \`${sensor.topic}\` | \`${sensor.message}\` |`,
         );
       }
       lines.push("");
-      lines.push("**Ove teme nisu teme čvora iznad, i to je namerno.** Čvor objavljuje ono");
-      lines.push("što GPIO pin daje — `Bool` po pinu, jer to je ono što gpiozero pročita sa");
-      lines.push("ECHO linije. Simulacija objavljuje `sensor_msgs/Range`, jer fizika zna");
-      lines.push("rastojanje direktno. To su različite veličine i spajanje bi bilo laž.");
+      lines.push(
+        pick(
+          language,
+          "**Ove teme nisu teme čvora iznad, i to je namerno.** Čvor objavljuje ono",
+          "**These topics are not the node's topics above, and that is deliberate.** The node publishes what",
+        ),
+      );
+      lines.push(
+        pick(
+          language,
+          "što GPIO pin daje — `Bool` po pinu, jer to je ono što gpiozero pročita sa",
+          "the GPIO pin gives — a `Bool` per pin, because that is what gpiozero reads from the",
+        ),
+      );
+      lines.push(
+        pick(
+          language,
+          "ECHO linije. Simulacija objavljuje `sensor_msgs/Range`, jer fizika zna",
+          "ECHO line. The simulation publishes `sensor_msgs/Range`, because the physics knows",
+        ),
+      );
+      lines.push(
+        pick(
+          language,
+          "rastojanje direktno. To su različite veličine i spajanje bi bilo laž.",
+          "the distance directly. They are different quantities and joining them would be a lie.",
+        ),
+      );
       lines.push("");
     }
     if (robot.skipped.length > 0) {
-      lines.push("Senzori koji nisu u opisu:");
+      lines.push(
+        pick(language, "Senzori koji nisu u opisu:", "Sensors that are not in the description:"),
+      );
       lines.push("");
       for (const entry of robot.skipped) {
-        lines.push(`- ${mdCell(entry.part)} — ${URDF_SKIP_REASON[entry.reason]}`);
+        lines.push(
+          `- ${mdCell(entry.part)} — ${pick(language, URDF_SKIP_REASON[entry.reason], URDF_SKIP_REASON_EN[entry.reason])}`,
+        );
       }
       lines.push("");
     }
-    lines.push("`<sensor>` je tu, `<plugin>` namerno nije: koji plugin spaja senzor na ROS");
-    lines.push("temu zavisi od tvog Gazeba (`gazebo_ros` za Classic, `ros_gz_bridge` za");
-    lines.push("novi), a pogrešan se ne učitava uopšte. Provera opisa:");
+    lines.push(
+      pick(
+        language,
+        "`<sensor>` je tu, `<plugin>` namerno nije: koji plugin spaja senzor na ROS",
+        "`<sensor>` is there, `<plugin>` deliberately is not: which plugin joins a sensor to a ROS",
+      ),
+    );
+    lines.push(
+      pick(
+        language,
+        "temu zavisi od tvog Gazeba (`gazebo_ros` za Classic, `ros_gz_bridge` za",
+        "topic depends on your Gazebo (`gazebo_ros` for Classic, `ros_gz_bridge` for",
+      ),
+    );
+    lines.push(
+      pick(
+        language,
+        "novi), a pogrešan se ne učitava uopšte. Provera opisa:",
+        "the new one), and a wrong one does not load at all. Checking the description:",
+      ),
+    );
     lines.push("");
     lines.push("```sh");
     lines.push(`check_urdf install/${name}/share/${name}/urdf/${name}.urdf`);
@@ -715,10 +933,16 @@ function renderReadme(
     lines.push("");
   }
 
-  lines.push("## Pokretanje");
+  lines.push(pick(language, "## Pokretanje", "## Running"));
   lines.push("");
   lines.push("```sh");
-  lines.push("# gpiozero je već na Raspberry Pi OS-u; ako nije:");
+  lines.push(
+    pick(
+      language,
+      "# gpiozero je već na Raspberry Pi OS-u; ako nije:",
+      "# gpiozero is already on Raspberry Pi OS; if it is not:",
+    ),
+  );
   lines.push("sudo apt install python3-gpiozero");
   lines.push("");
   lines.push(`colcon build --packages-select ${name}`);
@@ -726,7 +950,13 @@ function renderReadme(
   lines.push(`ros2 launch ${name} wiring.launch.py`);
   lines.push("```");
   lines.push("");
-  lines.push("Brojevi pinova su parametri, pa se menjaju bez diranja koda:");
+  lines.push(
+    pick(
+      language,
+      "Brojevi pinova su parametri, pa se menjaju bez diranja koda:",
+      "The pin numbers are parameters, so they change without touching the code:",
+    ),
+  );
   lines.push("");
   lines.push("```sh");
   const example = pins[0];
@@ -738,10 +968,22 @@ function renderReadme(
   lines.push("```");
   lines.push("");
 
-  lines.push("## Pre nego što ga podeliš");
+  lines.push(pick(language, "## Pre nego što ga podeliš", "## Before you share it"));
   lines.push("");
-  lines.push("Dva polja u `package.xml` i `setup.py` su namerno ostavljena da ih popuniš:");
-  lines.push("`maintainer` (ime i adresa) i `license`. Nexus ne bira licencu umesto tebe.");
+  lines.push(
+    pick(
+      language,
+      "Dva polja u `package.xml` i `setup.py` su namerno ostavljena da ih popuniš:",
+      "Two fields in `package.xml` and `setup.py` are deliberately left for you to fill in:",
+    ),
+  );
+  lines.push(
+    pick(
+      language,
+      "`maintainer` (ime i adresa) i `license`. Nexus ne bira licencu umesto tebe.",
+      "`maintainer` (name and address) and `license`. Nexus does not choose a licence for you.",
+    ),
+  );
   lines.push("");
 
   return lines.join("\n");

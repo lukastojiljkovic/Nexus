@@ -56,6 +56,20 @@ describe("matchesComponentQuery", () => {
     expect(matchesComponentQuery(part, "newping")).toBe(true);
   });
 
+  it("finds a part by its English copy as well as its Serbian one", () => {
+    // The search runs whichever language the UI is in, and a person is as
+    // likely to type the English word for a part as the Serbian one — so the
+    // field must understand both rather than the language currently on screen.
+    const part = component({
+      name: "Senzor vlažnosti",
+      summary: "Meri vlagu",
+      nameEn: "Humidity sensor",
+      summaryEn: "Measures humidity",
+    });
+    expect(matchesComponentQuery(part, "humidity")).toBe(true);
+    expect(matchesComponentQuery(part, "vlaznosti")).toBe(true);
+  });
+
   /**
    * The rule that keeps the search worth having. Nearly every part in the
    * catalogue has a GND and a VCC, so folding the pin labels into the
@@ -125,13 +139,13 @@ describe("partDisplayName", () => {
   const uno = catalogueComponent("arduino-uno");
 
   it("prefers the user's own label", () => {
-    expect(partDisplayName("levi motor", uno, "Nepoznata")).toBe("levi motor");
+    expect(partDisplayName("levi motor", uno?.name, "Nepoznata")).toBe("levi motor");
   });
 
   it("falls back to the component's name when the label is blank", () => {
     expect(uno).toBeDefined();
-    expect(partDisplayName("", uno, "Nepoznata")).toBe(uno?.name);
-    expect(partDisplayName("   ", uno, "Nepoznata")).toBe(uno?.name);
+    expect(partDisplayName("", uno?.name, "Nepoznata")).toBe(uno?.name);
+    expect(partDisplayName("   ", uno?.name, "Nepoznata")).toBe(uno?.name);
   });
 
   it("says the caller's placeholder for a component this build does not ship", () => {

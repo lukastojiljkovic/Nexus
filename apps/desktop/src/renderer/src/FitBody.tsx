@@ -8,6 +8,7 @@ import { localTodayKey } from "./examDates.js";
 import { FitBodyFigure, sideOf, type MuscleShade } from "./FitBodyFigure.js";
 import { formatFitDay } from "./fitDay.js";
 import { progressSets } from "./fitWorkout.js";
+import { exerciseOptionName } from "./fitnessLocale.js";
 import { strings } from "./strings.js";
 
 /**
@@ -111,6 +112,7 @@ function windowFrom(to: string, days: number): string {
 interface PoolExercise {
   readonly key: string;
   readonly name: string;
+  readonly nameEn: string;
   readonly primaryMuscles: readonly MuscleGroup[];
   readonly secondaryMuscles: readonly MuscleGroup[];
   readonly equipment: string;
@@ -166,6 +168,7 @@ export function FitBody({ profileId }: FitBodyProps) {
     const fromCatalogue = EXERCISE_CATALOGUE.map((entry) => ({
       key: `catalogue:${entry.id}`,
       name: entry.name,
+      nameEn: entry.nameEn,
       primaryMuscles: entry.primaryMuscles,
       secondaryMuscles: entry.secondaryMuscles,
       equipment: v.equipment[entry.equipment],
@@ -177,6 +180,7 @@ export function FitBody({ profileId }: FitBodyProps) {
     const fromProfile = mine.map((entry) => ({
       key: `user:${entry.id}`,
       name: entry.name,
+      nameEn: entry.nameEn,
       primaryMuscles: entry.primaryMuscles,
       secondaryMuscles: entry.secondaryMuscles,
       equipment: v.equipment[entry.equipment],
@@ -230,7 +234,7 @@ export function FitBody({ profileId }: FitBodyProps) {
     exercise === null
       ? `${s.captionLead} ${span} — ${s.captionBands} 1–${String(BAND_LOW - 1)}, ` +
         `${String(BAND_LOW)}–${String(BAND_HIGH - 1)}, ${String(BAND_HIGH)} ${s.captionAndUp}. ${s.captionTail}`
-      : `${s.exerciseCaption} ${exercise.name}.`;
+      : `${s.exerciseCaption} ${exerciseOptionName(exercise)}.`;
 
   /** One muscle's label, read on hover — the count, and when it last happened. */
   const plateTitle = (group: MuscleGroup): string => {
@@ -417,7 +421,7 @@ function ExerciseList({
           className="nx-list-row fit__exercise-row"
           onClick={() => onPick(entry)}
         >
-          <span className="fit__exercise-name">{entry.name}</span>
+          <span className="fit__exercise-name">{exerciseOptionName(entry)}</span>
           {entry.mine && <Chip>{s.mine}</Chip>}
           <span className="fit__exercise-equipment">{entry.equipment}</span>
           <Icon name="chevronRight" size={14} className="fit__exercise-caret" />
@@ -449,7 +453,7 @@ function ExerciseDetail({
   return (
     <>
       <div className="fit__rail-head">
-        <h3 className="fit__rail-title">{exercise.name}</h3>
+        <h3 className="fit__rail-title">{exerciseOptionName(exercise)}</h3>
         <Button size="sm" variant="quiet" onClick={onBack}>
           <Icon name="chevronLeft" size={14} />
           {backLabel}
