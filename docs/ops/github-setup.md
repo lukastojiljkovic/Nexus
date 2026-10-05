@@ -1,7 +1,7 @@
 # GitHub repository settings (web UI)
 
-**Status: the repository is public, and every setting below except the last
-section was applied on 2026-10-05.** They live only in the GitHub
+**Status: the repository is public, and every setting below was applied on 2026-10-05, except the
+CodeQL check, which waits for the first run on `main`, and the last section.** They live only in the GitHub
 web UI and its API. The in-repo half — CI, the security, CodeQL, Scorecard, release and
 Pages workflows, the Dependabot config, the pull-request template and CODEOWNERS
 — is committed under `.github/`. Run this list once before the first release and
