@@ -1,4 +1,5 @@
 import type { DocAttachmentEntry } from "../../shared/ipc.js";
+import { numberFormat } from "./intl.js";
 
 /**
  * „Datoteke"'s pure presentation arithmetic (DOC), kept out of the page so the
@@ -6,21 +7,20 @@ import type { DocAttachmentEntry } from "../../shared/ipc.js";
  * non-image card draws — are testable without a DOM.
  */
 
-/** Locale-aware one-decimal formatter for the KB/MB branches of `formatFileSize` — the attachment panels' own (`NoteEditor.tsx`). */
-const BYTES_FORMATTER = new Intl.NumberFormat("sr-Latn", { maximumFractionDigits: 1 });
-
 /**
  * Human-readable file size: whole bytes under 1 KB, otherwise KB/MB with at
  * most one decimal — no fabricated precision beyond what `Intl.NumberFormat`
  * already rounds to. The recipe the three attachment panels each keep locally,
  * shared here because this page formats a SUM as well as a row and both have to
- * read the same way.
+ * read the same way. The number follows the ACTIVE locale (`intl.ts`), so a file
+ * of 1,5 MB reads „1,5 MB" in Serbian and „1.5 MB" in English.
  */
 export function formatFileSize(sizeBytes: number): string {
   if (sizeBytes < 1024) return `${sizeBytes} B`;
   const kb = sizeBytes / 1024;
-  if (kb < 1024) return `${BYTES_FORMATTER.format(kb)} KB`;
-  return `${BYTES_FORMATTER.format(kb / 1024)} MB`;
+  const oneDecimal = numberFormat({ maximumFractionDigits: 1 });
+  if (kb < 1024) return `${oneDecimal.format(kb)} KB`;
+  return `${oneDecimal.format(kb / 1024)} MB`;
 }
 
 /** How much the rows on screen weigh, together. Derived from exactly what is drawn — never from a count the page did not measure. */

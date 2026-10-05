@@ -63,7 +63,7 @@ export function seedDemoFocus(db: DatabaseHandle, ctx: DemoContext): void {
       ? buildPomodoroRun(rnd, startMs, rnd.int(1, 3), subjectIds, taskIds)
       : buildStudyBlock(rnd, startMs, subjectIds);
 
-    for (const phase of phases) store.create(phase, nowIso);
+    createPhases(store, ctx, phases, nowIso);
   }
 
   seedToday(store, rnd, ctx, subjectIds, taskIds, nowIso);
@@ -97,7 +97,7 @@ function seedToday(
   for (const hour of [...morningHours, ...afternoonHours]) {
     const startMs = demoAt(ctx, 0, hour, rnd.int(0, 45));
     const phases = buildPomodoroRun(rnd, startMs, 1, subjectIds, taskIds);
-    for (const phase of phases) store.create(phase, nowIso);
+    createPhases(store, ctx, phases, nowIso);
   }
 }
 
@@ -124,6 +124,47 @@ const STUDY_LABELS = [
   "Rešavanje zadataka sa vežbi",
   "Priprema za ispit",
 ] as const;
+
+/**
+ * English labels, keyed by the Serbian literal. The arrays above stay exactly
+ * as they were - including the `rnd.of(...)` draw that picks from them - and
+ * the chosen label is translated on the way into the store, so the locale can
+ * never change which draw happens.
+ */
+const EN: Readonly<Record<string, string>> = {
+  "Pisanje seminarskog rada": "Writing a term paper",
+  "Priprema za kolokvijum": "Preparing for a midterm",
+  "Čitanje literature": "Reading the literature",
+  "Rešavanje zadataka": "Working through problems",
+  "Priprema prezentacije": "Preparing a presentation",
+  "Debagovanje projekta": "Debugging the project",
+  "Pregled beležaka": "Reviewing notes",
+  "Analiza algoritma": "Analysing an algorithm",
+  "Vežbanje za tehnički intervju": "Practising for a technical interview",
+  "Rad na ličnom projektu": "Working on a personal project",
+  "Pisanje izveštaja": "Writing a report",
+  "Organizacija materijala": "Organising materials",
+  "Samostalno učenje": "Studying on my own",
+  "Ponavljanje gradiva": "Revising the material",
+  "Rešavanje zadataka sa vežbi": "Solving exercise problems",
+  "Priprema za ispit": "Preparing for an exam",
+};
+
+/** Writes one run's phases, translating each label into the run's language. */
+function createPhases(
+  store: FocusStore,
+  ctx: DemoContext,
+  phases: readonly CreateFocusSessionInput[],
+  nowIso: string,
+): void {
+  for (const phase of phases) {
+    if (ctx.locale === "en" && typeof phase.label === "string") {
+      store.create({ ...phase, label: EN[phase.label] ?? phase.label }, nowIso);
+      continue;
+    }
+    store.create(phase, nowIso);
+  }
+}
 
 /** Who a work phase belongs to, weighted so „none" is still the common case — most Pomodoro blocks are unattached. */
 const ATTACH_KINDS = ["subject", "subject", "task", "none", "none", "none"] as const;

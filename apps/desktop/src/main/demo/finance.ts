@@ -82,6 +82,65 @@ const BOOK_PAYEES = ["Delfi knjižare", "Vulkan izdavaštvo", "Onlajn kurs"] as 
 const GIFT_PAYEES = ["Rođendanski poklon", "Poklon za slavu", "Novogodišnji poklon"] as const;
 const MISC_PAYEES = ["Frizer", "Praonica veša", "Pošta", "Fotokopirnica"] as const;
 
+/**
+ * English account, category, subscription and payee text, keyed by the Serbian
+ * literals above. Shop and brand names (Maxi, Lidl, Zara, Booking.com, …) are
+ * already the names on the sign, so only the descriptive payees move.
+ */
+const EN: Readonly<Record<string, string>> = {
+  "Tekući račun": "Current account",
+  Keš: "Cash",
+  "Štedni račun": "Savings account",
+  "Devizna štednja": "Foreign-currency savings",
+  "Kreditna kartica": "Credit card",
+  Plata: "Salary",
+  Stipendija: "Scholarship",
+  Pokloni: "Gifts",
+  Kirija: "Rent",
+  Namirnice: "Groceries",
+  Prevoz: "Transport",
+  "Kafa i izlasci": "Coffee and going out",
+  Režije: "Utilities",
+  "Telefon i internet": "Phone and internet",
+  Zdravlje: "Health",
+  Odeća: "Clothing",
+  "Knjige i kursevi": "Books and courses",
+  Teretana: "Gym",
+  Putovanja: "Travel",
+  Štednja: "Savings",
+  Ostalo: "Other",
+  "Mesečna karta": "Monthly pass",
+  "Taksi/prevoz": "Taxi or ride-share",
+  "Kafić u kraju": "Local café",
+  "Splav na Savi": "River club on the Sava",
+  Picerija: "Pizzeria",
+  "Kineski restoran": "Chinese restaurant",
+  "Burger mesto": "Burger place",
+  Poslastičarnica: "Pastry shop",
+  Buvljak: "Flea market",
+  "Apoteka Benu": "Benu pharmacy",
+  "Dom zdravlja": "Health centre",
+  "Stomatološka ordinacija": "Dental practice",
+  "Delfi knjižare": "Delfi bookshop",
+  "Vulkan izdavaštvo": "Vulkan publishing",
+  "Onlajn kurs": "Online course",
+  "Rođendanski poklon": "Birthday present",
+  "Poklon za slavu": "Slava present",
+  "Novogodišnji poklon": "New Year present",
+  Frizer: "Hairdresser",
+  "Praonica veša": "Laundry",
+  Pošta: "Post office",
+  Fotokopirnica: "Copy shop",
+  "Autobuska/avio karta": "Bus/plane ticket",
+  "Putni troškovi": "Travel costs",
+  "Poklon od porodice": "Gift from the family",
+};
+
+/** The seeded text for the active locale. */
+function text(ctx: DemoContext, sr: string): string {
+  return ctx.locale === "en" ? (EN[sr] ?? sr) : sr;
+}
+
 /** The two fixed offsets (days before `ctx.today`) where a short trip starts. */
 const TRIP_START_OFFSETS: readonly number[] = [-200, -70];
 /** The three offsets where a gift arrives, in euros, from family abroad. */
@@ -135,23 +194,23 @@ function seedAccounts(db: DatabaseHandle, ctx: DemoContext): DemoFinAccounts {
   const now = iso(ctx.now);
 
   const current = store.create(
-    { name: "Tekući račun", kind: "current", currency: "RSD", openingBalance: rsd(14_500) },
+    { name: text(ctx, "Tekući račun"), kind: "current", currency: "RSD", openingBalance: rsd(14_500) },
     now,
   );
   const cash = store.create(
-    { name: "Keš", kind: "cash", currency: "RSD", openingBalance: rsd(3_000) },
+    { name: text(ctx, "Keš"), kind: "cash", currency: "RSD", openingBalance: rsd(3_000) },
     now,
   );
   const savingsRsd = store.create(
-    { name: "Štedni račun", kind: "savings", currency: "RSD", openingBalance: rsd(38_000) },
+    { name: text(ctx, "Štedni račun"), kind: "savings", currency: "RSD", openingBalance: rsd(38_000) },
     now,
   );
   const savingsEur = store.create(
-    { name: "Devizna štednja", kind: "savings", currency: "EUR", openingBalance: eur(320) },
+    { name: text(ctx, "Devizna štednja"), kind: "savings", currency: "EUR", openingBalance: eur(320) },
     now,
   );
   const card = store.create(
-    { name: "Kreditna kartica", kind: "card", currency: "RSD", openingBalance: 0 },
+    { name: text(ctx, "Kreditna kartica"), kind: "card", currency: "RSD", openingBalance: 0 },
     now,
   );
 
@@ -175,8 +234,10 @@ function seedCategories(db: DatabaseHandle, ctx: DemoContext): DemoFinCategories
   const store = new FinCategoryStore(db, ctx.profileId);
   const now = iso(ctx.now);
 
-  const income = (name: string): string => store.create({ name, kind: "income" }, now).id;
-  const expense = (name: string): string => store.create({ name, kind: "expense" }, now).id;
+  const income = (name: string): string =>
+    store.create({ name: text(ctx, name), kind: "income" }, now).id;
+  const expense = (name: string): string =>
+    store.create({ name: text(ctx, name), kind: "expense" }, now).id;
 
   return {
     plata: income("Plata"),
@@ -283,7 +344,7 @@ function seedRecurring(
     },
   ];
 
-  for (const rule of rules) store.create(rule, now);
+  for (const rule of rules) store.create({ ...rule, name: text(ctx, rule.name) }, now);
   store.generateDue(now, ctx.today);
 }
 
@@ -314,7 +375,10 @@ function seedTransactions(
     amountDinars: number,
     payee: string,
   ): void => {
-    store.create({ accountId, categoryId, date, amount: -rsd(amountDinars), payee }, now);
+    store.create(
+      { accountId, categoryId, date, amount: -rsd(amountDinars), payee: text(ctx, payee) },
+      now,
+    );
   };
   const spendOnCard = (
     categoryId: string,
@@ -366,7 +430,7 @@ function seedTransactions(
           categoryId: categories.pokloniIncome,
           date,
           amount: eur(rnd.int(40, 120)),
-          payee: "Poklon od porodice",
+          payee: text(ctx, "Poklon od porodice"),
         },
         now,
       );

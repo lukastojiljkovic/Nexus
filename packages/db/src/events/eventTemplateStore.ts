@@ -173,8 +173,9 @@ export class EventTemplateStore {
   /**
    * This profile's templates, alphabetical by `name` — SQLite's default binary
    * collation, which does not tailor Serbian Latin script correctly; the
-   * renderer re-sorts with `Intl.Collator(["sr-Latn","sr"])`, the house pattern
-   * `TaskTemplateStore.list` and every other alphabetical list already follow.
+   * renderer re-sorts with `Intl.Collator` in the active interface locale, the
+   * house pattern `TaskTemplateStore.list` and every other alphabetical list
+   * already follow.
    */
   list(): EventTemplate[] {
     const rows = this.selectAll.all(this.profileId) as EventTemplateRow[];

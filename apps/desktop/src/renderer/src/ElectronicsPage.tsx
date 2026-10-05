@@ -32,6 +32,7 @@ import { ElecInspector } from "./ElecInspector.js";
 import { ElecPalette } from "./ElecPalette.js";
 import { ElecRunnerDialog } from "./ElecRunnerDialog.js";
 import { ElecSimDialog } from "./ElecSimDialog.js";
+import { componentName, pinLabel } from "./elecLocale.js";
 import {
   contentBounds,
   dropSpot,
@@ -46,7 +47,7 @@ import { moduleName } from "./moduleName.js";
 import { NotePopover } from "./notePopover.js";
 import { formatNotificationWhen } from "./notificationFormat.js";
 import { neighbourAfterDelete, resolveOpenItem } from "./pickedList.js";
-import { countUnit, strings } from "./strings.js";
+import { activeLocale, countUnit, strings } from "./strings.js";
 
 /**
  * „Elektronika" (ELEC) — the workbench: a circuit, the parts on it and the
@@ -116,6 +117,24 @@ function boundsOf(parts: readonly CircuitPart[]): ElecBounds | null {
 
 export function ElectronicsPage({ profileId, intent, onIntentHandled }: ElectronicsPageProps) {
   const s = strings.electronics;
+  // The active language, and a component resolver that carries it: every
+  // artefact derived from the circuit — the generated code, the rule messages,
+  // the simulation bench's part column, the inspector — reads in the same
+  // language, and core never has to know what that language is.
+  const locale = activeLocale();
+  const resolveLocalized = useMemo(
+    () =>
+      (componentId: string): ComponentDef | undefined => {
+        const component = catalogueComponent(componentId);
+        if (component === undefined) return undefined;
+        return {
+          ...component,
+          name: componentName(component, locale),
+          pins: component.pins.map((pin) => ({ ...pin, label: pinLabel(pin, locale) })),
+        };
+      },
+    [locale],
+  );
 
   const [circuits, setCircuits] = useState<ElecCircuit[] | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -316,9 +335,9 @@ export function ElectronicsPage({ profileId, intent, onIntentHandled }: Electron
    * All four are pure functions of the same rows, and all four used to be
    * called inline in the JSX below — which meant re-deriving the nets, the
    * thirteen rules and the whole artefact on every keystroke in the notes box.
-   * They change when the document changes and at no other time, which is
-   * exactly what `useMemo` says. `resolveComponent` is module-scope and needs
-   * no dependency.
+   * They change when the document OR the interface language changes and at no
+   * other time, which is exactly what `useMemo` says: `resolveLocalized` carries
+   * the language, so it is a dependency beside the document.
    *
    * The bench (ADR-085 E5) joins them on the same terms and for a sharper
    * version of the same reason: the dialog re-renders ten times a second
@@ -326,12 +345,21 @@ export function ElectronicsPage({ profileId, intent, onIntentHandled }: Electron
    * every net in the circuit to produce the list it produced last frame.
    */
   const problems = useMemo(
-    () => (doc === null ? [] : circuitProblems(doc, resolveComponent)),
-    [doc],
+    () => (doc === null ? [] : circuitProblems(doc, resolveLocalized)),
+    [doc, resolveLocalized],
   );
-  const rules = useMemo(() => (doc === null ? [] : circuitRules(doc, resolveComponent)), [doc]);
-  const code = useMemo(() => (doc === null ? null : generateCode(doc, resolveComponent)), [doc]);
-  const bench = useMemo(() => (doc === null ? null : buildSimBench(doc, resolveComponent)), [doc]);
+  const rules = useMemo(
+    () => (doc === null ? [] : circuitRules(doc, resolveLocalized)),
+    [doc, resolveLocalized],
+  );
+  const code = useMemo(
+    () => (doc === null ? null : generateCode(doc, resolveLocalized, locale)),
+    [doc, resolveLocalized, locale],
+  );
+  const bench = useMemo(
+    () => (doc === null ? null : buildSimBench(doc, resolveLocalized)),
+    [doc, resolveLocalized],
+  );
 
   /** Runs one mutation: clears the previous refusal, blocks a second write, reports a failure. */
   async function run(action: () => Promise<void>): Promise<void> {

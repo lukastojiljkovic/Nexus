@@ -7,13 +7,13 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   ACCOUNTS_REGISTRY_FILE_NAME,
   DELETING_DIR_SUFFIX,
-  DEFAULT_ACCOUNT_LABEL,
   MAX_ACCOUNT_LABEL_LENGTH,
   absorbLegacyFlatData,
   accountDir,
   accountExists,
   accountsRoot,
   beginAccountDir,
+  defaultAccountLabel,
   deleteAccount,
   loadRegistry,
   normalizeAccountLabel,
@@ -188,7 +188,7 @@ describe("loadRegistry (reconciliation)", () => {
     const registry = loadRegistry(userData);
     expect(registry.accounts).toHaveLength(1);
     expect(registry.accounts[0]?.id).toBe(id);
-    expect(registry.accounts[0]?.label).toBe(DEFAULT_ACCOUNT_LABEL);
+    expect(registry.accounts[0]?.label).toBe(defaultAccountLabel());
   });
 
   it("ignores an under-construction directory that holds no keychain", () => {
@@ -372,7 +372,7 @@ describe("resumeAccountsMigration", () => {
     const registry = resumeAccountsMigration(userData);
     const id = registry.accounts[0]?.id;
     expect(id).toBeDefined();
-    expect(registry.accounts[0]?.label).toBe(DEFAULT_ACCOUNT_LABEL);
+    expect(registry.accounts[0]?.label).toBe(defaultAccountLabel());
     expect(registry.lastActiveId).toBe(id);
 
     const dir = accountDir(userData, id!);

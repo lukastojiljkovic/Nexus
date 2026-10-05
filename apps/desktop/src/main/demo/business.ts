@@ -48,6 +48,558 @@ import {
   type DemoRandom,
 } from "./context.js";
 
+/**
+ * English text for the whole business scene, keyed by the Serbian literals the
+ * six sections below hand to a store.
+ *
+ * The seed keeps its Serbian key wherever a Serbian string is a KEY — the task
+ * `TAGS` cache, the note folder keys and every event category — so only the
+ * value written to the store is translated; lookup order, the
+ * `demoRandom("business-…")` draw sequence and every id stay identical in both
+ * languages. Client and brand names that are the same on the sign (Delta
+ * d.o.o., Vega studio, Nimbus d.o.o., Sunčani vrt, Nordic Client AB) carry no
+ * entry and fall through unchanged.
+ *
+ * The last ten entries are the note BODIES, keyed by the Serbian body itself:
+ * a note's title is its own first heading, so the title travels with the body
+ * and the one `text` call `seedBusinessNotes` makes reaches both. Every
+ * heading, bullet, blank line and checklist mark is carried over as it stands.
+ */
+const EN: Readonly<Record<string, string>> = {
+  // --- TASK ----------------------------------------------------------------
+  Hitno: "Urgent",
+  "Čeka odgovor": "Waiting for a reply",
+  Poziv: "Call",
+  Dokumentacija: "Paperwork",
+  Ideja: "Idea",
+  Ponoviti: "Repeat",
+  Klijenti: "Clients",
+  "Ponude i ugovori": "Offers and contracts",
+  Administracija: "Admin",
+  Marketing: "Marketing",
+  "Pozvati podršku hostinga": "Call the hosting support",
+  "Proveriti email od advokata": "Check the email from the lawyer",
+  "Ideja: paket usluga za male klijente": "Idea: a service package for small clients",
+  "Poziv sa klijentom: redizajn sajta": "Client call: website redesign",
+  "Poslati predračun za Delta d.o.o.": "Send the quote for Delta d.o.o.",
+  "Onboarding novog klijenta — Nimbus d.o.o.": "Onboarding a new client — Nimbus d.o.o.",
+  "Poslati ugovor na potpis": "Send the contract for signature",
+  "Zakazati uvodni sastanak": "Book the introductory meeting",
+  "Podesiti pristup projektnim alatima": "Set up access to the project tools",
+  "Prezentacija predloga za Sunčani vrt": "Presenting the proposal for Sunčani vrt",
+  "Follow-up sa klijentom posle sastanka": "Follow-up with the client after the meeting",
+  "Priprema ponude — redizajn sajta Delta d.o.o.":
+    "Preparing the offer — website redesign for Delta d.o.o.",
+  "Definisati obim posla": "Define the scope of work",
+  "Izračunati cenu po fazama": "Work out the price per phase",
+  "Poslati na pregled": "Send for review",
+  "Poslati ugovor na potpis — Vega studio": "Send the contract for signature — Vega studio",
+  "Revizija cenovnika usluga": "Revising the service price list",
+  "Obnoviti ugovor sa Nimbus d.o.o.": "Renew the contract with Nimbus d.o.o.",
+  "Arhivirati potpisane ugovore za drugi kvartal":
+    "Archive the signed contracts for the second quarter",
+  Ugovori: "Contracts",
+  Finansije: "Finance",
+  "Kvartalni PDV — priprema": "Quarterly VAT — preparation",
+  "Sravnjenje ulaznih i izlaznih računa pre predaje prijave.":
+    "Reconciling incoming and outgoing invoices before filing the return.",
+  "Obnoviti domen i hosting": "Renew the domain and hosting",
+  "Fakturisati avgust": "Invoice for August",
+  "Uplata doprinosa za samostalnu delatnost": "Paying self-employment contributions",
+  "Slanje dokumentacije knjigovođi": "Sending the paperwork to the accountant",
+  "Objava studije slučaja na LinkedIn-u": "Publishing the case study on LinkedIn",
+  "Ažuriranje portfolija na sajtu": "Updating the portfolio on the website",
+  "Zakazati fotografisanje za sajt": "Book a photo shoot for the website",
+  "Newsletter — avgustovsko izdanje": "Newsletter — August issue",
+
+  // --- CALENDAR ------------------------------------------------------------
+  "Poziv sa klijentom: Delta d.o.o.": "Client call: Delta d.o.o.",
+  "Provera statusa redizajna sajta.": "Checking on the website redesign.",
+  "Sastanak sa knjigovođom": "Meeting with the accountant",
+  "Kancelarija knjigovođe": "The accountant's office",
+  "Sprint pregled — Nimbus d.o.o.": "Sprint review — Nimbus d.o.o.",
+  "Poziv sa klijentom: Vega studio": "Client call: Vega studio",
+  "Pregled ugovora sa advokatom": "Reviewing the contract with the lawyer",
+  "Prezentacija predloga — Sunčani vrt": "Presenting the proposal — Sunčani vrt",
+  "Radni sastanak — redizajn sajta": "Working meeting — website redesign",
+  "Poziv: podrška za postojećeg klijenta": "Call: support for an existing client",
+  "Sastanak sa dizajnerom — frilens saradnja":
+    "Meeting with the designer — freelance collaboration",
+  "Poziv sa potencijalnim klijentom": "Call with a potential client",
+  "Interni pregled finansija": "Internal finance review",
+  "Sprint pregled — interni projekat": "Sprint review — internal project",
+  "Prezentacija za investitora": "Presentation for an investor",
+  "Telefonski poziv — nova ponuda": "Phone call — new offer",
+  "Sastanak sa knjigovođom — zatvaranje kvartala":
+    "Meeting with the accountant — closing the quarter",
+  "Nedeljni sastanak tima": "Weekly team meeting",
+  "Konferencija — DevBiz Beograd": "Conference — DevBiz Belgrade",
+  "Dva dana predavanja o digitalnom marketingu i razvoju poslovanja.":
+    "Two days of talks on digital marketing and business development.",
+  "Radionica za klijente — uvod u digitalni marketing":
+    "Client workshop — an introduction to digital marketing",
+  "Coworking prostor": "Coworking space",
+
+  // --- NOTES ---------------------------------------------------------------
+  Interno: "Internal",
+  klijent: "client",
+  sastanak: "meeting",
+  projekat: "project",
+  ponuda: "offer",
+  onboarding: "onboarding",
+  procedura: "procedure",
+  ideja: "idea",
+  Beleška: "Note",
+
+  // --- FINANCE -------------------------------------------------------------
+  "Poslovni tekući račun": "Business current account",
+  "Devizni račun": "Foreign-currency account",
+  "Fakture klijentima": "Client invoices",
+  "Konverzija deviza": "Currency conversion",
+  "Hosting i domeni": "Hosting and domains",
+  Knjigovodstvo: "Accounting",
+  "Porezi i doprinosi": "Taxes and contributions",
+  "Softverske pretplate": "Software subscriptions",
+  Putovanja: "Travel",
+  Oprema: "Equipment",
+  Ostalo: "Other",
+  "Put — sastanak sa klijentom, Novi Sad": "Trip — client meeting, Novi Sad",
+  "DevBiz Beograd — kotizacija i prevoz": "DevBiz Belgrade — conference fee and travel",
+  "Avionska karta — sastanak u inostranstvu": "Plane ticket — meeting abroad",
+  "Kupovina monitora": "Buying a monitor",
+  "Nova stolica za kancelariju": "A new office chair",
+  "Plaćeno oglašavanje na društvenim mrežama": "Paid advertising on social media",
+  "Vizit karte i flajeri": "Business cards and flyers",
+  "Poštarina i kancelarijski materijal": "Postage and office supplies",
+  "Bankarske provizije": "Bank fees",
+  "Konverzija u dinare": "Conversion into dinars",
+  "Konverzija iz evra": "Conversion from euros",
+
+  // --- PEOPLE --------------------------------------------------------------
+  "Klijent — Delta d.o.o., kontakt osoba za projekte":
+    "Client — Delta d.o.o., contact person for projects",
+  "Klijentkinja — Vega studio, vlasnica agencije": "Client — Vega studio, agency owner",
+  "Klijent — Nimbus d.o.o., product menadžer": "Client — Nimbus d.o.o., product manager",
+  "Klijentkinja — Sunčani vrt, marketing": "Client — Sunčani vrt, marketing",
+  "Frilens saradnik — dizajn": "Freelance collaborator — design",
+  Knjigovotkinja: "Accountant",
+  "Advokat — ugovori i pravna podrška": "Lawyer — contracts and legal support",
+  "Godišnjica prvog ugovora o saradnji": "Anniversary of the first collaboration agreement",
+
+  // --- DOCUMENTS -----------------------------------------------------------
+  "Ugovor o zakupu poslovnog prostora": "Business premises lease agreement",
+  "Produžava se sa zakupodavcem na godinu dana.": "Renewed with the lessor for a year.",
+  "Ugovor o saradnji — Vega studio": "Collaboration agreement — Vega studio",
+  "Okvirni ugovor za tekuće i buduće projekte; renegocijacija u toku.":
+    "A framework agreement for current and future projects; renegotiation under way.",
+  "Polisa poslovnog osiguranja": "Business insurance policy",
+  "Osiguranje opreme i profesionalne odgovornosti.":
+    "Cover for equipment and professional liability.",
+  "Sertifikat za elektronsko fakturisanje": "Electronic invoicing certificate",
+  "Kvalifikovani sertifikat neophodan za izdavanje e-faktura.":
+    "A qualified certificate required for issuing e-invoices.",
+  "Poslovna platna kartica": "Business payment card",
+
+  // --- Note bodies ---------------------------------------------------------
+  [`# Zapisnik sastanka — Delta d.o.o.
+
+Sastanak održan u kancelariji klijenta, prisutni: kontakt osoba klijenta i ja.
+Tema — redizajn korporativnog sajta.
+
+## Dogovoreno
+
+Klijent želi potpuno nov vizuelni identitet sajta, zadržavajući postojeću
+strukturu sadržaja koliko god je moguće — najveći deo teksta je nedavno
+osvežen i ne treba ga ponovo pisati. Prioritet je brzina učitavanja stranice,
+jer trenutna verzija sporo radi na mobilnim uređajima.
+
+## Sledeći koraci
+
+- Poslati predlog wireframe-a za početnu stranicu do kraja nedelje
+- Zatražiti pristup analitici sajta radi uvida u najposećenije stranice
+- Dogovoriti termin za drugi sastanak posle prvog kruga predloga
+
+Klijent je naglasio da budžet za ovaj projekat nije konačno zaključan, ali da
+očekuje predlog cene pre nego što odobri obim posla — predlog cene ide odmah
+posle prvog kruga wireframe-ova, ne posle kompletnog dizajna.
+`]: `# Meeting notes — Delta d.o.o.
+
+The meeting was held at the client's office; present: the client's contact person and me.
+Topic — the corporate website redesign.
+
+## Agreed
+
+The client wants a completely new visual identity for the site, keeping the existing
+content structure as much as possible — most of the text was recently refreshed and
+does not need rewriting. The priority is page load speed, because the current version
+is slow on mobile devices.
+
+## Next steps
+
+- Send a wireframe proposal for the home page by the end of the week
+- Request access to the site analytics to see the most visited pages
+- Arrange a time for a second meeting after the first round of proposals
+
+The client stressed that the budget for this project is not finally locked in, but
+expects a price proposal before approving the scope — the price proposal follows
+straight after the first round of wireframes, not after the complete design.
+`,
+  [`# Brief projekta — redizajn sajta, Vega studio
+
+Radni brief pre početka izrade ponude. Vega studio je manja agencija za
+unutrašnji dizajn, žele sajt koji izgleda kao portfolio, ne kao klasična
+korporativna prezentacija.
+
+## Ciljevi
+
+Glavni cilj je da posetilac za manje od minuta vidi portfolio radova i
+kontakt formu — trenutni sajt sakriva oboje iza previše klikova. Sekundarni
+cilj je jednostavan sistem da sami dodaju nove projekte u portfolio bez
+pozivanja programera svaki put.
+
+## Obim
+
+- Početna stranica sa istaknutim portfolio radovima
+- Stranica portfolija sa filterom po tipu prostora (stan, poslovni prostor,
+  lokal)
+- Kontakt stranica sa formom i mapom lokacije
+- Jednostavan admin panel za dodavanje novih projekata
+
+## Otvorena pitanja
+
+Nisu odlučili da li žele CMS ili prilagođen admin panel — predložiću
+prilagođeno rešenje jer je obim sadržaja mali i CMS bi bio prekomplikovan za
+ono što im treba. Vratiću se na ovo posle njihovog odgovora.
+`]: `# Project brief — website redesign, Vega studio
+
+A working brief before the offer is prepared. Vega studio is a smaller interior
+design agency; they want a site that reads as a portfolio, not as a classic
+corporate presentation.
+
+## Goals
+
+The main goal is for a visitor to see the portfolio of work and the contact form in
+under a minute — the current site hides both behind too many clicks. The secondary
+goal is a simple system so they can add new projects to the portfolio themselves,
+without calling a developer every time.
+
+## Scope
+
+- A home page with featured portfolio work
+- A portfolio page with a filter by type of space (flat, business premises,
+  restaurant)
+- A contact page with a form and a location map
+- A simple admin panel for adding new projects
+
+## Open questions
+
+They have not decided whether they want a CMS or a custom admin panel — I will propose
+a custom solution because the volume of content is small and a CMS would be
+overcomplicated for what they need. I will come back to this after their answer.
+`,
+  [`# Ponuda — razvoj veb aplikacije za Nimbus d.o.o.
+
+Radna verzija ponude pre slanja klijentu, sa cenom po fazama umesto jedne
+paušalne sume — lakše je klijentu da odobri fazu po fazu nego ceo iznos
+odjednom.
+
+## Faza 1 — Analiza i dizajn
+
+Analiza zahteva, wireframe-ovi, dizajn ključnih ekrana. Trajanje dve nedelje.
+
+## Faza 2 — Razvoj osnovne funkcionalnosti
+
+Autentifikacija, glavni tok aplikacije, integracija sa njihovim postojećim
+sistemom za upravljanje nalozima. Trajanje pet nedelja.
+
+## Faza 3 — Testiranje i lansiranje
+
+Testiranje sa stvarnim korisnicima, ispravke, priprema za produkciju.
+Trajanje dve nedelje.
+
+## Napomene
+
+- Cena ne uključuje hosting — klijent već ima ugovor sa svojim provajderom
+- Održavanje posle lansiranja ide kao poseban mesečni ugovor, ne kao deo ove
+  ponude
+- Rok od devet nedelja važi ako klijent isporučuje povratne informacije u
+  roku od dva radna dana po fazi
+`]: `# Offer — web application development for Nimbus d.o.o.
+
+A working version of the offer before it is sent to the client, with a price per phase
+instead of one lump sum — it is easier for the client to approve phase by phase than the
+whole amount at once.
+
+## Phase 1 — Analysis and design
+
+Requirements analysis, wireframes, design of the key screens. Duration: two weeks.
+
+## Phase 2 — Core functionality development
+
+Authentication, the application's main flow, integration with their existing
+account management system. Duration: five weeks.
+
+## Phase 3 — Testing and launch
+
+Testing with real users, fixes, preparation for production.
+Duration: two weeks.
+
+## Notes
+
+- The price does not include hosting — the client already has a contract with its own
+  provider
+- Maintenance after launch is a separate monthly contract, not part of this
+  offer
+- The nine-week deadline holds if the client delivers feedback within
+  two working days per phase
+`,
+  [`# Onboarding checklist — novi klijent
+
+Lista koraka za svakog novog klijenta, da ništa ne ispadne iz procesa kad ima
+više projekata u isto vreme.
+
+- [x] Poslati ugovor na potpis
+- [x] Zatražiti avansnu uplatu pre početka rada
+- [x] Kreirati poseban folder za klijenta u sistemu za fajlove
+- [ ] Zakazati uvodni sastanak i definisati kanale komunikacije
+- [ ] Podesiti pristup alatima za praćenje projekta
+- [ ] Poslati raspored isporuke sa okvirnim datumima
+
+Najčešća greška iz ranijih projekata — zaboravim da definišem kanal
+komunikacije na početku, pa se onda mešaju mejlovi, poruke i pozivi bez reda.
+`]: `# Onboarding checklist — a new client
+
+A list of steps for every new client, so nothing falls out of the process when there
+are several projects at the same time.
+
+- [x] Send the contract for signature
+- [x] Request an advance payment before work begins
+- [x] Create a separate folder for the client in the file system
+- [ ] Book the introductory meeting and define the communication channels
+- [ ] Set up access to the project tracking tools
+- [ ] Send the delivery schedule with rough dates
+
+The most common mistake from earlier projects — I forget to define the communication
+channel at the start, and then emails, messages and calls get mixed up with no order.
+`,
+  [`# Zapisnik sastanka — Sunčani vrt, predlog redizajna
+
+Prvi sastanak sa novim potencijalnim klijentom — lanac vrtića Sunčani vrt,
+zainteresovani za redizajn sajta i uvođenje online prijave za upis dece.
+
+## Šta klijent traži
+
+Trenutni sajt je star nekoliko godina i ne radi dobro na telefonu, a najveći
+problem je što roditelji zovu telefonom da prijave dete jer online forma na
+sajtu ne postoji. Žele formu koja šalje podatke direktno na mejl kancelarije,
+bez potrebe za složenim sistemom za upravljanje.
+
+## Utisak
+
+Klijent nema jasnu predstavu o budžetu, samo okvirnu želju šta sajt treba da
+radi — trebaće mi dodatni sastanak da definišemo tačan obim pre nego što
+pošaljem predlog cene, umesto da nagađam obim iz ovog prvog razgovora.
+`]: `# Meeting notes — Sunčani vrt, redesign proposal
+
+The first meeting with a new potential client — the Sunčani vrt nursery chain,
+interested in a website redesign and introducing an online enrolment form.
+
+## What the client wants
+
+The current site is several years old and does not work well on a phone, and the biggest
+problem is that parents call to enrol a child because the online form on the
+site does not exist. They want a form that sends the data straight to the office's email,
+without the need for a complex management system.
+
+## Impression
+
+The client has no clear idea of the budget, only a rough wish for what the site should
+do — I will need an extra meeting to define the exact scope before I
+send the price proposal, instead of guessing the scope from this first conversation.
+`,
+  [`# Beleške sa poziva — Vega studio, druga runda pregovora
+
+Kratak poziv posle prve ponude — imaju par pitanja pre potpisivanja.
+
+Najviše ih je zanimalo da li cena uključuje reviziju dizajna posle prvog
+predloga — potvrdio sam da su dve runde revizije uključene, treća se
+naplaćuje posebno. Takođe su pitali da li mogu da plate u dve rate umesto
+odjednom, na šta sam pristao — polovina po potpisivanju ugovora, polovina po
+predaji finalnog rada.
+
+Deluju spremni da potpišu, čekam samo da mi pošalju potvrđen tekst ugovora.
+`]: `# Call notes — Vega studio, second round of negotiations
+
+A short call after the first offer — they have a couple of questions before signing.
+
+What interested them most was whether the price includes a design revision after the
+first proposal — I confirmed that two rounds of revision are included, the third is
+charged separately. They also asked whether they could pay in two instalments instead of
+at once, which I agreed to — half on signing the contract, half on
+handover of the final work.
+
+They seem ready to sign; I am only waiting for them to send me the confirmed contract text.
+`,
+  [`# Cenovnik usluga
+
+Interni cenovnik, referenca pre slanja svake ponude — ne šalje se klijentima
+u ovom obliku, služi samo da cene budu dosledne od projekta do projekta.
+
+## Razvoj sajtova
+
+- Jednostavan prezentacioni sajt — paušalna cena po dogovoru
+- Veb aplikacija sa korisničkim nalozima — cena po fazama, ne paušalno
+- Mesečno održavanje — fiksna mesečna naknada, nezavisno od broja sati
+
+## Dizajn
+
+- Redizajn postojećeg sajta — po broju jedinstvenih ekrana
+- Izrada vizuelnog identiteta — paušalna cena, uključuje dve runde revizije
+
+## Konsultacije
+
+Satnica za konsultacije van okvira postojećeg ugovora — koristi se retko, ali
+je bitno da postoji jasna cena umesto da se pregovara od slučaja do slučaja.
+
+Cenovnik revidiram otprilike jednom godišnje, na osnovu toga koliko su
+projekti realno trajali u odnosu na procenu.
+`]: `# Service price list
+
+An internal price list, a reference before every offer is sent — it is not sent to clients
+in this form, it only serves to keep prices consistent from project to project.
+
+## Website development
+
+- A simple presentation site — a lump sum by agreement
+- A web application with user accounts — priced per phase, not a lump sum
+- Monthly maintenance — a fixed monthly fee, regardless of the number of hours
+
+## Design
+
+- Redesigning an existing site — by the number of unique screens
+- Creating a visual identity — a lump sum, including two rounds of revision
+
+## Consultations
+
+An hourly rate for consultations outside the scope of an existing contract — used rarely, but
+it matters that there is a clear price instead of negotiating case by case.
+
+I revise the price list about once a year, based on how long the projects actually
+took compared with the estimate.
+`,
+  [`# Procedura za onboarding novog klijenta
+
+Interna procedura — dopuna na onboarding checklistu iz foldera Klijenti, ovde
+je objašnjenje ZAŠTO svaki korak postoji, ne samo lista.
+
+## Zašto ugovor ide pre svega ostalog
+
+Nijedan sastanak o obimu posla se ne zakazuje pre potpisanog ugovora — u
+ranijim projektima gde sam preskočio ovaj korak, obim se menjao usred
+razgovora i onda je bilo teško vratiti se na pisanu verziju.
+
+## Zašto avans ide pre početka rada
+
+Avansna uplata nije samo o novcu — pokazuje da je klijent ozbiljan i smanjuje
+broj projekata koji stanu na pola posle par nedelja rada bez ikakve uplate.
+
+## Zašto poseban folder odmah na početku
+
+Kad se folder kreira tek kad zatreba, fajlovi se raspu po više mesta i teško
+ih je posle naći. Folder ide odmah, čak i pre nego što ima šta da se stavi u
+njega.
+
+Dopunio proceduru posle jednog projekta gde se komunikacija odvijala kroz tri
+različita kanala istovremeno — dodao sam korak o definisanju kanala baš zbog
+toga.
+`]: `# Procedure for onboarding a new client
+
+An internal procedure — a supplement to the onboarding checklist in the Clients folder; here
+is the explanation of WHY every step exists, not just the list.
+
+## Why the contract comes before everything else
+
+No meeting about the scope of work is booked before the contract is signed — in
+earlier projects where I skipped this step, the scope changed in the middle of the
+conversation and then it was hard to go back to the written version.
+
+## Why the advance comes before work begins
+
+The advance payment is not only about money — it shows that the client is serious and reduces
+the number of projects that stall halfway after a few weeks of work with no payment at all.
+
+## Why a separate folder right at the start
+
+When a folder is created only once it is needed, the files scatter over several places and are hard
+to find afterwards. The folder goes in right away, even before there is anything to put in
+it.
+
+I supplemented the procedure after one project where communication ran through three
+different channels at the same time — I added the step about defining the channel for exactly
+that reason.
+`,
+  [`# Beleške — poreske obaveze samostalne radnje
+
+Lične beleške radi orijentacije, ne zamena za savet knjigovođe — svaka
+konkretna odluka ide preko knjigovođe.
+
+Kao samostalna radnja, obaveze se plaćaju mesečno — porez na prihod i
+doprinosi za penzijsko i zdravstveno osiguranje. Osnovica zavisi od
+prijavljenog prihoda prethodnog perioda, pa nagli skok prihoda u jednom
+mesecu ne menja odmah iznos obaveze za taj isti mesec.
+
+Dokumentacija za knjigovođu ide početkom svakog meseca — izvod sa računa i
+spisak izdatih faktura. Kašnjenje u slanju dokumentacije direktno kasni
+obračun, pa je bolje poslati par dana ranije nego tačno na rok.
+`]: `# Notes — the tax obligations of a sole trader
+
+Personal notes for orientation, not a substitute for the accountant's advice — every
+concrete decision goes through the accountant.
+
+As a sole trader, the obligations are paid monthly — income tax and
+contributions for pension and health insurance. The base depends on the
+declared income of the previous period, so a sudden jump in income in one
+month does not immediately change the amount due for that same month.
+
+The paperwork for the accountant goes out at the beginning of every month — the account
+statement and a list of issued invoices. A delay in sending the paperwork directly
+delays the calculation, so it is better to send it a couple of days early than exactly
+on the deadline.
+`,
+  [`# Ideje za nove usluge
+
+Brza lista mogućih pravaca širenja, bez konkretnog plana za sada.
+
+- Paket mesečnog održavanja sajta za klijente koji nemaju sopstveni tim —
+  redovna svrha za manje popravke i ažuriranja
+- Konsultacije za manje firme koje razmišljaju o sajtu ali još nisu spremne
+  za pun projekat
+- Šablon-baziran paket za manje klijente sa ograničenim budžetom, brži za
+  isporuku od potpuno prilagođenog rešenja
+
+Paket održavanja deluje najrealnije za sledeći korak — već postoji nekoliko
+klijenata koji bi verovatno pristali odmah.
+`]: `# Ideas for new services
+
+A quick list of possible directions for expansion, with no concrete plan for now.
+
+- A monthly website maintenance package for clients who do not have their own team —
+  a regular purpose for smaller fixes and updates
+- Consultations for smaller companies thinking about a website but not yet ready
+  for a full project
+- A template-based package for smaller clients on a limited budget, quicker to
+  deliver than a fully custom solution
+
+The maintenance package looks the most realistic for the next step — there are
+already a few clients who would probably agree straight away.
+`,
+};
+
+/** The seeded text for the active locale. */
+function text(ctx: DemoContext, sr: string): string {
+  return ctx.locale === "en" ? (EN[sr] ?? sr) : sr;
+}
+
 // =========================================================================
 // TASK
 // =========================================================================
@@ -293,12 +845,12 @@ function createListTask(
   const createdAt = demoInstant(env.ctx, env.rnd, lifetime.created);
 
   const input: CreateTaskInput = {
-    title: seed.title,
+    title: text(env.ctx, seed.title),
     priority: seed.priority,
     dueDate,
     listId,
     sectionId,
-    ...(seed.description !== undefined ? { description: seed.description } : {}),
+    ...(seed.description !== undefined ? { description: text(env.ctx, seed.description) } : {}),
     ...(seed.status === "doing" ? { status: seed.status } : {}),
     ...(seed.recurrence !== undefined ? { recurrence: seed.recurrence } : {}),
   };
@@ -312,7 +864,10 @@ function createListTask(
   }
 
   for (const sub of seed.subtasks ?? []) {
-    const createdSub = env.tasks.create({ title: sub.title, parentId: created.id }, createdAt);
+    const createdSub = env.tasks.create(
+      { title: text(env.ctx, sub.title), parentId: created.id },
+      createdAt,
+    );
     if (sub.done === true) {
       const at = demoInstant(env.ctx, env.rnd, subtaskCompletedOffset(env.rnd, lifetime));
       env.tasks.setDone(createdSub.id, true, at);
@@ -330,7 +885,7 @@ function seedBusinessTasks(db: DatabaseHandle, ctx: DemoContext): void {
 
   const tagIdByName = new Map<string, string>();
   for (const name of TAGS) {
-    tagIdByName.set(name, tagStore.createTag(name, nowIso).id);
+    tagIdByName.set(name, tagStore.createTag(text(ctx, name), nowIso).id);
   }
 
   const env: TaskSeedEnv = { ctx, rnd, tasks, tagStore, tagIdByName };
@@ -343,12 +898,12 @@ function seedBusinessTasks(db: DatabaseHandle, ctx: DemoContext): void {
   }
 
   for (const listSeed of LISTS) {
-    const list = lists.createList({ name: listSeed.name }, nowIso);
+    const list = lists.createList({ name: text(ctx, listSeed.name) }, nowIso);
     for (const taskSeed of listSeed.tasks) {
       createListTask(env, list.id, null, taskSeed);
     }
     for (const sectionSeed of listSeed.sections ?? []) {
-      const section = lists.createSection(list.id, sectionSeed.name, nowIso);
+      const section = lists.createSection(list.id, text(ctx, sectionSeed.name), nowIso);
       for (const taskSeed of sectionSeed.tasks) {
         createListTask(env, list.id, section.id, taskSeed);
       }
@@ -446,12 +1001,12 @@ function placeWeekdayEvent(
   const minute = rnd.of(EVENT_MINUTES);
   const startMs = demoAt(ctx, offset, seed.hour, minute);
   const input: CreateEventInput = {
-    title: seed.title,
+    title: text(ctx, seed.title),
     startAt: new Date(startMs).toISOString(),
     endAt: new Date(startMs + minutes(seed.durationMinutes)).toISOString(),
     category: seed.category,
-    ...(seed.location !== undefined ? { location: seed.location } : {}),
-    ...(seed.description !== undefined ? { description: seed.description } : {}),
+    ...(seed.location !== undefined ? { location: text(ctx, seed.location) } : {}),
+    ...(seed.description !== undefined ? { description: text(ctx, seed.description) } : {}),
   };
   events.create(input);
 }
@@ -468,7 +1023,7 @@ function seedBusinessCalendar(db: DatabaseHandle, ctx: DemoContext): void {
     end: { kind: "never" },
   };
   events.create({
-    title: "Nedeljni sastanak tima",
+    title: text(ctx, "Nedeljni sastanak tima"),
     startAt: new Date(standupStart).toISOString(),
     endAt: new Date(standupStart + minutes(30)).toISOString(),
     category: "posao",
@@ -482,23 +1037,26 @@ function seedBusinessCalendar(db: DatabaseHandle, ctx: DemoContext): void {
   // A two-day conference, like `calendar.ts`'s own DevConf — an all-day span
   // is never subject to the weekday-only rule that governs the timed meetings.
   events.create({
-    title: "Konferencija — DevBiz Beograd",
+    title: text(ctx, "Konferencija — DevBiz Beograd"),
     startAt: demoDay(ctx, 9),
     endAt: demoDay(ctx, 10),
     allDay: true,
     category: "posao",
-    description: "Dva dana predavanja o digitalnom marketingu i razvoju poslovanja.",
+    description: text(
+      ctx,
+      "Dva dana predavanja o digitalnom marketingu i razvoju poslovanja.",
+    ),
   });
 
   // The one deliberate exception to "working hours, Monday-Friday".
   const workshopOffset = saturdayOffset(ctx, 1);
   const workshopStart = demoAt(ctx, workshopOffset, 10, 0);
   events.create({
-    title: "Radionica za klijente — uvod u digitalni marketing",
+    title: text(ctx, "Radionica za klijente — uvod u digitalni marketing"),
     startAt: new Date(workshopStart).toISOString(),
     endAt: new Date(workshopStart + minutes(180)).toISOString(),
     category: "klijenti",
-    location: "Coworking prostor",
+    location: text(ctx, "Coworking prostor"),
   });
 }
 
@@ -816,7 +1374,7 @@ function seedBusinessNotes(db: DatabaseHandle, ctx: DemoContext): void {
   const folderIds = new Map<string, string>();
   for (const folder of FOLDERS) {
     const created = org.createFolder(
-      { parentId: null, name: folder.name, color: folder.color },
+      { parentId: null, name: text(ctx, folder.name), color: folder.color },
       stamp(ctx, rnd, folder.createdOffsetDays),
     );
     folderIds.set(folder.key, created.id);
@@ -826,7 +1384,7 @@ function seedBusinessNotes(db: DatabaseHandle, ctx: DemoContext): void {
   const resolveTag = (name: string, now: string): string => {
     const existing = tagIds.get(name);
     if (existing !== undefined) return existing;
-    const tag = org.createTag(name, now);
+    const tag = org.createTag(text(ctx, name), now);
     tagIds.set(name, tag.id);
     return tag.id;
   };
@@ -840,7 +1398,7 @@ function seedBusinessNotes(db: DatabaseHandle, ctx: DemoContext): void {
         ? createdAt
         : stamp(ctx, rnd, Math.min(0, spec.createdOffsetDays + spec.revisitAfterDays));
 
-    const parsed = parseMarkdownNote(spec.body.trim(), "Beleška");
+    const parsed = parseMarkdownNote(text(ctx, spec.body).trim(), text(ctx, "Beleška"));
     const update = buildNoteUpdate(parsed.blocks);
 
     const note = notes.create(createdAt);
@@ -902,11 +1460,21 @@ function seedBusinessAccounts(db: DatabaseHandle, ctx: DemoContext): DemoBizAcco
   const now = iso(ctx.now);
 
   const current = store.create(
-    { name: "Poslovni tekući račun", kind: "current", currency: "RSD", openingBalance: rsd(180_000) },
+    {
+      name: text(ctx, "Poslovni tekući račun"),
+      kind: "current",
+      currency: "RSD",
+      openingBalance: rsd(180_000),
+    },
     now,
   );
   const eurAccount = store.create(
-    { name: "Devizni račun", kind: "current", currency: "EUR", openingBalance: eur(850) },
+    {
+      name: text(ctx, "Devizni račun"),
+      kind: "current",
+      currency: "EUR",
+      openingBalance: eur(850),
+    },
     now,
   );
 
@@ -924,8 +1492,10 @@ function seedBusinessCategories(db: DatabaseHandle, ctx: DemoContext): DemoBizCa
   const store = new FinCategoryStore(db, ctx.profileId);
   const now = iso(ctx.now);
 
-  const income = (name: string): string => store.create({ name, kind: "income" }, now).id;
-  const expense = (name: string): string => store.create({ name, kind: "expense" }, now).id;
+  const income = (name: string): string =>
+    store.create({ name: text(ctx, name), kind: "income" }, now).id;
+  const expense = (name: string): string =>
+    store.create({ name: text(ctx, name), kind: "expense" }, now).id;
 
   return {
     fakture: income("Fakture klijentima"),
@@ -999,7 +1569,7 @@ function seedBusinessRecurring(
     },
   ];
 
-  for (const rule of rules) store.create(rule, now);
+  for (const rule of rules) store.create({ ...rule, name: text(ctx, rule.name) }, now);
   store.generateDue(now, ctx.today);
 }
 
@@ -1030,25 +1600,49 @@ function seedBusinessTransactions(
 
   const rsdSpend = (categoryId: string, offset: number, dinars: number, payee: string): void => {
     store.create(
-      { accountId: accounts.currentId, categoryId, date: demoDay(ctx, offset), amount: -rsd(dinars), payee },
+      {
+        accountId: accounts.currentId,
+        categoryId,
+        date: demoDay(ctx, offset),
+        amount: -rsd(dinars),
+        payee: text(ctx, payee),
+      },
       now,
     );
   };
   const rsdIncome = (categoryId: string, offset: number, dinars: number, payee: string): void => {
     store.create(
-      { accountId: accounts.currentId, categoryId, date: demoDay(ctx, offset), amount: rsd(dinars), payee },
+      {
+        accountId: accounts.currentId,
+        categoryId,
+        date: demoDay(ctx, offset),
+        amount: rsd(dinars),
+        payee: text(ctx, payee),
+      },
       now,
     );
   };
   const eurSpend = (categoryId: string, offset: number, euros: number, payee: string): void => {
     store.create(
-      { accountId: accounts.eurId, categoryId, date: demoDay(ctx, offset), amount: -eur(euros), payee },
+      {
+        accountId: accounts.eurId,
+        categoryId,
+        date: demoDay(ctx, offset),
+        amount: -eur(euros),
+        payee: text(ctx, payee),
+      },
       now,
     );
   };
   const eurIncome = (categoryId: string, offset: number, euros: number, payee: string): void => {
     store.create(
-      { accountId: accounts.eurId, categoryId, date: demoDay(ctx, offset), amount: eur(euros), payee },
+      {
+        accountId: accounts.eurId,
+        categoryId,
+        date: demoDay(ctx, offset),
+        amount: eur(euros),
+        payee: text(ctx, payee),
+      },
       now,
     );
   };
@@ -1187,12 +1781,12 @@ function seedBusinessPeople(db: DatabaseHandle, ctx: DemoContext): void {
 
   for (const spec of PEOPLE) {
     const input: CreatePersonInput = {
-      name: spec.name,
+      name: text(ctx, spec.name),
       kind: spec.kind,
       month: spec.month,
       day: spec.day,
       year: spec.year,
-      note: spec.note,
+      note: text(ctx, spec.note),
     };
     store.create(input, nowIso);
   }
@@ -1255,9 +1849,9 @@ function seedBusinessDocuments(db: DatabaseHandle, ctx: DemoContext): void {
     const [firstOffset, ...renewalOffsets] = spec.expiryOffsets;
     const created = store.create({
       docType: spec.docType,
-      label: spec.label,
+      label: text(ctx, spec.label),
       expiryDate: demoDay(ctx, firstOffset),
-      notes: spec.notes,
+      notes: spec.notes === null ? null : text(ctx, spec.notes),
     });
 
     for (const offset of renewalOffsets) {

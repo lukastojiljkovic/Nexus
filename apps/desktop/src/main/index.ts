@@ -502,21 +502,11 @@ import {
   type SecurityNotificationDeps,
 } from "./notifications.js";
 import { filterSearchHitsByModules } from "./searchGate.js";
+import { mainLocale, setMainLocale } from "./locale.js";
 import { asCanvasRefs } from "./canvasRefs.js";
 import { focusPhaseEndCopy, restEndCopy } from "./notificationStrings.js";
 import type { SecurityNotice } from "./notificationStrings.js";
-import {
-  ANKI_DECK_FILTER_NAME,
-  ARCHIVE_FILTER_NAME,
-  CALENDAR_FILTER_NAME,
-  CSV_TABLE_FILTER_NAME,
-  IMAGE_FILTER_NAME,
-  ROS_WORKSPACE_DIALOG_BUTTON,
-  ROS_WORKSPACE_DIALOG_TITLE,
-  SKETCH_FILTER_NAME,
-  STATEMENT_DIALOG_TITLE,
-  STATEMENT_FILTER_NAME,
-} from "./shellStrings.js";
+import { shellStrings } from "./shellStrings.js";
 import { computeSnoozeUntil, resolveDefaultSnoozePreset } from "./snooze.js";
 import { pickProfilePicture } from "./profilePicture.js";
 import {
@@ -924,6 +914,18 @@ if (shouldBlockResolver(app.getPath("userData"))) {
 if (isShots) {
   app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
   app.commandLine.appendSwitch("disable-renderer-backgrounding");
+}
+
+// `--locale=en`: run a harness in English; without it, every harness run is
+// Serbian whatever the machine speaks. Both halves are pinned because neither
+// follows the other in time: main seeds the demo profile in ITS locale before
+// any window exists, and the renderer's first run follows the system language,
+// so an unpinned sweep on an English Windows photographed English chrome around
+// Serbian rows. `lang` is what Chromium answers `navigator.language` with.
+if (isAutomatedRun) {
+  const harnessLocale = developmentFlag("--locale=en") ? "en" : "sr";
+  setMainLocale(harnessLocale);
+  app.commandLine.appendSwitch("lang", harnessLocale === "en" ? "en-GB" : "sr");
 }
 
 // Interim brand glyph (four-pointed star, see build/make-icon.ps1). Resolved
@@ -4019,6 +4021,18 @@ function asFitSetCount(value: unknown, field: string, max: number): number | nul
  * exercise in THIS profile — so a soft-deleted exercise cannot be logged afresh,
  * while every set already logged with it stays exactly as it was.
  */
+/**
+ * A catalogue or user exercise's label in the language main is serving.
+ *
+ * A workout set and a routine item SNAPSHOT the name they were logged under, so
+ * this is written at the moment of the write, in the language `mainLocale()`
+ * holds — the same source the dialogs and notifications read. A user's own
+ * exercise may carry no English name, in which case its own name stands.
+ */
+function localizedExerciseName(name: string, nameEn: string | undefined): string {
+  return mainLocale() === "en" && nameEn !== undefined && nameEn.trim().length > 0 ? nameEn : name;
+}
+
 function resolveLoggedExercise(
   profileId: string,
   reference: unknown,
@@ -4039,7 +4053,7 @@ function resolveLoggedExercise(
     }
     return {
       exerciseRef: reference,
-      label: entry.name,
+      label: localizedExerciseName(entry.name, entry.nameEn),
       metric: entry.metric,
       primaryMuscles: [...entry.primaryMuscles],
     };
@@ -4047,7 +4061,7 @@ function resolveLoggedExercise(
   const own = fitExerciseStore(profileId).get(parsed.id);
   return {
     exerciseRef: reference,
-    label: own.name,
+    label: localizedExerciseName(own.name, own.nameEn),
     metric: own.metric,
     primaryMuscles: own.primaryMuscles,
   };
@@ -4081,13 +4095,17 @@ function fitExerciseLookup(
     if (parsed === null) return null;
     if (parsed.kind === "catalogue") {
       const entry = catalogueExercise(parsed.id);
-      return entry === undefined ? null : { label: entry.name, metric: entry.metric };
+      return entry === undefined
+        ? null
+        : { label: localizedExerciseName(entry.name, entry.nameEn), metric: entry.metric };
     }
     // Read on first use rather than eagerly: a profile with no routines, or one
     // whose routines are all catalogue movements, never touches the table.
     own ??= new Map(fitExerciseStore(profileId).list().map((entry) => [entry.id, entry]));
     const entry = own.get(parsed.id);
-    return entry === undefined ? null : { label: entry.name, metric: entry.metric };
+    return entry === undefined
+      ? null
+      : { label: localizedExerciseName(entry.name, entry.nameEn), metric: entry.metric };
   };
 }
 
@@ -4491,7 +4509,12 @@ function resolveLoggedFood(
     if (food === undefined) {
       throw new Error(`Invalid IPC payload: "foodRef" names no food this build ships.`);
     }
-    return { foodRef: reference, label: food.name, per100g: food.per100g };
+    // The snapshot label is what a diary row reads for the rest of its life, so
+    // it is written in the language main is serving — the same `mainLocale()`
+    // the dialogs and notifications follow. The user-food path below has no
+    // English text to choose from.
+    const label = mainLocale() === "en" ? (food.nameEn ?? food.name) : food.name;
+    return { foodRef: reference, label, per100g: food.per100g };
   }
   const food = fitFoodStore(profileId).get(parsed.id);
   return { foodRef: reference, label: food.name, per100g: food.per100g };
@@ -4612,8 +4635,8 @@ function asCircuitNotes(value: unknown, field: string): string {
  * than in a terminal first; macOS shows the button, Windows always has one.
  */
 const ROS_WORKSPACE_DIALOG: OpenDialogOptions = {
-  title: ROS_WORKSPACE_DIALOG_TITLE,
-  buttonLabel: ROS_WORKSPACE_DIALOG_BUTTON,
+    title: shellStrings().rosWorkspaceDialogTitle,
+    buttonLabel: shellStrings().rosWorkspaceDialogButton,
   properties: ["openDirectory", "createDirectory"],
 };
 
@@ -6503,7 +6526,7 @@ function restoreDeps(): ImportDeps {
       // file's own magic bytes, never by its extension.
       const options: OpenDialogOptions = {
         properties: ["openFile"],
-        filters: [{ name: ARCHIVE_FILTER_NAME, extensions: ["nexus", "zip"] }],
+    filters: [{ name: shellStrings().archiveFilterName, extensions: ["nexus", "zip"] }],
       };
       const { canceled, filePaths } = mainWindow
         ? await dialog.showOpenDialog(mainWindow, options)
@@ -6517,7 +6540,7 @@ function restoreDeps(): ImportDeps {
     pickApkgFile: async () => {
       const options: OpenDialogOptions = {
         properties: ["openFile"],
-        filters: [{ name: ANKI_DECK_FILTER_NAME, extensions: ["apkg"] }],
+    filters: [{ name: shellStrings().ankiDeckFilterName, extensions: ["apkg"] }],
       };
       const { canceled, filePaths } = mainWindow
         ? await dialog.showOpenDialog(mainWindow, options)
@@ -6531,7 +6554,7 @@ function restoreDeps(): ImportDeps {
     pickCsvFile: async () => {
       const options: OpenDialogOptions = {
         properties: ["openFile"],
-        filters: [{ name: CSV_TABLE_FILTER_NAME, extensions: ["csv", "txt"] }],
+    filters: [{ name: shellStrings().csvTableFilterName, extensions: ["csv", "txt"] }],
       };
       const { canceled, filePaths } = mainWindow
         ? await dialog.showOpenDialog(mainWindow, options)
@@ -6547,8 +6570,8 @@ function restoreDeps(): ImportDeps {
     pickFinCsvFile: async () => {
       const options: OpenDialogOptions = {
         properties: ["openFile"],
-        title: STATEMENT_DIALOG_TITLE,
-        filters: [{ name: STATEMENT_FILTER_NAME, extensions: ["csv", "txt"] }],
+    title: shellStrings().statementDialogTitle,
+    filters: [{ name: shellStrings().statementFilterName, extensions: ["csv", "txt"] }],
       };
       const { canceled, filePaths } = mainWindow
         ? await dialog.showOpenDialog(mainWindow, options)
@@ -6562,7 +6585,7 @@ function restoreDeps(): ImportDeps {
     pickIcsFile: async () => {
       const options: OpenDialogOptions = {
         properties: ["openFile"],
-        filters: [{ name: CALENDAR_FILTER_NAME, extensions: ["ics"] }],
+    filters: [{ name: shellStrings().calendarFilterName, extensions: ["ics"] }],
       };
       const { canceled, filePaths } = mainWindow
         ? await dialog.showOpenDialog(mainWindow, options)
@@ -6947,7 +6970,12 @@ async function handlePrivAttachmentPick(profileId: string): Promise<PrivAttachme
 async function handleDashboardPick(profileId: string): Promise<DashboardPickResult> {
   const options: OpenDialogOptions = {
     properties: ["openFile"],
-    filters: [{ name: IMAGE_FILTER_NAME, extensions: ["png", "jpg", "jpeg", "gif", "webp"] }],
+    filters: [
+      {
+        name: shellStrings().imageFilterName,
+        extensions: ["png", "jpg", "jpeg", "gif", "webp"],
+      },
+    ],
   };
   const { canceled, filePaths } = mainWindow
     ? await dialog.showOpenDialog(mainWindow, options)
@@ -7203,6 +7231,20 @@ function registerIpc(): void {
       startNotificationScheduler(notificationSchedulerDeps());
       syncService().openProfile(profileId);
     }
+  });
+
+  // The renderer is untrusted, so the payload is re-validated here rather than
+  // trusted to be one of the two codes: an unknown value is refused outright,
+  // never stored and never used to pick a table. Like `profiles:set-active`
+  // above, this is a report - main only changes the language of copy it writes
+  // next.
+  ipcMain.handle(IpcChannel.localeSet, (event, payload): void => {
+    assertTrustedSender(event);
+    const locale = asRecord(payload).locale;
+    if (locale !== "sr" && locale !== "en") {
+      throw new Error("locale:set expects the locale to be 'sr' or 'en'");
+    }
+    setMainLocale(locale);
   });
 
   ipcMain.handle(IpcChannel.profilesRename, (event, payload): void => {
@@ -10134,12 +10176,13 @@ function registerIpc(): void {
     const limit = Math.min(asPositiveInteger(body.limit, "limit"), MAX_FIT_FOOD_RESULTS);
 
     type Candidate =
-      | { id: string; name: string; catalogue: FoodEntry }
-      | { id: string; name: string; user: FitFood };
+      | { id: string; name: string; nameEn?: string; catalogue: FoodEntry }
+      | { id: string; name: string; nameEn?: string; user: FitFood };
     const pool: Candidate[] = [
       ...FOOD_CATALOGUE.map((food) => ({
         id: foodRefText({ kind: "catalogue", id: food.id }),
         name: food.name,
+        nameEn: food.nameEn,
         catalogue: food,
       })),
       ...fitFoodStore(profileId)
@@ -10924,9 +10967,11 @@ function registerIpc(): void {
 
   // ADR-085 E4: the generated code onto disk. The payload is an id and nothing
   // else — main reads the circuit from its own store and generates the text
-  // here, so the bytes written are the circuit as stored rather than a string
-  // the renderer composed. The path comes only from the native dialog (SEC-EL);
-  // `handleIcsExport` in `main/imex.ts` is the shape this follows.
+  // here, and in the language main is serving (`mainLocale()`), so the bytes
+  // written are the circuit as stored rather than a string the renderer
+  // composed, and an English session saves English files. The path comes only
+  // from the native dialog (SEC-EL); `handleIcsExport` in `main/imex.ts` is the
+  // shape this follows.
   //
   // **Which dialog the user sees is derived, never asked for.** A sketch is one
   // file and a ROS 2 package is a directory of eight, so `generateCode` decides
@@ -10945,7 +10990,7 @@ function registerIpc(): void {
     const id = asId(body.id, "id");
 
     const circuit = toCircuitDocument(electronicsStore(profileId).read(id));
-    const code = generateCode(circuit, catalogueComponent);
+    const code = generateCode(circuit, catalogueComponent, mainLocale());
     if (code.kind === "refused") {
       return { canceled: false, outcome: "refused", reason: code.reason };
     }
@@ -10953,7 +10998,7 @@ function registerIpc(): void {
     if (code.kind === "sketch") {
       const dialogOptions = {
         defaultPath: code.filename,
-        filters: [{ name: SKETCH_FILTER_NAME, extensions: ["ino"] }],
+    filters: [{ name: shellStrings().sketchFilterName, extensions: ["ino"] }],
       };
       const { canceled, filePath } = mainWindow
         ? await dialog.showSaveDialog(mainWindow, dialogOptions)
@@ -13442,6 +13487,16 @@ function shutdown(code: number): void {
 // --- Lifecycle --------------------------------------------------------------
 
 app.whenReady().then(async () => {
+  // The language main writes its own copy in, seeded from the OS. The renderer
+  // reports the STORED choice as soon as it serves it (`locale:set`), which is
+  // authoritative; this seed only covers the moment before that, such as the
+  // first launch's splash-time notification. An automated run was pinned at
+  // module scope instead (`--locale=en`), because its output may not depend on
+  // the machine it ran on.
+  if (!isAutomatedRun) {
+    setMainLocale(app.getLocale().toLowerCase().startsWith("sr") ? "sr" : "en");
+  }
+
   // SEC-EL: kill Electron's stock application menu, and answer no to every web
   // permission.
   //

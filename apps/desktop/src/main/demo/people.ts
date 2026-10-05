@@ -112,9 +112,50 @@ export function seedDemoPeople(db: DatabaseHandle, ctx: DemoContext): void {
 
   for (const spec of PEOPLE) {
     const { month, day } = resolveDate(ctx, spec);
-    const input: CreatePersonInput = { name: spec.name, kind: spec.kind, month, day, year: spec.year, note: spec.note };
+    const input: CreatePersonInput = {
+      name: spec.name,
+      kind: spec.kind,
+      month,
+      day,
+      year: spec.year,
+      note: spec.note === null ? null : text(ctx, spec.note),
+    };
     store.create(input, nowIso);
   }
+}
+
+/**
+ * English relationship notes, keyed by the Serbian text the Serbian scene
+ * uses. The people themselves keep their names in either language - an
+ * English interface does not rename Aleksandar Nikolic - so only the note
+ * beside a name is translated.
+ */
+const EN: Readonly<Record<string, string>> = {
+  Majka: "Mother",
+  Otac: "Father",
+  Sestra: "Sister",
+  Brat: "Brother",
+  "Godišnjica braka roditelja": "Parents' wedding anniversary",
+  Stric: "Uncle",
+  Tetka: "Aunt",
+  "Drug iz srednje škole": "Friend from secondary school",
+  "Prijateljica sa fakulteta": "Friend from university",
+  "Drug iz osnovne škole": "Friend from primary school",
+  "Najbolja drugarica": "Best friend",
+  "Godišnjica veze": "Anniversary of their relationship",
+  "Koleginica sa prakse": "Colleague from the internship",
+  "Kolega iz tima": "Team colleague",
+  "Kolega, front-end": "Colleague, front-end",
+  "Product menadžerka": "Product manager",
+  "Profesor — Algoritmi i strukture podataka": "Professor - Algorithms and data structures",
+  "Profesorka — Baze podataka": "Professor - Databases",
+  "Asistent — Veštačka inteligencija": "Assistant - Artificial intelligence",
+  "Profesor — Softversko inženjerstvo": "Professor - Software engineering",
+};
+
+/** The seeded text for the active locale. */
+function text(ctx: DemoContext, sr: string): string {
+  return ctx.locale === "en" ? (EN[sr] ?? sr) : sr;
 }
 
 /** A spec's `month`/`day`, either literal or derived from `ctx.today + upcomingInDays` (never `Date.now`). */

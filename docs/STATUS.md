@@ -14,7 +14,7 @@ the binding rules) → §1 and §2 below (where we are, what exists) → §4 (wh
 left) → §5 (what needs the founder). [README.md](README.md) maps every other
 document.
 
-**Last updated:** 2026-10-02. The state below was verified on that date against
+**Last updated:** 2026-10-04. The state below was verified on that date against
 `main`, and against the branch named under „Unmerged work" for what is not on
 `main` yet. Deliberately no commit sha: a sha in a header goes stale the moment
 anything is pushed, which is the defect class this file keeps recording.
@@ -23,13 +23,11 @@ anything is pushed, which is the defect class this file keeps recording.
 [SPECIFICATION.md](SPECIFICATION.md) (the whole product) ·
 [roadmap.md](roadmap.md) (what order).
 
-**Where things stand (2026-10-02).** The desktop application is finished and
-the repository is public. The first public release, **1.4.0**, is prepared on
-`chore/open-source-readiness`: the version, the changelog, the release pipeline
-and the website name it, and it waits on the maintainer to merge the branch,
-push a `v1.4.0` tag and let the release workflow draft the release. The
-installer is still unsigned, web and sync are paused, and no version has ever
-been tagged.
+**Where things stand (2026-10-05).** The desktop application is finished and
+the repository is public. The first public release, **1.4.0**, is tagged
+`v1.4.0` on `main`, built by the release workflow and published with its
+checksums, SBOM and build provenance. The installer is unsigned, and web and
+sync are paused.
 
 ---
 
@@ -38,9 +36,33 @@ been tagged.
 **The desktop app is finished, and the repository is public.** Sixteen modules,
 all usable end to end, on an encrypted local SQLite database with no network
 path at all. It installs like an ordinary Windows program and the founder has
-used it daily since 2026-08-02. The last installer built is **1.3.0**, built
-2026-09-23 from `eceb07e`; the tree now declares **1.4.0**, the first public
-release, prepared but not yet tagged (§4).
+used it daily since 2026-08-02. The first public release is **1.4.0**, tagged
+`v1.4.0` (§4); every installer before it was built by hand and never tagged,
+the last being 1.3.0, from `eceb07e` on 2026-09-23.
+
+**The interface ships in two languages** (2026-10-02). English joins Serbian as
+a whole second table, `strings.en.ts`, checked against the Serbian-derived
+`Strings` type so a leaf left untranslated or a key invented is one compile
+error each. First run follows the system language — Serbian when it reads `sr*`,
+English otherwise — and the device remembers the choice from then on, with
+Settings → Appearance switching it at runtime. The main process learns the
+choice over a `locale:set` report, so native dialogs and OS notifications follow
+the same language, and the demo profile seeds its content in it too.
+
+**The choice reaches the numbers as well as the words** (2026-10-04). Every
+date, time, duration, number, unit, file size and money figure the interface
+draws is produced through one `intl.ts`, and every alphabetical list sorts with
+the active locale's collator — an English reader sees `1,234.50` and
+`2 October`, a Serbian reader `1.234,50` and `2. oktobar` — with nothing
+capturing a formatter at import time, so the switch takes effect without a
+reload. The shipped catalogues carry English names: the 426-entry food table
+(`nameEn`/`labelEn`/`notesEn`), the 230 exercises (their existing `nameEn`), and
+the 153-entry electronics catalogue (`nameEn`/`summaryEn`), with both food and
+component search matching either language. The generated Arduino sketch and ROS
+package take a `GeneratedLanguage` so an English session writes English files,
+and the business demo seeder carries the same `EN` map the others do. `<html
+lang>` follows the locale on both the desktop and the web shell, so assistive
+technology reads the same language the copy does.
 
 **Web and sync are paused, not cancelled** (founder, 2026-08-31). Desktop work
 comes first, because the renderer is one React codebase and Electron is only its
@@ -77,17 +99,17 @@ blocking; both are §5 items.
 
 |  |  |
 | --- | --- |
-| Desktop version | **1.4.0** in `apps/desktop/package.json`; the last installer built is **1.4.0**, unsigned, with its fuses read back |
+| Desktop version | **1.4.0**, released as `v1.4.0`: unsigned, with its fuses read back |
 | Installer bytes | 183 821 644 (1.3.0) · `sha256` B66B0AAB… — see §4.4 |
 | Linux | AppImage, tarball and a Gentoo ebuild, all built and verified |
 | Modules registered | **16** |
 | Local migrations | **70** (latest `070-circuit-search`) |
 | Server | 14 Supabase migrations, 3 Edge Functions, 165 pgTAP assertions |
 | Static gates | **26**, each its own CI step |
-| Commits | **703** on this branch |
-| Unmerged work | **15 commits on `chore/open-source-readiness`**, plus the uncommitted public-release changes |
-| Open pull requests | The public-release pull request against `main` |
-| Git tags / GitHub releases | none yet — `v1.4.0`, the first, is prepared (§4) |
+| Commits | **739** on `feat/english-locale`, the last branch merged before 1.4.0 |
+| Unmerged work | none — `chore/open-source-readiness` (#39) and `feat/english-locale` were merged for 1.4.0 |
+| Open pull requests | none at the 1.4.0 release |
+| Git tags / GitHub releases | `v1.4.0`, the first (§4) |
 
 ---
 
@@ -597,22 +619,21 @@ anyone remembering to read this list. What is left is four designs that are owed
 ## 4. What remains
 
 **The repository is public, and the first public release is 1.4.0
-(2026-10-02).** Everything a stranger needs — the Apache-2.0 licence and
+(2026-10-05).** Everything a stranger needs — the Apache-2.0 licence and
 ADR-087, the policies (`SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`,
 `PRIVACY.md`, `TERMS.md`, `SUPPORT.md`, `ROADMAP.md`, `CHANGELOG.md`), the issue
 forms, the tagged release pipeline with SBOM and build provenance, the CodeQL /
 dependency review / Scorecard workflows, a file-by-file classification of this
 docs tree, a hardened Electron package (fuses and asar integrity) and a closed server gap (the housekeeping
-schedule is now a migration) — is in one pull request against `main`, on
-`chore/open-source-readiness`. The narrative is in
-[log/2026-10.md](log/2026-10.md).
+schedule is now a migration) — reached `main` through the public-release pull
+request (#39), the English locale followed it, and `v1.4.0` was tagged from
+the result. The narrative is in [log/2026-10.md](log/2026-10.md).
 
-**What that leaves is the maintainer's, and it is three things:** the
+**What that leaves is the maintainer's, and it is two things:** the
 code-signing route (`SignPath Foundation` is free for open-source projects;
-Azure Artifact Signing is the alternative), the merge of
-`chore/open-source-readiness` and the repository settings that live in the web
-UI ([ops/github-setup.md](ops/github-setup.md)), and the first `v*` tag,
-`v1.4.0`. None of the three is blocked on anything in this repository.
+Azure Artifact Signing is the alternative), and the repository settings that
+live in the web UI ([ops/github-setup.md](ops/github-setup.md)). Neither is
+blocked on anything in this repository.
 
 **Order of work.** On 2026-08-31 the founder paused web and sync: *„web/sync je
 za sada trajno na hold-u, dok ne završimo sve feature za desktop, lako ćemo ih
@@ -638,6 +659,10 @@ suggestion, cheapest and highest-leverage first.
    rewrite its leaves in place; splitting it means per-surface subtables that
    join the table when their page loads, and that reaches `check:strings`,
    `check:copy` and the locale machinery. A design, not an edit.
+   The English table (2026-10-02) roughly doubles that payload and rides in the
+   same startup chunk, because `strings.ts` imports both locales eagerly — so
+   the split this item proposes is worth more, not less, and a lazy per-locale
+   load is the other half of the same design.
 2. **A bench wire is pointer-only.** In Elektronika a part is a
    `role="button"` with a tab stop and Enter/Space; a wire is an invisible hit
    path with an `onPointerDown` and nothing else. So a keyboard user can select
@@ -672,45 +697,37 @@ suggestion, cheapest and highest-leverage first.
    already asks this question inside the professional drawer; the owed gate is
    the generalisation: every exported IPC interface field must have a renderer
    call site that sets it.
-7. **The sr-Latn date formatters are written out page by page.** 40
-   `new Intl.DateTimeFormat(…)` constructions in 27 files, measured 2026-09-26
-   while working [[DC-145]] — the long day label („petak, 18. septembar 2026.")
-   alone is spelled identically in the calendar, nutrition, habits and study
-   pages, and the two version-history lists share a timestamp formatter by
-   copy. [[DC-02]] already consolidated the clock formatter
-   (`formatClockTime`); the date labels are the same move at a larger size,
-   and one helper module with named formats is the shape it takes.
-8. **`ModuleManifest.imex` is declared and nothing fills it.** The archive
+7. **`ModuleManifest.imex` is declared and nothing fills it.** The archive
    was built in `@nexus/core` from `ProfileData`, one interchange version for
    the whole profile, not from per-module handlers — so the slot ADR-008 lists
    is unreachable by anything in the product. What is open is whether the
    plugin path still needs it (a third-party module's rows cannot ride
    `ProfileData`), which is a decision about PLUG rather than a cleanup: either
    the contract states what a plugin would implement, or it goes.
-9. **The duplicated Serbian numeral lexicon.** `pravo.ts` and
+8. **The duplicated Serbian numeral lexicon.** `pravo.ts` and
    `racunovodstvo.ts` each embed their own numeral lexicon (both citing
    *Pravopis srpskoga jezika*, 2010), their own `stripSeparators`, and their
    own digit-at-a-time ISO 7064 MOD 97-10 under names one character apart. This
    is a consolidation rather than a defect, and it is not urgent — it is what
    declining to retire one of each colliding tool pair costs.
-10. **The shell's own settings cards are in no screenshot.** Twelve per-module
-    settings scenes were added and are derived from the registry, which is why
-    they cannot go stale. The shell's cards — Profili, Sigurnost, Izgled,
-    Obaveštenja, Licence and the rest — have their ids written into
-    `SettingsPage.tsx` in the renderer and appear in no list the main process
-    can read, so the same derivation cannot reach them. Recorded rather than
-    papered over with a second hand-kept list.
-    The shell's two banners share the gap for a different reason: the
-    restore-undo banner and the unsaved-exit banner (DC-148) appear only after a
-    restore or after a write fails behind a closed page, and the harness has no
-    way to produce either state, so `.app__banner` has never been photographed
-    or audited. Reaching them needs a fault the sweep can cause on purpose, not a
-    hook in the shipped renderer.
-11. **„Dalje" sits below the fold on onboarding step 3 at 900 × 600.** Measured
+9. **The shell's own settings cards are in no screenshot.** Twelve per-module
+   settings scenes were added and are derived from the registry, which is why
+   they cannot go stale. The shell's cards — Profili, Sigurnost, Izgled,
+   Obaveštenja, Licence and the rest — have their ids written into
+   `SettingsPage.tsx` in the renderer and appear in no list the main process
+   can read, so the same derivation cannot reach them. Recorded rather than
+   papered over with a second hand-kept list.
+   The shell's two banners share the gap for a different reason: the
+   restore-undo banner and the unsaved-exit banner (DC-148) appear only after a
+   restore or after a write fails behind a closed page, and the harness has no
+   way to produce either state, so `.app__banner` has never been photographed
+   or audited. Reaching them needs a fault the sweep can cause on purpose, not a
+   hook in the shipped renderer.
+10. **„Dalje" sits below the fold on onboarding step 3 at 900 × 600.** Measured
     and reachable by scrolling, deliberately left: the card is the scroller, step
     3 is the only step whose actions do not fit, and a sticky action bar would
     change the first screen a user ever sees.
-12. **Mixed line endings within files**, despite `core.autocrlf=true`. Every
+11. **Mixed line endings within files**, despite `core.autocrlf=true`. Every
     scripted edit has to be EOL-aware; it has already cost two redoes. A standing
     hazard rather than a defect.
 
@@ -788,23 +805,22 @@ quality is.
   `eceb07e` built twice produced 183 821 582 and 183 821 644 bytes. Size and
   hash identify an artifact, never a revision. That matters the day an update
   feed publishes a digest.
-- **The Electron fuses have not been read back on a packaged build.** The
-  configuration is in `electron-builder.yml` (RunAsNode, NODE_OPTIONS and CLI
-  inspect off; cookie encryption, embedded asar integrity and only-load-from-asar
-  on), and the 1.3.0 executable was read back and had all six wrong. The machine
-  this pass ran on cannot build at all (see `log/2026-10.md`), so before the
-  first public release is tagged: run `pnpm --filter @nexus/desktop dist`, then
+- **The Electron fuses are not read back by CI.** The configuration is in
+  `electron-builder.yml` (RunAsNode, NODE_OPTIONS and CLI inspect off; cookie
+  encryption, embedded asar integrity and only-load-from-asar on), and the 1.3.0
+  executable was read back and had all six wrong. 1.4.0's read back as
+  configured, on 2026-10-02 and again on 2026-10-05 from the tree the tag was
+  cut from (see `log/2026-10.md`). After any change to that file or to
+  Electron: run `pnpm --filter @nexus/desktop dist`, then
   `npx @electron/fuses read --app apps/desktop/release/win-unpacked/Nexus.exe`,
   and launch the result.
-- **No version has ever been tagged or released, and `v1.4.0` would be the
-  first.** There are no git tags and no GitHub releases, so „1.3.0" is a number
-  the installer reports and nothing a user could verify against; the tree now
-  declares 1.4.0 and the changelog entry is written, but the tag has not been
-  pushed. The Gentoo ebuild's `SRC_URI` points at this repository's releases (the
-  separate `nexus-releases` repository was never created and is no longer
-  wanted), but the ebuild itself is still `nexus-bin-1.3.0`: it needs a 1.4.0
-  bump and a regenerated `Manifest` before a `v1.4.0` tag makes it an ordinary
-  `emerge`. Until then the ebuild is a hand-installed recipe.
+- **`v1.4.0` is the first tag and the first release.** Every installer before
+  it reports a number nothing could be verified against. The Gentoo ebuild's
+  `SRC_URI` points at this repository's releases (the separate `nexus-releases`
+  repository was never created and is no longer wanted), but the ebuild itself
+  is still `nexus-bin-1.3.0`: it needs a 1.4.0 bump and a `Manifest` digested
+  from the published Linux tarball, which exists only now that the release
+  does. Until then the ebuild is a hand-installed recipe.
 - **`check:licences` fails every bump of a packaged dependency, by
   construction.** Dependabot cannot regenerate a generated artifact, so the
   third-party notices must be regenerated on the branch
@@ -839,7 +855,7 @@ implemented until the founder says otherwise.
 | Five smaller confirmations | Open. Three items: the tier-constants doctrine, one agro domain question, desktop→desktop pairing. |
 | Linux | Open. Two items: is Linux supported or a courtesy build, and code signing. The separate releases repository is settled — releases publish in this repository. |
 | The developer drawer | Open. `lf8` naming, the `tf19`/`tf32` label, and `MXINT8`. |
-| Version numbering and tagging | Resolved in the tree: `1.4.0` is the first public release, prepared with its changelog entry. The `v1.4.0` tag is the maintainer's. |
+| Version numbering and tagging | **Answered** 2026-10-05: `1.4.0` is the first public release, tagged `v1.4.0`. |
 | `gitleaks-action` carries a commercial EULA | Irrelevant while the repository is personal; a licence question the day it moves under an organisation. |
 
 ### SEC-VER-01 is binding on paper and has one instance (2026-09-22)

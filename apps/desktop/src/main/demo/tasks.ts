@@ -88,6 +88,138 @@ const TAGS = [
   "Važno",
 ] as const;
 
+/**
+ * English list, section, task, tag and checklist text, keyed by the Serbian
+ * literals the scene above uses.
+ *
+ * The seed keeps its Serbian keys everywhere they are KEYS - `tagIdByName`,
+ * `idByTitle` and `DEPENDENCIES` all name a Serbian string - and translates
+ * only the value handed to the store, so lookup order, dependency wiring and
+ * the `demoRandom("tasks")` draw sequence are all identical in both languages.
+ */
+const EN: Readonly<Record<string, string>> = {
+  Fakultet: "University",
+  "Prijava teme za diplomski rad": "Registering the thesis topic",
+  "Skupiti tri predloga tema i dogovoriti termin sa mentorom.":
+    "Collect three topic proposals and arrange a time with the supervisor.",
+  Važno: "Important",
+  Dokumentacija: "Paperwork",
+  "Sastanak sa mentorom": "Meeting with the supervisor",
+  Poziv: "Call",
+  "Upis prvog semestra master studija": "Enrolling in the first semester of the master's",
+  "Predavanja i vežbe": "Lectures and exercises",
+  "Domaći zadatak iz Mašinskog učenja": "Machine Learning homework",
+  "Implementirati unazadnu propagaciju bez frameworka.":
+    "Implement backpropagation without a framework.",
+  Fokus: "Focus",
+  "Pročitati poglavlje o gradijentnom spustu": "Read the chapter on gradient descent",
+  "Napisati testove za slojeve": "Write tests for the layers",
+  "Provera na validacionom skupu": "Check on the validation set",
+  "Projekat iz Prevodilaca": "Compilers project",
+  "Sintaksna analiza za mini jezik — LL(1) parser.":
+    "Syntax analysis for a mini language — an LL(1) parser.",
+  "Napisati gramatiku": "Write the grammar",
+  "Implementirati lekser": "Implement the lexer",
+  "Implementirati parser": "Implement the parser",
+  "Testirati na primerima": "Test on the examples",
+  "Vežbe iz Baze podataka — normalizacija": "Databases exercises — normalisation",
+  "Seminarski rad iz Softverskog inženjerstva": "Software Engineering term paper",
+  "Tema: mikroservisna arhitektura i observability.":
+    "Topic: microservice architecture and observability.",
+  Ispiti: "Exams",
+  "Ispit iz Kompajlera": "Compilers exam",
+  "Ispit iz Veštačke inteligencije": "Artificial Intelligence exam",
+  "Popravni iz Operacionih sistema": "Operating Systems resit",
+  "Ponovo prijavljen ispit posle pada u junskom roku.":
+    "The exam was re-registered after failing the June sitting.",
+  Posao: "Work",
+  "Ažurirati CV i portfolio": "Update the CV and portfolio",
+  "Dodati poslednji projekat i osvežiti sekciju veština.":
+    "Add the latest project and refresh the skills section.",
+  "Poslati prijave za pripravnički program": "Send applications for the internship programme",
+  "Fokus na kompanije koje traže Java/Kotlin ili Python profil.":
+    "Focus on companies looking for a Java/Kotlin or Python profile.",
+  "Čeka odgovor": "Waiting for a reply",
+  "Priprema za tehnički intervju": "Preparing for the technical interview",
+  "LeetCode srednji nivo + sistemski dizajn osnove.":
+    "LeetCode medium level + the basics of system design.",
+  "Ponoviti algoritme i strukture podataka": "Revise algorithms and data structures",
+  "Uraditi mock intervju": "Do a mock interview",
+  "Pripremiti pitanja za poslodavca": "Prepare questions for the employer",
+  "Napisati propratno pismo": "Write the cover letter",
+  Sprint: "Sprint",
+  "Code review za PR br. 128": "Code review for PR no. 128",
+  Brzo: "Quick",
+  "Ispraviti bag u modulu za autentifikaciju": "Fix the bug in the authentication module",
+  "Token se ne obnavlja posle isteka — repro koraci u tiketu.":
+    "The token is not refreshed after expiry — repro steps in the ticket.",
+  Hitno: "Urgent",
+  "Napisati testove za novi endpoint": "Write tests for the new endpoint",
+  "Deploy na staging okruženje": "Deploy to the staging environment",
+  Administracija: "Admin",
+  "Popuniti izveštaj o radnim satima": "Fill in the timesheet",
+  Ponoviti: "Repeat",
+  "Obnoviti ugovor o radu": "Renew the employment contract",
+  "Prijava godišnjeg odmora": "Applying for annual leave",
+  "Mesečni izveštaj o troškovima": "Monthly expense report",
+  Kuća: "Home",
+  "Kupovina namirnica": "Buying groceries",
+  "Mleko, jaja, povrće, kafa.": "Milk, eggs, vegetables, coffee.",
+  Kupovina: "Shopping",
+  "Plaćanje računa za struju": "Paying the electricity bill",
+  "Popravka slavine u kupatilu": "Fixing the tap in the bathroom",
+  "Curi ispod sudopere, verovatno zaptivka.": "It leaks under the sink, probably the seal.",
+  "Generalno čišćenje stana": "Deep-cleaning the flat",
+  "Zameniti filter za vodu": "Replace the water filter",
+  "Sastanak sa majstorom za klimu": "Meeting the air-conditioning technician",
+  "Kupiti novu stolicu za radni sto": "Buy a new desk chair",
+  "Organizacija ostave": "Organising the storage room",
+  Lično: "Personal",
+  "Zakazati sistematski pregled": "Book a full medical check-up",
+  "Krv, EKG i oftalmolog — obavezno pre kraja godine.":
+    "Bloods, ECG and an eye exam — before the end of the year.",
+  "Obnoviti ličnu kartu": "Renew the identity card",
+  "Rezervacija leta za letovanje": "Booking the summer holiday flight",
+  "Pročitati „Clean Architecture“": "Read “Clean Architecture”",
+  "Prva polovina knjige": "First half of the book",
+  "Druga polovina knjige": "Second half of the book",
+  "Vratiti pozajmljeni novac Marku": "Pay Marko back the borrowed money",
+  "Pozajmica za koncert u martu.": "A loan for the March concert.",
+  "Poklon za rođendan sestre": "A present for my sister's birthday",
+  "Rezervacija stola za rođendansku večeru": "Booking a table for the birthday dinner",
+  "Podnošenje zahteva za studentski kredit": "Applying for the student loan",
+  "Potrebna potvrda o upisu i izvod iz banke.":
+    "Needs the enrolment certificate and a bank statement.",
+  Projekti: "Projects",
+  "Postaviti ličnu veb stranicu": "Set up a personal website",
+  Ideja: "Idea",
+  "Napisati blog post o RAG arhitekturama": "Write a blog post about RAG architectures",
+  Nexus: "Nexus",
+  "Dovršiti modul za praćenje navika": "Finish the habit-tracking module",
+  "Streak logika, nedeljni pregled i grafikon napretka.":
+    "Streak logic, a weekly review and a progress chart.",
+  "Dizajnirati šemu baze": "Design the database schema",
+  "Implementirati streak logiku": "Implement the streak logic",
+  "Napisati UI komponente": "Write the UI components",
+  "Napisati testove za uvoz/izvoz podataka": "Write tests for data import/export",
+  "Pokriti .ics i JSON arhivu edge-case datumima.":
+    "Cover the .ics and JSON archive with edge-case dates.",
+  "Optimizacija upita nad velikim tabelama": "Optimising queries on large tables",
+  "Indeksi za tabelu događaja i zadataka.": "Indexes for the events and tasks tables.",
+  Ideje: "Ideas",
+  "Istražiti lokalne LLM modele za pretragu beležaka":
+    "Research local LLM models for note search",
+  "Kandidati: manji modeli koji staju u 8GB VRAM.":
+    "Candidates: smaller models that fit in 8 GB of VRAM.",
+  "Skica za aplikaciju za deljenje troškova sa cimerima":
+    "Sketch for a shared-expenses app for flatmates",
+};
+
+/** The seeded text for the active locale. */
+function text(ctx: DemoContext, sr: string): string {
+  return ctx.locale === "en" ? (EN[sr] ?? sr) : sr;
+}
+
 // --- Recurrence rules ------------------------------------------------------
 //
 // Four series (ADR-024's cap on this seed is "2-4"), each shaped like a habit
@@ -660,12 +792,12 @@ function createListTask(
   const createdAt = demoInstant(env.ctx, env.rnd, lifetime.created);
 
   const input: CreateTaskInput = {
-    title: seed.title,
+    title: text(env.ctx, seed.title),
     priority: seed.priority,
     dueDate,
     listId,
     sectionId,
-    ...(seed.description !== undefined ? { description: seed.description } : {}),
+    ...(seed.description !== undefined ? { description: text(env.ctx, seed.description) } : {}),
     ...(seed.status === "doing" ? { status: seed.status } : {}),
     ...(seed.recurrence !== undefined ? { recurrence: seed.recurrence } : {}),
   };
@@ -684,7 +816,10 @@ function createListTask(
     // subtask takes its parent's own creation instant — which is also what
     // makes "a subtask never predates its parent" true without comparing
     // anything.
-    const createdSub = env.tasks.create({ title: sub.title, parentId: created.id }, createdAt);
+    const createdSub = env.tasks.create(
+      { title: text(env.ctx, sub.title), parentId: created.id },
+      createdAt,
+    );
     env.idByTitle.set(sub.title, createdSub.id);
     if (sub.done === true) {
       const at = demoInstant(env.ctx, env.rnd, subtaskCompletedOffset(env.rnd, lifetime));
@@ -704,7 +839,7 @@ export function seedDemoTasks(db: DatabaseHandle, ctx: DemoContext): void {
 
   const tagIdByName = new Map<string, string>();
   for (const name of TAGS) {
-    tagIdByName.set(name, tagStore.createTag(name, nowIso).id);
+    tagIdByName.set(name, tagStore.createTag(text(ctx, name), nowIso).id);
   }
 
   const env: TaskSeedEnv = {
@@ -717,13 +852,13 @@ export function seedDemoTasks(db: DatabaseHandle, ctx: DemoContext): void {
   };
 
   for (const listSeed of LISTS) {
-    const list = lists.createList({ name: listSeed.name }, nowIso);
+    const list = lists.createList({ name: text(ctx, listSeed.name) }, nowIso);
 
     for (const taskSeed of listSeed.tasks) {
       createListTask(env, list.id, null, taskSeed);
     }
     for (const sectionSeed of listSeed.sections ?? []) {
-      const section = lists.createSection(list.id, sectionSeed.name, nowIso);
+      const section = lists.createSection(list.id, text(ctx, sectionSeed.name), nowIso);
       for (const taskSeed of sectionSeed.tasks) {
         createListTask(env, list.id, section.id, taskSeed);
       }

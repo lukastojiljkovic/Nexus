@@ -383,6 +383,8 @@ export interface HttpStatus {
   readonly reference: string;
   /** One Serbian line saying WHEN this code is the right answer — what a registry table never tells you. */
   readonly noteSr: string;
+  /** The same line in English, so the reference reads in the interface language. */
+  readonly noteEn: string;
   readonly statusClass: HttpStatusClass;
   /** `false` for codes that are widely deployed but were never registered with IANA. */
   readonly official: boolean;
@@ -394,6 +396,96 @@ export function httpStatusClass(code: number): HttpStatusClass | null {
   return HTTP_STATUS_CLASSES[Math.floor(code / 100) - 1] ?? null;
 }
 
+/**
+ * One English line per code, keyed by the code rather than placed beside its
+ * Serbian row.
+ *
+ * Keying by code means the seventy-odd `status(...)` rows below did not have to
+ * move, and it keeps the two languages in one block each rather than
+ * interleaved a line at a time. The code is the row's identity either way — the
+ * table is checked for a row per entry in `system.test.ts` — so a code added
+ * without its English line is a named failure there rather than a silent
+ * fallback to Serbian.
+ */
+const NOTE_EN: Readonly<Record<number, string>> = {
+  100: "Carry on and send the body — the answer to Expect: 100-continue.",
+  101: "The server agrees to switch to another protocol, usually WebSocket.",
+  102: "WebDAV: the request was received and is being processed; the real answer is still coming.",
+  103: "Early headers (usually Link) before the final response arrives.",
+  200: "The request succeeded; the body carries the result that was asked for.",
+  201: "The resource was created; the Location header says where it lives.",
+  202: "Accepted for processing, but the work is neither finished nor guaranteed.",
+  203: "A proxy changed the response on the way — it is not the original from the origin.",
+  204: "It succeeded, and the response deliberately has no body.",
+  205: "It succeeded; the client should clear the form it submitted.",
+  206: "A partial answer to a Range request — a download resuming.",
+  207: "WebDAV: one body carrying a separate status for each resource.",
+  208: "WebDAV: this resource was already listed earlier in the same response.",
+  218: "Apache returns a 2xx instead of an error when ProxyErrorOverride is off.",
+  226: "The response is the result of delta-encoding what was requested through A-IM.",
+  300: "Several representations of the resource exist; the client picks one.",
+  301: "Moved for good — update the link and remember the redirect.",
+  302: "Temporarily elsewhere; clients in practice switch to GET, which 307 prevents.",
+  303: "Look at the result at another address, always over GET.",
+  304: "The cache is still fresh; there is no body, so use the stored copy.",
+  305: "Withdrawn for security reasons — it is neither sent nor honoured.",
+  306: "A number the registry reserved and never assigned.",
+  307: "Temporary, and the method and the request body must be preserved.",
+  308: "Permanent, and the method and the request body must be preserved.",
+  400: "The request is malformed and the server does not understand it at all.",
+  401: "Really „unauthenticated“ — the sign-in is missing or wrong.",
+  402: "Reserved for billing; in practice everyone uses it their own way.",
+  403: "The identity is known, but the right to access does not exist.",
+  404: "The server has nothing at that address and does not say why.",
+  405: "The method is not allowed; the Allow header lists the ones that are.",
+  406: "No available representation matches the Accept headers.",
+  407: "The proxy asks for sign-in before it lets the request through.",
+  408: "The client did not send the request in time; the server closes the connection.",
+  409: "The request conflicts with the resource's current state.",
+  410: "Deliberately removed and not coming back — a stronger claim than 404.",
+  411: "The server refuses a body with no Content-Length header.",
+  412: "The condition in If-Match or If-Unmodified-Since was not met.",
+  413: "The request body is larger than the server accepts.",
+  414: "The address is longer than the server accepts.",
+  415: "The body's Content-Type is not supported on this resource.",
+  416: "The requested range lies outside the resource's size.",
+  417: "The server cannot meet what the Expect header asks for.",
+  418: "A number from an April Fools' joke (RFC 2324); the registry keeps it reserved.",
+  419: "Laravel: the CSRF token expired, so the form has to be sent again.",
+  421: "The request reached a server that does not serve that domain.",
+  422: "The syntax is fine, but the content fails semantically.",
+  423: "WebDAV: the resource is locked.",
+  424: "WebDAV: a dependent request failed, so this one cannot proceed.",
+  425: "The server refuses to risk replaying a 0-RTT request.",
+  426: "Continuing is possible only over the protocol in the Upgrade header.",
+  428: "The server wants a conditional request to prevent a lost update.",
+  429: "The request-rate limit was exceeded; see Retry-After.",
+  431: "The headers are too large — usually a cookie that is too long.",
+  451: "The content is unavailable because the law forbids it.",
+  499: "nginx: the client closed the connection before the response arrived.",
+  500: "An unexpected error on the server, with no further explanation.",
+  501: "The server does not support the method that was requested.",
+  502: "The proxy got an invalid response from the upstream server.",
+  503: "Temporarily unavailable — overload or maintenance.",
+  504: "The upstream server did not answer in time.",
+  505: "The HTTP version in the request is not supported.",
+  506: "Content negotiation is misconfigured on the server itself.",
+  507: "WebDAV: there is not enough space to carry out the request.",
+  508: "WebDAV: processing fell into an infinite loop.",
+  509: "The traffic allowed to the hosting account was exceeded.",
+  510: "Obsolete: the request lacks an extension the server asks for.",
+  511: "The network wants sign-in — the classic captive portal on public Wi-Fi.",
+  520: "Cloudflare: the origin returned a response Cloudflare cannot read.",
+  521: "Cloudflare: the origin refused the connection.",
+  522: "Cloudflare: the connection to the origin was not established in time.",
+  523: "Cloudflare: the origin is not reachable from the network.",
+  524: "Cloudflare: the connection was made, but the answer did not arrive in time.",
+  525: "Cloudflare: the TLS handshake with the origin failed.",
+  526: "Cloudflare: the origin's certificate is not valid.",
+  527: "Cloudflare: an error in the Railgun layer, which has since been shut down.",
+  530: "Cloudflare: always arrives with a separate 1xxx code that carries the real reason.",
+};
+
 /** Terser than repeating the class in seventy-odd rows, and it can never disagree with the code. */
 function status(
   code: number,
@@ -402,7 +494,15 @@ function status(
   noteSr: string,
   official = true,
 ): HttpStatus {
-  return { code, name, reference, noteSr, statusClass: httpStatusClass(code) ?? "5xx", official };
+  return {
+    code,
+    name,
+    reference,
+    noteSr,
+    noteEn: NOTE_EN[code] ?? noteSr,
+    statusClass: httpStatusClass(code) ?? "5xx",
+    official,
+  };
 }
 
 /**
@@ -614,7 +714,9 @@ export function searchHttpStatuses(query: string): readonly HttpStatus[] {
   const needle = foldSearchText(trimmed);
   return HTTP_STATUSES.filter(
     (entry) =>
-      foldSearchText(entry.name).includes(needle) || foldSearchText(entry.noteSr).includes(needle),
+      foldSearchText(entry.name).includes(needle) ||
+      foldSearchText(entry.noteSr).includes(needle) ||
+      foldSearchText(entry.noteEn).includes(needle),
   );
 }
 

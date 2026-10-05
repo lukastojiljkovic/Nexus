@@ -23,6 +23,7 @@ import {
 import { Button, Select, TextArea, TextField } from "@nexus/ui";
 
 import { partDisplayName } from "./elecCatalogue.js";
+import { componentName, componentSummary, pinLabel } from "./elecLocale.js";
 import type { ElecSelection } from "./ElecBench.js";
 import type { ElecCircuitDocument } from "../../shared/ipc.js";
 import { countUnit, strings } from "./strings.js";
@@ -297,7 +298,11 @@ function PartPanel({
     <section className="elec-inspector__panel">
       <h2 className="elec-inspector__title">{s.partTitle}</h2>
       <p className="elec-inspector__subject">
-        {partDisplayName(part.label, component, bench.unknownPart)}
+        {partDisplayName(
+          part.label,
+          component === undefined ? undefined : componentName(component),
+          bench.unknownPart,
+        )}
       </p>
 
       <TextField
@@ -371,7 +376,7 @@ function PartPanel({
       {component !== undefined && (
         <>
           <h3 className="elec-inspector__heading">{s.componentHeading}</h3>
-          <p className="elec-inspector__summary">{component.summary}</p>
+          <p className="elec-inspector__summary">{componentSummary(component)}</p>
           <dl className="elec-inspector__facts">
             {component.supply !== undefined && (
               <Fact term={s.supplyLabel}>
@@ -411,7 +416,7 @@ function PartPanel({
           <ul className="elec-inspector__pins">
             {component.pins.map((pin) => (
               <li key={pin.id} className="elec-inspector__pin">
-                <span className="elec-inspector__pin-label">{pin.label}</span>
+                <span className="elec-inspector__pin-label">{pinLabel(pin)}</span>
                 <span className="elec-inspector__pin-functions">
                   {pin.functions.map((fn) => s.pinFunctions[fn]).join(", ")}
                 </span>
@@ -454,7 +459,12 @@ function WirePanel({ wire, parts, resolve, busy, onSetColour, onRemove }: WirePa
   function endName(partId: string, pinId: string): string {
     const part = parts.find((candidate) => candidate.id === partId);
     if (part === undefined) return pinId;
-    const name = partDisplayName(part.label, resolve(part.componentId), bench.unknownPart);
+    const resolved = resolve(part.componentId);
+    const name = partDisplayName(
+      part.label,
+      resolved === undefined ? undefined : componentName(resolved),
+      bench.unknownPart,
+    );
     return `${name} · ${pinId}`;
   }
 
@@ -539,9 +549,13 @@ function ProblemList({
 
   const nameOf = (partId: string): string => {
     const part = circuit.parts.find((candidate) => candidate.id === partId);
-    return part === undefined
-      ? partId
-      : partDisplayName(part.label, resolve(part.componentId), strings.electronics.bench.unknownPart);
+    if (part === undefined) return partId;
+    const component = resolve(part.componentId);
+    return partDisplayName(
+      part.label,
+      component === undefined ? undefined : componentName(component),
+      strings.electronics.bench.unknownPart,
+    );
   };
 
   const detailOf = (finding: RuleFinding): string =>

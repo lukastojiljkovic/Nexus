@@ -74,6 +74,16 @@ import type { AuthRefusal, DeviceRegisterRefusal, SyncEnableRefusal } from "@nex
  */
 export const DEMO_PROFILE_NAME = "Demo";
 
+/**
+ * Every language the copy layer can serve, as its locale codes.
+ *
+ * The renderer derives the same union from its own `LOCALES` record; this is
+ * the copy the IPC contract can see, and the value a `locale:set` payload is
+ * validated against. A third language is one entry there, one entry here, and
+ * a compile error wherever the two are compared.
+ */
+export type AppLocale = "sr" | "en";
+
 export const IpcChannel = {
   authStatus: "auth:status",
   authCreate: "auth:create",
@@ -110,6 +120,13 @@ export const IpcChannel = {
   // renderer may read, so there is nothing here for a compromised renderer
   // to widen.
   profilesSetActive: "profiles:set-active",
+  // The renderer reports the language it is serving (the renderer's own
+  // `LOCALES`, mirrored here as a closed union because the two sides must agree
+  // before any copy is written in it). Main's dialogs and OS notifications are
+  // composed there and cannot read the renderer's preference, so this is how
+  // they learn it. A report, not a request, like `profiles:set-active`: it
+  // changes what main writes NEXT and nothing the renderer may read.
+  localeSet: "locale:set",
   profilesRename: "profiles:rename",
   profilesPicturePick: "profiles:picture-pick",
   profilesPictureClear: "profiles:picture-clear",
@@ -8672,6 +8689,8 @@ export interface NexusApi {
   verifyProfileSwitch(passcode: string): Promise<AuthResult>;
   /** Reports which profile the shell is standing in (ADR-058, NTF active-profile rule) — at unlock landing and on every verified switch — so main serves notifications for the active profile only. */
   setActiveProfile(profileId: string): Promise<void>;
+  /** Reports the language the interface is being served in, so main's native dialogs and OS notifications follow the same choice. */
+  setLocale(locale: AppLocale): Promise<void>;
   renameProfile(id: string, name: string): Promise<void>;
   /**
    * Opens the native picker and, if the user chooses a file, stores the square
@@ -8771,7 +8790,7 @@ export interface NexusApi {
   bulkSetTaskDueDate(profileId: string, ids: string[], dueDate: string | null): Promise<void>;
   bulkDeleteTasks(profileId: string, ids: string[]): Promise<void>;
   bulkRestoreTasks(profileId: string, ids: string[]): Promise<void>;
-  /** This profile's task tags, alphabetical by name (the rail re-sorts with `Intl.Collator(["sr-Latn","sr"])`). */
+  /** This profile's task tags, alphabetical by name (the rail re-sorts with the active locale's `Intl.Collator`). */
   listTaskTags(profileId: string): Promise<TaskTag[]>;
   /** Get-or-create by trimmed name: tagging with a name the profile already has returns that tag rather than a second one. */
   createTaskTag(profileId: string, name: string): Promise<TaskTag>;
@@ -8797,7 +8816,7 @@ export interface NexusApi {
   ): Promise<SaveAttachmentResult>;
   /** Every live task's attachment count in one fetch — the page indexes them by task rather than asking per row (the `cardCounts` idiom). */
   taskAttachmentCounts(profileId: string): Promise<TaskAttachmentCount[]>;
-  /** This profile's task templates, alphabetical by name (the popover re-sorts with `Intl.Collator(["sr-Latn","sr"])`). */
+  /** This profile's task templates, alphabetical by name (the popover re-sorts with the active locale's `Intl.Collator`). */
   listTaskTemplates(profileId: string): Promise<TaskTemplate[]>;
   /** Captures `taskId` — its own fields, its direct live subtasks and its tags — as a template called `name`. An existing name is REPLACED. */
   saveTaskTemplateFromTask(profileId: string, taskId: string, name: string): Promise<TaskTemplate>;
@@ -8830,7 +8849,7 @@ export interface NexusApi {
    * are all this one call plus whatever the caller does next.
    */
   splitEventRecurrence(profileId: string, id: string, occurrenceDate: string): Promise<Event>;
-  /** This profile's event templates, alphabetical by name (the popover re-sorts with `Intl.Collator(["sr-Latn","sr"])`). */
+  /** This profile's event templates, alphabetical by name (the popover re-sorts with the active locale's `Intl.Collator`). */
   listEventTemplates(profileId: string): Promise<EventTemplate[]>;
   /** Captures `eventId`'s SHAPE — its time of day, length, reminders, rule and text — as a template called `name`. An existing name is REPLACED. */
   captureEventTemplate(profileId: string, eventId: string, name: string): Promise<EventTemplate>;
@@ -8844,7 +8863,7 @@ export interface NexusApi {
   calendarSettings(profileId: string): Promise<CalendarSettings>;
   /** Writes the whole pair at once — both dates, or both null to clear — and answers with what is now stored. */
   setCalendarSettings(profileId: string, settings: CalendarSettings): Promise<CalendarSettings>;
-  /** This profile's people, name-ordered by SQLite's binary collation (CAL-007); the renderer re-sorts with `Intl.Collator(["sr-Latn","sr"])`. */
+  /** This profile's people, name-ordered by SQLite's binary collation (CAL-007); the renderer re-sorts with the active locale's `Intl.Collator`. */
   listPeople(profileId: string): Promise<Person[]>;
   createPerson(profileId: string, person: NewPersonFields): Promise<Person>;
   updatePerson(profileId: string, id: string, changes: PersonFieldChanges): Promise<Person>;
@@ -9101,7 +9120,7 @@ export interface NexusApi {
   listNoteTagLinks(profileId: string): Promise<NoteTagLink[]>;
   attachNoteTag(profileId: string, noteId: string, tagId: string): Promise<void>;
   detachNoteTag(profileId: string, noteId: string, tagId: string): Promise<void>;
-  /** NOTE-002: this profile's categories, name-ordered; the renderer re-sorts with `Intl.Collator(["sr-Latn","sr"])`. */
+  /** NOTE-002: this profile's categories, name-ordered; the renderer re-sorts with the active locale's `Intl.Collator`. */
   listNoteCategories(profileId: string): Promise<NoteCategory[]>;
   /** Rejects a name this profile already uses — unlike a tag, a category is never get-or-created. */
   createNoteCategory(
@@ -9128,7 +9147,7 @@ export interface NexusApi {
   loadNoteVersion(profileId: string, noteId: string, coveredSeq: number): Promise<Uint8Array>;
   /** The pre-restore safety checkpoint — no age gate, deduped by covered_seq. */
   captureNoteVersion(profileId: string, noteId: string): Promise<void>;
-  /** This profile's user-defined templates, name-ordered (ADR-016 / NOTE-009); the renderer re-sorts with `Intl.Collator(["sr-Latn","sr"])`. */
+  /** This profile's user-defined templates, name-ordered (ADR-016 / NOTE-009); the renderer re-sorts with the active locale's `Intl.Collator`. */
   listNoteTemplates(profileId: string): Promise<NoteTemplate[]>;
   /** Upserts on name (ADR-016): saving under an existing template's name replaces its content, keeping the same id. */
   saveNoteTemplate(profileId: string, name: string, content: string): Promise<NoteTemplate>;

@@ -14,7 +14,7 @@ describe("profileInitials", () => {
     expect(profileInitials("Luka Dragan Stojiljković")).toBe("LD");
   });
 
-  it("uppercases in sr-Latn — plain toUpperCase mis-tailors nothing here, but the rule is the rule", () => {
+  it("uppercases in the active locale — plain toUpperCase would not follow a switch", () => {
     expect(profileInitials("đorđe ćirić")).toBe("ĐĆ");
     expect(profileInitials("šumska živina")).toBe("ŠŽ");
   });

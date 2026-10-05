@@ -49,6 +49,35 @@ const MON_WED_FRI: HabitSchedule = { kind: "days", weekdays: [1, 3, 5] };
 const WEEKDAYS: HabitSchedule = { kind: "days", weekdays: [1, 2, 3, 4, 5] };
 const WEEKEND: HabitSchedule = { kind: "days", weekdays: [6, 7] };
 
+/**
+ * English names and units for this file's twelve habits, keyed by the Serbian
+ * text the Serbian scene uses, so `ctx.locale === "sr"` seeds exactly what it
+ * always did.
+ */
+const EN: Readonly<Record<string, string>> = {
+  Trening: "Training",
+  "Vitamin D": "Vitamin D",
+  "Šetnja 10.000 koraka": "10,000-step walk",
+  koraka: "steps",
+  Meditacija: "Meditation",
+  "Bez telefona posle 23h": "No phone after 11 pm",
+  "Srpski dnevnik": "Serbian journal",
+  Voda: "Water",
+  čaša: "glass",
+  Čitanje: "Reading",
+  min: "min",
+  "Engleski — 20 min": "English - 20 min",
+  "Pospremanje stola": "Tidying the desk",
+  "Vikend trčanje": "Weekend run",
+  km: "km",
+  Rastezanje: "Stretching",
+};
+
+/** The seeded text for the active locale. */
+function text(ctx: DemoContext, sr: string): string {
+  return ctx.locale === "en" ? (EN[sr] ?? sr) : sr;
+}
+
 /** One habit's shape and the persona that fills its history. */
 interface HabitSeed {
   readonly name: string;
@@ -259,11 +288,11 @@ export function seedDemoHabits(db: DatabaseHandle, ctx: DemoContext): void {
     const color = HABIT_COLORS[index % HABIT_COLORS.length] ?? "bronza";
     const habit = store.create(
       {
-        name: seed.name,
+        name: text(ctx, seed.name),
         color,
         schedule: seed.schedule,
         target: seed.target ?? null,
-        unit: seed.unit ?? null,
+        unit: seed.unit === undefined ? null : text(ctx, seed.unit),
       },
       demoIso(ctx, seed.createdOffset, seed.tickHour),
     );

@@ -29,6 +29,7 @@ import { persistOverviewOpen, readStoredOverviewOpen } from "./overviewPrefs.js"
 import { PRIV_LOCKED_EVENT } from "./privEvents.js";
 import { TypedConfirmDialog } from "./TypedConfirmDialog.js";
 import { localTodayKey, shiftDayKey } from "./examDates.js";
+import { collator, dateTimeFormat } from "./intl.js";
 import { formatClockTime } from "./timeFormat.js";
 import { formatNotificationWhen } from "./notificationFormat.js";
 import { NotePopover } from "./notePopover.js";
@@ -36,9 +37,6 @@ import { persistRootNoteView, readStoredRootNoteView } from "./notePrefs.js";
 import { moduleName } from "./moduleName.js";
 import { mergeTemplateEntries } from "./noteTemplates.js";
 import { countUnit, strings } from "./strings.js";
-
-/** sr-Latn collation for the move-to-folder menu — plain "sr" mis-tailors š/č/ć. */
-const collator = new Intl.Collator(["sr-Latn", "sr"]);
 
 /**
  * What „Pretvori u zadatke" made, as one Serbian line: „Napravljeno 3 zadatka,
@@ -75,17 +73,17 @@ function formatChecklistResult(result: NoteChecklistTasksResult): string {
   return `${created}${completed}.${skipped}`;
 }
 
-/** Note-list date: compact sr-Latn day + month, degrading to the raw value. */
+/** Note-list date: compact day + month in the active locale, degrading to the raw value. */
 function formatNoteDate(iso: string): string {
   const date = new Date(iso);
   return Number.isNaN(date.getTime())
     ? iso
-    : new Intl.DateTimeFormat("sr-Latn", { day: "2-digit", month: "short" }).format(date);
+    : dateTimeFormat({ day: "2-digit", month: "short" }).format(date);
 }
 
 /**
- * A month group's own name — „jul 2026." — for everything older than the
- * current one.
+ * A month group's own name — „jul 2026." in Serbian, "July 2026" in English —
+ * for everything older than the current one.
  *
  * `timeZone: "UTC"` is load-bearing rather than tidy: the key it formats is a
  * bare `YYYY-MM`, read back as UTC midnight of the first, and in any zone
@@ -94,12 +92,6 @@ function formatNoteDate(iso: string): string {
  * Greenwich. `NoteRhythm`'s cell formatter pins the zone for exactly this
  * reason.
  */
-const MONTH_LABEL = new Intl.DateTimeFormat("sr-Latn", {
-  month: "long",
-  year: "numeric",
-  timeZone: "UTC",
-});
-
 /** The buckets the note list is cut into, widest-window last. */
 type NoteGroupKind = "pinned" | "today" | "yesterday" | "week" | "month" | "older";
 
@@ -191,7 +183,9 @@ function groupLabel(group: NoteGroup): string {
     case "month":
       return strings.notes.listGroups.month;
     case "older":
-      return MONTH_LABEL.format(new Date(`${group.monthKey}-01T00:00:00Z`));
+      return dateTimeFormat({ month: "long", year: "numeric", timeZone: "UTC" }).format(
+        new Date(`${group.monthKey}-01T00:00:00Z`),
+      );
   }
 }
 
@@ -849,9 +843,9 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
     }
   }
 
-  const sortedFolders = folders.slice().sort((a, b) => collator.compare(a.name, b.name));
-  const sortedTags = tags.slice().sort((a, b) => collator.compare(a.name, b.name));
-  const sortedCategories = categories.slice().sort((a, b) => collator.compare(a.name, b.name));
+  const sortedFolders = folders.slice().sort((a, b) => collator().compare(a.name, b.name));
+  const sortedTags = tags.slice().sort((a, b) => collator().compare(a.name, b.name));
+  const sortedCategories = categories.slice().sort((a, b) => collator().compare(a.name, b.name));
   const categoryById = useMemo(
     () => new Map(categories.map((category) => [category.id, category])),
     [categories],

@@ -1,15 +1,22 @@
 import type { FocusPhaseKind, HabitSchedule, NotificationSource } from "@nexus/core";
 import { clockText } from "../shared/duration.js";
+import { mainLocale } from "./locale.js";
 
 /**
- * Serbian copy for OS notifications, fired only from the main process (NTF
- * piece a2). The main process cannot import the renderer's `strings.ts` — a
+ * Serbian and English copy for OS notifications, fired only from the main
+ * process (NTF piece a2). The main process cannot import the renderer's
+ * `strings.ts` — a
  * separate bundle, browser-only build — so this is the single, centralized
  * main-side counterpart. It produces exactly the text snapshot recorded by
  * `NotificationStore.recordDelivered` and shown by an OS `Notification`; the
  * later bell/center UI (NTF piece a3) keeps using the renderer's own
  * `strings.ts` for everything it renders itself. Sentence case throughout, no
  * exclamation marks (the app's tone: informative, never alarming).
+ *
+ * The language is read through `mainLocale()` at the moment a notification is
+ * composed, never captured at import, so a choice made in Settings governs the
+ * very next toast. Every composition helper below therefore comes in a Serbian
+ * pair (the three-form numeral rule) and an English one (one/other).
  */
 
 /** One notification's exact text snapshot. */
@@ -22,6 +29,12 @@ const EXAM_TYPE_LABELS: Record<"pismeni" | "usmeni" | "kolokvijum", string> = {
   pismeni: "Pismeni",
   usmeni: "Usmeni",
   kolokvijum: "Kolokvijum",
+};
+
+const EXAM_TYPE_LABELS_EN: Record<"pismeni" | "usmeni" | "kolokvijum", string> = {
+  pismeni: "Written",
+  usmeni: "Oral",
+  kolokvijum: "Midterm",
 };
 
 const MS_PER_DAY = 86_400_000;
@@ -39,10 +52,10 @@ function daysUntil(today: string, dateKey: string): number {
   return Math.round((utcDayMs(dateKey) - utcDayMs(today)) / MS_PER_DAY);
 }
 
-/** "YYYY-MM-DD" -> "DD.MM.YYYY." (Serbian date punctuation). */
+/** "YYYY-MM-DD" -> Serbian "DD.MM.YYYY." or English "DD/MM/YYYY". */
 function formatDate(dateKey: string): string {
   const [year, month, day] = dateKey.slice(0, 10).split("-");
-  return `${day}.${month}.${year}.`;
+  return isEnglish() ? `${day}/${month}/${year}` : `${day}.${month}.${year}.`;
 }
 
 /**
@@ -58,7 +71,8 @@ function formatInstant(iso: string): string {
   if (Number.isNaN(date.getTime())) return iso;
   const pad = (value: number): string => String(value).padStart(2, "0");
   const dateKey = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-  return `${formatDate(dateKey)} u ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  const time = `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return isEnglish() ? `${formatDate(dateKey)} at ${time}` : `${formatDate(dateKey)} u ${time}`;
 }
 
 /**
@@ -82,6 +96,21 @@ function dayUnit(count: number): string {
   return count % 10 === 1 && count % 100 !== 11 ? "dan" : "dana";
 }
 
+/** English 1 / everything-else numeral agreement. */
+function enPlural(count: number, one: string, many: string): string {
+  return Math.abs(count) === 1 ? one : many;
+}
+
+/** English "day"/"days" agreement. */
+function enDayUnit(count: number): string {
+  return Math.abs(count) === 1 ? "day" : "days";
+}
+
+/** True when main is serving English. Read per call - never captured. */
+function isEnglish(): boolean {
+  return mainLocale() === "en";
+}
+
 /**
  * Document expiry reminder copy. `today`/`expiryDate` are bare "YYYY-MM-DD".
  * `isFinalWarning` is the candidate's `priority === "max"` — the ladder's
@@ -93,8 +122,15 @@ export function documentNotificationCopy(
   today: string,
   isFinalWarning: boolean,
 ): NotificationCopy {
-  const title = isFinalWarning ? "Poslednja opomena: dokument ističe" : "Dokument uskoro ističe";
   const days = daysUntil(today, expiryDate);
+  if (isEnglish()) {
+    const title = isFinalWarning
+      ? "Last warning: document expires"
+      : "Document expires soon";
+    const dayPhrase = days <= 0 ? "expires today" : `expires in ${days} ${enDayUnit(days)}`;
+    return { title, body: `“${label}” ${dayPhrase} (${formatDate(expiryDate)})` };
+  }
+  const title = isFinalWarning ? "Poslednja opomena: dokument ističe" : "Dokument uskoro ističe";
   const dayPhrase = days <= 0 ? "ističe danas" : `ističe za ${days} ${dayUnit(days)}`;
   return { title, body: `„${label}“ ${dayPhrase} (${formatDate(expiryDate)})` };
 }
@@ -105,6 +141,10 @@ export function examNotificationCopy(
   examType: "pismeni" | "usmeni" | "kolokvijum",
   occurrenceKey: "d-1" | "d-0",
 ): NotificationCopy {
+  if (isEnglish()) {
+    const title = occurrenceKey === "d-0" ? "Exam is today" : "Exam tomorrow";
+    return { title, body: `${subjectName} — ${EXAM_TYPE_LABELS_EN[examType]}` };
+  }
   const title = occurrenceKey === "d-0" ? "Ispit je danas" : "Ispit sutra";
   return { title, body: `${subjectName} — ${EXAM_TYPE_LABELS[examType]}` };
 }
@@ -119,9 +159,11 @@ export function examNotificationCopy(
 function leadPhrase(offsetMinutes: number): string {
   if (offsetMinutes % MINUTES_PER_DAY === 0) return dayLeadPhrase(offsetMinutes / MINUTES_PER_DAY);
   if (offsetMinutes % MINUTES_PER_HOUR === 0) {
-    return `${offsetMinutes / MINUTES_PER_HOUR} h ranije`;
+    return isEnglish()
+      ? `${offsetMinutes / MINUTES_PER_HOUR} h earlier`
+      : `${offsetMinutes / MINUTES_PER_HOUR} h ranije`;
   }
-  return `${offsetMinutes} min ranije`;
+  return isEnglish() ? `${offsetMinutes} min earlier` : `${offsetMinutes} min ranije`;
 }
 
 /**
@@ -131,7 +173,9 @@ function leadPhrase(offsetMinutes: number): string {
  * (ADR-028) is in days to begin with and has no minutes to divide down.
  */
 function dayLeadPhrase(days: number): string {
-  return `${days} ${dayUnit(days)} ranije`;
+  return isEnglish()
+    ? `${days} ${enDayUnit(days)} earlier`
+    : `${days} ${dayUnit(days)} ranije`;
 }
 
 /**
@@ -156,6 +200,18 @@ export function eventNotificationCopy(
   offsetMinutes: number,
 ): NotificationCopy {
   const days = daysUntil(today, occurrenceDate);
+  if (isEnglish()) {
+    const dayPhrase = days === 0 ? "today" : days === 1 ? "tomorrow" : formatDate(occurrenceDate);
+    if (startTime === null) {
+      return { title: `Event: ${title}`, body: `All day · ${dayPhrase}` };
+    }
+    const startPhrase =
+      days === 0 ? `Starts at ${startTime}` : `Starts ${dayPhrase} at ${startTime}`;
+    return {
+      title: `Event: ${title}`,
+      body: offsetMinutes > 0 ? `${startPhrase} · ${leadPhrase(offsetMinutes)}` : startPhrase,
+    };
+  }
   const dayPhrase = days === 0 ? "danas" : days === 1 ? "sutra" : formatDate(occurrenceDate);
 
   if (startTime === null) {
@@ -186,6 +242,14 @@ export function taskNotificationCopy(
   offsetDays: number,
 ): NotificationCopy {
   const days = daysUntil(today, dueDate);
+  if (isEnglish()) {
+    const duePhrase =
+      days === 0 ? "Due today" : days === 1 ? "Due tomorrow" : `Due: ${formatDate(dueDate)}`;
+    return {
+      title: `Task: ${title}`,
+      body: offsetDays > 0 ? `${duePhrase} · ${dayLeadPhrase(offsetDays)}` : duePhrase,
+    };
+  }
   const duePhrase =
     days === 0 ? "Rok je danas" : days === 1 ? "Rok je sutra" : `Rok: ${formatDate(dueDate)}`;
   return {
@@ -206,8 +270,8 @@ export function taskNotificationCopy(
  * „Netflix se obnavlja" says nothing a calendar could not, while the figure is
  * the thing a person actually wants a heads-up about.
  *
- * Money is formatted HERE and nowhere else in main: two decimals, comma
- * separator (Serbian), and the currency code after it — the display edge's job,
+ * Money is formatted HERE and nowhere else in main: two decimals, the locale's
+ * separator (comma in Serbian, point in English), and the currency code after it — the display edge's job,
  * done at the display edge, exactly as `money.ts` does it in the renderer. The
  * minor-unit integer is never divided anywhere else.
  */
@@ -220,6 +284,17 @@ export function subscriptionNotificationCopy(
   reminderDays: number,
 ): NotificationCopy {
   const days = daysUntil(today, renewalDate);
+  if (isEnglish()) {
+    const whenPhrase =
+      days === 0
+        ? "Charge today"
+        : days === 1
+          ? "Charge tomorrow"
+          : `Charge: ${formatDate(renewalDate)}`;
+    const parts = [whenPhrase, `${formatMinorUnits(amount)} ${currency}`];
+    if (reminderDays > 0) parts.push(dayLeadPhrase(reminderDays));
+    return { title: `Subscription: ${name}`, body: parts.join(" · ") };
+  }
   const whenPhrase =
     days === 0
       ? "Naplata je danas"
@@ -232,7 +307,8 @@ export function subscriptionNotificationCopy(
 }
 
 /**
- * Minor units as a Serbian decimal: 1190 → „11,90". The sign is dropped because
+ * Minor units as a decimal in the active locale: 1190 → „11,90" in Serbian and
+ * "11.90" in English. The sign is dropped because
  * the sentence already says this is a naplata — a leading minus would read as an
  * error rather than as direction. Integer arithmetic throughout: the whole and
  * the fractional part are split with `Math.trunc`/`%`, never by dividing.
@@ -241,7 +317,8 @@ function formatMinorUnits(amount: number): string {
   const absolute = Math.abs(amount);
   const whole = Math.trunc(absolute / 100);
   const cents = absolute % 100;
-  return `${whole},${String(cents).padStart(2, "0")}`;
+  const separator = isEnglish() ? "." : ",";
+  return `${whole}${separator}${String(cents).padStart(2, "0")}`;
 }
 
 /**
@@ -282,6 +359,27 @@ export type SecurityNotice = { at: string } & (
  * something the row's own delivery timestamp can answer.
  */
 export function securityNotificationCopy(notice: SecurityNotice): NotificationCopy {
+  if (isEnglish()) {
+    switch (notice.kind) {
+      case "unlock-throttle": {
+        const attempts = notice.failedAttempts;
+        const unit = enPlural(attempts, "failed attempt", "failed attempts");
+        return {
+          title: "Several failed unlock attempts",
+          body: `${attempts} ${unit} before this unlock · locked until ${formatInstant(notice.lockedUntil)}`,
+        };
+      }
+      case "passcode-changed":
+        return { title: "PIN changed", body: "Unlocking now requires the new PIN." };
+      case "recovery-kit-reissued":
+        return { title: "New Recovery Kit issued", body: "The old code no longer works." };
+      case "account-deleted":
+        return {
+          title: "Account deleted",
+          body: `The account “${notice.label}” was deleted from this device.`,
+        };
+    }
+  }
   switch (notice.kind) {
     case "unlock-throttle": {
       const attempts = notice.failedAttempts;
@@ -326,6 +424,11 @@ export function habitNotificationCopy(
   target: number | null,
   unit: string | null,
 ): NotificationCopy {
+  if (isEnglish()) {
+    const parts = [habitScheduleLabelEn(schedule)];
+    if (target !== null) parts.push(`goal: ${target}${unit === null ? "" : ` ${unit}`}`);
+    return { title: `Habit: ${name}`, body: parts.join(" · ") };
+  }
   const parts = [habitScheduleLabel(schedule)];
   if (target !== null) parts.push(`cilj: ${target}${unit === null ? "" : ` ${unit}`}`);
   return { title: `Navika: ${name}`, body: parts.join(" · ") };
@@ -334,6 +437,9 @@ export function habitNotificationCopy(
 /** Short weekday names in ISO order (1 = ponedeljak) — mirrors `strings.habits.schedule.weekdayShort`. */
 const HABIT_WEEKDAY_SHORT = ["Pon", "Uto", "Sre", "Čet", "Pet", "Sub", "Ned"] as const;
 
+/** English short weekday names in ISO order (1 = Monday). */
+const HABIT_WEEKDAY_SHORT_EN = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
+
 /** A habit's schedule in words — „Svaki dan", „Pon · Sre · Pet", „3× nedeljno". */
 function habitScheduleLabel(schedule: HabitSchedule): string {
   if (schedule.kind === "quota") return `${schedule.perWeek}× nedeljno`;
@@ -341,11 +447,25 @@ function habitScheduleLabel(schedule: HabitSchedule): string {
   return schedule.weekdays.map((iso) => HABIT_WEEKDAY_SHORT[iso - 1] ?? "").join(" · ");
 }
 
+/** The same schedule in English: "Every day", "Mon · Wed · Fri", "3× a week". */
+function habitScheduleLabelEn(schedule: HabitSchedule): string {
+  if (schedule.kind === "quota") return `${schedule.perWeek}× a week`;
+  if (schedule.weekdays.length === HABIT_WEEKDAY_SHORT_EN.length) return "Every day";
+  return schedule.weekdays.map((iso) => HABIT_WEEKDAY_SHORT_EN[iso - 1] ?? "").join(" · ");
+}
+
 /** What each phase kind is called when its planned end arrives — the module's own three words. */
 const FOCUS_PHASE_TITLES: Record<FocusPhaseKind, string> = {
   work: "Fokus je gotov",
   short_break: "Pauza je gotova",
   long_break: "Duga pauza je gotova",
+};
+
+/** The English names of the same three moments. */
+const FOCUS_PHASE_TITLES_EN: Record<FocusPhaseKind, string> = {
+  work: "Focus is done",
+  short_break: "Break is over",
+  long_break: "Long break is over",
 };
 
 /**
@@ -375,7 +495,8 @@ export function focusPhaseEndCopy(
 ): NotificationCopy {
   const parts = [`${plannedMinutes} min`];
   if (label !== null && label.trim().length > 0) parts.push(label.trim());
-  return { title: FOCUS_PHASE_TITLES[kind], body: parts.join(" · ") };
+  const titles = isEnglish() ? FOCUS_PHASE_TITLES_EN : FOCUS_PHASE_TITLES;
+  return { title: titles[kind], body: parts.join(" · ") };
 }
 
 /**
@@ -395,11 +516,16 @@ export function restEndCopy(seconds: number): NotificationCopy {
   // `clockText` is the SHARED formatter, not a copy of one: the page draws the
   // same rest ticking down, and a toast that spelled it differently would be two
   // descriptions of one countdown.
+  if (isEnglish()) return { title: "Rest is over", body: `Break of ${clockText(seconds)}` };
   return { title: "Odmor je gotov", body: `Pauza od ${clockText(seconds)}` };
 }
 
 /** Today's study-day reminder copy: how many blocks are planned and their total length. */
 export function studyDayNotificationCopy(blockCount: number, totalMinutes: number): NotificationCopy {
+  if (isEnglish()) {
+    const blockPhrase = enPlural(blockCount, "block", "blocks");
+    return { title: "Study today", body: `${blockCount} ${blockPhrase} · ${totalMinutes} min` };
+  }
   const blockPhrase = pluralize(blockCount, "blok", "bloka", "blokova");
   return { title: "Učenje danas", body: `${blockCount} ${blockPhrase} · ${totalMinutes} min` };
 }
@@ -422,6 +548,7 @@ export type DigestCounts = Record<FoldableNotificationSource, number>;
  * with no deliveries is omitted rather than printed as a zero.
  */
 function digestBody(counts: DigestCounts): string {
+  if (isEnglish()) return digestBodyEn(counts);
   const parts: string[] = [];
   if (counts.document > 0) {
     parts.push(`${counts.document} ${pluralize(counts.document, "dokument", "dokumenta", "dokumenata")}`);
@@ -449,6 +576,37 @@ function digestBody(counts: DigestCounts): string {
   return parts.join(" · ");
 }
 
+/** The English digest body: the same per-source counts under their English nouns. */
+function digestBodyEn(counts: DigestCounts): string {
+  const parts: string[] = [];
+  if (counts.document > 0) {
+    parts.push(`${counts.document} ${enPlural(counts.document, "document", "documents")}`);
+  }
+  if (counts.exam > 0) {
+    parts.push(`${counts.exam} ${enPlural(counts.exam, "exam", "exams")}`);
+  }
+  if (counts["study-day"] > 0) {
+    parts.push(
+      `${counts["study-day"]} ${enPlural(counts["study-day"], "study session", "study sessions")}`,
+    );
+  }
+  if (counts.event > 0) {
+    parts.push(`${counts.event} ${enPlural(counts.event, "event", "events")}`);
+  }
+  if (counts.task > 0) {
+    parts.push(`${counts.task} ${enPlural(counts.task, "task", "tasks")}`);
+  }
+  if (counts.subscription > 0) {
+    parts.push(
+      `${counts.subscription} ${enPlural(counts.subscription, "subscription", "subscriptions")}`,
+    );
+  }
+  if (counts.habit > 0) {
+    parts.push(`${counts.habit} ${enPlural(counts.habit, "habit", "habits")}`);
+  }
+  return parts.join(" · ");
+}
+
 /**
  * Grouped-digest copy for a batch of more than `DIGEST_COUNT_THRESHOLD`
  * simultaneous notifications (the storm guard): one title with the total, one
@@ -457,6 +615,12 @@ function digestBody(counts: DigestCounts): string {
  * about — the only place in the notification copy where „Nexus“ appears.
  */
 export function groupedDigestCopy(total: number, counts: DigestCounts): NotificationCopy {
+  if (isEnglish()) {
+    return {
+      title: `Nexus — ${total} ${enPlural(total, "reminder", "reminders")}`,
+      body: digestBody(counts),
+    };
+  }
   return {
     title: `Nexus — ${total} ${pluralize(total, "podsetnik", "podsetnika", "podsetnika")}`,
     body: digestBody(counts),
@@ -472,6 +636,12 @@ export function groupedDigestCopy(total: number, counts: DigestCounts): Notifica
  * is asking.
  */
 export function windowDigestCopy(total: number, counts: DigestCounts): NotificationCopy {
+  if (isEnglish()) {
+    return {
+      title: `${total} ${enPlural(total, "new notification", "new notifications")}`,
+      body: digestBody(counts),
+    };
+  }
   return {
     title: `${total} ${pluralize(total, "novo obaveštenje", "nova obaveštenja", "novih obaveštenja")}`,
     body: digestBody(counts),
@@ -486,6 +656,12 @@ export function windowDigestCopy(total: number, counts: DigestCounts): Notificat
  * the per-source breakdown.
  */
 export function catchUpDigestCopy(total: number, counts: DigestCounts): NotificationCopy {
+  if (isEnglish()) {
+    return {
+      title: `While you were away: ${total} ${enPlural(total, "notification", "notifications")}`,
+      body: digestBody(counts),
+    };
+  }
   return {
     title: `Dok te nije bilo: ${total} ${pluralize(total, "obaveštenje", "obaveštenja", "obaveštenja")}`,
     body: digestBody(counts),

@@ -13,6 +13,7 @@ import type {
 } from "./calendarItems.js";
 import { formatClockLabel } from "./calendarPrefs.js";
 import type { ClockPreference } from "./calendarPrefs.js";
+import { collator, dateTimeFormat } from "./intl.js";
 import { RecurrenceMark } from "./RecurrencePicker.js";
 import { strings } from "./strings.js";
 
@@ -54,17 +55,6 @@ export interface CalendarMonthProps {
   /** A drag finished on `dayKey`; only events and tasks are draggable. */
   onMoveItem: (item: CalendarItem, dayKey: string) => void;
 }
-
-/** Serbian Latin collation — plain `localeCompare` misorders š/č/ć (see the views engine). */
-const collator = new Intl.Collator(["sr-Latn", "sr"]);
-
-const weekdayFormatter = new Intl.DateTimeFormat("sr-Latn", { weekday: "short", timeZone: "UTC" });
-const dayAriaFormatter = new Intl.DateTimeFormat("sr-Latn", {
-  weekday: "long",
-  day: "numeric",
-  month: "long",
-  timeZone: "UTC",
-});
 
 /** Bare-day formatting; degrades to the raw key on bad input (mirrors CalendarPage's formatDay). */
 function formatUtcKey(key: string, formatter: Intl.DateTimeFormat): string {
@@ -279,7 +269,7 @@ export function CalendarMonth({
         </span>
         {(weeks[0] ?? []).map((day) => (
           <span key={day.key} className="nx-eyebrow cal__month-weekday">
-            {formatUtcKey(day.key, weekdayFormatter)}
+            {formatUtcKey(day.key, dateTimeFormat({ weekday: "short", timeZone: "UTC" }))}
           </span>
         ))}
       </div>
@@ -320,7 +310,7 @@ export function CalendarMonth({
                   .filter((item) => item.startKey === day.key)
                   .sort((a, b) => {
                     const diff = a.startMinutes - b.startMinutes;
-                    return diff !== 0 ? diff : collator.compare(itemLabel(a), itemLabel(b));
+                    return diff !== 0 ? diff : collator().compare(itemLabel(a), itemLabel(b));
                   });
                 const hiddenBarCount = hiddenBars.filter(
                   (bar) => dayIndex >= bar.dayIndex && dayIndex < bar.dayIndex + bar.span,
@@ -342,7 +332,15 @@ export function CalendarMonth({
                   <div
                     key={day.key}
                     className={dayClasses.join(" ")}
-                    aria-label={formatUtcKey(day.key, dayAriaFormatter)}
+                    aria-label={formatUtcKey(
+                      day.key,
+                      dateTimeFormat({
+                        weekday: "long",
+                        day: "numeric",
+                        month: "long",
+                        timeZone: "UTC",
+                      }),
+                    )}
                     onClick={() => onSelectDay(day.key)}
                     onDragOver={(e) => dayDragOver(e, day.key)}
                     onDragLeave={(e) => dayDragLeave(e, day.key)}

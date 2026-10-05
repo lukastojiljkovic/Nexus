@@ -34,22 +34,36 @@
  * invented — there is no way to half-add a locale and not know it.
  */
 import { sr, type Strings } from "./strings.sr.js";
+import { en } from "./strings.en.js";
 
 export type { Strings } from "./strings.sr.js";
 
 /**
  * Every locale the app can serve.
  *
- * Serbian alone today. English is deliberately NOT stubbed as a copy of
- * Serbian: a locale present in this record is a locale the settings toggle
- * offers, and offering „English" that renders Serbian is a worse product than
- * offering nothing. The machinery is what was missing and the machinery is
- * here; the translation is content, and content is written, not generated.
+ * Serbian and English, each a whole table typed `Strings`; the compiler
+ * reports one error per leaf a locale has not translated and one per key it
+ * invented, so there is no way to half-add a locale and not know it. The order
+ * is the order the settings row offers, and `DEFAULT_LOCALE` below is what an
+ * unrecognised stored value falls back to.
+ *
+ * The union is written out rather than derived from the record with
+ * `keyof typeof LOCALES`, because a record of two full tables is thousands of
+ * literal types and the declaration emitter refuses to serialize a `keyof` of
+ * it (TS7056). Drift is still impossible: `LOCALES` is typed
+ * `Record<Locale, Strings>`, so a code missing from the union, missing from the
+ * record, or present only in the record is one compile error each.
  */
-export const LOCALES = { sr } satisfies Record<string, Strings>;
+export type Locale = "sr" | "en";
 
-export type Locale = keyof typeof LOCALES;
+export const LOCALES: Record<Locale, Strings> = { sr, en };
 
+/**
+ * The fallback: the table the process starts on and the table an unrecognised
+ * stored code resolves to. First-run detection (system locale `sr*` keeps
+ * Serbian, anything else starts English) lives in `localePrefs.ts`, beside the
+ * storage it belongs to - this module touches no browser API.
+ */
 export const DEFAULT_LOCALE: Locale = "sr";
 
 /**
@@ -63,7 +77,19 @@ export const DEFAULT_LOCALE: Locale = "sr";
  */
 const INTL_TAGS: Record<Locale, readonly string[]> = {
   sr: ["sr-Latn", "sr"],
+  en: ["en-GB", "en"],
 };
+
+/**
+ * The BCP-47 tags for a locale, most preferred first.
+ *
+ * `intl.ts` is the one caller: every `Intl` object the renderer builds is
+ * constructed from this list, so `INTL_TAGS` above stays the single source of
+ * the spelling even though the formatters live one module away.
+ */
+export function intlTags(locale: Locale): readonly string[] {
+  return INTL_TAGS[locale];
+}
 
 /**
  * The live table. Same object for the life of the process — see the header.
@@ -113,6 +139,14 @@ function overwrite(target: Node, source: Node): void {
 export function applyLocale(locale: Locale): void {
   currentLocale = locale;
   overwrite(strings as unknown as Node, LOCALES[locale] as unknown as Node);
+  // The document's own language follows the interface, so assistive technology
+  // and the browser's own hyphenation read the same language the copy does.
+  // Guarded rather than assumed: this module is imported by Node tests with no
+  // `document`, and it is an explicit call that runs on first serve AND on every
+  // runtime switch, which is exactly where the tag has to be rewritten.
+  if (typeof document !== "undefined") {
+    document.documentElement.lang = INTL_TAGS[locale][0] ?? locale;
+  }
 }
 
 const pluralRules = new Map<Locale, Intl.PluralRules>();

@@ -3,6 +3,7 @@ import type { KeyboardEvent } from "react";
 import { Button, Chip, ListRow, TextField } from "@nexus/ui";
 import { MAX_FIT_EXERCISE_QUERY_LENGTH, MAX_FIT_EXERCISE_RESULTS } from "../../shared/ipc.js";
 import type { FitExerciseOption } from "../../shared/ipc.js";
+import { exerciseOptionName } from "./fitnessLocale.js";
 import { strings } from "./strings.js";
 
 /**
@@ -177,7 +178,7 @@ export function FitExercisePicker({
               }
             >
               <span className="fit__result-body">
-                <span className="fit__result-name">{option.name}</span>
+                <span className="fit__result-name">{exerciseOptionName(option)}</span>
                 <span className="fit__chips">
                   <Chip>{v.equipment[option.equipment]}</Chip>
                   {/* What ONE SET of it records — the field that decides which

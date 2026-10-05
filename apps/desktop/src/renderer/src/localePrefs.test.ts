@@ -8,6 +8,7 @@ import {
   clearStoredLocale,
   persistLocale,
   readStoredLocale,
+  reportLocaleToMain,
 } from "./localePrefs.js";
 
 /**
@@ -34,18 +35,52 @@ function stubStorage(seed: Readonly<Record<string, string>> = {}): Storage {
   return storage;
 }
 
+/**
+ * The system language probe. Stubbed explicitly in every first-run test because
+ * the answer must not depend on the machine the suite happens to run on: Node
+ * 24 exposes a real `navigator.language`, and on a Serbian developer's laptop
+ * that is `sr-Latn-RS`.
+ */
+function stubLanguage(language: string | undefined): void {
+  vi.stubGlobal("navigator", language === undefined ? undefined : { language });
+}
+
 describe("readStoredLocale", () => {
-  it("answers Serbian when nothing is stored", () => {
+  it("answers Serbian when nothing is stored and the system reads Serbian", () => {
     stubStorage();
+    stubLanguage("sr-Latn-RS");
     expect(readStoredLocale()).toBe("sr");
     expect(readStoredLocale()).toBe(DEFAULT_LOCALE);
   });
 
-  it("answers Serbian for a code that is not in the build", () => {
+  it("answers English when nothing is stored and the system reads anything else", () => {
+    for (const language of ["en-US", "de-DE", "fr", "sr-Cyrl"]) {
+      // `sr-Cyrl` is still Serbian to a reader, so it stays Serbian.
+      stubStorage();
+      stubLanguage(language);
+      expect(readStoredLocale(), language).toBe(language.startsWith("sr") ? "sr" : "en");
+    }
+  });
+
+  it("answers English when the environment reports no language at all", () => {
+    // A stripped build has no system language to ask about; "not Serbian" is
+    // the same answer as any other non-Serbian code.
+    stubStorage();
+    stubLanguage(undefined);
+    expect(readStoredLocale()).toBe("en");
+    stubStorage();
+    stubLanguage("");
+    expect(readStoredLocale()).toBe("en");
+  });
+
+  it("answers the default for a stored code that is not in the build", () => {
     // The case that matters: a language removed from `LOCALES` — or typed into
     // localStorage by hand — must not leave the app reaching for a table that
-    // does not exist.
+    // does not exist. It falls back to `DEFAULT_LOCALE` rather than to the
+    // system language: the question was answered once, and a stale answer must
+    // not flip the interface.
     stubStorage({ [STORAGE_KEY]: "de" });
+    stubLanguage("de-DE");
     expect(readStoredLocale()).toBe(DEFAULT_LOCALE);
   });
 
@@ -67,11 +102,19 @@ describe("readStoredLocale", () => {
 });
 
 describe("clearStoredLocale", () => {
-  it("returns the next read to Serbian", () => {
-    const storage = stubStorage({ [STORAGE_KEY]: DEFAULT_LOCALE });
+  it("forgets the choice, so the next read is a first run again", () => {
+    const storage = stubStorage({ [STORAGE_KEY]: "en" });
+    stubLanguage("sr-RS");
     clearStoredLocale();
     expect(storage.getItem(STORAGE_KEY)).toBeNull();
-    expect(readStoredLocale()).toBe(DEFAULT_LOCALE);
+    expect(readStoredLocale()).toBe("sr");
+  });
+
+  it("hands the question back to the system language", () => {
+    stubStorage({ [STORAGE_KEY]: "sr" });
+    stubLanguage("de-DE");
+    clearStoredLocale();
+    expect(readStoredLocale()).toBe("en");
   });
 });
 
@@ -106,5 +149,21 @@ describe("applyStoredLocale", () => {
     stubStorage({ [STORAGE_KEY]: "klingon" });
     applyStoredLocale();
     expect(activeLocale()).toBe(DEFAULT_LOCALE);
+  });
+});
+
+describe("reportLocaleToMain", () => {
+  it("reports the served language to the bridge", () => {
+    const setLocale = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("window", { nexus: { setLocale } });
+    reportLocaleToMain("en");
+    expect(setLocale).toHaveBeenCalledWith("en");
+  });
+
+  it("is silent when there is no bridge to report to", () => {
+    vi.stubGlobal("window", undefined);
+    expect(() => reportLocaleToMain("en")).not.toThrow();
+    vi.stubGlobal("window", {});
+    expect(() => reportLocaleToMain("en")).not.toThrow();
   });
 });

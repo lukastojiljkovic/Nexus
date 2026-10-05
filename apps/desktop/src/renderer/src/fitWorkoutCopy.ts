@@ -1,10 +1,10 @@
 import type { ExerciseMetric, FitWorkoutSet } from "../../shared/ipc.js";
 import { SET_FIELDS, type SetField } from "./fitWorkout.js";
+import { numberFormat } from "./intl.js";
 import { countUnit, strings } from "./strings.js";
 
 /**
- * „Trening"'s words: the one place a set, a target or a refusal becomes Serbian
- * text.
+ * „Trening"'s words: the one place a set, a target or a refusal becomes text.
  *
  * It sits between `fitWorkout.ts` (which knows what a set IS and imports no
  * copy) and the three components that draw one. Three surfaces read a set — the
@@ -21,25 +21,24 @@ import { countUnit, strings } from "./strings.js";
 export const REST_PRESETS = [60, 90, 120, 180] as const;
 
 /**
- * One number as text — at most one decimal, Serbian, grouped. Loads land on
- * halves and quarters and nothing finer, a rep count is whole anyway, and a body
- * weight is read off a scale to a tenth: one formatter serves all of them, which
- * is why „Merenja" reads its figures through this file too rather than minting a
- * second `Intl.NumberFormat` that would drift.
+ * Any FIT figure as text — at most one decimal, grouped, in the ACTIVE locale
+ * (`intl.ts`). Loads land on halves and quarters and nothing finer, a rep count
+ * is whole anyway, and a body weight is read off a scale to a tenth: one
+ * formatter serves all of them, which is why „Merenja" reads its figures
+ * through this file too rather than minting a second `Intl.NumberFormat` that
+ * would drift.
  */
-const numberFormat = new Intl.NumberFormat("sr-Latn", {
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 1,
-});
+function oneDecimal(): Intl.NumberFormat {
+  return numberFormat({ minimumFractionDigits: 0, maximumFractionDigits: 1 });
+}
 
-/** Any FIT figure as text. The one place a number in this module becomes something a person reads. */
 export function figureText(value: number): string {
-  return numberFormat.format(value);
+  return oneDecimal().format(value);
 }
 
 /** A recorded quantity, or the em dash that says it was not recorded. Never a zero standing in for absent. */
 function figure(value: number | null): string {
-  return value === null ? strings.fitness.training.set.missing : numberFormat.format(value);
+  return value === null ? strings.fitness.training.set.missing : oneDecimal().format(value);
 }
 
 /**
@@ -57,7 +56,7 @@ export function setCountText(count: number): string {
 
 /** A session's tonnage, whole kilograms and grouped — „4.280". Nothing finer: a tenth of a kilo beside a four-digit total is noise. */
 export function tonnageText(kg: number): string {
-  return numberFormat.format(Math.round(kg));
+  return oneDecimal().format(Math.round(kg));
 }
 
 /**

@@ -26,6 +26,7 @@ import type {
 } from "../../shared/ipc.js";
 import { gramsInputValue, parseAmountInput } from "./fitDay.js";
 import { FitExercisePicker } from "./FitExercisePicker.js";
+import { exerciseOptionName } from "./fitnessLocale.js";
 import { movedByOne, SET_FIELDS } from "./fitWorkout.js";
 import { fitTrainingError, targetText } from "./fitWorkoutCopy.js";
 import { strings } from "./strings.js";
@@ -898,7 +899,7 @@ export function FitRoutines({ profileId, routines, exercises, onChanged }: FitRo
                       <Button
                         size="sm"
                         className="fit__row-action"
-                        aria-label={`${s.exercises.edit}: ${exercise.name}`}
+                        aria-label={`${s.exercises.edit}: ${exerciseOptionName(exercise)}`}
                         title={s.exercises.edit}
                         onClick={() => beginEditExercise(exercise)}
                       >
@@ -907,7 +908,7 @@ export function FitRoutines({ profileId, routines, exercises, onChanged }: FitRo
                       <Button
                         size="sm"
                         className="fit__row-action fit__row-delete"
-                        aria-label={`${s.exercises.delete}: ${exercise.name}`}
+                        aria-label={`${s.exercises.delete}: ${exerciseOptionName(exercise)}`}
                         title={s.exercises.delete}
                         onClick={() => void deleteExercise(exercise)}
                       >
@@ -917,7 +918,7 @@ export function FitRoutines({ profileId, routines, exercises, onChanged }: FitRo
                   }
                 >
                   <span className="fit__row-body">
-                    <span className="fit__row-title">{exercise.name}</span>
+                    <span className="fit__row-title">{exerciseOptionName(exercise)}</span>
                     <span className="fit__chips">
                       <Chip>{s.equipment[exercise.equipment]}</Chip>
                       <Chip variant="data">{s.metric[exercise.metric]}</Chip>

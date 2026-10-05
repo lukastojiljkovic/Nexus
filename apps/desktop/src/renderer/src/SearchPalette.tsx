@@ -5,6 +5,7 @@ import { foldSearchTag, formatChord, parseSearchQuery, SEARCH_KINDS } from "@nex
 import type { SearchKind } from "@nexus/core";
 import { Button, EmptyState, Icon, TextField } from "@nexus/ui";
 import type { NoteTag, SearchHistoryEntry, SearchResult, TaskTag } from "../../shared/ipc.js";
+import { collator } from "./intl.js";
 import { REBUILD_COMMAND_ID, matchCommands } from "./searchCommands.js";
 import type { SearchCommand } from "./searchCommands.js";
 import {
@@ -66,8 +67,6 @@ const HISTORY_ROW_LIMIT = 5;
  * `pointer-events: none` and already at zero opacity by then.
  */
 const PALETTE_EXIT_MS = 140;
-
-const collator = new Intl.Collator(["sr-Latn", "sr"]);
 
 /**
  * The commands that ALSO have a key binding, and which one (ADR-040).
@@ -138,7 +137,7 @@ function mergeTagOptions(noteTags: readonly NoteTag[], taskTags: readonly TaskTa
     if (key.length === 0 || byKey.has(key)) continue;
     byKey.set(key, { name: tag.name, key });
   }
-  return [...byKey.values()].sort((a, b) => collator.compare(a.name, b.name));
+  return [...byKey.values()].sort((a, b) => collator().compare(a.name, b.name));
 }
 
 /** The "Prikaži sve rezultate" row's id — a fixed string, since there is exactly one and it carries no entity. */

@@ -607,3 +607,71 @@ describe("generateSketch — the file as a whole", () => {
     expect(source.endsWith("\n")).toBe(true);
   });
 });
+
+/** The sketch again, generated in English — the same circuit, other words. */
+function englishOf(c: Circuit): string {
+  const sketch = generateSketch(c, resolve, "en");
+  expect(sketch.kind).toBe("sketch");
+  return sketch.kind === "sketch" ? sketch.source : "";
+}
+
+/**
+ * The language the sketch's own COMMENT prose is written in (2026-10-04).
+ *
+ * The file's structure is what the tests above are about; this is about the
+ * words in it. A session that chose English must not hand the user a Serbian
+ * header, and the Serbian path — the default, and what every caller before the
+ * parameter existed gets — must stay byte-identical.
+ */
+describe("generateSketch — the language it is written in", () => {
+  const wired = (): Circuit =>
+    circuit(
+      [part("p1", "arduino-uno"), part("p2", "button"), part("p3", "hc-05")],
+      [w(["p1", "D9"], ["p2", "OUT"]), w(["p1", "D0"], ["p3", "TXD"])],
+    );
+
+  it("writes the header's prose in English", () => {
+    const source = englishOf(wired());
+    expect(source).toContain("This file describes the WIRING, not the program.");
+    expect(source).toContain("buses are derived from the schematic; what the device does is up to you.");
+    expect(source).toContain(" * Connections:");
+    expect(source).not.toContain(" * Veze:");
+    expect(source).not.toContain("Ovaj fajl opisuje");
+  });
+
+  it("writes the library heading in English for a sketch that names one", () => {
+    const c = circuit(
+      [part("p1", "arduino-uno"), part("p2", "dht22")],
+      [w(["p1", "D7"], ["p2", "DATA"])],
+    );
+    const source = englishOf(c);
+    expect(source).toContain(
+      " * Libraries (Arduino IDE → Sketch → Include Library → Manage Libraries):",
+    );
+    expect(source).not.toContain(" * Biblioteke");
+  });
+
+  it("writes the UART warning and the empty loop note in English", () => {
+    expect(englishOf(wired())).toContain("shares the hardware UART with the serial monitor.");
+    const relayOnly = circuit(
+      [part("p1", "arduino-uno"), part("p2", "relay")],
+      [w(["p1", "D9"], ["p2", "IN"])],
+    );
+    const source = englishOf(relayOnly);
+    expect(source).toContain("No pin is read here: they are either outputs, or a library owns them.");
+    expect(source).not.toContain("Nijedan pin se ovde ne očitava");
+  });
+
+  it("leaves the default Serbian bytes exactly as they were", () => {
+    const c = wired();
+    const source = sourceOf(c);
+    expect(source).toContain("Ovaj fajl opisuje VEZE, ne program.");
+    expect(source).toContain(" * Veze:");
+    expect(source).toContain("HC-05 deli hardverski UART");
+    expect(source).not.toContain(" * Connections:");
+
+    // The parameter is optional and defaults to the Serbian path, so a caller
+    // that never learned about it gets the same bytes it always did.
+    expect(generateSketch(c, resolve)).toEqual(generateSketch(c, resolve, "sr"));
+  });
+});

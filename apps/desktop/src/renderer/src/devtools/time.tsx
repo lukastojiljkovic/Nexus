@@ -2,14 +2,14 @@ import {
   civilFromInstant,
   dayOfYear,
   EPOCH_SOURCES,
-  explainCronSr,
+  explainCron,
+  formatDuration,
   formatDurationCompact,
-  formatDurationSr,
   formatEpochValue,
   formatInZone,
   formatIso8601,
   formatOffset,
-  formatRelativeSr,
+  formatRelative,
   formatRfc2822,
   isLeapYear,
   isoWeek,
@@ -28,7 +28,7 @@ import {
 } from "@nexus/core/devtools/datetime";
 import { useEffect, useState, type ComponentType } from "react";
 
-import { strings } from "../strings.js";
+import { activeLocale, strings } from "../strings.js";
 import {
   ResultRow,
   ToolFailure,
@@ -243,7 +243,11 @@ function DateTimeTool() {
               value={isLeapYear(civil.year) ? s.yes : s.no}
               mono={false}
             />
-            <ResultRow label={s.relative} value={formatRelativeSr(instant, now)} mono={false} />
+            <ResultRow
+              label={s.relative}
+              value={formatRelative(instant, now, activeLocale())}
+              mono={false}
+            />
           </ToolSection>
 
           <ToolSection title={s.zone}>
@@ -292,7 +296,7 @@ function DateTimeTool() {
             />
             <ToolOutput
               label={s.durationWords}
-              value={formatDurationSr(durationMs)}
+              value={formatDuration(durationMs, activeLocale())}
               empty={s.durationUnrepresentable}
             />
           </>
@@ -340,7 +344,11 @@ function CronTool() {
         </>
       ) : (
         <>
-          <ToolOutput label={s.meaning} value={explainCronSr(result.spec)} multiline />
+            <ToolOutput
+              label={s.meaning}
+              value={explainCron(result.spec, activeLocale())}
+              multiline
+            />
           {result.spec.macro !== null && (
             <ResultRow label={s.macro} value={result.spec.macro} />
           )}

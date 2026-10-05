@@ -14,16 +14,18 @@ import type { FoodEntry, FoodMacros } from "./food.js";
 /** „Šargarepa, sirova" — USDA FDC 170393, verbatim. The one entry every test below starts from. */
 const CARROT: FoodEntry = {
   id: "sargarepa-sirova",
+  nameEn: "Carrot, raw",
   name: "Šargarepa, sirova",
   category: "povrce",
   per100g: { kcal: 41, protein: 0.93, carbs: 9.58, fat: 0.24, fiber: 2.8, sugar: 4.74, sodiumMg: 69 },
-  servings: [{ label: "1 srednja", grams: 61 }],
+  servings: [{ label: "1 srednja", labelEn: "1 medium", grams: 61 }],
   source: {
     kind: "usda",
     ref: "FDC 170393",
     url: "https://fdc.nal.usda.gov/food-details/170393/nutrients",
   },
   notes: "",
+  notesEn: "",
 };
 
 function entry(patch: Partial<FoodEntry>): FoodEntry {
@@ -211,10 +213,26 @@ describe("validateFoodEntry — servings", () => {
   });
 
   it("refuses a blank label and a non-positive gram weight", () => {
-    expect(codes(entry({ servings: [{ label: " ", grams: 61 }] }))).toEqual(["servings[0].label:shape"]);
-    expect(codes(entry({ servings: [{ label: "1 srednja", grams: 0 }] }))).toEqual([
+    expect(codes(entry({ servings: [{ label: " ", labelEn: "1 medium", grams: 61 }] }))).toEqual([
+      "servings[0].label:shape",
+    ]);
+    expect(
+      codes(entry({ servings: [{ label: "1 srednja", labelEn: "1 medium", grams: 0 }] })),
+    ).toEqual([
       "servings[0].grams:range",
     ]);
+  });
+
+  // The English half is a required part of the shape, not a decoration: an
+  // English interface drops a row with no `nameEn`/`labelEn`, so the gate has to
+  // refuse one before a build can ship it.
+  it("refuses a missing or blank English name, note key or serving label", () => {
+    expect(codes({ ...CARROT, nameEn: "  " })).toEqual(["nameEn:shape"]);
+    expect(codes({ ...CARROT, nameEn: undefined })).toEqual(["nameEn:shape"]);
+    expect(codes({ ...CARROT, notesEn: undefined })).toEqual(["notesEn:shape"]);
+    expect(
+      codes(entry({ servings: [{ label: "1 srednja", labelEn: " ", grams: 61 }] })),
+    ).toEqual(["servings[0].labelEn:shape"]);
   });
 });
 
@@ -350,6 +368,20 @@ describe("searchFoods", () => {
       "sargarepa-sirova",
       "kisela-sargarepa",
     ]);
+  });
+
+  it("finds an entry by its English name, and keeps its Serbian name searchable", () => {
+    // Built explicitly rather than from `entry()`, whose spread would hand both
+    // rows the same English name.
+    const carrot: FoodEntry = { ...CARROT, id: "carrot", nameEn: "Carrot, raw" };
+    const chips: FoodEntry = { ...CARROT, id: "chips", name: "Cips, od krompira", nameEn: "Potato chips, salted" };
+    const pool = [carrot, chips];
+    // The active language's name finds it...
+    expect(searchFoods(pool, "potato", 10).map((food) => food.id)).toEqual(["chips"]);
+    expect(searchFoods(pool, "carrot", 10).map((food) => food.id)).toEqual(["carrot"]);
+    // ...and the Serbian name stays searchable under the same query language.
+    expect(searchFoods(pool, "cips", 10).map((food) => food.id)).toEqual(["chips"]);
+    expect(searchFoods(pool, "sarg", 10).map((food) => food.id)).toEqual(["carrot"]);
   });
 
   it("is case- and diacritic-insensitive in both directions", () => {

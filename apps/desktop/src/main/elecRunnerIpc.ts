@@ -52,6 +52,7 @@ import type {
   RunnerStopState,
 } from "../shared/ipc.js";
 import type { ElecRunner } from "./elecRunner.js";
+import { mainLocale } from "./locale.js";
 import { runnerWorkspacePath, writeWorkspace } from "./elecWorkspace.js";
 
 export interface ElecRunnerIpcDeps {
@@ -153,9 +154,11 @@ export function createElecRunnerIpc(deps: ElecRunnerIpcDeps): ElecRunnerIpc {
    *
    * The circuit is read through the STORE rather than taken from the renderer,
    * so the package that is built and the package that was displayed are the same
-   * bytes: main regenerates from what is stored. `generateRosPackage` is pure
-   * and lives in `@nexus/core`, which the renderer imports for its own preview —
-   * so this is a second call to one function, never a second implementation.
+   * bytes: main regenerates from what is stored, and in the language main is
+   * serving (`mainLocale()`), so an English session builds an English package.
+   * `generateRosPackage` is pure and lives in `@nexus/core`, which the renderer
+   * imports for its own preview — so this is a second call to one function,
+   * never a second implementation.
    */
   function resolve(profileId: string, id: string): Resolved {
     const stored = deps.settings(profileId);
@@ -171,7 +174,7 @@ export function createElecRunnerIpc(deps: ElecRunnerIpcDeps): ElecRunnerIpc {
     // `distro: null` until one is picked.
     if (target === null) return { kind: "refused", reason: "no-distro" };
 
-    const code = generateRosPackage(deps.circuit(profileId, id), catalogueComponent);
+    const code = generateRosPackage(deps.circuit(profileId, id), catalogueComponent, mainLocale());
     if (code.kind === "refused") return { kind: "refused", reason: "no-package" };
     return { kind: "ready", target, name: code.name, files: code.files };
   }

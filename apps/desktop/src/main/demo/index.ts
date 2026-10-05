@@ -16,6 +16,7 @@
 
 import { TOOL_PACKS, packFlagKey } from "@nexus/core";
 import { SqliteFlagStore, TaskListStore } from "@nexus/db";
+import { mainLocale } from "../locale.js";
 import { BUSINESS_DISABLED_MODULE_IDS, createModuleRegistry } from "../../shared/modules.js";
 import { seedDemoBusinessProfile } from "./business.js";
 import { seedDemoCanvas } from "./canvas.js";
@@ -93,7 +94,7 @@ export async function seedDemoProfile(
   now: number,
   io: DemoAttachmentIo,
 ): Promise<void> {
-  const ctx: DemoContext = createDemoContext(profileId, now);
+  const ctx: DemoContext = createDemoContext(profileId, now, mainLocale());
 
   // Every module on. A demo profile exists to show the whole product, and the
   // private section ships off by default (`defaultEnabled: false`), so without
@@ -158,5 +159,5 @@ export async function seedDemoProfile(
 export function seedDemoBusiness(db: DatabaseHandle, profileId: string, now: number): void {
   enableEverything(new SqliteFlagStore(db, profileId), BUSINESS_DISABLED_MODULE_IDS);
   new TaskListStore(db, profileId).ensureInbox(new Date(now).toISOString());
-  seedDemoBusinessProfile(db, createDemoContext(profileId, now));
+  seedDemoBusinessProfile(db, createDemoContext(profileId, now, mainLocale()));
 }

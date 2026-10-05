@@ -19,6 +19,7 @@ import type { Event } from "../../shared/ipc.js";
 // drifting apart the way two copies eventually would.
 import { ForeignMark, renderBarContent } from "./CalendarMonth.js";
 import { isMutedItem, isSpanItem, isTimedEventItem, isTimedForeignItem } from "./calendarItems.js";
+import { dateTimeFormat } from "./intl.js";
 import type {
   CalendarItem,
   EventOccurrence,
@@ -146,13 +147,15 @@ function sameCandidate(previous: DragCandidate | null, next: DragCandidate): boo
   );
 }
 
-const weekdayFormatter = new Intl.DateTimeFormat("sr-Latn", { weekday: "short", timeZone: "UTC" });
-
-/** "pon 3." — weekday + day number; degrades to the raw key on bad input (mirrors CalendarMonth's formatUtcKey). */
+/**
+ * "pon 3." / "Wed 5" — weekday + day number, with the day punctuation the
+ * active locale's own pattern uses; degrades to the raw key on bad input
+ * (mirrors CalendarMonth's formatUtcKey).
+ */
 function formatColumnHeader(key: string): string {
   const date = new Date(key);
   if (Number.isNaN(date.getTime())) return key;
-  return `${weekdayFormatter.format(date)} ${Number(key.slice(8, 10))}.`;
+  return dateTimeFormat({ weekday: "short", day: "numeric", timeZone: "UTC" }).format(date);
 }
 
 /** Local wall-clock minutes since midnight — the "now" line, like every other calendar value here, never touches a timezone. */

@@ -1,5 +1,6 @@
 import { macrosFor, sumMacros } from "@nexus/core";
 import type { FitMealItem, FitTargets, FoodMacros } from "../../shared/ipc.js";
+import { dateTimeFormat, decimalSeparator, decimalSeparators, numberFormat } from "./intl.js";
 
 /**
  * „Ishrana"'s pure half (FIT slice b): what a day's figures ARE, before anything
@@ -20,9 +21,6 @@ import type { FitMealItem, FitTargets, FoodMacros } from "../../shared/ipc.js";
  * the user set and the totals are whatever was logged, and „over the goal" is a
  * fact about those two numbers rather than an opinion about the day.
  */
-
-/** The locale every formatter in this renderer spells (`money.ts`'s own). */
-const FIT_LOCALE = "sr-Latn";
 
 /**
  * The four macros the goals cover, in the order every surface lists them:
@@ -151,10 +149,10 @@ export function macroGoals(totals: FoodMacros, targets: FitTargets): MacroGoal[]
  * quantity in this module.
  *
  * The grammar is `parseMoneyInput`'s, minus the sign: digits, and at most one
- * separator, either `,` (Serbian) or `.` (what a numeric keypad gives you), both
- * read as the DECIMAL point. Grouping is not accepted at all, which is what
- * makes „1.234" a refusal rather than a guess — it would mean 1234 to one reader
- * and 1,234 to another.
+ * separator — the shipped locales' decimal marks, DERIVED from `Intl` through
+ * `decimalSeparators()` (Serbian `,`, English `.`), both read as the DECIMAL
+ * point. Grouping is not accepted at all, which is what makes „1.234" a refusal
+ * rather than a guess — it would mean 1234 to one reader and 1,234 to another.
  *
  * At most two decimals, refused rather than rounded: „12,345 g" is not 12,34 and
  * not 12,35, it is something to say again — and two decimals is already finer
@@ -165,7 +163,10 @@ export function macroGoals(totals: FoodMacros, targets: FitTargets): MacroGoal[]
  * unsayable. The caller checks the bound its own field has.
  */
 export function parseAmountInput(text: string): number | null {
-  const match = /^(\d+)(?:[.,](\d{1,2}))?$/.exec(text.trim());
+  const separators = decimalSeparators()
+    .map((separator) => separator.replace(/[\\\]^-]/g, "\\$&"))
+    .join("");
+  const match = new RegExp(`^(\\d+)(?:[${separators}](\\d{1,2}))?$`).exec(text.trim());
   if (match === null) return null;
   const [, whole = "", fraction] = match;
   const value = Number(fraction === undefined ? whole : `${whole}.${fraction}`);
@@ -173,26 +174,20 @@ export function parseAmountInput(text: string): number | null {
 }
 
 /**
- * A quantity as the field holds it — the decimal comma, no grouping and no unit.
- * Exactly `parseAmountInput`'s input language, so opening a row for editing and
- * saving it back unchanged is a no-op.
+ * A quantity as the field holds it — the ACTIVE locale's decimal mark, no
+ * grouping and no unit. Exactly `parseAmountInput`'s input language, so opening
+ * a row for editing and saving it back unchanged is a no-op.
  */
 export function gramsInputValue(value: number): string {
-  return String(value).replace(".", ",");
+  return String(value).replace(".", decimalSeparator());
 }
 
-/** One `Intl.NumberFormat` per fraction-digit count, built on first use — a day's screen formats every visible figure on every render. */
-const formatters = new Map<number, Intl.NumberFormat>();
-
+/** A formatter per fraction-digit count, from `intl.ts`'s per-locale memo — a day's screen formats every visible figure on every render. */
 function formatterFor(maxFractionDigits: number): Intl.NumberFormat {
-  const existing = formatters.get(maxFractionDigits);
-  if (existing !== undefined) return existing;
-  const created = new Intl.NumberFormat(FIT_LOCALE, {
+  return numberFormat({
     minimumFractionDigits: 0,
     maximumFractionDigits: maxFractionDigits,
   });
-  formatters.set(maxFractionDigits, created);
-  return created;
 }
 
 /** Calories, whole. A tenth of a kilocalorie is noise beside a figure in the hundreds. */
@@ -200,13 +195,14 @@ export function formatKcal(value: number): string {
   return formatterFor(0).format(value);
 }
 
-/** Grams, to at most one decimal — enough for „87,5 g", and a trailing zero is dropped rather than drawn. */
+/** Grams, to at most one decimal — enough for „87,5 g" or „87.5 g", and a trailing zero is dropped rather than drawn. */
 export function formatGrams(value: number): string {
   return formatterFor(1).format(value);
 }
 
 /**
- * A FIT day key as a person reads it: „5. avg 2026.".
+ * A FIT day key as a person reads it: „5. avg 2026." in Serbian, „5 Aug 2026"
+ * in English.
  *
  * The module was printing `2026-08-05` verbatim in five places across three
  * files — a personal record's date, a measurement row, a weekly-volume row, the
@@ -225,15 +221,15 @@ export function formatGrams(value: number): string {
  */
 export function formatFitDay(day: string): string {
   const date = new Date(`${day.slice(0, 10)}T00:00:00Z`);
-  return Number.isNaN(date.getTime()) ? day : FIT_DAY_FORMAT.format(date);
+  return Number.isNaN(date.getTime())
+    ? day
+    : dateTimeFormat({
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        timeZone: "UTC",
+      }).format(date);
 }
-
-const FIT_DAY_FORMAT = new Intl.DateTimeFormat(FIT_LOCALE, {
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-  timeZone: "UTC",
-});
 
 /**
  * Whether the day navigation may step FORWARD from `day`.

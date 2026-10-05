@@ -98,6 +98,13 @@ export interface Pin {
   readonly id: string;
   /** What is printed beside it on the silkscreen, which is what the user reads. */
   readonly label: string;
+  /**
+   * The English label, for the few pins whose silkscreen word is Serbian —
+   * „klizač", „crvena", „baza". Absent on every pin whose label is already the
+   * silkscreen's own letters (`GND`, `SDA`, `D9`), which is nearly all of them;
+   * a reader that finds none prints `label` unchanged.
+   */
+  readonly labelEn?: string;
   /** At least one. A pin that can do nothing is a data error, not a spare. */
   readonly functions: readonly PinFunction[];
   /**
@@ -160,8 +167,23 @@ export interface ComponentDef {
   readonly kind: ComponentKind;
   /** As printed on the part, or as it is sold: „BMP280", „HC-SR04". */
   readonly name: string;
+  /**
+   * The English name, beside the Serbian one.
+   *
+   * **Optional in the contract, required on everything the app SHIPS.** The
+   * validator also runs over a component the user typed into the drawer, and a
+   * person naming their own part is not asked for a second name. Making the
+   * field required would therefore refuse the user's own component and every
+   * fixture that stands in for one, for a promise that is about the shipped
+   * catalogue rather than about the shape of a part. The gate that holds the
+   * promise is `catalogue.test.ts`, and it names what is missing instead of
+   * failing a compile somewhere else.
+   */
+  readonly nameEn?: string;
   /** One Serbian line for the picker. */
   readonly summary: string;
+  /** The English summary, under `nameEn`'s rule. */
+  readonly summaryEn?: string;
   /**
    * Operating supply in volts, as the datasheet gives it.
    *
@@ -503,6 +525,15 @@ export function validateComponent(value: unknown): readonly ComponentProblem[] {
       problems.push({ field, code: "shape" });
     }
   }
+  // The English pair is optional, and a blank one is still refused: an entry
+  // that "has" an English name of "" is a row a reader prints as nothing,
+  // which is worse than one that honestly carries none.
+  for (const field of ["nameEn", "summaryEn"] as const) {
+    const text = value[field];
+    if (text !== undefined && (typeof text !== "string" || text.trim().length === 0)) {
+      problems.push({ field, code: "shape" });
+    }
+  }
   const library = value["library"];
   if (library !== undefined && (typeof library !== "string" || library.trim().length === 0)) {
     problems.push({ field: "library", code: "shape" });
@@ -679,9 +710,14 @@ function readPins(value: unknown, problems: ComponentProblem[]): Pin[] {
     }
     const id = raw["id"];
     const label = raw["label"];
+    const labelEn = raw["labelEn"];
     const functions = raw["functions"];
     if (typeof id !== "string" || id.trim().length === 0 || typeof label !== "string") {
       problems.push({ field: at, code: "shape" });
+      return;
+    }
+    if (labelEn !== undefined && (typeof labelEn !== "string" || labelEn.trim().length === 0)) {
+      problems.push({ field: `${at}.labelEn`, code: "shape" });
       return;
     }
     if (seen.has(id)) {
@@ -714,6 +750,7 @@ function readPins(value: unknown, problems: ComponentProblem[]): Pin[] {
       id,
       label,
       functions: functions as PinFunction[],
+      ...(typeof labelEn === "string" ? { labelEn } : {}),
       ...(typeof volts === "number" ? { volts } : {}),
     });
   });

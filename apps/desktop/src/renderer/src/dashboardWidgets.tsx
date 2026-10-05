@@ -41,6 +41,7 @@ import {
 import { formatFileSize } from "./fileRows.js";
 import { formatKcal, macroGoals } from "./fitDay.js";
 import { focusSessionMinutes, formatDurationMinutes, formatPhaseClock } from "./focusFormat.js";
+import { dateTimeFormat } from "./intl.js";
 import {
   habitStartDay,
   habitsExpectedToday,
@@ -102,9 +103,7 @@ function formatDueDate(iso: string): string {
   const date = new Date(iso);
   return Number.isNaN(date.getTime())
     ? iso
-    : new Intl.DateTimeFormat("sr-Latn", { day: "2-digit", month: "short", timeZone: "UTC" }).format(
-        date,
-      );
+    : dateTimeFormat({ day: "2-digit", month: "short", timeZone: "UTC" }).format(date);
 }
 
 /**

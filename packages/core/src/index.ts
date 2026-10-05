@@ -1149,7 +1149,7 @@ export type { RuleCode, RuleFinding, RuleSeverity, RuleValue } from "./electroni
 // renders a `Sketch` and the one that renders a `RosPackage` are one component
 // switching on `GeneratedCode`'s tag.
 export { generateCode } from "./electronics/code.js";
-export type { CodeRefusal, GeneratedCode } from "./electronics/code.js";
+export type { CodeRefusal, GeneratedCode, GeneratedLanguage } from "./electronics/code.js";
 // E6 needs the package itself and not only its type: the runner's workspace is
 // WRITTEN from these files, where the export dialog writes them to a directory
 // the user picked. One generator, two destinations.

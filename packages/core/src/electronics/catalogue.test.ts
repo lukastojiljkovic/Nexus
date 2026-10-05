@@ -20,6 +20,27 @@ describe("the shipped catalogue", () => {
     expect(refused, refused.join("\n")).toEqual([]);
   });
 
+  // The English half of the catalogue is a shipped artefact, not a nice-to-have,
+  // so the gate proves every row carries it. `validateComponent` refuses a BLANK
+  // English field when one is present, but it cannot refuse a MISSING one: the
+  // same validator runs over a component the user typed into the drawer, which
+  // has no English to give. This test states the promise for what we SHIP, so an
+  // entry that forgets its English fails here rather than reaching a screen in
+  // the wrong language.
+  it("carries an English name and summary for every entry", () => {
+    const missing = COMPONENT_CATALOGUE.flatMap((component) => {
+      const problems: string[] = [];
+      if (component.nameEn === undefined || component.nameEn.trim().length === 0) {
+        problems.push(`${component.id}: nameEn`);
+      }
+      if (component.summaryEn === undefined || component.summaryEn.trim().length === 0) {
+        problems.push(`${component.id}: summaryEn`);
+      }
+      return problems;
+    });
+    expect(missing, missing.join("\n")).toEqual([]);
+  });
+
   it("has no duplicate id", () => {
     const seen = new Set<string>();
     const duplicates = COMPONENT_CATALOGUE.filter((component) => {

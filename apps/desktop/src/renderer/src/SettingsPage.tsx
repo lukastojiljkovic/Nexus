@@ -135,6 +135,7 @@ import {
   readStoredLlmPromptLanguage,
 } from "./llmImportPrefs.js";
 import { FinCsvImportSection } from "./FinCsvImport.js";
+import { collator } from "./intl.js";
 // Type-only, and that is load-bearing: a value import would pull ~650 KB of
 // notice text into the eager renderer chunk. `LicencesSection` reaches for the
 // data with `import()` instead. A type import is erased, so this line costs
@@ -146,6 +147,7 @@ import {
   clearStoredLocale,
   persistLocale,
   readStoredLocale,
+  reportLocaleToMain,
 } from "./localePrefs.js";
 import { useFocusTrap } from "./useFocusTrap.js";
 import { moduleName } from "./moduleName.js";
@@ -3557,9 +3559,6 @@ function CsvImportSection({ profileId, hits }: CsvImportSectionProps) {
   );
 }
 
-/** sr-Latn collation for the destination list — plain "sr" mis-tailors Latin š/č/ć. */
-const FOLDER_COLLATOR = new Intl.Collator(["sr-Latn", "sr"]);
-
 /**
  * The note folders as flat, full-path options („Fakultet / Beleške"), so two
  * folders that share a name under different parents are told apart without
@@ -3581,7 +3580,7 @@ function folderOptions(folders: readonly NoteFolder[]): { id: string; label: str
   };
   return folders
     .map((folder) => ({ id: folder.id, label: pathOf(folder) }))
-    .sort((a, b) => FOLDER_COLLATOR.compare(a.label, b.label));
+    .sort((a, b) => collator().compare(a.label, b.label));
 }
 
 /** The half of a finished import worth rendering — the canceled arm carries nothing to show. */
@@ -5087,8 +5086,10 @@ export function SettingsPage({
       // that redraws is already in the restored language rather than in the
       // one that was just discarded.
       clearStoredLocale();
-      applyLocale(readStoredLocale());
-      setLocale(readStoredLocale());
+      const restoredLocale = readStoredLocale();
+      applyLocale(restoredLocale);
+      reportLocaleToMain(restoredLocale);
+      setLocale(restoredLocale);
       onLocaleChanged();
       setAccent(readStoredAccent(profileId, activeKind));
       setWeekStart(readStoredWeekStart());
@@ -5209,13 +5210,13 @@ export function SettingsPage({
         className={sectionClass(sections.has("appearance"))}
       >
         {/* First in the card, because it governs every other word on the page.
-            One option today; the row is shown all the same — it is the answer
-            to „gde se menja jezik", and a settings row reading „Jezik: Srpski"
-            is an ordinary thing for a one-language product to say. A locale
-            added to `LOCALES` appears here without this block changing.
+            The list is `availableLocales()`, so a locale added to `LOCALES`
+            appears here without this block changing, and the stored choice is
+            what the rest of the app reads on the next render.
             `applyLocale` runs BEFORE the state bump on purpose: the table is
             rewritten in place, so the render that follows reads the new copy
-            (see `strings.ts`). */}
+            (see `strings.ts`), and `reportLocaleToMain` tells the main process
+            so its dialogs and OS notifications follow. */}
         <div
           className={hits.has("appearance-language") ? "set__field set__hit-field" : "set__field"}
         >
@@ -5232,6 +5233,7 @@ export function SettingsPage({
               const next = event.target.value as Locale;
               persistLocale(next);
               applyLocale(next);
+              reportLocaleToMain(next);
               setLocale(next);
               onLocaleChanged();
             }}

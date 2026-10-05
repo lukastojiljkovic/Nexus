@@ -62,8 +62,8 @@ import {
  * whether the date actually exists (a 31st of April, a 30th of February) is
  * left to the core function's own `isCalendarDate`, exactly like every other
  * validation in this file. `formatDate` is its inverse for the read side; it
- * does not go through `proNum`, because a year is not a quantity and
- * `sr-Latn` grouping would print „2.027".
+ * does not go through `proNum`, because a year is not a quantity and the
+ * locale's grouping would print „2.027" or „2,027".
  */
 
 /** One non-empty trimmed line per entry — the drawer's one way to type a list. */

@@ -4,6 +4,7 @@ import type { ChartLevel, MatrixCell, Stat } from "@nexus/ui";
 import { heatmapWeeks, weekOpeningDayKey } from "@nexus/core";
 import type { NoteMeta } from "../../shared/ipc.js";
 import { localTodayKey, shiftDayKey } from "./examDates.js";
+import { dateTimeFormat } from "./intl.js";
 import { readStoredWeekStart, toWeekStart } from "./weekStart.js";
 import { strings } from "./strings.js";
 
@@ -67,12 +68,6 @@ const CELL_GAP = 3;
  * minimum window the content column is 632px, so this never overflows.
  */
 const MATRIX_WIDTH = WINDOW_WEEKS * (CELL_SIZE + CELL_GAP) - CELL_GAP;
-
-const CELL_DAY_FORMAT = new Intl.DateTimeFormat("sr-Latn", {
-  day: "numeric",
-  month: "long",
-  timeZone: "UTC",
-});
 
 /** 1–2 notes, 3–5, 6+ — three steps, never a continuous ramp (`CellMatrix`'s own rule). */
 function levelForCount(count: number): ChartLevel {
@@ -157,7 +152,9 @@ export function NoteRhythm({ profileId }: NoteRhythmProps) {
     return {
       tone: "accent",
       level: levelForCount(count),
-      label: `${CELL_DAY_FORMAT.format(new Date(day))}: ${String(count)}`,
+      label: `${dateTimeFormat({ day: "numeric", month: "long", timeZone: "UTC" }).format(
+        new Date(day),
+      )}: ${String(count)}`,
     };
   }
 

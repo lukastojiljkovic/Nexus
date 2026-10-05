@@ -39,6 +39,7 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.profilesVerifySwitch, { passcode }),
   setActiveProfile: (profileId) =>
     ipcRenderer.invoke(IpcChannel.profilesSetActive, { profileId }),
+  setLocale: (locale) => ipcRenderer.invoke(IpcChannel.localeSet, { locale }),
   renameProfile: (id, name) =>
     ipcRenderer.invoke(IpcChannel.profilesRename, { id, name }),
   pickProfilePicture: (profileId) =>

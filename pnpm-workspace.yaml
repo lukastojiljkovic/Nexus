@@ -234,6 +234,20 @@ overrides:
   # (patched at 0.9.12) that nothing here asks for. Retires when the lockfile's
   # own resolution clears 0.8.15.
   "@xmldom/xmldom@0.8": ^0.8.15
+  # GHSA-vfj7-8cjw-p6xm — stack exhaustion through deeply nested patterns in
+  # `braces`, and NO release fixes it: 3.0.3 is the last there is, and it is
+  # inside the range. SHIPPED by the audit's reckoning, through excalidraw >
+  # sass > chokidar@3 > braces, so it cannot be tolerated, only removed.
+  # excalidraw pins sass at 1.51.0 and ships its styles compiled; nothing in
+  # this repo compiles Sass, so the package is installed and never run. Every
+  # sass since 1.79 watches through chokidar 4 or later, which dropped glob
+  # support and `braces` with it, so raising sass within its major takes the
+  # vulnerable package out of the tree instead of patching around it. EXACTLY
+  # 1.79.4: it is the last release before sass took `@parcel/watcher` as a
+  # dependency, a native watcher with a build script that would add a
+  # second prebuild to the package for a feature nothing here uses. Retires
+  # when excalidraw's own sass reaches 1.79.
+  "@excalidraw/excalidraw>sass": 1.79.4
 
 # One four-line patch, and it is a TYPES bug rather than a code one. 13.0.3
 # added an `exports` map whose `"."` is a bare `"./lib/index.js"` with no

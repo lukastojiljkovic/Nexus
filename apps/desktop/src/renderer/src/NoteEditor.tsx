@@ -36,6 +36,7 @@ import { AttachmentImage, NoteAttachmentProvider } from "./noteAttachmentImage.j
 import { AttachmentPreviewDialog } from "./attachmentPreview.js";
 import { attachmentPreviewKind, type AttachmentPreviewKind } from "./attachmentPreviewKind.js";
 import { Callout } from "./noteCallout.js";
+import { collator, numberFormat } from "./intl.js";
 import { createNoteFindExtension, NoteFindBar } from "./noteFindBar.js";
 import { countEditorCards, NoteFlashcard } from "./noteFlashcard.js";
 import { NoteLink, NoteLinkProvider } from "./noteLink.js";
@@ -164,12 +165,6 @@ async function resendOwed(
   }
 }
 
-/** Locale-aware one-decimal formatter for the KB/MB branches of `formatBytes`. */
-const BYTES_FORMATTER = new Intl.NumberFormat("sr-Latn", { maximumFractionDigits: 1 });
-
-/** sr-Latn collation for the deck-mapping bar's subject/deck names — plain "sr" mis-tailors Latin š/č/ć. */
-const CARD_DECK_COLLATOR = new Intl.Collator(["sr-Latn", "sr"]);
-
 /**
  * Human-readable file size for the Prilozi panel: whole bytes under 1 KB,
  * otherwise KB/MB with at most one decimal — no fabricated precision beyond
@@ -178,8 +173,8 @@ const CARD_DECK_COLLATOR = new Intl.Collator(["sr-Latn", "sr"]);
 function formatBytes(sizeBytes: number): string {
   if (sizeBytes < 1024) return `${sizeBytes} B`;
   const kb = sizeBytes / 1024;
-  if (kb < 1024) return `${BYTES_FORMATTER.format(kb)} KB`;
-  return `${BYTES_FORMATTER.format(kb / 1024)} MB`;
+  if (kb < 1024) return `${numberFormat({ maximumFractionDigits: 1 }).format(kb)} KB`;
+  return `${numberFormat({ maximumFractionDigits: 1 }).format(kb / 1024)} MB`;
 }
 
 /**
@@ -423,7 +418,7 @@ export function NoteEditor({
     [attachments],
   );
 
-  // The deck bar's picker groups by subject (NOTE-006c), sr-Latn ordered;
+  // The deck bar's picker groups by subject (NOTE-006c), active-locale ordered;
   // decks within a subject get the same ordering. Subjects with no decks of
   // their own contribute no optgroup.
   const decksBySubject = useMemo(() => {
@@ -433,11 +428,11 @@ export function NoteEditor({
       if (list === undefined) map.set(deck.subjectId, [deck]);
       else list.push(deck);
     }
-    for (const list of map.values()) list.sort((a, b) => CARD_DECK_COLLATOR.compare(a.name, b.name));
+    for (const list of map.values()) list.sort((a, b) => collator().compare(a.name, b.name));
     return map;
   }, [decks]);
   const orderedSubjects = useMemo(
-    () => [...subjects].sort((a, b) => CARD_DECK_COLLATOR.compare(a.name, b.name)),
+    () => [...subjects].sort((a, b) => collator().compare(a.name, b.name)),
     [subjects],
   );
 

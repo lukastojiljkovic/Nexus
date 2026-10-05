@@ -36,6 +36,7 @@ import { dashboardSummary } from "./dashboardSummary.js";
 import { buildTaskListTree, flattenTaskListTree } from "./taskListTree.js";
 import { DASHBOARD_WIDGETS, type DashboardWidgetBodyProps } from "./dashboardWidgets.js";
 import { localTodayKey } from "./examDates.js";
+import { formatDashboardDate } from "./dateLabels.js";
 import { moduleIconName } from "./moduleIcon.js";
 import { NotePopover } from "./notePopover.js";
 import { lookup, strings } from "./strings.js";
@@ -1056,11 +1057,7 @@ export function DashboardPage({
     endDrag();
   }
 
-  const dateLine = new Intl.DateTimeFormat("sr-Latn", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  }).format(now);
+  const dateLine = formatDashboardDate(now);
 
   // Merged once per read, not once per tick: expanding the recurring masters is
   // the only real work here, and it depends on the events and the day — never

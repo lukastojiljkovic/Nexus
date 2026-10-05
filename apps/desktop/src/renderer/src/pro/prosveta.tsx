@@ -36,6 +36,7 @@ import {
 import { useState, type ComponentType } from "react";
 
 import { fill, strings } from "../strings.js";
+import { groupSeparator } from "../intl.js";
 import { proNum, proParse, proRatio, proUnit } from "./format.js";
 import {
   CopyButton,
@@ -134,11 +135,11 @@ function formatClockTime(time: ClockTime, dayUnit: string): string {
   return time.dayOffset > 0 ? `${base} (+${time.dayOffset} ${dayUnit})` : base;
 }
 
-/** An exact `bigint` with sr-Latn thousands grouping — too large for `proNum`'s `Number`. */
+/** An exact `bigint` with the active locale's thousands grouping — too large for `proNum`'s `Number`. */
 function formatBigInt(value: bigint): string {
   const negative = value < 0n;
   const digits = (negative ? -value : value).toString();
-  const grouped = digits.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  const grouped = digits.replace(/\B(?=(\d{3})+(?!\d))/g, groupSeparator());
   return negative ? `-${grouped}` : grouped;
 }
 

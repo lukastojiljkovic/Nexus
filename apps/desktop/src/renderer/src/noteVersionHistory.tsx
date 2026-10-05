@@ -7,6 +7,7 @@ import { Collaboration } from "@tiptap/extension-collaboration";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import type { NoteAttachment, NoteVersionMeta } from "../../shared/ipc.js";
 import { AttachmentImage, NoteAttachmentProvider } from "./noteAttachmentImage.js";
+import { dateTimeFormat } from "./intl.js";
 import { NoteLink, NoteLinkProvider } from "./noteLink.js";
 import { strings } from "./strings.js";
 
@@ -16,15 +17,6 @@ import { strings } from "./strings.js";
  * mounts this in place of the live canvas while `mode === "history"`; the
  * live `Y.Doc` and its flush machinery stay untouched underneath.
  */
-
-/** List-row timestamp: sr-Latn day/month/year + time — never plain "sr" (mis-tailors š/č/ć). */
-const HISTORY_DATE_FORMATTER = new Intl.DateTimeFormat("sr-Latn", {
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-});
 
 export interface NoteVersionHistoryProps {
   profileId: string;
@@ -132,7 +124,13 @@ export function NoteVersionHistory({
               onClick={() => setSelectedSeq(version.coveredSeq)}
             >
               <span className="note__history-item-time">
-                {HISTORY_DATE_FORMATTER.format(new Date(version.createdAt))}
+                {dateTimeFormat({
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }).format(new Date(version.createdAt))}
               </span>
               <span className="note__history-item-title">
                 {version.title.trim().length > 0 ? version.title : strings.notes.untitled}

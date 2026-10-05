@@ -18,12 +18,7 @@ import type {
 import { ARCHIVE_KDF_PARAMS, deriveArchiveKey, generateSalt } from "@nexus/core/auth";
 import { localToday } from "./clock.js";
 import { gatherProfileData, gatherProfileSettings, type ProfileDataDeps } from "./profileData.js";
-import {
-  ARCHIVE_FILTER_NAME,
-  CALENDAR_FILENAME_TOKEN,
-  CALENDAR_FILTER_NAME,
-  ENCRYPTED_ARCHIVE_FILTER_NAME,
-} from "./shellStrings.js";
+import { shellStrings } from "./shellStrings.js";
 import type { ExportResult, IcsExportResult, PrivateNotesExportSkip } from "../shared/ipc.js";
 
 /**
@@ -193,11 +188,11 @@ export async function handleExport(
     passphrase !== null
       ? {
           defaultPath: `nexus-export-${localToday()}.nexus`,
-          filters: [{ name: ENCRYPTED_ARCHIVE_FILTER_NAME, extensions: ["nexus"] }],
+          filters: [{ name: shellStrings().encryptedArchiveFilterName, extensions: ["nexus"] }],
         }
       : {
           defaultPath: `nexus-export-${localToday()}.nexus.zip`,
-          filters: [{ name: ARCHIVE_FILTER_NAME, extensions: ["zip"] }],
+          filters: [{ name: shellStrings().archiveFilterName, extensions: ["zip"] }],
         };
   const { canceled, filePath } = win
     ? await dialog.showSaveDialog(win, dialogOptions)
@@ -260,8 +255,8 @@ export async function handleIcsExport(
 ): Promise<IcsExportResult> {
   const win = deps.getMainWindow();
   const dialogOptions = {
-    defaultPath: `nexus-${CALENDAR_FILENAME_TOKEN}-${localToday()}.ics`,
-    filters: [{ name: CALENDAR_FILTER_NAME, extensions: ["ics"] }],
+    defaultPath: `nexus-${shellStrings().calendarFilenameToken}-${localToday()}.ics`,
+    filters: [{ name: shellStrings().calendarFilterName, extensions: ["ics"] }],
   };
   const { canceled, filePath } = win
     ? await dialog.showSaveDialog(win, dialogOptions)

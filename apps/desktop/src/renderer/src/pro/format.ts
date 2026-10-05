@@ -15,25 +15,20 @@
  * numbers stop lining up — which is exactly when somebody misreads one. Each
  * call site passes the precision its own catalogue entry specifies.
  *
- * The locale is the app's own `sr-Latn`. `Intl.NumberFormat` is cached per
+ * The locale is the ACTIVE interface locale, read through `intl.ts` so a runtime
+ * language switch is followed; `Intl.NumberFormat` is memoised per locale and
  * precision because a professional surface formats every visible figure on every
  * keystroke.
  */
 
-const LOCALE = "sr-Latn";
-
-const formatters = new Map<number, Intl.NumberFormat>();
+import { decimalSeparator, groupSeparator, numberFormat } from "../intl.js";
 
 function formatterFor(digits: number): Intl.NumberFormat {
-  const cached = formatters.get(digits);
-  if (cached !== undefined) return cached;
-  const created = new Intl.NumberFormat(LOCALE, {
+  return numberFormat({
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
     useGrouping: true,
   });
-  formatters.set(digits, created);
-  return created;
 }
 
 /**
@@ -79,9 +74,10 @@ export function proUnit(value: string, unit: string): string {
  * INVERSE of `proNum`.
  *
  * **This is here because the drawer could not read what the drawer had just
- * written.** `proNum` formats in `sr-Latn`, which groups with a full stop and
- * separates decimals with a comma: 1 234 567,89 prints as \u201e1.234.567,89". The
- * one-line parse every surface was about to copy \u2014 `text.replace(",", ".")` and
+ * written.** `proNum` formats in the active locale, which in Serbian groups with
+ * a full stop and separates decimals with a comma \u2014 1 234 567,89 prints as
+ * \u201e1.234.567,89" \u2014 and the other way round in English. The one-line parse every
+ * surface was about to copy \u2014 `text.replace(",", ".")` and
  * `Number(...)` \u2014 turns that into \u201e1.234.567.89", which is `NaN`, which the
  * surface reads as \u201ethe field is empty". Copy a result out of one tool, paste it
  * into the next, and the second tool silently shows nothing. Nothing about that
@@ -117,28 +113,49 @@ export function proUnit(value: string, unit: string): string {
  * because a professional field receiving one of those is a paste that went
  * wrong, and `Number` would accept all three.
  */
+/** A separator as a regex body: the shipped marks are `.` and `,`, but escaping keeps a future one honest. */
+function escapeForRegExp(separator: string): string {
+  return separator.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
+}
+
 export function proParse(text: string): number | undefined {
   const compact = text.replace(/[\s\u00a0\u202f\u2009]/g, "");
   if (!/^[-+]?[\d.,]+$/.test(compact) || !/\d/.test(compact)) return undefined;
 
   const negative = compact.startsWith("-");
   const body = compact.replace(/^[-+]/, "");
-  const firstComma = body.indexOf(",");
-  const lastComma = body.lastIndexOf(",");
-  const firstDot = body.indexOf(".");
-  const lastDot = body.lastIndexOf(".");
+  // The reader's own marks, derived from `Intl` rather than spelled: Serbian
+  // groups with "." and separates with ",", English the other way round. The
+  // decision below therefore follows the ACTIVE language, so a figure the
+  // drawer printed is read back the same way in both.
+  const decimal = decimalSeparator();
+  const group = groupSeparator();
+  const lastDecimal = body.lastIndexOf(decimal);
+  const lastGroup = body.lastIndexOf(group);
+  const decimalCount = body.split(decimal).length - 1;
+  const groupCount = body.split(group).length - 1;
 
   let decimalAt = -1;
-  if (lastComma >= 0 && lastDot >= 0) {
-    // The last separator is the decimal one — and it must be the ONLY one of its
-    // kind. „1.234,56.7" has a last dot and two dots, which is not a number
-    // anybody meant; reading it as 123456,7 would be an invention.
-    decimalAt = Math.max(lastComma, lastDot);
-    const decimalIsComma = lastComma > lastDot;
-    if ((decimalIsComma ? firstComma : firstDot) !== decimalAt) return undefined;
-  } else if (lastComma >= 0) decimalAt = firstComma === lastComma ? lastComma : -1;
-  else if (lastDot >= 0) {
-    decimalAt = firstDot === lastDot && !/^\d{1,3}\.\d{3}$/.test(body) ? lastDot : -1;
+  if (lastDecimal >= 0 && lastGroup >= 0) {
+    // With both marks present the LAST one is the decimal separator, and it may
+    // appear only once; the other one groups, and grouping may repeat.
+    // „1.234,56.7" has two dots behind a lone decimal comma, which is not a
+    // number anybody meant; reading it as 123456,7 would be an invention.
+    decimalAt = Math.max(lastDecimal, lastGroup);
+    if ((lastDecimal > lastGroup ? decimalCount : groupCount) !== 1) return undefined;
+  } else if (decimalCount + groupCount > 1) {
+    // One kind of separator, repeated — grouping in either language.
+    decimalAt = -1;
+  } else if (decimalCount === 1) {
+    // The reader's own decimal mark, alone: a decimal point.
+    decimalAt = lastDecimal;
+  } else if (groupCount === 1) {
+    // The reader's grouping mark, alone. Three digits after it is what the
+    // formatter prints for a whole number („1.234" in Serbian, „1,234" in
+    // English); anything else is a decimal mark that happened to be the other
+    // character („1.23" is 1,23 in Serbian).
+    const groups = new RegExp(`^\\d{1,3}(?:${escapeForRegExp(group)}\\d{3})+$`);
+    decimalAt = groups.test(body) ? -1 : lastGroup;
   }
 
   const whole = (decimalAt < 0 ? body : body.slice(0, decimalAt)).replace(/[.,]/g, "");

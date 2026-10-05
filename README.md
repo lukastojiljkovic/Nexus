@@ -1,6 +1,6 @@
 # Nexus
 
-Nexus is a desktop application that keeps your tasks, calendar, notes, documents, study, habits, fitness, finance, a canvas and an electronics workbench in one workspace on your own computer. Everything is stored in a single encrypted SQLite database, the application works with the network off, and the interface is in Serbian.
+Nexus is a desktop application that keeps your tasks, calendar, notes, documents, study, habits, fitness, finance, a canvas and an electronics workbench in one workspace on your own computer. Everything is stored in a single encrypted SQLite database, the application works with the network off, and the interface ships in **Serbian and English** — on first run it follows the system language (Serbian when the system locale is `sr*`, English otherwise) and remembers the choice.
 
 <img src="docs/images/dashboard.png" width="100%" alt="The Nexus dashboard: today's events, upcoming tasks, expiring documents, exams and study time">
 
@@ -298,8 +298,10 @@ step, so a red check names the rule that broke. `pnpm test` also runs a
 wall-mutation suite that breaks the server SQL one line at a time and demands
 the specific complaint.
 
-Serbian text is sorted and compared with `Intl.Collator(["sr-Latn", "sr"])` —
-plain `"sr"` mis-tailors the Latin diacritics (š, č, ć, ž, đ).
+Each language carries its own BCP-47 tags for `Intl`. Serbian is asked for as
+`Intl.Collator(["sr-Latn", "sr"])` — plain `"sr"` mis-tailors the Latin
+diacritics (š, č, ć, ž, đ) — and English as `["en-GB", "en"]`; the plural
+helpers read the same list, so numeral agreement follows the active language.
 
 ## CI
 
@@ -314,6 +316,10 @@ plain `"sr"` mis-tailors the Latin diacritics (š, č, ć, ž, đ).
 
 ## Language
 
-All user-facing copy is Serbian and lives in `strings.sr.ts`, centralized so a
-later i18n extraction is mechanical. Code, comments and documentation are in
-English.
+The interface ships in **Serbian and English**. On first run it follows the
+system language — Serbian when the system locale is `sr*`, English otherwise —
+and the choice is a device preference from then on, changeable in
+Settings → Appearance. All user-facing copy lives in one typed table per
+language: `strings.sr.ts` is the source of truth and `strings.en.ts` the English
+counterpart, both checked against the same `Strings` type, so adding a language
+is one file and one line. Code, comments and documentation are in English.

@@ -1,4 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// The shell picks its language from the system the moment `strings.ts` is
+// imported, and Node reports whatever the machine runs in. These assertions
+// are about the Serbian copy, so the system language is pinned before any
+// import runs. The English table is typed against the Serbian one, so a
+// missing leaf there is a compile error rather than a test here.
+vi.hoisted(() => {
+  vi.stubGlobal("navigator", { language: "sr-Latn-RS" });
+});
+
 import { NexusApiNotConnectedError, OBJECT_PROTOTYPE_MEMBER_NAMES, nexus } from "../src/api.js";
 
 /**

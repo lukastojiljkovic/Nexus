@@ -1,4 +1,5 @@
 import { dayUnit, strings } from "./strings.js";
+import { dateTimeFormat } from "./intl.js";
 
 /**
  * Shared bare-calendar-date math for exams (STUDY), reused by StudyPage, the
@@ -53,12 +54,12 @@ export function shiftDayKey(dayKey: string, days: number): string {
   return `${date.getUTCFullYear()}-${month}-${day}`;
 }
 
-/** Exam date for display — "8. jul 2026." in Serbian; raw string on bad input. */
+/** Exam date for display — "8. jul 2026." in Serbian, "8 July 2026" in English; raw string on bad input. */
 export function formatExamDate(examDate: string): string {
   const date = new Date(examDate.slice(0, 10));
   return Number.isNaN(date.getTime())
     ? examDate
-    : new Intl.DateTimeFormat("sr-Latn", {
+    : dateTimeFormat({
         day: "numeric",
         month: "long",
         year: "numeric",

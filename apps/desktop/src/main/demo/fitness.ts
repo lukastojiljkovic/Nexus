@@ -197,11 +197,11 @@ interface RoutineLine {
  * Resolves one routine line against `EXERCISE_CATALOGUE` — the same lookup
  * `index.ts`'s `resolveLoggedExercise` runs on the way in from a real IPC call.
  */
-function routineItem(line: RoutineLine): FitRoutineItemInput {
+function routineItem(line: RoutineLine, ctx: DemoContext): FitRoutineItemInput {
   const entry = requireExercise(line.id);
   return {
     exerciseRef: exerciseRefText({ kind: "catalogue", id: entry.id }),
-    label: entry.name,
+    label: ctx.locale === "en" ? entry.nameEn : entry.name,
     targetSets: line.targetSets,
     targetRepsMin: line.targetRepsMin ?? null,
     targetRepsMax: line.targetRepsMax ?? null,
@@ -303,6 +303,27 @@ const ROUTINE_NOTES: Record<RoutineKey, string> = {
   full: "Treći trening nedeljno — mrtvo dizanje, zgibovi i noge u jednoj sesiji.",
   cond: "Kondicija i hvat — girje, veslački ergometar i traka.",
 };
+
+/** The same four routines in English, keyed by the Serbian text above. */
+const EN: Readonly<Record<string, string>> = {
+  "Gornje telo": "Upper body",
+  "Donje telo": "Lower body",
+  "Celo telo": "Full body",
+  "Kondicioni trening": "Conditioning workout",
+  "Guranje i povlačenje za gornji deo tela, dva puta nedeljno.":
+    "Push and pull for the upper body, twice a week.",
+  "Noge i stomak, sa akcentom na čučanj i zadnju ložu.":
+    "Legs and core, with the squat and the hamstrings in focus.",
+  "Treći trening nedeljno — mrtvo dizanje, zgibovi i noge u jednoj sesiji.":
+    "The third workout of the week — deadlift, pull-ups and legs in one session.",
+  "Kondicija i hvat — girje, veslački ergometar i traka.":
+    "Conditioning and grip — kettlebells, rowing erg and treadmill.",
+};
+
+/** The seeded text for the active locale. */
+function text(ctx: DemoContext, sr: string): string {
+  return ctx.locale === "en" ? (EN[sr] ?? sr) : sr;
+}
 
 const ROUTINE_START_HOUR: Record<RoutineKey, number> = {
   upper: 18,
@@ -569,7 +590,7 @@ function buildSessionCalendar(rng: DemoRandom): readonly PlannedSession[] {
  * One catalogue exercise, resolved into the shape `FitWorkoutStore.logSet`
  * wants — `resolveLoggedExercise`'s own return shape.
  */
-function loggedExercise(id: string): {
+function loggedExercise(id: string, ctx: DemoContext): {
   exerciseRef: string;
   label: string;
   metric: ExerciseMetric;
@@ -578,7 +599,7 @@ function loggedExercise(id: string): {
   const entry = requireExercise(id);
   return {
     exerciseRef: exerciseRefText({ kind: "catalogue", id: entry.id }),
-    label: entry.name,
+    label: ctx.locale === "en" ? entry.nameEn : entry.name,
     metric: entry.metric,
     primaryMuscles: [...entry.primaryMuscles],
   };
@@ -604,7 +625,7 @@ function logSession(
 
   const fraction = clampFraction((session.offset + 150) / 150);
   for (const line of ROUTINE_LINES[session.routine]) {
-    const exercise = loggedExercise(line.id);
+    const exercise = loggedExercise(line.id, ctx);
     const plan = EXERCISE_PLANS[line.id];
     if (plan === undefined) {
       throw new Error(`Demo fitness: no set progression for catalogue exercise "${line.id}".`);
@@ -642,33 +663,33 @@ function seedTraining(db: DatabaseHandle, ctx: DemoContext, rng: DemoRandom): vo
   const routines: Record<RoutineKey, { readonly id: string; readonly name: string }> = {
     upper: routineStore.create(
       {
-        name: ROUTINE_NAMES.upper,
-        notes: ROUTINE_NOTES.upper,
-        items: UPPER_LINES.map(routineItem),
+        name: text(ctx, ROUTINE_NAMES.upper),
+        notes: text(ctx, ROUTINE_NOTES.upper),
+        items: UPPER_LINES.map((line) => routineItem(line, ctx)),
       },
       createdAt,
     ),
     lower: routineStore.create(
       {
-        name: ROUTINE_NAMES.lower,
-        notes: ROUTINE_NOTES.lower,
-        items: LOWER_LINES.map(routineItem),
+        name: text(ctx, ROUTINE_NAMES.lower),
+        notes: text(ctx, ROUTINE_NOTES.lower),
+        items: LOWER_LINES.map((line) => routineItem(line, ctx)),
       },
       createdAt,
     ),
     full: routineStore.create(
       {
-        name: ROUTINE_NAMES.full,
-        notes: ROUTINE_NOTES.full,
-        items: FULL_BODY_LINES.map(routineItem),
+        name: text(ctx, ROUTINE_NAMES.full),
+        notes: text(ctx, ROUTINE_NOTES.full),
+        items: FULL_BODY_LINES.map((line) => routineItem(line, ctx)),
       },
       createdAt,
     ),
     cond: routineStore.create(
       {
-        name: ROUTINE_NAMES.cond,
-        notes: ROUTINE_NOTES.cond,
-        items: CONDITIONING_LINES.map(routineItem),
+        name: text(ctx, ROUTINE_NAMES.cond),
+        notes: text(ctx, ROUTINE_NOTES.cond),
+        items: CONDITIONING_LINES.map((line) => routineItem(line, ctx)),
       },
       createdAt,
     ),
@@ -757,7 +778,7 @@ function logMealItem(
       date: day,
       slot,
       foodRef: foodRefText({ kind: "catalogue", id: food.id }),
-      label: food.name,
+      label: ctx.locale === "en" ? (food.nameEn ?? food.name) : food.name,
       grams: rng.int(option.gramsMin, option.gramsMax),
       per100g: food.per100g,
     },

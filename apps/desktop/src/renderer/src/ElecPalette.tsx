@@ -3,11 +3,12 @@ import type { ComponentDef } from "@nexus/core";
 import { TextField } from "@nexus/ui";
 
 import { filterComponents, groupComponentsByKind } from "./elecCatalogue.js";
+import { componentName, componentSummary } from "./elecLocale.js";
 import { countUnit, lookup, strings } from "./strings.js";
-// The drawer's own number formatter, imported rather than restated: it is
-// `Intl` in the `"sr-Latn"` this whole renderer spells, and a second one here
-// would be a second answer to „how does a number look" — the decimal comma
-// would drift the first time somebody corrected one of them.
+// The drawer's own number formatter, imported rather than restated: it follows
+// the ACTIVE interface locale, and a second `Intl` here would be a second answer
+// to „how does a number look" — the decimal mark would drift the first time
+// somebody corrected one of them.
 import { formatToolNumber } from "./toolFormat.js";
 
 export interface ElecPaletteProps {
@@ -65,8 +66,8 @@ export function ElecPalette({ components, onAdd, busy }: ElecPaletteProps) {
                   disabled={busy}
                   onClick={() => onAdd(component)}
                 >
-                  <span className="elec-palette__name">{component.name}</span>
-                  <span className="elec-palette__summary">{component.summary}</span>
+                  <span className="elec-palette__name">{componentName(component)}</span>
+                  <span className="elec-palette__summary">{componentSummary(component)}</span>
                   <span className="elec-palette__meta">{componentMeta(component)}</span>
                 </button>
               ))}

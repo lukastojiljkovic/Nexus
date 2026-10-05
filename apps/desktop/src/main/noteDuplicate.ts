@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { duplicateNoteState, mergeNoteState, remapNoteState } from "@nexus/core";
 import type { NoteAttachmentStore, NoteMeta, NoteOrgStore, NoteStore } from "@nexus/db";
 import { compactNow } from "./notes.js";
-import { NOTE_COPY_SUFFIX as SHELL_NOTE_COPY_SUFFIX } from "./shellStrings.js";
+import { shellStrings } from "./shellStrings.js";
 import { NOTE_UPDATE_MAX_BYTES } from "../shared/ipc.js";
 import type { NoteDuplicateResult } from "../shared/ipc.js";
 
@@ -58,11 +58,13 @@ import type { NoteDuplicateResult } from "../shared/ipc.js";
 
 /**
  * The mark a copy carries, in the document and in its title. Text lives in
- * `shellStrings.ts` (the main process's shell/persisted-default copy table) —
- * re-exported under this name so every existing call site and test import is
- * untouched.
+ * `shellStrings.ts` (the main process's shell/persisted-default copy table) and
+ * is read when the copy is made, so the mark is written in the language the
+ * user was reading; a copy made earlier keeps the mark it was born with.
  */
-export const NOTE_COPY_SUFFIX = SHELL_NOTE_COPY_SUFFIX;
+export function noteCopySuffix(): string {
+  return shellStrings().noteCopySuffix;
+}
 
 /** Everything this module needs: three stores and a transaction runner. */
 export interface NoteDuplicateDeps {
@@ -142,7 +144,7 @@ function copyNote(deps: NoteDuplicateDeps, noteId: string, now: string): NoteMet
     // The same mint the editor's own re-keying plugin uses (`noteFlashcard.ts`),
     // so a copy's keys are indistinguishable from typed ones.
     mintCardKey: () => randomUUID(),
-    titleSuffix: NOTE_COPY_SUFFIX,
+    titleSuffix: noteCopySuffix(),
   });
   // `remapNoteState` rather than a second traversal inside `duplicateNoteState`:
   // id remapping already lives in exactly one place, and this map does not

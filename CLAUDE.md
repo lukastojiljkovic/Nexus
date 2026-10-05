@@ -516,7 +516,8 @@ choice of backend**; whatever in them is about the data model still applies.
   `apps/desktop/shots/` with `report.md` — a geometric audit of clipped text,
   boxes escaping their parent, overlapping text and sub-24px targets, grouped
   as classes. `pnpm --filter @nexus/desktop demo` adds a populated „Demo"
-  account to this device (passcode `demo-nexus-2026`). Neither flips anything any
+  account to this device (passcode `demo-nexus-2026`). Both run in Serbian on
+  any machine, or in English with `--locale=en`. Neither flips anything any
   more — the line that stood here forbade running either beside a test suite,
   and that constraint retired with the ABI dance on 2026-09-04.
   **One run per verb at a time, and it is enforced.** `launch.mjs` now builds and

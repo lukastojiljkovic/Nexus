@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format is
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.4.0] - Unreleased
+## [1.4.0] - 2026-10-05
 
 The first public release. No earlier version was tagged or published; this one
 carries the Apache-2.0 licence, the release pipeline and the corrections below.
@@ -22,6 +22,14 @@ carries the Apache-2.0 licence, the release pipeline and the corrections below.
   other large surfaces left the startup path. The tools drawer fetches a
   toolkit when one of its tools is opened, and it no longer ships with the
   rest of the shell.
+- **The interface ships in English as well as Serbian**, and the language is a
+  first-class preference: on first run the app follows the system language
+  (Serbian for `sr*`, English otherwise), remembers the choice, and switches at
+  runtime from Settings → Appearance — including the main process's native
+  dialogs, OS notifications and the demo profile's seeded content. Dates,
+  numbers, money and alphabetical order follow the same choice, and the food
+  and electronics catalogues, the generated Arduino sketch and ROS package
+  carry English text too.
 
 ### Fixed
 

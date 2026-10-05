@@ -3,6 +3,7 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 import type { CircuitPart, CircuitWire, ComponentDef, WireEnd } from "@nexus/core";
 
 import { partDisplayName } from "./elecCatalogue.js";
+import { componentName, pinLabel } from "./elecLocale.js";
 import {
   PIN_LABEL_INSET,
   PIN_LEG,
@@ -333,7 +334,11 @@ export function ElecBench({
             const size = sizeOf(component);
             const box = rotatedSize(size, part.rotation);
             const origin = drawnOrigin(part);
-            const name = partDisplayName(part.label, component, s.unknownPart);
+            const name = partDisplayName(
+              part.label,
+              component === undefined ? undefined : componentName(component),
+              s.unknownPart,
+            );
             const chosen = selection?.kind === "part" && selection.id === part.id;
             const classes = ["elec-part"];
             if (chosen) classes.push("elec-part--selected");
@@ -400,7 +405,7 @@ export function ElecBench({
                             dominantBaseline="middle"
                             transform={`rotate(${-part.rotation} ${label} ${placed.y})`}
                           >
-                            {placed.pin.label}
+                            {pinLabel(placed.pin)}
                           </text>
                           <circle
                             className="elec-pin__hit"
@@ -409,7 +414,7 @@ export function ElecBench({
                             r={PIN_HIT_RADIUS}
                             role="button"
                             tabIndex={0}
-                            aria-label={`${name} · ${placed.pin.label}`}
+                            aria-label={`${name} · ${pinLabel(placed.pin)}`}
                             onPointerDown={(event) => {
                               event.stopPropagation();
                               onPinClick({ partId: part.id, pinId: placed.pin.id });

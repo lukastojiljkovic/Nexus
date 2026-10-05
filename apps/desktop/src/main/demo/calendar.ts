@@ -36,6 +36,80 @@ import {
   type DemoRandom,
 } from "./context.js";
 
+/**
+ * English titles, descriptions and locations for the demo calendar, keyed by
+ * the Serbian text the scene above uses. Categories ("posao", "zdravlje",
+ * "lično", "društveno", "fakultet") are stored values the UI maps to its own
+ * labels, so they are not translated here.
+ */
+const EN: Readonly<Record<string, string>> = {
+  "Predavanje: Mašinsko učenje": "Lecture: Machine Learning",
+  "Neuronske mreže i unazadna propagacija.": "Neural networks and backpropagation.",
+  "Vežbe: Baze podataka": "Exercises: Databases",
+  "Fokus blok — posao": "Focus block — work",
+  "Duboki rad — bez sastanaka.": "Deep work — no meetings.",
+  Teretana: "Gym",
+  "Jutarnje trčanje": "Morning run",
+  "Konsultacije kod profesora": "Office hours with the professor",
+  "Ručak sa kolegom sa posla": "Lunch with a colleague from work",
+  "Večera sa prijateljima": "Dinner with friends",
+  "Video poziv sa porodicom": "Video call with the family",
+  "Vikend kod roditelja": "Weekend at my parents'",
+  "Sajam knjiga": "Book fair",
+  "Obilazak štandova i kupovina knjiga za fakultet.":
+    "Visiting the stands and buying books for university.",
+  "Poseta rodbini": "Visiting relatives",
+  "Rođendanska proslava kod prijatelja": "A friend's birthday party",
+  "Sastanak tima": "Team meeting",
+  "Nedeljni pregled zaduženja i blokera.": "The weekly review of assignments and blockers.",
+  "Pregled koda sa kolegom": "Code review with a colleague",
+  "Poziv sa klijentom": "Call with the client",
+  "Kafa sa Anom": "Coffee with Ana",
+  "Ručak sa bivšim kolegama": "Lunch with former colleagues",
+  "Večera kod Marka": "Dinner at Marko's",
+  "Gledanje utakmice": "Watching the match",
+  "Rođendan kolege — druženje": "A colleague's birthday — get-together",
+  "Iznenađenje posle posla.": "A surprise after work.",
+  "Zubar — kontrolni pregled": "Dentist — check-up",
+  Frizer: "Hairdresser",
+  "Servis automobila": "Car service",
+  "Preuzimanje paketa iz pošte": "Collecting a parcel from the post office",
+  "Konsultacije na fakultetu": "Office hours at the university",
+  "Pitanja oko teme diplomskog.": "Questions about the thesis topic.",
+  "Rad na seminarskom u biblioteci": "Working on the term paper in the library",
+  "Grupni projekat — sastanak tima": "Group project — team meeting",
+  "Predavanje gostujućeg profesora": "Guest professor's lecture",
+  "Individualni trening": "Personal training session",
+  "Trčanje u parku": "Run in the park",
+  Joga: "Yoga",
+  "Video poziv sa roditeljima": "Video call with my parents",
+  "Priprema prezentacije": "Preparing a presentation",
+  "Kvartalni pregled za tim.": "The quarterly review for the team.",
+  "Telefonski intervju": "Phone interview",
+  "Pitanja oko seminarskog rada.": "Questions about the term paper.",
+  "Konferencija — DevConf Beograd": "Conference — DevConf Belgrade",
+  "Dva dana predavanja i radionica o distribuiranim sistemima.":
+    "Two days of talks and workshops on distributed systems.",
+  "Letovanje sa ekipom": "Summer holiday with the crew",
+  "Nedelju dana na moru sa drugovima sa fakulteta.":
+    "A week by the sea with friends from university.",
+  "Vikend izlet na planinu": "Weekend trip to the mountains",
+  "Amfiteatar 2": "Lecture hall 2",
+  "Sala 305": "Room 305",
+  "Teretana centar": "City gym",
+  "Kabinet 214": "Office 214",
+  "Restoran Salaš": "Restaurant Salaš",
+  "Sala za sastanke": "Meeting room",
+  "Stomatološka ordinacija": "Dental practice",
+  "Auto servis Milić": "Milić car service",
+  "Univerzitetska biblioteka": "University library",
+};
+
+/** The seeded text for the active locale. */
+function text(ctx: DemoContext, sr: string): string {
+  return ctx.locale === "en" ? (EN[sr] ?? sr) : sr;
+}
+
 // --- Recurring weekly rhythm ------------------------------------------
 
 interface RecurringMasterSeed {
@@ -467,13 +541,13 @@ function createRecurringMaster(
     end: seed.untilSemesterEnd === true ? { kind: "until", date: semesterEnd } : { kind: "never" },
   };
   const input: CreateEventInput = {
-    title: seed.title,
+    title: text(ctx, seed.title),
     startAt: new Date(startMs).toISOString(),
     endAt: new Date(startMs + minutes(seed.durationMinutes)).toISOString(),
     category: seed.category,
     recurrence: rule,
-    ...(seed.location !== undefined ? { location: seed.location } : {}),
-    ...(seed.description !== undefined ? { description: seed.description } : {}),
+    ...(seed.location !== undefined ? { location: text(ctx, seed.location) } : {}),
+    ...(seed.description !== undefined ? { description: text(ctx, seed.description) } : {}),
   };
   const created = events.create(input);
   // Today is handled by its own dedicated, hand-placed events below — see the
@@ -485,11 +559,11 @@ function createRecurringMaster(
 function createTodayEvent(ctx: DemoContext, events: EventStore, seed: TodayEventSeed): void {
   const startMs = demoAt(ctx, 0, seed.hour, seed.minute);
   const input: CreateEventInput = {
-    title: seed.title,
+    title: text(ctx, seed.title),
     startAt: new Date(startMs).toISOString(),
     endAt: new Date(startMs + minutes(seed.durationMinutes)).toISOString(),
     category: seed.category,
-    ...(seed.location !== undefined ? { location: seed.location } : {}),
+    ...(seed.location !== undefined ? { location: text(ctx, seed.location) } : {}),
   };
   events.create(input);
 }
@@ -508,23 +582,23 @@ function createMultiDayEvent(
   seed: MultiDaySeed,
 ): void {
   const input: CreateEventInput = {
-    title: seed.title,
+    title: text(ctx, seed.title),
     startAt: demoDay(ctx, startOffset),
     endAt: demoDay(ctx, endOffset),
     allDay: true,
     category: seed.category,
-    ...(seed.description !== undefined ? { description: seed.description } : {}),
+    ...(seed.description !== undefined ? { description: text(ctx, seed.description) } : {}),
   };
   events.create(input);
 }
 
 function createAllDayEvent(ctx: DemoContext, events: EventStore, seed: AllDayEventSeed): void {
   const input: CreateEventInput = {
-    title: seed.title,
+    title: text(ctx, seed.title),
     startAt: demoDay(ctx, saturdayOffset(ctx, seed.weeksAway)),
     allDay: true,
     category: seed.category,
-    ...(seed.description !== undefined ? { description: seed.description } : {}),
+    ...(seed.description !== undefined ? { description: text(ctx, seed.description) } : {}),
   };
   events.create(input);
 }
@@ -562,12 +636,14 @@ function placeFillerEvent(
   const startMs = demoAt(ctx, offset, hour, minute);
 
   const input: CreateEventInput = {
-    title: template.title,
+    title: text(ctx, template.title),
     startAt: new Date(startMs).toISOString(),
     endAt: new Date(startMs + minutes(template.durationMinutes)).toISOString(),
     category: template.category,
-    ...(template.location !== undefined ? { location: template.location } : {}),
-    ...(template.description !== undefined ? { description: template.description } : {}),
+    ...(template.location !== undefined ? { location: text(ctx, template.location) } : {}),
+    ...(template.description !== undefined
+      ? { description: text(ctx, template.description) }
+      : {}),
   };
   events.create(input);
 }
@@ -627,6 +703,20 @@ export function seedDemoCalendar(db: DatabaseHandle, ctx: DemoContext): void {
   const templates = new EventTemplateStore(db, ctx.profileId);
   const now = new Date(ctx.now).toISOString();
   for (const seed of SAVED_TEMPLATES) {
-    templates.saveByName(seed.name, seed.payload, now);
+    templates.saveByName(text(ctx, seed.name), translatePayload(ctx, seed.payload), now);
   }
+}
+
+/** A saved template's own text, in the run's language. */
+function translatePayload(
+  ctx: DemoContext,
+  payload: EventTemplatePayload,
+): EventTemplatePayload {
+  if (ctx.locale !== "en") return payload;
+  return {
+    ...payload,
+    title: text(ctx, payload.title),
+    location: payload.location === null ? null : text(ctx, payload.location),
+    description: payload.description === null ? null : text(ctx, payload.description),
+  };
 }

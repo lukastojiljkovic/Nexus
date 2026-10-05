@@ -247,9 +247,13 @@ describe("http statuses", () => {
     }
   });
 
-  it("gives every row a Serbian line and a reference, since a bare table is what it replaces", () => {
+  it("gives every row a Serbian line, an English line and a reference, since a bare table is what it replaces", () => {
     for (const entry of HTTP_STATUSES) {
       expect(entry.noteSr.length, String(entry.code)).toBeGreaterThan(10);
+      expect(entry.noteEn.length, String(entry.code)).toBeGreaterThan(10);
+      // The factory falls back to the Serbian line for a code with no English
+      // entry, so this is the assertion that catches a code added without one.
+      expect(entry.noteEn, String(entry.code)).not.toBe(entry.noteSr);
       expect(entry.reference.length, String(entry.code)).toBeGreaterThan(2);
     }
   });

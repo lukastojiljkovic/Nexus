@@ -1,18 +1,15 @@
 /**
  * The clock, spelled once.
  *
- * `new Intl.DateTimeFormat("sr-Latn", { hour: "2-digit", minute: "2-digit" })`
- * had been written out at three separate call sites — the focus history, the
- * notification centre and the calendar — which is three chances for one of them
- * to drift to a 12-hour clock, or to plain `"sr"`, whose Latin tailoring is
- * wrong for š/č/ć (the same trap `Intl.Collator(["sr-Latn","sr"])` exists to
- * avoid one layer over). It is one function now.
- *
- * The formatter is constructed once rather than per call: `Intl` object
- * construction is the expensive part, and the save indicator asks for a time on
- * every write.
+ * The "HH:MM" formatter had been written out at three separate call sites — the
+ * focus history, the notification centre and the calendar — which is three
+ * chances for one of them to drift to a 12-hour clock. It is one function now,
+ * and it reads the ACTIVE interface locale through `intl.ts`: the language
+ * switches at runtime without a reload, so the formatter is requested AT USE
+ * TIME rather than captured at import. `intl.ts` memoises it per locale, which
+ * is what keeps construction off the save indicator's per-write path.
  */
-const CLOCK = new Intl.DateTimeFormat("sr-Latn", { hour: "2-digit", minute: "2-digit" });
+import { dateTimeFormat } from "./intl.js";
 
 /**
  * "HH:MM" in the host's local time zone for a real instant. An unparseable
@@ -23,14 +20,12 @@ const CLOCK = new Intl.DateTimeFormat("sr-Latn", { hour: "2-digit", minute: "2-d
 export function formatClockTime(instant: string | Date): string {
   const date = instant instanceof Date ? instant : new Date(instant);
   if (Number.isNaN(date.getTime())) return typeof instant === "string" ? instant : "";
-  return CLOCK.format(date);
+  return dateTimeFormat({ hour: "2-digit", minute: "2-digit" }).format(date);
 }
 
-/** The day half of {@link formatArchiveInstant}, built once for the same reason. */
-const DAY = new Intl.DateTimeFormat("sr-Latn", { day: "numeric", month: "long", year: "numeric" });
-
 /**
- * An instant as a full sr-Latn day + time label ("8. jul 2026. 14:32").
+ * An instant as a full day + time label ("8. jul 2026. 14:32", "8 July 2026
+ * 14:32"), in the active locale.
  *
  * `formatClockTime` without the year would do for anything recent; this carries
  * it because what it labels never is by nature — a restore archive can have been
@@ -47,5 +42,6 @@ const DAY = new Intl.DateTimeFormat("sr-Latn", { day: "numeric", month: "long", 
 export function formatArchiveInstant(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
-  return `${DAY.format(date)} ${CLOCK.format(date)}`;
+  const day = dateTimeFormat({ day: "numeric", month: "long", year: "numeric" }).format(date);
+  return `${day} ${formatClockTime(date)}`;
 }

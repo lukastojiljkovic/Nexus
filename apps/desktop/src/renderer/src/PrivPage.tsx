@@ -13,6 +13,7 @@ import {
 } from "@nexus/ui";
 import type { PrivNoteListEntry, PrivStatus } from "../../shared/ipc.js";
 import { formatCountdown, passcodeMeetsPolicy, RecoveryKitPanel } from "./AuthGate.js";
+import { dateTimeFormat } from "./intl.js";
 import { NotePopover } from "./notePopover.js";
 import { flushOpenEditors } from "./openEditors.js";
 import { PrivNoteEditor } from "./PrivNoteEditor.js";
@@ -40,12 +41,12 @@ import { PRIV_LOCKED_EVENT } from "./privEvents.js";
 /** How long the clipboard guard waits before its best-effort clear (PRIV-012) — stated in the notice copy. */
 const CLIPBOARD_CLEAR_MS = 30_000;
 
-/** Note-list date, `NotesPage`'s own compact recipe. */
+/** Note-list date, `NotesPage`'s own compact recipe, in the active locale. */
 function formatNoteDate(iso: string): string {
   const date = new Date(iso);
   return Number.isNaN(date.getTime())
     ? iso
-    : new Intl.DateTimeFormat("sr-Latn", { day: "2-digit", month: "short" }).format(date);
+    : dateTimeFormat({ day: "2-digit", month: "short" }).format(date);
 }
 
 /** A list entry's display title — the untitled fallback is also what a typed confirm matches against. */
