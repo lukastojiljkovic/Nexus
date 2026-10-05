@@ -1,4 +1,4 @@
-# Copyright 2026 Luka Stojiljkovic
+# Copyright 2026 Luka Stojiljković
 # Distributed under the terms of the GNU General Public License v2
 
 EAPI=8
@@ -14,11 +14,12 @@ MY_P="${MY_PN}-${PV}-linux-x64"
 DESKTOP_ID="rs.stojiljkovic.nexus"
 
 # DESCRIPTION is portage metadata (`emerge -s`, packages.gentoo.org) and stays
-# English by convention. DESKTOP_COMMENT is what a user reads in the
-# application menu, so it is Serbian like the rest of the app's copy — the two
-# are separate strings on purpose, not a translation oversight.
-DESCRIPTION="Offline-first, all-in-one life management: notes, tasks, calendar, files"
-DESKTOP_COMMENT="Beleške, zadaci, kalendar, datoteke i finansije — sve na jednom mestu, lokalno i šifrovano."
+# English by convention. The menu comment speaks the app's two languages:
+# English by default, Serbian for any sr* locale — Latin script under both keys,
+# because that is the Serbian the app itself shows, whatever the script.
+DESCRIPTION="Offline-first workspace for tasks, calendar, notes, study and finance"
+DESKTOP_COMMENT="Tasks, calendar, notes, study and finance in one place, local and encrypted."
+DESKTOP_COMMENT_SR="Zadaci, kalendar, beleške, učenje i finansije na jednom mestu, lokalno i šifrovano."
 HOMEPAGE="https://github.com/lukastojiljkovic/Nexus"
 # Releases live in the source repository once it is public; the separate
 # `nexus-releases` repository was never created. Same asset name, so the
@@ -108,6 +109,8 @@ src_install() {
 		Version=1.0
 		Name=Nexus
 		Comment=${DESKTOP_COMMENT}
+		Comment[sr]=${DESKTOP_COMMENT_SR}
+		Comment[sr@latin]=${DESKTOP_COMMENT_SR}
 		Exec=${destdir}/${MY_PN}
 		Icon=${MY_PN}
 		Terminal=false

@@ -342,20 +342,34 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      # The ACTION is SHA-pinned like every other, and until 2026-08-31 the tool
-      # it installs was `latest` — which put the entire pin back where it came
-      # from. The action fetches a CLI, and each CLI release pins its own set of
-      # Docker image tags for Postgres, PostgREST, GoTrue, Realtime, Storage and
-      # the rest; with `latest`, this job re-resolved that whole stack on every
-      # run, with no commit in this repository to point at. That is worse than an
-      # unpinned dependency, because the job's PURPOSE is to say whether the
-      # migrations are sound: when it goes red, „the SQL broke" and „the
-      # toolchain moved under us" have to be distinguishable, and under `latest`
-      # they are not. Bump this deliberately; a stale CLI against a LOCAL stack
-      # costs nothing, and the bump is then a diff somebody read.
-      - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
-        with:
-          version: 2.116.0
+      # The CLI is a pinned VERSION with a pinned DIGEST. Until 2026-08-31 it was
+      # `latest`, and each CLI release pins its own set of Docker image tags for
+      # Postgres, PostgREST, GoTrue, Realtime, Storage and the rest; with
+      # `latest`, this job re-resolved that whole stack on every run, with no
+      # commit in this repository to point at. The job's PURPOSE is to say
+      # whether the migrations are sound: when it goes red, „the SQL broke" and
+      # „the toolchain moved under us" have to be distinguishable, and under
+      # `latest` they are not. Bump both lines together, the digest from the
+      # release's `checksums.txt`; a stale CLI against a LOCAL stack costs
+      # nothing, and the bump is then a diff somebody read.
+      #
+      # It is fetched here rather than through `supabase/setup-cli`, which is a
+      # composite action that installs Bun through a further third-party action
+      # (`oven-sh/setup-bun`) to run its own TypeScript: two links in the chain
+      # for one tarball. The Actions allow-list refused the nested one on the
+      # first run after it was applied (2026-10-05).
+      - name: Install the Supabase CLI
+        env:
+          VERSION: 2.116.0
+          SHA256: 5b3031cb297d51b25be4c284e4c852254460ec722ec221d3b81b07d55acfd158
+        run: |
+          tarball="supabase_${VERSION}_linux_amd64.tar.gz"
+          curl -fsSL -o "$RUNNER_TEMP/$tarball" "https://github.com/supabase/cli/releases/download/v${VERSION}/${tarball}"
+          echo "${SHA256}  $RUNNER_TEMP/$tarball" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/supabase-cli"
+          tar -xzf "$RUNNER_TEMP/$tarball" -C "$RUNNER_TEMP/supabase-cli"
+          echo "$RUNNER_TEMP/supabase-cli" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/supabase-cli/supabase" --version
 
       # The whole stack rather than `-x` a list of services. The tests assert
       # against `storage.buckets`, `storage.objects` and `realtime.messages`,

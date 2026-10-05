@@ -63,8 +63,8 @@ need network access on the first run.
 ## 2. The AppImage
 
 ```sh
-chmod +x Nexus-1.3.0-x86_64.AppImage
-./Nexus-1.3.0-x86_64.AppImage
+chmod +x Nexus-1.4.0-x86_64.AppImage
+./Nexus-1.4.0-x86_64.AppImage
 ```
 
 **No FUSE required.** The build pins electron-builder's static AppImage runtime
@@ -135,26 +135,20 @@ app-office/nexus-bin ~amd64
 
 ### 3.3 Give portage the tarball
 
-`SRC_URI` names a GitHub release. Until that release exists, hand portage the
-tarball directly:
+`SRC_URI` names the GitHub release, so portage fetches the tarball itself, and
+the committed `Manifest` beside the ebuild is the digest of exactly that file:
+`nexus-1.4.0-linux-x64.tar.gz` as the release workflow published it, the same
+bytes `SHA256SUMS.txt` and the build attestation on the release describe.
 
-```sh
-sudo cp nexus-1.3.0-linux-x64.tar.gz /var/cache/distfiles/
-sudo chown portage:portage /var/cache/distfiles/nexus-1.3.0-linux-x64.tar.gz
-```
-
-**There is no `Manifest` committed beside the ebuild, and that is deliberate.**
-A Manifest is the digest of one exact tarball, and the tarball is produced by
-`pnpm --filter @nexus/desktop dist` **on Linux** — `dist.mjs` refuses to emit a
-Linux target from a Windows host, because the native SQLite module underneath it
-is built for the host it runs on. One was committed for 1.1.0 and survived two
-bumps — to 1.2.0 and to 1.3.0 — as a digest of a file the ebuild would never
-fetch again: a hash that authenticates nothing while reading as though it
-authenticates something. It is generated where the tarball is:
+**A version bump regenerates the Manifest from the published tarball, never
+from a local build.** One was committed for 1.1.0 and survived two bumps — to
+1.2.0 and to 1.3.0 — as a digest of a file the ebuild would never fetch again: a
+hash that authenticates nothing while reading as though it authenticates
+something. Once the new release is out:
 
 ```sh
 cd /var/db/repos/nexus/app-office/nexus-bin
-sudo ebuild nexus-bin-1.3.0.ebuild manifest
+sudo ebuild nexus-bin-1.4.0.ebuild manifest
 ```
 
 ### 3.4 Install

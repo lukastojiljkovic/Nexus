@@ -2,7 +2,10 @@
 
 Nexus is a desktop application that keeps your tasks, calendar, notes, documents, study, habits, fitness, finance, a canvas and an electronics workbench in one workspace on your own computer. Everything is stored in a single encrypted SQLite database, the application works with the network off, and the interface ships in **Serbian and English** — on first run it follows the system language (Serbian when the system locale is `sr*`, English otherwise) and remembers the choice.
 
-<img src="docs/images/dashboard.png" width="100%" alt="The Nexus dashboard: today's events, upcoming tasks, expiring documents, exams and study time">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/dashboard-dark.png">
+  <img src="docs/images/dashboard-light.png" width="100%" alt="The Nexus dashboard: today's events, upcoming tasks, expiring documents, exams and study time">
+</picture>
 
 ## Download
 
@@ -76,8 +79,8 @@ request. Participation is covered by
 Apache License 2.0. See [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).
 
 Third-party notices are generated from the shipped dependency tree, never
-written by hand: they are shown inside the application under **Podešavanja →
-Licence**, attached to each release as `THIRD-PARTY-NOTICES.md`, and regenerated
+written by hand: they are shown inside the application under **Settings →
+Licences**, attached to each release as `THIRD-PARTY-NOTICES.md`, and regenerated
 with `pnpm --filter @nexus/desktop licences`.
 
 ---
@@ -256,7 +259,7 @@ A genuinely justified exception is a same-line `// nx-colour-allow: <reason>`
 comment (`/* … */` in CSS, `<!-- … -->` in HTML) — never a blanket ignore, and
 every use is still printed.
 
-Two themes ship: **Dan** (light) and **Noć** (dark).
+Two themes ship: **Day** (light, `dan` in code) and **Night** (dark, `noc`).
 
 The **type scale** is `11 / 13 / 15 / 18 / 24 / 32` in whole pixels, with a
 leading scale (`tight / snug / normal / loose`) beside it and a tighter tracking

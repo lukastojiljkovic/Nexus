@@ -41,7 +41,7 @@ licensed under its own terms, and those terms apply to those components.
 
 Their licences and notices are **not** reproduced here and are not meant to be:
 they are generated from the exact dependency tree that was packaged, and they
-ship inside the application under **Podešavanja → Licence**, together with the
+ship inside the application under **Settings → Licences**, together with the
 `LICENSES.chromium.html` that Electron places beside the executable. A
 redistributor must carry those notices along with the binary.
 
