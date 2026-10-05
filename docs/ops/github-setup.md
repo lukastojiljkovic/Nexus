@@ -39,10 +39,11 @@ any change to the repository's settings.
 
 ## Actions — Settings → Actions → General
 
-- [x] Allow GitHub-owned actions plus the three third-party actions the
-      workflows use (`pnpm/action-setup`, `ossf/scorecard-action`,
-      `supabase/setup-cli`), and require SHA pinning: every `uses:` is pinned
-      already
+- [x] Allow GitHub-owned actions plus the two third-party actions the
+      workflows use (`pnpm/action-setup`, `ossf/scorecard-action`), and require
+      SHA pinning: every `uses:` is pinned already. The list also binds actions
+      nested inside a composite one, which is why the Supabase CLI comes from
+      its release tarball rather than `supabase/setup-cli`
 - [x] Default workflow permissions: read-only `GITHUB_TOKEN` (workflows also
       declare their own `permissions:` explicitly)
 - [x] Require approval for first-time outside contributors
