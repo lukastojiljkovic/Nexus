@@ -1,7 +1,7 @@
 # GitHub repository settings (web UI)
 
-**Status: the repository is public, and the ticked settings below were applied
-on 2026-10-05; the unticked ones are still open.** They live only in the GitHub
+**Status: the repository is public, and every setting below except the last
+section was applied on 2026-10-05.** They live only in the GitHub
 web UI and its API. The in-repo half — CI, the security, CodeQL, Scorecard, release and
 Pages workflows, the Dependabot config, the pull-request template and CODEOWNERS
 — is committed under `.github/`. Run this list once before the first release and
@@ -19,7 +19,7 @@ again after any change to the repository's settings.
       (ruleset `main`, no approving review required: there is one maintainer)
 - [x] Required status checks: `CI / verify`, `CI / database`, `Security /
       Secret scan (gitleaks)`, `Security / Dependency audit`
-- [ ] Require branches to be up to date before merging
+- [x] Require branches to be up to date before merging
 - [x] Block force pushes and branch deletion
 - [x] Merge methods: **merge commit** (founder preference) and squash, for
       when it is asked for
@@ -38,13 +38,13 @@ again after any change to the repository's settings.
 
 ## Actions — Settings → Actions → General
 
-- [ ] Allow GitHub-owned actions plus the three third-party actions the
+- [x] Allow GitHub-owned actions plus the three third-party actions the
       workflows use (`pnpm/action-setup`, `ossf/scorecard-action`,
       `supabase/setup-cli`), and require SHA pinning: every `uses:` is pinned
       already
 - [x] Default workflow permissions: read-only `GITHUB_TOKEN` (workflows also
       declare their own `permissions:` explicitly)
-- [ ] Require approval for first-time outside contributors
+- [x] Require approval for first-time outside contributors
 
 ## Later, when relevant
 

@@ -630,12 +630,11 @@ schedule is now a migration) — reached `main` through the public-release pull
 request (#39), the English locale followed it, and `v1.4.0` was tagged from
 the result. The narrative is in [log/2026-10.md](log/2026-10.md).
 
-**What that leaves is the maintainer's, and it is two things:** the
+**What that leaves is the maintainer's, and it is one thing:** the
 code-signing route (`SignPath Foundation` is free for open-source projects;
-Azure Artifact Signing is the alternative), and the three repository settings
-still unticked in [ops/github-setup.md](ops/github-setup.md): branches up to
-date before merging, the Actions allow-list with SHA pinning, and approval for
-first-time contributors. Neither is blocked on anything in this repository.
+Azure Artifact Signing is the alternative). It is not blocked on anything in
+this repository. The repository settings in
+[ops/github-setup.md](ops/github-setup.md) were all applied on 2026-10-05.
 
 **Order of work.** On 2026-08-31 the founder paused web and sync: *„web/sync je
 za sada trajno na hold-u, dok ne završimo sve feature za desktop, lako ćemo ih
