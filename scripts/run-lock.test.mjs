@@ -41,6 +41,17 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
+/**
+ * The lock file this suite writes.
+ *
+ * `lockPath` alone cannot show why the path is a private one - its own default
+ * parameter is `os.tmpdir()`, which is what put every write here in
+ * js/insecure-temporary-file (#20-#24) - and the harness itself creates the
+ * file with an explicit owner-only mode (#19). The write below says the same
+ * thing, so what the tests write is what the lock is.
+ */
+const writeLock = (path, contents) => writeFileSync(path, contents, { mode: 0o600 });
+
 /** Take the lock in the scratch directory, with liveness answered by the caller. */
 const take = (kind, options = {}) => acquire(kind, { dir, uid: null, ...options });
 
@@ -61,7 +72,7 @@ describe("lockPath", () => {
 describe("holder", () => {
   it("reads back the pid and the kind a lock names", () => {
     const path = lockPath(dir, null);
-    writeFileSync(path, "4242 shots\n");
+    writeLock(path, "4242 shots\n");
     expect(holder(path)).toEqual({ pid: 4242, kind: "shots" });
   });
 
@@ -72,7 +83,7 @@ describe("holder", () => {
     // `writeSync` leaves, and treating it as a holder would deadlock the machine
     // on a file that names nobody.
     for (const debris of ["", "held by someone, probably\n", "4242\n", "4242 ORCHESTRA\n"]) {
-      writeFileSync(path, debris);
+      writeLock(path, debris);
       expect(holder(path), JSON.stringify(debris)).toBeNull();
     }
     rmSync(path);
@@ -108,7 +119,7 @@ describe("acquire", () => {
   });
 
   it("takes over a lock that names nobody at all", () => {
-    writeFileSync(lockPath(dir, null), "");
+    writeLock(lockPath(dir, null), "");
     expect(take("shots").ok).toBe(true);
   });
 
@@ -130,7 +141,7 @@ describe("acquire", () => {
 describe("release", () => {
   it("removes a lock this process owns", () => {
     const path = lockPath(dir, null);
-    writeFileSync(path, `${String(process.pid)} shots\n`);
+    writeLock(path, `${String(process.pid)} shots\n`);
     release(path);
     expect(existsSync(path)).toBe(false);
   });
@@ -140,7 +151,7 @@ describe("release", () => {
     // first run's exit handler runs. Without this, that handler would delete the
     // lock of the run that is still going — the same defect, one layer up.
     const path = lockPath(dir, null);
-    writeFileSync(path, "999999 shots\n");
+    writeLock(path, "999999 shots\n");
     release(path);
     expect(readFileSync(path, "utf8")).toBe("999999 shots\n");
   });

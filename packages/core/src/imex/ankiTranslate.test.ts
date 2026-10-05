@@ -559,3 +559,95 @@ describe("translateApkg", () => {
     expect(data.dashboardWidgets).toEqual([]);
   });
 });
+
+/**
+ * The two field patterns behind #7 and #8, and the input each one was slow on.
+ *
+ * `stripAnkiHtml` takes a hostile Anki field straight off somebody else's disk,
+ * so a pattern that re-walks the field from every candidate start is a field
+ * that freezes the import. Both are pinned twice here: the values they answer,
+ * which must not move, and the field built to repeat the pump, which has to
+ * come back in the time a keystroke takes.
+ */
+describe("the field patterns walk a field once", () => {
+  const PUMP = 50_000;
+
+  it("removes every [sound:] reference, and counts them", () => {
+    expect(stripAnkiHtml("[sound:a.mp3]hello[sound:b.mp3]")).toEqual({
+      text: "hello",
+      images: 0,
+      sounds: 2,
+    });
+    // An empty body is still a reference...
+    expect(stripAnkiHtml("[sound:]x")).toEqual({ text: "x", images: 0, sounds: 1 });
+    // ...a bracket inside the body is just a character to the body...
+    expect(stripAnkiHtml("[sound:a[b]after")).toEqual({ text: "after", images: 0, sounds: 1 });
+    // ...and one that never closes is left exactly as it was typed.
+    expect(stripAnkiHtml("[sound:never")).toEqual({
+      text: "[sound:never",
+      images: 0,
+      sounds: 0,
+    });
+  });
+
+  it("answers 50,000 [sound: repetitions without re-walking the tail", () => {
+    const started = performance.now();
+    const result = stripAnkiHtml("[sound:x".repeat(PUMP));
+    const elapsed = performance.now() - started;
+    // No closing bracket anywhere, so nothing matches and nothing is removed.
+    expect(result.sounds).toBe(0);
+    expect(result.text).toHaveLength(PUMP * "[sound:x".length);
+    expect(elapsed).toBeLessThan(100);
+  });
+
+  it("strips a script a first pass formed out of the text around it", () => {
+    // #12's shape: the removal joins `<scr` and `ipt>` into a live tag.
+    expect(stripAnkiHtml("<scr<script>ipt>").text).toBe("ipt>");
+    expect(stripAnkiHtml("<scr<script>a</script>ipt>").text).toBe("");
+    // And when a second pass finds a whole element the first one built, its
+    // CONTENT goes with it - the text between the two fragments is inside
+    // `<script>` by the time the strip repeats, which is the point of repeating.
+    expect(stripAnkiHtml("<scr<script>a</script>ipt>x</script>").text).toBe("");
+  });
+
+  it("splits a cloze body at its FIRST ::, which is what the old two-group pattern did", () => {
+    const value = (field: string) => {
+      const result = canonicalizeCloze(field);
+      if (!result.ok) throw new Error(result.reason);
+      return result.value;
+    };
+    expect(value("{{c1::a::b::c}}")).toEqual({
+      template: "{{c1::a}}",
+      numbers: [1],
+      hintsDropped: 1,
+    });
+    // A single colon is part of the text; only a doubled one starts a hint.
+    expect(value("{{c1::a:b::c}}")).toEqual({
+      template: "{{c1::a:b}}",
+      numbers: [1],
+      hintsDropped: 1,
+    });
+    expect(value("{{c1::a::}}")).toEqual({
+      template: "{{c1::a}}",
+      numbers: [1],
+      hintsDropped: 1,
+    });
+    expect(value("{{c1::a}}")).toEqual({ template: "{{c1::a}}", numbers: [1], hintsDropped: 0 });
+    // An empty text is the refusal the empty deletion always was, whichever
+    // side of the separator it is written on.
+    expect(canonicalizeCloze("{{c1::::b}}")).toEqual({
+      ok: false,
+      reason: "cloze-unrepresentable",
+    });
+  });
+
+  it("answers 50,000 ::z repetitions after an opener without re-walking the tail", () => {
+    // The exact pump #8 names: an opener the pattern cannot finish.
+    const field = "{{{{c0::::" + "::z".repeat(PUMP);
+    const started = performance.now();
+    const result = canonicalizeCloze(field);
+    const elapsed = performance.now() - started;
+    expect(result.ok).toBe(false);
+    expect(elapsed).toBeLessThan(100);
+  });
+});

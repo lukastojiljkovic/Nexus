@@ -9,6 +9,7 @@ import {
   countUnit,
   dayUnit,
   lookup,
+  overwrite,
   strings,
 } from "./strings.js";
 import { sr } from "./strings.sr.js";
@@ -195,5 +196,38 @@ describe("Serbian numeral agreement", () => {
     // 12–14 take `many` even though 2–4 take `few`.
     expect(countUnit(12, "praznina", "praznine", "praznina")).toBe("praznina");
     expect(countUnit(22, "praznina", "praznine", "praznina")).toBe("praznine");
+  });
+});
+
+/**
+ * `overwrite` is the one place a locale table is folded onto the live one, and
+ * it recurses through whatever `target[key]` already holds. `JSON.parse` makes
+ * a `__proto__` member an OWN property of the source, so the recursion from
+ * that key lands on `Object.prototype` -- the difference between a bad string
+ * and a polluted global. The three refused names are pinned here because the
+ * guard has no other way to be seen: every table this module ships is a
+ * literal, so nothing in a normal run ever carries one.
+ */
+describe("overwrite refuses the prototype names", () => {
+  it("does not follow __proto__ into Object.prototype", () => {
+    const target: Record<string, unknown> = {};
+    overwrite(target, JSON.parse('{"__proto__":{"polluted":true}}') as Record<string, unknown>);
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+    expect(Object.getPrototypeOf(target)).toBe(Object.prototype);
+  });
+
+  it("does not follow a constructor.prototype chain either", () => {
+    const target: Record<string, unknown> = {};
+    overwrite(
+      target,
+      JSON.parse('{"constructor":{"prototype":{"polluted":true}}}') as Record<string, unknown>,
+    );
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+  });
+
+  it("still copies an ordinary leaf", () => {
+    const target: Record<string, unknown> = {};
+    overwrite(target, { hello: "zdravo" });
+    expect(target.hello).toBe("zdravo");
   });
 });

@@ -75,8 +75,36 @@ const BLOCK_TAGS = new Set([
   "pre",
 ]);
 
-/** `[sound:whatever.mp3]` — Anki's own media reference in a field, and never valid HTML, so it is taken out before the markup is. */
-const SOUND_REFERENCE = /\[sound:[^\]]*\]/g;
+/** The opener of Anki's own media reference in a field: `[sound:whatever.mp3]`. */
+const SOUND_OPEN = "[sound:";
+
+/**
+ * Every `[sound:...]` reference in `field`, removed in one forward pass.
+ *
+ * A scan rather than the pattern it replaces, and for `ANY_TAG`'s reason
+ * below: with no closing bracket in the tail, `/\[sound:[^\]]*\]/g` re-walks
+ * every remaining character from each `[sound:` start, which is quadratic on a
+ * field built to repeat the prefix (#7). `indexOf` visits each character once
+ * and finds the same references: leftmost first, non-overlapping, an empty
+ * body included, and one that never closes left exactly as it was typed.
+ */
+function removeSoundReferences(field: string): { text: string; sounds: number } {
+  let text = "";
+  let sounds = 0;
+  let cursor = 0;
+  for (;;) {
+    const open = field.indexOf(SOUND_OPEN, cursor);
+    if (open === -1) break;
+    const close = field.indexOf("]", open + SOUND_OPEN.length);
+    // No bracket after this opener means none after a later one either, so the
+    // rest of the field is text.
+    if (close === -1) break;
+    text += field.slice(cursor, open);
+    sounds += 1;
+    cursor = close + 1;
+  }
+  return { text: text + field.slice(cursor), sounds };
+}
 
 /** A `<script>`/`<style>` element AND its contents — the one case where removing the tag alone would leave code on screen as text. Lazy body, so two blocks never merge into one. */
 const SCRIPT_OR_STYLE = /<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi;
@@ -160,19 +188,26 @@ const MATHJAX_DISPLAY = /\\\[([\s\S]*?)\\\]/g;
  * visible, and can never be re-read as markup by anything downstream — which is
  * exactly what would happen if the two steps were the other way round.
  *
- * Every regex above is linear: `[^>]*` and `[^\]]*` cannot backtrack, and the
- * lazy `[\s\S]*?` bodies are bounded by their own literal terminators. A 256
+ * Every step is linear in the field: `[^>]*` cannot backtrack, the lazy
+ * `[\s\S]*?` bodies are bounded by their own literal terminators, and the
+ * sound references come out through a scan rather than a pattern (#7). A 256
  * KiB field (the reader's per-field cap) is walked once per pass, never
  * re-walked.
  */
 export function stripAnkiHtml(field: string): AnkiFieldText {
-  let sounds = 0;
-  let text = field.replace(SOUND_REFERENCE, () => {
-    sounds += 1;
-    return "";
-  });
+  const soundRefs = removeSoundReferences(field);
+  let text = soundRefs.text;
+  const sounds = soundRefs.sounds;
 
-  text = text.replace(SCRIPT_OR_STYLE, "");
+  // To a fixed point: one pass can leave a `<script>` behind when the removal
+  // joins the text on either side of what it took out (#12). Ordinary fields
+  // stop after the second pass.
+  let previous: string;
+  do {
+    previous = text;
+    text = text.replace(SCRIPT_OR_STYLE, "");
+  } while (text !== previous);
+
   text = text.replace(ANKI_MATHJAX, (_whole, body: string) => `$${body}$`);
 
   let images = 0;
@@ -220,8 +255,17 @@ export interface ClozeCanonical {
   hintsDropped: number;
 }
 
-/** `{{cN::text}}` or `{{cN::text::hint}}`. `[^{}]*` on every part is what makes a NESTED deletion fail to match rather than match wrongly. */
-const ANKI_CLOZE = /\{\{c(\d+)::([^{}]*?)(?:::([^{}]*?))?\}\}/g;
+/**
+ * `{{cN::text}}` or `{{cN::text::hint}}`, up to the first closing brace run.
+ *
+ * The body is matched brace-free and split at its FIRST `::` in code below
+ * rather than by a second optional group here: two adjacent `[^{}]*` groups
+ * overlap on `:`, and that ambiguity is what made the old pattern re-walk the
+ * tail of a hostile field from every candidate start (#8). `[^{}]*` on the
+ * body is still what makes a NESTED deletion fail to match rather than match
+ * wrongly.
+ */
+const ANKI_CLOZE = /\{\{c(\d+)::([^{}]*)\}\}/g;
 
 /** Where a deletion CLAIMS to begin. Every one of these must be the start of a full `ANKI_CLOZE` match, or the field says something this grammar cannot read. */
 const ANKI_CLOZE_OPENER = /\{\{c\d+::/g;
@@ -287,8 +331,13 @@ export function canonicalizeCloze(
     // note says — and the self-check below then refuses the note, because a
     // stray `{{…}}` in the prose is exactly what it is looking for.
     if (!Number.isInteger(number) || number < 1) continue;
-    if (match[3] !== undefined) hintsDropped += 1;
-    const inner = match[2] ?? "";
+    // The text is the body up to its first `::`; anything after that separator
+    // is the hint, which this grammar drops and counts. The old pattern asked
+    // for the same split with a second group, which is the overlap #8 names.
+    const body = match[2] ?? "";
+    const separator = body.indexOf("::");
+    const inner = separator === -1 ? body : body.slice(0, separator);
+    if (separator !== -1) hintsDropped += 1;
     written.push({ number, text: inner });
     template += field.slice(cursor, index) + `{{c${number}::${inner}}}`;
     cursor = index + match[0].length;

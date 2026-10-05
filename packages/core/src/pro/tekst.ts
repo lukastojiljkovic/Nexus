@@ -2240,7 +2240,16 @@ export function subtitleAudit(input: SubtitleAuditInput): ProResult<SubtitleAudi
 
 /** Markup and ASS overrides, removed before the characters are counted. */
 function stripTags(line: string): string {
-  return line.replace(/<[^>]*>/gu, "").replace(/\{\\[^}]*\}/gu, "");
+  // To a fixed point: one pass can join the text on either side of what it
+  // removed into a tag of its own, which is the shape "<scr<script>ipt>" (#13).
+  let text = line;
+  let previous: string;
+  do {
+    previous = text;
+    text = text.replace(/<[^>]*>/gu, "");
+    text = text.replace(/\{\\[^}]*\}/gu, "");
+  } while (text !== previous);
+  return text;
 }
 
 interface ParsedCue extends CueTimes {

@@ -5,7 +5,6 @@ import {
   readdir as readdirAsync,
   readFile as readFileAsync,
   rename as renameAsync,
-  stat as statAsync,
   unlink as unlinkAsync,
   writeFile as writeFileAsync,
 } from "node:fs/promises";
@@ -14,6 +13,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, protocol, sess
 import type { IpcMainInvokeEvent, OpenDialogOptions } from "electron";
 // `electron-updater` is deliberately NOT imported — see the disarmed
 // auto-update section below for the three conditions that must hold first.
+import { readFileBounded } from "./boundedRead.js";
 import { devServerOrigin, isRequestAllowed, shouldBlockResolver } from "./net/offline.js";
 import { buildCloudEnv } from "./sync/config.js";
 import { electronCloudFetch } from "./sync/electronFetch.js";
@@ -6922,17 +6922,14 @@ async function handlePrivAttachmentPick(profileId: string): Promise<PrivAttachme
   const filePath = canceled ? null : (filePaths[0] ?? null);
   if (filePath === null) return { status: "canceled" };
 
-  let bytes: Uint8Array;
-  try {
-    const stats = await statAsync(filePath);
-    if (!stats.isFile() || stats.size === 0) return { status: "rejected", code: "unreadable" };
-    if (stats.size > PRIV_ATTACHMENT_MAX_BYTES) return { status: "rejected", code: "too-large" };
-    bytes = await readFileAsync(filePath);
-  } catch {
+  // One open, and the cap measured against the file the bytes come from
+  // (js/file-system-race, #29).
+  const read = await readFileBounded(filePath, PRIV_ATTACHMENT_MAX_BYTES);
+  if (read.status === "too-large") return { status: "rejected", code: "too-large" };
+  if (read.status !== "ok" || read.size === 0 || read.bytes.byteLength === 0) {
     return { status: "rejected", code: "unreadable" };
   }
-  if (bytes.byteLength === 0) return { status: "rejected", code: "unreadable" };
-  if (bytes.byteLength > PRIV_ATTACHMENT_MAX_BYTES) return { status: "rejected", code: "too-large" };
+  const bytes = read.bytes;
 
   const ref = await privAddAttachment(privDeps(), profileId, {
     // The display name is derived from the dialog's own path, never accepted
@@ -6983,14 +6980,12 @@ async function handleDashboardPick(profileId: string): Promise<DashboardPickResu
   const filePath = canceled ? null : (filePaths[0] ?? null);
   if (filePath === null) return { status: "canceled" };
 
-  let bytes: Uint8Array;
-  try {
-    const stats = await statAsync(filePath);
-    if (stats.size > MAX_BACKGROUND_BYTES) return { status: "rejected", code: "too-large" };
-    bytes = await readFileAsync(filePath);
-  } catch {
-    return { status: "rejected", code: "unreadable" };
-  }
+  // One open, and the cap measured against the file the bytes come from
+  // (js/file-system-race, #30).
+  const read = await readFileBounded(filePath, MAX_BACKGROUND_BYTES);
+  if (read.status === "too-large") return { status: "rejected", code: "too-large" };
+  if (read.status !== "ok") return { status: "rejected", code: "unreadable" };
+  const bytes: Uint8Array = read.bytes;
 
   const mime = sniffMime(bytes);
   if (!isInlineImageMime(mime)) return { status: "rejected", code: "unsupported-format" };

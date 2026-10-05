@@ -1,9 +1,10 @@
-import { readdir, readFile, stat } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
 import type { BrowserWindow, OpenDialogOptions } from "electron";
 import { dialog } from "electron";
 import { buildNoteUpdate, parseMarkdownNote } from "@nexus/core";
 import type { NoteOrgStore, NoteStore } from "@nexus/db";
+import { readFileBounded } from "./boundedRead.js";
 import { compactNow } from "./notes.js";
 import {
   MARKDOWN_IMPORT_MAX_BYTES,
@@ -125,25 +126,22 @@ export async function handleMarkdownImport(
       continue;
     }
 
-    let text: string;
-    try {
-      const info = await stat(path);
-      if (!info.isFile()) {
-        skip("unreadable");
-        continue;
-      }
-      if (info.size > MARKDOWN_IMPORT_MAX_BYTES) {
-        skip("too-large");
-        continue;
-      }
-      text = await readFile(path, "utf8");
-    } catch {
+    // One open, with the cap measured against the file the bytes come from
+    // (js/file-system-race, #27).
+    const read = await readFileBounded(path, MARKDOWN_IMPORT_MAX_BYTES);
+    if (read.status === "too-large") {
+      skip("too-large");
+      continue;
+    }
+    if (read.status !== "ok") {
       // Permissions, a file that vanished between the dialog and here, a name
-      // the OS will not open: one bad file must never cost the pick its good
-      // ones (the `pickAttachmentFiles` rule, made visible instead of silent).
+      // the OS will not open, a directory under a file name: one bad file must
+      // never cost the pick its good ones (the pickAttachmentFiles rule,
+      // made visible instead of silent).
       skip("unreadable");
       continue;
     }
+    const text = read.bytes.toString("utf8");
 
     const parsed = parseMarkdownNote(text, basename(name, extname(name)));
     if (parsed.blocks.length === 0) {

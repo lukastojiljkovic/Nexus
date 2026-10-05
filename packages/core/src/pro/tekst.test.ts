@@ -1063,6 +1063,27 @@ describe("subtitleAudit", () => {
     if (kept.ok) expect(kept.blocks[0]?.characters).toBe(9);
   });
 
+  it("strips nested markup to a fixed point before anything is counted", () => {
+    // #13's shape. The strip repeats until the text stops changing, so what the
+    // counter sees is the settled plain text and not a tag a first pass left
+    // standing; for these two inputs the values are the ones the single pass
+    // gave, and they must not move.
+    const split = subtitleAudit({
+      subtitle: "1\n00:00:01,000 --> 00:00:02,000\n<scr<script>ipt>\n",
+      countTags: false,
+    });
+    expect(split.ok).toBe(true);
+    if (split.ok) expect(split.blocks[0]?.characters).toBe(4);
+
+    const withText = subtitleAudit({
+      subtitle: "1\n00:00:01,000 --> 00:00:02,000\n<b>Hi</b> <scr<script>ipt>\n",
+      countTags: false,
+    });
+    expect(withText.ok).toBe(true);
+    // `Hi` + the space between the two + `ipt>`.
+    if (withText.ok) expect(withText.blocks[0]?.characters).toBe(7);
+  });
+
   it("refuses a malformed subtitle and each limit outside its own declared range", () => {
     expect(subtitleAudit({ subtitle: "not a subtitle at all", countTags: false })).toEqual({
       ok: false,

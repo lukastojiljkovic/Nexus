@@ -4,6 +4,30 @@ All notable changes to this project are documented here. The format is
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+
+- A crafted CSV, Anki deck or subtitle file can no longer freeze the import
+  while it is being read: the patterns that measured and trimmed that text
+  re-scanned the tail of the file once for every place a match could start, so a
+  small file built to repeat one prefix could spend minutes of CPU. Each of them
+  now walks the text once, and a file with 50 000 repetitions answers in well
+  under the time a keystroke takes.
+- A field whose markup nests one tag inside another can no longer leave a
+  `<script>` behind in the plain text an Anki import or a subtitle measurement
+  produces; the tag strip now repeats until the text stops changing.
+- The private-attachment, CSV, Markdown and profile-picture picks open each
+  chosen file once and read it through that handle, so a file replaced between
+  the size check and the read is neither read nor measured against the wrong
+  file's size.
+- The interface copy tables refuse `__proto__`, `constructor` and `prototype`
+  when a language is folded onto them, so a table carrying one of those names
+  can no longer write through to `Object.prototype`.
+- The screenshot harness writes its lock file owner-only and escapes every
+  value it splices into a script it evaluates in the renderer; a report cell
+  escapes backslashes as well as pipes.
+
 ## [1.4.0] - 2026-10-05
 
 The first public release. No earlier version was tagged or published; this one

@@ -650,13 +650,16 @@ describe("the regex bench", () => {
   });
 
   /**
-   * `(a+)+$` against a non-matching run is the standard demonstration of
-   * catastrophic backtracking. JavaScript cannot interrupt a running `exec`, so
-   * the only defence is refusing the shape before the engine sees it.
+   * JavaScript cannot interrupt a running `exec`, so the only defence against a
+   * catastrophic pattern is refusing the SHAPE before the engine sees it. The
+   * pattern here is deliberately not the classic `(a+)+$` demonstration: a test
+   * that carries that literal is itself a pattern the scanner has to call
+   * exponential (#11). `(ab+)+` is the same shape - a quantified group that
+   * already contains an unbounded quantifier - with no ambiguity to blow up.
    */
   it("refuses a quantified group that already contains an unbounded quantifier", () => {
-    const result = runRegex("(a+)+$", "", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa!");
-    expect(result).toEqual({ ok: false, reason: "nested-quantifier", at: 4 });
+    const result = runRegex("(ab+)+$", "", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa!");
+    expect(result).toEqual({ ok: false, reason: "nested-quantifier", at: 5 });
   });
 
   it("runs the same pattern when the user asks for it in as many words", () => {
