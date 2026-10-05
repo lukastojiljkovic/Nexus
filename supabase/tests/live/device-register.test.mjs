@@ -32,7 +32,7 @@ import { after, before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { createHmac, randomUUID } from "node:crypto";
 
-import { awaitFunctions } from "./ready.mjs";
+import { awaitFunctions, callFunction } from "./ready.mjs";
 
 const URL_BASE = process.env["NEXUS_LIVE_SUPABASE_URL"];
 const ANON = process.env["NEXUS_LIVE_ANON_KEY"];
@@ -150,7 +150,7 @@ async function provision() {
 }
 
 function register({ device, body, headers = {} }) {
-  return fetch(`${URL_BASE}/functions/v1/device-register`, {
+  return callFunction(`${URL_BASE}/functions/v1/device-register`, {
     method: "POST",
     headers: {
       apikey: ANON,
@@ -177,7 +177,7 @@ async function enabled() {
   const account = await provision();
   const authorising = await account.stepUp(await account.signIn());
   const deviceToken = await account.signIn();
-  const minted = await fetch(`${URL_BASE}/functions/v1/sync-enable`, {
+  const minted = await callFunction(`${URL_BASE}/functions/v1/sync-enable`, {
     method: "POST",
     headers: {
       apikey: ANON,
@@ -335,7 +335,7 @@ describe(
     });
 
     test("only POST reaches the handler", async () => {
-      const answer = await fetch(`${URL_BASE}/functions/v1/device-register`, {
+      const answer = await callFunction(`${URL_BASE}/functions/v1/device-register`, {
         method: "GET",
         headers: { apikey: ANON, Authorization: `Bearer ${ANON}` },
       }).then(readJson);
