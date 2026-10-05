@@ -100,7 +100,7 @@ blocking; both are §5 items.
 |  |  |
 | --- | --- |
 | Desktop version | **1.4.0**, released as `v1.4.0`: unsigned, with its fuses read back |
-| Installer bytes | 183 821 644 (1.3.0) · `sha256` B66B0AAB… — see §4.4 |
+| Installer bytes | 183 616 545 (1.4.0, as published) · `sha256` 361889BC… — the release's `SHA256SUMS.txt` |
 | Linux | AppImage, tarball and a Gentoo ebuild, all built and verified |
 | Modules registered | **16** |
 | Local migrations | **70** (latest `070-circuit-search`) |
@@ -110,6 +110,7 @@ blocking; both are §5 items.
 | Unmerged work | none — `chore/open-source-readiness` (#39) and `feat/english-locale` were merged for 1.4.0 |
 | Open pull requests | none at the 1.4.0 release |
 | Git tags / GitHub releases | `v1.4.0`, the first (§4) |
+| Repository | public since 2026-10-05; `main` changes only through a pull request with CI green (ruleset `main`, no bypass) |
 
 ---
 
@@ -631,9 +632,10 @@ the result. The narrative is in [log/2026-10.md](log/2026-10.md).
 
 **What that leaves is the maintainer's, and it is two things:** the
 code-signing route (`SignPath Foundation` is free for open-source projects;
-Azure Artifact Signing is the alternative), and the repository settings that
-live in the web UI ([ops/github-setup.md](ops/github-setup.md)). Neither is
-blocked on anything in this repository.
+Azure Artifact Signing is the alternative), and the three repository settings
+still unticked in [ops/github-setup.md](ops/github-setup.md): branches up to
+date before merging, the Actions allow-list with SHA pinning, and approval for
+first-time contributors. Neither is blocked on anything in this repository.
 
 **Order of work.** On 2026-08-31 the founder paused web and sync: *„web/sync je
 za sada trajno na hold-u, dok ne završimo sve feature za desktop, lako ćemo ih
@@ -815,12 +817,12 @@ quality is.
   `npx @electron/fuses read --app apps/desktop/release/win-unpacked/Nexus.exe`,
   and launch the result.
 - **`v1.4.0` is the first tag and the first release.** Every installer before
-  it reports a number nothing could be verified against. The Gentoo ebuild's
-  `SRC_URI` points at this repository's releases (the separate `nexus-releases`
-  repository was never created and is no longer wanted), but the ebuild itself
-  is still `nexus-bin-1.3.0`: it needs a 1.4.0 bump and a `Manifest` digested
-  from the published Linux tarball, which exists only now that the release
-  does. Until then the ebuild is a hand-installed recipe.
+  it reports a number nothing could be verified against. The Gentoo ebuild is
+  `nexus-bin-1.4.0`, its `SRC_URI` points at this repository's releases, and
+  its committed `Manifest` digests the published Linux tarball (the same bytes
+  as the release's `SHA256SUMS.txt`). The next bump regenerates the Manifest
+  from the next published tarball, never from a local build. It has still not
+  been run through portage (`apps/desktop/build/gentoo/README.md`).
 - **`check:licences` fails every bump of a packaged dependency, by
   construction.** Dependabot cannot regenerate a generated artifact, so the
   third-party notices must be regenerated on the branch

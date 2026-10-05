@@ -4,4 +4,4 @@ Copyright 2026 Luka Stojiljković
 This product includes third-party software. Its licences and notices, including
 the NOTICE files of Apache-2.0 dependencies, are generated from the shipped
 dependency tree by apps/desktop/scripts/generate-licences.mjs and are shown in
-the application under Podešavanja, Licence.
+the application under Settings → Licences.
