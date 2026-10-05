@@ -42,12 +42,18 @@ jobs:
           # with it in a distributed binary, or that restrict commercial use.
           # Deliberately NOT a blanket "only allow a list": a permissive licence
           # nobody thought to enumerate should be reviewed by a human, not
-          # rejected by a rule.
+          # rejected by a rule. Every entry must be an SPDX identifier: the
+          # action refuses to start on one that is not, which is why the Commons
+          # Clause (it has none) is not listed. It was, and the job failed on
+          # its first run, the first pull request after the repository went
+          # public. A package under it carries no SPDX licence, so it surfaces
+          # in the summary for a human, which is the outcome wanted.
           deny-licenses: >-
             AGPL-3.0, AGPL-3.0-only, AGPL-3.0-or-later,
-            GPL-2.0, GPL-2.0-only, GPL-3.0, GPL-3.0-only,
-            LGPL-3.0, LGPL-3.0-only, SSPL-1.0, BUSL-1.1,
-            CC-BY-NC-4.0, Commons-Clause
+            GPL-2.0, GPL-2.0-only, GPL-2.0-or-later,
+            GPL-3.0, GPL-3.0-only, GPL-3.0-or-later,
+            LGPL-3.0, LGPL-3.0-only, LGPL-3.0-or-later,
+            SSPL-1.0, BUSL-1.1, CC-BY-NC-4.0
           # A summary in the PR body, so a review does not have to open the job.
           comment-summary-in-pr: on-failure
 
