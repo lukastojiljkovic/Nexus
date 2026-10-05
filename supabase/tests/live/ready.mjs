@@ -36,6 +36,22 @@
 // The anon key is what makes the probe reach the handler: `verify_jwt = true` on
 // both endpoints, and the anon key IS a JWT this project signed — `config.toml`
 // says so at length, and says that is all that gate is worth.
+//
+// ─── AND MID-SUITE (2026-10-05, run 37304064456, `main`) ───────────────────
+//
+// The same refusal came back with the suites well under way: to
+// device-register's „never minted" case on the first attempt, and to
+// sync-enable's mint on the rerun, each time with every call either side of it
+// answered by the function. Under `oneshot` EVERY request is a fresh worker
+// boot, so readiness established once says nothing about the next call.
+// `callFunction` applies the same discriminator per request. Every answer a
+// handler gives carries `{"error": …}` or is a success, `unavailable()`
+// included, so a 503 without that body is the runtime's, and the request is
+// sent again, a bounded number of times. Nothing the function itself answers is
+// retried. If a worker ever died partway through a handler, the repeat would
+// answer as a repeat (`already_minted`, a second device) and fail its
+// assertion, so the retry can turn this flake green but cannot turn a fault
+// green.
 
 import { setTimeout as sleep } from "node:timers/promises";
 
@@ -73,6 +89,44 @@ export async function probeFunction(urlBase, anonKey, name) {
   }
   const ready = response.status === READY_STATUS && parsed?.error === READY_ERROR;
   return { ready, saw: describe(response.status, body) };
+}
+
+/** A 503 the handler did not write: no body, or a body without its `error` key. */
+function refusedByRuntime(status, body) {
+  if (status !== 503) return false;
+  try {
+    return typeof JSON.parse(body)?.error !== "string";
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * `fetch` for a function, sent again while the RUNTIME refuses it (see the
+ * header). Resolves to a `Response` carrying what the function answered, and
+ * throws, naming the runtime and its last answer, when the refusals outlast
+ * the budget.
+ */
+export async function callFunction(url, init, options = {}) {
+  const { attempts = 8, intervalMs = 500 } = options;
+  for (let attempt = 1; ; attempt++) {
+    const response = await fetch(url, init);
+    const body = await response.text();
+    if (!refusedByRuntime(response.status, body)) {
+      return new Response(body === "" ? null : body, {
+        status: response.status,
+        headers: response.headers,
+      });
+    }
+    if (attempt === attempts) {
+      throw new Error(
+        `the edge runtime refused ${new URL(url).pathname} ${attempts} times, last answer ` +
+          `${describe(response.status, body)}. The function never answered, so nothing it ` +
+          "returns can be asserted on.",
+      );
+    }
+    await sleep(intervalMs);
+  }
 }
 
 /**

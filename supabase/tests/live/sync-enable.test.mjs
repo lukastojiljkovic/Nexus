@@ -51,7 +51,7 @@ import { after, before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { createHmac, randomUUID } from "node:crypto";
 
-import { awaitFunctions } from "./ready.mjs";
+import { awaitFunctions, callFunction } from "./ready.mjs";
 
 const URL_BASE = process.env["NEXUS_LIVE_SUPABASE_URL"];
 const ANON = process.env["NEXUS_LIVE_ANON_KEY"];
@@ -209,7 +209,7 @@ function payload(overrides = {}) {
 }
 
 function enable({ device, authorising, body = payload(), headers = {} }) {
-  return fetch(`${URL_BASE}/functions/v1/sync-enable`, {
+  return callFunction(`${URL_BASE}/functions/v1/sync-enable`, {
     method: "POST",
     headers: {
       apikey: ANON,
@@ -524,7 +524,7 @@ describe(
       assert.equal(enabled.status, 400);
       assert.equal(enabled.body.detail, "not callable from a browser");
 
-      const paired = await fetch(`${URL_BASE}/functions/v1/pair-complete`, {
+      const paired = await callFunction(`${URL_BASE}/functions/v1/pair-complete`, {
         method: "POST",
         headers: { apikey: ANON, "content-type": "application/json", ...browser },
         body: "{}",
@@ -534,7 +534,7 @@ describe(
     });
 
     test("only POST reaches the handler", async () => {
-      const response = await fetch(`${URL_BASE}/functions/v1/sync-enable`, {
+      const response = await callFunction(`${URL_BASE}/functions/v1/sync-enable`, {
         method: "GET",
         headers: { apikey: ANON, Authorization: `Bearer ${ANON}` },
       }).then(readJson);
