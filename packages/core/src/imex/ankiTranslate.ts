@@ -75,20 +75,614 @@ const BLOCK_TAGS = new Set([
   "pre",
 ]);
 
-/** `[sound:whatever.mp3]` — Anki's own media reference in a field, and never valid HTML, so it is taken out before the markup is. */
-const SOUND_REFERENCE = /\[sound:[^\]]*\]/g;
+/** The opener of Anki's own media reference in a field: `[sound:whatever.mp3]`. */
+const SOUND_OPEN = "[sound:";
 
-/** A `<script>`/`<style>` element AND its contents — the one case where removing the tag alone would leave code on screen as text. Lazy body, so two blocks never merge into one. */
-const SCRIPT_OR_STYLE = /<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi;
+/**
+ * Every `[sound:...]` reference in `field`, removed in one forward pass.
+ *
+ * A scan rather than the pattern it replaces, and for `ANY_TAG`'s reason
+ * below: with no closing bracket in the tail, `/\[sound:[^\]]*\]/g` re-walks
+ * every remaining character from each `[sound:` start, which is quadratic on a
+ * field built to repeat the prefix (#7). `indexOf` visits each character once
+ * and finds the same references: leftmost first, non-overlapping, an empty
+ * body included, and one that never closes left exactly as it was typed.
+ */
+function removeSoundReferences(field: string): { text: string; sounds: number } {
+  let text = "";
+  let sounds = 0;
+  let cursor = 0;
+  for (;;) {
+    const open = field.indexOf(SOUND_OPEN, cursor);
+    if (open === -1) break;
+    const close = field.indexOf("]", open + SOUND_OPEN.length);
+    // No bracket after this opener means none after a later one either, so the
+    // rest of the field is text.
+    if (close === -1) break;
+    text += field.slice(cursor, open);
+    sounds += 1;
+    cursor = close + 1;
+  }
+  return { text: text + field.slice(cursor), sounds };
+}
+/** The two names whose element takes its contents with it. */
+type ScriptOrStyle = "script" | "style";
 
-/** `<anki-mathjax …>x</anki-mathjax>` — the newer editor's math element, whose content is TeX. Lazy body, for `SCRIPT_OR_STYLE`'s reason. */
-const ANKI_MATHJAX = /<anki-mathjax\b[^>]*>([\s\S]*?)<\/anki-mathjax\s*>/gi;
+/** The two names whose element takes its contents with it. */
+const SCRIPT_OR_STYLE_NAMES: readonly ScriptOrStyle[] = ["script", "style"];
 
-/** Any `<img …>`, self-closing or not. */
-const IMAGE_TAG = /<img\b[^>]*>/gi;
+/**
+ * The leftmost opener of one name that has a `>` but no closer, by where its
+ * `<` sits in the current text and where its `>` does. Only one per name is
+ * kept, because only the leftmost can ever be completed by a closer a removal
+ * builds; `gt` is `-1` for an opener whose `>` the removal took, after which
+ * nothing more can match.
+ */
+interface WaitingOpener {
+  readonly at: number;
+  readonly gt: number;
+}
 
-/** Any remaining tag, opening or closing, with its name captured. `[^>]*` is deliberately linear — nothing here may backtrack over a 256 KiB field. */
-const ANY_TAG = /<\/?([a-zA-Z][a-zA-Z0-9-]*)\b[^>]*>/g;
+/** The canonical key for a name `nameAt` matched against `SCRIPT_OR_STYLE_NAMES`. */
+function asScriptOrStyle(name: string): ScriptOrStyle {
+  return name.toLowerCase() === "style" ? "style" : "script";
+}
+
+/** `<img ...>`: the one tag counted rather than unwrapped, because v1 carries no media. */
+const IMAGE_NAMES: readonly string[] = ["img"];
+
+/** The newer editor's math element, whose content is TeX. */
+const ANKI_MATHJAX_NAMES: readonly string[] = ["anki-mathjax"];
+
+// The four patterns that used to live here — a `<script>`/`<style>` element, an
+// `<img …>`, any `<tag …>` and `<anki-mathjax>…</anki-mathjax>` — all carried
+// the same `[^>]*>` shape, and it is quadratic even though `[^>]*` itself never
+// backtracks WITHIN one start: the engine re-runs it from EVERY `<` in the
+// field, so a field at the reader's 256 KiB cap built from one opener repeated
+// with no terminator re-walks the whole tail per start — measured at 9.3 s for
+// the any-tag pattern, 3.7 s for `<img`, 2.4 s for `<script `, 1.8 s for
+// `<anki-mathjax`, and 3.7 s each for the two `\(`/`\[` MathJax spellings.
+//
+// They are scans now, on the fact a regex engine cannot use: when a start has
+// no terminator after it, no LATER start has one either, so the rest of the
+// field is text and each character is visited once. Inside an element the fact
+// is per NAME — a `<script>` opener with no `</script>` says nothing about a
+// `<style>` one — and each found closer advances the scan past itself, so the
+// searches cannot overlap.
+//
+// Identical output is the contract, and it is a real one: the scanners
+// reproduce `String.replace`'s leftmost-first, non-overlapping walk, the `i`
+// flag's exact folding, `\b`'s ASCII word boundary, and `ANY_TAG`'s name
+// CAPTURE, whose greedy `[a-zA-Z0-9-]*` backtracks to the longest prefix that
+// ends on a boundary — `<div->` captures `div` (a block tag) and not `div-`.
+// A differential fuzz against the old patterns in the test pins every case.
+
+function isAsciiLetter(ch: string | undefined): boolean {
+  return ch !== undefined && ((ch >= "a" && ch <= "z") || (ch >= "A" && ch <= "Z"));
+}
+
+/** The tag-name characters, as `ANY_TAG` above reads them. */
+function isTagNameChar(ch: string | undefined): boolean {
+  return isAsciiLetter(ch) || (ch !== undefined && ch >= "0" && ch <= "9") || ch === "-";
+}
+
+/** A word character in the sense `\b` uses: ASCII letters, digits and the underscore. The hyphen is a NAME character but not a word one, which is why `<a->` is a tag named `a`. */
+function isWordChar(ch: string | undefined): boolean {
+  return isAsciiLetter(ch) || (ch !== undefined && ch >= "0" && ch <= "9") || ch === "_";
+}
+
+/** `\b` between two characters: exactly one of the pair is a word character. */
+function isBoundary(before: string | undefined, after: string | undefined): boolean {
+  return isWordChar(before) !== isWordChar(after);
+}
+
+/** One character of `\s`, which is what a closer allows before its `>`. */
+function isSpace(ch: string | undefined): boolean {
+  return ch !== undefined && /\s/.test(ch);
+}
+
+/** One opener a scan found: the name it captured and the index just past the opener's `>`. */
+interface TagOpener {
+  readonly at: number;
+  readonly name: string;
+  readonly after: number;
+}
+
+/**
+ * The `i` flag's canonicalization, spelled as the engine's own non-Unicode rule:
+ * `toUpperCase`, unless that is not one character or BOTH sides are non-ASCII.
+ * The last clause is the one that matters — U+212A KELVIN SIGN lowercases to
+ * `k`, so a `toLowerCase()` compare would read `<an\u212Ai-mathjax>` as the
+ * math element, which `/anki-mathjax/i` (no `u` flag) does not.
+ */
+function canonical(ch: string): string {
+  const upper = ch.toUpperCase();
+  if (upper.length !== 1) return ch;
+  if (ch.charCodeAt(0) >= 128 && upper.charCodeAt(0) >= 128) return ch;
+  return upper;
+}
+
+/** True when the literal (lower-case, ASCII) `name` sits at `at` under one of the patterns' `i` flag. */
+function literalNameAt(text: string, at: number, name: string): boolean {
+  if (at + name.length > text.length) return false;
+  for (let index = 0; index < name.length; index += 1) {
+    if (canonical(text.charAt(at + index)) !== name.charAt(index).toUpperCase()) return false;
+  }
+  return true;
+}
+
+/**
+ * The name a tag at `at` carries: the longest one that ends at a word boundary.
+ *
+ * The backtracking matters only for `ANY_TAG`'s open class, where `\b` is tried
+ * after the greedy name and then after shorter ones — that is what makes
+ * `<a->` a tag named `a` and not one named `a-`. A LITERAL name backtracks into
+ * nothing, so `<anki-mathjax_>` is not the math element at all.
+ */
+function nameAt(
+  text: string,
+  at: number,
+  names: readonly string[] | null,
+): { name: string; end: number } | null {
+  if (text[at] !== "<") return null;
+  let cursor = at + 1;
+  if (names === null && text[cursor] === "/") cursor += 1;
+  const nameStart = cursor;
+  if (names !== null) {
+    const found = names.find((name) => literalNameAt(text, nameStart, name));
+    if (found === undefined) return null;
+    return isBoundary(text[nameStart + found.length - 1], text[nameStart + found.length])
+      ? { name: found, end: nameStart + found.length }
+      : null;
+  }
+  if (!isAsciiLetter(text[cursor])) return null;
+  cursor += 1;
+  while (isTagNameChar(text[cursor])) cursor += 1;
+  for (let length = cursor - nameStart; length > 0; length -= 1) {
+    const end = nameStart + length;
+    if (isBoundary(text[end - 1], text[end])) return { name: text.slice(nameStart, end), end };
+  }
+  return null;
+}
+
+/**
+ * The opener at `at`, read the way the patterns above read one: `<`, an optional
+ * `/`, a name, a word boundary, then anything up to the first `>`.
+ *
+ * `names` is the closed set of names to accept, matched case-insensitively;
+ * `null` selects `ANY_TAG`'s own class instead (any name at all, case-sensitive).
+ *
+ * `"no-terminator"` is the fact that makes every scan below linear. The pattern
+ * needs a `>` somewhere after `at`, and there is none left in the field, so no
+ * LATER start can match either and the caller may stop: the rest is text. A
+ * regular expression cannot use that fact, which is why these patterns re-walked
+ * the tail from every `<` - nine seconds on one 256 KiB field of `<a`.
+ */
+function matchTagOpener(
+  text: string,
+  at: number,
+  names: readonly string[] | null,
+): TagOpener | "no-terminator" | null {
+  const named = nameAt(text, at, names);
+  if (named === null) return null;
+  const gt = text.indexOf(">", named.end);
+  if (gt === -1) return "no-terminator";
+  return { at, name: named.name, after: gt + 1 };
+}
+
+/** The first `</name\s*>` at or after `from`: where it starts and where it ends. */
+function closerSpan(
+  text: string,
+  from: number,
+  name: string,
+): { start: number; end: number } | null {
+  let cursor = from;
+  for (;;) {
+    const open = text.indexOf("</", cursor);
+    if (open === -1) return null;
+    if (literalNameAt(text, open + 2, name)) {
+      let after = open + 2 + name.length;
+      while (isSpace(text[after])) after += 1;
+      if (text[after] === ">") return { start: open, end: after + 1 };
+    }
+    cursor = open + 2;
+  }
+}
+
+/** Every tag, with the name captured: a newline for a block tag, nothing for the rest. */
+function stripTags(text: string): string {
+  // `kept` is where the text still owed to the output starts; `search` is where
+  // the next `<` is looked for. Only a MATCH moves `kept` - a candidate that
+  // fails is a character that stays in the text.
+  let out = "";
+  let kept = 0;
+  let search = 0;
+  for (;;) {
+    const at = text.indexOf("<", search);
+    if (at === -1) break;
+    const opener = matchTagOpener(text, at, null);
+    if (opener === "no-terminator") break;
+    if (opener === null) {
+      search = at + 1;
+      continue;
+    }
+    out += text.slice(kept, at);
+    out += BLOCK_TAGS.has(opener.name.toLowerCase()) ? "\n" : "";
+    kept = opener.after;
+    search = opener.after;
+  }
+  return out + text.slice(kept);
+}
+
+/** Every `<img ...>`, counted and removed. */
+function removeImageTags(text: string): { text: string; images: number } {
+  let out = "";
+  let images = 0;
+  let kept = 0;
+  let search = 0;
+  for (;;) {
+    const at = text.indexOf("<", search);
+    if (at === -1) break;
+    const opener = matchTagOpener(text, at, IMAGE_NAMES);
+    if (opener === "no-terminator") break;
+    if (opener === null) {
+      search = at + 1;
+      continue;
+    }
+    out += text.slice(kept, at);
+    images += 1;
+    kept = opener.after;
+    search = opener.after;
+  }
+  return { text: out + text.slice(kept), images };
+}
+
+/** `<anki-mathjax ...>body</anki-mathjax>` rewritten as `$body$`. */
+function rewriteAnkiMathjax(text: string): string {
+  let out = "";
+  let kept = 0;
+  let search = 0;
+  for (;;) {
+    const at = text.indexOf("<", search);
+    if (at === -1) break;
+    const opener = matchTagOpener(text, at, ANKI_MATHJAX_NAMES);
+    if (opener === "no-terminator") break;
+    if (opener === null) {
+      search = at + 1;
+      continue;
+    }
+    const closer = closerSpan(text, opener.after, ANKI_MATHJAX_NAMES[0] ?? "");
+    // No closer in the tail means no later opener can have one either.
+    if (closer === null) break;
+    out += text.slice(kept, at) + "$" + text.slice(opener.after, closer.start) + "$";
+    kept = closer.end;
+    search = closer.end;
+  }
+  return out + text.slice(kept);
+}
+
+/**
+ * `\(...\)` and `\[...\]` rewritten as `$...$`, which is the delimiter a Nexus
+ * card's own KaTeX rendering reads. `open` and `close` are the two-character
+ * spellings, so one scan serves both.
+ */
+function rewriteDelimited(text: string, open: string, close: string): string {
+  let out = "";
+  let cursor = 0;
+  for (;;) {
+    const at = text.indexOf(open, cursor);
+    if (at === -1) break;
+    const end = text.indexOf(close, at + open.length);
+    // No closer in the tail means no later opener can have one either.
+    if (end === -1) break;
+    out += text.slice(cursor, at) + "$" + text.slice(at + open.length, end) + "$";
+    cursor = end + close.length;
+  }
+  return out + text.slice(cursor);
+}
+
+/**
+ * A `<script>`/`<style>` element AND its contents removed until none is left,
+ * in one forward walk.
+ *
+ * The rule is the pattern's own, stated without its engine: remove the LEFTMOST
+ * complete element - an opener, its first closer, and everything between them -
+ * then do that again to what is left, until nothing matches. The pattern loop
+ * this replaces reached that answer one pass per joined element, so a removal
+ * that joined the text around it into the element AROUND it cost a walk of the
+ * whole field per level, and a crafted chain of 15 000 of them measured 76 s;
+ * a removal can also join the text around it back into the SAME element, which
+ * is what `#12` needed the fixed point for. The pattern was quadratic a second
+ * way as well, because `[^>]*` cannot backtrack WITHIN one start but the engine
+ * still re-runs it from every `<`, so a 256 KiB field of unterminated
+ * `<script ` re-walked the tail per start (2.5 s measured).
+ *
+ * One forward walk reaches that fixed point because a removal can create work
+ * in exactly ONE place - the join it leaves behind - and at that join there are
+ * only three things to ask, each a constant-size look at the characters around
+ * it:
+ *
+ *  - a removal can join the kept text and the unread text into a NEW opener,
+ *    with its `<` and part of its name at the end of the kept text and the rest
+ *    of the name in the unread text. If the unread text has no `>` left at all
+ *    then no later opener can have one either, and the rest of the field is
+ *    text - the fact a pattern engine cannot use, and the reason the scan never
+ *    re-walks a tail.
+ *  - it can join them into a NEW closer, a `</name` whose whitespace and `>` are
+ *    in the unread text. An opener and a closer cannot both be born at one join
+ *    - `</scr` and `<scr` cannot both end where the kept text ends - so this
+ *    case and the one above exclude each other.
+ *  - a new closer can only complete an opener the walk has already passed that
+ *    had a `>` and no closer. Only the leftmost such opener of each name needs
+ *    remembering, and it is enough: the first `>` after a position is
+ *    non-decreasing in that position, so if the leftmost waiting opener's `>` is
+ *    at or past the new closer's start then every later opener's is too, and an
+ *    opener whose `>` lay inside the span just removed has its `>` after the
+ *    join, past a closer that straddles it, as well. When the leftmost waiting
+ *    opener does match, the removal runs from its start through the closer's
+ *    end, and the openers that removal swallowed go with it.
+ *
+ * Nothing else can be new. The kept text was already free of complete elements
+ * and the unread text is the raw field, which a deletion can only ever edit at
+ * the join, so every `<` is looked at once and no shape of markup takes the
+ * strip back to a re-walk.
+ *
+ * The look back at a join has to be constant-size, and so does every other look
+ * at the kept text. That is why the kept text is a stack of characters and a
+ * length rather than a string: `kept + slice` builds a rope, and reading an
+ * index or taking a slice of a rope flattens it, so each removal after a long
+ * kept prefix would copy every character kept so far. On the stack a raw
+ * character is pushed once and dropped at most once, so the appends and the
+ * truncations together cost O(n), and the one place that reads the whole kept
+ * text is the final join. The trailing whitespace of a join is the other half
+ * of that rule: `spaceRunStart` records where each character's whitespace run
+ * begins as the character is pushed, so where the run ending the kept text
+ * begins is one array read rather than a walk back over it.
+ */
+function stripScriptAndStyle(text: string): string {
+  // The two tables the walk queries instead of re-scanning: every `>` in the raw
+  // field (an opener's `>` is the first one at or after its name), and every
+  // closer with the position just past its own `>`. Both come out sorted, so a
+  // query is a binary search and building them costs one pass of the field.
+  const gtPositions: number[] = [];
+  for (let at = text.indexOf(">"); at !== -1; at = text.indexOf(">", at + 1)) {
+    gtPositions.push(at);
+  }
+  const closerStarts: { script: number[]; style: number[] } = { script: [], style: [] };
+  const closerEnds: { script: number[]; style: number[] } = { script: [], style: [] };
+  for (let at = text.indexOf("</"); at !== -1; at = text.indexOf("</", at + 2)) {
+    for (const name of SCRIPT_OR_STYLE_NAMES) {
+      if (!literalNameAt(text, at + 2, name)) continue;
+      let after = at + 2 + name.length;
+      while (isSpace(text[after])) after += 1;
+      if (text[after] !== ">") continue;
+      closerStarts[name].push(at);
+      closerEnds[name].push(after + 1);
+    }
+  }
+  /** The first `>` at or after `from`, or `-1` when the raw field has none left. */
+  const firstGtAtOrAfter = (from: number): number => {
+    let low = 0;
+    let high = gtPositions.length;
+    while (low < high) {
+      const mid = (low + high) >> 1;
+      if ((gtPositions[mid] ?? 0) < from) low = mid + 1;
+      else high = mid;
+    }
+    return low < gtPositions.length ? (gtPositions[low] ?? -1) : -1;
+  };
+  /** The index of the first closer of `name` at or after `from`, or one past the last. */
+  const firstCloserAtOrAfter = (name: ScriptOrStyle, from: number): number => {
+    const starts = closerStarts[name];
+    let low = 0;
+    let high = starts.length;
+    while (low < high) {
+      const mid = (low + high) >> 1;
+      if ((starts[mid] ?? 0) < from) low = mid + 1;
+      else high = mid;
+    }
+    return low;
+  };
+  /** `literal` at `at` of `source`, read the way the patterns' `i` flag reads it. */
+  const matchesAt = (source: string, at: number, literal: string): boolean => {
+    for (let index = 0; index < literal.length; index += 1) {
+      if (canonical(source.charAt(at + index)) !== literal.charAt(index).toUpperCase()) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  // The text still to settle is the kept text followed by the raw field from
+  // `unread`. Every removal took a span after the join, so the kept text stays
+  // free of complete elements except in the ways each join below is asked about.
+  //
+  // The kept text is the first `keptLen` entries of `keptChars`, as a stack:
+  // `kept + slice` would build a rope, and a later index or slice of a rope
+  // flattens it and copies every character kept so far, so replacing the string
+  // with this makes each removal O(1) in the kept prefix again. A raw character
+  // is written here when a removal hands it to the kept side and is never
+  // written again, so all the pushes together cost O(n).
+  const keptChars: string[] = [];
+  // `spaceRunStart[i]` is where the run of whitespace ending at `i` begins, or
+  // `i + 1` when `keptChars[i]` is not whitespace. It is filled from the
+  // character before as `i` is pushed, so the trailing whitespace of the kept
+  // text begins at `spaceRunStart[keptLen - 1]` without reading the run back;
+  // a truncation only drops entries from the end, so the entries it keeps stay
+  // correct.
+  const spaceRunStart: number[] = [];
+  let keptLen = 0;
+  let unread = 0;
+  const waiting: { script: WaitingOpener | null; style: WaitingOpener | null } = {
+    script: null,
+    style: null,
+  };
+  /** Push the raw character `ch` onto the kept stack, recording its whitespace run. */
+  const pushKept = (ch: string): void => {
+    const at = keptLen;
+    let runStart = at + 1;
+    if (isSpace(ch)) {
+      runStart = at > 0 && isSpace(keptChars[at - 1]) ? (spaceRunStart[at - 1] ?? at) : at;
+    }
+    keptChars[at] = ch;
+    spaceRunStart[at] = runStart;
+    keptLen = at + 1;
+  };
+  /** The current-text position of the raw index `raw`. */
+  const toCurrent = (raw: number): number => keptLen + (raw - unread);
+  /** `literal` at `at` of the kept text, the way `matchesAt` reads a string. */
+  const keptMatchesAt = (at: number, literal: string): boolean => {
+    for (let index = 0; index < literal.length; index += 1) {
+      const ch = at + index < keptLen ? keptChars[at + index] : undefined;
+      if (canonical(ch ?? "") !== literal.charAt(index).toUpperCase()) return false;
+    }
+    return true;
+  };
+  /** The answer: the kept text, joined, followed by the raw field still unread. */
+  const settled = (): string => keptChars.slice(0, keptLen).join("") + text.slice(unread);
+  /** Keep `at` as the leftmost waiting opener of `name`, if it is the leftmost. */
+  const remember = (name: ScriptOrStyle, at: number, gt: number): void => {
+    const entry = waiting[name];
+    if (entry === null || at < entry.at) waiting[name] = { at, gt };
+  };
+
+  /**
+   * The closer the last removal built across the join, if it built one: a
+   * `</name` whose head is the end of the kept text and whose whitespace and `>`
+   * are in the unread text. The name straddles the join, so it is found by
+   * reading back over at most the name (a constant); the run of spaces between
+   * the name and the `>` is entirely in the unread text and the kept text ends
+   * at the name, whose whitespace run `spaceRunStart` already knows, so a closer
+   * with any run of spaces there is still one check.
+   */
+  const builtCloser = (): { name: ScriptOrStyle; start: number; end: number } | null => {
+    for (const name of SCRIPT_OR_STYLE_NAMES) {
+      const closer = `</${name}`;
+      for (let back = 1; back < closer.length && back <= keptLen; back += 1) {
+        if (!keptMatchesAt(keptLen - back, closer.slice(0, back))) continue;
+        if (!matchesAt(text, unread, closer.slice(back))) continue;
+        let after = unread + closer.length - back;
+        while (isSpace(text[after])) after += 1;
+        if (text[after] === ">") return { name, start: keptLen - back, end: toCurrent(after + 1) };
+      }
+    }
+    const nameEnd = keptLen === 0 ? 0 : (spaceRunStart[keptLen - 1] ?? 0);
+    for (const name of SCRIPT_OR_STYLE_NAMES) {
+      const closer = `</${name}`;
+      if (nameEnd < closer.length || !keptMatchesAt(nameEnd - closer.length, closer)) continue;
+      let after = unread;
+      while (isSpace(text[after])) after += 1;
+      if (text[after] === ">") return { name, start: nameEnd - closer.length, end: toCurrent(after + 1) };
+    }
+    return null;
+  };
+
+  /**
+   * The opener the last removal built across the join, if it built one: its name
+   * straddles the join, so its `<` is in the kept text and its `>` cannot be.
+   * `open: false` means the unread text has no `>` left, so the opener can never
+   * be completed and nothing after it can match either.
+   */
+  const builtOpener = ():
+    | { open: true; name: ScriptOrStyle; start: number; gt: number }
+    | { open: false }
+    | null => {
+    for (const name of SCRIPT_OR_STYLE_NAMES) {
+      const opener = `<${name}`;
+      for (let back = 1; back < opener.length && back <= keptLen; back += 1) {
+        if (!keptMatchesAt(keptLen - back, opener.slice(0, back))) continue;
+        if (!matchesAt(text, unread, opener.slice(back))) continue;
+        const nameEnd = unread + opener.length - back;
+        if (!isBoundary(text[nameEnd - 1], text[nameEnd])) continue;
+        const gt = firstGtAtOrAfter(nameEnd);
+        if (gt === -1) return { open: false };
+        return { open: true, name, start: keptLen - back, gt };
+      }
+    }
+    return null;
+  };
+
+  /** Take the element span `[start, end)` out of the current text and re-anchor. */
+  const removeSpan = (start: number, end: number): void => {
+    const rawStart = unread + (start - keptLen);
+    const rawEnd = unread + (end - keptLen);
+    if (start <= keptLen) {
+      // Truncation only drops entries from the end, so the whitespace-run
+      // entries it keeps are still correct.
+      keptLen = start;
+    } else {
+      for (let at = unread; at < rawStart; at += 1) pushKept(text.charAt(at));
+    }
+    unread = rawEnd;
+    for (const name of SCRIPT_OR_STYLE_NAMES) {
+      const entry = waiting[name];
+      if (entry === null) continue;
+      if (entry.at >= start && entry.at < end) {
+        waiting[name] = null;
+        continue;
+      }
+      if (entry.at >= end) {
+        waiting[name] = {
+          at: entry.at - (end - start),
+          gt: entry.gt >= end ? entry.gt - (end - start) : -1,
+        };
+        continue;
+      }
+      if (entry.gt < start) continue;
+      if (entry.gt >= end) {
+        waiting[name] = { at: entry.at, gt: entry.gt - (end - start) };
+        continue;
+      }
+      // The removal took this opener's `>`; the first `>` after the join is its
+      // now - which is past a closer that straddles that join.
+      const gt = firstGtAtOrAfter(rawEnd);
+      waiting[name] = { at: entry.at, gt: gt === -1 ? -1 : start + (gt - rawEnd) };
+    }
+  };
+
+  for (;;) {
+    // 1. A join that built a closer can complete the opener it belonged to.
+    const closer = builtCloser();
+    if (closer !== null) {
+      const entry = waiting[closer.name];
+      if (entry !== null && entry.gt >= 0 && entry.gt < closer.start) {
+        removeSpan(entry.at, closer.end);
+        continue;
+      }
+    } else {
+      // 2. A join that built an opener: whose whole element is the match to take.
+      const opener = builtOpener();
+      if (opener !== null) {
+        if (!opener.open) return settled();
+        const index = firstCloserAtOrAfter(opener.name, opener.gt + 1);
+        if (index < closerStarts[opener.name].length) {
+          removeSpan(opener.start, toCurrent(closerEnds[opener.name][index] ?? 0));
+          continue;
+        }
+        remember(opener.name, opener.start, toCurrent(opener.gt));
+      }
+    }
+    // 3. The leftmost opener wholly inside the unread text.
+    let removed = false;
+    for (let at = text.indexOf("<", unread); at !== -1; at = text.indexOf("<", at + 1)) {
+      const named = nameAt(text, at, SCRIPT_OR_STYLE_NAMES);
+      if (named === null) continue;
+      const name = asScriptOrStyle(named.name);
+      const gt = firstGtAtOrAfter(named.end);
+      if (gt === -1) return settled();
+      const index = firstCloserAtOrAfter(name, gt + 1);
+      if (index >= closerStarts[name].length) {
+        remember(name, toCurrent(at), toCurrent(gt));
+        continue;
+      }
+      removeSpan(toCurrent(at), toCurrent(closerEnds[name][index] ?? 0));
+      removed = true;
+      break;
+    }
+    if (!removed) return settled();
+  }
+}
+
 
 /** A named or numeric character reference, WITH its terminating semicolon — a `&amp` that never closed is not an entity and stays as it was typed. */
 const ENTITY = /&(#x[0-9a-fA-F]+|#\d+|[a-zA-Z][a-zA-Z0-9]*);/g;
@@ -141,15 +735,6 @@ function decodeEntities(text: string): string {
   });
 }
 
-/**
- * MathJax, in the two spellings Anki writes it: `\(…\)` inline and `\[…\]`
- * display. Both become `$…$`, which is the delimiter a Nexus card's own KaTeX
- * rendering reads — `$…$` already in the field is left exactly as it is, since
- * it is already what we want. Lazy bodies, so two formulas in one field stay
- * two formulas.
- */
-const MATHJAX_INLINE = /\\\(([\s\S]*?)\\\)/g;
-const MATHJAX_DISPLAY = /\\\[([\s\S]*?)\\\]/g;
 
 /**
  * One Anki field as plain Nexus card text.
@@ -160,34 +745,32 @@ const MATHJAX_DISPLAY = /\\\[([\s\S]*?)\\\]/g;
  * visible, and can never be re-read as markup by anything downstream — which is
  * exactly what would happen if the two steps were the other way round.
  *
- * Every regex above is linear: `[^>]*` and `[^\]]*` cannot backtrack, and the
- * lazy `[\s\S]*?` bodies are bounded by their own literal terminators. A 256
- * KiB field (the reader's per-field cap) is walked once per pass, never
- * re-walked.
+ * Every step is one forward scan rather than a pattern, and that is load-bearing
+ * rather than tidy: `[^>]*` cannot backtrack WITHIN one start, but a regular
+ * expression still re-runs it from every `<`, so a 256 KiB field (the reader's
+ * per-field cap) of `<a` with no `>` spent nine seconds in the strip. A scan can
+ * use the fact an engine cannot: when a start has no terminator after it, no
+ * LATER start has one either, so the rest of the field is text.
  */
 export function stripAnkiHtml(field: string): AnkiFieldText {
-  let sounds = 0;
-  let text = field.replace(SOUND_REFERENCE, () => {
-    sounds += 1;
-    return "";
-  });
+  const soundRefs = removeSoundReferences(field);
+  let text = soundRefs.text;
+  const sounds = soundRefs.sounds;
 
-  text = text.replace(SCRIPT_OR_STYLE, "");
-  text = text.replace(ANKI_MATHJAX, (_whole, body: string) => `$${body}$`);
+  // The fixed point #12 needs: one removal can join the text on either side into
+  // the element AROUND it, and the walk below reaches that fixed point itself.
+  text = stripScriptAndStyle(text);
+  text = rewriteAnkiMathjax(text);
 
-  let images = 0;
-  text = text.replace(IMAGE_TAG, () => {
-    images += 1;
-    return "";
-  });
+  const imageRefs = removeImageTags(text);
+  text = imageRefs.text;
+  const images = imageRefs.images;
 
-  text = text.replace(ANY_TAG, (_whole, name: string) =>
-    BLOCK_TAGS.has(name.toLowerCase()) ? "\n" : "",
-  );
+  text = stripTags(text);
 
   text = decodeEntities(text);
-  text = text.replace(MATHJAX_INLINE, (_whole, body: string) => `$${body}$`);
-  text = text.replace(MATHJAX_DISPLAY, (_whole, body: string) => `$${body}$`);
+  text = rewriteDelimited(text, "\\(", "\\)");
+  text = rewriteDelimited(text, "\\[", "\\]");
 
   // Horizontal whitespace (the U+00A0 a decoded `&nbsp;` leaves included)
   // collapses to one
@@ -220,8 +803,17 @@ export interface ClozeCanonical {
   hintsDropped: number;
 }
 
-/** `{{cN::text}}` or `{{cN::text::hint}}`. `[^{}]*` on every part is what makes a NESTED deletion fail to match rather than match wrongly. */
-const ANKI_CLOZE = /\{\{c(\d+)::([^{}]*?)(?:::([^{}]*?))?\}\}/g;
+/**
+ * `{{cN::text}}` or `{{cN::text::hint}}`, up to the first closing brace run.
+ *
+ * The body is matched brace-free and split at its FIRST `::` in code below
+ * rather than by a second optional group here: two adjacent `[^{}]*` groups
+ * overlap on `:`, and that ambiguity is what made the old pattern re-walk the
+ * tail of a hostile field from every candidate start (#8). `[^{}]*` on the
+ * body is still what makes a NESTED deletion fail to match rather than match
+ * wrongly.
+ */
+const ANKI_CLOZE = /\{\{c(\d+)::([^{}]*)\}\}/g;
 
 /** Where a deletion CLAIMS to begin. Every one of these must be the start of a full `ANKI_CLOZE` match, or the field says something this grammar cannot read. */
 const ANKI_CLOZE_OPENER = /\{\{c\d+::/g;
@@ -287,8 +879,13 @@ export function canonicalizeCloze(
     // note says — and the self-check below then refuses the note, because a
     // stray `{{…}}` in the prose is exactly what it is looking for.
     if (!Number.isInteger(number) || number < 1) continue;
-    if (match[3] !== undefined) hintsDropped += 1;
-    const inner = match[2] ?? "";
+    // The text is the body up to its first `::`; anything after that separator
+    // is the hint, which this grammar drops and counts. The old pattern asked
+    // for the same split with a second group, which is the overlap #8 names.
+    const body = match[2] ?? "";
+    const separator = body.indexOf("::");
+    const inner = separator === -1 ? body : body.slice(0, separator);
+    if (separator !== -1) hintsDropped += 1;
     written.push({ number, text: inner });
     template += field.slice(cursor, index) + `{{c${number}::${inner}}}`;
     cursor = index + match[0].length;

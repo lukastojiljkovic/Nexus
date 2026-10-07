@@ -1,4 +1,6 @@
+import fc from "fast-check";
 import { describe, expect, it } from "vitest";
+import { growthToFull, LINEAR_GROWTH } from "../testing/growth.js";
 
 import {
   bracketBalance,
@@ -19,6 +21,7 @@ import {
   typographyCleanup,
   unwrapParagraphs,
   wordFrequency,
+  type UnwrapInput,
 } from "./tekst.js";
 
 /**
@@ -1063,6 +1066,27 @@ describe("subtitleAudit", () => {
     if (kept.ok) expect(kept.blocks[0]?.characters).toBe(9);
   });
 
+  it("strips nested markup to a fixed point before anything is counted", () => {
+    // #13's shape. The strip repeats until the text stops changing, so what the
+    // counter sees is the settled plain text and not a tag a first pass left
+    // standing; for these two inputs the values are the ones the single pass
+    // gave, and they must not move.
+    const split = subtitleAudit({
+      subtitle: "1\n00:00:01,000 --> 00:00:02,000\n<scr<script>ipt>\n",
+      countTags: false,
+    });
+    expect(split.ok).toBe(true);
+    if (split.ok) expect(split.blocks[0]?.characters).toBe(4);
+
+    const withText = subtitleAudit({
+      subtitle: "1\n00:00:01,000 --> 00:00:02,000\n<b>Hi</b> <scr<script>ipt>\n",
+      countTags: false,
+    });
+    expect(withText.ok).toBe(true);
+    // `Hi` + the space between the two + `ipt>`.
+    if (withText.ok) expect(withText.blocks[0]?.characters).toBe(7);
+  });
+
   it("refuses a malformed subtitle and each limit outside its own declared range", () => {
     expect(subtitleAudit({ subtitle: "not a subtitle at all", countTags: false })).toEqual({
       ok: false,
@@ -1566,5 +1590,364 @@ describe("wordFrequency", () => {
       ok: false,
       reason: "minWordLength",
     });
+  });
+});
+/**
+ * The subtitle strip and the trailing-whitespace rule used to be patterns, and
+ * both were quadratic on a hostile paste: `<[^>]*>` re-runs from every `<`, so a
+ * cue whose text is `<a` repeated took ten seconds, and `[^\S\n]+$` under the
+ * `m` flag re-walks a whitespace run from every position inside it, so a line of
+ * spaces in front of a word took minutes. The paste ceiling is what the scans
+ * answer at.
+ */
+describe("the text tools walk their paste once", () => {
+  const CEILING = 500_000;
+  const TYPOGRAPHY = {
+    style: "curly",
+    quotes: false,
+    ellipses: false,
+    dashes: false,
+    spaces: true,
+    nbsp: false,
+  } as const;
+
+  it("strips markup from a cue at the paste ceiling in linear time", () => {
+    const cue = (pairs: number): string =>
+      `1\n00:00:01,000 --> 00:00:02,000\n${"<a".repeat(pairs)}\n`;
+    const audit = (subtitle: string) => subtitleAudit({ subtitle, countTags: false });
+    expect(growthToFull(cue, audit, CEILING / 2 - 20)).toBeLessThan(LINEAR_GROWTH);
+    const characters = "<a".repeat(CEILING / 2 - 20);
+    const result = audit(cue(CEILING / 2 - 20));
+    expect(result.ok).toBe(true);
+    // No `>` anywhere, so nothing is a tag: the whole run is text.
+    if (result.ok) expect(result.blocks[0]?.characters).toBe(characters.length);
+  });
+
+  it("trims the line ends of a paste at the ceiling in linear time", () => {
+    const paste = (size: number): string => " ".repeat(size - 1) + "x";
+    const clean = (text: string) => typographyCleanup({ text, ...TYPOGRAPHY });
+    expect(growthToFull(paste, clean, CEILING)).toBeLessThan(LINEAR_GROWTH);
+    const cleaned = clean(paste(CEILING));
+    expect(cleaned.ok).toBe(true);
+    if (cleaned.ok) {
+      // The run is NOT at a line end, so the rule that fires here is the
+      // double-space collapse: one replacement, and the trim leaves it alone.
+      expect(cleaned.spaces).toBe(1);
+      expect(cleaned.text).toBe(" x");
+    }
+  });
+
+  it("pins the trailing trim and the count it reports", () => {
+    const cleaned = typographyCleanup({ text: "a \t \nb  \n", ...TYPOGRAPHY });
+    expect(cleaned.ok).toBe(true);
+    if (cleaned.ok) {
+      expect(cleaned.text).toBe("a\nb\n");
+      expect(cleaned.spaces).toBe(3);
+    }
+    const unwrapped = unwrapParagraphs({
+      text: "a  \nb \t\n",
+      joinHyphenated: false,
+      respectListItems: false,
+      splitOnSentenceEnd: false,
+    });
+    expect(unwrapped.ok).toBe(true);
+    if (unwrapped.ok) {
+      expect(unwrapped.text).toBe("a b");
+      expect(unwrapped.joinedLines).toBe(1);
+    }
+  });
+  it("trims a paste's white space at the ceiling in linear time", () => {
+    // `\p{White_Space}+$` re-walked a run of spaces from every position in it,
+    // which is quadratic on a line that never ends in one; the glossary check
+    // reads a line that way on both sides.
+    const pair = (size: number) => ({
+      original: " ".repeat(size - 2) + "x ",
+      translation: " ".repeat(size - 2) + "y ",
+      glossary: "a\tb\n",
+      caseSensitive: false,
+      wholeWord: false,
+    });
+    expect(growthToFull(pair, glossaryCheck, CEILING)).toBeLessThan(LINEAR_GROWTH);
+    expect(glossaryCheck(pair(CEILING)).ok).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The five steps this branch rewrote as scans keep main's answer exactly
+// ---------------------------------------------------------------------------
+
+/*
+ * `main`'s code for each rewritten step, transcribed here as the oracle. None
+ * of these steps changed what it computes - each one only stopped re-walking
+ * the text - so every property below must find ZERO differences. A difference
+ * is a bug in the scan, not a new contract.
+ */
+
+/** `\p{White_Space}` at both ends, the way `glossaryCheck`/`sentenceLength` trimmed. */
+function trimWhiteSpaceEndsReference(text: string): string {
+  return text.replace(/^\p{White_Space}+|\p{White_Space}+$/gu, "");
+}
+
+/** The horizontal white space at the end of every line, the way `main` trimmed it. */
+function trimLineEndsReference(text: string): string {
+  return text.replace(/[^\S\n]+$/gmu, "");
+}
+
+/**
+ * `main`'s markup and ASS-override removal: the two patterns, one pass each.
+ * Split and joined rather than `replace(pattern, "")`, which removes exactly
+ * the same text for a pattern that cannot match empty: CodeQL reads the
+ * `replace` form as an HTML sanitizer, and this is a test's transcription of
+ * the old code, not one.
+ */
+function stripTagsReference(line: string): string {
+  return line.split(/<[^>]*>/u).join("").split(/\{\\[^}]*\}/u).join("");
+}
+
+/** `main`'s spaces rule: the same chain, ending in `/[^\S\n]+$/gmu`. */
+function applySpacesReference(text: string): { text: string; count: number } {
+  let count = 0;
+  let result = text.replace(/ {2,}/gu, () => {
+    count += 1;
+    return " ";
+  });
+  result = result.replace(/[ \t]+(?=[,.;:!?)\]}])/gu, () => {
+    count += 1;
+    return "";
+  });
+  result = result.replace(/([,;:!?])(?=\p{L})/gu, (mark: string) => {
+    count += 1;
+    return `${mark} `;
+  });
+  result = result.replace(/(?<!\p{Nd})\.(?=\p{L})/gu, () => {
+    count += 1;
+    return ". ";
+  });
+  result = result.replace(/[^\S\n]+$/gmu, () => {
+    count += 1;
+    return "";
+  });
+  return { text: result, count };
+}
+
+const REFERENCE_LOWER = /\p{Ll}/u;
+const REFERENCE_SOFT_HYPHEN = "\u00ad";
+const REFERENCE_LIST_ITEM = /^[ \t]*(?:[-\u2013\u2022*]|\p{Nd}+[.)])\p{White_Space}/u;
+const REFERENCE_LINE_ENDS_SENTENCE = /[.!?\u2026]["'\u201c\u201d\u2018\u2019)\]}]?$/u;
+
+function referenceParagraphsOf(text: string): string[] {
+  const out: string[] = [];
+  let current: string[] = [];
+  for (const line of text.replace(/\r\n?/gu, "\n").split("\n")) {
+    if (!/[^\p{White_Space}]/u.test(line)) {
+      if (current.length > 0) out.push(current.join("\n"));
+      current = [];
+      continue;
+    }
+    current.push(line);
+  }
+  if (current.length > 0) out.push(current.join("\n"));
+  return out;
+}
+
+/** `main`'s unwrap: the same rules, ending in `/[^\S\n]+$/gmu`. */
+function unwrapParagraphsReference(input: UnwrapInput): {
+  text: string;
+  joinedLines: number;
+  joinedWords: number;
+  paragraphs: number;
+} {
+  let joinedLines = 0;
+  let joinedWords = 0;
+  const out: string[] = [];
+  for (const block of referenceParagraphsOf(input.text)) {
+    const lines = block.split("\n");
+    const built: string[] = [];
+    let current = lines[0] ?? "";
+    for (let index = 1; index < lines.length; index += 1) {
+      const next = lines[index] ?? "";
+      const head = next.replace(/^[ \t]+/u, "");
+      const tail = current.slice(-1);
+      if (
+        input.joinHyphenated &&
+        (tail === "-" || tail === REFERENCE_SOFT_HYPHEN) &&
+        REFERENCE_LOWER.test(head.slice(0, 1))
+      ) {
+        current = `${current.slice(0, -1)}${head}`;
+        joinedWords += 1;
+        continue;
+      }
+      if (input.respectListItems && REFERENCE_LIST_ITEM.test(next)) {
+        built.push(current);
+        current = next;
+        continue;
+      }
+      if (input.splitOnSentenceEnd && REFERENCE_LINE_ENDS_SENTENCE.test(current)) {
+        built.push(current);
+        built.push("");
+        current = next;
+        continue;
+      }
+      current = `${current} ${head}`;
+      joinedLines += 1;
+    }
+    built.push(current);
+    out.push(built.join("\n"));
+  }
+  const text = trimLineEndsReference(out.join("\n\n").replace(/ {2,}/gu, " "));
+  return { text, joinedLines, joinedWords, paragraphs: referenceParagraphsOf(text).length };
+}
+
+const WHITE_SPACE_TOKENS = [
+  "x", "a", "1", " ", "  ", "\t", "\u00a0", "\u2003", "\u3000", "\u2028", "\v", "\f",
+  "\u0085", "\u1680", "\u205f", "\u202f",
+];
+
+describe("glossaryCheck's row trim is main's trim", () => {
+  it("trims both halves of a row exactly as `^\\p{White_Space}+|\\p{White_Space}+$` did", () => {
+    const side = fc
+      .array(fc.constantFrom(...WHITE_SPACE_TOKENS), { maxLength: 12 })
+      .map((parts) => parts.join(""));
+    fc.assert(
+      fc.property(side, side, (left, right) => {
+        const line = `${left}\t${right}`;
+        const result = glossaryCheck({
+          original: "x",
+          translation: "x",
+          glossary: line,
+          caseSensitive: true,
+          wholeWord: false,
+        });
+        if (!/[^\p{White_Space}]/u.test(line)) {
+          // A gloss row with no visible character is no row at all.
+          expect(result).toEqual({ ok: false, reason: "glossary" });
+          return;
+        }
+        expect(result.ok, JSON.stringify(line)).toBe(true);
+        if (!result.ok) return;
+        // The row splits at its FIRST tab, which a leading tab (a `\t` inside
+        // the generated left half) can be, so the halves the trim sees are read
+        // back off the line rather than assumed.
+        const at = line.indexOf("\t");
+        const source = trimWhiteSpaceEndsReference(line.slice(0, at));
+        const target = trimWhiteSpaceEndsReference(line.slice(at + 1));
+        if (source.length === 0 || target.length === 0) {
+          expect(result.rows).toEqual([]);
+          expect(result.invalidRows).toEqual([1]);
+          return;
+        }
+        expect(result.rows[0]?.source).toBe(source);
+        expect(result.rows[0]?.target).toBe(target);
+      }),
+      { numRuns: 500 },
+    );
+  });
+});
+
+describe("sentenceLength's sentence trim is main's trim", () => {
+  it("returns each sentence trimmed exactly as main did", () => {
+    const body = fc
+      .array(fc.constantFrom(...WHITE_SPACE_TOKENS), { maxLength: 12 })
+      .map((parts) => parts.join(""));
+    fc.assert(
+      fc.property(body, (text) => {
+        const result = sentenceLength({ text, threshold: 10 });
+        expect(result.ok, JSON.stringify(text)).toBe(true);
+        if (!result.ok) return;
+        const expected = trimWhiteSpaceEndsReference(text);
+        if (expected.length === 0) {
+          expect(result.sentences).toEqual([]);
+          return;
+        }
+        expect(result.sentences).toHaveLength(1);
+        expect(result.sentences[0]?.text).toBe(expected);
+      }),
+      { numRuns: 500 },
+    );
+  });
+});
+
+describe("subtitleAudit counts what main's strip left behind", () => {
+  it("counts the characters `<[^>]*>` and `\\{\\\\[^}]*\\}` leave", () => {
+    const line = fc
+      .array(
+        fc.constantFrom("x", "<", ">", "/", "b", "script", "sty", "le", "<scr", "ipt>", "{\\", "}", "\\", "a"),
+        { minLength: 1, maxLength: 16 },
+      )
+      .map((parts) => parts.join(""));
+    fc.assert(
+      fc.property(line, (content) => {
+        const subtitle = `1\n00:00:01,000 --> 00:00:02,000\n${content}\n`;
+        const result = subtitleAudit({ subtitle, countTags: false });
+        expect(result.ok, JSON.stringify(content)).toBe(true);
+        if (!result.ok) return;
+        const expected = [...stripTagsReference(content)].length;
+        expect(result.blocks[0]?.characters).toBe(expected);
+        expect(result.blocks[0]?.longestLine).toBe(expected);
+      }),
+      { numRuns: 500 },
+    );
+  });
+});
+
+describe("the line-end trim is main's trim", () => {
+  it("typographyCleanup's spaces rule trims exactly as `[^\\S\\n]+$/gmu` did", () => {
+    const body = fc
+      .array(
+        fc.constantFrom(
+          "word", "x", "1", " ", "  ", "\t", "\u00a0", "\u2003", "\u3000", ".", ",", ";", "\n", "\n\n",
+        ),
+        { maxLength: 14 },
+      )
+      .map((parts) => parts.join(""));
+    fc.assert(
+      fc.property(body, (text) => {
+        const result = typographyCleanup({
+          text,
+          style: "curly",
+          quotes: false,
+          ellipses: false,
+          dashes: false,
+          spaces: true,
+          nbsp: false,
+        });
+        expect(result.ok, JSON.stringify(text)).toBe(true);
+        if (!result.ok) return;
+        const reference = applySpacesReference(text.replace(/\r\n?/gu, "\n"));
+        expect(result.text).toBe(reference.text);
+        expect(result.spaces).toBe(reference.count);
+      }),
+      { numRuns: 500 },
+    );
+  });
+
+  it("unwrapParagraphs trims exactly as `[^\\S\\n]+$/gmu` did", () => {
+    const body = fc
+      .array(
+        fc.constantFrom(
+          "word", "x", "1", " ", "  ", "\t", "\u00a0", "\u2003", "\u3000", "-", "\n", "\n\n", ".", ",",
+        ),
+        { maxLength: 16 },
+      )
+      .map((parts) => parts.join(""));
+    fc.assert(
+      fc.property(body, (text) => {
+        const input: UnwrapInput = {
+          text,
+          joinHyphenated: true,
+          respectListItems: true,
+          splitOnSentenceEnd: true,
+        };
+        const result = unwrapParagraphs(input);
+        expect(result.ok, JSON.stringify(text)).toBe(true);
+        if (!result.ok) return;
+        const reference = unwrapParagraphsReference(input);
+        expect(result.text).toBe(reference.text);
+        expect(result.joinedLines).toBe(reference.joinedLines);
+        expect(result.joinedWords).toBe(reference.joinedWords);
+        expect(result.paragraphs).toBe(reference.paragraphs);
+      }),
+      { numRuns: 500 },
+    );
   });
 });

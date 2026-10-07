@@ -1,5 +1,5 @@
-import { readFile, stat } from "node:fs/promises";
 import { CSV_IMPORT_MAX_FILE_BYTES } from "../shared/ipc.js";
+import { readFileBounded } from "./boundedRead.js";
 
 /**
  * The untrusted-input reader for the CSV task import (ADR-062) — the smallest
@@ -7,9 +7,9 @@ import { CSV_IMPORT_MAX_FILE_BYTES } from "../shared/ipc.js";
  * smallest thing this app opens: one text file, no zip, no SQLite, no KDF.
  * What survives of the family's discipline is exactly what still applies:
  *
- *  - **Stat before read.** The size gate runs against the file's stat, so an
- *    oversized file is refused before a byte of it enters main's heap — a CSV
- *    past `CSV_IMPORT_MAX_FILE_BYTES` is not a hand-kept table.
+ *  - **Size before read.** The gate runs against the size the opened file
+ *    reports, so an oversized file is refused before a byte of it enters
+ *    memory — a CSV past `CSV_IMPORT_MAX_FILE_BYTES` is not a hand-kept table.
  *  - **Named refusals.** Every failure is a `CsvReadError` with a code the
  *    screen has a sentence for, never a truncation: half of somebody's task
  *    list arriving silently is the one outcome an import must never produce.
@@ -35,21 +35,11 @@ export class CsvReadError extends Error {
  * the file actually holds before anything is written.
  */
 export async function readCsvText(filePath: string): Promise<string> {
-  let size: number;
-  try {
-    size = (await stat(filePath)).size;
-  } catch {
-    throw new CsvReadError("unreadable");
-  }
-  if (size > CSV_IMPORT_MAX_FILE_BYTES) throw new CsvReadError("too-large");
+  const read = await readFileBounded(filePath, CSV_IMPORT_MAX_FILE_BYTES);
+  if (read.status === "too-large") throw new CsvReadError("too-large");
+  if (read.status !== "ok") throw new CsvReadError("unreadable");
 
-  let bytes: Buffer;
-  try {
-    bytes = await readFile(filePath);
-  } catch {
-    throw new CsvReadError("unreadable");
-  }
-  const text = bytes.toString("utf8");
+  const text = read.bytes.toString("utf8");
   // U+FEFF as an escape: a raw BOM in source is invisible and every tool in
   // the chain treats it differently.
   return text.startsWith("\uFEFF") ? text.slice(1) : text;

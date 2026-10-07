@@ -1025,7 +1025,7 @@ export const SHOT_SCENES: readonly ShotScene[] = [
 
 /** Fires a keydown on `window` — where the shell's own global handler listens. */
 function DISPATCH_KEY(key: string, modifiers: Record<string, boolean> = {}): string {
-  const init = JSON.stringify({ key, bubbles: true, cancelable: true, ...modifiers });
+  const init = jsLiteral({ key, bubbles: true, cancelable: true, ...modifiers });
   // Dispatched on the FOCUSED element, not on `window`.
   //
   // An event dispatched on `window` has no path through the DOM, so it reaches
@@ -1059,7 +1059,7 @@ function DISPATCH_KEY(key: string, modifiers: Record<string, boolean> = {}): str
  */
 function OPEN_FIRST(selectors: string): string {
   return `(() => {
-    for (const selector of ${JSON.stringify(selectors)}.split(",")) {
+    for (const selector of ${jsLiteral(selectors)}.split(",")) {
       const el = document.querySelector(selector.trim());
       if (el) { el.click(); return selector.trim(); }
     }
@@ -1093,7 +1093,7 @@ function OPEN_FIRST(selectors: string): string {
  */
 function CLICK_THEN(...steps: readonly string[]): string {
   return `(async () => {
-    for (const step of ${JSON.stringify(steps)}) {
+    for (const step of ${jsLiteral(steps)}) {
       const target = step.startsWith("text:")
         ? Array.prototype.find.call(
             document.querySelectorAll("button"),
@@ -1339,7 +1339,7 @@ function SET_WAVE_KINDS(kinds: readonly string[]): string {
         HTMLSelectElement.prototype,
         "value",
       ).set;
-      const kinds = ${JSON.stringify(kinds)};
+      const kinds = ${jsLiteral(kinds)};
       const pickers = document.querySelectorAll(".elec-sim__kind");
       for (let index = 0; index < pickers.length; index += 1) {
         setter.call(pickers[index], kinds[index % kinds.length]);
@@ -1587,7 +1587,7 @@ function OPEN_CREATE_FORM(spec: {
           (node) => (node.textContent || "").trim() === step.slice(5),
         )
       : document.querySelector(step);
-  for (const step of ${JSON.stringify(spec.path ?? [])}) {
+  for (const step of ${jsLiteral(spec.path ?? [])}) {
     const node = await waitFor(() => locate(step));
     if (!node) return "none: path step " + step;
     node.click();
@@ -1602,9 +1602,9 @@ function OPEN_CREATE_FORM(spec: {
     // gone.
     await frame();
   }
-  const open = await waitFor(() => locate(${JSON.stringify(spec.open)}));
-  if (!open) return "none: no " + ${JSON.stringify(spec.open)};
-  const expect = ${JSON.stringify(spec.expect ?? null)};
+  const open = await waitFor(() => locate(${jsLiteral(spec.open)}));
+  if (!open) return "none: no " + ${jsLiteral(spec.open)};
+  const expect = ${jsLiteral(spec.expect ?? null)};
   const before = new Set(document.querySelectorAll("form"));
   open.click();
   const form = await waitFor(() =>
@@ -1613,9 +1613,9 @@ function OPEN_CREATE_FORM(spec: {
       : document.querySelector(expect),
   );
   if (!form) {
-    return "none: " + ${JSON.stringify(spec.open)} + " opened no " + (expect ?? "new form");
+    return "none: " + ${jsLiteral(spec.open)} + " opened no " + (expect ?? "new form");
   }
-  for (const step of ${JSON.stringify(spec.then ?? [])}) {
+  for (const step of ${jsLiteral(spec.then ?? [])}) {
     const node = await waitFor(() => locate(step));
     if (!node) return "none: the form has no " + step;
     node.click();
@@ -1653,7 +1653,7 @@ function SWITCH_TO_CIRCUIT(name: string): string {
     document.querySelectorAll(".note__menu-item"),
     (node) => {
       const label = node.querySelector(".elec__switcher-name");
-      return !!label && (label.textContent || "").trim().startsWith(${JSON.stringify(name)});
+      return !!label && (label.textContent || "").trim().startsWith(${jsLiteral(name)});
     },
   );
   if (!wanted) return "none";
@@ -1719,11 +1719,11 @@ function CLOSE_AND_RESTORE_CIRCUIT(): string {
  */
 function SCROLL_TO(selector: string, block: "start" | "center" = "start"): string {
   return `(async () => {
-    const el = document.querySelector(${JSON.stringify(selector)});
+    const el = document.querySelector(${jsLiteral(selector)});
     if (!el) return "none";
-    el.scrollIntoView({ behavior: "instant", block: ${JSON.stringify(block)} });
+    el.scrollIntoView({ behavior: "instant", block: ${jsLiteral(block)} });
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    return ${JSON.stringify(selector)};
+    return ${jsLiteral(selector)};
   })()`;
 }
 
@@ -1739,7 +1739,7 @@ function SCROLL_TO(selector: string, block: "start" | "center" = "start"): strin
  */
 function POINTER_TAP(selector: string): string {
   return `(async () => {
-    const el = document.querySelector(${JSON.stringify(selector)});
+    const el = document.querySelector(${jsLiteral(selector)});
     if (!el) return "none";
     const box = el.getBoundingClientRect();
     const init = {
@@ -1757,14 +1757,14 @@ function POINTER_TAP(selector: string): string {
     el.dispatchEvent(new PointerEvent("pointerdown", init));
     el.dispatchEvent(new PointerEvent("pointerup", { ...init, buttons: 0 }));
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    return ${JSON.stringify(selector)};
+    return ${jsLiteral(selector)};
   })()`;
 }
 
 /** Clicks the first match, or does nothing if the surface is not on this build. */
 function CLICK(selector: string): string {
   return `(() => {
-    const el = document.querySelector(${JSON.stringify(selector)});
+    const el = document.querySelector(${jsLiteral(selector)});
     if (el) el.click();
     return true;
   })()`;
@@ -1833,11 +1833,11 @@ const ONB_PHASE = `(() => {
  */
 function ONB_TYPE(selector: string, text: string): string {
   return `(async () => {
-    const field = document.querySelector(${JSON.stringify(selector)});
+    const field = document.querySelector(${jsLiteral(selector)});
     if (!field) return "none";
     const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
     field.focus();
-    setter.call(field, ${JSON.stringify(text)});
+    setter.call(field, ${jsLiteral(text)});
     field.dispatchEvent(new Event("input", { bubbles: true }));
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     return "typed";
@@ -1847,16 +1847,16 @@ function ONB_TYPE(selector: string, text: string): string {
 /** Clicks the nth match of a selector, and says whether there was one. */
 function ONB_PICK(selector: string, ...indexes: readonly number[]): string {
   return `(async () => {
-    const all = document.querySelectorAll(${JSON.stringify(selector)});
+    const all = document.querySelectorAll(${jsLiteral(selector)});
     let hit = 0;
-    for (const index of ${JSON.stringify(indexes)}) {
+    for (const index of ${jsLiteral(indexes)}) {
       const el = all[index];
       if (!el) continue;
       el.click();
       hit += 1;
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     }
-    return hit === ${JSON.stringify(indexes.length)} ? "picked" : "none";
+    return hit === ${jsLiteral(indexes.length)} ? "picked" : "none";
   })()`;
 }
 
@@ -2000,7 +2000,7 @@ function UNLOCK_SCRIPT(passcode: string): string {
     if (submit.disabled) return "none: the submit button is disabled";
     const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
     field.focus();
-    setter.call(field, ${JSON.stringify(passcode)});
+    setter.call(field, ${jsLiteral(passcode)});
     field.dispatchEvent(new Event("input", { bubbles: true }));
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     // Read back rather than assumed: React re-renders the button out of ENABLED
@@ -2126,7 +2126,7 @@ function LEAVE_FIRST_RUN(profileId: string): string {
       const anchor = profiles.find((profile) => profile.kind === "personal") ?? profiles[0];
       if (anchor === undefined) return "none: the account has no profile to return to";
       localStorage.setItem("nexus.activeProfile", anchor.id);
-      await window.nexus.deleteProfile(${JSON.stringify(profileId)});
+      await window.nexus.deleteProfile(${jsLiteral(profileId)});
       return anchor.id;
     } catch (error) {
       return "none: " + String(error);
@@ -2233,7 +2233,7 @@ function WRITE_PROBE(text: string): string {
       : window.HTMLInputElement.prototype;
     const setter = Object.getOwnPropertyDescriptor(proto, "value").set;
     field.focus();
-    setter.call(field, ${JSON.stringify(text)});
+    setter.call(field, ${jsLiteral(text)});
     field.dispatchEvent(new Event("input", { bubbles: true }));
     const form = field.closest("form");
     if (!form) return "none: the field is outside a form";
@@ -2383,6 +2383,36 @@ async function evalIn(win: BrowserWindow, code: string): Promise<unknown> {
 }
 
 /**
+ * `value` as a JavaScript literal, for interpolation into a script handed to
+ * `evalIn`.
+ *
+ * `JSON.stringify` on its own is a valid literal and not a safe one (#16). Its
+ * output is a JSON document, where `</script>`, `<!--` or a U+2028 line
+ * separator are ordinary text; spliced into a script's SOURCE the same
+ * characters end the literal or the statement, and a scene label or a profile
+ * name is text this sweep did not write. Every escape below is on the JSON
+ * text and stands for the same character inside a JavaScript string, so the
+ * value the renderer reads back is the one that went in.
+ */
+export function jsLiteral(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/[<>\u2028\u2029]/g, (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`)
+    .replace(/\//g, "\\/");
+}
+
+/**
+ * One cell of `report.md`'s table.
+ *
+ * The cell's text is read off a live DOM node, so it can hold anything the page
+ * rendered: a pipe would end the column early and a backslash would be read as
+ * the start of the escape the pipe is written with, so the backslash goes first
+ * (js/incomplete-sanitization, #14).
+ */
+export function markdownCell(text: string): string {
+  return text.replace(/\\/g, "\\\\").replace(/\|/g, "\\|");
+}
+
+/**
  * Waits until a selector matches, then a little longer.
  *
  * The extra settle is not superstition: React commits, then the browser lays
@@ -2394,7 +2424,7 @@ async function evalIn(win: BrowserWindow, code: string): Promise<unknown> {
 async function waitFor(win: BrowserWindow, selector: string, timeoutMs = 8000): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const found = await evalIn(win, `document.querySelector(${JSON.stringify(selector)}) !== null`);
+    const found = await evalIn(win, `document.querySelector(${jsLiteral(selector)}) !== null`);
     if (found === true) return true;
     await pause(80);
   }
@@ -2435,7 +2465,7 @@ let pageWaitReported = false;
  */
 async function settle(win: BrowserWindow): Promise<void> {
   const deadline = Date.now() + PAGE_WAIT_MS;
-  const probe = `document.querySelector(${JSON.stringify(PAGE_PENDING)}) !== null`;
+  const probe = `document.querySelector(${jsLiteral(PAGE_PENDING)}) !== null`;
   while ((await evalIn(win, probe)) === true) {
     if (Date.now() >= deadline) {
       if (!pageWaitReported) {
@@ -2545,7 +2575,7 @@ async function reloadAndWait(win: BrowserWindow, selector: string): Promise<void
  * frames show the app as it opens, not as it looks after being poked.
  */
 async function serveTheme(win: BrowserWindow, theme: ShotTheme): Promise<void> {
-  await evalIn(win, `(() => { localStorage.setItem("nexus.theme", ${JSON.stringify(theme)}); return true; })()`);
+  await evalIn(win, `(() => { localStorage.setItem("nexus.theme", ${jsLiteral(theme)}); return true; })()`);
   await reloadAndWait(win, ".app__sidebar");
 }
 
@@ -2645,7 +2675,7 @@ async function shootShellScene(
 
 /** Lands on a module by its stable id, never by its (translated) label. */
 async function openModule(win: BrowserWindow, moduleId: string): Promise<boolean> {
-  const selector = JSON.stringify(`[data-module-id="${moduleId}"]`);
+  const selector = jsLiteral(`[data-module-id="${moduleId}"]`);
   const clicked = await evalIn(
     win,
     `(() => {
@@ -2692,7 +2722,7 @@ interface FanoutOption {
 async function fanoutOptions(win: BrowserWindow, selector: string): Promise<FanoutOption[]> {
   const raw = await evalIn(
     win,
-    `Array.from(document.querySelectorAll(${JSON.stringify(selector)}))
+    `Array.from(document.querySelectorAll(${jsLiteral(selector)}))
        .filter((el) => !el.hasAttribute("aria-expanded"))
        .map((el) => ({
          label: (el.textContent || "").replace(/\\s+/g, " ").trim(),
@@ -2756,8 +2786,8 @@ async function clickFanout(win: BrowserWindow, selector: string, label: string):
     win,
     `(() => {
        const option = Array.prototype.find.call(
-         document.querySelectorAll(${JSON.stringify(selector)}),
-         (el) => (el.textContent || "").replace(/\\s+/g, " ").trim() === ${JSON.stringify(label)},
+         document.querySelectorAll(${jsLiteral(selector)}),
+         (el) => (el.textContent || "").replace(/\\s+/g, " ").trim() === ${jsLiteral(label)},
        );
        if (!option) return false;
        option.click();
@@ -3528,7 +3558,7 @@ function buildReport(frames: readonly ShotFrame[]): string {
     const { finding, scenes } = row;
     lines.push(
       `| ${finding.kind} | \`${finding.where}\` | \`${finding.other}\` | ${finding.amount} | ` +
-        `${scenes.size} | ${finding.text.replace(/\|/g, "\\|")} |`,
+        `${scenes.size} | ${markdownCell(finding.text)} |`,
     );
   }
   lines.push("", "## Where each finding appears", "");

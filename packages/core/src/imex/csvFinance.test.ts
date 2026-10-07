@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { growthToFull, LINEAR_GROWTH } from "../testing/growth.js";
 import {
   CSV_FINANCE_ACCOUNT_SOURCE_ID,
   CSV_FINANCE_COLUMN_ROLES,
@@ -583,5 +584,66 @@ describe("translateCsvFinance", () => {
     const result = translateCsvFinance([["31.08.2026."]], roles, target());
     if (result.status !== "ready") throw new Error(result.status);
     expect(result.report.drops).toEqual([{ row: 1, code: "no-amount" }]);
+  });
+});
+
+/**
+ * #9 and #10: the trailing clock and the trailing dots.
+ *
+ * Both were matched with a pattern that re-walked the run from every place a
+ * match could start, which is quadratic on a cell of spaces or of dots. Pinned
+ * on the values first - including the cells the trims around the call make
+ * equal - and then on the run itself.
+ */
+describe("the date and currency cells give up their tail in one pass", () => {
+  const PUMP = 50_000;
+
+  it("still reads a date with the clock a statement appends", () => {
+    expect(readCsvFinanceDate("31.08.2026. 14:32", "dmy-dot")).toBe("2026-08-31");
+    expect(readCsvFinanceDate("31.08.2026. 14:32:07", "dmy-dot")).toBe("2026-08-31");
+    expect(readCsvFinanceDate("31.08.2026.\u00a014:32", "dmy-dot")).toBe("2026-08-31");
+    // Several spaces, because the run is what the old pattern ate and the new
+    // one leaves to the trim either side of it.
+    expect(readCsvFinanceDate("  31.08.2026.    14:32  ", "dmy-dot")).toBe("2026-08-31");
+  });
+
+  it("still refuses a cell that is nothing but a clock", () => {
+    // The old pattern required a whitespace BEFORE the clock, so a cell of only
+    // `14:32` was never a date, and the reading must not change.
+    expect(readCsvFinanceDate("14:32", "dmy-dot")).toBeNull();
+    expect(readCsvFinanceDate("31.08.2026.", "dmy-dot")).toBe("2026-08-31");
+  });
+
+  it("answers 50,000 spaces mid-cell without re-walking the run", () => {
+    const cell = (count: number): string => "x" + " ".repeat(count) + "y";
+    const read = (text: string) => readCsvFinanceDate(text, "dmy-dot");
+    expect(growthToFull(cell, read, PUMP)).toBeLessThan(LINEAR_GROWTH);
+    expect(read(cell(PUMP))).toBeNull();
+  });
+
+  it("strips every trailing dot from a currency code", () => {
+    const roles: CsvFinanceColumnRole[] = ["date", "note", "amount", "currency"];
+    expect(
+      translateCsvFinance([["31.08.2026.", "A", "-100,00", "RSD.."]], roles, target()).status,
+    ).toBe("ready");
+    // A cell of nothing but dots is an EMPTY code, which this reader skips
+    // rather than refuses - the branch the pattern's reach decided.
+    expect(
+      translateCsvFinance([["31.08.2026.", "A", "-100,00", "..."]], roles, target()).status,
+    ).toBe("ready");
+  });
+
+  it("answers 50,000 dots in a currency cell without re-walking the run", () => {
+    const cell = (count: number): string => ".".repeat(count) + "X";
+    const translate = (currency: string) =>
+      translateCsvFinance(
+        [["31.08.2026.", "A", "-100,00", currency]],
+        ["date", "note", "amount", "currency"],
+        target(),
+      );
+    expect(growthToFull(cell, translate, PUMP)).toBeLessThan(LINEAR_GROWTH);
+    const result = translate(cell(PUMP));
+    // The dots are stripped and the code that is left is not this account's.
+    expect(result.status).toBe("refused");
   });
 });

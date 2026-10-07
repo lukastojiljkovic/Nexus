@@ -5,6 +5,7 @@ import type { BrowserWindow, OpenDialogOptions } from "electron";
 import { dialog, protocol, shell } from "electron";
 import { blobStorageName, decryptBlob, encryptBlob, type BlobKeys } from "@nexus/core/auth";
 import { extensionForMime, sniffMime } from "@nexus/core";
+import { readFileBounded } from "./boundedRead.js";
 import type { SaveAttachmentResult } from "../shared/ipc.js";
 
 /**
@@ -332,24 +333,16 @@ export async function pickAttachmentFiles(
   const files: PickedAttachmentFile[] = [];
   let skippedTooLarge = 0;
   for (const path of filePaths) {
-    try {
-      const info = await stat(path);
-      if (!info.isFile() || info.size === 0) continue;
-      if (info.size > maxBytes) {
-        skippedTooLarge += 1;
-        continue;
-      }
-      const bytes = await readFile(path);
-      if (bytes.byteLength === 0) continue;
-      if (bytes.byteLength > maxBytes) {
-        skippedTooLarge += 1;
-        continue;
-      }
-      files.push({ fileName: basename(path), bytes });
-    } catch {
-      // Unreadable (permissions, a file that vanished between the dialog and
-      // here): skipped, never fatal — the rest of the pick still lands.
+    // One open, and the cap measured against the file the bytes come from
+    // (js/file-system-race, #26). A refusal is an answer here rather than a
+    // throw: one bad file never costs the pick its good ones.
+    const read = await readFileBounded(path, maxBytes);
+    if (read.status === "too-large") {
+      skippedTooLarge += 1;
+      continue;
     }
+    if (read.status !== "ok" || read.size === 0 || read.bytes.byteLength === 0) continue;
+    files.push({ fileName: basename(path), bytes: read.bytes });
   }
   return { canceled: false, files, skippedTooLarge };
 }

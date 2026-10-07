@@ -155,7 +155,11 @@ function webClosure() {
 
 /** A static import, a `require` and a dynamic import of one specifier, in one pass. */
 function specifierUse(specifier) {
-  const escaped = specifier.replace(/[/@-]/g, "\\$&");
+  // The backslash FIRST: a specifier carrying one would otherwise be read as
+  // the start of the escape the second replace writes (#15). Every specifier
+  // this gate sees is a package name or a relative path, so the pattern it
+  // builds for them is unchanged.
+  const escaped = specifier.replace(/\\/g, "\\\\").replace(/[/@-]/g, "\\$&");
   return new RegExp(`(?:from|require\\s*\\(|import\\s*\\()\\s*["'\`]${escaped}["'\`]`);
 }
 
