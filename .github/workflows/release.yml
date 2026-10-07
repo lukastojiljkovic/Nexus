@@ -43,6 +43,8 @@ jobs:
     timeout-minutes: 60
     permissions:
       contents: read
+    outputs:
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -106,7 +108,8 @@ jobs:
           set -euo pipefail
           ls -l apps/desktop/release/Nexus-Setup-*.exe
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - id: upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: windows
           path: apps/desktop/release/Nexus-Setup-*.exe
@@ -119,6 +122,8 @@ jobs:
     timeout-minutes: 60
     permissions:
       contents: read
+    outputs:
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -155,7 +160,8 @@ jobs:
           set -euo pipefail
           ls -l apps/desktop/release/*.AppImage apps/desktop/release/*.tar.gz
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - id: upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: linux
           # Only what a user downloads. electron-builder also writes
@@ -169,18 +175,18 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  # THE ASSEMBLY JOB INSTALLS AND RUNS THIRD-PARTY CODE, and that is exactly why
-  # the signing key is not here. It runs `pnpm install`, the notices generator
-  # and the SBOM tool, so it holds `contents: read` and nothing else; the draft
-  # release it feeds is created by a job with no checkout at all.
+  # THE ASSEMBLY JOB INSTALLS AND RUNS THIRD-PARTY CODE, so it never touches
+  # what the release key signs. It runs `pnpm install`, the notices generator
+  # and the SBOM tool, holds `contents: read` and nothing else, and produces
+  # only the notices, the SBOM and the release notes. The installers travel
+  # from the build jobs to the signing and publishing jobs without passing
+  # through here.
   assemble:
-    name: Assemble the release assets
-    needs: [windows, linux]
+    name: Assemble the notices, SBOM and release notes
     runs-on: ubuntu-latest
     timeout-minutes: 40
     permissions:
       contents: read
-      actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -204,12 +210,10 @@ jobs:
       # Rendered from `licences.json`, never written by hand, and rendered from
       # THIS tree rather than from a file somebody kept up to date.
       - name: Render the third-party notices
-        run: node apps/desktop/scripts/render-notices.mjs THIRD-PARTY-NOTICES.md
-
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          path: release-assets
-          merge-multiple: true
+        run: |
+          set -euo pipefail
+          mkdir -p release-extras
+          node apps/desktop/scripts/render-notices.mjs release-extras/THIRD-PARTY-NOTICES.md
 
       - name: SBOM in CycloneDX format
         run: |
@@ -229,26 +233,13 @@ jobs:
           # No secret is in this step's environment, deliberately: cdxgen reads
           # the whole tree, and its own documentation warns against handing it
           # credentials.
-          npx --yes "@cdxgen/cdxgen@13.2.0" -o release-assets/sbom.cdx.json .
-          node -e 'const b=require("./release-assets/sbom.cdx.json"); if(!b.components?.length) { throw new Error("SBOM has no components"); } console.log(`SBOM: CycloneDX ${b.specVersion}, ${b.components.length} components`);'
-
-      - name: Copy the notices into the release assets
-        run: cp THIRD-PARTY-NOTICES.md release-assets/THIRD-PARTY-NOTICES.md
-
-      - name: Checksums over every artefact
-        run: |
-          set -euo pipefail
-          cd release-assets
-          # Sorted so the same artefacts always produce the same file, and
-          # SHA256SUMS.txt itself is excluded because it cannot contain its own
-          # hash.
-          find . -maxdepth 1 -type f ! -name SHA256SUMS.txt -printf '%P\n' | sort > /tmp/asset-list.txt
-          sha256sum $(cat /tmp/asset-list.txt) > SHA256SUMS.txt
-          cat SHA256SUMS.txt
+          npx --yes "@cdxgen/cdxgen@13.2.0" -o release-extras/sbom.cdx.json .
+          node -e 'const b=require("./release-extras/sbom.cdx.json"); if(!b.components?.length) { throw new Error("SBOM has no components"); } console.log(`SBOM: CycloneDX ${b.specVersion}, ${b.components.length} components`);'
 
       # The notes live HERE rather than in the publishing job because they need
       # `node` and `pnpm -v`, and the publishing job deliberately has neither.
-      # The checksum file they quote was written by the step above.
+      # This job never sees the installers, so the checksum block is a
+      # placeholder line the publishing job replaces with the SIGNED list.
       - name: Write the release notes
         run: |
           set -euo pipefail
@@ -275,10 +266,10 @@ jobs:
             echo
             echo "Node $(node -v), pnpm $(pnpm -v), Electron ${electron} (declared in \`apps/desktop/package.json\`)."
             echo
-            echo "### Files and checksums"
+            echo "### Installer checksums"
             echo
             echo '```'
-            cat release-assets/SHA256SUMS.txt
+            echo '<!-- SHA256SUMS -->'
             echo '```'
             echo
             echo "### Verify what you downloaded"
@@ -299,17 +290,8 @@ jobs:
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: release-assets
-          path: release-assets
-          if-no-files-found: error
-          retention-days: 7
-
-      # Only SHA256SUMS.txt, so the signing job downloads one small file it can
-      # verify and nothing else.
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: checksums
-          path: release-assets/SHA256SUMS.txt
+          name: extras
+          path: release-extras
           if-no-files-found: error
           retention-days: 7
 
@@ -320,22 +302,32 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  # THE SIGNING JOB IS SEPARATE, AND THAT IS THE POINT.
+  # THE SIGNING JOB SIGNS ONLY WHAT THE BUILD JOBS PRODUCED.
   #
-  # The signing key is a secret that authorises an install on every existing
-  # copy, and it is present ONLY in the step below — inside a job that installs
-  # nothing and runs no dependency code: no `pnpm install`, no `actions/setup-node`,
-  # no `npx`, no SBOM generator. The job that renders the notices and builds the
-  # SBOM executes third-party code, so it never sees this secret; here the only
-  # tools are `openssl`, `awk`, `actions/checkout` and `actions/*`'s own
-  # artefact transfer.
+  # The signing key authorises an install on every existing copy, so nothing
+  # another job wrote may reach it. This job downloads the installers by the
+  # artifact IDs the build jobs reported, writes SHA256SUMS.txt itself, and
+  # signs that. An artifact replaced under the same name gets a NEW ID, so a
+  # swap by any other job in the run fails the download here instead of being
+  # signed; the download also fails on a digest mismatch.
+  #
+  # It installs nothing and runs no dependency code: no `pnpm install`, no
+  # `actions/setup-node`, no `npx`. The only tools are `sha256sum`, `openssl`,
+  # `awk` and GitHub's own checkout and artefact actions.
+  #
+  # `environment: release` is what scopes the key. NEXUS_RELEASE_SIGNING_KEY
+  # belongs in that environment, whose deployment rule admits `v*` tags only,
+  # so no branch, pull request or other job can read it.
   sign:
     name: Sign the checksums
-    needs: [assemble]
+    needs: [windows, linux]
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    environment: release
     permissions:
       contents: read
+    outputs:
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
     steps:
       # Sparse on the ONE file the verify step reads, so this job's checkout is
       # as small as its trust surface. Cone mode would fetch the directories it
@@ -346,10 +338,27 @@ jobs:
           sparse-checkout: apps/desktop/src/main/update/releaseKey.ts
           sparse-checkout-cone-mode: false
 
+      # One ID per step: a single missing ID fails the step, where a list of
+      # IDs only warns about the ones it could not find.
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: checksums
+          artifact-ids: ${{ needs.windows.outputs.artifact-id }}
           path: release-assets
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.linux.outputs.artifact-id }}
+          path: release-assets
+
+      - name: Checksums over the installers
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd release-assets
+          # Sorted so the same installers always produce the same file.
+          find . -maxdepth 1 -type f -printf '%P\n' | sort > "$RUNNER_TEMP/installers.txt"
+          xargs -d '\n' -a "$RUNNER_TEMP/installers.txt" sha256sum > SHA256SUMS.txt
+          cat SHA256SUMS.txt
 
       # Sign SHA256SUMS.txt with the Ed25519 private key (ADR-089). The app
       # accepts an installer only when its SHA-256 appears in a SHA256SUMS.txt
@@ -401,21 +410,26 @@ jobs:
             -in release-assets/SHA256SUMS.txt \
             -sigfile release-assets/SHA256SUMS.txt.sig
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - id: upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: signature
-          path: release-assets/SHA256SUMS.txt.sig
+          name: signed-checksums
+          path: |
+            release-assets/SHA256SUMS.txt
+            release-assets/SHA256SUMS.txt.sig
           if-no-files-found: error
           retention-days: 7
 
   # THE PUBLISHING JOB HAS NO CHECKOUT AND RUNS NO PROJECT TOOLING. It holds the
   # `contents: write` token that creates the draft, and it reaches the files it
-  # uploads only through `actions/download-artifact`; `sha256sum -c` is what
-  # verifies that the list the signing job signed matches the bytes that
-  # actually arrived.
+  # uploads only through `actions/download-artifact`: the installers and the
+  # signed list by the IDs their own jobs reported, the notices, SBOM and notes
+  # by name from the assembly job. Those land in a directory of their own, and
+  # only the two files named below are uploaded from it, so nothing the
+  # assembly job writes can stand in for an installer or the checksum list.
   publish:
     name: Draft the release
-    needs: [assemble, sign]
+    needs: [windows, linux, assemble, sign]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -428,27 +442,49 @@ jobs:
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: release-assets
+          artifact-ids: ${{ needs.windows.outputs.artifact-id }}
           path: release-assets
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: signature
+          artifact-ids: ${{ needs.linux.outputs.artifact-id }}
           path: release-assets
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.sign.outputs.artifact-id }}
+          path: release-assets
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: extras
+          path: release-extras
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: release-notes
 
-      # Every artefact the release will upload is checked against the list the
-      # signing job signed, so a file that changed between assembly and here is
-      # caught before it is published rather than after.
-      - name: Check every artefact against the signed checksums
+      # Every installer the release will upload is checked against the list the
+      # signing job signed, so a file that changed after signing is caught
+      # before it is published rather than after.
+      - name: Check every installer against the signed checksums
         shell: bash
         run: |
           set -euo pipefail
           cd release-assets
           sha256sum -c SHA256SUMS.txt
+
+      # The signed list, verbatim, in place of the placeholder line; the step
+      # fails if the line is missing, so the notes cannot ship without it.
+      - name: Put the signed checksums into the notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          awk -v sums=release-assets/SHA256SUMS.txt '
+            $0 == "<!-- SHA256SUMS -->" { while ((getline line < sums) > 0) print line; found = 1; next }
+            { print }
+            END { if (!found) exit 1 }
+          ' release-notes.md > "$RUNNER_TEMP/release-notes.md"
 
       # Build provenance: a signed statement, verifiable later, that these
       # exact bytes were produced by this workflow in this repository at this
@@ -456,7 +492,10 @@ jobs:
       # trusting the upload.
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
-          subject-path: release-assets/*
+          subject-path: |
+            release-assets/*
+            release-extras/THIRD-PARTY-NOTICES.md
+            release-extras/sbom.cdx.json
 
       # `gh` rather than a release action, for the reason at the top of this
       # file: this job holds `contents: write`.
@@ -469,5 +508,7 @@ jobs:
             --repo "${GITHUB_REPOSITORY}" \
             --draft \
             --title "Nexus ${GITHUB_REF_NAME}" \
-            --notes-file release-notes.md \
-            release-assets/*
+            --notes-file "$RUNNER_TEMP/release-notes.md" \
+            release-assets/* \
+            release-extras/THIRD-PARTY-NOTICES.md \
+            release-extras/sbom.cdx.json

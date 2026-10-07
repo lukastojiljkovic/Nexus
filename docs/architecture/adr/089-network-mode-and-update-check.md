@@ -183,10 +183,17 @@ nothing else.
   `apps/desktop/src/main/update/electron.ts`, whose one flagged construct is
   `shell.openExternal(<the pinned release page>)` — the loader it hands the URL
   to is the user's browser, not this process's network stack.
-- **The release workflow signs.** It fails when
-  `NEXUS_RELEASE_SIGNING_KEY` is missing, and it verifies the signature against
-  the committed public key before uploading, so a secret that does not match the
-  key in the app can never ship a release every installed copy would reject.
+- **The release workflow signs, in a job of its own.** The `sign` job takes the
+  installers from the build jobs by the artifact IDs they reported, writes
+  `SHA256SUMS.txt` itself and signs that, so the job that runs dependency code
+  after the builds (`pnpm install` and `npx` for the notices and the SBOM) never
+  puts a file in front of the key. The list covers the installers only; the
+  notices and the SBOM are covered by the build-provenance attestation. The job
+  runs in the `release` environment, which holds `NEXUS_RELEASE_SIGNING_KEY` and
+  admits `v*` tags only. It fails when the key is missing, and it verifies the
+  signature against the committed public key before uploading, so a secret that
+  does not match the key in the app can never ship a release every installed
+  copy would reject.
 - **The screenshot harness records the default choice** in its sandbox, so a
   sweep photographs the app rather than a question.
 
