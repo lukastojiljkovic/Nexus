@@ -104,6 +104,11 @@ overrides:
   # no path from a user's document to this parser. 4.3.2 is the `v4-legacy`
   # tag, and 5.x is a separate major nothing in the tree asks for. Retires when
   # nothing resolves below 4.3.2.
+  #
+  # 2026-10-07 — `electron-updater` is gone (ADR-089), so the shipped half no
+  # longer reaches this parser at all: it is build-time only now, through
+  # `app-builder-lib`, reading the builder's own config. The pin stays for the
+  # same lockfile reason as before and retires on the same condition.
   js-yaml@4: ^4.3.2
   # GHSA-4cwx-7wf7-3272 — cross-user information disclosure and a parse-time
   # crash via degenerate private cache directives. Build-time only, through
