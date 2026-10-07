@@ -1,3 +1,4 @@
+import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { claimUniqueName, sanitizePathSegment, UNTITLED_NOTE_NAME } from "./archivePaths.js";
 
@@ -133,5 +134,62 @@ describe("a segment's trailing dots and spaces come off in one pass", () => {
     const name = sanitizePathSegment(".".repeat(128 * 1024), "Fascikla");
     expect(performance.now() - started).toBeLessThan(200);
     expect(name).toBe("Fascikla");
+  });
+});
+
+/**
+ * `sanitizePathSegment` as `main` wrote it: the same function with the pattern
+ * `/[. ]+$/` in place of the scan this branch gave it. The scan must answer
+ * exactly what the pattern answered on every input, and this is the whole
+ * function - reserved device names and all - so a generated raw segment
+ * exercises the trim at both of its call sites and the cap that can re-expose
+ * a trailing dot.
+ */
+function referenceControlChars(): string {
+  let chars = "";
+  for (let code = 0; code <= 0x1f; code += 1) chars += String.fromCharCode(code);
+  return chars + String.fromCharCode(0x7f);
+}
+
+const REFERENCE_FORBIDDEN_CHARS = new RegExp(`[/\\\\:*?"<>|${referenceControlChars()}]`, "g");
+
+const REFERENCE_RESERVED_DEVICE_NAMES = new Set<string>([
+  "CON", "PRN", "AUX", "NUL",
+  "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+  "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+]);
+
+function referenceSanitizePathSegment(raw: string, fallback: string): string {
+  let result = raw.replace(REFERENCE_FORBIDDEN_CHARS, "-");
+  result = result.replace(/\s+/g, " ").trim();
+  result = result.replace(/[. ]+$/, "");
+  result = result.slice(0, 80).trim().replace(/[. ]+$/, "");
+  if (result === "" || result === "." || result === "..") return fallback;
+  const dotIndex = result.indexOf(".");
+  const stem = dotIndex === -1 ? result : result.slice(0, dotIndex);
+  if (REFERENCE_RESERVED_DEVICE_NAMES.has(stem.toUpperCase())) {
+    return `${stem}_${result.slice(stem.length)}`;
+  }
+  return result;
+}
+
+describe("sanitizePathSegment keeps the answer the pattern gave", () => {
+  const TOKENS = [
+    "x", "Plan", "....", " ", ".", ". ", "...  ", "CON", "con", "Com1", "nul.md",
+    "COM10", "a/b", "a\\b", String.fromCharCode(0), String.fromCharCode(0x7f),
+    "\u00e9", "\u00a0", "\t", "\n", "-", "_", "*", "?", '"', "<", ">", "|", ":",
+  ];
+
+  it("agrees with main on raw segments of dots, spaces and reserved names", () => {
+    const raw = fc
+      .array(fc.oneof(fc.constantFrom(...TOKENS), fc.string({ maxLength: 8 })), { maxLength: 14 })
+      .map((parts) => parts.join(""));
+    const fallback = fc.string({ maxLength: 8 });
+    fc.assert(
+      fc.property(raw, fallback, (name, reserved) => {
+        expect(sanitizePathSegment(name, reserved)).toBe(referenceSanitizePathSegment(name, reserved));
+      }),
+      { numRuns: 500 },
+    );
   });
 });
