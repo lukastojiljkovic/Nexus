@@ -1,5 +1,6 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
+import { growthToFull, LINEAR_GROWTH } from "../testing/growth.js";
 import { renderNoteMarkdown } from "./noteMarkdown.js";
 import { buildNoteUpdate, parseMarkdownNote } from "./markdownImport.js";
 import type { MarkdownBlock, MarkdownInline, MarkdownInlineMarks } from "./markdownImport.js";
@@ -441,11 +442,11 @@ describe("a bare URL's punctuation is trimmed in one pass", () => {
 
   it("parses a document at the reader's cap in linear time", () => {
     const cap = 1024 * 1024;
-    const started = performance.now();
-    const parsed = parseMarkdownNote(`http://${".".repeat(cap - 8)}x`, FALLBACK);
-    expect(performance.now() - started).toBeLessThan(200);
-    expect(parsed.blocks.length).toBeGreaterThan(0);
-  });
+    const url = (size: number): string => `http://${".".repeat(size - 8)}x`;
+    const parse = (text: string) => parseMarkdownNote(text, FALLBACK);
+    expect(growthToFull(url, parse, cap)).toBeLessThan(LINEAR_GROWTH);
+    expect(parse(url(cap)).blocks.length).toBeGreaterThan(0);
+  }, 60_000);
 });
 
 /**

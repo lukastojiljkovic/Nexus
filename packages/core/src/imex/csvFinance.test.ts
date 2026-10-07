@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { growthToFull, LINEAR_GROWTH } from "../testing/growth.js";
 import {
   CSV_FINANCE_ACCOUNT_SOURCE_ID,
   CSV_FINANCE_COLUMN_ROLES,
@@ -614,9 +615,10 @@ describe("the date and currency cells give up their tail in one pass", () => {
   });
 
   it("answers 50,000 spaces mid-cell without re-walking the run", () => {
-    const started = performance.now();
-    expect(readCsvFinanceDate("x" + " ".repeat(PUMP) + "y", "dmy-dot")).toBeNull();
-    expect(performance.now() - started).toBeLessThan(100);
+    const cell = (count: number): string => "x" + " ".repeat(count) + "y";
+    const read = (text: string) => readCsvFinanceDate(text, "dmy-dot");
+    expect(growthToFull(cell, read, PUMP)).toBeLessThan(LINEAR_GROWTH);
+    expect(read(cell(PUMP))).toBeNull();
   });
 
   it("strips every trailing dot from a currency code", () => {
@@ -632,13 +634,15 @@ describe("the date and currency cells give up their tail in one pass", () => {
   });
 
   it("answers 50,000 dots in a currency cell without re-walking the run", () => {
-    const started = performance.now();
-    const result = translateCsvFinance(
-      [["31.08.2026.", "A", "-100,00", ".".repeat(PUMP) + "X"]],
-      ["date", "note", "amount", "currency"],
-      target(),
-    );
-    expect(performance.now() - started).toBeLessThan(100);
+    const cell = (count: number): string => ".".repeat(count) + "X";
+    const translate = (currency: string) =>
+      translateCsvFinance(
+        [["31.08.2026.", "A", "-100,00", currency]],
+        ["date", "note", "amount", "currency"],
+        target(),
+      );
+    expect(growthToFull(cell, translate, PUMP)).toBeLessThan(LINEAR_GROWTH);
+    const result = translate(cell(PUMP));
     // The dots are stripped and the code that is left is not this account's.
     expect(result.status).toBe("refused");
   });

@@ -1,5 +1,6 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
+import { growthToFull, LINEAR_GROWTH } from "../testing/growth.js";
 import { claimUniqueName, sanitizePathSegment, UNTITLED_NOTE_NAME } from "./archivePaths.js";
 
 describe("sanitizePathSegment", () => {
@@ -130,10 +131,10 @@ describe("a segment's trailing dots and spaces come off in one pass", () => {
   });
 
   it("answers a 128k-dot title in linear time", () => {
-    const started = performance.now();
-    const name = sanitizePathSegment(".".repeat(128 * 1024), "Fascikla");
-    expect(performance.now() - started).toBeLessThan(200);
-    expect(name).toBe("Fascikla");
+    const dots = (count: number): string => ".".repeat(count);
+    const sanitize = (title: string) => sanitizePathSegment(title, "Fascikla");
+    expect(growthToFull(dots, sanitize, 128 * 1024)).toBeLessThan(LINEAR_GROWTH);
+    expect(sanitize(dots(128 * 1024))).toBe("Fascikla");
   });
 });
 

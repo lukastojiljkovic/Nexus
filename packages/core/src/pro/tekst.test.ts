@@ -1,5 +1,6 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
+import { growthToFull, LINEAR_GROWTH } from "../testing/growth.js";
 
 import {
   bracketBalance,
@@ -1611,22 +1612,22 @@ describe("the text tools walk their paste once", () => {
   } as const;
 
   it("strips markup from a cue at the paste ceiling in linear time", () => {
+    const cue = (pairs: number): string =>
+      `1\n00:00:01,000 --> 00:00:02,000\n${"<a".repeat(pairs)}\n`;
+    const audit = (subtitle: string) => subtitleAudit({ subtitle, countTags: false });
+    expect(growthToFull(cue, audit, CEILING / 2 - 20)).toBeLessThan(LINEAR_GROWTH);
     const characters = "<a".repeat(CEILING / 2 - 20);
-    const started = performance.now();
-    const result = subtitleAudit({
-      subtitle: `1\n00:00:01,000 --> 00:00:02,000\n${characters}\n`,
-      countTags: false,
-    });
-    expect(performance.now() - started).toBeLessThan(200);
+    const result = audit(cue(CEILING / 2 - 20));
     expect(result.ok).toBe(true);
     // No `>` anywhere, so nothing is a tag: the whole run is text.
     if (result.ok) expect(result.blocks[0]?.characters).toBe(characters.length);
   });
 
   it("trims the line ends of a paste at the ceiling in linear time", () => {
-    const started = performance.now();
-    const cleaned = typographyCleanup({ text: " ".repeat(CEILING - 1) + "x", ...TYPOGRAPHY });
-    expect(performance.now() - started).toBeLessThan(200);
+    const paste = (size: number): string => " ".repeat(size - 1) + "x";
+    const clean = (text: string) => typographyCleanup({ text, ...TYPOGRAPHY });
+    expect(growthToFull(paste, clean, CEILING)).toBeLessThan(LINEAR_GROWTH);
+    const cleaned = clean(paste(CEILING));
     expect(cleaned.ok).toBe(true);
     if (cleaned.ok) {
       // The run is NOT at a line end, so the rule that fires here is the
@@ -1659,16 +1660,15 @@ describe("the text tools walk their paste once", () => {
     // `\p{White_Space}+$` re-walked a run of spaces from every position in it,
     // which is quadratic on a line that never ends in one; the glossary check
     // reads a line that way on both sides.
-    const started = performance.now();
-    const result = glossaryCheck({
-      original: " ".repeat(CEILING - 2) + "x ",
-      translation: " ".repeat(CEILING - 2) + "y ",
+    const pair = (size: number) => ({
+      original: " ".repeat(size - 2) + "x ",
+      translation: " ".repeat(size - 2) + "y ",
       glossary: "a\tb\n",
       caseSensitive: false,
       wholeWord: false,
     });
-    expect(performance.now() - started).toBeLessThan(200);
-    expect(result.ok).toBe(true);
+    expect(growthToFull(pair, glossaryCheck, CEILING)).toBeLessThan(LINEAR_GROWTH);
+    expect(glossaryCheck(pair(CEILING)).ok).toBe(true);
   });
 });
 

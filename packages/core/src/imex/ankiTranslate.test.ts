@@ -2,6 +2,7 @@ import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 
 import { findClozeRuns, renderClozeCard } from "../study/clozeText.js";
+import { growthToFull, LINEAR_GROWTH } from "../testing/growth.js";
 import {
   ankiNotetypeKind,
   APKG_SKIP_CODES,
@@ -592,13 +593,12 @@ describe("the field patterns walk a field once", () => {
   });
 
   it("answers 50,000 [sound: repetitions without re-walking the tail", () => {
-    const started = performance.now();
-    const result = stripAnkiHtml("[sound:x".repeat(PUMP));
-    const elapsed = performance.now() - started;
+    const pump = (count: number): string => "[sound:x".repeat(count);
+    expect(growthToFull(pump, stripAnkiHtml, PUMP)).toBeLessThan(LINEAR_GROWTH);
+    const result = stripAnkiHtml(pump(PUMP));
     // No closing bracket anywhere, so nothing matches and nothing is removed.
     expect(result.sounds).toBe(0);
     expect(result.text).toHaveLength(PUMP * "[sound:x".length);
-    expect(elapsed).toBeLessThan(100);
   });
 
   it("strips a script a first pass formed out of the text around it", () => {
@@ -644,12 +644,9 @@ describe("the field patterns walk a field once", () => {
 
   it("answers 50,000 ::z repetitions after an opener without re-walking the tail", () => {
     // The exact pump #8 names: an opener the pattern cannot finish.
-    const field = "{{{{c0::::" + "::z".repeat(PUMP);
-    const started = performance.now();
-    const result = canonicalizeCloze(field);
-    const elapsed = performance.now() - started;
-    expect(result.ok).toBe(false);
-    expect(elapsed).toBeLessThan(100);
+    const pump = (count: number): string => "{{{{c0::::" + "::z".repeat(count);
+    expect(growthToFull(pump, canonicalizeCloze, PUMP)).toBeLessThan(LINEAR_GROWTH);
+    expect(canonicalizeCloze(pump(PUMP)).ok).toBe(false);
   });
 });
 
@@ -829,37 +826,37 @@ describe("the tag steps answer what the oracle answers", () => {
   });
 
   it("strips the field at the reader's cap in linear time", () => {
-    const atCap = (prefix: string): string => prefix.repeat(Math.floor(CAP / prefix.length));
-    const adversarial = [
-      atCap("<a"),
-      atCap("<a "),
-      atCap("</d"),
-      atCap("<script "),
-      atCap("<script>"),
-      atCap("<style x"),
-      atCap("<anki-mathjax"),
-      atCap("<anki-mathjax>"),
-      atCap("<img "),
-      atCap("<img>"),
-      atCap("\\("),
-      atCap("\\["),
+    const prefixes = [
+      "<a",
+      "<a ",
+      "</d",
+      "<script ",
+      "<script>",
+      "<style x",
+      "<anki-mathjax",
+      "<anki-mathjax>",
+      "<img ",
+      "<img>",
+      "\\(",
+      "\\[",
     ];
-    for (const field of adversarial) {
-      const started = performance.now();
-      const stripped = stripAnkiHtml(field);
-      const elapsed = performance.now() - started;
-      // A pattern here spent one to nine SECONDS on the same input; the bar is
-      // an order of magnitude above the measured cost and three below the fault.
-      expect(elapsed, `field of ${String(field.length)} chars`).toBeLessThan(200);
-      expect(stripped.text.length).toBeLessThanOrEqual(field.length);
+    for (const prefix of prefixes) {
+      const fill = (size: number): string => prefix.repeat(Math.floor(size / prefix.length));
+      // A pattern here spent one to nine SECONDS on the same input, and grew
+      // sixteenfold from a quarter of the field to all of it.
+      expect(growthToFull(fill, stripAnkiHtml, CAP), `${prefix} to the cap`).toBeLessThan(
+        LINEAR_GROWTH,
+      );
+      const field = fill(CAP);
+      expect(stripAnkiHtml(field).text.length).toBeLessThanOrEqual(field.length);
     }
-  });
+  }, 60_000);
 
   /**
    * The shapes that took the old fallback route - a join that builds the closer
    * for an opener the walk has already passed (case (a)), and the walk
    * re-scanning for `>` from every start - plus a 15 000-level join chain behind
-   * an unclosed `<style>`. Each is timed at the cap, and each also runs against
+   * an unclosed `<style>`. Each is timed up to the cap, and each also runs against
    * the oracle on a copy a few KiB long: the oracle re-reads the field from the
    * start once per removal, so the chain and the repeated case-(a) shape are far
    * too slow to compare at the cap.
@@ -900,31 +897,32 @@ describe("the tag steps answer what the oracle answers", () => {
     };
     const SMALL = 4 * 1024;
     for (const [name, shape] of Object.entries(shapes)) {
+      expect(growthToFull(shape, stripAnkiHtml, CAP), `${name} to the cap`).toBeLessThan(
+        LINEAR_GROWTH,
+      );
       const field = shape(CAP);
-      const started = performance.now();
-      const stripped = stripAnkiHtml(field);
-      const elapsed = performance.now() - started;
-      expect(elapsed, `${name} at ${String(field.length)} chars`).toBeLessThan(200);
-      expect(stripped.text.length).toBeLessThanOrEqual(field.length);
+      expect(stripAnkiHtml(field).text.length).toBeLessThanOrEqual(field.length);
       const small = shape(SMALL);
       expect(stripAnkiHtml(small), `${name} at ${String(small.length)} chars`).toEqual(byPattern(small));
     }
-  });
+  }, 60_000);
 
   it("settles a chain of joins, agreeing with the leftmost rule", () => {
     // #12's own shape: a removal joins the text on either side into the element
     // AROUND it, so a pass per level - which is what the loop did - cost a walk of
     // the whole field per level: fifteen thousand of them took 76 seconds. The
     // walk reaches the same fixed point in one pass, so the depth here is the real
-    // one.
-    let text = "<scr<script>x</script>ipt>";
-    for (let level = 1; level < 15_000; level += 1) text = `<scr${text}ipt></script>`;
-    const field = text.padEnd(CAP, "z");
-    const started = performance.now();
-    const stripped = stripAnkiHtml(field);
-    expect(performance.now() - started).toBeLessThan(200);
-    expect(stripped).toEqual(byPattern(field));
-  });
+    // one, and a quarter of the field holds a quarter of the levels.
+    const chain = (size: number): string => {
+      let text = "<scr<script>x</script>ipt>";
+      const levels = Math.round((15_000 * size) / CAP);
+      for (let level = 1; level < levels; level += 1) text = `<scr${text}ipt></script>`;
+      return text.padEnd(size, "z");
+    };
+    expect(growthToFull(chain, stripAnkiHtml, CAP)).toBeLessThan(LINEAR_GROWTH);
+    const field = chain(CAP);
+    expect(stripAnkiHtml(field)).toEqual(byPattern(field));
+  }, 60_000);
 
   /**
    * The tokens the strip has to get right, plus arbitrary fragments. `&` is
