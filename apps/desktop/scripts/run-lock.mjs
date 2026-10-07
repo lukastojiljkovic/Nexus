@@ -34,6 +34,8 @@
 // be a second copy of a rule nothing in this file could check. On POSIX the temp
 // directory is shared between users and the uid goes into the name; on Windows
 // it is per-user already.
+// The lock FILE is created owner-only for the same reason: its name must be
+// predictable, so its contents (one pid) must not be readable by anyone else.
 import { closeSync, openSync, readFileSync, unlinkSync, writeSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -120,7 +122,12 @@ export function acquire(kind, { dir, uid, alive = running } = {}) {
   // process holding it, and retrying there would be a spin.
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      const fd = openSync(path, "wx");
+      // `wx` and an explicit owner-only mode: the lock's NAME has to stay
+      // predictable - a second harness run has to find this very file - so the
+      // file itself is what must not be readable by anyone else on the machine
+      // (js/insecure-temporary-file, #19). `wx` alone already refuses a symlink
+      // or a file someone else planted, because it never follows or reuses one.
+      const fd = openSync(path, "wx", 0o600);
       writeSync(fd, `${String(process.pid)} ${kind}\n`);
       closeSync(fd);
       return { ok: true, path, holder: null, release: () => release(path) };

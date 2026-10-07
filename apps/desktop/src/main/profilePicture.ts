@@ -1,7 +1,7 @@
-import { readFile, stat } from "node:fs/promises";
 import type { BrowserWindow, OpenDialogOptions } from "electron";
 import { dialog, nativeImage } from "electron";
 import { centerSquareCrop, isInlineImageMime, sniffMime, PROFILE_PICTURE_SIZE } from "@nexus/core";
+import { readFileBounded } from "./boundedRead.js";
 import { shellStrings } from "./shellStrings.js";
 import type { ProfilePicturePickErrorCode } from "../shared/ipc.js";
 
@@ -65,8 +65,9 @@ const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "gif", "webp"];
  *
  * Order matters and is deliberate, mirroring `handleDashboardPick`:
  *
- * 1. `stat` BEFORE the read, so an oversized file is refused without ever being
- *    loaded — reading first and measuring after would make the cap decorative.
+ * 1. The cap is measured on the opened file BEFORE the bytes are read, so an
+ *    oversized file is refused without ever being loaded — reading first
+ *    and measuring after would make the cap decorative.
  * 2. Sniff the bytes, never the extension (SEC-FILE-02). A `.png` whose content
  *    is a PDF sniffs as a PDF and is refused by name.
  * 3. Decode, crop, resize, re-encode — see the module doc for what step 3 is
@@ -97,14 +98,10 @@ export async function pickProfilePicture(
   const filePath = canceled ? null : (filePaths[0] ?? null);
   if (filePath === null) return { status: "canceled" };
 
-  let bytes: Buffer;
-  try {
-    const stats = await stat(filePath);
-    if (stats.size > maxBytes) return { status: "rejected", code: "too-large" };
-    bytes = await readFile(filePath);
-  } catch {
-    return { status: "rejected", code: "unreadable" };
-  }
+  const read = await readFileBounded(filePath, maxBytes);
+  if (read.status === "too-large") return { status: "rejected", code: "too-large" };
+  if (read.status !== "ok") return { status: "rejected", code: "unreadable" };
+  const bytes = read.bytes;
 
   if (!isInlineImageMime(sniffMime(bytes))) {
     return { status: "rejected", code: "unsupported-format" };

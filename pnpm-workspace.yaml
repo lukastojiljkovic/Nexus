@@ -248,6 +248,19 @@ overrides:
   # second prebuild to the package for a feature nothing here uses. Retires
   # when excalidraw's own sass reaches 1.79.
   "@excalidraw/excalidraw>sass": 1.79.4
+  # GHSA-238p-pmpm-9mq7 — prototype pollution that can bypass KaTeX's trust
+  # restrictions, fixed in 0.18.2. SHIPPED: the canvas reaches it through
+  # @excalidraw/mermaid-to-excalidraw > mermaid, and mermaid still asks for
+  # katex ^0.16 in its latest release (12.1.0 at the time of writing). The app's
+  # own katex is already on 0.18, so this moves mermaid's copy onto the same
+  # patched line. Mermaid's one use is `katex.renderToString` with
+  # `throwOnError`, `displayMode` and `output`, all unchanged in 0.18. Retires
+  # when mermaid depends on a patched katex itself.
+  "mermaid>katex": ^0.18.11
+  # GHSA-68fv-2mgg-jv7q — event-loop DoS through indexed source-map section
+  # offsets. Development only, through postcss and sass; 1.2.2 is the fix and
+  # the same major.
+  source-map-js: ^1.2.2
 
 # One four-line patch, and it is a TYPES bug rather than a code one. 13.0.3
 # added an `exports` map whose `"."` is a bare `"./lib/index.js"` with no

@@ -1,4 +1,6 @@
+import fc from "fast-check";
 import { describe, expect, it } from "vitest";
+import { growthToFull, LINEAR_GROWTH } from "../testing/growth.js";
 import { renderNoteMarkdown } from "./noteMarkdown.js";
 import { buildNoteUpdate, parseMarkdownNote } from "./markdownImport.js";
 import type { MarkdownBlock, MarkdownInline, MarkdownInlineMarks } from "./markdownImport.js";
@@ -413,6 +415,76 @@ describe("buildNoteUpdate", () => {
   it("renders nothing for a document with no blocks", () => {
     expect(renderNoteMarkdown(buildNoteUpdate([]), { attachments: new Map(), rootPrefix: "../" })).toBe(
       "",
+    );
+  });
+});
+/**
+ * A bare URL's sentence punctuation used to be trimmed with a `[.,;:!?)\]}'"»…]+$`
+ * pattern, which re-walked the run from every position in it: a URL of a
+ * megabyte of dots with a letter after them took minutes. The set and the
+ * backward scan answer the same thing, and the reader's cap is what says so.
+ */
+describe("a bare URL's punctuation is trimmed in one pass", () => {
+  it("leaves the punctuation the sentence owns behind the link", () => {
+    expect(blocksOf("see http://example.com/a... and x")[1]).toEqual(
+      paragraph(
+        text("see "),
+        text("http://example.com/a", { link: "http://example.com/a" }),
+        text("... and x"),
+      ),
+    );
+    // A URL that IS punctuation keeps nothing, and one with a trailing slash
+    // keeps the slash: only the class's own characters come off.
+    expect(blocksOf("http://example.com/a/")[1]).toEqual(
+      paragraph(text("http://example.com/a/", { link: "http://example.com/a/" })),
+    );
+  });
+
+  it("parses a document at the reader's cap in linear time", () => {
+    const cap = 1024 * 1024;
+    const url = (size: number): string => `http://${".".repeat(size - 8)}x`;
+    const parse = (text: string) => parseMarkdownNote(text, FALLBACK);
+    expect(growthToFull(url, parse, cap)).toBeLessThan(LINEAR_GROWTH);
+    expect(parse(url(cap)).blocks.length).toBeGreaterThan(0);
+  }, 60_000);
+});
+
+/**
+ * A bare URL's trailing sentence punctuation as `main` removed it, with the
+ * class `/[.,;:!?)\]}'"\u00bb\u2026]+$/` this branch replaced by a scan over the
+ * same characters. The link the parser emits is exactly the string that step
+ * produces, so the property below compares `parseMarkdownNote` against the old
+ * class through it.
+ */
+function trimTrailingPunctuationReference(value: string): string {
+  return value.replace(/[.,;:!?)\]}'"\u00bb\u2026]+$/g, "");
+}
+
+describe("a bare URL's trailing punctuation comes off the way main did it", () => {
+  const TOKENS = [
+    ".", ",", ";", ":", "!", "?", ")", "]", "}", "'", '"', "\u00bb", "\u2026",
+    "a", "B", "1", "0", "-", "/", "%", "=", "+", "$",
+  ];
+
+  it("agrees with the old class on generated URL tails", () => {
+    const tail = fc
+      .array(fc.constantFrom(...TOKENS), { maxLength: 30 })
+      .map((parts) => parts.join(""));
+    fc.assert(
+      fc.property(tail, (value) => {
+        const url = `https://example.com/${value}`;
+        const parsed = parseMarkdownNote(url, FALLBACK);
+        const paragraph = parsed.blocks.find((block) => block.type === "paragraph");
+        const link =
+          paragraph !== undefined && paragraph.type === "paragraph"
+            ? paragraph.content.find(
+                (inline) => inline.type === "text" && inline.marks.link !== undefined,
+              )
+            : undefined;
+        const text = link !== undefined && link.type === "text" ? link.text : undefined;
+        expect(text, JSON.stringify(url)).toBe(trimTrailingPunctuationReference(url));
+      }),
+      { numRuns: 500 },
     );
   });
 });

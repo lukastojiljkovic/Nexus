@@ -27,9 +27,19 @@ function controlCharRange(): string {
 /** `/ \ : * ? " < > |` plus every C0/C1 control character. */
 const FORBIDDEN_CHARS = new RegExp(`[/\\\\:*?"<>|${controlCharRange()}]`, "g");
 
-/** A trailing run of dots and/or spaces — Windows silently drops these, which would otherwise collapse two distinct names into one. */
-const TRAILING_DOTS_AND_SPACES = /[. ]+$/;
-
+/**
+ * A trailing run of dots and/or spaces removed, in one pass. Windows silently
+ * drops these, which would otherwise collapse two distinct names into one.
+ *
+ * A scan rather than `/[. ]+$/`, which re-walked the run from every position in
+ * it: a note title of a hundred thousand dots spent seconds here, and a title is
+ * as hostile as the archive it came from.
+ */
+function trimTrailingDotsAndSpaces(text: string): string {
+  let end = text.length;
+  while (end > 0 && (text[end - 1] === "." || text[end - 1] === " ")) end -= 1;
+  return text.slice(0, end);
+}
 const MAX_SEGMENT_LENGTH = 80;
 
 /** Windows' reserved device names. Reserved case-insensitively AND with any extension appended — `CON.txt` is still the console device — so the check below reads the stem, not the whole segment. */
@@ -71,11 +81,11 @@ const RESERVED_DEVICE_NAMES = new Set<string>([
 export function sanitizePathSegment(raw: string, fallback: string): string {
   let result = raw.replace(FORBIDDEN_CHARS, "-");
   result = result.replace(/\s+/g, " ").trim();
-  result = result.replace(TRAILING_DOTS_AND_SPACES, "");
+  result = trimTrailingDotsAndSpaces(result);
   // Stripped twice on purpose: the cap slices blind, so it can re-expose a
   // trailing dot or space that Windows then drops silently — which is how two
   // names that differ only past the cap would land on one file.
-  result = result.slice(0, MAX_SEGMENT_LENGTH).trim().replace(TRAILING_DOTS_AND_SPACES, "");
+  result = trimTrailingDotsAndSpaces(result.slice(0, MAX_SEGMENT_LENGTH).trim());
 
   if (result === "" || result === "." || result === "..") {
     return fallback;

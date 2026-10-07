@@ -840,7 +840,35 @@ function isWordBoundary(ch: string): boolean {
 
 /** A bare URL in running text, linked as itself. `<>` and whitespace end it; sentence punctuation is trimmed back off. */
 const BARE_URL = /https?:\/\/[^\s<>]+/g;
-const TRAILING_PUNCTUATION = /[.,;:!?)\]}'"»…]+$/;
+
+/**
+ * The sentence punctuation a bare URL may have swallowed, as a set rather than
+ * the `[.,;:!?)\]}'"\u00bb\u2026]+$` class it was: that class re-walked the run
+ * from every position in it, which is quadratic on a URL of a megabyte of dots
+ * with a letter after them, and a hostname never needs a pattern to stay linear.
+ */
+const TRAILING_PUNCTUATION = new Set([
+  ".",
+  ",",
+  ";",
+  ":",
+  "!",
+  "?",
+  ")",
+  "]",
+  "}",
+  "'",
+  '"',
+  "\u00bb",
+  "\u2026",
+]);
+
+/** `value` without its trailing run of sentence punctuation. */
+function trimTrailingPunctuation(value: string): string {
+  let end = value.length;
+  while (end > 0 && TRAILING_PUNCTUATION.has(value[end - 1] ?? "")) end -= 1;
+  return value.slice(0, end);
+}
 
 /**
  * Appends one text run, autolinking bare URLs on the way. Skipped inside code
@@ -856,7 +884,7 @@ function pushText(out: MarkdownInline[], value: string, marks: MarkdownInlineMar
   }
   let index = 0;
   for (const match of value.matchAll(BARE_URL)) {
-    const url = match[0].replace(TRAILING_PUNCTUATION, "");
+    const url = trimTrailingPunctuation(match[0]);
     if (url.length === 0 || match.index < index) continue;
     appendRun(out, value.slice(index, match.index), marks);
     appendRun(out, url, { ...marks, link: url });

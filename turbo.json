@@ -13,6 +13,11 @@
   // the tree instead of trusting it: every `extends` that escapes a package
   // resolves to a path that must appear below.
   "globalDependencies": ["eslint.config.mjs", "tsconfig.base.json"],
+  // `turbo` writes its own block into a root `AGENTS.md` whenever it detects a
+  // coding agent, so an agent's first `pnpm build` dirtied the tree with a file
+  // nobody asked for. The project's instructions live in CLAUDE.md and
+  // CONTRIBUTING.md; turbo's own docs ship in its package either way.
+  "agentGuidance": false,
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

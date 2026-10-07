@@ -370,7 +370,11 @@ const DATE_PARTS: Record<CsvFinanceDateFormat, { pattern: RegExp; day: 1 | 2 | 3
 };
 
 /** A trailing clock a statement often appends to its booking date („31.08.2026. 14:32"). Dropped: FIN stores a bare LOCAL day, so the time is not a fact this ledger keeps. */
-const TRAILING_TIME = /\s+\d{1,2}:\d{2}(?::\d{2})?$/;
+// One required whitespace, not `\s+`: the cell is trimmed before this runs and
+// trimmed again after, so one space gives the same answer as the whole run
+// would - and a run re-scanned from every start is quadratic on a cell of
+// spaces (#9).
+const TRAILING_TIME = /(?<=\s)\d{1,2}:\d{2}(?::\d{2})?$/;
 
 /** A real calendar day, not merely a parseable one: `Date` rolls 30 February into March, which is exactly the plausible-but-wrong value a typo produces. */
 function isRealDay(year: number, month: number, day: number): boolean {
@@ -700,7 +704,14 @@ export function translateCsvFinance(
   //    could honestly turn it into the account's own currency.
   if (currencyColumn !== -1) {
     for (const cell of columnCells(rows, currencyColumn)) {
-      const code = cell.trim().replace(/\.+$/, "").toUpperCase();
+      // The trailing dots come off with a scan rather than `/\.+$/`: that
+      // pattern re-walks the run from every start, which is quadratic on a cell
+      // of dots that never ends in one (#10).
+      const trimmed = cell.trim();
+      let end = trimmed.length;
+      // 0x2e is `.`.
+      while (end > 0 && trimmed.charCodeAt(end - 1) === 0x2e) end -= 1;
+      const code = trimmed.slice(0, end).toUpperCase();
       if (code.length === 0 || code === target.currency) continue;
       return {
         status: "refused",

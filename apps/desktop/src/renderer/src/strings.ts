@@ -112,9 +112,17 @@ type Node = Record<string, unknown>;
  *
  * Recurses rather than reassigning precisely so that subtree aliases taken at
  * module scope stay live. Arrays are replaced element-wise for the same reason.
+ *
+ * Exported for the test that pins the three refused key names below; the
+ * module's own caller is `applyLocale`.
  */
-function overwrite(target: Node, source: Node): void {
+export function overwrite(target: Node, source: Node): void {
   for (const key of Object.keys(source)) {
+    // A source parsed from JSON can carry `__proto__` as an own property, and
+    // the recursive branch would then follow `target[key]` into
+    // `Object.prototype` and write there for real. Refused rather than walked:
+    // no copy table has a leaf under any of these three names.
+    if (key === "__proto__" || key === "constructor" || key === "prototype") continue;
     const value = source[key];
     if (value === null || typeof value !== "object") {
       target[key] = value;
