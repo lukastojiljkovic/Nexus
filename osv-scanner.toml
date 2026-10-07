@@ -1,0 +1,15 @@
+# Advisories osv-scanner (and OpenSSF Scorecard's Vulnerabilities check) should not count, each with its reason.
+#
+# Both packages are reached only through @electron/get, the install-time downloader of the Electron binary. They
+# never ship in the app and never run in it, and no patched version exists upstream. The matching Dependabot alerts
+# are dismissed as tolerable risk with the same reason. `ignoreUntil` makes the scanner raise them again for review.
+
+[[IgnoredVulns]]
+id = "GHSA-ch52-4w7c-c8xp"
+ignoreUntil = 2027-04-07T00:00:00Z
+reason = "http-cache-semantics via @electron/get (got -> cacheable-request), install time only; not shipped; no patched version upstream."
+
+[[IgnoredVulns]]
+id = "GHSA-hp3w-g68c-fv3c"
+ignoreUntil = 2027-04-07T00:00:00Z
+reason = "sprintf-js via @electron/get (global-agent -> roarr), install time only; not shipped; no patched version upstream."
