@@ -85,8 +85,9 @@ history, not a live link.
 
 ## Conventions
 
-- **Documents are English. User-facing copy is Serbian** and lives in
-  `strings.sr.ts`, never here.
+- **Documents are English. User-facing copy is Serbian and English**, and lives
+  in the typed string tables — `strings.sr.ts` is the source of truth and
+  `strings.en.ts` its English counterpart — never here.
 - **A document that has stopped being true is worse than a missing one.** When
   work finishes, the status moves in `STATUS.md` and the narrative moves to
   `log/` — in the same pass, not later.

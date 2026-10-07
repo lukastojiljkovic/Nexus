@@ -6,18 +6,14 @@ itself. Security reports are welcome and are taken seriously.
 
 ## Supported versions
 
-**No version of Nexus has been released yet.** There are no tags, no GitHub
-releases and no published builds, so there is nothing to support in the usual
-sense — any copy in circulation today is somebody's local build.
+The current release line is **1.4.x**. The latest release is supported, and so
+is the release before it for as long as it is the previous minor.
 
 | Version | Supported |
 | --- | --- |
-| `main` (development) | Yes — fixes land here first |
-| 1.3.0 and earlier | No build of these has ever been published |
-
-Once the first public release exists, this table becomes: the latest release is
-supported, and so is the release before it for as long as it is the previous
-minor.
+| `1.4.x` (latest release) | Yes |
+| 1.3.x and earlier | No — no release line before 1.4 has been published |
+| `main` (development) | Not supported, but fixes land here first |
 
 ## Reporting a vulnerability
 
@@ -30,9 +26,8 @@ That is also reachable through the repository's **Security** tab, under
 problem; a public issue is a working exploit notice for everyone running the
 app.
 
-If private reporting is unavailable — the maintainer has to switch it on, and it
-is part of the public-launch checklist — email
-**stojiljkovic.d.luka@gmail.com** instead.
+Private vulnerability reporting is enabled on this repository. If GitHub is not
+a route you can use, email **stojiljkovic.d.luka@gmail.com** instead.
 
 A useful report contains the affected version or commit, the platform, what you
 did, what happened, and a proof of concept if you have one. A report that says
