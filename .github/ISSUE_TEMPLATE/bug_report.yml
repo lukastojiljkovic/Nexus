@@ -18,7 +18,7 @@ body:
     attributes:
       label: Nexus version
       description: Shown in the About card in Settings. If you built it yourself, the commit is more useful.
-      placeholder: "1.4.0, or the commit you built from"
+      placeholder: "1.5.0, or the commit you built from"
     validations:
       required: true
 

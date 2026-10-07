@@ -96,7 +96,7 @@ product never tags a pre-release and the text order the old comparison used
 failure is silent on the automatic check and reported on „Proveri sada", because
 an unasked question on a shared address is not an error the user needs to see.
 
-**Nothing downloads until the user presses Install.** The check offers a version
+**Nothing downloads until the user presses Download and install.** The check offers a version
 and the release notes, rendered as safe text — never HTML.
 
 **Verification, all required; any failure deletes the file and offers the

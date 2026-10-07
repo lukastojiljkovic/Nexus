@@ -268,15 +268,15 @@ a `DOCKER_CONTEXT` pointing at another machine would make every path in the
 argv, and every answer about „is the container still there", be about a computer
 the user is not sitting at.
 
-## DEV-008 — 1.4.0 is released without a code signature
+## DEV-008 — Releases ship without a code signature
 
 - **Date:** 2026-10-02 · **Status:** **confirmed by founder 2026-10-02**
   (*„Napravi release i kaži da je signing trenutno stopiran ali da je projekat
   sada open source za sve koji žele da se uvere da je sa kodom sve u redu"*).
 - **What:** SEC-EL-07 requires releases to be code-signed, and SEC-SC-05
-  releases only CI-built, signed artifacts. The 1.4.0 Windows installer and the
-  Linux files are CI-built but carry no signature, and Windows shows a
-  SmartScreen warning on first run.
+  releases only CI-built, signed artifacts. The 1.4.0 and 1.5.0 Windows
+  installers and the Linux files are CI-built but carry no Authenticode
+  signature, and Windows shows a SmartScreen warning on first run.
 - **Why accepted:** no signing route is in place yet, and the source of the
   release is public. Anyone can read what the installer does, and the files can
   be tied to the code they came from without trusting a publisher name.
@@ -297,7 +297,7 @@ the user is not sitting at.
      clause, so the missing Authenticode certificate no longer blocks an update;
      SEC-EL-07's code-signing clause stays open here. It is offered only when
      the user turns update checks on, and nothing downloads until they press
-     Install.
+     **Download and install**.
 - **Revisit trigger:** a signing route (SignPath Foundation for open-source
   projects, or Azure Artifact Signing). The first signed release closes this
   deviation for the SmartScreen warning and for SEC-EL-07's code-signing clause

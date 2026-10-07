@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format is
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.5.0] - 2026-10-08
 
 ### Added
 
@@ -17,13 +17,13 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   The question is asked of a new install and of a device upgrading from an older
   version alike.
 - **An update check you can turn on.** In **Offline + update checks** mode Nexus
-  looks for a new version at most once a day and whenever you press **Check now**
-  on the **About** card, shows the version and its release notes, and downloads
-  nothing until you press **Install**. Every download is verified against a key
-  built into the app; anything that does not verify is deleted and never run. On
-  Linux the release page is offered instead of a self-install. The mode lives in
-  **Settings → Privacy → Network and updates**, and a change takes effect after
-  a restart.
+  looks for a new version at most once a day and whenever you press **Check
+  now** on the **About** card, shows the version and its release notes, and
+  downloads nothing until you press **Download and install**. Every download is
+  verified against a key built into the app; anything that does not verify is
+  deleted and never run. On Linux the release page is offered instead of a
+  self-install. The mode lives in **Settings → Privacy → Network and updates**,
+  and a change takes effect after a restart.
 
 ### Removed
 
@@ -149,4 +149,5 @@ tags and no downloads.
   shown in the application, rather than written by hand.
 - **Linux builds** — AppImage, tarball and a Gentoo ebuild.
 
+[1.5.0]: https://github.com/lukastojiljkovic/Nexus/releases/tag/v1.5.0
 [1.4.0]: https://github.com/lukastojiljkovic/Nexus/releases/tag/v1.4.0

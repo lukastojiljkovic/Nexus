@@ -83,7 +83,7 @@ Constraints that are deliberate:
   user rather than assumed by the app.
 - Updates are opt-in. On first start Nexus asks whether it may check GitHub
   for new versions, offline is the default, nothing downloads until the user
-  presses Install, and an installer runs only after its signature and hash
+  presses Download and install, and an installer runs only after its signature and hash
   verify (ADR-089).
 - Deleting a hosted sync account from inside the app is not implemented; that
   gap is recorded in the project's own status notes.
