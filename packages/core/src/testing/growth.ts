@@ -1,7 +1,7 @@
 /**
- * How much longer `run` takes when its input grows from a quarter of `size` to
- * all of it: about four times for a pass that reads its input once, about
- * sixteen for one that re-reads what it has already read.
+ * How much longer `run` takes when its input grows from a sixteenth of `size`
+ * to all of it: about sixteen times for a pass that reads its input once,
+ * about 256 for one that re-reads what it has already read.
  *
  * The linear-time tests used to hold each pass to a wall-clock bar, and a bar
  * measures the machine as much as the code. CI runs every package's suite at
@@ -10,31 +10,35 @@
  * growth is what made the old patterns a fault, so growth is what these tests
  * hold, against `LINEAR_GROWTH`.
  *
+ * The step is sixteenfold because CI's load is not steady either: a strip that
+ * grew 2.2 times across a fourfold step on a desktop grew 8.5 times there,
+ * which leaves a fourfold step no room between one pass (4) and a re-read (16).
+ *
  * One untimed run warms the JIT. Then the two sizes run three times each,
  * alternating so that a busy stretch of the machine falls on both, and the
  * fastest of each is kept: a collector pause or a neighbouring suite only ever
- * adds time. The quarter is floored at `FLOOR_MS`, because a ratio over a run
- * too short to time is noise.
+ * adds time. The small run is floored at `FLOOR_MS`, because a ratio over a
+ * run too short to time is noise.
  */
 export function growthToFull<T>(
   build: (size: number) => T,
   run: (input: T) => unknown,
   size: number,
 ): number {
-  const quarter = build(Math.floor(size / 4));
+  const small = build(Math.floor(size / 16));
   const full = build(size);
-  run(quarter);
-  let quarterMs = Number.POSITIVE_INFINITY;
+  run(small);
+  let smallMs = Number.POSITIVE_INFINITY;
   let fullMs = Number.POSITIVE_INFINITY;
   for (let round = 0; round < 3; round += 1) {
-    quarterMs = Math.min(quarterMs, timed(run, quarter));
+    smallMs = Math.min(smallMs, timed(run, small));
     fullMs = Math.min(fullMs, timed(run, full));
   }
-  return fullMs / Math.max(quarterMs, FLOOR_MS);
+  return fullMs / Math.max(smallMs, FLOOR_MS);
 }
 
-/** Twice the growth of one pass, half the growth of a pass that re-reads. */
-export const LINEAR_GROWTH = 8;
+/** Four times the growth of one pass, a quarter of the growth of a re-read. */
+export const LINEAR_GROWTH = 64;
 
 const FLOOR_MS = 2;
 

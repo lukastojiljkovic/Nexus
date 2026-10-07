@@ -843,7 +843,7 @@ describe("the tag steps answer what the oracle answers", () => {
     for (const prefix of prefixes) {
       const fill = (size: number): string => prefix.repeat(Math.floor(size / prefix.length));
       // A pattern here spent one to nine SECONDS on the same input, and grew
-      // sixteenfold from a quarter of the field to all of it.
+      // some 250-fold from a sixteenth of the field to all of it.
       expect(growthToFull(fill, stripAnkiHtml, CAP), `${prefix} to the cap`).toBeLessThan(
         LINEAR_GROWTH,
       );
@@ -912,7 +912,7 @@ describe("the tag steps answer what the oracle answers", () => {
     // AROUND it, so a pass per level - which is what the loop did - cost a walk of
     // the whole field per level: fifteen thousand of them took 76 seconds. The
     // walk reaches the same fixed point in one pass, so the depth here is the real
-    // one, and a quarter of the field holds a quarter of the levels.
+    // one, and a smaller field holds proportionally fewer levels.
     const chain = (size: number): string => {
       let text = "<scr<script>x</script>ipt>";
       const levels = Math.round((15_000 * size) / CAP);
