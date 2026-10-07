@@ -620,6 +620,12 @@
 .set__security-form .nx-button {
   align-self: flex-start;
 }
+/* The export's own button sits under the fields it acts on, at its own width,
+   like every other button on the page; as a direct child of the card's column
+   it stretched across all of it, which the wide categories pane made obvious. */
+.set__export {
+  align-self: flex-start;
+}
 /* Rezervna kopija → Vraćanje iz arhive (IMEX slice 3d) and Uvoz iz arhive
    (ADR-043): sibling blocks below the export, each separated from what is above
    it by the same hairline the sidebar uses between nav groups. */

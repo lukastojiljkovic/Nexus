@@ -977,7 +977,13 @@ function BackupSection({ profileId }: BackupSectionProps) {
           </Checkbox>
         </>
       )}
-      <Button size="sm" variant="primary" disabled={disabled} onClick={() => void runExport()}>
+      <Button
+        size="sm"
+        variant="primary"
+        className="set__export"
+        disabled={disabled}
+        onClick={() => void runExport()}
+      >
         {s.exportButton}
       </Button>
       {saved != null && (
