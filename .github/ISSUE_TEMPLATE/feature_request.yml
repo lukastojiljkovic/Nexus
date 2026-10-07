@@ -39,8 +39,6 @@ body:
     attributes:
       label: Scope
       options:
-        - label: I understand the interface is Serbian only, and that this is a product decision.
-          required: false
         - label: This is about the desktop application or the source in this repository.
           required: false
 

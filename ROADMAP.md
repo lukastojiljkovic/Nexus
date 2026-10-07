@@ -6,31 +6,37 @@ The detailed, dated working notes stay in the repository's own `docs/` tree.
 
 ## Where the project is
 
-The desktop application is **finished and in daily use**, and it has not been
-released yet. Sixteen modules — tasks, calendar, notes, documents, study, habits,
-focus, fitness, finance, electronics and the rest — run against a local
-encrypted database with no network path at all. It installs like an ordinary
-Windows program, and builds exist for Linux as an AppImage, a tarball and a
-Gentoo ebuild.
+The desktop application is **finished and in daily use**, and its first public
+release, 1.4.0, is published. Sixteen modules — tasks, calendar, notes,
+documents, study, habits, focus, fitness, finance, electronics and the rest —
+run against a local encrypted database with no network path at all. It installs
+like an ordinary Windows program, and builds exist for Linux as an AppImage, a
+tarball and a Gentoo ebuild.
 
-The user interface is **Serbian only**. That is a product decision, not a
-missing translation.
+The interface ships in **Serbian and English**. It follows the system language
+on first run and remembers the choice.
 
-## Now — the first public release
+## Now — 1.5.0
 
-Everything on this list is preparation rather than features:
+Release 1.4.0 is published: the Windows installer, the Linux AppImage and the
+tarball, each release carrying checksums, an SBOM, build provenance and the
+third-party notices generated from the exact released tree. The open-source
+paperwork (licence, security policy, contribution rules, privacy statement,
+terms, changelog) and the repository's own settings (branch protection, secret
+scanning, Dependabot, private vulnerability reporting, Discussions) are in
+place.
 
-- the open-source paperwork: licence, security policy, contribution rules,
-  privacy statement, terms, changelog;
-- the release pipeline: a tagged build that produces the Windows installer and
-  the Linux artefacts, with checksums, an SBOM, build provenance and the
-  third-party notices generated from the exact released tree;
-- Windows code signing, so the installer stops triggering a SmartScreen warning;
-- the repository's own settings: branch protection, secret scanning, Dependabot,
-  private vulnerability reporting, Discussions.
+The next release is tracked in the
+[1.5.0 milestone](https://github.com/lukastojiljkovic/Nexus/milestone/1):
 
-**Nothing is downloadable from here until signing is settled** — an unsigned
-installer is not something to hand to strangers.
+- Settings reorganised into categories and sub-pages, so a setting is found
+  without scrolling past twenty-odd cards;
+- an opt-in update check. On first start the user chooses between offline only,
+  which stays the default, and offline plus update checks, which contacts GitHub
+  only to find and download new versions of Nexus.
+
+Still open after that: Windows code signing, so the installer stops triggering
+a SmartScreen warning.
 
 ## Next — optional sync, and the web app
 

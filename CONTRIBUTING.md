@@ -10,7 +10,7 @@ under.
   intend. A PR that changes direction is harder to accept than to discuss.
 - **One change per pull request.** No drive-by refactors, no reformatting, no
   "while I was here". A reviewable diff is the point.
-- The user interface is **Serbian only**, by decision. Code, comments,
+- The user interface ships in **Serbian and English**. Code, comments,
   identifiers and documentation are **English**.
 
 ## Getting it running
@@ -98,14 +98,28 @@ Apache-2.0, the DCO is the lighter of the two and the one most contributors have
 already agreed to. **This is a recommendation the maintainer has not yet
 confirmed**; see the pull request that added this file.
 
-## An English locale
+## Translations
 
-**Welcome**, and it is a mechanical extraction rather than a redesign: the
-user-facing copy is centralised in `strings.sr.ts`, so a second locale means a
-second table with the same keys and a way to choose between them. The maintainer
-has not decided whether the language switch belongs in Settings before or after
-the first release; open an issue if you want to work on it, so the decision and
-the work land together.
+**Welcome.** Both languages ship today: `strings.sr.ts` is the **source of
+truth**, and `strings.en.ts` is the English counterpart. Every user-facing string
+is a leaf in one of those typed tables, and `strings.ts` holds them in a
+`Record<Locale, Strings>` - so the compiler reports one error per string a
+locale has not translated and one per key it invented. A locale cannot be
+half-added or half-changed and still type-check.
+
+To add or change a string:
+
+1. Add or edit the leaf in `strings.sr.ts`; that is the table everything else is
+   checked against.
+2. Add or edit the matching leaf in `strings.en.ts` with the English text.
+3. Run `pnpm --filter @nexus/desktop test` (or `pnpm test` from the root), which
+   runs `apps/desktop/src/renderer/src/strings.test.ts`. That suite pins the
+   locale list, checks that English is a whole translation rather than a copy of
+   Serbian, and covers the plural and `Intl` rules each language uses.
+
+The language is a device preference: it follows the system locale on first run
+- Serbian when that starts with `sr`, English otherwise - and is remembered
+afterwards. The switch is in Settings.
 
 ## AI coding tools
 

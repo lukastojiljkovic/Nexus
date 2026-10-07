@@ -4,15 +4,12 @@
 
 | You want to | Go to |
 | --- | --- |
-| Ask a question, or show what you built | **Discussions** (Q&A and Show and tell) |
+| Ask a question, or show what you built | **Discussions** — the Q&A and Show and tell categories |
 | Report something that is broken | **Issues** — use the bug report form |
 | Ask for a feature | **Issues** — use the feature request form |
 | Report a security problem | **Not an issue.** See [SECURITY.md](SECURITY.md) |
 | Read the licence or the terms | [LICENSE](LICENSE), [TERMS.md](TERMS.md) |
 | Check what data leaves your device | [PRIVACY.md](PRIVACY.md) |
-
-Discussions has to be switched on by the maintainer, which happens with the
-public launch. Until then, issues are the only channel.
 
 ## Before opening an issue
 
@@ -25,10 +22,12 @@ public launch. Until then, issues are the only channel.
 
 ## What is in scope
 
-The desktop application, and the source in this repository. The user interface
-is **Serbian only** — that is a decision, not an oversight, so "the app is not in
-English" is not a bug. An English locale is welcome as a contribution; see
-[CONTRIBUTING.md](CONTRIBUTING.md).
+The desktop application, and the source in this repository. The interface ships
+in **Serbian and English** and follows the system language on first run; the
+choice is changeable in Settings. A missing or wrong translation is a bug like
+any other, and it is welcome as a contribution; see
+[CONTRIBUTING.md](CONTRIBUTING.md) for how a string is added to both
+`strings.sr.ts` and `strings.en.ts`.
 
 The optional sync service is **not running anywhere**: no hosted backend exists,
 and the shipped build cannot be pointed at one. Issues that assume a working
