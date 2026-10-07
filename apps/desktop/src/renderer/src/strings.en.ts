@@ -5627,8 +5627,46 @@ export const en = {
      * nothing is lost, the cards come back the moment the box is cleared.
      */
     searchEmptyDescription: "Clear the search to bring back all sections.",
-    /** The page's table of contents, above the cards — a landmark name, never drawn. */
-    indexLabel: "Settings sections",
+    /**
+     * SET-015: the eight categories the rail lists, and the one line each of
+     * them says about itself. `categoryTitle` is the rail row and the pane
+     * heading; `categorySummary` is the subtitle under the heading (and the
+     * second line of a row on the narrow root).
+     */
+    categoryTitle: {
+      profile: "Profile and security",
+      appearance: "Appearance",
+      keyboard: "Keyboard",
+      modules: "Modules",
+      notifications: "Notifications",
+      data: "Data",
+      privacy: "Privacy",
+      about: "About",
+    },
+    categorySummary: {
+      profile: "Name and picture, profiles, passcode and auto-lock",
+      appearance: "Language, theme, accent colour, week and clock",
+      keyboard: "Keyboard shortcuts",
+      modules: "Which parts of Nexus are on, and each module's settings",
+      notifications: "What notifies you, and when",
+      data: "Backup, restore, import, export and sync",
+      privacy: "What is stored and where, search history",
+      about: "Version, data location and licences",
+    },
+    /** The rail's own landmark name — a name, never drawn. */
+    categoriesLabel: "Settings categories",
+    /** The back button's accessible name; the visible text is the chevron plus `{name}`. */
+    backTo: "Back to {name}",
+    /** The two sub-page lists (SET-015). */
+    moduleSettingsList: "Module settings",
+    importExportList: "Import and export",
+    /**
+     * The rail badge's accessible text — its visible content is the bare
+     * count. The numeral agrees with the count, so the form is picked with
+     * `dayUnit` at the call site and `{n}` is filled in with the number.
+     */
+    searchResultCountOne: "1 result",
+    searchResultCountMany: "{n} results",
     /** Section-card titles, in the order they appear on the page. */
     sectionTitle: {
       profile: "Profile",
@@ -5653,7 +5691,20 @@ export const en = {
       packs: "Tool packs",
       risk: "Notes on the professional tools",
       notifications: "Notifications",
-      backup: "Backup",
+      backup: "Backup and restore",
+      /**
+       * The eight sub-pages of „Import and export" (SET-015). The text is the
+       * one the block inside each already draws, so a list row and its card
+       * name the same thing rather than two spellings of it.
+       */
+      "import-archive": "Import from an archive",
+      "import-ics": "Import a calendar (.ics)",
+      "export-ics": "Calendar export",
+      "import-apkg": "Import from Anki (.apkg)",
+      "import-csv": "Import tasks (.csv)",
+      "import-fin-csv": "Import a statement (.csv)",
+      "import-llm": "Import via an AI assistant",
+      "import-markdown": "Import notes (.md)",
       sync: "Sync",
       privacy: "Data and privacy",
       about: "About",

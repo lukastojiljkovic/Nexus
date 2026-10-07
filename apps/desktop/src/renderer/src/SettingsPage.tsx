@@ -1,5 +1,5 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
-import type { FormEvent } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { FormEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
   Button,
@@ -8,10 +8,14 @@ import {
   Chip,
   Disclosure,
   EmptyState,
+  Icon,
+  ListRow,
+  NavItem,
   PageHeader,
   Select,
   TextArea,
   TextField,
+  type IconName,
 } from "@nexus/ui";
 import {
   ARCHIVE_MODULE_IDS,
@@ -128,6 +132,7 @@ import {
 } from "./settingsSearch.js";
 import { isDeviceOnlyPanel, moduleSettingsCards } from "./moduleSettings.js";
 import { MODULE_SETTINGS_PANELS } from "./moduleSettingsPanels.js";
+import { moduleIconName } from "./moduleIcon.js";
 import {
   persistLlmImportKind,
   persistLlmPromptLanguage,
@@ -141,7 +146,7 @@ import { collator } from "./intl.js";
 // data with `import()` instead. A type import is erased, so this line costs
 // nothing at runtime.
 import type { LicenceEntry } from "./licences.js";
-import { applyLocale, countUnit, dayUnit, lookup, strings, type Locale } from "./strings.js";
+import { applyLocale, countUnit, dayUnit, fill, lookup, strings, type Locale } from "./strings.js";
 import {
   availableLocales,
   clearStoredLocale,
@@ -152,12 +157,19 @@ import {
 import { useFocusTrap } from "./useFocusTrap.js";
 import { moduleName } from "./moduleName.js";
 import { formatArchiveInstant } from "./timeFormat.js";
-import { useStickyBarHeight } from "./stickyOffset.js";
 import { SyncSection } from "./SyncSettings.js";
+import {
+  SETTINGS_CATEGORIES,
+  categoryOf,
+  subPageListById,
+  visibleSections,
+  type CategoryId,
+  type SettingsLocation,
+} from "./settingsCategories.js";
 
 const THEME_OPTIONS: ThemePreference[] = ["system", "dan", "noc"];
 
-/** DOM id prefix for a section card, so the index below can reach one by section id alone. */
+/** DOM id prefix for a section card, so the screenshot harness can reach one by section id alone. */
 const SECTION_DOM_PREFIX = "set-section-";
 
 function sectionDomId(sectionId: string): string {
@@ -165,136 +177,169 @@ function sectionDomId(sectionId: string): string {
 }
 
 /**
- * The shell's own cards, in the exact order the page renders them — the module
- * cards are spliced in between the two halves, which is where `moduleCards`
- * sits in the JSX.
+/**
+ * SET-015: the width at which „Podešavanja" turns its category rail into a
+ * second column.
  *
- * Deliberately not `buildSettingsIndex`'s `sections`: that list is in the
- * *index's* order (every shell card, then every declared module, flags ignored),
- * which is the right order for matching and the wrong one for a table of
- * contents. An index whose entries are not in the order of the thing they index
- * is worse than none — the reader learns it lies on the first click.
+ * A CONTAINER width, not a viewport one — the app sidebar claims 220px of the
+ * window before this page sees anything, so the viewport is the wrong measure
+ * of „is there room for two columns here". The number is the same one the CSS
+ * states in `styles/settings.css`; the layout itself is a container query, and
+ * this copy exists only so the default LOCATION can be chosen in the wide
+ * layout's terms (see the effect below).
  */
-const SHELL_SECTIONS_BEFORE_MODULES = [
-  "profile",
-  "profiles",
-  "security",
-  "appearance",
-  // ADR-086: the explanation card. Last of the shell's own cards and the first thing
-  // before the module cards, because it summarises both halves.
-  "setup",
-] as const;
-const SHELL_SECTIONS_AFTER_MODULES = [
-  "shortcuts",
-  "modules",
-  // Immediately after „Moduli", because the two answer the same question at two
-  // depths — which parts of Nexus this profile has, and which trades' tools the
-  // one drawer among them carries. A reader who has just decided „Stručne
-  // alatke" is on wants the next card to be what goes in it.
-  "packs",
-  // And right after the toolkits, because it is the long form of what those
-  // toolkits' tools say short. A reader deciding whether to switch „Gradnja i
-  // projektovanje" on meets the answer to „what does this app claim about
-  // regulated work" on the next card, not eight cards later.
-  "risk",
-  "notifications",
-  "backup",
-  // Between „Rezervna kopija" and „Podaci i privatnost", because it is the third
-  // answer to the same question those two answer — where does a copy of my data
-  // go — and because the privacy card's own `sync` sentence reads as a summary
-  // of the card immediately above it rather than a forward reference.
-  "sync",
-  "privacy",
-  "about",
-  "licences",
-] as const;
+const WIDE_LAYOUT_MIN_PX = 760;
 
-/** One entry of the section index: the card's section id and the title it is drawn with. */
-interface SectionIndexEntry {
-  readonly id: string;
-  readonly title: string;
+/**
+ * Where „Podešavanja" was when the page was last left, for the session only.
+ *
+ * Module-level rather than stored: coming back inside one session should land
+ * where the reader was, and nothing about that belongs on disk — a category is
+ * a browsing position, not a preference, exactly like a module page's open
+ * tab. Deliberately not per profile either: the position describes this
+ * session's reading, and a profile switch is a different session.
+ */
+let lastSettingsLocation: SettingsLocation | null = null;
+
+/**
+ * The category the two-column layout opens on when nothing else was chosen.
+ * „Profil i sigurnost" is first in the table's order and is the page's own
+ * subject.
+ */
+const DEFAULT_CATEGORY: CategoryId = "profile";
+
+/**
+ * The nearest scroll container above `node`, or null when the page is not in
+ * one.
+ *
+ * „Scroll the page's scroll container to the top" cannot name a class: the
+ * scroller belongs to the SHELL (`.app__main`), and a page that spelled it
+ * would break the day the shell renamed it. The walk asks the only question
+ * that matters — which ancestor actually scrolls this page — and reads the
+ * answer off the computed style, which stays true whatever the shell calls it.
+ */
+function scrollContainerOf(node: HTMLElement | null): HTMLElement | null {
+  for (
+    let element = node?.parentElement ?? null;
+    element !== null;
+    element = element.parentElement
+  ) {
+    const overflowY = getComputedStyle(element).overflowY;
+    if (overflowY === "auto" || overflowY === "scroll") return element;
+  }
+  return null;
+}
+
+/** How many of the currently visible cards belong to one category — the rail's badge while a query is active. */
+function categoryHitCount(category: CategoryId, cards: ReadonlySet<string>): number {
+  let count = 0;
+  for (const sectionId of cards) if (categoryOf(sectionId) === category) count += 1;
+  return count;
 }
 
 /**
- * The page's table of contents (SET §5).
+ * A rail item's badge: the bare count for the eye and the counted sentence for
+ * a reader.
  *
- * „Podešavanja" is twenty-odd cards long, and until now the only way to reach
- * the twentieth was to scroll past nineteen. This is the answer: every card the
- * filter is currently showing, in page order, sticky at the top of the
- * scroller, and the one being read marked.
- *
- * The mark is typographic — gold text plus weight, the app's single active-state
- * recipe — never a pill, a tab or an inset bar. The jump is instant rather than
- * smooth: this is a keyboard-first index whose whole value is arriving, and a
- * scripted scroll animation is both slower and the one kind of motion
- * `prefers-reduced-motion` cannot reach through CSS.
- *
- * „Which card am I on" is answered by the FIRST entry currently on screen, in
- * page order — not by the last one the observer happened to report, which would
- * make the marker jump backwards on a fast scroll.
+ * The number is `aria-hidden` and the sentence is `.nx-sr-only`, because the
+ * two say the same thing — a reader who heard „4, 4 rezultata" would be told
+ * twice. `searchResultCountOne`/`Many` carry the Serbian numeral agreement and
+ * `dayUnit` picks between them, exactly as the backup result line does.
  */
-function SectionIndex({ entries }: { entries: readonly SectionIndexEntry[] }) {
-  const [current, setCurrent] = useState<string | null>(null);
-  // The strip's real height, published on `.set` so `.set__section`'s
-  // `scroll-margin-top` can be it. It wraps to two or three lines at every size
-  // the app opens at, and to a different number of lines as the filter hides
-  // sections — see `stickyOffset.ts` for the defect the constant it replaced
-  // produced at all three window sizes.
-  const indexHeight = useStickyBarHeight("--set-index-height");
-  // A stable dependency for the effect below: `entries` is a fresh array on
-  // every keystroke in the filter, and re-attaching an observer per render
-  // would be a new observer per keystroke for an unchanged set of cards.
-  //
-  // The separator is written `"\0"` and must stay written that way. Both of
-  // these lines used to carry a LITERAL NUL byte, and a source file with a NUL
-  // in it is a BINARY file to every tool that decides by sniffing: ripgrep
-  // skips it silently, and git's own heuristic stops producing diffs for it. A
-  // 215 KB page that no search reaches is worse than a slower join, and the
-  // escape costs nothing — it is the same string.
-  const ids = entries.map((entry) => entry.id).join("\0");
-
-  useEffect(() => {
-    const nodes = ids
-      .split("\0")
-      .map((id) => document.getElementById(sectionDomId(id)))
-      .filter((node): node is HTMLElement => node !== null);
-    if (nodes.length === 0) return undefined;
-    const onScreen = new Set<string>();
-    const observer = new IntersectionObserver(
-      (records) => {
-        for (const record of records) {
-          if (record.isIntersecting) onScreen.add(record.target.id);
-          else onScreen.delete(record.target.id);
-        }
-        const first = nodes.find((node) => onScreen.has(node.id));
-        if (first !== undefined) setCurrent(first.id.slice(SECTION_DOM_PREFIX.length));
-      },
-      // The band is the top third of the scroller: a card counts as "the one
-      // being read" while its top edge is up there, which is what a reader
-      // means by it. Watching the whole viewport would mark whichever card
-      // merely touches the bottom edge.
-      { rootMargin: "0px 0px -66% 0px" },
-    );
-    for (const node of nodes) observer.observe(node);
-    return () => observer.disconnect();
-  }, [ids]);
-
+function railCountBadge(count: number): ReactNode {
+  const s = strings.settings;
   return (
-    <nav ref={indexHeight} className="set__index" aria-label={strings.settings.indexLabel}>
-      {entries.map((entry) => (
-        <button
-          key={entry.id}
-          type="button"
-          className={
-            entry.id === current ? "set__index-link set__index-link--current" : "set__index-link"
-          }
-          aria-current={entry.id === current ? "true" : undefined}
-          onClick={() => document.getElementById(sectionDomId(entry.id))?.scrollIntoView()}
-        >
-          {entry.title}
-        </button>
-      ))}
-    </nav>
+    <>
+      <span aria-hidden="true">{count}</span>
+      <span className="nx-sr-only">
+        {fill(dayUnit(count, s.searchResultCountOne, s.searchResultCountMany), { n: count })}
+      </span>
+    </>
+  );
+}
+
+/**
+ * One row of a sub-page list — „Podešavanja modula" or „Uvoz i izvoz".
+ *
+ * A `ListRow` whose content is a real `<button>`: the row's own click handler
+ * makes the whole width the target, the button is what Tab reaches and what
+ * Enter and Space activate, and the button stops the click from bubbling so
+ * the two paths fire the handler exactly once. `data-settings-sub` rides the
+ * button, so the screenshot harness clicks the same control a user does.
+ */
+function SubPageListRow({
+  id,
+  icon,
+  label,
+  onOpen,
+}: {
+  id: string;
+  /** The module's own mark; `undefined` when the icon table does not cover it, which is its documented answer. */
+  icon: IconName | undefined;
+  label: string;
+  onOpen: () => void;
+}) {
+  return (
+    <ListRow
+      leading={icon !== undefined ? <Icon name={icon} size={16} /> : undefined}
+      trailing={<Icon name="chevronRight" size={16} />}
+      onClick={onOpen}
+    >
+      <button
+        type="button"
+        className="set__nav-row"
+        data-settings-sub={id}
+        onClick={(event) => {
+          event.stopPropagation();
+          onOpen();
+        }}
+      >
+        {label}
+      </button>
+    </ListRow>
+  );
+}
+
+/**
+ * One row of the narrow layout's root list: a category, the one line that says
+ * what it holds, and the chevron that promises a page behind it.
+ *
+ * The same button-inside-a-row shape as {@link SubPageListRow}, with the
+ * summary as a second line — the root list is the only place on this page with
+ * room to say what a category contains before it is opened.
+ */
+function CategoryListRow({
+  id,
+  icon,
+  title,
+  summary,
+  onOpen,
+}: {
+  id: string;
+  icon: IconName;
+  title: string;
+  summary: string;
+  onOpen: () => void;
+}) {
+  return (
+    <ListRow
+      leading={<Icon name={icon} size={16} />}
+      trailing={<Icon name="chevronRight" size={16} />}
+      onClick={onOpen}
+    >
+      <button
+        type="button"
+        className="set__nav-row set__nav-row--stacked"
+        data-settings-category={id}
+        onClick={(event) => {
+          event.stopPropagation();
+          onOpen();
+        }}
+      >
+        <span className="set__nav-row-title">{title}</span>
+        <span className="nx-hint">{summary}</span>
+      </button>
+    </ListRow>
   );
 }
 
@@ -1297,6 +1342,11 @@ function SearchHistorySection({ profileId, hits }: SearchHistorySectionProps) {
 interface CalendarExportSectionProps {
   profileId: string;
   hits: ReadonlySet<string>;
+  /**
+   * SET-015: Settings mounts this flow as the only content of a card whose
+   * title IS this heading, so the heading would be drawn twice.
+   */
+  showTitle?: boolean;
 }
 
 /**
@@ -1305,7 +1355,11 @@ interface CalendarExportSectionProps {
  * line — there is no passphrase, no confirmation and no preview, because the
  * file is an open interchange copy of appointments the user already sees.
  */
-function CalendarExportSection({ profileId, hits }: CalendarExportSectionProps) {
+function CalendarExportSection({
+  profileId,
+  hits,
+  showTitle = true,
+}: CalendarExportSectionProps) {
   const s = strings.settings.calendarExport;
 
   const [running, setRunning] = useState(false);
@@ -1332,7 +1386,13 @@ function CalendarExportSection({ profileId, hits }: CalendarExportSectionProps) 
 
   return (
     <div className="set__restore-block">
-      <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-calendar"))}>{s.title}</h3>
+      {showTitle && (
+        <h3
+          className={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-calendar"))}
+        >
+          {s.title}
+        </h3>
+      )}
       <p className="nx-hint">{s.description}</p>
       <Button size="sm" disabled={running} onClick={() => void runExport()}>
         {s.button}
@@ -1797,6 +1857,12 @@ interface ImportSectionProps {
   profileId: string;
   /** SET-014 search hits; the section reads only its own entry ids out of it. */
   hits: ReadonlySet<string>;
+  /**
+   * SET-015: Settings mounts this flow as the only content of a card whose
+   * title IS this heading, so the heading would be drawn twice. The archive
+   * import's own siblings keep the default.
+   */
+  showTitle?: boolean;
 }
 
 /**
@@ -1818,7 +1884,7 @@ interface ImportSectionProps {
  * app shows is driven by `restoreStatus` in App.tsx, which serves both
  * operations from one slot.
  */
-function ImportSection({ profileId, hits }: ImportSectionProps) {
+function ImportSection({ profileId, hits, showTitle = true }: ImportSectionProps) {
   const s = strings.settings.import;
   // The half of the flow that is identical to a restore's, read from where it
   // is already spelled rather than spelled a second time.
@@ -1987,7 +2053,13 @@ function ImportSection({ profileId, hits }: ImportSectionProps) {
 
   return (
     <div className="set__import-block">
-      <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-import"))}>{s.title}</h3>
+      {showTitle && (
+        <h3
+          className={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-import"))}
+        >
+          {s.title}
+        </h3>
+      )}
       <p className="nx-hint">{s.description}</p>
 
       {!previewing && state.phase !== "applied" && (
@@ -2217,6 +2289,8 @@ interface IcsImportSectionProps {
   profileId: string;
   /** SET-014 search hits; the section reads only its own entry id out of it. */
   hits: ReadonlySet<string>;
+  /** SET-015: Settings now draws this flow's heading as the card's own title, so the heading is suppressed there. */
+  showTitle?: boolean;
 }
 
 /**
@@ -2238,7 +2312,7 @@ interface IcsImportSectionProps {
  * Kalendar. Below them, every named loss, counted: the components Nexus does
  * not read, then the per-event trims.
  */
-function IcsImportSection({ profileId, hits }: IcsImportSectionProps) {
+function IcsImportSection({ profileId, hits, showTitle = true }: IcsImportSectionProps) {
   const s = strings.settings.icsImport;
   // The half of the flow that is identical to a restore's, read from where it
   // is already spelled rather than spelled a second time.
@@ -2374,7 +2448,11 @@ function IcsImportSection({ profileId, hits }: IcsImportSectionProps) {
 
   return (
     <div className="set__import-block">
-      <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-ics"))}>{s.title}</h3>
+      {showTitle && (
+        <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-ics"))}>
+          {s.title}
+        </h3>
+      )}
       <p className="nx-hint">{s.description}</p>
 
       {!previewing && state.phase !== "applied" && (
@@ -2578,6 +2656,8 @@ interface ApkgImportSectionProps {
   profileId: string;
   /** SET-014 search hits; the section reads only its own entry id out of it. */
   hits: ReadonlySet<string>;
+  /** SET-015: Settings now draws this flow's heading as the card's own title, so the heading is suppressed there. */
+  showTitle?: boolean;
 }
 
 /**
@@ -2603,7 +2683,7 @@ interface ApkgImportSectionProps {
  * planner — narrowed to the modules that actually carry something, which for an
  * `.apkg` is only Učenje. Below them, every named loss, counted.
  */
-function ApkgImportSection({ profileId, hits }: ApkgImportSectionProps) {
+function ApkgImportSection({ profileId, hits, showTitle = true }: ApkgImportSectionProps) {
   const s = strings.settings.apkgImport;
   // The half of the flow that is identical to a restore's, read from where it is
   // already spelled rather than spelled a second time.
@@ -2749,7 +2829,11 @@ function ApkgImportSection({ profileId, hits }: ApkgImportSectionProps) {
 
   return (
     <div className="set__import-block">
-      <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-apkg"))}>{s.title}</h3>
+      {showTitle && (
+        <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-apkg"))}>
+          {s.title}
+        </h3>
+      )}
       <p className="nx-hint">{s.description}</p>
 
       {state.phase !== "applied" && (
@@ -3184,6 +3268,8 @@ interface CsvImportSectionProps {
   profileId: string;
   /** SET-014 search hits; the section reads only its own entry id out of it. */
   hits: ReadonlySet<string>;
+  /** SET-015: Settings now draws this flow's heading as the card's own title, so the heading is suppressed there. */
+  showTitle?: boolean;
 }
 
 /**
@@ -3205,7 +3291,7 @@ interface CsvImportSectionProps {
  * a CSV only Zadaci) above the translator's row-by-row drops, each named with
  * the row number the user's spreadsheet shows.
  */
-function CsvImportSection({ profileId, hits }: CsvImportSectionProps) {
+function CsvImportSection({ profileId, hits, showTitle = true }: CsvImportSectionProps) {
   const s = strings.settings.csvImport;
   // The half of the flow that is identical to its siblings', read from where
   // it is already spelled rather than spelled a second time.
@@ -3362,7 +3448,11 @@ function CsvImportSection({ profileId, hits }: CsvImportSectionProps) {
 
   return (
     <div className="set__import-block">
-      <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-csv"))}>{s.title}</h3>
+      {showTitle && (
+        <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-csv"))}>
+          {s.title}
+        </h3>
+      )}
       <p className="nx-hint">{s.description}</p>
 
       {!planned && state.phase !== "applied" && (
@@ -3614,6 +3704,8 @@ interface LlmImportSectionProps {
   profileId: string;
   /** SET-014 search hits; the section reads only its own entry id out of it. */
   hits: ReadonlySet<string>;
+  /** SET-015: Settings now draws this flow's heading as the card's own title, so the heading is suppressed there. */
+  showTitle?: boolean;
 }
 
 /**
@@ -3643,7 +3735,7 @@ interface LlmImportSectionProps {
  * at all; the disclosure is also the only honest way to let somebody read what
  * they are about to paste into a chat.
  */
-function LlmImportSection({ profileId, hits }: LlmImportSectionProps) {
+function LlmImportSection({ profileId, hits, showTitle = true }: LlmImportSectionProps) {
   const s = strings.settings.llmImport;
   const shared = strings.settings.restore;
 
@@ -3851,7 +3943,11 @@ function LlmImportSection({ profileId, hits }: LlmImportSectionProps) {
   if (state.phase === "applied") {
     return (
       <div className="set__import-block">
-        <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-llm"))}>{s.title}</h3>
+        {showTitle && (
+          <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-llm"))}>
+            {s.title}
+          </h3>
+        )}
         <p className="nx-hint">{s.applied}</p>
       </div>
     );
@@ -3859,7 +3955,11 @@ function LlmImportSection({ profileId, hits }: LlmImportSectionProps) {
 
   return (
     <div className="set__import-block">
-      <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-llm"))}>{s.title}</h3>
+      {showTitle && (
+        <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-llm"))}>
+          {s.title}
+        </h3>
+      )}
       <p className="nx-hint">{s.description}</p>
 
       <p className="nx-hint">{s.kindLabel}</p>
@@ -4168,6 +4268,8 @@ interface MarkdownImportSectionProps {
   profileId: string;
   /** SET-014 search hits; the section reads only its own entry id out of it. */
   hits: ReadonlySet<string>;
+  /** SET-015: Settings now draws this flow's heading as the card's own title, so the heading is suppressed there. */
+  showTitle?: boolean;
 }
 
 /**
@@ -4184,7 +4286,7 @@ interface MarkdownImportSectionProps {
  * notes, how many images arrived as text, and every file that did not make it,
  * NAMED, with the reason beside it.
  */
-function MarkdownImportSection({ profileId, hits }: MarkdownImportSectionProps) {
+function MarkdownImportSection({ profileId, hits, showTitle = true }: MarkdownImportSectionProps) {
   const s = strings.settings.markdownImport;
   const [folders, setFolders] = useState<{ id: string; label: string }[]>([]);
   const [folderId, setFolderId] = useState<string>(UNFILED_VALUE);
@@ -4230,9 +4332,13 @@ function MarkdownImportSection({ profileId, hits }: MarkdownImportSectionProps) 
 
   return (
     <div className="set__import-block">
-      <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-markdown"))}>
-        {s.title}
-      </h3>
+      {showTitle && (
+        <h3
+          className={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-markdown"))}
+        >
+          {s.title}
+        </h3>
+      )}
       <p className="nx-hint">{s.description}</p>
 
       <Select
@@ -4955,10 +5061,18 @@ export interface SettingsPageProps {
  * whole point of the split, and the reason the two kinds of settings are named
  * apart rather than merged (see `SettingsPanel`'s own comment).
  *
- * SET-014 layers a filter on top: the field below the title narrows the page to
+ * SET-014 layers a filter on top: the field in the header narrows the page to
  * the sections that answer the query (`settingsSearch.ts` owns what is
  * searchable) and marks the matched labels typographically. An empty query is
  * the page exactly as it was before the filter existed.
+ *
+ * SET-015 gives the page its structure: eight categories, a rail beside the
+ * pane on a window wide enough for two columns and a drill-down list on one
+ * that is not, and a sub-page for each module card and each import/export flow
+ * (`settingsCategories.ts` owns that table). Navigation HIDES cards rather than
+ * unmounting them, and the location and the filter are answered by one pure
+ * function — so a search still spans every category, and a half-finished flow
+ * survives a click in the rail.
  */
 export function SettingsPage({
   profileId,
@@ -5111,7 +5225,12 @@ export function SettingsPage({
   // built once per registry rather than on every keystroke; the match itself is
   // a dozen string comparisons and needs no memo of its own.
   const searchIndex = useMemo(() => buildSettingsIndex(registry), [registry]);
-  const { sections, hits } = matchSettings(searchIndex, foldSettingsQuery(query));
+  const terms = foldSettingsQuery(query);
+  const { sections, hits } = matchSettings(searchIndex, terms);
+  // A query is „active" exactly when it folded to at least one term: an empty
+  // or all-whitespace box is the page as it was before the filter existed, and
+  // `matchSettings` answers that case with every section and no hits.
+  const searching = terms.length > 0;
   // The module cards this build draws, in registry order and gated by SET-007's
   // flags — the page composes them, it does not know them.
   const moduleCards = useMemo(() => moduleSettingsCards(registry, flags), [registry, flags]);
@@ -5120,25 +5239,160 @@ export function SettingsPage({
   // needs to be told (`strings.ts`).
   const [locale, setLocale] = useState<Locale>(() => readStoredLocale());
   const a = strings.settings.appearance;
+  const s = strings.settings;
 
-  // The table of contents, in the page's own order and narrowed by the same
-  // filter the cards are: an index entry for a card the filter has hidden would
-  // be a jump to nothing.
-  const indexEntries: SectionIndexEntry[] = [
-    ...SHELL_SECTIONS_BEFORE_MODULES.map((id) => ({ id, title: strings.settings.sectionTitle[id] })),
-    ...moduleCards.map((card) => ({ id: card.moduleId, title: card.title })),
-    ...SHELL_SECTIONS_AFTER_MODULES.map((id) => ({ id, title: strings.settings.sectionTitle[id] })),
-  ].filter((entry) => sections.has(entry.id));
+  // SET-015: where the page is. A category, a sub-page inside it, or — with
+  // both null — the narrow layout's root list. Restored from the last visit in
+  // this session, and defaulting to nothing at all, which the wide layout
+  // resolves to its first category below.
+  const [location, setLocation] = useState<SettingsLocation>(
+    () => lastSettingsLocation ?? { category: null, sub: null },
+  );
+  // The rail's roving tab stop: one item carries `tabIndex={0}` at a time, and
+  // it follows the current category so Tab always lands where the reader is.
+  const [railFocus, setRailFocus] = useState(0);
+  // Whether this page's own column is wide enough for the rail. The LAYOUT is a
+  // container query in CSS; this is read here only to resolve the default
+  // location and to keep a resize from stranding one the wide layout cannot
+  // show.
+  const [wide, setWide] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const paneHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  // A navigation waiting for the render it belongs to; see the effect below.
+  const pendingNavigation = useRef<SettingsLocation | null>(null);
+  const [navTick, setNavTick] = useState(0);
+
+  // SET-015: what the location — or the query — makes visible. Every other card
+  // stays MOUNTED and takes `set__section--hidden`, exactly as the SET-014
+  // filter already hid them: navigation that unmounted a card would discard
+  // in-progress state (a restore preview holding its archive open, a half-typed
+  // passcode) that the reader is coming back to.
+  const visibility = visibleSections(location, searching ? { sections, hits } : null);
+  // Sections whose visible label IS the card's own title. The import/export
+  // sub-pages suppress the block's own eyebrow — it would be the title a second
+  // time — so a hit there has to be carried by the title; every other card
+  // still highlights the label inside it, exactly as it always has.
+  const hitCards = new Set(
+    searchIndex.entries.filter((entry) => hits.has(entry.id)).map((entry) => entry.section),
+  );
+
+  /**
+   * The pane's heading: the current category, or the open sub-page's own title.
+   * Looked up rather than switched, because a module card's sub-page id is one
+   * of this table's keys and a module id that is not would still be named by
+   * `moduleName`.
+   */
+  const paneTitle =
+    location.sub !== null
+      ? (lookup(s.sectionTitle, location.sub) ?? moduleName(location.sub))
+      : location.category !== null
+        ? s.categoryTitle[location.category]
+        : null;
+  const paneSummary =
+    location.sub === null && location.category !== null
+      ? s.categorySummary[location.category]
+      : null;
+  /**
+   * The quiet back button, or null when there is nowhere to go: a sub-page
+   * returns to its category in either layout, and a category returns to the
+   * root only in the narrow one — the wide layout's rail IS the root, so that
+   * button is hidden there (see `styles/settings.css`).
+   */
+  const backTarget =
+    location.sub !== null && location.category !== null
+      ? {
+          label: s.categoryTitle[location.category],
+          next: { category: location.category, sub: null } as SettingsLocation,
+        }
+      : location.sub === null && location.category !== null
+        ? {
+            label: moduleName("settings"),
+            next: { category: null, sub: null } as SettingsLocation,
+          }
+        : null;
+
+  /** The heading a group of search results sits under, or null when it has no hits. */
+  const searchGroupTitle = (id: CategoryId): ReactNode =>
+    searching && visibility.groups.includes(id) ? (
+      <h2 className="set__group-title" data-settings-group={id}>
+        {s.categoryTitle[id]}
+      </h2>
+    ) : null;
+
+  // The page's own width, not the window's: the shell's sidebar takes part of
+  // the window before this page sees any of it (SET-015 §Layout).
+  useLayoutEffect(() => {
+    const node = rootRef.current;
+    if (node === null) return undefined;
+    const measure = (): void => {
+      setWide(node.getBoundingClientRect().width >= WIDE_LAYOUT_MIN_PX);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  // A width with no location resolves to the first category: the two-column
+  // layout has no root list to sit in. Every other location survives the
+  // breakpoint untouched, in both directions (SET-015 §Navigation).
+  useLayoutEffect(() => {
+    if (wide && location.category === null) setLocation({ category: DEFAULT_CATEGORY, sub: null });
+  }, [wide, location.category]);
+
+  // Kept for the session, never written down — `lastSettingsLocation`'s own
+  // comment says why.
+  useEffect(() => {
+    lastSettingsLocation = location;
+  }, [location]);
+
+  // The rail's tab stop follows the category the reader is on.
+  useEffect(() => {
+    const index = SETTINGS_CATEGORIES.findIndex((category) => category.id === location.category);
+    if (index >= 0) setRailFocus(index);
+  }, [location.category]);
+
+  /**
+   * The only way the location changes.
+   *
+   * The scroll-and-focus work happens in the effect BELOW rather than here,
+   * because the heading it focuses does not exist until React has committed the
+   * new location; `pendingNavigation` carries the intent across that render,
+   * and is cleared on the way through so a later render — a keystroke, a
+   * resize — cannot replay it.
+   */
+  function navigate(next: SettingsLocation): void {
+    pendingNavigation.current = next;
+    setLocation(next);
+    setNavTick((tick) => tick + 1);
+  }
+
+  useLayoutEffect(() => {
+    const next = pendingNavigation.current;
+    if (next === null) return;
+    pendingNavigation.current = null;
+    if (searching) {
+      // A query shows results from every category at once, so a rail item
+      // scrolls to that category's group instead of switching the pane.
+      document
+        .querySelector(`[data-settings-group="${next.category ?? ""}"]`)
+        ?.scrollIntoView({ block: "start" });
+      return;
+    }
+    // „Arrive at the top, with the new page named": the scroller belongs to the
+    // shell and the heading to this page, so the two are done separately.
+    const scroller = scrollContainerOf(rootRef.current);
+    if (scroller !== null) scroller.scrollTop = 0;
+    paneHeadingRef.current?.focus();
+  }, [navTick, searching]);
 
   return (
-    <div className="set">
+    <div className="set" ref={rootRef}>
       {/* The filter is a PAGE-LEVEL control, so it sits in the header's actions
           slot rather than as the first row of the body — which is what
-          `actions` exists for, and what it was doing wrong before. Two things
-          come out of it: the page stops spending a whole row plus a gap on
-          chrome above a table of contents that is itself three rows tall, and
-          the header's own band (72px, the mark's height) carries something
-          instead of standing empty beside the title. */}
+          `actions` exists for, and what it was doing wrong before. The
+          header's own band (72px, the mark's height) carries something instead
+          of standing empty beside the title. */}
       <PageHeader
         title={moduleName("settings")}
         sigil="settings"
@@ -5152,509 +5406,756 @@ export function SettingsPage({
           />
         }
       />
-      {/* One card left is not an index, it is a label repeating the card's own
-          title directly beneath it. */}
-      {indexEntries.length > 1 && <SectionIndex entries={indexEntries} />}
-      {sections.size === 0 && (
-        <EmptyState
-          sigil="settings"
-          title={strings.search.emptyResults}
-          description={strings.settings.searchEmptyDescription}
-        />
-      )}
 
-      <Card
-        id={sectionDomId("profile")}
-        title={strings.settings.sectionTitle.profile}
-        className={sectionClass(sections.has("profile"))}
-      >
-        <ProfileSection
-          profileId={profileId}
-          initialName={profileName}
-          initialPictureHash={profilePictureHash}
-          onProfileRenamed={onProfileRenamed}
-          onProfilePictureChanged={onProfilePictureChanged}
-          hits={hits}
-        />
-      </Card>
+      <div className="set__layout">
+        {/* SET-015's rail: the eight categories, one `NavItem` each. The active
+            row is typographic — accent ink, extra weight, NavItem's own ✦ —
+            and nothing here draws a pill, a tab or a bar.
 
-      <Card
-        id={sectionDomId("profiles")}
-        title={strings.settings.sectionTitle.profiles}
-        className={sectionClass(sections.has("profiles"))}
-      >
-        <ProfilesSection
-          profiles={profiles}
-          activeProfileId={profileId}
-          onCreateBusiness={onCreateBusinessProfile}
-          onRequestSwitch={onRequestProfileSwitch}
-          onDelete={onDeleteProfile}
-        />
-      </Card>
-
-      <Card
-        id={sectionDomId("security")}
-        title={strings.settings.sectionTitle.security}
-        className={sectionClass(sections.has("security"))}
-      >
-        <SecuritySection
-          autoLockMinutes={autoLockMinutes}
-          onAutoLockChange={onAutoLockChange}
-          hits={hits}
-        />
-      </Card>
-
-      <Card
-        id={sectionDomId("appearance")}
-        title={strings.settings.sectionTitle.appearance}
-        className={sectionClass(sections.has("appearance"))}
-      >
-        {/* First in the card, because it governs every other word on the page.
-            The list is `availableLocales()`, so a locale added to `LOCALES`
-            appears here without this block changing, and the stored choice is
-            what the rest of the app reads on the next render.
-            `applyLocale` runs BEFORE the state bump on purpose: the table is
-            rewritten in place, so the render that follows reads the new copy
-            (see `strings.ts`), and `reportLocaleToMain` tells the main process
-            so its dialogs and OS notifications follow. */}
-        <div
-          className={hits.has("appearance-language") ? "set__field set__hit-field" : "set__field"}
+            While a query is active every item carries its hit count and the
+            active mark is withheld: `NavItem` suppresses a badge on its active
+            row, and „every item shows its count" is the half of that trade the
+            reader needs while looking at results that span categories. */}
+        <nav
+          className="set__rail"
+          aria-label={s.categoriesLabel}
+          onKeyDown={(event) => {
+            if (
+              event.key !== "ArrowDown" &&
+              event.key !== "ArrowUp" &&
+              event.key !== "Home" &&
+              event.key !== "End"
+            ) {
+              return;
+            }
+            // Roving focus over the rail's own rows, read off the live DOM
+            // rather than a ref array: the rows are the anchors carrying
+            // `data-settings-category`, and a ref per row would be the same
+            // list kept twice.
+            const items = Array.from(
+              event.currentTarget.querySelectorAll<HTMLElement>("[data-settings-category]"),
+            );
+            if (items.length === 0) return;
+            const last = items.length - 1;
+            const current = items.findIndex((item) => item === document.activeElement);
+            const next =
+              event.key === "Home"
+                ? 0
+                : event.key === "End"
+                  ? last
+                  : event.key === "ArrowDown"
+                    ? Math.min(current + 1, last)
+                    : Math.max(current - 1, 0);
+            event.preventDefault();
+            setRailFocus(next);
+            items[next]?.focus();
+          }}
         >
-          {/* `layout="inline"` is what makes a `Select` the ROW rather than
-              something inside one: the component owns both the label and the
-              control, so it carries the row's own left-and-right arrangement
-              and nothing here has to name the label twice. */}
-          <Select
-            label={a.languageLabel}
-            layout="inline"
-            className="set__select"
-            value={locale}
-            onChange={(event) => {
-              const next = event.target.value as Locale;
-              persistLocale(next);
-              applyLocale(next);
-              reportLocaleToMain(next);
-              setLocale(next);
-              onLocaleChanged();
-            }}
+          {SETTINGS_CATEGORIES.map((category, index) => (
+            <NavItem
+              key={category.id}
+              href="#"
+              active={!searching && location.category === category.id}
+              tabIndex={index === railFocus ? 0 : -1}
+              className={
+                searching && categoryHitCount(category.id, visibility.cards) === 0
+                  ? "set__rail-item--empty"
+                  : undefined
+              }
+              badge={
+                searching
+                  ? railCountBadge(categoryHitCount(category.id, visibility.cards))
+                  : undefined
+              }
+              data-settings-category={category.id}
+              onClick={(event) => {
+                event.preventDefault();
+                setRailFocus(index);
+                navigate({ category: category.id, sub: null });
+              }}
+            >
+              <Icon name={category.icon} size={16} />
+              {s.categoryTitle[category.id]}
+            </NavItem>
+          ))}
+        </nav>
+
+        <div className="set__pane">
+          {searching && sections.size === 0 && (
+            <EmptyState
+              sigil="settings"
+              title={strings.search.emptyResults}
+              description={s.searchEmptyDescription}
+            />
+          )}
+
+          {/* The narrow layout's root: the eight categories as one card of
+              rows, with no rail beside them. The wide layout hides this card
+              and shows the rail, which is the same list. */}
+          <Card
+            className={`set__root${
+              searching || location.category !== null ? " set__section--hidden" : ""
+            }`}
           >
-            {availableLocales().map((code) => (
-              <option key={code} value={code}>
-                {lookup(a.languageNames, code) ?? code}
-              </option>
+            {SETTINGS_CATEGORIES.map((category) => (
+              <CategoryListRow
+                key={category.id}
+                id={category.id}
+                icon={category.icon}
+                title={s.categoryTitle[category.id]}
+                summary={s.categorySummary[category.id]}
+                onOpen={() => navigate({ category: category.id, sub: null })}
+              />
             ))}
-          </Select>
-          <p className="nx-hint">{a.languageHint}</p>
-        </div>
-        <div className="set__field">
-          <p className={labelClass("nx-hint", hits.has("appearance-theme"))}>
-            {a.themeLabel}
-          </p>
-          <div className="set__segmented" role="group" aria-label={a.themeLabel}>
-            {THEME_OPTIONS.map((option) => (
-              <Button
-                key={option}
-                size="sm"
-                variant={preference === option ? "primary" : "ghost"}
-                aria-pressed={preference === option}
-                onClick={() => onPreferenceChange(option)}
-              >
-                {themeOptionLabel(option)}
-              </Button>
-            ))}
-          </div>
-          <p className="nx-hint">{a.themeHint}</p>
-        </div>
-        <div className="set__field">
-          <p className={labelClass("nx-hint", hits.has("appearance-accent"))}>
-            {a.accentLabel}
-          </p>
-          <div className="set__accent-row" role="group" aria-label={a.accentLabel}>
-            {ACCENT_IDS.map((id) => {
-              const name = a.accentNames[id] ?? id;
-              const selected = accent === id;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  className={`set__accent-swatch${selected ? " set__accent-swatch--selected" : ""}`}
-                  aria-pressed={selected}
-                  title={name}
-                  aria-label={name}
-                  style={{ background: `var(--nx-swatch-${id})` }}
-                  onClick={() => {
-                    persistAccent(profileId, id);
-                    setAccent(id);
-                  }}
-                />
-              );
-            })}
-          </div>
-          {/* The chosen accent's NAME, on the row's own explanation line rather
-              than glued to the label with an em dash: eight swatches say which
-              one is selected by shape, and this says what it is called. */}
-          <p className="nx-hint">{a.accentNames[accent] ?? accent}</p>
-        </div>
-        {/* PRD 04 §5. The calendar reads this on mount, so a change here shows
-            the next time that page is opened — page switching remounts it. */}
-        <div className="set__field">
-          <p className={labelClass("nx-hint", hits.has("appearance-week-start"))}>
-            {a.weekStartLabel}
-          </p>
-          <div className="set__segmented" role="group" aria-label={a.weekStartLabel}>
-            {WEEK_START_OPTIONS.map((option) => (
-              <Button
-                key={option}
-                size="sm"
-                variant={weekStart === option ? "primary" : "ghost"}
-                aria-pressed={weekStart === option}
-                onClick={() => {
-                  persistWeekStart(option);
-                  setWeekStart(option);
+          </Card>
+
+          {/* The pane's own heading. A search draws one heading per group
+              instead — see `searchGroupTitle` — because results then span
+              categories and no single one of them names the page. */}
+          {!searching && paneTitle !== null && (
+            <div className="set__pane-head">
+              {backTarget !== null && (
+                <Button
+                  variant="quiet"
+                  className={location.sub === null ? "set__back set__back--root" : "set__back"}
+                  aria-label={fill(s.backTo, { name: backTarget.label })}
+                  onClick={() => navigate(backTarget.next)}
+                >
+                  <Icon name="chevronLeft" size={16} />
+                  {backTarget.label}
+                </Button>
+              )}
+              <h2 className="set__pane-title" tabIndex={-1} ref={paneHeadingRef}>
+                {paneTitle}
+              </h2>
+              {paneSummary !== null && <p className="nx-hint">{paneSummary}</p>}
+            </div>
+          )}
+
+          {searchGroupTitle("profile")}
+
+          <Card
+            id={sectionDomId("profile")}
+            title={strings.settings.sectionTitle.profile}
+            className={sectionClass(visibility.cards.has("profile"))}
+          >
+            <ProfileSection
+              profileId={profileId}
+              initialName={profileName}
+              initialPictureHash={profilePictureHash}
+              onProfileRenamed={onProfileRenamed}
+              onProfilePictureChanged={onProfilePictureChanged}
+              hits={hits}
+            />
+          </Card>
+
+          <Card
+            id={sectionDomId("profiles")}
+            title={strings.settings.sectionTitle.profiles}
+            className={sectionClass(visibility.cards.has("profiles"))}
+          >
+            <ProfilesSection
+              profiles={profiles}
+              activeProfileId={profileId}
+              onCreateBusiness={onCreateBusinessProfile}
+              onRequestSwitch={onRequestProfileSwitch}
+              onDelete={onDeleteProfile}
+            />
+          </Card>
+
+          <Card
+            id={sectionDomId("security")}
+            title={strings.settings.sectionTitle.security}
+            className={sectionClass(visibility.cards.has("security"))}
+          >
+            <SecuritySection
+              autoLockMinutes={autoLockMinutes}
+              onAutoLockChange={onAutoLockChange}
+              hits={hits}
+            />
+          </Card>
+
+          {searchGroupTitle("appearance")}
+          <Card
+            id={sectionDomId("appearance")}
+            title={strings.settings.sectionTitle.appearance}
+            className={sectionClass(visibility.cards.has("appearance"))}
+          >
+            {/* First in the card, because it governs every other word on the page.
+                The list is `availableLocales()`, so a locale added to `LOCALES`
+                appears here without this block changing, and the stored choice is
+                what the rest of the app reads on the next render.
+                `applyLocale` runs BEFORE the state bump on purpose: the table is
+                rewritten in place, so the render that follows reads the new copy
+                (see `strings.ts`), and `reportLocaleToMain` tells the main process
+                so its dialogs and OS notifications follow. */}
+            <div
+              className={hits.has("appearance-language") ? "set__field set__hit-field" : "set__field"}
+            >
+              {/* `layout="inline"` is what makes a `Select` the ROW rather than
+                  something inside one: the component owns both the label and the
+                  control, so it carries the row's own left-and-right arrangement
+                  and nothing here has to name the label twice. */}
+              <Select
+                label={a.languageLabel}
+                layout="inline"
+                className="set__select"
+                value={locale}
+                onChange={(event) => {
+                  const next = event.target.value as Locale;
+                  persistLocale(next);
+                  applyLocale(next);
+                  reportLocaleToMain(next);
+                  setLocale(next);
+                  onLocaleChanged();
                 }}
               >
-                {a.weekStartOptions[option]}
-              </Button>
-            ))}
-          </div>
-        </div>
-        {/* CAL §5, beside the week start: both say how this machine reads a
-            calendar. Selects rather than segmented rows — four spans and two
-            clocks with example times in them are longer labels than a row of
-            chips can carry without wrapping (the auto-lock precedent). */}
-        <div
-          className={
-            hits.has("calendar-event-duration") ? "set__field set__hit-field" : "set__field"
-          }
-        >
-          <Select
-            label={a.eventDurationLabel}
-            layout="inline"
-            className="set__select"
-            value={eventDuration}
-            onChange={(event) => {
-              const next = Number(event.target.value) as EventDurationMinutes;
-              persistEventDuration(next);
-              setEventDuration(next);
-            }}
-          >
-            {EVENT_DURATIONS.map((minutes) => (
-              <option key={minutes} value={minutes}>
-                {lookup(a.eventDurationOptions, String(minutes)) ?? String(minutes)}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <div className={hits.has("calendar-clock") ? "set__field set__hit-field" : "set__field"}>
-          <Select
-            label={a.clockLabel}
-            layout="inline"
-            className="set__select"
-            value={clock}
-            onChange={(event) => {
-              const next = event.target.value as ClockPreference;
-              persistClock(next);
-              setClock(next);
-            }}
-          >
-            {CLOCK_PREFERENCES.map((option) => (
-              <option key={option} value={option}>
-                {a.clockOptions[option]}
-              </option>
-            ))}
-          </Select>
-          <p className="nx-hint">{a.clockHint}</p>
-        </div>
-        <ResetLink
-          onClick={() =>
-            setResetting({ id: "appearance", title: strings.settings.sectionTitle.appearance })
-          }
-        />
-      </Card>
+                {availableLocales().map((code) => (
+                  <option key={code} value={code}>
+                    {lookup(a.languageNames, code) ?? code}
+                  </option>
+                ))}
+              </Select>
+              <p className="nx-hint">{a.languageHint}</p>
+            </div>
+            <div className="set__field">
+              <p className={labelClass("nx-hint", hits.has("appearance-theme"))}>
+                {a.themeLabel}
+              </p>
+              <div className="set__segmented" role="group" aria-label={a.themeLabel}>
+                {THEME_OPTIONS.map((option) => (
+                  <Button
+                    key={option}
+                    size="sm"
+                    variant={preference === option ? "primary" : "ghost"}
+                    aria-pressed={preference === option}
+                    onClick={() => onPreferenceChange(option)}
+                  >
+                    {themeOptionLabel(option)}
+                  </Button>
+                ))}
+              </div>
+              <p className="nx-hint">{a.themeHint}</p>
+            </div>
+            <div className="set__field">
+              <p className={labelClass("nx-hint", hits.has("appearance-accent"))}>
+                {a.accentLabel}
+              </p>
+              <div className="set__accent-row" role="group" aria-label={a.accentLabel}>
+                {ACCENT_IDS.map((id) => {
+                  const name = a.accentNames[id] ?? id;
+                  const selected = accent === id;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      className={`set__accent-swatch${selected ? " set__accent-swatch--selected" : ""}`}
+                      aria-pressed={selected}
+                      title={name}
+                      aria-label={name}
+                      style={{ background: `var(--nx-swatch-${id})` }}
+                      onClick={() => {
+                        persistAccent(profileId, id);
+                        setAccent(id);
+                      }}
+                    />
+                  );
+                })}
+              </div>
+              {/* The chosen accent's NAME, on the row's own explanation line rather
+                  than glued to the label with an em dash: eight swatches say which
+                  one is selected by shape, and this says what it is called. */}
+              <p className="nx-hint">{a.accentNames[accent] ?? accent}</p>
+            </div>
+            {/* PRD 04 §5. The calendar reads this on mount, so a change here shows
+                the next time that page is opened — page switching remounts it. */}
+            <div className="set__field">
+              <p className={labelClass("nx-hint", hits.has("appearance-week-start"))}>
+                {a.weekStartLabel}
+              </p>
+              <div className="set__segmented" role="group" aria-label={a.weekStartLabel}>
+                {WEEK_START_OPTIONS.map((option) => (
+                  <Button
+                    key={option}
+                    size="sm"
+                    variant={weekStart === option ? "primary" : "ghost"}
+                    aria-pressed={weekStart === option}
+                    onClick={() => {
+                      persistWeekStart(option);
+                      setWeekStart(option);
+                    }}
+                  >
+                    {a.weekStartOptions[option]}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            {/* CAL §5, beside the week start: both say how this machine reads a
+                calendar. Selects rather than segmented rows — four spans and two
+                clocks with example times in them are longer labels than a row of
+                chips can carry without wrapping (the auto-lock precedent). */}
+            <div
+              className={
+                hits.has("calendar-event-duration") ? "set__field set__hit-field" : "set__field"
+              }
+            >
+              <Select
+                label={a.eventDurationLabel}
+                layout="inline"
+                className="set__select"
+                value={eventDuration}
+                onChange={(event) => {
+                  const next = Number(event.target.value) as EventDurationMinutes;
+                  persistEventDuration(next);
+                  setEventDuration(next);
+                }}
+              >
+                {EVENT_DURATIONS.map((minutes) => (
+                  <option key={minutes} value={minutes}>
+                    {lookup(a.eventDurationOptions, String(minutes)) ?? String(minutes)}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className={hits.has("calendar-clock") ? "set__field set__hit-field" : "set__field"}>
+              <Select
+                label={a.clockLabel}
+                layout="inline"
+                className="set__select"
+                value={clock}
+                onChange={(event) => {
+                  const next = event.target.value as ClockPreference;
+                  persistClock(next);
+                  setClock(next);
+                }}
+              >
+                {CLOCK_PREFERENCES.map((option) => (
+                  <option key={option} value={option}>
+                    {a.clockOptions[option]}
+                  </option>
+                ))}
+              </Select>
+              <p className="nx-hint">{a.clockHint}</p>
+            </div>
+            <ResetLink
+              onClick={() =>
+                setResetting({ id: "appearance", title: strings.settings.sectionTitle.appearance })
+              }
+            />
+          </Card>
 
-      {/* ADR-086 §5 — why this profile's Nexus looks the way it does.
-          Directly under „Izgled" because it explains the accent that card
-          holds, and directly above the module cards because it explains those
-          too; a summary belongs before the detail it summarises. */}
-      <Card
-        id={sectionDomId("setup")}
-        title={strings.settings.sectionTitle.setup}
-        className={sectionClass(sections.has("setup"))}
-      >
-        <SetupSection
-          profileId={profileId}
-          flags={flags}
-          registry={registry}
-          hits={hits}
-          onRerunOnboarding={onRerunOnboarding}
-        />
-      </Card>
-
-      {/* Every card a MODULE owns, composed from the registry in registry order
-          (`manifest.settings`). Nothing is drawn for a module the profile has
-          switched off — a card for a section the sidebar does not show would be
-          a dangling control, which is the rule PRIV's card already followed and
-          all of them now do. A declaration this build has no renderer for draws
-          nothing, exactly as an unknown dashboard placement does. */}
-      {moduleCards.map((card) => {
-        const Body = MODULE_SETTINGS_PANELS[card.moduleId]?.Body;
-        if (Body === undefined) return null;
-        return (
+          {searchGroupTitle("keyboard")}
+          {/* ADR-040's remapping table. Its own category now: „which keys do
+              this on this machine" is a question about the keyboard rather than
+              about the app's shape, and it used to sit between the module cards
+              and the notifications — the exact hunt SET-015 removes. */}
           <Card
-            key={card.moduleId}
-            id={sectionDomId(card.moduleId)}
-            title={card.title}
-            className={sectionClass(sections.has(card.moduleId))}
+            id={sectionDomId("shortcuts")}
+            title={strings.settings.sectionTitle.shortcuts}
+            className={sectionClass(visibility.cards.has("shortcuts"))}
           >
-            {/* The reset count is a remount key: a cleared preference is re-read
-                by the body's own initializers, so the page never learns what
-                the panel stores. */}
-            <Body key={resetCounts[card.moduleId] ?? 0} profileId={profileId} hits={hits} />
-            {/* „Vrati na podrazumevano“ is the DECLARATION's decision, not a
-                list here: a card offers it when every value it holds lives on
-                this machine (SET §5). */}
-            {isDeviceOnlyPanel(card.panel) && (
-              <ResetLink onClick={() => setResetting({ id: card.moduleId, title: card.title })} />
+            <ShortcutsSection
+              overrides={shortcutOverrides}
+              onChange={onShortcutOverridesChange}
+              onShowAll={onShowShortcuts}
+              globalTaken={globalShortcutTaken}
+              hits={hits}
+            />
+          </Card>
+
+          {searchGroupTitle("modules")}
+          {/* ADR-086 §5 — why this profile's Nexus looks the way it does.
+              First in „Moduli", above the gallery and the module cards it
+              explains, because a summary belongs before the detail it
+              summarises. */}
+          <Card
+            id={sectionDomId("setup")}
+            title={strings.settings.sectionTitle.setup}
+            className={sectionClass(visibility.cards.has("setup"))}
+          >
+            <SetupSection
+              profileId={profileId}
+              flags={flags}
+              registry={registry}
+              hits={hits}
+              onRerunOnboarding={onRerunOnboarding}
+            />
+          </Card>
+
+          <Card
+            id={sectionDomId("modules")}
+            title={strings.settings.sectionTitle.modules}
+            className={sectionClass(visibility.cards.has("modules"))}
+          >
+            {[...registry.byCategory()].map(([category, members]) => (
+              <div key={category} className="set__module-group">
+                <h3 className="nx-eyebrow set__module-group-title">
+                  {strings.settings.moduleCategories[category] ?? category}
+                </h3>
+                <div className="set__module-list">
+                  {members.map((manifest) => {
+                    const locked = LOCKED_MODULE_IDS.has(manifest.id);
+                    const enabled = flags[manifest.id] ?? manifest.defaultEnabled;
+                    return (
+                      <div className="set__module-row" key={manifest.id}>
+                        <div className="set__module-info">
+                          <span
+                            className={labelClass(
+                              "set__module-name",
+                              hits.has(moduleEntryId(manifest.id)),
+                            )}
+                          >
+                            {moduleName(manifest.id)}
+                          </span>
+                          <span className="nx-hint">
+                            {lookup(strings.settings.moduleDescriptions, manifest.id) ?? ""}
+                          </span>
+                        </div>
+                        {locked ? (
+                          <Chip>{strings.settings.modulesAlwaysOn}</Chip>
+                        ) : (
+                          <Checkbox
+                            checked={enabled}
+                            aria-label={moduleName(manifest.id)}
+                            onChange={(event) => void toggleModule(manifest.id, event.target.checked)}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+            {modulesError != null && <p className="set__error">{modulesError}</p>}
+          </Card>
+
+          {/* The picker, inline rather than behind the drawer's dialog: this is the
+              page somebody opens to change what they have, and a card that only
+              holds a button to open a dialog is a card that wastes a click. The
+              component is the drawer's own, so the two surfaces cannot drift. */}
+          <Card
+            id={sectionDomId("packs")}
+            title={strings.settings.sectionTitle.packs}
+            className={sectionClass(visibility.cards.has("packs"))}
+          >
+            <ProPackList
+              profileId={profileId}
+              packs={new Set(enabledPacks(flags))}
+              onFlagsChanged={onFlagsChanged}
+            />
+          </Card>
+
+          {/* The long form of every notice the drawer shows short. It is the
+              cheapest of the four mechanisms and, on its own, the least protective
+              — a page nobody opens. It earns its place as the ANCHOR: the short
+              line on each tool is only honest if the full text exists somewhere a
+              person can actually read it, and this is that somewhere.
+
+              Every class is listed, including the ones this profile's toolkits do
+              not currently reach. „What does this app say about regulated work" is
+              a question somebody asks BEFORE switching a toolkit on, and a card that
+              answered it only for toolkits already enabled would be silent exactly
+              when it was being consulted. */}
+          <Card
+            id={sectionDomId("risk")}
+            title={strings.settings.sectionTitle.risk}
+            className={sectionClass(visibility.cards.has("risk"))}
+          >
+            <p className="set__hint">{strings.pro.riskSection.description}</p>
+            {TOOL_RISK_CLASSES.filter(
+              (riskClass): riskClass is Exclude<ToolRiskClass, "none"> => riskClass !== "none",
+            ).map((riskClass) => (
+              <div className="set__module-group" key={riskClass}>
+                <h3 className="nx-eyebrow set__module-group-title">
+                  {strings.pro.risk[riskClass].label}
+                </h3>
+                <p className="nx-hint">{strings.pro.risk[riskClass].note}</p>
+              </div>
+            ))}
+          </Card>
+
+          {/* „Podešavanja modula": one row per module card this build draws, and
+              each row opens that card alone. The rows come from the same
+              `moduleSettingsCards` gate the cards below do, so a switched-off
+              module offers neither a row nor a page. */}
+          <Card
+            title={s.moduleSettingsList}
+            className={
+              visibility.lists.has("module-settings") ? undefined : "set__section--hidden"
+            }
+          >
+            {moduleCards.map((card) => (
+              <SubPageListRow
+                key={card.moduleId}
+                id={card.moduleId}
+                icon={moduleIconName(card.moduleId)}
+                label={card.title}
+                onOpen={() => navigate({ category: "modules", sub: card.moduleId })}
+              />
+            ))}
+          </Card>
+
+          {/* Every card a MODULE owns, composed from the registry in registry
+              order (`manifest.settings`). Nothing is drawn for a module the
+              profile has switched off — a card for a section the sidebar does
+              not show would be a dangling control, which is the rule PRIV's card
+              already followed and all of them now do. A declaration this build
+              has no renderer for draws nothing, exactly as an unknown dashboard
+              placement does. */}
+          {moduleCards.map((card) => {
+            const Body = MODULE_SETTINGS_PANELS[card.moduleId]?.Body;
+            if (Body === undefined) return null;
+            return (
+              <Card
+                key={card.moduleId}
+                id={sectionDomId(card.moduleId)}
+                title={card.title}
+                className={sectionClass(visibility.cards.has(card.moduleId))}
+              >
+                {/* The reset count is a remount key: a cleared preference is
+                    re-read by the body's own initializers, so the page never
+                    learns what the panel stores. */}
+                <Body key={resetCounts[card.moduleId] ?? 0} profileId={profileId} hits={hits} />
+                {/* „Vrati na podrazumevano“ is the DECLARATION's decision, not a
+                    list here: a card offers it when every value it holds lives
+                    on this machine (SET §5). */}
+                {isDeviceOnlyPanel(card.panel) && (
+                  <ResetLink
+                    onClick={() => setResetting({ id: card.moduleId, title: card.title })}
+                  />
+                )}
+              </Card>
+            );
+          })}
+
+          {searchGroupTitle("notifications")}
+          <Card
+            id={sectionDomId("notifications")}
+            title={strings.settings.sectionTitle.notifications}
+            className={sectionClass(visibility.cards.has("notifications"))}
+          >
+            {/* NTF-008's appetite presets, as the card's first ROW: the question is
+                „koliko obaveštenja", the answer is the three-way choice, and the
+                controls under it are the exceptions to whichever one is picked. */}
+            <div className="set__field">
+              <p className="nx-hint">{strings.settings.notificationPresets.label}</p>
+              <div className="set__preset-row">
+                {NOTIFICATION_PRESETS.map((preset) => (
+                  <Button
+                    key={preset.key}
+                    size="sm"
+                    variant={activePreset?.key === preset.key ? "primary" : "ghost"}
+                    onClick={() => void applyPreset(preset.sources)}
+                  >
+                    {strings.settings.notificationPresets[preset.key]}
+                  </Button>
+                ))}
+              </div>
+              <p className="nx-hint">{strings.settings.notificationPresets.caption}</p>
+            </div>
+            {presetError != null && <p className="set__error">{presetError}</p>}
+            <NotificationSettingsControls profileId={profileId} refreshToken={refreshToken} />
+          </Card>
+
+          {searchGroupTitle("data")}
+          <Card
+            id={sectionDomId("backup")}
+            title={strings.settings.sectionTitle.backup}
+            className={sectionClass(visibility.cards.has("backup"))}
+          >
+            <BackupSection profileId={profileId} />
+            <AutoBackupSection profileId={profileId} hits={hits} />
+            <RestoreSection profileId={profileId} hits={hits} />
+          </Card>
+
+          {/* „Uvoz i izvoz": the eight flows that used to share the card above.
+              Each is a page of its own now, because „napravi rezervnu kopiju" and
+              „uvezi izvod iz banke" are different acts with different
+              consequences, and eleven blocks in one card made neither of them
+              findable. */}
+          <Card
+            title={s.importExportList}
+            className={visibility.lists.has("import-export") ? undefined : "set__section--hidden"}
+          >
+            {subPageListById("import-export").subPages.map((subPage) => (
+              <SubPageListRow
+                key={subPage.id}
+                id={subPage.id}
+                icon={subPage.icon}
+                label={lookup(s.sectionTitle, subPage.id) ?? subPage.id}
+                onOpen={() => navigate({ category: "data", sub: subPage.id })}
+              />
+            ))}
+          </Card>
+
+          {/* The eight sub-pages. Each card is named with the heading its block
+              already drew, which is why the block's own eyebrow is suppressed —
+              it would be the same words a second time, directly under the title. */}
+          <Card
+            id={sectionDomId("import-archive")}
+            title={s.sectionTitle["import-archive"]}
+            className={`${sectionClass(visibility.cards.has("import-archive"))}${
+              hitCards.has("import-archive") ? " set__hit-card" : ""
+            }`}
+          >
+            <ImportSection profileId={profileId} hits={hits} showTitle={false} />
+          </Card>
+
+          <Card
+            id={sectionDomId("import-ics")}
+            title={s.sectionTitle["import-ics"]}
+            className={`${sectionClass(visibility.cards.has("import-ics"))}${
+              hitCards.has("import-ics") ? " set__hit-card" : ""
+            }`}
+          >
+            <IcsImportSection profileId={profileId} hits={hits} showTitle={false} />
+          </Card>
+
+          <Card
+            id={sectionDomId("export-ics")}
+            title={s.sectionTitle["export-ics"]}
+            className={`${sectionClass(visibility.cards.has("export-ics"))}${
+              hitCards.has("export-ics") ? " set__hit-card" : ""
+            }`}
+          >
+            <CalendarExportSection profileId={profileId} hits={hits} showTitle={false} />
+          </Card>
+
+          <Card
+            id={sectionDomId("import-apkg")}
+            title={s.sectionTitle["import-apkg"]}
+            className={`${sectionClass(visibility.cards.has("import-apkg"))}${
+              hitCards.has("import-apkg") ? " set__hit-card" : ""
+            }`}
+          >
+            <ApkgImportSection profileId={profileId} hits={hits} showTitle={false} />
+          </Card>
+
+          <Card
+            id={sectionDomId("import-csv")}
+            title={s.sectionTitle["import-csv"]}
+            className={`${sectionClass(visibility.cards.has("import-csv"))}${
+              hitCards.has("import-csv") ? " set__hit-card" : ""
+            }`}
+          >
+            <CsvImportSection profileId={profileId} hits={hits} showTitle={false} />
+          </Card>
+
+          <Card
+            id={sectionDomId("import-fin-csv")}
+            title={s.sectionTitle["import-fin-csv"]}
+            className={`${sectionClass(visibility.cards.has("import-fin-csv"))}${
+              hitCards.has("import-fin-csv") ? " set__hit-card" : ""
+            }`}
+          >
+            {/* The same component the finance page mounts (FIN slice e) — one
+                flow, two places to reach it, because a second copy of a state
+                machine that writes money is a second place for it to go wrong. */}
+            <FinCsvImportSection profileId={profileId} showTitle={false} />
+          </Card>
+
+          <Card
+            id={sectionDomId("import-llm")}
+            title={s.sectionTitle["import-llm"]}
+            className={`${sectionClass(visibility.cards.has("import-llm"))}${
+              hitCards.has("import-llm") ? " set__hit-card" : ""
+            }`}
+          >
+            <LlmImportSection profileId={profileId} hits={hits} showTitle={false} />
+          </Card>
+
+          <Card
+            id={sectionDomId("import-markdown")}
+            title={s.sectionTitle["import-markdown"]}
+            className={`${sectionClass(visibility.cards.has("import-markdown"))}${
+              hitCards.has("import-markdown") ? " set__hit-card" : ""
+            }`}
+          >
+            <MarkdownImportSection profileId={profileId} hits={hits} showTitle={false} />
+          </Card>
+
+          {/* The cloud half. It is a DEVICE card, not a profile one: the cloud
+              switch, the account and the master key belong to this computer, so
+              it takes no `profileId` and shows the same thing in every profile. */}
+          <Card
+            id={sectionDomId("sync")}
+            title={strings.settings.sectionTitle.sync}
+            className={sectionClass(visibility.cards.has("sync"))}
+          >
+            <SyncSection hits={hits} />
+          </Card>
+
+          {searchGroupTitle("privacy")}
+          {/* SET-010, local half. Six statements of fact — no toggle, no link, no
+              „saznaj više“ on any of them. Every sentence is checkable in the
+              source; see the copy block's own comment, which names the file each
+              one is true because of. Below them, the one thing on this card that
+              IS operable (SRCH-009): the search history is the only place the app
+              stores something about how you used it rather than what you made, so
+              the card that lists what is stored is where you erase it. */}
+          <Card
+            id={sectionDomId("privacy")}
+            title={strings.settings.sectionTitle.privacy}
+            className={sectionClass(visibility.cards.has("privacy"))}
+          >
+            <p className="nx-hint">{strings.settings.privacy.storage}</p>
+            <p className="nx-hint">{strings.settings.privacy.noTelemetry}</p>
+            <p className="nx-hint">{strings.settings.privacy.offline}</p>
+            <p className="nx-hint">{strings.settings.privacy.sync}</p>
+            <p className="nx-hint">{strings.settings.privacy.exports}</p>
+            <p className="nx-hint">{strings.settings.privacy.deletion}</p>
+            <SearchHistorySection profileId={profileId} hits={hits} />
+          </Card>
+
+          {searchGroupTitle("about")}
+          <Card
+            id={sectionDomId("about")}
+            title={strings.settings.sectionTitle.about}
+            className={sectionClass(visibility.cards.has("about"))}
+          >
+            {info ? (
+              <dl className="app__facts">
+                <div>
+                  <dt>{strings.settings.about.version}</dt>
+                  <dd>
+                    {info.name} {info.version}
+                  </dd>
+                </div>
+                <div>
+                  <dt>{strings.settings.about.electron}</dt>
+                  <dd>{info.versions.electron}</dd>
+                </div>
+                <div>
+                  <dt>{strings.settings.about.chromium}</dt>
+                  <dd>{info.versions.chrome}</dd>
+                </div>
+                <div>
+                  <dt>{strings.settings.about.node}</dt>
+                  <dd>{info.versions.node}</dd>
+                </div>
+                <div>
+                  <dt>{strings.settings.about.dataLocation}</dt>
+                  <dd className="app__path">{info.userDataPath}</dd>
+                </div>
+              </dl>
+            ) : (
+              <p className="nx-hint">{strings.app.loading}</p>
             )}
           </Card>
-        );
-      })}
 
-      <Card
-        id={sectionDomId("shortcuts")}
-        title={strings.settings.sectionTitle.shortcuts}
-        className={sectionClass(sections.has("shortcuts"))}
-      >
-        <ShortcutsSection
-          overrides={shortcutOverrides}
-          onChange={onShortcutOverridesChange}
-          onShowAll={onShowShortcuts}
-          globalTaken={globalShortcutTaken}
-          hits={hits}
-        />
-      </Card>
+          {/* The notices this product owes for other people's work. Last on the
+              page and after „O aplikaciji" on purpose: it is about the app rather
+              than about the user, and it is the longest thing here. */}
+          <Card
+            id={sectionDomId("licences")}
+            title={strings.settings.sectionTitle.licences}
+            className={sectionClass(visibility.cards.has("licences"))}
+          >
+            <LicencesSection />
+          </Card>
 
-      <Card
-        id={sectionDomId("modules")}
-        title={strings.settings.sectionTitle.modules}
-        className={sectionClass(sections.has("modules"))}
-      >
-        {[...registry.byCategory()].map(([category, members]) => (
-          <div key={category} className="set__module-group">
-            <h3 className="nx-eyebrow set__module-group-title">
-              {strings.settings.moduleCategories[category] ?? category}
-            </h3>
-            <div className="set__module-list">
-              {members.map((manifest) => {
-                const locked = LOCKED_MODULE_IDS.has(manifest.id);
-                const enabled = flags[manifest.id] ?? manifest.defaultEnabled;
-                return (
-                  <div className="set__module-row" key={manifest.id}>
-                    <div className="set__module-info">
-                      <span
-                        className={labelClass(
-                          "set__module-name",
-                          hits.has(moduleEntryId(manifest.id)),
-                        )}
-                      >
-                        {moduleName(manifest.id)}
-                      </span>
-                      <span className="nx-hint">
-                        {lookup(strings.settings.moduleDescriptions, manifest.id) ?? ""}
-                      </span>
-                    </div>
-                    {locked ? (
-                      <Chip>{strings.settings.modulesAlwaysOn}</Chip>
-                    ) : (
-                      <Checkbox
-                        checked={enabled}
-                        aria-label={moduleName(manifest.id)}
-                        onChange={(event) => void toggleModule(manifest.id, event.target.checked)}
-                      />
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-        {modulesError != null && <p className="set__error">{modulesError}</p>}
-      </Card>
-
-      {/* The picker, inline rather than behind the drawer's dialog: this is the
-          page somebody opens to change what they have, and a card that only
-          holds a button to open a dialog is a card that wastes a click. The
-          component is the drawer's own, so the two surfaces cannot drift. */}
-      <Card
-        id={sectionDomId("packs")}
-        title={strings.settings.sectionTitle.packs}
-        className={sectionClass(sections.has("packs"))}
-      >
-        <ProPackList
-          profileId={profileId}
-          packs={new Set(enabledPacks(flags))}
-          onFlagsChanged={onFlagsChanged}
-        />
-      </Card>
-
-      {/* The long form of every notice the drawer shows short. It is the
-          cheapest of the four mechanisms and, on its own, the least protective
-          — a page nobody opens. It earns its place as the ANCHOR: the short
-          line on each tool is only honest if the full text exists somewhere a
-          person can actually read it, and this is that somewhere.
-
-          Every class is listed, including the ones this profile's toolkits do
-          not currently reach. „What does this app say about regulated work" is
-          a question somebody asks BEFORE switching a toolkit on, and a card that
-          answered it only for toolkits already enabled would be silent exactly
-          when it was being consulted. */}
-      <Card
-        id={sectionDomId("risk")}
-        title={strings.settings.sectionTitle.risk}
-        className={sectionClass(sections.has("risk"))}
-      >
-        <p className="set__hint">{strings.pro.riskSection.description}</p>
-        {TOOL_RISK_CLASSES.filter(
-          (riskClass): riskClass is Exclude<ToolRiskClass, "none"> => riskClass !== "none",
-        ).map((riskClass) => (
-          <div className="set__module-group" key={riskClass}>
-            <h3 className="nx-eyebrow set__module-group-title">
-              {strings.pro.risk[riskClass].label}
-            </h3>
-            <p className="nx-hint">{strings.pro.risk[riskClass].note}</p>
-          </div>
-        ))}
-      </Card>
-
-      <Card
-        id={sectionDomId("notifications")}
-        title={strings.settings.sectionTitle.notifications}
-        className={sectionClass(sections.has("notifications"))}
-      >
-        {/* NTF-008's appetite presets, as the card's first ROW: the question is
-            „koliko obaveštenja", the answer is the three-way choice, and the
-            controls under it are the exceptions to whichever one is picked. */}
-        <div className="set__field">
-          <p className="nx-hint">{strings.settings.notificationPresets.label}</p>
-          <div className="set__preset-row">
-            {NOTIFICATION_PRESETS.map((preset) => (
-              <Button
-                key={preset.key}
-                size="sm"
-                variant={activePreset?.key === preset.key ? "primary" : "ghost"}
-                onClick={() => void applyPreset(preset.sources)}
-              >
-                {strings.settings.notificationPresets[preset.key]}
-              </Button>
-            ))}
-          </div>
-          <p className="nx-hint">{strings.settings.notificationPresets.caption}</p>
         </div>
-        {presetError != null && <p className="set__error">{presetError}</p>}
-        <NotificationSettingsControls profileId={profileId} refreshToken={refreshToken} />
-      </Card>
-
-      <Card
-        id={sectionDomId("backup")}
-        title={strings.settings.sectionTitle.backup}
-        className={sectionClass(sections.has("backup"))}
-      >
-        <BackupSection profileId={profileId} />
-        <AutoBackupSection profileId={profileId} hits={hits} />
-        <CalendarExportSection profileId={profileId} hits={hits} />
-        <RestoreSection profileId={profileId} hits={hits} />
-        <ImportSection profileId={profileId} hits={hits} />
-        <IcsImportSection profileId={profileId} hits={hits} />
-        <ApkgImportSection profileId={profileId} hits={hits} />
-        <CsvImportSection profileId={profileId} hits={hits} />
-        {/* The same component the finance page mounts (FIN slice e) — one flow,
-            two places to reach it, because a second copy of a state machine that
-            writes money is a second place for it to go wrong. */}
-        <FinCsvImportSection
-          profileId={profileId}
-          titleClassName={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-fin-csv"))}
-        />
-        <LlmImportSection profileId={profileId} hits={hits} />
-        <MarkdownImportSection profileId={profileId} hits={hits} />
-      </Card>
-
-      {/* The cloud half. It is a DEVICE card, not a profile one: the cloud
-          switch, the account and the master key belong to this computer, so it
-          takes no `profileId` and shows the same thing in every profile. */}
-      <Card
-        id={sectionDomId("sync")}
-        title={strings.settings.sectionTitle.sync}
-        className={sectionClass(sections.has("sync"))}
-      >
-        <SyncSection hits={hits} />
-      </Card>
-
-      {/* SET-010, local half. Six statements of fact — no toggle, no link, no
-          „saznaj više“ on any of them. Every sentence is checkable in the
-          source; see the copy block's own comment, which names the file each
-          one is true because of. Below them, the one thing on this card that
-          IS operable (SRCH-009): the search history is the only place the app
-          stores something about how you used it rather than what you made, so
-          the card that lists what is stored is where you erase it. */}
-      <Card
-        id={sectionDomId("privacy")}
-        title={strings.settings.sectionTitle.privacy}
-        className={sectionClass(sections.has("privacy"))}
-      >
-        <p className="nx-hint">{strings.settings.privacy.storage}</p>
-        <p className="nx-hint">{strings.settings.privacy.noTelemetry}</p>
-        <p className="nx-hint">{strings.settings.privacy.offline}</p>
-        <p className="nx-hint">{strings.settings.privacy.sync}</p>
-        <p className="nx-hint">{strings.settings.privacy.exports}</p>
-        <p className="nx-hint">{strings.settings.privacy.deletion}</p>
-        <SearchHistorySection profileId={profileId} hits={hits} />
-      </Card>
-
-      <Card
-        id={sectionDomId("about")}
-        title={strings.settings.sectionTitle.about}
-        className={sectionClass(sections.has("about"))}
-      >
-        {info ? (
-          <dl className="app__facts">
-            <div>
-              <dt>{strings.settings.about.version}</dt>
-              <dd>
-                {info.name} {info.version}
-              </dd>
-            </div>
-            <div>
-              <dt>{strings.settings.about.electron}</dt>
-              <dd>{info.versions.electron}</dd>
-            </div>
-            <div>
-              <dt>{strings.settings.about.chromium}</dt>
-              <dd>{info.versions.chrome}</dd>
-            </div>
-            <div>
-              <dt>{strings.settings.about.node}</dt>
-              <dd>{info.versions.node}</dd>
-            </div>
-            <div>
-              <dt>{strings.settings.about.dataLocation}</dt>
-              <dd className="app__path">{info.userDataPath}</dd>
-            </div>
-          </dl>
-        ) : (
-          <p className="nx-hint">{strings.app.loading}</p>
-        )}
-      </Card>
-
-      {/* The notices this product owes for other people's work. Last on the
-          page and after „O aplikaciji" on purpose: it is about the app rather
-          than about the user, and it is the longest thing here. */}
-      <Card
-        id={sectionDomId("licences")}
-        title={strings.settings.sectionTitle.licences}
-        className={sectionClass(sections.has("licences"))}
-      >
-        <LicencesSection />
-      </Card>
+      </div>
 
       {/* One dialog for every resettable card — the question is the same
           question, and only the card it names differs (SET §5). */}

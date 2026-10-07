@@ -326,9 +326,19 @@ export interface FinCsvImportSectionProps {
   profileId: string;
   /** The heading's class, so the Settings mount can carry its SET-014 search-hit marker and the finance page can carry its own. */
   titleClassName?: string;
+  /**
+   * SET-015: Settings now mounts this flow as the only content of a card whose
+   * title IS this heading, so the heading would be drawn twice. The finance
+   * page keeps the default and its own heading.
+   */
+  showTitle?: boolean;
 }
 
-export function FinCsvImportSection({ profileId, titleClassName }: FinCsvImportSectionProps) {
+export function FinCsvImportSection({
+  profileId,
+  titleClassName,
+  showTitle = true,
+}: FinCsvImportSectionProps) {
   const s = strings.settings.finCsvImport;
   // The half of the flow that is identical to its siblings', read from where it
   // is already spelled rather than spelled a second time.
@@ -501,7 +511,9 @@ export function FinCsvImportSection({ profileId, titleClassName }: FinCsvImportS
 
   return (
     <div className="set__import-block">
-      <h3 className={titleClassName ?? "nx-eyebrow set__module-group-title"}>{s.title}</h3>
+      {showTitle && (
+        <h3 className={titleClassName ?? "nx-eyebrow set__module-group-title"}>{s.title}</h3>
+      )}
       <p className="nx-hint">{s.description}</p>
 
       {accounts.length === 0 ? (

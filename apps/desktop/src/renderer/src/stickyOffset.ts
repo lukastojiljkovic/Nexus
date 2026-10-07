@@ -36,6 +36,17 @@ import { useCallback, useEffect, useRef } from "react";
  *
  * The value carries its `px` unit and is written only when it changes, so a
  * resize that does not move the bar invalidates no style.
+ *
+ * ─── Where it is used today ──────────────────────────────────────────────
+ *
+ * Nowhere, since SET-015 replaced the settings index with a category rail —
+ * that rail is a `position: sticky` column in a grid, not a bar laid over the
+ * cards, so nothing has to clear it and Settings no longer publishes a height.
+ * The hook is KEPT rather than deleted because `docs/defect-classes.md` names
+ * it as the fix for DC-23's two still-open instances in the notes editor
+ * (`noteTableOfContents.tsx`'s scroll under NOTE's sticky toolbar, and
+ * ProseMirror's `tr.scrollIntoView()` under `.note__find`), and deleting it
+ * would leave that document pointing at a file that no longer exists.
  */
 export function useStickyBarHeight(property: string): (node: HTMLElement | null) => void {
   const attached = useRef<{ scope: HTMLElement; observer: ResizeObserver } | null>(null);
