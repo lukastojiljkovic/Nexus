@@ -3,32 +3,25 @@
   display: flex;
   flex-direction: column;
   gap: var(--nx-space-5);
+  /* SET-015: this page's own width is the measure the layout changes at, not
+     the window's — the shell's sidebar takes part of the window before this
+     page sees any of it. Declaring the container here is what lets the
+     `@container` block below ask about the right box. */
+  container-type: inline-size;
 }
 /* Section cards reuse nx-card's surface; this only spaces their innards.
 
-   `scroll-margin-top` is what makes the section index above land a card under
-   the sticky index rather than behind it: `scrollIntoView({block:"start"})`
-   aligns the element's margin box, so the card stops one comfortable step below
-   the strip instead of exactly at the scrollport edge.
-
-   `--set-index-height` is the strip's MEASURED height, republished by
-   `stickyOffset.ts` on `.set` whenever it changes. It used to be the constant
-   `calc(var(--nx-space-8) + var(--nx-space-4))` — „one index strip's height",
-   which is what it is only while the strip fits on one line. It fits on two or
-   three at every window size the app opens at, and on a different number again
-   as the filter hides sections, so the constant was wrong at all three sizes in
-   both themes and the layout sweep saw the card title under the strip.
-
-   The fallback is that same constant, and it is the honest one: it is the value
-   for a single-line strip, which is what the page looks like for the one frame
-   before the observer's first measurement lands. */
+   `scroll-margin-top` is what keeps a card jumped to — by the screenshot
+   harness today, by a deep link tomorrow — clear of the scroller's own top
+   edge, so it lands at the page's padding step rather than flush against the
+   edge it was scrolled to (`scrollIntoView({block:"start"})` aligns the
+   element's MARGIN box with the scrollport top). It is one token because that
+   is the distance the page itself puts above its first row. */
 .set__section {
   display: flex;
   flex-direction: column;
   gap: var(--nx-space-4);
-  scroll-margin-top: calc(
-    var(--set-index-height, var(--nx-space-8)) + var(--nx-space-4)
-  );
+  scroll-margin-top: var(--nx-space-6);
 }
 .set__section .nx-card__title {
   margin-bottom: 0;
@@ -143,60 +136,153 @@
   width: 320px;
   max-width: 100%;
 }
-/* The section index (SET §5's answer to „a page this long with no way to jump
-   is a scroll hunt"). It is the page's table of contents and it sticks to the
-   top of the scroller, so the answer to „where am I, and where is the card I
-   came for" is on screen at every scroll position.
+/* SET-015: the page's two levels of navigation, in one container query.
+   ------------------------------------------------------------------------
+   „Podešavanja" had twenty-seven cards in one column with a wrapping chip index
+   above them, and any card below the third screenful was a scroll hunt — the
+   index itself wrapped to three lines at every window the app opens at and hid
+   the card it had just jumped to. What replaces it is a rail of eight
+   categories with the cards beside it, and the breakpoint is a CONTAINER query
+   on `.set` rather than a media query: the shell's sidebar takes part of the
+   window before this page sees any of it, so the viewport is the wrong measure
+   of whether there is room for two columns.
 
-   Typographic, like every other navigation state in the product: the current
-   section is gold text plus weight, never a pill and never a filled tab. It
-   also answers to the filter above it — a query that hides eleven cards hides
-   their entries here too, so the index never offers a jump to something that is
-   not on the page. */
-.set__index {
-  position: sticky;
-  top: 0;
-  z-index: var(--nx-layer-raised);
+   Below the breakpoint the same location is a phone-style drill-down: the rail
+   becomes the root CARD (`.set__root`) and the pane takes the whole width. Only
+   the layout changes at the breakpoint — the location and every card's mounted
+   state survive it, which is the whole reason the two are separate. */
+.set__layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+/* Furniture, not reading matter: hidden until the container can hold it beside
+   the pane. */
+.set__rail {
+  display: none;
+}
+.set__pane {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--nx-space-1) var(--nx-space-2);
-  margin: 0 calc(-1 * var(--nx-space-2));
-  padding: var(--nx-space-2);
-  background: var(--nx-bg);
-  border-bottom: 1px solid var(--nx-border-subtle);
-  /* Twenty-odd short words wrap to two lines at any sane window width. The cap
-     is for the pathological one — a very narrow window where a table of
-     contents would otherwise take a quarter of the page and keep it forever. */
-  max-height: 25vh;
-  overflow-y: auto;
+  flex-direction: column;
+  gap: var(--nx-space-5);
+  min-width: 0;
 }
-.set__index-link {
-  padding: var(--nx-space-1) var(--nx-space-2);
-  /* The pointer-target floor, stated for a control that is deliberately not a
-     bordered button — an index entry that looked like a button would read as
-     eleven actions rather than as a table of contents. */
-  min-height: 24px;
-  display: inline-flex;
-  align-items: center;
-  border: none;
-  border-radius: var(--nx-radius-xs);
-  background: transparent;
-  color: var(--nx-text-muted);
-  font: inherit;
-  font-size: var(--nx-font-size-body-sm);
-  cursor: pointer;
-  transition: color var(--nx-motion-fast) var(--nx-motion-ease);
+/* The pane's own heading: the category, or the open sub-page. Above the card
+   titles and below the page title, so the ladder reads page → category → card →
+   row; the summary under it is the page's hint tier, unchanged. */
+.set__pane-head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nx-space-2);
 }
-.set__index-link:hover {
+.set__pane-title,
+.set__group-title {
+  margin: 0;
+  font-size: var(--nx-font-size-title);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-normal);
   color: var(--nx-text);
 }
-.set__index-link:focus-visible {
+/* A search group's heading is a rail item's scroll target, so it lands clear of
+   the scroller's edge exactly as a card does. */
+.set__group-title {
+  scroll-margin-top: var(--nx-space-6);
+}
+/* The heading is `tabIndex={-1}` only so navigation can move focus to it and a
+   screen reader announces the new page. Tab never reaches it and it does nothing
+   when focused, so it is not a control and draws no ring: the next Tab goes on
+   from it into the page. */
+.set__pane-title:focus {
+  outline: none;
+}
+/* A `ListRow` whose content is a real `<button>`: the row keeps the page's row
+   rhythm and divider, the button is what Tab reaches and what Enter and Space
+   activate. `display: block` and the full width make the button the row. */
+.set__nav-row {
+  display: block;
+  width: 100%;
+  /* The pointer-target floor, written the way the design system writes it
+     (`.nx-button--sm`) rather than as a space step: it is a minimum SIZE, not
+     the gap between two things. Without it a one-line row's button measured
+     ~19px tall and the sweep's `small-target` audit reported it. */
+  min-height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.set__nav-row--stacked {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+.set__nav-row-title {
+  font-size: var(--nx-font-size-body-sm);
+  font-weight: var(--nx-font-weight-medium);
+  color: var(--nx-text);
+}
+.set__nav-row:focus-visible {
   outline: 2px solid var(--nx-accent);
   outline-offset: 2px;
 }
-.set__index-link--current {
+/* A rail item with nothing to jump to while a query is active. Quieter by ink
+   alone, and still focusable: „no results in this category" is an answer, and
+   hiding the row would shorten the map exactly when the reader needs it. */
+.set__rail-item--empty {
+  color: var(--nx-text-muted);
+}
+/* `NavItem` is an anchor and declares no focus ring of its own — the sidebar's
+   rows take the platform's. A keyboard-driven rail wants the app's ring, which
+   is the one every other focusable surface in this file uses. */
+.set__rail .nx-nav-item:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+/* SET-015: the hit mark on a card whose visible label IS the card's title. The
+   import/export sub-pages suppress the block's own eyebrow — it would be the
+   title a second time — so without this a matched flow would be the one hit on
+   the page with nothing highlighted. The same recipe as `.set__hit` below:
+   accent ink plus weight, never a wash. */
+.set__hit-card > .nx-card__title {
   color: var(--nx-accent-strong);
   font-weight: var(--nx-font-weight-semibold);
+}
+
+@container (min-width: 760px) {
+  .set__layout {
+    grid-template-columns: clamp(168px, 24%, 212px) minmax(0, 1fr);
+    column-gap: var(--nx-space-6);
+  }
+  .set__rail {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nx-space-1);
+    /* Sticky in the SHELL's scroller (`.app__main`), which is the page's own
+       scroll container: the rail has to stay reachable while the cards beside
+       it scroll. It paints the page's ground because cards scroll UNDER it —
+       the rail's rows are transparent, so without an opaque ground their text
+       would be read through the rail's. */
+    position: sticky;
+    top: 0;
+    /* The same rung the chip index it replaces took, stated rather than left to
+       the positioned-box paint order so the intent survives a later card that
+       positions itself. */
+    z-index: var(--nx-layer-raised);
+    align-self: start;
+    background: var(--nx-bg);
+    padding-block: var(--nx-space-2);
+  }
+  /* The two narrow-only pieces. The rail is the root list in this layout, and a
+     back-to-root button would have nowhere to go. */
+  .set__root {
+    display: none;
+  }
+  .set__back--root {
+    display: none;
+  }
 }
 /* A filtered-out section hides but stays MOUNTED — unmounting would discard
    in-progress state (a restore preview holding its archive open, a half-typed
@@ -532,6 +618,12 @@
   max-width: 320px;
 }
 .set__security-form .nx-button {
+  align-self: flex-start;
+}
+/* The export's own button sits under the fields it acts on, at its own width,
+   like every other button on the page; as a direct child of the card's column
+   it stretched across all of it, which the wide categories pane made obvious. */
+.set__export {
   align-self: flex-start;
 }
 /* Rezervna kopija → Vraćanje iz arhive (IMEX slice 3d) and Uvoz iz arhive

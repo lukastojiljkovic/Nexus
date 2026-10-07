@@ -5634,8 +5634,46 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
      * nothing is lost, the cards come back the moment the box is cleared.
      */
     searchEmptyDescription: "Obriši pretragu da bi se vratili svi odeljci.",
-    /** The page's table of contents, above the cards — a landmark name, never drawn. */
-    indexLabel: "Odeljci podešavanja",
+    /**
+     * SET-015: the eight categories the rail lists, and the one line each of
+     * them says about itself. `categoryTitle` is the rail row and the pane
+     * heading; `categorySummary` is the subtitle under the heading (and the
+     * second line of a row on the narrow root).
+     */
+    categoryTitle: {
+      profile: "Profil i sigurnost",
+      appearance: "Izgled",
+      keyboard: "Tastatura",
+      modules: "Moduli",
+      notifications: "Obaveštenja",
+      data: "Podaci",
+      privacy: "Privatnost",
+      about: "O aplikaciji",
+    },
+    categorySummary: {
+      profile: "Ime i slika, profili, pristupni kod i automatsko zaključavanje",
+      appearance: "Jezik, tema, boja naglaska, nedelja i sat",
+      keyboard: "Prečice na tastaturi",
+      modules: "Koji delovi Nexusa su uključeni i podešavanja svakog modula",
+      notifications: "Šta te obaveštava i kada",
+      data: "Rezervna kopija, vraćanje, uvoz, izvoz i sinhronizacija",
+      privacy: "Šta se čuva i gde, istorija pretrage",
+      about: "Verzija, lokacija podataka i licence",
+    },
+    /** The rail's own landmark name — a name, never drawn. */
+    categoriesLabel: "Kategorije podešavanja",
+    /** The back button's accessible name; the visible text is the chevron plus `{name}`. */
+    backTo: "Nazad: {name}",
+    /** The two sub-page lists (SET-015). */
+    moduleSettingsList: "Podešavanja modula",
+    importExportList: "Uvoz i izvoz",
+    /**
+     * The rail badge's accessible text — its visible content is the bare
+     * count. The numeral agrees with the count, so the form is picked with
+     * `dayUnit` at the call site and `{n}` is filled in with the number.
+     */
+    searchResultCountOne: "{n} rezultat",
+    searchResultCountMany: "{n} rezultata",
     /** Section-card titles, in the order they appear on the page. */
     sectionTitle: {
       profile: "Profil",
@@ -5660,7 +5698,20 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       packs: "Paketi alatki",
       risk: "Napomene uz stručne alatke",
       notifications: "Obaveštenja",
-      backup: "Rezervna kopija",
+      backup: "Rezervna kopija i vraćanje",
+      /**
+       * The eight sub-pages of „Uvoz i izvoz" (SET-015). The text is the one
+       * the block inside each already draws, so a list row and its card name
+       * the same thing rather than two spellings of it.
+       */
+      "import-archive": "Uvoz iz arhive",
+      "import-ics": "Uvoz kalendara (.ics)",
+      "export-ics": "Izvoz kalendara",
+      "import-apkg": "Uvoz iz Anki (.apkg)",
+      "import-csv": "Uvoz zadataka (.csv)",
+      "import-fin-csv": "Uvoz izvoda (.csv)",
+      "import-llm": "Uvoz preko AI asistenta",
+      "import-markdown": "Uvoz belešaka (.md)",
       sync: "Sinhronizacija",
       privacy: "Podaci i privatnost",
       about: "O aplikaciji",

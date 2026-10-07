@@ -35,6 +35,19 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   value it splices into a script it evaluates in the renderer; a report cell
   escapes backslashes as well as pipes.
 
+### Changed
+
+- **Settings is organised into categories.** The page was one column of
+  twenty-seven cards with a wrapping chip index above it; it now has eight
+  categories — profile and security, appearance, keyboard, modules,
+  notifications, data, privacy, about — with the categories beside the cards on
+  a wide window and a drill-down list on a narrow one. The card that held
+  eleven separate things keeps backup, auto-backup and restore and is now
+  "Backup and restore", while the seven importers and the calendar export are
+  each their own page under "Import and export". Searching still reaches every
+  setting, and now shows results from every category at once, grouped under its
+  heading.
+
 ## [1.4.0] - 2026-10-05
 
 The first public release. No earlier version was tagged or published; this one

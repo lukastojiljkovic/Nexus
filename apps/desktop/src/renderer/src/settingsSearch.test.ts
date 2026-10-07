@@ -383,6 +383,27 @@ describe("buildSettingsIndex", () => {
     }
   });
 
+  it("files the eight moved import/export entries under their own sub-pages (SET-015)", () => {
+    // The flows used to share the „Rezervna kopija“ card and file under
+    // `backup`. Their hit ids did not move, so a hit and its highlight still
+    // agree; only the section a hit steers the reader to changed.
+    const moved: ReadonlyArray<readonly [string, string]> = [
+      ["backup-import", "import-archive"],
+      ["backup-ics", "import-ics"],
+      ["backup-calendar", "export-ics"],
+      ["backup-apkg", "import-apkg"],
+      ["backup-csv", "import-csv"],
+      ["backup-fin-csv", "import-fin-csv"],
+      ["backup-llm", "import-llm"],
+      ["backup-markdown", "import-markdown"],
+    ];
+    for (const [id, section] of moved) expect(entryById(id).section, id).toBe(section);
+    // The three blocks the backup card keeps still answer with `backup`.
+    expect(entryById("backup-export").section).toBe("backup");
+    expect(entryById("backup-auto").section).toBe("backup");
+    expect(entryById("backup-restore").section).toBe("backup");
+  });
+
   it("is rebuilt per call, so the registry it was given is the one it describes", () => {
     const first = buildSettingsIndex(createModuleRegistry());
     const second = buildSettingsIndex(createModuleRegistry());

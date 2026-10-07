@@ -863,7 +863,14 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     cleanup: CLOSE_AND_RESTORE_CIRCUIT(),
   },
   { id: "search", module: "dashboard", prepare: OPEN_SEARCH_PAGE(), fanout: null },
-  { id: "settings", module: "settings", fanout: null },
+  {
+    // The page as it opens: „Profil i sigurnost", the category the two-column
+    // layout defaults to and the one a reader lands on from the sidebar.
+    id: "settings",
+    module: "settings",
+    prepare: OPEN_SETTINGS_LOCATION("profile"),
+    fanout: null,
+  },
   {
     // „Podešavanja" is twenty-odd cards long and a frame only ever shows the
     // first one, so every card below the fold was unphotographed — which is why
@@ -871,9 +878,13 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     // Named by DOM id, not by the Serbian title: `sectionDomId` builds these
     // from the section id, so this survives a translation the way the module
     // scenes survive one by matching `data-module-id`.
+    //
+    // „Sinhronizacija" lives in the „Podaci" category (SET-015), so the scene
+    // opens that category first — see {@link OPEN_SETTINGS_LOCATION} for why a
+    // straight jump to the id would photograph the page top instead.
     id: "settings-sync",
     module: "settings",
-    prepare: SCROLL_TO("#set-section-sync"),
+    prepare: OPEN_SETTINGS_LOCATION("data", null, "#set-section-sync"),
     fanout: null,
   },
   {
@@ -889,26 +900,24 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     // starts showing the knob the day the demo seed sets the section up.
     id: "settings-priv",
     module: "settings",
-    prepare: SCROLL_TO("#set-section-priv"),
+    prepare: OPEN_SETTINGS_LOCATION("modules", "priv", "#set-section-priv"),
     fanout: null,
   },
   {
-    // „Uvoz iz asistenta", and through it the rest of „Rezervna kopija".
+    // „Uvoz iz asistenta" — one of the eight „Uvoz i izvoz" sub-pages the
+    // eleven-part „Rezervna kopija" card was split into (SET-015).
     //
-    // That one card holds NINE import and export flows — arhiva, kalendar,
-    // vraćanje, ICS, Anki, dva CSV-a, ovaj i Markdown — and the two scenes
-    // above reach neither it nor them, because a settings frame shows one card
-    // and this one is twelve screens down. The anchor is the answer box rather
-    // than the card, for the reason `SCROLL_TO` takes a selector at all: the
-    // card's top would photograph „Napravi rezervnu kopiju" and leave the flow
-    // this scene is named after exactly as unseen as it was.
+    // The anchor is the answer box rather than the card, for the reason
+    // `SCROLL_TO` takes a selector at all: the card's top would photograph the
+    // introduction and leave the flow this scene is named after exactly as
+    // unseen as it was.
     //
     // It is also the one field on the page whose name used to be written twice
     // — a `<p class="nx-hint">` above the box and an `aria-label` on it, which
     // is [[DC-120]] — and it was fixed on a surface no frame had ever shown.
     id: "settings-import-llm",
     module: "settings",
-    prepare: SCROLL_TO(".set__llm-answer", "center"),
+    prepare: OPEN_SETTINGS_LOCATION("data", "import-llm", ".set__llm-answer", "center"),
     fanout: null,
   },
   {
@@ -920,10 +929,39 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     // The anchor is the button, not its section, for the same reason
     // `settings-import-llm`'s is the answer box: scrolling to the card would
     // photograph the settings and leave the control this scene is named after
-    // as unseen as it was.
+    // as unseen as it was. The scene opens „Izgled", the first category in page
+    // order whose card draws one — which is the card the frame always meant.
     id: "settings-reset",
     module: "settings",
-    prepare: SCROLL_TO(".set__reset", "center"),
+    prepare: OPEN_SETTINGS_LOCATION("appearance", null, ".set__reset", "center"),
+    fanout: null,
+  },
+  {
+    // „Moduli" — the broadest category, and the one SET-015 shapes most: the
+    // four shell cards a profile's shape is decided by, then the module-settings
+    // list whose every row opens one module's card alone.
+    id: "settings-modules",
+    module: "settings",
+    prepare: OPEN_SETTINGS_LOCATION("modules"),
+    fanout: null,
+  },
+  {
+    // „Podaci" — the split itself. The card that used to hold eleven blocks now
+    // holds three, and the eight import/export flows are one click in through
+    // the list beneath it.
+    id: "settings-data",
+    module: "settings",
+    prepare: OPEN_SETTINGS_LOCATION("data"),
+    fanout: null,
+  },
+  {
+    // The narrow layout's root: the eight categories as one card of rows. It is
+    // reached by walking INTO a category and back out, because that is a route
+    // the harness can click — and at the wide sizes this lands on „Profil i
+    // sigurnost", which is the only root a two-column layout has.
+    id: "settings-root",
+    module: "settings",
+    prepare: CLICK_THEN('[data-settings-category="profile"]', ".set__back--root"),
     fanout: null,
   },
 
@@ -966,7 +1004,11 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     .map((manifest) => ({
       id: `settings-card-${manifest.id}`,
       module: "settings",
-      prepare: SCROLL_TO(`#set-section-${manifest.id}`),
+      prepare: OPEN_SETTINGS_LOCATION(
+        "modules",
+        manifest.id,
+        `#set-section-${manifest.id}`,
+      ),
       fanout: null,
     })),
 
@@ -1768,6 +1810,52 @@ function CLICK(selector: string): string {
     if (el) el.click();
     return true;
   })()`;
+}
+
+/**
+ * Opens one location on „Podešavanja" — the SET-015 category rail, then a
+ * sub-page row when the scene wants one — and scrolls to what the frame is
+ * about.
+ *
+ * The sweep used to reach a settings card by its DOM id alone
+ * (`#set-section-…`), because the page was one column and every card was on it.
+ * SET-015 hides every card that is not in the open category or sub-page, and a
+ * `display: none` element is not scrollable — a scene that jumped straight to
+ * the id would photograph the page top under the card's name, which is exactly
+ * the failure {@link SCROLL_TO} refuses to be silent about.
+ *
+ * The category control exists in BOTH layouts under the same selector: the
+ * rail's `NavItem` in the two-column layout and the root list's row in the
+ * narrow one. The one that is not drawn is still clickable by script, so a
+ * scene written once covers both.
+ *
+ * `anchor` is the thing the frame is named after (a card, a field, a button),
+ * and `block` follows {@link SCROLL_TO}'s rule: `"start"` for a card, which has
+ * a `scroll-margin-top` that clears the scroller's edge, and `"center"` for
+ * something inside a card, which has none. The scroll is the same code, not a
+ * second copy of it: `SCROLL_TO` is an IIFE, so it is embedded and awaited.
+ */
+function OPEN_SETTINGS_LOCATION(
+  category: string,
+  sub: string | null = null,
+  anchor: string | null = null,
+  block: "start" | "center" = "start",
+): string {
+  const steps = [
+    `[data-settings-category="${category}"]`,
+    ...(sub === null ? [] : [`[data-settings-sub="${sub}"]`]),
+  ];
+  const arrive = anchor === null ? "true" : `(await ${SCROLL_TO(anchor, block)})`;
+  return `(async () => {
+  const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  for (const step of ${jsLiteral(steps)}) {
+    const node = document.querySelector(step);
+    if (!node) return "none: " + step;
+    node.click();
+    await frame();
+  }
+  return ${arrive};
+})()`;
 }
 
 /**
@@ -3379,6 +3467,10 @@ async function sweep(
         process.stderr.write(`shots: no sidebar row for module "settings"\n`);
         continue;
       }
+      // „Kako je Nexus podešen za tebe" lives in the „Moduli" category now, so
+      // the scene opens that category before it reaches for the row.
+      await evalIn(win, OPEN_SETTINGS_LOCATION("modules"));
+      await settle(win);
       await evalIn(win, CLICK("#set-section-setup .set__module-row--foot .nx-button"));
       await settle(win);
       if ((await evalIn(win, ONB_PHASE)) !== "asking") {

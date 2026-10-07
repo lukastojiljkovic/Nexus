@@ -337,20 +337,19 @@ function shellEntries(): readonly ShellSettingsSearchEntry[] {
       label: s.autoBackup.title,
       keywords: ["automatski", "backup", "rezervna", "raspored", "dnevno", "nedeljno", "fascikla"],
     },
-    // The "Rezervna kopija" card's blocks — export, calendar export, restore,
-    // archive import, calendar import, Anki import, AI import, markdown import —
-    // each get their own entry inside that one section rather than a section of
-    // their own: they are one subject, and splitting the card would hide the
-    // contrast the archive flows are meant to be read against. „uvoz“ is shared
-    // by the import entries, which are then told apart by the words that name
-    // what each one reads; the restore entry answers to the words that describe
-    // what IT does.
+    // SET-015: the eight flows that used to share „Rezervna kopija“ are each
+    // their own sub-page now, so each entry files under its own sub-page id
+    // (`import-*` / `export-ics`) rather than under `backup`. The hit ids stay
+    // what they always were, which is what keeps every highlight working under
+    // its new heading. „uvoz“ is shared by the import entries, which are then
+    // told apart by the words that name what each one reads; the restore entry
+    // stays on `backup` and answers to the words that describe what IT does.
     {
-      // „kalendar“ and „ics“ are the words someone actually types looking for
-      // this; „izvoz“ is deliberately NOT repeated from `backup-export`, which
+      // „kalendar" and „ics" are the words someone actually types looking for
+      // this; „izvoz" is deliberately NOT repeated from `backup-export`, which
       // owns it — an entry that answers every query answers none of them.
       id: "backup-calendar",
-      section: "backup",
+      section: "export-ics",
       label: s.calendarExport.title,
       keywords: ["kalendar", "ics", "icalendar", "dogadjaji", "google"],
     },
@@ -362,7 +361,7 @@ function shellEntries(): readonly ShellSettingsSearchEntry[] {
     },
     {
       id: "backup-import",
-      section: "backup",
+      section: "import-archive",
       label: s.import.title,
       keywords: ["uvoz", "uvezi", "spajanje", "dodaj", "arhiva"],
     },
@@ -373,7 +372,7 @@ function shellEntries(): readonly ShellSettingsSearchEntry[] {
       // purpose — a user typing either is as likely to want the import as the
       // export, and both blocks answering is the honest result.
       id: "backup-ics",
-      section: "backup",
+      section: "import-ics",
       label: s.icsImport.title,
       keywords: ["ics", "icalendar", "kalendar", "google", "outlook", "dogadjaji", "uvoz"],
     },
@@ -382,7 +381,7 @@ function shellEntries(): readonly ShellSettingsSearchEntry[] {
       // this types „anki“ or „apkg“, never „uvoz iz arhive“ — so „arhiva“ is
       // deliberately absent, exactly as it is from the markdown entry below.
       id: "backup-apkg",
-      section: "backup",
+      section: "import-apkg",
       label: s.apkgImport.title,
       keywords: ["anki", "apkg", "kartice", "spil", "flashcards", "uvoz"],
     },
@@ -391,7 +390,7 @@ function shellEntries(): readonly ShellSettingsSearchEntry[] {
       // this types „csv“, „excel“ or „tabela“ — so „arhiva“ is deliberately
       // absent, exactly as it is from its neighbours.
       id: "backup-csv",
-      section: "backup",
+      section: "import-csv",
       label: s.csvImport.title,
       keywords: ["csv", "tabela", "excel", "zadaci", "kolone", "todoist", "uvoz"],
     },
@@ -401,7 +400,7 @@ function shellEntries(): readonly ShellSettingsSearchEntry[] {
       // which is exactly what keeps it apart from the task CSV entry above, whose
       // words nobody would use for their money.
       id: "backup-fin-csv",
-      section: "backup",
+      section: "import-fin-csv",
       label: s.finCsvImport.title,
       keywords: ["izvod", "banka", "bankovni", "racun", "transakcije", "promet", "finansije", "uvoz"],
     },
@@ -410,7 +409,7 @@ function shellEntries(): readonly ShellSettingsSearchEntry[] {
       // this types „chatgpt“ or „ai“, never „uvoz iz arhive“ — so „arhiva“ is
       // deliberately absent, exactly as it is from the two entries around it.
       id: "backup-llm",
-      section: "backup",
+      section: "import-llm",
       label: s.llmImport.title,
       keywords: ["ai", "chatgpt", "claude", "gemini", "asistent", "vestacka", "uputstvo", "uvoz"],
     },
@@ -419,7 +418,7 @@ function shellEntries(): readonly ShellSettingsSearchEntry[] {
       // flow's: „arhiva“ belongs to the two entries above, which is why it is
       // deliberately absent here.
       id: "backup-markdown",
-      section: "backup",
+      section: "import-markdown",
       label: s.markdownImport.title,
       keywords: ["markdown", "md", "beleske", "fajlovi", "obsidian", "uvoz"],
     },
