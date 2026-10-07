@@ -22,9 +22,11 @@
 #
 # This is a DECLARATION and nothing more. Local builds always pass
 # `--publish never` (see scripts/dist.mjs), so a build never contacts GitHub;
-# the release workflow uploads a DRAFT release instead; and auto-update stays
-# disarmed (the SEC-EL-07 comment in src/main/index.ts lists the three
-# conditions for re-arming it).
+# the release workflow uploads a DRAFT release instead. It is also not the
+# updater's feed: ADR-089 replaced electron-updater with a check against the
+# GitHub release API, which reads `SHA256SUMS.txt` and its Ed25519 signature
+# rather than the `latest*.yml` files electron-builder writes here — those stay
+# unshipped (see the `linux` upload step in release.yml).
 
 appId: rs.stojiljkovic.nexus
 productName: Nexus

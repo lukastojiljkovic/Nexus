@@ -9,12 +9,40 @@ import {
   writeFile as writeFileAsync,
 } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative } from "node:path";
-import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, protocol, session } from "electron";
-import type { IpcMainInvokeEvent, OpenDialogOptions } from "electron";
-// `electron-updater` is deliberately NOT imported — see the disarmed
-// auto-update section below for the three conditions that must hold first.
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  Menu,
+  Notification,
+  protocol,
+  session,
+  shell,
+} from "electron";
+import type { IpcMainInvokeEvent, OpenDialogOptions, Session } from "electron";
+// `electron-updater` is deliberately NOT imported, and that is settled rather
+// than pending: ADR-089 replaced it with the updater in `./update/`, which
+// downloads only a release asset whose SHA-256 is listed in a `SHA256SUMS.txt`
+// signed by the Ed25519 key compiled into this binary (`./update/releaseKey.ts`),
+// and only when the user has chosen „Offline + update checks". See the SEC-EL-07
+// section near the bottom of this file.
 import { readFileBounded } from "./boundedRead.js";
-import { devServerOrigin, isRequestAllowed, shouldBlockResolver } from "./net/offline.js";
+import {
+  devServerOrigin,
+  isRequestAllowed,
+  networkChoiceRecorded,
+  networkModeRequiresRestart,
+  readNetworkChoice,
+  readNetworkMode,
+  resolverRules,
+  updatesActive,
+  writeNetworkMode,
+} from "./net/offline.js";
+import { isUpdateRequestAllowed } from "./update/allowlist.js";
+import { createUpdateHttp, openReleasePage } from "./update/electron.js";
+import { RELEASE_PUBLIC_KEY_PEM } from "./update/releaseKey.js";
+import { createUpdateService, type UpdateService } from "./update/service.js";
 import { buildCloudEnv } from "./sync/config.js";
 import { electronCloudFetch } from "./sync/electronFetch.js";
 import { createSyncService, type SyncService } from "./sync/service.js";
@@ -652,6 +680,7 @@ import {
   MAX_TASK_TEMPLATE_NAME_LENGTH,
   MIN_FIT_REST_SECONDS,
   MIN_TARGET_RETENTION,
+  type NetworkModeView,
   NOTE_CARD_DISPOSITIONS,
   NOTE_CARD_KEY_MAX_LENGTH,
   NOTE_CARDS_MAX_COUNT,
@@ -713,6 +742,7 @@ import {
   type TaskAttachmentsAddResult,
   type TaskListsSnapshot,
   type TopicMoveDirection,
+  type UpdateStateView,
   WINDOW_VIEW_COMMANDS,
   type WindowState,
   type WindowViewCommand,
@@ -877,27 +907,47 @@ if (HARNESS_SANDBOX !== null) {
   app.setPath("sessionData", sandboxPath);
 }
 
-// SEC-NET: the resolver-level layer of the cloud-off boundary.
+// SEC-NET / ADR-089: the resolver-level layer of the boundary.
 //
 // MUST run at module scope, for the same reason the scheme registration above
 // does: a Chromium command-line switch is read once while the browser process
 // is starting, and appending it after `ready` changes nothing while looking
 // like it changed something. And it MUST run after `app.setName` and the
-// harness sandbox, because `shouldBlockResolver` reads `cloud.json` out of
-// `userData` and that path is what those two decide.
+// harness sandbox, because `resolverRules` reads `cloud.json` AND
+// `network.json` out of `userData` and that path is what those two decide.
 //
 // This is the layer that cannot be lifted at runtime, and the asymmetry is the
 // design rather than a shortcoming: the state this product has to be able to
 // guarantee is the DEFAULT one, and every launch builds it from scratch before
 // a line of renderer code has run. `net/offline.ts` covers the other three
-// layers and why turning cloud ON needs no restart while turning it off does.
+// layers, the network mode, and why any stored change needs a restart.
 //
 // `MAP * ~NOTFOUND` blocks NAMES, not literal IPs, which is exactly why it is
 // the third line of defence and not the only one — `webRequest` does not care
-// how the destination was spelled.
-if (shouldBlockResolver(app.getPath("userData"))) {
-  app.commandLine.appendSwitch("host-resolver-rules", "MAP * ~NOTFOUND");
+// how the destination was spelled. `resolverRules` returns exactly that string
+// in offline mode; in „offline + update checks" it appends one `EXCLUDE` per
+// pinned GitHub host so the dedicated update session alone can resolve them.
+const resolverRuleForLaunch = resolverRules(app.getPath("userData"));
+if (resolverRuleForLaunch !== null) {
+  app.commandLine.appendSwitch("host-resolver-rules", resolverRuleForLaunch);
 }
+
+// The automated harnesses are not people and must not meet the first-run
+// choice screen — the smoke and shots runs wipe this sandbox on every start,
+// so `network.json` would be absent every time and the sweep would photograph a
+// question instead of the app. Recording the default answer here is the one
+// place the harness may stand in for the user, and it is the honest one: the
+// sandbox is deleted at the START of every run, so nothing carries over.
+if (HARNESS_SANDBOX !== null && readNetworkChoice(app.getPath("userData")) === null) {
+  writeNetworkMode(app.getPath("userData"), "offline");
+}
+
+// The mode this process came up under — the one the resolver rule above was
+// computed from. Every later question ("does this need a restart") compares the
+// stored file against THIS, because a change written mid-session cannot take
+// effect until the next launch. Read once, here, for the same reason the
+// resolver rule is.
+const runningNetworkMode = readNetworkMode(app.getPath("userData"));
 
 // The screenshot sweep only. Two switches, because Chromium has two separate
 // mechanisms for standing a window down and `backgroundThrottling: false` in
@@ -5410,6 +5460,63 @@ function syncService(): SyncService {
     },
   });
   return syncServiceInstance;
+}
+
+// --- The network mode and the update check (ADR-089) -------------------------
+//
+// One service per launch, memoised on `syncService`'s terms: it owns the
+// dedicated update session's fetch, the pending offer and the once-a-day
+// bookkeeping, and a second instance would be a second answer to „is a download
+// already in flight".
+//
+// The service itself (`main/update/service.ts`) imports no Electron; the
+// effects arrive here. The session is created lazily because it can only be
+// made after `ready`, and `updateService()` is only ever called from handlers
+// registered inside `whenReady` and from the startup check beside the window.
+let updateSessionFor: Session | null = null;
+let updateServiceInstance: UpdateService | null = null;
+
+function updateService(): UpdateService {
+  updateServiceInstance ??= createUpdateService({
+    currentVersion: app.getVersion(),
+    platform: process.platform,
+    userData: userDataDir(),
+    mode: () =>
+      updatesActive(runningNetworkMode, readNetworkMode(userDataDir())) ? "updates" : "offline",
+    http: createUpdateHttp(requireUpdateSession()),
+    publicKeyPem: RELEASE_PUBLIC_KEY_PEM,
+    openPath: (path) => shell.openPath(path),
+    quit: () => app.quit(),
+    now: () => Date.now(),
+    onChanged: (view) => {
+      mainWindow?.webContents.send(IpcChannel.updateChanged, view);
+    },
+  });
+  return updateServiceInstance;
+}
+
+function requireUpdateSession(): Session {
+  if (updateSessionFor === null) {
+    throw new Error("Nexus update: the update session has not been created yet.");
+  }
+  return updateSessionFor;
+}
+
+/**
+ * The two questions the choice screen and the settings card ask. `choiceRequired`
+ * is the FIRST-RUN trigger, and it is true for a new install and an upgrade
+ * alike: no earlier version wrote `network.json`, so on the first 1.5.0 launch
+ * of every device there is no valid choice recorded.
+ */
+function networkModeView(): NetworkModeView {
+  const stored = readNetworkMode(userDataDir());
+  return {
+    mode: stored,
+    runningMode: runningNetworkMode,
+    updatesActive: updatesActive(runningNetworkMode, stored),
+    restartRequired: networkModeRequiresRestart(runningNetworkMode, stored),
+    choiceRequired: !networkChoiceRecorded(userDataDir()),
+  };
 }
 
 // --- Elektronika's external runner (ADR-085 E6, DEV-007) ---------------------
@@ -12132,6 +12239,66 @@ function registerIpc(): void {
     return syncService().syncNow();
   });
 
+  // The network mode (ADR-089). Both handlers answer while LOCKED, because the
+  // choice screen is shown BEFORE the unlock screen: the mode has to be settled
+  // before any account exists, exactly as `cloud.json` had to be readable then.
+  ipcMain.handle(IpcChannel.networkMode, (event): NetworkModeView => {
+    assertTrustedSender(event);
+    return networkModeView();
+  });
+
+  ipcMain.handle(IpcChannel.networkSetMode, (event, payload): NetworkModeView => {
+    assertTrustedSender(event);
+    const mode = asRecord(payload).mode;
+    if (mode !== "offline" && mode !== "updates") {
+      throw new Error('Invalid IPC payload: "mode" must be "offline" or "updates".');
+    }
+    // The ONE write. Selecting a radio and then closing the window records
+    // nothing, because nothing calls this but the confirm button and the
+    // settings card.
+    writeNetworkMode(userDataDir(), mode);
+    return networkModeView();
+  });
+
+  // The update check. Validation is trivial (no payloads), and every handler
+  // goes through one rule: updates may reach the network only when this launch
+  // came up in „updates" AND the stored choice is still „updates". Switching to
+  // offline therefore stops checks at once, while switching to updates waits for
+  // a restart, because the resolver rule is fixed at launch. That is why each
+  // handler below re-reads the stored mode rather than trusting a renderer that
+  // might have called the channel in a state this launch may not act on.
+  ipcMain.handle(IpcChannel.updateStatus, (event): UpdateStateView => {
+    assertTrustedSender(event);
+    return updateService().view();
+  });
+
+  ipcMain.handle(IpcChannel.updateCheck, async (event): Promise<UpdateStateView> => {
+    assertTrustedSender(event);
+    return updateService().checkNow();
+  });
+
+  ipcMain.handle(IpcChannel.updateInstall, async (event): Promise<UpdateStateView> => {
+    assertTrustedSender(event);
+    return updateService().install();
+  });
+
+  // No argument, by design: the address is the pinned release page in main, and
+  // a channel through which the renderer could hand main any URL to open would
+  // be a phishing primitive wearing a convenience's clothes.
+  ipcMain.handle(IpcChannel.updateOpenRelease, async (event): Promise<void> => {
+    assertTrustedSender(event);
+    await openReleasePage();
+  });
+
+  // Restarting for a network-mode change (ADR-089). This is the whole of it:
+  // `app.relaunch()` then the ordinary quit, so `will-quit` still closes the
+  // database and gives back the global shortcut exactly as a normal exit does.
+  ipcMain.handle(IpcChannel.appRelaunch, (event): void => {
+    assertTrustedSender(event);
+    app.relaunch();
+    app.quit();
+  });
+
   ipcMain.handle(IpcChannel.appInfo, (event): AppInfo => {
     assertTrustedSender(event);
     return appInfo();
@@ -13428,43 +13595,40 @@ async function runDemoSeed(): Promise<void> {
   );
 }
 
-// --- Auto-update (SEC-EL-07) — DISARMED, deliberately ------------------------
+// --- Auto-update (SEC-EL-07) — a different updater, described by ADR-089 ------
 //
-// **This is off, and it must stay off until the three conditions below are all
-// true.** It was armed, and that was a live remote-code-execution hole in a
-// shipped build rather than a future concern:
+// The old path was electron-updater, and it was disarmed because it was a live
+// remote-code-execution hole in a shipped build rather than a future concern:
 //
-//   - `checkForUpdatesAndNotify()` runs with electron-updater's own defaults,
-//     and those defaults are `autoDownload: true` and
-//     `autoInstallOnAppQuit: true`. Nobody clicks anything: the installer is
-//     fetched during the session and executed at the next quit.
-//   - `electron-builder.yml` carries no signing configuration at all, so the
-//     build is unsigned and the generated `app-update.yml` has no
-//     `publisherName`. electron-updater's Windows signature check compares the
-//     downloaded installer's Authenticode publisher against that field — and
-//     when the field is absent the check RETURNS AS THOUGH IT PASSED. It is a
-//     documented no-op, not a weak check.
+//   - `checkForUpdatesAndNotify()` runs with electron-updater's own defaults —
+//     `autoDownload: true` and `autoInstallOnAppQuit: true` — so the installer
+//     was fetched during the session and executed at the next quit, with nobody
+//     clicking anything.
+//   - `electron-builder.yml` carries no signing configuration, so the build is
+//     unsigned and the generated `app-update.yml` has no `publisherName`.
+//     electron-updater's Windows check compares the downloaded installer's
+//     Authenticode publisher against that field — and when the field is absent
+//     the check RETURNS AS THOUGH IT PASSED. It is a documented no-op.
 //
-// So the only thing standing between an attacker and native code on the user's
-// machine was that the feed repository does not exist yet. That is an accident
-// of scheduling, not a control. And the payoff grows the day sync ships: native
-// code on the device reaches `DK`, the DPAPI device secret, and — once cloud is
-// enabled — `MK`, every profile content key, and the stored refresh token,
-// which keeps working after the machine is wiped.
+// SEC-EL-07 states the two things it actually requires: the release is
+// Authenticode-signed, and updates travel over TLS **with cryptographic
+// signature verification**. ADR-089 keeps the second requirement and changes
+// how it is met. An Authenticode certificate is a *vendor-identity* control,
+// and this project does not have one; a detached Ed25519 signature over
+// `SHA256SUMS.txt`, verified against `./update/releaseKey.ts`'s public key
+// compiled into this binary, is the stronger control for the threat that
+// matters here — a stolen GitHub token or a compromised feed repository.
+// Authenticode therefore drops to being a SmartScreen concern and is no longer
+// a condition for updates (see ADR-089 §1).
 //
-// Before this may be re-armed, ALL THREE:
-//   1. the build is Authenticode-signed and `win.publisherName` is set, so the
-//      check stops being a no-op;
-//   2. `autoDownload: false` and `autoInstallOnAppQuit: false`, with an
-//      `update-available` handler that asks the user;
-//   3. a detached Ed25519 signature over `latest.yml`, verified against a
-//      public key COMPILED INTO THE BINARY, before `quitAndInstall`. Signing
-//      alone defends TLS and the GitHub account; it does not defend a stolen
-//      release token. The pinned key is what survives that.
-//
-// Until then the app never reaches for a feed, which is also why `autoUpdater`
-// is no longer imported: an unused import of an update client is the next
-// person's invitation to call it.
+// What ADR-089 put in its place lives in `./update/` and is on only when the
+// user chose „Offline + update checks". It never downloads on its own: the
+// check offers a version, and nothing is fetched until the user presses
+// Install. The installer is accepted only if its SHA-256 appears in a
+// `SHA256SUMS.txt` whose detached signature verifies against the pinned key,
+// and the hash is re-checked immediately before launch. `electron-updater` was
+// left the tree in 1.5.0 and must not come back: an unused import of an
+// update client is the next person's invitation to call it.
 
 function shutdown(code: number): void {
   stopNotificationScheduler();
@@ -13585,6 +13749,37 @@ app.whenReady().then(async () => {
   // product it protects.
   session.defaultSession.setSpellCheckerEnabled(false);
 
+  // SEC-NET / ADR-089: the dedicated update session. It exists in BOTH modes,
+  // but in offline mode it must be as DEAD as the renderer's — „a session
+  // nobody uses" is not the guarantee, because a live allowlist is a request
+  // path a bug or a future caller could reach. So the launch mode is the first
+  // condition here: unless this launch came up in „Offline + update checks",
+  // every request is cancelled before the host allowlist is even consulted.
+  // When the launch mode IS updates, the allowlist admits exactly three https
+  // hosts and nothing else — the ONLY network exception this product has.
+  //
+  // In-memory on purpose: the partition has no `persist:` prefix, so nothing
+  // this session fetches (no cookie, no cache, no auth) survives the process.
+  // The renderer's `defaultSession` is not touched: its `webRequest` list and
+  // its dead proxy stay exactly as they are, which is why the boundary a
+  // renderer can see is identical in both modes.
+  //
+  // DIRECT connection, not the system proxy, and that is load-bearing rather
+  // than tidiness: with a proxy configured, Chromium sends the request to the
+  // proxy with the HOST NAME in it and never consults the resolver, so the
+  // launch's `host-resolver-rules` — the layer that maps every name except the
+  // three pinned hosts to NOTFOUND — would not apply to this session at all.
+  // Direct mode is what keeps that resolver layer in force for this session.
+  // The `onBeforeRequest` allowlist below does not depend on it: it is the
+  // first and independent gate.
+  updateSessionFor = session.fromPartition("nexus-update");
+  updateSessionFor.webRequest.onBeforeRequest((details, callback) => {
+    callback({
+      cancel: runningNetworkMode !== "updates" || !isUpdateRequestAllowed(details.url),
+    });
+  });
+  await updateSessionFor.setProxy({ mode: "direct" });
+
   try {
     // ADR-044, and strictly before anything answers the renderer: bring the
     // on-disk layout up to the per-account one (resuming an interrupted move),
@@ -13689,12 +13884,16 @@ app.whenReady().then(async () => {
 
     mainWindow = createWindow();
 
-    // Never in dev, never during the smoke run — only a real packaged install.
-    // No update check. See the disarmed auto-update section: the check ran
-    // with auto-download and auto-install-on-quit at their defaults against an
-    // unsigned build whose signature verification is a no-op. It comes back
-    // only with signing, an explicit prompt, and a pinned-key signature over
-    // the feed manifest.
+    // ADR-089: an automatic check at most once a day, and only in
+    // „offline + update checks" mode. It runs beside the window rather than
+    // blocking it, the service makes it silent on a rate limit or a network
+    // failure, and it never downloads anything — the installer waits for the
+    // user to press Install. The harness runs are excluded twice over: the
+    // sandbox above records the offline choice, and an automated run does not
+    // ask at all.
+    if (!isAutomatedRun) {
+      void updateService().autoCheckIfDue();
+    }
 
     if (isSmoke) {
       mainWindow.webContents.once("did-finish-load", () => {
@@ -13719,7 +13918,10 @@ app.whenReady().then(async () => {
         // sweep's lock scene has to be able to unlock what it locked. It is
         // handed in rather than written down in `shots/` so that the one copy
         // of it stays here — see `ShotFixtures`.
-        void runShots(mainWindow!, shotsOutputDir(), { passcode: DEMO_PASSCODE })
+        void runShots(mainWindow!, shotsOutputDir(), {
+          passcode: DEMO_PASSCODE,
+          userDataDir: app.getPath("userData"),
+        })
           .then((frames) => {
             const findings = frames.reduce((total, frame) => total + frame.findings.length, 0);
             // The duplicate count is on the HEADLINE and not only in the

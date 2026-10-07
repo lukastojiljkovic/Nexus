@@ -1,6 +1,6 @@
 # Privacy
 
-**Last updated:** 2026-10-02
+**Last updated:** 2026-10-07
 
 Nexus is built so that the answer to "what does this app send?" is short, and so
 that the short answer can be checked in the source rather than believed.
@@ -15,12 +15,47 @@ that the short answer can be checked in the source rather than believed.
   local-only product, and the local-only path cannot reach the network at all —
   that is a runtime assertion in `apps/desktop/src/main/net/offline.ts`, not a
   setting somebody remembered to check.
+- **Update checks are off by default too.** Nexus asks once, on the first start
+  after 1.5.0, whether it may check for new versions of itself; a user who says
+  no is in exactly the product 1.4.0 was, with no network call of any kind.
 - **The app requires no online account.** Local accounts are passcode-protected
   profiles on your machine.
 - **In the build you can download today, sync cannot be turned on.** No backend
   project is compiled into it, so the sync screen says there is no server
   configured and every round refuses before making a request. No hosted backend
   exists for this project at all.
+
+## Update checks
+
+On the first start after 1.5.0, Nexus asks one question — what may it use the
+network for? — and offers two answers. The question is asked of a new install
+and of a device upgrading from an older version alike, because no earlier
+version ever recorded a choice.
+
+**Offline only (the default).** Nexus makes no network call at all. This is
+the 1.4.0 product, unchanged: a request allowlist, a dead proxy, a resolver that
+maps every name to `NOTFOUND`, and the spellchecker off.
+
+**Offline + update checks.** Nexus contacts GitHub, and only GitHub, for one
+purpose: checking for and downloading a new version of Nexus itself. When this
+mode is on, GitHub sees the device's IP address and the request headers (the
+user agent), as any server does — and Nexus sends nothing else. **Your notes and
+data never leave the computer** — there is no telemetry, no analytics and no
+crash reporting in either mode, and the update check has no channel to carry
+any.
+
+The download itself is accepted only over https from `github.com` (and the
+`release-assets.githubusercontent.com` host GitHub redirects release assets to),
+and only when the installer's SHA-256 appears in a `SHA256SUMS.txt` whose
+detached Ed25519 signature verifies against a public key compiled into the app.
+Anything that does not verify is deleted and never run.
+
+You can change the mode at any time in **Settings → Privacy → Network and
+updates**. The change takes effect after a restart, because the network boundary
+is installed while the app is starting.
+
+There is no cloud option yet. When one is added, it will be a third mode in the
+same place, and this document will describe it before it ships.
 
 ## If you turn sync on
 

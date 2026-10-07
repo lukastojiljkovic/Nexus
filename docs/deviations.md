@@ -288,8 +288,18 @@ the user is not sitting at.
      (`gh attestation verify <file> --repo lukastojiljkovic/Nexus`).
   3. **Said where it is downloaded.** The release notes, the README and the
      website state that signing is paused.
-  4. **Auto-update stays disarmed.** An update feed is only re-armed behind a
-     signature check (SEC-EL-07), so an unsigned build never updates itself.
+  4. **Updates are gated by a key, not by the certificate.** ADR-089 (2026-10-07)
+     replaced the updater rather than re-arming one: 1.4.0 shipped
+     `electron-updater` as a dependency but never called it, and 1.5.0 removes
+     the dependency. The update check verifies a detached Ed25519 signature
+     against a public key compiled into the app, over a checksum file that then
+     pins the installer's hash. That meets SEC-EL-07's update-verification
+     clause, so the missing Authenticode certificate no longer blocks an update;
+     SEC-EL-07's code-signing clause stays open here. It is offered only when
+     the user turns update checks on, and nothing downloads until they press
+     Install.
 - **Revisit trigger:** a signing route (SignPath Foundation for open-source
   projects, or Azure Artifact Signing). The first signed release closes this
-  deviation, and auto-update is not re-armed before it.
+  deviation for the SmartScreen warning and for SEC-EL-07's code-signing clause
+  and SEC-SC-05 (signed artefacts); it is no longer a condition for updates,
+  which ADR-089 settles with the pinned key.

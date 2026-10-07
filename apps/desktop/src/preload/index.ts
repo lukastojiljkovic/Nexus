@@ -2,9 +2,11 @@ import { contextBridge, ipcRenderer } from "electron";
 import {
   IpcChannel,
   type NexusApi,
+  type NetworkMode,
   type RunnerOutputEvent,
   type RunnerState,
   type SyncActivityView,
+  type UpdateStateView,
   type WindowState,
 } from "../shared/ipc.js";
 
@@ -914,6 +916,23 @@ const api: NexusApi = {
     return () => ipcRenderer.removeListener(IpcChannel.syncActivityChanged, handler);
   },
   appInfo: () => ipcRenderer.invoke(IpcChannel.appInfo),
+  networkMode: () => ipcRenderer.invoke(IpcChannel.networkMode),
+  setNetworkMode: (mode: NetworkMode) => ipcRenderer.invoke(IpcChannel.networkSetMode, { mode }),
+  updateStatus: () => ipcRenderer.invoke(IpcChannel.updateStatus),
+  checkForUpdates: () => ipcRenderer.invoke(IpcChannel.updateCheck),
+  installUpdate: () => ipcRenderer.invoke(IpcChannel.updateInstall),
+  openReleasePage: () => ipcRenderer.invoke(IpcChannel.updateOpenRelease),
+  relaunchApp: () => ipcRenderer.invoke(IpcChannel.appRelaunch),
+  onUpdateChanged: (listener) => {
+    // Carries a payload, so it is typed at the boundary like `onSyncActivity`
+    // — and the renderer treats it as a hint to re-read rather than a fact it
+    // acts on unchecked.
+    const handler = (_event: unknown, payload: UpdateStateView): void => {
+      listener(payload);
+    };
+    ipcRenderer.on(IpcChannel.updateChanged, handler);
+    return () => ipcRenderer.removeListener(IpcChannel.updateChanged, handler);
+  },
 };
 
 contextBridge.exposeInMainWorld("nexus", Object.freeze(api));

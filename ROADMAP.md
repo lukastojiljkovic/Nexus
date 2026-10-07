@@ -38,6 +38,24 @@ The next release is tracked in the
 Still open after that: Windows code signing, so the installer stops triggering
 a SmartScreen warning.
 
+## 1.5.0 — a network mode, and update checks you can turn on
+
+1.5.0 adds one question to the product and keeps the answer a choice. On the
+first start it asks whether Nexus may use the network at all: **Offline only**
+(the default, and what every release so far has been) or **Offline + update
+checks**, which lets Nexus contact GitHub for one purpose — checking for and
+downloading a new version of itself.
+
+Offline stays the default, and update checks are opt-in. A user who picks
+**Offline only** is in exactly the 1.4.0 product: the boundary in the main
+process is unchanged, and updates are installed only when they ask for one. A
+user who turns the checks on gets a version, its release notes, and an
+**Install** button — nothing downloads until they press it, and every download
+is verified against a key compiled into the app. In **Offline + update checks**
+mode GitHub sees the device's IP address, as any server does; your notes and
+data never leave the computer. The mode is changeable at any time in Settings,
+and the reader is told a restart is what applies it.
+
 ## Next — optional sync, and the web app
 
 The desktop app's sync engine, its cryptography and its server schema are built
@@ -62,6 +80,9 @@ first. None of them is next.
   with the network off.
 - **Cloud is off by default**, and off means the local path cannot reach the
   network at all — enforced in CI, not promised in copy.
+- **Offline is the default, and update checks are opt-in.** Every release so far
+  has made no network call at all, and a user who says no to update checks stays
+  in exactly that product.
 - **The server holds ciphertext.** Metadata in the clear is accepted; content
   never is.
 - **No telemetry, no analytics, no crash reporting.**

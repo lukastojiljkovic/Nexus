@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -9,9 +9,17 @@ import {
   cloudSwitchPath,
   devServerOrigin,
   isRequestAllowed,
+  networkChoiceRecorded,
+  networkModePath,
+  networkModeRequiresRestart,
   readCloudSwitch,
+  readNetworkMode,
+  resolverRules,
   shouldBlockResolver,
+  UPDATE_HOSTS,
+  updatesActive,
   writeCloudSwitch,
+  writeNetworkMode,
 } from "./offline.js";
 
 let userData: string;
@@ -95,6 +103,18 @@ describe("the request allowlist", () => {
     // The hole is one origin wide. Another port on the same host is not it.
     expect(isRequestAllowed("http://localhost:5174/x", [], origin)).toBe(false);
   });
+
+  it("cancels the update hosts for the renderer in BOTH modes", () => {
+    // ADR-089's whole shape, as one assertion: the renderer's rule takes no
+    // network mode, because the mode never widens it. The three hosts the
+    // UPDATE session is allowed to reach are cancelled by the renderer's rule
+    // exactly as they were in 1.4.0 — only `ses.fetch` on the dedicated session
+    // can use them, and this function is what the `defaultSession` installs.
+    for (const host of UPDATE_HOSTS) {
+      expect(isRequestAllowed(`https://${host}/x`, [], null), host).toBe(false);
+      expect(isRequestAllowed(`https://${host}/x`, [], "http://localhost:5173")).toBe(false);
+    }
+  });
 });
 
 describe("the device-level switch", () => {
@@ -150,5 +170,113 @@ describe("the device-level switch", () => {
     // A no-op change is not a change.
     expect(cloudRequiresRestart(false, false)).toBe(false);
     expect(cloudRequiresRestart(true, true)).toBe(false);
+  });
+});
+
+describe("the network mode (ADR-089)", () => {
+  it("is offline, and unrecorded, before anything has been written", () => {
+    // Both halves of the first-run rule: the boundary is the strong one, and
+    // the choice screen has not been answered. An upgrading user hits this
+    // exact state on the first 1.5.0 launch, because no earlier version wrote
+    // the file.
+    expect(readNetworkMode(userData)).toBe("offline");
+    expect(networkChoiceRecorded(userData)).toBe(false);
+    expect(resolverRules(userData)).toBe("MAP * ~NOTFOUND");
+  });
+
+  it("round-trips both modes", () => {
+    writeNetworkMode(userData, "updates");
+    expect(readNetworkMode(userData)).toBe("updates");
+    expect(networkChoiceRecorded(userData)).toBe(true);
+
+    writeNetworkMode(userData, "offline");
+    expect(readNetworkMode(userData)).toBe("offline");
+    expect(networkChoiceRecorded(userData)).toBe(true);
+  });
+
+  it("reads as offline AND unrecorded for every shape of damage", () => {
+    // Each of these is a file a human, a crashed write, a hand-edited future
+    // version or a half-finished migration could plausibly leave behind. Every
+    // one must fail closed on BOTH questions — the mode and the record — or
+    // the choice screen would be skipped for a file this build cannot trust.
+    for (const contents of [
+      "",
+      "{",
+      "null",
+      "[]",
+      '"updates"',
+      "42",
+      "{}",
+      '{"mode":"updates"}',
+      '{"version":2,"mode":"offline"}',
+      '{"version":"1","mode":"offline"}',
+      '{"version":1}',
+      '{"version":1,"mode":"offline "}',
+      '{"version":1,"mode":"Offline"}',
+      '{"version":1,"mode":"cloud"}',
+      '{"Version":1,"Mode":"updates"}',
+      '{"version":1,"mode":true}',
+    ]) {
+      writeFileSync(networkModePath(userData), contents, "utf8");
+      expect(readNetworkMode(userData), `contents: ${contents}`).toBe("offline");
+      expect(networkChoiceRecorded(userData), `contents: ${contents}`).toBe(false);
+    }
+  });
+
+  it("installs the plain resolver block in offline mode, byte for byte", () => {
+    // The 1.4.0 boundary. This string is the whole of the promise to a user who
+    // picks „Offline only", so it may not gain so much as a space.
+    writeNetworkMode(userData, "offline");
+    expect(resolverRules(userData)).toBe("MAP * ~NOTFOUND");
+  });
+
+  it("adds exactly one EXCLUDE per pinned host in updates mode", () => {
+    writeNetworkMode(userData, "updates");
+    const rule = resolverRules(userData);
+    expect(rule).not.toBeNull();
+    // The base rule is unchanged; the exceptions are appended and named.
+    expect(rule?.startsWith("MAP * ~NOTFOUND, ")).toBe(true);
+    for (const host of UPDATE_HOSTS) {
+      expect(rule).toContain(`EXCLUDE ${host}`);
+    }
+    // One base rule plus one EXCLUDE each — no wildcard, no fourth host.
+    expect(rule?.split(", ").length).toBe(UPDATE_HOSTS.length + 1);
+  });
+
+  it("installs no resolver block at all once cloud is on", () => {
+    // Cloud keeps its own behaviour: the block is what sync has to lift, and
+    // the network mode must not add one back.
+    writeNetworkMode(userData, "updates");
+    writeCloudSwitch(userData, { enabled: true });
+    expect(resolverRules(userData)).toBeNull();
+    expect(shouldBlockResolver(userData)).toBe(false);
+  });
+
+  it("needs a restart in BOTH directions", () => {
+    expect(networkModeRequiresRestart("offline", "updates")).toBe(true);
+    expect(networkModeRequiresRestart("updates", "offline")).toBe(true);
+    expect(networkModeRequiresRestart("offline", "offline")).toBe(false);
+    expect(networkModeRequiresRestart("updates", "updates")).toBe(false);
+  });
+
+  it("lets updates reach the network only when launch and stored choice agree", () => {
+    // The one rule every update path consults, all four combinations. Switching
+    // to offline stops checks at once (the second row); switching to updates
+    // takes effect only after a restart (the third), because the mode the
+    // process came up under is the mode it keeps.
+    expect(updatesActive("updates", "updates")).toBe(true);
+    expect(updatesActive("updates", "offline")).toBe(false);
+    expect(updatesActive("offline", "updates")).toBe(false);
+    expect(updatesActive("offline", "offline")).toBe(false);
+  });
+
+  it("records nothing on a read — closing the choice screen writes no file", () => {
+    // „Closing the window without choosing records nothing": reading is the
+    // only thing that happens while the screen is open, so nothing may create
+    // the file, and `networkChoiceRecorded` must stay false afterwards.
+    expect(existsSync(networkModePath(userData))).toBe(false);
+    expect(readNetworkMode(userData)).toBe("offline");
+    expect(networkChoiceRecorded(userData)).toBe(false);
+    expect(existsSync(networkModePath(userData))).toBe(false);
   });
 });

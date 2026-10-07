@@ -34,6 +34,7 @@ import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:
 import { join, resolve } from "node:path";
 import type { BrowserWindow } from "electron";
 import { createModuleRegistry } from "../../shared/modules.js";
+import { networkModePath } from "../net/offline.js";
 import { AUDIT_SCRIPT, type AuditFinding } from "./audit.js";
 
 /** The switcher every page builds its sub-views out of (`.nx-segmented`). */
@@ -108,7 +109,7 @@ export interface ShotPageScene {
  * the shell — and nothing else in the walk: neither has a sidebar row, a
  * switcher, or a `module` to land on.
  */
-export type ShotShellState = "onboarding" | "lock";
+export type ShotShellState = "onboarding" | "lock" | "network";
 
 /**
  * A scene whose surface is NOT a page.
@@ -955,6 +956,22 @@ export const SHOT_SCENES: readonly ShotScene[] = [
     fanout: null,
   },
   {
+    // „Privatnost", whose first card is ADR-089's „Mreža i ažuriranja": the two
+    // modes, the save button and, after a change, the restart offer.
+    id: "settings-network",
+    module: "settings",
+    prepare: OPEN_SETTINGS_LOCATION("privacy"),
+    fanout: null,
+  },
+  {
+    // „O aplikaciji", where the update row lives. The harness sandbox records
+    // „Samo bez mreže", so this frame is the row's checks-are-off shape.
+    id: "settings-about",
+    module: "settings",
+    prepare: OPEN_SETTINGS_LOCATION("about"),
+    fanout: null,
+  },
+  {
     // The narrow layout's root: the eight categories as one card of rows. It is
     // reached by walking INTO a category and back out, because that is a route
     // the harness can click — and at the wide sizes this lands on „Profil i
@@ -1051,16 +1068,23 @@ export const SHOT_SCENES: readonly ShotScene[] = [
   // --- Before there is a shell ----------------------------------------------
   //
   // LAST, and for the reason the lock screen was left out of this list for so
-  // long: both of these RELOAD the renderer (the shell comes back on its
-  // landing rather than wherever the scene before them had walked to), and the
+  // long: all three RELOAD the renderer (the shell comes back on its landing
+  // rather than wherever the scene before them had walked to), and the
   // first-run one creates a profile and deletes it again. A scene that changes
   // the window that much is followed by scenes that do not depend on it, which
-  // is the order this list is written in — so these two are its end.
+  // is the order this list is written in — so these three are its end.
   //
   // A scene that LOCKS is the case the old note here said the loop could not
   // have: every frame after it would be a photograph of the lock screen. It is
   // survivable only because the scene unlocks again, which is what
   // `shootShellScene` does and what needs the fixture passcode.
+  //
+  // The network scene is FIRST of the three because it answers its own
+  // question: it deletes the recorded choice, photographs the screen that
+  // appears, then chooses „Offline only" and presses Continue, so the file is
+  // written again and everything after it runs against the same shell the
+  // other scenes expect.
+  { kind: "shell", id: "network", shell: "network" },
   { kind: "shell", id: "onboarding", shell: "onboarding" },
   { kind: "shell", id: "lock", shell: "lock" },
 ];
@@ -2368,6 +2392,14 @@ export interface ShotSize {
 export interface ShotFixtures {
   /** The passcode of the demo account `runShotsAuthSetup` creates. */
   readonly passcode: string;
+  /**
+   * The sandbox `userData` this run is using. The network scene deletes the
+   * recorded choice from here (`networkModePath`) to put the app back in the
+   * first-run state the harness otherwise answers at startup. Handed in for
+   * `passcode`'s reason: the path belongs to main, and a sweep that guessed it
+   * could delete the wrong file.
+   */
+  readonly userDataDir: string;
 }
 
 /**
@@ -2668,9 +2700,43 @@ async function serveTheme(win: BrowserWindow, theme: ShotTheme): Promise<void> {
 }
 
 /**
+ * Deletes the recorded network choice, which is how this sweep reaches
+ * ADR-089's first-run screen: `main/index.ts` writes the default into the
+ * sandbox at startup so an ordinary run photographs the app rather than the
+ * question. The path comes from `networkModePath`, so the file removed here is
+ * exactly the one `readNetworkChoice` reads.
+ */
+function clearNetworkChoice(userDataDir: string): void {
+  rmSync(networkModePath(userDataDir), { force: true });
+}
+
+/**
+ * Answers the choice screen: choose „Offline only" and press Continue.
+ *
+ * Matched by VALUE and by FORM rather than by visible text, because the screen
+ * renders in whichever language the shell is in and a probe that looked for
+ * „Nastavi" would miss the English build. „Offline only" is the preselected
+ * default, so the radio click is normally a no-op and the submit is the whole
+ * answer.
+ */
+function CHOOSE_OFFLINE_AND_CONTINUE(): string {
+  return `(() => {
+    const form = document.querySelector(".auth__form");
+    if (form === null) return "none: the choice screen has no form";
+    const radio = form.querySelector('input[type="radio"][value="offline"]');
+    if (radio === null) return "none: no Offline only radio";
+    if (!radio.checked) radio.click();
+    const submit = form.querySelector('button[type="submit"]');
+    if (submit === null) return "none: no confirm button";
+    submit.click();
+    return "submitted";
+})()`;
+}
+
+/**
  * Photographs one PRE-SHELL state: in, the frames, and back out to the shell.
  *
- * Both branches end with the app unlocked, on the demo profile, standing on its
+ * Every branch ends with the app unlocked, on the demo profile, standing on its
  * landing — the state the scene loop expects to find, and the same state every
  * page scene's `cleanup` is written to restore. A scene that left the app
  * somewhere else would turn every frame after it into a photograph of the wrong
@@ -2717,6 +2783,42 @@ async function shootShellScene(
       process.stderr.write(
         `shots: scene "${scene.id}" stayed locked after the passcode was submitted — ${String(refusal)}\n`,
       );
+      return;
+    }
+    await settle(win);
+    return;
+  }
+
+  if (scene.shell === "network") {
+    // The choice screen is what a person meets BEFORE there is a shell, and an
+    // ordinary sweep never sees it: `main/index.ts` records the default in the
+    // sandbox at startup. Deleting the file puts this run back in the first-run
+    // state, and the reload is what makes the renderer ask main for the mode
+    // again instead of rendering from the read it already had.
+    clearNetworkChoice(fixtures.userDataDir);
+    await reloadAndWait(win, `.net__choices[role="radiogroup"]`);
+    if (!(await waitFor(win, `.net__choices[role="radiogroup"]`))) {
+      process.stderr.write(
+        `shots: scene "${scene.id}" did not reach the network choice screen\n`,
+      );
+      return;
+    }
+    await settle(win);
+    await shoot(scene.id);
+
+    // Answer it, so `network.json` exists again and every frame after this one
+    // is the shell rather than the question. A failed answer is reported and
+    // abandoned for the lock scene's reason: the frames after it would
+    // otherwise be photographs of a screen this scene was supposed to leave.
+    const chosen = await evalIn(win, CHOOSE_OFFLINE_AND_CONTINUE());
+    if (typeof chosen !== "string" || chosen.startsWith("none")) {
+      process.stderr.write(
+        `shots: scene "${scene.id}" could not answer the choice — ${String(chosen)}\n`,
+      );
+      return;
+    }
+    if (!(await waitFor(win, ".app__sidebar"))) {
+      process.stderr.write(`shots: scene "${scene.id}" did not return to the shell\n`);
       return;
     }
     await settle(win);

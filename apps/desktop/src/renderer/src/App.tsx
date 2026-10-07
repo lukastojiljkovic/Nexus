@@ -77,6 +77,9 @@ import { NotificationAppetiteDialog } from "./NotificationAppetiteDialog.js";
 import { SearchPalette } from "./SearchPalette.js";
 import { ShortcutsDialog } from "./ShortcutsDialog.js";
 import { UnsavedExitBanners } from "./UnsavedExitBanners.js";
+import { NetworkModeGate } from "./NetworkModeGate.js";
+import { UpdateNotice } from "./UpdateNotice.js";
+import { publishNetworkMode, useNetworkMode } from "./updates.js";
 import { buildSearchCommands } from "./searchCommands.js";
 import { createModuleRegistry } from "../../shared/modules.js";
 import { ProfileAvatar } from "./profileAvatar.js";
@@ -248,6 +251,9 @@ export function App() {
   // The local account's lock state (ADR-018). `null` only until the very
   // first `getAuthStatus` round trip resolves.
   const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
+  // ADR-089: the device-level network mode. Read BEFORE the auth status
+  // matters, because the choice screen is shown before the unlock screen.
+  const networkMode = useNetworkMode();
   const [autoLockMinutes, setAutoLockMinutes] = useState<AutoLockMinutes>(readStoredAutoLock);
   // Remapped shortcuts (ADR-040). Read once at init and owned here — the
   // `autoLockMinutes` precedent: a device-level UI preference, so it lives in
@@ -1210,6 +1216,17 @@ export function App() {
     );
   }
 
+  // ADR-089, and BEFORE the unlock screen. While no valid choice is recorded —
+  // which is every device on its first 1.5.0 launch, new install and upgrade
+  // alike — the question comes first and nothing else renders. The mode read
+  // resolves before this branch, so the unlock screen never flashes first.
+  if (networkMode === null) {
+    return inWindow(<p className="nx-hint">{strings.app.loading}</p>, true);
+  }
+  if (networkMode.choiceRequired) {
+    return inWindow(<NetworkModeGate onChosen={publishNetworkMode} />);
+  }
+
   if (!authStatus) {
     return inWindow(<p className="nx-hint">{strings.app.loading}</p>, true);
   }
@@ -1604,6 +1621,9 @@ export function App() {
               </Button>
             </div>
           )}
+          {/* ADR-089: an app-wide word that a newer version exists. It only
+              ever offers — nothing downloads until the user presses Install. */}
+          <UpdateNotice />
           <UnsavedExitBanners profileId={activeProfile?.id ?? null} />
           {/* Every page is keyed by the active profile (ADR-058 §1): a switch
               remounts it, so page-local state — a selected task, an open note,

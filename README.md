@@ -45,6 +45,7 @@ Sixteen modules, switched on per profile.
 ## Privacy and security, briefly
 
 - **Local by default.** Your data is one encrypted SQLite database on your own device. The local path cannot reach the network, and that is enforced in CI rather than promised in copy.
+- **Offline is the default, and update checks are opt-in.** On first start Nexus asks whether it may use the network at all: **Offline only** makes no network call of any kind, and **Offline + update checks** contacts GitHub for one purpose — checking for and downloading a new version of Nexus itself. Your notes and data never leave the computer; in update-check mode GitHub sees your IP address, as any website does, and nothing else. Every download is verified against a key compiled into the app. Change it any time in **Settings → Privacy → Network and updates**.
 - **No telemetry, no analytics, no crash reporting.**
 - **Cloud is off by default**, and in the build this repository produces it cannot be turned on at all: no backend project is compiled in. Optional sync is end-to-end encrypted, and the server holds ciphertext only.
 

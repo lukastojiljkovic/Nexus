@@ -199,6 +199,60 @@ export const sr = {
   },
 
   /**
+   * ADR-089 — the network mode. One block for the choice screen (shown once,
+   * before the unlock screen) and for the card in Podešavanja, because the two
+   * must say the same thing about the same two options. The copy is written so
+   * that an upgrading user does not read it as a first run: it asks a question
+   * about this computer, it never welcomes anybody.
+   */
+  network: {
+    chooseTitle: "Kako Nexus sme da koristi mrežu?",
+    chooseIntro:
+      "Izaberi režim za ovaj računar. Odluka se pamti i možeš je promeniti kasnije u Podešavanjima.",
+    offlineTitle: "Samo bez mreže",
+    offlineBody:
+      "Nexus ne otvara nijednu vezu ka internetu. Ništa ne napušta ovaj računar — ni tvoji podaci, ni provera nove verzije.",
+    updatesTitle: "Bez mreže + provere ažuriranja",
+    updatesBody:
+      "Nexus se javlja samo GitHub-u, i to isključivo da proveri i preuzme novu verziju sebe. Tvoje beleške i podaci ne napuštaju računar; GitHub vidi tvoju IP adresu, kao i svaki sajt.",
+    chooseConfirm: "Nastavi",
+    chooseHint:
+      "Ako zatvoriš prozor bez izbora, Nexus ostaje u režimu „Samo bez mreže“ i pitaće te ponovo pri sledećem pokretanju.",
+    cardIntro:
+      "Režim važi za ceo računar. „Samo bez mreže“ ne otvara nijednu vezu; „Bez mreže + provere ažuriranja“ dozvoljava samo proveru i preuzimanje nove verzije Nexusa.",
+    save: "Sačuvaj izbor",
+    saved: "Izbor je sačuvan.",
+    restartNote: "Promena režima važi od sledećeg pokretanja Nexusa.",
+    restartNow: "Restartuj Nexus",
+    restartError: "Nexus nije mogao da se restartuje. Zatvori ga i otvori ponovo.",
+    saveError: "Izbor nije sačuvan. Pokušaj ponovo.",
+    aboutTitle: "Ažuriranja",
+    aboutOff:
+      "Provere ažuriranja su isključene. Uključi ih u kartici „Mreža i ažuriranja“ u kategoriji Privatnost.",
+    aboutOpenCard: "Otvori „Mreža i ažuriranja“",
+    checkNow: "Proveri sada",
+    checking: "Proveravam…",
+    upToDate: "Imaš najnoviju verziju.",
+    available: "Dostupna je nova verzija: {version}.",
+    install: "Preuzmi i pokreni instalaciju",
+    installing: "Preuzimam…",
+    installHint: "Ništa se ne preuzima pre ovog klika. Nexus proverava potpis instalacije, pokreće je i zatvara se.",
+    later: "Kasnije",
+    releasePage: "Stranica izdanja",
+    notesTitle: "Šta je novo",
+    problemTitle: "Proveru nije bilo moguće završiti.",
+    problem: {
+      "rate-limited": "GitHub trenutno ograničava broj provera. Pokušaj ponovo kasnije.",
+      network: "Veza sa mrežom nije dostupna. Proveri internet i pokušaj ponovo.",
+      unexpected: "Odgovor GitHub-a nije bilo moguće pročitati. Pokušaj ponovo kasnije.",
+      asset: "Uz to izdanje nema instalacione datoteke za Windows. Otvori stranicu izdanja.",
+      signature:
+        "Potpis datoteke sa proverom nije ispravan. Preuzimanje je zaustavljeno pre nego što je instalacija počela.",
+      hash: "Preuzeta datoteka ne odgovara svojoj proveri. Obrisana je i nije pokrenuta.",
+    },
+  },
+
+  /**
    * ADR-065 — the four-screen questionnaire: ime + tema, uloga, oblasti,
    * podsetnici. Every screen is skippable, and the copy never pretends
    * otherwise: each answer says what it changes and that Podešavanja can undo
@@ -5657,7 +5711,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       modules: "Koji delovi Nexusa su uključeni i podešavanja svakog modula",
       notifications: "Šta te obaveštava i kada",
       data: "Rezervna kopija, vraćanje, uvoz, izvoz i sinhronizacija",
-      privacy: "Šta se čuva i gde, istorija pretrage",
+      privacy: "Mreža i ažuriranja, šta se čuva i gde, istorija pretrage",
       about: "Verzija, lokacija podataka i licence",
     },
     /** The rail's own landmark name — a name, never drawn. */
@@ -5713,6 +5767,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       "import-llm": "Uvoz preko AI asistenta",
       "import-markdown": "Uvoz belešaka (.md)",
       sync: "Sinhronizacija",
+      network: "Mreža i ažuriranja",
       privacy: "Podaci i privatnost",
       about: "O aplikaciji",
       licences: "Licence",
@@ -7564,18 +7619,14 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       noTelemetry:
         "Nexus ne prikuplja telemetriju ni analitiku. Nema brojača, nema izveštaja o korišćenju, nema profilisanja.",
       /**
-       * REWRITTEN, because both halves of the old sentence had stopped being
-       * true, in opposite directions. It promised the content „nikada" leaves
-       * the device — sync now exists and the user may turn it on — and it named
-       * an update check as the one exception, which this build does not make at
-       * all: the auto-updater is disarmed and `checkForUpdates` is not called
-       * (see the disarmed auto-update section in `main/index.ts`). Claiming an
-       * outbound call the app never makes is exactly as wrong as hiding one it
-       * does, so both halves are restated as facts with their condition
-       * attached.
+       * The local half of the network story, stated with its condition
+       * attached. „Offline" here means the mode this device is in: while it is
+       * on, Nexus opens no connection, not even a version check. The mode is
+       * the first card of this category (ADR-089), which is where the last
+       * sentence sends the reader, and it is the only place the answer changes.
        */
       offline:
-        "Dok je mrežni pristup isključen — a tako je od prvog pokretanja — Nexus ne otvara nijednu vezu ka internetu. Ni provere verzije: aplikacija se ne javlja nigde.",
+        "Dok je mrežni pristup isključen, Nexus ne otvara nijednu vezu ka internetu — ni provere verzije. Režim menjaš u kartici „Mreža i ažuriranja“.",
       sync: "Ako uključiš sinhronizaciju, na server odlazi šifrovan sadržaj — uz podatak koji ga je uređaj poslao i kada. Ključ ostaje na tvojim uređajima; server ga nema i ne može da pročita ono što čuva.",
       exports:
         "Izvoz je običan fajl: ti biraš gde se čuva, a arhivu možeš zaštititi lozinkom pri pravljenju.",

@@ -133,6 +133,21 @@ describe("the category table", () => {
     expect(modules && categoryCardIds(modules)).toEqual(["setup", "modules", "packs", "risk"]);
     expect(modules && categoryListIds(modules)).toEqual(["module-settings"]);
   });
+
+  it("puts the network card FIRST in the privacy category (ADR-089)", () => {
+    const privacy = SETTINGS_CATEGORIES.find((category) => category.id === "privacy");
+    expect(privacy && categoryCardIds(privacy)).toEqual(["network", "privacy"]);
+    expect(categoryOf("network")).toBe("privacy");
+  });
+
+  it("reaches the network card by its name and by the words people type", () => {
+    // The card's own title is matched by `matchSettings`, and the entries above
+    // are what make „mreza", „azuriranja" and „github" land on it.
+    expect(search(s().sectionTitle.network).sections.has("network")).toBe(true);
+    for (const query of ["mreza", "azuriranja", "github", "update"]) {
+      expect(search(query).sections.has("network"), query).toBe(true);
+    }
+  });
 });
 
 // --- visibleSections ----------------------------------------------------------
