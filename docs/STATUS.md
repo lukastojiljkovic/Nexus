@@ -107,7 +107,7 @@ blocking; both are §5 items.
 | Server | 14 Supabase migrations, 3 Edge Functions, 165 pgTAP assertions |
 | Static gates | **26**, each its own CI step |
 | Commits | **739** on `feat/english-locale`, the last branch merged before 1.4.0 |
-| Unmerged work | none — `chore/open-source-readiness` (#39) and `feat/english-locale` were merged for 1.4.0 |
+| Unmerged work | `feat/update-check` — ADR-089's network mode and opt-in update check; its narrative moves to `log/` when it merges, and the row returns to „none". |
 | Open pull requests | none at the 1.4.0 release |
 | Git tags / GitHub releases | `v1.4.0`, the first (§4) |
 | Repository | public since 2026-10-05; `main` changes only through a pull request with CI green (ruleset `main`, no bypass) |
@@ -228,8 +228,10 @@ blocking; both are §5 items.
   `supabase/tests/static/`) and eight for the shared scanners, the root config,
   the CI step list and the run lock.
 - **Packaging** — NSIS per-user installer, a Serbian uninstaller that defaults
-  to keeping data, an app icon, and `electron-updater` wired but pointed at a
-  release repo that does not exist yet. Chromium's and Node's own notices ship
+  to keeping data, an app icon, and ADR-089's updater — no electron-updater and
+  no feed: a check against the GitHub release API, offered only in „offline +
+  update checks" mode and verified against a key compiled into the app.
+  Chromium's and Node's own notices ship
   beside the executable (confirmed by watching a real build, 2026-08-16).
 - **A root `Makefile` as the build entry point** (2026-08-16, `a438e32`, on
   `origin/main`). It wraps the existing pnpm scripts and adds only the two

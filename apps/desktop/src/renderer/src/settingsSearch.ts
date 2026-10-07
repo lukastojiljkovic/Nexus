@@ -530,6 +530,29 @@ function shellEntries(): readonly ShellSettingsSearchEntry[] {
         "brisanje",
       ],
     },
+    // ADR-089: the device-level network mode, first card of the privacy
+    // category. „mreža" and „internet" are the words somebody actually types,
+    // and „github", „verzija" and „update" are the ones they type for the
+    // second half of the card's name. The entries are the controls the card
+    // draws, so the hits land on the radio labels and the save button.
+    {
+      id: "network-offline",
+      section: "network",
+      label: strings.network.offlineTitle,
+      keywords: ["mreza", "internet", "offline", "bez interneta", "privatnost", "iskljuceno"],
+    },
+    {
+      id: "network-updates",
+      section: "network",
+      label: strings.network.updatesTitle,
+      keywords: ["mreza", "internet", "azuriranja", "update", "github", "verzija", "provera"],
+    },
+    {
+      id: "network-save",
+      section: "network",
+      label: strings.network.save,
+      keywords: ["rezim", "promeni", "sacuvaj", "restart", "pokretanje"],
+    },
     {
       // SRCH-009: the one operable control on the privacy card, so — unlike the
       // five sentences above it — this entry does get a highlight. Its own entry
@@ -581,6 +604,16 @@ function shellEntries(): readonly ShellSettingsSearchEntry[] {
         "fascikla",
         "putanja",
       ],
+    },
+    {
+      // ADR-089: „Proveri sada" lives on the About card, so it files under
+      // „about" and answers to the words somebody hunting for an update types —
+      // never to the card's own name, which is the whole reason the button
+      // carries its own entry.
+      id: "about-check-now",
+      section: "about",
+      label: strings.network.checkNow,
+      keywords: ["azuriranje", "update", "verzija", "provera", "github", "mreza", "novo"],
     },
     ];
 }

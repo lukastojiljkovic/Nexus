@@ -6,6 +6,30 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Nexus now asks once, on first start, how it may use the network — and
+  remembers the answer.** **Offline only** is the default and makes no network
+  call at all, exactly as every release so far. **Offline + update checks** lets
+  Nexus contact GitHub for one purpose: checking for and downloading a new
+  version of itself. Your notes and data never leave the computer in either
+  mode; in update-check mode GitHub sees your IP address, as any website does.
+  The question is asked of a new install and of a device upgrading from an older
+  version alike.
+- **An update check you can turn on.** In **Offline + update checks** mode Nexus
+  looks for a new version at most once a day and whenever you press **Check now**
+  on the **About** card, shows the version and its release notes, and downloads
+  nothing until you press **Install**. Every download is verified against a key
+  built into the app; anything that does not verify is deleted and never run. On
+  Linux the release page is offered instead of a self-install. The mode lives in
+  **Settings → Privacy → Network and updates**, and a change takes effect after
+  a restart.
+
+### Removed
+
+- **electron-updater is no longer bundled**, so sixteen fewer third-party
+  packages ship.
+
 ### Security
 
 - A crafted CSV, Anki deck or subtitle file can no longer freeze the import

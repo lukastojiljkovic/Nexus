@@ -158,6 +158,8 @@ import { useFocusTrap } from "./useFocusTrap.js";
 import { moduleName } from "./moduleName.js";
 import { formatArchiveInstant } from "./timeFormat.js";
 import { SyncSection } from "./SyncSettings.js";
+import { NetworkSettings } from "./NetworkSettings.js";
+import { UpdateAbout } from "./UpdateAbout.js";
 import {
   SETTINGS_CATEGORIES,
   categoryOf,
@@ -6092,8 +6094,18 @@ export function SettingsPage({
           </Card>
 
           {searchGroupTitle("privacy")}
+          {/* ADR-089, FIRST in this category: the device-level decision about
+              whether Nexus may reach the network at all, ahead of the card that
+              describes what is stored. */}
+          <Card
+            id={sectionDomId("network")}
+            title={strings.settings.sectionTitle.network}
+            className={sectionClass(visibility.cards.has("network"))}
+          >
+            <NetworkSettings hits={hits} />
+          </Card>
           {/* SET-010, local half. Six statements of fact — no toggle, no link, no
-              „saznaj više“ on any of them. Every sentence is checkable in the
+              „saznaj više" on any of them. Every sentence is checkable in the
               source; see the copy block's own comment, which names the file each
               one is true because of. Below them, the one thing on this card that
               IS operable (SRCH-009): the search history is the only place the app
@@ -6147,6 +6159,10 @@ export function SettingsPage({
             ) : (
               <p className="nx-hint">{strings.app.loading}</p>
             )}
+            {/* ADR-089: „Proveri sada" lives here, and the row is mode-aware â€”
+                in offline mode it says so and offers the way to the card that
+                changes it, rather than a button main would refuse. */}
+            <UpdateAbout onOpenNetworkCard={() => navigate({ category: "privacy", sub: null })} />
           </Card>
 
           {/* The notices this product owes for other people's work. Last on the

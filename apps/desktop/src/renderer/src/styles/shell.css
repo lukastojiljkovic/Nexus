@@ -1194,3 +1194,77 @@ body {
   -webkit-user-select: all;
   user-select: all;
 }
+
+/* The network mode (ADR-089) ------------------------------------------------ */
+/* One recipe for the choice screen and for the settings card, because the two
+   ask the same question with the same two answers. `grid-template-columns:
+   auto 1fr` puts the radio on the first line beside the name and lets the
+   explanation run under the NAME rather than under the control — the shape
+   `.priv__choice-row` uses, adopted rather than restated. */
+.net__choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+.net__choice {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: var(--nx-space-2);
+  row-gap: 2px;
+  align-items: start;
+  padding: var(--nx-space-2);
+  border-radius: var(--nx-radius-md);
+  cursor: pointer;
+  transition: background var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.net__choice:hover {
+  background: var(--nx-surface-alt);
+}
+.net__choice .nx-radio {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  margin-top: 3px;
+}
+.net__choice-title {
+  grid-column: 2;
+  font-size: var(--nx-font-size-body);
+  font-weight: var(--nx-font-weight-medium);
+}
+.net__choice-body {
+  grid-column: 2;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+.net__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+.net__about {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+/* A button on its own line keeps its own width, as the card's other buttons
+   do; a column would otherwise stretch it across the card. */
+.net__about > .nx-button {
+  align-self: flex-start;
+}
+/* The release notes EXACTLY as GitHub sent them: a monospace, scrollable block
+   whose `pre-wrap` keeps the line breaks a changelog is written with. It is
+   text, never markup — see `UpdateAbout`. */
+.net__notes {
+  margin: 0;
+  padding: var(--nx-space-3);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  font-family: var(--nx-font-family-mono);
+  font-size: var(--nx-font-size-body-sm);
+  line-height: var(--nx-font-leading-loose);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 320px;
+  overflow-y: auto;
+}

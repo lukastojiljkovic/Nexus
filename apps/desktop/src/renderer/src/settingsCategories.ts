@@ -164,7 +164,15 @@ export const SETTINGS_CATEGORIES: readonly SettingsCategory[] = [
   {
     id: "privacy",
     icon: "shield",
-    entries: [{ kind: "card", id: "privacy" }],
+    entries: [
+      // ADR-089 FIRST in this category, before „Podaci i privatnost": it is the
+      // device-level decision about whether Nexus may reach the network at all,
+      // and the card below it describes what is stored. A reader who came to
+      // „Privatnost" to find out what leaves the machine meets the switch
+      // before the prose.
+      { kind: "card", id: "network" },
+      { kind: "card", id: "privacy" },
+    ],
   },
   {
     id: "about",

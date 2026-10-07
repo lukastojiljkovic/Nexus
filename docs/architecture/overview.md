@@ -41,7 +41,10 @@ three Edge Functions, and the PostgREST wire measured rather than assumed. What
 does not exist is the *client* path that would let a user switch any of it on.
 **Cloud stays off by default and switchable off entirely, structurally** — the
 local-only path must not be able to reach the network, and `check:egress` is one
-of the four layers holding that. See `../STATUS.md` §2 and §3.
+of the four layers holding that. ADR-089 adds a device-level **network mode** on
+top: **Offline only** (the default) is that path unchanged, and **Offline +
+update checks** is the one mode in which a dedicated, non-persistent session may
+reach three pinned GitHub hosts to update the app. See `../STATUS.md` §2 and §3.
 
 ## Decision index
 
@@ -120,10 +123,11 @@ script stays the authority because it alone covers CSS and HTML.
   `dependency-review.yml` are the public-repository checks; `release.yml` builds
   and drafts a tagged release; `pages.yml` publishes `site/`.
 - **Desktop packaging:** electron-vite for dev/build, electron-builder for
-  installers (`pnpm --filter @nexus/desktop dist`), electron-updater present as
-  a dependency but **no update feed is configured**. The 1.4.0 installer is
-  unsigned, so Windows shows a SmartScreen warning on first run; code signing
-  (SEC-SC-03/04) is still open work, and the release notes say so.
+  installers (`pnpm --filter @nexus/desktop dist`). The updater is ADR-089's:
+  a check against the GitHub release API behind the device-level network mode,
+  with electron-updater gone and no update feed configured. The 1.4.0 installer
+  is unsigned, so Windows shows a SmartScreen warning on first run; code signing
+  (SEC-EL-07 and SEC-SC-05) is still open work, and the release notes say so.
 - **Native module:** `better-sqlite3-multiple-ciphers` ships one prebuild per
   platform and architecture, with no ABI in the key, so one `.node` serves both
   Vitest and Electron and nothing has to be flipped between them. Electron is on

@@ -1,4 +1,14 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  closeSync,
+  existsSync,
+  fsyncSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  writeFileSync,
+  writeSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 
 /**
@@ -200,4 +210,162 @@ export function shouldBlockResolver(userData: string): boolean {
 /** `true` when `cloud.json` has never been written — i.e. a first run. */
 export function cloudSwitchIsUnset(userData: string): boolean {
   return !existsSync(cloudSwitchPath(userData));
+}
+
+// ── The network mode (ADR-089) ────────────────────────────────────────────
+//
+// A SECOND device-level switch, beside cloud.json, and a narrower one: it does
+// not decide whether Nexus may reach a server — cloud does that, and there is
+// no server yet — it decides whether Nexus may reach GitHub to check for and
+// download a new version of ITSELF. The product's default is `"offline"`,
+// which is byte-for-byte the 1.4.0 boundary: the resolver maps every name to
+// NOTFOUND and no session is given a host to talk to.
+//
+// It is NOT a boolean, and `version` is not decoration. The file is a small
+// forward-compatible record (`{"version":1,"mode":"offline"|"updates"}`) so a
+// later release can add a `"cloud"` mode — or any third value — by teaching
+// this parser about it, without a migration pass over every device. The
+// parser is fail-closed on EVERY kind of doubt, exactly as `readCloudSwitch`
+// is: a missing file, an unreadable one, malformed JSON, a version this build
+// does not understand, a mode that is not literally one of the two — each
+// answers `"offline"`.
+
+/** Which network mode this device is in. `"offline"` is the default and the fail-closed answer. */
+export type NetworkMode = "offline" | "updates";
+
+/** The one version this build writes and understands. A future version is a future parser. */
+const NETWORK_MODE_VERSION = 1;
+
+const NETWORK_FILE = "network.json";
+
+export function networkModePath(userData: string): string {
+  return join(userData, NETWORK_FILE);
+}
+
+/**
+ * The stored mode, or `null` when no VALID choice is recorded.
+ *
+ * Exported because two callers ask different questions of the same bytes: the
+ * resolver wants "which mode", and the first-run choice screen wants "is a
+ * choice recorded at all". A malformed file is `null` — which both callers
+ * read as "offline, and ask again", never as "the user chose offline".
+ */
+export function readNetworkChoice(userData: string): NetworkMode | null {
+  let raw: string;
+  try {
+    raw = readFileSync(networkModePath(userData), "utf8");
+  } catch {
+    return null;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== "object" || parsed === null) return null;
+  const record = parsed as { version?: unknown; mode?: unknown };
+  // `=== 1` and the literal modes, not truthiness: `"1"`, `2`, `"updates "`
+  // and an object with a `mode` that merely looks like one all have to land on
+  // the same answer as a corrupt file, or a half-finished future migration
+  // would come up with the boundary down.
+  if (record.version !== NETWORK_MODE_VERSION) return null;
+  if (record.mode === "offline") return "offline";
+  if (record.mode === "updates") return "updates";
+  return null;
+}
+
+/** The mode this launch runs under. Missing, unreadable or malformed is `"offline"`. */
+export function readNetworkMode(userData: string): NetworkMode {
+  return readNetworkChoice(userData) ?? "offline";
+}
+
+/**
+ * Whether a VALID choice is recorded on this device — the first-run screen's
+ * trigger, and true for new installs and upgrades alike on the first 1.5.0
+ * launch, because no earlier version ever wrote this file.
+ */
+export function networkChoiceRecorded(userData: string): boolean {
+  return readNetworkChoice(userData) !== null;
+}
+
+/**
+ * Records the user's choice, atomically.
+ *
+ * The `network:set-mode` handler is the only writer on the user's behalf: it
+ * serves the choice screen's Continue and the card's Save, and selecting a
+ * radio and then closing the window must record nothing, so this is
+ * deliberately not wired to `onChange`. The harness sandbox is the one other
+ * caller — the smoke and shots runs record the default at startup so a sweep
+ * photographs the app rather than the question.
+ *
+ * Atomic for `writeRegistry`'s reason in `accounts.ts`: a crash partway through
+ * a plain write leaves a truncated file, and `readNetworkChoice` reads a
+ * truncated file as "no choice" — which re-asks the question on a device that
+ * already answered it. A sibling `.tmp`, fsynced and closed before the rename,
+ * means a reader sees either the old choice or the new one, never half of one.
+ */
+export function writeNetworkMode(userData: string, mode: NetworkMode): void {
+  const path = networkModePath(userData);
+  mkdirSync(dirname(path), { recursive: true });
+  const tmpPath = `${path}.tmp`;
+  const fd = openSync(tmpPath, "w");
+  try {
+    writeSync(fd, `${JSON.stringify({ version: NETWORK_MODE_VERSION, mode }, null, 2)}\n`);
+    fsyncSync(fd);
+  } finally {
+    closeSync(fd);
+  }
+  renameSync(tmpPath, path);
+}
+
+/**
+ * Whether moving from `from` to `to` needs the app restarted. BOTH directions
+ * do, for `cloudRequiresRestart`'s exact reason: the resolver block is a
+ * command-line switch installed at launch, so the mode a process came up under
+ * is the mode it keeps.
+ */
+export function networkModeRequiresRestart(from: NetworkMode, to: NetworkMode): boolean {
+  return from !== to;
+}
+
+/** Updates may reach the network only when this launch came up in "updates" AND the stored choice is still "updates". */
+export function updatesActive(running: NetworkMode, stored: NetworkMode): boolean {
+  return running === "updates" && stored === "updates";
+}
+
+/**
+ * The three hosts the update session may reach, matched EXACTLY — no wildcard
+ * and no subdomain. They are the whole of ADR-089's pinned chain, verified on
+ * 2026-10-07 with `curl.exe -sIL` on a real release asset:
+ *
+ *   - `api.github.com`            the release API that answers `releases/latest`
+ *   - `github.com`                the `/releases/download/…` URL the API names
+ *   - `release-assets.githubusercontent.com`  where `github.com` 302-redirects
+ *
+ * If GitHub ever moves release assets elsewhere the download fails closed —
+ * the chain is not re-derived at runtime and the release page is offered
+ * instead — which is the behaviour ADR-089 requires.
+ */
+export const UPDATE_HOSTS: readonly string[] = [
+  "api.github.com",
+  "github.com",
+  "release-assets.githubusercontent.com",
+];
+
+/**
+ * The value for Chromium's `host-resolver-rules`, or `null` when no block
+ * should be installed at all (cloud on).
+ *
+ * `"MAP * ~NOTFOUND"` is unchanged, byte for byte, in offline mode — that is
+ * the 1.4.0 boundary and this change may not widen it. In updates mode the
+ * same mapping carries one `EXCLUDE` per pinned host, which is the smallest
+ * edit that lets the dedicated update session resolve those three names and
+ * nothing else. Cloud on keeps its own untouched behaviour: the resolver block
+ * is not installed at all, so sync can reach its Supabase origins.
+ */
+export function resolverRules(userData: string): string | null {
+  if (!shouldBlockResolver(userData)) return null;
+  if (readNetworkMode(userData) !== "updates") return "MAP * ~NOTFOUND";
+  return `MAP * ~NOTFOUND, ${UPDATE_HOSTS.map((host) => `EXCLUDE ${host}`).join(", ")}`;
 }

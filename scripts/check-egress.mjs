@@ -174,6 +174,21 @@ export const ALLOWLIST = new Map([
     "apps/desktop/src/main/sync/electronFetch.ts",
     ["electron-net-fetch"],
   ],
+  [
+    // The update feature's Electron half (ADR-089). Its one flagged construct
+    // is `shell.openExternal("<the pinned release page>")`, which the
+    // `load-remote` rule reads as „a remote URL handed to a loader" — and it
+    // is, deliberately: the loader is the USER'S BROWSER, not this process's
+    // network stack. Nothing here fetches anything; the actual update traffic
+    // goes through `ses.fetch` on the dedicated `nexus-update` session, which
+    // the rule set already allows because it is a method on a session rather
+    // than the global `fetch`. The exemption is scoped to the one rule id so
+    // this file is still forbidden from reaching for the global, and it names
+    // one file rather than `main/update/` so a new module there never inherits
+    // the permission.
+    "apps/desktop/src/main/update/electron.ts",
+    ["load-remote"],
+  ],
 ]);
 
 /**

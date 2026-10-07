@@ -203,6 +203,61 @@ export const en = {
   },
 
   /**
+   * ADR-089 — the network mode. One block for the choice screen (shown once,
+   * before the unlock screen) and for the card in Settings, because the two
+   * must say the same thing about the same two options. The copy is written so
+   * that an upgrading user does not read it as a first run: it asks a question
+   * about this computer, it never welcomes anybody.
+   */
+  network: {
+    chooseTitle: "How may Nexus use the network?",
+    chooseIntro:
+      "Choose a mode for this computer. The choice is remembered, and you can change it later in Settings.",
+    offlineTitle: "Offline only",
+    offlineBody:
+      "Nexus opens no connection to the internet. Nothing leaves this computer — neither your data nor a check for a new version.",
+    updatesTitle: "Offline + update checks",
+    updatesBody:
+      "Nexus contacts GitHub only, and only to check for and download a new version of itself. Your notes and data never leave this computer; GitHub sees your IP address, as any website does.",
+    chooseConfirm: "Continue",
+    chooseHint:
+      "If you close the window without choosing, Nexus stays in “Offline only” and asks again on the next start.",
+    cardIntro:
+      "The mode is for the whole computer. “Offline only” opens no connection; “Offline + update checks” allows only checking for and downloading a new version of Nexus.",
+    save: "Save the choice",
+    saved: "The choice is saved.",
+    restartNote: "The change takes effect the next time Nexus starts.",
+    restartNow: "Restart Nexus",
+    restartError: "Nexus could not restart. Close it and open it again.",
+    saveError: "The choice was not saved. Try again.",
+    aboutTitle: "Updates",
+    aboutOff:
+      "Update checks are off. Turn them on in the “Network and updates” card under Privacy.",
+    aboutOpenCard: "Open “Network and updates”",
+    checkNow: "Check now",
+    checking: "Checking…",
+    upToDate: "You have the newest version.",
+    available: "A new version is available: {version}.",
+    install: "Download and install",
+    installing: "Downloading…",
+    installHint:
+      "Nothing downloads until you press this. Nexus checks the installer's signature, starts it and closes.",
+    later: "Later",
+    releasePage: "Release page",
+    notesTitle: "What is new",
+    problemTitle: "The check could not be finished.",
+    problem: {
+      "rate-limited": "GitHub is limiting the number of checks right now. Try again later.",
+      network: "The network connection is unavailable. Check your internet and try again.",
+      unexpected: "The reply from GitHub could not be read. Try again later.",
+      asset: "That release has no Windows installer. Open the release page.",
+      signature:
+        "The signature on the checksum file is not valid. The download stopped before anything was installed.",
+      hash: "The downloaded file does not match its checksum. It was deleted and not started.",
+    },
+  },
+
+  /**
    * ADR-065 — the four-screen questionnaire: ime + tema, uloga, oblasti,
    * podsetnici. Every screen is skippable, and the copy never pretends
    * otherwise: each answer says what it changes and that Podešavanja can undo
@@ -5650,7 +5705,7 @@ export const en = {
       modules: "Which parts of Nexus are on, and each module's settings",
       notifications: "What notifies you, and when",
       data: "Backup, restore, import, export and sync",
-      privacy: "What is stored and where, search history",
+      privacy: "Network and updates, what is stored and where, search history",
       about: "Version, data location and licences",
     },
     /** The rail's own landmark name — a name, never drawn. */
@@ -5706,6 +5761,7 @@ export const en = {
       "import-llm": "Import via an AI assistant",
       "import-markdown": "Import notes (.md)",
       sync: "Sync",
+      network: "Network and updates",
       privacy: "Data and privacy",
       about: "About",
       licences: "Licences",
@@ -7557,18 +7613,14 @@ export const en = {
       noTelemetry:
         "Nexus collects no telemetry or analytics. No counters, no usage reports, no profiling.",
       /**
-       * REWRITTEN, because both halves of the old sentence had stopped being
-       * true, in opposite directions. It promised the content „nikada" leaves
-       * the device — sync now exists and the user may turn it on — and it named
-       * an update check as the one exception, which this build does not make at
-       * all: the auto-updater is disarmed and `checkForUpdates` is not called
-       * (see the disarmed auto-update section in `main/index.ts`). Claiming an
-       * outbound call the app never makes is exactly as wrong as hiding one it
-       * does, so both halves are restated as facts with their condition
-       * attached.
+       * The local half of the network story, stated with its condition
+       * attached. „Offline" here means the mode this device is in: while it is
+       * on, Nexus opens no connection, not even a version check. The mode is
+       * the first card of this category (ADR-089), which is where the last
+       * sentence sends the reader, and it is the only place the answer changes.
        */
       offline:
-        "While network access is off — as it is from the first run — Nexus opens no connection to the internet. Not even version checks: the app reports to nobody.",
+        "While network access is off, Nexus opens no connection to the internet — not even version checks. You change the mode in the “Network and updates” card.",
       sync: "If you turn on sync, encrypted content goes to the server — along with the fact that the device sent it and when. The key stays on your devices; the server does not have it and cannot read what it keeps.",
       exports:
         "An export is an ordinary file: you choose where it is kept, and you can protect the archive with a password when making it.",

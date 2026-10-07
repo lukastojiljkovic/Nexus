@@ -121,8 +121,8 @@ release surface beyond the founder's own machines.
 
 ## Standing gates that outrank everything above
 
-- **No public download before code signing and notarization** (SEC-SC-03/04).
-  Today's installers are unsigned.
+- **No public download before code signing and notarization** (SEC-EL-07 and
+  SEC-SC-05, signed artefacts). Today's installers are unsigned.
 - **No performance claim before a harness measures it.** The budgets in
   [architecture/overview.md](architecture/overview.md) are targets nothing
   checks — which is why the 2026-09-26 split is recorded in bytes and not in

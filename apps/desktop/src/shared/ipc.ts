@@ -1001,6 +1001,28 @@ export const IpcChannel = {
   syncNow: "sync:now",
   syncActivity: "sync:activity",
   syncActivityChanged: "sync:activity-changed",
+  // The network mode and the update check (ADR-089). `network:mode` is the
+  // choice screen's and the settings card's read, and it is answered while
+  // LOCKED — the choice has to be made before the unlock screen. `network:set-mode`
+  // records the choice once and never on a mere radio change. The three update
+  // channels do nothing in offline mode, and main is what says so: the mode is
+  // re-read inside every handler rather than trusted from the renderer.
+  networkMode: "network:mode",
+  networkSetMode: "network:set-mode",
+  updateStatus: "update:status",
+  updateCheck: "update:check",
+  updateInstall: "update:install",
+  // Opens the PINNED release page in the user's browser. It takes no argument
+  // on purpose: a channel through which the renderer could hand main any URL
+  // to open is a phishing primitive dressed as a convenience.
+  updateOpenRelease: "update:open-release",
+  // Restarts the app so a network-mode change takes effect (ADR-089). No
+  // payload: the only thing it does is `app.relaunch()` + `app.quit()`, and a
+  // renderer cannot aim it at another program.
+  appRelaunch: "app:relaunch",
+  // Main pushes this on every phase change so the About card and the update
+  // notice watch instead of polling.
+  updateChanged: "update:changed",
   appInfo: "app:info",
 } as const;
 
@@ -8630,6 +8652,75 @@ export type SyncAdoptView =
   | { outcome: "adopted"; status: SyncStatusView }
   | { outcome: "refused"; reason: SyncAdoptProblem };
 
+/**
+ * The network mode (ADR-089), redeclared here rather than imported from
+ * `main/net/offline.ts`: this contract may not depend on the main process, and
+ * the two-member union is small enough that a drift would be a compile error at
+ * every comparison. The spelling order is the choice screen's.
+ */
+export type NetworkMode = "offline" | "updates";
+
+/**
+ * What the choice screen and the „Mreža i ažuriranja" card read.
+ *
+ * `choiceRequired` is the FIRST-RUN trigger and it is true for a new install
+ * and for an upgrade alike: no earlier version ever wrote `network.json`, so
+ * the first 1.5.0 launch on any device has no valid choice recorded.
+ */
+export interface NetworkModeView {
+  /** The stored choice. */
+  mode: NetworkMode;
+  /** The mode this LAUNCH came up under — the resolver rule and the session's basis. */
+  runningMode: NetworkMode;
+  /**
+   * Whether the updater may reach the network right now: the launch came up in
+   * „updates" AND the stored choice is still „updates". False the moment the
+   * user switches to offline, whatever a renderer believes.
+   */
+  updatesActive: boolean;
+  /** True when the stored choice differs from the running one: a restart is owed. */
+  restartRequired: boolean;
+  /** True when no valid choice is recorded yet, which is when the choice screen shows. */
+  choiceRequired: boolean;
+}
+
+/** The version and notes offered, with no URL at all — main keeps every address. */
+export interface UpdateOffer {
+  readonly version: string;
+  readonly notes: string;
+  /** False on Linux (open the release page) and on a release whose installer is missing or mistyped. */
+  readonly canInstall: boolean;
+}
+
+/** Where the update check is. `"available"` carries an {@link UpdateOffer}. */
+export type UpdatePhase = "idle" | "checking" | "downloading" | "up-to-date" | "available" | "error";
+
+/**
+ * Why an update action failed. Machine codes, never prose: the renderer maps
+ * each to its own sentence and always offers the release-page link beside it.
+ * `"rate-limited"` is the one a manual check reports and the automatic one
+ * swallows (ADR-089 §2).
+ */
+export type UpdateProblem =
+  | "rate-limited"
+  | "network"
+  | "unexpected"
+  | "asset"
+  | "signature"
+  | "hash";
+
+/** Everything the renderer is told about the update check. No key, no token, no asset URL. */
+export interface UpdateStateView {
+  readonly mode: NetworkMode;
+  readonly phase: UpdatePhase;
+  readonly offer: UpdateOffer | null;
+  readonly problem: UpdateProblem | null;
+  /** The release page to open; always present so an error always has its link. */
+  readonly releaseUrl: string;
+  /** Epoch milliseconds of the last completed attempt, or null before the first. */
+  readonly lastCheckedAt: number | null;
+}
+
 /** Everything `enableSync` can answer. */
 export type SyncEnableView =
   | {
@@ -10138,5 +10229,28 @@ export interface NexusApi {
   syncNow(): Promise<SyncActivityView>;
   /** Subscribes to every change in what sync is doing. Returns an unsubscribe function. */
   onSyncActivity(listener: (activity: SyncActivityView) => void): () => void;
+  /**
+   * The network mode and whether a choice has been made (ADR-089). Answered
+   * while LOCKED, because the choice screen is shown before the unlock screen.
+   */
+  networkMode(): Promise<NetworkModeView>;
+  /**
+   * Records the user's choice and answers with the freshly computed view.
+   * Called from the choice screen's confirm button and the settings card — the
+   * moment a choice is recorded — never from a radio's `onChange`.
+   */
+  setNetworkMode(mode: NetworkMode): Promise<NetworkModeView>;
+  /** The update check's state. Read once on mount; changes arrive through `onUpdateChanged`. */
+  updateStatus(): Promise<UpdateStateView>;
+  /** The „Proveri sada" button. Refused with no request in offline mode; a rate limit is reported here. */
+  checkForUpdates(): Promise<UpdateStateView>;
+  /** Downloads, verifies and launches the offered installer. Only ever after this call. */
+  installUpdate(): Promise<UpdateStateView>;
+  /** Opens the pinned release page in the user's browser. No argument: the address is main's. */
+  openReleasePage(): Promise<void>;
+  /** Restarts Nexus so a network-mode change takes effect. The only thing it does is relaunch this app. */
+  relaunchApp(): Promise<void>;
+  /** Subscribes to every update-check phase change. Returns an unsubscribe function. */
+  onUpdateChanged(listener: (state: UpdateStateView) => void): () => void;
   appInfo(): Promise<AppInfo>;
 }

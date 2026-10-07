@@ -90,10 +90,14 @@ jobs:
       # `win.certificatePassword` (or, for a cloud signer, `win.sign` with a
       # custom sign hook). The certificate or the signing credential belongs in
       # repository secrets, used here and nowhere else, and it must never be
-      # echoed. The conditions the auto-updater's own design already states —
-      # an Authenticode signature whose `publisherName` matches the update
-      # config — make this a prerequisite for re-arming updates, not merely a
-      # warning-suppression step.
+      # echoed.
+      #
+      # Authenticode is now ONLY about SmartScreen (ADR-089 §1). The updater's
+      # integrity condition is the detached Ed25519 signature over
+      # SHA256SUMS.txt verified against a key compiled into the app — a key
+      # stops a stolen release token, which a certificate does not, and a
+      # certificate stops a SmartScreen warning, which a key does not. The two
+      # are independent, and neither is a prerequisite for the other.
       # ------------------------------------------------------------------------
 
       - name: Check the installer exists
@@ -155,26 +159,27 @@ jobs:
         with:
           name: linux
           # Only what a user downloads. electron-builder also writes
-          # `latest*.yml` and `.blockmap` files for an updater this build does
-          # not use; shipping them would advertise an update channel that is
-          # disarmed.
+          # `latest*.yml` and `.blockmap` files for electron-updater, which this
+          # build does not use: ADR-089's updater reads the GitHub release API,
+          # never those files. Shipping them would advertise a channel nothing
+          # reads, so they stay out of the release.
           path: |
             apps/desktop/release/*.AppImage
             apps/desktop/release/*.tar.gz
           if-no-files-found: error
           retention-days: 7
 
-  publish:
-    name: Draft the release
+  # THE ASSEMBLY JOB INSTALLS AND RUNS THIRD-PARTY CODE, and that is exactly why
+  # the signing key is not here. It runs `pnpm install`, the notices generator
+  # and the SBOM tool, so it holds `contents: read` and nothing else; the draft
+  # release it feeds is created by a job with no checkout at all.
+  assemble:
+    name: Assemble the release assets
     needs: [windows, linux]
     runs-on: ubuntu-latest
     timeout-minutes: 40
     permissions:
-      # To create the draft release and upload assets.
-      contents: write
-      # For the build-provenance attestation.
-      id-token: write
-      attestations: write
+      contents: read
       actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -241,14 +246,9 @@ jobs:
           sha256sum $(cat /tmp/asset-list.txt) > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
-      # Build provenance: a signed statement, verifiable later, that these
-      # exact bytes were produced by this workflow in this repository at this
-      # commit. It is the one artefact-related claim that does not depend on
-      # trusting the upload.
-      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
-        with:
-          subject-path: release-assets/*
-
+      # The notes live HERE rather than in the publishing job because they need
+      # `node` and `pnpm -v`, and the publishing job deliberately has neither.
+      # The checksum file they quote was written by the step above.
       - name: Write the release notes
         run: |
           set -euo pipefail
@@ -267,8 +267,9 @@ jobs:
             echo
             echo "- The interface is in **Serbian and English**. On first run it follows the system language, and Settings switches it at any time."
             echo "- **Code signing is paused for now**, so Windows SmartScreen warns on first run (More info, then Run anyway). Nexus is open source: anyone who wants to make sure the code does what it says can read all of it in this repository, and every file below was built by CI from the tagged commit, with an attestation that proves which commit and workflow produced it."
-            echo "- Sync is **off by default and unreachable in this build**: no backend project is compiled in, and the app makes no network call at all."
-            echo "- Auto-update is **disarmed** on purpose. Updating means downloading the next release."
+            echo "- Nexus is **offline by default**. On first start you choose **Offline only**, which makes no network call at all, or **Offline + update checks**, the only mode in which Nexus contacts GitHub, and only to check for and download a new version of itself. Your notes and data never leave the computer in either mode."
+            echo "- Sync is **off by default and unreachable in this build**: no backend project is compiled in."
+            echo "- Each installer is covered by \`SHA256SUMS.txt\` and its detached Ed25519 signature \`SHA256SUMS.txt.sig\`. Before it runs an update, Nexus checks the signature against a key compiled into the app and the installer's hash against the signed list."
             echo
             echo "### Toolchain"
             echo
@@ -295,6 +296,167 @@ jobs:
             echo "- [SECURITY.md](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/SECURITY.md) · [SUPPORT.md](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/SUPPORT.md)"
             echo "- Third-party notices are attached as \`THIRD-PARTY-NOTICES.md\`, and are also shown in the application under Settings → Licences."
           } > release-notes.md
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-assets
+          path: release-assets
+          if-no-files-found: error
+          retention-days: 7
+
+      # Only SHA256SUMS.txt, so the signing job downloads one small file it can
+      # verify and nothing else.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: checksums
+          path: release-assets/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 7
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-notes
+          path: release-notes.md
+          if-no-files-found: error
+          retention-days: 7
+
+  # THE SIGNING JOB IS SEPARATE, AND THAT IS THE POINT.
+  #
+  # The signing key is a secret that authorises an install on every existing
+  # copy, and it is present ONLY in the step below — inside a job that installs
+  # nothing and runs no dependency code: no `pnpm install`, no `actions/setup-node`,
+  # no `npx`, no SBOM generator. The job that renders the notices and builds the
+  # SBOM executes third-party code, so it never sees this secret; here the only
+  # tools are `openssl`, `awk`, `actions/checkout` and `actions/*`'s own
+  # artefact transfer.
+  sign:
+    name: Sign the checksums
+    needs: [assemble]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      # Sparse on the ONE file the verify step reads, so this job's checkout is
+      # as small as its trust surface. Cone mode would fetch the directories it
+      # needs to reach the file; `sparse-checkout-cone-mode: false` fetches the
+      # file itself.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: apps/desktop/src/main/update/releaseKey.ts
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: checksums
+          path: release-assets
+
+      # Sign SHA256SUMS.txt with the Ed25519 private key (ADR-089). The app
+      # accepts an installer only when its SHA-256 appears in a SHA256SUMS.txt
+      # whose detached signature verifies against the public key compiled into
+      # the binary (`src/main/update/releaseKey.ts`), so a release without this
+      # signature is one every installed copy would refuse to install.
+      #
+      # The secret is a PKCS#8 PEM. It is written to a private temp file and
+      # NEVER echoed; the job fails outright when it is missing, because a
+      # missing secret must not produce a release that silently has no
+      # signature. It is in THIS step's environment and nowhere else in the
+      # run.
+      - name: Sign the checksums
+        shell: bash
+        env:
+          NEXUS_RELEASE_SIGNING_KEY: ${{ secrets.NEXUS_RELEASE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${NEXUS_RELEASE_SIGNING_KEY:-}" ]; then
+            echo "::error::NEXUS_RELEASE_SIGNING_KEY is not set; refusing to draft a release no installed copy could update from."
+            exit 1
+          fi
+          umask 077
+          keyfile="$(mktemp)"
+          trap 'rm -f "$keyfile"' EXIT
+          printf '%s\n' "$NEXUS_RELEASE_SIGNING_KEY" > "$keyfile"
+          openssl pkeyutl -sign -rawin -inkey "$keyfile" \
+            -in release-assets/SHA256SUMS.txt \
+            -out release-assets/SHA256SUMS.txt.sig
+
+      # A secret that does not match the COMMITTED key must never ship: this
+      # verifies the signature with the public key from `releaseKey.ts` — the
+      # one every installed copy carries — and fails the job if it does not
+      # verify. Without this step, a rotated or mistyped secret would produce a
+      # release every user's updater rejects.
+      #
+      # The key is EXTRACTED from the TypeScript around it with `awk`: the line
+      # is `export const RELEASE_PUBLIC_KEY_PEM = \`-----BEGIN PUBLIC KEY-----`,
+      # so `sub(/.*-----BEGIN/, "-----BEGIN")` trims the prefix off the opening
+      # marker and the rest of the template literal is printed verbatim. The
+      # `sed` range this replaced captured that prefix and produced a PEM
+      # OpenSSL could not read.
+      - name: Verify the signature against the committed key
+        shell: bash
+        run: |
+          set -euo pipefail
+          awk '/-----BEGIN PUBLIC KEY-----/{sub(/.*-----BEGIN/, "-----BEGIN"); p=1} p{print} /-----END PUBLIC KEY-----/{exit}' apps/desktop/src/main/update/releaseKey.ts > "$RUNNER_TEMP/nexus-release-pub.pem"
+          openssl pkeyutl -verify -rawin -pubin -inkey "$RUNNER_TEMP/nexus-release-pub.pem" \
+            -in release-assets/SHA256SUMS.txt \
+            -sigfile release-assets/SHA256SUMS.txt.sig
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: signature
+          path: release-assets/SHA256SUMS.txt.sig
+          if-no-files-found: error
+          retention-days: 7
+
+  # THE PUBLISHING JOB HAS NO CHECKOUT AND RUNS NO PROJECT TOOLING. It holds the
+  # `contents: write` token that creates the draft, and it reaches the files it
+  # uploads only through `actions/download-artifact`; `sha256sum -c` is what
+  # verifies that the list the signing job signed matches the bytes that
+  # actually arrived.
+  publish:
+    name: Draft the release
+    needs: [assemble, sign]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      # To create the draft release and upload assets.
+      contents: write
+      # For the build-provenance attestation.
+      id-token: write
+      attestations: write
+      actions: read
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-assets
+          path: release-assets
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: signature
+          path: release-assets
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-notes
+
+      # Every artefact the release will upload is checked against the list the
+      # signing job signed, so a file that changed between assembly and here is
+      # caught before it is published rather than after.
+      - name: Check every artefact against the signed checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd release-assets
+          sha256sum -c SHA256SUMS.txt
+
+      # Build provenance: a signed statement, verifiable later, that these
+      # exact bytes were produced by this workflow in this repository at this
+      # commit. It is the one artefact-related claim that does not depend on
+      # trusting the upload.
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: release-assets/*
 
       # `gh` rather than a release action, for the reason at the top of this
       # file: this job holds `contents: write`.

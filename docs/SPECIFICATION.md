@@ -50,8 +50,12 @@ See [STATUS.md](STATUS.md) §3.
 **Two constraints that are structural rather than aspirational.** Cloud is **off
 by default and switchable off entirely** on the desktop, and the local-only path
 must not be *able* to reach the network — there is a CI gate over it, not a
-promise. And **content is never in the clear on the server**; metadata in the
-clear is accepted, content never is.
+promise. A device-level **network mode** (ADR-089) states the choice in the
+product: „Offline only" — the default — is exactly that path, with no network
+call of any kind, and „Offline + update checks" is the only mode in which Nexus
+contacts GitHub, solely to check for and download a new version of itself.
+And **content is never in the clear on the server**; metadata in the clear is
+accepted, content never is.
 
 **Not GitHub Pages, deliberately.** It cannot set HTTP response headers, so it
 can send neither a CSP nor `frame-ancestors` — and a page that decrypts user

@@ -5,8 +5,10 @@
 # customUnInstall runs inside the generated uninstaller, after the app files
 # are removed. It offers to also delete the user's local data — everything the
 # app ever writes:
-#   $APPDATA\Nexus            userData (nexus.db, window state, localStorage)
-#   $LOCALAPPDATA\Nexus-updater   electron-updater download cache
+#   $APPDATA\Nexus            userData (nexus.db, window state, localStorage,
+#                             including the update downloads under updates/)
+#   $LOCALAPPDATA\Nexus-updater   a legacy cache directory left by builds that
+#                             shipped electron-updater; removed if present
 # The prompt defaults to "Ne" (MB_DEFBUTTON2 for the focused button, /SD IDNO
 # for silent runs), so data survives unless the user explicitly chooses
 # deletion. ${isUpdated} guards the auto-update path: when the uninstaller
