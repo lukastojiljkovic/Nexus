@@ -54,10 +54,43 @@ const LOWER = /\p{Ll}/u;
 const UPPER = /\p{Lu}/u;
 const DIGIT = /\p{Nd}/u;
 const SPACE_CHAR = /\p{White_Space}/u;
+/** One character of `\p{White_Space}` — the class the trims below read, which is not quite `\s`. */
+const UNICODE_SPACE = /\p{White_Space}/u;
+
+/** `text` without a leading and trailing run of `\p{White_Space}`, in one pass each. */
+function trimWhiteSpaceEnds(text: string): string {
+  let start = 0;
+  while (start < text.length && UNICODE_SPACE.test(text[start] ?? "")) start += 1;
+  let end = text.length;
+  while (end > start && UNICODE_SPACE.test(text[end - 1] ?? "")) end -= 1;
+  return text.slice(start, end);
+}
+/** What `[^\S\n]` is: whitespace, minus the newline. */
+const HORIZONTAL_SPACE = /[^\S\n]/u;
 
 /** CRLF and CR both become LF before anything counts a line or a code point. */
 function toLf(text: string): string {
   return text.replace(/\r\n?/gu, "\n");
+}
+
+/**
+ * The trailing horizontal whitespace of every line, removed in one pass, and how
+ * many lines carried some.
+ *
+ * `[^\S\n]+$` under the `m` flag re-walked a run from every position inside it,
+ * so a line of a megabyte of spaces in front of a word took twenty minutes; this
+ * walks each line once, from its end. The count is the number of matches the
+ * pattern would have made, which one of the callers reports.
+ */
+function trimLineEnds(text: string): { text: string; trimmed: number } {
+  let trimmed = 0;
+  const lines = text.split("\n").map((line) => {
+    let end = line.length;
+    while (end > 0 && HORIZONTAL_SPACE.test(line[end - 1] ?? "")) end -= 1;
+    if (end < line.length) trimmed += 1;
+    return line.slice(0, end);
+  });
+  return { text: lines.join("\n"), trimmed };
 }
 
 /**
@@ -427,8 +460,8 @@ export function glossaryCheck(input: GlossaryCheckInput): ProResult<GlossaryChec
       invalidRows.push(index + 1);
       continue;
     }
-    const source = line.slice(0, at).replace(/^\p{White_Space}+|\p{White_Space}+$/gu, "");
-    const target = line.slice(at + 1).replace(/^\p{White_Space}+|\p{White_Space}+$/gu, "");
+    const source = trimWhiteSpaceEnds(line.slice(0, at));
+    const target = trimWhiteSpaceEnds(line.slice(at + 1));
     if (source.length === 0 || target.length === 0) {
       invalidRows.push(index + 1);
       continue;
@@ -1714,7 +1747,7 @@ export function sentenceLength(input: SentenceLengthInput): ProResult<SentenceLe
   let longestWords: number | undefined;
 
   const push = (raw: string): void => {
-    const text = raw.replace(/^\p{White_Space}+|\p{White_Space}+$/gu, "");
+    const text = trimWhiteSpaceEnds(raw);
     if (text.length === 0) return;
     const words = lexicalTokens(text).length;
     sentences.push({
@@ -2246,10 +2279,51 @@ function stripTags(line: string): string {
   let previous: string;
   do {
     previous = text;
-    text = text.replace(/<[^>]*>/gu, "");
-    text = text.replace(/\{\\[^}]*\}/gu, "");
+    text = removeTags(text);
+    text = removeAssOverrides(text);
   } while (text !== previous);
   return text;
+}
+
+/**
+ * Every `<...>` in `text`, removed in one forward pass.
+ *
+ * A scan rather than the pattern it replaces: `<[^>]*>` cannot backtrack WITHIN
+ * one start, but the engine re-runs it from every `<`, so a subtitle line at a
+ * megabyte spent two minutes on `<a` repeated. A start with no `>` after it has
+ * no LATER start with one either, so the rest of the line is text.
+ */
+function removeTags(text: string): string {
+  let out = "";
+  let kept = 0;
+  let search = 0;
+  for (;;) {
+    const at = text.indexOf("<", search);
+    if (at === -1) break;
+    const gt = text.indexOf(">", at + 1);
+    if (gt === -1) break;
+    out += text.slice(kept, at);
+    kept = gt + 1;
+    search = kept;
+  }
+  return out + text.slice(kept);
+}
+
+/** Every `{\...}` ASS override, removed the same way (`\{\\[^}]*\}`). */
+function removeAssOverrides(text: string): string {
+  let out = "";
+  let kept = 0;
+  let search = 0;
+  for (;;) {
+    const at = text.indexOf("{\\", search);
+    if (at === -1) break;
+    const close = text.indexOf("}", at + 2);
+    if (close === -1) break;
+    out += text.slice(kept, at);
+    kept = close + 1;
+    search = kept;
+  }
+  return out + text.slice(kept);
 }
 
 interface ParsedCue extends CueTimes {
@@ -2734,10 +2808,9 @@ function applySpaces(text: string): { text: string; count: number } {
     count += 1;
     return ". ";
   });
-  result = result.replace(/[^\S\n]+$/gmu, () => {
-    count += 1;
-    return "";
-  });
+  const lineEnds = trimLineEnds(result);
+  result = lineEnds.text;
+  count += lineEnds.trimmed;
   return { text: result, count };
 }
 
@@ -2823,10 +2896,7 @@ export function unwrapParagraphs(input: UnwrapInput): ProResult<Unwrap> {
     out.push(built.join("\n"));
   }
 
-  const text = out
-    .join("\n\n")
-    .replace(/ {2,}/gu, " ")
-    .replace(/[^\S\n]+$/gmu, "");
+  const text = trimLineEnds(out.join("\n\n").replace(/ {2,}/gu, " ")).text;
   return {
     ok: true,
     text,

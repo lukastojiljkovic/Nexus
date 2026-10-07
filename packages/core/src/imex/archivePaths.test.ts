@@ -113,3 +113,25 @@ describe("claimUniqueName", () => {
     expect(claimUniqueName(registryB, "Plan", ".md")).toBe("Plan.md");
   });
 });
+
+/**
+ * The trailing dots and spaces used to come off with `/[. ]+$/`, which re-walked
+ * the run from every position in it: a title of a hundred thousand dots spent
+ * seconds here, and a title comes from an archive. A scan is linear, and what it
+ * removes is the same run.
+ */
+describe("a segment's trailing dots and spaces come off in one pass", () => {
+  it("removes the run, and leaves every other name alone", () => {
+    expect(sanitizePathSegment("Plan. . . ", "Fascikla")).toBe("Plan");
+    expect(sanitizePathSegment("...", "Fascikla")).toBe("Fascikla");
+    expect(sanitizePathSegment("Plan.", "Fascikla")).toBe("Plan");
+    expect(sanitizePathSegment("Plan. 2026", "Fascikla")).toBe("Plan. 2026");
+  });
+
+  it("answers a 128k-dot title in linear time", () => {
+    const started = performance.now();
+    const name = sanitizePathSegment(".".repeat(128 * 1024), "Fascikla");
+    expect(performance.now() - started).toBeLessThan(200);
+    expect(name).toBe("Fascikla");
+  });
+});

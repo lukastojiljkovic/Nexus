@@ -1589,3 +1589,83 @@ describe("wordFrequency", () => {
     });
   });
 });
+/**
+ * The subtitle strip and the trailing-whitespace rule used to be patterns, and
+ * both were quadratic on a hostile paste: `<[^>]*>` re-runs from every `<`, so a
+ * cue whose text is `<a` repeated took ten seconds, and `[^\S\n]+$` under the
+ * `m` flag re-walks a whitespace run from every position inside it, so a line of
+ * spaces in front of a word took minutes. The paste ceiling is what the scans
+ * answer at.
+ */
+describe("the text tools walk their paste once", () => {
+  const CEILING = 500_000;
+  const TYPOGRAPHY = {
+    style: "curly",
+    quotes: false,
+    ellipses: false,
+    dashes: false,
+    spaces: true,
+    nbsp: false,
+  } as const;
+
+  it("strips markup from a cue at the paste ceiling in linear time", () => {
+    const characters = "<a".repeat(CEILING / 2 - 20);
+    const started = performance.now();
+    const result = subtitleAudit({
+      subtitle: `1\n00:00:01,000 --> 00:00:02,000\n${characters}\n`,
+      countTags: false,
+    });
+    expect(performance.now() - started).toBeLessThan(200);
+    expect(result.ok).toBe(true);
+    // No `>` anywhere, so nothing is a tag: the whole run is text.
+    if (result.ok) expect(result.blocks[0]?.characters).toBe(characters.length);
+  });
+
+  it("trims the line ends of a paste at the ceiling in linear time", () => {
+    const started = performance.now();
+    const cleaned = typographyCleanup({ text: " ".repeat(CEILING - 1) + "x", ...TYPOGRAPHY });
+    expect(performance.now() - started).toBeLessThan(200);
+    expect(cleaned.ok).toBe(true);
+    if (cleaned.ok) {
+      // The run is NOT at a line end, so the rule that fires here is the
+      // double-space collapse: one replacement, and the trim leaves it alone.
+      expect(cleaned.spaces).toBe(1);
+      expect(cleaned.text).toBe(" x");
+    }
+  });
+
+  it("pins the trailing trim and the count it reports", () => {
+    const cleaned = typographyCleanup({ text: "a \t \nb  \n", ...TYPOGRAPHY });
+    expect(cleaned.ok).toBe(true);
+    if (cleaned.ok) {
+      expect(cleaned.text).toBe("a\nb\n");
+      expect(cleaned.spaces).toBe(3);
+    }
+    const unwrapped = unwrapParagraphs({
+      text: "a  \nb \t\n",
+      joinHyphenated: false,
+      respectListItems: false,
+      splitOnSentenceEnd: false,
+    });
+    expect(unwrapped.ok).toBe(true);
+    if (unwrapped.ok) {
+      expect(unwrapped.text).toBe("a b");
+      expect(unwrapped.joinedLines).toBe(1);
+    }
+  });
+  it("trims a paste's white space at the ceiling in linear time", () => {
+    // `\p{White_Space}+$` re-walked a run of spaces from every position in it,
+    // which is quadratic on a line that never ends in one; the glossary check
+    // reads a line that way on both sides.
+    const started = performance.now();
+    const result = glossaryCheck({
+      original: " ".repeat(CEILING - 2) + "x ",
+      translation: " ".repeat(CEILING - 2) + "y ",
+      glossary: "a\tb\n",
+      caseSensitive: false,
+      wholeWord: false,
+    });
+    expect(performance.now() - started).toBeLessThan(200);
+    expect(result.ok).toBe(true);
+  });
+});

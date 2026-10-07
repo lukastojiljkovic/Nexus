@@ -416,3 +416,33 @@ describe("buildNoteUpdate", () => {
     );
   });
 });
+/**
+ * A bare URL's sentence punctuation used to be trimmed with a `[.,;:!?)\]}'"»…]+$`
+ * pattern, which re-walked the run from every position in it: a URL of a
+ * megabyte of dots with a letter after them took minutes. The set and the
+ * backward scan answer the same thing, and the reader's cap is what says so.
+ */
+describe("a bare URL's punctuation is trimmed in one pass", () => {
+  it("leaves the punctuation the sentence owns behind the link", () => {
+    expect(blocksOf("see http://example.com/a... and x")[1]).toEqual(
+      paragraph(
+        text("see "),
+        text("http://example.com/a", { link: "http://example.com/a" }),
+        text("... and x"),
+      ),
+    );
+    // A URL that IS punctuation keeps nothing, and one with a trailing slash
+    // keeps the slash: only the class's own characters come off.
+    expect(blocksOf("http://example.com/a/")[1]).toEqual(
+      paragraph(text("http://example.com/a/", { link: "http://example.com/a/" })),
+    );
+  });
+
+  it("parses a document at the reader's cap in linear time", () => {
+    const cap = 1024 * 1024;
+    const started = performance.now();
+    const parsed = parseMarkdownNote(`http://${".".repeat(cap - 8)}x`, FALLBACK);
+    expect(performance.now() - started).toBeLessThan(200);
+    expect(parsed.blocks.length).toBeGreaterThan(0);
+  });
+});

@@ -651,3 +651,183 @@ describe("the field patterns walk a field once", () => {
     expect(elapsed).toBeLessThan(100);
   });
 });
+
+/**
+ * `ANY_TAG`, `SCRIPT_OR_STYLE`, `ANKI_MATHJAX`, `IMAGE_TAG` and the two MathJax
+ * spellings used to be patterns, and every one of them was quadratic on a
+ * hostile field: `[^>]*` cannot backtrack WITHIN one start, but the engine
+ * re-runs it from every `<`, so a 256 KiB field of `<a` with no `>` spent nine
+ * seconds in the strip. The scans that replaced them answer the same thing, and
+ * these cases are what says so - the old patterns themselves, kept as the
+ * oracle, plus the cap each reader enforces.
+ */
+describe("the tag steps answer what the patterns answered", () => {
+  /** `ANY_TAG`'s block list, copied because the oracle below needs the old one. */
+  const BLOCK_TAGS = new Set([
+    "br",
+    "div",
+    "p",
+    "li",
+    "ul",
+    "ol",
+    "tr",
+    "td",
+    "th",
+    "table",
+    "hr",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "blockquote",
+    "pre",
+  ]);
+  const CAP = 256 * 1024;
+
+  /**
+   * The steps as the patterns read them - minus the entity step, because the
+   * alphabet below keeps `&` out and an input with no `&` is one `decodeEntities`
+   * leaves exactly as it found it.
+   */
+  function byPattern(field: string): { text: string; images: number; sounds: number } {
+    let sounds = 0;
+    let text = field.replace(/\[sound:[^\]]*\]/g, () => {
+      sounds += 1;
+      return "";
+    });
+    let previous: string;
+    do {
+      previous = text;
+      text = text.replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, "");
+    } while (text !== previous);
+    text = text.replace(
+      /<anki-mathjax\b[^>]*>([\s\S]*?)<\/anki-mathjax\s*>/gi,
+      (_whole, body: string) => `$${body}$`,
+    );
+    let images = 0;
+    text = text.replace(/<img\b[^>]*>/gi, () => {
+      images += 1;
+      return "";
+    });
+    text = text.replace(/<\/?([a-zA-Z][a-zA-Z0-9-]*)\b[^>]*>/g, (_whole, name: string) =>
+      BLOCK_TAGS.has(name.toLowerCase()) ? "\n" : "",
+    );
+    text = text.replace(/\\\(([\s\S]*?)\\\)/g, (_whole, body: string) => `$${body}$`);
+    text = text.replace(/\\\[([\s\S]*?)\\\]/g, (_whole, body: string) => `$${body}$`);
+    text = text.replace(/[^\S\n]+/g, " ");
+    const lines = text
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+    return { text: lines.join("\n"), images, sounds };
+  }
+
+  const HAND_CASES = [
+    "<b>x</b>",
+    "<b>",
+    "x</b>",
+    "a<br>b",
+    "</i>",
+    "<>< ><b >x</b >",
+    "<ab_cd>",
+    "<a-_>",
+    "<script>x</scr<style></style>ipt>",
+    "<script>x</scr<script></script>ipt>",
+    "<style>a</styl<style></style>e>",
+    "</scri<script></script>pt>",
+    "<a->x</a->",
+    "<SCRIPT >x</SCRIPT\n>",
+    "<script >x</script   >",
+    "<style\t>x</style\n>",
+    "<scr<script>ipt>",
+    "<scr<script>a</script>ipt>x</script>",
+    "<scr<style>x</style>ript>",
+    "<script><script>x</script>",
+    "<script src='x'>\nmulti\nline\n</script>ostalo",
+    "<anki-mathjax>x^2</anki-mathjax>",
+    "<anki-mathjax>x^2</anki-mathjax><anki-mathjax>y",
+    "<ANKI-MATHJAX >x</ANKI-MATHJAX   >",
+    "pre<img src='a.png'>mid[sound:b.mp3]post<img src='c.jpg'/>",
+    "<img",
+    "\\(",
+    "\\[x^2\\]",
+    "a\\(x\\)b\\[y\\]c",
+    "\\(",
+    "x\\\\)y",
+    "<",
+    ">>",
+    "<script",
+    "</script>",
+  ];
+
+  it("matches the old patterns on the hand cases, nested and unclosed included", () => {
+    for (const field of HAND_CASES) {
+      expect(stripAnkiHtml(field), field).toEqual(byPattern(field));
+    }
+  });
+
+  it("matches them on a few hundred seeded random fields", () => {
+    const pool = [
+      "<", ">", "/", "script", "style", "SCRIPT", "STYLE", "img", "IMG", "anki-mathjax",
+      "div", "b", "br", "a", "-", "_", " ", "\t", "\n", "=", '"', "'", "x", "1", "\\(",
+      "\\)", "\\[", "\\]", "[sound:", "]", "::", "<scr", "ipt>",
+    ];
+    let state = 20261007;
+    const random = (): number => {
+      state = (state * 1103515245 + 12345) % 2147483648;
+      return state / 2147483648;
+    };
+    for (let round = 0; round < 2_000; round += 1) {
+      let field = "";
+      const parts = Math.floor(random() * 22);
+      for (let part = 0; part < parts; part += 1) {
+        field += pool[Math.floor(random() * pool.length)] ?? "";
+      }
+      expect(stripAnkiHtml(field), JSON.stringify(field)).toEqual(byPattern(field));
+    }
+  });
+
+  it("strips the field at the reader's cap in linear time", () => {
+    const atCap = (prefix: string): string => prefix.repeat(Math.floor(CAP / prefix.length));
+    const adversarial = [
+      atCap("<a"),
+      atCap("<a "),
+      atCap("</d"),
+      atCap("<script "),
+      atCap("<script>"),
+      atCap("<style x"),
+      atCap("<anki-mathjax"),
+      atCap("<anki-mathjax>"),
+      atCap("<img "),
+      atCap("<img>"),
+      atCap("\\("),
+      atCap("\\["),
+    ];
+    for (const field of adversarial) {
+      const started = performance.now();
+      const stripped = stripAnkiHtml(field);
+      const elapsed = performance.now() - started;
+      // A pattern here spent one to nine SECONDS on the same input; the bar is
+      // an order of magnitude above the measured cost and three below the fault.
+      expect(elapsed, `field of ${String(field.length)} chars`).toBeLessThan(200);
+      expect(stripped.text.length).toBeLessThanOrEqual(field.length);
+    }
+  });
+
+  it("settles a chain of joins, agreeing with the loop that needed a pass per level", () => {
+    // #12's own shape: a removal joins the text on either side into the element
+    // AROUND it, so a pass per level - which is what the loop did - cost a walk of
+    // the whole field per level: fifteen thousand of them took 76 seconds. The
+    // walk reaches the same fixed point in one pass, so the depth here is the real
+    // one.
+    let text = "<scr<script>x</script>ipt>";
+    for (let level = 1; level < 15_000; level += 1) text = `<scr${text}ipt></script>`;
+    const field = text.padEnd(CAP, "z");
+    const started = performance.now();
+    const stripped = stripAnkiHtml(field);
+    expect(performance.now() - started).toBeLessThan(200);
+    expect(stripped).toEqual(byPattern(field));
+  });
+});
