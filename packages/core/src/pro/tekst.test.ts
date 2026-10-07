@@ -1693,9 +1693,15 @@ function trimLineEndsReference(text: string): string {
   return text.replace(/[^\S\n]+$/gmu, "");
 }
 
-/** `main`'s markup and ASS-override removal: the two patterns, one pass each. */
+/**
+ * `main`'s markup and ASS-override removal: the two patterns, one pass each.
+ * Split and joined rather than `replace(pattern, "")`, which removes exactly
+ * the same text for a pattern that cannot match empty: CodeQL reads the
+ * `replace` form as an HTML sanitizer, and this is a test's transcription of
+ * the old code, not one.
+ */
 function stripTagsReference(line: string): string {
-  return line.replace(/<[^>]*>/gu, "").replace(/\{\\[^}]*\}/gu, "");
+  return line.split(/<[^>]*>/u).join("").split(/\{\\[^}]*\}/u).join("");
 }
 
 /** `main`'s spaces rule: the same chain, ending in `/[^\S\n]+$/gmu`. */
