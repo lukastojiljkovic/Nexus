@@ -39,8 +39,9 @@ Three commitments distinguish it from the tools it replaces:
 - Everything needed to run a day works with the network off. Cloud sync, when it
   is hosted, is an addition rather than a dependency.
 - Privacy is structural. Private notes are end-to-end encrypted, the local path
-  cannot reach the network, and that limit is enforced by a CI gate rather than
-  promised in copy.
+  cannot reach the network unless the user turns on update checks (and then
+  reaches only GitHub's release hosts), and that limit is enforced by a CI gate
+  rather than promised in copy.
 - The full data set can always be exported, so the product never holds the
   user's data hostage.
 
@@ -80,7 +81,10 @@ Constraints that are deliberate:
 - The Electronics workbench derives and can run a plan on the user's own
   toolchain; anything that depends on a rule that can change is typed by the
   user rather than assumed by the app.
-- Auto-update is deliberately disarmed in the current build.
+- Updates are opt-in. On first start Nexus asks whether it may check GitHub
+  for new versions, offline is the default, nothing downloads until the user
+  presses Install, and an installer runs only after its signature and hash
+  verify (ADR-089).
 - Deleting a hosted sync account from inside the app is not implemented; that
   gap is recorded in the project's own status notes.
 
