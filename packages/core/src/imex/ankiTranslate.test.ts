@@ -1,3 +1,4 @@
+import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 
 import { findClozeRuns, renderClozeCard } from "../study/clozeText.js";
@@ -653,15 +654,21 @@ describe("the field patterns walk a field once", () => {
 });
 
 /**
- * `ANY_TAG`, `SCRIPT_OR_STYLE`, `ANKI_MATHJAX`, `IMAGE_TAG` and the two MathJax
- * spellings used to be patterns, and every one of them was quadratic on a
- * hostile field: `[^>]*` cannot backtrack WITHIN one start, but the engine
- * re-runs it from every `<`, so a 256 KiB field of `<a` with no `>` spent nine
- * seconds in the strip. The scans that replaced them answer the same thing, and
- * these cases are what says so - the old patterns themselves, kept as the
- * oracle, plus the cap each reader enforces.
+ * `ANY_TAG`, `ANKI_MATHJAX`, `IMAGE_TAG` and the two MathJax spellings used to
+ * be patterns, and every one of them was quadratic on a hostile field: `[^>]*`
+ * cannot backtrack WITHIN one start, but the engine re-runs it from every `<`,
+ * so a 256 KiB field of `<a` with no `>` spent nine seconds in the strip. The
+ * scans that replaced them answer the same thing, and these cases are what says
+ * so - the old patterns themselves, kept as the oracle, plus the cap each
+ * reader enforces.
+ *
+ * The script/style step is the one that no longer answers what the pass loop
+ * answered. Its contract is now the LEFTMOST complete element removed, then the
+ * same again on what is left, until nothing matches, and
+ * `stripScriptAndStyleReference` below is that rule written out. It is the
+ * oracle for that step the way the patterns are the oracle for the others.
  */
-describe("the tag steps answer what the patterns answered", () => {
+describe("the tag steps answer what the oracle answers", () => {
   /** `ANY_TAG`'s block list, copied because the oracle below needs the old one. */
   const BLOCK_TAGS = new Set([
     "br",
@@ -687,9 +694,25 @@ describe("the tag steps answer what the patterns answered", () => {
   const CAP = 256 * 1024;
 
   /**
-   * The steps as the patterns read them - minus the entity step, because the
-   * alphabet below keeps `&` out and an input with no `&` is one `decodeEntities`
-   * leaves exactly as it found it.
+   * The script/style contract, written out: remove the LEFTMOST complete
+   * element, then do it again to what is left, until nothing matches. This is
+   * not the pass-by-pass loop the pattern ran - that reached the fixed point one
+   * pass at a time, which is part of what made the import quadratic - it is the
+   * rule the one-walk strip has to land on.
+   */
+  function stripScriptAndStyleReference(text: string): string {
+    for (;;) {
+      const match = /<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/i.exec(text);
+      if (match === null) return text;
+      text = text.slice(0, match.index) + text.slice(match.index + match[0].length);
+    }
+  }
+
+  /**
+   * The steps as the oracle reads them - the patterns, except for the
+   * script/style step, which is `stripScriptAndStyleReference` above - minus the
+   * entity step, because the alphabets below keep `&` out and an input with no
+   * `&` is one `decodeEntities` leaves exactly as it found it.
    */
   function byPattern(field: string): { text: string; images: number; sounds: number } {
     let sounds = 0;
@@ -697,11 +720,7 @@ describe("the tag steps answer what the patterns answered", () => {
       sounds += 1;
       return "";
     });
-    let previous: string;
-    do {
-      previous = text;
-      text = text.replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, "");
-    } while (text !== previous);
+    text = stripScriptAndStyleReference(text);
     text = text.replace(
       /<anki-mathjax\b[^>]*>([\s\S]*?)<\/anki-mathjax\s*>/gi,
       (_whole, body: string) => `$${body}$`,
@@ -746,6 +765,26 @@ describe("the tag steps answer what the patterns answered", () => {
     "<scr<style>x</style>ript>",
     "<script><script>x</script>",
     "<script src='x'>\nmulti\nline\n</script>ostalo",
+    // Case (a): the removal joins the closer for an opener the walk has already
+    // passed. The first is #12's own shape; the second splits the closer over
+    // two removals (`</sc` + `r` + `ipt>`); the last is the same on the other
+    // name.
+    "<script>x</scr<style></style>ipt>",
+    "<script>x</sc<style></style>r<style></style>ipt>",
+    "<style>x</sty<script></script>le>ipt>",
+    // A built closer that comes before the waiting opener's `>`: the opener is
+    // `<script x </script>` (its `>` was inside the removed `<style>` element),
+    // so the closer the join built belongs to no opener and nothing is removed.
+    "<script x </scr<style></style>ipt>",
+    // A waiting opener whose `>` lay inside the removed span: the `<script x `
+    // opener's `>` was the removed `<style>` element's own `>`.
+    "<script x <style></style>/script>",
+    // Both names waiting at once (nothing matches, and the walk returns the
+    // field it was given), and whitespace and case inside the built closer.
+    "<script>x<style>y",
+    "<script>x</scr<style></style>ipt  \n >",
+    "<SCRIPT>x</SCR<style></style>IPT>",
+    "<ScRiPt>x</ScR<style></style>iPt>",
     "<anki-mathjax>x^2</anki-mathjax>",
     "<anki-mathjax>x^2</anki-mathjax><anki-mathjax>y",
     "<ANKI-MATHJAX >x</ANKI-MATHJAX   >",
@@ -762,13 +801,13 @@ describe("the tag steps answer what the patterns answered", () => {
     "</script>",
   ];
 
-  it("matches the old patterns on the hand cases, nested and unclosed included", () => {
+  it("matches the oracle on the hand cases, nested and unclosed included", () => {
     for (const field of HAND_CASES) {
       expect(stripAnkiHtml(field), field).toEqual(byPattern(field));
     }
   });
 
-  it("matches them on a few hundred seeded random fields", () => {
+  it("matches it on a few thousand seeded random fields", () => {
     const pool = [
       "<", ">", "/", "script", "style", "SCRIPT", "STYLE", "img", "IMG", "anki-mathjax",
       "div", "b", "br", "a", "-", "_", " ", "\t", "\n", "=", '"', "'", "x", "1", "\\(",
@@ -816,7 +855,63 @@ describe("the tag steps answer what the patterns answered", () => {
     }
   });
 
-  it("settles a chain of joins, agreeing with the loop that needed a pass per level", () => {
+  /**
+   * The shapes that took the old fallback route - a join that builds the closer
+   * for an opener the walk has already passed (case (a)), and the walk
+   * re-scanning for `>` from every start - plus a 15 000-level join chain behind
+   * an unclosed `<style>`. Each is timed at the cap, and each also runs against
+   * the oracle on a copy a few KiB long: the oracle re-reads the field from the
+   * start once per removal, so the chain and the repeated case-(a) shape are far
+   * too slow to compare at the cap.
+   */
+  it("strips every shape that took the fallback at the cap", () => {
+    const pad = (unit: string, room: number): string =>
+      unit.repeat(Math.max(0, Math.floor(room / unit.length)));
+    const chain = (levels: number): string => {
+      let inner = "<scr<script>x</script>ipt>";
+      for (let level = 1; level < levels; level += 1) inner = `<scr${inner}ipt></script>`;
+      return inner;
+    };
+    const CASE_A = "<script>x</scr<style></style>ipt>";
+    const shapes: Record<string, (size: number) => string> = {
+      fallbackTail: (size) => `<script><style></style>${pad("<script ", size - 24)}`,
+      fallbackHead: (size) => pad("<script ", size - 24) + "<script><style></style>",
+      fallbackLazy: (size) => `<script><style></style>${pad("<style>", size - 24)}`,
+      walkGtScan: (size) => `${pad("<script ", size - 1)}>`,
+      chainBehindStyle: (size) =>
+        `<style>${chain(Math.min(15_000, Math.max(1, Math.floor(size / 8)))).padEnd(size - 7, "z")}`,
+      caseARepeat: (size) => CASE_A.repeat(Math.floor(size / CASE_A.length)),
+      // The kept text is what these six attack: a removal leaves a longer
+      // whitespace run, or a longer kept prefix, for the next join to read.
+      spaceRun10: (size) => pad("          <style></style>", size),
+      spaceRun: (size) => pad(" <style></style>", size),
+      closerHeadSpaces: (size) => `</script${pad(" <style></style>", size - 8)}`,
+      prefixThenCaseA: (size) => "a".repeat(size / 2) + pad(CASE_A, size / 2),
+      prefixThenCaseA34: (size) => "a".repeat((size * 3) / 4) + pad(CASE_A, size / 4),
+      interleaved: (size) => pad("xxxxxxxxxxxxxxxxxxxx<style></style>", size),
+      // The three below read one loop of the walk over and over: truncating a
+      // long kept prefix behind every case-(a) join, walking back over a
+      // whitespace run that grows by 256 per removal, and re-deriving a
+      // swallowed waiting opener's `>` from the raw field on each removal.
+      caseAUnderPrefix: (size) =>
+        "a".repeat(Math.floor(size / 4)) + pad(CASE_A, size - Math.floor(size / 4)),
+      longSpaceRun: (size) => pad(`${" ".repeat(256)}<style></style>`, size),
+      stolenGtOpeners: (size) => pad("<script a=<style></style>>", size),
+    };
+    const SMALL = 4 * 1024;
+    for (const [name, shape] of Object.entries(shapes)) {
+      const field = shape(CAP);
+      const started = performance.now();
+      const stripped = stripAnkiHtml(field);
+      const elapsed = performance.now() - started;
+      expect(elapsed, `${name} at ${String(field.length)} chars`).toBeLessThan(200);
+      expect(stripped.text.length).toBeLessThanOrEqual(field.length);
+      const small = shape(SMALL);
+      expect(stripAnkiHtml(small), `${name} at ${String(small.length)} chars`).toEqual(byPattern(small));
+    }
+  });
+
+  it("settles a chain of joins, agreeing with the leftmost rule", () => {
     // #12's own shape: a removal joins the text on either side into the element
     // AROUND it, so a pass per level - which is what the loop did - cost a walk of
     // the whole field per level: fifteen thousand of them took 76 seconds. The
@@ -830,4 +925,68 @@ describe("the tag steps answer what the patterns answered", () => {
     expect(performance.now() - started).toBeLessThan(200);
     expect(stripped).toEqual(byPattern(field));
   });
+
+  /**
+   * The tokens the strip has to get right, plus arbitrary fragments. `&` is
+   * filtered out of the fragments because the oracle is the patterns minus the
+   * entity step (see `byPattern`), and a fragment that happens to spell `&amp;`
+   * would compare `decodeEntities` against no `decodeEntities`.
+   */
+  const FIELD_TOKENS = [
+    "<", ">", "/", "</", "script", "SCRIPT", "style", "Style", "<scr", "ipt>", "</scr", "<sty",
+    "le>", "</sty", " ", "\t", "\n", "=", '"', "'", "x", "img", "anki-mathjax", "div", "br",
+    "[sound:", "]", "\\(", "\\)", "\\[", "\\]",
+  ];
+  const fieldTokens = fc
+    .array(
+      fc.oneof(
+        fc.constantFrom(...FIELD_TOKENS),
+        fc.string({ maxLength: 12 }).map((fragment) => fragment.replace(/&/g, "#")),
+      ),
+      { maxLength: 40 },
+    )
+    .map((parts) => parts.join(""));
+
+  it("matches the oracle on fields built from the tokens that matter", () => {
+    fc.assert(
+      fc.property(fieldTokens, (field) => {
+        expect(stripAnkiHtml(field), JSON.stringify(field)).toEqual(byPattern(field));
+      }),
+      { numRuns: 500 },
+    );
+  });
+
+  it("never answers a longer text than the field it was given", () => {
+    fc.assert(
+      fc.property(fieldTokens, (field) => {
+        expect(stripAnkiHtml(field).text.length).toBeLessThanOrEqual(field.length);
+      }),
+      { numRuns: 500 },
+    );
+  });
+
+  /*
+   * The third property this brief asks for - the strip leaves no complete
+   * element behind, so running the reference on its output changes nothing -
+   * is deliberately NOT asserted here, because neither route the public surface
+   * offers is sound.
+   *
+   * `stripAnkiHtml`'s output is not a view of the strip step. The steps after it
+   * remove `<script>`/`<style>` tags whether the strip removed them or not, they
+   * can FABRICATE a complete element out of characters the strip correctly left
+   * as text - `"<<" + "<anki-mathjax>" + "script>x</" + "<anki-mathjax>" +
+   * "script>"` comes out of `stripTags` as `<script>x</script>` - and
+   * `decodeEntities` turns `&lt;script&gt;` back into one on purpose. So a
+   * "reference changes nothing" assertion on that output would fail on inputs
+   * the strip itself handled exactly right. The strip function is not exported,
+   * and a test-only export in production is exactly what the brief forbids.
+   *
+   * The fixed point is instead pinned where it is observable: every generated
+   * field must equal the ORACLE's answer exactly (the property above), and the
+   * oracle applies the reference to the same field - a complete element left
+   * anywhere that survives to the output would diverge from it. The exhaustive
+   * differential run for this change (every sequence of up to five tokens drawn
+   * from `<script>`, `<style>`, their closers and the split spellings) pins the
+   * same thing on the strip step itself, for every short shape there is.
+   */
 });

@@ -14,12 +14,16 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   so a small file built to repeat one prefix could spend minutes of CPU; the
   markup of a single Anki field at the reader's 256 KiB cap cost nine seconds.
   Each step now scans its input in one pass, and a file with 50 000 repetitions
-  answers in well under the time a keystroke takes. One rare nesting of
-  `<script>` and `<style>` tags still takes the previous route, bounded at about
-  a second for a field at the cap.
-- A field whose markup nests one tag inside another can no longer leave a
-  `<script>` behind in the plain text an Anki import or a subtitle measurement
-  produces; the strip settles the nesting before anything is counted or shown.
+  answers in well under the time a keystroke takes. The `<script>` and `<style>`
+  strip removes the leftmost complete element and repeats until none is left,
+  all in one walk of the field, so no arrangement of tags sends it down a slow
+  path.
+- A `<script>` or `<style>` element whose tags are split around another element,
+  so that removing the inner one completes the outer, is now removed with its
+  contents instead of surviving into the text of an Anki import, and a subtitle
+  line's length no longer counts a tag left behind by nesting one inside
+  another. Imported text is shown as text and never run, so both changes are
+  about what is counted and displayed.
 - The private-attachment, CSV, Markdown and profile-picture picks open each
   chosen file once and read it through that handle, so a file replaced between
   the size check and the read is neither read nor measured against the wrong
