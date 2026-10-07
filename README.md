@@ -63,6 +63,7 @@ The repository holds the full working record, and a reader can follow it end to 
 - **The security baseline** — [docs/security/baseline.md](docs/security/baseline.md): the binding `SEC-*` rules.
 - **Threat models and signed deviations** — [docs/security/threat-models/](docs/security/threat-models/) and [docs/deviations.md](docs/deviations.md).
 - **The design direction** — [docs/design/direction-brief.md](docs/design/direction-brief.md); the direction that won is now the token set in `packages/tokens`.
+- **The product and the design system** — [PRODUCT.md](PRODUCT.md) is the durable product record, and [DESIGN.md](DESIGN.md) documents the visual system as implemented.
 - **The prompt pipeline** — [docs/prompts/README.md](docs/prompts/README.md): the prompts that produced the PRDs, the research passes and the ADRs.
 - **The map** — [docs/README.md](docs/README.md) groups all of it by what you want to do.
 
