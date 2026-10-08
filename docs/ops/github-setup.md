@@ -1,7 +1,7 @@
 # GitHub repository settings (web UI)
 
 **Status: the repository is public, and every setting below was applied on
-2026-10-05, except the last section.** They live only in the GitHub web UI and
+2026-10-05, except the release environment and the last section.** They live only in the GitHub web UI and
 its API. The in-repo half — CI, the security, CodeQL, Scorecard, release and
 Pages workflows, the Dependabot config, the pull-request template and
 CODEOWNERS — is committed under `.github/`. Run this list once before the first
@@ -46,6 +46,14 @@ release and again after any change to the repository's settings.
 - [x] Default workflow permissions: read-only `GITHUB_TOKEN` (workflows also
       declare their own `permissions:` explicitly)
 - [x] Require approval for first-time outside contributors
+
+## Release signing key — Settings → Environments
+
+- [ ] Environment `release`, limited to tags matching `v*`: the `sign` job in
+      `release.yml` declares it, and it is the only job that reads the key
+- [ ] `NEXUS_RELEASE_SIGNING_KEY` as a secret of `release`, then the
+      repository-level secret of that name deleted (it was set there on
+      2026-10-07, before the environment existed)
 
 ## Later, when relevant
 

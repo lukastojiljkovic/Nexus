@@ -6,37 +6,30 @@ The detailed, dated working notes stay in the repository's own `docs/` tree.
 
 ## Where the project is
 
-The desktop application is **finished and in daily use**, and its first public
-release, 1.4.0, is published. Sixteen modules — tasks, calendar, notes,
+The desktop application is **finished and in daily use**, and its latest
+release, 1.5.0, is published. Sixteen modules — tasks, calendar, notes,
 documents, study, habits, focus, fitness, finance, electronics and the rest —
-run against a local encrypted database with no network path at all. It installs
-like an ordinary Windows program, and builds exist for Linux as an AppImage, a
-tarball and a Gentoo ebuild.
+run against a local encrypted database with no network path; the only connection
+Nexus can open is the update check, and only when the user turns it on. It
+installs like an ordinary Windows program, and builds exist for Linux as an
+AppImage, a tarball and a Gentoo ebuild.
 
 The interface ships in **Serbian and English**. It follows the system language
 on first run and remembers the choice.
 
-## Now — 1.5.0
+## Now — after 1.5.0
 
-Release 1.4.0 is published: the Windows installer, the Linux AppImage and the
-tarball, each release carrying checksums, an SBOM, build provenance and the
-third-party notices generated from the exact released tree. The open-source
-paperwork (licence, security policy, contribution rules, privacy statement,
-terms, changelog) and the repository's own settings (branch protection, secret
-scanning, Dependabot, private vulnerability reporting, Discussions) are in
-place.
+Release 1.5.0 is published (2026-10-08): Settings in categories and sub-pages,
+and the opt-in update check described below. Each release carries the Windows
+installer, the Linux AppImage and the tarball, with checksums and their Ed25519
+signature, an SBOM, build provenance and the third-party notices generated from
+the exact released tree. The open-source paperwork (licence, security policy,
+contribution rules, privacy statement, terms, changelog) and the repository's
+own settings (branch protection, secret scanning, Dependabot, private
+vulnerability reporting, Discussions) are in place.
 
-The next release is tracked in the
-[1.5.0 milestone](https://github.com/lukastojiljkovic/Nexus/milestone/1):
-
-- Settings reorganised into categories and sub-pages, so a setting is found
-  without scrolling past twenty-odd cards;
-- an opt-in update check. On first start the user chooses between offline only,
-  which stays the default, and offline plus update checks, which contacts GitHub
-  only to find and download new versions of Nexus.
-
-Still open after that: Windows code signing, so the installer stops triggering
-a SmartScreen warning.
+Still open: Windows code signing, so the installer stops triggering a
+SmartScreen warning.
 
 ## 1.5.0 — a network mode, and update checks you can turn on
 
@@ -50,7 +43,7 @@ Offline stays the default, and update checks are opt-in. A user who picks
 **Offline only** is in exactly the 1.4.0 product: the boundary in the main
 process is unchanged, and updates are installed only when they ask for one. A
 user who turns the checks on gets a version, its release notes, and an
-**Install** button — nothing downloads until they press it, and every download
+**Download and install** button — nothing downloads until they press it, and every download
 is verified against a key compiled into the app. In **Offline + update checks**
 mode GitHub sees the device's IP address, as any server does; your notes and
 data never leave the computer. The mode is changeable at any time in Settings,
