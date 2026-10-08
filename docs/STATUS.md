@@ -23,10 +23,10 @@ anything is pushed, which is the defect class this file keeps recording.
 [SPECIFICATION.md](SPECIFICATION.md) (the whole product) ·
 [roadmap.md](roadmap.md) (what order).
 
-**Where things stand (2026-10-05).** The desktop application is finished and
-the repository is public. The first public release, **1.4.0**, is tagged
-`v1.4.0` on `main`, built by the release workflow and published with its
-checksums, SBOM and build provenance. The installer is unsigned, and web and
+**Where things stand (2026-10-08).** The desktop application is finished and
+the repository is public. The latest release, **1.5.0**, is tagged `v1.5.0` on
+`main`, built by the release workflow and published with its checksums, their
+Ed25519 signature, an SBOM and build provenance; 1.4.0 was the first. The installer is unsigned, and web and
 sync are paused.
 
 ---
@@ -35,10 +35,12 @@ sync are paused.
 
 **The desktop app is finished, and the repository is public.** Sixteen modules,
 all usable end to end, on an encrypted local SQLite database with no network
-path at all. It installs like an ordinary Windows program and the founder has
-used it daily since 2026-08-02. The first public release is **1.4.0**, tagged
-`v1.4.0` (§4); every installer before it was built by hand and never tagged,
-the last being 1.3.0, from `eceb07e` on 2026-09-23.
+path; the only connection Nexus can open is the update check, and only when the
+user turns it on. It installs like an ordinary Windows program and the founder
+has used it daily since 2026-08-02. The first public release is **1.4.0**,
+tagged `v1.4.0` (§4), and the latest is **1.5.0** (2026-10-08); every installer
+before 1.4.0 was built by hand and never tagged, the last being 1.3.0, from
+`eceb07e` on 2026-09-23.
 
 **The interface ships in two languages** (2026-10-02). English joins Serbian as
 a whole second table, `strings.en.ts`, checked against the Serbian-derived
@@ -99,17 +101,17 @@ blocking; both are §5 items.
 
 |  |  |
 | --- | --- |
-| Desktop version | **1.4.0**, released as `v1.4.0`: unsigned, with its fuses read back |
-| Installer bytes | 183 616 545 (1.4.0, as published) · `sha256` 361889BC… — the release's `SHA256SUMS.txt` |
+| Desktop version | **1.5.0**, released as `v1.5.0`: unsigned, with its fuses read back |
+| Installer bytes | 183 215 709 (1.5.0, as published) · `sha256` 3737A3DC… — the release's signed `SHA256SUMS.txt` |
 | Linux | AppImage, tarball and a Gentoo ebuild, all built and verified |
 | Modules registered | **16** |
 | Local migrations | **70** (latest `070-circuit-search`) |
 | Server | 14 Supabase migrations, 3 Edge Functions, 165 pgTAP assertions |
 | Static gates | **26**, each its own CI step |
-| Commits | **739** on `feat/english-locale`, the last branch merged before 1.4.0 |
-| Unmerged work | `feat/update-check` — ADR-089's network mode and opt-in update check; its narrative moves to `log/` when it merges, and the row returns to „none". |
-| Open pull requests | none at the 1.4.0 release |
-| Git tags / GitHub releases | `v1.4.0`, the first (§4) |
+| Commits | **787** on `main` at `v1.5.0` |
+| Unmerged work | none |
+| Open pull requests | none at the 1.5.0 release |
+| Git tags / GitHub releases | `v1.4.0`, the first (§4), and `v1.5.0` |
 | Repository | public since 2026-10-05; `main` changes only through a pull request with CI green (ruleset `main`, no bypass) |
 
 ---
@@ -632,6 +634,11 @@ schedule is now a migration) — reached `main` through the public-release pull
 request (#39), the English locale followed it, and `v1.4.0` was tagged from
 the result. The narrative is in [log/2026-10.md](log/2026-10.md).
 
+**1.5.0 followed on 2026-10-08:** Settings in categories (ADR-088) and the
+opt-in update check (ADR-089), with the security fixes in `CHANGELOG.md`. Its
+release is the first to sign `SHA256SUMS.txt` with the Ed25519 key the app
+pins.
+
 **What that leaves is the maintainer's, and it is one thing:** the
 code-signing route (`SignPath Foundation` is free for open-source projects;
 Azure Artifact Signing is the alternative). It is not blocked on anything in
@@ -813,13 +820,14 @@ quality is.
   encryption, embedded asar integrity and only-load-from-asar on), and the 1.3.0
   executable was read back and had all six wrong. 1.4.0's read back as
   configured, on 2026-10-02 and again on 2026-10-05 from the tree the tag was
-  cut from (see `log/2026-10.md`). After any change to that file or to
+  cut from (see `log/2026-10.md`), and 1.5.0's Linux binary, taken from the
+  published tarball, read back as configured on 2026-10-08. After any change to that file or to
   Electron: run `pnpm --filter @nexus/desktop dist`, then
   `npx @electron/fuses read --app apps/desktop/release/win-unpacked/Nexus.exe`,
   and launch the result.
 - **`v1.4.0` is the first tag and the first release.** Every installer before
   it reports a number nothing could be verified against. The Gentoo ebuild is
-  `nexus-bin-1.4.0`, its `SRC_URI` points at this repository's releases, and
+  `nexus-bin-1.5.0`, its `SRC_URI` points at this repository's releases, and
   its committed `Manifest` digests the published Linux tarball (the same bytes
   as the release's `SHA256SUMS.txt`). The next bump regenerates the Manifest
   from the next published tarball, never from a local build. It has still not
