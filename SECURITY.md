@@ -6,12 +6,13 @@ itself. Security reports are welcome and are taken seriously.
 
 ## Supported versions
 
-The current release line is **1.4.x**. The latest release is supported, and so
+The current release line is **1.5.x**. The latest release is supported, and so
 is the release before it for as long as it is the previous minor.
 
 | Version | Supported |
 | --- | --- |
-| `1.4.x` (latest release) | Yes |
+| `1.5.x` (latest release) | Yes |
+| `1.4.x` (previous minor) | Yes |
 | 1.3.x and earlier | No — no release line before 1.4 has been published |
 | `main` (development) | Not supported, but fixes land here first |
 

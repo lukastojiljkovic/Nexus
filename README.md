@@ -9,15 +9,15 @@ Nexus is a desktop application that keeps your tasks, calendar, notes, documents
 
 ## Download
 
-[**Releases**](https://github.com/lukastojiljkovic/Nexus/releases/latest) — the first public release is **1.4.0**:
+[**Releases**](https://github.com/lukastojiljkovic/Nexus/releases/latest) — the latest release is **1.5.0**:
 
 | File | Platform |
 | --- | --- |
-| `Nexus-Setup-1.4.0.exe` | Windows 10 or 11, x64 — per-user NSIS installer |
-| `Nexus-1.4.0-x86_64.AppImage` | Linux x64 with glibc — mark it executable and run it |
-| `nexus-1.4.0-linux-x64.tar.gz` | Linux x64 — the payload the Gentoo ebuild installs |
+| `Nexus-Setup-1.5.0.exe` | Windows 10 or 11, x64 — per-user NSIS installer |
+| `Nexus-1.5.0-x86_64.AppImage` | Linux x64 with glibc — mark it executable and run it |
+| `nexus-1.5.0-linux-x64.tar.gz` | Linux x64 — the payload the Gentoo ebuild installs |
 
-Every release also carries `SHA256SUMS.txt`, a CycloneDX SBOM, the rendered `THIRD-PARTY-NOTICES.md`, and build-provenance attestations. On Linux the app needs a running Secret Service keyring (gnome-keyring, KWallet, KeePassXC with Secret Service enabled); without one it refuses to create an account rather than weaken the key chain. Code signing is paused for now, so SmartScreen warns on first run; the source is all here for anyone who wants to check what the installer does, and the attestations tie each file to the commit and workflow that built it. macOS is not built: nothing here has produced or opened a macOS artefact.
+Every release also carries `SHA256SUMS.txt` with its Ed25519 signature `SHA256SUMS.txt.sig`, a CycloneDX SBOM, the rendered `THIRD-PARTY-NOTICES.md`, and build-provenance attestations. On Linux the app needs a running Secret Service keyring (gnome-keyring, KWallet, KeePassXC with Secret Service enabled); without one it refuses to create an account rather than weaken the key chain. Code signing is paused for now, so SmartScreen warns on first run; the source is all here for anyone who wants to check what the installer does, and the attestations tie each file to the commit and workflow that built it. macOS is not built: nothing here has produced or opened a macOS artefact.
 
 ## What it does
 
