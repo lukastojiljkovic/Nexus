@@ -66,10 +66,11 @@ and the business demo seeder carries the same `EN` map the others do. `<html
 lang>` follows the locale on both the desktop and the web shell, so assistive
 technology reads the same language the copy does.
 
-**Web and sync are paused, not cancelled** (founder, 2026-08-31). Desktop work
-comes first, because the renderer is one React codebase and Electron is only its
-shell — a feature finished on the desktop is one the web app inherits later.
-§4.2 is the queue that resumes when the desktop is done.
+**Web and sync are on hold permanently** (founder, 2026-10-08; paused since
+2026-08-31). Nexus is positioned as an offline application: no public copy
+mentions sync, cloud or a web app, and nothing in §4.2 is scheduled. The code
+stays in the repository and in CI, so it keeps building and passing, but no work
+is planned on it.
 
 **What exists of sync is real, and it has never run against the real server.**
 The server half ran against a real Postgres 17: 14 migrations, an RLS wall
@@ -745,7 +746,7 @@ suggestion, cheapest and highest-leverage first.
 error model, and the pairing redesign are all web/sync work and stay paused with
 it. The questions they raise are in §5 so they are not lost.
 
-### 4.2 Paused: the web app and sync, in order
+### 4.2 On hold permanently: the web app and sync (kept for the record)
 
 1. **A first round against the real project.** The desktop wiring is DONE
    (2026-08-30): `runSyncRound` builds everything `syncOnce` needs and erases

@@ -47,7 +47,7 @@ Sixteen modules, switched on per profile.
 - **Local by default.** Your data is one encrypted SQLite database on your own device. The local path cannot reach the network, and that is enforced in CI rather than promised in copy.
 - **Offline is the default, and update checks are opt-in.** On first start Nexus asks whether it may use the network at all: **Offline only** makes no network call of any kind, and **Offline + update checks** contacts GitHub for one purpose — checking for and downloading a new version of Nexus itself. Your notes and data never leave the computer; in update-check mode GitHub sees your IP address, as any website does, and nothing else. Every download is verified against a key compiled into the app. Change it any time in **Settings → Privacy → Network and updates**.
 - **No telemetry, no analytics, no crash reporting.**
-- **Cloud is off by default**, and in the build this repository produces it cannot be turned on at all: no backend project is compiled in. Optional sync is end-to-end encrypted, and the server holds ciphertext only.
+- **No account, no server, no cloud.** Nothing syncs; to move to another computer, export everything into one archive, protected with a password if you like, and import it there.
 
 Read [PRIVACY.md](PRIVACY.md) for exactly what is stored where, and
 [SECURITY.md](SECURITY.md) to report a vulnerability privately.
@@ -199,7 +199,7 @@ requirement, and installing the Gentoo overlay — is in
 ```text
 apps/
   desktop/     Electron shell — main, preload, renderer; the database lives here
-  web/         The same renderer on a browser runtime
+  web/         The same renderer on a browser runtime (on hold)
   gallery/     Component gallery (design review only)
 packages/
   tokens/          Design tokens — the single source of truth for every style value
@@ -211,6 +211,9 @@ packages/
   sync-port/       The injected crypto seam, so no package hardcodes a primitive
   sync-transport/  The wire — PostgREST and Broadcast, no keys, no origin
 ```
+
+The four `sync` packages and `apps/web` are on hold. They were built and tested before Nexus
+chose to stay offline, no release can reach a server with them, and no work on them is planned.
 
 | Package | What it may depend on |
 | --- | --- |
