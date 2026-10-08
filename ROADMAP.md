@@ -49,34 +49,30 @@ mode GitHub sees the device's IP address, as any server does; your notes and
 data never leave the computer. The mode is changeable at any time in Settings,
 and the reader is told a restart is what applies it.
 
-## Next — optional sync, and the web app
+## On hold — sync and the web app
 
-The desktop app's sync engine, its cryptography and its server schema are built
-and tested. What has never happened is a round against a real deployed backend,
-because no hosted project exists and the shipped build cannot be pointed at one.
-
-That is **paused, not cancelled**, and it resumes after the desktop's own loose
-ends are done. The work already built stays built, stays tested and stays off by
-default: a user who never turns sync on is running exactly the offline product.
+Nexus stays an offline application. A sync engine, its cryptography, a server
+schema and a browser build of the renderer were built and tested earlier; they
+stay in the repository, no release can reach a server with them, and no work on
+them is planned. Moving to another computer is an export: one archive, protected
+with a password if you like, imported on the other machine.
 
 ## Later — the wider catalogue
 
 The full product ambition is much larger than the sixteen modules that exist:
 goals, time tracking, health, car, travel, inventory, shopping, read-later,
-library, a password vault, entertainment, sharing, analytics, automation, an AI
-assistant and a plugin system. Several of them genuinely depend on sync existing
-first. None of them is next.
+library, a password vault, entertainment, analytics, automation, an AI assistant
+and a plugin system, each of them working with the network off. None of them is
+next.
 
 ## What will not change
 
 - **Local-first.** Your data lives on your device, encrypted, and the app works
   with the network off.
-- **Cloud is off by default**, and off means the local path cannot reach the
-  network at all — enforced in CI, not promised in copy.
+- **No cloud.** There is no server and no account, and the local path cannot
+  reach the network at all — enforced in CI, not promised in copy.
 - **Offline is the default, and update checks are opt-in.** Every release so far
   has made no network call at all, and a user who says no to update checks stays
   in exactly that product.
-- **The server holds ciphertext.** Metadata in the clear is accepted; content
-  never is.
 - **No telemetry, no analytics, no crash reporting.**
 
