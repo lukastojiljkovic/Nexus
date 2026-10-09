@@ -102,6 +102,7 @@ import {
 } from "./studyPlanView.js";
 import type { ScopeCutRow } from "./studyPlanView.js";
 import { moduleName } from "./moduleName.js";
+import { ModuleSettingsGear } from "./moduleSettingsGear.js";
 
 // --- Field orderings (renderer mirror of @nexus/db) -------------------------
 //
@@ -3086,9 +3087,12 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
         title={moduleName("study")}
         sigil="study"
         actions={
-          <Button variant="primary" onClick={startAddSubject}>
-            {strings.study.add}
-          </Button>
+          <>
+            <Button variant="primary" onClick={startAddSubject}>
+              {strings.study.add}
+            </Button>
+            <ModuleSettingsGear moduleId="study" />
+          </>
         }
       />
 

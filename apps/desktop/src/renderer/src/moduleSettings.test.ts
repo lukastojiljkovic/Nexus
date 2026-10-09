@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { createModuleRegistry } from "../../shared/modules.js";
 import {
   isDeviceOnlyPanel,
+  moduleSettingsCardIds,
   moduleSettingsCards,
   moduleSettingsDeclarations,
   settingsEntryId,
@@ -108,6 +109,52 @@ describe("moduleSettingsDeclarations", () => {
       (declaration) => declaration.moduleId,
     );
     expect(ids).not.toContain("settings");
+  });
+});
+
+// --- which module pages wear the gear -----------------------------------------
+
+/**
+ * The gear a module page's header draws (`moduleSettingsGear.tsx`) is offered
+ * exactly for the modules this answers for, so the set is the whole contract:
+ * a module whose manifest declares `settings` has a card to open and gets the
+ * button, and one that declares none has neither. Two of the absences are
+ * decisions rather than gaps — SET is the page the gear opens INTO, and CANV,
+ * ELEC and „Stručne alatke" publish no card on purpose (see their manifests).
+ */
+describe("moduleSettingsCardIds", () => {
+  it("names every module that publishes a card, and no other module", () => {
+    expect([...moduleSettingsCardIds(createModuleRegistry())]).toEqual([
+      "dashboard",
+      "tasks",
+      "calendar",
+      "notes",
+      "priv",
+      "files",
+      "study",
+      "finance",
+      "habits",
+      "fitness",
+      "focus",
+      "tools",
+    ]);
+  });
+
+  it("leaves out the settings page itself and the three modules with no card", () => {
+    const ids = moduleSettingsCardIds(createModuleRegistry());
+    for (const id of ["settings", "canvas", "electronics", "pro"]) {
+      expect(ids.has(id), id).toBe(false);
+    }
+  });
+
+  it("answers for a module registered later, with no edit to this file or the gear", () => {
+    expect(moduleSettingsCardIds(registryWithFakeModule()).has("fake")).toBe(true);
+  });
+
+  it("is NOT gated by flags — the gear lives on the module's own page, which a disabled module does not have", () => {
+    // PRIV ships disabled, so the page never mounts and the gear is never
+    // drawn; but the reason is the missing page, not a filtered set.
+    expect(moduleSettingsCardIds(createModuleRegistry()).has("priv")).toBe(true);
   });
 });
 

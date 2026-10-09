@@ -36,6 +36,8 @@ import { PINNED_GROUP_KEY, readPinnedModules, sidebarGroups } from "./navPrefs.j
 import { pruneOnboardingDrafts } from "./onboardingDraft.js";
 import { moduleIconName } from "./moduleIcon.js";
 import { moduleName } from "./moduleName.js";
+import { ModuleSettingsNavProvider, type ModuleSettingsNav } from "./moduleSettingsGear.js";
+import { moduleSettingsCardIds } from "./moduleSettings.js";
 import {
   persistActiveProfile,
   profileDisplayName,
@@ -236,6 +238,23 @@ export function App() {
   // via onIntentHandled (`clearIntent`), so a later return to that module
   // never re-fires the same intent.
   const [pending, setPending] = useState<PendingIntent | null>(null);
+  /**
+   * The module card a gear asked „Podešavanja" to open at
+   * (`moduleSettingsGear.tsx`). The page consumes it on the mount the press
+   * caused and reports back through `onTargetHandled`, exactly as a page-level
+   * intent above is consumed — one press, one landing.
+   */
+  const [settingsTarget, setSettingsTarget] = useState<string | null>(null);
+  /**
+   * The other half of that class: a press whose page was never drawn — the
+   * window locked first, another row clicked in the same breath — must not
+   * steer a later, ordinary visit. `activeId` rather than the pane's deferred
+   * page, because it is the DESTINATION: the two are equal on the render the
+   * press causes, which is the one that must keep the target.
+   */
+  useEffect(() => {
+    if (activeId !== "settings") setSettingsTarget(null);
+  }, [activeId]);
   /**
    * The modules this profile keeps above the sidebar's categories (ADR-086),
    * and the counter that makes a fresh write show up.
@@ -752,6 +771,31 @@ export function App() {
     setPending(next);
     setActiveId(next.module);
   }
+
+  /**
+   * A module page's gear: „Podešavanja", at that module's card. Both halves
+   * happen together for `dispatchIntent`'s reason — a target with the page not
+   * switched to is a jump nobody sees, and the page switched to without the
+   * target is the plain Settings page.
+   */
+  const openModuleSettings = useCallback((moduleId: string) => {
+    setSettingsTarget(moduleId);
+    setActiveId("settings");
+  }, []);
+
+  // Stable across renders, on `clearIntent`'s own terms: it is handed to
+  // SettingsPage, whose deep-link effect lists it in its dependency array.
+  const clearSettingsTarget = useCallback(() => setSettingsTarget(null), []);
+
+  /**
+   * What every module page's header reads: which modules publish a card, and
+   * how to open one. `registry` is compiled-in data built once at module scope,
+   * so this is built once too.
+   */
+  const settingsNav = useMemo<ModuleSettingsNav>(
+    () => ({ withSettings: moduleSettingsCardIds(registry), open: openModuleSettings }),
+    [openModuleSettings],
+  );
 
   /**
    * The app's first cross-module deep link (STUDY -> the note a flashcard was
@@ -1629,197 +1673,204 @@ export function App() {
               remounts it, so page-local state — a selected task, an open note,
               a half-typed filter — never leaks across profiles. */}
           <PageSlot page={shownId}>
-            {shownId === "dashboard" && activeProfile ? (
-              <DashboardPage
-                key={activeProfile.id}
-                profileId={activeProfile.id}
-                profileName={activeProfile.name}
-                registry={registry}
-                enabledModules={enabledIds}
-                onOpenModule={setActiveId}
-                onOpenNote={openNote}
-              />
-            ) : shownId === "tasks" && activeProfile ? (
-              <TasksPage
-                key={activeProfile.id}
-                profileId={activeProfile.id}
-                intent={pending?.module === "tasks" ? pending.intent : null}
-                onIntentHandled={clearIntent}
-              />
-            ) : shownId === "calendar" && activeProfile ? (
-              <CalendarPage
-                key={activeProfile.id}
-                profileId={activeProfile.id}
-                // CAL-005 / ADR-058 §5: the account's OTHER profile is the
-                // overlay chip's origin — v1 keeps one personal anchor plus at
-                // most one business profile, so "the other" is at most one row.
-                // „Prebaci profil“ routes through the SAME passcode-gated
-                // dialog every switch passes (setSwitchTarget → AUTH-024).
-                overlayProfile={
-                  profiles.find((profile) => profile.id !== activeProfile.id) ?? null
-                }
-                onSwitchToProfile={setSwitchTarget}
-                intent={pending?.module === "calendar" ? pending.intent : null}
-                onIntentHandled={clearIntent}
-              />
-            ) : shownId === "notes" && activeProfile ? (
-              <NotesPage
-                key={activeProfile.id}
-                profileId={activeProfile.id}
-                intent={pending?.module === "notes" ? pending.intent : null}
-                onIntentHandled={clearIntent}
-              />
-            ) : shownId === "priv" && activeProfile ? (
-              <PrivPage key={activeProfile.id} profileId={activeProfile.id} />
-            ) : shownId === "files" && activeProfile ? (
-              <FilesPage
-                key={activeProfile.id}
-                profileId={activeProfile.id}
-                onOpenOwner={openAttachmentOwner}
-              />
-            ) : shownId === "study" && activeProfile ? (
-              <StudyPage
-                key={activeProfile.id}
-                profileId={activeProfile.id}
-                onOpenNote={openNote}
-                intent={pending?.module === "study" ? pending.intent : null}
-                onIntentHandled={clearIntent}
-              />
-            ) : shownId === "finance" && activeProfile ? (
-              <FinancePage
-                key={activeProfile.id}
-                profileId={activeProfile.id}
-                intent={pending?.module === "finance" ? pending.intent : null}
-                onIntentHandled={clearIntent}
-              />
-            ) : shownId === "habits" && activeProfile ? (
-              // No `intent` pair: HABIT publishes no quick-create command in this
-              // slice (`searchCommands.ts`'s `CreatableModuleId` is untouched), so
-              // there is nothing pending for this page to consume.
-              <HabitsPage key={activeProfile.id} profileId={activeProfile.id} />
-            ) : shownId === "fitness" && activeProfile ? (
-              // No `intent` pair, on HABIT's terms exactly: FIT publishes no
-              // quick-create command (`searchCommands.ts`'s `CreatableModuleId` is
-              // untouched) — logging a meal needs a food, an amount and a slot, and
-              // a palette line that opened an empty picker would be a command that
-              // only ever means „open the page".
-              <FitnessPage key={activeProfile.id} profileId={activeProfile.id} />
-            ) : shownId === "focus" && activeProfile ? (
-              // `enabledModules` rather than an `intent` pair: UTIL publishes no
-              // quick-create command (`searchCommands.ts`'s `CreatableModuleId` is
-              // untouched — a timer is started, not created), but its attach
-              // picker draws rows from TASK and STUDY and must not offer either
-              // while the profile has it switched off.
-              <FocusPage
-                key={activeProfile.id}
-                profileId={activeProfile.id}
-                enabledModules={enabledIds}
-              />
-            ) : shownId === "tools" && activeProfile ? (
-              // `enabledModules` on „Fokus"'s reasoning, for a different purpose:
-              // the drawer is the utilities HOST, so it collects tools from every
-              // module's `tools` declaration — and a tool published by a module
-              // this profile has switched off must go with it, exactly as that
-              // module's page and widgets do.
-              //
-              // No `key={activeProfile.id}`: the drawer reads nothing profile-
-              // shaped and stores nothing, so there is no per-profile state to
-              // discard when the active profile changes.
-              <ToolsPage drawer="utilities" enabledModules={enabledIds} packs={enabledPackIds} />
-            ) : shownId === "pro" && activeProfile ? (
-              // The same host, the other drawer. Which tools each one draws is
-              // decided by each tool's own `packs` declaration rather than by this
-              // prop — the prop only says which drawer this page IS, so a module
-              // publishing a tool for some profession lands here without either
-              // page knowing about it.
-              //
-              // `packs` is what narrows this one from „every professional tool" to
-              // „the ones this profile asked for". „Alatke" takes the same prop
-              // and ignores it, because an everyday tool declares no pack and is
-              // therefore visible to everybody — passing it to both is what keeps
-              // the two pages one component.
-              <ToolsPage
-                drawer="professional"
-                enabledModules={enabledIds}
-                packs={enabledPackIds}
-                // Only this drawer gets an editor, because only this drawer has
-                // toolkits. It writes through the same channel „Podešavanja" does
-                // and hands the re-read flags straight back to the shell, so the
-                // rail, the drawer and the module gallery never disagree about
-                // what this profile has.
-                packEditor={{ profileId: activeProfile.id, onFlagsChanged: setFlags }}
-              />
-            ) : shownId === "canvas" && activeProfile ? (
-              // No `intent` pair, and that is still true in slice c: CANV
-              // publishes no quick-create command (`searchCommands.ts`'s
-              // `CreatableModuleId` is untouched — a board is made on the page,
-              // from a name) and nothing deep-links INTO a board. The two props
-              // it does take are both outbound — `theme`, because the embedded
-              // editor's ~209 CSS variables are scoped to `.excalidraw` and never
-              // see `<html data-theme>`, and `onOpenRef`, because a card is a
-              // pointer and following one is a cross-module intent App owns.
-              <CanvasPage
-                key={activeProfile.id}
-                profileId={activeProfile.id}
-                theme={theme}
-                onOpenRef={openCanvasRef}
-              />
-            ) : shownId === "electronics" && activeProfile ? (
-              // No `theme`: the bench is our own SVG over our own tokens, so it
-              // follows `<html data-theme>` like every other surface in the app.
-              //
-              // It HAS an `intent` pair now, and it is the search result that
-              // asked for one: the tenth `SearchKind` (migration 070) made a
-              // circuit reachable from the palette and the search page, and a
-              // result that only switched to the module would leave the user
-              // looking at whichever circuit was open. A circuit is still made on
-              // the page, from a name — ELEC publishes no create command — so
-              // „reveal" is the only arm.
-              <ElectronicsPage
-                key={activeProfile.id}
-                profileId={activeProfile.id}
-                intent={pending?.module === "electronics" ? pending.intent : null}
-                onIntentHandled={clearIntent}
-              />
-            ) : shownId === SEARCH_PAGE_ID && activeProfile ? (
-              <SearchPage
-                key={activeProfile.id}
-                profileId={activeProfile.id}
-                seed={searchSeed}
-                onSeedConsumed={clearSearchSeed}
-                onOpenResult={onSearchResult}
-                paletteChordLabel={formatChord(shortcuts.palette)}
-              />
-            ) : shownId === "settings" && activeProfile ? (
-              <SettingsPage
-                key={activeProfile.id}
-                profileId={activeProfile.id}
-                profileName={activeProfile.name}
-                profilePictureHash={activeProfile.pictureHash}
-                profiles={profiles}
-                info={info}
-                flags={flags}
-                onFlagsChanged={setFlags}
-                onProfileRenamed={renameActiveProfile}
-                onProfilePictureChanged={setActiveProfilePicture}
-                onCreateBusinessProfile={createBusinessProfile}
-                onRequestProfileSwitch={setSwitchTarget}
-                onDeleteProfile={deleteProfileAnywhere}
-                preference={preference}
-                onPreferenceChange={changePreference}
-                onLocaleChanged={redrawInNewLocale}
-                registry={registry}
-                autoLockMinutes={autoLockMinutes}
-                onAutoLockChange={changeAutoLock}
-                shortcutOverrides={shortcutOverrides}
-                onShortcutOverridesChange={changeShortcutOverrides}
-                globalShortcutTaken={globalCaptureTaken}
-                onShowShortcuts={() => setShortcutsHelpOpen(true)}
-                onRerunOnboarding={() => setRerunOnboarding(true)}
-              />
-            ) : (
-              <ModulePage id={shownId} />
-            )}
+            {/* One provider around every page: it is what lets a module page's
+                header offer the gear without this file, or the page, passing
+                the registry and a callback through twelve prop interfaces. */}
+            <ModuleSettingsNavProvider value={settingsNav}>
+              {shownId === "dashboard" && activeProfile ? (
+                <DashboardPage
+                  key={activeProfile.id}
+                  profileId={activeProfile.id}
+                  profileName={activeProfile.name}
+                  registry={registry}
+                  enabledModules={enabledIds}
+                  onOpenModule={setActiveId}
+                  onOpenNote={openNote}
+                />
+              ) : shownId === "tasks" && activeProfile ? (
+                <TasksPage
+                  key={activeProfile.id}
+                  profileId={activeProfile.id}
+                  intent={pending?.module === "tasks" ? pending.intent : null}
+                  onIntentHandled={clearIntent}
+                />
+              ) : shownId === "calendar" && activeProfile ? (
+                <CalendarPage
+                  key={activeProfile.id}
+                  profileId={activeProfile.id}
+                  // CAL-005 / ADR-058 §5: the account's OTHER profile is the
+                  // overlay chip's origin — v1 keeps one personal anchor plus at
+                  // most one business profile, so "the other" is at most one row.
+                  // „Prebaci profil“ routes through the SAME passcode-gated
+                  // dialog every switch passes (setSwitchTarget → AUTH-024).
+                  overlayProfile={
+                    profiles.find((profile) => profile.id !== activeProfile.id) ?? null
+                  }
+                  onSwitchToProfile={setSwitchTarget}
+                  intent={pending?.module === "calendar" ? pending.intent : null}
+                  onIntentHandled={clearIntent}
+                />
+              ) : shownId === "notes" && activeProfile ? (
+                <NotesPage
+                  key={activeProfile.id}
+                  profileId={activeProfile.id}
+                  intent={pending?.module === "notes" ? pending.intent : null}
+                  onIntentHandled={clearIntent}
+                />
+              ) : shownId === "priv" && activeProfile ? (
+                <PrivPage key={activeProfile.id} profileId={activeProfile.id} />
+              ) : shownId === "files" && activeProfile ? (
+                <FilesPage
+                  key={activeProfile.id}
+                  profileId={activeProfile.id}
+                  onOpenOwner={openAttachmentOwner}
+                />
+              ) : shownId === "study" && activeProfile ? (
+                <StudyPage
+                  key={activeProfile.id}
+                  profileId={activeProfile.id}
+                  onOpenNote={openNote}
+                  intent={pending?.module === "study" ? pending.intent : null}
+                  onIntentHandled={clearIntent}
+                />
+              ) : shownId === "finance" && activeProfile ? (
+                <FinancePage
+                  key={activeProfile.id}
+                  profileId={activeProfile.id}
+                  intent={pending?.module === "finance" ? pending.intent : null}
+                  onIntentHandled={clearIntent}
+                />
+              ) : shownId === "habits" && activeProfile ? (
+                // No `intent` pair: HABIT publishes no quick-create command in this
+                // slice (`searchCommands.ts`'s `CreatableModuleId` is untouched), so
+                // there is nothing pending for this page to consume.
+                <HabitsPage key={activeProfile.id} profileId={activeProfile.id} />
+              ) : shownId === "fitness" && activeProfile ? (
+                // No `intent` pair, on HABIT's terms exactly: FIT publishes no
+                // quick-create command (`searchCommands.ts`'s `CreatableModuleId` is
+                // untouched) — logging a meal needs a food, an amount and a slot, and
+                // a palette line that opened an empty picker would be a command that
+                // only ever means „open the page".
+                <FitnessPage key={activeProfile.id} profileId={activeProfile.id} />
+              ) : shownId === "focus" && activeProfile ? (
+                // `enabledModules` rather than an `intent` pair: UTIL publishes no
+                // quick-create command (`searchCommands.ts`'s `CreatableModuleId` is
+                // untouched — a timer is started, not created), but its attach
+                // picker draws rows from TASK and STUDY and must not offer either
+                // while the profile has it switched off.
+                <FocusPage
+                  key={activeProfile.id}
+                  profileId={activeProfile.id}
+                  enabledModules={enabledIds}
+                />
+              ) : shownId === "tools" && activeProfile ? (
+                // `enabledModules` on „Fokus"'s reasoning, for a different purpose:
+                // the drawer is the utilities HOST, so it collects tools from every
+                // module's `tools` declaration — and a tool published by a module
+                // this profile has switched off must go with it, exactly as that
+                // module's page and widgets do.
+                //
+                // No `key={activeProfile.id}`: the drawer reads nothing profile-
+                // shaped and stores nothing, so there is no per-profile state to
+                // discard when the active profile changes.
+                <ToolsPage drawer="utilities" enabledModules={enabledIds} packs={enabledPackIds} />
+              ) : shownId === "pro" && activeProfile ? (
+                // The same host, the other drawer. Which tools each one draws is
+                // decided by each tool's own `packs` declaration rather than by this
+                // prop — the prop only says which drawer this page IS, so a module
+                // publishing a tool for some profession lands here without either
+                // page knowing about it.
+                //
+                // `packs` is what narrows this one from „every professional tool" to
+                // „the ones this profile asked for". „Alatke" takes the same prop
+                // and ignores it, because an everyday tool declares no pack and is
+                // therefore visible to everybody — passing it to both is what keeps
+                // the two pages one component.
+                <ToolsPage
+                  drawer="professional"
+                  enabledModules={enabledIds}
+                  packs={enabledPackIds}
+                  // Only this drawer gets an editor, because only this drawer has
+                  // toolkits. It writes through the same channel „Podešavanja" does
+                  // and hands the re-read flags straight back to the shell, so the
+                  // rail, the drawer and the module gallery never disagree about
+                  // what this profile has.
+                  packEditor={{ profileId: activeProfile.id, onFlagsChanged: setFlags }}
+                />
+              ) : shownId === "canvas" && activeProfile ? (
+                // No `intent` pair, and that is still true in slice c: CANV
+                // publishes no quick-create command (`searchCommands.ts`'s
+                // `CreatableModuleId` is untouched — a board is made on the page,
+                // from a name) and nothing deep-links INTO a board. The two props
+                // it does take are both outbound — `theme`, because the embedded
+                // editor's ~209 CSS variables are scoped to `.excalidraw` and never
+                // see `<html data-theme>`, and `onOpenRef`, because a card is a
+                // pointer and following one is a cross-module intent App owns.
+                <CanvasPage
+                  key={activeProfile.id}
+                  profileId={activeProfile.id}
+                  theme={theme}
+                  onOpenRef={openCanvasRef}
+                />
+              ) : shownId === "electronics" && activeProfile ? (
+                // No `theme`: the bench is our own SVG over our own tokens, so it
+                // follows `<html data-theme>` like every other surface in the app.
+                //
+                // It HAS an `intent` pair now, and it is the search result that
+                // asked for one: the tenth `SearchKind` (migration 070) made a
+                // circuit reachable from the palette and the search page, and a
+                // result that only switched to the module would leave the user
+                // looking at whichever circuit was open. A circuit is still made on
+                // the page, from a name — ELEC publishes no create command — so
+                // „reveal" is the only arm.
+                <ElectronicsPage
+                  key={activeProfile.id}
+                  profileId={activeProfile.id}
+                  intent={pending?.module === "electronics" ? pending.intent : null}
+                  onIntentHandled={clearIntent}
+                />
+              ) : shownId === SEARCH_PAGE_ID && activeProfile ? (
+                <SearchPage
+                  key={activeProfile.id}
+                  profileId={activeProfile.id}
+                  seed={searchSeed}
+                  onSeedConsumed={clearSearchSeed}
+                  onOpenResult={onSearchResult}
+                  paletteChordLabel={formatChord(shortcuts.palette)}
+                />
+              ) : shownId === "settings" && activeProfile ? (
+                <SettingsPage
+                  key={activeProfile.id}
+                  profileId={activeProfile.id}
+                  profileName={activeProfile.name}
+                  profilePictureHash={activeProfile.pictureHash}
+                  profiles={profiles}
+                  info={info}
+                  flags={flags}
+                  onFlagsChanged={setFlags}
+                  onProfileRenamed={renameActiveProfile}
+                  onProfilePictureChanged={setActiveProfilePicture}
+                  onCreateBusinessProfile={createBusinessProfile}
+                  onRequestProfileSwitch={setSwitchTarget}
+                  onDeleteProfile={deleteProfileAnywhere}
+                  preference={preference}
+                  onPreferenceChange={changePreference}
+                  onLocaleChanged={redrawInNewLocale}
+                  registry={registry}
+                  autoLockMinutes={autoLockMinutes}
+                  onAutoLockChange={changeAutoLock}
+                  shortcutOverrides={shortcutOverrides}
+                  onShortcutOverridesChange={changeShortcutOverrides}
+                  globalShortcutTaken={globalCaptureTaken}
+                  onShowShortcuts={() => setShortcutsHelpOpen(true)}
+                  onRerunOnboarding={() => setRerunOnboarding(true)}
+                  target={settingsTarget}
+                  onTargetHandled={clearSettingsTarget}
+                />
+              ) : (
+                <ModulePage id={shownId} />
+              )}
+            </ModuleSettingsNavProvider>
           </PageSlot>
         </main>
       </div>
