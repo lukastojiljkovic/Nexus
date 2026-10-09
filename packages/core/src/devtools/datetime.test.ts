@@ -63,7 +63,7 @@ function at(epochMs: number, subNs = 0): Instant {
 
 function specOf(text: string): CronSpec {
   const result = parseCron(text);
-  if (!result.ok) throw new Error(`${text} → ${result.error.message}`);
+  if (!result.ok) throw new Error(`${text} → ${result.error.messageSr}`);
   return result.spec;
 }
 
@@ -939,22 +939,31 @@ describe("the cron grammar", () => {
     const result = parseCron("@reboot");
     expect(result.ok).toBe(false);
     expect(result.ok ? "" : result.error.code).toBe("reboot");
-    expect(result.ok ? "" : result.error.message).toContain("@reboot");
+    expect(result.ok ? "" : result.error.messageSr).toContain("@reboot");
+    expect(result.ok ? "" : result.error.messageEn).toContain("@reboot");
   });
 });
 
 describe("the cron refusals", () => {
-  const errorOf = (text: string): { code: string; field: string | null; message: string } => {
+  const errorOf = (
+    text: string,
+  ): { code: string; field: string | null; messageSr: string; messageEn: string } => {
     const result = parseCron(text);
     if (result.ok) throw new Error(`${text} parsed when it should not have`);
-    return { code: result.error.code, field: result.error.field, message: result.error.message };
+    return {
+      code: result.error.code,
+      field: result.error.field,
+      messageSr: result.error.messageSr,
+      messageEn: result.error.messageEn,
+    };
   };
 
   it("names the field a value is out of range for, in Serbian", () => {
     expect(errorOf("60 * * * *")).toEqual({
       code: "range",
       field: "minute",
-      message: 'Polje „minut“ prihvata 0–59, a dobilo je „60“.',
+      messageSr: 'Polje „minut“ prihvata 0–59, a dobilo je „60“.',
+      messageEn: "The “minute” field accepts 0–59, and it was given “60”.",
     });
     expect(errorOf("0 24 * * *").field).toBe("hour");
     expect(errorOf("0 0 32 * *").field).toBe("dayOfMonth");
@@ -962,7 +971,8 @@ describe("the cron refusals", () => {
     expect(errorOf("0 0 * * 8")).toEqual({
       code: "range",
       field: "dayOfWeek",
-      message: 'Polje „dan u nedelji“ prihvata 0–7, a dobilo je „8“.',
+      messageSr: 'Polje „dan u nedelji“ prihvata 0–7, a dobilo je „8“.',
+      messageEn: "The “day of week” field accepts 0–7, and it was given “8”.",
     });
     // Six fields, so the leading one is the seconds — and „0 0 * * * 60" would
     // put the 60 in the day-of-week, which is a different refusal entirely.
@@ -974,7 +984,8 @@ describe("the cron refusals", () => {
     expect(errorOf("0 17-9 * * *")).toEqual({
       code: "range-order",
       field: "hour",
-      message: 'Opseg u polju „sat“ ide unazad: „17-9“.',
+      messageSr: 'Opseg u polju „sat“ ide unazad: „17-9“.',
+      messageEn: "The range in the “hour” field runs backwards: “17-9”.",
     });
     expect(errorOf("0 0 * * FRI-MON").code).toBe("range-order");
   });
@@ -989,7 +1000,8 @@ describe("the cron refusals", () => {
     expect(errorOf("0 0 * *")).toEqual({
       code: "field-count",
       field: null,
-      message: "Cron izraz mora imati 5 ili 6 polja, a ima 4.",
+      messageSr: "Cron izraz mora imati 5 ili 6 polja, a ima 4.",
+      messageEn: "A cron expression must have 5 or 6 fields, and this one has 4.",
     });
     expect(errorOf("0 0 * * * * *").code).toBe("field-count");
     expect(errorOf("").code).toBe("empty");
@@ -1001,8 +1013,43 @@ describe("the cron refusals", () => {
     expect(errorOf("@sometimes")).toEqual({
       code: "unknown-macro",
       field: null,
-      message: 'Nepoznat makro „@sometimes“.',
+      messageSr: 'Nepoznat makro „@sometimes“.',
+      messageEn: "Unknown macro “@sometimes”.",
     });
+  });
+
+  /**
+   * Every refusal is written in BOTH languages by `parseCron`, because the
+   * sentence interpolates the field's own name and the numbers it accepts —
+   * arithmetic only the parser has. The drawer renders `messageEn` while
+   * English is served, and before this test existed one of the two could be
+   * written without the other and nothing would say so.
+   *
+   * The sweep is over the same inputs the assertions above use, so a refusal
+   * added later is covered by being written rather than by being remembered.
+   */
+  it("writes every refusal in English too, and names the field there as well", () => {
+    for (const text of [
+      "",
+      "0 0 * *",
+      "@sometimes",
+      "@reboot",
+      "60 * * * *",
+      "0 0 * * 8",
+      "0 17-9 * * *",
+      "*/0 * * * *",
+      "*/2/3 * * * *",
+      "0 0 * * MAYBE",
+      "0 0 * * 1,,2",
+      "? * * * *",
+      "* ?1 * * *",
+    ]) {
+      const error = errorOf(text);
+      expect(error.messageEn, text).not.toMatch(/[čćšžđČĆŠŽĐ]/);
+      expect(error.messageEn.length, text).toBeGreaterThan(0);
+    }
+    expect(errorOf("0 17-9 * * *").messageEn).toContain("hour");
+    expect(errorOf("*/0 * * * *").messageEn).toContain("whole number");
   });
 });
 

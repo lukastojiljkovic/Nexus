@@ -45,7 +45,13 @@ import type { HabitSchedule } from "../habits/habitSchedule.js";
 import type { RecurrenceRule } from "../recurrence/recurrence.js";
 import type { TaskViewConfig } from "../tasks/taskViewConfig.js";
 import { base64ToBytes } from "../bytes.js";
-import { claimUniqueName, sanitizePathSegment, UNTITLED_NOTE_NAME } from "./archivePaths.js";
+import {
+  ARCHIVE_SEGMENT_NAMES,
+  claimUniqueName,
+  sanitizePathSegment,
+  type ArchiveLanguage,
+  type ArchiveSegmentNames,
+} from "./archivePaths.js";
 import { toCsv } from "./csv.js";
 import { buildIcsCalendar } from "./icsExport.js";
 import { renderNoteMarkdown } from "./noteMarkdown.js";
@@ -2557,6 +2563,17 @@ export interface ExportArchiveInput {
    * whole arrangement avoids.
    */
   privateNotes?: ExportPrivateNotes;
+  /**
+   * The language the Markdown mirror's two GENERATED names are written in — the
+   * untitled-note and nameless-folder fallbacks (`archivePaths.ts`).
+   *
+   * ABSENT means Serbian, which is what every caller that has no locale keeps
+   * getting: the language is read from ONE variable in `main` (`mainLocale()`)
+   * and passed down, the way `main/shellStrings.ts` reads its native-dialog
+   * names. A note's title and a folder's name are the user's own data and are
+   * never translated, so this changes nothing else in the archive.
+   */
+  language?: ArchiveLanguage;
   /** sha256 hex over a UTF-8 string, injected so this module never imports `node:crypto`. */
   hash: (content: string) => string;
 }
@@ -3158,7 +3175,7 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
 
   // --- Notes: Markdown mirror + binary entries (ADR-022 section 3) -------
   const binaries: ExportBinaryEntry[] = [];
-  const notePaths = buildNotePaths(notes, noteFolders);
+  const notePaths = buildNotePaths(notes, noteFolders, ARCHIVE_SEGMENT_NAMES[input.language ?? "sr"]);
   const attachmentsByNote = groupAttachmentsByNote(noteAttachments);
 
   for (const note of notes) {
@@ -3342,10 +3359,15 @@ const EMPTY_NOTE_ATTACHMENTS: ReadonlyMap<string, NoteMarkdownAttachment> = new 
  * is resolved (and memoized) recursively; a cycle — never produced by
  * `NoteOrgStore`, but defensive here — is broken by treating the re-entrant
  * folder as a root folder rather than recursing forever.
+ *
+ * `names` is the one part of this that is not the user's data: the two
+ * fallbacks a path segment can need when there is nothing to name it with,
+ * already resolved to the export's language by the caller.
  */
 function buildNotePaths(
   notes: readonly ExportNote[],
   folders: readonly ExportNoteFolder[],
+  names: ArchiveSegmentNames,
 ): Map<string, NotePathInfo> {
   const folderById = new Map(folders.map((folder) => [folder.id, folder]));
   const registries = new Map<string, Set<string>>();
@@ -3370,7 +3392,11 @@ function buildNotePaths(
 
     resolving.add(folderId);
     const parentDir = folder.parentId !== null ? resolveFolderDir(folder.parentId) : "notes";
-    const name = claimUniqueName(registryFor(parentDir), sanitizePathSegment(folder.name, "Fascikla"), "");
+    const name = claimUniqueName(
+      registryFor(parentDir),
+      sanitizePathSegment(folder.name, names.untitledFolder),
+      "",
+    );
     const dir = `${parentDir}/${name}`;
     resolving.delete(folderId);
 
@@ -3388,7 +3414,7 @@ function buildNotePaths(
         : "notes";
     const fileName = claimUniqueName(
       registryFor(dir),
-      sanitizePathSegment(note.title, UNTITLED_NOTE_NAME),
+      sanitizePathSegment(note.title, names.untitledNote),
       ".md",
     );
     const path = `${dir}/${fileName}`;
