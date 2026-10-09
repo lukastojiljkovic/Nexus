@@ -1623,3 +1623,74 @@ export type {
   RecordingStorageSummary,
   RecordingTotals,
 } from "./recorder/recordingGroups.js";
+
+// --- EMERGENCY (the emergency card, migration 078) --------------------------
+//
+// The card POINTS at People and Documents instead of copying them, so a person
+// or a document either module has lost comes back from `buildCardModel` as a
+// MISSING row rather than quietly disappearing from the page. The model returns
+// the page in print order with the section headings left to the renderer's own
+// copy, and `cardCompleteness` names the recommended fields still unanswered.
+export {
+  ALLERGY_SEVERITIES,
+  BLOOD_TYPES,
+  BLOOD_TYPE_UNKNOWN,
+  CARD_DOCUMENT_MODES,
+  CARD_LANGUAGES,
+  isAllergySeverity,
+  isBloodType,
+  isCardDocumentMode,
+  isCardLanguage,
+  isCardPrintLanguage,
+  isOrganDonor,
+  MAX_CARD_ALLERGY_LABEL_LENGTH,
+  MAX_CARD_CONDITION_LENGTH,
+  MAX_CARD_CONTACTS,
+  MAX_CARD_CONTACT_NAME_LENGTH,
+  MAX_CARD_CONTACT_RELATION_LENGTH,
+  MAX_CARD_DOCUMENTS,
+  MAX_CARD_DOCTOR_NAME_LENGTH,
+  MAX_CARD_FULL_NAME_LENGTH,
+  MAX_CARD_INSURANCE_NUMBER_LENGTH,
+  MAX_CARD_LIST_ITEMS,
+  MAX_CARD_MEDICATION_DOSE_LENGTH,
+  MAX_CARD_MEDICATION_NAME_LENGTH,
+  MAX_CARD_NOTES_LENGTH,
+  MAX_CARD_PHONE_LENGTH,
+  ORGAN_DONOR_CHOICES,
+  serializeCardAllergies,
+  serializeCardConditions,
+  serializeCardMedications,
+  validateCardAllergies,
+  validateCardConditions,
+  validateCardMedications,
+} from "./emergency/cardFields.js";
+export type {
+  AllergySeverity,
+  BloodType,
+  CardAllergy,
+  CardBloodType,
+  CardDocumentMode,
+  CardLanguage,
+  CardMedication,
+  CardPrintLanguage,
+  OrganDonor,
+} from "./emergency/cardFields.js";
+export { buildCardModel } from "./emergency/cardModel.js";
+export type {
+  CardBlock,
+  CardBlockKey,
+  CardContactSource,
+  CardDocument,
+  CardDocumentSource,
+  CardModel,
+  CardPass,
+  CardPerson,
+  EmergencyCardFields,
+  EmergencyCardSource,
+  EmergencyCardWithContacts,
+  ResolvedCardContact,
+  ResolvedCardDocument,
+} from "./emergency/cardModel.js";
+export { cardCompleteness } from "./emergency/cardCompleteness.js";
+export type { CardGap } from "./emergency/cardCompleteness.js";

@@ -1238,6 +1238,39 @@ export class RecipeValidationError extends DatabaseError {}
 export class RecipeNotFoundError extends DatabaseError {}
 
 /**
+ * Thrown when an emergency-card write is rejected at the store boundary
+ * (EMERGENCY, migration 078): a blood type, an organ-donor answer, an allergy
+ * severity or a print language outside its closed vocabulary, a `dateOfBirth`
+ * that is not a real bare day or that lies in the future of the moment being
+ * stamped, a free-text field past its bound, a contact that names BOTH a person
+ * and its own text (or neither), a `personId`/`documentId` that does not resolve
+ * to a live row of this profile, a document that is already on the card, a rank
+ * past `rankBetween`'s reach, a malformed `now`, or an export value that is not
+ * this module's version 1.
+ *
+ * It is also thrown on the way OUT, for a stored JSON list that no longer parses
+ * - corruption rather than input, and never something to coerce to an empty list,
+ * because an empty list means "the user says there are none" and replacing a
+ * damaged one with it would invent that answer.
+ *
+ * The store revalidates all of it because stage 2's IPC layer hands it untrusted
+ * renderer input (SEC-EL-02), exactly as every store added since `NoteStore`
+ * does.
+ */
+export class EmergencyCardValidationError extends DatabaseError {}
+
+/**
+ * Thrown when an emergency-card operation names something this profile does not
+ * have: no live card (a second `create`, an `update` or a child write with no
+ * card to hang off, a `restore` of a card that was never deleted), a contact or a
+ * document reference that is not a row of this profile's card, or a `move` whose
+ * neighbour ids are not live siblings. One class, because the card, its contacts
+ * and its document references are one aggregate - the `FitSetNotFoundError`
+ * posture, one module over.
+ */
+export class EmergencyCardNotFoundError extends DatabaseError {}
+
+/**
  * Whether a driver error is a violated UNIQUE (or partial-UNIQUE) index.
  *
  * A store that leans on such an index to make a state unrepresentable — the

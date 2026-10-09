@@ -1663,6 +1663,14 @@ describe("RestoreStore", () => {
     //    them today would delete every recording on restore. Stage 2 wires
     //    `RecorderStore.exportData`/`importData` into the archive and moves
     //    these two names into `RESTORE_WIPE_TABLES`.
+    //  - emergency_cards / emergency_contacts / emergency_documents (migration
+    //    078): the card IS user content, and it is deliberately NOT here yet
+    //    rather than exempt on its merits. The module ships in two stages, and
+    //    the profile archive is stage 2's job: it plugs this store's own
+    //    `exportData`/`importData` into the archive, and the three tables move
+    //    into `RESTORE_WIPE_TABLES` (with their sync classification) in that
+    //    pass. Exempting them HERE keeps a restore from emptying a table nothing
+    //    in this build refills - which is the lossy direction, not the safe one.
     const allowlist = new Set<string>([
       "meta",
       "profiles",
@@ -1728,6 +1736,9 @@ describe("RestoreStore", () => {
       "cookbook_steps",
       "recordings",
       "recording_markers",
+      "emergency_cards",
+      "emergency_contacts",
+      "emergency_documents",
     ]);
 
     const wipeTables = new Set<string>(RESTORE_WIPE_TABLES);
