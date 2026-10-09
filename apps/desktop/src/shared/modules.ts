@@ -5463,6 +5463,7 @@ const PRO_LABORATORIJA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.molar-mass",
     category: "materials",
     riskClass: "none",
+    taskGroups: ["measure", "study"],
     sourceKey: "pro.sources.iupac-ciaaw-2021-atomic-weights",
     packs: ["laboratorija"],
     keywords: [
@@ -5476,6 +5477,7 @@ const PRO_LABORATORIJA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.molarity-to-mass",
     category: "calculation",
     riskClass: "life-safety",
+    taskGroups: ["measure", "study"],
     packs: ["laboratorija"],
     keywords: [
       "koncentracija", "masa", "mase", "mol", "molarnost", "molova", "odmeravanje", "rastvor",
@@ -5488,6 +5490,7 @@ const PRO_LABORATORIJA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.dilution",
     category: "calculation",
     riskClass: "life-safety",
+    taskGroups: ["measure"],
     packs: ["laboratorija"],
     keywords: [
       "c1v1", "dilute", "koncentracija", "maticni", "rastvarac", "rastvor", "razblazivanje",
@@ -5500,6 +5503,7 @@ const PRO_LABORATORIJA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.concentration-units",
     category: "conversion",
     riskClass: "none",
+    taskGroups: ["measure"],
     packs: ["laboratorija"],
     keywords: [
       "gram", "jedinice", "koncentracija", "litar", "miligram", "mol", "molar", "procenat",
@@ -5512,6 +5516,7 @@ const PRO_LABORATORIJA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.ph-strong-acid-base",
     category: "calculation",
     riskClass: "life-safety",
+    taskGroups: ["measure", "study"],
     packs: ["laboratorija"],
     keywords: [
       "acid", "baza", "disocijacija", "kiselina", "koncentracija", "logaritam", "ph", "poh"
@@ -5523,6 +5528,7 @@ const PRO_LABORATORIJA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.buffer-ph",
     category: "calculation",
     riskClass: "life-safety",
+    taskGroups: ["measure", "study"],
     packs: ["laboratorija"],
     keywords: [
       "baza", "buffer", "henderson", "hasselbalch", "kiselina", "odnos", "ph", "pka", "pufer",
@@ -5538,6 +5544,7 @@ const PRO_ELEKTRO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.energy-cost",
     category: "finance",
     riskClass: "financial",
+    taskGroups: ["money", "measure"],
     packs: ["elektro"],
     keywords: [
       "cena", "cenom", "energija", "energije", "kilovat", "kwh", "potrosnja", "potrosnje",
@@ -5550,6 +5557,7 @@ const PRO_ELEKTRO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.lighting-count",
     category: "calculation",
     riskClass: "none",
+    taskGroups: ["build", "measure"],
     packs: ["elektro"],
     keywords: [
       "faktor", "lumen", "luks", "lux", "osvetljenje", "osvetljenja", "povrsina", "prostorija",
@@ -5562,6 +5570,7 @@ const PRO_ELEKTRO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.luminaire-spacing",
     category: "geometry",
     riskClass: "none",
+    taskGroups: ["build", "measure"],
     packs: ["elektro"],
     keywords: [
       "mreza", "razmak", "svetiljke", "visina", "height", "luminaire", "mounting", "spacing",
@@ -5574,6 +5583,7 @@ const PRO_ELEKTRO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.transformer-current",
     category: "electrical",
     riskClass: "life-safety",
+    taskGroups: ["build"],
     packs: ["elektro"],
     keywords: [
       "kva", "namotaj", "napon", "primar", "sekundar", "struja", "transformator", "current",
@@ -5586,6 +5596,7 @@ const PRO_ELEKTRO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.conduit-fill",
     category: "electrical",
     riskClass: "life-safety",
+    taskGroups: ["build"],
     packs: ["elektro"],
     keywords: [
       "cev", "cevi", "fill", "ispuna", "kabl", "precnik", "provodnik", "provodnika", "conduit",
@@ -5598,6 +5609,7 @@ const PRO_ELEKTRO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.motor-starting-current",
     category: "electrical",
     riskClass: "life-safety",
+    taskGroups: ["build"],
     packs: ["elektro"],
     keywords: [
       "motor", "namotaj", "pokretanje", "soft", "start", "struja", "trougao", "zvezda",
@@ -5613,6 +5625,7 @@ const PRO_IT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.transfer-time",
     category: "system",
     riskClass: "none",
+    taskGroups: ["data", "measure"],
     packs: ["it"],
     keywords: [
       "bandwidth", "brzina", "download", "fajl", "gib", "mib", "prenos", "size", "upload",
@@ -5625,6 +5638,7 @@ const PRO_IT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.transfer-rate",
     category: "conversion",
     riskClass: "none",
+    taskGroups: ["data", "measure"],
     packs: ["it"],
     keywords: [
       "brzina", "gib", "jedinice", "kib", "konverzija", "mb", "mbit", "protok", "rate",
@@ -5637,6 +5651,7 @@ const PRO_IT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.raid-capacity",
     category: "numbers",
     riskClass: "none",
+    taskGroups: ["data"],
     packs: ["it"],
     keywords: [
       "disk", "diska", "kapacitet", "mirror", "niz", "parity", "raid", "rebuild", "redundancija",
@@ -5649,6 +5664,7 @@ const PRO_IT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.uptime-downtime",
     category: "system",
     riskClass: "none",
+    taskGroups: ["data", "dates"],
     packs: ["it"],
     keywords: [
       "availability", "devetke", "dostupnost", "downtime", "nedostupnost", "nines", "prekid",
@@ -5661,6 +5677,7 @@ const PRO_IT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.vlsm-split",
     category: "system",
     riskClass: "none",
+    taskGroups: ["data"],
     packs: ["it"],
     keywords: [
       "adresa", "host", "ipv4", "mask", "mreza", "opseg", "podmreza", "podmreze", "prefix",
@@ -5673,6 +5690,7 @@ const PRO_IT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.mac-normalise",
     category: "data",
     riskClass: "none",
+    taskGroups: ["data", "text"],
     packs: ["it"],
     keywords: [
       "adresa", "hex", "mac", "mreza", "multicast", "normalizacija", "oui", "unicast", "address",
@@ -5688,6 +5706,7 @@ const PRO_AUTO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.engine-displacement",
     category: "geometry",
     riskClass: "none",
+    taskGroups: ["build", "measure"],
     packs: ["auto"],
     keywords: [
       "bore", "cilindar", "displacement", "engine", "hod", "klip", "kubikaza", "motor",
@@ -5700,6 +5719,7 @@ const PRO_AUTO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.compression-ratio",
     category: "geometry",
     riskClass: "none",
+    taskGroups: ["build", "measure"],
     packs: ["auto"],
     keywords: [
       "chamber", "clearance", "dihtung", "glava", "komora", "kompresija", "kompresije", "klip",
@@ -5712,6 +5732,7 @@ const PRO_AUTO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.mean-piston-speed",
     category: "calculation",
     riskClass: "none",
+    taskGroups: ["measure"],
     packs: ["auto"],
     keywords: [
       "brzina", "hod", "klip", "klipa", "obrtaji", "stroke", "mean", "piston", "rpm", "speed"
@@ -5723,6 +5744,7 @@ const PRO_AUTO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.injector-flow",
     category: "calculation",
     riskClass: "none",
+    taskGroups: ["build", "measure"],
     packs: ["auto"],
     keywords: [
       "brizgaljka", "bsfc", "dizna", "dizni", "gorivo", "injector", "protok", "snaga", "duty",
@@ -5735,6 +5757,7 @@ const PRO_AUTO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.air-fuel-ratio",
     category: "calculation",
     riskClass: "none",
+    taskGroups: ["measure"],
     packs: ["auto"],
     keywords: [
       "afr", "air", "e85", "gorivo", "lambda", "mixture", "odnos", "smesa", "stoichiometric",
@@ -5747,6 +5770,7 @@ const PRO_AUTO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.wheel-offset",
     category: "geometry",
     riskClass: "none",
+    taskGroups: ["build", "measure"],
     packs: ["auto"],
     keywords: [
       "backspace", "et", "felna", "felne", "offset", "raspon", "rim", "sirina", "tocak", "wheel",
