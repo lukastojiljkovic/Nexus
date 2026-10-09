@@ -189,6 +189,20 @@ export const ALLOWLIST = new Map([
     "apps/desktop/src/main/update/electron.ts",
     ["load-remote"],
   ],
+  [
+    // A LOOPBACK TEST SERVER, and nothing else. The download service's promises
+    // are about the WIRE — a pause must become a `Range` request, a server
+    // without ranges must make the file restart rather than continue, a
+    // redirect out of the allowlist must cost one request and not two — so the
+    // suite serves real bytes from 127.0.0.1 instead of stubbing a reply, and
+    // `node:http` is both the server and the client (which does not follow
+    // redirects, the one property `service.ts` requires of a port). The port
+    // this stands in for is `ses.fetch` on the dedicated in-memory session;
+    // nothing here can leave the machine, and the single exempted rule id is
+    // why this entry may not grow a second one.
+    "apps/desktop/src/main/download/service.test.ts",
+    ["node-http"],
+  ],
 ]);
 
 /**

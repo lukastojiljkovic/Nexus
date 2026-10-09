@@ -215,11 +215,14 @@ export const sr = {
     updatesTitle: "Bez mreže + provere ažuriranja",
     updatesBody:
       "Nexus se javlja samo GitHub-u, i to isključivo da proveri i preuzme novu verziju sebe. Tvoje beleške i podaci ne napuštaju računar; GitHub vidi tvoju IP adresu, kao i svaki sajt.",
+    downloadsTitle: "Bez mreže + provere ažuriranja + preuzimanja",
+    downloadsBody:
+      "Sve što dozvoljava režim „Bez mreže + provere ažuriranja“, i preuzimanja koja pokreneš. Ništa se ne preuzima samo — preuzimanje počinje kad ga pokreneš, i to samo sa adresa ugrađenih u aplikaciju, a ono što stigne proverava se pre nego što Nexus to upotrebi.",
     chooseConfirm: "Nastavi",
     chooseHint:
       "Ako zatvoriš prozor bez izbora, Nexus ostaje u režimu „Samo bez mreže“ i pitaće te ponovo pri sledećem pokretanju.",
     cardIntro:
-      "Režim važi za ceo računar. „Samo bez mreže“ ne otvara nijednu vezu; „Bez mreže + provere ažuriranja“ dozvoljava samo proveru i preuzimanje nove verzije Nexusa.",
+      "Režim važi za ceo računar, i svaki režim dozvoljava sve što i prethodni. „Samo bez mreže“ ne otvara nijednu vezu; „Bez mreže + provere ažuriranja“ dodatno proverava i preuzima novu verziju Nexusa; „Bez mreže + provere ažuriranja + preuzimanja“ dodatno preuzima ono što pokreneš.",
     save: "Sačuvaj izbor",
     saved: "Izbor je sačuvan.",
     restartNote: "Promena režima važi od sledećeg pokretanja Nexusa.",
