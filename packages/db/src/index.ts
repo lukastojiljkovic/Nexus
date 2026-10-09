@@ -97,6 +97,8 @@ export {
   NoteVersionNotFoundError,
   NotificationNotFoundError,
   NotificationValidationError,
+  PantryNotFoundError,
+  PantryValidationError,
   PersonNotFoundError,
   PersonValidationError,
   PlanNotFoundError,
@@ -860,3 +862,32 @@ export type {
   UpdateVehicleFields,
   Vehicle,
 } from "./car/carStore.js";
+
+// --- PANTRY (migration 075) -------------------------------------------------
+//
+// THREE tables and one store, and it is the store that owns every rule a
+// validator cannot see: a location id that has to resolve, a reorder that has to
+// describe a gap, a quantity change that must not go below zero, and an import
+// whose references must all be inside the value it came in.
+//
+// `exportData`/`importData` are a versioned plain JSON value rather than an
+// archive record type: stage 2 is what carries it into the profile archive, and
+// the version check is why an older build refuses a newer file outright instead
+// of importing half of it.
+export {
+  MAX_PANTRY_EXPORT_ROWS,
+  PANTRY_EXPORT_VERSION,
+  PantryStore,
+} from "./pantry/pantryStore.js";
+export type {
+  CreatePantryItemInput,
+  CreatePantryLocationInput,
+  PantryExport,
+  PantryExportItem,
+  PantryExportLocation,
+  PantryExportLogEntry,
+  PantryItem,
+  PantryLocation,
+  PantryLogEntry,
+  UpdatePantryItemFields,
+} from "./pantry/pantryStore.js";

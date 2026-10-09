@@ -1630,6 +1630,20 @@ describe("RestoreStore", () => {
     //    table cannot be in one without the other. Until then this entry is the
     //    decision the rule asks for, and the reason is that the module has no
     //    archive yet.
+    //  - pantry_locations / pantry_items / pantry_log (migration 075): CONTENT,
+    //    and deliberately not wiped YET rather than never. Sync is on hold
+    //    permanently, and a table joins this list only by joining `@nexus/sync`'s
+    //    collection map — `collectionGuard.test.ts` holds the two lists equal —
+    //    which in turn owes migration 063's journal triggers for every
+    //    collection it names. Stage 2 is the pass that takes the pantry the whole
+    //    way into the archive, and it owes all three of those edits in the same
+    //    run that wires `PantryStore.exportData`/`importData` into
+    //    `ProfileData`: the map entries, the triggers, and these three names.
+    //    Wiping them NOW is the one direction migration 067's own commit message
+    //    warns about — this guard requires a table to be wiped OR documented, and
+    //    does NOT require a wiped table to be written back, so a restore would
+    //    silently destroy every pantry in the profile while the pantry is still
+    //    not something an archive can carry.
     const allowlist = new Set<string>([
       "meta",
       "profiles",
@@ -1687,6 +1701,9 @@ describe("RestoreStore", () => {
       "fuel_entries",
       "faults",
       "service_attachments",
+      "pantry_locations",
+      "pantry_items",
+      "pantry_log",
     ]);
 
     const wipeTables = new Set<string>(RESTORE_WIPE_TABLES);

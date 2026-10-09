@@ -74,6 +74,7 @@ import { migration071 } from "./071-timers.js";
 import { migration072 } from "./072-library.js";
 import { migration073 } from "./073-culture.js";
 import { migration074 } from "./074-car.js";
+import { migration075 } from "./075-pantry.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -159,6 +160,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration072,
   migration073,
   migration074,
+  migration075,
 ];
 
 /**
