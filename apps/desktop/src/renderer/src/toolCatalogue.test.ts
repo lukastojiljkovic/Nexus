@@ -149,11 +149,13 @@ describe("the catalogue of every tool (C10a)", () => {
     expect(entry("rebar-weight").profession.sr).toBe(
       `${LOCALES.sr.pro.packs.gradnja.name} · ${LOCALES.sr.pro.packs.inzenjering.name} · ${LOCALES.sr.pro.packs.zanat.name}`,
     );
-    // „stolari" is a `who` word of the `zanat` pack, and every hit carries the
-    // pack that answers for it.
+    // „stolari" is a `who` word of the `zanat` and `stolarija` packs, and every
+    // hit carries a pack that answers for it.
     const joiners = results("stolar");
     expect(joiners.length).toBeGreaterThan(0);
-    for (const id of joiners) expect(entry(id).packs, id).toContain("zanat");
+    for (const id of joiners) {
+      expect(entry(id).packs.some((pack) => pack === "zanat" || pack === "stolarija"), id).toBe(true);
+    }
   });
 });
 
