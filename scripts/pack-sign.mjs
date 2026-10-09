@@ -70,16 +70,25 @@ const RESERVED_FILES = new Set([MANIFEST_FILE, SIGNATURE_FILE]);
 export function collectFiles(dir) {
   const files = [];
   const visit = (absolute, prefix) => {
-    for (const name of readdirSync(absolute).sort()) {
-      const path = join(absolute, name);
-      const relative = prefix === "" ? name : `${prefix}/${name}`;
-      const stats = statSync(path);
+    // Classified from the directory entries themselves, not a `stat` of the
+    // path, so nothing is checked on one lookup and used on another.
+    const entries = readdirSync(absolute, { withFileTypes: true }).sort((a, b) =>
+      a.name < b.name ? -1 : a.name > b.name ? 1 : 0,
+    );
+    for (const entry of entries) {
+      const path = join(absolute, entry.name);
+      const relative = prefix === "" ? entry.name : `${prefix}/${entry.name}`;
       if (RESERVED_FILES.has(relative)) continue;
-      if (stats.isDirectory()) {
+      // The app refuses a link anywhere in a pack, so signing one would only
+      // produce a pack nobody can install.
+      if (entry.isSymbolicLink()) {
+        throw new Error(`pack-sign: "${relative}" is a link; a pack holds plain files and folders.`);
+      }
+      if (entry.isDirectory()) {
         visit(path, relative);
         continue;
       }
-      if (!stats.isFile()) {
+      if (!entry.isFile()) {
         throw new Error(`pack-sign: "${relative}" is neither a file nor a folder.`);
       }
       const bytes = readFileSync(path);

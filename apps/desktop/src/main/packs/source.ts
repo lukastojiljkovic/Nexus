@@ -22,7 +22,7 @@
  * that it went somewhere else.
  */
 
-import { lstatSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { closeSync, lstatSync, openSync, readdirSync, readSync, realpathSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 import { compareVersions } from "../update/version.js";
@@ -58,12 +58,27 @@ interface FoundFile {
   readonly size: number;
 }
 
+/**
+ * Reads a small file whole, refusing it past `limit`. One descriptor and one
+ * bounded buffer, never a size check followed by a read: a file that grows
+ * between the two would carry an unbounded read straight past the cap.
+ */
 function readBoundedFile(path: string, limit: number, tooLarge: PackError["code"]): Uint8Array {
-  const stats = statSync(path);
-  if (stats.size > limit) {
-    throw new PackError(tooLarge, `${path} is over the ${String(limit)}-byte limit.`);
+  const fd = openSync(path, "r");
+  try {
+    const buffer = Buffer.alloc(limit + 1);
+    let length = 0;
+    for (;;) {
+      const read = readSync(fd, buffer, length, buffer.length - length, null);
+      if (read === 0) return buffer.subarray(0, length);
+      length += read;
+      if (length > limit) {
+        throw new PackError(tooLarge, `${path} is over the ${String(limit)}-byte limit.`);
+      }
+    }
+  } finally {
+    closeSync(fd);
   }
-  return readFileSync(path);
 }
 
 /**

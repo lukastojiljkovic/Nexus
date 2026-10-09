@@ -1,5 +1,5 @@
 import { createHash, generateKeyPairSync, verify } from "node:crypto";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -69,6 +69,14 @@ describe("collecting a pack's files", () => {
     const top = files.find((file) => file.path === "top.zim");
     expect(top.size).toBe(Buffer.byteLength("top level content", "utf8"));
     expect(top.sha256).toBe(createHash("sha256").update("top level content").digest("hex"));
+  });
+
+  it("refuses a link, which the app would refuse to install", () => {
+    const dir = packFolder();
+    const outside = join(root, "outside");
+    mkdirSync(outside, { recursive: true });
+    symlinkSync(outside, join(dir, "linked"), process.platform === "win32" ? "junction" : "dir");
+    expect(() => collectFiles(dir)).toThrow(/is a link/);
   });
 
   it("never lists the manifest or its signature", () => {
