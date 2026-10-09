@@ -1657,6 +1657,12 @@ describe("RestoreStore", () => {
     //    lines move into `RESTORE_WIPE_TABLES` — together with `@nexus/sync`'s
     //    collection map, which `src/sync/collectionGuard.test.ts` holds equal to
     //    that list (and which is frozen with sync itself).
+    //  - recordings / recording_markers (migration 077): the same sequencing
+    //    as the cookbook. They are the user's own content and belong in the
+    //    archive, but `ProfileData` carries no recorder field yet, so wiping
+    //    them today would delete every recording on restore. Stage 2 wires
+    //    `RecorderStore.exportData`/`importData` into the archive and moves
+    //    these two names into `RESTORE_WIPE_TABLES`.
     const allowlist = new Set<string>([
       "meta",
       "profiles",
@@ -1720,6 +1726,8 @@ describe("RestoreStore", () => {
       "cookbook_recipes",
       "cookbook_ingredients",
       "cookbook_steps",
+      "recordings",
+      "recording_markers",
     ]);
 
     const wipeTables = new Set<string>(RESTORE_WIPE_TABLES);
