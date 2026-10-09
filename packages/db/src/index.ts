@@ -16,6 +16,7 @@ export type { AttachmentTextCandidate } from "./attachmentText.js";
 export {
   ArcadeValidationError,
   BackupSettingsValidationError,
+  CardGameValidationError,
   PrivateNoteNotFoundError,
   PrivateNoteValidationError,
   PrivateSettingsValidationError,
@@ -1071,3 +1072,28 @@ export type {
   ArcadeResult,
   ArcadeScore,
 } from "./games/arcade/arcadeStore.js";
+
+// --- GAMES: cards (stage 1 — the engines' storage, migration 081) ------------
+//
+// Two tables and one store, keyed by (profile, game, variant) so that Klondike
+// draw-one and draw-three are two records and two saved games rather than one.
+//
+// The validation is the ENGINE's: this store hands every move list to the same
+// `replay*` fold the renderer's own moves go through, so nothing here has to know
+// what a legal Spider move is. `exportData`/`importData` are the module's door
+// into stage 2's profile archive, and `importData` refuses an unknown version
+// before it writes anything.
+export {
+  CardGameStore,
+  CARD_GAME_ARCHIVE_VERSION,
+  MAX_CARD_GAME_ELAPSED_SECONDS,
+  MAX_CARD_GAME_MOVES,
+  MAX_CARD_GAME_MOVES_BYTES,
+} from "./games/cards/cardGameStore.js";
+export type {
+  CardGameData,
+  CardGameProgress,
+  CardGameProgressInput,
+  CardGameResultInput,
+  CardGameStats,
+} from "./games/cards/cardGameStore.js";

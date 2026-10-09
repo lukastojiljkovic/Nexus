@@ -35,8 +35,8 @@ import {
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 80 (the arcade scores), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(80);
+  it("is at version 81 (the card games), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(81);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -9703,6 +9703,155 @@ describe("migration 078 - the emergency card", () => {
     expect(() => insert.run("bad-donor", null, "maybe", "sr", T, T)).toThrow(/CHECK/);
     expect(() => insert.run("bad-language", null, null, "de", T, T)).toThrow(/CHECK/);
     insert.run("good", "unknown", "yes", "both", T, T);
+    raw.close();
+  });
+});
+
+describe("migration 081 — the card-game tables", () => {
+  const T = "2026-10-09T09:00:00.000Z";
+
+  /** A database with one profile, opened the way `openDatabase` opens one. */
+  function open(name: string): Database.Database {
+    const raw = new Database(join(dir, name));
+    prepareConnection(raw);
+    runMigrations(raw);
+    raw
+      .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
+      .run("p1", "personal", "P", T);
+    return raw;
+  }
+
+  const STAT_COLUMNS =
+    "profile_id, game, variant, played, won, best_time_seconds, best_score," +
+    " current_streak, longest_streak, updated_at";
+  const STAT_ROW: readonly unknown[] = ["p1", "klondike", "draw1", 3, 2, 95, 480, 1, 2, T];
+
+  const insertStat = (raw: Database.Database, row: readonly unknown[]): void => {
+    raw
+      .prepare(`INSERT INTO cardgame_stats (${STAT_COLUMNS}) VALUES (${"?, ".repeat(9)}?)`)
+      .run(...row);
+  };
+
+  /** One field replaced, so each CHECK is exercised in isolation. */
+  const withField = (index: number, value: unknown): unknown[] => {
+    const row = [...STAT_ROW];
+    row[index] = value;
+    return row;
+  };
+
+  it("takes a statistics row keyed by profile, game and variant", () => {
+    const raw = open("cardgame-stats.db");
+    insertStat(raw, STAT_ROW);
+    // The same game in another variant is another row, not a collision.
+    insertStat(raw, withField(2, "draw3"));
+    expect(raw.prepare("SELECT COUNT(*) AS n FROM cardgame_stats").get()).toEqual({ n: 2 });
+    raw.close();
+  });
+
+  it("refuses a second row for the same game in the same variant", () => {
+    const raw = open("cardgame-duplicate.db");
+    insertStat(raw, STAT_ROW);
+    expect(() => insertStat(raw, withField(3, 9))).toThrow(/UNIQUE/);
+    raw.close();
+  });
+
+  it("refuses counts that a whole-number column must not hold", () => {
+    for (const [index, bad] of [
+      [3, -1], // played
+      [4, 1.5], // won: a float SQLite would otherwise keep in an INTEGER column
+      [5, -3], // best time
+      // A best score that is not a number at all: notice that a NUMERIC string
+      // like „480" would NOT be refused — column affinity converts it to the
+      // integer it spells, which is the value that was meant.
+      [6, "not a number"],
+      [7, -1], // current streak
+      [8, 0.5], // longest streak
+    ] as const) {
+      const raw = open(`cardgame-bad-${String(index)}.db`);
+      expect(() => insertStat(raw, withField(index, bad))).toThrow(/CHECK/);
+      raw.close();
+    }
+  });
+
+  it("refuses wins over plays and a current streak longer than the longest", () => {
+    const raw = open("cardgame-coupled.db");
+    // Five wins out of three games is not a state a store can produce.
+    expect(() => insertStat(raw, withField(4, 5))).toThrow(/CHECK/);
+    // Nor is a current streak of five against a longest of two.
+    expect(() => insertStat(raw, withField(7, 5))).toThrow(/CHECK/);
+    raw.close();
+  });
+
+  it("accepts a zero-win row with no bests, which is what a fresh profile has", () => {
+    const raw = open("cardgame-fresh.db");
+    insertStat(raw, ["p1", "spider", "suits2", 0, 0, null, null, 0, 0, T]);
+    expect(
+      raw.prepare("SELECT best_score, best_time_seconds FROM cardgame_stats").get(),
+    ).toEqual({ best_score: null, best_time_seconds: null });
+    raw.close();
+  });
+
+  it("takes one saved game per game and variant, and only one", () => {
+    const raw = open("cardgame-saves.db");
+    const insert = (variant: string, seed: number): void => {
+      raw
+        .prepare(
+          `INSERT INTO cardgame_saves
+             (profile_id, game, variant, seed, moves_json, elapsed_seconds, created_at, updated_at)
+           VALUES ('p1', 'klondike', ?, ?, '[{"kind":"draw"}]', 42, ?, ?)`,
+        )
+        .run(variant, seed, T, T);
+    };
+    insert("draw1", 7);
+    insert("draw3", 7);
+    expect(raw.prepare("SELECT COUNT(*) AS n FROM cardgame_saves").get()).toEqual({ n: 2 });
+    expect(() => insert("draw1", 8)).toThrow(/UNIQUE/);
+    raw.close();
+  });
+
+  it("refuses a saved game with an empty move list, a negative seed or a day-long sitting", () => {
+    const raw = open("cardgame-save-checks.db");
+    const insert = (seed: unknown, moves: unknown, elapsed: unknown): void => {
+      raw
+        .prepare(
+          `INSERT INTO cardgame_saves
+             (profile_id, game, variant, seed, moves_json, elapsed_seconds, created_at, updated_at)
+           VALUES ('p1', 'spider', 'suits1', ?, ?, ?, ?, ?)`,
+        )
+        .run(seed, moves, elapsed, T, T);
+    };
+    expect(() => insert(1, "", 10)).toThrow(/CHECK/);
+    expect(() => insert(-1, "[]", 10)).toThrow(/CHECK/);
+    expect(() => insert(1, "[]", 86_401)).toThrow(/CHECK/);
+    insert(1, "[]", 86_400);
+    expect(raw.prepare("SELECT COUNT(*) AS n FROM cardgame_saves").get()).toEqual({ n: 1 });
+    raw.close();
+  });
+
+  it("takes both tables with the profile that owned them", () => {
+    const raw = open("cardgame-cascade.db");
+    insertStat(raw, STAT_ROW);
+    raw
+      .prepare(
+        `INSERT INTO cardgame_saves
+           (profile_id, game, variant, seed, moves_json, elapsed_seconds, created_at, updated_at)
+         VALUES ('p1', 'freecell', 'classic', 617, '[]', 0, ?, ?)`,
+      )
+      .run(T, T);
+    raw.prepare("DELETE FROM profiles WHERE id = 'p1'").run();
+    expect(raw.prepare("SELECT COUNT(*) AS n FROM cardgame_stats").get()).toEqual({ n: 0 });
+    expect(raw.prepare("SELECT COUNT(*) AS n FROM cardgame_saves").get()).toEqual({ n: 0 });
+    raw.close();
+  });
+
+  it("carries no journal trigger, because sync is on hold and these tables are not synced", () => {
+    const raw = open("cardgame-journal.db");
+    const triggers = (
+      raw.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger'").all() as {
+        name: string;
+      }[]
+    ).map((row) => row.name);
+    expect(triggers.filter((name) => name.startsWith("cardgame_"))).toEqual([]);
     raw.close();
   });
 });

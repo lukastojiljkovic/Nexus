@@ -1830,3 +1830,147 @@ export type {
   BlocksState,
   BlocksStatus,
 } from "./games/blocks/blocks.js";
+
+// --- GAMES: cards (stage 1 — the engines, no UI) -----------------------------
+//
+// Three solitaires in one area, because they are one family: one card model, one
+// shuffled-deal contract, one action log with undo in it, and one answer to „may
+// this card go home by itself". The engines are pure — no clock, no randomness
+// but the seed they are handed, no storage — so the deal is a function of
+// `(variant, seed)` and a saved game is three fields long.
+//
+// `CARD_GAME_VARIANTS` and the two seed predicates are exported beside the
+// engines rather than kept inside them, on `finance/money.ts`'s terms: the store's
+// enum check, stage 2's pickers and the engines must refuse by the SAME rule, or
+// the wire and the store quietly disagree about what a variant is.
+export {
+  CARD_CODES,
+  cardCode,
+  cardFromCode,
+  colourOf,
+  deckOf,
+  isCard,
+  RANKS,
+  rankBelow,
+  sameCard,
+  standardDeck,
+  SUITS,
+} from "./games/cards/card.js";
+export type { Card, CardColour, Rank, Suit } from "./games/cards/card.js";
+export { shuffle } from "./games/cards/shuffle.js";
+export type { RandomSource } from "./games/cards/shuffle.js";
+export { autoplaySafe, autoplaySafeCards } from "./games/cards/autoplay.js";
+export {
+  isGameLogEntry,
+  isUndoEntry,
+  logCanUndo,
+  logMoves,
+  logPushMove,
+  logPushUndo,
+  UNDO_ENTRY,
+} from "./games/cards/log.js";
+export type { GameLogEntry, GameUndoEntry } from "./games/cards/log.js";
+export {
+  CARD_GAMES,
+  CARD_GAME_VARIANTS,
+  CardGameError,
+  FREE_CELL_MAX_DEAL,
+  FREE_CELL_MIN_DEAL,
+  IllegalMoveError,
+  isCardGameId,
+  isCardGameVariant,
+  isCardSeed,
+  isFreeCellDeal,
+  MAX_CARD_SEED,
+} from "./games/cards/game.js";
+export type {
+  CardGameId,
+  CardGameRefusal,
+  CardGameRefusalCode,
+  CardGameReplay,
+  CardGameVariant,
+  FreeCellVariant,
+  KlondikeVariant,
+  SpiderVariant,
+} from "./games/cards/game.js";
+export {
+  applyKlondike,
+  canUndoKlondike,
+  dealKlondike,
+  hasKlondikeMoves,
+  isKlondikeEntry,
+  isKlondikeMove,
+  isKlondikeMoveLegal,
+  isKlondikeWon,
+  KLONDIKE_COLUMNS,
+  KLONDIKE_SCORE,
+  klondikeAllFaceUp,
+  klondikeAutoComplete,
+  klondikeAutoMoves,
+  klondikeHint,
+  klondikeMoves,
+  replayKlondike,
+  undoKlondike,
+} from "./games/cards/klondike.js";
+export type {
+  KlondikeBoard,
+  KlondikeCard,
+  KlondikeMove,
+  KlondikePile,
+  KlondikeReplay,
+  KlondikeState,
+} from "./games/cards/klondike.js";
+export {
+  applyFreeCell,
+  canUndoFreeCell,
+  dealFreeCell,
+  FREE_CELL_COLUMNS,
+  FREE_CELL_COUNT,
+  FREE_CELL_SCORE,
+  freeCellAutoMoves,
+  freeCellHint,
+  freeCellMoves,
+  freeCellSupermoveLimit,
+  hasFreeCellMoves,
+  isFreeCellEntry,
+  isFreeCellMove,
+  isFreeCellMoveLegal,
+  isFreeCellWon,
+  replayFreeCell,
+  undoFreeCell,
+} from "./games/cards/freecell.js";
+export type {
+  FreeCellBoard,
+  FreeCellMove,
+  FreeCellReplay,
+  FreeCellSlot,
+  FreeCellState,
+} from "./games/cards/freecell.js";
+export {
+  applySpider,
+  canUndoSpider,
+  dealSpider,
+  hasSpiderMoves,
+  isSpiderEntry,
+  isSpiderMove,
+  isSpiderMoveLegal,
+  isSpiderWon,
+  replaySpider,
+  SPIDER_COLUMNS,
+  SPIDER_FOUNDATIONS,
+  SPIDER_RUN,
+  SPIDER_SCORE,
+  SPIDER_SUITS,
+  spiderAutoMoves,
+  spiderDealCount,
+  spiderHint,
+  spiderMoves,
+  undoSpider,
+} from "./games/cards/spider.js";
+export type {
+  SpiderBoard,
+  SpiderCard,
+  SpiderMove,
+  SpiderReplay,
+  SpiderState,
+} from "./games/cards/spider.js";
