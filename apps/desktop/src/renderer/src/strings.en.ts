@@ -63,28 +63,51 @@ export const en = {
     brand: "Nexus",
     navLabel: "Main navigation",
     /**
-     * The registry's own category names, translated. The manifests have always
-     * carried the grouping and the sidebar rendered the groups — it simply
-     * threw the NAMES away, so fourteen modules read as one undifferentiated
-     * list (STATUS §5 C item 13). Keys are `ModuleCategory` from `@nexus/core`;
-     * a category with no enabled member never renders, so an unused one costs
-     * nothing. One word each, because this is a 220px rail.
+     * The navigation groups, translated — the sidebar's headings, the
+     * launcher's sections and the module galleries' headings, ONE table because
+     * they are one list (ADR-093). Keys are `ModuleGroup` from `@nexus/core`;
+     * Culture and Play have no module in this build, and a group with no enabled
+     * member never renders, so neither costs anything until the modules it is
+     * for exist. One word each, because this is a 220px rail.
      */
-    navCategories: {
-      "Core experience": "Essentials",
-      "Content & knowledge": "Content",
-      "Life hubs": "Life",
-      "Professional & utilities": "Work",
-      "Growth & platform": "Growth",
+    navGroups: {
+      plan: "Plan",
+      knowledge: "Knowledge",
+      life: "Life",
+      culture: "Culture",
+      make: "Make",
+      play: "Play",
+      shell: "Nexus",
     } satisfies Record<string, string>,
     /**
-     * The sidebar's one heading that is not a category (ADR-086): the modules
-     * this profile's own answers put at the top. „Za tebe" and not „Omiljeno" —
-     * nobody marked these as favourites, the app placed them, and the honest
-     * word says so. „Podešavanja → Kako je Nexus podešen za tebe" is where it
-     * says why, and where somebody changes it.
+     * The pinned shortlist's heading (ADR-086; ADR-093 §3): the modules at the
+     * top of the rail. It began as „the ones this profile's answers put there"
+     * and the pin toggle on every row made it a list the user edits too, so the
+     * word has to cover both. „Podešavanja → Kako je Nexus podešen za tebe" is
+     * where the questionnaire says why it placed what it placed.
      */
     navPinned: "For you",
+    /**
+     * Pinning and the launcher (ADR-093 §3 and §4).
+     *
+     * `pinFull` says the number out loud rather than leaving a disabled control
+     * to explain itself: the shortlist holds `MAX_PINNED_MODULES`, and a pin
+     * that silently does nothing is the shape of defect this house fixes by
+     * saying what the rule is.
+     *
+     * The launcher's `label` is one string for the rail's foot row AND the
+     * overlay's heading, because they are one surface — the row that opens the
+     * panel and the panel that appears have to read as the same thing.
+     */
+    pinModule: "Pin {name} to the top",
+    unpinModule: "Unpin {name}",
+    pinFull: "Five modules are already at the top. Unpin one to pin this one.",
+    launcher: {
+      label: "All modules",
+      description: "Every module that is on, by group. Type part of a name to narrow the list.",
+      searchLabel: "Search modules",
+      close: "Close",
+    },
     /**
      * The fold over a module landing's chart — NOTE, TASK, UČENJE and NAVIKE.
      *
@@ -6177,14 +6200,13 @@ export const en = {
       pro:
         "Tools by trade — turn on the packs you need, and the drawer shows only those.",
     } satisfies Record<string, string>,
-    /** Category-group headings above the module gallery, keyed by registry category. */
-    moduleCategories: {
-      "Core experience": "Essentials",
-      "Content & knowledge": "Content and knowledge",
-      "Life hubs": "Life hubs",
-      "Professional & utilities": "Professional and utilities",
-      "Growth & platform": "Growth and platform",
-    } satisfies Record<string, string>,
+    /**
+     * The gallery's group headings are the navigation groups' own names
+     * (`strings.app.navGroups`), not a second set: the gallery, the onboarding
+     * chooser and the rail list the same modules under the same words, and
+     * ADR-093 collapsed the two tables into one so a group cannot be called two
+     * things.
+     */
     modulesAlwaysOn: "Always on",
     modulesToggleError: "The change failed. Try again.",
     /**

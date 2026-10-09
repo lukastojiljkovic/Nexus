@@ -4,6 +4,9 @@ import {
   useEffect,
   useMemo,
   useState,
+  // Aliased because this file also listens for the DOM's own `KeyboardEvent`
+  // (`handleGlobalKeydown`), and the two are different types.
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
 import {
@@ -32,7 +35,21 @@ import { Onboarding } from "./Onboarding.js";
 import { ProfileSwitchDialog } from "./ProfileSwitchDialog.js";
 import { NotePopover } from "./notePopover.js";
 import { applyProfileAccent, defaultAccent, seedAccent } from "./accent.js";
-import { PINNED_GROUP_KEY, readPinnedModules, sidebarGroups } from "./navPrefs.js";
+import { ModuleLauncherDialog } from "./ModuleLauncherDialog.js";
+import {
+  MAX_PINNED_MODULES,
+  movePinned,
+  navGroupOpen,
+  persistCollapsedGroups,
+  persistPinnedModules,
+  pinModule,
+  PINNED_GROUP_KEY,
+  readCollapsedGroups,
+  readPinnedModules,
+  sidebarGroups,
+  toggleCollapsedGroups,
+  unpinModule,
+} from "./navPrefs.js";
 import { pruneOnboardingDrafts } from "./onboardingDraft.js";
 import { moduleIconName } from "./moduleIcon.js";
 import { moduleName } from "./moduleName.js";
@@ -99,7 +116,7 @@ import {
   subscribeSystemTheme,
   type ThemePreference,
 } from "./theme.js";
-import { lookup, strings } from "./strings.js";
+import { fill, lookup, strings } from "./strings.js";
 
 /**
  * A pending page-level intent (021-e): one payload, tagged with the module
@@ -248,6 +265,18 @@ export function App() {
    */
   const [navEpoch, setNavEpoch] = useState(0);
   const [pinnedModules, setPinnedModules] = useState<readonly string[]>([]);
+  /**
+   * The group keys this profile has folded away (ADR-093 §2), and whether the
+   * „Svi moduli" overlay is on screen.
+   *
+   * Read and written on the same terms as the pins above — one effect over the
+   * active profile, so entering a profile through any of its three doors loads
+   * both, and `navEpoch` is what re-reads them after the questionnaire.
+   */
+  const [collapsedGroups, setCollapsedGroups] = useState<readonly string[]>([]);
+  const [launcherOpen, setLauncherOpen] = useState(false);
+  /** The pinned row a drag picked up, or null — identity travels in renderer state, the dashboard's own idiom. */
+  const [draggedPin, setDraggedPin] = useState<string | null>(null);
   // The local account's lock state (ADR-018). `null` only until the very
   // first `getAuthStatus` round trip resolves.
   const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
@@ -403,6 +432,10 @@ export function App() {
     // resurrect a passcode dialog aimed at a profile that account does not have.
     setSwitchTarget(null);
     setProfileActionError(null);
+    // The launcher is modal and belongs to the session that opened it: it lists
+    // the modules of a profile, and the next unlock may be a different account
+    // (`switchTarget`'s rule one line up).
+    setLauncherOpen(false);
     setAuthStatus((previous) => ({
       state: "locked",
       lockedForMs: 0,
@@ -498,12 +531,14 @@ export function App() {
 
   useEffect(() => {
     setPinnedModules(activeProfileId === null ? [] : readPinnedModules(activeProfileId));
+    setCollapsedGroups(activeProfileId === null ? [] : readCollapsedGroups(activeProfileId));
   }, [activeProfileId, navEpoch]);
 
   /**
-   * The sidebar, as the blocks it draws — the pinned „Za tebe" group this
-   * profile's plan chose (ADR-086), then the registry's categories with those
-   * modules taken out of them.
+   * The sidebar, as the blocks it draws (ADR-093): the shell's first row, the
+   * pinned „Za tebe" shortlist the plan or the user's own pin toggles chose,
+   * then the six navigation groups with those modules taken out of them, then
+   * the shell's remaining rows.
    */
   const navGroups = useMemo(
     () => sidebarGroups(registry, new Set(resolveEnabled(registry, flags)), pinnedModules),
@@ -511,12 +546,81 @@ export function App() {
   );
 
   /**
+   * Both writes go through `navPrefs`' pure helpers and then straight back into
+   * the stored key, and there is deliberately no separate in-memory order: the
+   * rail is drawn from the same list the next boot will read, so a pin made now
+   * and a pin made in a previous session cannot take two paths.
+   *
+   * A profile is always the active one here — these controls only exist inside
+   * the shell, which only renders with a profile — so the null branch is a
+   * no-op rather than a fallback.
+   */
+  function persistPins(next: readonly string[]): void {
+    if (activeProfileId === null) return;
+    persistPinnedModules(activeProfileId, next);
+    setPinnedModules(next);
+  }
+
+  /** The pin toggle on a rail row and on a launcher tile: one write, two entry points. */
+  function togglePin(moduleId: string): void {
+    persistPins(
+      pinnedModules.includes(moduleId)
+        ? unpinModule(pinnedModules, moduleId)
+        : pinModule(pinnedModules, moduleId),
+    );
+  }
+
+  /**
+   * One move of a pinned row, whatever asked for it: a keystroke asks for one
+   * place, a drop asks for the distance between where the row was picked up and
+   * where it was let go, and `movePinned` clamps both.
+   */
+  function movePinnedBy(moduleId: string, delta: number): void {
+    persistPins(movePinned(pinnedModules, moduleId, delta));
+  }
+
+  /**
+   * A dropped pinned row lands where the row it was dropped on sits. The step is
+   * the DISTANCE between the two, which is what lets a drag reuse the keyboard's
+   * one-step call rather than growing an index arithmetic of its own.
+   */
+  function dropPinOn(targetId: string): void {
+    const dragged = draggedPin;
+    setDraggedPin(null);
+    if (dragged === null || dragged === targetId) return;
+    movePinnedBy(dragged, pinnedModules.indexOf(targetId) - pinnedModules.indexOf(dragged));
+  }
+
+  /**
+   * Alt+↑ / Alt+↓ move the focused pinned row (ADR-093 §3) — the keystroke half
+   * of the drag, sharing its write. `Alt` and not a bare arrow: the rail is a
+   * list of links, and an arrow that reordered the sidebar for anybody pressing
+   * ↓ would be a trap.
+   */
+  function onPinnedRowKeyDown(
+    event: ReactKeyboardEvent<HTMLAnchorElement>,
+    moduleId: string,
+  ): void {
+    if (!event.altKey) return;
+    if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+    event.preventDefault();
+    movePinnedBy(moduleId, event.key === "ArrowUp" ? -1 : 1);
+  }
+
+  /** Folds a group away, or opens it again. The stored set is the COLLAPSED keys, so an untouched group is open. */
+  function toggleGroup(key: string): void {
+    const next = toggleCollapsedGroups(collapsedGroups, key);
+    if (activeProfileId !== null) persistCollapsedGroups(activeProfileId, next);
+    setCollapsedGroups(next);
+  }
+
+  /**
    * What Ctrl+1…Ctrl+9 count along — the SAME list the nav renders, flattened.
    *
    * Derived from `navGroups` rather than walked again, and that is the whole
    * reason `sidebarGroups` exists: this used to be its own pass over
-   * `registry.byCategory()` that happened to agree with the render, and a
-   * pinned group would have renumbered the visible rows while leaving the
+   * the registry's own grouping that happened to agree with the render, and a
+   * pinned block would have renumbered the visible rows while leaving the
    * shortcuts pointing at the old ones. (Deliberately NOT `resolveEnabled`:
    * that returns registration order, and the two are only accidentally equal
    * for today's module set.)
@@ -554,6 +658,9 @@ export function App() {
     setPending(null);
     setSearchSeed(null);
     closePalette();
+    // The launcher lists the modules of the profile being LEFT, and a modal that
+    // survived a switch would be a catalogue of somebody else's app.
+    setLauncherOpen(false);
     try {
       setFlags(await window.nexus.getFlags(profile.id));
     } catch (error) {
@@ -1376,48 +1483,143 @@ export function App() {
           <StarField enabled={theme === "noc"} />
           <div className="app__nav-scroll">
             {navGroups.map((group, index) => {
-              // The manifests have always carried the grouping — the nav had
-              // been rendering the groups and discarding their names, so
-              // fourteen modules read as one flat list (STATUS §5 C item 13).
-              // A category with no name of its own falls back to the registry
-              // key rather than rendering an empty strip. „Za tebe" is the one
-              // heading that is NOT a category: it is a fact about this person
-              // rather than about the product, which is why `PINNED_GROUP_KEY`
-              // is deliberately not a `ModuleCategory` a manifest could claim.
-              const headingId = `app-nav-category-${index}`;
+              // The manifests carry the grouping (ADR-093). A group with no name
+              // of its own falls back to the registry key rather than rendering
+              // an empty strip. `null` is one of the shell's two rows and wears
+              // no heading at all: the home surface heads the rail and
+              // „Podešavanja" closes it, and neither is a group of modules a
+              // person belongs to. „Za tebe" is the third kind of heading — a
+              // fact about this person rather than about the product, which is
+              // why `PINNED_GROUP_KEY` is deliberately not a `ModuleGroup` a
+              // manifest could claim.
+              const groupKey = group.key;
+              const headingId = `app-nav-group-${index}`;
+              const rowsId = `app-nav-group-rows-${index}`;
               const label =
-                group.key === PINNED_GROUP_KEY
-                  ? strings.app.navPinned
-                  : (lookup(strings.app.navCategories, group.key) ?? group.key);
+                groupKey === null
+                  ? null
+                  : groupKey === PINNED_GROUP_KEY
+                    ? strings.app.navPinned
+                    : (lookup(strings.app.navGroups, groupKey) ?? groupKey);
+              // A folded group that holds the page on screen opens anyway
+              // (`navGroupOpen`): a rail that said only „somewhere else" would
+              // lose the module a launcher tile or a shortcut just opened.
+              const open = navGroupOpen(group, collapsedGroups, effectiveId);
               return (
                 <div
-                  key={group.key}
+                  key={groupKey ?? `shell-${index}`}
                   className="app__nav-group"
                   role="group"
-                  aria-labelledby={headingId}
+                  aria-labelledby={label === null ? undefined : headingId}
                 >
-                  <h2 id={headingId} className="app__nav-group-label">
-                    {label}
-                  </h2>
-                  {group.moduleIds.map((moduleId) => (
-                    <NavItem
-                      key={moduleId}
-                      href="#"
-                      // The screenshot sweep's landing hook (`main/shots/`).
-                      // A stable id rather than the visible label, because the
-                      // label is Serbian today and a `--shots` run must keep
-                      // working in whatever language the shell is serving.
-                      data-module-id={moduleId}
-                      active={moduleId === effectiveId}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        setActiveId(moduleId);
-                      }}
-                    >
-                      {moduleIcon(moduleId)}
-                      {moduleName(moduleId)}
-                    </NavItem>
-                  ))}
+                  {label !== null && groupKey !== null && (
+                    <h2 id={headingId} className="app__nav-group-label">
+                      {/* The heading IS the control — a disclosure — and its
+                          accessible name stays the group's own name: the state
+                          rides `aria-expanded`, so no second string has to
+                          describe one heading in two directions. */}
+                      <button
+                        type="button"
+                        className="app__nav-group-toggle"
+                        aria-expanded={open}
+                        aria-controls={rowsId}
+                        onClick={() => toggleGroup(groupKey)}
+                      >
+                        {label}
+                        <Icon
+                          name={open ? "chevronDown" : "chevronRight"}
+                          size={14}
+                          className="app__nav-group-caret"
+                        />
+                      </button>
+                    </h2>
+                  )}
+                  <div id={rowsId} className="app__nav-group-rows" hidden={!open}>
+                    {group.moduleIds.map((moduleId) => {
+                      const isPinned = groupKey === PINNED_GROUP_KEY;
+                      const atCap = pinnedModules.length >= MAX_PINNED_MODULES;
+                      return (
+                        <div
+                          key={moduleId}
+                          className="app__nav-row"
+                          // A pinned row is draggable and a drop target on the
+                          // dashboard's own terms: native HTML5 drag, with the
+                          // identity in renderer state rather than in the
+                          // `dataTransfer` payload, which is set only because a
+                          // browser refuses to start a drag without one.
+                          draggable={isPinned}
+                          onDragStart={
+                            isPinned
+                              ? (event) => {
+                                  setDraggedPin(moduleId);
+                                  event.dataTransfer.setData("text/plain", moduleId);
+                                  event.dataTransfer.effectAllowed = "move";
+                                }
+                              : undefined
+                          }
+                          onDragOver={
+                            isPinned
+                              ? (event) => {
+                                  event.preventDefault();
+                                  event.dataTransfer.dropEffect = "move";
+                                }
+                              : undefined
+                          }
+                          onDrop={
+                            isPinned
+                              ? (event) => {
+                                  event.preventDefault();
+                                  dropPinOn(moduleId);
+                                }
+                              : undefined
+                          }
+                          onDragEnd={isPinned ? () => setDraggedPin(null) : undefined}
+                        >
+                          <NavItem
+                            href="#"
+                            // The screenshot sweep's landing hook (`main/shots/`).
+                            // A stable id rather than the visible label, because the
+                            // label is Serbian today and a `--shots` run must keep
+                            // working in whatever language the shell is serving.
+                            data-module-id={moduleId}
+                            active={moduleId === effectiveId}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              setActiveId(moduleId);
+                            }}
+                            onKeyDown={
+                              isPinned ? (event) => onPinnedRowKeyDown(event, moduleId) : undefined
+                            }
+                          >
+                            {moduleIcon(moduleId)}
+                            {moduleName(moduleId)}
+                          </NavItem>
+                          {/* Only inside a headed group, because promotion is
+                              the one thing this control does: the shell's own
+                              two rows cannot be switched off, so pinning one
+                              says nothing. */}
+                          {groupKey !== null && (
+                            <button
+                              type="button"
+                              className={
+                                isPinned ? "app__nav-pin app__nav-pin--on" : "app__nav-pin"
+                              }
+                              aria-pressed={isPinned}
+                              disabled={!isPinned && atCap}
+                              {...(!isPinned && atCap ? { title: strings.app.pinFull } : {})}
+                              aria-label={fill(
+                                isPinned ? strings.app.unpinModule : strings.app.pinModule,
+                                { name: moduleName(moduleId) },
+                              )}
+                              onClick={() => togglePin(moduleId)}
+                            >
+                              <Icon name={isPinned ? "pinFilled" : "pin"} size={14} />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               );
             })}
@@ -1425,9 +1627,16 @@ export function App() {
           {activeProfile && (
             <div className="app__sidebar-foot">
               {/* Navigates to the full page (ADR-039 §1); the badge stays as
-                  the hint for Ctrl+K, which still opens the palette. */}
+                  the hint for Ctrl+K, which still opens the palette.
+
+                  `data-nx-search-page` rather than a position in this column:
+                  the sweep's probe used to take the foot's FIRST row, and the
+                  row ADR-093 added below would have made it photograph the
+                  launcher under the name „search" — the DC-125 mistake, an
+                  index into a list that grows. */}
               <NavItem
                 href="#"
+                data-nx-search-page="true"
                 active={effectiveId === SEARCH_PAGE_ID}
                 // The LIVE palette binding, never a printed "Ctrl+K": a remap
                 // has to be visible everywhere at once (ADR-040).
@@ -1439,6 +1648,21 @@ export function App() {
               >
                 <Icon name="search" size={16} />
                 {strings.search.navLabel}
+              </NavItem>
+              {/* ADR-093 §4. The rail draws what somebody reaches for daily;
+                  this is the way to everything else. It sits under „Pretraga"
+                  and not above it because search is the errand you arrive with
+                  and this is the one you leave with when you have not. */}
+              <NavItem
+                href="#"
+                data-nx-launcher="true"
+                onClick={(event) => {
+                  event.preventDefault();
+                  setLauncherOpen(true);
+                }}
+              >
+                <Icon name="grid" size={16} />
+                {strings.app.launcher.label}
               </NavItem>
               <NotificationCenter profileId={activeProfile.id} onNavigate={setActiveId} />
               {/* SET-001 and ADR-058 §2, in ONE row rather than two.
@@ -1856,6 +2080,24 @@ export function App() {
           bindings={shortcuts}
           moduleIds={visibleModuleIds}
           onClose={() => setShortcutsHelpOpen(false)}
+        />
+      )}
+
+      {/* ADR-093 §4. Every enabled module by group, one overlay, opened from
+          the foot of the rail. `enabledIds` below is the SAME resolved set the
+          rail is filtered through, so a module switched off in Settings leaves
+          both surfaces in one write. */}
+      {launcherOpen && activeProfile && (
+        <ModuleLauncherDialog
+          registry={registry}
+          enabledModules={enabledIds}
+          pinned={pinnedModules}
+          onOpen={(moduleId) => {
+            setLauncherOpen(false);
+            setActiveId(moduleId);
+          }}
+          onTogglePin={togglePin}
+          onClose={() => setLauncherOpen(false)}
         />
       )}
     </div>
