@@ -31,6 +31,8 @@ export {
   CarValidationError,
   CardNotFoundError,
   CardValidationError,
+  ChessNotFoundError,
+  ChessValidationError,
   CircuitNotFoundError,
   CircuitValidationError,
   CultureNotFoundError,
@@ -1097,3 +1099,31 @@ export type {
   CardGameResultInput,
   CardGameStats,
 } from "./games/cards/cardGameStore.js";
+
+// --- CHESS (migration 082) ---------------------------------------------------
+//
+// Saved games, the one game in progress, and the ladder record. Deliberately NOT
+// in `RESTORE_WIPE_TABLES`: that list and `@nexus/sync`'s collection map are held
+// equal by `sync/collectionGuard.test.ts`, sync is on hold, and these tables carry
+// no journal triggers — the pair of edits belongs together on the day sync
+// resumes. `ON DELETE CASCADE` is what takes them when a profile goes, which is
+// the path privacy depends on.
+export {
+  ChessStore,
+  MAX_CHESS_LEVEL,
+  MAX_CHESS_PGN_LENGTH,
+  MAX_CHESS_RESUME_MOVES,
+} from "./games/chess/chessStore.js";
+export type {
+  ChessArchive,
+  ChessArchiveGame,
+  ChessArchiveResume,
+  ChessArchiveStats,
+  ChessGameResult,
+  ChessLevelStats,
+  ChessOpponent,
+  ResumableGame,
+  SaveGameInput,
+  SavedGame,
+  SetResumeInput,
+} from "./games/chess/chessStore.js";
