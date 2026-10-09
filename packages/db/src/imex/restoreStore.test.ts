@@ -1663,6 +1663,10 @@ describe("RestoreStore", () => {
     //    them today would delete every recording on restore. Stage 2 wires
     //    `RecorderStore.exportData`/`importData` into the archive and moves
     //    these two names into `RESTORE_WIPE_TABLES`.
+    //  - arcade_scores (migration 080): the same sequencing. A profile's
+    //    scores are its own and go into the archive with stage 2, which wires
+    //    `ArcadeStore.exportData`/`importData` in and moves this name into
+    //    `RESTORE_WIPE_TABLES`; until then a wipe would lose them on restore.
     //  - emergency_cards / emergency_contacts / emergency_documents (migration
     //    078): the card IS user content, and it is deliberately NOT here yet
     //    rather than exempt on its merits. The module ships in two stages, and
@@ -1748,6 +1752,7 @@ describe("RestoreStore", () => {
       "cookbook_steps",
       "recordings",
       "recording_markers",
+      "arcade_scores",
       "emergency_cards",
       "emergency_contacts",
       "emergency_documents",

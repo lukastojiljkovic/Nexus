@@ -1293,6 +1293,19 @@ export class EmergencyCardValidationError extends DatabaseError {}
 export class EmergencyCardNotFoundError extends DatabaseError {}
 
 /**
+ * Thrown when an arcade score write or an arcade archive is rejected at the store
+ * boundary (GAMES, migration 080): a `game` outside the closed two, a `variant`
+ * that is not a lower-case board key, a `timeMs`/`score`/`lines` that is not a
+ * whole number inside its bound, a malformed `now`, a won Minesweeper game with
+ * no time to record — or an `importData` value that is not a version this build
+ * reads, is missing a field, carries one twice, or holds a row that mixes the two
+ * games' columns. The store revalidates because renderer input is untrusted
+ * (SEC-EL-02), and it validates an imported archive in full before writing a row
+ * because a half-applied archive is worse than a refused one.
+ */
+export class ArcadeValidationError extends DatabaseError {}
+
+/**
  * Whether a driver error is a violated UNIQUE (or partial-UNIQUE) index.
  *
  * A store that leans on such an index to make a state unrepresentable — the

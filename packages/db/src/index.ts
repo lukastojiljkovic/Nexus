@@ -14,6 +14,7 @@ export {
 export type { AttachmentTextCandidate } from "./attachmentText.js";
 
 export {
+  ArcadeValidationError,
   BackupSettingsValidationError,
   PrivateNoteNotFoundError,
   PrivateNoteValidationError,
@@ -1041,3 +1042,32 @@ export type {
   CalcHistoryExportEntry,
   CalculatorExport,
 } from "./calculator/calculatorStore.js";
+
+// --- GAMES (the arcade's scores, migration 080) ------------------------------
+//
+// ONE store over ONE table, and the row is a running total rather than a game: a
+// finished game folds into (profile, game, variant) in a single transaction, so a
+// best time, a best score, a streak and „when" can never disagree about a game
+// that happened. The variant is the BOARD — a Minesweeper preset's own name or
+// `custom:CxRxM`, derived by `@nexus/core`'s `minesweeperVariant` rather than
+// named by a caller — because a best time across two board shapes means nothing.
+//
+// `exportData`/`importData` are the profile archive's door: a versioned plain
+// value in, a full validation before a single row moves, and an unknown version
+// refused rather than guessed at.
+export {
+  ARCADE_EXPORT_VERSION,
+  ARCADE_GAMES,
+  ArcadeScoreStore,
+  MAX_ARCADE_LINES,
+  MAX_ARCADE_SCORE,
+  MAX_ARCADE_TIME_MS,
+  MAX_ARCADE_VARIANT_LENGTH,
+} from "./games/arcade/arcadeStore.js";
+export type {
+  ArcadeExport,
+  ArcadeExportScore,
+  ArcadeGame,
+  ArcadeResult,
+  ArcadeScore,
+} from "./games/arcade/arcadeStore.js";
