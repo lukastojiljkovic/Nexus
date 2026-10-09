@@ -82,6 +82,7 @@ import type {
   TaskList,
 } from "../../shared/ipc.js";
 import { LOCKED_MODULE_IDS } from "../../shared/modules.js";
+import { SYNC_ON_HOLD } from "../../shared/syncHold.js";
 import { authErrorMessage, passcodeMeetsPolicy, RecoveryKitPanel } from "./AuthGate.js";
 import { ALL_NOTIFICATION_SOURCES, NOTIFICATION_PRESETS } from "./notificationFormat.js";
 import { NotificationSettingsControls } from "./NotificationSettingsControls.js";
@@ -6084,14 +6085,22 @@ export function SettingsPage({
 
           {/* The cloud half. It is a DEVICE card, not a profile one: the cloud
               switch, the account and the master key belong to this computer, so
-              it takes no `profileId` and shows the same thing in every profile. */}
-          <Card
-            id={sectionDomId("sync")}
-            title={strings.settings.sectionTitle.sync}
-            className={sectionClass(visibility.cards.has("sync"))}
-          >
-            <SyncSection hits={hits} />
-          </Card>
+              it takes no `profileId` and shows the same thing in every profile.
+
+              ON HOLD since 2026-10-08 (`shared/syncHold.ts`), so it is not
+              mounted: no card, no `sync:status` read and no resume attempt. The
+              component, the copy, the IPC channels and the engine all stay
+              exactly as they are, which is what makes turning it back on
+              flipping one constant rather than rebuilding a surface. */}
+          {SYNC_ON_HOLD ? null : (
+            <Card
+              id={sectionDomId("sync")}
+              title={strings.settings.sectionTitle.sync}
+              className={sectionClass(visibility.cards.has("sync"))}
+            >
+              <SyncSection hits={hits} />
+            </Card>
+          )}
 
           {searchGroupTitle("privacy")}
           {/* ADR-089, FIRST in this category: the device-level decision about
@@ -6105,11 +6114,13 @@ export function SettingsPage({
             <NetworkSettings hits={hits} />
           </Card>
           {/* SET-010, local half. Six statements of fact — no toggle, no link, no
-              „saznaj više" on any of them. Every sentence is checkable in the
-              source; see the copy block's own comment, which names the file each
-              one is true because of. Below them, the one thing on this card that
-              IS operable (SRCH-009): the search history is the only place the app
-              stores something about how you used it rather than what you made, so
+              „saznaj više" on any of them; five are drawn while sync is ON HOLD
+              and `privacy.sync` is the one that is not. Every sentence is
+              checkable in the source; see the copy block's own comment, which
+              names the file each one is true because of. Below them, the one
+              thing on this card that IS operable (SRCH-009): the search history
+              is the only place the app stores something about how you used it
+              rather than what you made, so
               the card that lists what is stored is where you erase it. */}
           <Card
             id={sectionDomId("privacy")}
@@ -6119,7 +6130,9 @@ export function SettingsPage({
             <p className="nx-hint">{strings.settings.privacy.storage}</p>
             <p className="nx-hint">{strings.settings.privacy.noTelemetry}</p>
             <p className="nx-hint">{strings.settings.privacy.offline}</p>
-            <p className="nx-hint">{strings.settings.privacy.sync}</p>
+            {SYNC_ON_HOLD ? null : (
+              <p className="nx-hint">{strings.settings.privacy.sync}</p>
+            )}
             <p className="nx-hint">{strings.settings.privacy.exports}</p>
             <p className="nx-hint">{strings.settings.privacy.deletion}</p>
             <SearchHistorySection profileId={profileId} hits={hits} />

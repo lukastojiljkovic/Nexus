@@ -1,5 +1,6 @@
 import type { IconName } from "@nexus/ui";
 
+import { isSettingsCardHeld } from "../../shared/syncHold.js";
 import type { SettingsSearchResult } from "./settingsSearch.js";
 
 /**
@@ -107,8 +108,13 @@ export interface SettingsCategory {
  * The eight categories, in the order the brief fixes. The module cards this
  * build draws are NOT entries here — they are the sub-pages of the
  * „Podešavanja modula" list, and the page appends them where that list sits.
+ *
+ * This is the FULL shape, sync card and all, and it is deliberately not what
+ * the page renders: {@link SETTINGS_CATEGORIES} below drops the cards whose
+ * work is ON HOLD, so the table stays the statement of the information
+ * architecture rather than a second version of it.
  */
-export const SETTINGS_CATEGORIES: readonly SettingsCategory[] = [
+const CATEGORY_TABLE: readonly SettingsCategory[] = [
   {
     id: "profile",
     icon: "person",
@@ -183,6 +189,22 @@ export const SETTINGS_CATEGORIES: readonly SettingsCategory[] = [
     ],
   },
 ];
+
+/**
+ * The categories the page renders: {@link CATEGORY_TABLE} with every card whose
+ * work is ON HOLD removed (`shared/syncHold.ts`).
+ *
+ * One filter rather than a second hand-kept table, because two tables would
+ * drift: the search index, the rail's counts and the page itself all read this
+ * one, so a card the hold hides cannot be found by any of them. Turning sync
+ * back on is flipping `SYNC_ON_HOLD`, and this line needs no edit.
+ */
+export const SETTINGS_CATEGORIES: readonly SettingsCategory[] = CATEGORY_TABLE.map((category) => ({
+  ...category,
+  entries: category.entries.filter(
+    (entry) => entry.kind !== "card" || !isSettingsCardHeld(entry.id),
+  ),
+}));
 
 export function categoryById(id: CategoryId): SettingsCategory {
   const category = SETTINGS_CATEGORIES.find((candidate) => candidate.id === id);

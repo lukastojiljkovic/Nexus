@@ -36,10 +36,10 @@ built to stand on its own before the next is started.
 
 Three commitments distinguish it from the tools it replaces:
 
-- Everything needed to run a day works with the network off. Cloud sync, when it
-  is hosted, is an addition rather than a dependency.
-- Privacy is structural. Private notes are end-to-end encrypted, the local path
-  cannot reach the network unless the user turns on update checks (and then
+- Everything works with the network off, and nothing needs a server or an
+  online account.
+- Privacy is structural. Private notes are encrypted under their own credential,
+  the app cannot reach the network unless the user turns on update checks (and then
   reaches only GitHub's release hosts), and that limit is enforced by a CI gate
   rather than promised in copy.
 - The full data set can always be exported, so the product never holds the
@@ -59,10 +59,8 @@ interface ships in Serbian and English, follows the system language on first
 run, and remembers the choice. Two themes ship: Dan (light) and Noc (dark),
 with an accent chosen from a fixed palette.
 
-Sync is not hosted. No backend project is compiled into the distributed build,
-so the sync screen reports that no server is configured and every round refuses
-before making a request. Code signing is not in place, so Windows shows a
-SmartScreen warning on first run.
+Nexus works entirely on the device and has no online service. Code signing is
+not in place, so Windows shows a SmartScreen warning on first run.
 
 ## Capabilities and Constraints
 
@@ -85,8 +83,6 @@ Constraints that are deliberate:
   for new versions, offline is the default, nothing downloads until the user
   presses Download and install, and an installer runs only after its signature and hash
   verify (ADR-089).
-- Deleting a hosted sync account from inside the app is not implemented; that
-  gap is recorded in the project's own status notes.
 
 ## Brand Commitments
 
@@ -124,17 +120,17 @@ Real assets in this repository:
 
 What does not exist, and must not be invented: user counts, download numbers,
 retention or performance statistics, benchmarks, testimonials, press mentions,
-dates for future releases, and any hosted sync or web service. The roadmap
+dates for future releases, and any hosted or web service. The roadmap
 states plans without dates, and nothing here should claim otherwise.
 
 ## Product Principles
 
-1. **Offline-first, forever.** Every core feature works with no internet. Cloud
-   sync is an enhancement, never a dependency, and local-only accounts exist for
-   people who never want a server involved.
-2. **Privacy as architecture.** Private notes are encrypted so the server cannot
-   read them, the local-only path cannot reach the network, and the guarantees
-   are enforced by checks rather than stated only in prose.
+1. **Offline, forever.** Every feature works with no internet, and nothing needs
+   a server.
+2. **Privacy as architecture.** Private notes are encrypted under their own
+   credential, the app cannot reach the network unless the user allows update
+   checks, and the guarantees are enforced by checks rather than stated only in
+   prose.
 3. **Modular by onboarding.** A person sees the modules they chose and enables
    the rest when they want them; personal and business profiles stay apart.
 4. **Depth per module.** A module is finished before the next one starts, and
