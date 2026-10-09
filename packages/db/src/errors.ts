@@ -1097,6 +1097,57 @@ export class CultureValidationError extends DatabaseError {}
 export class CultureNotFoundError extends DatabaseError {}
 
 /**
+ * Thrown when a vehicle, an odometer reading, a service entry, a service
+ * interval, a fuel entry, a fault or a receipt is refused at the store boundary
+ * (CAR stage 1, migration 074).
+ *
+ * Four of its refusals are the reason this class exists rather than the schema
+ * alone:
+ *
+ * - a VIN that is not seventeen characters of the ISO 3779 alphabet (no I, O or
+ *   Q). The check digit is deliberately NOT recomputed — it is a North-American
+ *   rule and enforcing it would refuse every European vehicle.
+ * - an odometer reading that DECREASES without the replaced-odometer override.
+ *   That refusal carries the way out in its own message, because the number is
+ *   legitimate and only its segment is wrong.
+ * - a reading that opens a new segment while something is already dated after
+ *   it, which would leave the older reading on the far side of the boundary.
+ * - a model year past next year, which no clock-free CHECK can state.
+ *
+ * The rest is the ordinary vocabulary of a store boundary: trimmed lengths,
+ * closed enums (`fuel_type`, `distance_unit`, `category`, `status`), a
+ * non-negative reading, a positive quantity, a price that is a safe integer of
+ * minor units with a three-letter currency beside it, a bare date, a
+ * well-formed `now`, a receipt's file name/mime/size/sha, and a referenced
+ * service entry that is not a live row of the same vehicle.
+ *
+ * It is also thrown on the way OUT of `importData`, whose whole value is
+ * validated before a single row is written — including its version, its ids, its
+ * cross-references and the monotone-within-a-segment rule — and on the way out
+ * of no reader: this module stores nothing but what it wrote, so a stored row
+ * that does not parse is corruption rather than input to coerce.
+ */
+export class CarValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a CAR operation names an id that is not a live row reachable from
+ * the store's own profile — unknown, soft-deleted (for a mutation), archived
+ * where a mutation needs a current vehicle, or owned by another profile.
+ *
+ * One class for all seven tables, because one store owns them all and every
+ * method reaches its row through the same gate: the vehicle is resolved in this
+ * profile first, and each child statement is scoped through it. Surfacing them
+ * uniformly keeps one profile's cars invisible to a store scoped to another, and
+ * it is why a child row of another profile's vehicle can never be written —
+ * that is a `CarNotFoundError` about the vehicle, never a row.
+ *
+ * An ARCHIVED vehicle is deliberately NOT among the refusals for a read or an
+ * edit (`HabitNotFoundError`'s own note): archiving a sold car is how its
+ * history stays reachable, so the history must stay correctable.
+ */
+export class CarNotFoundError extends DatabaseError {}
+
+/**
  * Whether a driver error is a violated UNIQUE (or partial-UNIQUE) index.
  *
  * A store that leans on such an index to make a state unrepresentable — the
