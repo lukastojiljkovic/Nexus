@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { InvalidStateError } from "../boards-shared/errors.js";
-import { createRng } from "../boards-shared/rng.js";
+import { createSeededRandom } from "../random.js";
 import {
   MLIN_DRAW_PLIES,
   MLIN_LEVELS,
@@ -343,20 +343,20 @@ describe("a short scripted game", () => {
 
 describe("the computer", () => {
   it("returns a legal move at level 3 on a hundred random positions", () => {
-    const random = createRng(0x5eed);
+    const random = createSeededRandom(0x5eed);
     let checked = 0;
     // A hundred positions: a thousand searches at level 3 kept this file busy for 297 s
     // on the CI runners, and every level-3 answer is drawn from `legalMoves` either way.
     for (let sample = 0; sample < 100; sample += 1) {
       let state = initialState();
-      const plies = 4 + Math.floor(random() * 40);
+      const plies = 4 + Math.floor(random.next() * 40);
       for (let ply = 0; ply < plies; ply += 1) {
         const moves = legalMoves(state);
         if (moves.length === 0 || result(state).status !== "in_progress") break;
-        state = applyMove(state, moves[Math.floor(random() * moves.length)] as MlinMove);
+        state = applyMove(state, moves[Math.floor(random.next() * moves.length)] as MlinMove);
       }
       const moves = legalMoves(state);
-      const choice = bestMove(state, 3, createRng(sample));
+      const choice = bestMove(state, 3, createSeededRandom(sample));
       expect(choice.nodes).toBeLessThanOrEqual(MLIN_LEVELS[2]!.nodeBudget);
       if (moves.length === 0 || result(state).status !== "in_progress") continue;
       checked += 1;
@@ -367,18 +367,18 @@ describe("the computer", () => {
   }, 300_000);
 
   it("stays inside every level's budget, and takes a mill that is on offer", () => {
-    const random = createRng(0xbeef);
+    const random = createSeededRandom(0xbeef);
     for (let sample = 0; sample < 200; sample += 1) {
       let state = initialState();
-      const plies = 4 + Math.floor(random() * 30);
+      const plies = 4 + Math.floor(random.next() * 30);
       for (let ply = 0; ply < plies; ply += 1) {
         const moves = legalMoves(state);
         if (moves.length === 0 || result(state).status !== "in_progress") break;
-        state = applyMove(state, moves[Math.floor(random() * moves.length)] as MlinMove);
+        state = applyMove(state, moves[Math.floor(random.next() * moves.length)] as MlinMove);
       }
       if (result(state).status !== "in_progress") continue;
       const level = 1 + (sample % 3);
-      const choice = bestMove(state, level, createRng(sample));
+      const choice = bestMove(state, level, createSeededRandom(sample));
       expect(choice.nodes).toBeLessThanOrEqual(MLIN_LEVELS[level - 1]!.nodeBudget);
       expect(legalMoves(state)).toContainEqual(choice.move);
     }
@@ -387,7 +387,7 @@ describe("the computer", () => {
     // has 3 pieces and a mill, seat 1 has 1, seat 1's best reply makes it 2 and
     // builds a two-in-line of its own, so 100 * (3 - 2) + 25 - 6.
     const onOffer = board(BEFORE_MILL, { toMove: 0, placed: [2, 2] });
-    const choice = bestMove(onOffer, 1, createRng(11));
+    const choice = bestMove(onOffer, 1, createSeededRandom(11));
     expect(choice.move).toMatchObject({ kind: "place", point: 2 });
     expect((choice.move as { remove: number | null }).remove).not.toBeNull();
     expect(choice.score).toBe(119);

@@ -76,7 +76,7 @@ describe("CardGameStore statistics", () => {
       variant: "draw1",
       played: 0,
       won: 0,
-      bestTimeSeconds: null,
+      bestTimeMs: null,
       bestScore: null,
       currentStreak: 0,
       longestStreak: 0,
@@ -102,7 +102,7 @@ describe("CardGameStore statistics", () => {
     expect(stats).toMatchObject({
       played: 1,
       won: 0,
-      bestTimeSeconds: null,
+      bestTimeMs: null,
       bestScore: null,
       currentStreak: 0,
       longestStreak: 0,
@@ -121,7 +121,7 @@ describe("CardGameStore statistics", () => {
     expect(play(true, 300, 520, NOW)).toMatchObject({
       played: 1,
       won: 1,
-      bestTimeSeconds: 300,
+      bestTimeMs: 300_000,
       bestScore: 520,
       currentStreak: 1,
       longestStreak: 1,
@@ -130,14 +130,14 @@ describe("CardGameStore statistics", () => {
     expect(play(true, 400, 480, LATER)).toMatchObject({
       played: 2,
       won: 2,
-      bestTimeSeconds: 300,
+      bestTimeMs: 300_000,
       bestScore: 520,
       currentStreak: 2,
       longestStreak: 2,
     });
     // A faster, better one takes both.
     expect(play(true, 210, 610, LATER)).toMatchObject({
-      bestTimeSeconds: 210,
+      bestTimeMs: 210_000,
       bestScore: 610,
       currentStreak: 3,
       longestStreak: 3,
@@ -146,7 +146,7 @@ describe("CardGameStore statistics", () => {
     expect(play(false, 90, 100, LATER)).toMatchObject({
       played: 4,
       won: 3,
-      bestTimeSeconds: 210,
+      bestTimeMs: 210_000,
       bestScore: 610,
       currentStreak: 0,
       longestStreak: 3,

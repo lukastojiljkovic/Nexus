@@ -40,7 +40,7 @@ import {
   isUndoEntry,
   type GameLogEntry,
 } from "./log.js";
-import { createSeededRandom, shuffle } from "./shuffle.js";
+import { createSeededRandom, shuffled } from "../random.js";
 
 /** Seven columns, one more card each, the seventh's top card face up. */
 export const KLONDIKE_COLUMNS = 7;
@@ -432,7 +432,7 @@ export function klondikeHint(state: KlondikeState): KlondikeMove | null {
 
 /** The shuffle-deal: twenty-eight cards across the columns, the rest face down in the stock. */
 function dealtBoard(seed: number): KlondikeBoard {
-  const deck = shuffle(standardDeck(), createSeededRandom(seed));
+  const deck = shuffled(standardDeck(), createSeededRandom(seed));
   const tableau: KlondikeCard[][] = [];
   let at = 0;
   for (let column = 0; column < KLONDIKE_COLUMNS; column += 1) {

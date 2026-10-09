@@ -28,8 +28,8 @@
  * returns through the other is not the one the level ramp is tuned for.
  */
 
-import type { PuzzleRandom } from "../puzzles-shared/random.js";
-import { createPuzzleRandom, randomBelow } from "../puzzles-shared/random.js";
+import type { SeededRandom } from "../random.js";
+import { createSeededRandom, randomBelow } from "../random.js";
 
 export const SNAKE_COLUMNS = 20;
 export const SNAKE_ROWS = 20;
@@ -120,7 +120,7 @@ export function createSnake(
   for (let step = 0; step < SNAKE_START_LENGTH; step += 1) {
     body.push(row * columns + (headColumn - step));
   }
-  const random = createPuzzleRandom(seed);
+  const random = createSeededRandom(seed);
   const food = placeFood(body, columns, rows, random);
   return {
     columns,
@@ -148,7 +148,7 @@ function placeFood(
   body: readonly number[],
   columns: number,
   rows: number,
-  random: PuzzleRandom,
+  random: SeededRandom,
 ): number {
   const occupied = new Set(body);
   const empty: number[] = [];
@@ -230,7 +230,7 @@ function advance(state: SnakeState, at: number): SnakeState {
     };
   }
   const score = state.score + SNAKE_FOOD_POINTS;
-  const random = createPuzzleRandom(state.rngState);
+  const random = createSeededRandom(state.rngState);
   const food = placeFood(grown, state.columns, state.rows, random);
   return {
     ...state,

@@ -41,7 +41,7 @@ import {
   logPushUndo,
   type GameLogEntry,
 } from "./log.js";
-import { createSeededRandom, shuffle } from "./shuffle.js";
+import { createSeededRandom, shuffled } from "../random.js";
 
 export const SPIDER_COLUMNS = 10;
 /** Eight completed runs win: two decks hold eight Kings, and one run takes one of them. */
@@ -307,7 +307,7 @@ function dealtBoard(variant: SpiderVariant, seed: number): SpiderBoard {
   // One hundred and four cards whatever the variant: each rank appears eight
   // times, spread over the suits the variant plays (see the file's header).
   const suits = SPIDER_SUITS[variant];
-  const deck = shuffle(deckOf(suits, SPIDER_FOUNDATIONS / suits.length), createSeededRandom(seed));
+  const deck = shuffled(deckOf(suits, SPIDER_FOUNDATIONS / suits.length), createSeededRandom(seed));
   const columns: SpiderCard[][] = [];
   let at = 0;
   for (let column = 0; column < SPIDER_COLUMNS; column += 1) {

@@ -47,12 +47,22 @@ import type { Migration } from "./migrations.js";
  * that maintains both pairs. The day these tables sync, the ledger in
  * `@nexus/sync` and a repair are owed with it.
  *
- * **`variant` is NOT a CHECK.** `game` could be — three values that will never
- * change — but `variant` is a per-game vocabulary the store validates against
- * `@nexus/core`'s `CARD_GAME_VARIANTS`, exactly as `note_folders`' palette is
- * validated in the store rather than in the schema (migration 011's choice, made
- * so that a palette — or a Spider variant — can evolve without a migration). One
- * definition, in the package both sides already import.
+ * **`game` is a CHECK and `variant`'s SHAPE is one; `variant`'s vocabulary is
+ * not.** `game` is the closed list of games the engines deal, so the schema states
+ * it exactly as `arcade_scores` states its two. `variant` is a per-game vocabulary
+ * the store validates against `@nexus/core`'s `CARD_GAME_VARIANTS`, exactly as
+ * `note_folders`' palette is validated in the store rather than in the schema
+ * (migration 011's choice, made so that a palette — or a Spider variant — can
+ * evolve without a migration). One definition, in the package both sides already
+ * import; what the schema can bound without knowing the vocabulary is its length,
+ * and it carries the same `1..32` bound `arcade_scores.variant` carries.
+ *
+ * **The counts and the time are spelled as `arcade_scores` spells them** —
+ * `played`, `won`, `best_time_ms`, `current_streak`, `longest_streak` — so the two
+ * games tables read with one vocabulary. The elapsed time a SAVED game carries
+ * stays in whole seconds (`cardgame_saves.elapsed_seconds`): that is the game's
+ * own clock rather than a best, and only the recorded best is billed in
+ * milliseconds, as the arcade's is.
  *
  * **`moves_json` is the whole saved game.** A move list is what resumes a deal
  * (`replayKlondike`/`replayFreeCell`/`replaySpider` fold it from the seed), so the
@@ -67,17 +77,19 @@ export const migration081: Migration = {
     db.exec(`
       CREATE TABLE cardgame_stats (
         profile_id        TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-        game              TEXT NOT NULL,
-        variant           TEXT NOT NULL,
+        game              TEXT NOT NULL CHECK (game IN ('klondike', 'freecell', 'spider')),
+        variant           TEXT NOT NULL CHECK (length(variant) > 0 AND length(variant) <= 32),
         played            INTEGER NOT NULL DEFAULT 0
                             CHECK (typeof(played) = 'integer' AND played >= 0),
         won               INTEGER NOT NULL DEFAULT 0
                             CHECK (typeof(won) = 'integer' AND won >= 0),
         -- NULL until the first win: a deal abandoned at 300 points is not a best
         -- score, and a game nobody has won has no best time at all.
-        best_time_seconds INTEGER
-                            CHECK (best_time_seconds IS NULL
-                                   OR (typeof(best_time_seconds) = 'integer' AND best_time_seconds >= 0)),
+        best_time_ms      INTEGER
+                            CHECK (best_time_ms IS NULL
+                                   OR (typeof(best_time_ms) = 'integer' AND best_time_ms >= 0)),
+        -- No floor: Spider's published score starts at 500 and loses a point a
+        -- move, so a long win can end below zero.
         best_score        INTEGER
                             CHECK (best_score IS NULL OR typeof(best_score) = 'integer'),
         current_streak    INTEGER NOT NULL DEFAULT 0

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { InvalidStateError } from "../boards-shared/errors.js";
-import { createRng } from "../boards-shared/rng.js";
+import { createSeededRandom } from "../random.js";
 import {
   FOUR_CELLS,
   FOUR_COLUMNS,
@@ -195,28 +195,28 @@ describe("the computer", () => {
     expect(forced.length).toBeGreaterThan(0);
     expect(forced.length).toBeLessThan(moves.length);
 
-    const choice = bestMove(state, 3, createRng(1));
+    const choice = bestMove(state, 3, createSeededRandom(1));
     expect(choice.cut).toBe(false);
     expect(forced).toContain(choice.move?.column ?? -1);
     // Level 3 reports a mate; level 1, which sees only its own reply, does not.
     expect(choice.score).toBeGreaterThanOrEqual(90_000);
-    expect(bestMove(state, 1, createRng(1)).score).toBeLessThan(10_000);
+    expect(bestMove(state, 1, createSeededRandom(1)).score).toBeLessThan(10_000);
   });
 
   it("stays inside its node budget at every level, and always plays legally", () => {
-    const random = createRng(0x5eed);
+    const random = createSeededRandom(0x5eed);
     for (let sample = 0; sample < 1_000; sample += 1) {
       let state = initialState();
-      const plies = 4 + Math.floor(random() * 20);
+      const plies = 4 + Math.floor(random.next() * 20);
       for (let ply = 0; ply < plies; ply += 1) {
         const moves = legalMoves(state);
         if (moves.length === 0) break;
-        state = applyMove(state, moves[Math.floor(random() * moves.length)] as FourMove);
+        state = applyMove(state, moves[Math.floor(random.next() * moves.length)] as FourMove);
       }
       const moves = legalMoves(state);
       if (moves.length === 0) continue;
       const level = 1 + (sample % 3);
-      const choice = bestMove(state, level, createRng(sample));
+      const choice = bestMove(state, level, createSeededRandom(sample));
       expect(choice.nodes).toBeLessThanOrEqual(FOUR_LEVELS[level - 1]!.nodeBudget);
       expect(choice.move).not.toBeNull();
       expect(moves).toContainEqual(choice.move);

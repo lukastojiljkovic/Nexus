@@ -31,8 +31,8 @@
  */
 
 import { InvalidStateError } from "../boards-shared/errors.js";
-import type { Rng } from "../boards-shared/rng.js";
-import { rollDie, shuffled } from "../boards-shared/rng.js";
+import type { SeededRandom } from "../random.js";
+import { rollDie, shuffled } from "../random.js";
 import type { Choice } from "../boards-shared/search.js";
 
 /** The squares of the track. */
@@ -180,7 +180,7 @@ function nextSeat(state: LudoState): number {
  * and a third six in a row takes the turn away with it when the variant says
  * so — the roll that did it included.
  */
-export function rollFor(state: LudoState, rng: Rng): LudoState {
+export function rollFor(state: LudoState, rng: SeededRandom): LudoState {
   if (state.die !== null) throw new InvalidStateError("already-rolled");
   if (result(state).status !== "in_progress") throw new InvalidStateError("over");
   const die = rollDie(rng, 6);
@@ -379,13 +379,13 @@ function levelLimit(level: number): LudoLevel {
  * die is rolled. `Choice.depth` is the level's `plies` and `Choice.cut` says
  * the budget ended the work.
  */
-export function bestMove(state: LudoState, level: number, rng: Rng): Choice<LudoMove> {
+export function bestMove(state: LudoState, level: number, rng: SeededRandom): Choice<LudoMove> {
   if (result(state).status !== "in_progress") {
     return { move: null, score: 0, depth: 0, nodes: 0, cut: false };
   }
   if (state.die === null) throw new InvalidStateError("must-roll");
   const limits = levelLimit(level);
-  const moves = shuffled(rng, legalMoves(state));
+  const moves = shuffled(legalMoves(state), rng);
   if (moves.length === 0) return { move: null, score: 0, depth: 0, nodes: 0, cut: false };
   const budget: Budget = { nodes: 0, limit: limits.nodeBudget };
   const seat = state.toMove;

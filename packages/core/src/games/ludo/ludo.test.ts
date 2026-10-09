@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { InvalidStateError } from "../boards-shared/errors.js";
-import { createRng } from "../boards-shared/rng.js";
+import { createSeededRandom } from "../random.js";
 import {
   LUDO_DEFAULTS,
   LUDO_HOME,
@@ -143,7 +143,7 @@ describe("the variants", () => {
   /** A seed whose first roll of a fresh generator is `face`. */
   function seedRolling(face: number): number {
     for (let seed = 1; seed < 10_000; seed += 1) {
-      const rolled = rollFor(board(2, [], { toMove: 0 }), createRng(seed));
+      const rolled = rollFor(board(2, [], { toMove: 0 }), createSeededRandom(seed));
       if (rolled.die === face) return seed;
     }
     throw new Error(`no seed rolls a ${face}`);
@@ -151,13 +151,13 @@ describe("the variants", () => {
 
   it("grants another roll for a six, or passes the turn, by the option", () => {
     const seed = seedRolling(6);
-    const extra = rollFor(board(2, [], { extraTurnOnSix: true }), createRng(seed));
+    const extra = rollFor(board(2, [], { extraTurnOnSix: true }), createSeededRandom(seed));
     expect(extra.die).toBe(6);
     const moved = applyMove(extra, { token: 0 });
     expect(moved.toMove).toBe(0);
     expect(moved.die).toBeNull();
 
-    const single = rollFor(board(2, [], { extraTurnOnSix: false }), createRng(seed));
+    const single = rollFor(board(2, [], { extraTurnOnSix: false }), createSeededRandom(seed));
     const movedOn = applyMove(single, { token: 0 });
     expect(movedOn.toMove).toBe(1);
   });
@@ -166,7 +166,7 @@ describe("the variants", () => {
     const seed = seedRolling(6);
     const lost = rollFor(
       board(2, [], { sixes: 2, threeSixesLoseTurn: true, toMove: 0 }),
-      createRng(seed),
+      createSeededRandom(seed),
     );
     expect(lost.toMove).toBe(1);
     expect(lost.die).toBeNull();
@@ -174,13 +174,13 @@ describe("the variants", () => {
 
     const kept = rollFor(
       board(2, [], { sixes: 2, threeSixesLoseTurn: false, toMove: 0 }),
-      createRng(seed),
+      createSeededRandom(seed),
     );
     expect(kept.toMove).toBe(0);
     expect(kept.die).toBe(6);
     expect(kept.sixes).toBe(3);
     // A non-six roll clears the run of sixes.
-    const notSix = rollFor(board(2, [], { sixes: 2 }), createRng(seedRolling(1)));
+    const notSix = rollFor(board(2, [], { sixes: 2 }), createSeededRandom(seedRolling(1)));
     expect(notSix.sixes).toBe(0);
   });
 
@@ -204,14 +204,14 @@ describe("the variants", () => {
 
 describe("the computer", () => {
   it("returns a legal move at level 3 on a thousand rolled positions", () => {
-    const random = createRng(0x5eed);
+    const random = createSeededRandom(0x5eed);
     let checked = 0;
     for (let sample = 0; sample < 1_000; sample += 1) {
       const seats = 2 + (sample % 3);
       let state = initialState({ seats });
       // Enough turns that the six a token needs to leave the yard has usually
       // come and gone, so the position has something to decide.
-      const turns = 15 + Math.floor(random() * 30);
+      const turns = 15 + Math.floor(random.next() * 30);
       for (let turn = 0; turn < turns; turn += 1) {
         if (result(state).status !== "in_progress") break;
         state = rollFor(state, random);
@@ -222,14 +222,14 @@ describe("the computer", () => {
           state = endTurn(state);
           continue;
         }
-        state = applyMove(state, moves[Math.floor(random() * moves.length)] as LudoMove);
+        state = applyMove(state, moves[Math.floor(random.next() * moves.length)] as LudoMove);
       }
       if (result(state).status !== "in_progress") continue;
       if (state.die === null) state = rollFor(state, random);
       // A third six can leave the next seat to roll and no die to play.
       if (state.die === null) continue;
       const moves = legalMoves(state);
-      const choice = bestMove(state, 3, createRng(sample));
+      const choice = bestMove(state, 3, createSeededRandom(sample));
       expect(choice.nodes).toBeLessThanOrEqual(LUDO_LEVELS[2]!.nodeBudget);
       if (moves.length === 0) {
         expect(choice.move).toBeNull();
@@ -245,7 +245,7 @@ describe("the computer", () => {
   }, 300_000);
 
   it("stays inside every level's budget, and takes the capture on offer", () => {
-    const random = createRng(0xbeef);
+    const random = createSeededRandom(0xbeef);
     let checked = 0;
     for (let sample = 0; sample < 200; sample += 1) {
       let state = initialState({ seats: 2 + (sample % 3) });
@@ -257,13 +257,13 @@ describe("the computer", () => {
         state =
           moves.length === 0
             ? endTurn(state)
-            : applyMove(state, moves[Math.floor(random() * moves.length)] as LudoMove);
+            : applyMove(state, moves[Math.floor(random.next() * moves.length)] as LudoMove);
       }
       if (result(state).status !== "in_progress") continue;
       if (state.die === null) state = rollFor(state, random);
       if (state.die === null) continue;
       const level = 1 + (sample % 3);
-      const choice = bestMove(state, level, createRng(sample));
+      const choice = bestMove(state, level, createSeededRandom(sample));
       expect(choice.nodes).toBeLessThanOrEqual(LUDO_LEVELS[level - 1]!.nodeBudget);
       const moves = legalMoves(state);
       if (moves.length === 0) expect(choice.move).toBeNull();
@@ -281,7 +281,7 @@ describe("the computer", () => {
     const legal = legalMoves(onOffer);
     expect(legal).toContainEqual({ token: 0 });
     expect(legal).toContainEqual({ token: 1 });
-    const choice = bestMove(onOffer, 1, createRng(3));
+    const choice = bestMove(onOffer, 1, createSeededRandom(3));
     expect(choice.move).toEqual({ token: 0 });
     const taken = applyMove(onOffer, { token: 0 });
     expect(taken.tokens[1]?.[0]).toBe(0);
@@ -291,7 +291,7 @@ describe("the computer", () => {
 
 describe("the saved game", () => {
   it("round-trips through JSON", () => {
-    const state = rollFor(board(3, [[3, 7], [1]], { toMove: 2, extraTurnOnSix: false }), createRng(5));
+    const state = rollFor(board(3, [[3, 7], [1]], { toMove: 2, extraTurnOnSix: false }), createSeededRandom(5));
     expect(state.die).not.toBeNull();
     expect(fromJSON(toJSON(state))).toEqual(state);
     expect(fromJSON(JSON.parse(JSON.stringify(toJSON(state))) as unknown)).toEqual(state);

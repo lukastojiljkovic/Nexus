@@ -37,7 +37,7 @@
  * the engine and the test's oracle agree within a few thousand states.
  */
 
-import { createPuzzleRandom, randomBelow } from "../puzzles-shared/random.js";
+import { createSeededRandom, randomBelow } from "../random.js";
 
 export type BrojOperation = "+" | "-" | "*" | "/";
 
@@ -81,7 +81,7 @@ export interface BrojPuzzle {
 
 /** A fresh puzzle: four digits from 1 to 9, then the show's fifth and sixth. */
 export function createBrojPuzzle(seed: number): BrojPuzzle {
-  const random = createPuzzleRandom(seed);
+  const random = createSeededRandom(seed);
   const numbers: number[] = [];
   for (let drawn = 0; drawn < 4; drawn += 1) {
     numbers.push(BROJ_SMALL_MIN + randomBelow(random, BROJ_SMALL_MAX - BROJ_SMALL_MIN + 1));

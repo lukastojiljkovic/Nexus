@@ -41,8 +41,8 @@
  * brings a seed, and a seed replays the same puzzle.
  */
 
-import type { PuzzleRandom } from "../puzzles-shared/random.js";
-import { createPuzzleRandom, shuffled } from "../puzzles-shared/random.js";
+import type { SeededRandom } from "../random.js";
+import { createSeededRandom, shuffled } from "../random.js";
 
 export type SudokuCells = readonly number[];
 
@@ -742,7 +742,7 @@ export function sudokuDifficulty(cells: SudokuCells): SudokuDifficulty {
  * pattern alone — with the seed reshuffling them all, the same seed always
  * yields the same grid and different seeds yield unrelated ones.
  */
-function filledGrid(random: PuzzleRandom): number[] {
+function filledGrid(random: SeededRandom): number[] {
   const rowOrder: number[] = [];
   for (const band of shuffled([0, 1, 2], random)) {
     for (const row of shuffled([0, 1, 2], random)) rowOrder.push(band * 3 + row);
@@ -777,7 +777,7 @@ const RUNG: Record<SudokuDifficulty, number> = { easy: 0, medium: 1, hard: 2 };
  */
 function digHoles(
   solution: readonly number[],
-  random: PuzzleRandom,
+  random: SeededRandom,
   cap: SudokuDifficulty | undefined,
 ): number[] {
   const cells = [...solution];
@@ -803,7 +803,7 @@ export function generateSudoku(seed: number, options: SudokuOptions = {}): Sudok
   if (size !== SIZE) {
     throw new RangeError(`generateSudoku: this engine builds 9x9 puzzles only, got ${size}`);
   }
-  const random = createPuzzleRandom(seed);
+  const random = createSeededRandom(seed);
   const solution = filledGrid(random);
   const cells = digHoles(solution, random, options.difficulty);
   return {
