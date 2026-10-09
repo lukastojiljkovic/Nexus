@@ -699,15 +699,16 @@ suggestion, cheapest and highest-leverage first.
    2026-09-22 and fixed by hand, four more the same day. Nothing in the tree can
    check a sentence, and a figure has no type, no import and no call site. The
    owed gate is a rule over the specific shapes that have now shipped twice.
-6. **A gate for Class C: a contract field no screen can reach.** The worked
-   example is `NewDocumentFields.reminderOffsets` and
-   `DocumentFieldChanges.reminderOffsets` — declared in `shared/ipc.ts`,
-   accepted by main, validated by the store, asserted by
-   `documentStore.test.ts` — while the panel's form never sets them, so a
-   document's warning ladder is unreachable by any user. `check:pro-flags`
-   already asks this question inside the professional drawer; the owed gate is
-   the generalisation: every exported IPC interface field must have a renderer
-   call site that sets it.
+6. **Done (2026-10-09): `check:reachable`, the gate for Class C.** Every
+   field of a `NexusApi` parameter type needs a renderer call site that sets
+   it; the walk follows each argument back through locals, field assignments,
+   conditionals and helper returns. The worked example had already been fixed
+   by `0df4eae` (the panel sets `reminderOffsets` on create and edit); the
+   form's payload now lives in `documentsForm.ts` with tests. The gate's
+   allowlist carries 14 fields: six with a reason, and eight marked
+   `TODO(reachable)`, among them three real gaps of the same shape: TASK
+   cannot edit a task's description, and CAL cannot edit an event's
+   description or category.
 7. **`ModuleManifest.imex` is declared and nothing fills it.** The archive
    was built in `@nexus/core` from `ProfileData`, one interchange version for
    the whole profile, not from per-module handlers — so the slot ADR-008 lists
