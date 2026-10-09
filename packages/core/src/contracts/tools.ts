@@ -118,6 +118,11 @@ export const TOOL_PACKS = [
   "agro",
   "zanat",
   "event",
+  // science, installations, computing, vehicles
+  "laboratorija",
+  "elektro",
+  "it",
+  "auto",
 ] as const;
 
 export type ToolPack = (typeof TOOL_PACKS)[number];

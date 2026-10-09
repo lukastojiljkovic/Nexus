@@ -246,6 +246,17 @@ export const TRADE_STEMS: readonly TradeStem[] = [
   { stem: "konferencij", packs: ["event"] },
   { stem: "festival", packs: ["event"] },
   { stem: "dekoracij", packs: ["event"] },
+  // laboratorija, elektro, it, auto
+  { stem: "laboratorij", packs: ["laboratorija"] },
+  { stem: "hemicar", packs: ["laboratorija"] },
+  { stem: "elektricar", packs: ["elektro"] },
+  { stem: "informatic", packs: ["it"] },
+  { stem: "mrez", packs: ["it"] },
+  { stem: "automehanicar", packs: ["auto"] },
+  { stem: "autoelektricar", packs: ["auto", "elektro"] },
+  { stem: "autolimar", packs: ["auto"] },
+  { stem: "autoservis", packs: ["auto"] },
+  { stem: "vulkanizer", packs: ["auto"] },
 ];
 
 /**
@@ -285,6 +296,10 @@ export const TRADE_ACTIVITIES: readonly TradeActivity[] = [
   { id: "dogadjaji", packs: ["event"] },
   { id: "trenira", packs: ["trening"] },
   { id: "prevodi", packs: ["tekst"] },
+  { id: "laboratorija", packs: ["laboratorija"] },
+  { id: "instalacije", packs: ["elektro"] },
+  { id: "sistemi", packs: ["it"] },
+  { id: "servis", packs: ["auto"] },
 ];
 
 /**

@@ -5456,6 +5456,305 @@ const PRO_EVENT_TOOLS: ToolRegistration[] = [
   },
 ];
 
+const PRO_LABORATORIJA_TOOLS: ToolRegistration[] = [
+  {
+    id: "molar-mass",
+    titleKey: "pro.name.molar-mass",
+    blurbKey: "pro.blurb.molar-mass",
+    category: "materials",
+    riskClass: "none",
+    sourceKey: "pro.sources.iupac-ciaaw-2021-atomic-weights",
+    packs: ["laboratorija"],
+    keywords: [
+      "atomska", "atomic", "element", "formula", "hemijska", "jedinjenje", "masa", "mol",
+      "molarna", "molar", "tezina", "weight"
+    ],
+  },
+  {
+    id: "molarity-to-mass",
+    titleKey: "pro.name.molarity-to-mass",
+    blurbKey: "pro.blurb.molarity-to-mass",
+    category: "calculation",
+    riskClass: "life-safety",
+    packs: ["laboratorija"],
+    keywords: [
+      "koncentracija", "masa", "mase", "mol", "molarnost", "molova", "odmeravanje", "rastvor",
+      "rastvora", "vaganje", "zapremina", "weigh", "solution", "volume"
+    ],
+  },
+  {
+    id: "dilution",
+    titleKey: "pro.name.dilution",
+    blurbKey: "pro.blurb.dilution",
+    category: "calculation",
+    riskClass: "life-safety",
+    packs: ["laboratorija"],
+    keywords: [
+      "c1v1", "dilute", "koncentracija", "maticni", "rastvarac", "rastvor", "razblazivanje",
+      "razblaziti", "razredjivanje", "solvent", "zapremina"
+    ],
+  },
+  {
+    id: "concentration-units",
+    titleKey: "pro.name.concentration-units",
+    blurbKey: "pro.blurb.concentration-units",
+    category: "conversion",
+    riskClass: "none",
+    packs: ["laboratorija"],
+    keywords: [
+      "gram", "jedinice", "koncentracija", "litar", "miligram", "mol", "molar", "procenat",
+      "ppm", "ppb", "rastvor", "concentration", "units"
+    ],
+  },
+  {
+    id: "ph-strong-acid-base",
+    titleKey: "pro.name.ph-strong-acid-base",
+    blurbKey: "pro.blurb.ph-strong-acid-base",
+    category: "calculation",
+    riskClass: "life-safety",
+    packs: ["laboratorija"],
+    keywords: [
+      "acid", "baza", "disocijacija", "kiselina", "koncentracija", "logaritam", "ph", "poh"
+    ],
+  },
+  {
+    id: "buffer-ph",
+    titleKey: "pro.name.buffer-ph",
+    blurbKey: "pro.blurb.buffer-ph",
+    category: "calculation",
+    riskClass: "life-safety",
+    packs: ["laboratorija"],
+    keywords: [
+      "baza", "buffer", "henderson", "hasselbalch", "kiselina", "odnos", "ph", "pka", "pufer",
+      "puferski"
+    ],
+  },
+];
+
+const PRO_ELEKTRO_TOOLS: ToolRegistration[] = [
+  {
+    id: "energy-cost",
+    titleKey: "pro.name.energy-cost",
+    blurbKey: "pro.blurb.energy-cost",
+    category: "finance",
+    riskClass: "financial",
+    packs: ["elektro"],
+    keywords: [
+      "cena", "cenom", "energija", "energije", "kilovat", "kwh", "potrosnja", "potrosnje",
+      "racun", "struja", "tarifa", "cost", "energy", "price", "tariff"
+    ],
+  },
+  {
+    id: "lighting-count",
+    titleKey: "pro.name.lighting-count",
+    blurbKey: "pro.blurb.lighting-count",
+    category: "calculation",
+    riskClass: "none",
+    packs: ["elektro"],
+    keywords: [
+      "faktor", "lumen", "luks", "lux", "osvetljenje", "osvetljenja", "povrsina", "prostorija",
+      "sijalica", "svetiljka", "svetiljke", "lighting", "luminaire", "luminous", "room"
+    ],
+  },
+  {
+    id: "luminaire-spacing",
+    titleKey: "pro.name.luminaire-spacing",
+    blurbKey: "pro.blurb.luminaire-spacing",
+    category: "geometry",
+    riskClass: "none",
+    packs: ["elektro"],
+    keywords: [
+      "mreza", "razmak", "svetiljke", "visina", "height", "luminaire", "mounting", "spacing",
+      "workplane"
+    ],
+  },
+  {
+    id: "transformer-current",
+    titleKey: "pro.name.transformer-current",
+    blurbKey: "pro.blurb.transformer-current",
+    category: "electrical",
+    riskClass: "life-safety",
+    packs: ["elektro"],
+    keywords: [
+      "kva", "namotaj", "napon", "primar", "sekundar", "struja", "transformator", "current",
+      "primary", "secondary", "transformer", "voltage"
+    ],
+  },
+  {
+    id: "conduit-fill",
+    titleKey: "pro.name.conduit-fill",
+    blurbKey: "pro.blurb.conduit-fill",
+    category: "electrical",
+    riskClass: "life-safety",
+    packs: ["elektro"],
+    keywords: [
+      "cev", "cevi", "fill", "ispuna", "kabl", "precnik", "provodnik", "provodnika", "conduit",
+      "conductors", "diameter", "tube"
+    ],
+  },
+  {
+    id: "motor-starting-current",
+    titleKey: "pro.name.motor-starting-current",
+    blurbKey: "pro.blurb.motor-starting-current",
+    category: "electrical",
+    riskClass: "life-safety",
+    packs: ["elektro"],
+    keywords: [
+      "motor", "namotaj", "pokretanje", "soft", "start", "struja", "trougao", "zvezda",
+      "current", "dol", "starting"
+    ],
+  },
+];
+
+const PRO_IT_TOOLS: ToolRegistration[] = [
+  {
+    id: "transfer-time",
+    titleKey: "pro.name.transfer-time",
+    blurbKey: "pro.blurb.transfer-time",
+    category: "system",
+    riskClass: "none",
+    packs: ["it"],
+    keywords: [
+      "bandwidth", "brzina", "download", "fajl", "gib", "mib", "prenos", "size", "upload",
+      "velicina", "vreme", "transfer"
+    ],
+  },
+  {
+    id: "transfer-rate",
+    titleKey: "pro.name.transfer-rate",
+    blurbKey: "pro.blurb.transfer-rate",
+    category: "conversion",
+    riskClass: "none",
+    packs: ["it"],
+    keywords: [
+      "brzina", "gib", "jedinice", "kib", "konverzija", "mb", "mbit", "protok", "rate",
+      "throughput", "bandwidth"
+    ],
+  },
+  {
+    id: "raid-capacity",
+    titleKey: "pro.name.raid-capacity",
+    blurbKey: "pro.blurb.raid-capacity",
+    category: "numbers",
+    riskClass: "none",
+    packs: ["it"],
+    keywords: [
+      "disk", "diska", "kapacitet", "mirror", "niz", "parity", "raid", "rebuild", "redundancija",
+      "storage", "strip", "tolerancija", "volume"
+    ],
+  },
+  {
+    id: "uptime-downtime",
+    titleKey: "pro.name.uptime-downtime",
+    blurbKey: "pro.blurb.uptime-downtime",
+    category: "system",
+    riskClass: "none",
+    packs: ["it"],
+    keywords: [
+      "availability", "devetke", "dostupnost", "downtime", "nedostupnost", "nines", "prekid",
+      "procenat", "sla", "uptime"
+    ],
+  },
+  {
+    id: "vlsm-split",
+    titleKey: "pro.name.vlsm-split",
+    blurbKey: "pro.blurb.vlsm-split",
+    category: "system",
+    riskClass: "none",
+    packs: ["it"],
+    keywords: [
+      "adresa", "host", "ipv4", "mask", "mreza", "opseg", "podmreza", "podmreze", "prefix",
+      "subnet", "vlsm"
+    ],
+  },
+  {
+    id: "mac-normalise",
+    titleKey: "pro.name.mac-normalise",
+    blurbKey: "pro.blurb.mac-normalise",
+    category: "data",
+    riskClass: "none",
+    packs: ["it"],
+    keywords: [
+      "adresa", "hex", "mac", "mreza", "multicast", "normalizacija", "oui", "unicast", "address",
+      "vendor"
+    ],
+  },
+];
+
+const PRO_AUTO_TOOLS: ToolRegistration[] = [
+  {
+    id: "engine-displacement",
+    titleKey: "pro.name.engine-displacement",
+    blurbKey: "pro.blurb.engine-displacement",
+    category: "geometry",
+    riskClass: "none",
+    packs: ["auto"],
+    keywords: [
+      "bore", "cilindar", "displacement", "engine", "hod", "klip", "kubikaza", "motor",
+      "provrt", "radna", "stroke", "zapremina"
+    ],
+  },
+  {
+    id: "compression-ratio",
+    titleKey: "pro.name.compression-ratio",
+    blurbKey: "pro.blurb.compression-ratio",
+    category: "geometry",
+    riskClass: "none",
+    packs: ["auto"],
+    keywords: [
+      "chamber", "clearance", "dihtung", "glava", "komora", "kompresija", "kompresije", "klip",
+      "stepen", "volume", "compression", "ratio"
+    ],
+  },
+  {
+    id: "mean-piston-speed",
+    titleKey: "pro.name.mean-piston-speed",
+    blurbKey: "pro.blurb.mean-piston-speed",
+    category: "calculation",
+    riskClass: "none",
+    packs: ["auto"],
+    keywords: [
+      "brzina", "hod", "klip", "klipa", "obrtaji", "stroke", "mean", "piston", "rpm", "speed"
+    ],
+  },
+  {
+    id: "injector-flow",
+    titleKey: "pro.name.injector-flow",
+    blurbKey: "pro.blurb.injector-flow",
+    category: "calculation",
+    riskClass: "none",
+    packs: ["auto"],
+    keywords: [
+      "brizgaljka", "bsfc", "dizna", "dizni", "gorivo", "injector", "protok", "snaga", "duty",
+      "flow", "fuel"
+    ],
+  },
+  {
+    id: "air-fuel-ratio",
+    titleKey: "pro.name.air-fuel-ratio",
+    blurbKey: "pro.blurb.air-fuel-ratio",
+    category: "calculation",
+    riskClass: "none",
+    packs: ["auto"],
+    keywords: [
+      "afr", "air", "e85", "gorivo", "lambda", "mixture", "odnos", "smesa", "stoichiometric",
+      "vazduh", "fuel", "ratio"
+    ],
+  },
+  {
+    id: "wheel-offset",
+    titleKey: "pro.name.wheel-offset",
+    blurbKey: "pro.blurb.wheel-offset",
+    category: "geometry",
+    riskClass: "none",
+    packs: ["auto"],
+    keywords: [
+      "backspace", "et", "felna", "felne", "offset", "raspon", "rim", "sirina", "tocak", "wheel",
+      "width"
+    ],
+  },
+];
+
 /**
  * The professional drawer's contents, one array per subject — named, because
  * each array is also one FILE of surfaces in the renderer.
@@ -5492,6 +5791,11 @@ export const PRO_TOOL_GROUPS = {
   agro: PRO_AGRO_TOOLS,
   zanat: PRO_ZANAT_TOOLS,
   event: PRO_EVENT_TOOLS,
+  // The four packs added after `event`, in `TOOL_PACKS` order.
+  laboratorija: PRO_LABORATORIJA_TOOLS,
+  elektro: PRO_ELEKTRO_TOOLS,
+  it: PRO_IT_TOOLS,
+  auto: PRO_AUTO_TOOLS,
 } as const satisfies Record<string, readonly ToolRegistration[]>;
 
 const PRO_TOOLS: ToolRegistration[] = Object.values(PRO_TOOL_GROUPS).flat();
