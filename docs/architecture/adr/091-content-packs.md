@@ -167,8 +167,11 @@ rule; a file list that breaks one of the caps or repeats a path; a
 **No rollback.** An old pack is still validly signed, so the signature cannot
 tell last year's folder from this year's. The installed version can: a pack
 older than it is refused (`older-than-installed`) at inspection and again at
-install, before anything is written. Reinstalling the same version is allowed,
-because that is how a damaged copy is repaired.
+install, before anything is written. The check reads the version folders under
+`packs/<id>/`, never `installed.json`, because the index is a cache and a
+rollback check that trusts a cache fails open whenever the two drift.
+Reinstalling the same version is allowed, because that is how a damaged copy is
+repaired.
 
 **Paths are hostile until proven otherwise.** A pack arrives from outside this
 machine, and every path in it was written by whoever built it. Each listed path

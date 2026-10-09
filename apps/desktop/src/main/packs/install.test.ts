@@ -12,7 +12,7 @@ import {
   volumeFreeBytes,
   type PackInstallDeps,
 } from "./install.js";
-import { PACKS_STAGING_DIR, packsRoot, readInstalled } from "./registry.js";
+import { PACKS_STAGING_DIR, packsRoot, readInstalled, writeInstalled } from "./registry.js";
 
 const APP_VERSION = "1.6.0";
 const CONTENT = "the first version of the content";
@@ -170,6 +170,14 @@ describe("installing a pack", () => {
     const idDir = join(packsRoot(userData), "wikipedia-sr");
     expect(readdirSync(idDir)).toEqual(["1.0.1"]);
     expect(stagingLeftovers()).toEqual([]);
+  });
+
+  // The index is a cache: one that has lost the newer version must not be what
+  // lets the older one back in.
+  it("refuses the rollback even when the index no longer lists the newer version", async () => {
+    await installPackFromDirectory(source("v2", { version: "1.0.1" }), deps());
+    writeInstalled(userData, []);
+    expect(await refusal(installPackFromDirectory(source("v1"), deps()))).toBe("older-than-installed");
   });
 
   it("replaces the same version when it is installed again", async () => {

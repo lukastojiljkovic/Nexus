@@ -155,27 +155,39 @@ function progressReporter(
 }
 
 /**
- * Refuses a pack older than the version of it already installed.
+ * Refuses a pack older than a version of it already installed.
  *
  * An older pack is still validly signed, so the signature cannot stop it: without
  * this, anyone holding last year's folder could put it back over this year's and
  * the install would delete the newer one. Reinstalling the SAME version stays
- * allowed, because that is how a damaged copy is repaired. Versions this build
- * cannot compare refuse, the safe direction to be wrong in.
+ * allowed, because that is how a damaged copy is repaired.
+ *
+ * Decided from the version folders on disk, not from `installed.json`: the index
+ * is a cache that can lag the disk or be edited, and a rollback check that trusts
+ * it fails open exactly when it drifts. A folder there is only ever made by the
+ * install's rename, so its name is a version that was complete. A folder that
+ * cannot be listed refuses; a name that is not a version is not one this could
+ * roll back.
  */
 export function refuseRollback(
   userData: string,
-  publicKeyPem: string,
   manifest: { readonly id: string; readonly version: string },
 ): void {
-  const installed = readInstalled(userData, publicKeyPem).find((pack) => pack.manifest.id === manifest.id);
-  if (installed === undefined) return;
-  const order = compareVersions(manifest.version, installed.manifest.version);
-  if (order === null || order < 0) {
-    throw new PackError(
-      "older-than-installed",
-      `Version ${installed.manifest.version} of "${manifest.id}" is installed; this folder holds ${manifest.version}.`,
-    );
+  let names: string[];
+  try {
+    names = readdirSync(packIdDir(userData, manifest.id));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw new PackError("io", `The installed versions of "${manifest.id}" could not be read: ${messageOf(error)}`);
+  }
+  for (const name of names) {
+    const order = compareVersions(manifest.version, name);
+    if (order !== null && order < 0) {
+      throw new PackError(
+        "older-than-installed",
+        `Version ${name} of "${manifest.id}" is installed; this folder holds ${manifest.version}.`,
+      );
+    }
   }
 }
 
@@ -199,7 +211,7 @@ export async function installPackFromDirectory(
     publicKeyPem: deps.publicKeyPem,
   });
   const manifest = source.manifest;
-  refuseRollback(deps.userData, deps.publicKeyPem, manifest);
+  refuseRollback(deps.userData, manifest);
   const totalBytes = packContentBytes(manifest);
   const root = packsRoot(deps.userData);
 

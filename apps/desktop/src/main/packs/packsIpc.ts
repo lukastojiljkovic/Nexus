@@ -158,7 +158,7 @@ export function createPacksIpc(deps: PacksIpcDeps): PacksIpc {
         publicKeyPem: deps.publicKeyPem,
       });
       // Told now, rather than after the user has pressed Install.
-      refuseRollback(deps.userData, deps.publicKeyPem, source.manifest);
+      refuseRollback(deps.userData, source.manifest);
       pending = dir;
       return { outcome: "ready", candidate: toCandidate(source.manifest) };
     } catch (error) {
