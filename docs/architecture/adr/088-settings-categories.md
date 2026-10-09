@@ -28,8 +28,9 @@ what the page held, and it did nothing for the backup card.
 
 **Eight categories, each a pane with its own cards and, where a category has
 more than a handful, one sub-page list.** The table lives in
-`settingsCategories.ts` as data — ids, icons, card ids and sub-page lists — and
-the page renders what it says; nothing about membership or order is decided in
+`shared/settingsSections.ts` as data — ids, icons, card ids and sub-page lists
+(moved there from `settingsCategories.ts` on 2026-10-09, so that the screenshot
+harness in the main process can read it) — and the page renders what it says; nothing about membership or order is decided in
 JSX, so the one class of defect this page can produce (a card that is on the
 page and unreachable) is a failing unit test rather than a screenshot.
 
