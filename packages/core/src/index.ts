@@ -1974,3 +1974,68 @@ export type {
   SpiderReplay,
   SpiderState,
 } from "./games/cards/spider.js";
+
+// --- GAMES / CHESS (stage 1) -------------------------------------------------
+//
+// The module's LOGIC: no UI, no IPC, no database. Three layers meet here, and
+// which one a caller is in is spelled out in `games/chess/index.ts`.
+//
+// The RULES — `createGame`, `gameStatus`, `applyUci`, `gamePgn`, `replayUci` —
+// are `chess.js` (BSD-2-Clause), and it is a dependency of THIS package and of
+// nothing else, because the renderer must reach the rules through us and never
+// through a second copy of its own.
+//
+// The ENGINE — `parseFen`, `legalMoves`, `perft`, `searchPosition`,
+// `chooseEngineMove` — is this project's own: a 0x88 move generator proved by
+// perft against the published counts, and a small alpha-beta search with
+// quiescence, a fixed transposition table and a level ladder from a beginner's
+// opponent to a sound one. It is interruptible, and it reads neither the clock
+// nor a random source: `now`, `rng` and `shouldStop` are passed in, which is what
+// lets stage 2 run it in a worker and stop it.
+export {
+  ChessError,
+  CHESS_LEVELS,
+  MATE_SCORE,
+  START_FEN,
+  applyUci,
+  chessLevel,
+  chooseEngineMove,
+  createGame,
+  evaluate,
+  gamePgn,
+  gameStatus,
+  isCapture,
+  isValidFen,
+  legalMoves,
+  legalUci,
+  loadGamePgn,
+  materialBalance,
+  moveSquares,
+  moveToUci,
+  parseFen,
+  perft,
+  perftAt,
+  playMove,
+  replayUci,
+  resultToken,
+  searchPosition,
+  squareIndex,
+  squareName,
+  toFen,
+  uciToMove,
+} from "./games/chess/index.js";
+export type {
+  Chess,
+  ChessColor,
+  ChessLevel,
+  ChessResultToken,
+  EnginePosition,
+  GameSnapshot,
+  Move,
+  MoveSquares,
+  SearchLimits,
+  SearchOptions,
+  SearchResult,
+  Side,
+  Square,
+} from "./games/chess/index.js";

@@ -1667,6 +1667,10 @@ describe("RestoreStore", () => {
     //    scores are its own and go into the archive with stage 2, which wires
     //    `ArcadeStore.exportData`/`importData` in and moves this name into
     //    `RESTORE_WIPE_TABLES`; until then a wipe would lose them on restore.
+    //  - chess_games / chess_resume / chess_level_stats (migration 082): the
+    //    same sequencing as the arcade. Stage 2 wires `ChessStore.exportData`/
+    //    `importData` into the archive and moves these three names into
+    //    `RESTORE_WIPE_TABLES`.
     //  - emergency_cards / emergency_contacts / emergency_documents (migration
     //    078): the card IS user content, and it is deliberately NOT here yet
     //    rather than exempt on its merits. The module ships in two stages, and
@@ -1773,6 +1777,9 @@ describe("RestoreStore", () => {
       //    game data this device has exactly where it is.
       "cardgame_stats",
       "cardgame_saves",
+      "chess_games",
+      "chess_resume",
+      "chess_level_stats",
     ]);
 
     const wipeTables = new Set<string>(RESTORE_WIPE_TABLES);

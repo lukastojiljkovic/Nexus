@@ -85,6 +85,7 @@ import { migration080 } from "./080-arcade-scores.js";
 // worktree: the maintainer renumbers at merge, which is why the number appears in
 // exactly three places — this import, the list entry below, and the file name.
 import { migration081 } from "./081-card-games.js";
+import { migration082 } from "./082-chess.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -177,6 +178,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration079,
   migration080,
   migration081,
+  migration082,
 ];
 
 /**

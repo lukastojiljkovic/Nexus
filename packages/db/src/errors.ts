@@ -1329,6 +1329,35 @@ export class ArcadeValidationError extends DatabaseError {}
 export class CardGameValidationError extends DatabaseError {}
 
 /**
+ * Thrown when a chess write is rejected at the store boundary (migration 082):
+ * an empty or oversized PGN, a PGN that is not a game, a result or colour outside
+ * its closed vocabulary, an opponent/level pair that cannot exist (an engine game
+ * with no level, a game against a person carrying one), a level outside 1..8, a
+ * time control that is not a `base+increment` clock, a `playedAt`/`now` that is
+ * not an ISO-8601 instant, a resume slot whose FEN or move list is not a game, or
+ * a resume whose stored position is not the one its moves produce.
+ *
+ * That last pair is why this class exists rather than a schema CHECK alone: the
+ * resume slot stores both a move list and the position it leads to, and only a
+ * replay can say whether the two describe the same game. A board reading the
+ * position and a clock counting the moves must not be able to disagree.
+ *
+ * The same class covers the archive reader's refusals — an unknown export
+ * version, a game entry whose fields do not validate, statistics whose arithmetic
+ * does not add up. `importData` validates the WHOLE value before it writes
+ * anything, so a refusal here leaves the profile's chess content untouched.
+ */
+export class ChessValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a chess operation targets a game id that is not a live game in the
+ * store's own profile — unknown, soft-deleted (for a mutation), or owned by
+ * another profile. Surfacing this uniformly keeps one profile's archive invisible
+ * to a store scoped to another.
+ */
+export class ChessNotFoundError extends DatabaseError {}
+
+/**
  * Whether a driver error is a violated UNIQUE (or partial-UNIQUE) index.
  *
  * A store that leans on such an index to make a state unrepresentable — the
