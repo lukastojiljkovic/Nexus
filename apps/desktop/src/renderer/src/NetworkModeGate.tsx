@@ -41,6 +41,7 @@ export function NetworkModeGate({
   }[] = [
     { id: "offline", title: s.offlineTitle, body: s.offlineBody },
     { id: "updates", title: s.updatesTitle, body: s.updatesBody },
+    { id: "downloads", title: s.downloadsTitle, body: s.downloadsBody },
   ];
 
   async function confirm(event: FormEvent): Promise<void> {

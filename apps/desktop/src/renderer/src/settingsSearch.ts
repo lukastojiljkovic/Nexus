@@ -548,6 +548,15 @@ function shellEntries(): readonly ShellSettingsSearchEntry[] {
       keywords: ["mreza", "internet", "azuriranja", "update", "github", "verzija", "provera"],
     },
     {
+      // ADR-092's third mode, with the words somebody hunting for it uses:
+      // „preuzimanje" is what the card itself says, and „sadrzaj" and
+      // „datoteka" are what somebody looking for it would type instead.
+      id: "network-downloads",
+      section: "network",
+      label: strings.network.downloadsTitle,
+      keywords: ["mreza", "internet", "preuzimanje", "preuzimanja", "sadrzaj", "datoteka"],
+    },
+    {
       id: "network-save",
       section: "network",
       label: strings.network.save,

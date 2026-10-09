@@ -163,6 +163,16 @@ describe("the automatic check", () => {
     expect(calls.json).toBe(0);
     expect(service.view().mode).toBe("offline");
   });
+
+  it("still runs in downloads mode", async () => {
+    // ADR-092's superset order, and the assertion that keeps the third mode
+    // from quietly taking the check away from a user who chose the wider one:
+    // `"downloads"` allows everything `"updates"` allows.
+    const { service, calls } = harness({ mode: "downloads" });
+    await service.autoCheckIfDue();
+    expect(calls.json).toBe(1);
+    expect(service.view().mode).toBe("downloads");
+  });
 });
 
 describe("the manual check", () => {

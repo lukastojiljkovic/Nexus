@@ -29,8 +29,10 @@ import type { IpcMainInvokeEvent, OpenDialogOptions, Session } from "electron";
 // section near the bottom of this file.
 import { readFileBounded } from "./boundedRead.js";
 import {
+  activeNetworkMode,
   devServerOrigin,
   isRequestAllowed,
+  isSessionRequestAllowed,
   networkChoiceRecorded,
   networkModeRequiresRestart,
   readNetworkChoice,
@@ -39,7 +41,6 @@ import {
   updatesActive,
   writeNetworkMode,
 } from "./net/offline.js";
-import { isUpdateRequestAllowed } from "./update/allowlist.js";
 import { createUpdateHttp, openReleasePage } from "./update/electron.js";
 import { RELEASE_PUBLIC_KEY_PEM } from "./update/releaseKey.js";
 import { createUpdateService, type UpdateService } from "./update/service.js";
@@ -680,6 +681,8 @@ import {
   MAX_TASK_TEMPLATE_NAME_LENGTH,
   MIN_FIT_REST_SECONDS,
   MIN_TARGET_RETENTION,
+  NETWORK_MODES,
+  type NetworkMode,
   type NetworkModeView,
   NOTE_CARD_DISPOSITIONS,
   NOTE_CARD_KEY_MAX_LENGTH,
@@ -925,8 +928,10 @@ if (HARNESS_SANDBOX !== null) {
 // `MAP * ~NOTFOUND` blocks NAMES, not literal IPs, which is exactly why it is
 // the third line of defence and not the only one — `webRequest` does not care
 // how the destination was spelled. `resolverRules` returns exactly that string
-// in offline mode; in „offline + update checks" it appends one `EXCLUDE` per
-// pinned GitHub host so the dedicated update session alone can resolve them.
+// in offline mode; in either mode that allows a connection it appends one
+// `EXCLUDE` per host that mode's allowlist holds (ADR-089's three GitHub hosts,
+// and ADR-092's download list on top of them), so the dedicated session alone
+// can resolve those names.
 const resolverRuleForLaunch = resolverRules(app.getPath("userData"));
 if (resolverRuleForLaunch !== null) {
   app.commandLine.appendSwitch("host-resolver-rules", resolverRuleForLaunch);
@@ -1793,6 +1798,25 @@ function asBoolean(value: unknown, field: string): boolean {
     throw new Error(`Invalid IPC payload: "${field}" must be a boolean.`);
   }
   return value;
+}
+
+/**
+ * The network mode off the wire — the whole of `network:set-mode`'s payload, so
+ * a value this build does not know reaches no writer at all.
+ *
+ * It walks `NETWORK_MODES` rather than spelling the modes out, because that
+ * constant is also what the `NetworkMode` type is derived from: a mode added to
+ * the wire contract is admitted here by the same edit, and one removed stops
+ * being admitted. The stored file has its own, deliberately separate parser
+ * (`readNetworkChoice`), which fails closed to `"offline"` for a file it cannot
+ * trust; this one refuses outright, because a renderer sending an unknown mode
+ * is a fault rather than a device to be repaired.
+ */
+function asNetworkMode(value: unknown): NetworkMode {
+  if (typeof value === "string" && (NETWORK_MODES as readonly string[]).includes(value)) {
+    return value as NetworkMode;
+  }
+  throw new Error('Invalid IPC payload: "mode" must be "offline", "updates" or "downloads".');
 }
 
 /** A plain string field that may be empty (structural check only; semantics stay in the store). */
@@ -5462,10 +5486,11 @@ function syncService(): SyncService {
   return syncServiceInstance;
 }
 
-// --- The network mode and the update check (ADR-089) -------------------------
+// --- The network mode, the update check and the download service (ADR-089,
+// --- ADR-092) ---------------------------------------------------------------
 //
 // One service per launch, memoised on `syncService`'s terms: it owns the
-// dedicated update session's fetch, the pending offer and the once-a-day
+// dedicated session's fetch, the pending offer and the once-a-day
 // bookkeeping, and a second instance would be a second answer to „is a download
 // already in flight".
 //
@@ -5473,6 +5498,11 @@ function syncService(): SyncService {
 // effects arrive here. The session is created lazily because it can only be
 // made after `ready`, and `updateService()` is only ever called from handlers
 // registered inside `whenReady` and from the startup check beside the window.
+//
+// The DOWNLOAD service (`main/download/service.ts`) is built by its caller for
+// our own reasons rather than here: nothing in the app starts a download yet —
+// the mode's third value is the whole of this run's IPC — so this file carries
+// only the session rule the service will fetch through.
 let updateSessionFor: Session | null = null;
 let updateServiceInstance: UpdateService | null = null;
 
@@ -5481,8 +5511,11 @@ function updateService(): UpdateService {
     currentVersion: app.getVersion(),
     platform: process.platform,
     userData: userDataDir(),
-    mode: () =>
-      updatesActive(runningNetworkMode, readNetworkMode(userDataDir())) ? "updates" : "offline",
+    // The mode this launch may ACT on, not the stored one: a stored change is a
+    // restart owed, and until then the updater behaves as if the mode were
+    // offline. „downloads" arrives here as itself, and the service admits the
+    // check in it because the modes are a superset chain.
+    mode: () => activeNetworkMode(runningNetworkMode, readNetworkMode(userDataDir())),
     http: createUpdateHttp(requireUpdateSession()),
     publicKeyPem: RELEASE_PUBLIC_KEY_PEM,
     openPath: (path) => shell.openPath(path),
@@ -12249,10 +12282,7 @@ function registerIpc(): void {
 
   ipcMain.handle(IpcChannel.networkSetMode, (event, payload): NetworkModeView => {
     assertTrustedSender(event);
-    const mode = asRecord(payload).mode;
-    if (mode !== "offline" && mode !== "updates") {
-      throw new Error('Invalid IPC payload: "mode" must be "offline" or "updates".');
-    }
+    const mode = asNetworkMode(asRecord(payload).mode);
     // The ONE write. Selecting a radio and then closing the window records
     // nothing, because nothing calls this but the confirm button and the
     // settings card.
@@ -12262,9 +12292,10 @@ function registerIpc(): void {
 
   // The update check. Validation is trivial (no payloads), and every handler
   // goes through one rule: updates may reach the network only when this launch
-  // came up in „updates" AND the stored choice is still „updates". Switching to
-  // offline therefore stops checks at once, while switching to updates waits for
-  // a restart, because the resolver rule is fixed at launch. That is why each
+  // came up in a mode that allows them — „updates", or „downloads", which
+  // contains it — AND the stored choice still names that same mode. Switching to
+  // offline therefore stops checks at once, while switching up waits for a
+  // restart, because the resolver rule is fixed at launch. That is why each
   // handler below re-reads the stored mode rather than trusting a renderer that
   // might have called the channel in a state this launch may not act on.
   ipcMain.handle(IpcChannel.updateStatus, (event): UpdateStateView => {
@@ -13749,14 +13780,16 @@ app.whenReady().then(async () => {
   // product it protects.
   session.defaultSession.setSpellCheckerEnabled(false);
 
-  // SEC-NET / ADR-089: the dedicated update session. It exists in BOTH modes,
+  // SEC-NET / ADR-089, ADR-092: the dedicated session. It exists in every mode,
   // but in offline mode it must be as DEAD as the renderer's — „a session
   // nobody uses" is not the guarantee, because a live allowlist is a request
   // path a bug or a future caller could reach. So the launch mode is the first
-  // condition here: unless this launch came up in „Offline + update checks",
-  // every request is cancelled before the host allowlist is even consulted.
-  // When the launch mode IS updates, the allowlist admits exactly three https
-  // hosts and nothing else — the ONLY network exception this product has.
+  // condition: in „Offline only" every request is cancelled before the host
+  // allowlist is even consulted. In the two modes that allow a connection, the
+  // allowlist admits exactly the https hosts that mode names and nothing else —
+  // the ONLY network exception this product has. Which hosts those are is
+  // `isSessionRequestAllowed`'s one rule in `net/offline.ts`, read here with the
+  // mode this LAUNCH came up under, never the stored one.
   //
   // In-memory on purpose: the partition has no `persist:` prefix, so nothing
   // this session fetches (no cookie, no cache, no auth) survives the process.
@@ -13774,9 +13807,7 @@ app.whenReady().then(async () => {
   // first and independent gate.
   updateSessionFor = session.fromPartition("nexus-update");
   updateSessionFor.webRequest.onBeforeRequest((details, callback) => {
-    callback({
-      cancel: runningNetworkMode !== "updates" || !isUpdateRequestAllowed(details.url),
-    });
+    callback({ cancel: !isSessionRequestAllowed(runningNetworkMode, details.url) });
   });
   await updateSessionFor.setProxy({ mode: "direct" });
 
