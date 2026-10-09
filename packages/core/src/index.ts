@@ -2160,3 +2160,37 @@ export {
   splFromDbfs,
 } from "./signals/soundLevel.js";
 export type { AWeightingFilter, Biquad, FrameLevel } from "./signals/soundLevel.js";
+
+// --- GAMES: the board games' engines (slice 1 of 2, no store) ---------------
+//
+// Six engines, each with the same six functions — `initialState`, `legalMoves`,
+// `applyMove`, `result`, `bestMove` and the `toJSON`/`fromJSON` pair — so they
+// are exported as six NAMESPACES rather than as sixty names: `reversi
+// .legalMoves(state)` says which game it is, and `legalMoves` alone could not.
+// Each game's own file (`games/<game>/<game>.ts`) is the module comment that
+// explains its rules and cites them, and stage 2 reaches one game at a time.
+//
+// The shared pieces are exported directly, because they are what makes the six
+// one shape: `Rng` and `createRng` (no engine reads `Math.random`, so a saved
+// game replays its dice), `InvalidStateError` (what `applyMove` and `fromJSON`
+// refuse an untrusted move or saved game with, and which carries a machine token
+// rather than copy), `Outcome` with its `win` and `draw` for the games that end
+// in a win or a draw, and `search` with its `SearchGame`/`SearchLimits`/`Choice`
+// shape for the games whose computer opponent is the alpha-beta in
+// `boards-shared`. Backgammon, whose result carries a gammon and a cube, and
+// ludo, which has up to four seats and so cannot use `Player = 0 | 1`, define
+// their own result types and are the only two that do.
+export * as reversi from "./games/reversi/reversi.js";
+export * as draughts from "./games/draughts/draughts.js";
+export * as mlin from "./games/mlin/mlin.js";
+export * as backgammon from "./games/backgammon/backgammon.js";
+export * as fourInARow from "./games/four-in-a-row/fourInARow.js";
+export * as ludo from "./games/ludo/ludo.js";
+
+export { createRng, rollDie, rollDice } from "./games/boards-shared/rng.js";
+export type { Rng } from "./games/boards-shared/rng.js";
+export { InvalidStateError } from "./games/boards-shared/errors.js";
+export { IN_PROGRESS, draw, win } from "./games/boards-shared/outcome.js";
+export type { Outcome, Player } from "./games/boards-shared/outcome.js";
+export { search } from "./games/boards-shared/search.js";
+export type { Choice, SearchGame, SearchLimits as BoardSearchLimits } from "./games/boards-shared/search.js";
