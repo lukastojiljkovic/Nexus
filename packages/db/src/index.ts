@@ -107,6 +107,8 @@ export {
   ProfileLastDeleteError,
   ProfileNotFoundError,
   ProfileValidationError,
+  RecipeNotFoundError,
+  RecipeValidationError,
   RestoreValidationError,
   SchemaVersionError,
   SearchValidationError,
@@ -891,3 +893,54 @@ export type {
   PantryLogEntry,
   UpdatePantryItemFields,
 } from "./pantry/pantryStore.js";
+
+// --- COOK (the cookbook, migration 076) -------------------------------------
+//
+// ONE store over THREE tables: a recipe, its ingredient lines and its steps. The
+// two child tables reach a profile only through their recipe, so every read joins
+// for its scope rather than filtering a column that is deliberately not there.
+//
+// A recipe's photo is the attachment INDEX row, not the bytes: the blob lives
+// content-addressed on disk under main's ownership, exactly as `note_attachments`
+// (migration 013) and the dashboard's background (migration 030) already work.
+// `exportData`/`importData` are the module's arm of the profile archive — a
+// versioned plain JSON value, validated whole before anything is written.
+export {
+  COOKBOOK_EXPORT_VERSION,
+  MAX_INGREDIENT_GROUP_LENGTH,
+  MAX_INGREDIENT_NAME_LENGTH,
+  MAX_INGREDIENT_PREPARATION_LENGTH,
+  MAX_INGREDIENT_QUANTITY,
+  MAX_INGREDIENT_UNIT_GRAMS,
+  MAX_LICENCE_ATTRIBUTION_LENGTH,
+  MAX_LICENCE_TEXT_LENGTH,
+  MAX_LICENCE_URL_LENGTH,
+  MAX_RECIPE_CUISINE_LENGTH,
+  MAX_RECIPE_DESCRIPTION_LENGTH,
+  MAX_RECIPE_INGREDIENTS,
+  MAX_RECIPE_NOTES_LENGTH,
+  MAX_RECIPE_PHOTO_BYTES,
+  MAX_RECIPE_SERVINGS,
+  MAX_RECIPE_STEPS,
+  MAX_RECIPE_STEP_TEXT_LENGTH,
+  MAX_RECIPE_STEP_TIMER_MINUTES,
+  MAX_RECIPE_TAGS,
+  MAX_RECIPE_TAG_LENGTH,
+  MAX_RECIPE_TIME_MINUTES,
+  MAX_RECIPE_TITLE_LENGTH,
+  RecipeStore,
+} from "./cookbook/recipeStore.js";
+export type {
+  CookbookExport,
+  CreateRecipeInput,
+  ExportedIngredient,
+  ExportedRecipe,
+  ExportedStep,
+  Recipe,
+  RecipeIngredient,
+  RecipeIngredientInput,
+  RecipePhoto,
+  RecipeStepInput,
+  RecipeStepRow,
+  UpdateRecipeFields,
+} from "./cookbook/recipeStore.js";

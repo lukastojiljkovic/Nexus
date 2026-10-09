@@ -1181,6 +1181,32 @@ export class PantryValidationError extends DatabaseError {}
 export class PantryNotFoundError extends DatabaseError {}
 
 /**
+ * Thrown when a recipe, an ingredient line or a step is rejected at the store
+ * boundary (COOK, migration 076): an empty or over-long title, a `course` outside
+ * the eleven, a `servings` that is not a whole number in range, a prep/cook time
+ * or step timer outside its bound, more tags/ingredients/steps than the module
+ * holds, a unit outside `INGREDIENT_UNITS`, a range with no lower end or one that
+ * runs backwards, a `gramsPerUnit` with no `foodRef` to be the weight of, a food
+ * reference that is not `catalogue:<id>`/`user:<uuid>` shaped, a photo whose
+ * name/mime/size/hash is not a legal attachment index row, or a malformed `now`.
+ *
+ * The two refusals worth naming out loud are the licence pair: an `imported`
+ * recipe without all five licence fields is refused, and an `own` recipe that
+ * carries one is refused too — a recipe credited to a source it did not come from
+ * is worse than one with no attribution at all, and the store does not get to
+ * decide the caller meant the other value.
+ *
+ * It is also what `importData` throws, for a whole archive at once: an unknown
+ * `version`, a field missing, a duplicated id. That import validates the entire
+ * value before it writes anything is the property this class is the signal of —
+ * a caller that sees it knows nothing was replaced.
+ */
+export class RecipeValidationError extends DatabaseError {}
+
+/** Thrown when a recipe operation targets an id that is not a live recipe in the store's own profile — unknown, soft-deleted, or owned by another profile. */
+export class RecipeNotFoundError extends DatabaseError {}
+
+/**
  * Whether a driver error is a violated UNIQUE (or partial-UNIQUE) index.
  *
  * A store that leans on such an index to make a state unrepresentable — the

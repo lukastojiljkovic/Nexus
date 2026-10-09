@@ -1644,6 +1644,19 @@ describe("RestoreStore", () => {
     //    does NOT require a wiped table to be written back, so a restore would
     //    silently destroy every pantry in the profile while the pantry is still
     //    not something an archive can carry.
+    //  - cookbook_recipes / cookbook_ingredients / cookbook_steps (migration
+    //    076): NOT in the wipe list, and the reason is SEQUENCING rather than
+    //    device-locality, so it expires. These three ARE the user's own content
+    //    and they belong in the archive — what does not exist yet is the
+    //    archive's half of that: `ProfileData` carries no cookbook field, so
+    //    `RestoreStore` has nothing to write these tables back FROM, and an
+    //    entry in `RESTORE_WIPE_TABLES` today would turn every restore into a
+    //    silent deletion of the user's recipes. The module's own
+    //    `RecipeStore.exportData`/`importData` pair is the other end of the
+    //    same change, and the day stage 2 plugs it into the archive these three
+    //    lines move into `RESTORE_WIPE_TABLES` — together with `@nexus/sync`'s
+    //    collection map, which `src/sync/collectionGuard.test.ts` holds equal to
+    //    that list (and which is frozen with sync itself).
     const allowlist = new Set<string>([
       "meta",
       "profiles",
@@ -1704,6 +1717,9 @@ describe("RestoreStore", () => {
       "pantry_locations",
       "pantry_items",
       "pantry_log",
+      "cookbook_recipes",
+      "cookbook_ingredients",
+      "cookbook_steps",
     ]);
 
     const wipeTables = new Set<string>(RESTORE_WIPE_TABLES);
