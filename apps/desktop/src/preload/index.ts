@@ -2,7 +2,9 @@ import { contextBridge, ipcRenderer } from "electron";
 import {
   IpcChannel,
   type NexusApi,
+  type InstalledPackView,
   type NetworkMode,
+  type PackProgress,
   type RunnerOutputEvent,
   type RunnerState,
   type SyncActivityView,
@@ -932,6 +934,34 @@ const api: NexusApi = {
     };
     ipcRenderer.on(IpcChannel.updateChanged, handler);
     return () => ipcRenderer.removeListener(IpcChannel.updateChanged, handler);
+  },
+  // Content packs (ADR-091). Note what `packsInspect` and `packsInstall` do NOT
+  // carry: a path. `inspect` opens main's folder dialog, and `install` installs
+  // whatever that dialog left waiting — so this bridge can expose both without
+  // ever becoming a way to name a directory.
+  packsList: () => ipcRenderer.invoke(IpcChannel.packsList),
+  packsInspect: () => ipcRenderer.invoke(IpcChannel.packsInspect),
+  packsInstall: () => ipcRenderer.invoke(IpcChannel.packsInstall),
+  packsRemove: (id) => ipcRenderer.invoke(IpcChannel.packsRemove, { id }),
+  packsVerify: (id) => ipcRenderer.invoke(IpcChannel.packsVerify, { id }),
+  onPacksChanged: (listener) => {
+    // Carries a payload, so it is typed at the boundary like `onUpdateChanged`:
+    // a hint to draw the new list, not a fact the renderer acts on unchecked.
+    const handler = (_event: unknown, packs: InstalledPackView[]): void => {
+      listener(packs);
+    };
+    ipcRenderer.on(IpcChannel.packsChanged, handler);
+    return () => ipcRenderer.removeListener(IpcChannel.packsChanged, handler);
+  },
+  onPacksProgress: (listener) => {
+    // The copy of a twenty-gigabyte pack is the one operation in this app that
+    // runs long enough for a person to wonder whether it is still going, so the
+    // rows are pushed for as long as it runs.
+    const handler = (_event: unknown, progress: PackProgress): void => {
+      listener(progress);
+    };
+    ipcRenderer.on(IpcChannel.packsProgress, handler);
+    return () => ipcRenderer.removeListener(IpcChannel.packsProgress, handler);
   },
 };
 

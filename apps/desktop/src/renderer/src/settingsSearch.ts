@@ -615,6 +615,32 @@ function shellEntries(): readonly ShellSettingsSearchEntry[] {
       label: strings.network.checkNow,
       keywords: ["azuriranje", "update", "verzija", "provera", "github", "mreza", "novo"],
     },
+    {
+      // ADR-091. One entry for the card (the list of what is installed) and one
+      // for the button, because the two are different errands: somebody hunting
+      // for „vikipedija" wants the card, and somebody hunting for „instaliraj"
+      // wants the button. The words are what a person types for offline
+      // content, and none of them is the card's own name.
+      id: "content-packs-list",
+      section: "content-packs",
+      label: s.sectionTitle["content-packs"],
+      keywords: [
+        "paket",
+        "paketi",
+        "sadrzaj",
+        "vikipedija",
+        "mapa",
+        "offline",
+        "zim",
+        "instalirano",
+      ],
+    },
+    {
+      id: "content-packs-install",
+      section: "content-packs",
+      label: s.contentPacks.install,
+      keywords: ["instaliraj", "paket", "dodaj", "fascikla", "usb", "disk", "preuzmi"],
+    },
     ];
 }
 

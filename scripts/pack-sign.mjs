@@ -1,0 +1,209 @@
+// No shebang — for the reason the other gates in this directory have none: this
+// module is both a CLI and an import target for its own test.
+//
+// ADR-091's signing tool: builds `pack.json` for a folder and writes its
+// signature with the maintainer's release key.
+//
+//   node scripts/pack-sign.mjs --dir <pack folder> --meta <metadata.json> --key <private-key.pem>
+//
+// WHAT IT DOES AND DOES NOT DO. `--meta` is the manifest's metadata WITHOUT
+// `files`: the maintainer writes what the pack IS (id, version, kind, two
+// languages of copy, licence, source, `minAppVersion`) and this tool computes
+// what the pack CONTAINS — each file's path, size and SHA-256, read off the
+// folder, which is the half nobody can do by hand and keep correct. `--meta`
+// carrying a `files` key is refused rather than ignored: a manifest whose file
+// list was typed once and then hashed over is exactly the manifest that lies.
+//
+// The private key is READ, USED, and never printed, echoed, copied or logged.
+// The only things this tool writes are `pack.json` and `pack.json.sig` in the
+// folder it was pointed at, and the only things it prints are that folder, the
+// file count and the pack's total size. The tests that exercise it generate a
+// throwaway key per test; no real key is ever read by a test.
+//
+// It deliberately does NOT re-implement the app's validation. The app refuses
+// what it must (`apps/desktop/src/main/packs/`), and a tool that carried its own
+// copy of those rules would be a second answer to the same question — the one
+// that drifts. What this tool does enforce is the one thing the app cannot: that
+// the metadata it signs is complete, so `--meta` with a misspelled key is an
+// error here rather than a manifest the app refuses after the key was used.
+
+import { createHash, createPrivateKey, sign } from "node:crypto";
+import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+
+/** The manifest's file name, and its signature's. Both live at the pack's root. */
+const MANIFEST_FILE = "pack.json";
+/**
+ * The context a pack signature covers before the manifest, so the release key's
+ * signature on a pack can never pass for its signature on `SHA256SUMS.txt`.
+ * `PACK_SIGNATURE_CONTEXT` in `apps/desktop/src/main/packs/verify.ts` is the
+ * verifying side; the test holds the two strings together.
+ */
+export const PACK_SIGNATURE_CONTEXT = "nexus-pack-manifest-v1\n";
+const SIGNATURE_FILE = "pack.json.sig";
+
+/** The only format this tool writes. A future format is a deliberate edit here. */
+const FORMAT = 1;
+
+/** Every key the metadata must carry, in the order `pack.json` lists them. */
+const META_KEYS = [
+  "format",
+  "id",
+  "version",
+  "kind",
+  "title",
+  "description",
+  "licence",
+  "source",
+  "minAppVersion",
+];
+
+/** The two names inside a pack that are not content, and therefore not listed. */
+const RESERVED_FILES = new Set([MANIFEST_FILE, SIGNATURE_FILE]);
+
+/**
+ * Every content file under `dir`, with `/`-separated paths, sizes and SHA-256
+ * digests, in a stable order (directories walked in name order, so two runs
+ * over an unchanged folder write byte-identical manifests).
+ */
+export function collectFiles(dir) {
+  const files = [];
+  const visit = (absolute, prefix) => {
+    for (const name of readdirSync(absolute).sort()) {
+      const path = join(absolute, name);
+      const relative = prefix === "" ? name : `${prefix}/${name}`;
+      const stats = statSync(path);
+      if (RESERVED_FILES.has(relative)) continue;
+      if (stats.isDirectory()) {
+        visit(path, relative);
+        continue;
+      }
+      if (!stats.isFile()) {
+        throw new Error(`pack-sign: "${relative}" is neither a file nor a folder.`);
+      }
+      const bytes = readFileSync(path);
+      files.push({
+        path: relative,
+        size: bytes.byteLength,
+        sha256: createHash("sha256").update(bytes).digest("hex"),
+      });
+    }
+  };
+  visit(dir, "");
+  return files;
+}
+
+/**
+ * The manifest object: the metadata as written, plus the file list computed
+ * from the folder.
+ *
+ * The key order is fixed here rather than left to the metadata's own order, so
+ * that the bytes this tool signs are the same bytes regardless of how somebody
+ * happened to arrange a JSON file.
+ */
+export function buildManifest(meta, files) {
+  const manifest = {};
+  for (const key of META_KEYS) {
+    manifest[key] = key === "format" ? FORMAT : meta[key];
+  }
+  manifest.files = files;
+  return manifest;
+}
+
+/**
+ * The metadata, checked for completeness and nothing else.
+ *
+ * A missing key and an unknown key are both refused, because both produce a
+ * manifest whose meaning is not what the person who wrote it meant: the first
+ * leaves a field the app's parser will refuse after the key was used, and the
+ * second is a typo the app's parser refuses for a reason that names the wrong
+ * field.
+ */
+export function checkMeta(meta) {
+  if (typeof meta !== "object" || meta === null || Array.isArray(meta)) {
+    throw new Error("pack-sign: --meta must be a JSON object.");
+  }
+  if (Object.hasOwn(meta, "files")) {
+    throw new Error("pack-sign: --meta must not carry \"files\" — they are computed from the folder.");
+  }
+  for (const key of META_KEYS) {
+    if (!Object.hasOwn(meta, key)) throw new Error(`pack-sign: --meta is missing "${key}".`);
+  }
+  for (const key of Object.keys(meta)) {
+    if (!META_KEYS.includes(key)) throw new Error(`pack-sign: --meta has an unknown field "${key}".`);
+  }
+  if (meta.format !== FORMAT) {
+    throw new Error(`pack-sign: "format" must be ${String(FORMAT)}.`);
+  }
+  return meta;
+}
+
+/** `--name value` pairs from argv, refusing anything unexpected. */
+export function parseArgs(argv) {
+  const values = {};
+  for (let index = 0; index < argv.length; index += 2) {
+    const flag = argv[index];
+    const value = argv[index + 1];
+    if (flag === undefined || value === undefined || !flag.startsWith("--")) {
+      throw new Error(
+        "pack-sign: usage: node scripts/pack-sign.mjs --dir <folder> --meta <metadata.json> --key <private-key.pem>",
+      );
+    }
+    values[flag.slice(2)] = value;
+  }
+  for (const required of ["dir", "meta", "key"]) {
+    if (values[required] === undefined) {
+      throw new Error(`pack-sign: --${required} is required.`);
+    }
+  }
+  return { dir: values.dir, meta: values.meta, key: values.key };
+}
+
+/**
+ * Writes `pack.json` and `pack.json.sig` for `dir`.
+ *
+ * The signature covers the EXACT bytes written, taken from the same buffer, so
+ * there is no second serialisation that could differ in a byte.
+ */
+export function signPack({ dir, meta, key }) {
+  const folder = resolve(dir);
+  if (!statSync(folder).isDirectory()) {
+    throw new Error(`pack-sign: "${folder}" is not a folder.`);
+  }
+  const files = collectFiles(folder);
+  if (files.length === 0) {
+    throw new Error("pack-sign: the folder holds no content files.");
+  }
+  const manifest = buildManifest(checkMeta(meta), files);
+  const manifestBytes = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+
+  const privateKey = createPrivateKey(readFileSync(key));
+  const signature = sign(
+    null,
+    Buffer.concat([Buffer.from(PACK_SIGNATURE_CONTEXT, "utf8"), manifestBytes]),
+    privateKey,
+  );
+
+  writeFileSync(join(folder, MANIFEST_FILE), manifestBytes);
+  writeFileSync(join(folder, SIGNATURE_FILE), signature);
+  return {
+    folder,
+    fileCount: files.length,
+    totalBytes: files.reduce((sum, file) => sum + file.size, 0),
+  };
+}
+
+function main() {
+  const args = parseArgs(process.argv.slice(2));
+  const meta = JSON.parse(readFileSync(args.meta, "utf8"));
+  const result = signPack({ dir: args.dir, meta, key: args.key });
+  // Counts and a folder, and never a byte of the key or of the content.
+  console.log(
+    `pack-sign: ${MANIFEST_FILE} + ${SIGNATURE_FILE} written to ${result.folder} (${String(result.fileCount)} files, ${String(result.totalBytes)} bytes)`,
+  );
+}
+
+if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main();
+}

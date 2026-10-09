@@ -41,6 +41,7 @@ import type {
   LlmImportSkipReason,
   LlmPromptLanguage,
   MarkdownImportSkipCode,
+  PackRefusalCode,
   ProfilePicturePickErrorCode,
   RestoreModuleCounts,
   RestoreProblemCode,
@@ -5771,6 +5772,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       privacy: "Podaci i privatnost",
       about: "O aplikaciji",
       licences: "Licence",
+      "content-packs": "Paketi sadržaja",
     },
     /**
      * SET §5: the per-card „Vrati na podrazumevano“. One block of copy for
@@ -7650,6 +7652,85 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         countMany: "sačuvanih pretraga",
         error: "Brisanje istorije pretrage nije uspelo. Pokušaj ponovo.",
       },
+    },
+    /**
+     * ADR-091 — „Paketi sadržaja". A content pack is a signed folder of public
+     * content (offline Wikipedia, a map, a dataset) installed from a disk or a
+     * USB stick and kept beside the encrypted database rather than inside it.
+     *
+     * The card has to say three things a user cannot see: what a pack IS, that
+     * it is accepted only when Nexus's own key signed it, and that the licence
+     * and the attribution travel with the content because the licence requires
+     * it. `problem` is one sentence per `PackRefusalCode`, in the same shape as
+     * `network.problem` — the codes are main's, and the words are this table's.
+     */
+    contentPacks: {
+      intro:
+        "Paket je fascikla javnog sadržaja — na primer cela Vikipedija za čitanje bez interneta, mapa ili skup podataka — koju Nexus prihvata samo ako je potpisana ključem Nexusa. Sadržaj ostaje na ovom uređaju, u fascikli pored šifrovane baze, i ne ulazi u rezervnu kopiju profila.",
+      emptyTitle: "Nema instaliranih paketa.",
+      emptyBody:
+        "Paket donosiš kao fasciklu na disku ili na USB-u: u njoj su pack.json, njegov potpis i sam sadržaj. Ovde vidiš šta je instalirano, možeš da proveriš sadržaj i da ukloniš paket.",
+      install: "Instaliraj iz fascikle…",
+      installHint:
+        "Nexus prvo proverava potpis i svaki heš, pa tek onda kopira. Ništa se ne šalje na internet i ništa iz profila se ne dira.",
+      verify: "Proveri",
+      verifying: "Provera…",
+      remove: "Ukloni",
+      candidateTitle: "Instalirati ovaj paket?",
+      candidateQuestion: "U fascikli je „{title}“, verzija {version}, veličine {size}.",
+      candidateHint:
+        "Potpis je već proveren. Instaliranje kopira sadržaj u fasciklu paketa na ovom uređaju i dodaje ga na listu.",
+      installConfirm: "Instaliraj",
+      removeTitle: "Ukloniti paket?",
+      removeQuestion: "Sadržaj paketa se briše sa ovog uređaja. Podaci profila se ne diraju.",
+      removeConfirm: "Ukloni",
+      cancel: "Otkaži",
+      versionLabel: "Verzija",
+      sizeLabel: "Veličina",
+      filesLabel: "Datoteke",
+      licenceLabel: "Licenca",
+      attributionLabel: "Atribucija",
+      sourceLabel: "Izvor",
+      verifyOk: "Sadržaj je proveren i odgovara potpisanom manifestu.",
+      progressCopy: "Kopiranje: {file}",
+      progressVerify: "Provera: {file}",
+      progressCount: "{done} od {total}",
+      problemTitle: "Paket nije prihvaćen.",
+      problem: {
+        "not-a-pack": "U izabranoj fascikli nema čitljivog pack.json.",
+        "not-a-directory": "Paket je fascikla; izaberi fasciklu u kojoj je pack.json.",
+        "manifest-unreadable": "pack.json se ne može pročitati.",
+        "manifest-too-large": "pack.json je veći nego što manifest sme da bude.",
+        signature: "Potpis na pack.json nije važeći, pa paket nije instaliran.",
+        "format-unknown": "Format ovog paketa je noviji od ove verzije Nexusa.",
+        "id-invalid": "Oznaka paketa nije ispravna.",
+        "version-invalid": "Verzija paketa nije ispravna.",
+        "kind-unknown": "Vrsta sadržaja ovog paketa nije poznata.",
+        "title-invalid": "Naziv paketa nije ispravan.",
+        "description-invalid": "Opis paketa nije ispravan.",
+        "files-invalid": "Spisak datoteka u manifestu nije ispravan.",
+        "path-invalid": "Manifest navodi putanju koju Nexus ne prihvata.",
+        "path-duplicate": "Manifest dva puta navodi istu datoteku.",
+        "path-duplicate-case": "Manifest navodi dve datoteke koje su na Windowsu jedna.",
+        "hash-invalid": "Heš u manifestu nije ispravan.",
+        "size-invalid": "Veličina u manifestu nije ispravna.",
+        limit: "Paket je veći, ili navodi više datoteka, nego što je dozvoljeno.",
+        "licence-invalid": "Podaci o licenci u manifestu nisu ispravni.",
+        "source-invalid": "Podaci o izvoru u manifestu nisu ispravni.",
+        "min-app-version-invalid": "Najniža verzija aplikacije u manifestu nije ispravna.",
+        "min-app-version-too-new": "Ovaj paket traži noviju verziju Nexusa.",
+        symlink: "Paket sadrži simbolički link, što nije dozvoljeno.",
+        "not-a-file": "U paketu je nešto što nije ni datoteka ni fascikla.",
+        "missing-file": "Datoteka koju manifest navodi ne postoji u paketu.",
+        "extra-file": "U paketu je datoteka koju manifest ne navodi.",
+        "size-mismatch": "Veličina datoteke se ne poklapa sa manifestom.",
+        "hash-mismatch": "Sadržaj datoteke se ne poklapa sa hešom u manifestu.",
+        "no-space": "Na disku nema dovoljno mesta za ovaj paket.",
+        "no-candidate": "Nijedan paket nije izabran.",
+        "not-found": "Ovaj paket nije instaliran.",
+        io: "Paket se ne može pročitati ili upisati.",
+      } satisfies Record<PackRefusalCode, string>,
+      error: "Radnja nije uspela. Pokušaj ponovo.",
     },
     about: {
       version: "Verzija",
