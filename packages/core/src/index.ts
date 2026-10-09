@@ -2194,3 +2194,177 @@ export { IN_PROGRESS, draw, win } from "./games/boards-shared/outcome.js";
 export type { Outcome, Player } from "./games/boards-shared/outcome.js";
 export { search } from "./games/boards-shared/search.js";
 export type { Choice, SearchGame, SearchLimits as BoardSearchLimits } from "./games/boards-shared/search.js";
+
+// --- GAMES: the puzzle engines (stage 1, no store) ---------------------------
+//
+// Sudoku, 2048, nonograms, mahjong solitaire, Broj, and the snake and brick
+// arcade engines — pure logic, one folder each, with no store of their own: a
+// result joins the arcade scores table in stage 2. Every one of them takes its
+// random source in and none of them reads a clock, so a seed plus a move log is
+// a whole game and a report that carries its seed is a reproduction.
+//
+// `step` is the name both arcade engines use for their one entry point, so the
+// two are exported under the game they belong to. `puzzles-shared/random.ts` is
+// the seeded source they draw from; its shuffle and its bounded draw stay
+// internal, because a caller that needs one has taken on the rule that decides
+// what a draw means.
+export { createPuzzleRandom } from "./games/puzzles-shared/random.js";
+export type { PuzzleRandom } from "./games/puzzles-shared/random.js";
+
+export {
+  SUDOKU_UNITS,
+  countSudokuSolutions,
+  generateSudoku,
+  solveSudokuLogically,
+  sudokuCandidates,
+  sudokuConflicts,
+  sudokuDifficulty,
+  sudokuHint,
+  sudokuSolution,
+} from "./games/sudoku/sudoku.js";
+export type {
+  SudokuCells,
+  SudokuDifficulty,
+  SudokuEliminateHint,
+  SudokuFillHint,
+  SudokuHint,
+  SudokuLogicalSolve,
+  SudokuNarrowHint,
+  SudokuOptions,
+  SudokuPuzzle,
+  SudokuTechnique,
+} from "./games/sudoku/sudoku.js";
+
+export {
+  TILE_2048_SIZES,
+  TILE_2048_WIN,
+  canMoveTile2048,
+  continueAfterWin,
+  createTile2048,
+  highestTile,
+  mergeLine,
+  moveTile2048,
+  nextTileValue,
+  tile2048From,
+  undoLastMove,
+} from "./games/tile2048/tile2048.js";
+export type {
+  Tile2048Move,
+  Tile2048Setup,
+  Tile2048Size,
+  Tile2048Snapshot,
+  Tile2048State,
+} from "./games/tile2048/tile2048.js";
+
+export {
+  NONOGRAM_ATTEMPT_LIMIT,
+  NONOGRAM_MAX,
+  NONOGRAM_MIN,
+  checkNonogram,
+  cluesOf,
+  generateNonogram,
+  solveNonogramLines,
+} from "./games/nonogram/nonogram.js";
+export type {
+  NonogramCell,
+  NonogramCheck,
+  NonogramPuzzle,
+} from "./games/nonogram/nonogram.js";
+
+export {
+  MAHJONG_FACES,
+  MAHJONG_SOLVER_NODE_BUDGET,
+  TURTLE,
+  TURTLE_LAYER_COUNTS,
+  TURTLE_SLOTS,
+  createMahjongDeal,
+  createMahjongGame,
+  isMahjongFree,
+  mahjongBoard,
+  mahjongFacesMatch,
+  mahjongFreeSlots,
+  mahjongGameFrom,
+  mahjongGroupOf,
+  mahjongHint,
+  mahjongLegalPairs,
+  mahjongRemove,
+  mahjongShuffle,
+  mahjongUndo,
+  mahjongWon,
+  solveMahjong,
+} from "./games/mahjong/mahjong.js";
+export type {
+  MahjongBoard,
+  MahjongDeal,
+  MahjongGame,
+  MahjongGroup,
+  MahjongMove,
+  MahjongNeighbourhood,
+  MahjongSlot,
+  MahjongSolution,
+} from "./games/mahjong/mahjong.js";
+
+export {
+  BROJ_FIFTH_CHOICES,
+  BROJ_SIXTH_CHOICES,
+  BROJ_SMALL_MAX,
+  BROJ_SMALL_MIN,
+  BROJ_TARGET_MAX,
+  BROJ_TARGET_MIN,
+  BROJ_VALUE_LIMIT,
+  brojNumbersOf,
+  checkBrojExpression,
+  createBrojPuzzle,
+  evaluateBroj,
+  formatBroj,
+  solveBroj,
+} from "./games/broj/broj.js";
+export type {
+  BrojCheck,
+  BrojExpression,
+  BrojOperation,
+  BrojOptions,
+  BrojPuzzle,
+  BrojRefusal,
+  BrojSolution,
+} from "./games/broj/broj.js";
+
+export {
+  SNAKE_COLUMNS,
+  SNAKE_FOOD_POINTS,
+  SNAKE_MAX_TICKS_PER_STEP,
+  SNAKE_MIN_TICK_MS,
+  SNAKE_POINTS_PER_LEVEL,
+  SNAKE_ROWS,
+  SNAKE_START_LENGTH,
+  SNAKE_TICK_MS,
+  SNAKE_TICK_STEP_MS,
+  createSnake,
+  snakeTickMs,
+  step as stepSnake,
+} from "./games/snake/snake.js";
+export type { SnakeDirection, SnakeInput, SnakeState } from "./games/snake/snake.js";
+
+export {
+  BRICKS_BALL_RADIUS,
+  BRICKS_BASE_SPEED,
+  BRICKS_BRICK_POINTS,
+  BRICKS_BRICK_TOP,
+  BRICKS_COLUMNS,
+  BRICKS_LEVEL_BONUS,
+  BRICKS_LIVES,
+  BRICKS_MAX_BRICK_ROWS,
+  BRICKS_MAX_SPEED,
+  BRICKS_MAX_TICKS_PER_STEP,
+  BRICKS_PADDLE_HEIGHT,
+  BRICKS_PADDLE_SPEED,
+  BRICKS_PADDLE_WIDTH,
+  BRICKS_ROWS,
+  BRICKS_TENTHS,
+  BRICKS_TICK_MS,
+  bricksRemaining,
+  bricksSpeed,
+  createBricks,
+  step as stepBricks,
+} from "./games/bricks/bricks.js";
+export type { BricksInput, BricksState } from "./games/bricks/bricks.js";
