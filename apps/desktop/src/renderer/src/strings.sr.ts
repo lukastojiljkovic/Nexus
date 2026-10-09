@@ -336,6 +336,10 @@ export const sr = {
         dogadjaji: "Organizujem događaje",
         trenira: "Treniram druge",
         prevodi: "Prevodim i lektorišem",
+        laboratorija: "Radim u laboratoriji",
+        instalacije: "Postavljam instalacije",
+        sistemi: "Održavam mreže i sisteme",
+        servis: "Servisiram vozila",
       } satisfies Record<string, string>,
     },
     /** Not what somebody does but HOW — and it decides what every module opens on. */
