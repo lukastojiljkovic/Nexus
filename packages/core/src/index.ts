@@ -1594,3 +1594,32 @@ export type {
   RecipeSource,
   RecipeStep,
 } from "./cookbook/recipe.js";
+
+// --- RECORDER (voice and video diary, migration 077) ------------------------
+//
+// The capture side is `MediaRecorder`, so the two kinds and the four mime
+// strings it can actually produce are a CLOSED list declared here rather than a
+// pattern: the store refuses anything else on the way in, and stage 2 must
+// check the mime the browser reports after `start()` against the same list —
+// one definition, or the wire and the store disagree about what a recording is.
+export {
+  RECORDING_KINDS,
+  RECORDING_MIME_TYPES,
+  isRecordingMime,
+  recordingKindForMime,
+} from "./recorder/recording.js";
+export type { RecordingKind, RecordingMime } from "./recorder/recording.js";
+export { formatRecordingDuration } from "./recorder/duration.js";
+export {
+  diaryMonthSummary,
+  groupByCreationDay,
+  groupByDiaryDate,
+  recordingStorageSummary,
+} from "./recorder/recordingGroups.js";
+export type {
+  RecorderEntry,
+  RecorderMonthSummary,
+  RecordingGroup,
+  RecordingStorageSummary,
+  RecordingTotals,
+} from "./recorder/recordingGroups.js";

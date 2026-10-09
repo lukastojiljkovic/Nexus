@@ -109,6 +109,8 @@ export {
   ProfileValidationError,
   RecipeNotFoundError,
   RecipeValidationError,
+  RecorderNotFoundError,
+  RecorderValidationError,
   RestoreValidationError,
   SchemaVersionError,
   SearchValidationError,
@@ -944,3 +946,41 @@ export type {
   RecipeStepRow,
   UpdateRecipeFields,
 } from "./cookbook/recipeStore.js";
+
+// --- RECORDER (voice and video diary, migration 077) ------------------------
+//
+// ONE store over TWO tables, because a recording is a recording plus the markers
+// inside it — and the markers reach a profile only through their recording, so
+// every marker statement here resolves that recording first (migration 077's
+// `habit_entries` arrangement).
+//
+// The media never enters this package: `create` takes the `sha256` main's blob
+// store returned after writing the bytes, so the recorder reuses the ONE
+// content-addressed store every attachment uses rather than growing a second.
+// `MAX_RECORDING_BYTES` says how large the existing whole-buffer write path can
+// be taken, with the measurement behind it; `exportData`/`importData` are the
+// profile archive's half of the module, metadata only, for stage 2 to plug in.
+export {
+  MAX_RECORDING_BYTES,
+  MAX_RECORDING_DURATION_MS,
+  MAX_RECORDING_LABEL_LENGTH,
+  MAX_RECORDING_MARKERS,
+  MAX_RECORDING_NOTES_LENGTH,
+  MAX_RECORDING_TAG_LENGTH,
+  MAX_RECORDING_TAGS,
+  MAX_RECORDING_TITLE_LENGTH,
+  MAX_RECORDING_TRANSCRIPT_LENGTH,
+  RECORDER_EXPORT_VERSION,
+  RecorderStore,
+} from "./recorder/recorderStore.js";
+export type {
+  AddMarkerInput,
+  CreateRecordingInput,
+  ExportedRecording,
+  RecorderExport,
+  RecorderImportResult,
+  Recording,
+  RecordingMarker,
+  UpdateMarkerFields,
+  UpdateRecordingFields,
+} from "./recorder/recorderStore.js";

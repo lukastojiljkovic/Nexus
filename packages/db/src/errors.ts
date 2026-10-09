@@ -858,6 +858,37 @@ export class HabitValidationError extends DatabaseError {}
 export class HabitNotFoundError extends DatabaseError {}
 
 /**
+ * Thrown when a recording or marker write is rejected at the store boundary
+ * because its input breaks a domain rule the UI is expected to have caught
+ * already (RECORDER slice a, migration 077): a `kind` outside `audio`/`video`, a
+ * `mime` outside the closed list `RECORDING_MIME_TYPES` — or a mime whose family
+ * disagrees with the kind, which is two answers to one question — a
+ * `durationMs`/`sizeBytes` that is not a positive whole number within its cap, a
+ * `sha256` that is not 64 lowercase hex characters, an over-long title, note,
+ * transcript or marker label, too many tags or markers, a diary flag with no
+ * date to file it under, a diary date on a recording that is not a diary, a
+ * malformed `now`, a marker whose `atMs` falls outside its recording's duration,
+ * or an imported archive value that is not this store's own format.
+ *
+ * The import case is the one worth naming: `importData` validates the WHOLE
+ * value before it writes anything, so a refusal here means the profile still
+ * holds exactly what it held before the call. The store revalidates because the
+ * archive is a file the user picked and stage 2's IPC passes it through
+ * (SEC-EL-02).
+ */
+export class RecorderValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a recording operation targets an id that is not a live recording
+ * in the store's own profile — unknown, soft-deleted, or owned by another
+ * profile. A MARKER reaches its recording through the row it names and never
+ * through a `profile_id` of its own (migration 077), so every marker operation
+ * surfaces the same error when the recording it names is missing, deleted or
+ * another profile's.
+ */
+export class RecorderNotFoundError extends DatabaseError {}
+
+/**
  * Thrown when a USER FOOD write is rejected at the store boundary (FIT slice a,
  * migration 057): an empty or over-long `name`, a `category` outside
  * `FOOD_CATEGORIES`, a nutrient that is not a finite non-negative number, a
