@@ -2070,3 +2070,93 @@ export { MOON_PHASE_NAMES, moonPhase, nextMoonPhases } from "./sky/phases.js";
 export type { MoonPhaseName, MoonPhaseReading, NextMoonPhases } from "./sky/phases.js";
 export { northFromSun, sunOrientation } from "./sky/orientation.js";
 export type { SunOrientation } from "./sky/orientation.js";
+
+// --- SIGNALS (Morse, ASCII, the tuner and the sound meter) -------------------
+export {
+  MAX_WPM,
+  MIN_WPM,
+  MORSE_TRANSLITERATIONS,
+  PARIS_DIT_MS,
+  charForMorse,
+  decodeMorse,
+  ditMs,
+  encodeMorse,
+  farnsworthGapUnits,
+  farnsworthWordGapUnits,
+  morseAlphabet,
+  morseForChar,
+  morseSchedule,
+  scheduleDurationMs,
+} from "./signals/morse.js";
+export type {
+  MorseDecodeOptions,
+  MorseDecodeResult,
+  MorseDecodedChar,
+  MorseEncodeResult,
+  MorseInterval,
+  MorseTiming,
+} from "./signals/morse.js";
+export { MORSE_ALPHABET, MORSE_BY_CHARACTER, MORSE_BY_CODE } from "./signals/morseTable.js";
+export type { MorseCharacter } from "./signals/morseTable.js";
+export {
+  ASCII_CODES,
+  ASCII_RADICES,
+  asciiEntry,
+  asciiFromCode,
+  codeFromAscii,
+  codesFromText,
+  formatAsciiCode,
+  formatAsciiString,
+  formatCodePoint,
+  isAsciiCode,
+  isAsciiText,
+  parseAsciiCode,
+  textFromCodes,
+  textToCodePoints,
+} from "./signals/ascii.js";
+export type { AsciiChar, AsciiRadix } from "./signals/ascii.js";
+export {
+  DEFAULT_CLARITY,
+  DEFAULT_MAX_HZ,
+  DEFAULT_MIN_HZ,
+  MIN_FRAME_SAMPLES,
+  detectPitch,
+} from "./signals/pitch.js";
+export type { PitchDetection, PitchDetectionOptions, PitchOptions } from "./signals/pitch.js";
+export {
+  CHROMATIC_PRESET,
+  CONCERT_A4_HZ,
+  MAX_A4_HZ,
+  MIN_A4_HZ,
+  NOTE_NAMES,
+  SEMITONE_RATIO,
+  TUNING_PRESETS,
+  centsBetween,
+  isValidA4,
+  noteForFrequency,
+  noteFrequencyHz,
+  noteLabel,
+  shiftCents,
+  targetFor,
+} from "./signals/notes.js";
+export type { InstrumentPreset, NoteReading, PitchReading, TuningTarget } from "./signals/notes.js";
+export {
+  DEFAULT_LEVEL_GATE_DB,
+  LeqWindow,
+  SILENCE_FLOOR_DB,
+  aWeightingDb,
+  amplitudeFromDbfs,
+  applyAWeighting,
+  biquadCascadeDb,
+  dBfsFromAmplitude,
+  dBfsFromPeak,
+  dBfsFromRms,
+  designAWeighting,
+  frameLevel,
+  leqFromFrameLevels,
+  leqFromFrameRms,
+  peak,
+  rms,
+  splFromDbfs,
+} from "./signals/soundLevel.js";
+export type { AWeightingFilter, Biquad, FrameLevel } from "./signals/soundLevel.js";
