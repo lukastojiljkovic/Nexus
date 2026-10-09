@@ -205,6 +205,44 @@ export const TOOL_CATEGORIES = [
 export type ToolCategory = (typeof TOOL_CATEGORIES)[number];
 
 /**
+ * What you NEED, rather than what you do — the eight task groups the tool
+ * finder filters by.
+ *
+ * **A third axis, and the reason it earns a place beside the other two.** The
+ * two that already existed answer „who is this for“ (a pack) and „what does it
+ * do“ (a category), and neither answers the question somebody actually arrives
+ * with: they need a VAT figure, or the number of days between two dates, and do
+ * not know which of eighteen toolkits owns it. `TOOL_CATEGORIES` groups the rail
+ * by subject, which is the right order once you know what you are looking for;
+ * this is the order you are in before you do.
+ *
+ * **They are deliberately NOT derived from the packs.** A pack is a trade, and
+ * these cut across trades on purpose: a bricklayer's rebar mass and a
+ * bookkeeper's pro-rata interest are both arithmetic somebody has to be able to
+ * reach without knowing whose drawer it lives in. Derived groups would re-erect
+ * the very boundary this axis exists to dissolve — which is why a tool carries
+ * its own assignment, one or two of them, and `modules.test.ts` refuses a tool
+ * that declares none.
+ *
+ * Eight, and closed: a group whose every member a profile can never see is a
+ * filter that opens onto nothing, so this is the whole set and the same test
+ * holds each group to at least one tool. The Serbian names live in
+ * `strings.toolFinder.groups`, like every other piece of copy.
+ */
+export const TOOL_TASK_GROUPS = [
+  "money",
+  "dates",
+  "measure",
+  "text",
+  "design",
+  "build",
+  "data",
+  "study",
+] as const;
+
+export type ToolTaskGroup = (typeof TOOL_TASK_GROUPS)[number];
+
+/**
  * What could go wrong with this tool's answer, and who gets hurt — the founder's
  * *„da obavezno stoje vidljivi disclaimeri… da nas neko ne tuzi do bankrota"*,
  * as a closed set the contract enforces rather than copy each surface remembers.
@@ -314,6 +352,17 @@ export interface ToolRegistration {
   blurbKey?: string;
   /** Which group of the drawer this tool belongs under. */
   category: ToolCategory;
+  /**
+   * Which task groups the finder files this tool under (`TOOL_TASK_GROUPS`).
+   *
+   * **Required, one or two, and `modules.test.ts` refuses an empty list.** A
+   * tool that declared none would be reachable only by somebody who already knew
+   * whose toolkit owned it — which is the question the finder exists to answer,
+   * so „unassigned" is the one state this field may not have. Two is the cap
+   * because a group is a way IN, not a description: a tool filed under five of
+   * eight headings has told the reader nothing about where to look.
+   */
+  taskGroups: readonly ToolTaskGroup[];
   /**
    * The profession toolkits that list this tool — and, through
    * `toolDrawer`, which drawer it lives in at all.
