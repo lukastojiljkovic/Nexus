@@ -48,6 +48,8 @@ export interface ShellStrings {
   statementDialogTitle: string;
   statementFilterName: string;
   imageFilterName: string;
+  packDialogTitle: string;
+  packDialogButton: string;
   defaultAccountLabel: string;
   noteCopySuffix: string;
   backupProfileSlugFallback: string;
@@ -112,6 +114,15 @@ const SR: ShellStrings = {
    */
   imageFilterName: "Slika",
   /**
+   * The folder picker for a content pack (ADR-091, `index.ts`'s `packs:inspect`).
+   * A folder and not a file, because that is what a pack IS: `pack.json`, its
+   * signature and the content beside them. The title says which thing is being
+   * chosen, and the button says that the folder named is the pack — Electron's
+   * own default is „Select Folder", which reads as a step rather than an answer.
+   */
+  packDialogTitle: "Izaberi fasciklu paketa",
+  packDialogButton: "Izaberi ovu fasciklu",
+  /**
    * The label given to an account nobody named (`accounts.ts`'s
    * `defaultAccountLabel`, ADR-044 section 3) - renameable from the picker, so
    * a generic name costs the user one rename and never costs them their data.
@@ -139,6 +150,8 @@ const EN: ShellStrings = {
   statementDialogTitle: "Choose a statement (.csv)",
   statementFilterName: "Statement (CSV)",
   imageFilterName: "Image",
+  packDialogTitle: "Choose a pack folder",
+  packDialogButton: "Choose this folder",
   defaultAccountLabel: "My account",
   noteCopySuffix: " (copy)",
   backupProfileSlugFallback: "profile",
