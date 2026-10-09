@@ -255,6 +255,10 @@ function emptyProfileData(): ProfileData {
     circuitChassis: [],
     circuitParts: [],
     circuitWires: [],
+    // The kit's section (ADR-090): empty here, because no module is adopted in a
+    // database-level test and a module's own payload is not a row this store
+    // writes. A restore applies it through `restoreModuleData`, one level up.
+    modules: [],
     events: [],
     eventTemplates: [],
     documents: [],
@@ -955,6 +959,11 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
     circuitChassis: electronics.chassis,
     circuitParts: electronics.parts,
     circuitWires: electronics.wires,
+    // The kit's section (ADR-090): this store writes no module's payload, so the
+    // fixture carries none — `main/restore.ts` applies it through
+    // `restoreModuleData` after the replace, which is where the desktop tests
+    // cover it.
+    modules: [],
   };
 
   const derived = new Map<string, RestoredNoteDerived>([
@@ -1604,6 +1613,22 @@ describe("RestoreStore", () => {
       "sync_outbox",
       "sync_quarantine",
       "elec_settings",
+      // The TIMERS module's three tables (migration 071, ADR-090). A KIT
+      // module's tables are deliberately NOT in `RESTORE_WIPE_TABLES`, and the
+      // reason is structural rather than a preference: that list is DERIVED into
+      // `@nexus/sync`'s collection map, which `collectionGuard.test.ts` holds it
+      // equal to, and a module built on the kit may not edit `@nexus/sync` (its
+      // whole point is that a new module edits no shared file). So the kit's rule
+      // is the opposite one, stated in `ModuleContext.importData`: a module
+      // REPLACES ITS OWN ROWS, inside the same restore, when the archive names it
+      // — `main/restore.ts` calls `restoreModuleData` immediately after the
+      // replace has emptied every table above. An archive written before 1.42
+      // (or by a build with no kit modules) names none, so nothing runs and these
+      // rows stand UNTOUCHED, exactly as `private_notes` behaves with no
+      // `privateSealed`.
+      "timers_presets",
+      "timers_countdowns",
+      "timers_settings",
     ]);
 
     const wipeTables = new Set<string>(RESTORE_WIPE_TABLES);

@@ -42,6 +42,10 @@ export const ESSENTIALS_MODULE_PRESET: Readonly<Record<string, boolean>> = {
   tools: true,
   canvas: true,
   electronics: true,
+  // The first module built on the kit (ADR-090) is decided here like every other
+  // selectable one: nothing about a timer asks to be opted into, so „Osnovno"
+  // turns it on exactly as the manifest's own `defaultEnabled` says.
+  timers: true,
   pro: false,
 };
 

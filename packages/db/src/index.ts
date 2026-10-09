@@ -695,6 +695,26 @@ export type {
 
 export { ForeignImportStore } from "./imex/foreignImportStore.js";
 
+// --- TIMERS (migration 071, ADR-090) ----------------------------------------
+//
+// ONE store over THREE tables, on `ElectronicsStore`'s terms: a preset, a
+// running countdown and the module's one preference are one subject, and the
+// module that owns them is one folder.
+//
+// Its two error classes live beside it rather than in `errors.ts`, and that is a
+// decision rather than an oversight: `errors.ts` is the package's shared
+// vocabulary with a doc comment per class, and a module built on the kit adds
+// nothing there. They extend the same `DatabaseError`, so a caller that catches
+// by the base class sees no difference at all.
+export {
+  MAX_TIMER_DURATION_SECONDS,
+  MAX_TIMER_NAME_LENGTH,
+  TimersNotFoundError,
+  TimersStore,
+  TimersValidationError,
+} from "./timers/timersStore.js";
+export type { TimersCountdown, TimersPreset, TimersSettings } from "./timers/timersStore.js";
+
 export { SyncJournal } from "./sync/syncJournal.js";
 export type {
   ApplyOutcome,

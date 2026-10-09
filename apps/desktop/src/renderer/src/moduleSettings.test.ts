@@ -1,7 +1,7 @@
 import { ModuleRegistry, type ModuleManifest, type SettingsPanel } from "@nexus/core";
 import { describe, expect, it } from "vitest";
 
-import { createModuleRegistry } from "../../shared/modules.js";
+import { createModuleRegistry, kitManifest } from "../../shared/modules.js";
 import {
   isDeviceOnlyPanel,
   moduleSettingsCards,
@@ -10,7 +10,7 @@ import {
 } from "./moduleSettings.js";
 import { MODULE_SETTINGS_PANELS } from "./moduleSettingsPanels.js";
 import { buildSettingsIndex, foldSettingsQuery, matchSettings } from "./settingsSearch.js";
-import { strings } from "./strings.js";
+import { activeLocale, strings } from "./strings.js";
 
 /**
  * The per-module settings contract, read the way `SettingsPage` reads it.
@@ -100,6 +100,9 @@ describe("moduleSettingsDeclarations", () => {
       "fitness",
       "focus",
       "tools",
+      // The first DISCOVERED card (ADR-090), last because a kit module
+      // registers after every compiled-in one.
+      "timers",
     ]);
   });
 
@@ -129,6 +132,7 @@ describe("moduleSettingsCards", () => {
       "fitness",
       "focus",
       "tools",
+      "timers",
     ]);
     expect(cards.map((card) => card.title)).toEqual([
       s().sectionTitle.dashboard,
@@ -142,6 +146,10 @@ describe("moduleSettingsCards", () => {
       s().sectionTitle.fitness,
       s().sectionTitle.focus,
       s().sectionTitle.tools,
+      // A discovered module declares its own card title (ADR-090), so the
+      // expected value is its own pair read in the language being read rather
+      // than a path into the shell's table.
+      kitManifest("timers")?.copy?.name[activeLocale()] ?? "",
     ]);
   });
 

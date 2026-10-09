@@ -1,0 +1,312 @@
+import { describe, expect, it } from "vitest";
+import type { ExportModuleData } from "@nexus/core";
+import { ModuleHost, type ModulePlatform } from "./moduleIpc.js";
+import { defineModuleContract } from "../shared/moduleApi.js";
+
+/**
+ * The module kit's main half (ADR-090), against the real host.
+ *
+ * What is pinned here is everything the kit PROMISES rather than everything a
+ * module happens to do: the three refusals (an undeclared op, a channel outside
+ * the module's own prefix, a message from an untrusted sender), the channel set
+ * a build answers on, what a handler is handed, the armed-timer lifecycle the
+ * host owns, and the archive section's two impossible-to-recover-from cases.
+ * The platform is a double because `electron` cannot run under Vitest — that
+ * split is the whole reason `moduleIpc.ts` has no `electron` import — and it also
+ * makes the clock something a test can move instead of wait for.
+ */
+
+/** The one event value the double's sender check accepts, so "untrusted" is a value rather than a mock's mood. */
+const TRUSTED = { trusted: true };
+
+interface Harness {
+  readonly platform: ModulePlatform;
+  readonly toasts: { title: string; body: string; silent: boolean }[];
+  /** Every timer the host armed, in order — the fake scheduler, with the clock the test owns. */
+  readonly timers: { atMs: number; run: () => void; cancelled: boolean }[];
+  setNow(value: number): void;
+  now(): number;
+}
+
+function harness(): Harness {
+  const toasts: Harness["toasts"] = [];
+  const timers: Harness["timers"] = [];
+  let clock = 1_000;
+  const platform: ModulePlatform = {
+    // The real check refuses a frame this app did not serve (SEC-EL-02); the
+    // double refuses every event but one, which is the same rule with a name.
+    assertTrustedSender: (event) => {
+      if (event !== TRUSTED) throw new Error("Nexus: that message did not come from this app.");
+    },
+    // Handed straight through to `call.profileDb`'s opener: this test is about
+    // the wiring, and a real handle is the timers module's own test's business.
+    database: () => ({}) as never,
+    notify: (copy) => toasts.push(copy),
+    schedule: (atMs, run) => {
+      const entry = { atMs, run, cancelled: false };
+      timers.push(entry);
+      return () => {
+        entry.cancelled = true;
+      };
+    },
+    now: () => clock,
+  };
+  return {
+    platform,
+    toasts,
+    timers,
+    setNow: (value) => {
+      clock = value;
+    },
+    now: () => clock,
+  };
+}
+
+/** One two-op contract, so a test can talk about a module without a module existing. */
+type SampleOps = {
+  ping: { request: { who: string }; response: { pong: boolean } };
+  echo: { request: { text: string }; response: string };
+};
+const contract = defineModuleContract<"sample", SampleOps>("sample", ["ping", "echo"]);
+
+/** Registers a do-nothing handler for every op the contract declares — what a module's own `register` does, and what actually installs a channel. */
+function handleAll(ctx: { handle: (op: never, handler: never) => void }): void {
+  for (const op of contract.ops) {
+    ctx.handle(op as never, ((payload: unknown) => payload) as never);
+  }
+}
+
+describe("ModuleHost.adopt", () => {
+  it("answers every channel the contract declares, and nothing else", () => {
+    const host = new ModuleHost(harness().platform);
+    handleAll(host.adopt(contract));
+
+    expect(host.channels()).toEqual(["sample:ping", "sample:echo"]);
+    return expect(host.dispatch("sample:nope", TRUSTED, {})).rejects.toThrow(
+      /No module answers channel/,
+    );
+  });
+
+  it("refuses a contract that claims a channel outside the module's own prefix", () => {
+    const host = new ModuleHost(harness().platform);
+    const foreign = defineModuleContract<"sample", SampleOps>("sample", ["ping", "echo"]);
+    // Hand-built rather than declared, because `defineModuleContract` cannot
+    // produce one: this is the shape a module would have to fake to answer for
+    // another module, which is exactly what the refusal is for.
+    const smuggled = {
+      id: foreign.id,
+      ops: ["ping"] as const,
+      channels: { ping: "other:ping" },
+    };
+
+    expect(() => host.adopt(smuggled as never)).toThrow(/not under its own "sample:" prefix/);
+    expect(host.channels()).toEqual([]);
+  });
+
+  it("refuses a channel another module already answers", () => {
+    const host = new ModuleHost(harness().platform);
+    handleAll(host.adopt(contract));
+
+    // A second module claiming the same channel is refused when it is ADOPTED,
+    // which is before any of its handlers are installed — so a build cannot end
+    // up with one `ipcMain.handle` per module on the same channel, the second
+    // silently replacing the first.
+    expect(() => host.adopt(contract)).toThrow(/already handled by another module/);
+  });
+
+  it("refuses an op its contract does not declare, at registration", () => {
+    const host = new ModuleHost(harness().platform);
+    const ctx = host.adopt(contract);
+    handleAll(ctx);
+
+    expect(() => ctx.handle("nope" as never, (() => undefined) as never)).toThrow(
+      /has no declared op "nope"/,
+    );
+    // The refusal happened BEFORE the channel was installed, so the module's own
+    // two ops are what it answers and nothing else.
+    expect(host.channels()).toEqual(["sample:ping", "sample:echo"]);
+  });
+
+  it("refuses an untrusted sender before the handler runs", async () => {
+    const host = new ModuleHost(harness().platform);
+    const ctx = host.adopt(contract);
+    let ran = 0;
+    ctx.handle("ping", () => {
+      ran += 1;
+      return { pong: true };
+    });
+
+    await expect(host.dispatch("sample:ping", { untrusted: true }, {})).rejects.toThrow(
+      /did not come from this app/,
+    );
+    expect(ran).toBe(0);
+    await expect(host.dispatch("sample:ping", TRUSTED, {})).resolves.toEqual({ pong: true });
+    expect(ran).toBe(1);
+  });
+
+  it("hands a handler the shared validators, the profile's database and the clock", async () => {
+    const kit = harness();
+    const host = new ModuleHost(kit.platform);
+    const ctx = host.adopt(contract);
+    const opened: string[] = [];
+    ctx.handle("echo", (payload, call) => {
+      const record = call.as.asRecord(payload);
+      opened.push(call.as.asId(record.text, "id"));
+      const table = call.profileDb("profile-1", (db, profileId) => {
+        opened.push(profileId);
+        return db;
+      });
+      return `${String(table !== null)}:${String(call.now())}`;
+    });
+
+    await expect(
+      host.dispatch("sample:echo", TRUSTED, { text: "profile-1" }),
+    ).resolves.toBe("true:1000");
+    expect(opened).toEqual(["profile-1", "profile-1"]);
+  });
+});
+
+describe("ModuleHost's armed timers", () => {
+  it("re-arms in bounded hops, so a machine that slept through the moment still fires", () => {
+    const kit = harness();
+    const host = new ModuleHost(kit.platform);
+    const ctx = host.adopt(contract);
+    let fired = 0;
+    // An instant a long way off: the host must not hand the platform one
+    // enormous delay, or a suspended machine would never wake the timer.
+    ctx.armUntil(10_000_000, () => {
+      fired += 1;
+    });
+
+    expect(kit.timers).toHaveLength(1);
+    expect(kit.timers[0]?.atMs).toBe(31_000);
+    // Drive the hops forward until the instant is behind the clock.
+    for (let hop = 0; hop < 400 && fired === 0; hop += 1) {
+      const entry = kit.timers[kit.timers.length - 1];
+      if (entry === undefined) break;
+      kit.setNow(entry.atMs);
+      entry.run();
+    }
+    expect(fired).toBe(1);
+  });
+
+  it("fires at once for an instant that has already passed", () => {
+    const kit = harness();
+    const host = new ModuleHost(kit.platform);
+    const ctx = host.adopt(contract);
+    let fired = 0;
+    ctx.armUntil(kit.now() - 60_000, () => {
+      fired += 1;
+    });
+
+    expect(fired).toBe(1);
+    expect(kit.timers).toEqual([]);
+  });
+
+  it("cancels every armed timer when the session ends", () => {
+    const kit = harness();
+    const host = new ModuleHost(kit.platform);
+    const ctx = host.adopt(contract);
+    let fired = 0;
+    ctx.armUntil(kit.now() + 5_000, () => {
+      fired += 1;
+    });
+
+    host.sessionEnd();
+
+    expect(kit.timers.every((timer) => timer.cancelled)).toBe(true);
+    kit.setNow(kit.now() + 60_000);
+    expect(fired).toBe(0);
+  });
+});
+
+describe("ModuleHost's archive section", () => {
+  const section: readonly ExportModuleData[] = [{ moduleId: "sample", payload: { any: "thing" } }];
+
+  function withExporting() {
+    const kit = harness();
+    const host = new ModuleHost(kit.platform);
+    const ctx = host.adopt(contract);
+    return { kit, host, ctx };
+  }
+
+  it("omits a module that has nothing to say, rather than writing undefined", () => {
+    const { host, ctx } = withExporting();
+    ctx.exportData(() => undefined);
+
+    expect(host.collectExports(["profile-1"])).toEqual([]);
+  });
+
+  it("names the module a section belongs to, with the profile the session opened", () => {
+    const { host, ctx } = withExporting();
+    const seen: string[] = [];
+    ctx.exportData((session) => {
+      seen.push(...session.profileIds);
+      return { presets: [] };
+    });
+
+    expect(host.collectExports(["profile-9"])).toEqual([
+      { moduleId: "sample", payload: { presets: [] } },
+    ]);
+    expect(seen).toEqual(["profile-9"]);
+  });
+
+  it("refuses a section naming a module this build does not know, and says which", () => {
+    const { host } = withExporting();
+
+    expect(() => host.assertKnownModules([{ moduleId: "ghost", payload: null }])).toThrow(
+      /module "ghost", which this build does not know/,
+    );
+  });
+
+  it("refuses every entry before running a single importer", () => {
+    const { host, ctx } = withExporting();
+    let imported = 0;
+    ctx.importData(() => {
+      imported += 1;
+    });
+
+    expect(() =>
+      host.applyImports(
+        [{ moduleId: "sample", payload: 1 }, { moduleId: "ghost", payload: 2 }],
+        ["profile-1"],
+      ),
+    ).toThrow(/module "ghost"/);
+    expect(imported).toBe(0);
+  });
+
+  it("applies a known section to every profile the session names", () => {
+    const { host, ctx } = withExporting();
+    const applied: { profileId: string; payload: unknown }[] = [];
+    ctx.importData((value, session) => {
+      for (const profileId of session.profileIds) applied.push({ profileId, payload: value });
+    });
+
+    host.applyImports(section, ["profile-1", "profile-2"]);
+
+    expect(applied).toEqual([
+      { profileId: "profile-1", payload: { any: "thing" } },
+      { profileId: "profile-2", payload: { any: "thing" } },
+    ]);
+  });
+});
+
+describe("ModuleHost's session hooks", () => {
+  it("hands every module the profile ids the session opened, and the end of it", () => {
+    const kit = harness();
+    const host = new ModuleHost(kit.platform);
+    const ctx = host.adopt(contract);
+    const starts: string[][] = [];
+    let ends = 0;
+    ctx.onSessionStart((session) => starts.push([...session.profileIds]));
+    ctx.onSessionEnd(() => {
+      ends += 1;
+    });
+
+    host.sessionStart(["profile-1", "profile-2"]);
+    host.sessionEnd();
+
+    expect(starts).toEqual([["profile-1", "profile-2"]]);
+    expect(ends).toBe(1);
+  });
+});

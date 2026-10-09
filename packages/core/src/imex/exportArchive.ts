@@ -616,7 +616,19 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * pins them equal.
  *
  */
-const SCHEMA_VERSION = "1.41.0";
+/**
+ * `1.42.0` adds the MODULE KIT's section (ADR-090): a new
+ * `data/modules.ndjson` carrying one `module-data` record per discovered module
+ * that has something to say.
+ *
+ * A MINOR bump, by the same honesty every entry above made: an older reader
+ * refuses the record type outright, and it would refuse it for a reason that
+ * has nothing to do with a damaged file - a kit module's payload would be
+ * silently missing from a restore that reported success. The record type is
+ * additive in this build's own direction (nothing above changed), which is why
+ * the bump is minor and not major.
+ */
+const SCHEMA_VERSION = "1.42.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 
@@ -2154,6 +2166,26 @@ export interface ExportSettings {
 }
 
 /**
+ * One kit module's section of an archive (ADR-090): which module, and the
+ * versioned payload that module handed over.
+ *
+ * `moduleId` is the module's own manifest id (`timers`), which is also the
+ * prefix of every channel it declares — one name for one module, so an archive
+ * that names an id this build does not know is answerable with a sentence
+ * rather than a guess. The row rides as `module-data` in
+ * `data/modules.ndjson`.
+ */
+export interface ExportModuleData {
+  moduleId: string;
+  /**
+   * The module's own export value, exactly as its `exportData()` returned it
+   * (or as its `importData()` will validate it back). Deliberately `unknown`:
+   * see `ProfileData.modules` for why core carries this without reading it.
+   */
+  payload: unknown;
+}
+
+/**
  * Every non-derived row of one profile: what an archive carries, what the
  * exporter gathers, and what a restore writes. One shape, deliberately shared
  * by all three, so a module that one of them forgets is a type error in the
@@ -2392,6 +2424,35 @@ export interface ProfileData {
   circuitChassis: readonly ExportCircuitChassis[];
   circuitParts: readonly ExportCircuitPart[];
   circuitWires: readonly ExportCircuitWire[];
+  /**
+   * The MODULE KIT's section (ADR-090): one entry per discovered module that
+   * has something to say, keyed by that module's own id.
+   *
+   * **Why this one member is not an array of rows with its own bucket.** Every
+   * field above is a collection this package knows the shape of, and that is
+   * what lets `countProfileModules` and `filterProfileData` share one
+   * module↔collection mapping. A kit module's payload is the opposite kind of
+   * thing by design: its shape belongs to the module, versioned by the module,
+   * read back only by the module that wrote it (`ModuleContext.exportData`).
+   * Core carries it and never looks inside — so it stays `unknown`, and the
+   * type says out loud what the alternative (`any`, or a shape invented here)
+   * would hide.
+   *
+   * **It belongs to no archive module** (IMEX-003), exactly as `settings` and
+   * the private section belong to none: a subset export filters the collections
+   * above, and this rides whole with every archive, because a module's data has
+   * no bucket a subset could be expressed against. The one thing an archive
+   * DOES say about it is which modules it names, and a build that does not know
+   * one of them refuses the archive rather than dropping the section
+   * (`main/restore.ts`), because a backup that silently loses rows is the
+   * failure this whole reader exists to prevent.
+   *
+   * Required like every field above, and for the same reason: a caller that
+   * forgets it must be a type error, not a quiet omission. EMPTY is the honest
+   * shape for "this archive carries no kit module data", which is also every
+   * archive written before `1.42.0` — indistinguishable on purpose.
+   */
+  modules: readonly ExportModuleData[];
 }
 
 // --- Private notes (PRIV v1, ADR-057 §6) ------------------------------------
@@ -2617,6 +2678,11 @@ export const DATA_FILES = [
   // The ELEC module (migration 067, `1.40.0`): its own file, on the same terms
   // again — a pre-1.40 archive neither carries it nor declares its checksum.
   "data/electronics.ndjson",
+  // The MODULE KIT's section (ADR-090, `1.42.0`): one record per discovered
+  // module that has something to say, appended on the same terms again - a
+  // pre-1.42 archive neither carries it nor declares its checksum, and
+  // absent-and-undeclared is nothing at all.
+  "data/modules.ndjson",
 ] as const;
 
 /** The manifest's module ids, in manifest order — the grouping `countProfileModules` counts by and `buildExportArchive` builds `manifest.modules` from, so the two can never disagree. */
@@ -2777,6 +2843,12 @@ export function countProfileModules(data: ProfileData): Record<ArchiveModuleId, 
       data.circuitChassis.length +
       data.circuitParts.length +
       data.circuitWires.length,
+    // The kit's section (ADR-090) is counted NOWHERE, deliberately: it belongs
+    // to no archive module (see `ProfileData.modules`), and the buckets above
+    // are keyed by `ArchiveModuleId` - a closed union this package cannot grow
+    // per module. A restore preview therefore says nothing about it, which is
+    // the honest answer: what one module's opaque payload contains is the
+    // module's own business, and its own screen is where it is described.
   };
 }
 
@@ -2957,6 +3029,11 @@ export function filterProfileData(
     circuitChassis: only("electronics", data.circuitChassis),
     circuitParts: only("electronics", data.circuitParts),
     circuitWires: only("electronics", data.circuitWires),
+    // The MODULE KIT's section passes through WHOLE (ADR-090): it belongs to no
+    // archive module, so there is no subset to apply to it - a module's payload
+    // is not a collection of rows a module choice could drop. `settings` and
+    // the private section ride outside this filter for the same reason.
+    modules: data.modules,
   };
 }
 
@@ -3143,6 +3220,15 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
     ...privateNotes.versions.map((row) => ({ type: "private-note-version", ...row })),
   ]);
 
+  // The kit's section (ADR-090): one record per module, in the order the host
+  // collected them (which is registration order, so two exports of one profile
+  // are byte-identical). A module with nothing to say never reaches here - the
+  // host omits it - so an empty file means "no module had anything", exactly
+  // what a profile that never used one produces.
+  const modulesNdjson = toNdjson(
+    data.modules.map((row) => ({ type: "module-data", ...row })),
+  );
+
   files.set("data/tasks.ndjson", tasksNdjson);
   files.set("data/calendar.ndjson", calendarNdjson);
   files.set("data/study.ndjson", studyNdjson);
@@ -3155,6 +3241,7 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
   files.set("data/fitness.ndjson", fitnessNdjson);
   files.set("data/canvas.ndjson", canvasNdjson);
   files.set("data/electronics.ndjson", electronicsNdjson);
+  files.set("data/modules.ndjson", modulesNdjson);
 
   // --- Notes: Markdown mirror + binary entries (ADR-022 section 3) -------
   const binaries: ExportBinaryEntry[] = [];

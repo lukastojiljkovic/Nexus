@@ -41,6 +41,7 @@ import type {
   ExportFitWorkoutSet,
   ExportHabit,
   ExportHabitEntry,
+  ExportModuleData,
   ExportNoteFolder,
   ExportNoteTag,
   ExportNoteTagLink,
@@ -156,6 +157,18 @@ export interface ProfileDataDeps {
   fitBodyProfileStore(profileId: string): FitBodyProfileStore;
   canvasStore(profileId: string): CanvasStore;
   electronicsStore(profileId: string): ElectronicsStore;
+  /**
+   * The kit's section of a full profile read (ADR-090): what every discovered
+   * module hands over for this profile, in registration order.
+   *
+   * A function rather than a store, because this is the ONE member of
+   * `ProfileData` that is not read out of a table: a module's payload is the
+   * module's own shape, produced by its own `exportData` hook, and the only
+   * thing that knows how to produce it is the host that adopted it
+   * (`main/moduleIpc.ts`). Injecting it keeps this module free of the host,
+   * exactly as every store above is injected for.
+   */
+  moduleExports(profileId: string): readonly ExportModuleData[];
 }
 
 /** Every NOTE-module row `ProfileData` requires (ADR-022 section 3) — `gatherNotes`'s return shape. */
@@ -346,6 +359,11 @@ export function gatherProfileData(deps: ProfileDataDeps, profileId: string): Pro
     ...gatherFitness(deps, profileId),
     ...gatherCanvas(deps, profileId),
     ...gatherElectronics(deps, profileId),
+    // The kit's section (ADR-090), and the one member of this shape that is a
+    // HOOK rather than a read: a discovered module's data lives in its own
+    // tables and in its own shape, so the only thing that can produce it is the
+    // module itself - `deps.moduleExports` asks the host that adopted it.
+    modules: deps.moduleExports(profileId),
   };
 }
 

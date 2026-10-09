@@ -48,6 +48,7 @@ import {
   type LlmSkippedRecord,
   type ParsedApkg,
   type ProfileData,
+  type ExportModuleData,
 } from "@nexus/core";
 import { uuidv7 } from "@nexus/db";
 import type {
@@ -354,6 +355,21 @@ export interface RestoreDeps extends ProfileDataDeps {
   deleteBlobIfOrphaned(sha256: string, refCount: number): Promise<void>;
   /** The sealed private-note store (ADR-057 §6) — what undo's parallel sealed-rows capture reads through (`gatherPrivateSealedRows`). Never decrypts; it cannot. */
   privateNoteStore(profileId: string): PrivateNoteStore;
+  /**
+   * Refuses an archive whose `data/modules.ndjson` names a kit module this
+   * build did not adopt (ADR-090) - called at the PREVIEW, so the user hears
+   * it before confirming, and not at all when the section is empty or names
+   * only modules that are here.
+   */
+  assertKnownModules(modules: readonly ExportModuleData[]): void;
+  /**
+   * Applies the archive's kit-module section to one profile (ADR-090), after
+   * the profile's content has been replaced and inside the same unlocked
+   * session. Each module validates its own payload completely before writing
+   * its own rows; a module that refuses leaves the rest of the archive
+   * applied and its own section empty.
+   */
+  restoreModuleData(profileId: string, modules: readonly ExportModuleData[]): void;
   /** Whether `profileId`'s private section is set up AND unlocked right now — the preview's `willRestore` fact, re-checked at apply time by the re-seal itself. */
   privUnlocked(profileId: string): boolean;
   /**
@@ -716,6 +732,28 @@ export async function previewRestore(
   const warnings = parsed.problems.filter((problem) => problem.severity === "warning").map(toRestoreProblem);
   const token = randomBytes(16).toString("hex");
 
+  // The kit's section (ADR-090), refused HERE rather than at apply: a module
+  // this build does not know means the archive carries data that would be lost,
+  // and the user has to hear that before they confirm a restore that replaces
+  // their profile - not after. The apply re-checks it (`applyImports`), because
+  // a plan confirmed against one build must not be applied by another.
+  try {
+    deps.assertKnownModules(parsed.data.modules);
+  } catch (error) {
+    await archive.close();
+    return {
+      status: "invalid",
+      problems: [
+        {
+          severity: "error",
+          code: "unknown-module",
+          path: "data/modules.ndjson",
+          detail: error instanceof Error ? error.message : String(error),
+        },
+      ],
+    };
+  }
+
   picked.ready = {
     archive,
     token,
@@ -888,6 +926,13 @@ export async function applyRestore(
     now,
   );
 
+  // The kit's section (ADR-090), applied immediately after the replace that
+  // emptied these modules' tables (`RESTORE_WIPE_TABLES`): what the archive
+  // carries is what the profile ends up with, and an archive that carries none
+  // leaves them empty - which is what "this archive says nothing about them"
+  // has to mean for a restore that replaces a profile whole.
+  deps.restoreModuleData(profileId, ready.data.modules);
+
   // Private attachment files the archive could not supply count beside the
   // content-addressed ones: both are attachment rows restored without their
   // bytes, which is the one fact this number states.
@@ -973,6 +1018,12 @@ export async function undoRestore(deps: RestoreDeps, profileId: string): Promise
     },
     now,
   );
+
+  // The kit's section is replayed on the same terms as every other member of
+  // the snapshot (ADR-090): the pre-operation payload went in with the
+  // pre-operation rows, so undoing a restore - or a foreign import - puts the
+  // profile's modules back exactly where they were.
+  deps.restoreModuleData(profileId, toUndo.snapshot.data.modules);
 
   let blobsRemoved = 0;
   for (const sha256 of toUndo.addedBlobs) {

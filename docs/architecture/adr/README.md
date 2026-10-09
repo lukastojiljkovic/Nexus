@@ -101,4 +101,5 @@ directory is the decision log behind it.
 | [087](087-apache-2.0-open-source.md) | Nexus is Apache-2.0, and the repository becomes public | Accepted; supersedes ADR-080 §1 | 2026-10-02 |
 | [088](088-settings-categories.md) | „Podešavanja" becomes eight categories with sub-pages | Accepted | 2026-10-07 |
 | [089](089-network-mode-and-update-check.md) | A network mode and an opt-in update check | Accepted | 2026-10-07 |
+| [090](090-module-kit.md) | The module kit: a module is a folder | Accepted | 2026-10-09 |
 | [093](093-navigation-groups.md) | Navigation groups, the pinned shortlist and the launcher | Accepted; supersedes ADR-008 decision #11, amends ADR-086 §4 | 2026-10-09 |

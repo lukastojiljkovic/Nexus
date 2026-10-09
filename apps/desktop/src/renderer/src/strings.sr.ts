@@ -6576,6 +6576,9 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         // ADR-058: arhiva se vraća samo u profil svoje vrste (lični ↔ poslovni).
         "profile-kind-mismatch":
           "Arhiva pripada drugoj vrsti profila (lični/poslovni) i ne može se vratiti u ovaj profil — izaberi profil iste vrste.",
+        // ADR-090: arhiva nosi podatke modula koji ova verzija ne poznaje.
+        "unknown-module":
+          "Arhiva sadrži podatke modula koji ova verzija ne poznaje — ažuriraj Nexus ili uvezi arhivu u verziji koja ju je napravila.",
       } satisfies Record<RestoreProblemCode, string>,
     },
     /**

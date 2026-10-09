@@ -52,6 +52,7 @@ import {
 import { habitPeriodPhrase } from "./habitFormat.js";
 import { formatMoney } from "./money.js";
 import { formatNotificationWhen } from "./notificationFormat.js";
+import { kitWidgetRenderer, kitWidgetIds } from "./moduleKit/widgets.js";
 import { countUnit, dayUnit, strings } from "./strings.js";
 import { readStoredWeekStart, toWeekStart } from "./weekStart.js";
 
@@ -1520,3 +1521,25 @@ export const DASHBOARD_WIDGETS: Record<string, DashboardWidgetRenderer> = {
   },
   "pro:paketi": { Body: ProPacksWidget, visible: (enabled) => enabled.has("pro") },
 };
+
+/**
+ * How the page draws one qualified placement: the compiled-in map above, or a
+ * kit module's own discovered body (ADR-090, `moduleKit/widgets.ts`).
+ *
+ * The page asks HERE rather than indexing the map itself, for the reason the
+ * settings page asks `settingsPanelRenderer`: "which bodies exist" stopped being
+ * a compile-time fact the day a module could bring its own. `undefined` still
+ * means exactly what it always meant — a placement this build cannot draw, which
+ * the page skips rather than fails on, so a layout survives a module being
+ * dropped from the build and comes back when it returns.
+ */
+export function dashboardWidgetRenderer(
+  qualifiedId: string,
+): DashboardWidgetRenderer | undefined {
+  return DASHBOARD_WIDGETS[qualifiedId] ?? kitWidgetRenderer(qualifiedId);
+}
+
+/** Every widget this build can draw, compiled-in and discovered alike — what the pairing tests compare the registry against. */
+export function dashboardWidgetIds(): readonly string[] {
+  return [...Object.keys(DASHBOARD_WIDGETS), ...kitWidgetIds()];
+}

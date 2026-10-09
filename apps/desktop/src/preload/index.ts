@@ -9,6 +9,7 @@ import {
   type UpdateStateView,
   type WindowState,
 } from "../shared/ipc.js";
+import { buildModuleBridge } from "./moduleBridge.js";
 
 /**
  * The renderer's only bridge to the main process (SEC-EL-02). Each method wraps
@@ -17,6 +18,11 @@ import {
  * cannot reshape the surface after exposure.
  */
 const api: NexusApi = {
+  // The kit's modules, built from their own declared contracts (ADR-090). This
+  // line is the whole of the preload's per-module cost: the namespaces, their
+  // methods and the channels behind them all come from the modules' own
+  // `shared/ipc.ts` files, discovered by `moduleBridge.ts`.
+  modules: buildModuleBridge(ipcRenderer),
   getAuthStatus: () => ipcRenderer.invoke(IpcChannel.authStatus),
   createAccount: (label, passcode) => ipcRenderer.invoke(IpcChannel.authCreate, { label, passcode }),
   createAdditionalAccount: (label, passcode) =>

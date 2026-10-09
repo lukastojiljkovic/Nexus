@@ -16,6 +16,7 @@ import {
   type ArchiveProfilePicture,
   type ExportArchive,
   type ExportArchiveInput,
+  type ExportModuleData,
   type ExportPrivateNotes,
   type ExportSettings,
   type ProfileData,
@@ -193,8 +194,34 @@ function createProfile(handle: NexusDatabase, name: string): string {
   return id;
 }
 
+/**
+ * The module kit's section as this suite sees it (ADR-090): what a full read
+ * hands over, which module ids this build adopted, and every import it was
+ * asked to apply.
+ *
+ * `main/index.ts` gets the same three things from `moduleHost`, which has its
+ * own tests (`moduleIpc.test.ts`) against the real host. Here they are a seam,
+ * because what THESE tests are responsible for is the ordering and the refusal
+ * the restore orchestration owes: a section that rides the archive, is refused
+ * at the preview when this build does not know an id, and is applied after the
+ * replace has emptied the profile.
+ */
+interface TestModuleSeam {
+  /** One profile's section, as the host's `collectExports` produces it. Written by `restoreModuleData`, so a re-read after a restore reports what the archive carried. */
+  exportsByProfile: Map<string, readonly ExportModuleData[]>;
+  /** The ids this build adopted; an archive naming anything else is refused. */
+  knownIds: ReadonlySet<string>;
+  /** Every `restoreModuleData` call, in order. */
+  applied: { profileId: string; modules: readonly ExportModuleData[] }[];
+}
+
+/** A seam with nothing exported and `timers` adopted — what a suite that does not care about the section gets. */
+function moduleSeam(knownIds: readonly string[] = ["timers"]): TestModuleSeam {
+  return { exportsByProfile: new Map(), knownIds: new Set(knownIds), applied: [] };
+}
+
 /** Every `ProfileDataDeps` getter, bound to one database — the same construction `main/index.ts` would do for a real profile, minus Electron. */
-function profileDataDeps(handle: NexusDatabase): ProfileDataDeps {
+function profileDataDeps(handle: NexusDatabase, modules = moduleSeam()): ProfileDataDeps {
   return {
     taskStore: (profileId) => new TaskStore(handle.raw, profileId),
     taskListStore: (profileId) => new TaskListStore(handle.raw, profileId),
@@ -241,6 +268,12 @@ function profileDataDeps(handle: NexusDatabase): ProfileDataDeps {
     fitBodyProfileStore: (profileId) => new FitBodyProfileStore(handle.raw, profileId),
     canvasStore: (profileId) => new CanvasStore(handle.raw, profileId),
     electronicsStore: (profileId) => new ElectronicsStore(handle.raw, profileId),
+    // The kit's section (ADR-090), over the seam above. The refusal's WORDING is
+    // duplicated from `main/moduleIpc.ts`'s `assertKnownModules`, exactly as
+    // `TestPrivSeam` duplicates `privResealForRestore`'s contract: this file is
+    // about the orchestration around it, and the real message is asserted where
+    // the real host is.
+    moduleExports: (profileId) => modules.exportsByProfile.get(profileId) ?? [],
   };
 }
 
@@ -253,6 +286,8 @@ interface TestDepsHandle {
   getReloadCount: () => number;
   /** The private-section seam's double (ADR-057 §6) — flip `unlocked` per test; `blobFiles` stands in for the sealed private-blob directory. */
   priv: TestPrivSeam;
+  /** The module kit's section (ADR-090) — flip `knownIds` per test; `applied` records every import. */
+  modules: TestModuleSeam;
 }
 
 /**
@@ -292,6 +327,8 @@ function makeTestDeps(
   icsPath: string | null = null,
   /** FIN slice e's own picker, injected separately for the reason every other one is: nothing on the task surface may open the ledger's dialog. */
   finCsvPath: string | null = null,
+  /** The kit's section (ADR-090), shared with whatever builds the archive under test so a section can be handed over, applied and read back. */
+  modules: TestModuleSeam = moduleSeam(),
 ): TestDepsHandle {
   const blobs = new Map<string, Uint8Array>();
   const cancelFocusCalls: string[] = [];
@@ -304,9 +341,27 @@ function makeTestDeps(
   };
 
   const deps: ImportDeps = {
-    ...profileDataDeps(handle),
+    ...profileDataDeps(handle, modules),
     restoreStore: (profileId) => new RestoreStore(handle.raw, profileId),
     foreignImportStore: (profileId) => new ForeignImportStore(handle.raw, profileId),
+    // The kit's section (ADR-090), over the seam above. The refusal's WORDING is
+    // duplicated from `main/moduleIpc.ts`'s `assertKnownModules`, exactly as
+    // `TestPrivSeam` duplicates `privResealForRestore`'s contract: this file is
+    // about the orchestration around it, and the real message is asserted where
+    // the real host is.
+    assertKnownModules: (section) => {
+      for (const { moduleId } of section) {
+        if (!modules.knownIds.has(moduleId)) {
+          throw new Error(
+            `This archive carries data for module "${moduleId}", which this build does not know.`,
+          );
+        }
+      }
+    },
+    restoreModuleData: (profileId, section) => {
+      modules.applied.push({ profileId, modules: section });
+      modules.exportsByProfile.set(profileId, section);
+    },
     // The REAL read `main/index.ts` performs, through the same store — the
     // picture rides with the name because a restore replaces both, and an undo
     // that snapshotted only the name would leave the target wearing the
@@ -433,7 +488,7 @@ function makeTestDeps(
     },
   };
 
-  return { deps, blobs, cancelFocusCalls, getReloadCount: () => reloadCount, priv };
+  return { deps, blobs, cancelFocusCalls, getReloadCount: () => reloadCount, priv, modules };
 }
 
 /** A tick past `setTimeout(…, 0)` — what `applyRestore`/`undoRestore` schedule their renderer reload on. */
@@ -1016,6 +1071,17 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
     circuitChassis: electronics.chassis,
     circuitParts: electronics.parts,
     circuitWires: electronics.wires,
+    // The module kit's section (ADR-090), carried by every archive this fixture
+    // builds so the whole suite exercises its travel. One discovered module with
+    // ONE opaque payload: core validates the row and never looks inside it, so
+    // what the row HOLDS is deliberately something only the module that wrote it
+    // could describe.
+    modules: [
+      {
+        moduleId: "timers",
+        payload: { presets: [{ name: "Kafa", durationSeconds: 240 }] },
+      },
+    ],
   };
 
   const derived = deriveRestoredNotes(data.notes);

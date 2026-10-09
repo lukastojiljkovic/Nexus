@@ -43,6 +43,7 @@ import {
 import { PLAN_STAGES, applyProfilePlan, type PlanStage } from "./profilePlanApply.js";
 import { heardTrades, joinList, packName, planReasonLines } from "./profilePlanCopy.js";
 import { persistSignals } from "./signalPrefs.js";
+import { moduleDescription, moduleName } from "./moduleName.js";
 import { fill, lookup, strings } from "./strings.js";
 
 /** Mirrors the main-process rule: 1–80 chars after trimming (UX-side only). */
@@ -1021,13 +1022,13 @@ export function Onboarding({
                   </h3>
                   <div className="onb__module-list">
                     {members.map((manifest) => {
-                      const label = lookup(strings.modules, manifest.id) ?? manifest.id;
+                      const label = moduleName(manifest.id);
                       return (
                         <div className="onb__module-row" key={manifest.id}>
                           <div className="onb__module-info">
                             <span className="onb__module-name">{label}</span>
                             <span className="onb__module-desc">
-                              {lookup(strings.settings.moduleDescriptions, manifest.id) ?? ""}
+                              {moduleDescription(manifest.id)}
                             </span>
                           </div>
                           {LOCKED_MODULE_IDS.has(manifest.id) ? (

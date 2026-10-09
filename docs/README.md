@@ -39,6 +39,7 @@ history, not a live link.
 | --- | --- |
 | [architecture/overview.md](architecture/overview.md) | The shape of the system — surfaces, monorepo layout, build and test strategy, and the risks still open. Read it to see how the parts fit together. |
 | [architecture/adr/README.md](architecture/adr/README.md) | One table of every architecture decision: number, title, status and date, each read from the ADR's own status line. Read it to find the decision behind any part of the system. |
+| [architecture/adding-a-module.md](architecture/adding-a-module.md) | The step-by-step checklist for adding a module — the folder contract, the manifest, the contract, the main half, the page and its copy, storage, import/export, the tests and the gates. Read it before writing the first file of a new module. |
 | [prd/glossary.md](prd/glossary.md) | The shared vocabulary the specification and the code use. Read it when a term in an ADR or a PRD is not obvious. |
 
 ## Follow the work
