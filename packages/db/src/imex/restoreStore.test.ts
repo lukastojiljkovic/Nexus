@@ -1671,6 +1671,18 @@ describe("RestoreStore", () => {
     //    into `RESTORE_WIPE_TABLES` (with their sync classification) in that
     //    pass. Exempting them HERE keeps a restore from emptying a table nothing
     //    in this build refills - which is the lossy direction, not the safe one.
+    //  - calc_history / calc_sessions (migration 079): CONTENT, and the one
+    //    pair in this ledger that is here only until the next stage of the same
+    //    module lands. The calculator was built in two passes — the engine and
+    //    this store first, the page, the IPC and the profile archive second —
+    //    and until the archive carries a calculator there is nothing for a
+    //    restore to WRITE here. Wiping either table now would destroy history
+    //    and variables the archive cannot put back, which is the one direction
+    //    this guard exists to prevent; leaving them standing loses nothing,
+    //    because a restore is not a thing that should delete what it cannot
+    //    reproduce. When the archive learns about the calculator, both tables
+    //    move into `RESTORE_WIPE_TABLES` (children first, and here there are no
+    //    children) and this entry goes with them.
     const allowlist = new Set<string>([
       "meta",
       "profiles",
@@ -1739,6 +1751,8 @@ describe("RestoreStore", () => {
       "emergency_cards",
       "emergency_contacts",
       "emergency_documents",
+      "calc_history",
+      "calc_sessions",
     ]);
 
     const wipeTables = new Set<string>(RESTORE_WIPE_TABLES);
