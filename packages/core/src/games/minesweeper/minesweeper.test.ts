@@ -242,7 +242,8 @@ describe("the first click", () => {
         }
       }
     }
-  });
+    // 30 000 boards took 5.04 s on the CI runners, past vitest's 5 s default.
+  }, 60_000);
 
   it("draws the same board for the same seed and click, and a different one for another seed", () => {
     const click = 40;
