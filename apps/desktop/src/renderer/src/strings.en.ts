@@ -241,7 +241,7 @@ export const en = {
     install: "Download and install",
     installing: "Downloading…",
     installHint:
-      "Nothing downloads until you press this. Nexus checks the installer's signature, starts it and closes.",
+      "Nothing downloads until you press this. Nexus checks the installer's signature, starts it and closes. The installation then runs quietly and opens the new version by itself when it finishes.",
     later: "Later",
     releasePage: "Release page",
     notesTitle: "What is new",

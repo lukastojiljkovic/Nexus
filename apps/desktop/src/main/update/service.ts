@@ -24,11 +24,11 @@ import { sha256Hex, verifyDetachedSignature } from "./verify.js";
  * The update check as a service with every effect injected.
  *
  * This module imports no Electron and touches no session: the dedicated
- * network session, `shell.openPath` and `app.quit()` arrive as functions from
- * `index.ts`. That is what makes the interesting half — a rate-limited
- * automatic check staying silent, a hash mismatch deleting its file, a
- * signature that does not verify refusing to install — testable without a
- * browser process.
+ * network session, the installer launch (`update/launch.ts`) and `app.quit()`
+ * arrive as functions from `index.ts`. That is what makes the interesting half
+ * testable without a browser process: a rate-limited automatic check staying
+ * silent, a hash mismatch deleting its file, a signature that does not verify
+ * refusing to install.
  *
  * ADR-089 is the contract, and the two load-bearing sentences are enforced
  * here rather than in copy: nothing is downloaded until `install()` is called
@@ -61,8 +61,13 @@ export interface UpdateServiceDeps {
   readonly mode: () => NetworkMode;
   readonly http: UpdateHttp;
   readonly publicKeyPem: string;
-  /** Returns `shell.openPath`'s answer: an empty string on success, a message on failure. */
-  readonly openPath: (path: string) => Promise<string>;
+  /**
+   * Starts the verified installer and answers the way `shell.openPath` did: an
+   * empty string once the process exists, a message when it does not. It is
+   * never called with anything but the file this service downloaded, hashed
+   * while streaming and hashed again a moment ago.
+   */
+  readonly launchInstaller: (path: string) => Promise<string>;
   readonly quit: () => void;
   readonly now: () => number;
   readonly onChanged: (view: UpdateStateView) => void;
@@ -312,7 +317,7 @@ export function createUpdateService(deps: UpdateServiceDeps): UpdateService {
 
     let launchError: string;
     try {
-      launchError = await deps.openPath(destination);
+      launchError = await deps.launchInstaller(destination);
     } catch {
       launchError = "launch failed";
     }
