@@ -5,6 +5,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   symlinkSync,
   unlinkSync,
@@ -68,17 +69,19 @@ const COMMITTED = readFileSync(REPO_NOTICES);
  * Copy the gate into a directory laid out the way its arithmetic expects — its
  * `SCRIPTS_DIR`, `APP_ROOT`, `REPO_ROOT` and `OUTPUT` are each one hop from the
  * last — and all four resolve INSIDE that directory, while the dependency graph
- * it reads is reached back through two junctions to the real one.
+ * it reads is reached back through junctions to the real one.
  *
- * WHAT IS COPIED is the six files pnpm resolves a workspace from and the gate
+ * WHAT IS COPIED is the files pnpm resolves a workspace from and the gate
  * reads by name: `package.json`, `pnpm-workspace.yaml`, `pnpm-lock.yaml`,
- * `apps/desktop/package.json` (what `--filter @nexus/desktop` matches),
+ * `apps/desktop/package.json` (what `--filter @nexus/desktop...` matches), the
+ * `package.json` of every workspace package (the members its trailing `...`
+ * follows, whose own dependencies ship in the installer too),
  * `apps/desktop/electron.vite.config.ts` (what scopes the font notices to the
  * families the build actually copies) and the gate itself — plus the notices
- * under test. WHAT IS NOT is `node_modules`, at either level: both are
- * junctions, so `pnpm licenses list --filter @nexus/desktop` answers out of the
- * real virtual store and the gate reads the real Electron manifest and the real
- * Excalidraw font files. Not one package notice is simulated, which is what
+ * under test. WHAT IS NOT is `node_modules`, at any level: each one is a
+ * junction, so `pnpm licenses list --filter @nexus/desktop...` answers out of
+ * the real virtual store and the gate reads the real Electron manifest and the
+ * real Excalidraw font files. Not one package notice is simulated, which is what
  * keeps a rejection from being a statement about the copy. The first case in
  * the describe below — the same notices, untouched — is what proves it: if the
  * scratch tree produced anything other than the real `rendered`, that copy
@@ -102,14 +105,24 @@ const COMMITTED = readFileSync(REPO_NOTICES);
  * editor who makes them so will otherwise get three tests racing over one file
  * and a failure that points at the mutation rather than at the sharing.
  */
+const PACKAGES = readdirSync(join(REPO_ROOT, "packages"))
+  .map((name) => `packages/${name}`)
+  .filter((dir) => existsSync(join(REPO_ROOT, dir, "package.json")));
+
 const SKELETON = [
   "package.json",
   "pnpm-workspace.yaml",
   "pnpm-lock.yaml",
   "apps/desktop/package.json",
+  ...PACKAGES.map((dir) => `${dir}/package.json`),
   "apps/desktop/electron.vite.config.ts",
   GATE,
 ];
+
+/** Every `node_modules` of the real tree that the scratch tree links back to. */
+const LINKED = [".", "apps/desktop", ...PACKAGES]
+  .map((dir) => join(dir, "node_modules"))
+  .filter((rel) => existsSync(join(REPO_ROOT, rel)));
 
 /**
  * A package this tree has never contained, in the shape the generator writes
@@ -246,12 +259,7 @@ describe("the same notices, in a scratch tree", () => {
     scratchNotices = join(scratch, NOTICES);
     mkdirSync(dirname(scratchNotices), { recursive: true });
     copyFileSync(REPO_NOTICES, scratchNotices);
-    symlinkSync(join(REPO_ROOT, "node_modules"), join(scratch, "node_modules"), "junction");
-    symlinkSync(
-      join(REPO_ROOT, "apps", "desktop", "node_modules"),
-      join(scratch, "apps", "desktop", "node_modules"),
-      "junction",
-    );
+    for (const rel of LINKED) symlinkSync(join(REPO_ROOT, rel), join(scratch, rel), "junction");
   });
 
   afterAll(() => {
@@ -260,8 +268,10 @@ describe("the same notices, in a scratch tree", () => {
     // treats a reparse point. It does not follow them — measured on this
     // repository, not assumed — but a safety argument that leans on somebody
     // else's implementation detail holds until the day it does not.
-    const links = [join(scratch, "node_modules"), join(scratch, "apps", "desktop", "node_modules")];
-    for (const link of links) if (existsSync(link)) unlinkSync(link);
+    for (const rel of LINKED) {
+      const link = join(scratch, rel);
+      if (existsSync(link)) unlinkSync(link);
+    }
     rmSync(scratch, { recursive: true, force: true });
   });
 
