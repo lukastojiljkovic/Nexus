@@ -43,6 +43,7 @@ import {
   type ElecBounds,
   type ElecView,
 } from "./elecGeometry.js";
+import { DEFAULT_WIRE_COLOUR } from "./elecWires.js";
 import { moduleName } from "./moduleName.js";
 import { NotePopover } from "./notePopover.js";
 import { formatNotificationWhen } from "./notificationFormat.js";
@@ -98,9 +99,6 @@ export interface ElectronicsPageProps {
 
 /** How much one press of the zoom buttons moves the scale. */
 const ZOOM_STEP = 1.25;
-
-/** The colour a jumper gets when nothing has been chosen — ground is the wire everybody runs first. */
-const DEFAULT_WIRE_COLOUR: WireColour = "black";
 
 /** A part's component, or `undefined` for one this build does not ship. */
 function resolveComponent(componentId: string): ComponentDef | undefined {
@@ -297,8 +295,12 @@ export function ElectronicsPage({ profileId, intent, onIntentHandled }: Electron
   }, [doc]);
 
   /**
-   * Escape and Delete, bound on the document because the surface is an SVG the
-   * user reaches by clicking rather than by tabbing.
+   * Escape and Delete for whatever the POINTER selected. The keyboard's own half
+   * is the wires group inside the bench, which handles Delete on the wire it is
+   * on — a focused wire need not be the selected one, so it cannot be left to
+   * this listener; what reaches here is a click's choice while focus sits
+   * anywhere else. The surface itself is an SVG the user reaches by clicking
+   * rather than by tabbing.
    *
    * The guard is what makes that safe: „Delete" inside the name field or the
    * notes box is a character, not a command, and a listener at this level sees
@@ -930,6 +932,8 @@ export function ElectronicsPage({ profileId, intent, onIntentHandled }: Electron
               wiring={wiring}
               onPinClick={onPinClick}
               onMovePart={(id, x, y) => void editPart(id, { x, y })}
+              busy={busy}
+              onRemoveWire={(id) => void removeWire(id)}
             />
 
             {doc.parts.length === 0 && (

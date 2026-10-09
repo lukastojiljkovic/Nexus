@@ -171,6 +171,16 @@ const NON_TEXT = [
   // one rule further out.
   ["elecPartEdge", "elecPartBody", "a component's outline against its own body"],
   ["elecPartEdge", "elecCanvas", "a component's outline against the bench"],
+  // The ring that says which jumper the keyboard is on. It is drawn BESIDE the
+  // wire rather than on it (see `elecGeometry.ts`'s `wireFocusBox`), so what it
+  // has to be legible against is the bench — the same measurement every jumper
+  // above is held to, and for the same reason: it is a mark, not prose. The
+  // accent could not stand in here, and that is why the workbench has a colour
+  // of its own: the accent is chosen against the THEME's ground, which in Dan is
+  // light paper, while the bench is dark in both themes — Dan's own accent gold
+  // measures 3.0:1 against Dan's mat and the six darker ones between 1.8 and
+  // 2.6, so a ring in the accent is invisible to most users in Dan.
+  ["elecFocus", "elecCanvas", "the focus ring around a jumper on the bench"],
 ];
 
 /**
