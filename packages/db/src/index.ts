@@ -76,6 +76,8 @@ export {
   FocusValidationError,
   HabitNotFoundError,
   HabitValidationError,
+  LibraryNotFoundError,
+  LibraryValidationError,
   NoteAttachmentNotFoundError,
   NoteAttachmentValidationError,
   NoteCategoryNotFoundError,
@@ -728,3 +730,28 @@ export type { SyncAccount, SyncAccountInput } from "./sync/syncAccount.js";
 export { SyncProgressStore } from "./sync/syncProgress.js";
 export type { QuarantinedObject } from "./sync/syncProgress.js";
 export { syncStoreFor } from "./sync/syncStore.js";
+
+// --- LIBRARY (books, films and series, migration 072) ----------------------
+//
+// ONE store over SIX tables, because a pass or a thought is not a thing with a
+// page of its own: it is part of the work's story. Everything a renderer can
+// send is revalidated here (SEC-EL-02), the collection's progress is computed on
+// every read and never stored, and `exportData`/`importData` are the versioned
+// value the profile archive will carry in stage 2 — see the module's own docs for
+// why the six tables are not yet in `RESTORE_WIPE_TABLES`.
+export { LibraryStore, MAX_LIBRARY_COVER_BYTES } from "./library/libraryStore.js";
+export type {
+  AddLibraryPassInput,
+  AddLibraryThoughtInput,
+  AdoptResult,
+  CreateLibraryCollectionInput,
+  CreateLibraryItemInput,
+  LibraryCollectionWithProgress,
+  LibraryCoverInput,
+  LibraryImportCounts,
+  LibraryItemWithCover,
+  UpdateLibraryCollectionFields,
+  UpdateLibraryItemFields,
+  UpdateLibraryPassFields,
+  UpdateLibraryThoughtFields,
+} from "./library/libraryStore.js";

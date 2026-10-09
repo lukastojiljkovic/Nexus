@@ -1592,6 +1592,17 @@ describe("RestoreStore", () => {
     //    a thing that may grant it. It is also not CONTENT in the archive's
     //    sense: nothing here is something the user wrote, so there is no
     //    version of it an archive could hold and no journal trigger on it.
+    //  - library_items / library_item_covers / library_passes / library_thoughts
+    //    / library_collections / library_collection_items (migration 072,
+    //    LIBRARY stage 1): NOT in the wipe list, and this is a state the next
+    //    stage removes rather than a decision about the module. The wipe is half
+    //    of a whole-profile REPLACE — the tables are emptied and refilled from
+    //    the archive — and library rows are not in the archive yet, because
+    //    wiring `LibraryStore.exportData` into `ProfileData` is stage 2's job.
+    //    On that list today, every restore would DELETE the user's library with
+    //    nothing to put back. They join it in the same change that teaches the
+    //    archive to carry them, with `LibraryStore`'s own export/import round
+    //    trip as their test.
     const allowlist = new Set<string>([
       "meta",
       "profiles",
@@ -1630,6 +1641,12 @@ describe("RestoreStore", () => {
       "timers_presets",
       "timers_countdowns",
       "timers_settings",
+      "library_items",
+      "library_item_covers",
+      "library_passes",
+      "library_thoughts",
+      "library_collections",
+      "library_collection_items",
     ]);
 
     const wipeTables = new Set<string>(RESTORE_WIPE_TABLES);
