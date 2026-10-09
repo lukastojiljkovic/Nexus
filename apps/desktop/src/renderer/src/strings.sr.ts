@@ -5728,6 +5728,37 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
      */
     searchResultCountOne: "{n} rezultat",
     searchResultCountMany: "{n} rezultata",
+    /**
+     * The gear a module page wears beside its title (`moduleSettingsGear.tsx`):
+     * the accessible name of the button that opens Podešavanja directly at that
+     * module's card. One entry per module that publishes a card, spelled for
+     * the PHRASE rather than glued together from `sectionTitle` — Serbian puts
+     * the module in the accusative, so „za Zadatke“ and „za Kontrolnu tablu“
+     * are not forms any template can build from the nominative names the rest
+     * of the app holds. The module's own name is kept verbatim, as `moduleName`
+     * and every other sentence that names one does.
+     */
+    moduleSettingsButton: {
+      dashboard: "Podešavanja za Kontrolnu tablu",
+      tasks: "Podešavanja za Zadatke",
+      calendar: "Podešavanja za Kalendar",
+      notes: "Podešavanja za Beleške",
+      priv: "Podešavanja za Privatne beleške",
+      files: "Podešavanja za Datoteke",
+      study: "Podešavanja za Učenje",
+      finance: "Podešavanja za Finansije",
+      habits: "Podešavanja za Navike",
+      fitness: "Podešavanja za Fitnes",
+      focus: "Podešavanja za Fokus",
+      tools: "Podešavanja za Alatke",
+    },
+    /**
+     * The same name for a module this table has no phrase for — one added to
+     * the registry before its copy is written. It names the module in the
+     * nominative, which is what `moduleName` holds, so the phrasing is one that
+     * needs no case a template could not form.
+     */
+    moduleSettingsButtonFallback: "Podešavanja: {name}",
     /** Section-card titles, in the order they appear on the page. */
     sectionTitle: {
       profile: "Profil",

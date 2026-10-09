@@ -1,13 +1,18 @@
 import { describe, expect, it } from "vitest";
 
 import { createModuleRegistry } from "../../shared/modules.js";
-import { moduleSettingsCards, moduleSettingsDeclarations } from "./moduleSettings.js";
+import {
+  moduleSettingsCardIds,
+  moduleSettingsCards,
+  moduleSettingsDeclarations,
+} from "./moduleSettings.js";
 import {
   SETTINGS_CATEGORIES,
   SETTINGS_SUB_PAGE_LISTS,
   categoryCardIds,
   categoryListIds,
   categoryOf,
+  moduleSettingsLocation,
   subPageListById,
   visibleSections,
   type SettingsLocation,
@@ -151,6 +156,48 @@ describe("the category table", () => {
 });
 
 // --- visibleSections ----------------------------------------------------------
+
+/**
+ * The gear's landing (`moduleSettingsGear.tsx`): a module page's button opens
+ * „Podešavanja" at that module's card. Both halves of that sentence are pinned
+ * here — the CATEGORY the rail selects, and the CARD the pane draws — because
+ * the location is what `visibleSections` is handed, and a gear that opened the
+ * right category with nothing in it, or the right card under the wrong heading,
+ * would look like a working button.
+ */
+describe("moduleSettingsLocation", () => {
+  it("lands on the module's own card, in „Moduli“, for every module that has one", () => {
+    for (const moduleId of moduleSettingsCardIds(REGISTRY)) {
+      const location = moduleSettingsLocation(moduleId);
+      expect(location, moduleId).toEqual({ category: "modules", sub: moduleId });
+      // The pane: exactly that card, nothing else...
+      const visibility = visibleSections(location, null);
+      expect([...visibility.cards], moduleId).toEqual([moduleId]);
+      // ...under the one heading that owns it, which is also what the rail
+      // highlights while the press is showing.
+      expect(visibility.groups, moduleId).toEqual(["modules"]);
+    }
+  });
+
+  it("is the same place the „Podešavanja modula“ row opens, so one card has one destination", () => {
+    // The list row calls `navigate({ category: "modules", sub: card.moduleId })`;
+    // the gear composes the same pair from the module id alone.
+    for (const card of moduleSettingsCards(REGISTRY, {})) {
+      expect(moduleSettingsLocation(card.moduleId)).toEqual({
+        category: "modules",
+        sub: card.moduleId,
+      });
+    }
+  });
+
+  it("is not the category alone — a module's card is a sub-page of the „Podešavanja modula“ list", () => {
+    // The distinction the gear has to get right: at rest the „Moduli" category
+    // shows setup/modules/packs/risk and the LIST, never a module's card.
+    const categoryAtRest = visibleSections({ category: "modules", sub: null }, null);
+    expect(categoryAtRest.cards.has("notes")).toBe(false);
+    expect(categoryAtRest.lists.has("module-settings")).toBe(true);
+  });
+});
 
 describe("visibleSections", () => {
   it("shows a category's own cards and its list, and nothing else", () => {

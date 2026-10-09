@@ -62,6 +62,7 @@ export interface AnchoredPositionOptions {
   readonly side?: PlacementSide;
   readonly align?: PlacementAlign;
   readonly gap?: number;
+  /** The panel's preferred ceiling; `UNBOUNDED_PANEL_HEIGHT` leaves the room the window has left as its only limit. */
   readonly preferredMaxHeight?: number;
   /**
    * The control the panel belongs to. The panel is portalled to `<body>`, so it
@@ -118,6 +119,19 @@ function samePlacement(a: Placement, b: Placement): boolean {
   return a.top === b.top && a.left === b.left && a.maxHeight === b.maxHeight && a.side === b.side;
 }
 
+/**
+ * The inline `max-height` for one preferred cap.
+ *
+ * `UNBOUNDED_PANEL_HEIGHT` is `Infinity`, and `` `${Infinity}px` `` is not a
+ * length: the browser drops it, the measurement then runs against whatever the
+ * stylesheet caps the panel at, and the panel is placed from a height it does
+ * not have. `none` is the declaration that means „no ceiling", which is exactly
+ * what the unbounded cap asks for.
+ */
+function maxHeightDeclaration(preferredMaxHeight: number): string {
+  return Number.isFinite(preferredMaxHeight) ? `${preferredMaxHeight}px` : "none";
+}
+
 export function useAnchoredPosition({
   open,
   anchor,
@@ -152,7 +166,7 @@ export function useAnchoredPosition({
     // the width it is stuck at rather than the width it wants, and a panel
     // whose content grew while it was open could never grow back.
     const committed = { maxHeight: panel.style.maxHeight, left: panel.style.left };
-    panel.style.maxHeight = `${preferredMaxHeight}px`;
+    panel.style.maxHeight = maxHeightDeclaration(preferredMaxHeight);
     panel.style.left = "0px";
     const box = panel.getBoundingClientRect();
     panel.style.maxHeight = committed.maxHeight;
@@ -263,7 +277,13 @@ export function useAnchoredPosition({
   const style: CSSProperties =
     placement === null
       ? // The measuring pass: laid out (so it has a box) but not painted.
-        { position: "fixed", top: 0, left: 0, maxHeight: preferredMaxHeight, visibility: "hidden" }
+        {
+          position: "fixed",
+          top: 0,
+          left: 0,
+          maxHeight: Number.isFinite(preferredMaxHeight) ? preferredMaxHeight : undefined,
+          visibility: "hidden",
+        }
       : {
           position: "fixed",
           top: placement.top,

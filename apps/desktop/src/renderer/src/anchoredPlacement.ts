@@ -50,6 +50,20 @@ export const CARET_GAP = 4;
  */
 export const PANEL_MAX_HEIGHT = 320;
 
+/**
+ * The preferred cap of a panel the WINDOW is the only limit on — today the app
+ * menu behind the title bar's mark, which must show every one of its rows
+ * whenever the window is tall enough for them.
+ *
+ * Not a number, and that is the point rather than a shortcut:
+ * `computePlacement` answers with `min(space − margin, preferredMaxHeight)`, so
+ * a cap of `Infinity` makes the room the window has left the only answer. `320`
+ * was this menu's cap by inheritance — `NotePopover` defaulted to
+ * `PANEL_MAX_HEIGHT`, which is a note popover's scroll window rather than this
+ * menu's — and the menu drew a scrollbar on a window with room to spare.
+ */
+export const UNBOUNDED_PANEL_HEIGHT = Number.POSITIVE_INFINITY;
+
 /** A viewport-relative box, in the same coordinates `getBoundingClientRect` reports. */
 export interface Rect {
   readonly top: number;
@@ -79,6 +93,10 @@ export interface PlacementInput {
   readonly align: PlacementAlign;
   readonly gap: number;
   readonly margin: number;
+  /**
+   * The tallest the panel would like to be. `UNBOUNDED_PANEL_HEIGHT` says the
+   * window is the panel's only limit, and the room it has left decides alone.
+   */
   readonly preferredMaxHeight: number;
 }
 
@@ -140,6 +158,10 @@ function clampedLeft(input: PlacementInput): number {
  * The height used to position an upward panel is the SHRUNK height, never the
  * measured one. That is what keeps a clamped panel's bottom edge glued to the
  * anchor instead of leaving a gap the size of everything that was cut.
+ *
+ * An UNBOUNDED `preferredMaxHeight` (the app menu) does not change any of that:
+ * it only removes the fixed ceiling, so "fits" is asked of the room the window
+ * has rather than of a number somebody picked for a different panel.
  */
 export function computePlacement(input: PlacementInput): Placement {
   const wanted = Math.min(input.panel.height, input.preferredMaxHeight);
