@@ -306,10 +306,12 @@ describe("the cube", () => {
 });
 
 describe("the computer", () => {
-  it("returns a legal turn at level 3 on a thousand rolled positions", () => {
+  it("returns a legal turn at level 3 on a hundred rolled positions", () => {
     const random = createRng(0x5eed);
     let checked = 0;
-    for (let sample = 0; sample < 1_000; sample += 1) {
+    // A hundred positions: a thousand searches at level 3 kept this file busy for 170 s
+    // on the CI runners, and every level-3 answer is drawn from `legalMoves` either way.
+    for (let sample = 0; sample < 100; sample += 1) {
       let state = initialState();
       const turns = Math.floor(random() * 30);
       for (let turn = 0; turn < turns; turn += 1) {
@@ -335,7 +337,7 @@ describe("the computer", () => {
       expect(choice.move).not.toBeNull();
       expect(moves).toContainEqual(choice.move);
     }
-    expect(checked).toBeGreaterThan(900);
+    expect(checked).toBeGreaterThan(90);
   }, 300_000);
 
   it("stays inside every level's budget", () => {

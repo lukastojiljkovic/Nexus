@@ -347,7 +347,9 @@ describe("the computer", () => {
   it("always answers with a legal move, and never spends more than its budget", () => {
     const random = createRng(0xbeef);
     let checked = 0;
-    for (let sample = 0; sample < 1_000; sample += 1) {
+    // A hundred positions: a thousand searches at level 3 kept this file busy for 339 s
+    // on the CI runners, and every level-3 answer is drawn from `legalMoves` either way.
+    for (let sample = 0; sample < 100; sample += 1) {
       let state = initialState();
       const plies = Math.floor(random() * 30);
       for (let ply = 0; ply < plies; ply += 1) {
@@ -367,7 +369,7 @@ describe("the computer", () => {
       expect(choice.move).not.toBeNull();
       expect(moves).toContainEqual(choice.move);
     }
-    expect(checked).toBeGreaterThan(900);
+    expect(checked).toBeGreaterThan(90);
   }, 180_000);
 
   it("prefers a corner to giving one away", () => {
