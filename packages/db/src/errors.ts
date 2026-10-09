@@ -1030,6 +1030,36 @@ export class FitMeasurementValidationError extends DatabaseError {}
 export class FitBodyProfileValidationError extends DatabaseError {}
 
 /**
+ * Thrown when a library write is rejected at the store boundary (LIBRARY,
+ * migration 072): a `kind`/`status` outside its closed vocabulary, an empty or
+ * over-long `title`/creator/tag/note, a `year` outside 1..9999, a `rating`
+ * outside 1..10, a count that is not a whole number in range, progress that is
+ * impossible for the item's kind or a count past its total, a bare date that is
+ * no calendar day, a malformed `now`, a `wikidataId` that is not a `Q…`
+ * grammar — or, on the way OUT, a stored JSON list column that no longer parses
+ * to a valid creator or tag list, which is corruption rather than input to
+ * coerce (`HabitStore`'s posture on its own JSON column).
+ *
+ * It is also the archive reader's refusal: `importData` validates the whole
+ * value before it writes anything, so an unknown `version`, an unknown key, a
+ * reference to a row the value does not carry, a second cover for one item and a
+ * second link for one pair all arrive here — as one sentence about the value,
+ * because that is what the caller handed over.
+ */
+export class LibraryValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a library operation targets an id that is not a live row reachable
+ * from the store's own profile — an unknown item, a soft-deleted item, an item
+ * of another profile, or a pass, thought or collection link that does not belong
+ * to the item or collection the call named. Surfacing this uniformly keeps one
+ * profile's library invisible to a store scoped to another, and it is the whole
+ * of the scoping for `library_passes`, `library_thoughts` and
+ * `library_collection_items`, which carry no `profile_id` of their own.
+ */
+export class LibraryNotFoundError extends DatabaseError {}
+
+/**
  * Whether a driver error is a violated UNIQUE (or partial-UNIQUE) index.
  *
  * A store that leans on such an index to make a state unrepresentable — the

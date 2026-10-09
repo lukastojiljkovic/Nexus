@@ -1275,3 +1275,90 @@ export type {
   PlanReason,
   ProfilePlan,
 } from "./profile/plan.js";
+
+// --- LIBRARY (items, passes, thoughts, collections, migration 072) ----------
+//
+// Pure logic only: the vocabulary and its bounds (kinds, statuses, ratings,
+// years, the length caps), the validators the store and the archive reader both
+// call, the title fold that decides whether a curated list's entry and a work a
+// person already logged are the SAME work, the four orders, the year's
+// statistics, the shape of a bundled list, and the versioned value the profile
+// archive will carry.
+//
+// The ROW SHAPES live here too (`LibraryItem`, `LibraryPass`, …), deliberately:
+// the sorters, the statistics and the archive validator all read them, and one
+// shape that cannot drift from itself is worth more than a second copy in
+// `@nexus/db` — the store returns exactly these values (`electronics`'
+// `Chassis`, one module over).
+export {
+  LIBRARY_EXPORT_VERSION,
+  LIBRARY_MAX_IMPORT_ROWS,
+  libraryExportVersion,
+  validateLibraryExport,
+} from "./library/export.js";
+export type { LibraryExportV1 } from "./library/export.js";
+export {
+  LIBRARY_COLLATOR,
+  LIBRARY_SORT_KEYS,
+  compareLibraryItems,
+  compareLibraryItemsBy,
+  sortLibraryItems,
+} from "./library/sort.js";
+export type { LibrarySortableItem, LibrarySortKey } from "./library/sort.js";
+export { LIBRARY_MAX_SUGGESTION_ITEMS, validateSuggestedCollection } from "./library/suggested.js";
+export type { SuggestedCollectionItemV1, SuggestedCollectionV1, SuggestedTitle } from "./library/suggested.js";
+export { libraryYearStats } from "./library/stats.js";
+export type { LibraryStatsItem, LibraryStatsPass, LibraryYearStats } from "./library/stats.js";
+export { normalizeLibraryTitle, titleMatchKey } from "./library/title.js";
+export { collectionProgress } from "./library/collections.js";
+export type {
+  LibraryCollection,
+  LibraryCollectionItem,
+  LibraryCollectionProgress,
+} from "./library/collections.js";
+export {
+  LIBRARY_KINDS,
+  LIBRARY_MAX_COLLECTION_DESCRIPTION_LENGTH,
+  LIBRARY_MAX_COLLECTION_NAME_LENGTH,
+  LIBRARY_MAX_COUNT,
+  LIBRARY_MAX_COVER_BYTES,
+  LIBRARY_MAX_CREATORS,
+  LIBRARY_MAX_CREATOR_LENGTH,
+  LIBRARY_MAX_RATING,
+  LIBRARY_MAX_SUMMARY_LENGTH,
+  LIBRARY_MAX_TAGS,
+  LIBRARY_MAX_TAG_LENGTH,
+  LIBRARY_MAX_THOUGHT_LENGTH,
+  LIBRARY_MAX_TITLE_LENGTH,
+  LIBRARY_MAX_YEAR,
+  LIBRARY_MIN_RATING,
+  LIBRARY_MIN_YEAR,
+  LIBRARY_PROGRESS_FIELDS,
+  LIBRARY_STATUSES,
+  deriveLibraryRatingFromPass,
+  deriveLibraryStatusFromPass,
+  isLibraryCount,
+  isLibraryDay,
+  isLibraryKind,
+  isLibraryRating,
+  isLibraryReadPages,
+  isLibraryStatus,
+  isLibraryTimestamp,
+  isLibraryYear,
+  isWikidataId,
+  serializeLibraryList,
+  validateLibraryCreators,
+  validateLibraryProgress,
+  validateLibraryTags,
+} from "./library/item.js";
+export type {
+  LibraryCover,
+  LibraryItem,
+  LibraryKind,
+  LibraryPass,
+  LibraryPassOutcome,
+  LibraryProgress,
+  LibraryProgressField,
+  LibraryStatus,
+  LibraryThought,
+} from "./library/item.js";
