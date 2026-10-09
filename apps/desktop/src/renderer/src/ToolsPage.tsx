@@ -1,23 +1,29 @@
 import {
   TOOL_CATEGORIES,
   TOOL_PACKS,
-  toolDrawer,
-  toolVisibleToPacks,
   type FlagState,
   type ToolDrawer,
   type ToolPack,
-  type ToolRegistration,
   type ToolRiskClass,
 } from "@nexus/core";
 import { Button, EmptyState, LoadingState, PageHeader, TextField } from "@nexus/ui";
-import { Suspense, useDeferredValue, useMemo, useState, type ComponentType } from "react";
+import {
+  Suspense,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useState,
+  type ComponentType,
+} from "react";
 
 import { createModuleRegistry } from "../../shared/modules.js";
 import { ProPackDialog } from "./ProPacks.js";
 import { PRO_TOOL_SURFACES } from "./proToolSurfaces.js";
+import { ToolFinder } from "./ToolFinder.js";
 import { filterTools, type SearchableTool } from "./toolSearch.js";
+import { buildToolCatalogue, DRAWER_MODULES, type ToolCatalogueEntry } from "./toolCatalogue.js";
 import { TOOL_SURFACES } from "./toolSurfaces.js";
-import { countUnit, fill, strings } from "./strings.js";
+import { activeLocale, countUnit, fill, strings } from "./strings.js";
 import { moduleName } from "./moduleName.js";
 import { readRecentTools, rememberRecentTool } from "./toolPrefs.js";
 import { ToolRiskNotice, ToolRiskProvider } from "./toolRisk.js";
@@ -81,8 +87,16 @@ import { ToolRiskNotice, ToolRiskProvider } from "./toolRisk.js";
 
 /** What each drawer is: the module that owns its page, its surfaces, and its copy. */
 const DRAWERS = {
-  utilities: { moduleId: "tools", surfaces: TOOL_SURFACES, chrome: () => strings.tools },
-  professional: { moduleId: "pro", surfaces: PRO_TOOL_SURFACES, chrome: () => strings.pro },
+  utilities: {
+    moduleId: DRAWER_MODULES.utilities,
+    surfaces: TOOL_SURFACES,
+    chrome: () => strings.tools,
+  },
+  professional: {
+    moduleId: DRAWER_MODULES.professional,
+    surfaces: PRO_TOOL_SURFACES,
+    chrome: () => strings.pro,
+  },
 } as const satisfies Record<
   ToolDrawer,
   {
@@ -112,9 +126,23 @@ function resolveKey(key: string): string | undefined {
   return typeof resolved === "string" ? resolved : undefined;
 }
 
+/**
+ * A tool this page was asked to open, from OUTSIDE it: the finder stands on both
+ * drawers, so a result in the other drawer has to switch pages and then open the
+ * tool it found. One arm today, and the union is still spelled out because that
+ * is what `App`'s `dispatchIntent` consumes — a bare string here would be a
+ * second way to say the same thing.
+ */
+export interface ToolsIntent {
+  readonly kind: "open";
+  readonly toolId: string;
+}
+
 export interface ToolsPageProps {
   /** Which drawer this page is. */
   drawer: ToolDrawer;
+  /** The active profile — whose stars and whose „Nedavno“ the finder reads and writes. */
+  profileId: string;
   /**
    * The modules this profile has switched on. A tool whose owning module is off
    * is not drawn — see the header.
@@ -144,6 +172,18 @@ export interface ToolsPageProps {
     readonly profileId: string;
     readonly onFlagsChanged: (flags: FlagState) => void;
   };
+  /**
+   * A tool another page sent here, or null. Consumed once and reported back
+   * through `onIntentHandled`, exactly as every other page takes an intent.
+   */
+  intent: ToolsIntent | null;
+  onIntentHandled: () => void;
+  /**
+   * Opens a tool that lives in the OTHER drawer, by switching to that drawer's
+   * page and asking IT to open the tool. Supplied by the shell because the switch
+   * is a navigation and this page cannot perform one.
+   */
+  onOpenInOtherDrawer: (drawer: ToolDrawer, id: string) => void;
 }
 
 interface DrawerTool extends SearchableTool {
@@ -172,42 +212,72 @@ interface DirectoryGroup {
   readonly members: readonly DrawerTool[];
 }
 
-export function ToolsPage({ drawer, enabledModules, packs, packEditor }: ToolsPageProps) {
+export function ToolsPage({
+  drawer,
+  profileId,
+  enabledModules,
+  packs,
+  packEditor,
+  intent,
+  onIntentHandled,
+  onOpenInOtherDrawer,
+}: ToolsPageProps) {
   const { moduleId, surfaces } = DRAWERS[drawer];
+  // Read on every render, not at module scope: the page is remounted on a
+  // language switch (App's `localeEpoch`), and a memo built here has to be built
+  // from the language now on screen.
+  const locale = activeLocale();
   // Read on every render, not at module scope, so a language switch relabels
   // the drawer instead of freezing it at import.
   const s = DRAWERS[drawer].chrome();
 
-  const tools = useMemo<DrawerTool[]>(() => {
-    const registry = createModuleRegistry();
-    return registry
-      .all()
-      .filter((manifest) => enabledModules.has(manifest.id))
-      .flatMap((manifest) => manifest.tools ?? [])
-      .filter(
-        (tool: ToolRegistration) =>
-          toolDrawer(tool) === drawer &&
-          toolVisibleToPacks(tool, packs) &&
-          surfaces[tool.id] !== undefined,
-      )
-      .map((tool) => ({
-        id: tool.id,
-        // The id rather than a placeholder when a name does not resolve: an
-        // unnamed tool is a bug, and printing its id makes the bug legible.
-        name: resolveKey(tool.titleKey) ?? tool.id,
-        category: tool.category,
-        blurb: tool.blurbKey === undefined ? undefined : resolveKey(tool.blurbKey),
-        riskClass: tool.riskClass,
-        source: tool.sourceKey === undefined ? undefined : resolveKey(tool.sourceKey),
-        packs: tool.packs ?? [],
-        ...(tool.keywords === undefined ? {} : { keywords: tool.keywords }),
-      }));
-  }, [drawer, enabledModules, packs, surfaces]);
+  /**
+   * ONE catalogue, built once, and both halves of the page read it.
+   *
+   * This page used to walk the registry itself and map the registrations it
+   * found; the finder now needs the same walk, and two walks are two answers to
+   * „what does this profile have" — the drift would show as a result the finder
+   * offers and the rail cannot draw, which is a row that opens onto nothing.
+   * `buildToolCatalogue` does the deriving, this filter does the deciding, and
+   * the rail's rows and the finder's rows come out of the same list.
+   */
+  const catalogue = useMemo(() => buildToolCatalogue(createModuleRegistry()), []);
+  const reachable = useMemo(
+    () =>
+      catalogue.filter(
+        (entry) =>
+          // A tool from a switched-off module is not offered (the header's rule).
+          enabledModules.has(entry.moduleId) &&
+          // An everyday tool is visible to everybody; a professional one needs a
+          // toolkit this profile answered for (`toolVisibleToPacks`, restated
+          // against the entry's `drawer` so an empty list cannot read as
+          // „professional tool nobody can see").
+          (entry.drawer === "utilities" || entry.packs.some((pack) => packs.has(pack))) &&
+          DRAWERS[entry.drawer].surfaces[entry.id] !== undefined,
+      ),
+    [catalogue, enabledModules, packs],
+  );
+  const tools = useMemo<DrawerTool[]>(
+    () =>
+      reachable
+        .filter((entry) => entry.drawer === drawer)
+        .map((entry) => ({
+          id: entry.id,
+          name: entry.name[locale],
+          category: entry.category,
+          blurb: entry.description?.[locale],
+          riskClass: entry.riskClass,
+          source: entry.sourceKey === undefined ? undefined : resolveKey(entry.sourceKey),
+          packs: entry.packs,
+          ...(entry.keywords.length === 0 ? {} : { keywords: entry.keywords }),
+        })),
+    [reachable, drawer, locale],
+  );
 
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [pickingPacks, setPickingPacks] = useState(false);
-  const [recent, setRecent] = useState<readonly string[]>(() => readRecentTools(drawer));
+  const [recent, setRecent] = useState<readonly string[]>(() => readRecentTools(profileId));
   /**
    * WHICH DRAWER THIS STATE BELONGS TO, and the one place a switch between them
    * is handled.
@@ -215,25 +285,42 @@ export function ToolsPage({ drawer, enabledModules, packs, packEditor }: ToolsPa
    * `ToolsPage` is the same element type in both branches of the shell's route
    * chain, so React REUSES the instance when somebody goes from „Alatke" to
    * „Stručne alatke": every piece of state above survives a change of drawer
-   * that ought to have ended it. „Nedavno" would be read once, for whichever
-   * drawer was opened first, and shown for ever under the other one's name; the
-   * search text would follow the user across; and the selection would name a
-   * tool the new drawer does not have. Two of those were already true and drew
-   * no attention because the third one hid them — a stale `selectedId` simply
-   * fails to resolve and falls through to the empty pane.
+   * that ought to have ended it. The search text would follow the user across,
+   * and the selection would name a tool the new drawer does not have — a stale
+   * `selectedId` simply fails to resolve and falls through to the empty pane,
+   * which is why that one drew no attention until the other did.
+   *
+   * „Nedavno" used to be re-read here and deliberately is not any more: it is
+   * ONE list for the whole catalogue now that the finder stands on both pages,
+   * so the same rows are right on either side and re-reading would be a second
+   * read of one answer.
    *
    * Setting state while rendering is React's own answer to exactly this (it
    * re-renders immediately, before anything is committed) and it is why there is
-   * no effect here: an effect would paint the previous drawer's search and
-   * history first and correct them a frame later.
+   * no effect here: an effect would paint the previous drawer's search first and
+   * correct it a frame later.
    */
   const [shownDrawer, setShownDrawer] = useState(drawer);
   if (shownDrawer !== drawer) {
     setShownDrawer(drawer);
-    setRecent(readRecentTools(drawer));
     setSelectedId(null);
     setQuery("");
   }
+
+  /**
+   * Consumes a tool another drawer's finder sent here (see `ToolsIntent`).
+   *
+   * The setters are written out rather than routed through `openTool` for
+   * FINANSIJE's reason: a function declared in the component body is a fresh
+   * reference on every render, so this effect would either list it and re-run on
+   * every render, or omit it and need a lint exemption.
+   */
+  useEffect(() => {
+    if (intent === null) return;
+    setSelectedId(intent.toolId);
+    setRecent(rememberRecentTool(profileId, intent.toolId));
+    onIntentHandled();
+  }, [intent, profileId, onIntentHandled]);
 
   const visible = filterTools(tools, query);
   /**
@@ -280,7 +367,21 @@ export function ToolsPage({ drawer, enabledModules, packs, packEditor }: ToolsPa
   /** Opens a tool and records that this device did — one path, for the rail and the directory alike. */
   function openTool(id: string): void {
     setSelectedId(id);
-    setRecent(rememberRecentTool(drawer, id));
+    setRecent(rememberRecentTool(profileId, id));
+  }
+
+  /**
+   * A finder result, opened exactly as the rail's own row is.
+   *
+   * A result from the OTHER drawer cannot be selected here — this page draws one
+   * drawer — so it goes to the shell, which switches pages and sends the tool
+   * back in as an intent. Everything else is the rail's path, unchanged, which
+   * is what makes „a result opens the tool the same way" true by construction
+   * rather than by review.
+   */
+  function openCatalogueEntry(entry: ToolCatalogueEntry): void {
+    if (entry.drawer === drawer) openTool(entry.id);
+    else onOpenInOtherDrawer(entry.drawer, entry.id);
   }
 
   /**
@@ -354,6 +455,18 @@ export function ToolsPage({ drawer, enabledModules, packs, packEditor }: ToolsPa
               {strings.pro.choosePacks}
             </Button>
           }
+        />
+      )}
+      {/* The finder, at the head of both drawers — and NOT over the empty state
+          below it. A profile with no toolkit is being asked a question, and a
+          search field over the answer is what this page's own empty-state
+          comment already refuses: „a search field over an empty rail". */}
+      {!noPacks && (
+        <ToolFinder
+          profileId={profileId}
+          catalogue={reachable}
+          recentIds={recent}
+          onOpen={openCatalogueEntry}
         />
       )}
       {!noPacks && (

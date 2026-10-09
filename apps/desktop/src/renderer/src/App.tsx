@@ -13,7 +13,7 @@ import {
   moduleNavPosition,
   resolveEnabled,
 } from "@nexus/core";
-import type { CanvasRef } from "@nexus/core";
+import type { CanvasRef, ToolDrawer } from "@nexus/core";
 import { Button, EmptyState, Icon, NavItem, StarField } from "@nexus/ui";
 import type { ThemeName } from "@nexus/tokens";
 import { DEMO_PROFILE_NAME } from "../../shared/ipc.js";
@@ -50,6 +50,7 @@ import type { NotesIntent } from "./NotesPage.js";
 import type { StudyIntent } from "./StudyPage.js";
 import type { FinanceIntent } from "./FinancePage.js";
 import type { ElecIntent } from "./ElectronicsPage.js";
+import type { ToolsIntent } from "./ToolsPage.js";
 import {
   CalendarPage,
   CanvasPage,
@@ -82,6 +83,7 @@ import { UpdateNotice } from "./UpdateNotice.js";
 import { publishNetworkMode, useNetworkMode } from "./updates.js";
 import { buildSearchCommands } from "./searchCommands.js";
 import { createModuleRegistry } from "../../shared/modules.js";
+import { DRAWER_MODULES } from "./toolCatalogue.js";
 import { ProfileAvatar } from "./profileAvatar.js";
 import { persistAutoLock, readStoredAutoLock, type AutoLockMinutes } from "./autoLock.js";
 import {
@@ -114,7 +116,16 @@ type PendingIntent =
   | { module: "notes"; intent: NotesIntent }
   | { module: "study"; intent: StudyIntent }
   | { module: "finance"; intent: FinanceIntent }
-  | { module: "electronics"; intent: ElecIntent };
+  | { module: "electronics"; intent: ElecIntent }
+  // The finder stands on BOTH drawer pages and searches both drawers at once, so
+  // a result in the other one has to be able to send a tool across — one arm
+  // carrying both page ids, because the two pages are one component and the
+  // payload is the same one. It arrives through the same door every other
+  // cross-module open uses.
+  | { module: ToolsPageModuleId; intent: ToolsIntent };
+
+/** The two pages the tool drawers live on — the ids `DRAWER_MODULES` maps a drawer to. */
+type ToolsPageModuleId = (typeof DRAWER_MODULES)[ToolDrawer];
 
 /**
  * The exhaustiveness guard for a switch over a CLOSED union — `never` reaches it
@@ -751,6 +762,17 @@ export function App() {
   function dispatchIntent(next: PendingIntent): void {
     setPending(next);
     setActiveId(next.module);
+  }
+
+  /**
+   * Opens a tool in the drawer that owns it — the finder's one cross-drawer
+   * move, and the only reason `ToolsPage` takes a callback instead of switching
+   * pages itself. The drawer names the page (`DRAWER_MODULES`: „Alatke“ is the
+   * `tools` module, „Stručne alatke“ the `pro` one) and the tool rides in as an
+   * intent, so it arrives by the same door every other cross-module open uses.
+   */
+  function openToolInDrawer(drawer: ToolDrawer, toolId: string): void {
+    dispatchIntent({ module: DRAWER_MODULES[drawer], intent: { kind: "open", toolId } });
   }
 
   /**
@@ -1722,10 +1744,21 @@ export function App() {
               // this profile has switched off must go with it, exactly as that
               // module's page and widgets do.
               //
-              // No `key={activeProfile.id}`: the drawer reads nothing profile-
-              // shaped and stores nothing, so there is no per-profile state to
-              // discard when the active profile changes.
-              <ToolsPage drawer="utilities" enabledModules={enabledIds} packs={enabledPackIds} />
+              // `key={activeProfile.id}`, where the drawer used to go without
+              // one: it reads nothing profile-shaped except the finder's stars
+              // and history, and those ARE per-profile state — so a switch now
+              // discards the previous person's favourites exactly as it
+              // discards every other page's half-typed work.
+              <ToolsPage
+                key={activeProfile.id}
+                drawer="utilities"
+                profileId={activeProfile.id}
+                enabledModules={enabledIds}
+                packs={enabledPackIds}
+                intent={pending?.module === "tools" ? pending.intent : null}
+                onIntentHandled={clearIntent}
+                onOpenInOtherDrawer={openToolInDrawer}
+              />
             ) : shownId === "pro" && activeProfile ? (
               // The same host, the other drawer. Which tools each one draws is
               // decided by each tool's own `packs` declaration rather than by this
@@ -1739,9 +1772,14 @@ export function App() {
               // therefore visible to everybody — passing it to both is what keeps
               // the two pages one component.
               <ToolsPage
+                key={activeProfile.id}
                 drawer="professional"
+                profileId={activeProfile.id}
                 enabledModules={enabledIds}
                 packs={enabledPackIds}
+                intent={pending?.module === "pro" ? pending.intent : null}
+                onIntentHandled={clearIntent}
+                onOpenInOtherDrawer={openToolInDrawer}
                 // Only this drawer gets an editor, because only this drawer has
                 // toolkits. It writes through the same channel „Podešavanja" does
                 // and hands the re-read flags straight back to the shell, so the

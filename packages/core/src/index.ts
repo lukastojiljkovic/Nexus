@@ -55,6 +55,7 @@ export {
   TOOL_DRAWERS,
   TOOL_PACKS,
   TOOL_RISK_CLASSES,
+  TOOL_TASK_GROUPS,
   enabledPacks,
   packFlagKey,
   toolDrawer,
@@ -68,6 +69,7 @@ export type {
   ToolPack,
   ToolRegistration,
   ToolRiskClass,
+  ToolTaskGroup,
 } from "./contracts/tools.js";
 
 export type {
