@@ -90,6 +90,7 @@ describe("legal moves against chess.js over random play", () => {
 
     expect(mismatches).toEqual([]);
     expect(compared).toBe(target);
-  });
+    // 500 positions with chess.js beside them took 5.4 and 5.9 s on the CI runners, past vitest's 5 s default.
+  }, 60_000);
 });
 
