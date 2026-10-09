@@ -45,6 +45,11 @@ import { PRO_LABORATORIJA_EN } from "./pro.laboratorija.en.js";
 import { PRO_ELEKTRO_EN } from "./pro.elektro.en.js";
 import { PRO_IT_EN } from "./pro.it.en.js";
 import { PRO_AUTO_EN } from "./pro.auto.en.js";
+import { PRO_NAUTIKA_EN } from "./pro.nautika.en.js";
+import { PRO_VAZDUHOPLOVSTVO_EN } from "./pro.vazduhoplovstvo.en.js";
+import { PRO_GEODEZIJA_EN } from "./pro.geodezija.en.js";
+import { PRO_RADIO_EN } from "./pro.radio.en.js";
+import { PRO_ENERGIJA_EN } from "./pro.energija.en.js";
 
 export const proEn = {
   title: "Professional tools",
@@ -240,6 +245,26 @@ export const proEn = {
       name: "Car and engine",
       who: "mechanics, auto electricians, service technicians",
     },
+    nautika: {
+      name: "Sailing and seamanship",
+      who: "sailors, skippers, boat owners, fishermen",
+    },
+    vazduhoplovstvo: {
+      name: "Aviation",
+      who: "pilots, flight instructors, glider pilots, skydivers",
+    },
+    geodezija: {
+      name: "Surveying and GIS",
+      who: "surveyors, geomatics engineers, cadastral officers, GIS analysts",
+    },
+    radio: {
+      name: "Amateur radio",
+      who: "radio amateurs, technicians, repeater operators",
+    },
+    energija: {
+      name: "Energy and solar",
+      who: "solar installers, off-grid homes, campers, battery system builders",
+    },
   },
 
   /**
@@ -390,12 +415,17 @@ export const proEn = {
   name: {
     "air-fuel-ratio": "Air-fuel ratio",
     "allocation-remainder": "Split without a remainder",
+    "altimeter-units": "Altimeter and pressure",
     "amount-in-words": "Amount and number in words",
+    "anchor-rode": "Anchor rode",
     "angle-of-view": "Angle of view",
     "angle-units": "Angles and bearing",
+    "antenna-lengths": "Antenna lengths",
     "anuitet-otplatni-plan": "Annuity and repayment schedule",
+    "array-sizing": "Array sizing",
     "aspect-ratio-fit": "Aspect ratio",
     "audio-level-reference": "dBu, dBV and volts",
+    "autonomy-days": "Days of autonomy",
     "average-to-target": "Grades to average",
     "awg-to-mm2": "AWG and mm²",
     "axle-load-distribution": "Axle load",
@@ -408,6 +438,7 @@ export const proEn = {
     "barbell-plate-loading": "Plate loading",
     "baseline-rhythm": "Leading and vertical rhythm",
     "battery-bank-runtime": "Battery and runtime",
+    "battery-bank-sizing": "Battery bank sizing",
     "beam-check": "Beam and cantilever",
     "beam-spot-diameter": "Floodlight beam",
     "bee-syrup-mix": "Syrup for bees",
@@ -433,8 +464,10 @@ export const proEn = {
     "cents-ratio": "Cents and frequency ratio",
     "chained-discount": "Cascading discounts",
     "chargeable-weight": "Chargeable weight",
+    "charge-controller-current": "Charge controller current",
     "check-digits-id": "PIB and JMBG check",
     "child-age": "Child's age",
+    "coax-loss": "Feed-line loss",
     "coffee-extraction": "Coffee extraction",
     "column-grid": "Column grid",
     "combinatorics": "Combinatorics",
@@ -446,10 +479,13 @@ export const proEn = {
     "copyfitting": "Text extent calculation",
     "cost-allocation": "Cost allocation",
     "cost-per-km-transport": "Cost per kilometre",
+    "course-to-steer": "Course to steer",
     "crop-factor": "Crop factor",
     "css-typographic-units": "Typographic units",
     "decibel-ratio": "Decibels and ratios",
+    "decimal-dms": "Decimal degrees and DMS",
     "delta-e": "Colour difference ΔE",
+    "device-daily-energy": "Consumption by device",
     "deposit-instalments": "Deposit and instalments",
     "depreciation-schedule": "Depreciation of fixed assets",
     "depth-of-field": "Depth of field",
@@ -472,15 +508,23 @@ export const proEn = {
     "font-metrics-trim": "Font metrics",
     "fractions-decimals": "Fractions and decimals",
     "frame-rate-conform": "Conform and slow motion",
+    "frequency-wavelength": "Frequency and wavelength",
+    "fresnel-zone": "Fresnel zone",
     "fuel-consumption-cost": "Fuel consumption and cost",
+    "fuel-range": "Fuel range",
+    "fuel-reserve": "Fuel and reserve",
     "fx-difference": "Exchange rate and differences",
     "gear-ratio-road-speed": "Gear ratio and speed",
     "generator-sizing": "Generator power",
+    "geodesic-direct": "Point from azimuth and distance",
+    "geodesic-inverse": "Distance and azimuth on the ellipsoid",
     "glass-pane-weight": "Glass weight",
     "glossary-check": "Terminology check",
     "grade-scale-points": "Test score scale",
     "grade-statistics": "Grade statistics",
     "grain-moisture-shrink": "Grain drying loss",
+    "great-circle": "Great circle and bearing",
+    "grid-ground-ratio": "Grid and ground",
     "gross-up": "Gross from net",
     "growing-degree-days": "Temperature sum",
     "guessing-correction": "Guessing correction",
@@ -492,13 +536,16 @@ export const proEn = {
     "iban-check": "IBAN",
     "ice-and-chilling": "Ice for cooling",
     "ice-cream-overrun": "Ice cream overrun",
+    "hull-speed": "Hull speed",
     "illuminance-to-aperture": "Lux to aperture",
     "induction-motor-rating": "Induction motor",
     "injector-flow": "Injector flow",
     "interest-periods": "Interest by period",
     "interval-session-timing": "Interval training",
     "inventory-costing": "FIFO and average inventory",
+    "inverter-sizing": "Inverter and surge",
     "irrigation-depth-volume": "Irrigation rate",
+    "isa-atmosphere": "Standard atmosphere",
     "isbn-issn-check": "ISBN and ISSN",
     "iso-286-fits": "Tolerances and fits",
     "iso-paper-sizes": "ISO paper formats",
@@ -520,6 +567,7 @@ export const proEn = {
     "lighting-count": "Room lighting",
     "limb-symmetry-index": "Side symmetry",
     "linear-cutting-stock": "Bar cutting",
+    "link-budget": "Link budget",
     "livestock-ration-dm": "Ration by dry matter",
     "load-lashing-force": "Lashing force",
     "loading-space-utilisation": "Cargo space utilisation",
@@ -557,6 +605,7 @@ export const proEn = {
     "paper-weight": "Paper weight and mass",
     "parcel-polygon-area": "Plot area",
     "parking-cloakroom": "Parking and cloakroom",
+    "path-loss": "Path loss",
     "payment-due-date": "Payment deadline",
     "payment-reference-97": "Reference number 97",
     "pcm-file-size": "PCM recording size",
@@ -570,6 +619,7 @@ export const proEn = {
     "portions-from-pack": "Portions from a package",
     "power-factor-correction": "Reactive power compensation",
     "pq-nits": "PQ and nits",
+    "pressure-altitude": "Pressure altitude",
     "pressure-and-piston-force": "Pressure and piston force",
     "print-resolution": "Print resolution",
     "pro-rata-days": "Pro rata by days",
@@ -598,6 +648,7 @@ export const proEn = {
     "room-modes": "Room modes",
     "room-quad-area": "Room area",
     "room-surfaces": "Room surfaces",
+    "rule-of-twelfths": "Rule of twelfths",
     "run-of-show": "Event schedule",
     "running-pace-splits": "Race pace",
     "saddle-stitch-imposition": "Booklet imposition",
@@ -622,6 +673,7 @@ export const proEn = {
     "solution-concentration": "Solution concentration",
     "sound-wavelength": "Sound wavelength",
     "speaker-load": "Speaker impedance and power",
+    "speed-run": "Speed, time and distance",
     "speedometer-tyre-deviation": "Speedometer error",
     "spl-distance": "SPL at a distance",
     "split-into-groups": "Group division",
@@ -637,6 +689,7 @@ export const proEn = {
     "survey-bearing-distance": "Surveying task",
     "suvlasnicki-udeli": "Shares and target denominator",
     "sweat-rate-hydration": "Sweat rate",
+    "swr-match": "SWR and matching",
     "tank-mix-dose": "Dose per tank",
     "tank-volume-by-level": "Tank volume",
     "tap-drill-size": "Thread tapping",
@@ -661,6 +714,7 @@ export const proEn = {
     "trial-balance-check": "Sum check",
     "trip-cost-quote": "Tour price",
     "troskovi-srazmerno-uspehu": "Success-based costs",
+    "true-airspeed": "True airspeed",
     "truss-hoist-reactions": "Route and motor load",
     "tvm-solver": "Time value of money",
     "typography-cleanup": "Typographic cleanup",
@@ -668,10 +722,12 @@ export const proEn = {
     "unwrap-paragraphs": "Layout cleanup",
     "uptime-downtime": "Uptime and downtime",
     "us-customary-kitchen-units": "American measures",
+    "utm-mgrs": "UTM and MGRS",
     "varispeed-repitch": "Detuning and speed",
     "venue-occupancy-area": "Venue capacity",
     "video-bitrate-storage": "Bitrate and card",
     "vlsm-split": "Subnet allocation",
+    "vmg": "VMG",
     "voltage-drop": "Line voltage drop",
     "wall-ceiling-area": "Walls and ceiling",
     "wall-u-value": "Assembly U-value",
@@ -680,7 +736,10 @@ export const proEn = {
     "weighted-area": "Chargeable area",
     "weighted-grade": "Weighted grade",
     "weld-consumable": "Welding consumption",
+    "wgs84-utm": "WGS84 and UTM",
     "wheel-offset": "Wheel offset",
+    "wind-components": "Wind and runway",
+    "wind-triangle": "Wind triangle",
     "wood-moisture-movement": "Wood movement by moisture",
     "word-frequency": "Word frequency",
     "yield-estimate-samples": "Yield estimate",
@@ -698,18 +757,32 @@ export const proEn = {
       "Air-fuel ratio by mass, lambda with the stoichiometric ratio you enter, and the fuel a target ratio needs.",
     "allocation-remainder":
       "Splits an amount by a given key so the parts add up to exactly the whole, with no penny lost to rounding.",
+    "altimeter-units":
+      "The altimeter setting in inHg, hPa and mbar, off the exact definition of the inch of mercury.",
     "amount-in-words":
       "Writes an amount in words — with a currency, where the word form follows the number, or without a currency as a bare number.",
+    "anchor-rode":
+      "How much rode a chosen scope needs, measured against the depth at the bow, in metres and " +
+      "feet.",
     "angle-of-view":
       "For the entered sensor dimensions and focal length, gives the angle of view across width, height and diagonal, and how many metres the frame covers at a given distance.",
     "angle-units":
       "Converts an angle between degrees-minutes-seconds, decimal degrees, gradians, radians and mils, and reduces it to a full circle.",
+    "antenna-lengths":
+      "The wavelength in the conductor and the physical lengths of a half-wave dipole and a " +
+      "quarter-wave element, with the velocity factor you enter.",
     "anuitet-otplatni-plan":
       "What the equal instalment is, and how each instalment splits into interest and principal when a debt is repaid in N equal instalments.",
+    "array-sizing":
+      "The array an off-grid system needs, from the daily consumption, the peak sun hours you " +
+      "enter and the system losses, with a panel count when one panel is given.",
     "aspect-ratio-fit":
       "The reduced whole-number aspect ratio and the dimensions when fitting into a frame, filling a frame or a given width, with the band or crop size.",
     "audio-level-reference":
       "Converts a line-signal level between dBu, dBV, dBm and volts — RMS, peak and peak-to-peak.",
+    "autonomy-days":
+      "How many days with no sun a bank of a stated capacity gives, at a system voltage and depth " +
+      "of discharge.",
     "average-to-target":
       "Calculates how many more grades of a given value are needed for the average to reach the target, or how many weaker grades the average can still absorb without falling below the target.",
     "awg-to-mm2":
@@ -734,6 +807,9 @@ export const proEn = {
       "What the leading is in pixels, whether it lands on the baseline grid, and how many lines fit in a column of a given height.",
     "battery-bank-runtime":
       "Calculates pack voltage and energy, the usable part and runtime under a given load, with Peukert's correction when the user enters it.",
+    "battery-bank-sizing":
+      "The bank a stated autonomy needs, from the daily consumption, the depth of discharge and " +
+      "the system voltage.",
     "beam-check":
       "For four basic static schemes, gives the reactions, maximum moment, stress and deflection from the entered E and I.",
     "beam-spot-diameter":
@@ -782,12 +858,17 @@ export const proEn = {
       "Converts the difference of two frequencies into cents, semitones and a ratio, and calculates the frequency after detuning by a given number of cents.",
     "chained-discount":
       "Layers a series of discounts and surcharges on top of one another and says which single discount would give the same price.",
+    "charge-controller-current":
+      "The current a controller has to pass (MPPT), with the margin you set yourself.",
     "chargeable-weight":
       "From the dimensions and actual mass of a shipment, gives the volumetric mass by a given divisor and the chargeable mass that is invoiced.",
     "check-digits-id":
       "Calculates and checks the check digit of a PIB, a company number and a JMBG, so a typing error shows before the number goes onto a document.",
     "child-age":
       "For a date of birth and a given day, calculates the age in years, months and days, the total number of completed months and days, and the date on which the person reaches a given number of years.",
+    "coax-loss":
+      "The loss in a cable from the datasheet's dB per 100 m and its length, with the power at the " +
+      "far end.",
     "coffee-extraction":
       "From the dose, water, brew mass and measured TDS, calculates the brewing ratios and extraction percentage, and back — how much water goes with a given ratio.",
     "column-grid":
@@ -810,14 +891,23 @@ export const proEn = {
       "Splits a shared cost into parts by area or share, with rounding whose parts add up to exactly the whole.",
     "cost-per-km-transport":
       "From annual fixed costs and cost per kilometre, gives the cost price of a kilometre and of a kilometre under load.",
+    "course-to-steer":
+      "The heading that holds a track through a known current, with its drift angle and its " +
+      "speed over the ground.",
     "crop-factor":
       "From the entered sensor dimensions, calculates the crop factor relative to the 135 format and converts focal length and aperture to a full-frame equivalent.",
     "css-typographic-units":
       "Converts px, rem, em, pt, pica, mm, cm, inch, Q and dp into one another, and gives asset sizes for @2x and @3x.",
     "decibel-ratio":
       "Converts decibels into a linear ratio and back — separately for amplitude and separately for power — and adds several levels in decibels.",
+    "decimal-dms":
+      "Decimal degrees into degrees, minutes and seconds and back, with the sign on the degrees " +
+      "alone.",
     "delta-e":
       "How much two colours differ numerically by the ΔE*ab, ΔE94 and CIEDE2000 formulas; the acceptance threshold is set and interpreted by the user.",
+    "device-daily-energy":
+      "The daily energy from a list of devices — power times time per device, summed into " +
+      "watt-hours and kilowatt-hours.",
     "deposit-instalments":
       "Splits a contract value into a deposit and equal instalments with dates, with no difference in the sum.",
     "depreciation-schedule":
@@ -862,14 +952,31 @@ export const proEn = {
       "Adds, subtracts, multiplies and divides fractions in integer arithmetic, reduces the result, shows it as a mixed number and as a decimal with the repeating part marked, and turns a repeating decimal back into a fraction.",
     "frame-rate-conform":
       "When footage from one frame rate lands on a timeline at another, gives the playback speed, the new duration and the offset from the original.",
+    "frequency-wavelength":
+      "A frequency into the free-space wavelength and back, with the half and the quarter an " +
+      "antenna needs.",
+    "fresnel-zone":
+      "The first Fresnel zone's radius at the obstruction and its 60 % clearance, from the path " +
+      "length and where the obstruction sits.",
     "fuel-consumption-cost":
       "From the distance travelled and fuel used, gives consumption, cost per kilometre and cost per tonne-kilometre.",
+    "fuel-range":
+      "Endurance and range from a tank, a burn rate and a speed, with the reserve you hold back.",
+    "fuel-reserve":
+      "Endurance and range from the fuel on board, a burn rate and a reserve stated in minutes of " +
+      "flight.",
     "fx-difference":
       "Converts a foreign-currency amount at the rate the user enters, calculates the exchange difference between two rates and derives a cross rate from two pairs.",
     "gear-ratio-road-speed":
       "Links engine speed, gearbox and final-drive ratios and tyre circumference to vehicle speed.",
     "generator-sizing":
       "Adds loads with power factor and simultaneity into a working apparent power, and calculates the peak apparent power at the moment the largest motor starts.",
+    "geodesic-direct":
+      "The point of arrival from a start, an azimuth and a distance on the WGS84 ellipsoid, with " +
+      "the azimuth on arrival.",
+    "geodesic-inverse":
+      "Distance, initial and final azimuth between two points on the WGS84 ellipsoid (Vincenty), " +
+      "with the quarter meridian as its control line.",
     "glass-pane-weight":
       "The mass of monolithic, laminated and insulated glass per m², per piece and in total, from the dimensions and the composition of the pack.",
     "glossary-check":
@@ -880,6 +987,12 @@ export const proEn = {
       "For an entered series of grades or scores, gives the mean, median, mode, standard deviation, quartiles, the distribution by value and the share of values above a threshold the user enters.",
     "grain-moisture-shrink":
       "How many kilograms remain when grain at a measured moisture content drops to the contract moisture, how much water left, and what the mass is after deductions for impurities.",
+    "great-circle":
+      "Great-circle distance with the initial and final bearing, and beside them the rhumb line " +
+      "— the course a compass can hold — and its length.",
+    "grid-ground-ratio":
+      "The ratio of the grid distance to the ellipsoidal distance between two points, with both " +
+      "points' scale factors.",
     "gross-up":
       "Solves the linear gross–net equation backwards: from the net amount and the rates the user enters, derives the gross, the tax and contribution amounts, and returns the check.",
     "growing-degree-days":
@@ -902,6 +1015,9 @@ export const proEn = {
       "How many kilograms of ice remove heat from a given mass of drink from a starting to a target temperature, and how much ice melts additionally during holding.",
     "ice-cream-overrun":
       "Calculates overrun from the mass of the same container filled with mix and with finished ice cream, and from a given overrun gives the volume and weight of a package.",
+    "hull-speed":
+      "The hull speed of a displacement hull from its waterline length and a Froude number, with " +
+      "the traditional speed–length ratio.",
     "illuminance-to-aperture":
       "Converts lux and foot-candles and, with a calibration constant entered from your light meter, calculates the aperture for a given ISO and shutter time.",
     "induction-motor-rating":
@@ -914,8 +1030,14 @@ export const proEn = {
       "From the work duration, rest (or work:rest ratio) and the number of repetitions and sets, gives the set duration, the total training time and the actual work-to-rest ratio.",
     "inventory-costing":
       "From a list of inputs and outputs, calculates the cost of goods sold and the inventory balance by the FIFO method and by weighted average cost.",
+    "inverter-sizing":
+      "An inverter's continuous and surge apparent power from the loads and their power factor, " +
+      "with the surge ratio.",
     "irrigation-depth-volume":
       "Converts an entered irrigation rate in millimetres into cubic metres per hectare, gives the system's runtime at a given flow and the sprinkler's rainfall intensity.",
+    "isa-atmosphere":
+      "Temperature, pressure, density and the speed of sound from the ICAO standard atmosphere at " +
+      "a geopotential altitude.",
     "isbn-issn-check":
       "Checks the check digit of an ISBN, ISSN, ISMN and EAN-13 number and converts ISBN-10 to ISBN-13 and back.",
     "iso-286-fits":
@@ -958,6 +1080,9 @@ export const proEn = {
       "The ratio of values on two sides of the body in percentages, the difference up to one hundred percent, and what value the weaker side needs to reach for a ratio the user sets.",
     "linear-cutting-stock":
       "From a list of required pieces, the bar length and the cut width, gives how many bars are needed, which pieces go on which bar and what offcut remains.",
+    "link-budget":
+      "The link budget in decibels: EIRP, the power at the receiver, the voltage into 50 Ω and the " +
+      "net system gain.",
     "livestock-ration-dm":
       "Converts an entered intake of dry matter per head into fresh kilograms of each feed, the daily and total consumption of the herd and the stock needed for a given number of days.",
     "load-lashing-force":
@@ -1032,6 +1157,9 @@ export const proEn = {
       "From a series of vertex coordinates, calculates the area and perimeter of a plot by the surveyor's formula.",
     "parking-cloakroom":
       "From the number of guests, the share arriving by car and vehicle occupancy, calculates the number of vehicles and the parking area, the length of cloakroom rails and the number of staff for a given reception window.",
+    "path-loss":
+      "Free-space path loss by Friis from a distance and a frequency, and the share of the power " +
+      "that arrives.",
     "payment-due-date":
       "From a date and a term you enter, gives the due date, the day of the week and the number of days' difference to a reference date.",
     "payment-reference-97":
@@ -1058,6 +1186,9 @@ export const proEn = {
       "Calculates the reactive power and capacitance needed to raise the power factor from the present one to the target, and the current before and after.",
     "pq-nits":
       "Converts a PQ signal into luminance in nits and back, by the curve from ST 2084, with 10-bit and 12-bit code in full and narrow range.",
+    "pressure-altitude":
+      "Pressure altitude and density altitude from the actual pressure and the outside temperature, " +
+      "by inverting the standard atmosphere.",
     "pressure-and-piston-force":
       "Converts bar, Pa, psi, kgf/cm², mmHg and metres of water column, distinguishes gauge from absolute pressure and calculates the force on the piston and on the rod side.",
     "print-resolution":
@@ -1114,6 +1245,9 @@ export const proEn = {
       "From four measured sides and one diagonal, gives the room area and the corner angle, because a room is rarely a rectangle.",
     "room-surfaces":
       "From the room measurements and the list of openings, gives the net wall area, the ceiling, the reveals and the quantity of material needed.",
+    "rule-of-twelfths":
+      "The height of the tide between the turns by the rule of twelfths, with the whole " +
+      "hour-by-hour table.",
     "run-of-show":
       "From the durations of cues, the transitions between them and cues pinned to an exact hour, makes a running order forwards and backwards and shows gaps and overruns.",
     "running-pace-splits":
@@ -1162,6 +1296,9 @@ export const proEn = {
       "For a given frequency and air temperature, gives the speed of sound, the wavelength and its quarter, and the delay per distance travelled.",
     "speaker-load":
       "For speakers wired in parallel or series, gives the total impedance and how much power each cabinet receives.",
+    "speed-run":
+      "The third of speed, distance and time from the other two, in knots, km/h, m/s, nautical " +
+      "miles, kilometres, hours and minutes.",
     "speedometer-tyre-deviation":
       "When the tyre size changes, calculates the true speed, the odometer error and the change in vehicle height.",
     "spl-distance":
@@ -1192,6 +1329,8 @@ export const proEn = {
       "Whether the entered ideal parts make exactly a whole, what they are on a common denominator and how many squares each carries.",
     "sweat-rate-hydration":
       "From the mass before and after training, the fluid drunk and the duration, calculates sweat loss, the sweat rate per hour and the percentage of body mass lost.",
+    "swr-match":
+      "SWR, return loss, reflection coefficient and mismatch loss — any one of them from another.",
     "tank-mix-dose":
       "Converts an entered product dose per hectare into one tank fill and gives the total amounts of product and water for an entered area.",
     "tank-volume-by-level":
@@ -1240,6 +1379,9 @@ export const proEn = {
       "Adds mileage, tolls, per diems and waiting into the cost price of a trip and, from the margin, gives the transport price.",
     "troskovi-srazmerno-uspehu":
       "What the ratio of the awarded and requested amount is, and what proportional share of its costs each party bears by that ratio.",
+    "true-airspeed":
+      "True airspeed from calibrated airspeed, pressure altitude and outside temperature, with the " +
+      "density from the ideal gas law.",
     "truss-hoist-reactions":
       "For a line hung from two points, calculates the force at each point from its own weight and individual loads, the centre of gravity and the possible lift of one end.",
     "tvm-solver":
@@ -1254,6 +1396,9 @@ export const proEn = {
       "An availability percentage and the downtime it allows a year, a month, a week and a day, or the other way round.",
     "us-customary-kitchen-units":
       "Converts cups, ounces, pounds, pints and degrees Fahrenheit from foreign recipes into millilitres, grams and degrees Celsius, and refuses to convert volume into mass without a density.",
+    "utm-mgrs":
+      "WGS84 coordinates into an MGRS reference and back, at a precision from 100 km down to one " +
+      "metre.",
     "varispeed-repitch":
       "When a sample's pitch changes or a recording played at one frequency is played back at another — gives the speed ratio, the resulting tempo, the resulting duration and the shift in cents.",
     "venue-occupancy-area":
@@ -1262,6 +1407,8 @@ export const proEn = {
       "Links bitrate, duration and file size and calculates how much recording fits on a card or disk of a given capacity.",
     "vlsm-split":
       "Carving an IPv4 network into subnets for the host counts you list, largest first, with the leftover shown.",
+    "vmg":
+      "The useful component of boat speed upwind or downwind at a given true wind angle.",
     "voltage-drop":
       "For a given cross-section, length and current, calculates the line resistance, the voltage drop in volts and percent and the power loss.",
     "wall-ceiling-area":
@@ -1278,8 +1425,17 @@ export const proEn = {
       "Adds assessment components with different maxima and different weights into one total percentage and calculates how many points are missing on the remaining component for a desired overall result.",
     "weld-consumable":
       "The mass of weld metal and of the filler needed from the weld cross-section and length, with the length of wire or number of electrodes.",
+    "wgs84-utm":
+      "Latitude and longitude into a UTM zone, coordinates, scale factor and convergence, and " +
+      "back — by the Gauss–Krüger series on WGS84.",
     "wheel-offset":
       "Backspace and front space from the rim width and offset, and how far the rim edges move against another wheel.",
+    "wind-components":
+      "The headwind and crosswind components for a runway, with the same two figures for the " +
+      "reciprocal direction.",
+    "wind-triangle":
+      "The wind correction angle, the heading to fly and the ground speed from a course, a true " +
+      "airspeed and a wind.",
     "wood-moisture-movement":
       "How much a piece of wood changes dimension when moisture changes, and what clearance remains for the expected moisture range in the room.",
     "word-frequency":
@@ -1432,4 +1588,9 @@ export const proEn = {
   elektro: PRO_ELEKTRO_EN,
   it: PRO_IT_EN,
   auto: PRO_AUTO_EN,
+  nautika: PRO_NAUTIKA_EN,
+  vazduhoplovstvo: PRO_VAZDUHOPLOVSTVO_EN,
+  geodezija: PRO_GEODEZIJA_EN,
+  radio: PRO_RADIO_EN,
+  energija: PRO_ENERGIJA_EN,
 } as const;

@@ -257,6 +257,40 @@ export const TRADE_STEMS: readonly TradeStem[] = [
   { stem: "autolimar", packs: ["auto"] },
   { stem: "autoservis", packs: ["auto"] },
   { stem: "vulkanizer", packs: ["auto"] },
+
+  // more i jedrenje
+  { stem: "jedrilic", packs: ["nautika"] },
+  { stem: "jedrenj", packs: ["nautika"] },
+  { stem: "nauticar", packs: ["nautika"] },
+  { stem: "skiper", packs: ["nautika"] },
+  { stem: "regat", packs: ["nautika"] },
+  { stem: "brodic", packs: ["nautika"] },
+
+  // vazduhoplovstvo
+  { stem: "avijacij", packs: ["vazduhoplovstvo"] },
+  { stem: "avion", packs: ["vazduhoplovstvo"] },
+  { stem: "pilot", packs: ["vazduhoplovstvo"] },
+  { stem: "stjuard", packs: ["vazduhoplovstvo"] },
+  { stem: "vazduhoplov", packs: ["vazduhoplovstvo"] },
+
+  // geodezija
+  { stem: "geodet", packs: ["geodezija"] },
+  { stem: "geodezij", packs: ["geodezija"] },
+  { stem: "kartograf", packs: ["geodezija"] },
+  { stem: "topograf", packs: ["geodezija"] },
+
+  // radio-amaterizam
+  { stem: "antena", packs: ["radio"] },
+  { stem: "kratkotalas", packs: ["radio"] },
+  { stem: "predajnik", packs: ["radio"] },
+  { stem: "prijemnik", packs: ["radio"] },
+  { stem: "radioamat", packs: ["radio"] },
+
+  // energija
+  { stem: "akumulator", packs: ["energija"] },
+  { stem: "fotonap", packs: ["energija"] },
+  { stem: "invertor", packs: ["energija"] },
+  { stem: "solar", packs: ["energija"] },
 ];
 
 /**
@@ -300,6 +334,11 @@ export const TRADE_ACTIVITIES: readonly TradeActivity[] = [
   { id: "instalacije", packs: ["elektro"] },
   { id: "sistemi", packs: ["it"] },
   { id: "servis", packs: ["auto"] },
+  { id: "jedrim", packs: ["nautika"] },
+  { id: "letim", packs: ["vazduhoplovstvo"] },
+  { id: "merim-teren", packs: ["geodezija"] },
+  { id: "radio", packs: ["radio"] },
+  { id: "solar", packs: ["energija"] },
 ];
 
 /**

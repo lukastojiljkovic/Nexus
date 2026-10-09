@@ -123,6 +123,12 @@ export const TOOL_PACKS = [
   "elektro",
   "it",
   "auto",
+  // more, vazduh i nauka
+  "nautika",
+  "vazduhoplovstvo",
+  "geodezija",
+  "radio",
+  "energija",
 ] as const;
 
 export type ToolPack = (typeof TOOL_PACKS)[number];
@@ -169,10 +175,11 @@ export function enabledPacks(flags: Readonly<Record<string, boolean>>): ToolPack
  * somebody else's.
  *
  * **The seven at the bottom are the price of the axis.** Eleven categories were
- * enough while the professional drawer was one trade's; across eighteen toolkits
- * `calculation` would have collected a hundred and fifty tools and stopped being
- * a heading at all — a group that contains everything sorts nothing. They are
- * still verbs, not trades, and that is what keeps the doctrine above intact: a
+ * enough while the professional drawer was one trade's; across twenty-three
+ * toolkits `calculation` would have collected a hundred and fifty tools and
+ * stopped being a heading at all — a group that contains everything sorts
+ * nothing. They are still verbs, not trades, and that is what keeps the
+ * doctrine above intact: a
  * bricklayer's lintel and a rigger's sling are both `structure` because both
  * ask what an assembly can carry, and neither pack owns the word. The trade is
  * the filter that got the tool onto the screen; the category is what it does

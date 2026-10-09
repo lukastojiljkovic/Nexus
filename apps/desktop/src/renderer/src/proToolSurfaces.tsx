@@ -191,6 +191,32 @@ export const PRO_SURFACE_FILES: readonly SurfaceFile[] = [
     tools: PRO_TOOL_GROUPS.auto,
     load: () => import("./pro/auto.js").then((module) => module.AUTO_SURFACES),
   },
+  {
+    file: "pro/nautika.tsx",
+    tools: PRO_TOOL_GROUPS.nautika,
+    load: () => import("./pro/nautika.js").then((module) => module.NAUTIKA_SURFACES),
+  },
+  {
+    file: "pro/vazduhoplovstvo.tsx",
+    tools: PRO_TOOL_GROUPS.vazduhoplovstvo,
+    load: () =>
+      import("./pro/vazduhoplovstvo.js").then((module) => module.VAZDUHOPLOVSTVO_SURFACES),
+  },
+  {
+    file: "pro/geodezija.tsx",
+    tools: PRO_TOOL_GROUPS.geodezija,
+    load: () => import("./pro/geodezija.js").then((module) => module.GEODEZIJA_SURFACES),
+  },
+  {
+    file: "pro/radio.tsx",
+    tools: PRO_TOOL_GROUPS.radio,
+    load: () => import("./pro/radio.js").then((module) => module.RADIO_SURFACES),
+  },
+  {
+    file: "pro/energija.tsx",
+    tools: PRO_TOOL_GROUPS.energija,
+    load: () => import("./pro/energija.js").then((module) => module.ENERGIJA_SURFACES),
+  },
 ];
 
 /**
