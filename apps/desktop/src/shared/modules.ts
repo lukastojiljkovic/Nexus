@@ -5779,6 +5779,442 @@ const PRO_AUTO_TOOLS: ToolRegistration[] = [
   },
 ];
 
+const PRO_NAUTIKA_TOOLS: ToolRegistration[] = [
+  {
+    id: "speed-run",
+    titleKey: "pro.name.speed-run",
+    blurbKey: "pro.blurb.speed-run",
+    category: "calculation",
+    riskClass: "life-safety",
+    taskGroups: ["measure"],
+    packs: ["nautika"],
+    keywords: [
+      "brzina", "cvor", "cvorovima", "dva", "dve", "kilometar", "milja", "nauticka", "predeni",
+      "put", "rastojanje", "sat", "sati", "treca", "tri", "vreme", "vremena"
+    ],
+  },
+  {
+    id: "great-circle",
+    titleKey: "pro.name.great-circle",
+    blurbKey: "pro.blurb.great-circle",
+    category: "geometry",
+    riskClass: "life-safety",
+    taskGroups: ["measure"],
+    packs: ["nautika"],
+    keywords: [
+      "azimut", "duzina", "koordinate", "krug", "kurs", "loksodroma", "meridian", "ortodroma",
+      "rastojanje", "sfera", "sirina", "veliki"
+    ],
+  },
+  {
+    id: "anchor-rode",
+    titleKey: "pro.name.anchor-rode",
+    blurbKey: "pro.blurb.anchor-rode",
+    category: "calculation",
+    riskClass: "life-safety",
+    taskGroups: ["measure"],
+    packs: ["nautika"],
+    keywords: [
+      "anker", "dubina", "lanac", "odnos", "pramac", "sidrenje", "uze", "valjak"
+    ],
+  },
+  {
+    id: "fuel-range",
+    titleKey: "pro.name.fuel-range",
+    blurbKey: "pro.blurb.fuel-range",
+    category: "calculation",
+    riskClass: "life-safety",
+    taskGroups: ["measure"],
+    packs: ["nautika"],
+    keywords: [
+      "autonomija", "domet", "gorivo", "litara", "potrosnja", "rezerva", "rezervoar", "sat",
+      "trajanje"
+    ],
+  },
+  {
+    id: "hull-speed",
+    titleKey: "pro.name.hull-speed",
+    blurbKey: "pro.blurb.hull-speed",
+    category: "calculation",
+    riskClass: "life-safety",
+    taskGroups: ["measure"],
+    packs: ["nautika"],
+    keywords: [
+      "deplasman", "duzina", "froude", "frudov", "granica", "linija", "talasanje", "trup",
+      "vodena"
+    ],
+  },
+  {
+    id: "rule-of-twelfths",
+    titleKey: "pro.name.rule-of-twelfths",
+    blurbKey: "pro.blurb.rule-of-twelfths",
+    category: "time",
+    riskClass: "life-safety",
+    taskGroups: ["measure"],
+    packs: ["nautika"],
+    keywords: [
+      "dvanaestine", "niska", "okretanje", "plima", "raspon", "sat", "tabela", "visina",
+      "visoka", "voda"
+    ],
+  },
+  {
+    id: "vmg",
+    titleKey: "pro.name.vmg",
+    blurbKey: "pro.blurb.vmg",
+    category: "calculation",
+    riskClass: "life-safety",
+    taskGroups: ["measure"],
+    packs: ["nautika"],
+    keywords: [
+      "brzina", "jedrenje", "komponenta", "niz", "pravi", "ugao", "uz", "vetar", "vmg"
+    ],
+  },
+  {
+    id: "course-to-steer",
+    titleKey: "pro.name.course-to-steer",
+    blurbKey: "pro.blurb.course-to-steer",
+    category: "geometry",
+    riskClass: "life-safety",
+    taskGroups: ["measure"],
+    packs: ["nautika"],
+    keywords: [
+      "drif", "kormilo", "kurs", "preko", "smer", "struja", "trokut", "vektor", "zanosenje",
+      "zemlje"
+    ],
+  },
+];
+
+const PRO_VAZDUHOPLOVSTVO_TOOLS: ToolRegistration[] = [
+  {
+    id: "isa-atmosphere",
+    titleKey: "pro.name.isa-atmosphere",
+    blurbKey: "pro.blurb.isa-atmosphere",
+    category: "calculation",
+    riskClass: "life-safety",
+    taskGroups: ["measure", "study"],
+    packs: ["vazduhoplovstvo"],
+    keywords: [
+      "atmosfera", "brzina", "gustina", "icao", "pritisak", "standardna", "temperatura", "visina",
+      "zvuka"
+    ],
+  },
+  {
+    id: "pressure-altitude",
+    titleKey: "pro.name.pressure-altitude",
+    blurbKey: "pro.blurb.pressure-altitude",
+    category: "calculation",
+    riskClass: "life-safety",
+    taskGroups: ["measure"],
+    packs: ["vazduhoplovstvo"],
+    keywords: [
+      "altitude", "density", "gustina", "pritisak", "temperatura", "visina"
+    ],
+  },
+  {
+    id: "true-airspeed",
+    titleKey: "pro.name.true-airspeed",
+    blurbKey: "pro.blurb.true-airspeed",
+    category: "calculation",
+    riskClass: "life-safety",
+    taskGroups: ["measure"],
+    packs: ["vazduhoplovstvo"],
+    keywords: [
+      "airspeed", "brzina", "cas", "gustina", "ias", "instrument", "kalibrisana", "prava", "tas",
+      "visina"
+    ],
+  },
+  {
+    id: "wind-triangle",
+    titleKey: "pro.name.wind-triangle",
+    blurbKey: "pro.blurb.wind-triangle",
+    category: "geometry",
+    riskClass: "life-safety",
+    taskGroups: ["measure"],
+    packs: ["vazduhoplovstvo"],
+    keywords: [
+      "ground", "kurs", "korekcija", "preko", "speed", "trougao", "vetar", "wca", "zemlje"
+    ],
+  },
+  {
+    id: "wind-components",
+    titleKey: "pro.name.wind-components",
+    blurbKey: "pro.blurb.wind-components",
+    category: "geometry",
+    riskClass: "life-safety",
+    taskGroups: ["measure"],
+    packs: ["vazduhoplovstvo"],
+    keywords: [
+      "ceono", "crosswind", "headwind", "komponenta", "pista", "poprecno", "runway", "vetar"
+    ],
+  },
+  {
+    id: "fuel-reserve",
+    titleKey: "pro.name.fuel-reserve",
+    blurbKey: "pro.blurb.fuel-reserve",
+    category: "calculation",
+    riskClass: "life-safety",
+    taskGroups: ["measure"],
+    packs: ["vazduhoplovstvo"],
+    keywords: [
+      "dolet", "endurance", "gorivo", "let", "minuta", "potrosnja", "range", "rezerva", "trajanje"
+    ],
+  },
+  {
+    id: "altimeter-units",
+    titleKey: "pro.name.altimeter-units",
+    blurbKey: "pro.blurb.altimeter-units",
+    category: "conversion",
+    riskClass: "life-safety",
+    taskGroups: ["measure"],
+    packs: ["vazduhoplovstvo"],
+    keywords: [
+      "altimeter", "hpa", "inhg", "mbar", "pritisak", "visinomer", "ziva"
+    ],
+  },
+];
+
+const PRO_GEODEZIJA_TOOLS: ToolRegistration[] = [
+  {
+    id: "decimal-dms",
+    titleKey: "pro.name.decimal-dms",
+    blurbKey: "pro.blurb.decimal-dms",
+    category: "conversion",
+    riskClass: "none",
+    taskGroups: ["measure", "data"],
+    packs: ["geodezija"],
+    keywords: [
+      "dms", "decimalni", "koordinate", "minute", "sekunde", "stepeni", "znak"
+    ],
+  },
+  {
+    id: "wgs84-utm",
+    titleKey: "pro.name.wgs84-utm",
+    blurbKey: "pro.blurb.wgs84-utm",
+    category: "geometry",
+    riskClass: "none",
+    taskGroups: ["measure", "data"],
+    packs: ["geodezija"],
+    keywords: [
+      "duzina", "easting", "gaus", "konvergencija", "kruger", "northing", "razmera", "sirina",
+      "utm", "wgs84", "zona"
+    ],
+  },
+  {
+    id: "utm-mgrs",
+    titleKey: "pro.name.utm-mgrs",
+    blurbKey: "pro.blurb.utm-mgrs",
+    category: "geometry",
+    riskClass: "none",
+    taskGroups: ["measure", "data"],
+    packs: ["geodezija"],
+    keywords: [
+      "kvadrat", "mgrs", "oznaka", "pojas", "preciznost", "utm", "vojni", "zona"
+    ],
+  },
+  {
+    id: "geodesic-inverse",
+    titleKey: "pro.name.geodesic-inverse",
+    blurbKey: "pro.blurb.geodesic-inverse",
+    category: "geometry",
+    riskClass: "none",
+    taskGroups: ["measure"],
+    packs: ["geodezija"],
+    keywords: [
+      "azimut", "elipsoid", "geodezijsko", "inverzni", "rastojanje", "vincenti", "wgs84"
+    ],
+  },
+  {
+    id: "geodesic-direct",
+    titleKey: "pro.name.geodesic-direct",
+    blurbKey: "pro.blurb.geodesic-direct",
+    category: "geometry",
+    riskClass: "none",
+    taskGroups: ["measure"],
+    packs: ["geodezija"],
+    keywords: [
+      "azimut", "direktni", "elipsoid", "izracunaj", "koordinate", "rastojanje", "vincenti",
+      "wgs84"
+    ],
+  },
+  {
+    id: "grid-ground-ratio",
+    titleKey: "pro.name.grid-ground-ratio",
+    blurbKey: "pro.blurb.grid-ground-ratio",
+    category: "geometry",
+    riskClass: "none",
+    taskGroups: ["measure", "build"],
+    packs: ["geodezija"],
+    keywords: [
+      "faktor", "korekcija", "mreza", "odnos", "razmera", "teren", "utm"
+    ],
+  },
+];
+
+const PRO_RADIO_TOOLS: ToolRegistration[] = [
+  {
+    id: "frequency-wavelength",
+    titleKey: "pro.name.frequency-wavelength",
+    blurbKey: "pro.blurb.frequency-wavelength",
+    category: "conversion",
+    riskClass: "none",
+    taskGroups: ["measure", "study"],
+    packs: ["radio"],
+    keywords: [
+      "frekvencija", "herc", "lambda", "metar", "mhz", "talas", "talasna", "duzina"
+    ],
+  },
+  {
+    id: "antenna-lengths",
+    titleKey: "pro.name.antenna-lengths",
+    blurbKey: "pro.blurb.antenna-lengths",
+    category: "calculation",
+    riskClass: "none",
+    taskGroups: ["build", "measure"],
+    packs: ["radio"],
+    keywords: [
+      "antena", "dipol", "duzina", "element", "faktor", "polutalasni", "cetvrtvalni", "skracenja",
+      "velociti"
+    ],
+  },
+  {
+    id: "swr-match",
+    titleKey: "pro.name.swr-match",
+    blurbKey: "pro.blurb.swr-match",
+    category: "calculation",
+    riskClass: "none",
+    taskGroups: ["measure"],
+    packs: ["radio"],
+    keywords: [
+      "gubitak", "koeficijent", "mismatch", "neprilagodjenje", "povratni", "refleksije", "reflection",
+      "return", "swr"
+    ],
+  },
+  {
+    id: "path-loss",
+    titleKey: "pro.name.path-loss",
+    blurbKey: "pro.blurb.path-loss",
+    category: "calculation",
+    riskClass: "none",
+    taskGroups: ["measure"],
+    packs: ["radio"],
+    keywords: [
+      "friis", "gubitak", "loss", "path", "prostor", "slabljenje", "slobodan"
+    ],
+  },
+  {
+    id: "fresnel-zone",
+    titleKey: "pro.name.fresnel-zone",
+    blurbKey: "pro.blurb.fresnel-zone",
+    category: "geometry",
+    riskClass: "none",
+    taskGroups: ["measure"],
+    packs: ["radio"],
+    keywords: [
+      "frenel", "fresnel", "prepreka", "prohodnost", "zona", "poluprecnik", "vidljivost"
+    ],
+  },
+  {
+    id: "coax-loss",
+    titleKey: "pro.name.coax-loss",
+    blurbKey: "pro.blurb.coax-loss",
+    category: "calculation",
+    riskClass: "none",
+    taskGroups: ["measure"],
+    packs: ["radio"],
+    keywords: [
+      "kabl", "koaksijalni", "gubitak", "db", "duzina", "snaga", "coax"
+    ],
+  },
+  {
+    id: "link-budget",
+    titleKey: "pro.name.link-budget",
+    blurbKey: "pro.blurb.link-budget",
+    category: "calculation",
+    riskClass: "none",
+    taskGroups: ["measure"],
+    packs: ["radio"],
+    keywords: [
+      "bilans", "budget", "dbm", "dbi", "eirp", "link", "prijem", "snaga", "veza", "µv"
+    ],
+  },
+];
+
+const PRO_ENERGIJA_TOOLS: ToolRegistration[] = [
+  {
+    id: "device-daily-energy",
+    titleKey: "pro.name.device-daily-energy",
+    blurbKey: "pro.blurb.device-daily-energy",
+    category: "calculation",
+    riskClass: "none",
+    taskGroups: ["build", "measure"],
+    packs: ["energija"],
+    keywords: [
+      "dnevna", "energija", "potrosnja", "uredjaji", "vat", "vatsati", "wh", "kwh"
+    ],
+  },
+  {
+    id: "battery-bank-sizing",
+    titleKey: "pro.name.battery-bank-sizing",
+    blurbKey: "pro.blurb.battery-bank-sizing",
+    category: "electrical",
+    riskClass: "life-safety",
+    taskGroups: ["build"],
+    packs: ["energija"],
+    keywords: [
+      "akumulator", "autonomija", "banka", "baterija", "dani", "dubina", "kapacitet",
+      "praznjenja", "sistem"
+    ],
+  },
+  {
+    id: "array-sizing",
+    titleKey: "pro.name.array-sizing",
+    blurbKey: "pro.blurb.array-sizing",
+    category: "electrical",
+    riskClass: "life-safety",
+    taskGroups: ["build"],
+    packs: ["energija"],
+    keywords: [
+      "gubici", "pancele", "panel", "polje", "solar", "suncani", "sati", "velicina", "wp"
+    ],
+  },
+  {
+    id: "inverter-sizing",
+    titleKey: "pro.name.inverter-sizing",
+    blurbKey: "pro.blurb.inverter-sizing",
+    category: "electrical",
+    riskClass: "life-safety",
+    taskGroups: ["build"],
+    packs: ["energija"],
+    keywords: [
+      "faktor", "invertor", "snaga", "udarno", "va", "trajno", "pokretanje"
+    ],
+  },
+  {
+    id: "charge-controller-current",
+    titleKey: "pro.name.charge-controller-current",
+    blurbKey: "pro.blurb.charge-controller-current",
+    category: "electrical",
+    riskClass: "life-safety",
+    taskGroups: ["build"],
+    packs: ["energija"],
+    keywords: [
+      "amper", "kontroler", "mppt", "punjac", "regulator", "struja", "pwm"
+    ],
+  },
+  {
+    id: "autonomy-days",
+    titleKey: "pro.name.autonomy-days",
+    blurbKey: "pro.blurb.autonomy-days",
+    category: "electrical",
+    riskClass: "life-safety",
+    taskGroups: ["build", "measure"],
+    packs: ["energija"],
+    keywords: [
+      "autonomija", "banka", "baterija", "dani", "kapacitet", "rezerva"
+    ],
+  },
+];
+
 /**
  * The professional drawer's contents, one array per subject — named, because
  * each array is also one FILE of surfaces in the renderer.
@@ -5820,6 +6256,11 @@ export const PRO_TOOL_GROUPS = {
   elektro: PRO_ELEKTRO_TOOLS,
   it: PRO_IT_TOOLS,
   auto: PRO_AUTO_TOOLS,
+  nautika: PRO_NAUTIKA_TOOLS,
+  vazduhoplovstvo: PRO_VAZDUHOPLOVSTVO_TOOLS,
+  geodezija: PRO_GEODEZIJA_TOOLS,
+  radio: PRO_RADIO_TOOLS,
+  energija: PRO_ENERGIJA_TOOLS,
 } as const satisfies Record<string, readonly ToolRegistration[]>;
 
 const PRO_TOOLS: ToolRegistration[] = Object.values(PRO_TOOL_GROUPS).flat();
