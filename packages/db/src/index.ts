@@ -44,6 +44,8 @@ export {
   DocumentNotFoundError,
   DocumentValidationError,
   ElecSettingsValidationError,
+  EmergencyCardNotFoundError,
+  EmergencyCardValidationError,
   EventNotFoundError,
   EventTemplateNotFoundError,
   EventTemplateValidationError,
@@ -984,3 +986,30 @@ export type {
   UpdateMarkerFields,
   UpdateRecordingFields,
 } from "./recorder/recorderStore.js";
+
+// --- EMERGENCY (the emergency card, migration 078) --------------------------
+//
+// The card and the two ordered lists it owns, in ONE aggregate store per profile.
+// `exportData`/`importData` carry the whole module as a versioned plain JSON value
+// so stage 2's profile archive can plug it in without a second definition of what
+// a card is.
+export {
+  EMERGENCY_EXPORT_VERSION,
+  EmergencyCardStore,
+} from "./emergency/emergencyCardStore.js";
+export type {
+  AddEmergencyContactInput,
+  AddEmergencyDocumentInput,
+  CreateEmergencyCardInput,
+  EmergencyCard,
+  EmergencyCardContact,
+  EmergencyCardDocumentRef,
+  EmergencyCardExport,
+  EmergencyCardFieldsInput,
+  ExportedEmergencyCard,
+  ExportedEmergencyCardContact,
+  ExportedEmergencyCardDocument,
+  UpdateEmergencyCardFields,
+  UpdateEmergencyContactFields,
+  UpdateEmergencyDocumentFields,
+} from "./emergency/emergencyCardStore.js";

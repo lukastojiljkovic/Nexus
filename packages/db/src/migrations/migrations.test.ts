@@ -35,8 +35,8 @@ import {
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 77 (the recorder), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(77);
+  it("is at version 78 (the emergency card), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(78);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -9624,6 +9624,85 @@ describe("migration 076 — the cookbook's three tables", () => {
     expect(raw.prepare("SELECT COUNT(*) AS n FROM cookbook_recipes").get()).toEqual({ n: 0 });
     expect(raw.prepare("SELECT COUNT(*) AS n FROM cookbook_ingredients").get()).toEqual({ n: 0 });
     expect(raw.prepare("SELECT COUNT(*) AS n FROM cookbook_steps").get()).toEqual({ n: 0 });
+    raw.close();
+  });
+});
+
+describe("migration 078 - the emergency card", () => {
+  const T = "2026-06-01T08:00:00.000Z";
+
+  /** A database with one profile, opened through the whole migration list. */
+  function open(name: string): Database.Database {
+    const raw = new Database(join(dir, name));
+    prepareConnection(raw);
+    runMigrations(raw);
+    raw
+      .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
+      .run("p1", "personal", "P", T);
+    return raw;
+  }
+
+  function insertCard(raw: Database.Database, id: string, deletedAt: string | null = null): void {
+    raw
+      .prepare(
+        `INSERT INTO emergency_cards (id, profile_id, full_name, created_at, updated_at, deleted_at)
+         VALUES (?, 'p1', 'Mila', ?, ?, ?)`,
+      )
+      .run(id, T, T, deletedAt);
+  }
+
+  it("holds one LIVE card per profile, and lets a cleared one stand beside the new one", () => {
+    const raw = open("emergency-card-live.db");
+    insertCard(raw, "card-1");
+    expect(() => insertCard(raw, "card-2")).toThrow(/UNIQUE/);
+
+    raw.prepare("UPDATE emergency_cards SET deleted_at = ? WHERE id = 'card-1'").run(T);
+    insertCard(raw, "card-2");
+    expect(raw.prepare("SELECT count(*) AS n FROM emergency_cards").get()).toEqual({ n: 2 });
+    raw.close();
+  });
+
+  it("refuses a contact that names nobody, and one that names both a person and its own text", () => {
+    const raw = open("emergency-contact-pair.db");
+    insertCard(raw, "card-1");
+    const insert = raw.prepare(
+      `INSERT INTO emergency_contacts (id, card_id, person_id, name, rank, created_at, updated_at)
+       VALUES (?, 'card-1', ?, ?, 'i0', ?, ?)`,
+    );
+
+    expect(() => insert.run("c1", null, null, T, T)).toThrow(/CHECK/);
+    expect(() => insert.run("c2", "person-1", "Mila", T, T)).toThrow(/CHECK/);
+    insert.run("c3", null, "Marko", T, T);
+    insert.run("c4", "person-1", null, T, T);
+    raw.close();
+  });
+
+  it("refuses the same document twice on one card, and a print mode nobody prints", () => {
+    const raw = open("emergency-documents.db");
+    insertCard(raw, "card-1");
+    const insert = raw.prepare(
+      `INSERT INTO emergency_documents (id, card_id, document_id, mode, rank, created_at, updated_at)
+       VALUES (?, 'card-1', 'doc-1', ?, 'i0', ?, ?)`,
+    );
+
+    expect(() => insert.run("e1", "scan", T, T)).toThrow(/CHECK/);
+    insert.run("e2", "number", T, T);
+    expect(() => insert.run("e3", "number_image", T, T)).toThrow(/UNIQUE/);
+    raw.close();
+  });
+
+  it("refuses a blood type, an organ-donor answer and a print language outside their closed sets", () => {
+    const raw = open("emergency-vocabulary.db");
+    const insert = raw.prepare(
+      `INSERT INTO emergency_cards (id, profile_id, blood_type, organ_donor, print_language,
+                                    created_at, updated_at)
+       VALUES (?, 'p1', ?, ?, ?, ?, ?)`,
+    );
+
+    expect(() => insert.run("bad-blood", "a-", null, "sr", T, T)).toThrow(/CHECK/);
+    expect(() => insert.run("bad-donor", null, "maybe", "sr", T, T)).toThrow(/CHECK/);
+    expect(() => insert.run("bad-language", null, null, "de", T, T)).toThrow(/CHECK/);
+    insert.run("good", "unknown", "yes", "both", T, T);
     raw.close();
   });
 });
