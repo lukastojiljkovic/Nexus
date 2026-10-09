@@ -2,6 +2,10 @@ import { foldSearchText } from "@nexus/core";
 import { describe, expect, it } from "vitest";
 
 import { createModuleRegistry } from "../../shared/modules.js";
+import {
+  SYNC_HELD_SETTINGS_CARD_IDS,
+  isSettingsCardHeld,
+} from "../../shared/syncHold.js";
 import { moduleSettingsDeclarations, settingsEntryId } from "./moduleSettings.js";
 import {
   buildSettingsIndex,
@@ -37,6 +41,12 @@ function s(): typeof strings.settings {
 const INDEX = buildSettingsIndex(createModuleRegistry());
 const ENTRIES = INDEX.entries;
 const SECTION_IDS = Object.keys(s().sectionTitle) as SettingsSectionId[];
+/**
+ * The sections the index is expected to hold: every title in `sectionTitle`
+ * minus the cards whose work is ON HOLD. The full list is kept beside it so the
+ * test below can pin that the difference is exactly the hold's own ids.
+ */
+const VISIBLE_SECTION_IDS = SECTION_IDS.filter((id) => !isSettingsCardHeld(id));
 
 /** The page's own call shape: a raw string in, a result out. */
 function search(query: string): ReturnType<typeof matchSettings> {
@@ -74,13 +84,13 @@ describe("foldSettingsQuery", () => {
 describe("matchSettings with nothing typed", () => {
   it("keeps every section and highlights nothing", () => {
     const result = matchSettings(INDEX, []);
-    expect([...result.sections].sort()).toEqual([...SECTION_IDS].sort());
+    expect([...result.sections].sort()).toEqual([...VISIBLE_SECTION_IDS].sort());
     expect(result.hits.size).toBe(0);
   });
 
   it("treats an all-whitespace query as nothing typed", () => {
     const result = search("   ");
-    expect(result.sections.size).toBe(SECTION_IDS.length);
+    expect(result.sections.size).toBe(VISIBLE_SECTION_IDS.length);
     expect(result.hits.size).toBe(0);
   });
 });
@@ -126,7 +136,7 @@ describe("matchSettings", () => {
 
   it("drops every section that neither matched itself nor holds a match", () => {
     const result = search("preimenuj");
-    for (const sectionId of SECTION_IDS) {
+    for (const sectionId of VISIBLE_SECTION_IDS) {
       if (sectionId === "profile") continue;
       expect(result.sections.has(sectionId), sectionId).toBe(false);
     }
@@ -261,11 +271,27 @@ describe("buildSettingsIndex", () => {
     // card CLAIMS its shell id rather than adding a seventeenth section.
     const sections = INDEX.sections;
     expect(new Set(sections.map((section) => section.id)).size).toBe(sections.length);
-    expect([...sections.map((section) => section.id)].sort()).toEqual([...SECTION_IDS].sort());
+    expect([...sections.map((section) => section.id)].sort()).toEqual(
+      [...VISIBLE_SECTION_IDS].sort(),
+    );
     for (const section of sections) {
       expect(section.title, section.id).toBe(
         s().sectionTitle[section.id as keyof typeof strings.settings.sectionTitle],
       );
+    }
+  });
+
+  it("drops a card whose work is ON HOLD, and every control filed under it", () => {
+    // „Hidden" has to mean absent, not merely unmatched: a section the index
+    // still holds would keep the card's title in the query space and could
+    // steer a reader to a card the page does not draw.
+    expect(SECTION_IDS.length).toBeGreaterThan(VISIBLE_SECTION_IDS.length);
+    expect(SECTION_IDS.filter((id) => !VISIBLE_SECTION_IDS.includes(id))).toEqual([
+      ...SYNC_HELD_SETTINGS_CARD_IDS,
+    ]);
+    for (const heldId of SYNC_HELD_SETTINGS_CARD_IDS) {
+      expect(INDEX.sections.map((section) => section.id)).not.toContain(heldId);
+      expect(ENTRIES.filter((entry) => entry.section === heldId)).toEqual([]);
     }
   });
 

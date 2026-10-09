@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import { createModuleRegistry } from "../../shared/modules.js";
+import {
+  SYNC_HELD_SETTINGS_CARD_IDS,
+  SYNC_ON_HOLD,
+  isSettingsCardHeld,
+} from "../../shared/syncHold.js";
 import { moduleSettingsCards, moduleSettingsDeclarations } from "./moduleSettings.js";
 import {
   SETTINGS_CATEGORIES,
@@ -56,13 +61,21 @@ describe("the category table", () => {
     );
     // Every title in `sectionTitle` is either an explicit card of one category,
     // a sub-page of one list, or a module card, which `categoryOf` files under
-    // „Moduli".
+    // „Moduli" — except a card the hold hides, which belongs to no category
+    // because it is not drawn at all.
     for (const id of Object.keys(s().sectionTitle)) {
+      if (isSettingsCardHeld(id)) continue;
       expect(
         explicitCards.includes(id) || SUB_PAGE_IDS.includes(id) || moduleIds.has(id),
         id,
       ).toBe(true);
       expect(SETTINGS_CATEGORIES.map((category) => category.id)).toContain(categoryOf(id));
+    }
+    // The skip above is the hold's own list and nothing else, so the two cannot
+    // drift into hiding a card nobody decided to hide.
+    for (const heldId of SYNC_HELD_SETTINGS_CARD_IDS) {
+      expect(explicitCards.includes(heldId)).toBe(false);
+      expect(Object.keys(s().sectionTitle)).toContain(heldId);
     }
     // Every module — switched on or off, since the fallback is what handles
     // both — belongs to „Moduli".
@@ -128,10 +141,29 @@ describe("the category table", () => {
   it("interleaves the two sub-page lists where the brief puts them", () => {
     const data = SETTINGS_CATEGORIES.find((category) => category.id === "data");
     const modules = SETTINGS_CATEGORIES.find((category) => category.id === "modules");
-    expect(data && categoryCardIds(data)).toEqual(["backup", "sync"]);
+    expect(data && categoryCardIds(data)).toEqual(["backup"]);
     expect(data && categoryListIds(data)).toEqual(["import-export"]);
     expect(modules && categoryCardIds(modules)).toEqual(["setup", "modules", "packs", "risk"]);
     expect(modules && categoryListIds(modules)).toEqual(["module-settings"]);
+  });
+
+  it("hides every card whose work is ON HOLD, in the categories and in search", () => {
+    // The card is real copy in the table (hide, do not delete) …
+    expect(SYNC_ON_HOLD).toBe(true);
+    expect(SYNC_HELD_SETTINGS_CARD_IDS).not.toEqual([]);
+    for (const heldId of SYNC_HELD_SETTINGS_CARD_IDS) {
+      expect(s().sectionTitle).toHaveProperty(heldId);
+      // … and nothing the page draws claims it.
+      for (const category of SETTINGS_CATEGORIES) {
+        expect(categoryCardIds(category), `${category.id}/${heldId}`).not.toContain(heldId);
+      }
+      // Its own title, and the words its search entries carried, find no card.
+      const title =
+        s().sectionTitle[heldId as keyof typeof strings.settings.sectionTitle];
+      expect(search(title).sections.has(heldId)).toBe(false);
+      expect(search("sinhronizacija").sections.has(heldId)).toBe(false);
+      expect(search("cloud").sections.has(heldId)).toBe(false);
+    }
   });
 
   it("puts the network card FIRST in the privacy category (ADR-089)", () => {
@@ -160,7 +192,7 @@ describe("visibleSections", () => {
     expect(visibility.groups).toEqual(["profile"]);
 
     const data = visibleSections({ category: "data", sub: null }, null);
-    expect([...data.cards].sort()).toEqual(["backup", "sync"]);
+    expect([...data.cards].sort()).toEqual(["backup"]);
     expect([...data.lists]).toEqual(["import-export"]);
     expect(data.groups).toEqual(["data"]);
   });

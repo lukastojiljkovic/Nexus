@@ -1,5 +1,6 @@
 import { foldSearchText, type ModuleRegistry } from "@nexus/core";
 
+import { isSettingsCardHeld } from "../../shared/syncHold.js";
 import { lookupString } from "./dashboardLayout.js";
 import { moduleSettingsDeclarations, settingsEntryId } from "./moduleSettings.js";
 import { lookup, strings } from "./strings.js";
@@ -698,7 +699,12 @@ export function buildSettingsIndex(registry: ModuleRegistry): SettingsIndex {
   const s = strings.settings;
   // Read here, not at module scope, so a language switch is reflected on the
   // next build instead of freezing the shell's section id list at import.
-  const shellSectionIds = Object.keys(s.sectionTitle) as ShellSettingsSectionId[];
+  // A card ON HOLD is not a section: it is not drawn, so it must not answer a
+  // query either — a search that steered a reader to a card the page does not
+  // have is the one failure a filter can produce that looks like a page bug.
+  const shellSectionIds = (Object.keys(s.sectionTitle) as ShellSettingsSectionId[]).filter(
+    (id) => !isSettingsCardHeld(id),
+  );
   const moduleSections = moduleSettingsDeclarations(registry).map(({ moduleId, panel }) => ({
     id: moduleId,
     title: lookupString(strings, panel.titleKey) ?? moduleId,
@@ -714,7 +720,10 @@ export function buildSettingsIndex(registry: ModuleRegistry): SettingsIndex {
       ...shellEntries(),
       ...moduleSettingsEntries(registry),
       ...moduleGalleryEntries(registry),
-    ],
+      // The same rule one level down: a held card's controls are not indexed
+      // (`shellEntries` keeps them written so the day the hold lifts nothing
+      // has to be re-typed).
+    ].filter((entry) => !isSettingsCardHeld(entry.section)),
   };
 }
 
