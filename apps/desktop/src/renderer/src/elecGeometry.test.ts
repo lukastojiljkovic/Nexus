@@ -15,12 +15,15 @@ import {
   pinLayout,
   pinLocal,
   pinPoint,
+  PIN_PITCH,
   pinSides,
   rotateInBox,
   rotatedSize,
   snapToGrid,
   toCircuitPoint,
   viewCentre,
+  wireControls,
+  wireFocusBox,
   wirePath,
   zoomAbout,
 } from "./elecGeometry.js";
@@ -218,9 +221,10 @@ describe("pinDirection", () => {
   });
 });
 
-describe("wirePath", () => {
-  const anchor = (x: number, y: number, out: { x: number; y: number }) => ({ x, y, out });
+/** One end of a wire as the geometry wants it: a point, and the direction its leg leaves in. */
+const anchor = (x: number, y: number, out: { x: number; y: number }) => ({ x, y, out });
 
+describe("wirePath", () => {
   it("leaves each pin along its own leg", () => {
     // 300 apart, so the reach is 300 × 0.35 = 105 and the sag is capped at 26.
     const path = wirePath(anchor(0, 0, { x: 1, y: 0 }), anchor(300, 0, { x: -1, y: 0 }));
@@ -241,6 +245,106 @@ describe("wirePath", () => {
     const path = wirePath(anchor(12.5, -7.25, { x: 0, y: 1 }), anchor(90, 40, { x: 0, y: -1 }));
     expect(path.startsWith("M 12.50 -7.25 ")).toBe(true);
     expect(path.endsWith(", 90.00 40.00")).toBe(true);
+  });
+});
+
+/**
+ * Every point of a jumper, evaluated from its own control points.
+ *
+ * The cubic is written out again here rather than read from the module, because
+ * the thing under test is WHICH points the box is grown from, not how a cubic
+ * is evaluated: a box that took the four control points instead of the curve
+ * would pass any check written against this module's own arithmetic.
+ */
+function curvePoints(
+  from: ReturnType<typeof anchor>,
+  to: ReturnType<typeof anchor>,
+  steps = 10_000,
+): { x: number; y: number }[] {
+  const [c1, c2] = wireControls(from, to);
+  const axis = (p0: number, p1: number, p2: number, p3: number, t: number): number => {
+    const u = 1 - t;
+    return u * u * u * p0 + 3 * u * u * t * p1 + 3 * u * t * t * p2 + t * t * t * p3;
+  };
+  const points = [];
+  for (let step = 0; step <= steps; step += 1) {
+    const t = step / steps;
+    points.push({
+      x: axis(from.x, c1.x, c2.x, to.x, t),
+      y: axis(from.y, c1.y, c2.y, to.y, t),
+    });
+  }
+  return points;
+}
+
+/** How far a coordinate reaches, over a sample: what a box has to contain and may not exceed by much. */
+function extent(values: readonly number[]): { min: number; max: number } {
+  let min = Infinity;
+  let max = -Infinity;
+  for (const value of values) {
+    min = Math.min(min, value);
+    max = Math.max(max, value);
+  }
+  return { min, max };
+}
+
+describe("wireFocusBox", () => {
+  it("stands off a straight jumper on every side, floored across its thin axis", () => {
+    // Two pins facing each other 100 apart: the reach is 100 × 0.35 = 35 and the
+    // sag is 100 × 0.1 = 10, so the control points are (35, 10) and (65, 10).
+    // The curve leaves its ends in x (the derivative has no root inside the
+    // segment) and reaches y = 7.5 at t = 0.5. So the curve's own box is
+    // 100 × 7.5; the ring stands 5 off each side, which makes the width 110 and
+    // the height 17.5 — under one pin pitch, so the height becomes 24 about the
+    // curve's centre (y = 3.75). Centred on (50, 3.75): 55 either way, 12 either
+    // way.
+    const box = wireFocusBox(anchor(0, 0, { x: 1, y: 0 }), anchor(100, 0, { x: -1, y: 0 }));
+    expect(box).toEqual({ minX: -5, minY: -8.25, maxX: 105, maxY: 15.75 });
+  });
+
+  it("gives a jumper too short to ring a box of one pin pitch on both axes", () => {
+    // 10 apart: the reach is held to its 26 floor and the sag is 1, so the
+    // control points are (26, 1) and (-16, 1). The curve bulges to x = 8.88 —
+    // inside the 10 the pins span — and to y = 0.75 over the sag. So the
+    // curve's own box is 10 × 0.75, and the standoff would leave a box under the
+    // target floor on both axes. Both become 24, centred on (5, 0.375).
+    const box = wireFocusBox(anchor(0, 0, { x: 1, y: 0 }), anchor(10, 0, { x: -1, y: 0 }));
+    expect(box.maxX - box.minX).toBe(PIN_PITCH);
+    expect(box.maxY - box.minY).toBe(PIN_PITCH);
+    expect(box).toEqual({ minX: -7, minY: -11.625, maxX: 17, maxY: 12.375 });
+  });
+
+  it("contains the whole curve, including a bulge past both pins", () => {
+    // Both legs point AWAY from the other pin, which is where the curve swings
+    // out past the two ends — the case a box taken from the anchors would cut
+    // through, and a box taken from the control hull would oversize.
+    const from = anchor(0, 0, { x: -1, y: 0 });
+    const to = anchor(100, 0, { x: 1, y: 0 });
+    const box = wireFocusBox(from, to);
+    const points = curvePoints(from, to);
+    const x = extent(points.map((point) => point.x));
+    const y = extent(points.map((point) => point.y));
+
+    expect(x.min).toBeGreaterThanOrEqual(box.minX);
+    expect(x.max).toBeLessThanOrEqual(box.maxX);
+    expect(y.min).toBeGreaterThanOrEqual(box.minY);
+    expect(y.max).toBeLessThanOrEqual(box.maxY);
+
+    // And no wider than the curve plus the standoff on each side: the box is the
+    // curve's own span, not the span of the four points that describe it.
+    expect(box.maxX - box.minX - (x.max - x.min)).toBeCloseTo(10, 2);
+  });
+
+  it("moves with the wire it rings", () => {
+    const before = wireFocusBox(anchor(0, 0, { x: 1, y: 0 }), anchor(100, 0, { x: -1, y: 0 }));
+    const after = wireFocusBox(
+      anchor(30, -20, { x: 1, y: 0 }),
+      anchor(130, -20, { x: -1, y: 0 }),
+    );
+    expect(after.minX - before.minX).toBeCloseTo(30, 9);
+    expect(after.maxX - before.maxX).toBeCloseTo(30, 9);
+    expect(after.minY - before.minY).toBeCloseTo(-20, 9);
+    expect(after.maxY - before.maxY).toBeCloseTo(-20, 9);
   });
 });
 

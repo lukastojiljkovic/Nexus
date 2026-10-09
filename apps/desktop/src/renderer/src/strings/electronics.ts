@@ -126,6 +126,21 @@ export const electronicsSr = {
       brown: "braon",
       grey: "siva",
     } satisfies Record<WireColour, string>,
+    /**
+     * The wires group's own name, read when the keyboard enters it. Plural,
+     * because it names the GROUP and not one wire; each wire then names itself
+     * through `wireName` below.
+     */
+    wiresLabel: "Žice",
+    /**
+     * A wire as a screen reader hears it: its two ends, named the way the parts
+     * and the pins on this bench are already named (`partDisplayName` and
+     * `pinLabel`). Assembled by `elecWires.ts` with `fill`, never by joining
+     * fragments in a component.
+     */
+    wireName: "Žica od {fromPart} pin {fromPin} do {toPart} pin {toPin}",
+    /** Appended to `wireName` when the jumper is not the default colour. */
+    wireColourSuffix: ", {colour}",
     /** Nothing armed: what a click on a pin will do. */
     wiringIdle: "Klikni na pin da počneš žicu.",
     /** One end armed: what the next click does, and how to change your mind. */
