@@ -2039,3 +2039,34 @@ export type {
   Side,
   Square,
 } from "./games/chess/index.js";
+
+// --- SKY (the astronomy engine, stage 1: no store, no UI) --------------------
+//
+// Offline sun, moon and sky for any place and date, from Jean Meeus'
+// „Astronomical Algorithms“ and nothing else — no dependency, no network, and
+// no time zone: every function takes an instant in UT and every instant it
+// returns is one, because turning them into somebody's clock is the shell's job.
+//
+// The eight functions are the product. `sunPosition` and `moonPosition` answer
+// „where is it now“, `sunDay`, `moonDay` and `sunTwilight` answer „what happens
+// today“ — each of which reports a state (`always-above`, `always-below`)
+// instead of a time when the body does not cross, so polar day and polar night
+// are answers rather than errors — `moonPhase` and `nextMoonPhases` answer what
+// the Moon looks like and when it next changes, and `sunOrientation` turns the
+// Sun into a compass. Everything lower down (Julian days, ΔT, the sidereal time,
+// the refraction curve, the topocentric correction) is reachable inside this
+// package for tests and for the next slice, and is deliberately not part of the
+// cross-package surface: a caller that wanted the obliquity would be a second
+// astronomy module.
+export type { SkyInstant } from "./sky/julian.js";
+export type { SkyPlace, SkyPosition } from "./sky/horizontal.js";
+export { sunPosition } from "./sky/sun.js";
+export type { SunEquatorial, SunPosition } from "./sky/sun.js";
+export { moonPosition } from "./sky/moon.js";
+export type { MoonEcliptic, MoonPosition } from "./sky/moon.js";
+export { moonDay, sunDay, sunTwilight } from "./sky/horizon.js";
+export type { MoonDay, SkyDayState, SkyTwilight, SunDay, TwilightWindow } from "./sky/horizon.js";
+export { MOON_PHASE_NAMES, moonPhase, nextMoonPhases } from "./sky/phases.js";
+export type { MoonPhaseName, MoonPhaseReading, NextMoonPhases } from "./sky/phases.js";
+export { northFromSun, sunOrientation } from "./sky/orientation.js";
+export type { SunOrientation } from "./sky/orientation.js";
