@@ -316,13 +316,18 @@ export interface TradeActivity {
 }
 
 export const TRADE_ACTIVITIES: readonly TradeActivity[] = [
-  { id: "mere-sece", packs: ["gradnja", "zanat"] },
+  // The five wave-2b toolkits ride here rather than on new rows, and the reason
+  // is that an activity id is a key into `strings`, so a new row would be new
+  // copy in both languages for a set of trades that measures and cuts exactly
+  // like the two trades this row already names: a plumber cuts pipe, a
+  // metalworker cuts stock, a joiner and a tailor cut their own material.
+  { id: "mere-sece", packs: ["gradnja", "zanat", "grejanje", "metal", "stolarija", "krojenje"] },
   { id: "ponude", packs: ["biznis", "racunovodstvo"] },
   { id: "teren", packs: ["gradnja", "nekretnine", "agro"] },
   { id: "predaje", packs: ["prosveta"] },
   { id: "ugovori", packs: ["pravo"] },
   { id: "vozi", packs: ["transport"] },
-  { id: "kuva", packs: ["kuhinja"] },
+  { id: "kuva", packs: ["kuhinja", "vino"] },
   { id: "snima", packs: ["foto", "dizajn"] },
   { id: "kod", packs: ["softver", "inzenjering"] },
   { id: "svira", packs: ["muzika"] },
