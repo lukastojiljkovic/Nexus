@@ -99,6 +99,7 @@ function emptyInput(): ExportArchiveInput {
       circuitChassis: [],
       circuitParts: [],
       circuitWires: [],
+      modules: [],
     },
     hash: sha256,
   };
@@ -244,6 +245,7 @@ describe("buildExportArchive", () => {
           "data/fitness.ndjson",
           "data/canvas.ndjson",
           "data/electronics.ndjson",
+          "data/modules.ndjson",
           "data/calendar.ics",
           "tables/tasks.csv",
           "tables/events.csv",
@@ -293,7 +295,7 @@ describe("buildExportArchive", () => {
       const archive = buildExportArchive(input);
       const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as Record<string, unknown>;
 
-      expect(manifest.schemaVersion).toBe("1.41.0");
+      expect(manifest.schemaVersion).toBe("1.42.0");
       expect(manifest.appVersion).toBe("0.1.0");
       expect(manifest.createdAt).toBe("2026-07-11T10:00:00.000Z");
       // `picture: null` is written out loud rather than omitted: the manifest is
@@ -347,6 +349,9 @@ describe("buildExportArchive", () => {
         "data/fitness.ndjson": sha256(""),
         "data/canvas.ndjson": sha256(""),
         "data/electronics.ndjson": sha256(""),
+        // The kit's section (ADR-090): one file like any other, checksummed
+        // like any other, empty for a profile that used no kit module.
+        "data/modules.ndjson": sha256(""),
       });
       expect(manifest.blobs).toEqual([]);
       // The private inventory (ADR-057 §6), beside the blob list it mirrors —
@@ -1274,6 +1279,7 @@ describe("buildExportArchive", () => {
         circuitWires: [
           { id: "cw1", circuitId: "ci1", fromPartId: "cp1", fromPinId: "D9", toPartId: "cp2", toPinId: "1", colour: "yellow", createdAt: t, updatedAt: t },
         ],
+        modules: [],
       };
     }
 

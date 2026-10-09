@@ -2,6 +2,12 @@ export { MAX_ID_LENGTH } from "./ids.js";
 
 export { MODULE_GROUPS } from "./modules/manifest.js";
 export type { ModuleGroup, ModuleManifest } from "./modules/manifest.js";
+export type {
+  ModuleCopyDeclaration,
+  ModuleKindCopy,
+  ModuleText,
+} from "./modules/copy.js";
+export type { LabelText } from "./contracts/labels.js";
 export { ModuleRegistry } from "./modules/registry.js";
 
 export { resolveEnabled } from "./flags/flags.js";
@@ -672,6 +678,7 @@ export type {
   ExportTaskTagLink,
   ExportTaskTemplate,
   ExportTaskTemplatePayload,
+  ExportModuleData,
   ProfileData,
 } from "./imex/exportArchive.js";
 

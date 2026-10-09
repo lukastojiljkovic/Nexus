@@ -1,8 +1,9 @@
 import { foldSearchText, type ModuleRegistry } from "@nexus/core";
 
-import { lookupString } from "./dashboardLayout.js";
+import { resolveLabel } from "./moduleKit/labels.js";
+import { moduleDescription, moduleName } from "./moduleName.js";
 import { moduleSettingsDeclarations, settingsEntryId } from "./moduleSettings.js";
-import { lookup, strings } from "./strings.js";
+import { strings } from "./strings.js";
 
 /**
  * SET-014: the settings page's own filter index. A hand-composed page of
@@ -643,11 +644,11 @@ function moduleSettingsEntries(registry: ModuleRegistry): SettingsSearchEntry[] 
     panel.controls.map((control) => ({
       id: settingsEntryId(moduleId, control.key),
       section: moduleId,
-      label: lookupString(strings, control.labelKey) ?? control.labelKey,
+      label: resolveLabel(control.labelKey),
       keywords: [
         ...(control.keywords ?? []),
         ...(control.kind === "choice"
-          ? control.options.map((option) => lookupString(strings, option.labelKey) ?? option.id)
+          ? control.options.map((option) => resolveLabel(option.labelKey))
           : []),
       ],
     })),
@@ -661,13 +662,12 @@ function moduleSettingsEntries(registry: ModuleRegistry): SettingsSearchEntry[] 
  * already exists and already says what it is for.
  */
 function moduleGalleryEntries(registry: ModuleRegistry): SettingsSearchEntry[] {
-  const s = strings.settings;
   return [...registry.byGroup()].flatMap(([, members]) =>
     members.map((manifest) => ({
       id: moduleEntryId(manifest.id),
       section: "modules",
-      label: lookup(strings.modules, manifest.id) ?? manifest.id,
-      keywords: [lookup(s.moduleDescriptions, manifest.id) ?? ""],
+      label: moduleName(manifest.id),
+      keywords: [moduleDescription(manifest.id)],
     })),
   );
 }
@@ -701,7 +701,7 @@ export function buildSettingsIndex(registry: ModuleRegistry): SettingsIndex {
   const shellSectionIds = Object.keys(s.sectionTitle) as ShellSettingsSectionId[];
   const moduleSections = moduleSettingsDeclarations(registry).map(({ moduleId, panel }) => ({
     id: moduleId,
-    title: lookupString(strings, panel.titleKey) ?? moduleId,
+    title: resolveLabel(panel.titleKey),
   }));
   const claimed = new Set(moduleSections.map((section) => section.id));
   const shellSections = shellSectionIds.filter((id) => !claimed.has(id)).map((id) => ({

@@ -1,7 +1,7 @@
 import { foldSearchText } from "@nexus/core";
 import { describe, expect, it } from "vitest";
 
-import { createModuleRegistry } from "../../shared/modules.js";
+import { createModuleRegistry, kitManifest } from "../../shared/modules.js";
 import { moduleSettingsDeclarations, settingsEntryId } from "./moduleSettings.js";
 import {
   buildSettingsIndex,
@@ -14,7 +14,7 @@ import {
   type SettingsSearchEntry,
   type SettingsSectionId,
 } from "./settingsSearch.js";
-import { strings } from "./strings.js";
+import { activeLocale, strings } from "./strings.js";
 
 /**
  * SET-014's filter index. Everything here is pure — no storage, no clock, no
@@ -36,7 +36,20 @@ function s(): typeof strings.settings {
 }
 const INDEX = buildSettingsIndex(createModuleRegistry());
 const ENTRIES = INDEX.entries;
-const SECTION_IDS = Object.keys(s().sectionTitle) as SettingsSectionId[];
+/** The sections a DISCOVERED module claims for its own card (ADR-090): its module id, which is by definition not a key of the shell's `sectionTitle`. */
+const KIT_SECTION_IDS = moduleSettingsDeclarations(createModuleRegistry())
+  .filter(({ panel }) => typeof panel.titleKey !== "string")
+  .map(({ moduleId }) => moduleId);
+/**
+ * Every section the page can show: the shell's own table plus the discovered
+ * ones. The union rather than one list, because the two halves are statements
+ * about different things — a compiled-in module's card claims a heading the
+ * shell already carries, and a kit module brings its own.
+ */
+const SECTION_IDS = [
+  ...Object.keys(s().sectionTitle),
+  ...KIT_SECTION_IDS,
+] as SettingsSectionId[];
 
 /** The page's own call shape: a raw string in, a result out. */
 function search(query: string): ReturnType<typeof matchSettings> {
@@ -263,6 +276,14 @@ describe("buildSettingsIndex", () => {
     expect(new Set(sections.map((section) => section.id)).size).toBe(sections.length);
     expect([...sections.map((section) => section.id)].sort()).toEqual([...SECTION_IDS].sort());
     for (const section of sections) {
+      // A discovered module's card is titled by its own declaration (ADR-090),
+      // so the shell's table has nothing to say about it — the expectation is
+      // the pair it declared, read in the language being read.
+      const kit = kitManifest(section.id);
+      if (kit !== undefined) {
+        expect(section.title, section.id).toBe(kit.copy?.name[activeLocale()]);
+        continue;
+      }
       expect(section.title, section.id).toBe(
         s().sectionTitle[section.id as keyof typeof strings.settings.sectionTitle],
       );
@@ -344,6 +365,11 @@ describe("buildSettingsIndex", () => {
       "focus:long-break-minutes",
       "focus:cycles",
       "tools:default-vat-rate",
+      // The first DISCOVERED card's one control (ADR-090), last for the same
+      // reason its section is: a kit module registers after every compiled-in
+      // one. Its label is its own `{ sr, en }` pair, so the assertion above about
+      // `strings` paths does not apply to it.
+      "timers:sound-on-end",
     ]);
   });
 

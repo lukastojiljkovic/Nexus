@@ -60,6 +60,7 @@ import type {
 // into naming a state the protocol cannot produce — or, worse, into omitting one
 // it can, which is a screen with no message for a case that happens.
 import type { AuthRefusal, DeviceRegisterRefusal, SyncEnableRefusal } from "@nexus/sync-transport";
+import type { NexusModules } from "./moduleApi.js";
 
 /** The only channels the preload bridge and the main handlers agree on. */
 /**
@@ -6916,12 +6917,25 @@ export type ArchiveReadErrorCode =
  * assigns a core `ImportProblemCode` to this type, so a code added in core and
  * forgotten here is a compile error rather than a silent gap.
  *
- * `profile-kind-mismatch` is the one code the core parser can never produce:
- * it needs the TARGET profile, which only main knows (ADR-058). A restore
+ * `profile-kind-mismatch` is a code the core parser can never produce: it
+ * needs the TARGET profile, which only main knows (ADR-058). A restore
  * archive fits only its own KIND of profile — a business archive does not
  * restore into a personal profile, nor the reverse — so main's preview refuses
  * the pair by name. The foreign IMPORT deliberately has no such rule: an
  * import copies rows, and rows are rows whichever kind of profile wrote them.
+ *
+ * `unknown-module` is the second, and it needs the MODULE SET this build
+ * adopted (ADR-090): an archive's `data/modules.ndjson` may name a kit module
+ * this build has never heard of, and that module's payload is data the user
+ * would lose. Core carries such a row without judging it - it has no module
+ * registry - so the refusal is main's, raised at the PREVIEW, where the user
+ * still has a profile left to protect.
+ *
+ * `invalid-module-data` is the third and the second half of the same refusal: a
+ * module this build DOES have may still refuse the payload it is given (a
+ * version it does not know, a row that is not its shape). Each module's own
+ * `parse` is what says so, and it is run at the preview and again before any
+ * module writes, so this code reaches the user before they confirm either time.
  */
 export type RestoreProblemCode =
   | "missing-manifest"
@@ -6938,7 +6952,9 @@ export type RestoreProblemCode =
   | "invalid-ydoc"
   | "missing-ydoc"
   | "missing-blob"
-  | "profile-kind-mismatch";
+  | "profile-kind-mismatch"
+  | "unknown-module"
+  | "invalid-module-data";
 
 /** One thing wrong with an archive. `detail` is a machine-ish English fragment (a field name, an id) — never a sentence for a user; the renderer owns all Serbian copy. */
 export interface RestoreProblem {
@@ -7216,7 +7232,14 @@ export type ImportRecordType =
   | "circuit"
   | "circuit-chassis"
   | "circuit-part"
-  | "circuit-wire";
+  | "circuit-wire"
+  // The module kit's section (ADR-090, interchange `1.42.0`): one row per
+  // discovered module that had something to export. Core validates the row's
+  // shape and never its payload, and main refuses an id this build did not
+  // adopt or a payload the module itself will not take - so the type carries the
+  // record and the REFUSALS are `RestoreProblemCode`'s `unknown-module` and
+  // `invalid-module-data`, exactly as the comment there says.
+  | "module-data";
 
 /**
  * Why rows the archive carried are not in the plan. Mirrors `@nexus/core`'s
@@ -8742,6 +8765,16 @@ export type SyncEnableView =
  * generic. Frozen at exposure time (see preload).
  */
 export interface NexusApi {
+  /**
+   * Kit modules (ADR-090): one namespace per DISCOVERED module, typed by
+   * interface merging from each module's own `shared/ipc.ts` (`moduleApi.ts`).
+   *
+   * A method here is `nexus.modules.<id>.<op>(payload)` and lands on the channel
+   * the module declared for that op - no generic `invoke`, no channel argument,
+   * and no per-module line in the preload bridge. A build with no kit modules
+   * has an empty object, which is the true answer rather than a placeholder.
+   */
+  modules: NexusModules;
   /** ADR-018: the local account's status. The first thing the renderer asks about, before profiles or flags — there is no code path where a data channel is called before this. */
   getAuthStatus(): Promise<AuthStatus>;
   /** First run: creates the local account (encrypting an existing plaintext database in place if one predates this) and returns the one-time Recovery Kit code on success — the only time it is ever handed back. */

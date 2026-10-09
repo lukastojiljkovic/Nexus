@@ -5,6 +5,7 @@ import type { StatsContribution } from "../contracts/stats.js";
 import type { AutomationCatalog } from "../contracts/automation.js";
 import type { ImexHandler } from "../contracts/imex.js";
 import type { ToolRegistration } from "../contracts/tools.js";
+import type { ModuleCopyDeclaration } from "./copy.js";
 
 /**
  * The registry's navigation groups, in the order they appear in the sidebar
@@ -53,6 +54,23 @@ export interface ModuleManifest {
   group: ModuleGroup;
   /** Whether the module is on when no feature flag is set for it. */
   defaultEnabled: boolean;
+  /**
+   * Where this module sits among the DISCOVERED (module-kit) modules, ascending,
+   * ties broken by id.
+   *
+   * A kit module is registered after every compiled-in one, on the rule that
+   * turns twenty-way conflicts into zero: the shell's own sixteen keep the order
+   * they were written in, and the modules that arrive as folders order
+   * themselves. Left unset by a compiled-in module, which is what makes "after
+   * the existing ones" true by construction rather than by a number.
+   */
+  order?: number;
+  /**
+   * The words the shell needs before this module's page loads (see
+   * `ModuleCopyDeclaration`). Unset by every compiled-in module: their copy
+   * lives in the renderer's `strings` table, which the shell can already read.
+   */
+  copy?: ModuleCopyDeclaration;
 
   widgets?: WidgetContract[];
   /** The module's own settings card (SET), composed from this declaration rather than hand-written into the page. */
