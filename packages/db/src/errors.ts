@@ -1306,6 +1306,29 @@ export class EmergencyCardNotFoundError extends DatabaseError {}
 export class ArcadeValidationError extends DatabaseError {}
 
 /**
+ * Thrown when a card-game write is rejected at the store boundary (GAMES cards,
+ * migration 081): a `game` outside the three, a `variant` that does not belong to
+ * that game, a `seed` outside what that game deals from — a FreeCell deal number
+ * is 1 to 32 000 — an `elapsedSeconds` that is not a whole number of seconds
+ * inside a day, a `score` that is not a whole number, a move list over either of
+ * its two ceilings, or a `now` that is not an ISO-8601 date-time.
+ *
+ * The last refusal is the one worth naming: a move list the game's own engine
+ * would not have accepted — a forged entry, a truncated log, a move that was
+ * never legal in the position it claims to have been played from — arrives here
+ * too, because the store validates by REPLAYING it through `@nexus/core`
+ * (`replayKlondike`/`replayFreeCell`/`replaySpider`) rather than by trusting the
+ * shape. That is what makes „the renderer may pass this straight in" true: the
+ * same fold the UI's own moves go through is the gate on the way to the column.
+ *
+ * Raised on the way OUT as well, where it reports a stored row that no longer
+ * replays — a hand-edited file, a bad restore — which is corruption, never
+ * something to coerce to an empty board. The `CanvasValidationError` posture
+ * applied to a column of JSON.
+ */
+export class CardGameValidationError extends DatabaseError {}
+
+/**
  * Whether a driver error is a violated UNIQUE (or partial-UNIQUE) index.
  *
  * A store that leans on such an index to make a state unrepresentable — the

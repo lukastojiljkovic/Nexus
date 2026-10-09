@@ -80,6 +80,11 @@ import { migration077 } from "./077-recorder.js";
 import { migration078 } from "./078-emergency.js";
 import { migration079 } from "./079-calculator.js";
 import { migration080 } from "./080-arcade-scores.js";
+// 081 — the GAMES card tables. The numbers between this one and 070 are reserved
+// by sibling runs in flight on the same branch, so the list has a GAP here in this
+// worktree: the maintainer renumbers at merge, which is why the number appears in
+// exactly three places — this import, the list entry below, and the file name.
+import { migration081 } from "./081-card-games.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -171,6 +176,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration078,
   migration079,
   migration080,
+  migration081,
 ];
 
 /**

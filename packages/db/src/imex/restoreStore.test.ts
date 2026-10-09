@@ -1758,6 +1758,21 @@ describe("RestoreStore", () => {
       "emergency_documents",
       "calc_history",
       "calc_sessions",
+      //  - cardgame_stats / cardgame_saves (migration 081, GAMES cards stage 1):
+      //    a DEFERRAL, not an exemption by nature — and it is written down here
+      //    because the alternative was to leave the gate red. Both tables hold
+      //    per-profile content, so they belong in this list the moment the
+      //    archive carries them: the module's own door is `CardGameStore.
+      //    exportData`/`importData`, and wiring them into the profile archive is
+      //    stage 2's job (it owns the module kit and the archive plug-in). Listing
+      //    them HERE alone would not be enough either — `collectionGuard.test.ts`
+      //    asserts that `RESTORE_WIPE_TABLES` and `@nexus/sync`'s collection map
+      //    are the same set, and sync is on hold with no new collections, so the
+      //    two lists have to gain these two tables together, in the run that
+      //    teaches the archive about GAMES. Until then a restore leaves whatever
+      //    game data this device has exactly where it is.
+      "cardgame_stats",
+      "cardgame_saves",
     ]);
 
     const wipeTables = new Set<string>(RESTORE_WIPE_TABLES);
