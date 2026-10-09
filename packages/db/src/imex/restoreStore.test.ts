@@ -1616,6 +1616,20 @@ describe("RestoreStore", () => {
     //    tables cascade from `profiles` like every other content table, which
     //    the cascade audit in `profileStore.test.ts` proves for all six,
     //    photos and playlist items included.
+    //  - CAR's seven tables (migration 074): the module arrived in two stages,
+    //    and this is the boundary between them. Stage 1 built the store and the
+    //    logic and deliberately left `RESTORE_WIPE_TABLES` ALONE, because a wipe
+    //    without a refill is how a restore DESTROYS data: the wipe empties a
+    //    table and the archive that was just read is what fills it again — and
+    //    no archive carries a CAR table yet, since the module has no kit entry
+    //    to export it through. Adding them to the wipe list would therefore
+    //    delete a user's whole car history on the first restore. They join that
+    //    list in stage 2, in the same pass as the archive's own half, which is
+    //    also the pass that must add them to `@nexus/sync`'s collection map:
+    //    `collectionGuard.test.ts` holds the map and the wipe list EQUAL, so a
+    //    table cannot be in one without the other. Until then this entry is the
+    //    decision the rule asks for, and the reason is that the module has no
+    //    archive yet.
     const allowlist = new Set<string>([
       "meta",
       "profiles",
@@ -1666,6 +1680,13 @@ describe("RestoreStore", () => {
       "culture_music_entries",
       "culture_playlists",
       "culture_playlist_items",
+      "vehicles",
+      "odometer_readings",
+      "service_entries",
+      "service_intervals",
+      "fuel_entries",
+      "faults",
+      "service_attachments",
     ]);
 
     const wipeTables = new Set<string>(RESTORE_WIPE_TABLES);

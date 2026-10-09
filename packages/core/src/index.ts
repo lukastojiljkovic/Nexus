@@ -1408,3 +1408,78 @@ export type {
   CultureVenueCount,
   CultureVisitSource,
 } from "./culture/stats.js";
+
+/**
+ * CAR — what a car was, what it is due for, and what it costs (stage 1: the
+ * logic and the data, no UI). The vocabularies in `./car/vehicle.js` are the
+ * module's own language and migration 074's CHECKs spell out the same sets, so
+ * everything that reads a fuel type, a distance unit, a service category or a
+ * fault status reads it from here.
+ */
+export {
+  CAR_COST_CATEGORIES,
+  DISTANCE_UNITS,
+  FAULT_STATUSES,
+  FUEL_TYPES,
+  KM_PER_MILE,
+  MIN_VEHICLE_YEAR,
+  SERVICE_CATEGORIES,
+  VIN_LENGTH,
+  fromKilometres,
+  fuelQuantityUnit,
+  normalizeVin,
+  toKilometres,
+} from "./car/vehicle.js";
+export type {
+  CarCostCategory,
+  DistanceUnit,
+  FaultStatus,
+  FuelQuantityUnit,
+  FuelType,
+  ServiceCategory,
+} from "./car/vehicle.js";
+
+export { addMonthsClamped, dayNumber, daysBetween } from "./car/dates.js";
+
+export {
+  checkOdometerReading,
+  currentSegment,
+  estimateOdometerForDate,
+  segmentForDate,
+} from "./car/odometer.js";
+export type { OdometerPoint, OdometerVerdict } from "./car/odometer.js";
+
+export { fuelConsumption } from "./car/consumption.js";
+export type {
+  ConsumptionSegment,
+  FuelConsumption,
+  FuelFill,
+  OverallConsumption,
+} from "./car/consumption.js";
+
+export { whatIsDue } from "./car/due.js";
+export type {
+  DueInput,
+  DueItem,
+  DueStatus,
+  DueThresholds,
+  ServiceIntervalSpec,
+  ServiceRecord,
+} from "./car/due.js";
+
+export {
+  costPerDistance,
+  distanceCovered,
+  fuelCostMinor,
+  totalsByCategory,
+  totalsByMonth,
+  vehicleCosts,
+} from "./car/costs.js";
+export type {
+  CarCost,
+  CategoryTotal,
+  DistanceCost,
+  FuelCostFields,
+  MonthlyTotal,
+  ServiceCostFields,
+} from "./car/costs.js";

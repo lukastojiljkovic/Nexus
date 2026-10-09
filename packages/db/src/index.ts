@@ -23,6 +23,8 @@ export {
   CalendarSettingsValidationError,
   CanvasBoardNotFoundError,
   CanvasValidationError,
+  CarNotFoundError,
+  CarValidationError,
   CardNotFoundError,
   CardValidationError,
   CircuitNotFoundError,
@@ -813,3 +815,48 @@ export type {
   UpdateTrackFields,
   UpdateVisitFields,
 } from "./culture/cultureStore.js";
+
+/**
+ * CAR (migration 074) — vehicles and everything that hangs off one. Stage 1 is
+ * the store and the logic only; the page, the IPC channels and the profile
+ * archive wiring arrive with the module kit.
+ */
+export {
+  CarStore,
+  MAX_FAULT_FIX_NOTES_LENGTH,
+  MAX_FAULT_SYMPTOM_LENGTH,
+  MAX_FUEL_QUANTITY,
+  MAX_INTERVAL_KM,
+  MAX_INTERVAL_MONTHS,
+  MAX_ODOMETER_READING,
+  MAX_SERVICE_ATTACHMENT_BYTES,
+  MAX_SERVICE_DESCRIPTION_LENGTH,
+  MAX_SERVICE_PARTS_LENGTH,
+  MAX_SERVICE_WORKSHOP_LENGTH,
+  MAX_VEHICLE_MAKE_LENGTH,
+  MAX_VEHICLE_MODEL_LENGTH,
+  MAX_VEHICLE_NAME_LENGTH,
+  MAX_VEHICLE_NOTES_LENGTH,
+  MAX_VEHICLE_PLATE_LENGTH,
+} from "./car/carStore.js";
+export type {
+  AddOdometerReadingInput,
+  AddServiceAttachmentInput,
+  CarExport,
+  CreateFaultInput,
+  CreateFuelEntryInput,
+  CreateServiceInput,
+  CreateVehicleInput,
+  Fault,
+  FuelEntry,
+  OdometerReading,
+  ServiceAttachment,
+  ServiceEntry,
+  ServiceInterval,
+  SetServiceIntervalInput,
+  UpdateFaultFields,
+  UpdateFuelEntryFields,
+  UpdateServiceFields,
+  UpdateVehicleFields,
+  Vehicle,
+} from "./car/carStore.js";
