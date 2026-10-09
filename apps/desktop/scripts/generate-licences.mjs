@@ -12,8 +12,12 @@
 //
 // SCOPING RULE — what a user receives, and nothing else:
 //   1. Every transitive PRODUCTION dependency of `@nexus/desktop`, as
-//      `pnpm licenses list --prod --json` reports it. That app is the only one
-//      packaged; `@nexus/gallery` is the design-review surface and never ships.
+//      `pnpm licenses list --prod --json --filter @nexus/desktop...` reports
+//      it. The trailing `...` is what makes it transitive across the
+//      workspace: without it pnpm stops at `@nexus/core` and `@nexus/db`, and
+//      their own dependencies (bundled into the app all the same) get no
+//      notice. `@nexus/desktop` is the only app packaged; `@nexus/gallery` is
+//      the design-review surface and never ships.
 //      Over-inclusive on purpose: a module that Vite tree-shakes out of the
 //      bundle still gets its notice, because proving absence per module is not
 //      something a build can honestly assert.
@@ -107,7 +111,7 @@ function pnpmEntry() {
 function pnpmLicences() {
   const viaNode = pnpmEntry();
   const options = { cwd: REPO_ROOT, encoding: "utf8", maxBuffer: 256 * 1024 * 1024 };
-  const args = ["licenses", "list", "--prod", "--json", "--filter", "@nexus/desktop"];
+  const args = ["licenses", "list", "--prod", "--json", "--filter", "@nexus/desktop..."];
   const result = viaNode
     ? spawnSync(process.execPath, [viaNode, ...args], options)
     : spawnSync("pnpm", args, { ...options, shell: process.platform === "win32" });
