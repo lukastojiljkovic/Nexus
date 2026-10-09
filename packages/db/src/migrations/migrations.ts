@@ -79,6 +79,7 @@ import { migration076 } from "./076-cookbook.js";
 import { migration077 } from "./077-recorder.js";
 import { migration078 } from "./078-emergency.js";
 import { migration079 } from "./079-calculator.js";
+import { migration080 } from "./080-arcade-scores.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -169,6 +170,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration077,
   migration078,
   migration079,
+  migration080,
 ];
 
 /**

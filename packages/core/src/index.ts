@@ -1752,3 +1752,81 @@ export {
   serializeCalculatorSession,
 } from "./calculator/session.js";
 export type { CalculatorFunctionDefinition, CalculatorSession } from "./calculator/session.js";
+
+// --- GAMES (the arcade: Minesweeper and Blocks, migration 080) --------------
+//
+// Two engines, both pure, both playable from an input log: a seeded source is
+// handed in, every clock reading is handed in, and the whole game is a VALUE on
+// the way out. `games/random.ts` carries the argument for the source, and each
+// engine's own header carries its rules — including why the falling-blocks game
+// is called Blocks and drawn by us rather than by the trademarked game's look.
+export { createSeededRandom, randomBelow, shuffled } from "./games/random.js";
+export type { SeededRandom } from "./games/random.js";
+
+export {
+  MINESWEEPER_MAX_COLUMNS,
+  MINESWEEPER_MAX_ROWS,
+  MINESWEEPER_MIN_COLUMNS,
+  MINESWEEPER_MIN_FREE_CELLS,
+  MINESWEEPER_MIN_MINES,
+  MINESWEEPER_MIN_ROWS,
+  MINESWEEPER_PRESETS,
+  MINESWEEPER_PRESET_IDS,
+  chordCell,
+  createMinesweeper,
+  cycleMark,
+  minesweeperElapsedMs,
+  minesweeperFaces,
+  minesweeperFromMines,
+  minesweeperIndex,
+  minesweeperRemainingMines,
+  minesweeperVariant,
+  revealCell,
+  validateMinesweeperConfig,
+} from "./games/minesweeper/minesweeper.js";
+export type {
+  MinesweeperCell,
+  MinesweeperConfig,
+  MinesweeperConfigResult,
+  MinesweeperFace,
+  MinesweeperMark,
+  MinesweeperOptions,
+  MinesweeperPresetId,
+  MinesweeperState,
+  MinesweeperStatus,
+  MinesweeperVariant,
+} from "./games/minesweeper/minesweeper.js";
+
+export { BLOCKS_PIECE_IDS, pieceCells, pieceFrame } from "./games/blocks/pieces.js";
+export type { BlockCell, BlockPieceId } from "./games/blocks/pieces.js";
+export {
+  BLOCKS_BOARD_CAPACITY,
+  BLOCKS_CLEAR_SCORES,
+  BLOCKS_COLUMNS,
+  BLOCKS_GRAVITY_BASE_MS,
+  BLOCKS_GRAVITY_MIN_MS,
+  BLOCKS_GRAVITY_STEP_MS,
+  BLOCKS_HARD_DROP_POINTS,
+  BLOCKS_LINES_PER_LEVEL,
+  BLOCKS_LOCK_DELAY_MS,
+  BLOCKS_MAX_LOCK_RESETS,
+  BLOCKS_PREVIEW_COUNT,
+  BLOCKS_ROWS,
+  BLOCKS_SOFT_DROP_POINTS,
+  BLOCKS_TICK_MS,
+  activeCells,
+  blocksFrom,
+  createBlocks,
+  ghostCells,
+  gravityIntervalMs,
+  levelForLines,
+  lineScore,
+  step,
+} from "./games/blocks/blocks.js";
+export type {
+  BlocksInput,
+  BlocksPiece,
+  BlocksSetup,
+  BlocksState,
+  BlocksStatus,
+} from "./games/blocks/blocks.js";
