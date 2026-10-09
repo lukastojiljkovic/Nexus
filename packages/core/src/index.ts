@@ -1694,3 +1694,61 @@ export type {
 } from "./emergency/cardModel.js";
 export { cardCompleteness } from "./emergency/cardCompleteness.js";
 export type { CardGap } from "./emergency/cardCompleteness.js";
+
+// --- CALC (the calculator's engine, no UI) -----------------------------------
+//
+// The expression engine over mathjs, narrowed to the boundary the security page
+// asks for: `engine.ts`'s header says what is disabled and why, and `limits.ts`
+// carries the bounds that keep a typed expression from becoming a way to make
+// the process work forever. Two decisions a reader should not have to
+// rediscover:
+//
+//  - **`display` is not `value`.** `value` is mathjs's own lexical form and is
+//    what the session stores; `display` is the reader's, and `display.ts` is the
+//    pure function that produces it from a locale.
+//  - **A session is plain JSON.** `session.ts` holds variables as the TEXT of
+//    their values and user functions as a signature plus a body, which is what
+//    lets `@nexus/db` store one and validate it without mathjs.
+export {
+  CALCULATOR_DISPLAY_PRECISION,
+  CALCULATOR_LOCALES,
+  DEFAULT_CALCULATOR_FORMAT,
+  formatCalculatorDisplay,
+} from "./calculator/display.js";
+export type { CalculatorFormatOptions, CalculatorLocale } from "./calculator/display.js";
+export {
+  BIG_NUMBER_PRECISION,
+  CALCULATOR_ANGLE_MODES,
+  CALCULATOR_CODES,
+  CALCULATOR_PRECISIONS,
+  createCalculatorEngine,
+} from "./calculator/engine.js";
+export type {
+  CalculatorAngleMode,
+  CalculatorCode,
+  CalculatorEngine,
+  CalculatorEvaluateOptions,
+  CalculatorFailure,
+  CalculatorOutcome,
+  CalculatorPrecision,
+  CalculatorProgrammerView,
+  CalculatorSuccess,
+} from "./calculator/engine.js";
+export {
+  MAX_EXPRESSION_LENGTH,
+  MAX_FACTORIAL_ARGUMENT,
+  MAX_MATRIX_ELEMENTS,
+} from "./calculator/limits.js";
+export {
+  CALCULATOR_SESSION_VERSION,
+  MAX_CALCULATOR_FUNCTION_PARAMS,
+  MAX_CALCULATOR_NAME_LENGTH,
+  MAX_CALCULATOR_SESSION_FUNCTIONS,
+  MAX_CALCULATOR_SESSION_VARIABLES,
+  MAX_CALCULATOR_VALUE_LENGTH,
+  emptyCalculatorSession,
+  parseCalculatorSession,
+  parseCalculatorSessionText,
+  serializeCalculatorSession,
+} from "./calculator/session.js";
+export type { CalculatorFunctionDefinition, CalculatorSession } from "./calculator/session.js";

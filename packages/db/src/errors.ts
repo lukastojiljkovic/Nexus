@@ -945,6 +945,28 @@ export class CanvasValidationError extends DatabaseError {}
 export class CanvasBoardNotFoundError extends DatabaseError {}
 
 /**
+ * Thrown when a calculator write is rejected at the store boundary (CALC,
+ * migration 079): an empty or over-long expression, a result past its own cap,
+ * a malformed `now`, an export whose version this build does not know, or an
+ * imported value with one bad row in it.
+ *
+ * Most of what it reports is `@nexus/core`'s answer rather than this store's:
+ * `parseCalculatorSession` is the session's storage gate — a variable holding a
+ * number instead of text, a function with no parameters, a name that is not an
+ * identifier — and `CalculatorStore` renames its refusal into this, because a
+ * caller that is main's IPC layer is untrusted (SEC-EL-02).
+ *
+ * It is also thrown on the way OUT, when a stored session no longer parses.
+ * That is corruption rather than input — the store writes nothing but core's own
+ * serialized form — and reading it back as an empty session would silently
+ * discard somebody's variables.
+ */
+export class CalculatorValidationError extends DatabaseError {}
+
+/** Thrown when a history operation names an entry that is not in the store's own profile. */
+export class CalcHistoryNotFoundError extends DatabaseError {}
+
+/**
  * Thrown when a circuit, a placed part or a wire is rejected at the store
  * boundary (ELEC, migration 067).
  *

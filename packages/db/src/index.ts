@@ -21,6 +21,8 @@ export {
   AttachmentIndexValidationError,
   CalendarOverlayValidationError,
   CalendarSettingsValidationError,
+  CalcHistoryNotFoundError,
+  CalculatorValidationError,
   CanvasBoardNotFoundError,
   CanvasValidationError,
   CarNotFoundError,
@@ -1013,3 +1015,29 @@ export type {
   UpdateEmergencyContactFields,
   UpdateEmergencyDocumentFields,
 } from "./emergency/emergencyCardStore.js";
+
+// --- CALC (the calculator's history and session, migration 079) --------------
+//
+// One store over two tables, and neither of them holds an evaluated value: an
+// entry is the expression that was typed and the string that was displayed, and
+// the session is `@nexus/core`'s own JSON re-validated through
+// `parseCalculatorSession` on the way in and on the way out. That is what keeps
+// mathjs out of this package.
+//
+// `importData` takes a `now` beside the value, unlike the other readers here:
+// every write in this package is stamped by main rather than by a clock inside
+// the store (CLAUDE.md's rule), and an import writes a session row.
+export {
+  CALCULATOR_EXPORT_VERSION,
+  CALC_HISTORY_UNPINNED_LIMIT,
+  CalculatorStore,
+  MAX_CALC_HISTORY_IMPORT_ENTRIES,
+  MAX_CALC_HISTORY_READ,
+  MAX_CALC_HISTORY_RESULT_LENGTH,
+} from "./calculator/calculatorStore.js";
+export type {
+  AddCalcHistoryInput,
+  CalcHistoryEntry,
+  CalcHistoryExportEntry,
+  CalculatorExport,
+} from "./calculator/calculatorStore.js";
