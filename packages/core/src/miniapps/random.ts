@@ -26,9 +26,12 @@ export type RandomBelow = (bound: number) => number;
 export const DICE_MAX_DICE_PER_TERM = 100;
 export const DICE_MIN_FACES = 2;
 export const DICE_MAX_FACES = 1000;
+/** The longest notation read at all, which bounds the terms, and so the dice, one roll asks for. */
+export const DICE_MAX_NOTATION_LENGTH = 100;
 
 export type DiceNotationCode =
   | "empty"
+  | "too-long"
   | "syntax"
   | "no-dice"
   | "dice-count"
@@ -92,8 +95,12 @@ export interface DiceRoll {
   readonly total: number;
 }
 
-/** One term: `NdS`, `NdSkh K`, `NdSkl K`, or a bare integer constant. */
-const TERM = /(\d*)[dD](\d+)(?:(kh|kl)(\d+))?|(\d+)/iy;
+/**
+ * One term: `NdS`, `NdSkh K`, `NdSkl K`, or a bare integer constant. Every digit
+ * run is bounded: one digit wider than its limit, so `101d6` and `1d1001` still
+ * reach their range checks, and a constant has six digits at most.
+ */
+const TERM = /(\d{0,4})[dD](\d{1,5})(?:(kh|kl)(\d{1,4}))?|(\d{1,6})/iy;
 
 function skipSpaces(text: string, from: number): number {
   let index = from;
@@ -107,13 +114,20 @@ function skipSpaces(text: string, from: number): number {
  * A term is `NdS` (with `N` optional, so `d20` is one twenty-sided die) or a
  * bare integer, and the terms are joined by `+` or `-`. `kh`/`kl` keep the
  * highest or lowest `K` dice of their term. Counts are 1–100 dice per term and
- * faces 2–1000, the bounds the module states; anything else — including a
+ * faces 2–1000, the bounds the module states, and the whole notation is 100
+ * characters at most; anything else — including a
  * leading sign, a term with no operator before it, or an expression with no
  * dice term at all — raises `DiceNotationError` rather than being repaired.
  */
 export function parseDiceNotation(text: string): DiceNotation {
   const source = text.trim();
   if (source === "") throw new DiceNotationError("empty", "dice notation is empty");
+  if (source.length > DICE_MAX_NOTATION_LENGTH) {
+    throw new DiceNotationError(
+      "too-long",
+      `dice notation is ${DICE_MAX_NOTATION_LENGTH} characters at most`,
+    );
+  }
 
   const terms: DiceTerm[] = [];
   let modifier = 0;

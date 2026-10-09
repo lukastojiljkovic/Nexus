@@ -103,6 +103,9 @@ describe("parseDiceNotation", () => {
 
     expect(code("")).toBe("empty");
     expect(code("   ")).toBe("empty");
+    expect(code("1d6+".repeat(25) + "1")).toBe("too-long");
+    expect(code("9".repeat(5000))).toBe("too-long");
+    expect(code("2d6+1234567")).toBe("syntax");
     expect(code("abc")).toBe("syntax");
     expect(code("2d6+")).toBe("syntax");
     expect(code("2d6*2")).toBe("syntax");

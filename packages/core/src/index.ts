@@ -1306,6 +1306,7 @@ export type {
 export {
   DICE_MAX_DICE_PER_TERM,
   DICE_MAX_FACES,
+  DICE_MAX_NOTATION_LENGTH,
   DICE_MIN_FACES,
   DiceNotationError,
   coinFlip,
