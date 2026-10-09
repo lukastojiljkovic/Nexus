@@ -1004,6 +1004,44 @@ function wallToInstant(wall: WallTime, timeZone: string): Instant | null {
   return best === null ? null : makeInstant(best);
 }
 
+/**
+ * The instant at which a clock in `timeZone` reads this wall time, as epoch
+ * milliseconds — or `null` when no such instant exists. The inverse of
+ * `zonedFields`, and the same conversion `nextFireTimes` uses; both
+ * daylight-saving edges are `wallToInstant`'s and are documented there: a wall
+ * time inside a skipped hour answers `null`, and one inside a repeated hour
+ * answers its EARLIER occurrence.
+ *
+ * Exported because `miniapps/worldClock.ts`'s meeting finder turns local working
+ * hours into UTC intervals. A second copy of that arithmetic would be written,
+ * by anyone reading `Intl`'s documentation rather than this file, in the obvious
+ * one-pass form — which is wrong on the repeated hour.
+ */
+export function instantFromWall(
+  wall: {
+    readonly year: number;
+    readonly month: number;
+    readonly day: number;
+    readonly hour?: number;
+    readonly minute?: number;
+    readonly second?: number;
+  },
+  timeZone: string,
+): number | null {
+  const instant = wallToInstant(
+    {
+      year: wall.year,
+      month: wall.month,
+      day: wall.day,
+      hour: wall.hour ?? 0,
+      minute: wall.minute ?? 0,
+      second: wall.second ?? 0,
+    },
+    timeZone,
+  );
+  return instant === null ? null : instant.epochMs;
+}
+
 // ---------------------------------------------------------------------------
 // Serbian plural arithmetic
 // ---------------------------------------------------------------------------

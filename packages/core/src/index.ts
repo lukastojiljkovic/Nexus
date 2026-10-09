@@ -1268,3 +1268,149 @@ export type {
   PlanReason,
   ProfilePlan,
 } from "./profile/plan.js";
+
+// --- MINI-APPS (the engines behind the small tool pages) --------------------
+//
+// Stage 1 of the module: pure logic and data, with no store, no page and no
+// dependency of its own. Every engine here is deliberately clock-free and
+// random-source-free — the metronome schedules on the caller's own audio clock,
+// `random.ts` takes a `randomBelow` so a crypto source and a seeded one are
+// interchangeable, and the typing and world clock engines read timestamps the
+// page supplies. What they own is the RULES: the half-open window the metronome
+// schedules on, the dice grammar, the law's non-working days in Serbia, and
+// where č, ć, š, ž and đ sit on the Serbian Latin board. The world clock and the
+// date calculator stand on `devtools/datetime.ts`'s zone arithmetic rather than
+// carrying their own copy of it.
+export {
+  METRONOME_MAX_BEATS_PER_BAR,
+  METRONOME_MAX_BPM,
+  METRONOME_MAX_SUBDIVISIONS,
+  METRONOME_MIN_BEATS_PER_BAR,
+  METRONOME_MIN_BPM,
+  METRONOME_NOTE_VALUES,
+  TAP_RESET_SECONDS,
+  beatSchedule,
+  tapTempo,
+  tempoTrainerPlan,
+} from "./miniapps/metronome.js";
+export type {
+  BeatAccent,
+  MetronomeClick,
+  MetronomeSpec,
+  NoteValue,
+  TapTempoResult,
+  TempoTrainerPlan,
+  TempoTrainerSpec,
+  TempoTrainerStep,
+} from "./miniapps/metronome.js";
+export {
+  DICE_MAX_DICE_PER_TERM,
+  DICE_MAX_FACES,
+  DICE_MAX_NOTATION_LENGTH,
+  DICE_MIN_FACES,
+  DiceNotationError,
+  coinFlip,
+  dealTeams,
+  parseDiceNotation,
+  pickItems,
+  randomInt,
+  rollParsedDice,
+  rollDiceNotation,
+  shuffleItems,
+} from "./miniapps/random.js";
+export type {
+  DiceKeep,
+  DiceNotation,
+  DiceNotationCode,
+  DiceRoll,
+  DiceTerm,
+  DiceTermRoll,
+  RandomBelow,
+  RolledDie,
+} from "./miniapps/random.js";
+export {
+  TALLY_MAX_COUNTERS,
+  TALLY_MAX_NAME_LENGTH,
+  TALLY_MAX_STEP,
+  TallyError,
+  emptyTallyState,
+  tallyCanRedo,
+  tallyCanUndo,
+  tallyCounter,
+  tallyReduce,
+  tallyTotal,
+} from "./miniapps/tally.js";
+export type {
+  TallyAction,
+  TallyCounter,
+  TallyErrorCode,
+  TallyState,
+} from "./miniapps/tally.js";
+export {
+  SCOREBOARD_MAX_NAME_LENGTH,
+  SCOREBOARD_MAX_PLAYERS,
+  SCOREBOARD_MAX_ROUNDS,
+  SCOREBOARD_MAX_SCORE,
+  ScoreboardError,
+  emptyScoreboardState,
+  scoreboardCanRedo,
+  scoreboardCanUndo,
+  scoreboardIsOver,
+  scoreboardLeaders,
+  scoreboardReachedTarget,
+  scoreboardReduce,
+  scoreboardStandings,
+  scoreboardTotalFor,
+} from "./miniapps/scoreboard.js";
+export type {
+  ScoreboardAction,
+  ScoreboardBoard,
+  ScoreboardErrorCode,
+  ScoreboardPlayer,
+  ScoreboardRound,
+  ScoreboardStanding,
+  ScoreboardState,
+} from "./miniapps/scoreboard.js";
+export {
+  TYPING_LAYOUTS,
+  TYPING_LESSONS,
+  TYPING_PRACTISE_KEYS,
+  layoutKeys,
+  scoreTypingSession,
+  typingKeyPosition,
+} from "./miniapps/typing.js";
+export type {
+  TypingKey,
+  TypingKeyErrors,
+  TypingKeyRow,
+  TypingKeystroke,
+  TypingLayout,
+  TypingLayoutId,
+  TypingLesson,
+  TypingScore,
+  TypingSession,
+} from "./miniapps/typing.js";
+export {
+  SERBIAN_HOLIDAY_IDS,
+  addToDate,
+  dateDifference,
+  isSerbianHoliday,
+  orthodoxEaster,
+  serbianHolidays,
+  serbianNonWorkingDays,
+  weekdayOf,
+  workdaysBetween,
+} from "./miniapps/dateCalc.js";
+export type {
+  DateDifference,
+  DateUnits,
+  SerbianHoliday,
+  SerbianHolidayId,
+} from "./miniapps/dateCalc.js";
+export { meetingWindows, readZone, worldClock } from "./miniapps/worldClock.js";
+export type {
+  MeetingWindow,
+  MeetingWindowRequest,
+  ZoneReading,
+  ZoneWorkHours,
+} from "./miniapps/worldClock.js";
