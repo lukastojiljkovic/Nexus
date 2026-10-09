@@ -61,7 +61,7 @@ interface Harness {
     json: number;
     bytes: number;
     download: number;
-    openPath: string[];
+    launchInstaller: string[];
     quit: number;
   };
   readonly changes: UpdateStateView[];
@@ -72,11 +72,12 @@ function harness(options: {
   json?: UpdateHttp["json"];
   bytes?: UpdateHttp["bytes"];
   download?: UpdateHttp["download"];
+  launchInstaller?: (path: string) => Promise<string>;
   currentVersion?: string;
   platform?: NodeJS.Platform;
   now?: () => number;
 }): Harness {
-  const calls = { json: 0, bytes: 0, download: 0, openPath: [] as string[], quit: 0 };
+  const calls = { json: 0, bytes: 0, download: 0, launchInstaller: [] as string[], quit: 0 };
   const changes: UpdateStateView[] = [];
   const http: UpdateHttp = {
     json: async (url, headers) => {
@@ -107,8 +108,9 @@ function harness(options: {
     mode: () => options.mode ?? "updates",
     http,
     publicKeyPem,
-    openPath: async (path) => {
-      calls.openPath.push(path);
+    launchInstaller: async (path) => {
+      calls.launchInstaller.push(path);
+      if (options.launchInstaller !== undefined) return options.launchInstaller(path);
       return "";
     },
     quit: () => {
@@ -216,9 +218,49 @@ describe("installing", () => {
     expect(view.phase).not.toBe("error");
     expect(calls.bytes).toBe(2);
     expect(calls.download).toBe(1);
-    expect(calls.openPath).toHaveLength(1);
-    expect(calls.openPath[0]).toContain(join("updates", "Nexus-Setup-1.5.0-"));
+    // The path is the file main downloaded, hashed and re-hashed — nothing from
+    // the renderer, and nothing the launcher gets to choose.
+    expect(calls.launchInstaller).toHaveLength(1);
+    expect(calls.launchInstaller[0]).toContain(join("updates", "Nexus-Setup-1.5.0-"));
     expect(calls.quit).toBe(1);
+  });
+
+  it("reports a launcher that refused, keeps the verified file and does not quit", async () => {
+    // What a launcher that answers with a message — `spawn`'s own failure,
+    // `update/launch.ts`'s `ENOENT` — looks like from here. The app must stay
+    // open: the update has not started, so quitting would leave the user with
+    // nothing.
+    let written: string | null = null;
+    const { service, calls } = harness({
+      download: async (_url, destination) => {
+        written = destination;
+        writeFileSync(destination, installerBytes);
+        return {
+          status: 200,
+          sha256: createHash("sha256").update(installerBytes).digest("hex"),
+        };
+      },
+      launchInstaller: async () => "spawn Nexus-Setup-1.5.0.exe ENOENT",
+    });
+    await service.checkNow();
+    const view = await service.install();
+    expect(view.problem).toBe("unexpected");
+    expect(calls.quit).toBe(0);
+    // The bytes are correct and the launch is not, so the file stays.
+    expect(written).not.toBeNull();
+    expect(existsSync(written as unknown as string)).toBe(true);
+  });
+
+  it("reports a launcher that threw as the same failure", async () => {
+    const { service, calls } = harness({
+      launchInstaller: async () => {
+        throw new Error("spawn failed");
+      },
+    });
+    await service.checkNow();
+    const view = await service.install();
+    expect(view.problem).toBe("unexpected");
+    expect(calls.quit).toBe(0);
   });
 
   it("refuses to install, and downloads nothing, when the signature does not verify", async () => {
