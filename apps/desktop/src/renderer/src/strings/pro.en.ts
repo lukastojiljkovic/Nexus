@@ -50,6 +50,11 @@ import { PRO_VAZDUHOPLOVSTVO_EN } from "./pro.vazduhoplovstvo.en.js";
 import { PRO_GEODEZIJA_EN } from "./pro.geodezija.en.js";
 import { PRO_RADIO_EN } from "./pro.radio.en.js";
 import { PRO_ENERGIJA_EN } from "./pro.energija.en.js";
+import { PRO_GREJANJE_EN } from "./pro.grejanje.en.js";
+import { PRO_METAL_EN } from "./pro.metal.en.js";
+import { PRO_STOLARIJA_EN } from "./pro.stolarija.en.js";
+import { PRO_KROJENJE_EN } from "./pro.krojenje.en.js";
+import { PRO_VINO_EN } from "./pro.vino.en.js";
 
 export const proEn = {
   title: "Professional tools",
@@ -264,6 +269,26 @@ export const proEn = {
     energija: {
       name: "Energy and solar",
       who: "solar installers, off-grid homes, campers, battery system builders",
+    },
+    grejanje: {
+      name: "Heating & plumbing",
+      who: "plumbers, heating engineers, installers, servicers",
+    },
+    metal: {
+      name: "Metalworking",
+      who: "fitters, machinists, turners, welders, sheet-metal workers",
+    },
+    stolarija: {
+      name: "Woodworking",
+      who: "joiners, carpenters, furniture makers",
+    },
+    krojenje: {
+      name: "Sewing & pattern cutting",
+      who: "tailors, dressmakers, fashion designers, upholsterers",
+    },
+    vino: {
+      name: "Wine & spirits",
+      who: "winemakers, cellar hands, distillers",
     },
   },
 
@@ -745,6 +770,30 @@ export const proEn = {
     "yield-estimate-samples": "Yield estimate",
     "yield-trim-cook": "Yield and loss",
     "zbir-perioda": "Sum of periods",
+    // Wave 2b - the five new toolkits' tools. Appended rather than merged into
+    // the alphabetical run above, so the addition reads as one block in review;
+    // the table's order is cosmetic and the rail sorts by category.
+    "abv-gravity": "Alcohol from gravity",
+    "bias-binding": "Bias binding",
+    "board-foot": "Board feet",
+    "button-spacing": "Button spacing",
+    "circle-skirt": "Circle skirt",
+    "cutting-speed": "Cutting speed",
+    "feed-per-tooth": "Feed per tooth",
+    "gather-ratio": "Gather ratio",
+    "heating-cost": "Heating cost",
+    "metal-weight": "Metal weight",
+    "must-sugar": "Sugar in the must",
+    "pipe-pressure-drop": "Pipe pressure drop",
+    "power-units": "Power units",
+    "radiator-output": "Radiator output",
+    "room-heat-loss": "Room heat loss",
+    "seam-allowance": "Seam allowance",
+    "spirit-dilution": "Diluting a spirit",
+    "sugar-addition": "Sugar to add",
+    "sulfite": "Sulfite and SO₂",
+    "water-heater-time": "Water heating time",
+    "weld-throat-leg": "Weld throat and leg",
   },
 
   /**
@@ -1446,6 +1495,49 @@ export const proEn = {
       "From the gross purchase, through cleaning loss and thermal-processing loss, gives the number of portions and the portion price, and back — how much gross to buy for a given number of portions.",
     "zbir-perioda":
       "How many total days a series of periods gives, how that sum breaks down into years, months and days, and where the periods overlap.",
+    // Wave 2b - see the note at the foot of the `name` table.
+    "abv-gravity":
+      "From the original and final gravity it gives alcohol by volume and by weight and the apparent attenuation, using the linear rules of the Balling/Plato scale.",
+    "bias-binding":
+      "From a square of fabric it gives the length of bias strip of a given width, the number of parallel strips and the square's diagonal.",
+    "board-foot":
+      "Converts piece dimensions, volume and board feet into one another, at the nominal (rough) thickness the trade prices.",
+    "button-spacing":
+      "Spaces a given number of buttons evenly between the end points and gives each position from the first button.",
+    "circle-skirt":
+      "From the waist circumference and the length it gives the cutting radius for a full, half or quarter circle, the hem circumference and the square the panel needs.",
+    "cutting-speed":
+      "Converts a cutting speed into a spindle speed and back, for a given tool or workpiece diameter.",
+    "feed-per-tooth":
+      "From the feed per tooth and the tooth count it gives the feed per revolution and the table feed, and the other way round.",
+    "gather-ratio":
+      "From the length before and after gathering it gives the gather ratio and the excess fabric per centimetre of seam.",
+    "heating-cost":
+      "From the fuel price, the energy in one unit and the seasonal efficiency it gives the cost of a delivered and a useful kilowatt-hour, for several fuels at once.",
+    "metal-weight":
+      "From the section's dimensions and the material's density it gives the mass of bar, tube, plate or profile - per metre, per piece and in total.",
+    "must-sugar":
+      "From a refractometer and a hydrometer reading it gives the sugar in the must, the Oechsle value and the potential alcohol, at the fermentation yield you enter.",
+    "pipe-pressure-drop":
+      "From diameter, length and flow it gives the velocity, the Reynolds number, the friction factor and the pressure drop by Darcy-Weisbach.",
+    "power-units":
+      "Converts a heat flow between watts, kilowatts, BTU/h and kcal/h.",
+    "radiator-output":
+      "From the nominal output and the exponent it gives a radiator's output at another temperature spread, and back.",
+    "room-heat-loss":
+      "Adds envelope transmission and ventilation by the simplified EN 12831 method and gives a room's design heat loss.",
+    "seam-allowance":
+      "Converts a finished measurement into a cut one and back, at an allowance for every seam the measurement crosses.",
+    "spirit-dilution":
+      "From the current strength, the target strength and the volume it gives how much water or stronger spirit to add, by the simple mixing equation.",
+    "sugar-addition":
+      "From the must volume, the sugar it already carries and the target alcohol it gives how much sugar to add.",
+    "sulfite":
+      "Converts a mass of potassium metabisulfite into SO₂ and back, with the share and the dose per litre.",
+    "water-heater-time":
+      "From volume, temperatures and power it gives the energy and the time to heat water, at the standing losses you enter.",
+    "weld-throat-leg":
+      "From the legs of a fillet weld it gives the throat and the weld's section, and back - for equal and unequal legs.",
   },
 
   /**
@@ -1564,6 +1656,19 @@ export const proEn = {
       "Fibre saturation point (nominally 30%): USDA Wood Handbook, FPL-GTR-282 (2021), ch. 4. The shrinkage coefficient for species and direction is entered by the user.",
     "whatwg-encoding-standard":
       "WHATWG Encoding Standard (Living Standard) — the index tables windows-1250, windows-1252 and iso-8859-2; UTF-8 by RFC 3629. The platform reads the tables; they are not copied into the code.",
+    // Wave 2b - see the note at the foot of the `name` table.
+    "balling-plato-abv-rule":
+      "The customary linear rules of the Balling/Plato scale: ABV = (OG − FG)·131,25 and ABW = (OG − FG)·105; an approximation over the ordinary brewing range.",
+    "darcy-weisbach-swamee-jain-1976":
+      "Darcy–Weisbach for the pressure drop and Swamee–Jain (1976) as the explicit friction-factor approximation; laminar 64/Re.",
+    "en-12831-1-2017":
+      "EN 12831-1:2017 - design heat load, simplified method: transmission Σ(U·A) and ventilation 0,34 Wh/(m³·K).",
+    "en-442-1-2014":
+      "EN 442-1:2014 - radiators and convectors: nominal output and the exponent in Φ = Φ_n·(Δθ/Δθ_n)^n, at a nominal spread of 50 K.",
+    "iupac-atomic-weights-2021":
+      "Standard atomic weights (IUPAC/CIAAW 2021) and Gay-Lussac: C₆H₁₂O₆ → 2 C₂H₅OH + 2 CO₂; ethanol density 789,3 kg/m³ at 20 °C.",
+    "it-btu-calorie-definitions":
+      "Exact definitions: 1 BTU_IT = 1055,05585262 J and 1 cal_IT = 4,1868 J (International Steam Table); 1 BTU/h = 0,293071 W, 1 kcal/h = 1,163 W.",
   },
 
   /* One group per TOOLKIT — see the header. */
@@ -1593,4 +1698,9 @@ export const proEn = {
   geodezija: PRO_GEODEZIJA_EN,
   radio: PRO_RADIO_EN,
   energija: PRO_ENERGIJA_EN,
+  grejanje: PRO_GREJANJE_EN,
+  metal: PRO_METAL_EN,
+  stolarija: PRO_STOLARIJA_EN,
+  krojenje: PRO_KROJENJE_EN,
+  vino: PRO_VINO_EN,
 } as const;

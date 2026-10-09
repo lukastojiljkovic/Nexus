@@ -129,6 +129,12 @@ export const TOOL_PACKS = [
   "geodezija",
   "radio",
   "energija",
+  // instalacije, obrada metala, drvo, konac, piće
+  "grejanje",
+  "metal",
+  "stolarija",
+  "krojenje",
+  "vino",
 ] as const;
 
 export type ToolPack = (typeof TOOL_PACKS)[number];

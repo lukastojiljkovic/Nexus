@@ -47,6 +47,11 @@ import { PRO_VAZDUHOPLOVSTVO_SR } from "./pro.vazduhoplovstvo.js";
 import { PRO_GEODEZIJA_SR } from "./pro.geodezija.js";
 import { PRO_RADIO_SR } from "./pro.radio.js";
 import { PRO_ENERGIJA_SR } from "./pro.energija.js";
+import { PRO_GREJANJE_SR } from "./pro.grejanje.js";
+import { PRO_METAL_SR } from "./pro.metal.js";
+import { PRO_STOLARIJA_SR } from "./pro.stolarija.js";
+import { PRO_KROJENJE_SR } from "./pro.krojenje.js";
+import { PRO_VINO_SR } from "./pro.vino.js";
 
 export const proSr = {
   title: "Stručne alatke",
@@ -261,6 +266,26 @@ export const proSr = {
     energija: {
       name: "Energija i solar",
       who: "solarni instalateri, vikendaši, kamperi, korisnici van mreže",
+    },
+    grejanje: {
+      name: "Grejanje i vodovod",
+      who: "instalateri, vodoinstalateri, grejači, serviseri",
+    },
+    metal: {
+      name: "Obrada metala",
+      who: "bravari, metalci, strugari, zavarivači, limari",
+    },
+    stolarija: {
+      name: "Stolarija",
+      who: "stolari, tesaři, monteri nameštaja",
+    },
+    krojenje: {
+      name: "Krojenje i šivenje",
+      who: "krojači, konfekcija, modni dizajneri, tapetari",
+    },
+    vino: {
+      name: "Vino i rakija",
+      who: "vinari, podrumari, destileri, proizvođači rakije",
     },
   },
 
@@ -763,6 +788,30 @@ export const proSr = {
     "yield-estimate-samples": "Procena prinosa",
     "yield-trim-cook": "Randman i kalo",
     "zbir-perioda": "Zbir perioda",
+    // Wave 2b — the five new toolkits' tools. Appended rather than merged into
+    // the alphabetical run above, so the addition reads as one block in review;
+    // the table's order is cosmetic and the rail sorts by category.
+    "abv-gravity": "Alkohol iz gustine",
+    "bias-binding": "Pristrasna traka",
+    "board-foot": "Bord stopa",
+    "button-spacing": "Razmak dugmadi",
+    "circle-skirt": "Kružna suknja",
+    "cutting-speed": "Brzina rezanja",
+    "feed-per-tooth": "Pomak po zubu",
+    "gather-ratio": "Nabiranje tkanine",
+    "heating-cost": "Cena grejanja",
+    "metal-weight": "Masa metala",
+    "must-sugar": "Šećer u moštu",
+    "pipe-pressure-drop": "Pad pritiska u cevi",
+    "power-units": "Jedinice snage",
+    "radiator-output": "Učinak radijatora",
+    "room-heat-loss": "Toplotni gubici prostorije",
+    "seam-allowance": "Dodatak na šav",
+    "spirit-dilution": "Razblaživanje rakije",
+    "sugar-addition": "Dodavanje šećera",
+    "sulfite": "Sulfit i SO₂",
+    "water-heater-time": "Grejanje vode",
+    "weld-throat-leg": "Grlo i krak šava",
   },
 
   /**
@@ -1718,6 +1767,65 @@ export const proSr = {
     "zbir-perioda":
       "Koliko ukupno dana daje niz perioda, kako se taj zbir razlaže na godine, mesece i dane, i " +
       "gde se periodi preklapaju.",
+    // Wave 2b — see the note at the foot of the `name` table.
+    "abv-gravity":
+      "Iz početne i krajnje gustine daje alkohol po zapremini i po masi i naizglednu " +
+      "fermentaciju, uz linearna pravila sa Balling/Plato skale.",
+    "bias-binding":
+      "Iz kvadrata tkanine daje dužinu pristrasne trake date širine, broj paralelnih traka i " +
+      "dijagonalu kvadrata.",
+    "board-foot":
+      "Prevodi mere komada, zapreminu i bord stope jedno u drugo, uz nominalnu (grubu) " +
+      "debljinu kakvu trgovina obračunava.",
+    "button-spacing":
+      "Raspoređuje zadati broj dugmadi ravnomerno između krajnjih tačaka i daje svaki položaj " +
+      "od prvog dugmeta.",
+    "circle-skirt":
+      "Iz obima struka i dužine daje poluprečnik kroja za pun krug, polukrug ili četvrtinu, " +
+      "obim poruba i kvadrat potreban za kroj.",
+    "cutting-speed":
+      "Prevodi brzinu rezanja u broj obrtaja i nazad, za zadati prečnik alata ili obratka.",
+    "feed-per-tooth":
+      "Iz pomaka po zubu i broja zuba daje pomak po obrtaju i pomak tabele, i obrnuto.",
+    "gather-ratio":
+      "Iz dužine komada pre i posle nabiranja daje odnos nabiranja i višak tkanine po " +
+      "centimetru šava.",
+    "heating-cost":
+      "Iz cene goriva, energije u jednoj jedinici i stepena korisnosti daje cenu jednog " +
+      "kilovat-časa isporučene i korisne toplote, za više goriva odjednom.",
+    "metal-weight":
+      "Iz dimenzija preseka i gustine materijala daje masu šipke, cevi, ploče ili profila — po " +
+      "metru, po komadu i ukupno.",
+    "must-sugar":
+      "Iz očitavanja refraktometra i hidrometra daje šećer u moštu, Oechsle i potencijalni " +
+      "alkohol, uz prinos fermentacije koji se unosi.",
+    "pipe-pressure-drop":
+      "Iz prečnika, dužine i protoka daje brzinu, Reynoldsov broj, faktor trenja i pad " +
+      "pritiska po Darcy–Weisbachu.",
+    "power-units":
+      "Prevodi toplotnu snagu između vata, kilovata, BTU/h i kcal/h.",
+    "radiator-output":
+      "Iz nazivnog učinka i eksponenta daje učinak radijatora pri drugoj temperaturnoj " +
+      "razlici, i obrnuto.",
+    "room-heat-loss":
+      "Sabira transmisiju kroz omotač i ventilaciju po uprošćenoj metodi EN 12831 i daje " +
+      "projektni toplotni gubitak prostorije.",
+    "seam-allowance":
+      "Prevodi gotovu meru u krojnu i nazad, uz dodatak po svakom šavu koji mera prelazi.",
+    "spirit-dilution":
+      "Iz sadašnje jačine, ciljane jačine i zapremine daje koliko vode ili jačeg destilata " +
+      "treba dodati, po prostoj jednačini mešanja.",
+    "sugar-addition":
+      "Iz zapremine mošta, šećera koji već postoji i ciljanog alkohola daje koliko šećera " +
+      "treba dodati.",
+    "sulfite":
+      "Prevodi masu kalijum metabisulfita u SO₂ i nazad, uz udeo i dozu po litru.",
+    "water-heater-time":
+      "Iz zapremine, temperatura i snage daje energiju i vreme zagrevanja vode, uz stalne " +
+      "gubitke koji se unose.",
+    "weld-throat-leg":
+      "Iz krakova ugaonog šava daje grlo i presek šava, i nazad — za jednake i nejednake " +
+      "krakove.",
   },
 
   /**
@@ -1885,6 +1993,25 @@ export const proSr = {
     "whatwg-encoding-standard":
       "WHATWG Encoding Standard (Living Standard) — indeksne tabele windows-1250, windows-1252 i " +
       "iso-8859-2; UTF-8 po RFC 3629. Tabele čita platforma, ne prepisuju se u kod.",
+    // Wave 2b — see the note at the foot of the `name` table.
+    "balling-plato-abv-rule":
+      "Uobičajena linearna pravila sa Balling/Plato skale: ABV = (OG − FG)·131,25 i " +
+      "ABW = (OG − FG)·105; aproksimacija za uobičajene pivske granice.",
+    "darcy-weisbach-swamee-jain-1976":
+      "Darcy–Weisbach za pad pritiska i Swamee–Jain (1976) eksplicitna aproksimacija faktora " +
+      "trenja; laminarno 64/Re.",
+    "en-12831-1-2017":
+      "EN 12831-1:2017 — projektno toplotno opterećenje, uprošćena metoda: transmisija Σ(U·A) i " +
+      "ventilacija 0,34 Wh/(m³·K).",
+    "en-442-1-2014":
+      "EN 442-1:2014 — radijatori i konvektori: nominalni učinak i eksponent u " +
+      "Φ = Φ_n·(Δθ/Δθ_n)^n, uz nominalnu razliku 50 K.",
+    "iupac-atomic-weights-2021":
+      "Standardne atomske mase (IUPAC/CIAAW 2021) i Gay-Lussac: C₆H₁₂O₆ → 2 C₂H₅OH + 2 CO₂; " +
+      "gustina etanola 789,3 kg/m³ na 20 °C.",
+    "it-btu-calorie-definitions":
+      "Tačne definicije: 1 BTU_IT = 1055,05585262 J i 1 cal_IT = 4,1868 J (International Steam " +
+      "Table); 1 BTU/h = 0,293071 W, 1 kcal/h = 1,163 W.",
   },
 
   /* One group per TOOLKIT — see the header. */
@@ -1914,4 +2041,9 @@ export const proSr = {
   geodezija: PRO_GEODEZIJA_SR,
   radio: PRO_RADIO_SR,
   energija: PRO_ENERGIJA_SR,
+  grejanje: PRO_GREJANJE_SR,
+  metal: PRO_METAL_SR,
+  stolarija: PRO_STOLARIJA_SR,
+  krojenje: PRO_KROJENJE_SR,
+  vino: PRO_VINO_SR,
 } as const;
