@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { InvalidStateError } from "../boards-shared/errors.js";
-import { createRng } from "../boards-shared/rng.js";
+import { createSeededRandom } from "../random.js";
 import {
   REVERSI_CELLS,
   REVERSI_LEVELS,
@@ -264,7 +264,7 @@ describe("passing and the end", () => {
    * implementation rather than against a stored expectation.
    */
   it("passes only when stuck, and ends when both sides are", () => {
-    const random = createRng(0x5eed);
+    const random = createSeededRandom(0x5eed);
     let passesSeen = 0;
     for (let game = 0; game < 20; game += 1) {
       let state = initialState();
@@ -291,7 +291,7 @@ describe("passing and the end", () => {
           state = passed;
           continue;
         }
-        const index = Math.floor(random() * moves.length);
+        const index = Math.floor(random.next() * moves.length);
         const move = moves[Math.min(index, moves.length - 1)] as ReversiMove;
         const played = applyMove(state, move);
         if (move.kind === "place") {
@@ -325,7 +325,7 @@ describe("the score", () => {
     expect(result(one)).toEqual({ status: "win", winner: 0, reason: "pieces" });
     expect(evaluate(zero)).toBe(10_016);
     expect(evaluate(one)).toBe(-10_016);
-    expect(bestMove(zero, 3, createRng(1))).toEqual({
+    expect(bestMove(zero, 3, createSeededRandom(1))).toEqual({
       move: null,
       score: 10_016,
       depth: 0,
@@ -345,20 +345,20 @@ describe("the score", () => {
 
 describe("the computer", () => {
   it("always answers with a legal move, and never spends more than its budget", () => {
-    const random = createRng(0xbeef);
+    const random = createSeededRandom(0xbeef);
     let checked = 0;
     // A hundred positions: a thousand searches at level 3 kept this file busy for 339 s
     // on the CI runners, and every level-3 answer is drawn from `legalMoves` either way.
     for (let sample = 0; sample < 100; sample += 1) {
       let state = initialState();
-      const plies = Math.floor(random() * 30);
+      const plies = Math.floor(random.next() * 30);
       for (let ply = 0; ply < plies; ply += 1) {
         const moves = legalMoves(state);
         if (moves.length === 0) break;
-        state = applyMove(state, moves[Math.floor(random() * moves.length)] as ReversiMove);
+        state = applyMove(state, moves[Math.floor(random.next() * moves.length)] as ReversiMove);
       }
       const level = 3;
-      const choice = bestMove(state, level, createRng(sample));
+      const choice = bestMove(state, level, createSeededRandom(sample));
       expect(choice.nodes).toBeLessThanOrEqual(REVERSI_LEVELS[level - 1]!.nodeBudget);
       const moves = legalMoves(state);
       if (moves.length === 0) {
@@ -389,7 +389,7 @@ describe("the computer", () => {
     const moves = legalMoves(state).map((move) => (move.kind === "place" ? move.cell : -1));
     expect(moves).toContain(square("a1"));
     expect(moves).toContain(square("f5"));
-    const choice = bestMove(state, 3, createRng(7));
+    const choice = bestMove(state, 3, createSeededRandom(7));
     expect(choice.move).toEqual({ kind: "place", cell: square("a1") });
   });
 });

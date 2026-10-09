@@ -11,11 +11,11 @@ type DatabaseHandle = Database.Database;
  * board, folded forward every time a game ends.
  *
  * **`record` is the whole API of the thing that matters, and it is one
- * transaction.** A finished game changes five numbers at once (played, won, the
- * best, the streak, when) and they have to move TOGETHER: a crash between the
- * „played" write and the „best" write would leave a row that says a game happened
- * and does not know how it went, and the next record would build on that. So the
- * read, the fold and the write are one `db.transaction`.
+ * transaction.** A finished game moves several numbers at once (played, won, the
+ * bests, the two streaks, when) and they have to move TOGETHER: a crash between
+ * the „played" write and the „best" write would leave a row that says a game
+ * happened and does not know how it went, and the next record would build on
+ * that. So the read, the fold and the write are one `db.transaction`.
  *
  * **The row is a running total, so a second game is never a second row.**
  * Migration 080's unique index on (profile, game, variant) is what makes that
@@ -28,7 +28,9 @@ type DatabaseHandle = Database.Database;
  * only when it beats the row's best. A Blocks game raises the best score and the
  * best line count and can never win, which the schema states as well as this
  * store. A streak is a run of WINS: a loss ends it, and a game with no win
- * condition never starts one.
+ * condition never starts one. `longestStreak` is the record the current one is
+ * measured against and only ever rises — a later loss cannot take away what
+ * somebody did.
  *
  * **`exportData`/`importData` are the archive's door, and the import REPLACES.**
  * The export is a versioned plain value — `{ version: 1, scores: [...] }` — and it
@@ -84,8 +86,8 @@ export interface ArcadeScore {
   /** The board this row counts: a Minesweeper preset or `custom:CxRxM`, and Blocks' own one board. */
   variant: string;
   /** Finished games. */
-  plays: number;
-  wins: number;
+  played: number;
+  won: number;
   /** The fastest WON Minesweeper game in milliseconds, or null — never a loss's time. */
   bestTimeMs: number | null;
   /** The best Blocks score; always null for Minesweeper. */
@@ -93,7 +95,9 @@ export interface ArcadeScore {
   /** The most lines ever cleared in one Blocks game; always null for Minesweeper. */
   bestLines: number | null;
   /** The current run of consecutive wins. A loss ends it; Blocks never starts one. */
-  streak: number;
+  currentStreak: number;
+  /** The longest run of consecutive wins ever recorded; only ever rises. */
+  longestStreak: number;
   lastPlayedAt: string;
   createdAt: string;
   updatedAt: string;
@@ -127,12 +131,13 @@ export interface ArcadeExportScore {
   id: string;
   game: ArcadeGame;
   variant: string;
-  plays: number;
-  wins: number;
+  played: number;
+  won: number;
   bestTimeMs: number | null;
   bestScore: number | null;
   bestLines: number | null;
-  streak: number;
+  currentStreak: number;
+  longestStreak: number;
   lastPlayedAt: string;
   createdAt: string;
   updatedAt: string;
@@ -152,32 +157,34 @@ interface ArcadeScoreRow {
   profile_id: string;
   game: string;
   variant: string;
-  plays: number;
-  wins: number;
+  played: number;
+  won: number;
   best_time_ms: number | null;
   best_score: number | null;
   best_lines: number | null;
-  streak: number;
+  current_streak: number;
+  longest_streak: number;
   last_played_at: string;
   created_at: string;
   updated_at: string;
 }
 
 const COLUMNS =
-  "id, profile_id, game, variant, plays, wins, best_time_ms, best_score, best_lines, " +
-  "streak, last_played_at, created_at, updated_at";
+  "id, profile_id, game, variant, played, won, best_time_ms, best_score, best_lines, " +
+  "current_streak, longest_streak, last_played_at, created_at, updated_at";
 
 /** The archive's field list, and the whole of what an imported entry may carry. */
 const EXPORT_KEYS: ReadonlyArray<keyof ArcadeExportScore> = [
   "id",
   "game",
   "variant",
-  "plays",
-  "wins",
+  "played",
+  "won",
   "bestTimeMs",
   "bestScore",
   "bestLines",
-  "streak",
+  "currentStreak",
+  "longestStreak",
   "lastPlayedAt",
   "createdAt",
   "updatedAt",
@@ -272,16 +279,17 @@ export class ArcadeScoreStore {
     // board's answer, folded forward.
     this.upsertRow = db.prepare(
       `INSERT INTO arcade_scores
-         (id, profile_id, game, variant, plays, wins, best_time_ms, best_score, best_lines,
-          streak, last_played_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         (id, profile_id, game, variant, played, won, best_time_ms, best_score, best_lines,
+          current_streak, longest_streak, last_played_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (profile_id, game, variant) DO UPDATE SET
-         plays          = excluded.plays,
-         wins           = excluded.wins,
+         played         = excluded.played,
+         won            = excluded.won,
          best_time_ms   = excluded.best_time_ms,
          best_score     = excluded.best_score,
          best_lines     = excluded.best_lines,
-         streak         = excluded.streak,
+         current_streak = excluded.current_streak,
+         longest_streak = excluded.longest_streak,
          last_played_at = excluded.last_played_at,
          updated_at     = excluded.updated_at`,
     );
@@ -289,9 +297,9 @@ export class ArcadeScoreStore {
     // included, so an archive round trip gives back the rows it took.
     this.insertExact = db.prepare(
       `INSERT INTO arcade_scores
-         (id, profile_id, game, variant, plays, wins, best_time_ms, best_score, best_lines,
-          streak, last_played_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, profile_id, game, variant, played, won, best_time_ms, best_score, best_lines,
+          current_streak, longest_streak, last_played_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     this.deleteProfile = db.prepare(`DELETE FROM arcade_scores WHERE profile_id = ?`);
     // Row ids are GLOBAL primary keys here as they are in every other table
@@ -340,17 +348,19 @@ export class ArcadeScoreStore {
         | undefined;
       const faster =
         won && timeMs !== null && (existing?.best_time_ms == null || timeMs < existing.best_time_ms);
+      const currentStreak = won ? (existing?.current_streak ?? 0) + 1 : 0;
       this.upsertRow.run(
         uuidv7(),
         this.profileId,
         game,
         variant,
-        (existing?.plays ?? 0) + 1,
-        game === "minesweeper" ? (existing?.wins ?? 0) + (won ? 1 : 0) : 0,
+        (existing?.played ?? 0) + 1,
+        game === "minesweeper" ? (existing?.won ?? 0) + (won ? 1 : 0) : 0,
         faster ? timeMs : (existing?.best_time_ms ?? null),
         score === null ? null : Math.max(score, existing?.best_score ?? 0),
         lines === null ? null : Math.max(lines, existing?.best_lines ?? 0),
-        won ? (existing?.streak ?? 0) + 1 : 0,
+        currentStreak,
+        Math.max(existing?.longest_streak ?? 0, currentStreak),
         stamp,
         existing?.created_at ?? stamp,
         stamp,
@@ -395,12 +405,13 @@ export class ArcadeScoreStore {
         id: score.id,
         game: score.game,
         variant: score.variant,
-        plays: score.plays,
-        wins: score.wins,
+        played: score.played,
+        won: score.won,
         bestTimeMs: score.bestTimeMs,
         bestScore: score.bestScore,
         bestLines: score.bestLines,
-        streak: score.streak,
+        currentStreak: score.currentStreak,
+        longestStreak: score.longestStreak,
         lastPlayedAt: score.lastPlayedAt,
         createdAt: score.createdAt,
         updatedAt: score.updatedAt,
@@ -440,12 +451,13 @@ export class ArcadeScoreStore {
           this.profileId,
           score.game,
           score.variant,
-          score.plays,
-          score.wins,
+          score.played,
+          score.won,
           score.bestTimeMs,
           score.bestScore,
           score.bestLines,
-          score.streak,
+          score.currentStreak,
+          score.longestStreak,
           score.lastPlayedAt,
           score.createdAt,
           score.updatedAt,
@@ -473,12 +485,13 @@ export class ArcadeScoreStore {
       profileId: row.profile_id,
       game: row.game as ArcadeGame,
       variant: row.variant,
-      plays: row.plays,
-      wins: row.wins,
+      played: row.played,
+      won: row.won,
       bestTimeMs: row.best_time_ms,
       bestScore: row.best_score,
       bestLines: row.best_lines,
-      streak: row.streak,
+      currentStreak: row.current_streak,
+      longestStreak: row.longest_streak,
       lastPlayedAt: row.last_played_at,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
@@ -526,9 +539,18 @@ function parseArcadeExport(value: unknown): ArcadeExportScore[] {
     const id = validateId(entry["id"]);
     const game = validateGame(entry["game"]);
     const variant = validateVariant(entry["variant"]);
-    const plays = validateCount(entry["plays"], "plays", 0, Number.MAX_SAFE_INTEGER);
-    const wins = validateCount(entry["wins"], "wins", 0, plays);
-    const streak = validateCount(entry["streak"], "streak", 0, wins);
+    const played = validateCount(entry["played"], "played", 0, Number.MAX_SAFE_INTEGER);
+    const won = validateCount(entry["won"], "won", 0, played);
+    const currentStreak = validateCount(entry["currentStreak"], "currentStreak", 0, won);
+    const longestStreak = validateCount(
+      entry["longestStreak"],
+      "longestStreak",
+      0,
+      Number.MAX_SAFE_INTEGER,
+    );
+    if (longestStreak < currentStreak) {
+      throw new ArcadeValidationError(`"longestStreak" must not be smaller than "currentStreak".`);
+    }
     const bestTimeMs = nullableCount(entry["bestTimeMs"], "bestTimeMs", 1, MAX_ARCADE_TIME_MS);
     const bestScore = nullableCount(entry["bestScore"], "bestScore", 0, MAX_ARCADE_SCORE);
     const bestLines = nullableCount(entry["bestLines"], "bestLines", 0, MAX_ARCADE_LINES);
@@ -543,7 +565,12 @@ function parseArcadeExport(value: unknown): ArcadeExportScore[] {
     }
     if (
       game === "blocks" &&
-      (wins !== 0 || streak !== 0 || bestTimeMs !== null || bestScore === null || bestLines === null)
+      (won !== 0 ||
+        currentStreak !== 0 ||
+        longestStreak !== 0 ||
+        bestTimeMs !== null ||
+        bestScore === null ||
+        bestLines === null)
     ) {
       throw new ArcadeValidationError(
         `A Blocks row never wins, has no time, and always carries a score and a line count; ${id} does not.`,
@@ -564,12 +591,13 @@ function parseArcadeExport(value: unknown): ArcadeExportScore[] {
       id,
       game,
       variant,
-      plays,
-      wins,
+      played,
+      won,
       bestTimeMs,
       bestScore,
       bestLines,
-      streak,
+      currentStreak,
+      longestStreak,
       lastPlayedAt,
       createdAt,
       updatedAt,

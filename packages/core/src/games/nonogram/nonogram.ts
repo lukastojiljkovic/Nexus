@@ -27,8 +27,8 @@
  * loop forever, so the failure is a caller's to see instead of a hang.
  */
 
-import type { PuzzleRandom } from "../puzzles-shared/random.js";
-import { createPuzzleRandom } from "../puzzles-shared/random.js";
+import type { SeededRandom } from "../random.js";
+import { createSeededRandom } from "../random.js";
 
 /** The smallest board this generator builds, and the largest. */
 export const NONOGRAM_MIN = 5;
@@ -352,7 +352,7 @@ const PICTURE_MAX_SHARE = 0.8;
  */
 export function generateNonogram(seed: number, width: number, height = width): NonogramPuzzle {
   checkSize(width, height);
-  const random = createPuzzleRandom(seed);
+  const random = createSeededRandom(seed);
   for (let attempt = 1; attempt <= NONOGRAM_ATTEMPT_LIMIT; attempt += 1) {
     const picture = randomPicture(random, width, height);
     const filled = picture.filter(Boolean).length;
@@ -395,7 +395,7 @@ function checkSize(width: number, height: number): void {
  * hole as easily as it can fill one, and the picture comes out with the long
  * runs a line solver can work with.
  */
-function randomPicture(random: PuzzleRandom, width: number, height: number): boolean[] {
+function randomPicture(random: SeededRandom, width: number, height: number): boolean[] {
   const picture = new Array<boolean>(width * height);
   picture.fill(false);
   const rectangles = PICTURE_RECTANGLES_BASE + Math.floor(Math.max(width, height) / 3);
@@ -414,7 +414,7 @@ function randomPicture(random: PuzzleRandom, width: number, height: number): boo
   return picture;
 }
 
-function randomBelowIndex(random: PuzzleRandom, bound: number): number {
+function randomBelowIndex(random: SeededRandom, bound: number): number {
   return Math.floor(random.next() * bound);
 }
 

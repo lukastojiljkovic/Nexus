@@ -149,15 +149,16 @@ describe("the Spider deal", () => {
    * seed 1 and the ten cards its first row would deal. Spider has no published
    * layout to check against (unlike FreeCell), so this is the record that the
    * shuffle's constants, the deck's composition and the deal's order are the
-   * ones that shipped.
+   * ones that shipped. It was re-derived when the deal moved off
+   * `cards/shuffle.ts`'s xorshift and onto the shared mulberry32 source.
    */
   it("pins the tops and the first row of seed 1", () => {
     const state = dealSpider("suits4", 1);
     const tops = state.board.columns.map((pile) => cardCode(pile[pile.length - 1]!.card));
-    expect(tops).toEqual(["5S", "JH", "JC", "QH", "5D", "5C", "9D", "QC", "3H", "KC"]);
+    expect(tops).toEqual(["4C", "2H", "8C", "KD", "AH", "9H", "3S", "TH", "9D", "TS"]);
     // The stock's last ten cards are the first row, one card per column in order.
     expect(state.board.stock.slice(-SPIDER_COLUMNS).map(cardCode)).toEqual([
-      "TH", "5D", "JS", "3C", "AS", "9C", "QD", "4H", "KS", "5H",
+      "7H", "7C", "3D", "QC", "8C", "2S", "3H", "AH", "2S", "7S",
     ]);
   });
 });

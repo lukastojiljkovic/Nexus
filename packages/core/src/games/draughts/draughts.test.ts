@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { InvalidStateError } from "../boards-shared/errors.js";
-import { createRng } from "../boards-shared/rng.js";
+import { createSeededRandom } from "../random.js";
 import {
   DRAUGHTS_DRAW_PLIES,
   DRAUGHTS_LEVELS,
@@ -597,21 +597,21 @@ describe("the draws", () => {
 
 describe("the computer", () => {
   it("returns a legal move at level 3 on a hundred positions per rule set", () => {
-    const random = createRng(0x5eed);
+    const random = createSeededRandom(0x5eed);
     for (const kind of ["english", "russian"] as const) {
       let checked = 0;
       // A hundred positions: a thousand searches at level 3 kept this file busy for 79 s
       // on the CI runners, and every level-3 answer is drawn from `legalMoves` either way.
       for (let sample = 0; sample < 100; sample += 1) {
         let state = initialState({ kind });
-        const plies = 4 + Math.floor(random() * 40);
+        const plies = 4 + Math.floor(random.next() * 40);
         for (let ply = 0; ply < plies; ply += 1) {
           const moves = legalMoves(state);
           if (moves.length === 0) break;
-          state = applyMove(state, moves[Math.floor(random() * moves.length)] as DraughtsMove);
+          state = applyMove(state, moves[Math.floor(random.next() * moves.length)] as DraughtsMove);
         }
         const moves = legalMoves(state);
-        const choice = bestMove(state, 3, createRng(sample));
+        const choice = bestMove(state, 3, createSeededRandom(sample));
         expect(choice.nodes).toBeLessThanOrEqual(DRAUGHTS_LEVELS[2]!.nodeBudget);
         if (result(state).status !== "in_progress") continue;
         checked += 1;
@@ -623,24 +623,24 @@ describe("the computer", () => {
   }, 300_000);
 
   it("stays inside every level's budget, and always captures when it must", () => {
-    const random = createRng(0xbeef);
+    const random = createSeededRandom(0xbeef);
     for (let sample = 0; sample < 300; sample += 1) {
       let state = initialState({ kind: sample % 2 === 0 ? "english" : "russian" });
-      const plies = 4 + Math.floor(random() * 30);
+      const plies = 4 + Math.floor(random.next() * 30);
       for (let ply = 0; ply < plies; ply += 1) {
         const moves = legalMoves(state);
         if (moves.length === 0) break;
-        state = applyMove(state, moves[Math.floor(random() * moves.length)] as DraughtsMove);
+        state = applyMove(state, moves[Math.floor(random.next() * moves.length)] as DraughtsMove);
       }
       const moves = legalMoves(state);
       if (moves.length === 0 || result(state).status !== "in_progress") continue;
       const level = 1 + (sample % 3);
-      const choice = bestMove(state, level, createRng(sample));
+      const choice = bestMove(state, level, createSeededRandom(sample));
       expect(choice.nodes).toBeLessThanOrEqual(DRAUGHTS_LEVELS[level - 1]!.nodeBudget);
       expect(moves).toContainEqual(choice.move);
     }
     const forced = grid(DOUBLE_JUMP, "english");
-    expect(bestMove(forced, 3, createRng(3)).move?.kind).toBe("capture");
+    expect(bestMove(forced, 3, createSeededRandom(3)).move?.kind).toBe("capture");
   }, 180_000);
 });
 

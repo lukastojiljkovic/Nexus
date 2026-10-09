@@ -47,6 +47,9 @@ export const MAX_CARD_GAME_MOVES_BYTES = 262_144;
  */
 export const MAX_CARD_GAME_ELAPSED_SECONDS = 86_400;
 
+/** Whole seconds into the milliseconds the stats column is billed in (the arcade's unit). */
+const MS_PER_SECOND = 1000;
+
 /** The version on `CardGameData`, and the only one `importData` accepts. */
 export const CARD_GAME_ARCHIVE_VERSION = 1;
 
@@ -54,17 +57,22 @@ export const CARD_GAME_ARCHIVE_VERSION = 1;
  * One game's record, per variant: how many deals were finished, how many were
  * won, the best time and score, and the two streaks.
  *
- * `bestTimeSeconds` and `bestScore` are NULL until the first WIN, and that is the
+ * `bestTimeMs` and `bestScore` are NULL until the first WIN, and that is the
  * definition rather than an omission: a best is a result somebody achieved, and a
  * deal abandoned at 300 points is not a best score. Both are raised, never
  * lowered.
+ *
+ * The best time is MILLISECONDS, the unit `arcade_scores.best_time_ms` carries,
+ * while the result and the saved game hand the game's own clock in whole seconds
+ * (`cardgame_saves.elapsed_seconds`): the conversion happens once, in
+ * `recordResult`, so no caller has to know which column wants which unit.
  */
 export interface CardGameStats {
   readonly game: CardGameId;
   readonly variant: CardGameVariant;
   readonly played: number;
   readonly won: number;
-  readonly bestTimeSeconds: number | null;
+  readonly bestTimeMs: number | null;
   readonly bestScore: number | null;
   readonly currentStreak: number;
   readonly longestStreak: number;
@@ -148,7 +156,7 @@ interface StatRow {
   variant: string;
   played: number;
   won: number;
-  best_time_seconds: number | null;
+  best_time_ms: number | null;
   best_score: number | null;
   current_streak: number;
   longest_streak: number;
@@ -167,7 +175,7 @@ interface SaveRow {
 }
 
 const STAT_COLUMNS =
-  "game, variant, played, won, best_time_seconds, best_score, current_streak," +
+  "game, variant, played, won, best_time_ms, best_score, current_streak," +
   " longest_streak, updated_at";
 
 /** Timestamps for imported rows whose archive carries none; an archive's own times travel with it when they exist. */
@@ -221,13 +229,13 @@ export class CardGameStore {
     // swallowed by a blanket „ignore".
     this.upsertStats = db.prepare(
       `INSERT INTO cardgame_stats
-         (profile_id, game, variant, played, won, best_time_seconds, best_score,
+         (profile_id, game, variant, played, won, best_time_ms, best_score,
           current_streak, longest_streak, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (profile_id, game, variant) DO UPDATE SET
          played = excluded.played,
          won = excluded.won,
-         best_time_seconds = excluded.best_time_seconds,
+         best_time_ms = excluded.best_time_ms,
          best_score = excluded.best_score,
          current_streak = excluded.current_streak,
          longest_streak = excluded.longest_streak,
@@ -309,10 +317,11 @@ export class CardGameStore {
 
     const current = this.getStats(game, variant);
     const currentStreak = input.won ? current.currentStreak + 1 : 0;
-    const bestTimeSeconds =
-      input.won && (current.bestTimeSeconds === null || elapsedSeconds < current.bestTimeSeconds)
-        ? elapsedSeconds
-        : current.bestTimeSeconds;
+    const elapsedMs = elapsedSeconds * MS_PER_SECOND;
+    const bestTimeMs =
+      input.won && (current.bestTimeMs === null || elapsedMs < current.bestTimeMs)
+        ? elapsedMs
+        : current.bestTimeMs;
     const bestScore =
       input.won && (current.bestScore === null || score > current.bestScore)
         ? score
@@ -324,7 +333,7 @@ export class CardGameStore {
       variant,
       current.played + 1,
       current.won + (input.won ? 1 : 0),
-      bestTimeSeconds,
+      bestTimeMs,
       bestScore,
       currentStreak,
       Math.max(current.longestStreak, currentStreak),
@@ -449,7 +458,7 @@ export class CardGameStore {
           row.variant,
           row.played,
           row.won,
-          row.bestTimeSeconds,
+          row.bestTimeMs,
           row.bestScore,
           row.currentStreak,
           row.longestStreak,
@@ -542,7 +551,7 @@ function emptyStats(game: CardGameId, variant: CardGameVariant): CardGameStats {
     variant,
     played: 0,
     won: 0,
-    bestTimeSeconds: null,
+    bestTimeMs: null,
     bestScore: null,
     currentStreak: 0,
     longestStreak: 0,
@@ -557,7 +566,7 @@ function toStats(row: StatRow): CardGameStats {
     variant,
     played: row.played,
     won: row.won,
-    bestTimeSeconds: row.best_time_seconds,
+    bestTimeMs: row.best_time_ms,
     bestScore: row.best_score,
     currentStreak: row.current_streak,
     longestStreak: row.longest_streak,
@@ -740,10 +749,8 @@ function parseCardGameData(value: unknown): {
     if (currentStreak > longestStreak) {
       throw new CardGameValidationError(`"currentStreak" must not exceed "longestStreak".`);
     }
-    const bestTimeSeconds =
-      row["bestTimeSeconds"] === null
-        ? null
-        : validateCount(row["bestTimeSeconds"], "bestTimeSeconds");
+    const bestTimeMs =
+      row["bestTimeMs"] === null ? null : validateCount(row["bestTimeMs"], "bestTimeMs");
     const bestScore = row["bestScore"] === null ? null : validateScore(row["bestScore"]);
     const updatedAt = row["updatedAt"] === null ? null : validateNow(row["updatedAt"]);
     stats.push({
@@ -751,7 +758,7 @@ function parseCardGameData(value: unknown): {
       variant,
       played,
       won,
-      bestTimeSeconds,
+      bestTimeMs,
       bestScore,
       currentStreak,
       longestStreak,

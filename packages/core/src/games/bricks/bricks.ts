@@ -28,8 +28,8 @@
  * report of a game is a seed plus an input log.
  */
 
-import type { PuzzleRandom } from "../puzzles-shared/random.js";
-import { createPuzzleRandom } from "../puzzles-shared/random.js";
+import type { SeededRandom } from "../random.js";
+import { createSeededRandom } from "../random.js";
 
 export const BRICKS_COLUMNS = 13;
 export const BRICKS_ROWS = 22;
@@ -131,7 +131,7 @@ function paddleTop(state: { rows: number }): number {
  * because a level with no bricks in it would be over before it was played.
  */
 function drawBricks(
-  random: PuzzleRandom,
+  random: SeededRandom,
   columns: number,
   level: number,
 ): { bricks: boolean[]; brickRows: number } {
@@ -159,7 +159,7 @@ function launchVelocity(speed: number, horizontal: 1 | -1): { dx: number; dy: nu
 
 /** A fresh game: level one drawn, the ball waiting on the paddle, three lives. */
 export function createBricks(seed: number, now: number): BricksState {
-  const random = createPuzzleRandom(seed);
+  const random = createSeededRandom(seed);
   const { bricks, brickRows } = drawBricks(random, BRICKS_COLUMNS, 1);
   const skeleton = { columns: BRICKS_COLUMNS, rows: BRICKS_ROWS };
   const paddleLeft = paddleCentre(skeleton);
@@ -328,7 +328,7 @@ function tick(state: BricksState, input: BricksInput): BricksState {
     score += BRICKS_LEVEL_BONUS;
     cleared += 1;
     speed = bricksSpeed(level);
-    const random = createPuzzleRandom(rngState);
+    const random = createSeededRandom(rngState);
     const drawn = drawBricks(random, state.columns, level);
     bricks = drawn.bricks;
     brickRows = drawn.brickRows;

@@ -20,17 +20,20 @@ import type { Migration } from "./migrations.js";
  * **The row is a RUNNING TOTAL, not a game.** No per-game history is kept, and
  * that is the model rather than an omission: nobody wants a ledger of their
  * losses, the numbers a player actually looks at are all aggregates (played, won,
- * best, streak, when), and a history table would be a second thing for the
- * archive to carry and the merge to get wrong. `ArcadeScoreStore.record` folds
- * one finished game into the row in a single transaction.
+ * the two bests, the two streaks, when), and a history table would be a second
+ * thing for the archive to carry and the merge to get wrong.
+ * `ArcadeScoreStore.record` folds one finished game into the row in a single
+ * transaction.
  *
  * **A row carries only what its own game measures, and the CHECKs make the mixed
  * row unrepresentable.** A Minesweeper row has no score and no line count; a
  * Blocks row has no time, cannot have won, and always has a score and a line
  * count — a Blocks game is over when a piece cannot be dealt, and the numbers are
  * known at that moment, so a Blocks row without them would be a game nobody
- * finished. `wins <= plays` and `streak <= wins` are the same idea for the
- * counting columns: a run of wins cannot be longer than the wins.
+ * finished. `won <= played`, `current_streak <= longest_streak` and
+ * `current_streak <= won` are the same idea for the counting columns: a run of
+ * wins cannot be longer than the wins it was drawn from, nor than the longest
+ * run recorded.
  *
  * **No `deleted_at`.** Every other user-content table in this schema has one, and
  * this one does not, because there is nothing to delete: a score row is a
@@ -62,10 +65,10 @@ export const migration080: Migration = {
         profile_id     TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
         game           TEXT NOT NULL CHECK (game IN ('minesweeper', 'blocks')),
         variant        TEXT NOT NULL CHECK (length(variant) > 0 AND length(variant) <= 32),
-        plays          INTEGER NOT NULL
-                         CHECK (typeof(plays) = 'integer' AND plays >= 0),
-        wins           INTEGER NOT NULL
-                         CHECK (typeof(wins) = 'integer' AND wins >= 0),
+        played         INTEGER NOT NULL
+                         CHECK (typeof(played) = 'integer' AND played >= 0),
+        won            INTEGER NOT NULL
+                         CHECK (typeof(won) = 'integer' AND won >= 0),
         best_time_ms   INTEGER
                          CHECK (best_time_ms IS NULL OR
                                 (typeof(best_time_ms) = 'integer' AND
@@ -78,19 +81,22 @@ export const migration080: Migration = {
                          CHECK (best_lines IS NULL OR
                                 (typeof(best_lines) = 'integer' AND
                                  best_lines >= 0 AND best_lines <= 100000)),
-        streak         INTEGER NOT NULL
-                         CHECK (typeof(streak) = 'integer' AND streak >= 0),
+        current_streak INTEGER NOT NULL
+                         CHECK (typeof(current_streak) = 'integer' AND current_streak >= 0),
+        longest_streak INTEGER NOT NULL
+                         CHECK (typeof(longest_streak) = 'integer' AND longest_streak >= 0),
         last_played_at TEXT NOT NULL,
         created_at     TEXT NOT NULL,
         updated_at     TEXT NOT NULL,
         -- A run of wins cannot be longer than the wins, and a win is a game.
-        CHECK (streak <= wins),
-        CHECK (wins <= plays),
+        CHECK (current_streak <= longest_streak),
+        CHECK (current_streak <= won),
+        CHECK (won <= played),
         -- A row carries its own game's numbers and no other game's.
         CHECK (game <> 'minesweeper' OR (best_score IS NULL AND best_lines IS NULL)),
         CHECK (game <> 'blocks' OR
-               (best_time_ms IS NULL AND wins = 0 AND streak = 0 AND
-                best_score IS NOT NULL AND best_lines IS NOT NULL))
+               (best_time_ms IS NULL AND won = 0 AND current_streak = 0 AND
+                longest_streak = 0 AND best_score IS NOT NULL AND best_lines IS NOT NULL))
       );
 
       -- The row's identity AND the table's only read index: every query is
