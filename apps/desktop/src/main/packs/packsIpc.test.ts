@@ -91,6 +91,17 @@ describe("the packs IPC surface", () => {
     expect(await packs.install()).toEqual({ outcome: "refused", code: "no-candidate" });
   });
 
+  it("refuses an older version at inspection, before Install is offered", async () => {
+    const packs = service();
+    picked = source("newer", "1.0.1");
+    await packs.inspect();
+    await packs.install();
+
+    picked = source("older", "1.0.0");
+    expect(await packs.inspect()).toEqual({ outcome: "refused", code: "older-than-installed" });
+    expect(await packs.install()).toEqual({ outcome: "refused", code: "no-candidate" });
+  });
+
   it("refuses a folder that is not a pack, with the code that names the rule", async () => {
     const packs = service();
     picked = join(root, "nothing-here");

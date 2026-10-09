@@ -161,6 +161,17 @@ describe("installing a pack", () => {
     expect(listed.map((pack) => pack.manifest.version)).toEqual(["1.0.1"]);
   });
 
+  // A signature proves a pack is ours, not that it is current: last year's
+  // folder is still signed, so only the version can stop it replacing this year's.
+  it("refuses an older version over a newer one, and keeps the newer one", async () => {
+    await installPackFromDirectory(source("v2", { version: "1.0.1" }), deps());
+    expect(await refusal(installPackFromDirectory(source("v1"), deps()))).toBe("older-than-installed");
+
+    const idDir = join(packsRoot(userData), "wikipedia-sr");
+    expect(readdirSync(idDir)).toEqual(["1.0.1"]);
+    expect(stagingLeftovers()).toEqual([]);
+  });
+
   it("replaces the same version when it is installed again", async () => {
     await installPackFromDirectory(source("v1"), deps());
     await installPackFromDirectory(

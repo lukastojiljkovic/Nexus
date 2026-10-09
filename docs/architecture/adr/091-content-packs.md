@@ -161,7 +161,14 @@ A folder is read in this order, and the first refusal wins: a signature that
 does not verify over the manifest's exact bytes; a `format` this build does not
 read; an `id`, a `version`, a `kind`, a `minAppVersion` or copy that breaks its
 rule; a file list that breaks one of the caps or repeats a path; a
-`minAppVersion` newer than this build; and only then the folder itself.
+`minAppVersion` newer than this build; a `version` older than the one of this
+`id` already installed; and only then the folder itself.
+
+**No rollback.** An old pack is still validly signed, so the signature cannot
+tell last year's folder from this year's. The installed version can: a pack
+older than it is refused (`older-than-installed`) at inspection and again at
+install, before anything is written. Reinstalling the same version is allowed,
+because that is how a damaged copy is repaired.
 
 **Paths are hostile until proven otherwise.** A pack arrives from outside this
 machine, and every path in it was written by whoever built it. Each listed path

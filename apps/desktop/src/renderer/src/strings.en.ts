@@ -7707,6 +7707,7 @@ export const en = {
         "source-invalid": "The source details in the manifest are not valid.",
         "min-app-version-invalid": "The minimum app version in the manifest is not valid.",
         "min-app-version-too-new": "This pack needs a newer version of Nexus.",
+        "older-than-installed": "A newer version of this pack is already installed.",
         symlink: "The pack contains a symbolic link, which is not allowed.",
         "not-a-file": "The pack holds something that is neither a file nor a folder.",
         "missing-file": "A file the manifest names is not in the pack.",

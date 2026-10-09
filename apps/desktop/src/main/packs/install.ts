@@ -31,6 +31,7 @@ import { dirname, join } from "node:path";
 import { pipeline } from "node:stream/promises";
 
 import type { PackProgress } from "../../shared/ipc.js";
+import { compareVersions } from "../update/version.js";
 import { PackError, messageOf } from "./errors.js";
 import { PACK_LIMITS } from "./limits.js";
 import { packContentBytes } from "./manifest.js";
@@ -154,11 +155,37 @@ function progressReporter(
 }
 
 /**
+ * Refuses a pack older than the version of it already installed.
+ *
+ * An older pack is still validly signed, so the signature cannot stop it: without
+ * this, anyone holding last year's folder could put it back over this year's and
+ * the install would delete the newer one. Reinstalling the SAME version stays
+ * allowed, because that is how a damaged copy is repaired. Versions this build
+ * cannot compare refuse, the safe direction to be wrong in.
+ */
+export function refuseRollback(
+  userData: string,
+  publicKeyPem: string,
+  manifest: { readonly id: string; readonly version: string },
+): void {
+  const installed = readInstalled(userData, publicKeyPem).find((pack) => pack.manifest.id === manifest.id);
+  if (installed === undefined) return;
+  const order = compareVersions(manifest.version, installed.manifest.version);
+  if (order === null || order < 0) {
+    throw new PackError(
+      "older-than-installed",
+      `Version ${installed.manifest.version} of "${manifest.id}" is installed; this folder holds ${manifest.version}.`,
+    );
+  }
+}
+
+/**
  * Installs the pack in `sourceDir`.
  *
  * Refuses, with a code, before it writes anything: a folder that is not a pack,
- * a manifest the key did not sign, a pack this build is too old for, a file set
- * that does not match the manifest, or a volume without room. After that the
+ * a manifest the key did not sign, a pack this build is too old for, a pack
+ * older than the one installed, a file set that does not match the manifest, or
+ * a volume without room. After that the
  * only failures left are the copy's own, and each of those deletes what it
  * wrote.
  */
@@ -172,6 +199,7 @@ export async function installPackFromDirectory(
     publicKeyPem: deps.publicKeyPem,
   });
   const manifest = source.manifest;
+  refuseRollback(deps.userData, deps.publicKeyPem, manifest);
   const totalBytes = packContentBytes(manifest);
   const root = packsRoot(deps.userData);
 

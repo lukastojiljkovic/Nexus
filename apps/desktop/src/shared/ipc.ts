@@ -8877,6 +8877,8 @@ export type PackRefusalCode =
   | "min-app-version-invalid"
   /** The pack asks for an app newer than this one, or for one that cannot be compared. */
   | "min-app-version-too-new"
+  /** A newer version of this pack is already installed; installing this one would roll it back. */
+  | "older-than-installed"
   /** The source tree holds a symbolic link or a junction. */
   | "symlink"
   /** Something in the source tree is neither a directory nor a regular file. */

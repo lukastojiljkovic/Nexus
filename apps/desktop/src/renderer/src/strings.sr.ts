@@ -7719,6 +7719,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         "source-invalid": "Podaci o izvoru u manifestu nisu ispravni.",
         "min-app-version-invalid": "Najniža verzija aplikacije u manifestu nije ispravna.",
         "min-app-version-too-new": "Ovaj paket traži noviju verziju Nexusa.",
+        "older-than-installed": "Novija verzija ovog paketa je već instalirana.",
         symlink: "Paket sadrži simbolički link, što nije dozvoljeno.",
         "not-a-file": "U paketu je nešto što nije ni datoteka ni fascikla.",
         "missing-file": "Datoteka koju manifest navodi ne postoji u paketu.",

@@ -33,7 +33,12 @@ import type {
   PackVerifyResult,
 } from "../../shared/ipc.js";
 import { packRefusalCode } from "./errors.js";
-import { installPackFromDirectory, removeInstalledPack, verifyInstalledPack } from "./install.js";
+import {
+  installPackFromDirectory,
+  refuseRollback,
+  removeInstalledPack,
+  verifyInstalledPack,
+} from "./install.js";
 import { packContentBytes, type PackManifest } from "./manifest.js";
 import {
   readInstalled,
@@ -152,6 +157,8 @@ export function createPacksIpc(deps: PacksIpcDeps): PacksIpc {
         appVersion: deps.appVersion,
         publicKeyPem: deps.publicKeyPem,
       });
+      // Told now, rather than after the user has pressed Install.
+      refuseRollback(deps.userData, deps.publicKeyPem, source.manifest);
       pending = dir;
       return { outcome: "ready", candidate: toCandidate(source.manifest) };
     } catch (error) {
