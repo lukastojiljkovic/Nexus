@@ -35,8 +35,8 @@ import {
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 72 (the library module), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(72);
+  it("is at version 73 (the culture log), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(73);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -9244,6 +9244,176 @@ describe("migration 070 — the circuit search kind", () => {
     expect(
       raw.prepare("SELECT COUNT(*) AS n FROM search_entries").get(),
     ).toEqual({ n: 1 });
+    raw.close();
+  });
+});
+
+describe("migration 073 - the culture corner", () => {
+  const NOW = "2026-06-01T08:00:00.000Z";
+  const CULTURE_TABLES = [
+    "culture_visits",
+    "culture_visit_photos",
+    "culture_tracks",
+    "culture_music_entries",
+    "culture_playlists",
+    "culture_playlist_items",
+  ];
+
+  /**
+   * A migrated database holding one profile and nothing else, over a handle this
+   * block owns. The schema is what is under test here, so every row below is
+   * written with raw SQL: a store that refused a bad value before SQLite saw it
+   * would prove the store, not the CHECK.
+   */
+  function open(): Database.Database {
+    const raw = new Database(join(dir, "culture-073.db"));
+    prepareConnection(raw);
+    runMigrations(raw);
+    raw
+      .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
+      .run("p1", "personal", "P", NOW);
+    return raw;
+  }
+
+  /** One visit row, with whichever optional columns the test is exercising named in `columns`. */
+  function insertVisit(
+    raw: Database.Database,
+    columns: string,
+    values: readonly (string | number)[],
+  ): void {
+    raw
+      .prepare(
+        `INSERT INTO culture_visits
+           (id, profile_id, kind, title, venue, visit_date, created_at, updated_at${columns})
+         VALUES ('v1', 'p1', 'museum', 'Postavka', 'Muzej', '2026-05-01', ?, ?${values
+           .map(() => ", ?")
+           .join("")})`,
+      )
+      .run(NOW, NOW, ...values);
+  }
+
+  it("creates all six tables and stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "culture-fresh.db") });
+    expect(tableNames(db)).toEqual(expect.arrayContaining(CULTURE_TABLES));
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  it("refuses a visit kind outside the ten, at the schema", () => {
+    const raw = open();
+    expect(() =>
+      raw
+        .prepare(
+          `INSERT INTO culture_visits
+             (id, profile_id, kind, title, venue, visit_date, created_at, updated_at)
+           VALUES ('v1', 'p1', 'muzej', 'Postavka', 'Muzej', '2026-05-01', ?, ?)`,
+        )
+        .run(NOW, NOW),
+    ).toThrow(/CHECK constraint failed/);
+    raw.close();
+  });
+
+  it("refuses a rating off the 1-10 scale and a negative duration, at the schema", () => {
+    const raw = open();
+    expect(() => insertVisit(raw, ", rating", [11])).toThrow(/CHECK constraint failed/);
+    expect(() => insertVisit(raw, ", rating", [0])).toThrow(/CHECK constraint failed/);
+    expect(() => insertVisit(raw, ", rating", [7.5])).toThrow(/CHECK constraint failed/);
+    expect(() => insertVisit(raw, ", rating", [10])).not.toThrow();
+
+    expect(() =>
+      raw
+        .prepare(
+          `INSERT INTO culture_tracks
+             (id, profile_id, title, duration_ms, file_name, mime, size_bytes, sha256,
+              imported_at, updated_at)
+           VALUES ('t1', 'p1', 'Pesma', -1, 'p.mp3', 'audio/mpeg', 4, ?, ?, ?)`,
+        )
+        .run("a".repeat(64), NOW, NOW),
+    ).toThrow(/CHECK constraint failed/);
+    raw.close();
+  });
+
+  it("keeps a price's amount and currency together, at the schema", () => {
+    const raw = open();
+    expect(() => insertVisit(raw, ", price_minor", [70_000])).toThrow(/CHECK constraint failed/);
+    expect(() => insertVisit(raw, ", price_currency", ["RSD"])).toThrow(/CHECK constraint failed/);
+    expect(() => insertVisit(raw, ", price_minor, price_currency", [70_000, "rsd"])).toThrow(
+      /CHECK constraint failed/,
+    );
+    expect(() => insertVisit(raw, ", price_minor, price_currency", [70_000, "RSD"])).not.toThrow();
+    raw.close();
+  });
+
+  it("clears a log entry's track link when the track itself is hard-deleted", () => {
+    const raw = open();
+    raw
+      .prepare(
+        `INSERT INTO culture_tracks
+           (id, profile_id, title, duration_ms, file_name, mime, size_bytes, sha256,
+            imported_at, updated_at)
+         VALUES ('t1', 'p1', 'Pesma', 1000, 'p.mp3', 'audio/mpeg', 4, ?, ?, ?)`,
+      )
+      .run("a".repeat(64), NOW, NOW);
+    raw
+      .prepare(
+        `INSERT INTO culture_music_entries
+           (id, profile_id, artist, title, kind, entry_date, track_id, created_at, updated_at)
+         VALUES ('e1', 'p1', 'Izvođač', 'Pesma', 'track', '2026-05-01', 't1', ?, ?)`,
+      )
+      .run(NOW, NOW);
+
+    raw.prepare("DELETE FROM culture_tracks WHERE id = 't1'").run();
+    expect(
+      raw.prepare("SELECT track_id AS trackId FROM culture_music_entries WHERE id = 'e1'").get(),
+    ).toEqual({ trackId: null });
+    raw.close();
+  });
+
+  it("cascades a profile delete through all six tables, photos and items included", () => {
+    const raw = open();
+    raw
+      .prepare(
+        `INSERT INTO culture_visits
+           (id, profile_id, kind, title, venue, visit_date, created_at, updated_at)
+         VALUES ('v1', 'p1', 'theatre', 'Hamlet', 'Narodno pozorište', '2026-05-01', ?, ?)`,
+      )
+      .run(NOW, NOW);
+    raw
+      .prepare(
+        `INSERT INTO culture_visit_photos
+           (id, visit_id, file_name, mime, size_bytes, sha256, created_at)
+         VALUES ('ph1', 'v1', 'program.pdf', 'application/pdf', 4, ?, ?)`,
+      )
+      .run("a".repeat(64), NOW);
+    raw
+      .prepare(
+        `INSERT INTO culture_tracks
+           (id, profile_id, title, duration_ms, file_name, mime, size_bytes, sha256,
+            imported_at, updated_at)
+         VALUES ('t1', 'p1', 'Pesma', 1000, 'p.mp3', 'audio/mpeg', 4, ?, ?, ?)`,
+      )
+      .run("b".repeat(64), NOW, NOW);
+    raw
+      .prepare(
+        `INSERT INTO culture_playlists (id, profile_id, name, created_at, updated_at)
+         VALUES ('pl1', 'p1', 'Za kola', ?, ?)`,
+      )
+      .run(NOW, NOW);
+    raw
+      .prepare(
+        `INSERT INTO culture_playlist_items (id, playlist_id, track_id, rank, created_at)
+         VALUES ('i1', 'pl1', 't1', 'i0', ?)`,
+      )
+      .run(NOW);
+
+    raw.prepare("DELETE FROM profiles WHERE id = 'p1'").run();
+
+    for (const table of CULTURE_TABLES) {
+      expect({
+        table,
+        n: (raw.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n,
+      }).toEqual({ table, n: 0 });
+    }
     raw.close();
   });
 });

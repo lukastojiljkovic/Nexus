@@ -1060,6 +1060,43 @@ export class LibraryValidationError extends DatabaseError {}
 export class LibraryNotFoundError extends DatabaseError {}
 
 /**
+ * Thrown when a culture write is rejected at the store boundary (CULTURE,
+ * migration 073): a `kind` outside `VISIT_KINDS` or `MUSIC_LOG_KINDS`, a title,
+ * venue, artist or playlist name that is empty or over its bound after
+ * trimming, a `date` that is not a real calendar day, a `startTime` that is not
+ * a wall clock `HH:MM`, a `rating` outside 1-10, an amount that is not a
+ * non-negative whole number of minor units, a currency that is not three
+ * upper-case ISO-4217 letters, a price missing one of its two halves, a
+ * `durationMs` that is negative or past a day, a `releaseYear` outside four
+ * digits, a `mime` outside the five audio formats, a malformed
+ * `fileName`/`sizeBytes`/`sha256`, or a `trackId` that is not a live track of
+ * this profile.
+ *
+ * Also the archive reader's refusal: `importData` raises this for a value whose
+ * `version` is not 1, for a row that is not shaped like this module's export,
+ * and for a reference between rows that the archive cannot satisfy - all before
+ * a single row is written.
+ *
+ * Raised on the way IN (an untrusted caller, SEC-EL-02) and equally on the way
+ * OUT, where it reports a stored `rank` that is no longer a rank - corruption,
+ * never something to coerce, exactly as `parseStoredSchedule` treats a damaged
+ * habit schedule.
+ */
+export class CultureValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a culture operation names a row that is not live in the store's
+ * own profile - unknown, soft-deleted, or another profile's - including a photo
+ * that is not on the visit it was addressed through, an item that is not in the
+ * playlist it was addressed through, and a `trackId` no live track carries.
+ *
+ * One class for four row kinds because one store owns them all, and because the
+ * caller's question is the same in every case: "is this still here, and is it
+ * mine?"
+ */
+export class CultureNotFoundError extends DatabaseError {}
+
+/**
  * Whether a driver error is a violated UNIQUE (or partial-UNIQUE) index.
  *
  * A store that leans on such an index to make a state unrepresentable — the

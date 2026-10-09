@@ -1603,6 +1603,19 @@ describe("RestoreStore", () => {
     //    nothing to put back. They join it in the same change that teaches the
     //    archive to carry them, with `LibraryStore`'s own export/import round
     //    trip as their test.
+    //  - the six culture tables (migration 073) are exempt, and this is the
+    //    entry to remove when stage 2 lands. They ARE ordinary user content,
+    //    but their archive section does not exist yet: stage 1 built the store
+    //    and its own versioned `exportData`/`importData`, and stage 2 wires
+    //    that section into the profile archive. Until then a restore neither
+    //    wipes nor refills them. They are absent from `RESTORE_WIPE_TABLES` for
+    //    the reason they also carry no journal triggers — sync is on hold, and
+    //    that list is tied to `@nexus/sync`'s map by
+    //    `collectionGuard.test.ts`, which goes red the moment one side names a
+    //    table the other does not. The profile DELETE is unaffected: these
+    //    tables cascade from `profiles` like every other content table, which
+    //    the cascade audit in `profileStore.test.ts` proves for all six,
+    //    photos and playlist items included.
     const allowlist = new Set<string>([
       "meta",
       "profiles",
@@ -1647,6 +1660,12 @@ describe("RestoreStore", () => {
       "library_thoughts",
       "library_collections",
       "library_collection_items",
+      "culture_visits",
+      "culture_visit_photos",
+      "culture_tracks",
+      "culture_music_entries",
+      "culture_playlists",
+      "culture_playlist_items",
     ]);
 
     const wipeTables = new Set<string>(RESTORE_WIPE_TABLES);
