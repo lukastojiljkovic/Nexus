@@ -27,6 +27,8 @@ export {
   CardValidationError,
   CircuitNotFoundError,
   CircuitValidationError,
+  CultureNotFoundError,
+  CultureValidationError,
   DashboardSetNotFoundError,
   DashboardSetValidationError,
   DashboardSettingsValidationError,
@@ -755,3 +757,59 @@ export type {
   UpdateLibraryPassFields,
   UpdateLibraryThoughtFields,
 } from "./library/libraryStore.js";
+
+// --- CULTURE (the culture corner, migration 073) ----------------------------
+//
+// ONE store over six tables: visits with their photos, the listening log, the
+// user's own tracks and playlists over them. The groups are read together (the
+// period statistics take visits, entries and tracks at once) and they travel
+// together - `exportData`/`importData` are one versioned value, which is the
+// piece stage 2 plugs into the profile archive.
+//
+// The photos and the tracks name BLOBS but never hold them: the bytes live in
+// the content-addressed store main owns (`apps/desktop/src/main/attachments.ts`,
+// the same one the note, task and subject attachments use), and these rows
+// carry the name, the mime, the size and the hash exactly as those three do.
+export {
+  CULTURE_EXPORT_VERSION,
+  CultureStore,
+  MAX_CULTURE_CITY_LENGTH,
+  MAX_CULTURE_COMPANIONS_LENGTH,
+  MAX_CULTURE_DURATION_MS,
+  MAX_CULTURE_NAME_LENGTH,
+  MAX_CULTURE_NOTES_LENGTH,
+  MAX_CULTURE_PHOTO_BYTES,
+  MAX_CULTURE_PLAYLIST_NAME_LENGTH,
+  MAX_CULTURE_PLAY_COUNT,
+  MAX_CULTURE_TITLE_LENGTH,
+  MAX_CULTURE_TRACK_BYTES,
+  MAX_CULTURE_TRACK_NUMBER,
+  MAX_CULTURE_VENUE_LENGTH,
+  MAX_CULTURE_YEAR,
+  MIN_CULTURE_YEAR,
+} from "./culture/cultureStore.js";
+export type {
+  CreateEntryInput,
+  CreateTrackInput,
+  CreateVisitInput,
+  CultureDateRange,
+  CultureExport,
+  CultureExportEntry,
+  CultureExportItem,
+  CultureExportPhoto,
+  CultureExportPlaylist,
+  CultureExportTrack,
+  CultureExportVisit,
+  CultureImportSummary,
+  CultureMusicEntry,
+  CulturePhotoInput,
+  CulturePlaylist,
+  CulturePlaylistItem,
+  CulturePrice,
+  CultureTrack,
+  CultureVisit,
+  CultureVisitPhoto,
+  UpdateEntryFields,
+  UpdateTrackFields,
+  UpdateVisitFields,
+} from "./culture/cultureStore.js";

@@ -1362,3 +1362,49 @@ export type {
   LibraryStatus,
   LibraryThought,
 } from "./library/item.js";
+
+/**
+ * CULTURE - the culture corner: what you went to see, what you listened to, and
+ * the music you own. Stage 1 is this logic and the store behind it; the page
+ * arrives on the module kit.
+ *
+ * Three files, split by what a caller is asking. `kinds.ts` is the VOCABULARY -
+ * the ten visit kinds, the four listening kinds, the 1-10 rating scale and the
+ * five audio formats the library accepts - and it is exported because the store
+ * refuses a value outside those lists and stage 2's pickers have to offer
+ * exactly them; one list, read by both, is the only way a picker cannot offer a
+ * kind the schema rejects. `stats.ts` answers a PERIOD (the caller passes the
+ * rows a store read returned, which is what makes the same function answer for
+ * a month or for everything) and `format.ts` is the two durations the page
+ * draws.
+ */
+export {
+  CULTURE_AUDIO_MIMES,
+  MAX_CULTURE_RATING,
+  MIN_CULTURE_RATING,
+  MUSIC_LOG_KINDS,
+  VISIT_KINDS,
+  isCultureAudioMime,
+  isCultureRating,
+  isMusicLogKind,
+  isVisitKind,
+} from "./culture/kinds.js";
+export type { CultureAudioMime, MusicLogKind, VisitKind } from "./culture/kinds.js";
+export { culturePlaylistTotalMs, formatCultureDuration } from "./culture/format.js";
+export type { CultureDurationSource } from "./culture/format.js";
+export {
+  DEFAULT_CULTURE_TOP_ARTISTS,
+  MAX_CULTURE_TOP_ARTISTS,
+  summarizeCulture,
+} from "./culture/stats.js";
+export type {
+  CultureArtistCount,
+  CultureEntrySource,
+  CultureKindCount,
+  CultureStats,
+  CultureStatsInput,
+  CultureStatsOptions,
+  CultureTrackPlaySource,
+  CultureVenueCount,
+  CultureVisitSource,
+} from "./culture/stats.js";
