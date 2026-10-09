@@ -1546,3 +1546,51 @@ export type {
   PantryWasteItem,
   PantryWasteRow,
 } from "./pantry/pantryStock.js";
+
+/**
+ * COOK (the cookbook, stage 1: the logic and no UI). A recipe's units and their
+ * exact conversions, the line shape an ingredient has, scaling, the typed-line
+ * parser, per-serving nutrition off the same food table the fitness log reads,
+ * and the shopping list. Stage 2's page and IPC sit on this and own none of it.
+ */
+export {
+  COUNT_UNITS,
+  INGREDIENT_UNITS,
+  MASS_UNITS,
+  VOLUME_UNITS,
+  compatibleUnits,
+  convertQuantity,
+  isIngredientUnit,
+  unitFamily,
+} from "./cookbook/units.js";
+export type {
+  CountUnit,
+  IngredientUnit,
+  MassUnit,
+  UnitFamily as CookbookUnitFamily,
+  VolumeUnit,
+} from "./cookbook/units.js";
+export { roundToKitchen, scaleIngredients } from "./cookbook/ingredient.js";
+export type { IngredientLine, ScalableIngredient } from "./cookbook/ingredient.js";
+export { parseIngredientLine } from "./cookbook/parse.js";
+export { nutritionPerServing } from "./cookbook/nutrition.js";
+export type {
+  NutritionLine,
+  RecipeNutrition,
+  UncountedIngredient,
+  UncountedReason,
+} from "./cookbook/nutrition.js";
+export { buildShoppingList } from "./cookbook/shopping.js";
+export type { ShoppingLine } from "./cookbook/shopping.js";
+export {
+  COOKBOOK_COURSES,
+  PUBLIC_DOMAIN_LICENCE_ID,
+  RECIPE_SOURCES,
+  isRecipeLicenceId,
+} from "./cookbook/recipe.js";
+export type {
+  CookbookCourse,
+  RecipeLicence,
+  RecipeSource,
+  RecipeStep,
+} from "./cookbook/recipe.js";

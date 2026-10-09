@@ -35,8 +35,8 @@ import {
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 75 (the pantry), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(75);
+  it("is at version 76 (the cookbook), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(76);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -9414,6 +9414,216 @@ describe("migration 073 - the culture corner", () => {
         n: (raw.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n,
       }).toEqual({ table, n: 0 });
     }
+    raw.close();
+  });
+});
+
+describe("migration 076 — the cookbook's three tables", () => {
+  const T = "2026-06-01T08:00:00.000Z";
+
+  /** A database with one profile, opened the way `openDatabase` opens one. */
+  function open(name: string): Database.Database {
+    const raw = new Database(join(dir, name));
+    prepareConnection(raw);
+    runMigrations(raw);
+    raw
+      .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
+      .run("p1", "personal", "P", T);
+    return raw;
+  }
+
+  const RECIPE_COLUMNS =
+    "id, profile_id, title, description, cuisine, course, servings, prep_minutes, cook_minutes," +
+    " tags_json, rating, notes, favourite, source, licence_title, licence_author, licence_url," +
+    " licence_id, licence_attribution, photo_file_name, photo_mime, photo_size_bytes," +
+    " photo_sha256, created_at, updated_at";
+
+  /** A recipe row that satisfies every CHECK, so a case can break exactly one column. */
+  const RECIPE: readonly unknown[] = [
+    "r1", "p1", "Sarma", "", "srpska", "main", 4, null, 180,
+    "[]", null, "", 0, "own", null, null, null, null, null, null, null, null, null, T, T,
+  ];
+
+  function insertRecipe(raw: Database.Database, row: readonly unknown[]): void {
+    raw
+      .prepare(
+        `INSERT INTO cookbook_recipes (${RECIPE_COLUMNS}) VALUES (${"?, ".repeat(row.length - 1)}?)`,
+      )
+      .run(...row);
+  }
+
+  /** Replaces one positional value, so each CHECK is exercised on its own. */
+  function withField(index: number, value: unknown): unknown[] {
+    const row = [...RECIPE];
+    row[index] = value;
+    return row;
+  }
+
+  it("creates the three tables and stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "076-fresh.db") });
+    const names = tableNames(db);
+    expect(names).toContain("cookbook_recipes");
+    expect(names).toContain("cookbook_ingredients");
+    expect(names).toContain("cookbook_steps");
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  it("creates the recipe's list index and the photo reverse lookup, and both child indexes", () => {
+    const db = openDatabase({ path: join(dir, "076-indexes.db") });
+    const indexes = (
+      db.raw
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'index'")
+        .all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(indexes).toContain("cookbook_recipes_profile_active");
+    expect(indexes).toContain("cookbook_recipes_photo");
+    expect(indexes).toContain("cookbook_ingredients_recipe");
+    expect(indexes).toContain("cookbook_steps_recipe");
+    db.close();
+  });
+
+  it("takes a recipe nobody imported, with no licence anywhere on it", () => {
+    const raw = open("076-own.db");
+    insertRecipe(raw, RECIPE);
+    expect(raw.prepare("SELECT COUNT(*) AS n FROM cookbook_recipes").get()).toEqual({ n: 1 });
+    raw.close();
+  });
+
+  it("refuses half an attribution in BOTH directions", () => {
+    const raw = open("076-licence.db");
+    // An own recipe carrying a licence: the source says one thing and the
+    // columns say another, and no reader could tell which to believe.
+    expect(() => insertRecipe(raw, withField(17, "CC-BY-SA-4.0"))).toThrow(/CHECK/);
+    // An imported recipe with only the identifier set.
+    const partial = [...RECIPE];
+    partial[13] = "imported";
+    partial[17] = "CC-BY-SA-4.0";
+    expect(() => insertRecipe(raw, partial)).toThrow(/CHECK/);
+    // The complete pair is taken.
+    const imported = [...RECIPE];
+    imported[13] = "imported";
+    imported[14] = "Sarma iz Vojvodine";
+    imported[15] = "Neki Autor";
+    imported[16] = "https://example.org/sarma";
+    imported[17] = "CC-BY-SA-4.0";
+    imported[18] = "Neki Autor, CC BY-SA 4.0";
+    expect(() => insertRecipe(raw, imported)).not.toThrow();
+    raw.close();
+  });
+
+  it("refuses a servings count that is not a whole number in range", () => {
+    const raw = open("076-servings.db");
+    // SQLite stores 2.5 happily in an INTEGER column; the typeof CHECK is what
+    // makes half a serving unrepresentable rather than merely unusual.
+    expect(() => insertRecipe(raw, withField(6, 2.5))).toThrow(/CHECK/);
+    expect(() => insertRecipe(raw, withField(6, 0))).toThrow(/CHECK/);
+    expect(() => insertRecipe(raw, withField(6, 101))).toThrow(/CHECK/);
+    expect(() => insertRecipe(raw, withField(6, 8))).not.toThrow();
+    raw.close();
+  });
+
+  it("refuses a course outside the eleven, a rating outside 1-10 and a negative duration", () => {
+    const raw = open("076-enums.db");
+    expect(() => insertRecipe(raw, withField(5, "brunch"))).toThrow(/CHECK/);
+    expect(() => insertRecipe(raw, withField(10, 0))).toThrow(/CHECK/);
+    expect(() => insertRecipe(raw, withField(10, 11))).toThrow(/CHECK/);
+    expect(() => insertRecipe(raw, withField(8, 0))).toThrow(/CHECK/);
+    expect(() => insertRecipe(raw, withField(8, 1.5))).toThrow(/CHECK/);
+    raw.close();
+  });
+
+  it("refuses a photo whose four columns do not all travel together", () => {
+    const raw = open("076-photo.db");
+    expect(() => insertRecipe(raw, withField(22, "a".repeat(64)))).toThrow(/CHECK/);
+    const complete = [...RECIPE];
+    complete[19] = "sarma.jpg";
+    complete[20] = "image/jpeg";
+    complete[21] = 40_112;
+    complete[22] = "a".repeat(64);
+    expect(() => insertRecipe(raw, complete)).not.toThrow();
+    // A hash that is not a hash is refused even with its companions beside it.
+    expect(() => insertRecipe(raw, withField(22, "abc"))).toThrow(/CHECK/);
+    raw.close();
+  });
+
+  it("refuses an ingredient range with no lower end, one that runs backwards, and a weight with no food", () => {
+    const raw = open("076-ingredient.db");
+    insertRecipe(raw, RECIPE);
+    let attempts = 0;
+    const insert = (
+      columns: string,
+      values: readonly unknown[],
+    ): void => {
+      attempts += 1;
+      raw
+        .prepare(
+          `INSERT INTO cookbook_ingredients (id, recipe_id, position, ${columns}, name, created_at, updated_at)
+           VALUES (?, 'r1', 0, ${values.map(() => "?").join(", ")}, 'kupus', ?, ?)`,
+        )
+        .run(`i${attempts}`, ...values, T, T);
+    };
+
+    expect(() => insert("quantity, quantity_max", [null, 3])).toThrow(/CHECK/);
+    expect(() => insert("quantity, quantity_max", [3, 2])).toThrow(/CHECK/);
+    expect(() => insert("quantity, quantity_max", [2, 3])).not.toThrow();
+    expect(() => insert("quantity", [0])).toThrow(/CHECK/);
+    expect(() => insert("quantity, food_ref, grams_per_unit", [1, null, 900])).toThrow(/CHECK/);
+    // A length is what the schema checks about a unit, and the store is what
+    // checks the unit itself against `INGREDIENT_UNITS` — deliberately, so the
+    // vocabulary can grow without a migration (migration 011's own rule).
+    expect(() => insert("unit", ["x".repeat(25)])).toThrow(/CHECK/);
+    expect(() => insert("unit", ["handful"])).not.toThrow();
+    raw.close();
+  });
+
+  it("refuses a step with no text and a timer outside a day", () => {
+    const raw = open("076-step.db");
+    insertRecipe(raw, RECIPE);
+    const insert = (text: string, timer: number | null): void => {
+      raw
+        .prepare(
+          `INSERT INTO cookbook_steps (id, recipe_id, position, text, timer_minutes, created_at, updated_at)
+           VALUES ('s1', 'r1', 0, ?, ?, ?, ?)`,
+        )
+        .run(text, timer, T, T);
+    };
+    expect(() => insert("", null)).toThrow(/CHECK/);
+    expect(() => insert("Kuvati.", 0)).toThrow(/CHECK/);
+    expect(() => insert("Kuvati.", 1441)).toThrow(/CHECK/);
+    expect(() => insert("Kuvati.", 90)).not.toThrow();
+    raw.close();
+  });
+
+  it("takes the children with the recipe, and only when the recipe is really gone", () => {
+    const raw = open("076-cascade.db");
+    insertRecipe(raw, RECIPE);
+    raw
+      .prepare(
+        `INSERT INTO cookbook_ingredients
+           (id, recipe_id, position, name, created_at, updated_at)
+         VALUES ('i1', 'r1', 0, 'kupus', ?, ?)`,
+      )
+      .run(T, T);
+    raw
+      .prepare(
+        `INSERT INTO cookbook_steps (id, recipe_id, position, text, created_at, updated_at)
+         VALUES ('s1', 'r1', 0, 'Kuvati.', ?, ?)`,
+      )
+      .run(T, T);
+
+    // A soft delete is an UPDATE of a timestamp and reaches neither table.
+    raw
+      .prepare("UPDATE cookbook_recipes SET deleted_at = ?, updated_at = ? WHERE id = 'r1'")
+      .run(T, T);
+    expect(raw.prepare("SELECT COUNT(*) AS n FROM cookbook_ingredients").get()).toEqual({ n: 1 });
+    expect(raw.prepare("SELECT COUNT(*) AS n FROM cookbook_steps").get()).toEqual({ n: 1 });
+
+    // Removing the profile is the hard delete, and the cascade reaches both.
+    raw.prepare("DELETE FROM profiles WHERE id = 'p1'").run();
+    expect(raw.prepare("SELECT COUNT(*) AS n FROM cookbook_recipes").get()).toEqual({ n: 0 });
+    expect(raw.prepare("SELECT COUNT(*) AS n FROM cookbook_ingredients").get()).toEqual({ n: 0 });
+    expect(raw.prepare("SELECT COUNT(*) AS n FROM cookbook_steps").get()).toEqual({ n: 0 });
     raw.close();
   });
 });
