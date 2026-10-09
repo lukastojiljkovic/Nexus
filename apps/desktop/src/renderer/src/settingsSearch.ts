@@ -662,7 +662,7 @@ function moduleSettingsEntries(registry: ModuleRegistry): SettingsSearchEntry[] 
  */
 function moduleGalleryEntries(registry: ModuleRegistry): SettingsSearchEntry[] {
   const s = strings.settings;
-  return [...registry.byCategory()].flatMap(([, members]) =>
+  return [...registry.byGroup()].flatMap(([, members]) =>
     members.map((manifest) => ({
       id: moduleEntryId(manifest.id),
       section: "modules",
