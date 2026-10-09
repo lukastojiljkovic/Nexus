@@ -1483,3 +1483,66 @@ export type {
   MonthlyTotal,
   ServiceCostFields,
 } from "./car/costs.js";
+
+// --- PANTRY (migration 075) -------------------------------------------------
+//
+// What is at home and when it expires, as pure arithmetic: the effective expiry
+// (the earlier of the printed date and „opened + use within N days“), the
+// expiry verdict against a ladder the caller supplies, the shopping list, and
+// the waste report. The vocabularies and the three validators are exported
+// beside it for FIN's reason — stage 2's IPC layer must refuse a barcode, a unit
+// or a category by the SAME rule the store does, and one definition is the only
+// way the wire and the store cannot quietly disagree about what a minimum
+// quantity is.
+//
+// What is deliberately NOT here: anything that computes a dose. `doseNote` is
+// free text this module never parses.
+export {
+  MAX_PANTRY_DOSE_NOTE_LENGTH,
+  MAX_PANTRY_LOCATION_NAME_LENGTH,
+  MAX_PANTRY_NAME_LENGTH,
+  MAX_PANTRY_NOTES_LENGTH,
+  MAX_PANTRY_QUANTITY,
+  MAX_PANTRY_USE_WITHIN_DAYS,
+  PANTRY_BARCODE_LENGTHS,
+  PANTRY_CATEGORIES,
+  PANTRY_LOG_REASONS,
+  PANTRY_UNITS,
+  isPantryBarcode,
+  isPantryCategory,
+  isPantryLogReason,
+  isPantryUnit,
+  validatePantryChange,
+  validatePantryItem,
+  validatePantryLocation,
+} from "./pantry/pantryItem.js";
+export type {
+  PantryCategory,
+  PantryChange,
+  PantryItemFields,
+  PantryLogReason,
+  PantryProblem,
+  PantryProblemCode,
+  PantryUnit,
+} from "./pantry/pantryItem.js";
+export {
+  PantryInputError,
+  effectiveExpiry,
+  shoppingList,
+  stockStatus,
+  wasteReport,
+} from "./pantry/pantryStock.js";
+export type {
+  PantryEffectiveExpiry,
+  PantryExpirySource,
+  PantryExpiryStatus,
+  PantryLocationRef,
+  PantryShoppingGroup,
+  PantryShoppingLine,
+  PantryStockItem,
+  PantryStockStatus,
+  PantryWasteEntry,
+  PantryWasteInput,
+  PantryWasteItem,
+  PantryWasteRow,
+} from "./pantry/pantryStock.js";

@@ -1148,6 +1148,39 @@ export class CarValidationError extends DatabaseError {}
 export class CarNotFoundError extends DatabaseError {}
 
 /**
+ * Thrown when a pantry write is rejected at the store boundary (PANTRY,
+ * migration 075), naming the failing field from `@nexus/core`'s
+ * `validatePantryItem`/`validatePantryLocation`/`validatePantryChange`
+ * (`PantryProblem[]`) rather than the raw problem list — an empty or over-long
+ * name, a category or unit outside its closed list, a negative or unbounded
+ * quantity, a minimum that is not above zero, an expiry or opening date that is
+ * not a real calendar day, an opening date in the future, a use-within that is
+ * not a whole number of days, an over-long note, a barcode that is not 8, 12, 13
+ * or 14 digits, an unbounded location id, a change of zero, or a change whose
+ * sign contradicts its reason.
+ *
+ * It is also the error the store raises for the rules a validator cannot see: a
+ * patch that tries to set `quantity` — quantity moves only through
+ * `changeQuantity`, which is what writes the log — a change that would leave the
+ * item below zero, a reorder whose neighbours do not describe a gap, a location
+ * that still holds live items, and every refusal in `importData`.
+ *
+ * Raised on the way IN because renderer input is untrusted (SEC-EL-02): main
+ * validates the same fields at the IPC boundary, and a store is never the place
+ * that assumes its caller did.
+ */
+export class PantryValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a pantry operation targets a row that is not there for THIS store
+ * — an unknown item or location, a soft-deleted one, or a row owned by another
+ * profile. Every statement in
+ * `PantryStore` is scoped by `profile_id`, so another profile's pantry is not
+ * merely invisible: naming it is this error.
+ */
+export class PantryNotFoundError extends DatabaseError {}
+
+/**
  * Whether a driver error is a violated UNIQUE (or partial-UNIQUE) index.
  *
  * A store that leans on such an index to make a state unrepresentable — the
