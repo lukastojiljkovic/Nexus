@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ExportModuleData } from "@nexus/core";
-import { ModuleHost, type ModulePlatform } from "./moduleIpc.js";
+import { openDatabase, type NexusDatabase } from "@nexus/db";
+import { ModuleHost, ModuleImportError, type ModulePlatform } from "./moduleIpc.js";
 import { defineModuleContract } from "../shared/moduleApi.js";
 
 /**
@@ -10,7 +11,8 @@ import { defineModuleContract } from "../shared/moduleApi.js";
  * module happens to do: the three refusals (an undeclared op, a channel outside
  * the module's own prefix, a message from an untrusted sender), the channel set
  * a build answers on, what a handler is handed, the armed-timer lifecycle the
- * host owns, and the archive section's two impossible-to-recover-from cases.
+ * host owns, and the archive section's rule that a refusal - at the preview, or
+ * by one module in the middle of an apply - leaves the profile as it found it.
  * The platform is a double because `electron` cannot run under Vitest — that
  * split is the whole reason `moduleIpc.ts` has no `electron` import — and it also
  * makes the clock something a test can move instead of wait for.
@@ -18,6 +20,22 @@ import { defineModuleContract } from "../shared/moduleApi.js";
 
 /** The one event value the double's sender check accepts, so "untrusted" is a value rather than a mock's mood. */
 const TRUSTED = { trusted: true };
+
+/**
+ * The database the platform hands out, opened the way every other main-process
+ * and db test opens one. In memory, and shared by the tests in one `it` only:
+ * what these tests assert about it is that a refused section leaves it exactly
+ * as it was, which needs a real handle and a real rollback rather than a mock.
+ */
+let db: NexusDatabase;
+
+beforeEach(() => {
+  db = openDatabase({ path: ":memory:" });
+});
+
+afterEach(() => {
+  db.close();
+});
 
 interface Harness {
   readonly platform: ModulePlatform;
@@ -38,9 +56,9 @@ function harness(): Harness {
     assertTrustedSender: (event) => {
       if (event !== TRUSTED) throw new Error("Nexus: that message did not come from this app.");
     },
-    // Handed straight through to `call.profileDb`'s opener: this test is about
-    // the wiring, and a real handle is the timers module's own test's business.
-    database: () => ({}) as never,
+    // Handed straight through to `call.profileDb`'s opener and to the archive
+    // section's transaction, so both run against a real connection.
+    database: () => db.raw,
     notify: (copy) => toasts.push(copy),
     schedule: (atMs, run) => {
       const entry = { atMs, run, cancelled: false };
@@ -230,6 +248,20 @@ describe("ModuleHost's archive section", () => {
     return { kit, host, ctx };
   }
 
+  /** A SECOND module, so a section can name two and the all-or-nothing rule has two things to be all-or-nothing about. */
+  const otherContract = defineModuleContract<"other", SampleOps>("other", ["ping", "echo"]);
+
+  /** The error a call refuses with, so a test can assert the CODE beside the sentence `restore.ts` maps onto the wire. */
+  function refusalOf(run: () => void): ModuleImportError {
+    try {
+      run();
+    } catch (error) {
+      if (error instanceof ModuleImportError) return error;
+      throw error;
+    }
+    throw new Error("Test setup: the call was expected to refuse.");
+  }
+
   it("omits a module that has nothing to say, rather than writing undefined", () => {
     const { host, ctx } = withExporting();
     ctx.exportData(() => undefined);
@@ -254,16 +286,168 @@ describe("ModuleHost's archive section", () => {
   it("refuses a section naming a module this build does not know, and says which", () => {
     const { host } = withExporting();
 
-    expect(() => host.assertKnownModules([{ moduleId: "ghost", payload: null }])).toThrow(
+    expect(() => host.assertImportable([{ moduleId: "ghost", payload: null }])).toThrow(
       /module "ghost", which this build does not know/,
     );
+  });
+
+  it("refuses a payload a module will not take, naming the module and the reason", () => {
+    const { host, ctx } = withExporting();
+    ctx.importData({
+      parse: (value) => {
+        if (value === "bad") throw new Error("sample data: not a payload this module knows.");
+        return value;
+      },
+      apply: () => undefined,
+    });
+
+    const refused = refusalOf(() =>
+      host.assertImportable([{ moduleId: "sample", payload: "bad" }]),
+    );
+
+    // The code is what `restore.ts` turns into its `invalid-module-data` problem,
+    // and the module's own sentence rides inside the message: "which module
+    // refused, and why" is what a reader can act on.
+    expect(refused.code).toBe("invalid-module-data");
+    expect(refused.message).toMatch(/module "sample"/);
+    expect(refused.message).toMatch(/not a payload this module knows/);
+    // A module id this build did not adopt keeps its own code.
+    expect(refusalOf(() => host.assertImportable([{ moduleId: "ghost", payload: null }])).code).toBe(
+      "unknown-module",
+    );
+  });
+
+  it("writes nothing when it refuses a section, previewed or applied", () => {
+    const { host, ctx } = withExporting();
+    // A table this test owns, so "wrote nothing" is a row count rather than a
+    // claim: the module's `apply` below is what would put a row in it.
+    db.raw.exec("CREATE TABLE kit_probe (id TEXT PRIMARY KEY)");
+    ctx.importData({
+      parse: (value) => value,
+      apply: (_parsed, session) => {
+        for (const profileId of session.profileIds) {
+          session.profileDb(profileId, (handle) => {
+            handle.prepare("INSERT INTO kit_probe (id) VALUES (?)").run(profileId);
+          });
+        }
+      },
+    });
+
+    expect(() => host.assertImportable([{ moduleId: "sample", payload: 1 }])).not.toThrow();
+    expect(() =>
+      host.applyImports(
+        [{ moduleId: "sample", payload: 1 }, { moduleId: "ghost", payload: 2 }],
+        ["profile-1"],
+      ),
+    ).toThrow(/module "ghost"/);
+
+    expect(db.raw.prepare("SELECT id FROM kit_probe").all()).toEqual([]);
+  });
+
+  it("parses every payload before it applies any of them", () => {
+    const kit = harness();
+    const host = new ModuleHost(kit.platform);
+    const first = host.adopt(contract);
+    const second = host.adopt(otherContract);
+    let applied = 0;
+    first.importData({
+      parse: (value) => value,
+      apply: () => {
+        applied += 1;
+      },
+    });
+    second.importData({
+      parse: () => {
+        throw new Error("other data: a payload this module will not take.");
+      },
+      apply: () => {
+        applied += 1;
+      },
+    });
+
+    expect(() =>
+      host.applyImports(
+        [
+          { moduleId: "sample", payload: 1 },
+          { moduleId: "other", payload: 2 },
+        ],
+        ["profile-1"],
+      ),
+    ).toThrow(/module "other"/);
+
+    // The first module's payload was fine and its `apply` still did not run: a
+    // section is read whole before any of it is written.
+    expect(applied).toBe(0);
+  });
+
+  it("rolls back every module's writes when a later one refuses", () => {
+    const kit = harness();
+    const host = new ModuleHost(kit.platform);
+    const first = host.adopt(contract);
+    const second = host.adopt(otherContract);
+    db.raw.exec("CREATE TABLE kit_probe (id TEXT PRIMARY KEY)");
+    first.importData({
+      parse: (value) => value,
+      apply: (_parsed, session) => {
+        for (const profileId of session.profileIds) {
+          session.profileDb(profileId, (handle) => {
+            // Through the handle's own transaction, exactly as a store writes:
+            // nested inside the kit's, it becomes a savepoint.
+            handle
+              .transaction(() => {
+                handle.prepare("INSERT INTO kit_probe (id) VALUES (?)").run(profileId);
+              })();
+          });
+        }
+      },
+    });
+    second.importData({
+      parse: (value) => value,
+      apply: () => {
+        throw new Error("other data: refused after the first module wrote.");
+      },
+    });
+
+    expect(() => host.applyImports([{ moduleId: "sample", payload: 1 }], ["profile-1"])).toThrow(
+      /refused after the first module wrote/,
+    );
+
+    // One transaction covers every module, so the row the first one wrote is gone.
+    expect(db.raw.prepare("SELECT id FROM kit_probe").all()).toEqual([]);
+  });
+
+  it("applies every adopted module, the one the section omits with no payload at all", () => {
+    const kit = harness();
+    const host = new ModuleHost(kit.platform);
+    const first = host.adopt(contract);
+    const second = host.adopt(otherContract);
+    const seen: unknown[] = [];
+    first.importData({
+      parse: (value) => value,
+      apply: (parsed) => {
+        seen.push(parsed);
+      },
+    });
+    second.importData({
+      parse: (value) => value,
+      apply: (parsed) => {
+        seen.push(parsed === undefined ? "absent" : parsed);
+      },
+    });
+
+    host.applyImports(section, ["profile-1"]);
+
+    expect(seen).toEqual([{ any: "thing" }, "absent"]);
   });
 
   it("refuses every entry before running a single importer", () => {
     const { host, ctx } = withExporting();
     let imported = 0;
-    ctx.importData(() => {
-      imported += 1;
+    ctx.importData({
+      parse: (value) => value,
+      apply: () => {
+        imported += 1;
+      },
     });
 
     expect(() =>
@@ -278,8 +462,11 @@ describe("ModuleHost's archive section", () => {
   it("applies a known section to every profile the session names", () => {
     const { host, ctx } = withExporting();
     const applied: { profileId: string; payload: unknown }[] = [];
-    ctx.importData((value, session) => {
-      for (const profileId of session.profileIds) applied.push({ profileId, payload: value });
+    ctx.importData({
+      parse: (value) => value,
+      apply: (parsed, session) => {
+        for (const profileId of session.profileIds) applied.push({ profileId, payload: parsed });
+      },
     });
 
     host.applyImports(section, ["profile-1", "profile-2"]);

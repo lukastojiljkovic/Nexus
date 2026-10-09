@@ -1620,12 +1620,13 @@ describe("RestoreStore", () => {
       // equal to, and a module built on the kit may not edit `@nexus/sync` (its
       // whole point is that a new module edits no shared file). So the kit's rule
       // is the opposite one, stated in `ModuleContext.importData`: a module
-      // REPLACES ITS OWN ROWS, inside the same restore, when the archive names it
-      // — `main/restore.ts` calls `restoreModuleData` immediately after the
-      // replace has emptied every table above. An archive written before 1.42
-      // (or by a build with no kit modules) names none, so nothing runs and these
-      // rows stand UNTOUCHED, exactly as `private_notes` behaves with no
-      // `privateSealed`.
+      // REPLACES ITS OWN ROWS, inside the same restore, and `main/restore.ts`
+      // calls `restoreModuleData` immediately after the replace has rewritten
+      // every table above. Every adopted module runs there, in ONE transaction,
+      // and one the archive's section does not name is handed `undefined` and
+      // resets its own rows to empty — so these tables not being on the wipe list
+      // is not a hole: an archive that says nothing about Timers leaves a profile
+      // with no presets, exactly as a pre-1.42 archive does.
       "timers_presets",
       "timers_countdowns",
       "timers_settings",

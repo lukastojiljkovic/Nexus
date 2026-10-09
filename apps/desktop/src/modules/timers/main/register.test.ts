@@ -357,6 +357,29 @@ describe("the timers archive section", () => {
     expect(restored.countdowns).toEqual([]);
   });
 
+  it("empties the archived state when the section names no Timers entry", async () => {
+    const kit = harness();
+    const profileId = createProfile();
+    await call(kit.host, "timers:createPreset", { profileId, name: "Kafa", durationSeconds: 240 });
+    await call(kit.host, "timers:setSoundOnEnd", { profileId, soundOnEnd: false });
+    // What the module answers for a profile with no timers_settings row: the
+    // value an emptied profile has to show, read from the store rather than
+    // restated in this test.
+    const rowlessProfile = await call<{ settings: unknown }>(kit.host, "timers:list", {
+      profileId: createProfile(),
+    });
+
+    // An archive with no Timers entry is what a restore of a pre-1.42 archive
+    // hands over, and a restore replaces the profile whole.
+    kit.host.applyImports([], [profileId]);
+
+    const after = await call<{ presets: unknown[]; settings: unknown }>(kit.host, "timers:list", {
+      profileId,
+    });
+    expect(after.presets).toEqual([]);
+    expect(after.settings).toEqual(rowlessProfile.settings);
+  });
+
   it("writes nothing for a session that names more than one profile, rather than guess", () => {
     const kit = harness();
     expect(kit.host.collectExports(["profile-1", "profile-2"])).toEqual([]);

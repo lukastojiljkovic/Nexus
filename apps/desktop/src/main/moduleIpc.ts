@@ -97,6 +97,54 @@ export interface ModuleSession {
   now(): number;
 }
 
+/**
+ * One module's archive import, in the two halves the kit runs at two different
+ * moments and with two different promises.
+ *
+ * **`parse` is pure and total.** It validates the WHOLE payload - every field,
+ * every row, every bound, and the version the payload was written with - and
+ * throws on anything it will not take, naming what is wrong. The kit runs it at
+ * the PREVIEW (so the refusal reaches the user before they confirm a restore
+ * that replaces their profile) and again at apply time, before any module
+ * writes. It must write nothing at all: the preview has nothing to protect
+ * itself with if it does.
+ *
+ * **`apply` writes, and is handed exactly what this module's own `parse`
+ * answered** - or `undefined` when the archive says nothing about this module.
+ * A restore replaces a profile whole, so `undefined` is not "leave it alone":
+ * it is this profile's archived state going back to empty, which every module
+ * that archives anything has to express in its own tables.
+ *
+ * The pair is registered together so the two cannot disagree about the type:
+ * `T` is inferred once, and `apply` receives what `parse` returned or nothing.
+ */
+export interface ModuleImport<T> {
+  parse(value: unknown): T;
+  apply(parsed: T | undefined, session: ModuleSession): void;
+}
+
+/**
+ * Why a kit section was refused: a module id this build did not adopt (or one
+ * it cannot restore), or a payload the module's own `parse` will not take.
+ *
+ * A code rather than only a sentence, because the two become different problems
+ * on the wire (`RestoreProblemCode`): `unknown-module` sends the reader to a
+ * newer build, and `invalid-module-data` says the archive's own payload is what
+ * is wrong. `main/restore.ts` maps one onto the other, which is why the class
+ * lives here rather than being duplicated at the seam.
+ */
+export type ModuleImportProblemCode = "unknown-module" | "invalid-module-data";
+
+export class ModuleImportError extends Error {
+  readonly code: ModuleImportProblemCode;
+
+  constructor(code: ModuleImportProblemCode, message: string) {
+    super(message);
+    this.name = "ModuleImportError";
+    this.code = code;
+  }
+}
+
 /** What one module's `register(ctx)` is handed. */
 export interface ModuleContext<Id extends string, Ops extends ModuleOps> {
   readonly id: Id;
@@ -133,11 +181,11 @@ export interface ModuleContext<Id extends string, Ops extends ModuleOps> {
    */
   exportData(run: (session: ModuleSession) => unknown): void;
   /**
-   * Registers this module's archive import. The run function MUST validate
-   * everything it is given and throw before it writes anything: main calls every
-   * importer for a section before it writes any of it.
+   * Registers this module's archive import (see `ModuleImport`): `parse` runs
+   * when the section is read, `apply` inside the one transaction every module's
+   * write shares.
    */
-  importData(run: (value: unknown, session: ModuleSession) => void): void;
+  importData<T>(spec: ModuleImport<T>): void;
 }
 
 /**
@@ -192,7 +240,7 @@ export class ModuleHost implements ModuleHostSurface {
   private readonly sessionStarts: ((session: ModuleSession) => void)[] = [];
   private readonly sessionEnds: (() => void)[] = [];
   private readonly exporters = new Map<string, (session: ModuleSession) => unknown>();
-  private readonly importers = new Map<string, (value: unknown, session: ModuleSession) => void>();
+  private readonly importers = new Map<string, ModuleImport<unknown>>();
   private readonly armed: Armed[] = [];
   /** Every module this build adopted - which is what "a module id this build knows" means. */
   private readonly adoptedIds = new Set<string>();
@@ -257,8 +305,15 @@ export class ModuleHost implements ModuleHostSurface {
       exportData: (run) => {
         this.exporters.set(contract.id, run);
       },
-      importData: (run) => {
-        this.importers.set(contract.id, run);
+      importData: <T>(spec: ModuleImport<T>) => {
+        this.importers.set(contract.id, {
+          parse: spec.parse,
+          // The map holds every module's pair under one key, so the payload type
+          // is erased here. What keeps `apply` receiving exactly what this
+          // module's own `parse` answered is the single `T` that produced both
+          // halves - erasing it is the only cast that fact needs.
+          apply: spec.apply as (parsed: unknown, session: ModuleSession) => void,
+        });
       },
     };
     return context;
@@ -341,54 +396,97 @@ export class ModuleHost implements ModuleHostSurface {
   }
 
   /**
-   * Refuses an archive section naming a module this build did not adopt.
+   * Refuses an archive section this build cannot import whole, naming what is
+   * wrong. Three refusals, in the order a reader would want them:
+   *
+   *  1. a module id this build did not adopt - the data would be lost, and the
+   *     message says so;
+   *  2. a module this build adopted but has no importer for - it cannot restore
+   *     what the archive carries;
+   *  3. a payload that module's own `parse` throws on, wrapped with the module's
+   *     name and refused here rather than half-read later.
    *
    * **Its own method, called TWICE, and the second call is the point.** The
-   * preview calls it so the user is told before they confirm, and `applyImports`
-   * calls it again so a plan confirmed against one build cannot be applied by
-   * another that moved on. The message names the module, because "which module"
-   * is the only thing the reader can act on: update Nexus, or import the archive
-   * with the build that wrote it.
+   * preview calls it so the user is told before they confirm a restore that
+   * replaces their profile, and `applyImports` runs the same parse again before
+   * any module writes - a plan confirmed against one build cannot be applied by
+   * another that moved on. Nothing is written by either call: every refusal
+   * leaves the profile exactly as it was found.
    */
-  assertKnownModules(section: readonly ExportModuleData[]): void {
-    for (const { moduleId } of section) {
-      if (!this.adoptedIds.has(moduleId)) {
-        throw new Error(
-          `This archive carries data for module "${moduleId}", which this build does not know. Update Nexus or import the archive with the build that wrote it.`,
-        );
-      }
-      if (!this.importers.has(moduleId)) {
-        throw new Error(
-          `This archive carries data for module "${moduleId}", which this build cannot restore.`,
-        );
-      }
-    }
+  assertImportable(section: readonly ExportModuleData[]): void {
+    this.parseImports(section);
   }
 
   /**
-   * Reads the archive's `modules` section, and refuses the two things that must
-   * never be quiet: a module this build does not know (its data would be lost),
-   * and a payload a module's own importer will not take. Every importer runs -
-   * and validates - BEFORE any of them writes, so a refused archive leaves the
-   * profile exactly as it found it.
+   * Reads every payload in the section, and answers them by module id. The one
+   * place a payload is read, so `assertImportable` and `applyImports` cannot
+   * disagree about what "this build can import it" means.
+   */
+  private parseImports(section: readonly ExportModuleData[]): Map<string, unknown> {
+    const parsed = new Map<string, unknown>();
+    for (const { moduleId } of section) {
+      if (!this.adoptedIds.has(moduleId)) {
+        throw new ModuleImportError(
+          "unknown-module",
+          `This archive carries data for module "${moduleId}", which this build does not know. Update Nexus or import the archive with the build that wrote it.`,
+        );
+      }
+    }
+    for (const { moduleId, payload } of section) {
+      const importer = this.importers.get(moduleId);
+      if (importer === undefined) {
+        throw new ModuleImportError(
+          "unknown-module",
+          `This archive carries data for module "${moduleId}", which this build cannot restore.`,
+        );
+      }
+      try {
+        parsed.set(moduleId, importer.parse(payload));
+      } catch (error) {
+        // The module's own sentence rides inside this one: "which module refused,
+        // and why" is what the reader can act on, and a swallowed reason would
+        // leave the wire with a problem code and nothing to explain it.
+        throw new ModuleImportError(
+          "invalid-module-data",
+          `This archive carries data for module "${moduleId}" that this build cannot read: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    }
+    return parsed;
+  }
+
+  /**
+   * Applies the archive's `modules` section, all of it or none of it.
+   *
+   * **Parsed first, written second.** Every payload is read before a single
+   * module writes, so a refusal costs nothing: a module that will not take its
+   * payload is refused while the profile is still untouched, rather than after
+   * the modules ahead of it have already written.
+   *
+   * **Then EVERY adopted module's `apply` runs, in one transaction**, inside
+   * `platform.database().transaction(...)()` - where each store's own transaction
+   * nests as a savepoint. A module the section names gets its parsed payload; a
+   * module it does not name gets `undefined`, which is the module's instruction
+   * to reset its archived state to empty (a restore replaces a profile whole).
+   * Because the whole set is one transaction, a module that throws in its own
+   * `apply` rolls back every module's writes with it, and the profile is left
+   * exactly as the archive's reader found it.
    */
   applyImports(section: readonly ExportModuleData[], profileIds: readonly string[]): void {
-    this.assertKnownModules(section);
-    if (section.length === 0) return;
+    const parsed = this.parseImports(section);
+    if (this.importers.size === 0) return;
     const session: ModuleSession = {
       profileIds,
       profileDb: (profileId, open) => open(this.platform.database(), profileId),
       now: () => this.platform.now(),
     };
-    // Every id is known and every entry has an importer by this point, so this
-    // loop cannot half-apply a section for a reason the archive itself states.
-    // What it CAN still do is refuse a value it does not understand, which is
-    // why an importer validates its whole payload before its first write
-    // (`ModuleContext.importData` says so) - the kit cannot police that from
-    // here, and the timers module's own test pins it.
-    for (const { moduleId, payload } of section) {
-      this.importers.get(moduleId)?.(payload, session);
-    }
+    this.platform.database().transaction(() => {
+      for (const [moduleId, importer] of this.importers) {
+        importer.apply(parsed.get(moduleId), session);
+      }
+    })();
   }
 
   /** The call object one handler is given; built per call so a stale `now` is impossible. */

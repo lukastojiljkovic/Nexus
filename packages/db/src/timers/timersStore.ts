@@ -225,18 +225,25 @@ export class TimersStore {
    * The rows are re-minted rather than restored by id: a preset's id is this
    * database's own key and no other profile holds it, so the archive carries what
    * the user typed - a name and a duration - and the keys are made here. Rows
-   * arrive already validated and normalised by the module's own importer, and
+   * arrive already validated and normalised by the module's own `parse`, and
    * every bound is checked again below anyway, because a transaction that is
    * going to roll back is a better answer than a row that violates a CHECK.
    *
    * The countdowns are deliberately NOT touched: they are live clocks, the
    * archive carries none (`main/imex.ts` says why), and a restore that replaced a
    * profile's content says nothing about a timer that is still running.
+   *
+   * `soundOnEnd: null` is an archive that carried no preference at all - which
+   * is what a section that names no Timers entry means - and it DELETES the
+   * settings row rather than writing a value. The profile then answers whatever
+   * `settings()` answers where no row exists, which is the only place the
+   * default is written down; a module that restated the boolean would be a
+   * second copy of it.
    */
   replaceFromArchive(
     input: {
       readonly presets: readonly { name: string; durationSeconds: number }[];
-      readonly soundOnEnd: boolean;
+      readonly soundOnEnd: boolean | null;
     },
     now: string,
   ): void {
@@ -262,7 +269,11 @@ export class TimersStore {
       for (const row of rows) {
         insert.run(row.id, this.profileId, row.name, row.durationSeconds, stamp, stamp);
       }
-      this.setSoundOnEnd(input.soundOnEnd, stamp);
+      if (input.soundOnEnd === null) {
+        this.db.prepare("DELETE FROM timers_settings WHERE profile_id = ?").run(this.profileId);
+      } else {
+        this.setSoundOnEnd(input.soundOnEnd, stamp);
+      }
     })();
   }
 

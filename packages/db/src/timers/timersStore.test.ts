@@ -208,8 +208,27 @@ describe("TimersStore replaceFromArchive (ADR-090 §imex)", () => {
 
     // An archive that names no preset is an archive whose profile had none, which
     // is a different statement from "say nothing about them" — that is the empty
-    // section, and it never reaches this method.
+    // section, and it arrives here as `soundOnEnd: null`, below.
     expect(timers.listPresets()).toEqual([]);
+  });
+
+  it("leaves no settings row when the archive carried no preference", () => {
+    const profileId = createProfile();
+    const timers = store(profileId);
+    timers.setSoundOnEnd(false, NOW);
+    // Read the default off a profile that has never held a Timers row rather than
+    // restating it here: the value is the store's, and a test that hard-coded it
+    // would keep passing the day the store's answer changed.
+    const rowlessProfile = store().settings();
+
+    timers.replaceFromArchive({ presets: [], soundOnEnd: null }, LATER);
+
+    expect(timers.settings()).toEqual(rowlessProfile);
+    expect(
+      db.raw
+        .prepare("SELECT count(*) AS n FROM timers_settings WHERE profile_id = ?")
+        .get(profileId),
+    ).toEqual({ n: 0 });
   });
 
   it("writes nothing at all when one row is refused", () => {

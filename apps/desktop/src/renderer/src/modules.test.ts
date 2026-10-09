@@ -193,6 +193,8 @@ describe("createModuleRegistry", () => {
       "calendar",
       "habits",
       "focus",
+      // The first discovered module, in the group it declares (ADR-090).
+      "timers",
     ]);
     expect(grouped.get("knowledge")?.map((manifest) => manifest.id)).toEqual([
       "notes",
@@ -209,8 +211,6 @@ describe("createModuleRegistry", () => {
       "canvas",
       "electronics",
       "pro",
-      // The first discovered module, in the category it declares (ADR-090).
-      "timers",
     ]);
     // The shell group is the two rows nothing may switch off, and the sidebar is
     // the one caller that splits it: its first member heads the rail, the rest

@@ -315,17 +315,27 @@ export function register(host: ModuleHostSurface): void {
     return buildTimersExport(timers.listPresets(), timers.settings());
   });
 
-  ctx.importData((value, session) => {
-    // Everything is validated BEFORE the first write, which is what
-    // `ModuleContext.importData` requires: an archive that is refused must leave
-    // every profile exactly as it found it.
-    const payload = parseTimersExport(value);
-    for (const profileId of session.profileIds) {
-      timersStore(session, profileId).replaceFromArchive(
-        { presets: payload.presets, soundOnEnd: payload.settings.soundOnEnd },
-        instant(session.now()),
-      );
-    }
+  ctx.importData({
+    // The pure half, run by the host at the preview and again before any module
+    // writes: it reads the whole payload - the version first - and throws on
+    // anything it will not take, so a refused archive never reaches a write.
+    parse: parseTimersExport,
+    // The writing half. `undefined` is an archive that says nothing about
+    // Timers, which for a restore that replaces a profile whole means empty:
+    // no presets, and no preference row at all, so the profile answers the
+    // store's own default rather than a boolean restated here. The countdowns
+    // are untouched either way - they are clocks, and the archive carries none.
+    apply: (payload, session) => {
+      for (const profileId of session.profileIds) {
+        timersStore(session, profileId).replaceFromArchive(
+          {
+            presets: payload?.presets ?? [],
+            soundOnEnd: payload?.settings.soundOnEnd ?? null,
+          },
+          instant(session.now()),
+        );
+      }
+    },
   });
 }
 

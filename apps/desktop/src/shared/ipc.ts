@@ -6930,6 +6930,12 @@ export type ArchiveReadErrorCode =
  * would lose. Core carries such a row without judging it - it has no module
  * registry - so the refusal is main's, raised at the PREVIEW, where the user
  * still has a profile left to protect.
+ *
+ * `invalid-module-data` is the third and the second half of the same refusal: a
+ * module this build DOES have may still refuse the payload it is given (a
+ * version it does not know, a row that is not its shape). Each module's own
+ * `parse` is what says so, and it is run at the preview and again before any
+ * module writes, so this code reaches the user before they confirm either time.
  */
 export type RestoreProblemCode =
   | "missing-manifest"
@@ -6947,7 +6953,8 @@ export type RestoreProblemCode =
   | "missing-ydoc"
   | "missing-blob"
   | "profile-kind-mismatch"
-  | "unknown-module";
+  | "unknown-module"
+  | "invalid-module-data";
 
 /** One thing wrong with an archive. `detail` is a machine-ish English fragment (a field name, an id) — never a sentence for a user; the renderer owns all Serbian copy. */
 export interface RestoreProblem {
@@ -7229,8 +7236,9 @@ export type ImportRecordType =
   // The module kit's section (ADR-090, interchange `1.42.0`): one row per
   // discovered module that had something to export. Core validates the row's
   // shape and never its payload, and main refuses an id this build did not
-  // adopt - so the type carries the record and the REFUSAL is
-  // `RestoreProblemCode`'s `unknown-module`, exactly as the comment there says.
+  // adopt or a payload the module itself will not take - so the type carries the
+  // record and the REFUSALS are `RestoreProblemCode`'s `unknown-module` and
+  // `invalid-module-data`, exactly as the comment there says.
   | "module-data";
 
 /**

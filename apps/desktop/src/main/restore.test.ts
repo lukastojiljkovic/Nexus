@@ -100,6 +100,7 @@ import * as apkgReaderModule from "./apkgReader.js";
 import * as archiveReaderModule from "./archiveReader.js";
 import * as csvReaderModule from "./csvReader.js";
 import * as icsReaderModule from "./icsReader.js";
+import { ModuleImportError } from "./moduleIpc.js";
 import { deriveRestoredNotes, gatherProfileData, gatherProfileSettings } from "./profileData.js";
 import type { ProfileDataDeps } from "./profileData.js";
 import {
@@ -203,21 +204,27 @@ function createProfile(handle: NexusDatabase, name: string): string {
  * own tests (`moduleIpc.test.ts`) against the real host. Here they are a seam,
  * because what THESE tests are responsible for is the ordering and the refusal
  * the restore orchestration owes: a section that rides the archive, is refused
- * at the preview when this build does not know an id, and is applied after the
- * replace has emptied the profile.
+ * at the preview when this build does not know an id or a payload its module
+ * will not take, and is applied after the replace has rewritten the profile.
  */
 interface TestModuleSeam {
   /** One profile's section, as the host's `collectExports` produces it. Written by `restoreModuleData`, so a re-read after a restore reports what the archive carried. */
   exportsByProfile: Map<string, readonly ExportModuleData[]>;
   /** The ids this build adopted; an archive naming anything else is refused. */
   knownIds: ReadonlySet<string>;
+  /**
+   * How this build's own modules read a payload, by module id. A module absent
+   * here takes whatever it is given; a test that needs the other answer puts a
+   * throwing parser in - which is the second half of the refusal the preview owes.
+   */
+  parsers: Map<string, (value: unknown) => unknown>;
   /** Every `restoreModuleData` call, in order. */
   applied: { profileId: string; modules: readonly ExportModuleData[] }[];
 }
 
 /** A seam with nothing exported and `timers` adopted — what a suite that does not care about the section gets. */
 function moduleSeam(knownIds: readonly string[] = ["timers"]): TestModuleSeam {
-  return { exportsByProfile: new Map(), knownIds: new Set(knownIds), applied: [] };
+  return { exportsByProfile: new Map(), knownIds: new Set(knownIds), parsers: new Map(), applied: [] };
 }
 
 /** Every `ProfileDataDeps` getter, bound to one database — the same construction `main/index.ts` would do for a real profile, minus Electron. */
@@ -269,7 +276,7 @@ function profileDataDeps(handle: NexusDatabase, modules = moduleSeam()): Profile
     canvasStore: (profileId) => new CanvasStore(handle.raw, profileId),
     electronicsStore: (profileId) => new ElectronicsStore(handle.raw, profileId),
     // The kit's section (ADR-090), over the seam above. The refusal's WORDING is
-    // duplicated from `main/moduleIpc.ts`'s `assertKnownModules`, exactly as
+    // duplicated from `main/moduleIpc.ts`'s `assertImportable`, exactly as
     // `TestPrivSeam` duplicates `privResealForRestore`'s contract: this file is
     // about the orchestration around it, and the real message is asserted where
     // the real host is.
@@ -344,16 +351,33 @@ function makeTestDeps(
     ...profileDataDeps(handle, modules),
     restoreStore: (profileId) => new RestoreStore(handle.raw, profileId),
     foreignImportStore: (profileId) => new ForeignImportStore(handle.raw, profileId),
-    // The kit's section (ADR-090), over the seam above. The refusal's WORDING is
-    // duplicated from `main/moduleIpc.ts`'s `assertKnownModules`, exactly as
-    // `TestPrivSeam` duplicates `privResealForRestore`'s contract: this file is
-    // about the orchestration around it, and the real message is asserted where
-    // the real host is.
-    assertKnownModules: (section) => {
+    // The kit's section (ADR-090), over the seam above. The refusal's WORDING and
+    // its CODE are duplicated from `main/moduleIpc.ts`'s `assertImportable`,
+    // exactly as `TestPrivSeam` duplicates `privResealForRestore`'s contract:
+    // this file is about the orchestration around it, and the real message is
+    // asserted where the real host is. `ModuleImportError` is the real class
+    // though — the code is what `restore.ts` maps onto the wire, so the mapping
+    // is only under test if the error is.
+    assertImportable: (section) => {
       for (const { moduleId } of section) {
         if (!modules.knownIds.has(moduleId)) {
-          throw new Error(
+          throw new ModuleImportError(
+            "unknown-module",
             `This archive carries data for module "${moduleId}", which this build does not know.`,
+          );
+        }
+      }
+      for (const { moduleId, payload } of section) {
+        const parse = modules.parsers.get(moduleId);
+        if (parse === undefined) continue;
+        try {
+          parse(payload);
+        } catch (error) {
+          throw new ModuleImportError(
+            "invalid-module-data",
+            `This archive carries data for module "${moduleId}" that this build cannot read: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
           );
         }
       }
@@ -1513,6 +1537,59 @@ describe("restore", () => {
       if (preview.status !== "ready") unreachable();
       expect(preview.preview.sourceProfileName).toBe("Firma A");
       expect(preview.preview.targetProfileName).toBe("Firma B");
+    });
+  });
+
+  describe("a kit module payload this build cannot read (ADR-090)", () => {
+    it("refuses it as a NAMED problem at the preview, before anything is confirmed", async () => {
+      const profileA = createProfile(dbA, "A");
+      const fixtureA = seedProfile(dbA, profileA, "A");
+      const archive = buildArchiveFor(
+        {
+          ...fixtureA,
+          // The fixture's own section, with a payload this build's Timers module
+          // will not take: the parser below is the module's own refusal, held in
+          // the seam because this file is about the orchestration around it.
+          data: {
+            ...fixtureA.data,
+            modules: [
+              {
+                moduleId: "timers",
+                payload: { version: 99, presets: [], settings: { soundOnEnd: true } },
+              },
+            ],
+          },
+        },
+        profileA,
+        "A",
+      );
+      const filePath = fixturePath("invalid-module.nexus.zip");
+      await writeFile(filePath, await buildArchiveZip(archive, fixtureA.blobBytes));
+
+      const profileB = createProfile(dbB, "B");
+      const modules = moduleSeam();
+      modules.parsers.set("timers", () => {
+        throw new Error("Timers data was written by another version of this module.");
+      });
+      const { deps } = makeTestDeps(dbB, filePath, null, null, null, null, modules);
+      await pickRestoreFile(deps);
+
+      const preview = await previewRestore(deps, profileB, null);
+
+      expect(preview).toEqual({
+        status: "invalid",
+        problems: [
+          {
+            severity: "error",
+            code: "invalid-module-data",
+            path: "data/modules.ndjson",
+            detail: expect.stringContaining("another version"),
+          },
+        ],
+      });
+      // Refused at the preview means nothing was confirmed: no module was
+      // applied, and the profile the restore would have replaced is untouched.
+      expect(modules.applied).toEqual([]);
     });
   });
 

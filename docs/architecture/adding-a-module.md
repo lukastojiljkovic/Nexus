@@ -42,7 +42,7 @@ import type { ModuleManifest } from "@nexus/core";
 export const manifest: ModuleManifest = {
   id: "timers",
   prefix: "UTIL",                       // the PRD prefix — see below
-  category: "Professional & utilities",
+  group: "plan",                        // one of `MODULE_GROUPS` (ADR-093)
   defaultEnabled: true,
   order: 100,                           // where it sorts among DISCOVERED modules
   copy: {
@@ -61,6 +61,10 @@ export const manifest: ModuleManifest = {
 * **`order`** sorts the discovered modules after every compiled-in one, ties
   broken by id. Pick a round number and leave room: a tie is resolved by the
   spec, not a bug.
+* **`group`** is where the navigation draws your module (ADR-093): one of
+  `MODULE_GROUPS`, in the order that list states. The list itself, and the
+  reasoning behind six feature groups replacing the old five categories, live in
+  [ADR-093](adr/093-navigation-groups.md).
 * **`prefix`** is traceability to a PRD entry. `UTIL` is deliberately shared by
   `focus`, `tools` and `timers` — one PRD section implemented three times — and
   any other duplicate fails `apps/desktop/src/renderer/src/modules.test.ts`,
@@ -214,17 +218,28 @@ The archive carries your data if you register both hooks:
 
 ```ts
 ctx.exportData((session) => buildTimersExport(presets, settings)); // versioned JSON, or undefined
-ctx.importData((value, session) => {                               // validate FIRST, then write
-  const payload = parseTimersExport(value);
-  for (const profileId of session.profileIds) replace(profileId, payload);
+ctx.importData({
+  parse: parseTimersExport,                                        // pure: the WHOLE payload, or it throws
+  apply: (payload, session) => {                                   // writes; `undefined` = reset to empty
+    for (const profileId of session.profileIds) replace(profileId, payload);
+  },
 });
 ```
 
 * Version the payload and refuse a version you do not know, by name.
-* Validate everything before your first write: a payload that is refused must
-  leave every profile exactly as it found it.
-* An archive naming a module id this build does not know is refused before you
-  are ever called, at the preview and again at apply time.
+* **`parse` is pure and total.** It reads the whole payload and throws on
+  anything it will not take, and it writes nothing: the kit runs it at the
+  preview (so the user hears a refusal before confirming) and again before any
+  module writes. That is what makes a refused archive cost nothing.
+* **`apply` is handed what your own `parse` answered**, or `undefined` when the
+  section does not name your module. For a restore, `undefined` means empty, not
+  "unchanged": reset the state you archive, and leave state you do not (a running
+  clock belongs to the machine, not the archive).
+* **Every adopted module is applied in ONE transaction.** A module that refuses
+  in its own `apply` rolls back what the modules ahead of it wrote.
+* An archive naming a module id this build does not know, or carrying a payload
+  your `parse` refuses, is refused before you are ever asked to apply it — at the
+  preview and again at apply time.
 * Do not export live state — a running countdown, a session in progress. Export
   what the user AUTHORED.
 * A session handed to `exportData` names exactly one profile (an archive is
@@ -246,7 +261,7 @@ and a test under a folder nobody named is collected by nothing.
 The app-level tests that ENUMERATE the registry will fail the day your manifest
 exists, and that is what they are for. Each fix is one line, and each one is a
 statement that your module belongs where it says: `renderer/src/modules.test.ts`
-(registry order, the prefix map, the category groups, the settings-card list, the
+(registry order, the prefix map, the group blocks, the settings-card list, the
 widget pairing), `renderer/src/moduleSettings.test.ts`,
 `renderer/src/settingsSearch.test.ts`, `renderer/src/onboardingPresets.test.ts`
 and `shared/onboardingPresets.ts` — the questionnaire's own table must decide

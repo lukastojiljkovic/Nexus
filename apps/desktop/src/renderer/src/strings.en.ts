@@ -6566,6 +6566,10 @@ export const en = {
         // does not ship, and that module's data has nowhere to go.
         "unknown-module":
           "The archive carries data for a module this version does not know — update Nexus, or import the archive in the version that wrote it.",
+        // ADR-090: the module is here, but its payload was written by a build
+        // that knew more than this one does.
+        "invalid-module-data":
+          "The archive carries module data written by a newer version — this version of Nexus cannot read it.",
       } satisfies Record<RestoreProblemCode, string>,
     },
     /**

@@ -161,18 +161,26 @@ payload, because the payload is not a collection of rows.
   module with nothing to say — `ModuleHost.collectExports` omits it rather than
   writing `undefined`, so an archive's shape does not change the day a module is
   added.
-* `ctx.importData(run)` MUST validate everything it is given and throw before its
-  first write. The timers module's payload carries `version`, and a version it
-  does not know is refused by name.
-* Core carries a payload without reading it; the desktop refuses a section naming
-  a module id this build did not adopt, at the PREVIEW (so the user hears it
-  before confirming) and again at apply time (so a plan confirmed against one
-  build cannot be applied by another). It is `RestoreProblemCode`'s
-  `unknown-module`, with Serbian and English copy.
-* **An archive without the section imports unchanged** — every archive written
-  before `1.42.0` does exactly that, and the module's own rows are left standing,
-  on the private section's reasoning: an archive that says nothing about a table
-  must not be read as saying “empty”.
+* `ctx.importData({ parse, apply })` splits the two moments. `parse` is pure and
+  total: it validates the WHOLE payload — every field, every row, the version it
+  was written with — and throws on anything it will not take, so it can run
+  before anything is written. `apply` writes, and is handed exactly what its own
+  module's `parse` answered, or `undefined` when the section does not name it.
+  The timers module's payload carries `version`, and a version it does not know
+  is refused by name.
+* Core carries a payload without reading it; the desktop refuses a section this
+  build cannot import whole, at the PREVIEW (so the user hears it before
+  confirming) and again at apply time (so a plan confirmed against one build
+  cannot be applied by another). Three refusals, two problem codes: a module id
+  this build did not adopt, or one it cannot restore, is `RestoreProblemCode`'s
+  `unknown-module`; a payload the module's own `parse` throws on is
+  `invalid-module-data`. Both carry Serbian and English copy.
+* **A section that does not name a module means EMPTY, not „unchanged".** A
+  restore replaces a profile whole, so every adopted module runs: the one the
+  section names with its parsed payload, and every other one with `undefined`,
+  which resets its archived state to empty. The whole set runs inside ONE
+  transaction, so a module that refuses — at the preview, or in the middle of the
+  apply — leaves the profile holding nothing of that section.
 
 ### 6. The database stays global, sequential, and shared
 
@@ -186,11 +194,14 @@ to `RESTORE_WIPE_TABLES`, and that is structural: that list is DERIVED into
 `@nexus/sync`'s collection map, which `packages/db/src/sync/collectionGuard.test.ts`
 holds it equal to, and a module built on the kit may not edit `@nexus/sync`. So
 the kit's rule is the opposite one: **a module replaces its own rows**, in its
-own `importData`, inside the same restore — `main/restore.ts` calls
+own `importData`, inside the same restore. `main/restore.ts` calls
 `restoreModuleData` immediately after the replace has emptied every table on that
-list. `timers_presets`, `timers_countdowns` and `timers_settings` are named as
-documented exemptions in that guard test, beside `elec_settings` and
-`backup_settings`, with this reasoning written next to them.
+list, and every adopted module's `apply` runs there in ONE transaction — the ones
+the section names with their parsed payloads, and the ones it does not name with
+`undefined`, which resets them to empty. `timers_presets`, `timers_countdowns`
+and `timers_settings` are named as documented exemptions in that guard test,
+beside `elec_settings` and `backup_settings`, with this reasoning written next
+to them.
 
 ## What remains central, on purpose
 
@@ -236,16 +247,24 @@ brought its own would have to re-derive all three.
   framework's tests alone: 10 ops, a main-owned clock that outlives the page, an
   OS announcement, an archive section that round-trips, and one dashboard card.
 * `check:copy` and `check:string-capture` had to learn what a module's copy is.
-  Both were extended, and the copy gate now censuses 16 099 leaves — the shell's
+  Both were extended, and the copy gate now censuses 16 104 leaves — the shell's
   plus the 45 the Timers module declares — with every one of them read. Before
   the extension those 45 were measured by nothing at all.
 * A module's copy file must import its live table from `./copy.js` for the
   string-capture gate to see module-scope reads; the convention is stated in
   `adding-a-module.md` and in the gate's own header.
-* The kit cannot make a restore atomic ACROSS modules: `ModuleHost.applyImports`
-  proves every id is known and has an importer before it calls any of them, and
-  each module validates its own payload in full before its own first write, but a
-  module that refuses after an earlier module has already applied leaves that
-  earlier section written. Closing it would need a validate pass over every
-  importer, which is a second entry point on `ModuleContext` and is not worth
-  adding for one refusal path.
+* A restore applies the kit's section ALL OR NOTHING, and the pair in
+  `ModuleContext.importData` is what buys it. `parse` is pure and total, so the
+  kit can run it twice: at the preview, where a refusal reaches the user before a
+  profile is replaced, and at apply time before any module writes. `apply` then
+  runs for EVERY adopted module — with what that module's own `parse` answered,
+  or with `undefined` when the section does not name it — inside one transaction
+  on the profile's database, where each store's own transaction nests as a
+  savepoint. A refusal at the preview costs nothing, because no profile has been
+  replaced yet. One residual is left. The kit's transaction runs after the core
+  replace has committed, so an `apply` that fails at that point leaves every
+  module's rows as they were before the restore, beside the restored core. Since
+  `parse` already passed, only a database error gets there. `undefined` is not „leave it
+  alone": a restore replaces a profile whole, so it is the module's instruction
+  to reset its own archived state to empty, and a module that archives anything
+  implements it.

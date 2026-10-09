@@ -308,13 +308,14 @@ export interface ImportArchiveResult {
  *
  * **A kit module's payload is read and never understood here.** `payload` is
  * carried as it was written, because its shape belongs to the module that
- * wrote it and is validated by that module's own importer against its own
- * version (`main/moduleIpc.ts`'s `applyImports`). What this reader DOES decide
- * is that the record is well-formed: a `module-data` row with no id, or with
- * two rows for one id, is refused like any other malformed row. An id this
- * build does not know is not this module's judgement to make and is not made
- * here - core has no module registry - so the refusal names the module and
- * comes from the desktop, where the build knows what it adopted.
+ * wrote it and is validated by that module's own `parse` against its own
+ * version, at the preview and again before anything is written
+ * (`main/moduleIpc.ts`'s `assertImportable` and `applyImports`). What this
+ * reader DOES decide is that the record is well-formed: a `module-data` row
+ * with no id, or with two rows for one id, is refused like any other malformed
+ * row. An id this build does not know is not this module's judgement to make
+ * and is not made here - core has no module registry - so the refusal names the
+ * module and comes from the desktop, where the build knows what it adopted.
  *
  * `1.41.0` adds the MACHINE a circuit is the electronics of (ADR-085 E4c,
  * migration 068): one record type — `circuit-chassis` — riding in the

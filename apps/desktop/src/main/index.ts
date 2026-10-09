@@ -6692,7 +6692,7 @@ function restoreDeps(): ImportDeps {
     // produces it - and what refuses an archive naming a module this build does
     // not know, at the preview, before anything is replaced.
     moduleExports: (profileId) => moduleHost.collectExports([profileId]),
-    assertKnownModules: (modules) => moduleHost.assertKnownModules(modules),
+    assertImportable: (modules) => moduleHost.assertImportable(modules),
     restoreModuleData: (profileId, modules) => moduleHost.applyImports(modules, [profileId]),
     saveBlob: (bytes) => saveBlob(blobStorePathsFor(), requireBlobKeys(), bytes),
     // Injected rather than reached for, so `restore.ts` never has to know WHICH

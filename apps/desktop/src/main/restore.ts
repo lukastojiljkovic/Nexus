@@ -63,6 +63,7 @@ import { ApkgReadError, readApkg } from "./apkgReader.js";
 import { ArchiveReadError, inspectArchiveFile, openArchive, type OpenedArchive } from "./archiveReader.js";
 import { CsvReadError, readCsvText } from "./csvReader.js";
 import { IcsReadError, readIcsText } from "./icsReader.js";
+import { ModuleImportError } from "./moduleIpc.js";
 import { cancelIdleCompactions } from "./notes.js";
 import type { PrivResealOutcome } from "./priv.js";
 import {
@@ -356,18 +357,24 @@ export interface RestoreDeps extends ProfileDataDeps {
   /** The sealed private-note store (ADR-057 §6) — what undo's parallel sealed-rows capture reads through (`gatherPrivateSealedRows`). Never decrypts; it cannot. */
   privateNoteStore(profileId: string): PrivateNoteStore;
   /**
-   * Refuses an archive whose `data/modules.ndjson` names a kit module this
-   * build did not adopt (ADR-090) - called at the PREVIEW, so the user hears
-   * it before confirming, and not at all when the section is empty or names
-   * only modules that are here.
+   * Refuses an archive whose `data/modules.ndjson` this build cannot import
+   * whole (ADR-090): a module id it did not adopt, a module it cannot restore,
+   * or a payload that module's own `parse` throws on. Called at the PREVIEW, so
+   * the user hears it before confirming, and not at all when the section is
+   * empty or names only modules that are here and take what they are given.
+   *
+   * The refusal carries a `ModuleImportError` code, which is what lets the
+   * preview report an unknown module and an unreadable payload as two different
+   * problems.
    */
-  assertKnownModules(modules: readonly ExportModuleData[]): void;
+  assertImportable(modules: readonly ExportModuleData[]): void;
   /**
    * Applies the archive's kit-module section to one profile (ADR-090), after
    * the profile's content has been replaced and inside the same unlocked
-   * session. Each module validates its own payload completely before writing
-   * its own rows; a module that refuses leaves the rest of the archive
-   * applied and its own section empty.
+   * session. Every payload is parsed before any module writes, and every
+   * adopted module is then applied inside ONE transaction: a module that
+   * refuses - at either step - leaves the profile exactly as the replace left
+   * it, with no module's rows written.
    */
   restoreModuleData(profileId: string, modules: readonly ExportModuleData[]): void;
   /** Whether `profileId`'s private section is set up AND unlocked right now — the preview's `willRestore` fact, re-checked at apply time by the re-seal itself. */
@@ -734,11 +741,13 @@ export async function previewRestore(
 
   // The kit's section (ADR-090), refused HERE rather than at apply: a module
   // this build does not know means the archive carries data that would be lost,
-  // and the user has to hear that before they confirm a restore that replaces
-  // their profile - not after. The apply re-checks it (`applyImports`), because
-  // a plan confirmed against one build must not be applied by another.
+  // and a payload this build cannot read means the archive would be imported
+  // half-way - either way the user has to hear it before they confirm a restore
+  // that replaces their profile, not after. The apply re-reads the section
+  // (`applyImports`) before any module writes, because a plan confirmed against
+  // one build must not be applied by another.
   try {
-    deps.assertKnownModules(parsed.data.modules);
+    deps.assertImportable(parsed.data.modules);
   } catch (error) {
     await archive.close();
     return {
@@ -746,7 +755,13 @@ export async function previewRestore(
       problems: [
         {
           severity: "error",
-          code: "unknown-module",
+          // Which problem this is comes from the kit's own code: "a module this
+          // build has never heard of" and "a payload this build cannot read" send
+          // the user to different places, and only the module knows the second.
+          code:
+            error instanceof ModuleImportError && error.code === "invalid-module-data"
+              ? "invalid-module-data"
+              : "unknown-module",
           path: "data/modules.ndjson",
           detail: error instanceof Error ? error.message : String(error),
         },
@@ -926,11 +941,12 @@ export async function applyRestore(
     now,
   );
 
-  // The kit's section (ADR-090), applied immediately after the replace that
-  // emptied these modules' tables (`RESTORE_WIPE_TABLES`): what the archive
-  // carries is what the profile ends up with, and an archive that carries none
-  // leaves them empty - which is what "this archive says nothing about them"
-  // has to mean for a restore that replaces a profile whole.
+  // The kit's section (ADR-090), applied immediately after the replace. A kit
+  // module's tables are deliberately NOT on `RESTORE_WIPE_TABLES` (section 6 of
+  // the ADR says why), so the replace above left them standing and THIS is what
+  // puts them where the archive says they belong: every adopted module runs,
+  // and one the section does not name is handed `undefined` and resets its own
+  // archived state to empty. All of it, or none of it, in one transaction.
   deps.restoreModuleData(profileId, ready.data.modules);
 
   // Private attachment files the archive could not supply count beside the

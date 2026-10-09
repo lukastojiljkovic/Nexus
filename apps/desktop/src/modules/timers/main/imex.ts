@@ -69,13 +69,14 @@ export function buildTimersExport(
 /**
  * Reads one payload off an archive, completely, before anything is written.
  *
- * **Throwing is the contract.** `ModuleContext.importData` says an importer must
- * validate everything it is given and throw before its first write, because main
- * calls every importer of a section before it applies any of it; a half-validated
- * payload that failed on its fortieth row would leave a profile holding a
- * fragment of an archive. So this function has no early return and no partial
- * result: it either answers with a fully validated, normalised payload or it
- * throws, and every message names the field that is wrong.
+ * **Throwing is the contract.** This is a `ModuleImport.parse`: the host runs it
+ * when the section is read (at the preview, so the user hears the refusal before
+ * confirming a restore) and again before any module writes, and it must write
+ * nothing itself. A half-validated payload that failed on its fortieth row would
+ * leave a profile holding a fragment of an archive. So this function has no
+ * early return and no partial result: it either answers with a fully validated,
+ * normalised payload or it throws, and every message names the field that is
+ * wrong.
  *
  * Names are trimmed here rather than in the store, and duplicates are refused
  * here rather than by the UNIQUE index, for the same reason: the store's refusal

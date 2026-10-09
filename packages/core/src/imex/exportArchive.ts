@@ -2179,7 +2179,8 @@ export interface ExportModuleData {
   moduleId: string;
   /**
    * The module's own export value, exactly as its `exportData()` returned it
-   * (or as its `importData()` will validate it back). Deliberately `unknown`:
+   * (or as the `parse` half of its `importData()` will validate it back).
+   * Deliberately `unknown`:
    * see `ProfileData.modules` for why core carries this without reading it.
    */
   payload: unknown;
