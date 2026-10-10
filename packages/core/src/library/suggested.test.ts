@@ -84,6 +84,31 @@ describe("validateSuggestedCollection", () => {
     expect(validateSuggestedCollection(leadingZero)).toBeNull();
   });
 
+  it("accepts an entry that carries no Wikidata id, leaving the key out entirely", () => {
+    // The format serves curated lists whose source does not name every work
+    // (the task's pack layout marks `wikidata` optional), and the store's own
+    // matching order answers such an entry with type + title + year. The key
+    // must stay ABSENT rather than becoming null, because this value is what
+    // gets serialised back into a pack.
+    const list = valid();
+    const items = list["items"] as Record<string, unknown>[];
+    delete items[0]!["wikidataId"];
+
+    const value = validateSuggestedCollection(list);
+    expect(value?.items[0]).toEqual({
+      kind: "book",
+      title: { sr: "Na Drini ćuprija", en: "The Bridge on the Drina" },
+      year: 1945,
+      creators: ["Ivo Andrić"],
+    });
+    expect(Object.hasOwn(value?.items[0] ?? {}, "wikidataId")).toBe(false);
+
+    // An explicit null is NOT the same as an absent key: the format has no null.
+    const nulled = valid();
+    (nulled["items"] as Record<string, unknown>[])[0]!["wikidataId"] = null;
+    expect(validateSuggestedCollection(nulled)).toBeNull();
+  });
+
   it("refuses an unknown kind, a bad year and a bad creator list", () => {
     const kind = valid();
     (kind["items"] as Record<string, unknown>[])[0]!["kind"] = "game";

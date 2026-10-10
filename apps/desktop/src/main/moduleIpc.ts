@@ -85,6 +85,17 @@ export interface ModuleCall {
    * store is a store like any other and never a second connection.
    */
   profileDb<T>(profileId: string, open: (db: DatabaseHandle, profileId: string) => T): T;
+  /**
+   * The installed content packs, as `main/packs/registry.ts` needs them
+   * (ADR-091): where they live, and the key their manifests verify against.
+   *
+   * A module READS packs here, in main, and hands the renderer only what it
+   * worked out from them - never a path, in either direction (`PacksIpc`'s own
+   * rule). The capability is deliberately narrow: a module may list what is
+   * installed and open a file the pack's own manifest lists, and it cannot
+   * install, remove or write anything.
+   */
+  packs(): ModulePacksAccess;
   /** Current wall-clock milliseconds. Injected so a test can move the clock. */
   now(): number;
 }
@@ -176,6 +187,12 @@ export interface ModuleContext<Id extends string, Ops extends ModuleOps> {
   /** Runs when the session ends - a lock, a switch, a quit - after every armed timer is cancelled. */
   onSessionEnd(run: () => void): void;
   /**
+   * The installed content packs a module may read (see `ModuleCall.packs`). On
+   * the CONTEXT as well as on the call because a module may need the packs when
+   * it arms something at session start, not only inside a handler.
+   */
+  packs(): ModulePacksAccess;
+  /**
    * Registers this module's archive payload: a versioned JSON value, or
    * `undefined` for a session with nothing to export (`ProfileData.modules`).
    */
@@ -201,7 +218,29 @@ export interface ModulePlatform {
   notify(copy: { readonly title: string; readonly body: string; readonly silent: boolean }): void;
   /** A timer main owns. `atMs` is wall-clock milliseconds (`Date.now()`). */
   schedule(atMs: number, run: () => void): () => void;
+  /**
+   * The content packs a module may read, or absent in a process that has none (a
+   * test's fake platform). A module that asks through `ctx.packs()` when the
+   * platform carries none is refused by name rather than answered with "no packs
+   * installed": the two are different facts, and only one of them is about the
+   * user's machine.
+   */
+  packs?: ModulePacksAccess;
   now(): number;
+}
+
+/**
+ * Where content packs live and what their signatures verify against - the two
+ * inputs `readInstalled` and `packVersionDir` take. Deliberately the DIRECTORY
+ * rather than a reader, because the registry's own path arithmetic is what a
+ * module has to go through; what keeps a module from naming an arbitrary file is
+ * its own reader, which opens only a path the signed manifest lists.
+ */
+export interface ModulePacksAccess {
+  /** `<userData>` - resolved per call, like `database()`, so a harness that redirects it is honoured. */
+  userData(): string;
+  /** The release public key an installed pack's manifest was signed with. */
+  readonly publicKeyPem: string;
 }
 
 /**
@@ -296,6 +335,7 @@ export class ModuleHost implements ModuleHostSurface {
         });
       },
       armUntil: (atMs, run) => this.armUntil(atMs, run),
+      packs: () => requirePacks(this.platform),
       onSessionStart: (run) => {
         this.sessionStarts.push(run);
       },
@@ -494,7 +534,25 @@ export class ModuleHost implements ModuleHostSurface {
     return {
       as: MODULE_VALIDATORS,
       profileDb: (profileId, open) => open(this.platform.database(), profileId),
+      packs: () => requirePacks(this.platform),
       now: () => this.platform.now(),
     };
   }
+}
+
+/**
+ * The pack access a module asked for, or a refusal that names the missing half.
+ *
+ * Thrown rather than answered with an empty list: "this process supplied no
+ * pack access" and "no pack is installed" would otherwise be one green screen,
+ * and the first is a wiring mistake only the caller can fix.
+ */
+function requirePacks(platform: ModulePlatform): ModulePacksAccess {
+  const packs = platform.packs;
+  if (packs === undefined) {
+    throw new Error(
+      "This process supplied no content-pack access to its modules, so no module can read installed packs.",
+    );
+  }
+  return packs;
 }

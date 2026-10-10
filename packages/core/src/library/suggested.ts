@@ -20,11 +20,16 @@
  * were single strings could not be adopted by a user in either locale without
  * losing something.
  *
- * **`wikidataId` is required, and that is not decoration.** It is what the
+ * **`wikidataId` is OPTIONAL, and the fallback is the point.** It is what the
  * adoption matches on FIRST, so a second adoption of the same list — or a user
  * who already logged one of the works by hand — resolves to the item they
- * already have instead of a duplicate. A list entry without one could only be
- * matched by title, which is exactly the case the id exists to keep rare.
+ * already have instead of a duplicate. An entry that carries none is matched by
+ * normalised title + year + kind instead (`LibraryStore`'s `MatchIndex`), which
+ * is the second step of the brief's own matching order rather than a hole in
+ * it: the format serves curated lists whose source does not name every work,
+ * and refusing such an entry would withhold a list rather than duplicate a work.
+ * An id that IS present is still refused unless it is a Wikidata Q-id, because
+ * the column it lands in is.
  *
  * **Nothing here is a real list.** The format is validated by its tests against
  * a three-item fixture written by hand; no curated data ships in this module,
@@ -57,7 +62,8 @@ export interface SuggestedTitle {
 }
 
 export interface SuggestedCollectionItemV1 {
-  readonly wikidataId: string;
+  /** The work's Wikidata Q-id, where the list's source has one. Absent means "match by title and year". */
+  readonly wikidataId?: string;
   readonly kind: LibraryKind;
   readonly title: SuggestedTitle;
   /** The work's year, where the list's source knows it. */
@@ -115,26 +121,35 @@ function titleOf(value: unknown): SuggestedTitle | null {
 }
 
 function suggestionItemOf(value: unknown): SuggestedCollectionItemV1 | null {
-  if (!isRecord(value) || !hasKeys(value, ["wikidataId", "kind", "title"], ["year", "creators"])) {
+  if (!isRecord(value) || !hasKeys(value, ["kind", "title"], ["wikidataId", "year", "creators"])) {
     return null;
   }
-  const wikidataId = text(value["wikidataId"], MAX_ID_LENGTH);
   const kind = value["kind"];
   const title = titleOf(value["title"]);
-  // The Q-id GRAMMAR is required here, not merely a string: this id is written
-  // into `library_items.wikidata_id`, whose CHECK and whose matching rule are
-  // both Wikidata-shaped, so a list carrying a catalogue slug would be a list
-  // the store could not adopt. See `isWikidataId` and migration 072.
-  if (wikidataId === null || !isWikidataId(wikidataId) || !isLibraryKind(kind) || title === null) {
+  if (!isLibraryKind(kind) || title === null) {
     return null;
   }
+  const rawWikidataId = value["wikidataId"];
+  const wikidataId = rawWikidataId === undefined ? undefined : text(rawWikidataId, MAX_ID_LENGTH);
+  // A Wikidata id that IS given has its GRAMMAR required here, not merely being
+  // a string: it is written into `library_items.wikidata_id`, whose CHECK and
+  // whose matching rule are both Wikidata-shaped, so a list carrying a catalogue
+  // slug would be a list the store could not adopt. See `isWikidataId` and
+  // migration 072. An id that is absent is not a refusal — see the file header.
+  if (wikidataId !== undefined && !isWikidataId(wikidataId)) return null;
+
   const out: {
-    wikidataId: string;
+    wikidataId?: string;
     kind: LibraryKind;
     title: SuggestedTitle;
     year?: number;
     creators?: string[];
-  } = { wikidataId, kind, title };
+  } =
+    wikidataId === undefined
+      ? // The key order is the format's own, so a value this function answers
+        // serialises back to the shape a reader of the format expects.
+        { kind, title }
+      : { wikidataId, kind, title };
 
   const year = value["year"];
   if (year !== undefined) {

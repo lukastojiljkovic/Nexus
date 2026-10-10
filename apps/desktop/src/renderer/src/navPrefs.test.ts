@@ -219,6 +219,7 @@ describe("sidebarGroups", () => {
       "plan",
       "knowledge",
       "life",
+      "culture",
       "make",
     ]);
   });

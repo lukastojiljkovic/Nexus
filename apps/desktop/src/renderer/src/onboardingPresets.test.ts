@@ -217,6 +217,8 @@ describe("resolveModuleSelection", () => {
       // any other selectable module, from its own manifest default.
       timers: true,
       pro: false,
+      // The second discovered module, in registry order after Tajmeri.
+      library: true,
     });
   });
 
@@ -255,6 +257,9 @@ describe("moduleFlagWrites", () => {
       // And the first DISCOVERED module last, because a kit module registers
       // after every compiled-in one (ADR-090).
       { moduleId: "timers", enabled: true },
+      // And the SECOND discovered module, after it for the same reason: a kit
+      // module registers after every compiled-in one, ordered by `order`.
+      { moduleId: "library", enabled: true },
     ]);
   });
 
