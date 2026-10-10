@@ -6627,6 +6627,14 @@ export const en = {
         // ADR-058: arhiva se vraća samo u profil svoje vrste (lični ↔ poslovni).
         "profile-kind-mismatch":
           "The archive belongs to another profile type (personal/business) and cannot be restored into this profile — pick a profile of the same type.",
+        // The module kit (ADR-090): the archive carries a module this build
+        // does not ship, and that module's data has nowhere to go.
+        "unknown-module":
+          "The archive carries data for a module this version does not know — update Nexus, or import the archive in the version that wrote it.",
+        // ADR-090: the module is here, but its payload was written by a build
+        // that knew more than this one does.
+        "invalid-module-data":
+          "The archive carries module data written by a newer version — this version of Nexus cannot read it.",
       } satisfies Record<RestoreProblemCode, string>,
     },
     /**

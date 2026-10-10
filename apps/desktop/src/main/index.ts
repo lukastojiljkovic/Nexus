@@ -85,7 +85,6 @@ import {
   MAX_CIRCUMFERENCE_CM,
   MAX_EXERCISE_REF_LENGTH,
   MAX_HEIGHT_CM,
-  MAX_ID_LENGTH,
   MAX_PART_COORDINATE,
   MAX_PART_LABEL_LENGTH,
   MAX_WEIGHT_KG,
@@ -524,6 +523,19 @@ import {
   scheduleIdleCompaction,
 } from "./notes.js";
 import { resolveActiveProfileId } from "./activeProfile.js";
+import {
+  asBoolean,
+  asBoundedInteger,
+  asCappedChars,
+  asId,
+  asInteger,
+  asNonEmptyString,
+  asNullableString,
+  asPositiveInteger,
+  asRecord,
+  asString,
+} from "./ipcValidators.js";
+import { createModuleHost } from "./moduleHost.js";
 import {
   deliverSecurityNotices,
   runCheckNow,
@@ -1342,6 +1354,44 @@ let activeProfileId: string | null = null;
  */
 const moduleRegistry = createModuleRegistry();
 
+/**
+ * The module kit's host: every module discovered from `src/modules/<id>/`, its
+ * channels registered and its session hooks held (ADR-090). Built once, at
+ * module load, because `ipcMain.handle` has to be called before the renderer
+ * can ask for anything, and because a module that fails to register should fail
+ * here, where the message names it.
+ *
+ * The platform handed in is the whole of what the kit may touch that belongs to
+ * this file: the sender check (SEC-EL-02), the open database, the one
+ * notification path, a timer and the clock. A module gets no `BrowserWindow`, no
+ * `app` and no `ipcMain` - it gets a handler per channel it declared, and
+ * nothing else is reachable from it.
+ */
+const moduleHost = createModuleHost({
+  assertTrustedSender,
+  database: () => requireDb().raw,
+  notify: ({ title, body, silent }) => {
+    // `Notification.isSupported()` rather than a try/catch: on a platform with
+    // no notification service the honest answer is "no toast", and a module's
+    // own state must never depend on one having been shown.
+    if (!Notification.isSupported()) return;
+    const notification = new Notification({ title, body, silent });
+    notification.on("click", () => {
+      const win = mainWindow;
+      if (win === null || win.isDestroyed()) return;
+      if (win.isMinimized()) win.restore();
+      win.focus();
+    });
+    notification.show();
+  },
+  // `armUntil` re-arms in bounded hops, so the delay handed here is never more
+  // than half a minute even for a countdown that ends tomorrow.
+  schedule: (atMs, run) => {
+    const handle = setTimeout(run, Math.max(0, atMs - Date.now()));
+    return () => clearTimeout(handle);
+  },
+  now: () => Date.now(),
+});
 /** The `userData` directory itself — the registry's home, and the root every account directory hangs off. */
 function userDataDir(): string {
   return app.getPath("userData");
@@ -1761,51 +1811,9 @@ function assertTrustedSender(event: IpcMainInvokeEvent): void {
   }
 }
 
-function asRecord(value: unknown): Record<string, unknown> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new Error("Invalid IPC payload: expected an object.");
-  }
-  return value as Record<string, unknown>;
-}
 
-function asNonEmptyString(value: unknown, field: string): string {
-  if (typeof value !== "string" || value.length === 0) {
-    throw new Error(`Invalid IPC payload: "${field}" must be a non-empty string.`);
-  }
-  return value;
-}
 
-/**
- * An IDENTIFIER off the wire — a row's own id, a foreign key, a registry key —
- * bounded on `MAX_ID_LENGTH`'s terms.
- *
- * **Every id here used to be a bare `asNonEmptyString`, which caps nothing.** An
- * id is the field nobody thinks of as untrusted input, so it got the check that
- * asks whether the string exists and nothing about what it is. The renderer IS
- * untrusted (SEC-EL), no id column in any migration carries a CHECK past
- * `NOT NULL`, and several handlers write a renderer-supplied key rather than
- * minting one — so the wire is the only bound those values ever meet.
- *
- * Same three questions as the archive reader's `idStr`, because it is the same
- * rule at the other boundary: non-empty, no outer whitespace (nothing in this
- * codebase mints an id with a space on either end, and trimming would forge a
- * key rather than refuse one), and inside `MAX_ID_LENGTH`. `check:ids` is what
- * keeps the next handler from reaching for `asNonEmptyString` again.
- */
-function asId(value: unknown, field: string): string {
-  const id = asNonEmptyString(value, field);
-  if (id !== id.trim() || id.length > MAX_ID_LENGTH) {
-    throw new Error(`Invalid IPC payload: "${field}" is not a well-formed id.`);
-  }
-  return id;
-}
 
-function asBoolean(value: unknown, field: string): boolean {
-  if (typeof value !== "boolean") {
-    throw new Error(`Invalid IPC payload: "${field}" must be a boolean.`);
-  }
-  return value;
-}
 
 /**
  * The network mode off the wire — the whole of `network:set-mode`'s payload, so
@@ -1826,13 +1834,6 @@ function asNetworkMode(value: unknown): NetworkMode {
   throw new Error('Invalid IPC payload: "mode" must be "offline", "updates" or "downloads".');
 }
 
-/** A plain string field that may be empty (structural check only; semantics stay in the store). */
-function asString(value: unknown, field: string): string {
-  if (typeof value !== "string") {
-    throw new Error(`Invalid IPC payload: "${field}" must be a string.`);
-  }
-  return value;
-}
 
 /**
  * A passcode field: a non-empty string capped at `MAX_PASSCODE_LENGTH`
@@ -1893,32 +1894,6 @@ function asCappedString(value: unknown, field: string, maxBytes: number): string
   return value;
 }
 
-/**
- * The CHARACTER-counting sibling of `asCappedString`, for the caps a store
- * defines in characters rather than bytes.
- *
- * The distinction is not pedantry in this app: every Serbian letter carrying a
- * diacritic — š, č, ć, ž, đ — is two bytes in UTF-8, so a byte cap applied to a
- * character limit refuses legal input, and refuses it *only for text written in
- * the product's own language*. `CARD_TEXT_MAX_LENGTH` is documented as mirroring
- * `CardStore`'s cap, and that cap is 10 000 CHARACTERS (`trimmed.length`), so
- * byte-capping it made the wire stricter than the store it claims to mirror and
- * produced a „must not exceed 10000 bytes" refusal for a card the store would
- * have taken. Found while reviewing UTIL slice b, whose `asFocusLabel` had to
- * dodge the same trap.
- *
- * Rule: match the unit the STORE measures in. A cap named `_BYTES` keeps
- * `asCappedString`; a cap the store checks with `.length` comes here.
- */
-function asCappedChars(value: unknown, field: string, maxChars: number): string {
-  if (typeof value !== "string") {
-    throw new Error(`Invalid IPC payload: "${field}" must be a string.`);
-  }
-  if (value.length > maxChars) {
-    throw new Error(`Invalid IPC payload: "${field}" must not exceed ${maxChars} characters.`);
-  }
-  return value;
-}
 
 /**
  * An array of non-empty strings, each capped at `maxItemLength`, the array
@@ -2098,11 +2073,6 @@ function asProfileCreateName(value: unknown, field: string): string {
   return asProfileName(value, field);
 }
 
-/** A nullable optional string field: either a string or an explicit null. */
-function asNullableString(value: unknown, field: string): string | null {
-  if (value === null || typeof value === "string") return value;
-  throw new Error(`Invalid IPC payload: "${field}" must be a string or null.`);
-}
 
 /**
  * An optional id: `null`, or an {@link asId}. An empty string is a bug on the
@@ -2982,15 +2952,6 @@ function asDashboardSetName(value: unknown, field: string): string {
   return trimmed;
 }
 
-function asBoundedInteger(value: unknown, field: string, min: number, max: number): number {
-  const int = asInteger(value, field);
-  if (int < min || int > max) {
-    throw new Error(
-      `Invalid IPC payload: "${field}" must be a whole number between ${min} and ${max}.`,
-    );
-  }
-  return int;
-}
 
 /** An optional whole number: an explicit null, or an integer (any range check stays in the store). */
 function asNullableInteger(value: unknown, field: string): number | null {
@@ -3387,22 +3348,7 @@ function asCardFieldChanges(value: unknown): UpdateCardFields {
   return patch;
 }
 
-/** A plain integer field (structural check only; range validation stays in the store). */
-function asInteger(value: unknown, field: string): number {
-  if (typeof value !== "number" || !Number.isInteger(value)) {
-    throw new Error(`Invalid IPC payload: "${field}" must be an integer.`);
-  }
-  return value;
-}
 
-/** A `coveredSeq` field: an integer, and additionally ≥ 1 — seq 0 never names a version (ADR-015). */
-function asPositiveInteger(value: unknown, field: string): number {
-  const int = asInteger(value, field);
-  if (int < 1) {
-    throw new Error(`Invalid IPC payload: "${field}" must be a positive integer.`);
-  }
-  return int;
-}
 
 /** The closed FSRS review-rating domain (Again/Hard/Good/Easy); Manual (0) and anything else is rejected. */
 function asCardRating(value: unknown, field: string): CardRating {
@@ -6150,6 +6096,11 @@ function notificationSchedulerDeps(): NotificationSchedulerDeps {
 function startUnlockedServices(): void {
   if (isAutomatedRun) return;
   startNotificationScheduler(notificationSchedulerDeps());
+  // The kit's modules get the same session the scheduler does, and for the same
+  // reason it is skipped in an automated run: a module that re-arms a countdown
+  // or fires a toast the moment the database opens would make a deterministic
+  // sweep non-deterministic. `performLock` hands them the end of it.
+  moduleHost.sessionStart(listProfiles(requireDb()).map((profile) => profile.id));
   // Sync follows the profile that is open, on the same rule and through the same
   // resolver the notification scheduler uses — so the two can never be serving
   // different profiles. A machine with cloud off, or with no account, refuses
@@ -6354,6 +6305,12 @@ function performLock(): void {
   // nothing below may run against a still-open private section.
   privLock();
   stopNotificationScheduler();
+  // The kit's modules lose their timers with the session, for the schedulers'
+  // reason and one more: a countdown armed for a profile whose database is about
+  // to be closed would fire against a locked session, and an OS toast about a
+  // profile nobody is standing in is the one notification this app must never
+  // show.
+  moduleHost.sessionEnd();
   // A round needs the data key and the open database; both die here. Optional
   // chaining rather than `syncService()`, because constructing the service to
   // stop a loop that was never started would read `cloud.json` at lock time.
@@ -6812,6 +6769,14 @@ function restoreDeps(): ImportDeps {
     fitBodyProfileStore,
     canvasStore,
     electronicsStore,
+    // The kit's own section (ADR-090), and the one `ProfileData` member that is
+    // a HOOK rather than a store read: a discovered module's data lives in its
+    // own tables and in its own shape, so the host that adopted it is what
+    // produces it - and what refuses an archive naming a module this build does
+    // not know, at the preview, before anything is replaced.
+    moduleExports: (profileId) => moduleHost.collectExports([profileId]),
+    assertImportable: (modules) => moduleHost.assertImportable(modules),
+    restoreModuleData: (profileId, modules) => moduleHost.applyImports(modules, [profileId]),
     saveBlob: (bytes) => saveBlob(blobStorePathsFor(), requireBlobKeys(), bytes),
     // Injected rather than reached for, so `restore.ts` never has to know WHICH
     // tables reference a blob — that union lives in exactly one place
@@ -6890,6 +6855,10 @@ function imexArchiveDeps(): ImexArchiveDeps {
     fitBodyProfileStore,
     canvasStore,
     electronicsStore,
+    // The kit's section of a full profile read (ADR-090). A function rather
+    // than a store getter, because a kit module's payload is produced by the
+    // module itself - see `ProfileDataDeps.moduleExports`.
+    moduleExports: (profileId) => moduleHost.collectExports([profileId]),
     flagStore,
     readBlob: (sha256) => readBlob(blobStorePathsFor(), requireBlobKeys(), sha256),
     // A private attachment's decrypted bytes, under whatever section is open
@@ -12417,6 +12386,15 @@ function registerIpc(): void {
     const id = asId(asRecord(payload).id, "id");
     return packs().verify(id);
   });
+
+  // The module kit's channels (ADR-090): one `ipcMain.handle` per channel a
+  // discovered module declared, and nothing generic behind them. The host
+  // refuses an untrusted sender before the module's own handler runs
+  // (`moduleIpc.ts`), so no module can forget SEC-EL-02 and no channel can be
+  // answered by a channel name the renderer made up.
+  for (const channel of moduleHost.channels()) {
+    ipcMain.handle(channel, (event, payload) => moduleHost.dispatch(channel, event, payload));
+  }
 }
 
 /**
@@ -13746,6 +13724,7 @@ async function runDemoSeed(): Promise<void> {
 
 function shutdown(code: number): void {
   stopNotificationScheduler();
+  moduleHost.sessionEnd();
   cancelIdleCompactions(); // same reasoning as `performLock` — about to close `db`
   try {
     db?.close();
@@ -14128,6 +14107,7 @@ app.on("will-quit", () => {
   // lazily — a launch where nobody opened Elektronika has none to stop.
   elecRunnerIpc?.dispose();
   stopNotificationScheduler();
+  moduleHost.sessionEnd();
   cancelIdleCompactions(); // same reasoning as `performLock` — about to close `db`
   clearRestoreState(); // likewise: decrypted archive bytes and a plaintext undo snapshot must not outlive the session
   try {

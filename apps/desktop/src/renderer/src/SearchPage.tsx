@@ -12,6 +12,7 @@ import {
   toggleKindInQuery,
   toggleTagInQuery,
 } from "./searchShared.js";
+import { searchKindLabel } from "./moduleKit/labels.js";
 import { dayUnit, strings } from "./strings.js";
 
 /**
@@ -213,7 +214,7 @@ export function SearchPage({
           <span className="searchpage__row-text">
             {showKind && (
               <span className="nx-eyebrow searchpage__row-kind">
-                {strings.search.kindSingular[result.kind]}
+                {searchKindLabel(result.kind, false)}
               </span>
             )}
             <span className="searchpage__row-title">
@@ -300,7 +301,7 @@ export function SearchPage({
                 aria-pressed={activeKinds.has(kind)}
                 onClick={() => setQuery((current) => toggleKindInQuery(current, kind))}
               >
-                {strings.search.kindPlural[kind]}
+                {searchKindLabel(kind, true)}
                 <span className="searchpage__chip-count">{count}</span>
               </Button>
             ))}
@@ -410,7 +411,7 @@ export function SearchPage({
           ) : (
             groups.map(([kind, list]) => (
               <div className="searchpage__group" key={kind}>
-                <div className="searchpage__group-heading">{strings.search.kindPlural[kind]}</div>
+                <div className="searchpage__group-heading">{searchKindLabel(kind, true)}</div>
                 {list.map((result) => renderRow(result, false))}
               </div>
             ))

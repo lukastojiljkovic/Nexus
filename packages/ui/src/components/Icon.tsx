@@ -79,6 +79,11 @@ export type IconName =
   | "stop"
   | "clock"
   | "repeat"
+  // The countdown: an hourglass, deliberately NOT another stopwatch. `focus`
+  // above is one and `clock` is a time of day, so the third timer in this set
+  // had to be a shape of its own — and an hourglass says what a countdown is
+  // (time running out of a fixed amount) rather than what time it is.
+  | "timer"
   // Objects the modules actually name.
   | "star"
   | "starFilled"
@@ -506,6 +511,16 @@ const SHAPES: Record<IconName, ReactNode> = {
       <path d="m16.4 3.2 3 2.8-3 2.8" />
       <path d="M19.4 13.4V15a3 3 0 0 1-3 3H4.6" />
       <path d="m7.6 20.8-3-2.8 3-2.8" />
+    </>
+  ),
+  // Two caps and two arcs: the sand is implied by the shape, the way every other
+  // glyph here implies its subject rather than drawing a filled region.
+  timer: (
+    <>
+      <path d="M6.8 3.4h10.4" />
+      <path d="M6.8 20.6h10.4" />
+      <path d="M7.6 3.4c0 4.2 8.8 4.2 8.8 8.6s-8.8 4.4-8.8 8.6" />
+      <path d="M16.4 3.4c0 4.2-8.8 4.2-8.8 8.6s8.8 4.4 8.8 8.6" />
     </>
   ),
 

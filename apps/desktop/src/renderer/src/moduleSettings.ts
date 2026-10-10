@@ -5,8 +5,7 @@ import {
   type SettingsPanel,
 } from "@nexus/core";
 
-import { lookupString } from "./dashboardLayout.js";
-import { strings } from "./strings.js";
+import { resolveLabel } from "./moduleKit/labels.js";
 
 /**
  * The renderer's reader for the per-module settings contract (`SettingsPanel`)
@@ -87,7 +86,7 @@ export function moduleSettingsCards(
     .filter((declaration) => enabled.has(declaration.moduleId))
     .map((declaration) => ({
       ...declaration,
-      title: lookupString(strings, declaration.panel.titleKey) ?? declaration.moduleId,
+      title: resolveLabel(declaration.panel.titleKey),
     }));
 }
 

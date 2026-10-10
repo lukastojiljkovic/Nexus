@@ -7243,9 +7243,70 @@ const V0_MODULES: ModuleManifest[] = [
 export const LOCKED_MODULE_IDS: ReadonlySet<string> = new Set(["dashboard", "settings"]);
 
 /** Builds the app's registry — each process constructs its own (not a singleton) per ADR-008. */
+/**
+ * The manifests the module KIT discovers, eagerly.
+ *
+ * **Why eager, and why here.** The registry is consulted before anything is
+ * drawn: the rail lists a module's name, the settings gallery draws its toggle,
+ * main answers `enabledModuleIds` from it and a fresh profile's flags are seeded
+ * from it. So the manifest of every discovered module is small, must be present
+ * at startup, and must not be reachable only through a page chunk.
+ *
+ * **Why a glob rather than an import.** This is the whole point of the kit: a
+ * module adds FILES, and the shell discovers them. The pattern below is the
+ * folder contract (`modules/<id>/shared/manifest.ts`), stated once, here. Vite
+ * (main, preload and the renderer) and Vitest both resolve `import.meta.glob`,
+ * so discovery behaves identically in the app and in the tests that pin it.
+ *
+ * **Ordering.** The compiled-in modules keep their order because they are
+ * registered first; kit modules follow, ordered by `ModuleManifest.order` and,
+ * on a tie, by id. The tie-break is what lets two parallel runs both name
+ * `order: 100` without a diff that cannot be resolved: the order stays total and
+ * deterministic, and neither module silently displaces the other.
+ */
+const KIT_MANIFESTS: readonly ModuleManifest[] = Object.entries(
+  import.meta.glob("../modules/*/shared/manifest.ts", { eager: true }) as Record<
+    string,
+    { manifest: ModuleManifest }
+  >,
+)
+  .map(([, module]) => module.manifest)
+  .sort((left, right) => {
+    const byOrder =
+      (left.order ?? Number.MAX_SAFE_INTEGER) - (right.order ?? Number.MAX_SAFE_INTEGER);
+    return byOrder !== 0 ? byOrder : left.id.localeCompare(right.id);
+  });
+
+/**
+ * The discovered manifests, and how the renderer kit asks for one.
+ *
+ * Exported rather than re-discovered: the folder pattern above is the single
+ * statement of where a module's manifest lives, and a second glob in the
+ * renderer would be a second spelling of it - the shape this repository has
+ * already paid for twice (`sourceRoots`, the module prefix map).
+ *
+ * `kitManifest` answers only for DISCOVERED modules: a compiled-in module's
+ * manifest is in `createModuleRegistry()`, and its copy is in the renderer's
+ * `strings` table. Answering `undefined` for one of those is the honest answer
+ * to "does this module carry its own copy".
+ */
+const KIT_BY_ID = new Map(KIT_MANIFESTS.map((manifest) => [manifest.id, manifest]));
+
+export function kitManifest(id: string): ModuleManifest | undefined {
+  return KIT_BY_ID.get(id);
+}
+
+/** Every discovered manifest, in registry order - what the renderer kit walks for a declared label. */
+export function kitManifests(): readonly ModuleManifest[] {
+  return KIT_MANIFESTS;
+}
+
 export function createModuleRegistry(): ModuleRegistry {
   const registry = new ModuleRegistry();
   for (const manifest of V0_MODULES) {
+    registry.register(manifest);
+  }
+  for (const manifest of KIT_MANIFESTS) {
     registry.register(manifest);
   }
   return registry;

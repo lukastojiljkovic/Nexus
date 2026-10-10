@@ -129,7 +129,7 @@
  * that rots: it would survive the deletion of the call site it was written for,
  * and the next reader would find the opposite of the truth in it.
  */
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, relative, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -160,6 +160,40 @@ const ENTRIES = [
  */
 const MODULE_DIRS = ["apps/desktop/src/renderer/src/strings"];
 
+/**
+ * A DISCOVERED module's own copy table: `modules/<id>/renderer/copy.sr.ts`,
+ * with `copy.en.ts` beside it (ADR-090).
+ *
+ * **Why these are found rather than listed.** The kit's whole promise is that a
+ * module is a folder nobody has to register, and this gate is the other half of
+ * that promise: the shell's table was covered from the day this file was written
+ * and a module's was covered by NOTHING — so a module could ship a sentence no
+ * screen reads and no run would say so. The table is discovered off the same
+ * folder contract `shared/modules.ts` globs, which is why a module that exists
+ * is measured without anybody adding it here.
+ *
+ * The file is read ON ITS OWN rather than through the shared index: that index
+ * is keyed by the exported name, and a module's table exports `sr` exactly as
+ * the shell's does — so a shared index would let the second one silently
+ * overwrite the first.
+ */
+function kitCopyFiles(root) {
+  const found = [];
+  const modulesDir = join(root, "apps", "desktop", "src", "modules");
+  let names;
+  try {
+    names = readdirSync(modulesDir, { withFileTypes: true });
+  } catch {
+    return found;
+  }
+  for (const entry of names.sort((a, b) => (a.name < b.name ? -1 : 1))) {
+    if (!entry.isDirectory()) continue;
+    const file = join(modulesDir, entry.name, "renderer", "copy.sr.ts");
+    if (existsSync(file)) found.push(relPath(root, file));
+  }
+  return found;
+}
+
 /** Build output, installed packages, and the screenshot sweep's own output. */
 const SKIP_DIRS = new Set(["node_modules", "out", "dist", "release", "shots", ".turbo"]);
 
@@ -170,8 +204,16 @@ const SCAN_ROOTS = ["apps", "packages"];
  * A module that exports a copy table, as a consumer writes the specifier — the
  * repo's convention is the `.js` extension over a `.ts` file, and both `strings`
  * and the source table `strings.sr` are imported directly (the tests do).
+ *
+ * `copy.js` is the third name, and it belongs to the KIT (ADR-090): a module
+ * built from its own folder registers its table with `defineModuleCopy` and
+ * hands it out under the one name the kit's convention fixes, so this gate can
+ * see that `copy.countdowns.start` is a read without knowing which module wrote
+ * it. A module that exported its table under another name would be invisible
+ * here — which is why the name is a convention rather than a preference, and
+ * why `adding-a-module.md` spells it out.
  */
-const TABLE_MODULE = /(?:^|\/)strings(?:\.sr)?\.js$/;
+const TABLE_MODULE = /(?:^|\/)(?:strings(?:\.sr)?|copy)\.js$/;
 
 /** The helpers that read a table by a key only known at runtime. */
 const DYNAMIC_READERS = new Set(["lookup", "lookupString"]);
@@ -863,6 +905,17 @@ export function repoCopyLeaves(root = repoRoot) {
     if (table === undefined) continue;
     for (const leaf of tableLeaves(table, index)) {
       rows.push({ ...leaf, app: entry.app, read: null });
+    }
+  }
+  // A kit module's table, indexed on its own so the shell's `sr` cannot shadow
+  // it — the two export the same name by convention, which is exactly why one
+  // shared index would be wrong here.
+  for (const file of kitCopyFiles(root)) {
+    const own = tableIndex(new Map([[file, files.get(file) ?? readFileSync(join(root, file), "utf8")]]));
+    const table = own.get("sr");
+    if (table === undefined) continue;
+    for (const leaf of tableLeaves(table, own)) {
+      rows.push({ ...leaf, app: "desktop", read: null });
     }
   }
   const paths = pathsOf(rows);

@@ -65,6 +65,7 @@ describe("launcherGroups", () => {
       "calendar",
       "habits",
       "focus",
+      "timers",
     ]);
   });
 
@@ -87,8 +88,9 @@ describe("launcherGroups", () => {
       "tasks",
       "calendar",
       "focus",
+      "timers",
     ]);
-    const withoutPlan = groups(allEnabled("tasks", "calendar", "habits", "focus"));
+    const withoutPlan = groups(allEnabled("tasks", "calendar", "habits", "focus", "timers"));
     expect(withoutPlan.map((group) => group.key)).toEqual(["knowledge", "life", "make"]);
     // PRIV is off by default, so it is absent until its flag says otherwise â€”
     // the same `resolveEnabled` set the rail is filtered through.

@@ -132,7 +132,7 @@ import {
   shortcutEntryId,
 } from "./settingsSearch.js";
 import { isDeviceOnlyPanel, moduleSettingsCards } from "./moduleSettings.js";
-import { MODULE_SETTINGS_PANELS } from "./moduleSettingsPanels.js";
+import { settingsPanelRenderer } from "./moduleSettingsPanels.js";
 import { moduleIconName } from "./moduleIcon.js";
 import {
   persistLlmImportKind,
@@ -156,7 +156,7 @@ import {
   reportLocaleToMain,
 } from "./localePrefs.js";
 import { useFocusTrap } from "./useFocusTrap.js";
-import { moduleName } from "./moduleName.js";
+import { moduleDescription, moduleName } from "./moduleName.js";
 import { formatArchiveInstant } from "./timeFormat.js";
 import { SyncSection } from "./SyncSettings.js";
 import { NetworkSettings } from "./NetworkSettings.js";
@@ -5233,7 +5233,7 @@ export function SettingsPage({
       setEventDuration(readStoredEventDuration());
       setClock(readStoredClock());
     } else {
-      MODULE_SETTINGS_PANELS[sectionId]?.resetDevice?.();
+      settingsPanelRenderer(sectionId)?.resetDevice?.();
       setResetCounts((counts) => ({ ...counts, [sectionId]: (counts[sectionId] ?? 0) + 1 }));
     }
     setResetting(null);
@@ -5878,7 +5878,7 @@ export function SettingsPage({
                             {moduleName(manifest.id)}
                           </span>
                           <span className="nx-hint">
-                            {lookup(strings.settings.moduleDescriptions, manifest.id) ?? ""}
+                            {moduleDescription(manifest.id)}
                           </span>
                         </div>
                         {locked ? (
@@ -5973,7 +5973,7 @@ export function SettingsPage({
               has no renderer for draws nothing, exactly as an unknown dashboard
               placement does. */}
           {moduleCards.map((card) => {
-            const Body = MODULE_SETTINGS_PANELS[card.moduleId]?.Body;
+            const Body = settingsPanelRenderer(card.moduleId)?.Body;
             if (Body === undefined) return null;
             return (
               <Card

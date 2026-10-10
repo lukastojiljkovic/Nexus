@@ -40,16 +40,48 @@ import ts from "typescript";
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = join(HERE, "..");
 
-/** The renderer is the only tree that imports the table. */
-const SCAN_ROOT = join(REPO_ROOT, "apps", "desktop", "src", "renderer");
+/**
+ * The two trees whose files import a live copy table: the shell's renderer, and
+ * every DISCOVERED module's `renderer/` folder (ADR-090).
+ *
+ * The second was a hole for as long as the kit has existed: a kit module carries
+ * its own table (`copy.ts`, registered with `defineModuleCopy`), and a module
+ * that read `copy.countdowns.start` at module scope would freeze a sentence
+ * exactly the way a `strings.…` read does — while this gate, pointed only at
+ * `src/renderer`, never opened the file that did it.
+ */
+const SCAN_ROOTS = [
+  join(REPO_ROOT, "apps", "desktop", "src", "renderer"),
+  join(REPO_ROOT, "apps", "desktop", "src", "modules"),
+];
 
-/** The table and its facade are where `strings` is DEFINED, not consumed. */
-const EXEMPT = new Set(["strings.ts", "strings.sr.ts"]);
+/**
+ * Where a table is DEFINED rather than consumed: the shell's `strings` and its
+ * Serbian source, and a kit module's own three files — `copy.sr.ts`/`copy.en.ts`
+ * are data and `copy.ts` is the one place the live object is built.
+ */
+const EXEMPT = new Set(["strings.ts", "strings.sr.ts", "copy.ts", "copy.sr.ts", "copy.en.ts"]);
 
-export function findScanFiles(root = SCAN_ROOT) {
+/**
+ * The module a kit module's copy table is imported FROM. The one name the kit
+ * fixes (`adding-a-module.md` spells it out), because the table's identity as
+ * „a live table“ is what the rule is about — a module that handed its table out
+ * of some other file would be invisible here, which the header states below
+ * rather than pretending otherwise.
+ */
+const COPY_MODULE = /(?:^|\/)copy\.js$/;
+
+export function findScanFiles(root = SCAN_ROOTS) {
   const out = [];
   const walk = (dir) => {
-    for (const entry of readdirSync(dir)) {
+    let entries;
+    try {
+      entries = readdirSync(dir);
+    } catch {
+      // A checkout without one of the trees is not this gate's problem.
+      return;
+    }
+    for (const entry of entries) {
       const full = join(dir, entry);
       if (statSync(full).isDirectory()) {
         if (entry !== "node_modules" && entry !== "dist" && entry !== "out") walk(full);
@@ -58,7 +90,7 @@ export function findScanFiles(root = SCAN_ROOT) {
       if (/\.(ts|tsx)$/.test(entry) && !EXEMPT.has(entry)) out.push(full);
     }
   };
-  walk(root);
+  for (const dir of Array.isArray(root) ? root : [root]) walk(dir);
   return out;
 }
 
@@ -105,8 +137,24 @@ function rootIdentifier(node) {
 export function scanSource(filePath, text) {
   const source = ts.createSourceFile(filePath, text, ts.ScriptTarget.Latest, true);
   const hits = [];
+  /**
+   * The names this file bound a LIVE copy table to. Resolved from the imports
+   * rather than assumed, on the same rule the walk above applies to `strings`: a
+   * local called `copy` bound to something else is not this table, and only an
+   * import says which it is.
+   */
+  const copyRoots = new Set();
+  for (const statement of source.statements) {
+    if (!ts.isImportDeclaration(statement)) continue;
+    const specifier = statement.moduleSpecifier;
+    if (!ts.isStringLiteral(specifier) || !COPY_MODULE.test(specifier.text)) continue;
+    const bindings = statement.importClause?.namedBindings;
+    if (bindings === undefined || !ts.isNamedImports(bindings)) continue;
+    for (const element of bindings.elements) copyRoots.add(element.name.text);
+  }
   const visit = (node) => {
-    if (ts.isPropertyAccessExpression(node) && rootIdentifier(node) === "strings") {
+    const root = ts.isPropertyAccessExpression(node) ? rootIdentifier(node) : null;
+    if (ts.isPropertyAccessExpression(node) && (root === "strings" || copyRoots.has(root))) {
       // Only report the OUTERMOST access of a chain, so `strings.a.b.c` is one
       // finding rather than three nested ones.
       const parentIsAccess =
@@ -137,11 +185,12 @@ export function auditAll() {
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const findings = auditAll();
   if (findings.length === 0) {
-    console.log("check-string-capture: no module-scope reads of the strings table.");
+    console.log("check-string-capture: no module-scope reads of a copy table.");
     process.exit(0);
   }
   console.error(
-    `check-string-capture: ${findings.length} module-scope read(s) of the strings table.\n` +
+    `check-string-capture: ${findings.length} module-scope read(s) of a copy table ` +
+      "(the shell's `strings` or a kit module's `copy`).\n" +
       "These are evaluated once at import and can never change language.\n",
   );
   for (const f of findings) {

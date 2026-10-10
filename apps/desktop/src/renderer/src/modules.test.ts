@@ -13,6 +13,7 @@ import {
   toolForbidsVerdict,
   unitsOfKind,
 } from "@nexus/core";
+import type { LabelText } from "@nexus/core";
 // The one place a renderer file names `@nexus/db`, and it is a TEST: the
 // default dashboard layout is a db constant (`DashboardWidgetStore`) whose
 // entries name widgets these manifests publish, and nothing else in the build
@@ -21,9 +22,9 @@ import {
 import { DEFAULT_DASHBOARD_LAYOUT } from "@nexus/db";
 import { describe, expect, it } from "vitest";
 
-import { DASHBOARD_WIDGETS } from "./dashboardWidgets.js";
+import { dashboardWidgetIds } from "./dashboardWidgets.js";
 import { FILE_VIEWS } from "./filePrefs.js";
-import { MODULE_SETTINGS_PANELS } from "./moduleSettingsPanels.js";
+import { MODULE_SETTINGS_PANELS, settingsPanelRenderer } from "./moduleSettingsPanels.js";
 import { NOTE_WIDTHS } from "./notePrefs.js";
 import { BLOCKED_IN_TODAY_OPTIONS } from "./taskPrefs.js";
 import { PRO_TOOL_SURFACES } from "./proToolSurfaces.js";
@@ -47,6 +48,32 @@ import { lookup as stringFor, strings } from "./strings.js";
  * import-time in the app) and a category outside the canonical list.
  */
 
+/**
+ * Whether a declared label really carries words, whichever of the two forms the
+ * declaration used (`LabelText`, ADR-090): a dotted `strings` path that
+ * RESOLVES to a string, or a `{ sr, en }` pair with both sentences written.
+ *
+ * One helper rather than two assertions per call site, because the question the
+ * two forms answer is the same one — "would this draw as something a person can
+ * read" — and a test that asked it one way for compiled-in modules and another
+ * way for discovered ones would let the two drift.
+ */
+function labelCarriesWords(label: LabelText): boolean {
+  if (typeof label === "string") {
+    const resolved = label
+      .split(".")
+      .reduce<unknown>(
+        (node, key) =>
+          typeof node === "object" && node !== null
+            ? (node as Record<string, unknown>)[key]
+            : undefined,
+        strings,
+      );
+    return typeof resolved === "string";
+  }
+  return label.sr.trim().length > 0 && label.en.trim().length > 0;
+}
+
 describe("createModuleRegistry", () => {
   it("registers the v0 module set in PRD numbering order", () => {
     expect(createModuleRegistry().all().map((manifest) => manifest.id)).toEqual([
@@ -66,6 +93,11 @@ describe("createModuleRegistry", () => {
       "canvas",
       "electronics",
       "pro",
+      // The first DISCOVERED module (ADR-090): a kit module registers after
+      // every compiled-in one, ordered by its manifest's `order`. It is written
+      // here rather than derived because this test IS the declaration — what the
+      // registry holds is what the app shows.
+      "timers",
     ]);
   });
 
@@ -120,7 +152,7 @@ describe("createModuleRegistry", () => {
       // alatke" does NOT join it: PRD 30 („Profession Toolkits") is its own
       // entry, not a second reading of PRD 29 („Utility Belt"), so it takes
       // its own prefix below rather than borrowing this one.
-      UTIL: ["focus", "tools"],
+      UTIL: ["focus", "tools", "timers"],
       CANV: ["canvas"],
       // „Elektronika" takes its own for „Tabla"'s reason exactly: ELEC is its
       // own PRD entry, and the UTIL sharing above is one section implemented
@@ -162,6 +194,8 @@ describe("createModuleRegistry", () => {
       "calendar",
       "habits",
       "focus",
+      // The first discovered module, in the group it declares (ADR-090).
+      "timers",
     ]);
     expect(grouped.get("knowledge")?.map((manifest) => manifest.id)).toEqual([
       "notes",
@@ -217,6 +251,9 @@ describe("createModuleRegistry", () => {
       "tools",
       "canvas",
       "electronics",
+      // ON by default, like every module but PRIV and PRO: a timer writes
+      // nothing until somebody starts one, so there is nothing to opt into.
+      "timers",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");
@@ -400,6 +437,9 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
       "fitness",
       "focus",
       "tools",
+      // The first DISCOVERED card (ADR-090): declared in the module's own
+      // manifest and drawn by its own body, with no line in this file's map.
+      "timers",
     ]);
   });
 
@@ -408,24 +448,42 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
     // declaration with no renderer is an empty card, a renderer with no
     // declaration is a card the page never asks for. Neither fails loudly in
     // the app, which is why it is pinned here.
-    expect(declared.map(([moduleId]) => moduleId).sort()).toEqual(
-      Object.keys(MODULE_SETTINGS_PANELS).sort(),
-    );
+    // THE KIT CHANGES THE HALF THIS ASKS ABOUT (ADR-090). A compiled-in module's
+    // body is listed in `MODULE_SETTINGS_PANELS`; a DISCOVERED module's is
+    // discovered beside it (`moduleKit/settings.ts`), because listing it is the
+    // edit the kit exists to remove. So the pairing is asked through
+    // `settingsPanelRenderer` — the function `SettingsPage` itself calls, so
+    // this pins the real question rather than one half of it — and the reverse
+    // direction is still asked against the compiled-in map, which must not hold
+    // a body no declaration names.
+    const declaredIds = declared.map(([moduleId]) => moduleId);
+    for (const moduleId of declaredIds) {
+      expect(settingsPanelRenderer(moduleId), moduleId).toBeDefined();
+    }
+    for (const moduleId of Object.keys(MODULE_SETTINGS_PANELS)) {
+      expect(declaredIds, moduleId).toContain(moduleId);
+    }
   });
 
   it("names a string that really exists for every card title and every control label", () => {
     for (const [moduleId, panel] of declared) {
-      expect(typeof lookup(panel.titleKey), panel.titleKey).toBe("string");
-      // A module's card IS its own section, so its title is the very heading
-      // `strings.settings.sectionTitle` already carries for it.
-      expect(lookup(panel.titleKey), moduleId).toBe(
-        strings.settings.sectionTitle[moduleId as keyof typeof strings.settings.sectionTitle],
-      );
+      expect(labelCarriesWords(panel.titleKey), JSON.stringify(panel.titleKey)).toBe(true);
+      // A compiled-in module's card IS its own section, so its title is the very
+      // heading `strings.settings.sectionTitle` already carries for it. A
+      // DISCOVERED module (ADR-090) carries its own `{ sr, en }` pair instead —
+      // its page copy is not in the startup chunk, so the shell has no heading of
+      // its own to compare against — and the equality is asked only where a
+      // dotted path was declared.
+      if (typeof panel.titleKey === "string") {
+        expect(lookup(panel.titleKey), moduleId).toBe(
+          strings.settings.sectionTitle[moduleId as keyof typeof strings.settings.sectionTitle],
+        );
+      }
       for (const control of panel.controls) {
-        expect(typeof lookup(control.labelKey), control.labelKey).toBe("string");
+        expect(labelCarriesWords(control.labelKey), JSON.stringify(control.labelKey)).toBe(true);
         if (control.kind === "choice") {
           for (const option of control.options) {
-            expect(typeof lookup(option.labelKey), option.labelKey).toBe("string");
+            expect(labelCarriesWords(option.labelKey), JSON.stringify(option.labelKey)).toBe(true);
           }
         }
       }
@@ -544,7 +602,12 @@ describe("the widgets the v0 modules publish (ADR-045)", () => {
       .flatMap((manifest) =>
         registry.widgetsOf(manifest.id).map((widget) => `${manifest.id}:${widget.id}`),
       );
-    expect([...qualified].sort()).toEqual(Object.keys(DASHBOARD_WIDGETS).sort());
+    // Both halves come from the same discovery now (ADR-090): a compiled-in
+    // widget is in `DASHBOARD_WIDGETS`, a discovered one in its module's own
+    // `renderer/Widgets.tsx`, and `dashboardWidgetIds` is the union — which is
+    // what the page itself draws from. A registered widget with no renderer is
+    // still a card the gallery would offer and the page could not draw.
+    expect([...qualified].sort()).toEqual([...dashboardWidgetIds()].sort());
   });
 
   it("resolves every widget of the DEFAULT layout — a new profile must not open onto blanks", () => {
@@ -567,28 +630,24 @@ describe("the widgets the v0 modules publish (ADR-045)", () => {
         expect(widget.id, widget.id).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
         expect(moduleIds, widget.id).toContain(widget.deepLink);
         expect(widget.sizes.length, widget.id).toBeGreaterThan(0);
-        // `title` is a strings KEY path, not Serbian copy (WidgetContract).
-        expect(widget.title, widget.id).toMatch(/^[a-zA-Z]+(?:\.[a-zA-Z]+)+$/);
+        // `title` is a strings KEY path, not Serbian copy (WidgetContract) — or,
+        // for a discovered module, its own `{ sr, en }` pair (ADR-090), which is
+        // the one form whose words live in the module's own folder.
+        if (typeof widget.title === "string") {
+          expect(widget.title, widget.id).toMatch(/^[a-zA-Z]+(?:\.[a-zA-Z]+)+$/);
+        }
       }
     }
   });
 
   it("names a string that really exists for every widget title", () => {
-    // The convention is only worth anything if the key resolves: a title that
-    // named nothing would render as the raw path the day slice b draws it.
+    // The convention is only worth anything if the label carries words — a
+    // dotted path that resolves, or a discovered module's own pair (ADR-090). A
+    // title that carried neither would render as the raw path on the card.
     const registry = createModuleRegistry();
     for (const manifest of registry.all()) {
       for (const widget of registry.widgetsOf(manifest.id)) {
-        const resolved = widget.title
-          .split(".")
-          .reduce<unknown>(
-            (node, key) =>
-              typeof node === "object" && node !== null
-                ? (node as Record<string, unknown>)[key]
-                : undefined,
-            strings,
-          );
-        expect(typeof resolved, widget.title).toBe("string");
+        expect(labelCarriesWords(widget.title), JSON.stringify(widget.title)).toBe(true);
       }
     }
   });
@@ -691,7 +750,9 @@ describe("the per-widget configuration declarations (DASH-004 / ADR-059)", () =>
           expect(typeof lookup(`dashboard.config.fields.${field.key}`), field.key).toBe("string");
           if (field.kind === "choice") {
             for (const option of field.options) {
-              expect(typeof lookup(option.labelKey), option.labelKey).toBe("string");
+              expect(labelCarriesWords(option.labelKey), JSON.stringify(option.labelKey)).toBe(
+                true,
+              );
             }
           }
         }

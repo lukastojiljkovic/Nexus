@@ -103,6 +103,8 @@ import { publishNetworkMode, useNetworkMode } from "./updates.js";
 import { buildSearchCommands } from "./searchCommands.js";
 import { createModuleRegistry } from "../../shared/modules.js";
 import { DRAWER_MODULES } from "./toolCatalogue.js";
+import { hasModulePage } from "./moduleKit/pages.js";
+import { KitModulePage } from "./moduleKit/ModulePage.js";
 import { ProfileAvatar } from "./profileAvatar.js";
 import { persistAutoLock, readStoredAutoLock, type AutoLockMinutes } from "./autoLock.js";
 import {
@@ -2129,6 +2131,13 @@ export function App() {
                   target={settingsTarget}
                   onTargetHandled={clearSettingsTarget}
                 />
+              ) : activeProfile !== undefined && hasModulePage(shownId) ? (
+                // The kit's ONE generic path (ADR-090): the shown id is a
+                // discovered module, so its page is the one the module's own
+                // folder brings, loaded lazily and handed the profile it stands
+                // in. Adding a module is a folder; adding a branch here would be
+                // the twenty-way conflict the kit exists to end.
+                <KitModulePage key={activeProfile.id} id={shownId} profileId={activeProfile.id} />
               ) : (
                 <ModulePage id={shownId} />
               )}

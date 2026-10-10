@@ -31,16 +31,21 @@ import type {
 import { buildCalendarItems, type CalendarSource } from "./calendarItems.js";
 import { localMinutesOfDay, readStoredClock } from "./calendarPrefs.js";
 import { lookupString, moveNeighbours, type LayoutNeighbours } from "./dashboardLayout.js";
+import { resolveLabel } from "./moduleKit/labels.js";
+import { moduleName } from "./moduleName.js";
 import { dayStripLine } from "./dashboardStrip.js";
 import { dashboardSummary } from "./dashboardSummary.js";
 import { buildTaskListTree, flattenTaskListTree } from "./taskListTree.js";
-import { DASHBOARD_WIDGETS, type DashboardWidgetBodyProps } from "./dashboardWidgets.js";
+import {
+  dashboardWidgetRenderer,
+  type DashboardWidgetBodyProps,
+} from "./dashboardWidgets.js";
 import { localTodayKey } from "./examDates.js";
 import { formatDashboardDate } from "./dateLabels.js";
 import { moduleIconName } from "./moduleIcon.js";
 import { ModuleSettingsGear } from "./moduleSettingsGear.js";
 import { NotePopover } from "./notePopover.js";
-import { lookup, strings } from "./strings.js";
+import { strings } from "./strings.js";
 import { useFocusTrap } from "./useFocusTrap.js";
 
 /** Time-of-day salutation, personalized with the profile name when present. */
@@ -78,9 +83,9 @@ const STRIP_TICK_MS = 60_000;
  */
 const DASHBOARD_WIDGET_SPANS_WIDE: Record<DashboardWidgetSize, number> = { S: 3, M: 4, L: 12 };
 
-/** The Serbian name of a widget, from the strings KEY its contract publishes. */
+/** The name of a widget: a compiled-in module's `strings` key, or a discovered module's own pair (`resolveLabel`). */
 function widgetTitle(contract: WidgetContract): string {
-  return lookupString(strings, contract.title) ?? contract.title;
+  return resolveLabel(contract.title);
 }
 
 /** The preset a newly placed widget takes: the medium one when it accepts it, the first it does otherwise. */
@@ -390,7 +395,7 @@ function WidgetConfigForm({ profileId, contract, config, onApply, onBack }: Widg
                   }}
                 >
                   {check(option.id === current)}
-                  {lookupString(strings, option.labelKey) ?? option.id}
+                  {resolveLabel(option.labelKey)}
                 </button>
               ))}
             </Fragment>
@@ -585,7 +590,7 @@ function WidgetGallery({
       manifest,
       widgets: registry
         .widgetsOf(manifest.id)
-        .filter((widget) => `${manifest.id}:${widget.id}` in DASHBOARD_WIDGETS),
+        .filter((widget) => dashboardWidgetRenderer(`${manifest.id}:${widget.id}`) !== undefined),
     }))
     .filter((group) => group.widgets.length > 0);
 
@@ -610,7 +615,7 @@ function WidgetGallery({
             {groups.map(({ manifest, widgets }) => (
               <section key={manifest.id} className="dash-gallery__group">
                 <h3 className="nx-eyebrow set__module-group-title">
-                  {lookup(strings.modules, manifest.id) ?? manifest.id}
+                  {moduleName(manifest.id)}
                 </h3>
                 {widgets.map((widget) => {
                   const qualified = `${manifest.id}:${widget.id}`;
@@ -1165,7 +1170,7 @@ export function DashboardPage({
   // is silently skipped — it stays in storage and comes back with its module.
   const placed: PlacedWidget[] = (layout ?? []).flatMap((entry) => {
     const contract = registry.findWidget(entry.widgetId);
-    const renderer = DASHBOARD_WIDGETS[entry.widgetId];
+    const renderer = dashboardWidgetRenderer(entry.widgetId);
     return contract !== undefined && renderer !== undefined && renderer.visible(enabledModules)
       ? [{ entry, contract, Body: renderer.Body }]
       : [];

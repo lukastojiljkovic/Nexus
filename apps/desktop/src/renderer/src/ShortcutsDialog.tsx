@@ -5,7 +5,8 @@ import { formatChord, MODULE_NAV_MAX, moduleNavChord } from "@nexus/core";
 import { Button } from "@nexus/ui";
 import { SHORTCUT_ACTIONS, type ShortcutBindings } from "./shortcuts.js";
 import { SHORTCUT_REFERENCE } from "./shortcutsReference.js";
-import { lookup, strings } from "./strings.js";
+import { moduleName } from "./moduleName.js";
+import { strings } from "./strings.js";
 import { useFocusTrap } from "./useFocusTrap.js";
 
 /**
@@ -150,7 +151,7 @@ export function ShortcutsDialog({ bindings, moduleIds, onClose }: ShortcutsDialo
                 return (
                   <ReferenceRow
                     key={moduleId}
-                    label={lookup(strings.modules, moduleId) ?? moduleId}
+                    label={moduleName(moduleId)}
                     keys={[formatChord(chord)]}
                   />
                 );

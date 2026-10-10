@@ -94,6 +94,7 @@ import type {
   ExportFocusSession,
   ExportHabit,
   ExportHabitEntry,
+  ExportModuleData,
   ExportNote,
   ExportNoteAttachment,
   ExportNoteCategory,
@@ -296,6 +297,25 @@ export interface ImportArchiveResult {
 /**
  * The schema version this build writes and is the newest it accepts, kept in
  * step with `buildExportArchive`'s own `SCHEMA_VERSION`.
+ *
+ * `1.42.0` adds the MODULE KIT's section (ADR-090): one record type -
+ * `module-data` - riding in a new `data/modules.ndjson` (a `DATA_FILES` entry
+ * the checksum walk's union absorbs unchanged), carrying a module's id and the
+ * opaque payload that module exported. No `ArchiveEra` flag: the
+ * whole-absent-type rule below covers it, and an archive written before this
+ * version simply names no module, which is exactly what a profile that never
+ * used one produces.
+ *
+ * **A kit module's payload is read and never understood here.** `payload` is
+ * carried as it was written, because its shape belongs to the module that
+ * wrote it and is validated by that module's own `parse` against its own
+ * version, at the preview and again before anything is written
+ * (`main/moduleIpc.ts`'s `assertImportable` and `applyImports`). What this
+ * reader DOES decide is that the record is well-formed: a `module-data` row
+ * with no id, or with two rows for one id, is refused like any other malformed
+ * row. An id this build does not know is not this module's judgement to make
+ * and is not made here - core has no module registry - so the refusal names the
+ * module and comes from the desktop, where the build knows what it adopted.
  *
  * `1.41.0` adds the MACHINE a circuit is the electronics of (ADR-085 E4c,
  * migration 068): one record type — `circuit-chassis` — riding in the
@@ -699,7 +719,7 @@ export interface ImportArchiveResult {
  * shipped would be speculative machinery with nothing to exercise it.
  *
  */
-export const INTERCHANGE_SCHEMA_VERSION = "1.41.0";
+export const INTERCHANGE_SCHEMA_VERSION = "1.42.0";
 
 // --- Archive era: what a declared version guarantees its rows CARRY ---------
 //
@@ -1460,7 +1480,9 @@ export type ArchiveRecordType =
   | "circuit"
   | "circuit-chassis"
   | "circuit-part"
-  | "circuit-wire";
+  | "circuit-wire"
+  // The MODULE KIT's section (ADR-090, `1.42.0`): one record per module id.
+  | "module-data";
 
 const ALL_RECORD_TYPES: readonly ArchiveRecordType[] = [
   "task",
@@ -1525,6 +1547,7 @@ const ALL_RECORD_TYPES: readonly ArchiveRecordType[] = [
   "circuit-chassis",
   "circuit-part",
   "circuit-wire",
+  "module-data",
 ];
 
 type DataFilePath = (typeof DATA_FILES)[number];
@@ -1601,6 +1624,9 @@ const FILE_RECORD_TYPES: Record<DataFilePath, readonly ArchiveRecordType[]> = {
   // test and does not impose one, but the file's own order is what lets a
   // restore write a wire after the parts it names.
   "data/electronics.ndjson": ["circuit", "circuit-chassis", "circuit-part", "circuit-wire"],
+  // One type, and it points at nothing: a kit module's payload is opaque here
+  // (ADR-090), so there is no order to keep and no reference to resolve.
+  "data/modules.ndjson": ["module-data"],
 };
 
 /**
@@ -1628,6 +1654,9 @@ const MODULE_OF_DATA_FILE: Record<DataFilePath, ArchiveModuleId | null> = {
   "data/canvas.ndjson": "canvas",
   "data/electronics.ndjson": "electronics",
   "data/fitness.ndjson": "fitness",
+  // The kit's section belongs to no archive module (ADR-090), on
+  // `private-notes`' exact terms: a drop from it is named without one.
+  "data/modules.ndjson": null,
 };
 
 // --- Per-record parsers, one field validator call per interface field, in --
@@ -3772,6 +3801,27 @@ function parsePrivateNoteVersion(raw: Record<string, unknown>): ExportPrivateNot
   };
 }
 
+/**
+ * One kit module's section (ADR-090).
+ *
+ * Two fields and no more, and the second one is deliberately unexamined: a
+ * module's payload is validated by the module that wrote it, against its own
+ * version, at the moment it is applied (`main/moduleIpc.ts`). What this parser
+ * decides is only that the ROW is well-formed - an id that is an id, and a
+ * `payload` key that is present, because a module whose export value was
+ * `undefined` is a module with nothing to say and the writer omits it rather
+ * than writing a key it cannot distinguish from "not carried".
+ *
+ * An explicit `null` IS a payload: a module may legitimately export `null` (a
+ * profile whose settings row exists but holds nothing), and refusing it here
+ * would be this file deciding a shape it just said it does not decide.
+ */
+function parseModuleData(raw: Record<string, unknown>): ExportModuleData {
+  const moduleId = idStr(raw.moduleId, "moduleId");
+  if (!Object.hasOwn(raw, "payload")) throw new InvalidFieldError("payload");
+  return { moduleId, payload: raw.payload };
+}
+
 // --- Collecting parsed rows with their archive origin -----------------------
 
 /** One parsed row plus where it came from — needed after the fact, to attach `path`/`line` to a reference or cycle problem discovered only once every row is known, and to name the module a dropped row belonged to. */
@@ -3924,6 +3974,8 @@ interface Collections {
   circuitChassis: Bucket<ExportCircuitChassis>;
   circuitParts: Bucket<ExportCircuitPart>;
   circuitWires: Bucket<ExportCircuitWire>;
+  /** The kit's section (ADR-090), keyed by module id. */
+  modules: Bucket<ExportModuleData>;
 }
 
 function newCollections(): Collections {
@@ -3954,6 +4006,7 @@ function newCollections(): Collections {
     canvasBoards: newBucket(),
     circuits: newBucket(), circuitChassis: newBucket(),
     circuitParts: newBucket(), circuitWires: newBucket(),
+    modules: newBucket(),
   };
 }
 
@@ -4349,6 +4402,14 @@ function dispatchRecord(
     case "circuit-wire": {
       const row = parseCircuitWire(raw);
       pushRow(collections.circuitWires, row.id, row, type, path, line, ctx);
+      return;
+    }
+    // Keyed by the MODULE ID, because that is the record's whole identity: an
+    // archive carries at most one row per module, and a second one is the
+    // ordinary `duplicate-id` refusal rather than a silent last-one-wins.
+    case "module-data": {
+      const row = parseModuleData(raw);
+      pushRow(collections.modules, row.moduleId, row, type, path, line, ctx);
       return;
     }
   }
@@ -6092,6 +6153,12 @@ export function parseImportArchive(input: ImportArchiveInput): ImportArchiveResu
         circuitChassis: rowsOf(collections.circuitChassis),
         circuitParts: rowsOf(collections.circuitParts),
         circuitWires: rowsOf(collections.circuitWires),
+        // Empty for every pre-1.42.0 archive, which carries no such file at all
+        // - and a restore reads that emptiness as "no module of this build
+        // left anything here", which is exactly what it left. A build that does
+        // not KNOW an id it finds here refuses the archive at apply time
+        // (`main/moduleIpc.ts`), never quietly drops it.
+        modules: rowsOf(collections.modules),
       };
 
   // Beside `data` and gated identically (ADR-057 §6): empty both for a

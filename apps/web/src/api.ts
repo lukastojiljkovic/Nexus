@@ -18,6 +18,15 @@ import { strings } from "./strings.js";
 type AssertTrue<T extends true> = T;
 
 /**
+ * `NexusApi` minus the kit's namespace, which is the one member that is not a
+ * method: `NexusApi.modules` is an object of per-module namespaces (ADR-090,
+ * `nexus.modules.timers.list(...)`) rather than a request of its own. The three
+ * assertions below are stated over this type so that one honest data member does
+ * not have to be answered as a function; the proxy answers it explicitly.
+ */
+type NexusApiMembers = Omit<NexusApi, "modules">;
+
+/**
  * Compile-time proof that answering EVERY member of `NexusApi` with a function
  * is a legal thing to do — i.e. that the interface is methods all the way down
  * and holds no data property.
@@ -31,14 +40,16 @@ type AssertTrue<T extends true> = T;
  * moment the member is added, which is the only moment anyone is looking.
  */
 type _EveryMemberIsCallable = AssertTrue<
-  NexusApi extends Record<keyof NexusApi, (...args: never[]) => unknown> ? true : false
+  NexusApiMembers extends Record<keyof NexusApiMembers, (...args: never[]) => unknown>
+    ? true
+    : false
 >;
 
 /**
  * THE ONE RULE THE PROXY DISPATCHES ON, and the two assertions that keep it
  * true.
  *
- * `NexusApi` has two kinds of member and they need opposite refusals:
+ * `NexusApi` has three kinds of member and they need different answers:
  *
  *   - 398 request methods returning a `Promise`. These must REJECT, not throw.
  *     The desktop renderer chains `.catch(…)` straight onto a dozen of them
@@ -50,19 +61,22 @@ type _EveryMemberIsCallable = AssertTrue<
  *     „unsubscribe" would be stored by a `useEffect` cleanup and called on
  *     unmount, producing a crash in a teardown path with no connection to the
  *     line that caused it.
+ *   - one namespace, `modules` (ADR-090), which is not callable at all and so
+ *     gets neither treatment: the web build serves no kit module and answers it
+ *     with a frozen empty object, below.
  *
- * Nothing at runtime can tell the two apart — a proxy sees a name and nothing
- * else — so the rule is the NAME, and the two assertions below are what stop
- * that from being a guess. Add a synchronous request method and the first one
- * fails; add a subscription that is not called `on…`, or a request method that
- * is, and the second does. Either way the compiler names the member before the
- * stub can answer it wrongly.
+ * Nothing at runtime can tell the two callable kinds apart — a proxy sees a name
+ * and nothing else — so the rule is the NAME, and the two assertions below are
+ * what stop that from being a guess. Add a synchronous request method and the
+ * first one fails; add a subscription that is not called `on…`, or a request
+ * method that is, and the second does. Either way the compiler names the member
+ * before the stub can answer it wrongly.
  */
 type RequestMembers = {
-  [K in keyof NexusApi as K extends `on${string}` ? never : K]: NexusApi[K];
+  [K in keyof NexusApiMembers as K extends `on${string}` ? never : K]: NexusApiMembers[K];
 };
 type SubscriptionMembers = {
-  [K in keyof NexusApi as K extends `on${string}` ? K : never]: NexusApi[K];
+  [K in keyof NexusApiMembers as K extends `on${string}` ? K : never]: NexusApiMembers[K];
 };
 
 type _EveryRequestReturnsAPromise = AssertTrue<
@@ -186,6 +200,19 @@ export class NexusApiNotConnectedError extends Error {
 }
 
 /**
+ * What the web build answers for the kit's namespace: NOTHING, frozen.
+ *
+ * The desktop's `NexusApi.modules` carries one namespace per discovered kit
+ * module (ADR-090); this build ships no kit module, so the member is here - a
+ * ported page reads the same shape - and holds no namespaces. One module-level
+ * object rather than a fresh `{}` per read, for the identity reason the `get`
+ * trap below gives about functions: React compares what a page reads by
+ * identity. Frozen for the same reason the proxy's target is: a write to a seam
+ * must fail where it is written, not silently succeed.
+ */
+const WEB_MODULES = Object.freeze({}) as NexusApi["modules"];
+
+/**
  * The web build's `NexusApi`: the shape is real, the answers are not yet.
  *
  * **THIS STUB IS THE CONTRACT THE SYNC ENGINE WILL SATISFY.** Everything a page
@@ -255,6 +282,8 @@ function createNotConnectedApi(): NexusApi {
           return Reflect.get(target, property, receiver);
         }
         if (RUNTIME_PROBES.has(property)) return undefined;
+        // The kit's namespace is answered with nothing in it: the web build serves no kit module.
+        if (property === "modules") return WEB_MODULES;
 
         const existing = answers.get(property);
         if (existing !== undefined) return existing;
