@@ -1,6 +1,9 @@
 # ADR-091 — Content packs: a signed folder, verified with the release key
 
-**Status:** accepted (2026-10-09) · **Owner:** founder
+**Status:** accepted (2026-10-09) · **Owner:** founder · Amended by
+[ADR-103](103-pack-catalogue-and-credits.md): format 1 gains an optional
+`notice` field, and the catalogue that lists packs for download is its third
+signed document
 
 Nexus is becoming *the internet without the internet*: offline Wikipedia and
 other libraries, maps, survival and reference content, later local AI models.
@@ -75,6 +78,13 @@ do that with a key this application already trusts.
   without the notice they asked for.
 - `minAppVersion` is the app version this pack needs. A pack that asks for a
   newer one is refused rather than installed and half-understood.
+- `notice`, **optional**, was added by
+  [ADR-103](103-pack-catalogue-and-credits.md) as an amendment to format 1
+  rather than a bump, because no pack had shipped: its one value today is
+  `"safety"`, and it is what makes the app show the safety disclaimer wherever
+  the pack is read. Absent means no notice; a value the build does not know is
+  refused, because a notice nothing understands is a disclaimer that would not
+  be drawn.
 - **A field the format does not define is refused**, at every level. A typo
   (`minAppVerison`) and a newer format's field are both worse read past than
   refused: the first installs a pack whose minimum version was never checked,

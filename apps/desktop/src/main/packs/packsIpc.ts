@@ -86,7 +86,7 @@ function packId(value: unknown): string {
   return value;
 }
 
-function toView(pack: InstalledPack): InstalledPackView {
+export function toView(pack: InstalledPack): InstalledPackView {
   const manifest = pack.manifest;
   return {
     id: manifest.id,
@@ -96,6 +96,7 @@ function toView(pack: InstalledPack): InstalledPackView {
     description: manifest.description,
     licence: manifest.licence,
     source: manifest.source,
+    notice: manifest.notice,
     size: pack.size,
     fileCount: pack.fileCount,
     installedAt: pack.installedAt,
@@ -112,6 +113,7 @@ function toCandidate(manifest: PackManifest): PackCandidateView {
     description: manifest.description,
     licence: manifest.licence,
     source: manifest.source,
+    notice: manifest.notice,
     size: packContentBytes(manifest),
     fileCount: manifest.files.length,
     minAppVersion: manifest.minAppVersion,

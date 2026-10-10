@@ -1,4 +1,4 @@
-import type { InstalledPackView, PackText } from "../../shared/ipc.js";
+import type { InstalledPackView, PackCatalogueEntryView, PackKind, PackText } from "../../shared/ipc.js";
 import { collator, numberFormat } from "./intl.js";
 import type { Locale } from "./strings.js";
 
@@ -43,6 +43,39 @@ export function sortPacksByTitle(
 
 /** The units a pack's size is read in, smallest first. */
 const SIZE_UNITS = ["B", "KB", "MB", "GB", "TB"] as const;
+
+/**
+ * The catalogue's entries, grouped by kind: one group per kind present, the
+ * kinds in the active language's order and the entries inside a group by title.
+ *
+ * The card draws the catalogue „by kind" because that is the question a person
+ * arrives with — „is there a map for this region", „is there a ZIM I can read
+ * offline" — and a flat list of fifty packs answers it by making the reader
+ * scan. Only the kinds the document actually offers get a group: a heading with
+ * nothing under it is a promise the catalogue did not make.
+ */
+export function groupCatalogueByKind(
+  entries: readonly PackCatalogueEntryView[],
+  locale: Locale,
+): { readonly kind: PackKind; readonly entries: PackCatalogueEntryView[] }[] {
+  const groups = new Map<PackKind, PackCatalogueEntryView[]>();
+  for (const entry of entries) {
+    const list = groups.get(entry.kind);
+    if (list === undefined) groups.set(entry.kind, [entry]);
+    else list.push(entry);
+  }
+  const { compare } = collator({ sensitivity: "base" }, locale);
+  return [...groups.entries()]
+    .map(([kind, list]) => ({
+      kind,
+      entries: [...list].sort(
+        (left, right) =>
+          compare(packText(left.title, locale), packText(right.title, locale)) ||
+          compare(left.id, right.id),
+      ),
+    }))
+    .sort((left, right) => compare(left.kind, right.kind));
+}
 
 /**
  * A pack's size, in the units a person reads sizes in.

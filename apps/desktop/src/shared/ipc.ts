@@ -1046,6 +1046,22 @@ export const IpcChannel = {
   // polling a twenty-gigabyte operation.
   packsChanged: "packs:changed",
   packsProgress: "packs:progress",
+  // The catalogue and the downloads that start from it (ADR-103). Six
+  // request channels and one event, and the shape is the same as above in the
+  // one way that matters: the renderer names a PACK id, never a URL, a file, a
+  // host or a size. Every address a download reaches came out of a signed
+  // catalogue document that MAIN fetched and verified.
+  packsCatalogue: "packs:catalogue",
+  packsDownload: "packs:download",
+  packsDownloadPause: "packs:download-pause",
+  packsDownloadResume: "packs:download-resume",
+  packsDownloadCancel: "packs:download-cancel",
+  packsDownloadProgress: "packs:download-progress",
+  // The external-link rule (ADR-103). A verified https address handed to the
+  // USER'S browser, never to this process's network stack; the rule itself is a
+  // pure function in main, because `shell.openExternal` on a hostile string is
+  // the phishing primitive ADR-089 refused.
+  externalOpen: "external:open",
   appInfo: "app:info",
   // The device's module arrangement (ADR-101). Device-level, like `network:*`
   // and `cloud.json` before them: ONE setting for the whole app, not one per
@@ -8804,6 +8820,14 @@ export interface UpdateStateView {
 export const PACK_KINDS = ["zim", "map", "dataset", "model", "content"] as const;
 export type PackKind = (typeof PACK_KINDS)[number];
 
+/**
+ * What a pack asks the app to say about it, mirroring
+ * `main/packs/manifest.ts`'s `PackNotice` for `PACK_KINDS`' reason: one flat
+ * closed list, and the manifest's parser is what refuses a second value.
+ */
+export const PACK_NOTICES = ["safety"] as const;
+export type PackNotice = (typeof PACK_NOTICES)[number];
+
 /** One string per language. Both are required: the copy is Serbian and English, always. */
 export interface PackText {
   readonly sr: string;
@@ -8832,6 +8856,8 @@ export interface InstalledPackView {
   readonly description: PackText;
   readonly licence: PackLicenceView;
   readonly source: PackSourceView;
+  /** What the app must say about this pack wherever it is read, or `null` (ADR-103). */
+  readonly notice: PackNotice | null;
   /** Every file's size, added up, in bytes. */
   readonly size: number;
   readonly fileCount: number;
@@ -8855,6 +8881,8 @@ export interface PackCandidateView {
   readonly description: PackText;
   readonly licence: PackLicenceView;
   readonly source: PackSourceView;
+  /** The same disclaimer flag an installed pack carries (ADR-103). */
+  readonly notice: PackNotice | null;
   /** What the manifest says the content will weigh, since it is not on disk here yet. */
   readonly size: number;
   readonly fileCount: number;
@@ -8947,6 +8975,22 @@ export type PackRefusalCode =
   | "no-candidate"
   /** This id is not installed. */
   | "not-found"
+  /** A manifest's `notice` is not one this build knows (ADR-103). */
+  | "notice-invalid"
+  /** The catalogue document is not readable JSON, is not an object, or carries an unknown field. */
+  | "catalogue-unreadable"
+  /** The catalogue's `.sig` is missing, too large, or not this key's signature over those exact bytes. */
+  | "catalogue-signature"
+  /** The catalogue describes a pack from a host this build may not download from. */
+  | "catalogue-host"
+  /** One catalogue entry breaks a rule: a field, the two metadata files, a duplicate path, or a size. */
+  | "catalogue-entry"
+  /** This launch is not in the network mode that allows downloads. */
+  | "downloads-off"
+  /** A download of this pack is already in flight (or of every slot the service allows). */
+  | "busy"
+  /** The download failed: the transport, the disk, or bytes that are not the catalogue's. */
+  | "download-failed"
   /** Reading or writing the pack failed for a reason none of the above names. */
   | "io";
 
@@ -8969,6 +9013,70 @@ export type PackRemoveResult =
 /** What `packsVerify` answers. */
 export type PackVerifyResult =
   | { readonly outcome: "ok"; readonly pack: InstalledPackView }
+  | { readonly outcome: "refused"; readonly code: PackRefusalCode };
+
+/**
+ * One pack the catalogue offers, as the Packs card draws it before a byte is
+ * downloaded.
+ *
+ * It carries the licence, the attribution and the source because ADR-103's
+ * decision is that a user sees who made the content and under what terms
+ * BEFORE anything arrives — not in a credits screen afterwards.
+ */
+export interface PackCatalogueEntryView {
+  readonly id: string;
+  readonly version: string;
+  readonly kind: PackKind;
+  readonly title: PackText;
+  readonly description: PackText;
+  readonly size: number;
+  readonly fileCount: number;
+  readonly licence: PackLicenceView;
+  readonly source: PackSourceView;
+  readonly notice: PackNotice | null;
+  /**
+   * What this device has of this pack, as main computed it: nothing, the same
+   * version, or an older one. Derived in main rather than here because the
+   * version grammar (`main/update/version.ts`) lives there and one comparator
+   * is the whole reason it is not written twice.
+   */
+  readonly state: PackCatalogueState;
+  readonly installedVersion: string | null;
+}
+
+/** Whether a catalogue entry is missing, current, or newer than what is installed. */
+export type PackCatalogueState = "not-installed" | "installed" | "update-available";
+
+/** What `packsCatalogue` answers: the signed document's entries, or a refusal. */
+export type PackCatalogueResult =
+  | { readonly outcome: "ready"; readonly entries: PackCatalogueEntryView[] }
+  | { readonly outcome: "refused"; readonly code: PackRefusalCode };
+
+/** Where one downloaded file has got to. Pushed on `packs:download-progress`. */
+export interface PackDownloadProgress {
+  readonly id: string;
+  /**
+   * Which half of the operation this is: the file coming down the wire, or the
+   * verified copy the install makes of it. One view for both, because from the
+   * card's side it is one operation and the label is the only difference.
+   */
+  readonly phase: "download" | "install";
+  /** The file being downloaded, as the catalogue names it. */
+  readonly file: string;
+  readonly filesDone: number;
+  readonly filesTotal: number;
+  readonly bytesDone: number;
+  readonly bytesTotal: number;
+}
+
+/**
+ * What `packsDownload` answers. `"paused"` is not a failure: it says the
+ * staging folder was kept and `packsResume` continues from it.
+ */
+export type PackDownloadResult =
+  | { readonly outcome: "installed"; readonly pack: InstalledPackView }
+  | { readonly outcome: "paused"; readonly id: string }
+  | { readonly outcome: "cancelled"; readonly id: string }
   | { readonly outcome: "refused"; readonly code: PackRefusalCode };
 
 /** Everything `enableSync` can answer. */
@@ -10530,10 +10638,33 @@ export interface NexusApi {
   packsRemove(id: string): Promise<PackRemoveResult>;
   /** Re-hashes every file of an installed pack against its signed manifest. The expensive one. */
   packsVerify(id: string): Promise<PackVerifyResult>;
+  /**
+   * The packs the signed catalogue offers (ADR-103), with what this device has
+   * of each. Takes no argument and reaches no network of its own: main fetches
+   * and verifies the document, and a refusal is a code.
+   */
+  /** `reload` re-reads and re-verifies the document rather than answering from main's cache. */
+  packsCatalogue(reload?: boolean): Promise<PackCatalogueResult>;
+  /** Downloads one catalogue pack file by file, verifies every hash, then installs it. */
+  packsDownload(id: string): Promise<PackDownloadResult>;
+  /** Asks a running download to stop and keep what it has, so `packsResume` can continue it. */
+  packsDownloadPause(id: string): Promise<void>;
+  /** Continues a paused download. */
+  packsDownloadResume(id: string): Promise<PackDownloadResult>;
+  /** Stops a download and deletes what it had staged. */
+  packsDownloadCancel(id: string): Promise<void>;
   /** Subscribes to the installed list changing. Returns an unsubscribe function. */
   onPacksChanged(listener: (packs: InstalledPackView[]) => void): () => void;
   /** Subscribes to copy and verify progress. Returns an unsubscribe function. */
   onPacksProgress(listener: (progress: PackProgress) => void): () => void;
+  /** Subscribes to download progress. Returns an unsubscribe function. */
+  onPacksDownloadProgress(listener: (progress: PackDownloadProgress) => void): () => void;
+  /**
+   * Opens an https address in the user's own browser, through main's
+   * external-link rule. Answers whether it was opened; a refused address is
+   * `false` rather than an exception.
+   */
+  openExternal(url: string): Promise<boolean>;
   appInfo(): Promise<AppInfo>;
   /**
    * The device's module arrangement (ADR-101) — read once when the shell mounts,

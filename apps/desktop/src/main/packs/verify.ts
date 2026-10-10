@@ -37,6 +37,25 @@ export function packSignedBytes(manifestBytes: Uint8Array): Uint8Array {
 }
 
 /**
+ * The same arrangement for the CATALOGUE (ADR-103), and a THIRD context.
+ *
+ * The release key now signs three kinds of document: `SHA256SUMS.txt` for the
+ * updater, a pack's `pack.json`, and the catalogue that lists the packs. The
+ * context is what keeps any one of them from being presented as another, and a
+ * third document is exactly the case the first two contexts were written for:
+ * were the catalogue signed over its bytes alone, a pack's signed manifest
+ * would be a valid catalogue, and a catalogue entry could be smuggled into a
+ * pack. `scripts/pack-sign.mjs` spells the same string, and its test reads this
+ * file to hold the two together.
+ */
+export const PACK_CATALOGUE_SIGNATURE_CONTEXT = "nexus-pack-catalogue-v1\n";
+
+/** What a catalogue signature is made over: the context, then the document's exact bytes. */
+export function catalogueSignedBytes(catalogueBytes: Uint8Array): Uint8Array {
+  return Buffer.concat([Buffer.from(PACK_CATALOGUE_SIGNATURE_CONTEXT, "utf8"), catalogueBytes]);
+}
+
+/**
  * Whether `signatureBytes` is the pinned key's signature over the context and
  * exactly `manifestBytes`. Any error — a malformed key, a signature of the wrong
  * length — answers `false`, for `verifyDetachedSignature`'s reason: "I could
@@ -49,6 +68,23 @@ export function verifyPackSignature(input: {
 }): boolean {
   return verifyDetachedSignature({
     data: packSignedBytes(input.manifestBytes),
+    signature: input.signatureBytes,
+    publicKeyPem: input.publicKeyPem,
+  });
+}
+
+/**
+ * Whether `signatureBytes` is the pinned key's signature over the context and
+ * exactly `catalogueBytes`. The refusals and the reason for the context are
+ * {@link verifyPackSignature}'s; only the string differs.
+ */
+export function verifyCatalogueSignature(input: {
+  readonly catalogueBytes: Uint8Array;
+  readonly signatureBytes: Uint8Array;
+  readonly publicKeyPem: string;
+}): boolean {
+  return verifyDetachedSignature({
+    data: catalogueSignedBytes(input.catalogueBytes),
     signature: input.signatureBytes,
     publicKeyPem: input.publicKeyPem,
   });

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import type { InstalledPackView } from "../../shared/ipc.js";
-import { formatPackSize, packText, sortPacksByTitle } from "./packsView.js";
+import type { InstalledPackView, PackCatalogueEntryView, PackKind } from "../../shared/ipc.js";
+import { formatPackSize, groupCatalogueByKind, packText, sortPacksByTitle } from "./packsView.js";
 
 function pack(id: string, sr: string, en: string): InstalledPackView {
   return {
@@ -12,6 +12,7 @@ function pack(id: string, sr: string, en: string): InstalledPackView {
     description: { sr: "opis", en: "description" },
     licence: { spdx: "CC-BY-SA-4.0", attribution: "authors", url: "https://example.org" },
     source: { name: "Kiwix", url: "https://www.kiwix.org/" },
+    notice: null,
     size: 1024,
     fileCount: 1,
     installedAt: 1,
@@ -64,5 +65,49 @@ describe("pack sizes", () => {
     expect(formatPackSize(1536)).toMatch(/^1(,|\.)5 KB$/);
     expect(formatPackSize(2 * 1024 ** 3)).toBe("2 GB");
     expect(formatPackSize(5 * 1024 ** 4)).toBe("5 TB");
+  });
+});
+
+/** A catalogue entry, with only the fields the grouping reads doing any work. */
+function catalogueEntry(id: string, kind: PackKind, sr: string): PackCatalogueEntryView {
+  return {
+    id,
+    version: "2026.10.0",
+    kind,
+    title: { sr, en: id },
+    description: { sr: "opis", en: "description" },
+    size: 1024,
+    fileCount: 3,
+    licence: { spdx: "CC-BY-SA-4.0", attribution: "authors", url: "https://example.org" },
+    source: { name: "Kiwix", url: "https://www.kiwix.org/" },
+    notice: null,
+    state: "not-installed",
+    installedVersion: null,
+  };
+}
+
+describe("the catalogue's order", () => {
+  it("groups by kind, and sorts the entries inside a group by the title being served", () => {
+    const groups = groupCatalogueByKind(
+      [
+        catalogueEntry("map-sr", "map", "Mapa Srbije"),
+        catalogueEntry("zim-b", "zim", "Beta"),
+        catalogueEntry("zim-a", "zim", "Alfa"),
+        catalogueEntry("map-bih", "map", "Mapa Bosne"),
+      ],
+      "sr",
+    );
+    expect(groups.map((group) => group.kind)).toEqual(["map", "zim"]);
+    expect(groups[0]?.entries.map((entry) => entry.id)).toEqual(["map-bih", "map-sr"]);
+    expect(groups[1]?.entries.map((entry) => entry.id)).toEqual(["zim-a", "zim-b"]);
+  });
+
+  it("draws no group for a kind the catalogue does not offer", () => {
+    const groups = groupCatalogueByKind([catalogueEntry("zim-a", "zim", "Alfa")], "sr");
+    expect(groups.map((group) => group.kind)).toEqual(["zim"]);
+  });
+
+  it("is empty when the catalogue is empty", () => {
+    expect(groupCatalogueByKind([], "sr")).toEqual([]);
   });
 });

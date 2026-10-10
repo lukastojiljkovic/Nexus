@@ -30,6 +30,7 @@ import { readFileBounded } from "./boundedRead.js";
 import {
   activeNetworkMode,
   devServerOrigin,
+  DOWNLOAD_HOSTS,
   isRequestAllowed,
   isSessionRequestAllowed,
   networkChoiceRecorded,
@@ -41,6 +42,9 @@ import {
   writeNetworkMode,
 } from "./net/offline.js";
 import { createUpdateHttp, openReleasePage } from "./update/electron.js";
+import { createDownloadHttp } from "./download/electron.js";
+import { openExternalUrl } from "./external.js";
+import { createPackCatalogueIpc, type PackCatalogueIpc } from "./packs/catalogueIpc.js";
 import { launchInstaller } from "./update/launch.js";
 import { RELEASE_PUBLIC_KEY_PEM } from "./update/releaseKey.js";
 import { createUpdateService, type UpdateService } from "./update/service.js";
@@ -710,6 +714,8 @@ import {
   type PackInspectResult,
   type PackInstallResult,
   type PackRemoveResult,
+  type PackCatalogueResult,
+  type PackDownloadResult,
   type PackVerifyResult,
   PRIV_ATTACHMENT_MAX_BYTES,
   PRIV_ATTACHMENTS_MAX_COUNT,
@@ -5646,6 +5652,47 @@ function packs(): PacksIpc {
     freeBytes: volumeFreeBytes,
   });
   return packsIpc;
+}
+
+// --- Content packs: the catalogue and its downloads (ADR-103) ----------------
+//
+// ONE service per launch, beside `packs()` and on its terms: it holds the state
+// that lives between two calls — which pack is downloading, what it has staged
+// and where a pause stopped it — and a second instance would let one window
+// cancel a download another window started.
+//
+// It fetches on the SAME dedicated session the update check and the download
+// service use (the `nexus-update` partition, ADR-089 and ADR-092): the launch's
+// resolver block and that session's own request rule are what keep the addresses
+// this feature reaches the compiled-in ones. The catalogue and every pack file
+// go through `createDownloadHttp`, whose `redirect: "manual"` is what keeps each
+// hop of a redirect chain in the service's hands rather than Chromium's.
+//
+// It is built lazily, like `packs()`: the session exists only after `ready`, and
+// the first call is a renderer's, long after that.
+let packCatalogueIpc: PackCatalogueIpc | null = null;
+
+function packCatalogue(): PackCatalogueIpc {
+  packCatalogueIpc ??= createPackCatalogueIpc({
+    userData: userDataDir(),
+    appVersion: app.getVersion(),
+    publicKeyPem: RELEASE_PUBLIC_KEY_PEM,
+    // The mode this launch may ACT on, never the stored file: a stored change
+    // is a restart owed, and until then downloads behave as if the mode were
+    // offline. `packsIpc`'s two folder paths reach no network and need no mode.
+    mode: () => activeNetworkMode(runningNetworkMode, readNetworkMode(userDataDir())),
+    http: createDownloadHttp(requireUpdateSession()),
+    hosts: DOWNLOAD_HOSTS,
+    isAllowedUrl: (url) => isSessionRequestAllowed(runningNetworkMode, url),
+    freeBytes: volumeFreeBytes,
+    onChanged: (packs) => {
+      mainWindow?.webContents.send(IpcChannel.packsChanged, packs);
+    },
+    onProgress: (row) => {
+      mainWindow?.webContents.send(IpcChannel.packsDownloadProgress, row);
+    },
+  });
+  return packCatalogueIpc;
 }
 
 // --- Search (ADR-021): the query pipeline -----------------------------------
@@ -12493,6 +12540,50 @@ function registerIpc(): void {
     assertTrustedSender(event);
     const id = asId(asRecord(payload).id, "id");
     return packs().verify(id);
+  });
+
+  // The catalogue and its downloads (ADR-103). Six channels and one push, and
+  // the same rule as the five above holds: **no URL, no host and no path crosses
+  // this bridge.** `packs:catalogue` takes no argument at all; the four calls
+  // below take a pack id, which is validated as an id here and as a kebab-case
+  // pack id beside the code that looks it up in the signed document. Every
+  // address a download reaches came out of that document.
+  ipcMain.handle(IpcChannel.packsCatalogue, async (event, payload): Promise<PackCatalogueResult> => {
+    assertTrustedSender(event);
+    return packCatalogue().catalogue(asBoolean(asRecord(payload).reload, "reload"));
+  });
+
+  ipcMain.handle(IpcChannel.packsDownload, async (event, payload): Promise<PackDownloadResult> => {
+    assertTrustedSender(event);
+    const id = asId(asRecord(payload).id, "id");
+    return packCatalogue().download(id);
+  });
+
+  ipcMain.handle(IpcChannel.packsDownloadPause, async (event, payload): Promise<void> => {
+    assertTrustedSender(event);
+    const id = asId(asRecord(payload).id, "id");
+    await packCatalogue().pause(id);
+  });
+
+  ipcMain.handle(IpcChannel.packsDownloadResume, async (event, payload): Promise<PackDownloadResult> => {
+    assertTrustedSender(event);
+    const id = asId(asRecord(payload).id, "id");
+    return packCatalogue().resume(id);
+  });
+
+  ipcMain.handle(IpcChannel.packsDownloadCancel, async (event, payload): Promise<void> => {
+    assertTrustedSender(event);
+    const id = asId(asRecord(payload).id, "id");
+    await packCatalogue().cancel(id);
+  });
+
+  // The credits screen's addresses (ADR-103). `openExternalUrl` holds the whole
+  // rule (`main/external.ts`): https only, no credentials, and the loader is the
+  // user's browser. A refused address answers `false` and opens nothing.
+  ipcMain.handle(IpcChannel.externalOpen, async (event, payload): Promise<boolean> => {
+    assertTrustedSender(event);
+    const url = asString(asRecord(payload).url, "url");
+    return await openExternalUrl(url);
   });
 
   // The module kit's channels (ADR-090): one `ipcMain.handle` per channel a

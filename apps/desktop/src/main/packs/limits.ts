@@ -48,3 +48,23 @@ export const PACK_LIMITS = {
    */
   progressStepBytes: 16 * 1024 * 1024,
 } as const;
+
+/**
+ * The caps the CATALOGUE document runs under (ADR-103).
+ *
+ * Its own object rather than more fields on `PACK_LIMITS`: the catalogue is not
+ * part of a pack, it is one small signed document fetched before there is a
+ * pack at all, and the numbers that bound it are about how long a hostile
+ * server can make this process read before it has checked a signature. The
+ * document cap is a tenth of the renderer bundle: a catalogue lists at most
+ * `packs` entries of a few hundred bytes each, so a megabyte is headroom rather
+ * than a budget.
+ */
+export const PACK_CATALOGUE_LIMITS = {
+  /** The whole `catalogue.json`. */
+  documentBytes: 1024 * 1024,
+  /** Its detached Ed25519 signature, `PACK_LIMITS.signatureBytes`' shape. */
+  signatureBytes: 4 * 1024,
+  /** How many packs one catalogue may offer. */
+  packs: 512,
+} as const;

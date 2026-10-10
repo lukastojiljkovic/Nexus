@@ -1176,3 +1176,74 @@
   color: var(--nx-accent-strong);
   font-weight: var(--nx-font-weight-semibold);
 }
+
+/* ADR-103: THE CATALOGUE, THE DISCLAIMER AND THE CREDITS.
+   ------------------------------------------------------------------------
+   Appended rather than woven into the packs block above, because several
+   agents are editing this file at once and a block at the end is the only
+   edit that cannot collide with anybody else's.
+
+   `.packs__catalogue` reuses the card's own row geometry: a group heading, a
+   list of rows, the same hairline between them. A group is a heading and its
+   rows rather than a bordered box, which is the nesting the packs block above
+   already refuses.
+
+   `.packs__notice` is the safety disclaimer. It is set apart by a rule and a
+   tint rather than by a red or an icon: it is not an error and not a warning
+   about this app, it is a sentence the content's author requires to travel
+   with it, and the quiet register is the honest one. It uses `--nx-surface-alt`
+   and `--nx-text-muted`, the pair `.nx-hint` already uses, so it cannot fall
+   below the body text's contrast.
+
+   `.packs__link` is the one control in this app that opens an address. It is a
+   button because the renderer may not navigate itself (SEC-EL-03): the rule
+   that decides whether the address may be opened at all is main's, and a click
+   is a call, not a location. */
+.packs__catalogue {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  margin-top: var(--nx-space-4);
+  padding-top: var(--nx-space-4);
+  border-top: 1px solid var(--nx-border-subtle);
+}
+.packs__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  margin-top: var(--nx-space-3);
+}
+.packs__group-title {
+  margin: 0;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  text-transform: uppercase;
+}
+.packs__notice {
+  margin: var(--nx-space-2) 0 0;
+  padding: var(--nx-space-2) var(--nx-space-3);
+  border: 1px solid var(--nx-border-subtle);
+  border-radius: var(--nx-radius-xs);
+  background: var(--nx-surface-alt);
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-caption);
+}
+.packs__link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.packs__link:hover {
+  color: var(--nx-text);
+}
+.packs__licences {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  margin-top: var(--nx-space-4);
+}
