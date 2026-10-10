@@ -7860,7 +7860,36 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         "no-candidate": "Nijedan paket nije izabran.",
         "not-found": "Ovaj paket nije instaliran.",
         io: "Paket se ne može pročitati ili upisati.",
+        "notice-invalid": "Oznaka bezbednosne napomene u manifestu nije ispravna.",
+        "catalogue-unreadable": "Katalog paketa se ne može pročitati.",
+        "catalogue-signature": "Potpis kataloga nije važeći, pa katalog nije prihvaćen.",
+        "catalogue-host": "Katalog upućuje na adresu sa koje Nexus ne sme da preuzima.",
+        "catalogue-entry": "Unos u katalogu nije ispravan, ili ovaj paket nije u katalogu.",
+        "downloads-off": "Preuzimanje je isključeno. Uključi „Preuzimanja“ u privatnosti.",
+        "download-failed": "Preuzimanje nije uspelo. Pokušaj ponovo.",
+        busy: "Drugo preuzimanje je već u toku, ili je ovo već pokrenuto.",
       } satisfies Record<PackRefusalCode, string>,
+      /** ADR-103: the catalogue the card draws and the download it can start. */
+      catalogueTitle: "Katalog paketa",
+      catalogueHint:
+        "Katalog je spisak paketa koji mogu da se preuzmu; potpisuje ga isti ključ kojim su potpisani i sami paketi, pa se prikazuje samo ono što je Nexus zaista objavio. Detalji pokazuju licencu, atribuciju i izvor pre nego što se bilo šta preuzme.",
+      catalogueRefresh: "Osveži katalog",
+      catalogueEmpty: "U katalogu trenutno nema paketa.",
+      catalogueModeOff:
+        "Preuzimanje je isključeno. Uključi „Preuzimanja“ u privatnosti da bi preuzimao pakete.",
+      catalogueDetails: "Detalji",
+      download: "Preuzmi",
+      downloadPause: "Pauza",
+      downloadResume: "Nastavi",
+      downloadCancel: "Otkaži",
+      downloadHint:
+        "Preuzimanje ide preko usluge za preuzimanje, datoteku po datoteku, i svaki heš se proverava dok se piše. Ako se veza prekine, možeš da pauziraš i nastaviš; ako server ne ume da nastavi preuzimanje, ta datoteka ide ispočetka.",
+      downloadProgressDownload: "Preuzimanje: {file}",
+      downloadProgressInstall: "Instaliranje: {file}",
+      stateNotInstalled: "Nije instaliran",
+      stateInstalled: "Instaliran",
+      stateUpdate: "Dostupno ažuriranje",
+      installedVersionLabel: "Instalirana verzija",
       error: "Radnja nije uspela. Pokušaj ponovo.",
     },
     about: {
@@ -7869,6 +7898,11 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       chromium: "Chromium",
       node: "Node",
       dataLocation: "Lokacija podataka",
+      /** ADR-103: every installed pack's licence, attribution and source, on the About card. */
+      packLicences: "Licence paketa",
+      packLicencesHint:
+        "Svaki instalirani paket nosi svoju licencu, svoju atribuciju i svoj izvor. Veza se otvara u tvom pregledaču, nikada u Nexusovoj mreži.",
+      packLicencesEmpty: "Nema instaliranih paketa.",
     },
     /**
      * „Licence": the notices this product owes for other people's code.
@@ -8170,6 +8204,17 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       notesFindStep: "Sledeći ili prethodni rezultat",
       notesFindClose: "Zatvori traku i vrati kursor na rezultat",
     },
+  },
+  /**
+   * The safety disclaimer (ADR-103), and the ONE place its sentence is written.
+   *
+   * `SafetyNotice` in `safetyNotice.tsx` draws it, and the Reader and the
+   * assistant are meant to import that component rather than retype the text: a
+   * disclaimer that exists in three slightly different versions is three
+   * different claims, and the one that drifts is the one somebody relies on.
+   */
+  safety: {
+    text: "Samo za informisanje. Nije zamena za stručnu pomoć. Proveri informacije. U hitnom slučaju pozovi 112.",
   },
 } as const;
 

@@ -203,6 +203,28 @@ export const ALLOWLIST = new Map([
     "apps/desktop/src/main/download/service.test.ts",
     ["node-http"],
   ],
+  [
+    // The pack downloader's end-to-end suite (ADR-103): the same shape as the
+    // entry above and for the same reason. What it proves is that a catalogue
+    // entry becomes an INSTALLED pack through the real download service and the
+    // real install, which means bytes have to arrive over a wire — so a loopback
+    // server serves a fixture pack, and `node:http` is both server and client.
+    // Nothing here can leave the machine, and the one exempted rule id is why
+    // this entry may not grow a second.
+    "apps/desktop/src/main/packs/download.test.ts",
+    ["node-http"],
+  ],
+  [
+    // The external-link rule's Electron half (ADR-103). Its one flagged
+    // construct is `shell.openExternal`, which the `load-remote` rule reads as
+    // "a remote URL handed to a loader" — and it is, deliberately: the loader is
+    // the USER'S BROWSER, not this process's network stack. Nothing here fetches
+    // anything, and the exemption is scoped to the one rule id and to one file,
+    // so the rule (which is pure and lives beside it) still fails the gate if it
+    // ever grows a call of its own.
+    "apps/desktop/src/main/external.ts",
+    ["load-remote"],
+  ],
 ]);
 
 /**

@@ -5,10 +5,13 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
+  PACK_CATALOGUE_SIGNATURE_CONTEXT,
   PACK_SIGNATURE_CONTEXT,
+  buildManifest,
   checkMeta,
   collectFiles,
   parseArgs,
+  signCatalogue,
   signPack,
 } from "./pack-sign.mjs";
 
@@ -136,6 +139,35 @@ describe("the metadata it is willing to sign", () => {
   it("refuses a file list in the metadata, because that half is computed here", () => {
     expect(() => checkMeta(meta({ files: [] }))).toThrow(/"files"/);
   });
+
+  it("accepts ADR-103's safety notice, and refuses one the app would refuse", () => {
+    expect(checkMeta(meta({ notice: "safety" })).notice).toBe("safety");
+    expect(() => checkMeta(meta({ notice: "warning" }))).toThrow(/"notice"/);
+  });
+
+  it("writes the notice after the required keys, so an older metadata file's bytes do not move", () => {
+    const files = [{ path: "a.zim", size: 1, sha256: "0".repeat(64) }];
+    // The order is stated here rather than read from the tool: it IS the
+    // property under test — the bytes an existing metadata file produces may not
+    // move because a new optional key was added.
+    const required = [
+      "format",
+      "id",
+      "version",
+      "kind",
+      "title",
+      "description",
+      "licence",
+      "source",
+      "minAppVersion",
+    ];
+    expect(Object.keys(buildManifest(meta(), files))).toEqual([...required, "files"]);
+    expect(Object.keys(buildManifest(meta({ notice: "safety" }), files))).toEqual([
+      ...required,
+      "notice",
+      "files",
+    ]);
+  });
 });
 
 describe("the command line", () => {
@@ -149,6 +181,54 @@ describe("the command line", () => {
       meta: "m",
       key: "k",
     });
+  });
+
+  it("reads the catalogue form, and refuses the two forms mixed", () => {
+    expect(parseArgs(["--catalogue", "--file", "c.json", "--key", "k"])).toEqual({
+      catalogue: true,
+      file: "c.json",
+      key: "k",
+    });
+    expect(() => parseArgs(["--catalogue", "--file", "c.json", "--key", "k", "--dir", "d"])).toThrow(
+      /--dir and --meta belong to a pack/,
+    );
+    expect(() => parseArgs(["--catalogue", "--key", "k"])).toThrow(/--file/);
+  });
+});
+
+describe("signing a catalogue", () => {
+  it("signs the document's exact bytes under the catalogue's context, and not the manifest's", () => {
+    const path = join(root, "catalogue.json");
+    const bytes = Buffer.from(`${JSON.stringify({ format: 1, packs: [] }, null, 2)}\n`, "utf8");
+    writeFileSync(path, bytes);
+
+    const result = signCatalogue({ file: path, key: keyPath });
+    expect(result.signaturePath).toBe(`${path}.sig`);
+    const signature = readFileSync(result.signaturePath);
+    expect(
+      verify(
+        null,
+        Buffer.concat([Buffer.from(PACK_CATALOGUE_SIGNATURE_CONTEXT, "utf8"), bytes]),
+        keyPair.publicKey,
+        signature,
+      ),
+    ).toBe(true);
+    // Never over the document under the MANIFEST's context, or a pack's
+    // signature could be presented as a catalogue's.
+    expect(
+      verify(
+        null,
+        Buffer.concat([Buffer.from(PACK_SIGNATURE_CONTEXT, "utf8"), bytes]),
+        keyPair.publicKey,
+        signature,
+      ),
+    ).toBe(false);
+  });
+
+  it("refuses a document that is not a JSON object, since the app would refuse to parse it", () => {
+    const path = join(root, "not-a-catalogue.json");
+    writeFileSync(path, "[1, 2, 3]");
+    expect(() => signCatalogue({ file: path, key: keyPath })).toThrow(/JSON object/);
   });
 });
 
@@ -165,5 +245,16 @@ describe("the signature context", () => {
     expect(verifier).toContain(
       `export const PACK_SIGNATURE_CONTEXT = ${JSON.stringify(PACK_SIGNATURE_CONTEXT)};`,
     );
+  });
+
+  it("has a catalogue context the app verifies against, and it is a different string", () => {
+    const verifier = readFileSync(
+      new URL("../apps/desktop/src/main/packs/verify.ts", import.meta.url),
+      "utf8",
+    );
+    expect(verifier).toContain(
+      `export const PACK_CATALOGUE_SIGNATURE_CONTEXT = ${JSON.stringify(PACK_CATALOGUE_SIGNATURE_CONTEXT)};`,
+    );
+    expect(PACK_CATALOGUE_SIGNATURE_CONTEXT).not.toBe(PACK_SIGNATURE_CONTEXT);
   });
 });

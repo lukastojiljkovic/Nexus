@@ -4,6 +4,7 @@ import {
   type NexusApi,
   type InstalledPackView,
   type NetworkMode,
+  type PackDownloadProgress,
   type PackProgress,
   type RunnerOutputEvent,
   type RunnerState,
@@ -950,6 +951,16 @@ const api: NexusApi = {
   packsInstall: () => ipcRenderer.invoke(IpcChannel.packsInstall),
   packsRemove: (id) => ipcRenderer.invoke(IpcChannel.packsRemove, { id }),
   packsVerify: (id) => ipcRenderer.invoke(IpcChannel.packsVerify, { id }),
+  // The catalogue and its downloads (ADR-103). Same rule as above, one step
+  // further: what crosses here is a pack id, and the addresses a download
+  // reaches are main's, out of a document the release key signed.
+  packsCatalogue: (reload) =>
+    ipcRenderer.invoke(IpcChannel.packsCatalogue, { reload: reload === true }),
+  packsDownload: (id) => ipcRenderer.invoke(IpcChannel.packsDownload, { id }),
+  packsDownloadPause: (id) => ipcRenderer.invoke(IpcChannel.packsDownloadPause, { id }),
+  packsDownloadResume: (id) => ipcRenderer.invoke(IpcChannel.packsDownloadResume, { id }),
+  packsDownloadCancel: (id) => ipcRenderer.invoke(IpcChannel.packsDownloadCancel, { id }),
+  openExternal: (url) => ipcRenderer.invoke(IpcChannel.externalOpen, { url }),
   onPacksChanged: (listener) => {
     // Carries a payload, so it is typed at the boundary like `onUpdateChanged`:
     // a hint to draw the new list, not a fact the renderer acts on unchecked.
@@ -968,6 +979,15 @@ const api: NexusApi = {
     };
     ipcRenderer.on(IpcChannel.packsProgress, handler);
     return () => ipcRenderer.removeListener(IpcChannel.packsProgress, handler);
+  },
+  onPacksDownloadProgress: (listener) => {
+    // A pack's download runs as long as its slowest file, so the rows are
+    // pushed for as long as it runs, exactly as the copy's are above.
+    const handler = (_event: unknown, progress: PackDownloadProgress): void => {
+      listener(progress);
+    };
+    ipcRenderer.on(IpcChannel.packsDownloadProgress, handler);
+    return () => ipcRenderer.removeListener(IpcChannel.packsDownloadProgress, handler);
   },
 };
 

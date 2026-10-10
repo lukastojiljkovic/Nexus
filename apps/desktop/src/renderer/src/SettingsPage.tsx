@@ -161,6 +161,7 @@ import { formatArchiveInstant } from "./timeFormat.js";
 import { SyncSection } from "./SyncSettings.js";
 import { NetworkSettings } from "./NetworkSettings.js";
 import { PacksSettings } from "./PacksSettings.js";
+import { PackLicences } from "./PackLicences.js";
 import { UpdateAbout } from "./UpdateAbout.js";
 import {
   SETTINGS_CATEGORIES,
@@ -6254,6 +6255,9 @@ export function SettingsPage({
                 in offline mode it says so and offers the way to the card that
                 changes it, rather than a button main would refuse. */}
             <UpdateAbout onOpenNetworkCard={() => navigate({ category: "privacy", sub: null })} />
+            {/* ADR-103: every installed pack's licence, attribution and source,
+                in the one place a person looks for "what is this app made of". */}
+            <PackLicences />
           </Card>
 
           {/* The notices this product owes for other people's work. Last on the

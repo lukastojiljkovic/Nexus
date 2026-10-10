@@ -7821,7 +7821,36 @@ export const en = {
         "no-candidate": "No pack has been chosen.",
         "not-found": "That pack is not installed.",
         io: "The pack could not be read or written.",
+        "notice-invalid": "The manifest's safety notice is not one this app knows.",
+        "catalogue-unreadable": "The pack catalogue cannot be read.",
+        "catalogue-signature": "The catalogue's signature is not valid, so the catalogue was refused.",
+        "catalogue-host": "The catalogue points at an address this app may not download from.",
+        "catalogue-entry": "An entry in the catalogue is not valid, or this pack is not in the catalogue.",
+        "downloads-off": "Downloads are off. Turn on Downloads in Privacy.",
+        "download-failed": "The download failed. Try again.",
+        busy: "Another download is already in progress, or this one already is.",
       } satisfies Record<PackRefusalCode, string>,
+      /** ADR-103: the catalogue the card draws and the download it can start. */
+      catalogueTitle: "Pack catalogue",
+      catalogueHint:
+        "The catalogue is the list of packs that can be downloaded, signed with the same key the packs themselves are signed with, so only what Nexus has published is shown. Details show the licence, the attribution and the source before anything downloads.",
+      catalogueRefresh: "Refresh the catalogue",
+      catalogueEmpty: "The catalogue lists no packs right now.",
+      catalogueModeOff:
+        "Downloads are off. Turn on Downloads in Privacy to download packs.",
+      catalogueDetails: "Details",
+      download: "Download",
+      downloadPause: "Pause",
+      downloadResume: "Resume",
+      downloadCancel: "Cancel",
+      downloadHint:
+        "A download goes through the download service, file by file, and every hash is checked while it is written. If the connection drops, you can pause and resume; if the server cannot resume, that file is downloaded again from the beginning.",
+      downloadProgressDownload: "Downloading: {file}",
+      downloadProgressInstall: "Installing: {file}",
+      stateNotInstalled: "Not installed",
+      stateInstalled: "Installed",
+      stateUpdate: "Update available",
+      installedVersionLabel: "Installed version",
       error: "That did not work. Try again.",
     },
     about: {
@@ -7830,6 +7859,11 @@ export const en = {
       chromium: "Chromium",
       node: "Node",
       dataLocation: "Data location",
+      /** ADR-103: every installed pack's licence, attribution and source, on the About card. */
+      packLicences: "Pack licences",
+      packLicencesHint:
+        "Every installed pack carries its own licence, its own attribution and its own source. A link opens in your browser, never through Nexus's network.",
+      packLicencesEmpty: "No packs are installed.",
     },
     /**
      * „Licence": the notices this product owes for other people's code.
@@ -8131,6 +8165,13 @@ export const en = {
       notesFindStep: "Next or previous match",
       notesFindClose: "Close the bar and put the cursor back on the match",
     },
+  },
+  /**
+   * The safety disclaimer (ADR-103). The Serbian table carries why it is one
+   * string in one place; this is the same sentence in English.
+   */
+  safety: {
+    text: "For reference only. Not a substitute for professional help. Check the information. In an emergency, call 112.",
   },
 } as const;
 

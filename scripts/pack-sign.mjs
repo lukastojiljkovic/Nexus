@@ -5,6 +5,7 @@
 // signature with the maintainer's release key.
 //
 //   node scripts/pack-sign.mjs --dir <pack folder> --meta <metadata.json> --key <private-key.pem>
+//   node scripts/pack-sign.mjs --catalogue --file <catalogue.json> --key <private-key.pem>
 //
 // WHAT IT DOES AND DOES NOT DO. `--meta` is the manifest's metadata WITHOUT
 // `files`: the maintainer writes what the pack IS (id, version, kind, two
@@ -43,6 +44,15 @@ const MANIFEST_FILE = "pack.json";
 export const PACK_SIGNATURE_CONTEXT = "nexus-pack-manifest-v1\n";
 const SIGNATURE_FILE = "pack.json.sig";
 
+/**
+ * The context a CATALOGUE signature covers (ADR-103) — a THIRD context, so a
+ * pack's signature can never be presented as the catalogue's nor the other way
+ * round. `PACK_CATALOGUE_SIGNATURE_CONTEXT` in
+ * `apps/desktop/src/main/packs/verify.ts` is the verifying side; the test holds
+ * the two strings together, exactly as it does for the manifest's.
+ */
+export const PACK_CATALOGUE_SIGNATURE_CONTEXT = "nexus-pack-catalogue-v1\n";
+
 /** The only format this tool writes. A future format is a deliberate edit here. */
 const FORMAT = 1;
 
@@ -58,6 +68,14 @@ const META_KEYS = [
   "source",
   "minAppVersion",
 ];
+
+/**
+ * Keys the format defines but does not require. `notice` is the first (ADR-103):
+ * the safety flag, absent for every pack but the safety ones, and its value is
+ * a closed set for the app's reason (`packs/manifest.ts`).
+ */
+const OPTIONAL_META_KEYS = ["notice"];
+const NOTICES = ["safety"];
 
 /** The two names inside a pack that are not content, and therefore not listed. */
 const RESERVED_FILES = new Set([MANIFEST_FILE, SIGNATURE_FILE]);
@@ -116,6 +134,11 @@ export function buildManifest(meta, files) {
   for (const key of META_KEYS) {
     manifest[key] = key === "format" ? FORMAT : meta[key];
   }
+  // Only when present, and after the required keys: a metadata file written
+  // before `notice` existed produces exactly the bytes it always did.
+  for (const key of OPTIONAL_META_KEYS) {
+    if (Object.hasOwn(meta, key)) manifest[key] = meta[key];
+  }
   manifest.files = files;
   return manifest;
 }
@@ -140,26 +163,66 @@ export function checkMeta(meta) {
     if (!Object.hasOwn(meta, key)) throw new Error(`pack-sign: --meta is missing "${key}".`);
   }
   for (const key of Object.keys(meta)) {
-    if (!META_KEYS.includes(key)) throw new Error(`pack-sign: --meta has an unknown field "${key}".`);
+    if (!META_KEYS.includes(key) && !OPTIONAL_META_KEYS.includes(key)) {
+      throw new Error(`pack-sign: --meta has an unknown field "${key}".`);
+    }
   }
   if (meta.format !== FORMAT) {
     throw new Error(`pack-sign: "format" must be ${String(FORMAT)}.`);
   }
+  if (Object.hasOwn(meta, "notice") && !NOTICES.includes(meta.notice)) {
+    throw new Error(`pack-sign: "notice" must be one of ${NOTICES.join(", ")}.`);
+  }
   return meta;
 }
 
-/** `--name value` pairs from argv, refusing anything unexpected. */
+/**
+ * `--name value` pairs from argv, plus the one bare flag `--catalogue`,
+ * refusing anything unexpected.
+ *
+ * The pack form answers `{ dir, meta, key }` and the catalogue form
+ * `{ catalogue: true, file, key }`: two shapes of job, and a caller that handed
+ * in both at once is refused rather than guessed at.
+ */
 export function parseArgs(argv) {
   const values = {};
-  for (let index = 0; index < argv.length; index += 2) {
+  for (let index = 0; index < argv.length; ) {
     const flag = argv[index];
-    const value = argv[index + 1];
-    if (flag === undefined || value === undefined || !flag.startsWith("--")) {
+    if (flag === undefined || !flag.startsWith("--")) {
       throw new Error(
-        "pack-sign: usage: node scripts/pack-sign.mjs --dir <folder> --meta <metadata.json> --key <private-key.pem>",
+        "pack-sign: usage: node scripts/pack-sign.mjs --dir <folder> --meta <metadata.json> --key <private-key.pem>" +
+          " | --catalogue --file <catalogue.json> --key <private-key.pem>",
       );
     }
-    values[flag.slice(2)] = value;
+    const name = flag.slice(2);
+    // `--catalogue` is the one flag that carries no value; every other flag is
+    // a `--name value` pair.
+    if (name === "catalogue") {
+      values["catalogue"] = true;
+      index += 1;
+      continue;
+    }
+    const next = argv[index + 1];
+    if (next === undefined || next.startsWith("--")) {
+      throw new Error(`pack-sign: --${name} needs a value.`);
+    }
+    values[name] = next;
+    index += 2;
+  }
+
+  if (values["catalogue"] === true) {
+    if (values["dir"] !== undefined || values["meta"] !== undefined) {
+      throw new Error(
+        "pack-sign: --catalogue signs a catalogue document; --dir and --meta belong to a pack.",
+      );
+    }
+    for (const required of ["file", "key"]) {
+      if (values[required] === undefined) throw new Error(`pack-sign: --${required} is required.`);
+    }
+    return { catalogue: true, file: values["file"], key: values["key"] };
+  }
+  if (values["file"] !== undefined) {
+    throw new Error("pack-sign: --file belongs to --catalogue; a pack is signed with --dir and --meta.");
   }
   for (const required of ["dir", "meta", "key"]) {
     if (values[required] === undefined) {
@@ -203,8 +266,42 @@ export function signPack({ dir, meta, key }) {
   };
 }
 
+/**
+ * Writes `<file>.sig`: the release key's signature over the catalogue's exact
+ * bytes, under the catalogue's context.
+ *
+ * Deliberately NOT a second implementation of the catalogue's own validation.
+ * The app is the authority (`apps/desktop/src/main/packs/catalogue.ts` refuses
+ * what it must), and a tool carrying its own copy of those rules is the one
+ * that drifts — `pack.json`'s arrangement above, kept for the same reason. What
+ * this does enforce is that the file is a JSON object, because signing a
+ * document the app will refuse to parse only spends the key.
+ */
+export function signCatalogue({ file, key }) {
+  const path = resolve(file);
+  const bytes = readFileSync(path);
+  const parsed = JSON.parse(bytes.toString("utf8"));
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error("pack-sign: the catalogue must be a JSON object.");
+  }
+  const privateKey = createPrivateKey(readFileSync(key));
+  const signature = sign(
+    null,
+    Buffer.concat([Buffer.from(PACK_CATALOGUE_SIGNATURE_CONTEXT, "utf8"), bytes]),
+    privateKey,
+  );
+  const signaturePath = `${path}.sig`;
+  writeFileSync(signaturePath, signature);
+  return { file: path, signaturePath, bytes: bytes.byteLength };
+}
+
 function main() {
   const args = parseArgs(process.argv.slice(2));
+  if (args.catalogue === true) {
+    const result = signCatalogue({ file: args.file, key: args.key });
+    console.log(`pack-sign: ${result.signaturePath} written over ${String(result.bytes)} bytes`);
+    return;
+  }
   const meta = JSON.parse(readFileSync(args.meta, "utf8"));
   const result = signPack({ dir: args.dir, meta, key: args.key });
   // Counts and a folder, and never a byte of the key or of the content.

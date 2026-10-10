@@ -163,4 +163,20 @@ describe("the pack manifest", () => {
       "min-app-version-invalid",
     );
   });
+
+  /**
+   * ADR-103's `notice`, the one field format 1 gained after this module was
+   * written. Its three cases are the whole rule: present and known, present and
+   * unknown (refused, because a notice nothing understands is a disclaimer that
+   * would not be drawn), and absent (no notice, not an unknown one).
+   */
+  it("reads a notice it knows, and treats an absent one as no notice", () => {
+    expect(parsePackManifest(manifest({ notice: "safety" })).notice).toBe("safety");
+    expect(parsePackManifest(manifest()).notice).toBeNull();
+  });
+
+  it("refuses a notice this build does not know", () => {
+    expect(refusal(() => parsePackManifest(manifest({ notice: "warning" })))).toBe("notice-invalid");
+    expect(refusal(() => parsePackManifest(manifest({ notice: 1 })))).toBe("notice-invalid");
+  });
 });

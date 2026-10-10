@@ -34,6 +34,19 @@ export const PACK_FORMAT = 1;
 export const PACK_KINDS = ["zim", "map", "dataset", "model", "content"] as const;
 export type PackKind = (typeof PACK_KINDS)[number];
 
+/**
+ * The notices a pack may declare about itself (ADR-103).
+ *
+ * One value, `"safety"`, and it means one thing: this pack is survival, first
+ * aid, food-preservation or car-emergency reference material, and the app must
+ * show the disclaimer wherever it is read. It is a closed set rather than free
+ * text because it is a decision the UI acts on — a `notice` nothing recognises
+ * is a pack the reader would open with no disclaimer at all, which is the one
+ * outcome the field exists to prevent.
+ */
+export const PACK_NOTICES = ["safety"] as const;
+export type PackNotice = (typeof PACK_NOTICES)[number];
+
 /** One string per language, both required: the copy is Serbian and English, always. */
 export interface PackText {
   readonly sr: string;
@@ -68,6 +81,13 @@ export interface PackManifest {
   readonly licence: PackLicence;
   readonly source: PackSource;
   readonly minAppVersion: string;
+  /**
+   * What the app must say about this pack wherever it is read, or `null`.
+   * Optional in format 1 (ADR-103): no pack had shipped when it was added, so
+   * the format was amended rather than bumped, and an absent field means "no
+   * notice", never "unknown".
+   */
+  readonly notice: PackNotice | null;
 }
 
 const KEBAB_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -87,12 +107,18 @@ const MANIFEST_KEYS: readonly string[] = [
   "source",
   "minAppVersion",
 ];
+/**
+ * Keys the format defines but does not require. Kept apart from the required
+ * list so `requireKnownKeys` is still one call over one list, and so a manifest
+ * that omits one is not read as a manifest that misspelled one.
+ */
+const MANIFEST_OPTIONAL_KEYS: readonly string[] = ["notice"];
 const TEXT_KEYS: readonly string[] = ["sr", "en"];
 const FILE_KEYS: readonly string[] = ["path", "size", "sha256"];
 const LICENCE_KEYS: readonly string[] = ["spdx", "attribution", "url"];
 const SOURCE_KEYS: readonly string[] = ["name", "url"];
 
-function asObject(value: unknown, where: string): Record<string, unknown> {
+export function asObject(value: unknown, where: string): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new PackError("manifest-unreadable", `${where} must be an object.`);
   }
@@ -104,7 +130,7 @@ function asObject(value: unknown, where: string): Record<string, unknown> {
  * whole of what its shape is, so an unknown one is a refusal and not a warning:
  * a field nothing reads is a field nothing enforces.
  */
-function requireKnownKeys(record: Record<string, unknown>, allowed: readonly string[], where: string): void {
+export function requireKnownKeys(record: Record<string, unknown>, allowed: readonly string[], where: string): void {
   for (const key of Object.keys(record)) {
     if (!allowed.includes(key)) {
       throw new PackError("manifest-unreadable", `${where} carries an unknown field "${key}".`);
@@ -112,7 +138,7 @@ function requireKnownKeys(record: Record<string, unknown>, allowed: readonly str
   }
 }
 
-function asRequiredString(record: Record<string, unknown>, key: string, code: PackError["code"], where: string): string {
+export function asRequiredString(record: Record<string, unknown>, key: string, code: PackError["code"], where: string): string {
   const value = record[key];
   // eslint-disable-next-line no-control-regex -- a control character in copy is exactly what this refuses.
   if (typeof value !== "string" || value.trim() === "" || /[\u0000-\u001f\u007f]/.test(value)) {
@@ -121,7 +147,7 @@ function asRequiredString(record: Record<string, unknown>, key: string, code: Pa
   return value;
 }
 
-function asCappedCopy(
+export function asCappedCopy(
   value: unknown,
   code: PackError["code"],
   where: string,
@@ -137,7 +163,7 @@ function asCappedCopy(
   return { sr, en };
 }
 
-function asUrl(record: Record<string, unknown>, key: string, code: PackError["code"], where: string): string {
+export function asUrl(record: Record<string, unknown>, key: string, code: PackError["code"], where: string): string {
   const value = asRequiredString(record, key, code, `${where}.${key}`);
   if (!HTTP_URL.test(value)) {
     throw new PackError(code, `${where}.${key} must be an http or https address.`);
@@ -155,7 +181,7 @@ function asUrl(record: Record<string, unknown>, key: string, code: PackError["co
  * refused here because a version is also a directory name on disk: `1.0.0` and
  * `v1.0.0` must not be two folders for one version.
  */
-function asVersion(value: unknown, code: PackError["code"], where: string): string {
+export function asVersion(value: unknown, code: PackError["code"], where: string): string {
   if (
     typeof value !== "string" ||
     value !== value.trim() ||
@@ -167,7 +193,7 @@ function asVersion(value: unknown, code: PackError["code"], where: string): stri
   return value;
 }
 
-function asPackId(value: unknown): string {
+export function asPackId(value: unknown): string {
   if (
     typeof value !== "string" ||
     value.length > PACK_LIMITS.idLength ||
@@ -182,14 +208,14 @@ function asPackId(value: unknown): string {
   return value;
 }
 
-function asKind(value: unknown): PackKind {
+export function asKind(value: unknown): PackKind {
   if (!(PACK_KINDS as readonly unknown[]).includes(value)) {
     throw new PackError("kind-unknown", `"kind" must be one of ${PACK_KINDS.join(", ")}.`);
   }
   return value as PackKind;
 }
 
-function asFileEntry(value: unknown, index: number): PackFileEntry {
+export function asFileEntry(value: unknown, index: number): PackFileEntry {
   const where = `"files[${String(index)}]"`;
   const record = asObject(value, where);
   requireKnownKeys(record, FILE_KEYS, where);
@@ -215,7 +241,22 @@ function asFileEntry(value: unknown, index: number): PackFileEntry {
   return { path, size, sha256: hash.toLowerCase() };
 }
 
-function asLicence(value: unknown): PackLicence {
+/**
+ * The manifest's `notice`, or `null` when it carries none.
+ *
+ * An absent field is `null`; anything present that is not one of
+ * {@link PACK_NOTICES} is refused, because a `notice` this build does not
+ * understand is a disclaimer it would not draw.
+ */
+export function asNotice(value: unknown): PackNotice | null {
+  if (value === undefined) return null;
+  if (typeof value !== "string" || !(PACK_NOTICES as readonly string[]).includes(value)) {
+    throw new PackError("notice-invalid", `"notice" must be one of ${PACK_NOTICES.join(", ")}.`);
+  }
+  return value as PackNotice;
+}
+
+export function asLicence(value: unknown): PackLicence {
   const record = asObject(value, '"licence"');
   requireKnownKeys(record, LICENCE_KEYS, '"licence"');
   const spdx = asRequiredString(record, "spdx", "licence-invalid", '"licence"');
@@ -230,7 +271,7 @@ function asLicence(value: unknown): PackLicence {
   };
 }
 
-function asSource(value: unknown): PackSource {
+export function asSource(value: unknown): PackSource {
   const record = asObject(value, '"source"');
   requireKnownKeys(record, SOURCE_KEYS, '"source"');
   const name = asRequiredString(record, "name", "source-invalid", '"source".name');
@@ -282,7 +323,7 @@ function asFiles(value: unknown): readonly PackFileEntry[] {
  */
 export function parsePackManifest(value: unknown): PackManifest {
   const record = asObject(value, "pack.json");
-  requireKnownKeys(record, MANIFEST_KEYS, "pack.json");
+  requireKnownKeys(record, [...MANIFEST_KEYS, ...MANIFEST_OPTIONAL_KEYS], "pack.json");
 
   if (record["format"] !== PACK_FORMAT) {
     throw new PackError("format-unknown", `pack.json: this build reads format ${String(PACK_FORMAT)} only.`);
@@ -304,6 +345,7 @@ export function parsePackManifest(value: unknown): PackManifest {
     licence: asLicence(record["licence"]),
     source: asSource(record["source"]),
     minAppVersion: asVersion(record["minAppVersion"], "min-app-version-invalid", '"minAppVersion"'),
+    notice: asNotice(record["notice"]),
   };
 }
 
