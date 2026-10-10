@@ -67,6 +67,12 @@ const LOCAL_SCHEMES: readonly string[] = [
   // `protocol.handle`. They never leave the process.
   "nx-blob:",
   "priv-blob:",
+  // ADR-100: a content pack's own files, served by `main/packs/protocol.ts` from
+  // an installed pack's folder. It never leaves the process either, and it is on
+  // this list for the reason the other two are: the renderer cancels every
+  // request whose scheme is not named here, so a pack's images would be blocked
+  // in the app's DEFAULT mode - offline - without this line.
+  "nx-pack:",
 ];
 
 /**

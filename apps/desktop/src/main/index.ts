@@ -516,6 +516,12 @@ import { handleMarkdownImport } from "./markdownImport.js";
 import { checklistToTasks, countNoteChecklistItems } from "./noteChecklistTasks.js";
 import { duplicateNote } from "./noteDuplicate.js";
 import { createPacksIpc, type PacksIpc } from "./packs/packsIpc.js";
+// ADR-100: the Reader's two seams into this file. The pack read protocol is the
+// same shape `registerBlobProtocol` is (a scheme handler in main/packs), and the
+// module's environment is installed once below - which is the whole of what a kit
+// module adds to this file.
+import { registerPackProtocol } from "./packs/protocol.js";
+import { installReaderEnvironment } from "../modules/reader/main/electron.js";
 import { volumeFreeBytes } from "./packs/install.js";
 import {
   cancelIdleCompactions,
@@ -890,6 +896,13 @@ protocol.registerSchemesAsPrivileged([
   // The private section's read protocol (PRIV v1 / ADR-057): same privileges,
   // entirely different gate — it serves ONLY while a section is unlocked.
   { scheme: "priv-blob", privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
+  // ADR-100: a content pack's own files - an article's images today, a map's tiles
+  // later. The handler is `main/packs/protocol.ts`, and its gate is the installed
+  // PACK: an id no installed manifest answers for, and a path that manifest does
+  // not list, are both 404s. `standard` gives the URL normal parsing (the pack id
+  // is the host and the rest is the pack path), and `stream` is what lets a media
+  // client read it by ranges.
+  { scheme: "nx-pack", privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
 ]);
 
 // Stable product name so userData resolves to a clean, branded directory
@@ -14130,6 +14143,16 @@ app.whenReady().then(async () => {
       blobStorePathsFor,
       () => blobKeys,
     );
+
+    // ADR-100: the Reader's environment and its pack read protocol. The
+    // environment is what a kit module cannot reach for itself (userData, the
+    // release key, the print view and the OS browser), and the protocol serves a
+    // pack's own files - see `main/packs/protocol.ts` for what it refuses.
+    installReaderEnvironment();
+    registerPackProtocol(protocol, {
+      userData: userDataDir(),
+      publicKeyPem: RELEASE_PUBLIC_KEY_PEM,
+    });
 
     // The private section's read protocol (PRIV v1 / ADR-057): decrypts a
     // sealed attachment ONLY while a section is unlocked — a locked section
