@@ -133,7 +133,7 @@ describe("the category table", () => {
   it("interleaves the two sub-page lists where the brief puts them", () => {
     const data = SETTINGS_CATEGORIES.find((category) => category.id === "data");
     const modules = SETTINGS_CATEGORIES.find((category) => category.id === "modules");
-    expect(data && categoryCardIds(data)).toEqual(["backup", "sync"]);
+    expect(data && categoryCardIds(data)).toEqual(["backup", "sync", "content-packs"]);
     expect(data && categoryListIds(data)).toEqual(["import-export"]);
     expect(modules && categoryCardIds(modules)).toEqual(["setup", "modules", "packs", "risk"]);
     expect(modules && categoryListIds(modules)).toEqual(["module-settings"]);
@@ -151,6 +151,16 @@ describe("the category table", () => {
     expect(search(s().sectionTitle.network).sections.has("network")).toBe(true);
     for (const query of ["mreza", "azuriranja", "github", "update"]) {
       expect(search(query).sections.has("network"), query).toBe(true);
+    }
+  });
+
+  it("reaches the content packs card by its name and by the words people type (ADR-091)", () => {
+    // A device card in „Podaci", and one no module owns: the card is the only
+    // place a pack can arrive, so a search has to be able to find it.
+    expect(categoryOf("content-packs")).toBe("data");
+    expect(search(s().sectionTitle["content-packs"]).sections.has("content-packs")).toBe(true);
+    for (const query of ["paket", "vikipedija", "offline", "instaliraj"]) {
+      expect(search(query).sections.has("content-packs"), query).toBe(true);
     }
   });
 });
@@ -207,7 +217,7 @@ describe("visibleSections", () => {
     expect(visibility.groups).toEqual(["profile"]);
 
     const data = visibleSections({ category: "data", sub: null }, null);
-    expect([...data.cards].sort()).toEqual(["backup", "sync"]);
+    expect([...data.cards].sort()).toEqual(["backup", "content-packs", "sync"]);
     expect([...data.lists]).toEqual(["import-export"]);
     expect(data.groups).toEqual(["data"]);
   });

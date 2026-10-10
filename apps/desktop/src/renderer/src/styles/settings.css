@@ -1022,6 +1022,79 @@
   overflow-wrap: anywhere;
 }
 
+/* ADR-091: THE PACKS CARD.
+   ------------------------------------------------------------------------
+   A pack is one row of facts a user cannot otherwise check (title, version,
+   size, licence, attribution, source) plus the two things that can be done to
+   it. Rows are separated by a hairline rather than by a border each: a
+   bordered box per entry inside a bordered card is the card-inside-card
+   nesting this app does not draw, and the pack count is one digit.
+
+   The attribution is the licence author's own words and is shown verbatim,
+   which is why the row's lines are `.nx-hint` paragraphs and not a key/value
+   table: one of the six values can be a sentence.
+
+   The empty state is not a shorter version of the list — it is the only place
+   that says what a pack IS, because a user who has never installed one has
+   nothing else to read. */
+.packs__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nx-space-2);
+  margin-top: var(--nx-space-3);
+}
+.packs__empty {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  margin-top: var(--nx-space-3);
+}
+.packs__list {
+  list-style: none;
+  margin: var(--nx-space-4) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+.packs__row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  padding-top: var(--nx-space-3);
+  border-top: 1px solid var(--nx-border-subtle);
+}
+.packs__row:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+.packs__row-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nx-space-2);
+}
+.packs__row-title {
+  font-weight: var(--nx-font-weight-semibold);
+}
+.packs__row-meta {
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-caption);
+}
+.packs__row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nx-space-2);
+  margin-top: var(--nx-space-2);
+}
+.packs__problem {
+  margin: var(--nx-space-2) 0 0;
+  color: var(--nx-danger);
+  font-size: var(--nx-font-size-body-sm);
+}
+
 /* SET-014: THE SEARCH HIT — and it is the last rule in the file on purpose.
    ------------------------------------------------------------------------
    A hit is typographic: accent text plus weight, exactly like

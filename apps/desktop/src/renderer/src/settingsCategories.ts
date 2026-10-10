@@ -159,6 +159,12 @@ export const SETTINGS_CATEGORIES: readonly SettingsCategory[] = [
       // third answer to „where does a copy of my data go" — and the privacy
       // card's own `sync` sentence reads as a summary of the card just above it.
       { kind: "card", id: "sync" },
+      // ADR-091. Last in „Podaci", beside „Sinhronizacija", because the two are
+      // the device's two ways of growing content it did not make: sync brings
+      // this profile's own data back, and a pack brings in somebody else's
+      // library. It is not a module card (a pack is content, not a part of the
+      // app) and it is not a privacy card (nothing here reaches the network).
+      { kind: "card", id: "content-packs" },
     ],
   },
   {

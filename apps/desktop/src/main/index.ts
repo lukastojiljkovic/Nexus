@@ -512,6 +512,8 @@ import { handleExport, handleIcsExport, writeProfileArchive, type ImexArchiveDep
 import { handleMarkdownImport } from "./markdownImport.js";
 import { checklistToTasks, countNoteChecklistItems } from "./noteChecklistTasks.js";
 import { duplicateNote } from "./noteDuplicate.js";
+import { createPacksIpc, type PacksIpc } from "./packs/packsIpc.js";
+import { volumeFreeBytes } from "./packs/install.js";
 import {
   cancelIdleCompactions,
   captureNoteVersion,
@@ -590,6 +592,7 @@ import {
   type BackupSettingsView,
   type CalendarOverlayEvent,
   type CalendarSettings,
+  type InstalledPackView,
   CARD_KINDS,
   CARD_TEXT_MAX_LENGTH,
   type CardKind,
@@ -690,6 +693,10 @@ import {
   type NoteDocPayload,
   type NoteDuplicateResult,
   type NoteVersionMeta,
+  type PackInspectResult,
+  type PackInstallResult,
+  type PackRemoveResult,
+  type PackVerifyResult,
   PRIV_ATTACHMENT_MAX_BYTES,
   PRIV_ATTACHMENTS_MAX_COUNT,
   PRIV_PLAINTEXT_MAX_BYTES,
@@ -5582,6 +5589,49 @@ function runnerIpc(): ElecRunnerIpc {
  */
 function elecSettingsStore(profileId: string): ElecSettingsStore {
   return new ElecSettingsStore(requireDb().raw, profileId);
+}
+
+// --- Content packs (ADR-091) -------------------------------------------------
+//
+// ONE service, built once per launch, on `runnerIpc`'s terms: it holds the one
+// piece of state a pack operation has between two calls — the folder the last
+// inspect verified and `packs:install` is waiting to install — and a second
+// instance would be a second place that state could live, with a renderer able
+// to install a candidate one instance did not inspect.
+//
+// The dialog is main's, and that is the whole security shape of this surface: a
+// pack is a FOLDER, and the only way one is ever named is that a person picked
+// it in a native dialog this process opened. `pickFolder` is the one effect
+// here that needs a window, which is why the service above it is electron-free.
+let packsIpc: PacksIpc | null = null;
+
+function packs(): PacksIpc {
+  packsIpc ??= createPacksIpc({
+    userData: userDataDir(),
+    appVersion: app.getVersion(),
+    publicKeyPem: RELEASE_PUBLIC_KEY_PEM,
+    pickFolder: async () => {
+      const options: OpenDialogOptions = {
+        properties: ["openDirectory"],
+        title: shellStrings().packDialogTitle,
+        buttonLabel: shellStrings().packDialogButton,
+      };
+      const { canceled, filePaths } = mainWindow
+        ? await dialog.showOpenDialog(mainWindow, options)
+        : await dialog.showOpenDialog(options);
+      return canceled ? null : (filePaths[0] ?? null);
+    },
+    // A window that has gone away is simply not sent to: the pack belongs to
+    // main and outlives any one window, `runnerIpc`'s arrangement.
+    onProgress: (row) => {
+      mainWindow?.webContents.send(IpcChannel.packsProgress, row);
+    },
+    onChanged: (packs) => {
+      mainWindow?.webContents.send(IpcChannel.packsChanged, packs);
+    },
+    freeBytes: volumeFreeBytes,
+  });
+  return packsIpc;
 }
 
 // --- Search (ADR-021): the query pipeline -----------------------------------
@@ -12302,6 +12352,39 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.appInfo, (event): AppInfo => {
     assertTrustedSender(event);
     return appInfo();
+  });
+
+  // Content packs (ADR-091). Five channels and two pushes, and the one thing
+  // they all have in common is that **no path crosses them**: `packs:inspect`
+  // opens the folder dialog in main and remembers what was picked,
+  // `packs:install` installs exactly that and takes no argument at all, and the
+  // two ids below are validated as ids here and as kebab-case pack ids beside
+  // the code that names a folder with them.
+  ipcMain.handle(IpcChannel.packsList, async (event): Promise<InstalledPackView[]> => {
+    assertTrustedSender(event);
+    return packs().list();
+  });
+
+  ipcMain.handle(IpcChannel.packsInspect, async (event): Promise<PackInspectResult> => {
+    assertTrustedSender(event);
+    return packs().inspect();
+  });
+
+  ipcMain.handle(IpcChannel.packsInstall, async (event): Promise<PackInstallResult> => {
+    assertTrustedSender(event);
+    return packs().install();
+  });
+
+  ipcMain.handle(IpcChannel.packsRemove, async (event, payload): Promise<PackRemoveResult> => {
+    assertTrustedSender(event);
+    const id = asId(asRecord(payload).id, "id");
+    return packs().remove(id);
+  });
+
+  ipcMain.handle(IpcChannel.packsVerify, async (event, payload): Promise<PackVerifyResult> => {
+    assertTrustedSender(event);
+    const id = asId(asRecord(payload).id, "id");
+    return packs().verify(id);
   });
 }
 

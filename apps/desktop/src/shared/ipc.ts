@@ -1023,6 +1023,28 @@ export const IpcChannel = {
   // Main pushes this on every phase change so the About card and the update
   // notice watch instead of polling.
   updateChanged: "update:changed",
+  // Content packs (ADR-091). Five request channels and two events, and the
+  // load-bearing thing about all of them is what they do NOT carry: **no path
+  // ever crosses this bridge in either direction.** A pack is a folder chosen
+  // in a native dialog that MAIN shows, and `packs:inspect` is the only way one
+  // is ever named — the renderer learns what it holds and nothing about where
+  // it is. `packs:install` then takes no argument at all: it installs the
+  // candidate the last inspect left waiting, or refuses because there is none.
+  //
+  // `packs:verify` is its own channel on `elec:runner-detect`'s grounds: it is
+  // the expensive one (it re-reads every byte of a pack that may be twenty
+  // gigabytes) and it must not be something opening a card can accidentally
+  // trigger.
+  packsList: "packs:list",
+  packsInspect: "packs:inspect",
+  packsInstall: "packs:install",
+  packsRemove: "packs:remove",
+  packsVerify: "packs:verify",
+  // Main pushes the whole list when it changes and one progress row while a
+  // copy or a verify runs, so a card that stays open watches instead of
+  // polling a twenty-gigabyte operation.
+  packsChanged: "packs:changed",
+  packsProgress: "packs:progress",
   appInfo: "app:info",
 } as const;
 
@@ -8721,6 +8743,184 @@ export interface UpdateStateView {
   readonly lastCheckedAt: number | null;
 }
 
+// --- content packs (ADR-091) -------------------------------------------------
+
+/**
+ * The five kinds of content a pack may carry. Redeclared from
+ * `main/packs/manifest.ts` rather than imported, on this file's usual grounds
+ * for a flat closed list — and it is the same five, because the manifest's
+ * parser is what refuses a sixth.
+ */
+export const PACK_KINDS = ["zim", "map", "dataset", "model", "content"] as const;
+export type PackKind = (typeof PACK_KINDS)[number];
+
+/** One string per language. Both are required: the copy is Serbian and English, always. */
+export interface PackText {
+  readonly sr: string;
+  readonly en: string;
+}
+
+/** Who made the content and under what terms. `attribution` is shown for every pack, always (CC BY-SA requires it). */
+export interface PackLicenceView {
+  readonly spdx: string;
+  readonly attribution: string;
+  readonly url: string;
+}
+
+/** Where the content came from. */
+export interface PackSourceView {
+  readonly name: string;
+  readonly url: string;
+}
+
+/** One installed pack, as the Packs card draws it. */
+export interface InstalledPackView {
+  readonly id: string;
+  readonly version: string;
+  readonly kind: PackKind;
+  readonly title: PackText;
+  readonly description: PackText;
+  readonly licence: PackLicenceView;
+  readonly source: PackSourceView;
+  /** Every file's size, added up, in bytes. */
+  readonly size: number;
+  readonly fileCount: number;
+  /** Epoch milliseconds of when this version landed. */
+  readonly installedAt: number;
+}
+
+/**
+ * A pack that has been verified and is waiting to be installed.
+ *
+ * Its own interface rather than an `InstalledPackView` with something added:
+ * `installedAt` has no meaning for a pack that is not installed yet, and a view
+ * that carried a zero there would be a number the card has to remember to
+ * ignore.
+ */
+export interface PackCandidateView {
+  readonly id: string;
+  readonly version: string;
+  readonly kind: PackKind;
+  readonly title: PackText;
+  readonly description: PackText;
+  readonly licence: PackLicenceView;
+  readonly source: PackSourceView;
+  /** What the manifest says the content will weigh, since it is not on disk here yet. */
+  readonly size: number;
+  readonly fileCount: number;
+  readonly minAppVersion: string;
+}
+
+/** Where a copy or a verify has got to. Pushed on `packs:progress`. */
+export interface PackProgress {
+  readonly id: string;
+  readonly phase: "copy" | "verify";
+  /** The file being read, as the manifest names it. */
+  readonly file: string;
+  readonly filesDone: number;
+  readonly filesTotal: number;
+  readonly bytesDone: number;
+  readonly bytesTotal: number;
+}
+
+/**
+ * Why a pack operation was refused, as machine codes.
+ *
+ * A code rather than prose, for `UpdateProblem`'s reason: the renderer maps each
+ * one to a sentence in its own language, and a sentence written here would be an
+ * English string crossing a boundary that exists in two. This is the ONE
+ * declaration of the vocabulary — `main/packs/errors.ts` imports it as the type
+ * of its refusals, so a code that exists on one side and not the other is a
+ * compile error rather than a card with a blank line on it.
+ *
+ * The set is deliberately closed and deliberately small. `"path-invalid"`
+ * carries a dozen path rules and names them in the log message instead, because
+ * a dozen codes would need a dozen sentences in each locale that all say "this
+ * pack names a file in a way this app will not touch"; the one thing the user
+ * can act on is that the pack is not acceptable.
+ */
+export type PackRefusalCode =
+  /** The chosen folder has no readable `pack.json`. */
+  | "not-a-pack"
+  /** The chosen path is not a directory. */
+  | "not-a-directory"
+  /** `pack.json` is not JSON, is not an object, or carries a field this format does not define. */
+  | "manifest-unreadable"
+  /** `pack.json` is larger than a manifest can be. */
+  | "manifest-too-large"
+  /** `pack.json.sig` is missing, is too large, or is not this key's signature over the manifest. */
+  | "signature"
+  /** `format` is not a version this build knows. */
+  | "format-unknown"
+  /** `id` is not kebab-case, is too long, or is not a usable folder name. */
+  | "id-invalid"
+  /** `version` is not `MAJOR.MINOR.PATCH`. */
+  | "version-invalid"
+  /** `kind` is not one of the five this format defines. */
+  | "kind-unknown"
+  | "title-invalid"
+  | "description-invalid"
+  | "files-invalid"
+  /** A listed path, or one found on disk, breaks a path rule. */
+  | "path-invalid"
+  /** Two entries share a path exactly. */
+  | "path-duplicate"
+  /** Two entries differ only by case, which is one file on Windows. */
+  | "path-duplicate-case"
+  /** A listed `sha256` is not 64 hex characters. */
+  | "hash-invalid"
+  | "size-invalid"
+  /** More files than a pack may list, or one file or the pack total is over its cap. */
+  | "limit"
+  | "licence-invalid"
+  | "source-invalid"
+  | "min-app-version-invalid"
+  /** The pack asks for an app newer than this one, or for one that cannot be compared. */
+  | "min-app-version-too-new"
+  /** A newer version of this pack is already installed; installing this one would roll it back. */
+  | "older-than-installed"
+  /** The source tree holds a symbolic link or a junction. */
+  | "symlink"
+  /** Something in the source tree is neither a directory nor a regular file. */
+  | "not-a-file"
+  /** A file the manifest lists is not in the source tree, or is no longer installed. */
+  | "missing-file"
+  /** A file is in the source tree that the manifest does not list. */
+  | "extra-file"
+  /** A file's size is not the size the manifest states. */
+  | "size-mismatch"
+  /** A file's SHA-256 is not the hash the manifest states. */
+  | "hash-mismatch"
+  /** The volume cannot hold the pack. */
+  | "no-space"
+  /** `install` was called with no inspected candidate waiting. */
+  | "no-candidate"
+  /** This id is not installed. */
+  | "not-found"
+  /** Reading or writing the pack failed for a reason none of the above names. */
+  | "io";
+
+/** What `packsInspect` answers: the verified candidate, a cancelled dialog, or a refusal. */
+export type PackInspectResult =
+  | { readonly outcome: "ready"; readonly candidate: PackCandidateView }
+  | { readonly outcome: "cancelled" }
+  | { readonly outcome: "refused"; readonly code: PackRefusalCode };
+
+/** What `packsInstall` answers. */
+export type PackInstallResult =
+  | { readonly outcome: "installed"; readonly pack: InstalledPackView }
+  | { readonly outcome: "refused"; readonly code: PackRefusalCode };
+
+/** What `packsRemove` answers. */
+export type PackRemoveResult =
+  | { readonly outcome: "removed"; readonly id: string }
+  | { readonly outcome: "refused"; readonly code: PackRefusalCode };
+
+/** What `packsVerify` answers. */
+export type PackVerifyResult =
+  | { readonly outcome: "ok"; readonly pack: InstalledPackView }
+  | { readonly outcome: "refused"; readonly code: PackRefusalCode };
+
 /** Everything `enableSync` can answer. */
 export type SyncEnableView =
   | {
@@ -10252,5 +10452,27 @@ export interface NexusApi {
   relaunchApp(): Promise<void>;
   /** Subscribes to every update-check phase change. Returns an unsubscribe function. */
   onUpdateChanged(listener: (state: UpdateStateView) => void): () => void;
+  /**
+   * The installed content packs (ADR-091), in id order. The renderer sorts them
+   * for display by the active locale's collator; main has no locale of its own.
+   */
+  packsList(): Promise<InstalledPackView[]>;
+  /**
+   * Opens main's folder dialog and verifies the chosen pack WITHOUT installing
+   * it, answering what the folder holds. Takes no argument: the renderer never
+   * names a path, and the candidate this leaves waiting is what `packsInstall`
+   * installs.
+   */
+  packsInspect(): Promise<PackInspectResult>;
+  /** Installs the candidate the last `packsInspect` left waiting, and nothing else. */
+  packsInstall(): Promise<PackInstallResult>;
+  /** Removes an installed pack's folder. */
+  packsRemove(id: string): Promise<PackRemoveResult>;
+  /** Re-hashes every file of an installed pack against its signed manifest. The expensive one. */
+  packsVerify(id: string): Promise<PackVerifyResult>;
+  /** Subscribes to the installed list changing. Returns an unsubscribe function. */
+  onPacksChanged(listener: (packs: InstalledPackView[]) => void): () => void;
+  /** Subscribes to copy and verify progress. Returns an unsubscribe function. */
+  onPacksProgress(listener: (progress: PackProgress) => void): () => void;
   appInfo(): Promise<AppInfo>;
 }

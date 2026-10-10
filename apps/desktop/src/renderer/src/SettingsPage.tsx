@@ -159,6 +159,7 @@ import { moduleName } from "./moduleName.js";
 import { formatArchiveInstant } from "./timeFormat.js";
 import { SyncSection } from "./SyncSettings.js";
 import { NetworkSettings } from "./NetworkSettings.js";
+import { PacksSettings } from "./PacksSettings.js";
 import { UpdateAbout } from "./UpdateAbout.js";
 import {
   SETTINGS_CATEGORIES,
@@ -6154,6 +6155,18 @@ export function SettingsPage({
             <SyncSection hits={hits} />
           </Card>
 
+          {/* ADR-091, last in „Podaci": content this device holds that it did not
+              make. A DEVICE card like „Sinhronizacija" above it — the packs live
+              in `<userData>/packs`, not in a profile's database, so it takes no
+              `profileId` and shows the same thing under every profile. */}
+          <Card
+            id={sectionDomId("content-packs")}
+            title={strings.settings.sectionTitle["content-packs"]}
+            className={sectionClass(visibility.cards.has("content-packs"))}
+          >
+            <PacksSettings />
+          </Card>
+
           {searchGroupTitle("privacy")}
           {/* ADR-089, FIRST in this category: the device-level decision about
               whether Nexus may reach the network at all, ahead of the card that
@@ -6220,7 +6233,7 @@ export function SettingsPage({
             ) : (
               <p className="nx-hint">{strings.app.loading}</p>
             )}
-            {/* ADR-089: „Proveri sada" lives here, and the row is mode-aware â€”
+            {/* ADR-089: „Proveri sada" lives here, and the row is mode-aware —
                 in offline mode it says so and offers the way to the card that
                 changes it, rather than a button main would refuse. */}
             <UpdateAbout onOpenNetworkCard={() => navigate({ category: "privacy", sub: null })} />
