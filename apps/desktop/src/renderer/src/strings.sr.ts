@@ -7860,6 +7860,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         "no-candidate": "Nijedan paket nije izabran.",
         "not-found": "Ovaj paket nije instaliran.",
         io: "Paket se ne može pročitati ili upisati.",
+        "tool-invalid": "Podaci o programu koji paket nosi nisu ispravni.",
       } satisfies Record<PackRefusalCode, string>,
       error: "Radnja nije uspela. Pokušaj ponovo.",
     },

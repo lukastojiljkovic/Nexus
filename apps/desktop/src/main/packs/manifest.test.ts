@@ -164,3 +164,66 @@ describe("the pack manifest", () => {
     );
   });
 });
+
+describe("a tool pack's `tool` record", () => {
+  /** A manifest of kind `tool`, whose one file the record names as its entry. */
+  function toolManifest(tool: unknown, overrides: Readonly<Record<string, unknown>> = {}): unknown {
+    return manifest({ kind: "tool", tool, ...overrides });
+  }
+
+  it("reads the entry, the protocol and the fixed arguments", () => {
+    const parsed = parsePackManifest(toolManifest({ entry: "wikipedia.zim", protocol: "uci" }));
+    expect(parsed.kind).toBe("tool");
+    expect(parsed.tool).toEqual({ entry: "wikipedia.zim", protocol: "uci" });
+    expect(
+      parsePackManifest(toolManifest({ entry: "wikipedia.zim", protocol: "stdio", args: ["-y"] }))
+        .tool,
+    ).toEqual({ entry: "wikipedia.zim", protocol: "stdio", args: ["-y"] });
+  });
+
+  it("leaves every other kind without one", () => {
+    expect(parsePackManifest(manifest()).tool).toBeUndefined();
+  });
+
+  it("refuses `tool` on a kind that is not `tool`", () => {
+    expect(
+      refusal(() => parsePackManifest(manifest({ tool: { entry: "wikipedia.zim", protocol: "uci" } }))),
+    ).toBe("tool-invalid");
+  });
+
+  it("refuses a `tool` pack with no `tool`", () => {
+    expect(refusal(() => parsePackManifest(manifest({ kind: "tool" })))).toBe("tool-invalid");
+  });
+
+  it("refuses an entry that is not one of the manifest's files", () => {
+    expect(
+      refusal(() => parsePackManifest(toolManifest({ entry: "engine.exe", protocol: "uci" }))),
+    ).toBe("tool-invalid");
+  });
+
+  it("refuses a protocol outside the two it defines", () => {
+    expect(
+      refusal(() => parsePackManifest(toolManifest({ entry: "wikipedia.zim", protocol: "json" }))),
+    ).toBe("tool-invalid");
+  });
+
+  it("refuses a field inside `tool` that the format does not define", () => {
+    expect(
+      refusal(() =>
+        parsePackManifest(toolManifest({ entry: "wikipedia.zim", protocol: "uci", cwd: "/tmp" })),
+      ),
+    ).toBe("manifest-unreadable");
+  });
+
+  it("refuses arguments that are empty, not strings, over the caps, or carry a control character", () => {
+    const withArgs = (args: unknown): unknown =>
+      toolManifest({ entry: "wikipedia.zim", protocol: "uci", args });
+    expect(refusal(() => parsePackManifest(withArgs([""])))).toBe("tool-invalid");
+    expect(refusal(() => parsePackManifest(withArgs([1])))).toBe("tool-invalid");
+    expect(refusal(() => parsePackManifest(withArgs(["a".repeat(257)])))).toBe("tool-invalid");
+    expect(
+      refusal(() => parsePackManifest(withArgs(Array.from({ length: 65 }, (_unused, i) => `-${String(i)}`)))),
+    ).toBe("tool-invalid");
+    expect(refusal(() => parsePackManifest(withArgs(["a\u0000b"])))).toBe("tool-invalid");
+  });
+});

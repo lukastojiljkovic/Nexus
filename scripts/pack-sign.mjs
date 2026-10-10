@@ -26,6 +26,13 @@
 // that drifts. What this tool does enforce is the one thing the app cannot: that
 // the metadata it signs is complete, so `--meta` with a misspelled key is an
 // error here rather than a manifest the app refuses after the key was used.
+//
+// ADR-094 adds one OPTIONAL key, `tool`, and the tool spec it carries is the
+// half of a tool pack this tool has to get right by construction: `entry` must
+// be one of the files it just measured, and the whole record is refused on any
+// other kind. A tool pack whose entry named nothing would be a pack whose
+// program does not exist, and the moment to find that out is before the key is
+// read, not after the pack is installed.
 
 import { createHash, createPrivateKey, sign } from "node:crypto";
 import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
@@ -58,6 +65,11 @@ const META_KEYS = [
   "source",
   "minAppVersion",
 ];
+
+/** ADR-094's one optional key, and the only `kind` that may carry it. */
+const OPTIONAL_META_KEYS = ["tool"];
+const TOOL_KEYS = ["entry", "protocol", "args"];
+const TOOL_PROTOCOLS = ["uci", "stdio"];
 
 /** The two names inside a pack that are not content, and therefore not listed. */
 const RESERVED_FILES = new Set([MANIFEST_FILE, SIGNATURE_FILE]);
@@ -117,6 +129,7 @@ export function buildManifest(meta, files) {
     manifest[key] = key === "format" ? FORMAT : meta[key];
   }
   manifest.files = files;
+  if (meta.tool !== undefined) manifest.tool = meta.tool;
   return manifest;
 }
 
@@ -140,12 +153,69 @@ export function checkMeta(meta) {
     if (!Object.hasOwn(meta, key)) throw new Error(`pack-sign: --meta is missing "${key}".`);
   }
   for (const key of Object.keys(meta)) {
-    if (!META_KEYS.includes(key)) throw new Error(`pack-sign: --meta has an unknown field "${key}".`);
+    if (!META_KEYS.includes(key) && !OPTIONAL_META_KEYS.includes(key)) {
+      throw new Error(`pack-sign: --meta has an unknown field "${key}".`);
+    }
   }
   if (meta.format !== FORMAT) {
     throw new Error(`pack-sign: "format" must be ${String(FORMAT)}.`);
   }
+  checkTool(meta);
   return meta;
+}
+
+/**
+ * ADR-094's `tool` record, checked for the shapes the app refuses.
+ *
+ * A `tool` on a pack that is not a tool pack and a tool pack with no `tool` are
+ * both manifests the app would refuse, so both are errors here; the `entry`
+ * cannot be checked until the folder has been walked, which is `checkToolEntry`.
+ */
+function checkTool(meta) {
+  const tool = meta.tool;
+  if (tool === undefined) {
+    if (meta.kind === "tool") {
+      throw new Error('pack-sign: a pack of kind "tool" must carry "tool".');
+    }
+    return;
+  }
+  if (meta.kind !== "tool") {
+    throw new Error(`pack-sign: "tool" is only for a pack of kind "tool" (this one is "${meta.kind}").`);
+  }
+  if (typeof tool !== "object" || tool === null || Array.isArray(tool)) {
+    throw new Error('pack-sign: "tool" must be a JSON object.');
+  }
+  for (const key of Object.keys(tool)) {
+    if (!TOOL_KEYS.includes(key)) throw new Error(`pack-sign: "tool" has an unknown field "${key}".`);
+  }
+  if (typeof tool.entry !== "string" || tool.entry === "") {
+    throw new Error('pack-sign: "tool".entry must be a non-empty string.');
+  }
+  if (!TOOL_PROTOCOLS.includes(tool.protocol)) {
+    throw new Error(`pack-sign: "tool".protocol must be one of ${TOOL_PROTOCOLS.join(", ")}.`);
+  }
+  if (Object.hasOwn(tool, "args")) {
+    if (!Array.isArray(tool.args)) throw new Error('pack-sign: "tool".args must be an array of strings.');
+    for (const argument of tool.args) {
+      if (typeof argument !== "string" || argument === "") {
+        throw new Error('pack-sign: every entry of "tool".args must be a non-empty string.');
+      }
+    }
+  }
+}
+
+/**
+ * The tool's entry against the folder the tool just measured.
+ *
+ * Called from `signPack` after `collectFiles` and before the private key is even
+ * read: an entry that names no file is a pack whose program does not exist, and
+ * that is worth knowing before the key is used rather than after.
+ */
+export function checkToolEntry(meta, files) {
+  if (meta.kind !== "tool" || meta.tool === undefined) return;
+  if (!files.some((file) => file.path === meta.tool.entry)) {
+    throw new Error(`pack-sign: "tool".entry "${meta.tool.entry}" is not one of the folder's files.`);
+  }
 }
 
 /** `--name value` pairs from argv, refusing anything unexpected. */
@@ -180,11 +250,13 @@ export function signPack({ dir, meta, key }) {
   if (!statSync(folder).isDirectory()) {
     throw new Error(`pack-sign: "${folder}" is not a folder.`);
   }
+  const checked = checkMeta(meta);
   const files = collectFiles(folder);
   if (files.length === 0) {
     throw new Error("pack-sign: the folder holds no content files.");
   }
-  const manifest = buildManifest(checkMeta(meta), files);
+  checkToolEntry(checked, files);
+  const manifest = buildManifest(checked, files);
   const manifestBytes = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 
   const privateKey = createPrivateKey(readFileSync(key));

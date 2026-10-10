@@ -8776,12 +8776,18 @@ export interface UpdateStateView {
 // --- content packs (ADR-091) -------------------------------------------------
 
 /**
- * The five kinds of content a pack may carry. Redeclared from
+ * The six kinds of content a pack may carry. Redeclared from
  * `main/packs/manifest.ts` rather than imported, on this file's usual grounds
- * for a flat closed list — and it is the same five, because the manifest's
- * parser is what refuses a sixth.
+ * for a flat closed list — and it is the same six, because the manifest's
+ * parser is what refuses a seventh.
+ *
+ * `tool` (ADR-094) is the one kind whose manifest also carries a `tool` record
+ * — the program to run, and how to speak to it. That record is deliberately NOT
+ * on `InstalledPackView`: a renderer never starts a process and never needs to
+ * name one, so nothing about a tool crosses this bridge beyond the fact that the
+ * pack is one.
  */
-export const PACK_KINDS = ["zim", "map", "dataset", "model", "content"] as const;
+export const PACK_KINDS = ["zim", "map", "dataset", "model", "content", "tool"] as const;
 export type PackKind = (typeof PACK_KINDS)[number];
 
 /** One string per language. Both are required: the copy is Serbian and English, always. */
@@ -8928,7 +8934,16 @@ export type PackRefusalCode =
   /** This id is not installed. */
   | "not-found"
   /** Reading or writing the pack failed for a reason none of the above names. */
-  | "io";
+  | "io"
+  /**
+   * ADR-094's `tool` record is missing on a `tool` pack, present on another
+   * kind, or breaks one of its own rules — an `entry` that is not a listed file,
+   * an unknown protocol, an argument list that is not one. One code for the
+   * whole record, for `"path-invalid"`'s reason: the rules are many and the one
+   * thing the user can act on is that this pack is not a tool pack this build
+   * will run.
+   */
+  | "tool-invalid";
 
 /** What `packsInspect` answers: the verified candidate, a cancelled dialog, or a refusal. */
 export type PackInspectResult =

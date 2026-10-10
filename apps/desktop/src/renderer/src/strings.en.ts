@@ -7821,6 +7821,7 @@ export const en = {
         "no-candidate": "No pack has been chosen.",
         "not-found": "That pack is not installed.",
         io: "The pack could not be read or written.",
+        "tool-invalid": "The program this pack carries is not described in a way this build accepts.",
       } satisfies Record<PackRefusalCode, string>,
       error: "That did not work. Try again.",
     },

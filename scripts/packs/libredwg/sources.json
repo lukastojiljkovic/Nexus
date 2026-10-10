@@ -1,0 +1,94 @@
+{
+  "id": "libredwg",
+  "version": "0.14.8601",
+  "release": {
+    "tag": "0.14.8601",
+    "published": "2026-10-03T09:16:19Z",
+    "url": "https://github.com/LibreDWG/libredwg/releases/tag/0.14.8601"
+  },
+  "sources": {
+    "libredwg-0.14.8601-win64.zip": {
+      "url": "https://github.com/LibreDWG/libredwg/releases/download/0.14.8601/libredwg-0.14.8601-win64.zip",
+      "fetched": "2026-10-10",
+      "bytes": 12100542,
+      "sha256": "439cd08d888f3bc2f643cabade0374dfd8670f18d2098cd039cbe64d12a57b19",
+      "sha256From": {
+        "url": "https://api.github.com/repos/LibreDWG/libredwg/releases/tags/0.14.8601",
+        "what": "The release asset's own digest, as GitHub publishes it for the tag the builder downloads from."
+      },
+      "licence": {
+        "spdx": "GPL-3.0-or-later",
+        "evidence": [
+          {
+            "url": "https://github.com/LibreDWG/libredwg/blob/0.14.8601/README",
+            "quote": "This library is free software, licensed under the terms of the GNU\nGeneral Public License as published by the Free Software Foundation,\neither version 3 of the License, or (at your option) any later version."
+          }
+        ]
+      },
+      "provides": [
+        "bin/dwg2dxf.exe",
+        "bin/dwgread.exe",
+        "bin/libredwg-0.dll",
+        "bin/libiconv-2.dll",
+        "bin/libpcre2-8-0.dll",
+        "bin/libpcre2-16-0.dll",
+        "README.txt"
+      ],
+      "notes": {
+        "what": "The archive itself carries no COPYING file, which is why the pack ships the project's own licence text fetched from the source tree at the same version.",
+        "url": "https://github.com/LibreDWG/libredwg/blob/0.14.8601/COPYING",
+        "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903"
+      }
+    },
+    "libredwg-0.14.8601.tar.xz": {
+      "url": "https://github.com/LibreDWG/libredwg/releases/download/0.14.8601/libredwg-0.14.8601.tar.xz",
+      "fetched": "2026-10-10",
+      "bytes": 10605020,
+      "sha256": "f1140a219d6edb291e55fad740be6c5e49c046fee558860575aeef110caa4ef9",
+      "sha256From": {
+        "url": "https://github.com/LibreDWG/libredwg/releases/download/0.14.8601/dist.sha256",
+        "what": "The release's own checksum file lists this source archive and this digest; the same digest is the asset's on GitHub.",
+        "quote": "f1140a219d6edb291e55fad740be6c5e49c046fee558860575aeef110caa4ef9  libredwg-0.14.8601.tar.xz"
+      },
+      "licence": {
+        "spdx": "GPL-3.0-or-later",
+        "evidence": [
+          {
+            "url": "https://github.com/LibreDWG/libredwg/blob/0.14.8601/include/dwg.h",
+            "quote": "This library is free software, licensed under the terms of the GNU       */\n/*  General Public License as published by the Free Software Foundation,     */\n/*  either version 3 of the License, or (at your option) any later version."
+          }
+        ]
+      },
+      "provides": [
+        "source/libredwg-0.14.8601.tar.xz"
+      ]
+    },
+    "COPYING": {
+      "url": "https://raw.githubusercontent.com/LibreDWG/libredwg/0.14.8601/COPYING",
+      "fetched": "2026-10-10",
+      "bytes": 35147,
+      "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+      "sha256From": {
+        "url": "measured",
+        "what": "Computed from the file this run fetched; it is the project's own licence text at the shipped version."
+      },
+      "licence": {
+        "spdx": "GPL-3.0-or-later",
+        "evidence": [
+          {
+            "url": "https://github.com/LibreDWG/libredwg/blob/0.14.8601/README",
+            "quote": "part of the GNU project, released under the aegis of GNU.  It is licensed\nunder the terms of the GNU General Public License version 3 (or at you option\nany later version)."
+          }
+        ]
+      },
+      "provides": [
+        "COPYING"
+      ]
+    }
+  },
+  "notes": {
+    "what": "0.14.8601 (2026-10-03) is the newest published Windows build. The project's NEWS records the security fixes it carries, which the tagged 0.14 build predates; the pack pins a version with them rather than the older tag.",
+    "url": "https://github.com/LibreDWG/libredwg/blob/0.14.8601/NEWS",
+    "quote": "  * Fixed CVE-2026-63474 (GHSA-qg2f-8389-w95j, Moderate): heap-buffer-overflow\n    WRITE in decompress_R2004_section, bypassing an earlier fix.\n    read_2004_compressed_section reset dec.size to a smaller per-section\n    value inside its loop, so bit_chain_alloc could shrink the live\n    decompression buffer while dec.byte/sec_dat->size kept tracking the\n    larger logical stream.  Reported by yPin9."
+  }
+}

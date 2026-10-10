@@ -105,3 +105,4 @@ directory is the decision log behind it.
 | [091](091-content-packs.md) | Content packs: a signed folder, verified with the release key | Accepted | 2026-10-09 |
 | [092](092-downloads-network-mode.md) | The third network mode, „downloads", and the download service | Accepted; amends ADR-089 | 2026-10-09 |
 | [093](093-navigation-groups.md) | Navigation groups, the pinned shortlist and the launcher | Accepted; supersedes ADR-008 decision #11, amends ADR-086 §4 | 2026-10-09 |
+| [094](094-tool-packs.md) | Tool packs: a GPL program as a separate process in a signed folder (amends ADR-091 §2 and §9) | Accepted | 2026-10-10 |

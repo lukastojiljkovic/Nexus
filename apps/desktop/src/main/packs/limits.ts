@@ -36,6 +36,16 @@ export const PACK_LIMITS = {
   /** Longest description, in characters, per language. */
   descriptionChars: 4000,
   /**
+   * The caps on a `tool` pack's fixed argument list (ADR-094). They are not a
+   * bound on what the program may be asked to do — that is the program's own
+   * business — but on what a manifest may make this app hand to `spawn`: a list
+   * nobody can read is a list nobody can review, and the header of `tools/run.ts`
+   * is where the reason argv is signature-covered at all is written down.
+   */
+  toolArgs: 64,
+  /** Longest single fixed argument, in characters. */
+  toolArgChars: 256,
+  /**
    * What a copy needs on top of the pack's own bytes: the `.staging` tree holds
    * a second copy until the rename lands, and a full volume would fail the
    * rename rather than the copy. Checked before a byte moves.
