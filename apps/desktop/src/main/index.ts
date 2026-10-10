@@ -426,6 +426,10 @@ import {
   // named by a row (the two functions below). The module's own handlers reach
   // it through the kit, in `modules/car/main/register.ts`.
   CarStore,
+  // COOK (the cookbook, migration 076): the store its blob union below counts,
+  // appended here rather than threaded into the alphabetical run above so a
+  // parallel run's addition and this one cannot collide.
+  RecipeStore,
 } from "@nexus/db";
 import {
   blobStorePaths,
@@ -565,6 +569,12 @@ import { packsRoot } from "./packs/registry.js";
 // (`moduleAttachments.ts`) — this file supplies it with what only this file
 // holds, in the module host's platform literal below.
 import { attachFilesForModule, releaseBlobForModule } from "./moduleAttachments.js";
+// The COOKBOOK module's Electron half and its runtime slot (ADR-090). A kit
+// module is a folder; the two things it cannot own — the packs directory and a
+// photo write into the encrypted blob store — are resolved HERE, by the one file
+// that owns `app`, the window and the data key, and handed to the module.
+import { configureCookbook } from "../modules/cookbook/main/register.js";
+import { createCookbookHost } from "../modules/cookbook/main/host.js";
 import {
   deliverSecurityNotices,
   runCheckNow,
@@ -1568,6 +1578,31 @@ configureCultureServices({
   blobRefCount,
   packsRoot: () => packsRoot(userDataDir()),
   releasePublicKeyPem: () => RELEASE_PUBLIC_KEY_PEM,
+});
+
+/**
+ * What the COOKBOOK module is handed once, at startup: where the installed
+ * content packs are, the release key their manifests are verified against, and
+ * the two capabilities a kit module cannot own — a native photo dialog with a
+ * write into the encrypted blob store, and the display-awake blocker.
+ *
+ * Every one of these is a fact about THIS file: `userDataDir`, the blob store's
+ * paths and keys, `mainWindow`, `blobRefCount`'s union over every
+ * blob-naming table. The module's own folder therefore stays free of Electron,
+ * of `app.getPath` and of the data key — and the module still cannot reach any
+ * path of its own choosing, because none of these is a parameter it supplies.
+ */
+configureCookbook({
+  // Resolved at launch and after the harness sandbox has been applied, which is
+  // exactly what the pack index expects: `<userData>/packs` (ADR-091 §5).
+  userData: userDataDir(),
+  packsPublicKeyPem: RELEASE_PUBLIC_KEY_PEM,
+  host: createCookbookHost({
+    window: () => mainWindow,
+    blobPaths: blobStorePathsFor,
+    blobKeys: requireBlobKeys,
+    refCount: (profileId, sha256) => blobRefCount(profileId, sha256),
+  }),
 });
 /** The `userData` directory itself — the registry's home, and the root every account directory hangs off. */
 function userDataDir(): string {
@@ -5440,6 +5475,9 @@ function blobRefCount(profileId: string, sha256: string): number {
     // it stops naming is still protected by every other member of this union.
     cultureStore(profileId).refCount(sha256) +
     dashboardSettingsStore(profileId).refCount(sha256) +
+    // COOK's recipe photo (migration 076): the module that joined this union
+    // with its screens, on the terms this block's own comment states.
+    recipeStore(profileId).refCount(sha256) +
     // The `profiles` table itself (SET-001, migration 040) — the fifth member,
     // and the only one whose store takes no profile id, because that table IS
     // the profile list. Its count is profile-agnostic like every other here.
@@ -5463,6 +5501,8 @@ function blobMimeForHash(profileId: string, sha256: string): string | null {
     // and this line is what keeps one row's mime from being the other's.
     cultureStore(profileId).mimeForHash(sha256) ??
     dashboardSettingsStore(profileId).mimeForHash(sha256) ??
+    // And a recipe's photo is servable by `nx-blob:` on the same terms.
+    recipeStore(profileId).mimeForHash(sha256) ??
     // A profile picture is served by `nx-blob:` on exactly the terms an inline
     // note image is, and THIS line is the gate: `registerBlobProtocol` 404s any
     // hash whose mime resolves to null, so a picture becomes servable at the
@@ -5495,6 +5535,11 @@ function dashboardSettingsStore(profileId: string): DashboardSettingsStore {
  */
 function carStore(profileId: string): CarStore {
   return new CarStore(requireDb().raw, profileId);
+}
+
+/** COOK's store (migration 076), built the way every store here is: a fresh handle per call, because a database locked between two calls must not be written through a captured one. */
+function recipeStore(profileId: string): RecipeStore {
+  return new RecipeStore(requireDb().raw, profileId);
 }
 
 function dashboardWidgetStore(profileId: string): DashboardWidgetStore {

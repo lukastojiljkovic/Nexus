@@ -127,6 +127,7 @@ describe("moduleSettingsDeclarations", () => {
       "timers",
       "culture",
       "pantry",
+      "cookbook",
     ]);
   });
 
@@ -166,6 +167,7 @@ describe("moduleSettingsCardIds", () => {
       "timers",
       "culture",
       "pantry",
+      "cookbook",
     ]);
   });
 
@@ -209,6 +211,7 @@ describe("moduleSettingsCards", () => {
       "timers",
       "culture",
       "pantry",
+      "cookbook",
     ]);
     expect(cards.map((card) => card.title)).toEqual([
       s().sectionTitle.dashboard,
@@ -228,6 +231,7 @@ describe("moduleSettingsCards", () => {
       kitManifest("timers")?.copy?.name[activeLocale()] ?? "",
       kitManifest("culture")?.copy?.name[activeLocale()] ?? "",
       kitManifest("pantry")?.copy?.name[activeLocale()] ?? "",
+      kitManifest("cookbook")?.copy?.name[activeLocale()] ?? "",
     ]);
   });
 

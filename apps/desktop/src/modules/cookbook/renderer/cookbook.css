@@ -1,0 +1,264 @@
+/* KUVARICA (COOKBOOK, ADR-090). Tokens exclusively — raw colour values are
+   forbidden outside @nexus/tokens, every length comes from the scale, and the
+   one stacking order used is the named layer scale (`check:colours`,
+   `check:tokens`, `check:layers`).
+ *
+ * THIS FILE IS IMPORTED BY THE MODULE'S PAGE, not by `app.css`: the shell's
+ * stylesheet is part of the startup chunk, and a rule for a page nobody has
+ * opened must not be paid for on every launch. Vite turns the import into a
+ * chunk of its own, loaded with the page.
+ *
+ * Class prefix `cookbook__`, for the reason the shell's split states: a rule
+ * belongs to the module whose prefix it carries. The dialog recipe below is the
+ * house one (`.recur-dialog__*`), restated under this module's own prefix so the
+ * box needs no stylesheet the page did not load.
+ */
+
+.cookbook {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-5);
+  padding: var(--nx-space-5);
+}
+
+.cookbook__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+
+.cookbook__error {
+  color: var(--nx-danger);
+}
+
+.cookbook__list {
+  display: flex;
+  flex-direction: column;
+}
+
+.cookbook__row-title {
+  margin-inline-end: var(--nx-space-3);
+}
+
+.cookbook__row-meta {
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+
+.cookbook__row-actions {
+  display: flex;
+  gap: var(--nx-space-2);
+  align-items: center;
+}
+
+.cookbook__detail-head {
+  display: flex;
+  gap: var(--nx-space-3);
+  /* Mixed shapes — a heading beside a bare button — so the CONTROL lines up at
+     the row's end rather than centring against the taller box (`check:rows`). */
+  align-items: end;
+  justify-content: space-between;
+}
+
+.cookbook__detail-title {
+  font-size: var(--nx-font-size-h2);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-tight);
+}
+
+.cookbook__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+}
+
+/* The servings stepper: a numeric box beside two bare buttons, so the controls
+   line up at the end (`check:rows`). */
+.cookbook__servings {
+  display: flex;
+  gap: var(--nx-space-2);
+  align-items: end;
+}
+
+.cookbook__servings-field {
+  width: 6rem;
+}
+
+.cookbook__times {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-4);
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+
+.cookbook__photo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  align-items: start;
+}
+
+.cookbook__photo-image {
+  max-width: 100%;
+  max-height: 15rem;
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+}
+
+.cookbook__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+
+.cookbook__section-title {
+  font-size: var(--nx-font-size-label);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-subtle);
+}
+
+.cookbook__ingredients,
+.cookbook__steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  padding-inline-start: var(--nx-space-4);
+  line-height: var(--nx-font-leading-normal);
+}
+
+.cookbook__ingredients {
+  list-style: none;
+  padding-inline-start: 0;
+}
+
+.cookbook__step-timer,
+.cookbook__cooking-timer {
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.cookbook__licence,
+.cookbook__nutrition {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--nx-space-1) var(--nx-space-4);
+}
+
+.cookbook__licence dt,
+.cookbook__nutrition dt {
+  color: var(--nx-text-subtle);
+}
+
+.cookbook__licence dd,
+.cookbook__nutrition dd {
+  font-variant-numeric: tabular-nums;
+}
+
+.cookbook__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: center;
+}
+
+/* --- Kuvanje: one step, read from across a kitchen ------------------------ */
+
+.cookbook--cooking {
+  max-width: var(--nx-layout-measure);
+  margin-inline: auto;
+}
+
+.cookbook__cooking-count {
+  color: var(--nx-text-subtle);
+  font-size: var(--nx-font-size-body-sm);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+}
+
+.cookbook__cooking-step {
+  font-size: var(--nx-font-size-display);
+  line-height: var(--nx-font-leading-snug);
+  letter-spacing: var(--nx-font-tracking-display);
+}
+
+/* --- Namirnice: the suggestion row ---------------------------------------- */
+
+.cookbook__suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+}
+
+/* --- Izmena: the form's rows --------------------------------------------- */
+
+.cookbook__triple {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-3);
+  align-items: end;
+}
+
+.cookbook__step-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+
+/* Mixed shapes again: two stacked fields and a bare icon button. */
+.cookbook__step-row {
+  display: flex;
+  gap: var(--nx-space-2);
+  align-items: end;
+}
+
+.cookbook__step-minutes {
+  width: 6rem;
+}
+
+/* --- The house dialog recipe, under this module's prefix ------------------ */
+
+.cookbook__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--nx-layer-dialog);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--nx-space-6);
+}
+
+.cookbook__backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--nx-bg);
+  opacity: 0.75;
+}
+
+.cookbook__panel {
+  position: relative;
+  width: min(520px, 92vw);
+  max-height: 92vh;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  padding: var(--nx-space-5);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+  box-shadow: var(--nx-elevation-overlay);
+}
+
+.cookbook__panel-title {
+  font-size: var(--nx-font-size-h1);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-h1);
+}
+
+.cookbook__panel-name {
+  color: var(--nx-text-subtle);
+}

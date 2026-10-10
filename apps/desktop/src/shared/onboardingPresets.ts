@@ -55,6 +55,9 @@ export const ESSENTIALS_MODULE_PRESET: Readonly<Record<string, boolean>> = {
   // And the same for the culture corner (ADR-090): it holds nothing until a
   // visit, a plan or an audio file is added, so there is nothing to opt into.
   culture: true,
+  // And the second (ADR-090): a cookbook writes nothing until somebody saves a
+  // recipe, so there is nothing to opt into either.
+  cookbook: true,
   pro: false,
   // The second module built on the kit (ADR-090), decided here like every other
   // selectable one: a library that had to be switched on first would be hiding

@@ -429,6 +429,9 @@ describe("buildSettingsIndex", () => {
       // And the second discovered card's one control, for the same reason.
       "culture:prompt-past-plans",
       "pantry:expiry-window",
+      // The second DISCOVERED card's one control (ADR-090), last for the same
+      // reason its section is.
+      "cookbook:unit-system",
     ]);
   });
 

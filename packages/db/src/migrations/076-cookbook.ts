@@ -82,6 +82,29 @@ import type { Migration } from "./migrations.js";
  * at it while `PRAGMA foreign_keys` is a no-op inside the migration transaction.
  * A rebuild would silently take every ingredient and step with it.
  *
+ * **`raw_text` is what the author WROTE, kept beside the parse.** Stage 2's
+ * ingredient field runs the line a user types through `parseIngredientLine`
+ * (the module's own parser, added with stage 1) and stores the fields it
+ * answers; the parse is lossy by design — „2–3 kašike" is a quantity, a range
+ * and `tbsp` from then on — so the raw line would otherwise be gone the moment
+ * a recipe was saved, and the author's own spelling with it. The column is
+ * `NOT NULL DEFAULT ''` because a line may legitimately have been written by a
+ * pack or an archive that carries only the structured fields, and an empty
+ * string is the honest answer for „nobody typed one".
+ *
+ * **Two more tables arrived with the module's screens (stage 2).**
+ * `cookbook_settings` is the module's one preference — which units a scaled
+ * quantity is written in — and it is a PROFILE row rather than a device one for
+ * `timers_settings`' reason: main reads it and it travels in the archive.
+ * `cookbook_food_matches` is the user's own link from an ingredient NAME to a
+ * food in an installed dataset pack („mleveno meso is this"), remembered per
+ * name so the second recipe that calls for it needs no second answer. It stores
+ * the food reference as TEXT in `food_ref`'s own grammar rather than as a foreign
+ * key, deliberately: the food lives in a signed content pack outside the
+ * database (ADR-091), so there is no table to point at — and a match whose pack
+ * was uninstalled must be able to stay, reading as „unknown food" rather than
+ * being deleted by a cascade nobody asked for.
+ *
  * **Three indexes, each earned.** `cookbook_recipes_profile_active` covers the
  * only recipe read there is — „this profile's live recipes, by title" — the shape
  * `habits_profile_active` already has. `cookbook_recipes_photo` is the blob
@@ -199,6 +222,9 @@ export const migration076: Migration = {
         group_heading   TEXT
                           CHECK (group_heading IS NULL
                                  OR (length(group_heading) > 0 AND length(group_heading) <= 60)),
+        -- The line as the author wrote it. Empty for a row that arrived
+        -- structured (a pack, an archive written before this column existed).
+        raw_text        TEXT NOT NULL DEFAULT '' CHECK (length(raw_text) <= 500),
         quantity        REAL CHECK (quantity IS NULL OR quantity > 0),
         quantity_max    REAL CHECK (quantity_max IS NULL OR quantity_max > 0),
         -- The unit vocabulary is @nexus/core's INGREDIENT_UNITS, and it is
@@ -248,6 +274,31 @@ export const migration076: Migration = {
       );
 
       CREATE INDEX cookbook_steps_recipe ON cookbook_steps (recipe_id, position);
+
+      -- The module's one preference. No row means the store's own default
+      -- ("metric"), so a profile that never opened the settings card reads one.
+      CREATE TABLE cookbook_settings (
+        profile_id    TEXT PRIMARY KEY REFERENCES profiles(id) ON DELETE CASCADE,
+        unit_system   TEXT NOT NULL CHECK (unit_system IN ('metric', 'kitchen')),
+        updated_at    TEXT NOT NULL
+      );
+
+      -- The user's own ingredient-name -> food link, remembered per NAME (see
+      -- the file doc). Keyed by the folded name so „Mleveno meso" and „mleveno
+      -- meso" are one answer; the display spelling the user first used is kept
+      -- beside it.
+      CREATE TABLE cookbook_food_matches (
+        profile_id      TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+        name_key        TEXT NOT NULL CHECK (length(name_key) > 0 AND length(name_key) <= 120),
+        name            TEXT NOT NULL CHECK (length(name) > 0 AND length(name) <= 120),
+        food_ref        TEXT NOT NULL CHECK (length(food_ref) > 0 AND length(food_ref) <= 80),
+        food_name       TEXT NOT NULL CHECK (length(food_name) > 0 AND length(food_name) <= 120),
+        grams_per_unit  REAL CHECK (grams_per_unit IS NULL
+                                    OR (grams_per_unit > 0 AND grams_per_unit <= 10000)),
+        created_at      TEXT NOT NULL,
+        updated_at      TEXT NOT NULL,
+        PRIMARY KEY (profile_id, name_key)
+      );
     `);
   },
 };

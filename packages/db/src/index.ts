@@ -1188,3 +1188,26 @@ export type {
   UpdateCulturePlanFields,
   UpdateVenueFields,
 } from "./culture/cultureStore.js";
+
+// --- COOK (the cookbook, migration 076) -------------------------------------
+//
+// Stage 2's additions to the cookbook's own store, added as one block at the end
+// of this file rather than inside the COOK section above: several runs append to
+// this index at once, and a block nobody has to thread between other lines is
+// what keeps the merge mechanical. The module's archive section reads
+// `parseCookbookExport` (the same validator `RecipeStore.importData` runs), and
+// `foldIngredientName` is the key an ingredient link is remembered under.
+export {
+  DEFAULT_UNIT_SYSTEM,
+  MAX_FOOD_MATCHES,
+  MAX_INGREDIENT_RAW_LENGTH,
+  RECIPE_UNIT_SYSTEMS,
+  foldIngredientName,
+  parseCookbookExport,
+} from "./cookbook/recipeStore.js";
+export type {
+  CookbookSettings,
+  FoodMatch,
+  FoodMatchInput,
+  RecipeUnitSystem,
+} from "./cookbook/recipeStore.js";

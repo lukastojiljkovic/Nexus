@@ -112,6 +112,9 @@ describe("createModuleRegistry", () => {
       "car",
       // The second DISCOVERED module, after TIMERS' `order: 100`.
       "pantry",
+      // And the second one, after it: the discovered modules sort by their
+      // manifests' own `order` (ADR-090).
+      "cookbook",
     ]);
   });
 
@@ -176,6 +179,9 @@ describe("createModuleRegistry", () => {
       // entry, and the UTIL sharing above is one section implemented twice rather
       // than a bin for anything shelf-shaped.
       PANT: ["pantry"],
+      // „Kuvarica" takes its own for „Elektronika"'s reason: the cookbook is a
+      // section of the product rather than a second reading of PRD 29.
+      COOK: ["cookbook"],
       CANV: ["canvas"],
       // „Elektronika" takes its own for „Tabla"'s reason exactly: ELEC is its
       // own PRD entry, and the UTIL sharing above is one section implemented
@@ -246,6 +252,9 @@ describe("createModuleRegistry", () => {
       // The second discovered module, in the group it declares: a pantry is an
       // AREA of a life, which is what „Život" holds (ADR-093).
       "pantry",
+      // A discovered module in the group it declares (ADR-090): the cookbook
+      // belongs to Life beside the pantry and the fitness log.
+      "cookbook",
     ]);
     // The culture group's first member, and the group ADR-093 named before
     // anything was in it.
@@ -314,6 +323,9 @@ describe("createModuleRegistry", () => {
       // The same for the pantry: nothing is written until a first item is
       // recorded.
       "pantry",
+      // And the cookbook, on the same terms: nothing is written until a recipe
+      // is saved.
+      "cookbook",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");
@@ -506,6 +518,7 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
       "car",
       // The second, on the same terms.
       "pantry",
+      "cookbook",
     ]);
   });
 
