@@ -1,0 +1,236 @@
+/* The Sun-and-Moon panel and the place picker. Tokens exclusively, like every
+   other stylesheet in the app; checked by `check:colours`, `check:tokens`,
+   `check:css` and `check:layers`.
+ *
+ * Class prefixes `ast-sunmoon__` and `ast-place__`, after the module this corner
+ * belongs to.
+ *
+ * THE COMPASS IS TWO ROTATING OVERLAYS, and the CSS states why rather than the
+ * component: each one covers the whole dial, so `transform-origin: 50% 50%`
+ * turns it about the dial's centre, and the needle and the Sun's marker are
+ * pseudo-elements pinned near the top edge. A single inline `rotate(…)` in
+ * degrees is then all the component has to say, which is what keeps the
+ * arithmetic in `panel.ts` and the picture here.
+ */
+
+.ast-sunmoon {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+}
+
+.ast-sunmoon__place {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+
+.ast-sunmoon__coordinates {
+  font-family: var(--nx-font-family-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--nx-text-muted);
+}
+
+.ast-sunmoon__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+
+/* One label and one value. The value is what the eye goes to, so it sits at the
+   end of the row and every figure in the panel lines up in one column. */
+.ast-sunmoon__row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--nx-space-3);
+  padding: 2px 0;
+}
+
+.ast-sunmoon__label {
+  color: var(--nx-text-muted);
+}
+
+.ast-sunmoon__value {
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+
+.ast-sunmoon__moon {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-3);
+}
+
+.ast-sunmoon__disk {
+  width: 3rem;
+  height: 3rem;
+}
+
+.ast-sunmoon__moon-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.ast-sunmoon__phase {
+  color: var(--nx-text);
+}
+
+.ast-sunmoon__compass {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nx-space-4);
+}
+
+.ast-sunmoon__rose-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+
+.ast-sunmoon__rose {
+  position: relative;
+  width: 5rem;
+  height: 5rem;
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-round);
+  background: var(--nx-surface-alt);
+}
+
+.ast-sunmoon__facing {
+  font-size: var(--nx-font-size-caption);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-faint);
+}
+
+.ast-sunmoon__needle,
+.ast-sunmoon__sun-mark {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 50%;
+}
+
+.ast-sunmoon__needle::before {
+  content: "";
+  position: absolute;
+  top: 0.9rem;
+  left: 50%;
+  width: 2px;
+  height: calc(50% - 0.9rem);
+  margin-left: -1px;
+  background: var(--nx-text);
+}
+
+.ast-sunmoon__needle::after {
+  content: "";
+  position: absolute;
+  top: 0.45rem;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 0.25rem solid transparent;
+  border-right: 0.25rem solid transparent;
+  border-bottom: 0.45rem solid var(--nx-text);
+}
+
+.ast-sunmoon__sun-mark::before {
+  content: "";
+  position: absolute;
+  top: 0.3rem;
+  left: 50%;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-left: -0.25rem;
+  border-radius: var(--nx-radius-round);
+  background: var(--nx-accent);
+}
+
+.ast-sunmoon__offsets {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nx-space-1);
+}
+
+/* A sighting is a choice, and the product marks a choice typographically: accent
+   text plus weight, keyed off `aria-pressed`, so what is announced and what is
+   painted are the same attribute. */
+.ast-sunmoon__offset {
+  font: inherit;
+  color: var(--nx-text-muted);
+  background: none;
+  border: 0;
+  padding: 2px 0;
+  text-align: start;
+  cursor: pointer;
+}
+
+.ast-sunmoon__offset[aria-pressed="true"] {
+  color: var(--nx-accent);
+  font-weight: var(--nx-font-weight-semibold);
+}
+
+.ast-place__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+
+.ast-place__results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A result is one click target with two lines of its own: the name the reader
+   searched for, and where that name is. */
+.ast-place__result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nx-space-2);
+  width: 100%;
+  font: inherit;
+  color: var(--nx-text);
+  background: none;
+  border: 0;
+  border-radius: var(--nx-radius-sm);
+  padding: var(--nx-space-1) var(--nx-space-2);
+  text-align: start;
+  cursor: pointer;
+}
+
+.ast-place__result:hover {
+  background: var(--nx-surface-alt);
+}
+
+.ast-place__result-place {
+  font-variant-numeric: tabular-nums;
+  color: var(--nx-text-subtle);
+  font-size: var(--nx-font-size-body-sm);
+}
+
+.ast-place__fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-3);
+}
+
+.ast-place__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: end;
+}
+
+.ast-place__error {
+  color: var(--nx-danger);
+  margin: 0;
+}

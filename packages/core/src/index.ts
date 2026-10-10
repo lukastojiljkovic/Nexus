@@ -2802,3 +2802,8 @@ export type {
 } from "./games/boards/protocol.js";
 export { orbitalPeriodDays, orbitPath, solarSystemAt } from "./sky/planets.js";
 export { dayNightAt, TERMINATOR_ANGULAR_RADIUS_DEG, TWILIGHT_ANGULAR_RADII_DEG } from "./sky/earthView.js";
+
+export { cityCount, cities, cityLabel, searchCities, DEFAULT_CITY_LIMIT } from "./sky/cities.js";
+export type { City } from "./sky/cities.js";
+export { computerObserver, computerZone, zoneCount, zonePoint } from "./sky/zoneLocation.js";
+export type { ZoneObserver } from "./sky/zoneLocation.js";
