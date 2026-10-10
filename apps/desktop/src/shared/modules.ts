@@ -1598,7 +1598,7 @@ const PRO_GRADNJA_TOOLS: ToolRegistration[] = [
     category: "geometry",
     riskClass: "life-safety",
     taskGroups: ["build"],
-    packs: ["gradnja", "zanat"],
+    packs: ["gradnja", "zanat", "stolarija"],
     keywords: [
       "blondel", "broj stepenika", "gazenje", "gazista", "gaziste", "going", "hod", "krak",
       "nagib", "penjanje", "podest", "riser", "spratna visina", "stair", "stepenice",
@@ -4967,7 +4967,7 @@ const PRO_ZANAT_TOOLS: ToolRegistration[] = [
     category: "materials",
     riskClass: "none",
     taskGroups: ["build", "measure"],
-    packs: ["zanat"],
+    packs: ["zanat", "krojenje"],
     keywords: [
       "dodatak", "duznih", "fabric", "horizontalni", "ivici", "komada", "komade", "metara",
       "obavezan", "raport", "raportu", "rastur", "repeat", "rolne", "sare", "sav", "savovima",
@@ -5025,7 +5025,7 @@ const PRO_ZANAT_TOOLS: ToolRegistration[] = [
     category: "geometry",
     riskClass: "none",
     taskGroups: ["build", "measure"],
-    packs: ["zanat"],
+    packs: ["zanat", "stolarija"],
     keywords: [
       "angle", "angles", "duzina", "gerung", "komada", "lajsne", "lista", "mitre", "nagib",
       "nagnuta", "naslona", "podesavanja", "ram", "reza", "sirina", "slozeni", "spring",
@@ -5069,7 +5069,7 @@ const PRO_ZANAT_TOOLS: ToolRegistration[] = [
     category: "geometry",
     riskClass: "none",
     taskGroups: ["build", "measure"],
-    packs: ["zanat"],
+    packs: ["zanat", "metal"],
     keywords: [
       "bend", "debljina", "duzina", "faktor", "faktora", "izmerena", "izmerenog", "krakova",
       "krakovi", "lima", "linija", "mera", "metal", "obrnuti", "polozaji", "pravca", "racun",
@@ -5084,7 +5084,7 @@ const PRO_ZANAT_TOOLS: ToolRegistration[] = [
     category: "structure",
     riskClass: "life-safety",
     taskGroups: ["build"],
-    packs: ["zanat"],
+    packs: ["zanat", "stolarija"],
     keywords: [
       "debljina", "deflection", "elasticnosti", "granica", "granicom", "koncentrisana", "modul",
       "modulu", "napon", "napona", "opterecenje", "opterecenju", "oslonaca", "oslonca",
@@ -5100,7 +5100,7 @@ const PRO_ZANAT_TOOLS: ToolRegistration[] = [
     riskClass: "none",
     taskGroups: ["build", "measure"],
     sourceKey: "pro.sources.cabinet-hole-raster-system-32",
-    packs: ["zanat"],
+    packs: ["zanat", "stolarija"],
     keywords: [
       "busenja", "debljina", "debljinom", "donje", "donjeg", "ivice", "jednaki", "korpusa",
       "najblizi", "otvor", "otvora", "otvori", "polica", "police", "polozaji", "raspored",
@@ -5116,7 +5116,7 @@ const PRO_ZANAT_TOOLS: ToolRegistration[] = [
     riskClass: "none",
     taskGroups: ["build", "measure"],
     sourceKey: "pro.sources.iso-metric-thread-261-273-68",
-    packs: ["zanat"],
+    packs: ["zanat", "metal"],
     keywords: [
       "burgije", "burgiju", "busenje", "drill", "korak", "navoj", "navoja", "nominalni",
       "precnik", "procenat", "procentu", "prolazne", "rupe", "serija", "size", "tap",
@@ -5130,7 +5130,7 @@ const PRO_ZANAT_TOOLS: ToolRegistration[] = [
     category: "materials",
     riskClass: "none",
     taskGroups: ["build", "measure"],
-    packs: ["zanat"],
+    packs: ["zanat", "stolarija"],
     keywords: [
       "datoj", "debljem", "debljina", "drveta", "duzina", "gradje", "gustina", "gustini",
       "huberu", "koeficijent", "komada", "komadu", "kore", "kraju", "kubikaza", "kubni", "masa",
@@ -5162,7 +5162,7 @@ const PRO_ZANAT_TOOLS: ToolRegistration[] = [
     category: "materials",
     riskClass: "none",
     taskGroups: ["build"],
-    packs: ["zanat"],
+    packs: ["zanat", "metal"],
     keywords: [
       "brojem", "consumable", "debljina", "dodatnog", "duzina", "duzine", "duzinom",
       "elektroda", "elektrode", "gustina", "iskoriscenje", "iskoristivi", "istih", "jedne",
@@ -5180,7 +5180,7 @@ const PRO_ZANAT_TOOLS: ToolRegistration[] = [
     riskClass: "none",
     taskGroups: ["build", "measure"],
     sourceKey: "pro.sources.usda-wood-handbook-2021",
-    packs: ["zanat"],
+    packs: ["zanat", "stolarija"],
     keywords: [
       "alternativno", "apsolutno", "dimenzija", "drveta", "elementa", "koeficijent", "krajnja",
       "max", "min", "moisture", "movement", "ocekivani", "ostaje", "polazna", "promeni",
@@ -6216,6 +6216,359 @@ const PRO_ENERGIJA_TOOLS: ToolRegistration[] = [
 ];
 
 /**
+ * „Grejanje i vodovod" — heating design, radiators and pipe hydraulics.
+ *
+ * **Two published METHODS, no published limits.** EN 12831-1 fixes how a design
+ * heat load is assembled and EN 442-1 fixes how a radiator falls away from its
+ * rating; neither says what U-value a wall must have or how warm a room has to
+ * be. Every such figure — the u-values, the air-change rate, the radiator's own
+ * exponent — is an INPUT the surface echoes back, and the one tool that compares
+ * anything is `heating-cost`, which compares the user's own fuel prices with
+ * each other and is `financial` for that reason.
+ *
+ * `pipe-flow-velocity` is shared from `inzenjering` (it names this pack) rather
+ * than re-derived: velocity in a bore is one relation, and the `pipe-pressure-drop`
+ * here answers the question that comes next.
+ */
+const PRO_GREJANJE_TOOLS: ToolRegistration[] = [
+  {
+    id: "room-heat-loss",
+    titleKey: "pro.name.room-heat-loss",
+    blurbKey: "pro.blurb.room-heat-loss",
+    category: "calculation",
+    riskClass: "none",
+    taskGroups: ["build", "measure"],
+    sourceKey: "pro.sources.en-12831-1-2017",
+    packs: ["grejanje"],
+    keywords: [
+      "air changes", "gubitak", "gubici", "heat", "izmena vazduha", "koeficijent", "loss",
+      "prostorija", "prostorije", "temperaturna razlika", "toplotni", "transmisija",
+      "u-vrednost", "ventilacija", "zid"
+    ],
+  },
+  {
+    id: "radiator-output",
+    titleKey: "pro.name.radiator-output",
+    blurbKey: "pro.blurb.radiator-output",
+    category: "calculation",
+    riskClass: "none",
+    taskGroups: ["build"],
+    sourceKey: "pro.sources.en-442-1-2014",
+    packs: ["grejanje"],
+    keywords: [
+      "eksponent", "flow", "izlazna", "konvektor", "nominalno", "polazni", "povratni",
+      "radiator", "snaga", "temperaturni", "ucinak", "voda"
+    ],
+  },
+  {
+    id: "water-heater-time",
+    titleKey: "pro.name.water-heater-time",
+    blurbKey: "pro.blurb.water-heater-time",
+    category: "calculation",
+    riskClass: "none",
+    taskGroups: ["build", "measure"],
+    packs: ["grejanje"],
+    keywords: [
+      "bojler", "energija", "grejac", "grejanje vode", "kapacitet", "kotao", "litara",
+      "potrosnja", "snaga", "temperatura", "vreme", "zagrevanje"
+    ],
+  },
+  {
+    id: "pipe-pressure-drop",
+    titleKey: "pro.name.pipe-pressure-drop",
+    blurbKey: "pro.blurb.pipe-pressure-drop",
+    category: "calculation",
+    riskClass: "none",
+    taskGroups: ["build"],
+    sourceKey: "pro.sources.darcy-weisbach-swamee-jain-1976",
+    packs: ["grejanje"],
+    keywords: [
+      "cev", "darcy", "gubitak", "hrapavost", "linija", "pad", "pritisak", "protok",
+      "reynolds", "trenje", "viskozitet"
+    ],
+  },
+  {
+    id: "power-units",
+    titleKey: "pro.name.power-units",
+    blurbKey: "pro.blurb.power-units",
+    category: "conversion",
+    riskClass: "none",
+    taskGroups: ["measure"],
+    sourceKey: "pro.sources.it-btu-calorie-definitions",
+    packs: ["grejanje"],
+    keywords: [
+      "btu", "btuh", "grejanje", "jedinice", "kcal", "kilokalorije", "kilovat", "konverzija",
+      "kw", "snaga", "toplota", "vat", "watt"
+    ],
+  },
+  {
+    id: "heating-cost",
+    titleKey: "pro.name.heating-cost",
+    blurbKey: "pro.blurb.heating-cost",
+    category: "calculation",
+    riskClass: "financial",
+    taskGroups: ["money"],
+    packs: ["grejanje"],
+    keywords: [
+      "cena", "drva", "efikasnost", "gorivo", "grejanje", "kwh", "loz-ulje", "ogrev", "pellet",
+      "struja", "trosak", "ukupno"
+    ],
+  },
+];
+
+/**
+ * „Obrada metala" — a machinist's arithmetic, over `zanat`'s metal tools.
+ *
+ * Three of the six are registered HERE from the packs that already owned them
+ * (`tap-drill-size`, `sheet-metal-bend`, `weld-consumable` all name this pack),
+ * because a metalworker measuring a developed length is the same computation a
+ * tinsmith was already given. The four definitions in this array are what was
+ * missing: spindle speed, table feed, stock mass and the fillet's own geometry.
+ *
+ * `metal-weight` carries `life-safety` for the reason `glass-pane-weight` does:
+ * the mass is what somebody lifts, rigs and rates a chain for.
+ */
+const PRO_METAL_TOOLS: ToolRegistration[] = [
+  {
+    id: "cutting-speed",
+    titleKey: "pro.name.cutting-speed",
+    blurbKey: "pro.blurb.cutting-speed",
+    category: "calculation",
+    riskClass: "none",
+    taskGroups: ["build"],
+    packs: ["metal"],
+    keywords: [
+      "brzina rezanja", "broj obrtaja", "cutter", "glodanje", "obrtaji", "rezanje", "rpm",
+      "spindle", "strug", "struganje", "vc"
+    ],
+  },
+  {
+    id: "feed-per-tooth",
+    titleKey: "pro.name.feed-per-tooth",
+    blurbKey: "pro.blurb.feed-per-tooth",
+    category: "calculation",
+    riskClass: "none",
+    taskGroups: ["build"],
+    packs: ["metal"],
+    keywords: [
+      "feed", "glodalo", "korak", "pomak", "po zubu", "posmak", "precnik", "tabela", "zub",
+      "zubi"
+    ],
+  },
+  {
+    id: "metal-weight",
+    titleKey: "pro.name.metal-weight",
+    blurbKey: "pro.blurb.metal-weight",
+    category: "materials",
+    riskClass: "life-safety",
+    taskGroups: ["build", "measure"],
+    sourceKey: "pro.sources.steel-nominal-density",
+    packs: ["metal"],
+    keywords: [
+      "aluminijum", "bar", "cev", "flah", "gustina", "lim", "masa", "mesing", "profil", "sipka",
+      "tezina", "celik"
+    ],
+  },
+  {
+    id: "weld-throat-leg",
+    titleKey: "pro.name.weld-throat-leg",
+    blurbKey: "pro.blurb.weld-throat-leg",
+    category: "geometry",
+    riskClass: "none",
+    taskGroups: ["build"],
+    packs: ["metal"],
+    keywords: [
+      "fillet", "grlo", "krak", "krakovi", "navar", "povrsina", "sav", "ugao", "zavarivanje"
+    ],
+  },
+];
+
+/**
+ * „Stolarija" — the woodworking pack, and it is an ASSEMBLY rather than a
+ * re-implementation.
+ *
+ * `timber-volume`, `stair-geometry`, `mitre-angles`, `shelf-deflection`,
+ * `shelf-spacing` and `wood-moisture-movement` were all built for `zanat` and
+ * all name this pack; a joiner was already the second audience of every one of
+ * them, which is why the honest answer was to publish them here rather than
+ * write a second shelf calculator. `board-foot` is the one thing that was
+ * genuinely absent — a unit the trade prices in and nothing in the drawer spoke.
+ */
+const PRO_STOLARIJA_TOOLS: ToolRegistration[] = [
+  {
+    id: "board-foot",
+    titleKey: "pro.name.board-foot",
+    blurbKey: "pro.blurb.board-foot",
+    category: "materials",
+    riskClass: "none",
+    taskGroups: ["build", "measure"],
+    sourceKey: "pro.sources.us-imperial-unit-definitions",
+    packs: ["stolarija"],
+    keywords: [
+      "board foot", "bord stopa", "drvo", "grede", "kubika", "kubni", "metar", "stopa",
+      "tabla", "tisuca"
+    ],
+  },
+];
+
+/**
+ * „Krojenje" — the cutting and fitting geometry of a garment.
+ *
+ * `fabric-yardage-repeat` is `zanat`'s and names this pack; everything else
+ * here is a division: a radius, an allowance, an area, a ratio, a spacing. No
+ * trade rule appears anywhere in the pack — the one figure that IS a
+ * convention, a gathering ratio, is a property of the cloth and is measured by
+ * the user's own two lengths.
+ */
+const PRO_KROJENJE_TOOLS: ToolRegistration[] = [
+  {
+    id: "circle-skirt",
+    titleKey: "pro.name.circle-skirt",
+    blurbKey: "pro.blurb.circle-skirt",
+    category: "geometry",
+    riskClass: "none",
+    taskGroups: ["build", "measure"],
+    packs: ["krojenje"],
+    keywords: [
+      "krug", "kruzna", "obim", "poluprecnik", "radijus", "suknja", "struk", "tkanina", "sav"
+    ],
+  },
+  {
+    id: "seam-allowance",
+    titleKey: "pro.name.seam-allowance",
+    blurbKey: "pro.blurb.seam-allowance",
+    category: "geometry",
+    riskClass: "none",
+    taskGroups: ["build"],
+    packs: ["krojenje"],
+    keywords: [
+      "dodatak", "gotova mera", "kroj", "krojna", "mera", "sav", "savovima", "sivenje"
+    ],
+  },
+  {
+    id: "bias-binding",
+    titleKey: "pro.name.bias-binding",
+    blurbKey: "pro.blurb.bias-binding",
+    category: "geometry",
+    riskClass: "none",
+    taskGroups: ["build", "measure"],
+    packs: ["krojenje"],
+    keywords: [
+      "bias", "ivica", "obrub", "pristrasna", "povrsina", "traka", "ugao"
+    ],
+  },
+  {
+    id: "gather-ratio",
+    titleKey: "pro.name.gather-ratio",
+    blurbKey: "pro.blurb.gather-ratio",
+    category: "geometry",
+    riskClass: "none",
+    taskGroups: ["build"],
+    packs: ["krojenje"],
+    keywords: [
+      "gustina", "nabiranje", "odnos", "punoca", "skup", "skupiti", "tkanina", "volan"
+    ],
+  },
+  {
+    id: "button-spacing",
+    titleKey: "pro.name.button-spacing",
+    blurbKey: "pro.blurb.button-spacing",
+    category: "geometry",
+    riskClass: "none",
+    taskGroups: ["build", "measure"],
+    packs: ["krojenje"],
+    keywords: [
+      "dugmad", "dugme", "kopca", "letvica", "razmak", "raspored", "raskopcavanje"
+    ],
+  },
+];
+
+/**
+ * „Vino i rakija" — sugar, strength and sulfite, as chemistry rather than
+ * advice.
+ *
+ * **Two requested conversions are absent on purpose**, and each is refused
+ * rather than approximated: Brix-to-specific-gravity, whose relation is a
+ * published TABLE rather than a formula this repository can cite, and the OIML
+ * R 22 temperature correction of an alcoholmeter, whose tables are not here.
+ * The sugar and strength tools therefore take the readings the user's own two
+ * instruments produced and convert what is exact between them.
+ *
+ * The stoichiometry is Gay-Lussac's, on IUPAC's atomic weights, and the
+ * practical fermentation yield — which is lower — is an INPUT the answer echoes.
+ * Nothing in the pack carries a health or a drinking claim.
+ */
+const PRO_VINO_TOOLS: ToolRegistration[] = [
+  {
+    id: "must-sugar",
+    titleKey: "pro.name.must-sugar",
+    blurbKey: "pro.blurb.must-sugar",
+    category: "calculation",
+    riskClass: "none",
+    taskGroups: ["measure"],
+    sourceKey: "pro.sources.iupac-atomic-weights-2021",
+    packs: ["vino"],
+    keywords: [
+      "brix", "hidrometar", "most", "oechsle", "potencijalni alkohol", "refraktometar",
+      "secer", "specificna tezina", "vino"
+    ],
+  },
+  {
+    id: "sugar-addition",
+    titleKey: "pro.name.sugar-addition",
+    blurbKey: "pro.blurb.sugar-addition",
+    category: "calculation",
+    riskClass: "none",
+    taskGroups: ["measure"],
+    sourceKey: "pro.sources.iupac-atomic-weights-2021",
+    packs: ["vino"],
+    keywords: [
+      "chaptalisation", "dodavanje", "dopunsko", "jacina", "kolicina", "secer", "vino"
+    ],
+  },
+  {
+    id: "abv-gravity",
+    titleKey: "pro.name.abv-gravity",
+    blurbKey: "pro.blurb.abv-gravity",
+    category: "calculation",
+    riskClass: "none",
+    taskGroups: ["measure"],
+    sourceKey: "pro.sources.balling-plato-abv-rule",
+    packs: ["vino"],
+    keywords: [
+      "abv", "alkohol", "attenuation", "finalna", "gravitacija", "jacina", "og", "fg",
+      "pocetna", "vrenje"
+    ],
+  },
+  {
+    id: "spirit-dilution",
+    titleKey: "pro.name.spirit-dilution",
+    blurbKey: "pro.blurb.spirit-dilution",
+    category: "calculation",
+    riskClass: "none",
+    taskGroups: ["measure"],
+    packs: ["vino"],
+    keywords: [
+      "destilat", "jakost", "koliko vode", "mekasanje", "rakija", "razblazivanje", "razredjivanje",
+      "spustiti", "voda"
+    ],
+  },
+  {
+    id: "sulfite",
+    titleKey: "pro.name.sulfite",
+    blurbKey: "pro.blurb.sulfite",
+    category: "calculation",
+    riskClass: "none",
+    taskGroups: ["measure"],
+    sourceKey: "pro.sources.iupac-atomic-weights-2021",
+    packs: ["vino"],
+    keywords: [
+      "metabisulfit", "so2", "sumpordioksid", "sumpor", "sulfit", "vino", "zastita"
+    ],
+  },
+];
+
+/**
  * The professional drawer's contents, one array per subject — named, because
  * each array is also one FILE of surfaces in the renderer.
  *
@@ -6251,7 +6604,7 @@ export const PRO_TOOL_GROUPS = {
   agro: PRO_AGRO_TOOLS,
   zanat: PRO_ZANAT_TOOLS,
   event: PRO_EVENT_TOOLS,
-  // The four packs added after `event`, in `TOOL_PACKS` order.
+  // The packs added after `event`, in `TOOL_PACKS` order.
   laboratorija: PRO_LABORATORIJA_TOOLS,
   elektro: PRO_ELEKTRO_TOOLS,
   it: PRO_IT_TOOLS,
@@ -6261,6 +6614,11 @@ export const PRO_TOOL_GROUPS = {
   geodezija: PRO_GEODEZIJA_TOOLS,
   radio: PRO_RADIO_TOOLS,
   energija: PRO_ENERGIJA_TOOLS,
+  grejanje: PRO_GREJANJE_TOOLS,
+  metal: PRO_METAL_TOOLS,
+  stolarija: PRO_STOLARIJA_TOOLS,
+  krojenje: PRO_KROJENJE_TOOLS,
+  vino: PRO_VINO_TOOLS,
 } as const satisfies Record<string, readonly ToolRegistration[]>;
 
 const PRO_TOOLS: ToolRegistration[] = Object.values(PRO_TOOL_GROUPS).flat();
