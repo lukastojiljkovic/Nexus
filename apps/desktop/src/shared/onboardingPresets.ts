@@ -46,6 +46,10 @@ export const ESSENTIALS_MODULE_PRESET: Readonly<Record<string, boolean>> = {
   // selectable one: nothing about a timer asks to be opted into, so „Osnovno"
   // turns it on exactly as the manifest's own `defaultEnabled` says.
   timers: true,
+  // And the second kit module (ADR-090), for the same reason: a board game is a
+  // complete screen the moment it is on, and it writes nothing until somebody
+  // plays one — so „Osnovno" decides it `true`, exactly as its manifest says.
+  boards: true,
   pro: false,
 };
 

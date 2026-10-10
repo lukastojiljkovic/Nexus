@@ -98,6 +98,9 @@ describe("createModuleRegistry", () => {
       // here rather than derived because this test IS the declaration — what the
       // registry holds is what the app shows.
       "timers",
+      // The second DISCOVERED module, ordered after the first by its own
+      // `order` (ADR-090): a board game is the `play` group's first member.
+      "boards",
     ]);
   });
 
@@ -159,6 +162,9 @@ describe("createModuleRegistry", () => {
       // twice rather than a bin for anything tool-shaped.
       ELEC: ["electronics"],
       PRO: ["pro"],
+      // The board games module: a board game is its own subject rather than a
+      // second reading of anything above, so it takes a prefix of its own.
+      BOARD: ["boards"],
     });
   });
 
@@ -188,7 +194,7 @@ describe("createModuleRegistry", () => {
    */
   it("groups the modules by navigation group in canonical order, empty groups omitted", () => {
     const grouped = createModuleRegistry().byGroup();
-    expect([...grouped.keys()]).toEqual(["plan", "knowledge", "life", "make", "shell"]);
+    expect([...grouped.keys()]).toEqual(["plan", "knowledge", "life", "make", "play", "shell"]);
     expect(grouped.get("plan")?.map((manifest) => manifest.id)).toEqual([
       "tasks",
       "calendar",
@@ -217,10 +223,12 @@ describe("createModuleRegistry", () => {
     // the one caller that splits it: its first member heads the rail, the rest
     // close it (`navPrefs.sidebarGroups`).
     expect(grouped.get("shell")?.map((manifest) => manifest.id)).toEqual([...LOCKED_MODULE_IDS]);
-    // Culture and Play have no module yet, so they draw nothing rather than an
-    // empty heading.
+    // „Igre" is the group a board game lives in (ADR-093), and the module that
+    // fills it is a discovered one — so it follows the compiled-in members of
+    // every other group.
+    expect(grouped.get("play")?.map((manifest) => manifest.id)).toEqual(["boards"]);
+    // Culture has no module yet, so it draws nothing rather than an empty heading.
     expect(grouped.has("culture")).toBe(false);
-    expect(grouped.has("play")).toBe(false);
   });
   it("is constructed per call, never a shared singleton (ADR-008)", () => {
     const first = createModuleRegistry();
@@ -254,6 +262,9 @@ describe("createModuleRegistry", () => {
       // ON by default, like every module but PRIV and PRO: a timer writes
       // nothing until somebody starts one, so there is nothing to opt into.
       "timers",
+      // And the second discovered module, ON by default for its own version of
+      // that reason: a board game writes nothing until somebody plays one.
+      "boards",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");
@@ -440,6 +451,8 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
       // The first DISCOVERED card (ADR-090): declared in the module's own
       // manifest and drawn by its own body, with no line in this file's map.
       "timers",
+      // The second, whose one preference is the level a new game opens at.
+      "boards",
     ]);
   });
 

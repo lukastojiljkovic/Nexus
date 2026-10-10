@@ -396,6 +396,7 @@ describe("buildSettingsIndex", () => {
       // one. Its label is its own `{ sr, en }` pair, so the assertion above about
       // `strings` paths does not apply to it.
       "timers:sound-on-end",
+      "boards:default-level",
     ]);
   });
 

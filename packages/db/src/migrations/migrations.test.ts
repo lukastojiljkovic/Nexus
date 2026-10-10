@@ -34,12 +34,29 @@ import {
  */
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
+/**
+ * Where this branch's reserved block begins.
+ *
+ * The runs in flight beside this one are each handed a migration number in a block
+ * the branch holds for them (`migrations.ts` says the same thing beside the list,
+ * and the maintainer renumbers every one of them at merge) — so the list has a GAP
+ * here that a contiguous 1..N assertion cannot describe. What the assertion is FOR
+ * survives the gap: no repeat, no reordering, no hole BELOW the block, and a list
+ * that reaches the block. The rule over the reserved numbers themselves belongs to
+ * whoever holds that block, not to this file.
+ */
+const RESERVED_FROM = 83;
+
 describe("the migration list", () => {
-  it("is at version 82 (the chess games), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(82);
-    expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
-      Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
-    );
+  it("is ascending and unique, and contiguous below this branch's reserved block", () => {
+    const versions = MIGRATIONS.map((migration) => migration.version);
+    expect(versions).toEqual([...versions].sort((left, right) => left - right));
+    expect(new Set(versions).size).toBe(versions.length);
+    const below = versions.filter((version) => version < RESERVED_FROM);
+    expect(below).toEqual(Array.from({ length: below.length }, (_, index) => index + 1));
+    // And the list does reach the block: a build that stopped at the last
+    // contiguous number would ship none of the modules the block belongs to.
+    expect(LATEST_VERSION).toBeGreaterThanOrEqual(RESERVED_FROM);
   });
 });
 

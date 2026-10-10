@@ -3,6 +3,9 @@ import { createModuleRegistry, kitManifest, kitManifests } from "../../../shared
 import { copy as timersCopy } from "../../../modules/timers/renderer/copy.js";
 import { sr as timersSr } from "../../../modules/timers/renderer/copy.sr.js";
 import { en as timersEn } from "../../../modules/timers/renderer/copy.en.js";
+import { copy as boardsCopy } from "../../../modules/boards/renderer/copy.js";
+import { sr as boardsSr } from "../../../modules/boards/renderer/copy.sr.js";
+import { en as boardsEn } from "../../../modules/boards/renderer/copy.en.js";
 import { dashboardWidgetRenderer } from "../dashboardWidgets.js";
 import { settingsPanelRenderer } from "../moduleSettingsPanels.js";
 import { applyLocale, activeLocale } from "../strings.js";
@@ -120,5 +123,69 @@ describe("a kit module's copy", () => {
       );
     };
     expect(paths(timersEn).sort()).toEqual(paths(timersSr).sort());
+  });
+});
+
+/**
+ * The SECOND kit module (ADR-090), asked exactly what the first one is asked.
+ *
+ * This block is the deliberate second line the file's own comment promises: none
+ * of the properties above is specific to „Tajmeri", and a module that found its
+ * page lazily, carried a mark, declared a settings card and published a widget is
+ * discovered by the same globs with no line in any of them.
+ */
+describe("a second discovered module (boards)", () => {
+  const BOARDS = "boards";
+
+  it("registers after the compiled-in modules and carries its own two words", () => {
+    const ids = createModuleRegistry()
+      .all()
+      .map((manifest) => manifest.id);
+    expect(ids).toContain(BOARDS);
+    expect(ids.indexOf(BOARDS)).toBeGreaterThan(ids.indexOf(TIMERS));
+    const manifest = kitManifest(BOARDS);
+    expect(manifest?.copy?.name.sr).not.toBe("");
+    expect(manifest?.copy?.name.en).not.toBe("");
+    expect(manifest?.copy?.description.sr).not.toBe("");
+    expect(manifest?.copy?.description.en).not.toBe("");
+  });
+
+  it("is found as a page, a mark, a settings card and a widget body", () => {
+    expect(hasModulePage(BOARDS)).toBe(true);
+    expect(modulePageIds()).toContain(BOARDS);
+    expect(modulePage(BOARDS)).not.toBeNull();
+    expect(kitIconIds()).toContain(BOARDS);
+
+    expect(kitSettingsPanel(BOARDS)).toBeDefined();
+    expect(settingsPanelRenderer(BOARDS)).toBeDefined();
+    const declared = kitManifest(BOARDS)?.settings;
+    expect(declared?.controls.map((control) => control.key)).toEqual(["default-level"]);
+    expect(resolveLabel(declared?.controls[0]?.labelKey ?? "")).not.toBe("");
+
+    const widgets = kitManifest(BOARDS)?.widgets?.map((widget) => widget.id) ?? [];
+    expect(widgets).toEqual(["u-toku"]);
+    expect(kitWidgetIds()).toContain(`${BOARDS}:u-toku`);
+    const renderer = dashboardWidgetRenderer(`${BOARDS}:u-toku`);
+    expect(renderer).toBeDefined();
+    expect(renderer?.visible(new Set([BOARDS]))).toBe(true);
+    expect(renderer?.visible(new Set())).toBe(false);
+  });
+
+  it("joins the locale machinery with a table of the Serbian shape", () => {
+    const table = boardsCopy;
+    expect(boardsCopy.page.subtitle).toBe(boardsSr.page.subtitle);
+    applyLocale("en");
+    expect(boardsCopy).toBe(table);
+    expect(boardsCopy.page.subtitle).toBe(boardsEn.page.subtitle);
+    applyLocale("sr");
+    expect(boardsCopy.page.subtitle).toBe(boardsSr.page.subtitle);
+
+    const paths = (value: unknown, prefix = ""): string[] => {
+      if (typeof value !== "object" || value === null) return [prefix];
+      return Object.entries(value).flatMap(([key, child]) =>
+        paths(child, prefix === "" ? key : `${prefix}.${key}`),
+      );
+    };
+    expect(paths(boardsEn).sort()).toEqual(paths(boardsSr).sort());
   });
 });
