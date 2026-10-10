@@ -342,6 +342,7 @@ import {
   PROFILE_KINDS,
   ProfileStore,
   rebuildSearchIndex,
+  RecorderStore,
   RestoreStore,
   type ScopeCutProposal,
   SearchHistoryStore,
@@ -536,6 +537,10 @@ import {
   asString,
 } from "./ipcValidators.js";
 import { createModuleHost } from "./moduleHost.js";
+import {
+  allowsCheck as recorderAllowsCheck,
+  allowsRequest as recorderAllowsRequest,
+} from "../modules/recorder/main/mediaAccess.js";
 import {
   deliverSecurityNotices,
   runCheckNow,
@@ -1370,6 +1375,10 @@ const moduleRegistry = createModuleRegistry();
 const moduleHost = createModuleHost({
   assertTrustedSender,
   database: () => requireDb().raw,
+  // The blob store's write half, on the same terms `main/restore.ts` gets it: a
+  // module that stores bytes (the recorder's media) hands them over and gets
+  // back the plaintext sha256 that names them — no path, no key, no container.
+  saveBlob: (bytes) => saveBlob(blobStorePathsFor(), requireBlobKeys(), bytes),
   notify: ({ title, body, silent }) => {
     // `Notification.isSupported()` rather than a try/catch: on a platform with
     // no notification service the honest answer is "no toast", and a module's
@@ -5253,7 +5262,12 @@ function blobRefCount(profileId: string, sha256: string): number {
     // The `profiles` table itself (SET-001, migration 040) — the fifth member,
     // and the only one whose store takes no profile id, because that table IS
     // the profile list. Its count is profile-agnostic like every other here.
-    profileStore().refCount(sha256)
+    profileStore().refCount(sha256) +
+    // RECORDER (migration 077): a recording's media is a blob in this same
+    // store, so a recording deleted for good is another row that can make a
+    // file an orphan — and a count that forgot it would delete a file some
+    // recording still plays.
+    recorderStore(profileId).refCount(sha256)
   );
 }
 
@@ -5268,8 +5282,18 @@ function blobMimeForHash(profileId: string, sha256: string): string | null {
     // note image is, and THIS line is the gate: `registerBlobProtocol` 404s any
     // hash whose mime resolves to null, so a picture becomes servable at the
     // moment `profiles` joins this union and not before.
-    profileStore().mimeForHash(sha256)
+    profileStore().mimeForHash(sha256) ??
+    // RECORDER (migration 077), and last on purpose: a recording's mime is what
+    // `MediaRecorder` reported, while every member above it is a mime main
+    // sniffed from the bytes themselves — so if one hash is somehow both, the
+    // sniffed answer is the one served.
+    recorderStore(profileId).mimeForHash(sha256)
   );
+}
+
+/** This profile's recorder store — the rows that name a recording's bytes (`blobRefCount`), and what the module's own handlers build on. */
+function recorderStore(profileId: string): RecorderStore {
+  return new RecorderStore(requireDb().raw, profileId);
 }
 
 function flagStore(profileId: string): SqliteFlagStore {
@@ -13767,16 +13791,30 @@ app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
 
   // The one rung of the Electron hardening set that had neither code nor a
-  // stated reason. Nexus asks the web platform for nothing — notifications are
-  // raised by `Notification` in MAIN, not by the renderer's Notification API,
-  // and there is no camera, microphone, geolocation, MIDI or clipboard-read
-  // path anywhere in the product. So both handlers deny unconditionally rather
-  // than switching on a permission name: an allowlist with no entries is a
-  // list somebody eventually adds to, and a flat refusal is a decision.
-  session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => {
-    callback(false);
+  // stated reason. Nexus asks the web platform for almost nothing —
+  // notifications are raised by `Notification` in MAIN, not by the renderer's
+  // Notification API, and there is no geolocation, MIDI or clipboard-read path
+  // anywhere in the product — so both handlers deny by default rather than
+  // switching on a permission name: a list that started empty is a list
+  // somebody eventually adds to, and a flat refusal is a decision.
+  //
+  // `media` is the ONE exception, and it is not made here: the recorder's own
+  // rule decides it (`modules/recorder/main/mediaAccess.ts`) — this app's own
+  // document, its main frame, and only while the recorder's page has asked for
+  // a device. Every other permission name still reaches `callback(false)`.
+  session.defaultSession.setPermissionRequestHandler((_contents, permission, callback, details) => {
+    callback(recorderAllowsRequest(permission, details, devServerOrigin(process.env), Date.now()));
   });
-  session.defaultSession.setPermissionCheckHandler(() => false);
+  session.defaultSession.setPermissionCheckHandler(
+    (_contents, permission, requestingOrigin, details) =>
+      recorderAllowsCheck(
+        permission,
+        requestingOrigin,
+        details,
+        devServerOrigin(process.env),
+        Date.now(),
+      ),
+  );
 
   // SEC-NET: the three runtime layers of the cloud-off boundary. The fourth
   // (`host-resolver-rules`) went on at module scope; `net/offline.ts` carries

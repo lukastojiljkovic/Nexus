@@ -41,6 +41,10 @@ function rendererHardening(): Plugin {
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: nx-blob: priv-blob:", // ADR-014 inline previews; ADR-057 private attachments (unlocked-only)
+    // ADR-014's read protocol again, for the RECORDER: `<audio>`/`<video>` fall
+    // back to `default-src 'self'`, which does not admit `nx-blob:`, so a
+    // recording would play in dev and be blocked in the build the user runs.
+    "media-src 'self' nx-blob:",
     "font-src 'self' data:",
     "connect-src 'self'",
     "object-src 'none'",
@@ -231,6 +235,9 @@ export default defineConfig({
           "script-src 'self' 'unsafe-inline'",
           "style-src 'self' 'unsafe-inline'",
           "img-src 'self' data: blob: nx-blob: priv-blob:",
+          // The recorder's playback, identical to production — `media-src` is
+          // one of the directives the dev policy deliberately does NOT relax.
+          "media-src 'self' nx-blob:",
           // THE LINE THIS BLOCK EXISTS FOR.
           "font-src 'self' data:",
           // The HMR socket, and nothing else. Not `ws:` — that would admit any

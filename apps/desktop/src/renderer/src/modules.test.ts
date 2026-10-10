@@ -98,6 +98,9 @@ describe("createModuleRegistry", () => {
       // here rather than derived because this test IS the declaration — what the
       // registry holds is what the app shows.
       "timers",
+      // The second: the voice and camera diary, ordered after the first by its
+      // own `order` (170 against the timer's 100).
+      "recorder",
     ]);
   });
 
@@ -159,6 +162,10 @@ describe("createModuleRegistry", () => {
       // twice rather than a bin for anything tool-shaped.
       ELEC: ["electronics"],
       PRO: ["pro"],
+      // The recorder takes its own prefix rather than borrowing another
+      // section's: a prefix is traceability to ONE PRD entry, and the brief
+      // names none for a voice and camera diary (see the module's manifest).
+      REC: ["recorder"],
     });
   });
 
@@ -201,6 +208,9 @@ describe("createModuleRegistry", () => {
       "notes",
       "files",
       "study",
+      // The recorder is Knowledge, on ADR-093's own reading of the group: it is
+      // the handling of what somebody wrote down, not an area of a life.
+      "recorder",
     ]);
     expect(grouped.get("life")?.map((manifest) => manifest.id)).toEqual([
       "priv",
@@ -254,6 +264,9 @@ describe("createModuleRegistry", () => {
       // ON by default, like every module but PRIV and PRO: a timer writes
       // nothing until somebody starts one, so there is nothing to opt into.
       "timers",
+      // Likewise: a recorder writes nothing until somebody records, so there is
+      // nothing to opt into either.
+      "recorder",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");
@@ -440,6 +453,9 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
       // The first DISCOVERED card (ADR-090): declared in the module's own
       // manifest and drawn by its own body, with no line in this file's map.
       "timers",
+      // And the second discovered card, on the same terms: declared in the
+      // recorder's own manifest, drawn by its own body.
+      "recorder",
     ]);
   });
 

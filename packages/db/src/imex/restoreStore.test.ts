@@ -1756,6 +1756,12 @@ describe("RestoreStore", () => {
       "cookbook_steps",
       "recordings",
       "recording_markers",
+      // The recorder's one preference (migration 077, REC stage 2). A kit
+      // module's settings row joins `recordings`/`recording_markers` on exactly
+      // their reasoning: the module REPLACES its own rows in its own
+      // `importData`, inside the same restore, so a table here would be a wipe
+      // nothing on this list refills.
+      "recorder_settings",
       "arcade_scores",
       "emergency_cards",
       "emergency_contacts",

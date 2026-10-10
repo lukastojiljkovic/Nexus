@@ -130,7 +130,11 @@ export type IconName =
   // title bar is the last place in a product to be original about meaning.
   | "windowMinimize"
   | "windowMaximize"
-  | "windowRestore";
+  | "windowRestore"
+  // The recorder's mark: a microphone, which is the one shape that says
+  // "capture sound" rather than "play it back" (`play`) or "a picture"
+  // (`image`). Added with the RECORDER module.
+  | "mic";
 
 const SHAPES: Record<IconName, ReactNode> = {
   // Three panes, uneven on purpose: a board someone arranged, not a 2×2 grid.
@@ -794,6 +798,17 @@ const SHAPES: Record<IconName, ReactNode> = {
     </>
   ),
   moon: <path d="M20 14.4A8.6 8.6 0 0 1 9.6 4a8.4 8.4 0 1 0 10.4 10.4z" />,
+  // A capsule, the cradle it sits in, and a stem: the three strokes every
+  // microphone has been drawn with since the shape was a radio part. The
+  // capsule is 6 wide and 11 tall starting at y=3, so it touches neither edge
+  // and the cradle's arc (radius 6.4 from y=11.4) bottoms out at 17.8.
+  mic: (
+    <>
+      <rect x="9" y="3" width="6" height="11" rx="3" />
+      <path d="M5.6 11.4a6.4 6.4 0 0 0 12.8 0" />
+      <path d="M12 17.8V21" />
+    </>
+  ),
 };
 
 /**

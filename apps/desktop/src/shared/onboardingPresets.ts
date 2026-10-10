@@ -46,6 +46,9 @@ export const ESSENTIALS_MODULE_PRESET: Readonly<Record<string, boolean>> = {
   // selectable one: nothing about a timer asks to be opted into, so „Osnovno"
   // turns it on exactly as the manifest's own `defaultEnabled` says.
   timers: true,
+  // Likewise the recorder: a diary writes nothing until somebody records, so
+  // there is nothing for a user to opt into either.
+  recorder: true,
   pro: false,
 };
 

@@ -104,6 +104,7 @@ describe("moduleSettingsDeclarations", () => {
       // The first DISCOVERED card (ADR-090), last because a kit module
       // registers after every compiled-in one.
       "timers",
+      "recorder",
     ]);
   });
 
@@ -141,6 +142,7 @@ describe("moduleSettingsCardIds", () => {
       "focus",
       "tools",
       "timers",
+      "recorder",
     ]);
   });
 
@@ -181,6 +183,7 @@ describe("moduleSettingsCards", () => {
       "focus",
       "tools",
       "timers",
+      "recorder",
     ]);
     expect(cards.map((card) => card.title)).toEqual([
       s().sectionTitle.dashboard,
@@ -198,6 +201,7 @@ describe("moduleSettingsCards", () => {
       // expected value is its own pair read in the language being read rather
       // than a path into the shell's table.
       kitManifest("timers")?.copy?.name[activeLocale()] ?? "",
+      kitManifest("recorder")?.copy?.name[activeLocale()] ?? "",
     ]);
   });
 

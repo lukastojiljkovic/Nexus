@@ -396,6 +396,10 @@ describe("buildSettingsIndex", () => {
       // one. Its label is its own `{ sr, en }` pair, so the assertion above about
       // `strings` paths does not apply to it.
       "timers:sound-on-end",
+      // The second discovered card's control, for the same reason and in the
+      // same place: it declares its own `{ sr, en }` pair rather than a
+      // `strings` path.
+      "recorder:countdown",
     ]);
   });
 
