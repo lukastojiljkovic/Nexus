@@ -98,6 +98,9 @@ describe("createModuleRegistry", () => {
       // here rather than derived because this test IS the declaration — what the
       // registry holds is what the app shows.
       "timers",
+      // The second discovered module (ADR-090), after `timers` because its
+      // manifest declares a higher `order` (210 against 100).
+      "miniapps",
     ]);
   });
 
@@ -152,7 +155,7 @@ describe("createModuleRegistry", () => {
       // alatke" does NOT join it: PRD 30 („Profession Toolkits") is its own
       // entry, not a second reading of PRD 29 („Utility Belt"), so it takes
       // its own prefix below rather than borrowing this one.
-      UTIL: ["focus", "tools", "timers"],
+      UTIL: ["focus", "tools", "timers", "miniapps"],
       CANV: ["canvas"],
       // „Elektronika" takes its own for „Tabla"'s reason exactly: ELEC is its
       // own PRD entry, and the UTIL sharing above is one section implemented
@@ -212,6 +215,8 @@ describe("createModuleRegistry", () => {
       "canvas",
       "electronics",
       "pro",
+      // The second discovered module (ADR-090), in the group it declares.
+      "miniapps",
     ]);
     // The shell group is the two rows nothing may switch off, and the sidebar is
     // the one caller that splits it: its first member heads the rail, the rest
@@ -254,6 +259,10 @@ describe("createModuleRegistry", () => {
       // ON by default, like every module but PRIV and PRO: a timer writes
       // nothing until somebody starts one, so there is nothing to opt into.
       "timers",
+      // The second discovered module (ADR-090), ON by default for the same
+      // reason: nine small tools, and not one of them writes anything until it
+      // is used.
+      "miniapps",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");

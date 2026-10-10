@@ -234,6 +234,12 @@ export const ENGLISH_ALLOWLIST = [
     reason: "the same acronym in the driver's summary",
   },
   {
+    file: "apps/desktop/src/modules/miniapps/renderer/copy.en.ts",
+    contains: "Los Angeles",
+    reason:
+      "the city's own name, which English spells the same way - the stoplist word here is part of the name, not a sentence",
+  },
+  {
     file: "apps/desktop/src/renderer/src/strings/pro.en.ts",
     contains: "dž",
     reason: "the transliteration description says which digraph is ambiguous; the letter IS the subject",

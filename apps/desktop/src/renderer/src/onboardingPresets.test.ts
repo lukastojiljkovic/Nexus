@@ -216,6 +216,8 @@ describe("resolveModuleSelection", () => {
       // The first discovered module (ADR-090): the questionnaire decides it like
       // any other selectable module, from its own manifest default.
       timers: true,
+      // The second discovered module (ADR-090), decided the same way.
+      miniapps: true,
       pro: false,
     });
   });
@@ -252,9 +254,11 @@ describe("moduleFlagWrites", () => {
       // is the whole point of a first run: what modules a profile has is a
       // stored fact of the profile, not an accident of this build's manifests.
       { moduleId: "pro", enabled: false },
-      // And the first DISCOVERED module last, because a kit module registers
-      // after every compiled-in one (ADR-090).
+      // And the DISCOVERED modules last, because a kit module registers after
+      // every compiled-in one (ADR-090) - in `ModuleManifest.order`, so `timers`
+      // (100) precedes `miniapps` (210).
       { moduleId: "timers", enabled: true },
+      { moduleId: "miniapps", enabled: true },
     ]);
   });
 

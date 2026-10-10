@@ -46,6 +46,9 @@ export const ESSENTIALS_MODULE_PRESET: Readonly<Record<string, boolean>> = {
   // selectable one: nothing about a timer asks to be opted into, so „Osnovno"
   // turns it on exactly as the manifest's own `defaultEnabled` says.
   timers: true,
+  // The second kit module (ADR-090): a drawer of small tools, which asks to be
+  // opted into no more than a timer does.
+  miniapps: true,
   pro: false,
 };
 

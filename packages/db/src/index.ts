@@ -1127,3 +1127,31 @@ export type {
   SavedGame,
   SetResumeInput,
 } from "./games/chess/chessStore.js";
+
+// --- MINI-APPS (migration 085) -----------------------------------------------
+//
+// ONE store over ONE table, because the nine small tools' kept state is one
+// authored document rather than a set of collections: see the migration's and
+// the store's own comments for why. Deliberately NOT in `RESTORE_WIPE_TABLES` -
+// that list is derived into `@nexus/sync`'s collection map, which a module built
+// on the kit may not edit (ADR-090 section 6) - and the module's own
+// `importData` is what empties the row; `restoreStore.test.ts` names it in the
+// exemption list.
+export {
+  MAX_MINIAPPS_JSON_CHARS,
+  MINIAPPS_EXPORT_VERSION,
+  MINIAPPS_MAX_CITIES,
+  MINIAPPS_MAX_HISTORY,
+  MINIAPPS_MAX_TYPING_RECORDS,
+  MINIAPPS_MAX_ZONE_LENGTH,
+  MiniappsStore,
+  MiniappsValidationError,
+  emptyMiniappsData,
+  parseMiniappsData,
+} from "./miniapps/miniappsStore.js";
+export type {
+  MiniappsData,
+  MiniappsDiceEntry,
+  MiniappsTypingProgress,
+  MiniappsTypingRecord,
+} from "./miniapps/miniappsStore.js";

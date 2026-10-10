@@ -35,8 +35,11 @@ import {
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 82 (the chess games), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(82);
+  it("is at version 85 (the mini-apps), ascending and gap-free from 1", () => {
+    // 85 is this task's reserved number. 083, 084 and 086+ are other runs'
+    // migrations and are absent from THIS worktree, so the gap-free half below
+    // only holds once those runs are merged; the pin is what this file owns.
+    expect(LATEST_VERSION).toBe(85);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
