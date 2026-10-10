@@ -17,6 +17,7 @@ import type {
 // header comment on why the renderer must never import it.
 import { ARCHIVE_KDF_PARAMS, deriveArchiveKey, generateSalt } from "@nexus/core/auth";
 import { localToday } from "./clock.js";
+import { mainLocale } from "./locale.js";
 import { gatherProfileData, gatherProfileSettings, type ProfileDataDeps } from "./profileData.js";
 import { shellStrings } from "./shellStrings.js";
 import type { ExportResult, IcsExportResult, PrivateNotesExportSkip } from "../shared/ipc.js";
@@ -108,6 +109,10 @@ export async function writeProfileArchive(
     createdAt: new Date().toISOString(),
     settings: await gatherProfileSettings(deps, profile.id),
     data: gatherProfileData(deps, profile.id),
+    // The two names the Markdown mirror generates for it (an untitled note, a
+    // folder whose name sanitizes to nothing) are written in the language the
+    // app is serving, exactly as the save dialog's own suggested names are.
+    language: mainLocale(),
     hash: (content) => createHash("sha256").update(content, "utf8").digest("hex"),
   };
   // Only name a subset when there is one (exactOptionalPropertyTypes): an
