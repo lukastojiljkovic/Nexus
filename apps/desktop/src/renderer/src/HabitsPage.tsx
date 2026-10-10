@@ -6,6 +6,9 @@ import {
   Checkbox,
   Disclosure,
   EmptyState,
+  Field,
+  FieldError,
+  FormLayout,
   Icon,
   ListRow,
   LoadingState,
@@ -13,6 +16,7 @@ import {
   Select,
   StatBand,
   TextField,
+  Toast,
 } from "@nexus/ui";
 import type { Stat } from "@nexus/ui";
 import { computeHabitStreak } from "@nexus/core";
@@ -1060,21 +1064,17 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
         sigil="habits"
         actions={<ModuleSettingsGear moduleId="habits" />}
       />
+      {/* The shared undo bar rather than a fifth copy of it. Same three moves
+          as before — the notice, the offer, the quiet way to drop it — with the
+          class names and the live region coming from the pattern, and no
+          timeout on the offer (see `Toast`). */}
       {pendingUndoId !== null && (
-        <div className="hab__undo" role="status">
-          <span className="hab__undo-text">{s.all.deletedNotice}</span>
-          <Button size="sm" className="hab__undo-action" onClick={() => void undoDelete()}>
-            {s.undo}
-          </Button>
-          <Button
-            size="sm"
-            className="hab__quiet"
-            aria-label={s.dismiss}
-            onClick={() => setPendingUndoId(null)}
-          >
-            <Icon name="close" size={14} />
-          </Button>
-        </div>
+        <Toast
+          message={s.all.deletedNotice}
+          undo={{ label: s.undo, onUndo: () => void undoDelete() }}
+          dismissLabel={s.dismiss}
+          onDismiss={() => setPendingUndoId(null)}
+        />
       )}
 
       {/* „Kako stojim" before „šta je na spisku" — three figures the page has
@@ -1139,10 +1139,29 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
         <p className="hab__note">{s.all.caption}</p>
 
         {editing !== null ? (
-          <form className="hab__form" onSubmit={(event) => void submitForm(event)}>
-            <div className="hab__form-title">
-              {editing.mode === "new" ? s.form.newTitle : s.form.editTitle}
-            </div>
+          // The shared form frame: the heading, the column and the two answers
+          // at the end are the pattern's, and `hab__form` still supplies the
+          // card this page draws the form on. The fields keep their own box and
+          // their own labels (`TextField`) and take the help line, the refusal
+          // and the required mark from `Field`.
+          <FormLayout
+            className="hab__form"
+            title={editing.mode === "new" ? s.form.newTitle : s.form.editTitle}
+            actions={
+              <>
+                <Button type="submit" size="sm" variant="primary">
+                  {s.form.save}
+                </Button>
+                <Button type="button" size="sm" className="hab__quiet" onClick={closeForm}>
+                  {s.form.cancel}
+                </Button>
+              </>
+            }
+            onSubmit={(event) => void submitForm(event)}
+          >
+            {/* No `Field` here: this one has no help line, no refusal and no
+                required mark, so the primitive's own label is the whole of what
+                it needs. `Field` is what adds the rest. */}
             <TextField
               label={s.form.nameLabel}
               value={nameDraft}
@@ -1156,30 +1175,36 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
             {renderSchedulePicker()}
 
             <div className="hab__pair">
-              <TextField
-                label={s.form.targetLabel}
-                value={targetDraft}
-                inputMode="numeric"
-                placeholder={s.form.targetPlaceholder}
-                onChange={(event) => {
-                  setTargetDraft(event.target.value);
-                  // The store refuses a unit with no target to be the unit OF;
-                  // clearing them together is how the form keeps the user from
-                  // reaching that refusal by accident.
-                  if (event.target.value.trim() === "") setUnitDraft("");
-                }}
-              />
-              <TextField
-                label={s.form.unitLabel}
-                value={unitDraft}
-                placeholder={s.form.unitPlaceholder}
-                maxLength={MAX_HABIT_UNIT_LENGTH}
-                disabled={targetDraft.trim() === ""}
-                onChange={(event) => setUnitDraft(event.target.value)}
-              />
+              {/* „Koliko" and its unit each carry their own sentence, and the
+                  pair used to print both sentences under BOTH fields, where
+                  neither was associated with the control it explains. A `Field`
+                  puts each line under its own box and wires it up. */}
+              <Field help={s.form.targetHint}>
+                <TextField
+                  label={s.form.targetLabel}
+                  value={targetDraft}
+                  inputMode="numeric"
+                  placeholder={s.form.targetPlaceholder}
+                  onChange={(event) => {
+                    setTargetDraft(event.target.value);
+                    // The store refuses a unit with no target to be the unit OF;
+                    // clearing them together is how the form keeps the user from
+                    // reaching that refusal by accident.
+                    if (event.target.value.trim() === "") setUnitDraft("");
+                  }}
+                />
+              </Field>
+              <Field help={s.form.unitHint}>
+                <TextField
+                  label={s.form.unitLabel}
+                  value={unitDraft}
+                  placeholder={s.form.unitPlaceholder}
+                  maxLength={MAX_HABIT_UNIT_LENGTH}
+                  disabled={targetDraft.trim() === ""}
+                  onChange={(event) => setUnitDraft(event.target.value)}
+                />
+              </Field>
             </div>
-            <span className="hab__field-hint">{s.form.targetHint}</span>
-            <span className="hab__field-hint">{s.form.unitHint}</span>
 
             {/* „Podsetnik" (slice c): a switch, and — only once it is on — a
                 time. Two controls rather than one for a concrete reason: an
@@ -1225,20 +1250,11 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
             <span className="hab__field-hint">{s.form.reminderHint}</span>
 
             {formError !== null && (
-              <p className="hab__error" role="alert">
-                {formError}
-              </p>
+              // The form's refusal rather than one field's, so it stands on its
+              // own with no control to point at — the same line `Field` draws.
+              <FieldError>{formError}</FieldError>
             )}
-
-            <div className="hab__form-actions">
-              <Button type="submit" size="sm" variant="primary">
-                {s.form.save}
-              </Button>
-              <Button type="button" size="sm" className="hab__quiet" onClick={closeForm}>
-                {s.form.cancel}
-              </Button>
-            </div>
-          </form>
+          </FormLayout>
         ) : noHabits ? (
           // The page's ONE invitation, and its one primary. Never a sample habit.
           <EmptyState
