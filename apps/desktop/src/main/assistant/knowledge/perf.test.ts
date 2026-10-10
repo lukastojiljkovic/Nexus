@@ -32,6 +32,9 @@ const MATCH_AT = 12_345;
 let db: NexusDatabase;
 let dir: string;
 
+// Seeding 50 000 rows takes about 2.8 s alone on the maintainer's machine
+// (measured 2026-10-10), and ran past vitest's 10 s hook default under the full
+// suite's load; CI's four-core runner is slower still, hence the explicit budget.
 beforeAll(() => {
   const created = tempDatabase();
   db = created.db;
@@ -68,7 +71,7 @@ beforeAll(() => {
     }
   });
   seed();
-});
+}, 60_000);
 
 afterAll(() => {
   db.close();
