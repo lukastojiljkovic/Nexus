@@ -667,6 +667,46 @@ describe("LibraryStore.adoptSuggestedCollection", () => {
       library.adoptSuggestedCollection({ id: "x" } as SuggestedCollectionV1, NOW),
     ).toThrow(LibraryValidationError);
   });
+
+  it("matches an entry with no Wikidata id by type, title and year — and not by another id-less entry", () => {
+    // The task's pack layout marks a work's Wikidata id optional, so the second
+    // half of the brief's matching order ("same Wikidata id, else same type,
+    // title and year") has to decide on its own. Two id-less entries must not
+    // collapse onto one row: the index maps a non-null Q-id only, which is what
+    // keeps `Map`'s very legal `undefined` key out of the match.
+    const library = store();
+    const handLogged = library.createItem(
+      { kind: "book", title: "Na Drini ćuprija", year: 1945 },
+      NOW,
+    );
+    const idless: SuggestedCollectionV1 = {
+      id: "idless-1",
+      title: { sr: "Bez kataloga", en: "Without a catalogue" },
+      source: "Wikidata",
+      licence: "CC0 1.0",
+      items: [
+        { kind: "book", title: { sr: "Na Drini ćuprija", en: "The Bridge on the Drina" }, year: 1945 },
+        { kind: "film", title: { sr: "Ko to tamo peva", en: "Who's Singin' Over There?" }, year: 1980 },
+        { kind: "series", title: { sr: "Otpisani", en: "The Written Off" }, year: 1974 },
+      ],
+    };
+
+    const adopted = library.adoptSuggestedCollection(idless, LATER);
+
+    expect(adopted.reusedItems).toBe(1);
+    expect(adopted.createdItems).toBe(2);
+    const ids = library.listCollectionItems(adopted.collection.id).map((item) => item.id);
+    expect(ids).toEqual([handLogged.id, ids[1], ids[2]]);
+    expect(library.listItems()).toHaveLength(3);
+    // The two created works carry no Q-id, and each is the work its own entry
+    // names: an index keyed on `undefined` would have made the third entry find
+    // the second one's row.
+    const created = library.listItems().filter((item) => item.id !== handLogged.id);
+    expect(created.map((item) => [item.title, item.wikidataId])).toEqual([
+      ["Ko to tamo peva", null],
+      ["Otpisani", null],
+    ]);
+  });
 });
 
 describe("LibraryStore export and import", () => {

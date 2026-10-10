@@ -1397,7 +1397,9 @@ export class LibraryStore {
       id, this.profileId, entry.kind, entry.title.sr, originalTitle,
       serializeLibraryList([...(entry.creators ?? [])]), entry.year ?? null, "planned",
       null, null, null, null, null, null, null, serializeLibraryList([]), null,
-      entry.wikidataId, now, now,
+      // `?? null`, not `entry.wikidataId`: the id is optional (`SuggestedCollectionItemV1`),
+      // and a driver bound to `undefined` is a TypeError rather than a null column.
+      entry.wikidataId ?? null, now, now,
     );
     return id;
   }
@@ -1456,6 +1458,10 @@ class MatchIndex {
 
   constructor(rows: readonly MatchRow[]) {
     for (const row of rows) {
+      // The Q-id map takes NON-NULL keys only, and the guard is load-bearing
+      // rather than tidy: `Map.get(undefined)` and `Map.set(undefined, …)` are
+      // both legal, so an id-less entry would otherwise find whichever item was
+      // registered first and adopt a stranger's row.
       if (row.wikidata_id !== null) this.byWikidata.set(row.wikidata_id, row.id);
       for (const title of [row.title, row.original_title]) {
         if (title === null) continue;
@@ -1466,8 +1472,11 @@ class MatchIndex {
   }
 
   find(entry: SuggestedCollectionItemV1): string | null {
-    const byId = this.byWikidata.get(entry.wikidataId);
-    if (byId !== undefined) return byId;
+    const wikidataId = entry.wikidataId;
+    if (wikidataId !== undefined) {
+      const byId = this.byWikidata.get(wikidataId);
+      if (byId !== undefined) return byId;
+    }
     for (const title of [entry.title.sr, entry.title.en]) {
       const key = matchKey({ kind: entry.kind, title, year: entry.year ?? null });
       const found = key === null ? undefined : this.byKey.get(key);
@@ -1478,7 +1487,7 @@ class MatchIndex {
 
   /** Registers a just-created item, so a list naming it twice links it once. */
   add(itemId: string, entry: SuggestedCollectionItemV1): void {
-    this.byWikidata.set(entry.wikidataId, itemId);
+    if (entry.wikidataId !== undefined) this.byWikidata.set(entry.wikidataId, itemId);
     for (const title of [entry.title.sr, entry.title.en]) {
       const key = matchKey({ kind: entry.kind, title, year: entry.year ?? null });
       if (key !== null) this.byKey.set(key, itemId);

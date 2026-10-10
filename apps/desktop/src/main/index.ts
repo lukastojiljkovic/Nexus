@@ -1481,6 +1481,12 @@ const moduleHost = createModuleHost({
     const handle = setTimeout(run, Math.max(0, atMs - Date.now()));
     return () => clearTimeout(handle);
   },
+  // The content packs a kit module may READ (ADR-091): the registry's own two
+  // inputs, so a module lists installed packs through `main/packs/registry.ts`
+  // rather than through a path of its own. A module can name neither a pack to
+  // install nor a file the pack's signed manifest does not list, and the
+  // renderer never sees either value.
+  packs: { userData: userDataDir, publicKeyPem: RELEASE_PUBLIC_KEY_PEM },
   now: () => Date.now(),
 });
 /** The `userData` directory itself — the registry's home, and the root every account directory hangs off. */

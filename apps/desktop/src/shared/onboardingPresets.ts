@@ -53,6 +53,10 @@ export const ESSENTIALS_MODULE_PRESET: Readonly<Record<string, boolean>> = {
   // person where packs come from.
   reader: true,
   pro: false,
+  // The second module built on the kit (ADR-090), decided here like every other
+  // selectable one: a library that had to be switched on first would be hiding
+  // the shelf a person came for, so it follows its manifest's `defaultEnabled`.
+  library: true,
 };
 
 /**

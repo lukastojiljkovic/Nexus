@@ -1593,16 +1593,18 @@ describe("RestoreStore", () => {
     //    sense: nothing here is something the user wrote, so there is no
     //    version of it an archive could hold and no journal trigger on it.
     //  - library_items / library_item_covers / library_passes / library_thoughts
-    //    / library_collections / library_collection_items (migration 072,
-    //    LIBRARY stage 1): NOT in the wipe list, and this is a state the next
-    //    stage removes rather than a decision about the module. The wipe is half
-    //    of a whole-profile REPLACE — the tables are emptied and refilled from
-    //    the archive — and library rows are not in the archive yet, because
-    //    wiring `LibraryStore.exportData` into `ProfileData` is stage 2's job.
-    //    On that list today, every restore would DELETE the user's library with
-    //    nothing to put back. They join it in the same change that teaches the
-    //    archive to carry them, with `LibraryStore`'s own export/import round
-    //    trip as their test.
+//    / library_collections / library_collection_items (migration 072): a KIT
+//    module's tables, and deliberately NOT in `RESTORE_WIPE_TABLES` for the
+//    TIMERS reason below rather than for a sequencing one. Stage 2 wired
+//    `LibraryStore.exportData`/`importData` into the archive (it is the
+//    module's `main/imex.ts`), so a restore DOES replace these rows — but
+//    it replaces them through the module's own `apply`, which runs in the same
+//    transaction as every other module's and is handed `undefined` by an
+//    archive that says nothing about the Library. Adding them to the wipe list
+//    instead would owe a matching entry in `@nexus/sync`'s collection map,
+//    which `collectionGuard.test.ts` holds EQUAL to that list and which a
+//    module built on the kit may not edit; the kit's own rule is the opposite
+//    one, and the TIMERS entry below states it in full.
     //  - the six culture tables (migration 073) are exempt, and this is the
     //    entry to remove when stage 2 lands. They ARE ordinary user content,
     //    but their archive section does not exist yet: stage 1 built the store

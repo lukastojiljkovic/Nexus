@@ -100,6 +100,10 @@ describe("createModuleRegistry", () => {
       "timers",
       // The second DISCOVERED module (ADR-100), after Timers on its own `order`.
       "reader",
+      // The second DISCOVERED module: a kit module registers after every
+      // compiled-in one, ordered by its manifest's `order` - Tajmeri declares
+      // 100 and Biblioteka 110.
+      "library",
     ]);
   });
 
@@ -166,6 +170,9 @@ describe("createModuleRegistry", () => {
       // twice rather than a bin for anything tool-shaped.
       ELEC: ["electronics"],
       PRO: ["pro"],
+      // PRD 27, and the module that finally puts a member in the `culture`
+      // group: `LIB` is its own PRD entry, so it is shared with nobody.
+      LIB: ["library"],
     });
   });
 
@@ -195,7 +202,7 @@ describe("createModuleRegistry", () => {
    */
   it("groups the modules by navigation group in canonical order, empty groups omitted", () => {
     const grouped = createModuleRegistry().byGroup();
-    expect([...grouped.keys()]).toEqual(["plan", "knowledge", "life", "make", "shell"]);
+    expect([...grouped.keys()]).toEqual(["plan", "knowledge", "life", "culture", "make", "shell"]);
     expect(grouped.get("plan")?.map((manifest) => manifest.id)).toEqual([
       "tasks",
       "calendar",
@@ -216,6 +223,9 @@ describe("createModuleRegistry", () => {
       "finance",
       "fitness",
     ]);
+    // The culture group's first member, and the group ADR-093 named before
+    // anything was in it.
+    expect(grouped.get("culture")?.map((manifest) => manifest.id)).toEqual(["library"]);
     expect(grouped.get("make")?.map((manifest) => manifest.id)).toEqual([
       "tools",
       "canvas",
@@ -226,9 +236,8 @@ describe("createModuleRegistry", () => {
     // the one caller that splits it: its first member heads the rail, the rest
     // close it (`navPrefs.sidebarGroups`).
     expect(grouped.get("shell")?.map((manifest) => manifest.id)).toEqual([...LOCKED_MODULE_IDS]);
-    // Culture and Play have no module yet, so they draw nothing rather than an
-    // empty heading.
-    expect(grouped.has("culture")).toBe(false);
+    // Play has no module yet, so it draws nothing rather than an empty heading.
+    // Culture used to be in the same place, and Biblioteka is what took it out.
     expect(grouped.has("play")).toBe(false);
   });
   it("is constructed per call, never a shared singleton (ADR-008)", () => {
@@ -266,6 +275,10 @@ describe("createModuleRegistry", () => {
       // And the Reader on the same terms (ADR-100): a shelf with no packs on it
       // writes nothing, and it is where the person learns where packs come from.
       "reader",
+      // ON by default like every module but PRIV and PRO: nothing about a
+      // library asks to be opted into, and the module writes nothing until a
+      // first title is added.
+      "library",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");
