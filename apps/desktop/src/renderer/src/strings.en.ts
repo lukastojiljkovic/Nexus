@@ -342,6 +342,10 @@ export const en = {
         dogadjaji: "I organise events",
         trenira: "I train others",
         prevodi: "I translate and proofread",
+        laboratorija: "I work in a lab",
+        instalacije: "I wire installations",
+        sistemi: "I run networks and systems",
+        servis: "I service vehicles",
       } satisfies Record<string, string>,
     },
     /** Not what somebody does but HOW — and it decides what every module opens on. */

@@ -171,6 +171,26 @@ export const PRO_SURFACE_FILES: readonly SurfaceFile[] = [
     tools: PRO_TOOL_GROUPS.event,
     load: () => import("./pro/event.js").then((module) => module.EVENT_SURFACES),
   },
+  {
+    file: "pro/laboratorija.tsx",
+    tools: PRO_TOOL_GROUPS.laboratorija,
+    load: () => import("./pro/laboratorija.js").then((module) => module.LABORATORIJA_SURFACES),
+  },
+  {
+    file: "pro/elektro.tsx",
+    tools: PRO_TOOL_GROUPS.elektro,
+    load: () => import("./pro/elektro.js").then((module) => module.ELEKTRO_SURFACES),
+  },
+  {
+    file: "pro/it.tsx",
+    tools: PRO_TOOL_GROUPS.it,
+    load: () => import("./pro/it.js").then((module) => module.IT_SURFACES),
+  },
+  {
+    file: "pro/auto.tsx",
+    tools: PRO_TOOL_GROUPS.auto,
+    load: () => import("./pro/auto.js").then((module) => module.AUTO_SURFACES),
+  },
 ];
 
 /**

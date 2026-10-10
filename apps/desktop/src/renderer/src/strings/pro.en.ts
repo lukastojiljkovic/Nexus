@@ -41,6 +41,10 @@ import { PRO_TRANSPORT_EN } from "./pro.transport.en.js";
 import { PRO_AGRO_EN } from "./pro.agro.en.js";
 import { PRO_ZANAT_EN } from "./pro.zanat.en.js";
 import { PRO_EVENT_EN } from "./pro.event.en.js";
+import { PRO_LABORATORIJA_EN } from "./pro.laboratorija.en.js";
+import { PRO_ELEKTRO_EN } from "./pro.elektro.en.js";
+import { PRO_IT_EN } from "./pro.it.en.js";
+import { PRO_AUTO_EN } from "./pro.auto.en.js";
 
 export const proEn = {
   title: "Professional tools",
@@ -220,6 +224,22 @@ export const proEn = {
       name: "Events and organisation",
       who: "event, wedding and conference organisers",
     },
+    laboratorija: {
+      name: "Laboratory and solutions",
+      who: "lab technicians, chemists, laboratory staff",
+    },
+    elektro: {
+      name: "Electrical installations",
+      who: "electricians, electrical fitters, service technicians",
+    },
+    it: {
+      name: "Networks and systems",
+      who: "administrators, network technicians, systems engineers",
+    },
+    auto: {
+      name: "Car and engine",
+      who: "mechanics, auto electricians, service technicians",
+    },
   },
 
   /**
@@ -368,6 +388,7 @@ export const proEn = {
    * not change when its neighbours arrived (`./devtools.ts`).
    */
   name: {
+    "air-fuel-ratio": "Air-fuel ratio",
     "allocation-remainder": "Split without a remainder",
     "amount-in-words": "Amount and number in words",
     "angle-of-view": "Angle of view",
@@ -402,6 +423,7 @@ export const proEn = {
     "breakeven-cvp": "Break-even point",
     "brine-salt": "Brine and curing",
     "budget-per-guest": "Budget per guest",
+    "buffer-ph": "Buffer pH",
     "cable-cross-section": "Required cross-section",
     "cadastral-area-units": "Cadastral measures",
     "cadence-stride-length": "Cadence and stride",
@@ -416,8 +438,11 @@ export const proEn = {
     "coffee-extraction": "Coffee extraction",
     "column-grid": "Column grid",
     "combinatorics": "Combinatorics",
+    "compression-ratio": "Compression ratio",
     "compressor-curve": "Compressor curve",
+    "concentration-units": "Concentration units",
     "concrete-takeoff": "Concrete volume and formwork",
+    "conduit-fill": "Conduit fill",
     "copyfitting": "Text extent calculation",
     "cost-allocation": "Cost allocation",
     "cost-per-km-transport": "Cost per kilometre",
@@ -429,11 +454,14 @@ export const proEn = {
     "depreciation-schedule": "Depreciation of fixed assets",
     "depth-of-field": "Depth of field",
     "diffraction-limit": "Diffraction",
+    "dilution": "Dilution",
     "dough-water-temp": "Water temperature",
     "drawing-scale": "Drawing scale",
     "driving-hours-planner": "Driving and breaks",
     "ean-barcode": "EAN barcode",
     "earthwork-prismoidal": "Volume between profiles",
+    "energy-cost": "Energy cost",
+    "engine-displacement": "Engine displacement",
     "erg-split-watts": "Split and watts",
     "eta-with-breaks": "Arrival estimate",
     "exposure-equivalent": "Equivalent exposure",
@@ -466,6 +494,7 @@ export const proEn = {
     "ice-cream-overrun": "Ice cream overrun",
     "illuminance-to-aperture": "Lux to aperture",
     "induction-motor-rating": "Induction motor",
+    "injector-flow": "Injector flow",
     "interest-periods": "Interest by period",
     "interval-session-timing": "Interval training",
     "inventory-costing": "FIFO and average inventory",
@@ -488,6 +517,7 @@ export const proEn = {
     "lesson-timeline": "Lesson pace",
     "levain-hydration": "Hydration and starter",
     "level-run": "Levelling",
+    "lighting-count": "Room lighting",
     "limb-symmetry-index": "Side symmetry",
     "linear-cutting-stock": "Bar cutting",
     "livestock-ration-dm": "Ration by dry matter",
@@ -495,15 +525,21 @@ export const proEn = {
     "loading-space-utilisation": "Cargo space utilisation",
     "loan-amortization": "Repayment plan",
     "loan-schedule": "Loan repayment schedule",
+    "luminaire-spacing": "Luminaire spacing",
+    "mac-normalise": "MAC address",
     "machine-field-capacity": "Machine output",
     "margin-markup": "Margin and markup",
+    "mean-piston-speed": "Piston speed",
     "metric-thread-strength": "Metric thread",
     "mired-shift": "Mired correction",
     "mitre-angles": "Mitre and compound mitre",
     "modular-type-scale": "Typographic scale",
     "mojibake-repair": "Encoding repair",
+    "molar-mass": "Molar mass",
+    "molarity-to-mass": "Molarity to mass",
     "mortar-mix-quantity": "Mortar and adhesive",
     "motion-blur": "Motion blur",
+    "motor-starting-current": "Motor starting current",
     "nd-filter-exposure": "ND filter",
     "nominalna-efektivna-stopa": "Nominal and effective rate",
     "note-frequency": "Note, MIDI and frequency",
@@ -524,6 +560,7 @@ export const proEn = {
     "payment-due-date": "Payment deadline",
     "payment-reference-97": "Reference number 97",
     "pcm-file-size": "PCM recording size",
+    "ph-strong-acid-base": "Strong acid and base pH",
     "pipe-flow-velocity": "Flow through a pipe",
     "plant-spacing-density": "Planting spacing",
     "plate-cost": "Dish costing",
@@ -539,6 +576,7 @@ export const proEn = {
     "projector-throw-screen": "Projection and screen",
     "racun-iban-provera": "Account, IBAN and modulus 97",
     "radni-dani": "Working days",
+    "raid-capacity": "RAID capacity",
     "raster-image-size": "Raster size",
     "rate-conversion": "Proportional and conformal rate",
     "ratio-split": "Split by ratio",
@@ -614,6 +652,9 @@ export const proEn = {
     "topic-hour-allocation": "Allocation by topics",
     "torque-speed-power": "Torque and power",
     "training-volume-load": "Tonnage and intensity",
+    "transfer-rate": "Transfer rate",
+    "transfer-time": "Transfer time",
+    "transformer-current": "Transformer current",
     "translation-volume": "Translation volume",
     "transposition": "Transposition",
     "trench-volume": "Trench excavation",
@@ -625,10 +666,12 @@ export const proEn = {
     "typography-cleanup": "Typographic cleanup",
     "ugovorna-kazna": "Contractual penalty",
     "unwrap-paragraphs": "Layout cleanup",
+    "uptime-downtime": "Uptime and downtime",
     "us-customary-kitchen-units": "American measures",
     "varispeed-repitch": "Detuning and speed",
     "venue-occupancy-area": "Venue capacity",
     "video-bitrate-storage": "Bitrate and card",
+    "vlsm-split": "Subnet allocation",
     "voltage-drop": "Line voltage drop",
     "wall-ceiling-area": "Walls and ceiling",
     "wall-u-value": "Assembly U-value",
@@ -637,6 +680,7 @@ export const proEn = {
     "weighted-area": "Chargeable area",
     "weighted-grade": "Weighted grade",
     "weld-consumable": "Welding consumption",
+    "wheel-offset": "Wheel offset",
     "wood-moisture-movement": "Wood movement by moisture",
     "word-frequency": "Word frequency",
     "yield-estimate-samples": "Yield estimate",
@@ -650,6 +694,8 @@ export const proEn = {
    * zadovoljava", which would be a claim the tool is forbidden to make.
    */
   blurb: {
+    "air-fuel-ratio":
+      "Air-fuel ratio by mass, lambda with the stoichiometric ratio you enter, and the fuel a target ratio needs.",
     "allocation-remainder":
       "Splits an amount by a given key so the parts add up to exactly the whole, with no penny lost to rounding.",
     "amount-in-words":
@@ -718,6 +764,8 @@ export const proEn = {
       "How much salt goes into a brine or a dry cure for the percentage the user sets, by both common bases of calculation, and what the salt percentage is in a brine that already exists.",
     "budget-per-guest":
       "Adds fixed costs, per-guest and per-table costs, percentage items, contingency and tax, and gives the price per guest and the break-even ticket price.",
+    "buffer-ph":
+      "Buffer pH from the pKa and the acid-to-base ratio, or the ratio that gives the pH wanted.",
     "cable-cross-section":
       "From the voltage drop the user sets, calculates the minimum copper or aluminium needed to stay within that drop, and the drop obtained at the cross-section the user chooses.",
     "cadastral-area-units":
@@ -746,10 +794,16 @@ export const proEn = {
       "The width of one column and a span of k columns for a given width, the number of columns, the gutter and the margin, and how many columns fit at a given minimum width.",
     "combinatorics":
       "Calculates factorial, variations and combinations with and without repetition, and permutations with repetition, in integer arithmetic without rounding.",
+    "compression-ratio":
+      "Compression ratio from the bore, stroke and the chamber, gasket, deck and crown volumes.",
     "compressor-curve":
       "For a given threshold, ratio and knee, shows what happens to the input level — output level, gain reduction and the makeup needed.",
+    "concentration-units":
+      "Converts a concentration between mol/L, mmol/L, g/L, mg/mL, percent, ppm and ppb, with the molar mass for the molar units.",
     "concrete-takeoff":
       "For a slab, beam, column or footing, gives the concrete volume, the formwork area and the number of mixer loads.",
+    "conduit-fill":
+      "How much of a conduit's bore a bundle of conductors takes up, from their diameters, against your own fill limit.",
     "copyfitting":
       "How many lines, columns and pages a text of N characters takes at a given line width and column height, and what line count makes an exact number of pages.",
     "cost-allocation":
@@ -772,6 +826,8 @@ export const proEn = {
       "For a given focal length, aperture, focus distance and circle of confusion, gives the hyperfocal distance and the near and far limits of sharpness.",
     "diffraction-limit":
       "Gives the diameter of the Airy disc for a given aperture, and the aperture at which the disc reaches the size of one pixel of the entered sensor.",
+    "dilution":
+      "Dilution by C1·V1 = C2·V2: how much stock to take, what volume to make it up to, and how much solvent to add.",
     "dough-water-temp":
       "Calculates the water temperature so the dough has the desired temperature after mixing and, conversely, extracts the mixer's friction factor from a measured batch.",
     "drawing-scale":
@@ -782,6 +838,10 @@ export const proEn = {
       "Calculates the check digit for EAN-13, EAN-8 and UPC-A and gives the symbol's width and height at a given X-dimension.",
     "earthwork-prismoidal":
       "Adds the volume of cut and fill from cross-section areas, by the average-end-area method or the prismoidal formula.",
+    "energy-cost":
+      "How many kilowatt-hours an appliance uses over a period and what it costs at the price you enter.",
+    "engine-displacement":
+      "Engine displacement from bore, stroke and cylinder count, in cubic centimetres and litres.",
     "erg-split-watts":
       "Converts a 500-metre split into watts and back by the published Concept2 relation, and gives the time for a given distance at that split.",
     "eta-with-breaks":
@@ -846,6 +906,8 @@ export const proEn = {
       "Converts lux and foot-candles and, with a calibration constant entered from your light meter, calculates the aperture for a given ISO and shutter time.",
     "induction-motor-rating":
       "From the nameplate data, calculates rated current, input power, synchronous speed, slip and torque.",
+    "injector-flow":
+      "The flow one injector must deliver for a power target, from the specific consumption, the cylinder count and the duty cycle.",
     "interest-periods":
       "Calculates interest on a principal across several periods with different rates and by the chosen day-count basis, showing the days and interest per period.",
     "interval-session-timing":
@@ -890,6 +952,8 @@ export const proEn = {
       "Separates the flour and water already in a starter or pre-ferment and calculates how much flour and water still need adding for the whole dough to have the desired hydration.",
     "level-run":
       "From level readings and the benchmark elevation, calculates the elevations of all points, the arithmetic check and the misclosure of the run.",
+    "lighting-count":
+      "How many fittings a room needs for an illuminance target, by the lumen method, and what they deliver.",
     "limb-symmetry-index":
       "The ratio of values on two sides of the body in percentages, the difference up to one hundred percent, and what value the weaker side needs to reach for a ratio the user sets.",
     "linear-cutting-stock":
@@ -904,10 +968,16 @@ export const proEn = {
       "Gives a monthly repayment plan for an annuity loan, the remaining debt at any month and the effect of an early repayment.",
     "loan-schedule":
       "Makes a repayment schedule by instalments — annuity or equal principal — splitting each instalment into interest and principal.",
+    "luminaire-spacing":
+      "The greatest spacing between fittings from the spacing-to-height ratio, measured from the work plane, and how many fit in the room.",
+    "mac-normalise":
+      "One MAC address in every notation, with its OUI and the two bits the first octet carries.",
     "machine-field-capacity":
       "From the working width, speed and time utilisation, gives hectares per hour, the time for the whole plot and fuel consumption per hectare.",
     "margin-markup":
       "Links purchase price, sale price, margin and markup, and calculates the largest discount down to a given margin.",
+    "mean-piston-speed":
+      "Mean piston speed from the stroke and engine speed, with the ratio to a limit you enter.",
     "metric-thread-strength":
       "From the nominal diameter and pitch, calculates the pitch, core and minor diameters, the stress area and the force matching the strength the user enters.",
     "mired-shift":
@@ -918,10 +988,16 @@ export const proEn = {
       "A series of type sizes obtained by multiplying the base size by the chosen ratio, in pixels, rem units and points.",
     "mojibake-repair":
       "Returns corrupted characters like “Å¡” and “Ä‡” to the correct letters, choosing which encoding the text was written in and which it was read in.",
+    "molar-mass":
+      "Molar mass from a chemical formula, with the per-element breakdown and shares, from the standard atomic weights (CIAAW 2021).",
+    "molarity-to-mass":
+      "How many grams to weigh for a solution of a given concentration and volume, or what concentration a weighed mass produced.",
     "mortar-mix-quantity":
       "The quantity of finished mix or ingredients to mix from the area and layer thickness, with water, number of bags and wastage.",
     "motion-blur":
       "How many pixels the subject smears during the exposure, and which shutter keeps it within a given number of pixels.",
+    "motor-starting-current":
+      "Motor starting current from the rated current and the locked-rotor ratio, for direct-on-line, star-delta and soft starting.",
     "nd-filter-exposure":
       "Converts an ND filter's strength between stops, optical density and factor, and calculates the exposure time after the filter.",
     "nominalna-efektivna-stopa":
@@ -962,6 +1038,8 @@ export const proEn = {
       "Calculates the two-digit check number of a reference number by the MOD 97-10 procedure and compares it with the one already entered.",
     "pcm-file-size":
       "How much an uncompressed recording of a given length takes at a given sample rate, resolution and number of channels — and what the data rate is.",
+    "ph-strong-acid-base":
+      "pH and pOH of a strong acid or base from the analytical concentration and the number of ionisable groups.",
     "pipe-flow-velocity":
       "Links the internal diameter, flow and velocity in a pipe, and calculates the Reynolds number and mass flow from the properties the user enters.",
     "plant-spacing-density":
@@ -992,6 +1070,8 @@ export const proEn = {
       "Whether the check number of a typed account matches by modulus 97, what its IBAN is and what the check number is for an entered string of digits.",
     "radni-dani":
       "How many calendar, working and non-working days there are between two dates, by the list of non-working days the user enters.",
+    "raid-capacity":
+      "Usable capacity and fault tolerance for RAID 0, 1, 5, 6 and 10, with a rebuild time when you enter a rate.",
     "raster-image-size":
       "The uncompressed size of an image from its dimensions, number of channels and bit depth, and how many such files fit in a given space.",
     "rate-conversion":
@@ -1142,6 +1222,12 @@ export const proEn = {
       "Links torque, power and speed and shows them in N·m, kgf·m, lbf·ft, W, kW, metric hp and hp.",
     "training-volume-load":
       "From programme rows (sets × repetitions × kilograms), adds up repetitions and tonnage and gives the average load per repetition, and with an entered 1RM the average intensity in percentages.",
+    "transfer-rate":
+      "A transfer rate in every unit, with the decimal and binary prefixes kept strictly apart.",
+    "transfer-time":
+      "How long a payload takes at a given rate, with decimal and binary units kept apart.",
+    "transformer-current":
+      "Primary and secondary full-load currents from the rating in kVA and the winding voltages.",
     "translation-volume":
       "Counts characters, words and translator's pages in pasted text and multiplies them by the price you enter.",
     "transposition":
@@ -1164,6 +1250,8 @@ export const proEn = {
       "What the penalty is for days of delay at the entered daily rate, and on which day of delay an entered cap is reached.",
     "unwrap-paragraphs":
       "Joins lines broken by copying from a PDF back into paragraphs and reassembles words split by a hyphen at the end of a line.",
+    "uptime-downtime":
+      "An availability percentage and the downtime it allows a year, a month, a week and a day, or the other way round.",
     "us-customary-kitchen-units":
       "Converts cups, ounces, pounds, pints and degrees Fahrenheit from foreign recipes into millilitres, grams and degrees Celsius, and refuses to convert volume into mass without a density.",
     "varispeed-repitch":
@@ -1172,6 +1260,8 @@ export const proEn = {
       "From the gross area and the deducted zones, calculates the net area and the number of people for the density the user enters, for each layout separately.",
     "video-bitrate-storage":
       "Links bitrate, duration and file size and calculates how much recording fits on a card or disk of a given capacity.",
+    "vlsm-split":
+      "Carving an IPv4 network into subnets for the host counts you list, largest first, with the leftover shown.",
     "voltage-drop":
       "For a given cross-section, length and current, calculates the line resistance, the voltage drop in volts and percent and the power loss.",
     "wall-ceiling-area":
@@ -1188,6 +1278,8 @@ export const proEn = {
       "Adds assessment components with different maxima and different weights into one total percentage and calculates how many points are missing on the remaining component for a desired overall result.",
     "weld-consumable":
       "The mass of weld metal and of the filler needed from the weld cross-section and length, with the length of wire or number of electrodes.",
+    "wheel-offset":
+      "Backspace and front space from the rim width and offset, and how far the rim edges move against another wheel.",
     "wood-moisture-movement":
       "How much a piece of wood changes dimension when moisture changes, and what clearance remains for the expected moisture range in the room.",
     "word-frequency":
@@ -1276,6 +1368,8 @@ export const proEn = {
       "ISO/IEC 7064:2003 — Information technology, Security techniques, Check character systems; the MOD 97-10 procedure.",
     "iso-metric-thread-261-273-68":
       "Thread pitches: ISO 261:1998. Profile and core diameter: ISO 68-1:1998. Clearance holes: ISO 273:1979 (fine, medium and coarse series). The percentage of engagement is a workshop convention chosen by the user and appears in none of those three standards.",
+    "iupac-ciaaw-2021-atomic-weights":
+      "Standard atomic weights from the IUPAC/CIAAW abridged table for 2021. An element with no published standard atomic weight is refused by name rather than given a mass number.",
     "jmbg-check-digit":
       "JMBG structure (13 digits, weights 7,6,5,4,3,2 repeated twice, modulus 11) — the Act on the Unique Citizen Identification Number (SFRY); the structure has not changed since the register was introduced. The tool uses only that arithmetic and does not claim compliance with the regulation.",
     "mccall-t-score-1922":
@@ -1334,4 +1428,8 @@ export const proEn = {
   agro: PRO_AGRO_EN,
   zanat: PRO_ZANAT_EN,
   event: PRO_EVENT_EN,
+  laboratorija: PRO_LABORATORIJA_EN,
+  elektro: PRO_ELEKTRO_EN,
+  it: PRO_IT_EN,
+  auto: PRO_AUTO_EN,
 } as const;
