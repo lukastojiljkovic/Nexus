@@ -1,0 +1,118 @@
+{
+  "generated": "2026-10-09T00:54:11Z",
+  "baseUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data",
+  "models": {
+    "sr-en": [
+      {
+        "architecture": "tiny",
+        "releaseStatus": null,
+        "sourceLanguage": "sr",
+        "targetLanguage": "en",
+        "files": {
+          "lexicalShortlist": {
+            "path": "models/sr-en/spring-2024_H5GCfsx4SnqOP4YFIQdkdA/exported/lex.50.50.sren.s2t.bin.gz"
+          },
+          "model": {
+            "path": "models/sr-en/spring-2024_H5GCfsx4SnqOP4YFIQdkdA/exported/model.sren.intgemm.alphas.bin.gz",
+            "uncompressedSize": 17141051,
+            "uncompressedHash": "99c44e9690a7ed2c1f13468765c3b1db2b8a8ae739980e4056d45dca613a1966"
+          },
+          "vocab": {
+            "path": "models/sr-en/spring-2024_H5GCfsx4SnqOP4YFIQdkdA/exported/vocab.sren.spm.gz"
+          }
+        },
+        "modelStatistics": {
+          "parameters": 16907062,
+          "encoderParameters": 6314532,
+          "decoderParameters": 2400528
+        },
+        "metrics": {
+          "flores200-plus": {
+            "bleu": 36.6054,
+            "chrf": 64.7233,
+            "chrfpp": 62.807,
+            "comet22": 0.8501,
+            "llm-ref": 4.3,
+            "metricx24-qe": 3.0235,
+            "metricx24": 3.2444,
+            "spbleu": 39.9991
+          }
+        }
+      }
+    ],
+    "en-hr": [
+      {
+        "architecture": "base-memory",
+        "releaseStatus": "Release",
+        "sourceLanguage": "en",
+        "targetLanguage": "hr",
+        "files": {
+          "lexicalShortlist": {
+            "path": "models/en-hr/hbs-topk10_PLHJ-5OxSNyWlwZM12Kghw/exported/lex.50.50.enhr.s2t.bin.gz"
+          },
+          "model": {
+            "path": "models/en-hr/hbs-topk10_PLHJ-5OxSNyWlwZM12Kghw/exported/model.enhr.intgemm.alphas.bin.gz",
+            "uncompressedSize": 31561787,
+            "uncompressedHash": "2f34590dff70aec009d3c6e9bee7a4a18aa6a0a1978c7dc49c686eb454b77704"
+          },
+          "vocab": {
+            "path": "models/en-hr/hbs-topk10_PLHJ-5OxSNyWlwZM12Kghw/exported/vocab.enhr.spm.gz"
+          }
+        },
+        "modelStatistics": {
+          "parameters": 31248966,
+          "encoderParameters": 10646820,
+          "decoderParameters": 8314144
+        },
+        "metrics": {
+          "flores200-plus": {
+            "bleu": 32.7249,
+            "chrf": 61.4944,
+            "chrfpp": 58.5122,
+            "comet22": 0.8957,
+            "llm-ref": 4.434,
+            "metricx24-qe": 1.6646,
+            "metricx24": 1.7787,
+            "spbleu": 40.1839
+          }
+        }
+      },
+      {
+        "architecture": "tiny",
+        "releaseStatus": null,
+        "sourceLanguage": "en",
+        "targetLanguage": "hr",
+        "files": {
+          "lexicalShortlist": {
+            "path": "models/en-hr/spring-2024_NcLX56D4SuSpByVVfuAHJQ/exported/lex.50.50.enhr.s2t.bin.gz"
+          },
+          "model": {
+            "path": "models/en-hr/spring-2024_NcLX56D4SuSpByVVfuAHJQ/exported/model.enhr.intgemm.alphas.bin.gz",
+            "uncompressedSize": 17141051,
+            "uncompressedHash": "29ba32235778da3e38cfeb0d7f36eaf8dc37c961ff8651d86f7cae7e29e97d88"
+          },
+          "vocab": {
+            "path": "models/en-hr/spring-2024_NcLX56D4SuSpByVVfuAHJQ/exported/vocab.enhr.spm.gz"
+          }
+        },
+        "modelStatistics": {
+          "parameters": 16907062,
+          "encoderParameters": 6314532,
+          "decoderParameters": 2400528
+        },
+        "metrics": {
+          "flores200-plus": {
+            "bleu": 29.6755,
+            "chrf": 59.5303,
+            "chrfpp": 56.4017,
+            "comet22": 0.8741,
+            "llm-ref": 4.312,
+            "spbleu": 36.9988,
+            "metricx24-qe": 1.8825,
+            "metricx24": 2.1373
+          }
+        }
+      }
+    ]
+  }
+}

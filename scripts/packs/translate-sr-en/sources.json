@@ -1,0 +1,79 @@
+[
+  {
+    "url": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json",
+    "fetchedAt": "2026-10-10T03:23:17.138Z",
+    "sha256": "8bf2ff10f4844d762779849eb6949e6db155d83e33a9b7b4f4074c42075024ef",
+    "licence": "MPL-2.0",
+    "licenceEvidence": {
+      "url": "https://raw.githubusercontent.com/mozilla/translations/main/README.md",
+      "quote": "The model files are distributed under the MPL 2.0 license."
+    },
+    "note": "Mozilla's model registry; generated 2026-10-10T00:46:23Z"
+  },
+  {
+    "url": "https://firefox.settings.services.mozilla.com/v1/buckets/main/collections/translations-models/records",
+    "fetchedAt": "2026-10-10T03:23:17.447Z",
+    "sha256": "d004e5e1cf8f8bba405c0964e3ebe21396b9523fee5296045cd6249ad3874db4",
+    "licence": "MPL-2.0",
+    "licenceEvidence": {
+      "url": "https://raw.githubusercontent.com/mozilla/translations/main/README.md",
+      "quote": "The model files are distributed under the MPL 2.0 license."
+    },
+    "note": "the Remote Settings delivery records: every file's size and SHA-256"
+  },
+  {
+    "url": "https://raw.githubusercontent.com/mozilla/translations/main/README.md",
+    "fetchedAt": "2026-10-10T03:23:17.660Z",
+    "sha256": "be23e8c6b368e8bda21ec6257b8027de1273f85bbca4886edc76bccf176d385a",
+    "licence": "MPL-2.0",
+    "licenceEvidence": {
+      "url": "https://raw.githubusercontent.com/mozilla/translations/main/README.md",
+      "quote": "The model files are distributed under the MPL 2.0 license."
+    },
+    "note": "the sentence above is quoted from this document"
+  },
+  {
+    "url": "https://raw.githubusercontent.com/mozilla/translations/main/LICENSE",
+    "fetchedAt": "2026-10-10T03:23:17.889Z",
+    "sha256": "1f256ecad192880510e84ad60474eab7589218784b9a50bc7ceee34c2b91f1d5",
+    "licence": "MPL-2.0",
+    "licenceEvidence": {
+      "url": "https://raw.githubusercontent.com/mozilla/translations/main/LICENSE",
+      "quote": "Mozilla Public License Version 2.0"
+    },
+    "note": "shipped unchanged as LICENSE.txt"
+  },
+  {
+    "url": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/models/sr-en/spring-2024_H5GCfsx4SnqOP4YFIQdkdA/exported/model.sren.intgemm.alphas.bin.gz",
+    "fetchedAt": "2026-10-10T03:23:19.611Z",
+    "sha256": "99c44e9690a7ed2c1f13468765c3b1db2b8a8ae739980e4056d45dca613a1966",
+    "licence": "MPL-2.0",
+    "licenceEvidence": {
+      "url": "https://raw.githubusercontent.com/mozilla/translations/main/README.md",
+      "quote": "The model files are distributed under the MPL 2.0 license."
+    },
+    "note": "fetched gzipped (12729754 bytes, sha256 ba4534d2f4ad45bacbdb5f626636471f9861b1c0eaa58b5bff4a4932e2ca8c93); stored as model.bin after decompression, from the record's model.sren.intgemm.alphas.bin"
+  },
+  {
+    "url": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/models/sr-en/spring-2024_H5GCfsx4SnqOP4YFIQdkdA/exported/lex.50.50.sren.s2t.bin.gz",
+    "fetchedAt": "2026-10-10T03:23:20.078Z",
+    "sha256": "476d9731a1fd44811466abf2292523f11eaad57f0fb7a5cd30391e7720c7071a",
+    "licence": "MPL-2.0",
+    "licenceEvidence": {
+      "url": "https://raw.githubusercontent.com/mozilla/translations/main/README.md",
+      "quote": "The model files are distributed under the MPL 2.0 license."
+    },
+    "note": "fetched gzipped (2117763 bytes, sha256 5bb28dd580aafc4eb6e74f05affbc15406d82a820fccaf41dfe4b0b47136480c); stored as shortlist.bin after decompression, from the record's lex.50.50.sren.s2t.bin"
+  },
+  {
+    "url": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/models/sr-en/spring-2024_H5GCfsx4SnqOP4YFIQdkdA/exported/vocab.sren.spm.gz",
+    "fetchedAt": "2026-10-10T03:23:21.031Z",
+    "sha256": "5cdbad076c8f5b11e3342f5011e9f56f22558523ca82aec9bab621ddc7614bdc",
+    "licence": "MPL-2.0",
+    "licenceEvidence": {
+      "url": "https://raw.githubusercontent.com/mozilla/translations/main/README.md",
+      "quote": "The model files are distributed under the MPL 2.0 license."
+    },
+    "note": "fetched gzipped (403515 bytes, sha256 5c6355d1a70c2074a36a5c48424d04d2362b8ce54f34ff5ac33c30405d0e2489); stored as vocab.spm after decompression, from the record's vocab.sren.spm"
+  }
+]

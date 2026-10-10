@@ -186,6 +186,10 @@ export const SERBIAN_SOURCES = [
     match: /^packages\/core\/src\/cookbook\/parse\.ts$/,
     reason: "the Serbian measure words and taste phrases the ingredient parser RECOGNISES in a pasted recipe — a vocabulary read from input, never shown",
   },
+  {
+    match: /^apps\/desktop\/src\/modules\/translator\/renderer\/sentences\/copy\.sr\.ts$/,
+    reason: "the sentence translator's own Serbian table — a sub-surface of a kit module (ADR-090), one folder deeper than `renderer/copy.sr.ts`, with its `copy.en.ts` rule 1 reads beside it",
+  },
 ];
 
 /**
@@ -313,6 +317,11 @@ export const SERBIAN_LITERAL_ALLOWLIST = [
     file: "packages/core/src/imex/archivePaths.ts",
     contains: "Fascikla",
     reason: "the same, for a folder whose own name sanitizes to nothing",
+  },
+  {
+    file: "apps/desktop/src/modules/translator/renderer/sentences/split.ts",
+    contains: "čl",
+    reason: "the Serbian abbreviation `čl.` the sentence splitter RECOGNISES in the user's own text — a vocabulary read from input, never shown",
   },
 ];
 
