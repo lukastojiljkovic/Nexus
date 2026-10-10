@@ -28,10 +28,11 @@ export function searchKindModule(kind: SearchKind): string | undefined {
 /**
  * The one shared module gate over search hits — `search:page`, the palette's
  * query path and the recent list all pass through HERE, never through a second
- * copy of the rule. Pure: the enabled set is the caller's (main resolves it
- * from the profile's flag store via `resolveEnabled`), so a business profile
- * with STUDY off stops surfacing subject/exam/deck/card rows everywhere at
- * once. A kind no module owns is shown by no enabled module, so it is dropped.
+ * copy of the rule. Pure: the visible set is the caller's (main resolves it
+ * from the DEVICE's arrangement, ADR-101 — `enabledModuleIds()` in
+ * `index.ts`), so hiding a module stops its subject/exam/deck/card rows
+ * surfacing everywhere at once. A kind no module owns is shown by no visible
+ * module, so it is dropped.
  */
 export function filterSearchHitsByModules<T extends { readonly kind: SearchKind }>(
   hits: readonly T[],

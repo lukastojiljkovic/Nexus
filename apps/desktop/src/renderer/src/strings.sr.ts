@@ -5782,7 +5782,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       profile: "Profil i sigurnost",
       appearance: "Izgled",
       keyboard: "Tastatura",
-      modules: "Moduli",
+      modules: "Prikaz",
       notifications: "Obaveštenja",
       data: "Podaci",
       privacy: "Privatnost",
@@ -6309,6 +6309,20 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
      */
     modulesAlwaysOn: "Uvek uključeno",
     modulesToggleError: "Promena nije uspela. Pokušaj ponovo.",
+    /**
+     * ADR-101: the „Prikaz" card — what this DEVICE shows, and in what order.
+     * One setting for the whole app rather than one per profile, so the words
+     * here say „this Nexus" rather than „this profile".
+     */
+    visibility: {
+      hint: "Isključeni moduli nestaju sa strane, iz pokretača, sa kontrolne table, iz pretrage i iz obaveštenja. Podaci ostaju — kad modul ponovo uključiš, sve je tu.",
+      orderHint: "Grupe i module raspoređuješ prevlačenjem ili dugmićima za pomeranje.",
+      moveUp: "Pomeri {name} gore",
+      moveDown: "Pomeri {name} dole",
+      moveGroupUp: "Pomeri grupu {name} gore",
+      moveGroupDown: "Pomeri grupu {name} dole",
+      reset: "Vrati podrazumevani raspored",
+    },
     /**
      * ADR-065 §5, moved by ADR-086 — the one row that reopens the
      * questionnaire.

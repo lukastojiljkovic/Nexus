@@ -2,6 +2,7 @@ import { foldSearchText } from "@nexus/core";
 import { describe, expect, it } from "vitest";
 
 import { createModuleRegistry, kitManifest } from "../../shared/modules.js";
+import { DEFAULT_SHELL_VISIBILITY, visibleModuleSet } from "../../shared/moduleVisibility.js";
 import {
   SYNC_HELD_SETTINGS_CARD_IDS,
   isSettingsCardHeld,
@@ -38,20 +39,37 @@ import { activeLocale, strings } from "./strings.js";
 function s(): typeof strings.settings {
   return strings.settings;
 }
-const INDEX = buildSettingsIndex(createModuleRegistry());
+/**
+ * The device's visible set for an arrangement nothing has touched (ADR-101) —
+ * the app as it ships, which is what this file's expectations describe. A
+ * module the user HIDES leaves the index entirely, which its own case below
+ * states.
+ */
+const REGISTRY = createModuleRegistry();
+const VISIBLE = visibleModuleSet(REGISTRY, DEFAULT_SHELL_VISIBILITY);
+const INDEX = buildSettingsIndex(REGISTRY, VISIBLE);
 const ENTRIES = INDEX.entries;
 /** The sections a DISCOVERED module claims for its own card (ADR-090): its module id, which is by definition not a key of the shell's `sectionTitle`. */
-const KIT_SECTION_IDS = moduleSettingsDeclarations(createModuleRegistry())
+const KIT_SECTION_IDS = moduleSettingsDeclarations(REGISTRY)
   .filter(({ panel }) => typeof panel.titleKey !== "string")
-  .map(({ moduleId }) => moduleId);
+  .map(({ moduleId }) => moduleId)
+  .filter((moduleId) => VISIBLE.has(moduleId));
+/** Every module id a card declares — the ids `sectionTitle` carries a title FOR, rather than a shell card of its own. */
+const DECLARED_MODULE_IDS = new Set(
+  moduleSettingsDeclarations(REGISTRY).map((declaration) => declaration.moduleId),
+);
 /**
  * Every section the page can show: the shell's own table plus the discovered
  * ones. The union rather than one list, because the two halves are statements
  * about different things — a compiled-in module's card claims a heading the
- * shell already carries, and a kit module brings its own.
+ * shell already carries, and a kit module brings its own. A key a MODULE claims
+ * is that module's card, so it is a section only while the module is shown
+ * (ADR-101) — a hidden module's card is not drawn, so it cannot be searched to.
  */
 const SECTION_IDS = [
-  ...Object.keys(s().sectionTitle),
+  ...(Object.keys(s().sectionTitle) as SettingsSectionId[]).filter(
+    (id) => !DECLARED_MODULE_IDS.has(id) || VISIBLE.has(id),
+  ),
   ...KIT_SECTION_IDS,
 ] as SettingsSectionId[];
 /**
@@ -316,18 +334,30 @@ describe("buildSettingsIndex", () => {
     }
   });
 
-  it("covers every registered module, in the gallery's own grouping order", () => {
+  it("covers every VISIBLE module, in the gallery's own grouping order", () => {
     const registry = createModuleRegistry();
     const expected = [...registry.byGroup()].flatMap(([, members]) =>
-      members.map((manifest) => moduleEntryId(manifest.id)),
+      members
+        .filter((manifest) => VISIBLE.has(manifest.id))
+        .map((manifest) => moduleEntryId(manifest.id)),
     );
-    const actual = buildSettingsIndex(registry)
+    const actual = buildSettingsIndex(registry, VISIBLE)
       .entries.filter((entry) => entry.section === "modules")
       .map((entry) => entry.id);
-    // The „Moduli“ card is now nothing but modules: ADR-065's „ponovo pokreni
-    // upitnik“ row moved to „Kako je Nexus podešen za tebe“ when ADR-086 made
+    // The „Prikaz" card is nothing but modules: ADR-065's „ponovo pokreni
+    // upitnik" row moved to „Kako je Nexus podešen za tebe" when ADR-086 made
     // the questionnaire about more than this gallery.
-    expect(actual).toEqual(expected);
+    // The section also carries the card's OWN entry (ADR-101): its title is
+    // „Prikaz" now, and „moduli" — the word the category and the old gallery
+    // carried — has to keep finding it.
+    expect(actual.filter((id) => id !== "modules-display")).toEqual(expected);
+    expect(actual[0]).toBe("modules-display");
+    // And a module this device hides is gone from the filter too (ADR-101):
+    // the card its entry would steer to is not drawn, so the hit leads
+    // nowhere. The switch that brings the module back is the „Prikaz" card,
+    // whose own entry names every module the build has, hidden or not.
+    expect(actual).not.toContain(moduleEntryId("priv"));
+    expect(actual).not.toContain(moduleEntryId("pro"));
   });
 
   it("labels a module row with the sidebar's name and keywords it with its description", () => {
@@ -355,12 +385,15 @@ describe("buildSettingsIndex", () => {
 
   it("derives one entry per declared control, in registry then declaration order", () => {
     const registry = createModuleRegistry();
-    const expected = moduleSettingsDeclarations(registry).flatMap(({ moduleId, panel }) =>
+    // Only the modules this device SHOWS contribute (ADR-101), so the
+    // declaration list is narrowed through the same predicate the page uses.
+    const declared = moduleSettingsDeclarations(registry).filter(({ moduleId }) =>
+      VISIBLE.has(moduleId),
+    );
+    const expected = declared.flatMap(({ moduleId, panel }) =>
       panel.controls.map((control) => settingsEntryId(moduleId, control.key)),
     );
-    const declaredSections = new Set(
-      moduleSettingsDeclarations(registry).map((declaration) => declaration.moduleId),
-    );
+    const declaredSections = new Set(declared.map((declaration) => declaration.moduleId));
     const actual = ENTRIES.filter((entry) => declaredSections.has(entry.section)).map(
       (entry) => entry.id,
     );
@@ -373,9 +406,6 @@ describe("buildSettingsIndex", () => {
       "calendar:semester-dates",
       "notes:width",
       "notes:markdown",
-      "priv:auto-lock",
-      "priv:lock-minimize",
-      "priv:kit-status",
       "files:view",
       "study:retention",
       "study:new-per-day",
@@ -407,7 +437,6 @@ describe("buildSettingsIndex", () => {
     expect(entryById(settingsEntryId("calendar", "semester-dates")).label).toBe(
       s().calendar.datesLabel,
     );
-    expect(entryById(settingsEntryId("priv", "kit-status")).label).toBe(s().priv.caption);
   });
 
   it("folds a choice's option labels into its keywords, so nobody spells them twice", () => {
@@ -419,11 +448,14 @@ describe("buildSettingsIndex", () => {
     expect(blocked.keywords).toContain(s().tasks.blockedInTodayOptions.prikazi);
   });
 
-  it("indexes a switched-off module's controls all the same — the flags are the page's question, not the filter's", () => {
-    // PRIV ships disabled, and its card is still reachable by search: a hit may
-    // steer to a section that is not on the page, exactly as a disabled
-    // module's own gallery row already does.
-    expect(ENTRIES.some((entry) => entry.section === "priv")).toBe(true);
+  it("takes a HIDDEN module's controls out of the index (ADR-101)", () => {
+    // PRIV ships off, so the shipped arrangement hides it — and its controls go
+    // with it: a hit that steered to a card the page does not draw is the one
+    // failure a filter can produce that reads as a page bug. What is left
+    // answering for a hidden module is the „Prikaz" card's own entry, which
+    // names every module the build has.
+    expect(ENTRIES.some((entry) => entry.section === "priv")).toBe(false);
+    expect(ENTRIES.some((entry) => entry.id === "modules-display")).toBe(true);
   });
 
   it("leaves no section without at least one entry — a card must be reachable by search", () => {
@@ -457,8 +489,8 @@ describe("buildSettingsIndex", () => {
   });
 
   it("is rebuilt per call, so the registry it was given is the one it describes", () => {
-    const first = buildSettingsIndex(createModuleRegistry());
-    const second = buildSettingsIndex(createModuleRegistry());
+    const first = buildSettingsIndex(createModuleRegistry(), VISIBLE);
+    const second = buildSettingsIndex(createModuleRegistry(), VISIBLE);
     expect(first).not.toBe(second);
     expect(first.entries.map((entry) => entry.id)).toEqual(second.entries.map((entry) => entry.id));
     expect(first.sections.map((section) => section.id)).toEqual(

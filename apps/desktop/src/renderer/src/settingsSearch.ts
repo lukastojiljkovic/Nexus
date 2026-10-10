@@ -233,6 +233,26 @@ function shellEntries(): readonly ShellSettingsSearchEntry[] {
       keywords: ["upitnik", "onboarding", "podesavanje", "ponovo", "pocetak", "moduli", "oblasti"],
     },
     {
+      // ADR-101: the „Prikaz" card — the module list, its switches and the
+      // order. The card's own title is „Prikaz", so „moduli" — the word the
+      // category and the old gallery carried — is a keyword rather than a
+      // second name for the card, and the rest are the words somebody hunts
+      // with: the arrangement, and the act of hiding a module.
+      id: "modules-display",
+      section: "modules",
+      label: s.sectionTitle.modules,
+      keywords: [
+        "moduli",
+        "prikaz",
+        "raspored",
+        "redosled",
+        "grupe",
+        "sakrij",
+        "prikazi",
+        "sortiranje",
+      ],
+    },
+    {
       id: "setup-forget",
       section: "setup",
       label: s.setup.forget,
@@ -671,24 +691,31 @@ export function shortcutEntryId(actionId: string): string {
  * closed choice contributes its option labels as keywords — which is how „Uska“
  * or „Sakrij“ keep finding their control without anyone writing them twice.
  *
- * Flags are deliberately not consulted: a switched-off module's controls stay
- * indexed, so a hit can steer to a card that is not on the page — the same
- * honest gap a disabled module's own gallery row already has.
+ * A module the device HIDES contributes nothing here: its card is not drawn, so
+ * an entry that steered to it would be a filter pointing at nothing. What the
+ * old flag-based index let through on purpose — a switched-off module's controls,
+ * so a hit reached the switch that turned it back on — is the „Prikaz" card's job
+ * now, and that card is one section with one row per module.
  */
-function moduleSettingsEntries(registry: ModuleRegistry): SettingsSearchEntry[] {
-  return moduleSettingsDeclarations(registry).flatMap(({ moduleId, panel }) =>
-    panel.controls.map((control) => ({
-      id: settingsEntryId(moduleId, control.key),
-      section: moduleId,
-      label: resolveLabel(control.labelKey),
-      keywords: [
-        ...(control.keywords ?? []),
-        ...(control.kind === "choice"
-          ? control.options.map((option) => resolveLabel(option.labelKey))
-          : []),
-      ],
-    })),
-  );
+function moduleSettingsEntries(
+  registry: ModuleRegistry,
+  enabled: ReadonlySet<string>,
+): SettingsSearchEntry[] {
+  return moduleSettingsDeclarations(registry)
+    .filter(({ moduleId }) => enabled.has(moduleId))
+    .flatMap(({ moduleId, panel }) =>
+      panel.controls.map((control) => ({
+        id: settingsEntryId(moduleId, control.key),
+        section: moduleId,
+        label: resolveLabel(control.labelKey),
+        keywords: [
+          ...(control.keywords ?? []),
+          ...(control.kind === "choice"
+            ? control.options.map((option) => resolveLabel(option.labelKey))
+            : []),
+        ],
+      })),
+    );
 }
 
 /**
@@ -697,14 +724,19 @@ function moduleSettingsEntries(registry: ModuleRegistry): SettingsSearchEntry[] 
  * card. A module's one-line description doubles as its keywords — copy that
  * already exists and already says what it is for.
  */
-function moduleGalleryEntries(registry: ModuleRegistry): SettingsSearchEntry[] {
+function moduleGalleryEntries(
+  registry: ModuleRegistry,
+  enabled: ReadonlySet<string>,
+): SettingsSearchEntry[] {
   return [...registry.byGroup()].flatMap(([, members]) =>
-    members.map((manifest) => ({
-      id: moduleEntryId(manifest.id),
-      section: "modules",
-      label: moduleName(manifest.id),
-      keywords: [moduleDescription(manifest.id)],
-    })),
+    members
+      .filter((manifest) => enabled.has(manifest.id))
+      .map((manifest) => ({
+        id: moduleEntryId(manifest.id),
+        section: "modules",
+        label: moduleName(manifest.id),
+        keywords: [moduleDescription(manifest.id)],
+      })),
   );
 }
 
@@ -729,8 +761,19 @@ export interface SettingsIndex {
  * every module card's title still lives in `strings.settings.sectionTitle`, and
  * the module's declaration is what names it, so listing it twice would be one
  * card counted as two.
+ *
+ * `enabled` is the DEVICE's visible set (`visibleModuleSet`, ADR-101): a module
+ * the user hid is not a section, not a row and not one control of its card, so
+ * the filter cannot steer anybody to a card the page does not draw. That is the
+ * half the old flag-based index deliberately did NOT have — it kept a switched
+ * off module searchable, so a hit could reach the switch that turned it back on.
+ * The switch is the „Prikaz" card now, and that card lists every module by name
+ * whether or not the module is shown.
  */
-export function buildSettingsIndex(registry: ModuleRegistry): SettingsIndex {
+export function buildSettingsIndex(
+  registry: ModuleRegistry,
+  enabled: ReadonlySet<string>,
+): SettingsIndex {
   const s = strings.settings;
   // Read here, not at module scope, so a language switch is reflected on the
   // next build instead of freezing the shell's section id list at import.
@@ -740,11 +783,18 @@ export function buildSettingsIndex(registry: ModuleRegistry): SettingsIndex {
   const shellSectionIds = (Object.keys(s.sectionTitle) as ShellSettingsSectionId[]).filter(
     (id) => !isSettingsCardHeld(id),
   );
-  const moduleSections = moduleSettingsDeclarations(registry).map(({ moduleId, panel }) => ({
-    id: moduleId,
-    title: resolveLabel(panel.titleKey),
-  }));
-  const claimed = new Set(moduleSections.map((section) => section.id));
+  const declarations = moduleSettingsDeclarations(registry);
+  // Every declared id claims its name in `sectionTitle`, whether or not the
+  // module is currently shown: a compiled-in module's card title IS a key of
+  // that table, so a hidden module that stopped claiming it would leave the
+  // shell's half drawing the same card title a second time, as an empty section.
+  const claimed = new Set(declarations.map(({ moduleId }) => moduleId));
+  const moduleSections = declarations
+    .filter(({ moduleId }) => enabled.has(moduleId))
+    .map(({ moduleId, panel }) => ({
+      id: moduleId,
+      title: resolveLabel(panel.titleKey),
+    }));
   const shellSections = shellSectionIds.filter((id) => !claimed.has(id)).map((id) => ({
     id,
     title: s.sectionTitle[id],
@@ -753,8 +803,8 @@ export function buildSettingsIndex(registry: ModuleRegistry): SettingsIndex {
     sections: [...shellSections, ...moduleSections],
     entries: [
       ...shellEntries(),
-      ...moduleSettingsEntries(registry),
-      ...moduleGalleryEntries(registry),
+      ...moduleSettingsEntries(registry, enabled),
+      ...moduleGalleryEntries(registry, enabled),
       // The same rule one level down: a held card's controls are not indexed
       // (`shellEntries` keeps them written so the day the hold lifts nothing
       // has to be re-typed).

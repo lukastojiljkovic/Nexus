@@ -1,9 +1,4 @@
-import {
-  resolveEnabled,
-  type FlagState,
-  type ModuleRegistry,
-  type SettingsPanel,
-} from "@nexus/core";
+import type { ModuleRegistry, SettingsPanel } from "@nexus/core";
 
 import { resolveLabel } from "./moduleKit/labels.js";
 
@@ -73,15 +68,19 @@ export interface ModuleSettingsCard extends ModuleSettingsDeclaration {
 
 /**
  * The module cards the page renders, in registry order — nothing at all for a
- * module the profile has switched off (SET-007), on the rule the dashboard's
- * own placements already follow: a card for a module the sidebar does not show
- * is a dangling control.
+ * module the DEVICE hides (SET-007, now app-wide: ADR-101), on the rule the
+ * dashboard's own placements already follow: a card for a module the sidebar
+ * does not show is a dangling control.
+ *
+ * The caller hands in the visible set (`visibleModuleSet`, the one predicate
+ * every consumer filters through) rather than a profile's flags, so the gallery,
+ * the rail, the launcher and the search index cannot disagree about which
+ * modules this machine shows.
  */
 export function moduleSettingsCards(
   registry: ModuleRegistry,
-  flags: FlagState,
+  enabled: ReadonlySet<string>,
 ): ModuleSettingsCard[] {
-  const enabled = new Set(resolveEnabled(registry, flags));
   return moduleSettingsDeclarations(registry)
     .filter((declaration) => enabled.has(declaration.moduleId))
     .map((declaration) => ({

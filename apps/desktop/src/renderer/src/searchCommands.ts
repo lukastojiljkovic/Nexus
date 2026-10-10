@@ -34,7 +34,7 @@ export type CreatableModuleId = "tasks" | "calendar" | "notes" | "finance";
 export interface SearchCommandsContext {
   /** Needed only by the rebuild command's own `rebuildSearchIndex` call. */
   profileId: string;
-  /** Enabled module ids, already in the registry's own order (`resolveEnabled`'s contract) — one "Idi na: …" command is built per id, in that order. */
+  /** The DEVICE's visible module ids (ADR-101), in the registry's own order — one "Idi na: …" command is built per id, in that order. */
   enabledModuleIds: readonly string[];
   /** The shell's own id -> Serbian display name lookup (`App.tsx`'s `moduleName`), reused rather than re-spelled here. */
   moduleName: (id: string) => string;

@@ -1,5 +1,12 @@
 import { foldSearchText, type ModuleGroup, type ModuleRegistry } from "@nexus/core";
 
+import {
+  DEFAULT_SHELL_VISIBILITY,
+  orderedGroupKeys,
+  orderedGroupMembers,
+  type ShellVisibility,
+} from "../../shared/moduleVisibility.js";
+
 /**
  * The launcher's index and its search (ADR-093 §4): every ENABLED module, by
  * group, plus the two lines a tile draws.
@@ -36,6 +43,10 @@ export interface LauncherGroup {
  * enabled member is omitted rather than drawn empty — Culture and Play are
  * empty in this build and their names would be headings over nothing.
  *
+ * The ORDER is the device's stored arrangement (ADR-101) rather than the
+ * registry's: the rail and this overlay are two pictures of one app, so a group
+ * or a module moved in „Prikaz" moves in both.
+ *
  * `describe` is the caller's, because the two lines are COPY and `@nexus/core`
  * must not learn any: the component hands in `moduleName` and the gallery's own
  * one-line description, which is the table the Settings page and the onboarding
@@ -46,11 +57,13 @@ export function launcherGroups(
   registry: ModuleRegistry,
   enabled: ReadonlySet<string>,
   describe: (moduleId: string) => { name: string; description: string },
+  visibility: ShellVisibility = DEFAULT_SHELL_VISIBILITY,
 ): LauncherGroup[] {
   const groups: LauncherGroup[] = [];
-  for (const [group, members] of registry.byGroup()) {
+  const byGroup = registry.byGroup();
+  for (const group of orderedGroupKeys(registry, visibility)) {
     if (group === "shell") continue;
-    const tiles = members
+    const tiles = orderedGroupMembers(byGroup.get(group) ?? [], visibility, group)
       .filter((manifest) => enabled.has(manifest.id))
       .map((manifest) => ({ id: manifest.id, ...describe(manifest.id) }));
     if (tiles.length > 0) groups.push({ key: group, tiles });

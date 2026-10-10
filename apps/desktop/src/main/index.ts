@@ -101,7 +101,6 @@ import {
   phaseProgress,
   rankSearchResults,
   resolveDueRange,
-  resolveEnabled,
   searchExercises,
   searchFoods,
   serializeWidgetConfig,
@@ -770,6 +769,21 @@ import {
   type WindowViewCommand,
 } from "../shared/ipc.js";
 import { businessProfileFlags, createModuleRegistry, LOCKED_MODULE_IDS } from "../shared/modules.js";
+import {
+  normalizeShellVisibility,
+  visibleModuleSet,
+  type ShellVisibility,
+} from "../shared/moduleVisibility.js";
+import {
+  asModuleVisibility,
+  applyShellModuleChanges,
+  createShellVisibilityMigration,
+  resolveShellVisibility,
+  setShellModuleVisible,
+  showEveryModule,
+  withModuleVisibility,
+  writeShellVisibility,
+} from "./visibility.js";
 import { DEMO_BUSINESS_PROFILE_NAME, seedDemoBusiness, seedDemoProfile } from "./demo/index.js";
 import { seedDemoCanvas } from "./demo/canvas.js";
 import { createDemoContext } from "./demo/context.js";
@@ -1355,6 +1369,18 @@ let activeProfileId: string | null = null;
 const moduleRegistry = createModuleRegistry();
 
 /**
+ * ADR-101 §3: the one-time union of the per-profile module switches this build
+ * replaces. Created here, at module load, because the window it opens depends on
+ * whether `visibility.json` exists at LAUNCH — and because a profile's rows are
+ * only readable once its account is unlocked, which is why `migrateShellVisibility`
+ * below is called from the unlock path rather than from startup.
+ */
+const moduleVisibilityMigration = createShellVisibilityMigration(
+  app.getPath("userData"),
+  moduleRegistry,
+);
+
+/**
  * The module kit's host: every module discovered from `src/modules/<id>/`, its
  * channels registered and its session hooks held (ADR-090). Built once, at
  * module load, because `ipcMain.handle` has to be called before the renderer
@@ -1677,10 +1703,19 @@ async function handleProfilesCreate(kind: ProfileKind, name: string): Promise<Pr
   const created = new ProfileStore(database.raw).create(kind, name, now);
   new TaskListStore(database.raw, created.id).ensureInbox(now);
   if (kind === "business") {
-    const flags = new SqliteFlagStore(database.raw, created.id);
-    for (const { moduleId, enabled } of businessProfileFlags(moduleRegistry)) {
-      await flags.set(moduleId, enabled);
-    }
+    // ADR-101: the preset's module half is a DEVICE write now. There is one
+    // arrangement for the whole app, so "a business profile does not show
+    // Učenje" cannot be a row of its own any more — the alternative was a
+    // preset that writes rows nothing reads, which is a decision this build
+    // would then be pretending to honour. The preset's other half (an Inbox, a
+    // board, a look) is untouched and stays per profile.
+    applyShellModuleChanges(
+      userDataDir(),
+      moduleRegistry,
+      Object.fromEntries(
+        businessProfileFlags(moduleRegistry).map(({ moduleId, enabled }) => [moduleId, enabled]),
+      ),
+    );
   }
   return created;
 }
@@ -5696,14 +5731,23 @@ function recentHits(
 }
 
 /**
- * The profile's enabled-module set (SET-007), resolved exactly as the shell
- * resolves it — the same `resolveEnabled` over the same shared manifests, fed
- * by the profile's own flag rows. This is what drives the search-result module
- * gate (ADR-058 §5, `filterSearchHitsByModules`): results gain the gate the
- * palette's COMMANDS have always had renderer-side, from the same two inputs.
+ * The modules this DEVICE shows (ADR-101), resolved through the one predicate
+ * every surface uses (`visibleModuleSet`). This is what drives the
+ * search-result module gate (ADR-058 §5, `filterSearchHitsByModules`) and, one
+ * level down, which modules may raise a notification at all.
+ *
+ * It used to be the profile's own flag rows through `resolveEnabled`; the
+ * app-wide setting replaces them, so hiding a module in „Prikaz" takes it out
+ * of the rail, the palette, the dashboard and this gate in ONE write — and the
+ * parameter went with the per-profile switch, because the answer is a fact
+ * about the machine rather than about who is signed in.
+ *
+ * Read per call rather than captured: the file is a couple of hundred bytes,
+ * and a module hidden while the app runs must stop surfacing results on the
+ * next query, exactly as `notificationSchedulerDeps` reads it on every cycle.
  */
-async function enabledModuleIdsFor(profileId: string): Promise<ReadonlySet<string>> {
-  return new Set(resolveEnabled(moduleRegistry, await flagStore(profileId).get()));
+function enabledModuleIds(): ReadonlySet<string> {
+  return visibleModuleSet(moduleRegistry, resolveShellVisibility(userDataDir()));
 }
 
 /**
@@ -5729,7 +5773,7 @@ async function runRecentSearch(
   limit: number,
   kinds: readonly SearchKind[] = [],
 ): Promise<SearchResult[]> {
-  const enabled = await enabledModuleIdsFor(profileId);
+  const enabled = enabledModuleIds();
   return filterSearchHitsByModules(recentHits(profileId, MAX_SEARCH_LIMIT, kinds), enabled)
     .slice(0, limit)
     .map((hit) => toSearchResult(hit, [], false));
@@ -5838,7 +5882,7 @@ async function runSearchQuery(
 
   if (match === null) {
     if (filters === null) return runRecentSearch(profileId, limit, parsed.kinds);
-    const enabled = await enabledModuleIdsFor(profileId);
+    const enabled = enabledModuleIds();
     const hits = filterSearchHitsByModules(
       recentHits(profileId, MAX_SEARCH_LIMIT, parsed.kinds),
       enabled,
@@ -5866,7 +5910,7 @@ async function runSearchQuery(
   // The enabled-module gate (ADR-058 §5) is applied to the CANDIDATES, before
   // operators and ranking, so a page of `limit` results is filled from rows
   // that may actually be shown rather than thinned after the cut.
-  const gated = filterSearchHitsByModules(candidates, await enabledModuleIdsFor(profileId));
+  const gated = filterSearchHitsByModules(candidates, enabledModuleIds());
   const filtered = filters === null ? gated : applySearchOperators(gated, filters);
 
   const ranked = rankSearchResults(filtered, { now: new Date().toISOString(), query: parsed });
@@ -5944,7 +5988,7 @@ async function runSearchPage(profileId: string, rawQuery: string): Promise<Searc
   // before EVERY count below — so a disabled module surfaces neither rows nor
   // phantom facet chips (`kindCounts`/`tagFacets` are computed strictly
   // post-gate, and a kind with nothing left simply never appears in them).
-  const candidates = filterSearchHitsByModules(sourced, await enabledModuleIdsFor(profileId));
+  const candidates = filterSearchHitsByModules(sourced, enabledModuleIds());
 
   const sources = tagFacetSources(profileId);
   const filters: SearchOperatorFilters | null =
@@ -6082,18 +6126,39 @@ function notificationSchedulerDeps(): NotificationSchedulerDeps {
     // ticks that says which of them are already done.
     habitStore,
     notificationStore,
-    // SET-007: a module switched off stops reminding, the way it already stops
-    // appearing in the sidebar, on the dashboard and in search. Read on every
-    // check rather than captured once — a flag toggled in Podešavanja must take
-    // effect on the next cycle, not on the next unlock.
-    enabledModuleIds: (profileId) =>
-      new Set(resolveEnabled(moduleRegistry, flagStore(profileId).getSync())),
+    // SET-007, now device-wide (ADR-101): a hidden module stops reminding, the
+    // way it already stops appearing in the sidebar, on the dashboard, in the
+    // launcher and in search. Read on every check rather than captured once — a
+    // module hidden in „Prikaz" must fall silent on the next cycle, not on the
+    // next unlock. The rows it already stored are untouched: hiding a module is
+    // a statement about this device's app, not about the user's data.
+    enabledModuleIds: () => enabledModuleIds(),
     getMainWindow: () => mainWindow,
   };
 }
 
+/**
+ * ADR-101 §3, driven from the unlock path: every profile this account holds is
+ * read ONCE per launch, and the device setting becomes the union of what they
+ * all had on. It returns immediately on any launch that found a
+ * `visibility.json`, which is what keeps the union from re-showing a module the
+ * user has since hidden by hand.
+ */
+function migrateShellVisibility(): void {
+  if (!moduleVisibilityMigration.open) return;
+  const profiles = listProfiles(requireDb()).map((profile) => ({
+    id: profile.id,
+    flags: flagStore(profile.id).getSync(),
+  }));
+  moduleVisibilityMigration.merge(profiles);
+}
+
 /** Starts everything that only makes sense once the database is open. Never during an automated run — a scheduled check firing mid-sweep would make its deterministic exit flaky, the same reason `app.whenReady` used to skip it. */
 function startUnlockedServices(): void {
+  // Before the automated-run guard on purpose: the union is a DATA migration
+  // rather than a running service, and a harness that never ran it would
+  // photograph a different app from the one a user gets on the same machine.
+  migrateShellVisibility();
   if (isAutomatedRun) return;
   startNotificationScheduler(notificationSchedulerDeps());
   // The kit's modules get the same session the scheduler does, and for the same
@@ -7437,10 +7502,14 @@ function registerIpc(): void {
     return profile;
   });
 
-  ipcMain.handle(IpcChannel.flagsGet, (event, payload): Promise<FlagState> => {
+  ipcMain.handle(IpcChannel.flagsGet, async (event, payload): Promise<FlagState> => {
     assertTrustedSender(event);
     const profileId = asId(asRecord(payload).profileId, "profileId");
-    return new SqliteFlagStore(requireDb().raw, profileId).get();
+    // ADR-101: a module's answer is the DEVICE's, so it is laid over the
+    // profile's own rows — which still hold its toolkit packs — rather than
+    // being read out of them.
+    const rows = await new SqliteFlagStore(requireDb().raw, profileId).get();
+    return withModuleVisibility(moduleRegistry, rows, resolveShellVisibility(userDataDir()));
   });
 
   ipcMain.handle(IpcChannel.flagsSet, async (event, payload): Promise<void> => {
@@ -7449,7 +7518,46 @@ function registerIpc(): void {
     const profileId = asId(body.profileId, "profileId");
     const flagKey = asFlagKey(body.moduleId);
     const enabled = asBoolean(body.enabled, "enabled");
+    // ADR-101: `asFlagKey` admits two kinds of key and they are written in two
+    // different places now. A module id records the DEVICE's arrangement — one
+    // setting for the whole app, which is what the questionnaire's module
+    // screen, its manual override and the profile plan all mean by "switch
+    // this on" — and a `pack:` key stays a row of this profile's own, because
+    // a toolbox is an answer about the person.
+    const manifest = moduleRegistry.get(flagKey);
+    if (manifest !== undefined) {
+      setShellModuleVisible(userDataDir(), moduleRegistry, manifest, enabled);
+      return;
+    }
     await new SqliteFlagStore(requireDb().raw, profileId).set(flagKey, enabled);
+  });
+
+  /**
+   * ADR-101: the DEVICE's module arrangement — which modules this machine shows
+   * and in what order — beside `cloud.json` and `network.json` rather than in a
+   * profile, because the rail is drawn from it and main's own gates read it
+   * before any question about a profile is asked. It is a preference, not a
+   * boundary, so a malformed file reads as the app exactly as it ships
+   * (`resolveShellVisibility`) and never as „nothing is shown".
+   */
+  ipcMain.handle(IpcChannel.visibilityGet, (event): ShellVisibility => {
+    assertTrustedSender(event);
+    return resolveShellVisibility(userDataDir());
+  });
+
+  /**
+   * One write per gesture: a switch, a move of a group or of a module, or the
+   * reset. The payload is a whole arrangement rather than an operation, and main
+   * validates it (`asModuleVisibility`) and normalizes it against the live
+   * registry before writing — so the two locked modules cannot be hidden by a
+   * payload, an id this build does not know is kept rather than dropped, and the
+   * file never records an entry that merely restates a manifest.
+   */
+  ipcMain.handle(IpcChannel.visibilitySet, (event, payload): ShellVisibility => {
+    assertTrustedSender(event);
+    const next = normalizeShellVisibility(asModuleVisibility(payload), moduleRegistry);
+    writeShellVisibility(userDataDir(), next);
+    return next;
   });
 
   ipcMain.handle(IpcChannel.tasksList, (event, payload): Task[] => {
@@ -13299,6 +13407,11 @@ async function runSmokePageWalk(win: BrowserWindow): Promise<void> {
     // Every toolkit too, so the professional drawer lists every tool it has.
     for (const pack of TOOL_PACKS) await flags.set(packFlagKey(pack), true);
   }
+
+  // ADR-101: the module switch is DEVICE-wide now, so „switches every module
+  // on" is a write to the device setting rather than to each profile's flag
+  // rows — and the walk below walks the pages of every module it just showed.
+  showEveryModule(userDataDir(), moduleRegistry);
 
   // Drawings the walk must NOT destroy. The walk opens „Tabla" and leaves the
   // moment it is shown, which is the exact gesture that emptied a board in 1.3.0:

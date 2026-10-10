@@ -5756,7 +5756,7 @@ export const en = {
       profile: "Profile and security",
       appearance: "Appearance",
       keyboard: "Keyboard",
-      modules: "Modules",
+      modules: "Display",
       notifications: "Notifications",
       data: "Data",
       privacy: "Privacy",
@@ -6274,6 +6274,20 @@ export const en = {
      */
     modulesAlwaysOn: "Always on",
     modulesToggleError: "The change failed. Try again.",
+    /**
+     * ADR-101: the „Display" card — what this DEVICE shows, and in what order.
+     * One setting for the whole app rather than one per profile, so the words
+     * here say „this Nexus" rather than „this profile".
+     */
+    visibility: {
+      hint: "Modules you switch off leave the sidebar, the launcher, the dashboard, search and notifications. Their data stays — switch one back on and everything is there.",
+      orderHint: "Reorder groups and modules by dragging them, or with the move buttons.",
+      moveUp: "Move {name} up",
+      moveDown: "Move {name} down",
+      moveGroupUp: "Move the {name} group up",
+      moveGroupDown: "Move the {name} group down",
+      reset: "Restore the default order",
+    },
     /**
      * ADR-065 §5, moved by ADR-086 — the one row that reopens the
      * questionnaire.
