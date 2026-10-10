@@ -1,0 +1,38 @@
+{
+  "head": { "vars": ["painting", "img", "titleEn", "titleSr", "artistEn", "artistSr", "death", "inception", "medium", "collectionEn"] },
+  "results": {
+    "bindings": [
+      {
+        "painting": { "type": "uri", "value": "http://www.wikidata.org/entity/Q119140957" },
+        "img": {
+          "type": "uri",
+          "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Ferencz%20Eisenhut%20%281857-1903%29%20-%20An%20Oriental%20School%20-%20NCM%201932-11%20-%20Nottingham%20Museums.jpg"
+        },
+        "titleEn": { "xml:lang": "en", "type": "literal", "value": "An Oriental School" },
+        "artistEn": { "xml:lang": "en", "type": "literal", "value": "Franz Eisenhut" },
+        "artistSr": { "xml:lang": "sr", "type": "literal", "value": "Ференц Ајзенхут" },
+        "death": { "datatype": "http://www.w3.org/2001/XMLSchema#dateTime", "type": "literal", "value": "1906-06-02T00:00:00Z" },
+        "inception": { "datatype": "http://www.w3.org/2001/XMLSchema#integer", "type": "literal", "value": "1885" },
+        "medium": { "xml:lang": "en", "type": "literal", "value": "canvas" },
+        "collectionEn": { "xml:lang": "en", "type": "literal", "value": "Nottingham Museums" }
+      },
+      {
+        "painting": { "type": "uri", "value": "http://www.wikidata.org/entity/Q123908564" },
+        "img": { "type": "uri", "value": "http://commons.wikimedia.org/wiki/Special:FilePath/A%20girl%20in%20national%20costume.JPG" },
+        "titleEn": { "xml:lang": "en", "type": "literal", "value": "A girl in national costume" },
+        "artistEn": { "xml:lang": "en", "type": "literal", "value": "Špiro Bocarić" },
+        "artistSr": { "xml:lang": "sr", "type": "literal", "value": "Спиридон Шпиро Боцарић" },
+        "death": { "datatype": "http://www.w3.org/2001/XMLSchema#dateTime", "type": "literal", "value": "1941-07-19T00:00:00Z" },
+        "medium": { "xml:lang": "en", "type": "literal", "value": "canvas" }
+      },
+      {
+        "painting": { "type": "uri", "value": "http://www.wikidata.org/entity/Q175036" },
+        "img": { "type": "uri", "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Mural%20del%20%22Guernica%22%20de%20Picasso.jpg" },
+        "titleEn": { "xml:lang": "en", "type": "literal", "value": "Guernica" },
+        "artistEn": { "xml:lang": "en", "type": "literal", "value": "Pablo Picasso" },
+        "death": { "datatype": "http://www.w3.org/2001/XMLSchema#dateTime", "type": "literal", "value": "1973-04-08T00:00:00Z" },
+        "inception": { "datatype": "http://www.w3.org/2001/XMLSchema#integer", "type": "literal", "value": "1937" }
+      }
+    ]
+  }
+}
