@@ -212,7 +212,10 @@ describe("the category table", () => {
       // A vacuous read is the failure this suite exists to make impossible: a
       // regex that matched nothing would agree with an empty list.
       expect(drawn.length).toBeGreaterThan(20);
-      expect(drawn.filter((argument) => literal.test(argument)).map((a) => a.slice(1, -1))).toEqual(
+      // A card the hold hides keeps its call site behind `SYNC_ON_HOLD ? null :`
+      // and draws nothing, which is why the table leaves it out too.
+      const ids = drawn.filter((argument) => literal.test(argument)).map((a) => a.slice(1, -1));
+      expect(ids.filter((id) => !isSettingsCardHeld(id))).toEqual(
         SETTINGS_SHELL_CARDS.map((card) => card.id),
       );
     });

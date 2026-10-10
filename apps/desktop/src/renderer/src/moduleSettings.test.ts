@@ -140,6 +140,7 @@ describe("moduleSettingsCardIds", () => {
       "fitness",
       "focus",
       "tools",
+      "timers",
     ]);
   });
 
