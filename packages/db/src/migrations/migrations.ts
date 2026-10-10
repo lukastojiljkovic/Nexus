@@ -86,6 +86,11 @@ import { migration080 } from "./080-arcade-scores.js";
 // exactly three places — this import, the list entry below, and the file name.
 import { migration081 } from "./081-card-games.js";
 import { migration082 } from "./082-chess.js";
+// 087 — the MAPS module's pins. 083..086 are reserved by sibling runs in flight
+// on the same branch, so this worktree's list has a GAP here: the maintainer
+// renumbers at merge, which is why the number appears in exactly three places —
+// this import, the list entry below, and the file name.
+import { migration087 } from "./087-maps.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -179,6 +184,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration080,
   migration081,
   migration082,
+  migration087,
 ];
 
 /**

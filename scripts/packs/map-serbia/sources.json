@@ -1,0 +1,92 @@
+{
+ "pack": "map-serbia",
+ "note": "The sources this pack's builder reads, with the evidence for each licence. The committed copy is the catalogue plus what a probe measured on 2026-10-10 WITHOUT downloading the large files (sizes by HEAD); `scripts/packs/map-serbia/build.mjs` REWRITES this file inside the pack, filling `fetched`, `size` and `sha256` — and the per-file digests under `files` — with what its own run measured. A null digest is a source this repository never stored: the planet build is cut by byte-range request and the two `-latest` Geofabrik files change daily, so the only honest record of those is the one the build writes.",
+ "generated": "2026-10-10T00:00:00.000Z",
+ "sources": [
+  {
+   "id": "planet-basemap",
+   "url": "https://build.protomaps.com/{date}.pmtiles",
+   "size": null,
+   "sha256": null,
+   "fetched": null,
+   "licence": "ODbL-1.0",
+   "licenceEvidence": {
+    "url": "https://raw.githubusercontent.com/protomaps/docs/main/basemaps/downloads.md",
+    "quote": "distributed as an [Open Database License](https://opendatacommons.org/licenses/odbl/) Produced Work (OpenStreetMap attribution required)"
+   },
+   "note": "The daily build. Sized per build; the 2026-10-09 build measured 138,736,840,194 bytes by HEAD. Never downloaded: `pmtiles extract` reads the region's byte ranges."
+  },
+  {
+   "id": "geofabrik-extract",
+   "url": "https://download.geofabrik.de/europe/serbia-latest.osm.pbf",
+   "size": 240649015,
+   "sha256": null,
+   "fetched": null,
+   "licence": "ODbL-1.0",
+   "licenceEvidence": { "url": "https://download.geofabrik.de/", "quote": "License: ODbL 1.0" },
+   "note": "Size measured by HEAD on 2026-10-10. The file is regenerated daily, so a digest pinned in this repository would be wrong by tomorrow; the build records the digest of the copy it read."
+  },
+  {
+   "id": "geofabrik-index",
+   "url": "https://download.geofabrik.de/index-v1.json",
+   "size": 3785307,
+   "sha256": "9b1d170b09eee255c0e56925788eb367646397c1ba1882f36b4c5c79133691fc",
+   "fetched": "2026-10-10",
+   "licence": "ODbL-1.0",
+   "licenceEvidence": { "url": "https://download.geofabrik.de/", "quote": "License: ODbL 1.0" },
+   "note": "The region polygon comes from here, so the pack's camera and its cut boundary are Geofabrik's own statement about where Serbia is."
+  },
+  {
+   "id": "style-generator",
+   "url": "https://registry.npmjs.org/@protomaps/basemaps/-/basemaps-5.7.2.tgz",
+   "size": 59103,
+   "sha256": "2d5d41b29cdd2364f7092ad439bd9d170b4f38cbec8858cefbe84d0f98125ce6",
+   "fetched": "2026-10-10",
+   "licence": "BSD-3-Clause",
+   "licenceEvidence": {
+    "url": "https://raw.githubusercontent.com/protomaps/basemaps/main/LICENSE.md",
+    "quote": "The BSD 3-Clause License (BSD-3-Clause)"
+   },
+   "note": "The geometry layers, run from the cache and not shipped: `layers(\"protomaps\", flavour)` produces them at build time."
+  },
+  {
+   "id": "pmtiles-cli",
+   "url": "https://github.com/protomaps/go-pmtiles/releases/download/v1.31.2/go-pmtiles_1.31.2_Windows_x86_64.zip",
+   "size": 17842310,
+   "sha256": null,
+   "fetched": null,
+   "licence": "BSD-3-Clause",
+   "licenceEvidence": {
+    "url": "https://raw.githubusercontent.com/protomaps/go-pmtiles/main/LICENSE",
+    "quote": "Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met"
+   },
+   "note": "One asset per platform; the URL above is the Windows x86_64 asset, whose size was measured by HEAD on 2026-10-10. A build tool fetched into the cache, never shipped and never committed."
+  },
+  {
+   "id": "noto-sans-glyphs",
+   "url": "https://protomaps.github.io/basemaps-assets/fonts/Noto%20Sans%20Regular/{range}.pbf",
+   "size": null,
+   "sha256": null,
+   "fetched": null,
+   "licence": "OFL-1.1",
+   "licenceEvidence": {
+    "url": "https://raw.githubusercontent.com/protomaps/basemaps-assets/main/fonts/OFL.txt",
+    "quote": "This Font Software is licensed under the SIL Open Font License, Version 1.1."
+   },
+   "note": "Nineteen ranges, one file each; the 0-255 range measured 76,044 bytes by HEAD on 2026-10-10. The build records all nineteen digests."
+  },
+  {
+   "id": "odbl-text",
+   "url": "https://opendatacommons.org/licenses/odbl/1-0/",
+   "size": null,
+   "sha256": null,
+   "fetched": null,
+   "licence": "ODbL-1.0",
+   "licenceEvidence": {
+    "url": "https://opendatacommons.org/licenses/odbl/1-0/",
+    "quote": "Open Database License (ODbL) v1.0"
+   },
+   "note": "The licence text, fetched and stripped to plain text at build time (the page serves it without a Content-Length). A conveyed database must carry this text with it — ODbL 4.2."
+  }
+ ]
+}

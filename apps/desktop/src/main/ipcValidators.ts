@@ -122,3 +122,33 @@ export function asBoundedInteger(value: unknown, field: string, min: number, max
   }
   return int;
 }
+
+/**
+ * A finite real number inside a range — the sibling `asBoundedInteger` does not
+ * cover, and the reason it is needed is a coordinate.
+ *
+ * A latitude is not an integer: `44.8178131` is what a map records, and
+ * rounding it to store it would move a pin by tens of metres. `Number.isFinite`
+ * is the check that matters and the one `typeof value === "number"` misses —
+ * `NaN` and `Infinity` are both numbers, both pass every `>=`/`<=` comparison
+ * that follows, and both would reach a store and then a `REAL` column. It is
+ * also the check `JSON.parse` cannot make for us: `NaN` is not valid JSON, but
+ * the renderer is not required to send JSON, and the structured clone behind
+ * IPC carries `NaN` happily.
+ */
+export function asBoundedNumber(
+  value: unknown,
+  field: string,
+  min: number,
+  max: number,
+): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new Error(`Invalid IPC payload: "${field}" must be a finite number.`);
+  }
+  if (value < min || value > max) {
+    throw new Error(
+      `Invalid IPC payload: "${field}" must be a number between ${min} and ${max}.`,
+    );
+  }
+  return value;
+}

@@ -98,6 +98,8 @@ describe("createModuleRegistry", () => {
       // here rather than derived because this test IS the declaration — what the
       // registry holds is what the app shows.
       "timers",
+      // The second kit module (ADR-099), ordered after it by `order` 210.
+      "maps",
     ]);
   });
 
@@ -159,6 +161,9 @@ describe("createModuleRegistry", () => {
       // twice rather than a bin for anything tool-shaped.
       ELEC: ["electronics"],
       PRO: ["pro"],
+      // MAPS' own, on the same terms: the PRD registry has no row for a map, so
+      // a map declares its own prefix rather than borrowing a tool drawer's.
+      MAP: ["maps"],
     });
   });
 
@@ -201,6 +206,9 @@ describe("createModuleRegistry", () => {
       "notes",
       "files",
       "study",
+      // The map joins Knowledge (ADR-093 sent the reference libraries there and
+      // named maps as one), after the compiled-in three by its `order`.
+      "maps",
     ]);
     expect(grouped.get("life")?.map((manifest) => manifest.id)).toEqual([
       "priv",
@@ -254,6 +262,9 @@ describe("createModuleRegistry", () => {
       // ON by default, like every module but PRIV and PRO: a timer writes
       // nothing until somebody starts one, so there is nothing to opt into.
       "timers",
+      // A map writes nothing either - its pack is installed data and its pins
+      // are the user's own - so it is on like every module but the two above.
+      "maps",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");

@@ -203,6 +203,21 @@ export const ALLOWLIST = new Map([
     "apps/desktop/src/main/download/service.test.ts",
     ["node-http"],
   ],
+  [
+    // A LOCAL SCHEME, and one file of one module. `nx-pack://<packId>/<path>`
+    // is answered in this process by `protocol.handle`, which opens a file
+    // under `<userData>/packs/<id>/` and serves a byte range of it - that is
+    // how the map pack's tiles, style and glyphs reach the renderer, and it is
+    // the same mechanism MapLibre's own loader uses a few lines away (in
+    // `node_modules`, which this gate does not read). The URL cannot leave the
+    // machine: there is no host in it, and the handler has no branch that
+    // resolves anything outside the pack folder. The exemption names ONE file
+    // and ONE rule id, so the rest of the module - and every other module -
+    // stays forbidden from reaching for the global, which is the substitution
+    // that would put a real request behind a URL that reads like a local one.
+    "apps/desktop/src/modules/maps/renderer/packFile.ts",
+    ["fetch"],
+  ],
 ]);
 
 /**

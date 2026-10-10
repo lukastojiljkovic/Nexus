@@ -35,11 +35,25 @@ import {
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 82 (the chess games), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(82);
-    expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
-      Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
+  /**
+   * The last number the PHASE-0 series reaches: 82 is the chess games, and
+   * everything above it on this branch is a module arriving on its own run.
+   * Those numbers come from a plan (so two runs cannot collide), which means a
+   * worktree holding one of them has a GAP here — and the maintainer closes it
+   * at merge by renumbering. That is why the rule below is stated as three
+   * properties rather than one contiguity check: the series is whole, the list
+   * ascends, no number repeats.
+   */
+  const PHASE_0_SERIES = 82;
+
+  it("ascends, holds the phase-0 series whole, and ends at this branch's highest", () => {
+    const versions = MIGRATIONS.map((migration) => migration.version);
+    expect(versions).toEqual([...versions].sort((left, right) => left - right));
+    expect(new Set(versions).size).toBe(versions.length);
+    expect(versions.slice(0, PHASE_0_SERIES)).toEqual(
+      Array.from({ length: PHASE_0_SERIES }, (_, index) => index + 1),
     );
+    expect(LATEST_VERSION).toBe(87);
   });
 });
 

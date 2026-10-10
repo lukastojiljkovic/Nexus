@@ -42,6 +42,7 @@ import { mainLocale } from "./locale.js";
 import {
   asBoolean,
   asBoundedInteger,
+  asBoundedNumber,
   asCappedChars,
   asId,
   asInteger,
@@ -70,6 +71,7 @@ export const MODULE_VALIDATORS = {
   asInteger,
   asPositiveInteger,
   asBoundedInteger,
+  asBoundedNumber,
 } as const;
 
 export type ModuleValidators = typeof MODULE_VALIDATORS;
