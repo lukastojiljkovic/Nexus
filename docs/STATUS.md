@@ -690,6 +690,12 @@ suggestion, cheapest and highest-leverage first.
    placeholder-text generator, and the tool that shows the time). A
    `shots`-side comparison with that tolerance, against the previous run's
    frames, would turn „is this change visible anywhere" into one command.
+   **Done (2026-10-09):** `pnpm --filter @nexus/desktop shots:compare <old run>
+   <new run>` pairs two sweeps by path and sorts every frame as identical,
+   noise, changed or size-changed, with the tolerance above as its default
+   (`DEFAULT_NOISE` in `main/shots/compare.mts`: 100 pixels, 32 levels). It
+   writes `compare.md` and a diff image per changed frame into the new run, and
+   `--fail-on-change` turns a changed frame into a failing exit code.
 4. **The sizing contract.** DC-06 closed one pane at one breakpoint; what is
    missing is the rule that would have prevented all of them — what a pane's
    floor is, and what happens below it. This is also the desktop half of the
@@ -729,6 +735,10 @@ suggestion, cheapest and highest-leverage first.
    `SettingsPage.tsx` in the renderer and appear in no list the main process
    can read, so the same derivation cannot reach them. Recorded rather than
    papered over with a second hand-kept list.
+   **Cards done (2026-10-09):** the category table moved to
+   `shared/settingsSections.ts`, and `SETTINGS_SHELL_CARDS` derives one scene
+   per shell card from it; a test reads the page's own `sectionDomId("…")` call
+   sites back and holds the two together. The banners below remain open.
    The shell's two banners share the gap for a different reason: the
    restore-undo banner and the unsaved-exit banner (DC-148) appear only after a
    restore or after a write fails behind a closed page, and the harness has no

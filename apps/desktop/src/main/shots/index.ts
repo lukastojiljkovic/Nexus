@@ -35,6 +35,7 @@ import { join, resolve } from "node:path";
 import type { BrowserWindow } from "electron";
 import { createModuleRegistry } from "../../shared/modules.js";
 import { isShotSceneHeld } from "../../shared/syncHold.js";
+import { SETTINGS_SHELL_CARDS } from "../../shared/settingsSections.js";
 import { networkModePath } from "../net/offline.js";
 import { AUDIT_SCRIPT, type AuditFinding } from "./audit.js";
 
@@ -1025,12 +1026,14 @@ const SCENE_PLAN: readonly ShotScene[] = [
   // body scrolls to an element that is not there and the harness says the probe
   // missed rather than photographing the page top under the card's name.
   //
-  // WHAT THIS DOES NOT COVER, said plainly so the next reader is not misled by
-  // a list that looks complete: the SHELL's own cards — Profili, Sigurnost,
-  // Izgled, Obaveštenja, Licence and the rest — are written into
-  // `SettingsPage.tsx` in the renderer, and their ids are in no list main can
-  // read. They stay unphotographed, and they are recorded as such in
-  // `docs/STATUS.md` rather than papered over with a second hand-kept list.
+  // AND THE SHELL'S OWN CARDS, by the same rule one layer in: their ids lived in
+  // `SettingsPage.tsx`, in no list main could read, so Profili, Sigurnost,
+  // Izgled, Obaveštenja, Licence and the rest were photographed by NOTHING.
+  // `shared/settingsSections.ts` is the table the page renders from, and
+  // `SETTINGS_SHELL_CARDS` is it flattened into one entry per card with the
+  // route this harness has to take to reach it. The list and the page cannot
+  // disagree about an id or about their order: `settingsCategories.test.ts`
+  // reads the page's own `sectionDomId(…)` call sites back and fails if they do.
   ...createModuleRegistry()
     .all()
     .filter((manifest) => manifest.settings !== undefined)
@@ -1044,6 +1047,23 @@ const SCENE_PLAN: readonly ShotScene[] = [
       ),
       fanout: null,
     })),
+
+  // --- Every shell card the page draws --------------------------------------
+  //
+  // One frame per card the SHELL owns, from the list the page itself renders
+  // from: see the note above for why that list had to move out of the
+  // renderer, and `settingsCategories.test.ts` for the assertion that keeps the
+  // two in step.
+  //
+  // A card in a sub-page list is reached the way a reader reaches it: the
+  // category, then the row that opens it. `OPEN_SETTINGS_LOCATION` clicks both
+  // and then scrolls to `#set-section-<id>`, which is the card itself.
+  ...SETTINGS_SHELL_CARDS.map((card) => ({
+    id: `settings-card-${card.id}`,
+    module: "settings",
+    prepare: OPEN_SETTINGS_LOCATION(card.category, card.sub, `#set-section-${card.id}`),
+    fanout: null,
+  })),
 
   // --- Overlays -------------------------------------------------------------
   // Surfaces with no sidebar row of their own. Each opens something, is

@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { createModuleRegistry } from "../../shared/modules.js";
@@ -12,6 +15,7 @@ import {
   moduleSettingsDeclarations,
 } from "./moduleSettings.js";
 import {
+  SETTINGS_SHELL_CARDS,
   SETTINGS_CATEGORIES,
   SETTINGS_SUB_PAGE_LISTS,
   categoryCardIds,
@@ -24,6 +28,8 @@ import {
 } from "./settingsCategories.js";
 import { buildSettingsIndex, foldSettingsQuery, matchSettings } from "./settingsSearch.js";
 import { strings } from "./strings.js";
+
+const here = dirname(fileURLToPath(import.meta.url));
 
 /**
  * SET-015's information architecture, pinned as pure data.
@@ -175,6 +181,70 @@ describe("the category table", () => {
     const privacy = SETTINGS_CATEGORIES.find((category) => category.id === "privacy");
     expect(privacy && categoryCardIds(privacy)).toEqual(["network", "privacy"]);
     expect(categoryOf("network")).toBe("privacy");
+  });
+
+  /**
+   * The list and the page, read back out of the page's own source.
+   *
+   * `SETTINGS_SHELL_CARDS` is what the screenshot sweep builds one scene per
+   * entry from, so this is the one assertion that keeps the frames honest in
+   * both directions: an id in the list that the page does not draw is a probe
+   * scrolling to nothing under a card's name (and the harness reports a miss
+   * rather than a frame), while a card the page draws that is not in the list is
+   * a surface no sweep will ever photograph — which is the state this whole
+   * list was added to end.
+   *
+   * The page cannot be GENERATED from the table (each card's body is written by
+   * hand), so the agreement is asserted rather than assumed. The order is part
+   * of it: the sweep visits the scenes in this list's order, which is the page's
+   * own.
+   */
+  describe("shell cards and the page", () => {
+    const source = readFileSync(join(here, "SettingsPage.tsx"), "utf8");
+    // Every place the page gives a card its DOM id. The definition of
+    // `sectionDomId` is not a call site and does not wear `id={…}`.
+    const drawn = [...source.matchAll(/\bid=\{sectionDomId\(([^)]*)\)\}/g)].map(
+      (match) => match[1]?.trim() ?? "",
+    );
+    const literal = /^"[a-z0-9-]+"$/;
+
+    it("are exactly the cards the page draws, in the page's own order", () => {
+      // A vacuous read is the failure this suite exists to make impossible: a
+      // regex that matched nothing would agree with an empty list.
+      expect(drawn.length).toBeGreaterThan(20);
+      expect(drawn.filter((argument) => literal.test(argument)).map((a) => a.slice(1, -1))).toEqual(
+        SETTINGS_SHELL_CARDS.map((card) => card.id),
+      );
+    });
+
+    /**
+     * The other direction, and the half that keeps the assertion above from
+     * going blind: an id the page COMPUTES cannot be in any list here, and it is
+     * exactly a card the sweep cannot name. One call site is like that, the
+     * module cards, whose ids the registry owns — and every module card already
+     * has a derived scene of its own.
+     */
+    it("leave no card id to the page to compute, apart from the module cards", () => {
+      expect(drawn.filter((argument) => !literal.test(argument))).toEqual(["card.moduleId"]);
+    });
+
+    it("gives every shell card a category and, where a list owns it, that list", () => {
+      for (const card of SETTINGS_SHELL_CARDS) {
+        expect(categoryOf(card.id), card.id).toBe(card.category);
+        if (card.sub !== null) {
+          expect(
+            subPageListById("import-export").subPages.some((subPage) => subPage.id === card.sub),
+            card.id,
+          ).toBe(true);
+        }
+      }
+      // And no shell card wears a module's id, which the sweep's two derivations
+      // would otherwise file under one stem (`settings-card-<id>`).
+      const moduleIds = new Set(
+        moduleSettingsDeclarations(REGISTRY).map((declaration) => declaration.moduleId),
+      );
+      for (const card of SETTINGS_SHELL_CARDS) expect(moduleIds.has(card.id), card.id).toBe(false);
+    });
   });
 
   it("reaches the network card by its name and by the words people type", () => {
