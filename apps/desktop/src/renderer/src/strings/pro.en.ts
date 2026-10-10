@@ -474,7 +474,7 @@ export const proEn = {
     "iso-286-fits": "Tolerances and fits",
     "iso-paper-sizes": "ISO paper formats",
     "item-analysis": "Item analysis",
-    "iznos-slovima": "Amount in words",
+    "iznos-slovima": "Amount in Serbian words",
     "jmbg-provera": "JMBG check",
     "jump-height-flight-time": "Jump height",
     "junction-temperature": "Thermal resistance",
@@ -508,7 +508,7 @@ export const proEn = {
     "nominalna-efektivna-stopa": "Nominal and effective rate",
     "note-frequency": "Note, MIDI and frequency",
     "number-check": "Number check",
-    "number-to-serbian-words": "Number in words",
+    "number-to-serbian-words": "Number in Serbian words",
     "nutrition-per-portion": "Nutritional values",
     "obracun-kamate": "Interest calculation",
     "ohms-law-power": "Ohm's law and power",
@@ -863,7 +863,7 @@ export const proEn = {
     "item-analysis":
       "For a single test item, calculates the facility index (share of correct answers) and the discrimination index as the difference in success between the stronger and weaker group.",
     "iznos-slovima":
-      "Writes a monetary amount in words, with the correct noun form beside the number.",
+      "Writes a monetary amount in Serbian words, with the correct noun form beside the number.",
     "jmbg-provera":
       "Whether the check digit of an entered JMBG matches the other twelve, and what date, sex marker and registry number that record carries.",
     "jump-height-flight-time":
@@ -931,7 +931,7 @@ export const proEn = {
     "number-check":
       "Compares all numbers in the source and in the translation and reports which is missing or mistyped.",
     "number-to-serbian-words":
-      "Writes a number in words, with the correct form beside thousand, million and billion.",
+      "Writes a number in Serbian words, with the correct form beside thousand, million and billion.",
     "nutrition-per-portion":
       "Converts an entered nutrition table between values per 100 g, per serving and per package, and converts kilojoules into kilocalories and back exactly.",
     "obracun-kamate":

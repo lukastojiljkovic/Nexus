@@ -336,6 +336,18 @@ jobs:
       # once. It is registered in the commit that resolves them.
       - run: pnpm check:copy
 
+      # English is the app's second locale, and the compiler checks only that
+      # both tables carry the same KEYS. Whether the English side was written at
+      # all is not visible to it: a demo body, a component catalogue, the
+      # drawer's cron refusals, five note templates and the Markdown mirror's
+      # own generated names were still Serbian under an English interface, and
+      # each of them typechecked, linted, passed `check:address` and
+      # photographed as a correct screen — in the wrong language, which no
+      # geometry audit can see. This is the rule that keeps the second half
+      # written: no Serbian in English copy, and no Serbian literal outside the
+      # tables that are meant to hold it.
+      - run: pnpm check:english
+
       - run: pnpm build
 
       - run: pnpm typecheck

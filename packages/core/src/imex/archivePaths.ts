@@ -14,8 +14,45 @@
  * contracts that happen to share a technique, not one contract in two places.
  */
 
-/** The name a note with no title gets in the Markdown mirror — the same "Bez naslova" the UI shows. */
+/** The name a note with no title gets in the Markdown mirror — the same "Bez naslova" the UI shows (`strings.notes.untitled`). */
 export const UNTITLED_NOTE_NAME = "Bez naslova";
+
+/** The name a FOLDER gets when its own name sanitizes to nothing (see `buildNotePaths` in `exportArchive.ts`). */
+export const UNTITLED_FOLDER_NAME = "Fascikla";
+
+/**
+ * The English pair, beside the Serbian one.
+ *
+ * The Markdown mirror is a document the user opens OUTSIDE Nexus, so it is
+ * written in the language the app is serving at the moment of the export —
+ * exactly as `main/shellStrings.ts` reads its native-dialog names fresh at the
+ * moment a dialog opens. Only the two GENERATED names follow the locale: a
+ * note's title and a folder's name are the user's own data and are never
+ * translated, whatever language they were typed in.
+ */
+export const UNTITLED_NOTE_NAME_EN = "Untitled";
+export const UNTITLED_FOLDER_NAME_EN = "Folder";
+
+/** The two names the mirror generates, for one language. */
+export interface ArchiveSegmentNames {
+  readonly untitledNote: string;
+  readonly untitledFolder: string;
+}
+
+/** The language the generated names are written in. */
+export type ArchiveLanguage = "sr" | "en";
+
+/**
+ * Both languages' generated names.
+ *
+ * A record and not a function, so the two spellings of one name sit on one
+ * line and neither can become a second copy of the other; the caller indexes it
+ * with the language it is writing the archive in.
+ */
+export const ARCHIVE_SEGMENT_NAMES: Readonly<Record<ArchiveLanguage, ArchiveSegmentNames>> = {
+  sr: { untitledNote: UNTITLED_NOTE_NAME, untitledFolder: UNTITLED_FOLDER_NAME },
+  en: { untitledNote: UNTITLED_NOTE_NAME_EN, untitledFolder: UNTITLED_FOLDER_NAME_EN },
+};
 
 /** Every C0/C1 control character (code points 0-31 and 127), built from character codes so the source file never has to carry a raw control byte. */
 function controlCharRange(): string {

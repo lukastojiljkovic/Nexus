@@ -1790,6 +1790,36 @@ describe("buildExportArchive", () => {
       expect(archive.files.has("notes/Siroce.md")).toBe(true);
     });
 
+    /**
+     * The mirror is a document read OUTSIDE Nexus, so its two GENERATED names —
+     * a note with no title, a folder whose name sanitizes to nothing — follow
+     * the language the export was written in. A note's title and a folder's
+     * name are the user's own data and are never translated, which the Serbian
+     * pair below proves by surviving an English export untouched.
+     */
+    it("names an untitled note and a nameless folder in the export's language", () => {
+      const input = emptyInput();
+      input.language = "en";
+      input.data.noteFolders = [folderRow({ id: "f1", name: "..." }), folderRow({ id: "f2", name: "Moj" })];
+      input.data.notes = [
+        noteRow({ id: "n1", title: "", folderId: "f1" }),
+        noteRow({ id: "n2", title: "Prazna", folderId: "f2" }),
+      ];
+      const english = buildExportArchive(input);
+      expect(english.files.has("notes/Folder/Untitled.md")).toBe(true);
+      expect(english.files.has("notes/Moj/Prazna.md")).toBe(true);
+      expect([...english.files.keys()].filter((path) => /Bez naslova|Fascikla/.test(path))).toEqual([]);
+
+      const serbian = buildExportArchive({ ...input, language: "sr" });
+      expect(serbian.files.has("notes/Fascikla/Bez naslova.md")).toBe(true);
+
+      // ABSENT is Serbian, which is what every caller that has no locale gets.
+      const defaultInput = emptyInput();
+      defaultInput.data.noteFolders = [folderRow({ id: "f1", name: "..." })];
+      defaultInput.data.notes = [noteRow({ id: "n1", title: "", folderId: "f1" })];
+      expect(buildExportArchive(defaultInput).files.has("notes/Fascikla/Bez naslova.md")).toBe(true);
+    });
+
     it("declares one attachment binary entry per distinct sha256, not one per row", () => {
       const input = emptyInput();
       const sha = "c".repeat(64);
