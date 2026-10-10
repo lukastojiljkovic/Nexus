@@ -2857,3 +2857,48 @@ export type {
   SkySearchMatch,
   StarPlacement,
 } from "./sky/stars.js";
+
+// --- MAPS (the offline map, ADR-099) -----------------------------------------
+//
+// The map's platform-free half: the arithmetic a distance and a coordinate need
+// (`geo`), the place index's reader and ranking (`places`), and the reader that
+// lists every address a style asks the renderer to fetch (`style`). The page,
+// the worker and the map pack's builder all reach for these, which is why they
+// are here rather than in the module's own folder.
+export {
+  EARTH_MEAN_RADIUS_M,
+  WEB_MERCATOR_CIRCUMFERENCE_M,
+  formatCoordinates,
+  formatDecimalCoordinates,
+  formatDistanceKilometres,
+  formatDistanceMetres,
+  formatDistanceShort,
+  formatDmsCoordinates,
+  haversineMetres,
+  metresPerPixel,
+  scaleBar,
+  toDms,
+} from "./maps/geo.js";
+export type { CoordinateStyle, GeoPoint, ScaleBar } from "./maps/geo.js";
+
+export {
+  MAX_MAP_PLACES,
+  MAX_PLACE_NAME_LENGTH,
+  MAP_PLACES_VERSION,
+  MAP_PLACE_KINDS,
+  MAP_PLACE_KIND_RANK,
+  foldPlaces,
+  parsePlacesFile,
+  rankPlaces,
+} from "./maps/places.js";
+export type {
+  FoldedPlace,
+  MapPlace,
+  MapPlaceKind,
+  MapPlacesFile,
+  PlaceHit,
+  PlaceMatchTier,
+} from "./maps/places.js";
+
+export { isRemoteStyleUrl, remoteStyleUrls, styleUrls } from "./maps/style.js";
+export type { StyleUrl } from "./maps/style.js";

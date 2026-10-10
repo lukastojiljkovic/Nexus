@@ -1,0 +1,117 @@
+{
+ "note": "Overpass result, cut to the tags the converter reads.",
+ "elements": [
+  {
+   "type": "node",
+   "id": 59735022,
+   "lat": 45.2551338,
+   "lon": 19.8451756,
+   "tags": {
+    "name": "Нови Сад",
+    "name:en": "Novi Sad",
+    "name:sr": "Нови Сад",
+    "name:sr-Latn": "Novi Sad",
+    "place": "city",
+    "population": "260438"
+   }
+  },
+  {
+   "type": "node",
+   "id": 60571493,
+   "lat": 44.8178131,
+   "lon": 20.4568974,
+   "tags": {
+    "int_name": "Beograd",
+    "name": "Београд",
+    "name:en": "Belgrade",
+    "name:sr": "Београд",
+    "name:sr-Latn": "Beograd",
+    "place": "city",
+    "population": "1197714"
+   }
+  },
+  {
+   "type": "node",
+   "id": 100890898,
+   "lat": 43.3211301,
+   "lon": 21.8959232,
+   "tags": {
+    "name": "Ниш",
+    "name:en": "Niš",
+    "name:sr": "Ниш",
+    "name:sr-Latn": "Niš",
+    "place": "city",
+    "population": "178976"
+   }
+  },
+  {
+   "type": "node",
+   "id": 254037025,
+   "lat": 43.8914332,
+   "lon": 20.3491624,
+   "tags": {
+    "name": "Чачак",
+    "name:en": "Čačak",
+    "name:sr": "Чачак",
+    "name:sr-Latn": "Čačak",
+    "place": "city",
+    "population": "69598"
+   }
+  },
+  {
+   "type": "node",
+   "id": 353439335,
+   "lat": 43.7234519,
+   "lon": 20.6870792,
+   "tags": {
+    "name": "Краљево",
+    "name:en": "Kraljevo",
+    "name:sr": "Краљево",
+    "name:sr-Latn": "Kraljevo",
+    "place": "city",
+    "population": "57432"
+   }
+  },
+  {
+   "type": "node",
+   "id": 1337495902,
+   "lat": 43.7421658,
+   "lon": 20.6850358,
+   "tags": {
+    "name": "Грдица",
+    "name:en": "Grdica",
+    "name:sr": "Грдица",
+    "name:sr-Latn": "Grdica",
+    "place": "village",
+    "population": "742"
+   }
+  },
+  {
+   "type": "node",
+   "id": 1486059453,
+   "lat": 44.8226315,
+   "lon": 20.4614781,
+   "tags": {
+    "name": "Дорћол",
+    "name:en": "Dorćol",
+    "name:sr": "Дорћол",
+    "name:sr-Latn": "Dorćol",
+    "place": "quarter"
+   }
+  },
+  {
+   "type": "node",
+   "id": 1883488000,
+   "lat": 44.8209873,
+   "lon": 20.436035,
+   "tags": {
+    "int_name": "Usce",
+    "name": "Ушће",
+    "name:en": "Ušće",
+    "name:sr": "Ушће",
+    "name:sr-Latn": "Ušće",
+    "place": "locality"
+   }
+  }
+ ]
+}

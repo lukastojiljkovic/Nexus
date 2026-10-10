@@ -53,6 +53,7 @@ describe("the migration list", () => {
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
+    expect(LATEST_VERSION).toBe(87);
   });
 });
 

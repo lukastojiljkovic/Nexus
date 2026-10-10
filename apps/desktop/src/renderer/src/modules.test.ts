@@ -140,6 +140,8 @@ describe("createModuleRegistry", () => {
       // The second discovered module, at `order: 350` — so it sorts above the
       // timers at 100 and below anything a later run gives a higher number.
       "chess",
+      // The second kit module (ADR-099), ordered after it by `order` 210.
+      "maps",
     ]);
   });
 
@@ -252,6 +254,9 @@ describe("createModuleRegistry", () => {
       // whose games are built as separate modules, so „Šah" names FUN and the
       // next game to arrive names it too.
       FUN: ["chess"],
+      // MAPS' own, on the same terms: the PRD registry has no row for a map, so
+      // a map declares its own prefix rather than borrowing a tool drawer's.
+      MAP: ["maps"],
     });
   });
 
@@ -310,6 +315,9 @@ describe("createModuleRegistry", () => {
       // The recorder is Knowledge, on ADR-093's own reading of the group: it is
       // the handling of what somebody wrote down, not an area of a life.
       "recorder",
+      // The map joins Knowledge (ADR-093 sent the reference libraries there and
+      // named maps as one), after the compiled-in three by its `order`.
+      "maps",
     ]);
     expect(grouped.get("life")?.map((manifest) => manifest.id)).toEqual([
       "priv",
@@ -431,6 +439,9 @@ describe("createModuleRegistry", () => {
       "boards",
       // ...and the same for a board: no game exists until somebody starts one.
       "chess",
+      // A map writes nothing either - its pack is installed data and its pins
+      // are the user's own - so it is on like every module but the two above.
+      "maps",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");

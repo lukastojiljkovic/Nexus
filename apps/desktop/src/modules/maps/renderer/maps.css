@@ -1,0 +1,390 @@
+/* MAPE (ADR-099). Tokens exclusively — raw colour values are forbidden outside
+   @nexus/tokens, and this stylesheet is checked by the same gates the shell's
+   own are (`check:colours`, `check:tokens`, `check:layers`).
+ *
+ * THIS FILE IS IMPORTED BY THE MODULE'S PAGE, not by `app.css`: the shell's
+ * stylesheet is part of the startup chunk, so a rule for a page nobody has
+ * opened would be paid for on every launch. Vite turns this import into a chunk
+ * of its own, loaded with the page — the same shape the module's JavaScript has.
+ *
+ * Class prefix `maps__`, for the reason the shell's split states: a rule belongs
+ * to the module whose prefix it carries. The one exception is `nx-swatch`, which
+ * is the shared swatch box and is worn rather than restated — a fourth hand-made
+ * colour picker is exactly what that class exists to prevent.
+ */
+
+.maps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  /* `flex`, not `height: 100%`: `.app__main` is a column flex container, and a
+     percentage height against a flexible box resolves against nothing. The map
+     then takes what is left after the header and the toolbar, which is what
+     "the map fills the page" means on a window that is 600 px tall. */
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.maps__error {
+  margin: 0;
+  color: var(--nx-danger);
+}
+
+/* The toolbar: the search box takes the room, the buttons wrap under it when the
+   window is narrow. `align-items: end` because one child is a stacked field
+   (label above input) and its neighbours are bare buttons — centring would leave
+   the input sitting below the buttons beside it (`check:rows`). */
+.maps__tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-3);
+  align-items: end;
+}
+
+.maps__search {
+  position: relative;
+  flex: 1 1 var(--nx-layout-field-min);
+  min-width: var(--nx-layout-field-min);
+}
+
+/* The results hang BELOW the field rather than pushing the map down: a list that
+   reflowed the page would move the map out from under the pointer between two
+   keystrokes. */
+.maps__results {
+  position: absolute;
+  z-index: var(--nx-layer-menu);
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin: var(--nx-space-1) 0 0;
+  padding: var(--nx-space-1);
+  list-style: none;
+  max-height: 16rem;
+  overflow-y: auto;
+  background: var(--nx-surface-raised);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  box-shadow: var(--nx-elevation-lifted);
+}
+
+.maps__result {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--nx-space-3);
+  width: 100%;
+  min-height: 2rem;
+  padding: var(--nx-space-1) var(--nx-space-2);
+  background: none;
+  border: 0;
+  border-radius: var(--nx-radius-sm);
+  cursor: pointer;
+  text-align: start;
+  font: inherit;
+  color: var(--nx-text);
+}
+
+.maps__result:hover {
+  background: var(--nx-surface-alt);
+}
+
+.maps__result:focus-visible,
+.maps__list-pick:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 1px;
+}
+
+.maps__result-name {
+  font-weight: var(--nx-font-weight-medium);
+}
+
+.maps__result-kind {
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+  white-space: nowrap;
+}
+
+.maps__result-empty {
+  padding: var(--nx-space-2);
+}
+
+.maps__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: center;
+}
+
+/* The camera readout and the measured distance. It WEARS `nx-hint` — it is a
+   muted line of the app's prose with numbers in it — and this class is the
+   modifier beside it: a row rather than one sentence, tabular figures because
+   both readings change while the map moves, and no prose measure because the
+   row is two short values rather than a paragraph. */
+.maps__readout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-1) var(--nx-space-4);
+  max-width: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.maps__readout-cell {
+  overflow-wrap: anywhere;
+}
+
+/* The map itself. The frame is what the overlays are positioned against; the
+   canvas div is the element MapLibre is handed, and it must fill the frame
+   exactly, which is why it is absolutely positioned rather than sized. */
+.maps__frame {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 16rem;
+  overflow: hidden;
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+}
+
+.maps__canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.maps__hint {
+  position: absolute;
+  z-index: var(--nx-layer-docked);
+  top: var(--nx-space-2);
+  left: var(--nx-space-2);
+  margin: 0;
+  max-width: min(24rem, 60%);
+  padding: var(--nx-space-1) var(--nx-space-2);
+  background: var(--nx-surface-raised);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-sm);
+}
+
+/* The scale bar: a line with two end ticks, drawn rather than written, because
+   the number alone does not say how far it is on screen. */
+.maps__scale {
+  position: absolute;
+  z-index: var(--nx-layer-docked);
+  left: var(--nx-space-3);
+  bottom: var(--nx-space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  align-items: flex-start;
+}
+
+.maps__scale-bar {
+  height: 6px;
+  border: 1px solid var(--nx-text);
+  border-top: 0;
+}
+
+.maps__scale-label {
+  padding: 0 var(--nx-space-1);
+  background: var(--nx-surface-raised);
+  border-radius: var(--nx-radius-xs);
+  color: var(--nx-text);
+  font-size: var(--nx-font-size-caption);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The ODbL credit. IN THE CORNER OF THE MAP, AT ALL TIMES, and never faded:
+   the Attribution Guidelines ask for the credit where somebody looking at the
+   map can see it, and this app's answer to "which corner" is the one the scale
+   bar does not use. It is capped at `60%` so it wraps into two lines rather than
+   running under the pins list. */
+.maps__attribution {
+  position: absolute;
+  z-index: var(--nx-layer-docked);
+  right: var(--nx-space-2);
+  bottom: var(--nx-space-2);
+  margin: 0;
+  max-width: 60%;
+  padding: var(--nx-space-1) var(--nx-space-2);
+  background: var(--nx-surface-raised);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-sm);
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-caption);
+  overflow-wrap: anywhere;
+}
+
+.maps__list {
+  position: absolute;
+  z-index: var(--nx-layer-panel);
+  top: var(--nx-space-2);
+  right: var(--nx-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  width: min(20rem, 62%);
+  max-height: calc(100% - var(--nx-space-4));
+  overflow-y: auto;
+  padding: var(--nx-space-3);
+  background: var(--nx-surface-raised);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  box-shadow: var(--nx-elevation-lifted);
+}
+
+.maps__list-title {
+  margin: 0;
+  font-size: var(--nx-font-size-title);
+  line-height: var(--nx-font-leading-tight);
+  font-weight: var(--nx-font-weight-semibold);
+  color: var(--nx-text);
+}
+
+.maps__list-rows {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.maps__list-row {
+  display: flex;
+  gap: var(--nx-space-2);
+  align-items: center;
+  padding: var(--nx-space-1) 0;
+  border-bottom: 1px solid var(--nx-border-subtle);
+}
+
+.maps__list-row:last-child {
+  border-bottom: 0;
+}
+
+.maps__list-pick {
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0 var(--nx-space-2);
+  align-items: center;
+  min-width: 0;
+  padding: var(--nx-space-1);
+  background: none;
+  border: 0;
+  border-radius: var(--nx-radius-sm);
+  cursor: pointer;
+  text-align: start;
+  font: inherit;
+  color: var(--nx-text);
+}
+
+.maps__list-pick:hover {
+  background: var(--nx-surface-alt);
+}
+
+.maps__list-pick--selected {
+  background: var(--nx-accent-soft);
+}
+
+.maps__list-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--nx-radius-round);
+}
+
+.maps__list-name {
+  font-weight: var(--nx-font-weight-medium);
+  overflow-wrap: anywhere;
+}
+
+.maps__list-note {
+  grid-column: 2;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+  overflow-wrap: anywhere;
+}
+
+.maps__list-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: var(--nx-space-1);
+}
+
+/* The dialog: the shared recipe (`FocusDiscardDialog`'s overlay, backdrop and
+   panel), restated here because a module's chunk carries its own stylesheet and
+   the shell's dialog classes live in the shell's. Every value is the same token
+   the shared recipe uses, so the two look like one dialog. */
+.maps__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--nx-layer-dialog);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--nx-space-6);
+}
+
+.maps__backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--nx-bg);
+  opacity: 0.75;
+}
+
+.maps__dialog {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  width: min(420px, 92vw);
+  max-height: 92vh;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--nx-space-5);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+  box-shadow: var(--nx-elevation-overlay);
+}
+
+.maps__dialog-title {
+  margin: 0;
+  font-size: var(--nx-font-size-title);
+  line-height: var(--nx-font-leading-tight);
+  font-weight: var(--nx-font-weight-semibold);
+  color: var(--nx-text);
+}
+
+.maps__field-error {
+  margin: 0;
+  color: var(--nx-danger);
+}
+
+.maps__colors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: center;
+}
+
+.maps__coords {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--nx-space-1) var(--nx-space-3);
+  margin: 0;
+}
+
+.maps__coords-term {
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+
+.maps__coords-value {
+  margin: 0;
+  font-family: var(--nx-font-family-mono);
+  font-size: var(--nx-font-size-body-sm);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.maps__actions {
+  display: flex;
+  gap: var(--nx-space-2);
+  align-items: center;
+}

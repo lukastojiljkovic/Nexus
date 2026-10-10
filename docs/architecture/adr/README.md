@@ -110,3 +110,4 @@ directory is the decision log behind it.
 | [094](094-tool-packs.md) | Tool packs: a GPL program as a separate process in a signed folder (amends ADR-091 §2 and §9) | Accepted | 2026-10-10 |
 | [100](100-reader-module.md) | The Reader module: content packs, read and printed | Accepted | 2026-10-10 |
 | [102](102-portable-build.md) | A portable build: Nexus on a stick, and the data on the stick too | Accepted; amends ADR-089 | 2026-10-10 |
+| [099](099-offline-map.md) | The offline map: a pack, a region, and no network | Accepted (depends on ADR-090, ADR-091, ADR-093) | 2026-10-10 |

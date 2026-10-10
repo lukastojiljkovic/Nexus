@@ -1333,3 +1333,24 @@ export type {
   BoardsSettings,
   BoardStats,
 } from "./games/boards/boardsStore.js";
+
+// --- MAPS (the offline map's pins, migration 87, ADR-099) --------------------
+//
+// ONE store over ONE table, because a pin is one thing: a title, a note, a
+// colour and a point. The map itself - tiles, style, place index - is the
+// installed pack and never this database (ADR-091 §5); a live GPS fix is a fact
+// about now and is kept in main's memory rather than in a row.
+//
+// The colour is stored as the NAME of one of the eight accent swatches
+// (`--nx-swatch-*`), never as a value: a hex in a column would be a palette
+// decision frozen into somebody's data.
+export {
+  MAX_MAPS_PINS,
+  MAX_PIN_NOTE_LENGTH,
+  MAX_PIN_TITLE_LENGTH,
+  MapsPinNotFoundError,
+  MapsStore,
+  MapsValidationError,
+  PIN_COLORS,
+} from "./maps/mapsStore.js";
+export type { MapsPin, PinColor } from "./maps/mapsStore.js";
