@@ -222,6 +222,7 @@ describe("resolveModuleSelection", () => {
       // And the second, on the same terms.
       cookbook: true,
       recorder: true,
+      emergency: true,
       pro: false,
       // The second discovered module, in registry order after Tajmeri.
       library: true,
@@ -274,6 +275,9 @@ describe("moduleFlagWrites", () => {
       { moduleId: "cookbook", enabled: true },
       // And the second discovered one after it, on the same terms.
       { moduleId: "recorder", enabled: true },
+      // The discovered modules follow in `order`: „Tajmeri" is 100, „Hitna
+      // karta" is 180.
+      { moduleId: "emergency", enabled: true },
     ]);
   });
 

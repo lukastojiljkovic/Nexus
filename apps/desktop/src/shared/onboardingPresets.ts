@@ -61,6 +61,9 @@ export const ESSENTIALS_MODULE_PRESET: Readonly<Record<string, boolean>> = {
   // Likewise the recorder: a diary writes nothing until somebody records, so
   // there is nothing for a user to opt into either.
   recorder: true,
+  // And the second, on the same terms: a card that is empty until somebody fills
+  // it in is a card nobody needs to be asked about.
+  emergency: true,
   pro: false,
   // The second module built on the kit (ADR-090), decided here like every other
   // selectable one: a library that had to be switched on first would be hiding

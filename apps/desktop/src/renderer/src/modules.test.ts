@@ -118,6 +118,9 @@ describe("createModuleRegistry", () => {
       // The second: the voice and camera diary, ordered after the first by its
       // own `order` (170 against the timer's 100).
       "recorder",
+      // The second discovered module, after „Tajmeri" because its manifest says
+      // `order: 180` and „Tajmeri" says 100.
+      "emergency",
     ]);
   });
 
@@ -185,6 +188,10 @@ describe("createModuleRegistry", () => {
       // „Kuvarica" takes its own for „Elektronika"'s reason: the cookbook is a
       // section of the product rather than a second reading of PRD 29.
       COOK: ["cookbook"],
+      // PRD 21 („Health") is its own entry too, and „Hitna karta" is the first
+      // module to implement it: the card's medications, allergies and conditions
+      // ARE that PRD's purpose line. It borrows no other module's prefix.
+      HLTH: ["emergency"],
       CANV: ["canvas"],
       // „Elektronika" takes its own for „Tabla"'s reason exactly: ELEC is its
       // own PRD entry, and the UTIL sharing above is one section implemented
@@ -265,6 +272,9 @@ describe("createModuleRegistry", () => {
       // A discovered module in the group it declares (ADR-090): the cookbook
       // belongs to Life beside the pantry and the fitness log.
       "cookbook",
+      // ADR-093's own table lists „Emergency card" under „Život", and the card
+      // joins it after the compiled-in three.
+      "emergency",
     ]);
     // The culture group's first member, and the group ADR-093 named before
     // anything was in it.
@@ -339,6 +349,10 @@ describe("createModuleRegistry", () => {
       // Likewise: a recorder writes nothing until somebody records, so there is
       // nothing to opt into either.
       "recorder",
+      // ON by default as well, and for a stronger version of the same reason: a
+      // module whose whole purpose is to be readable in an emergency cannot be
+      // something the user has to switch on first.
+      "emergency",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");

@@ -580,6 +580,9 @@ import {
   allowsCheck as recorderAllowsCheck,
   allowsRequest as recorderAllowsRequest,
 } from "../modules/recorder/main/mediaAccess.js";
+// The kit's one PDF capability (ADR-090's `ModulePlatform.savePdf`), which is
+// Electron-shaped and therefore lives beside the window rather than in a module.
+import { saveCardPdf } from "./cardPdf.js";
 import {
   deliverSecurityNotices,
   runCheckNow,
@@ -1573,6 +1576,10 @@ const moduleHost = createModuleHost({
   // renderer never sees either value.
   packs: { userData: userDataDir, publicKeyPem: RELEASE_PUBLIC_KEY_PEM },
   now: () => Date.now(),
+  // The fifth capability, and the only one that gives a module a file: it prints
+  // a document MAIN built and asks the USER where to put it (`cardPdf.ts`). A
+  // module never sees the path, the dialog or the window.
+  savePdf: saveCardPdf,
 });
 
 // CULTURE's main-process services (ADR-090 §3): the blob store, main's own

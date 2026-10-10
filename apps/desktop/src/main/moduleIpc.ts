@@ -284,6 +284,12 @@ export interface ModuleContext<Id extends string, Ops extends ModuleOps> {
    */
   packs(): ModulePacksAccess;
   /**
+   * Saves a main-authored HTML document as a PDF, where the user says
+   * (`ModulePlatform.savePdf`). Answers the path written, or `null` when the
+   * user closed the dialog without choosing one.
+   */
+  savePdf(request: PdfSaveRequest): Promise<string | null>;
+  /**
    * Registers this module's archive payload: a versioned JSON value, or
    * `undefined` for a session with nothing to export (`ProfileData.modules`).
    */
@@ -294,6 +300,28 @@ export interface ModuleContext<Id extends string, Ops extends ModuleOps> {
    * write shares.
    */
   importData<T>(spec: ModuleImport<T>): void;
+}
+
+/**
+ * One PDF to render, and the two things about the file the dialog opens on.
+ *
+ * `html` is a document MAIN built - never markup the renderer sent - and both
+ * measurements below are in the inches Electron's own `printToPDF` takes.
+ */
+export interface PdfSaveRequest {
+  /** The whole document to print. Authored in main, escaped there. */
+  readonly html: string;
+  /** The file name the save dialog opens on. A suggestion in a dialog, never a path anything writes to. */
+  readonly defaultPath: string;
+  /** Page size in INCHES. */
+  readonly pageSize: { readonly width: number; readonly height: number };
+  /** Margins in INCHES. */
+  readonly margins: {
+    readonly top: number;
+    readonly bottom: number;
+    readonly left: number;
+    readonly right: number;
+  };
 }
 
 /**
@@ -340,6 +368,24 @@ export interface ModulePlatform {
    */
   packs?: ModulePacksAccess;
   now(): number;
+  /**
+   * Renders a main-authored HTML document to a PDF and saves it where the USER
+   * chooses in a native save dialog, answering the path it wrote or `null` when
+   * they cancelled.
+   *
+   * **Why this is one capability rather than the objects it is made of.** The
+   * print pipeline needs a `BrowserWindow`, `webContents.printToPDF` and
+   * `dialog.showSaveDialog`, and a module reaches none of those: it gets a
+   * handler per declared channel and nothing else (see the note beside the
+   * platform's construction in `index.ts`). What is handed over instead is the
+   * ERRAND - print this document, save it where the user says - which is also
+   * what keeps the path out of the renderer's reach entirely.
+   *
+   * **Optional, and deliberately.** The kit runs electron-free under Vitest, so a
+   * platform built for a test has no printer at all; a module that asks
+   * `ctx.savePdf` then gets a sentence rather than a silent no-op.
+   */
+  savePdf?(request: PdfSaveRequest): Promise<string | null>;
 }
 
 /**
@@ -451,6 +497,16 @@ export class ModuleHost implements ModuleHostSurface {
       releaseBlob: (sha256) => this.platform.releaseBlob(sha256),
       armUntil: (atMs, run) => this.armUntil(atMs, run),
       packs: () => requirePacks(this.platform),
+      savePdf: (request) => {
+        const print = this.platform.savePdf;
+        if (print === undefined) {
+          // A sentence rather than a silent `null`: `null` means "the user
+          // cancelled", and a build with no printer that answered it would be
+          // telling the page a story about a dialog nobody ever saw.
+          return Promise.reject(new Error("This build cannot write PDF files."));
+        }
+        return print(request);
+      },
       onSessionStart: (run) => {
         this.sessionStarts.push(run);
       },

@@ -755,7 +755,7 @@ export class EmergencyCardStore {
    * reproduces the reference and the card model reports it as missing.
    */
   importData(value: unknown): void {
-    const imported = parseExport(value);
+    const imported = parseEmergencyCardExport(value);
     this.db.transaction(() => {
       this.deleteCardContacts.run(this.profileId);
       this.deleteCardDocuments.run(this.profileId);
@@ -1185,8 +1185,15 @@ const EXPORT_DOCUMENT_KEYS = [
  * The whole imported value, validated before a single row is written. Strict on
  * purpose: an unexpected key means the value did not come from `exportData`, and
  * dropping it silently is how a newer build's field disappears on an older one.
+ *
+ * EXPORTED, and for stage 2's sake: the desktop's archive reader must read the
+ * WHOLE payload before anything is written - at the preview, so the user hears a
+ * refusal before confirming a restore that replaces a profile, and again before
+ * any module writes (ADR-090 §5) - and it can only do that through this function.
+ * A second copy of it under `apps/desktop` would be two validators that agree
+ * until one of them moves. It is pure: it reads its argument and writes nothing.
  */
-function parseExport(value: unknown): EmergencyCardExport {
+export function parseEmergencyCardExport(value: unknown): EmergencyCardExport {
   if (!isRecord(value) || !hasExactKeys(value, EXPORT_KEYS)) {
     throw new EmergencyCardValidationError(
       "An emergency-card export must carry a version, a card and its two lists.",
