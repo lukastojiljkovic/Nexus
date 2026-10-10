@@ -186,6 +186,14 @@ export const SERBIAN_SOURCES = [
     match: /^packages\/core\/src\/cookbook\/parse\.ts$/,
     reason: "the Serbian measure words and taste phrases the ingredient parser RECOGNISES in a pasted recipe — a vocabulary read from input, never shown",
   },
+  {
+    match: /^apps\/desktop\/src\/modules\/astronomy\/renderer\/(earth|sunmoon)\/copy\.sr\.ts$/,
+    reason: "the astronomy corner's two component tables, the day-and-night map and the Sun-and-Moon panel, each with the `copy.en.ts` that rule 1 reads beside it; the module's own `renderer/copy.sr.ts` belongs to the run that assembles the page",
+  },
+  {
+    match: /^packages\/core\/src\/sky\/cityTable\.ts$/,
+    reason: "the shipped city table's own names, where GeoNames spells a place with a Serbian letter: that is data and never copy, and `cities.test.ts` pins the encoding around it",
+  },
 ];
 
 /**

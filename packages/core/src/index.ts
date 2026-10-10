@@ -2718,3 +2718,8 @@ export {
 export type { BricksInput, BricksState } from "./games/bricks/bricks.js";
 export type * from "./assistant/contract.js";
 export type * from "./sky/contract.js";
+
+export { cityCount, cities, cityLabel, searchCities, DEFAULT_CITY_LIMIT } from "./sky/cities.js";
+export type { City } from "./sky/cities.js";
+export { computerObserver, computerZone, zoneCount, zonePoint } from "./sky/zoneLocation.js";
+export type { ZoneObserver } from "./sky/zoneLocation.js";
