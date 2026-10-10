@@ -107,6 +107,12 @@ import { migration088 } from "./088-wiki.js";
 // number appears in exactly three places — this import, the list entry below,
 // and the file name.
 import { migration089 } from "./089-lab.js";
+// 093 - the assistant's knowledge base (ADR-104). The numbers between 082 and
+// this one are reserved by sibling runs in flight on the same branch, so the list
+// has a GAP here in this worktree: the maintainer renumbers at merge, which is
+// why the number appears in exactly three places - this import, the list entry
+// below, and the file name.
+import { migration093 } from "./093-assistant-knowledge.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -212,6 +218,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration087,
   migration088,
   migration089,
+  migration093,
 ];
 
 /**
