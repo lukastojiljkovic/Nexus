@@ -9,7 +9,7 @@ import {
   moduleSettingsDeclarations,
   settingsEntryId,
 } from "./moduleSettings.js";
-import { MODULE_SETTINGS_PANELS } from "./moduleSettingsPanels.js";
+import { MODULE_SETTINGS_PANELS, settingsPanelRenderer } from "./moduleSettingsPanels.js";
 import { buildSettingsIndex, foldSettingsQuery, matchSettings } from "./settingsSearch.js";
 import { activeLocale, strings } from "./strings.js";
 
@@ -104,6 +104,7 @@ describe("moduleSettingsDeclarations", () => {
       // The first DISCOVERED card (ADR-090), last because a kit module
       // registers after every compiled-in one.
       "timers",
+      "translator",
     ]);
   });
 
@@ -141,6 +142,7 @@ describe("moduleSettingsCardIds", () => {
       "focus",
       "tools",
       "timers",
+      "translator",
     ]);
   });
 
@@ -181,6 +183,7 @@ describe("moduleSettingsCards", () => {
       "focus",
       "tools",
       "timers",
+      "translator",
     ]);
     expect(cards.map((card) => card.title)).toEqual([
       s().sectionTitle.dashboard,
@@ -198,6 +201,7 @@ describe("moduleSettingsCards", () => {
       // expected value is its own pair read in the language being read rather
       // than a path into the shell's table.
       kitManifest("timers")?.copy?.name[activeLocale()] ?? "",
+      kitManifest("translator")?.copy?.name[activeLocale()] ?? "",
     ]);
   });
 
@@ -233,7 +237,18 @@ describe("isDeviceOnlyPanel", () => {
     const deviceOnly = [...declarations]
       .filter(([, panel]) => isDeviceOnlyPanel(panel))
       .map(([moduleId]) => moduleId);
-    expect(deviceOnly).toEqual(["tasks", "notes", "files", "finance", "habits", "focus", "tools"]);
+    expect(deviceOnly).toEqual([
+      "tasks",
+      "notes",
+      "files",
+      "finance",
+      "habits",
+      "focus",
+      "tools",
+      // The second DISCOVERED card (ADR-090), whose two values are `localStorage`
+      // keys on this machine.
+      "translator",
+    ]);
   });
 
   it("is false for a panel holding a profile row — a reset there would be a write about the user's data", () => {
@@ -259,6 +274,15 @@ describe("isDeviceOnlyPanel", () => {
 
   it("agrees with the renderer: a panel offers `resetDevice` exactly when it is device-only", () => {
     for (const { moduleId, panel } of moduleSettingsDeclarations(createModuleRegistry())) {
+      // A DISCOVERED module's card body is its own (`moduleKit/settings.ts`), and
+      // the kit offers no reset LINK for it: a device-local value in a kit module
+      // is forgotten by the body that owns the key, which is the only place that
+      // knows which key it is. So the agreement is asked of the compiled-in map,
+      // and the kit's half of the rule is that its cards have no link at all.
+      if (kitManifest(moduleId) !== undefined) {
+        expect(settingsPanelRenderer(moduleId)?.resetDevice).toBeUndefined();
+        continue;
+      }
       expect(MODULE_SETTINGS_PANELS[moduleId]?.resetDevice !== undefined, moduleId).toBe(
         isDeviceOnlyPanel(panel),
       );

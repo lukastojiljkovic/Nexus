@@ -2718,3 +2718,25 @@ export {
 export type { BricksInput, BricksState } from "./games/bricks/bricks.js";
 export type * from "./assistant/contract.js";
 export type * from "./sky/contract.js";
+
+// --- DICTIONARY (the translator module's own word index) ---------------------
+//
+// The reference library's arithmetic, and it is deliberately small: the fold one
+// headword or query is keyed by, the order a pack's index is written and
+// searched in, the script test that decides which direction a query is in, and
+// the two halves of a prefix search. `dictionary/keys.ts` carries the reasoning
+// for each — in particular why the fold is `search/searchText.ts`'s rather than
+// a second table, and why the index's order is a code-unit order rather than the
+// collator a reader's list would use.
+//
+// Nothing here reads a file: the pack's bytes are main's business
+// (`modules/translator/main/pack.ts`), and these functions are what that file
+// asks the question with.
+export {
+  compareDictionaryKeys,
+  dictionaryKey,
+  looksSerbian,
+  serbianLatin,
+} from "./dictionary/keys.js";
+export { lowerBound, matchDictionaryKeys } from "./dictionary/search.js";
+export type { DictionaryKeyMatch } from "./dictionary/search.js";

@@ -46,6 +46,9 @@ export const ESSENTIALS_MODULE_PRESET: Readonly<Record<string, boolean>> = {
   // selectable one: nothing about a timer asks to be opted into, so „Osnovno"
   // turns it on exactly as the manifest's own `defaultEnabled` says.
   timers: true,
+  // The second module built on the kit (ADR-090): a dictionary has nothing to
+  // opt into either, so „Osnovno" turns it on as its manifest says.
+  translator: true,
   pro: false,
 };
 
