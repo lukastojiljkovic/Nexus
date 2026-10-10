@@ -194,6 +194,10 @@ export const SERBIAN_SOURCES = [
     match: /^packages\/core\/src\/sky\/cityTable\.ts$/,
     reason: "the shipped city table's own names, where GeoNames spells a place with a Serbian letter: that is data and never copy, and `cities.test.ts` pins the encoding around it",
   },
+  {
+    match: /^apps\/desktop\/src\/modules\/[^/]+\/renderer\/[^/]+\/copy\.sr\.ts$/,
+    reason: "a kit module's own Serbian table one folder DEEPER than `renderer/copy.sr.ts` — the star map's, whose component lives under `renderer/stars/` so the module's page can be assembled around it; the `copy.en.ts` rule 1 reads sits beside it",
+  },
 ];
 
 /**
