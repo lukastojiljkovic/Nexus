@@ -30,9 +30,9 @@
 // security gate rather than a style guide. `child-process` is the module itself;
 // `shell` is the option that turns an argv back into a command line; the exec
 // family is a second door into the same room; and `spawn-literal` is the literal
-// that makes the table optional. They are exempted for one file and its test —
-// the spawn site — and for nobody else, and a startup check refuses an entry for
-// `shell`, the exec family or a literal at all, because that is the edit the
+// that makes the table optional. They are exempted only at the spawn sites (and
+// the runner's test) and for nobody else, and a startup check refuses an entry
+// for `shell`, the exec family or a literal at all, because that is the edit the
 // deviation exists to prevent rather than a matter of taste.
 //
 // THE FIFTH RULE IS NOT ONE OF THEM. `toolchain-name` is a VOCABULARY rule: a
@@ -49,21 +49,23 @@
 // profile `-e` so that its remaining arguments are never joined into a command
 // string. The IPC channels take a circuit id and nothing else
 // (`shared/ipc.ts`), so the renderer cannot reach the command line at all. And
-// the one file allowed to spawn — `apps/desktop/src/main/elecRunner.ts` — takes
-// its argv from a plan `buildCommand` produced, passes `shell: false`, and asks
-// the plan WHETHER THERE IS A CONTAINER rather than spelling a profile's name.
-// This gate was written against that path before the file existed; the rules it
-// is not exempted from are what keep the shape true now that it does.
+// the runner — `apps/desktop/src/main/elecRunner.ts` — takes its argv from a
+// plan `buildCommand` produced, passes `shell: false`, and asks the plan WHETHER
+// THERE IS A CONTAINER rather than spelling a profile's name. This gate was
+// written against that path before the file existed; the rules it is not
+// exempted from are what keep the shape true now that it does.
 //
 // Defence in depth means the outer layer is allowed to be imperfect. It does not
 // mean it is allowed to be absent.
 //
 // THE INTERACTION THAT DOES THE WORK, and it is worth naming because it reads
-// like a coincidence and is not one: the file allowed to import `child_process`
-// is NOT allowed to contain a toolchain word. So the program it starts cannot be
-// a literal it wrote; it can only be `argv[0]` of a plan that came out of the
-// table. The one file permitted to spawn is the one file that may not know what
-// it is spawning.
+// like a coincidence and is not one: a file allowed to import `child_process` is
+// NOT allowed to contain a toolchain word. So the runner cannot write the
+// program it starts as a literal — it can only be `argv[0]` of a plan that came
+// out of the table — and the installer launch can name no tool at all. What the
+// second shape leaves is what its own header argues for: a program path main
+// computed from the file IT downloaded and verified, and an argument list
+// written in that one file and reachable from nowhere else.
 //
 // COMMENTS ARE STRIPPED BEFORE MATCHING. A comment is where almost every
 // occurrence of these words currently lives: `packages/core/src/index.ts`
@@ -108,12 +110,14 @@ export const RUNNER_RULES = [
   /**
    * The module that starts a process.
    *
-   * ONE file may import it — `apps/desktop/src/main/elecRunner.ts` — plus that
-   * file's own test, and those two entries are the whole of the exemption (see
-   * ALLOWLIST). Everything else that starts a process is a finding regardless of
-   * how innocent the call looks, because the interesting question about a new
-   * `spawn` is never whether this particular one is safe: it is whether the
-   * capability has begun to spread, and a capability spreads one file at a time.
+   * TWO files may import it — `apps/desktop/src/main/elecRunner.ts`, the runner,
+   * and `apps/desktop/src/main/update/launch.ts`, the installer launch — plus
+   * the runner's own test, and those three entries are the whole of the
+   * exemption (see ALLOWLIST). Everything else that starts a process is a
+   * finding regardless of how innocent the call looks, because the interesting
+   * question about a new `spawn` is never whether this particular one is safe:
+   * it is whether the capability has begun to spread, and a capability spreads
+   * one file at a time.
    *
    * An import statement and a `require` are the two shapes a module is usually
    * reached by, and a dynamic `import("node:child_process")` is the third: the
@@ -128,7 +132,7 @@ export const RUNNER_RULES = [
     what: "node:child_process",
   },
   /**
-   * `shell: true`, and allowed NOWHERE — not even in the one file allowed to
+   * `shell: true`, and allowed NOWHERE — not even in the two files allowed to
    * spawn.
    *
    * This option is the whole attack in one word. A spawn without a shell hands
@@ -150,9 +154,9 @@ export const RUNNER_RULES = [
    * `spawnSync`, `fork` — and each of them is a second door to the same room.
    * `exec` and `execSync` take a command STRING and run it through a shell;
    * `execFile` and `spawnSync` start a process as `spawn` does; `fork` starts a
-   * whole Node process. The exemption on `child-process` names ONE file and ONE
-   * rule id, so a file allowed to call `spawn` is not thereby allowed to call any
-   * of these.
+   * whole Node process. The exemption on `child-process` names one file and a
+   * single rule id, so a file allowed to call `spawn` is not thereby allowed to
+   * call any of these.
    *
    * A NEGATIVE LOOKBEHIND, AND IT IS LOAD-BEARING.
    *
@@ -238,24 +242,26 @@ export const RUNNER_RULES = [
  * repo-relative path, so a new file never inherits an exemption; each entry names
  * the rule ids it exempts, so a file that may import the module is still not a
  * file that may name a tool; and the four rules that make a command line out of
- * data are exempted for the spawn site and nowhere else, which
+ * data are exempted at the spawn sites and nowhere else, which
  * `assertNoSecurityExemptions` below refuses to let anybody widen in passing.
  *
  * What is left is vocabulary: every other entry is a file that NAMES a tool.
  */
 export const ALLOWLIST = new Map([
   [
-    // The spawn itself — the one place in the application that is allowed to
-    // start a process. The entry names the path this gate was written against,
-    // so that whoever adds a second spawn site finds a decision here rather than
-    // an empty map.
+    // The runner's spawn — one of the two places in the application that is
+    // allowed to start a process. The entry names the path this gate was written
+    // against, so that whoever adds a second spawn site finds a decision here
+    // rather than an empty map. That second site has since been added, in the
+    // entry below, and it is a different shape rather than a widening of this
+    // one.
     //
     // It exempts `child-process` ALONE, which is the point of naming ids instead
     // of paths. `shell`, the exec family and `spawn-literal` are exempted
     // nowhere, and for the same reason: the spawn here is `argv[0]` of a plan
-    // `buildCommand` produced, with `shell: false`, and holding the only file
-    // that may spawn to those three is what keeps the deviation's first
-    // mitigation checkable rather than remembered.
+    // `buildCommand` produced, with `shell: false`, and holding the files that
+    // may spawn to those three is what keeps the deviation's first mitigation
+    // checkable rather than remembered.
     //
     // `toolchain-name` is NOT exempted here either, and that one is deliberate
     // rather than an omission: the file must not be able to spell a tool's name
@@ -268,6 +274,25 @@ export const ALLOWLIST = new Map([
     // it came from. If this file appears in a `toolchain-name` finding, the
     // repair has come undone and the finding is the correct outcome.
     "apps/desktop/src/main/elecRunner.ts",
+    ["child-process"],
+  ],
+  [
+    // The update's installer launch — the second file allowed to reach
+    // `node:child_process`, and a DIFFERENT shape rather than a widening of the
+    // entry above. The program here is not chosen from a table and could not be:
+    // it is the path `update/service.ts` built under `userData/updates/`, hashed
+    // while streaming and hashed again immediately before this call, and it is
+    // the only thing the spawn is ever handed — no renderer reaches it. The
+    // argument list is a literal in that one file, written down rather than
+    // assembled, so `spawn-literal` (which is why `argv[0]` here is a parameter
+    // and never a string) is what keeps this entry from being a hole.
+    //
+    // `toolchain-name` is not exempted, for the same reason as above, and it
+    // costs nothing here: an installer is not a toolchain. `shell` and the exec
+    // family are exempted for nobody, and this file is held to them — an
+    // installer started through a shell would turn the path back into a command
+    // line, which is the one thing its verification cannot protect.
+    "apps/desktop/src/main/update/launch.ts",
     ["child-process"],
   ],
   [
@@ -571,9 +596,9 @@ if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.a
         "the code it generates, the copy that describes it — add that path and the rule\n" +
         "id to ALLOWLIST in scripts/check-runner.mjs WITH ITS REASON. If it is a spawn,\n" +
         "or a shell, or an import of child_process anywhere but\n" +
-        "apps/desktop/src/main/elecRunner.ts, the answer is not an exemption: the\n" +
-        "command belongs in the table, and the file should get one from buildCommand()\n" +
-        "and spawn argv[0] with no shell set.",
+        "apps/desktop/src/main/elecRunner.ts and apps/desktop/src/main/update/launch.ts,\n" +
+        "the answer is not an exemption: the command belongs in the table, and the file\n" +
+        "should get one from buildCommand() and spawn argv[0] with no shell set.",
     );
     process.exit(1);
   }

@@ -18,7 +18,6 @@ import {
   Notification,
   protocol,
   session,
-  shell,
 } from "electron";
 import type { IpcMainInvokeEvent, OpenDialogOptions, Session } from "electron";
 // `electron-updater` is deliberately NOT imported, and that is settled rather
@@ -41,6 +40,7 @@ import {
 } from "./net/offline.js";
 import { isUpdateRequestAllowed } from "./update/allowlist.js";
 import { createUpdateHttp, openReleasePage } from "./update/electron.js";
+import { launchInstaller } from "./update/launch.js";
 import { RELEASE_PUBLIC_KEY_PEM } from "./update/releaseKey.js";
 import { createUpdateService, type UpdateService } from "./update/service.js";
 import { buildCloudEnv } from "./sync/config.js";
@@ -5485,7 +5485,7 @@ function updateService(): UpdateService {
       updatesActive(runningNetworkMode, readNetworkMode(userDataDir())) ? "updates" : "offline",
     http: createUpdateHttp(requireUpdateSession()),
     publicKeyPem: RELEASE_PUBLIC_KEY_PEM,
-    openPath: (path) => shell.openPath(path),
+    launchInstaller,
     quit: () => app.quit(),
     now: () => Date.now(),
     onChanged: (view) => {

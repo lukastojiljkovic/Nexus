@@ -236,7 +236,8 @@ export const sr = {
     available: "Dostupna je nova verzija: {version}.",
     install: "Preuzmi i pokreni instalaciju",
     installing: "Preuzimam…",
-    installHint: "Ništa se ne preuzima pre ovog klika. Nexus proverava potpis instalacije, pokreće je i zatvara se.",
+    installHint:
+      "Ništa se ne preuzima pre ovog klika. Nexus proverava potpis instalacije, pokreće je i zatvara se. Instalacija se zatim izvodi tiho i, kada završi, sama otvara novu verziju.",
     later: "Kasnije",
     releasePage: "Stranica izdanja",
     notesTitle: "Šta je novo",
