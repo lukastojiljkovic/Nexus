@@ -2800,3 +2800,5 @@ export type {
   BoardSeatKind,
   BoardsGame,
 } from "./games/boards/protocol.js";
+export { orbitalPeriodDays, orbitPath, solarSystemAt } from "./sky/planets.js";
+export { dayNightAt, TERMINATOR_ANGULAR_RADIUS_DEG, TWILIGHT_ANGULAR_RADII_DEG } from "./sky/earthView.js";
