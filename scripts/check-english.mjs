@@ -202,6 +202,10 @@ export const SERBIAN_SOURCES = [
     match: /^apps\/desktop\/src\/modules\/[^/]+\/renderer\/[^/]+\/copy\.sr\.ts$/,
     reason: "a kit module's own Serbian table one folder DEEPER than `renderer/copy.sr.ts` — the star map's, whose component lives under `renderer/stars/` so the module's page can be assembled around it; the `copy.en.ts` rule 1 reads sits beside it",
   },
+  {
+    match: /^apps\/desktop\/src\/modules\/translator\/renderer\/sentences\/copy\.sr\.ts$/,
+    reason: "the sentence translator's own Serbian table — a sub-surface of a kit module (ADR-090), one folder deeper than `renderer/copy.sr.ts`, with its `copy.en.ts` rule 1 reads beside it",
+  },
 ];
 
 /**
@@ -335,6 +339,11 @@ export const SERBIAN_LITERAL_ALLOWLIST = [
     file: "packages/core/src/imex/archivePaths.ts",
     contains: "Fascikla",
     reason: "the same, for a folder whose own name sanitizes to nothing",
+  },
+  {
+    file: "apps/desktop/src/modules/translator/renderer/sentences/split.ts",
+    contains: "čl",
+    reason: "the Serbian abbreviation `čl.` the sentence splitter RECOGNISES in the user's own text — a vocabulary read from input, never shown",
   },
 ];
 

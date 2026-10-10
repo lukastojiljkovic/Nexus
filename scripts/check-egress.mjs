@@ -240,6 +240,19 @@ export const ALLOWLIST = new Map([
     "apps/desktop/src/modules/maps/renderer/packFile.ts",
     ["fetch"],
   ],
+  [
+    // The translation worker's `fetch`, declared on its own worker-scope type.
+    // The rule fires on the declaration, which is the shape it must not ignore —
+    // and the two things that URL is ever given are both served from THIS
+    // process: the wasm asset the build emitted, and
+    // `nx-pack://<packId>/<file>` model files, which `protocol.handle` answers
+    // out of a signed, hash-verified pack folder (ADR-091). There is no host in
+    // the module and no way for one to arrive: the URLs come from
+    // `models.ts`, which builds them from a pack id and three constants.
+    // Exempted from `fetch` alone, so reaching for anything else still fails.
+    "apps/desktop/src/modules/translator/renderer/sentences/bergamot.worker.ts",
+    ["fetch"],
+  ],
 ]);
 
 /**
