@@ -217,6 +217,9 @@ describe("resolveModuleSelection", () => {
       // any other selectable module, from its own manifest default.
       timers: true,
       pro: false,
+      // The second discovered module, decided the same way and read from its own
+      // manifest default.
+      drawings: true,
     });
   });
 
@@ -255,6 +258,8 @@ describe("moduleFlagWrites", () => {
       // And the first DISCOVERED module last, because a kit module registers
       // after every compiled-in one (ADR-090).
       { moduleId: "timers", enabled: true },
+      // Then the second one, in registry order.
+      { moduleId: "drawings", enabled: true },
     ]);
   });
 

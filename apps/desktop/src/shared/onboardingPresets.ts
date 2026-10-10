@@ -47,6 +47,9 @@ export const ESSENTIALS_MODULE_PRESET: Readonly<Record<string, boolean>> = {
   // turns it on exactly as the manifest's own `defaultEnabled` says.
   timers: true,
   pro: false,
+  // The second module built on the kit (ADR-090), decided here like every other
+  // selectable one: the viewer reads a file and stores nothing, so it is on.
+  drawings: true,
 };
 
 /**

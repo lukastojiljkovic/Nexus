@@ -98,6 +98,9 @@ describe("createModuleRegistry", () => {
       // here rather than derived because this test IS the declaration — what the
       // registry holds is what the app shows.
       "timers",
+      // The second discovered module, ordered after TIMERS by its own
+      // `ModuleManifest.order`.
+      "drawings",
     ]);
   });
 
@@ -159,6 +162,9 @@ describe("createModuleRegistry", () => {
       // twice rather than a bin for anything tool-shaped.
       ELEC: ["electronics"],
       PRO: ["pro"],
+      // Opening an AutoCAD drawing is its own subject rather than a second
+      // reading of another prefix, so DRAW is this module's own entry.
+      DRAW: ["drawings"],
     });
   });
 
@@ -212,6 +218,8 @@ describe("createModuleRegistry", () => {
       "canvas",
       "electronics",
       "pro",
+      // The second discovered module, in the group it declares (ADR-090).
+      "drawings",
     ]);
     // The shell group is the two rows nothing may switch off, and the sidebar is
     // the one caller that splits it: its first member heads the rail, the rest
@@ -254,6 +262,9 @@ describe("createModuleRegistry", () => {
       // ON by default, like every module but PRIV and PRO: a timer writes
       // nothing until somebody starts one, so there is nothing to opt into.
       "timers",
+      // The drawings viewer stores nothing at all - it reads a file and prints
+      // one - so there is nothing about it to opt into either.
+      "drawings",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");

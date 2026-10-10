@@ -536,6 +536,7 @@ import {
   asString,
 } from "./ipcValidators.js";
 import { createModuleHost } from "./moduleHost.js";
+import { installDrawingsPlatform } from "../modules/drawings/main/desktop.js";
 import {
   deliverSecurityNotices,
   runCheckNow,
@@ -1392,6 +1393,18 @@ const moduleHost = createModuleHost({
   },
   now: () => Date.now(),
 });
+
+/**
+ * The one Electron-shaped capability the DRAWINGS module cannot hold itself:
+ * its native picker and the window's `printToPDF`.
+ *
+ * The module keeps its handlers electron-free (`modules/drawings/main/register.ts`)
+ * so the kit's register test can run them under Vitest, and takes its two
+ * effects through a slot this call fills - the getter rather than the window,
+ * because the window is replaced over the app's life and a captured one would
+ * go stale on the first reopen.
+ */
+installDrawingsPlatform(() => mainWindow);
 /** The `userData` directory itself — the registry's home, and the root every account directory hangs off. */
 function userDataDir(): string {
   return app.getPath("userData");
