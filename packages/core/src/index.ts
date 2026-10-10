@@ -2718,3 +2718,48 @@ export {
 export type { BricksInput, BricksState } from "./games/bricks/bricks.js";
 export type * from "./assistant/contract.js";
 export type * from "./sky/contract.js";
+
+// --- WORKSHOP (the maker's file viewers, ADR-090's kit) ----------------------
+//
+// Three readers for the files a maker opens every day, all pure: the geometry
+// and the arithmetic live here, the rendering lives in the module's page, and
+// the one thing that is neither - the Gerber-to-SVG library, which needs Node's
+// stream builtins - lives in the module's main process. `stl.ts`, `gcode.ts` and
+// `gerber.ts` each carry the reasoning for what they parse and for what they
+// refuse; every entry point takes BYTES from a file the user picked, which is
+// why every bound in them is a security bound rather than a tidiness one.
+export {
+  STL_MAX_ASCII_LINES,
+  STL_MAX_BYTES,
+  STL_MAX_TRIANGLES,
+  StlParseError,
+  parseStl,
+  stlIsClosed,
+} from "./workshop/stl.js";
+export type { StlBounds, StlMesh, StlProblem } from "./workshop/stl.js";
+export {
+  GCODE_ARC_SEGMENTS_PER_TURN,
+  GCODE_MAX_BYTES,
+  GCODE_MAX_LINES,
+  GCODE_MAX_SEGMENTS,
+  GCODE_MAX_WARNINGS,
+  GcodeParseError,
+  parseGcode,
+  parseGcodeText,
+} from "./workshop/gcode.js";
+export type {
+  GcodeBounds,
+  GcodeLayer,
+  GcodeModel,
+  GcodeProblem,
+  GcodeWarning,
+} from "./workshop/gcode.js";
+export {
+  boardSizeMm,
+  GERBER_MAX_BYTES,
+  GERBER_MAX_FILES,
+  GERBER_ROLES,
+  gerberBoxMm,
+  gerberRoleOf,
+} from "./workshop/gerber.js";
+export type { GerberBoardSize, GerberLayerBox, GerberRole } from "./workshop/gerber.js";

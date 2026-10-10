@@ -46,6 +46,11 @@ export const ESSENTIALS_MODULE_PRESET: Readonly<Record<string, boolean>> = {
   // selectable one: nothing about a timer asks to be opted into, so „Osnovno"
   // turns it on exactly as the manifest's own `defaultEnabled` says.
   timers: true,
+  // The maker's file viewers, decided here like every other selectable module: a
+  // viewer stores nothing and its page is complete the moment it is on, so the
+  // survey's own default turns it on exactly as the manifest's `defaultEnabled`
+  // says.
+  workshop: true,
   pro: false,
 };
 

@@ -98,6 +98,8 @@ describe("createModuleRegistry", () => {
       // here rather than derived because this test IS the declaration — what the
       // registry holds is what the app shows.
       "timers",
+      // The maker's file viewers, ordered by their manifest's `order` (310).
+      "workshop",
     ]);
   });
 
@@ -154,6 +156,9 @@ describe("createModuleRegistry", () => {
       // its own prefix below rather than borrowing this one.
       UTIL: ["focus", "tools", "timers"],
       CANV: ["canvas"],
+      // The workshop viewers, whose prefix is their own PRD entry rather than a
+      // second reading of somebody else's section.
+      WS: ["workshop"],
       // „Elektronika" takes its own for „Tabla"'s reason exactly: ELEC is its
       // own PRD entry, and the UTIL sharing above is one section implemented
       // twice rather than a bin for anything tool-shaped.
@@ -212,6 +217,8 @@ describe("createModuleRegistry", () => {
       "canvas",
       "electronics",
       "pro",
+      // The second discovered module, in the group it declares.
+      "workshop",
     ]);
     // The shell group is the two rows nothing may switch off, and the sidebar is
     // the one caller that splits it: its first member heads the rail, the rest
@@ -254,6 +261,8 @@ describe("createModuleRegistry", () => {
       // ON by default, like every module but PRIV and PRO: a timer writes
       // nothing until somebody starts one, so there is nothing to opt into.
       "timers",
+      // And the viewers ON the same terms: they store nothing at all.
+      "workshop",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");
@@ -440,6 +449,8 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
       // The first DISCOVERED card (ADR-090): declared in the module's own
       // manifest and drawn by its own body, with no line in this file's map.
       "timers",
+      // The second: one `fact` row, because the module stores nothing to set.
+      "workshop",
     ]);
   });
 
