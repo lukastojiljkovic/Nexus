@@ -134,6 +134,9 @@ describe("createModuleRegistry", () => {
       // group, which existed in `MODULE_GROUPS` from ADR-093 with no member
       // until now.
       "arcade",
+      // The second DISCOVERED module, ordered after the first by its own
+      // `order` (ADR-090): a board game is the `play` group's first member.
+      "boards",
     ]);
   });
 
@@ -238,6 +241,9 @@ describe("createModuleRegistry", () => {
       // the ASCII table, the tuner and the sound meter are one instrument panel
       // that is not any of those three.
       SIG: ["signals"],
+      // The board games module: a board game is its own subject rather than a
+      // second reading of anything above, so it takes a prefix of its own.
+      BOARD: ["boards"],
     });
   });
 
@@ -408,6 +414,9 @@ describe("createModuleRegistry", () => {
       // reason: nine small tools, and not one of them writes anything until it
       // is used.
       "miniapps",
+      // And the second discovered module, ON by default for its own version of
+      // that reason: a board game writes nothing until somebody plays one.
+      "boards",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");
@@ -608,6 +617,8 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
       // module's own `renderer/Settings.tsx` draws them.
       "calculator",
       "signals",
+      // The second, whose one preference is the level a new game opens at.
+      "boards",
     ]);
   });
 

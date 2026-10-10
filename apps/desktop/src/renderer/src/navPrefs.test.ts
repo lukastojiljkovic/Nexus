@@ -221,6 +221,8 @@ describe("sidebarGroups", () => {
       "life",
       "culture",
       "make",
+      // „Igre" joined the rail with its first module: the board games page.
+      "play",
     ]);
   });
 

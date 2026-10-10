@@ -75,6 +75,7 @@ describe("launcherGroups", () => {
     ]);
     // â€žKultura" is a group of its own, with the one module in it.
     expect(groups()[3]?.tiles.map((tile) => tile.id)).toEqual(["culture"]);
+    expect(groups().at(-1)?.tiles.map((tile) => tile.id)).toEqual(["boards"]);
   });
 
   /**

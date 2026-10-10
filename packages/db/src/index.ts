@@ -1293,3 +1293,40 @@ export type {
   SavePuzzleInput,
   SudokuState,
 } from "./puzzles/puzzlesStore.js";
+
+// --- GAMES: boards (stage 2 of the boards run, migration 091) ----------------
+//
+// The six board games' storage: the game in progress per game, the record against
+// each level, and the module's one preference. The rules are `@nexus/core`'s —
+// this store folds a saved move log back through `replayBoard` to insist that a
+// position and its log describe the same game, and reads the winner from the
+// engine rather than from the caller.
+//
+// Deliberately NOT in `RESTORE_WIPE_TABLES`, for `chess_games`' own reason: that
+// list and `@nexus/sync`'s collection map are held equal by
+// `sync/collectionGuard.test.ts`, sync is on hold, and these tables carry no
+// journal triggers. `ON DELETE CASCADE` is what takes them when a profile goes,
+// which is the path privacy depends on.
+export {
+  BOARDS_ARCHIVE_VERSION,
+  BoardsNotFoundError,
+  BoardsStore,
+  BoardsValidationError,
+  MAX_BOARDS_EVENTS,
+  MAX_BOARDS_EVENTS_CHARS,
+  MAX_BOARDS_SEED,
+  MAX_BOARDS_STATE_CHARS,
+  readBoardsArchive,
+} from "./games/boards/boardsStore.js";
+export type {
+  BoardArchiveSave,
+  BoardArchiveStats,
+  BoardEnding,
+  BoardFinishInput,
+  BoardRecordedOutcome,
+  BoardSave,
+  BoardSaveInput,
+  BoardsArchive,
+  BoardsSettings,
+  BoardStats,
+} from "./games/boards/boardsStore.js";

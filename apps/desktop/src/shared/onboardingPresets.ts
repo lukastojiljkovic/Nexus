@@ -80,6 +80,10 @@ export const ESSENTIALS_MODULE_PRESET: Readonly<Record<string, boolean>> = {
   // never suggests it during onboarding, so a profile that never asks for it
   // never sees it. The gallery is where it is switched on.
   arcade: false,
+  // And the second kit module (ADR-090), for the same reason: a board game is a
+  // complete screen the moment it is on, and it writes nothing until somebody
+  // plays one — so „Osnovno" decides it `true`, exactly as its manifest says.
+  boards: true,
   pro: false,
   // The second module built on the kit (ADR-090), decided here like every other
   // selectable one: a library that had to be switched on first would be hiding

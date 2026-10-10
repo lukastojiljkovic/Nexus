@@ -445,6 +445,7 @@ describe("buildSettingsIndex", () => {
       "signals:morse-speed",
       "signals:morse-pitch",
       "signals:tuner-a4",
+      "boards:default-level",
     ]);
   });
 

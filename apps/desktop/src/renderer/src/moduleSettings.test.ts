@@ -131,6 +131,8 @@ describe("moduleSettingsDeclarations", () => {
       "recorder",
       "calculator",
       "signals",
+      // And the second, ordered after the first by its own `order`.
+      "boards",
     ]);
   });
 
@@ -174,6 +176,9 @@ describe("moduleSettingsCardIds", () => {
       "recorder",
       "calculator",
       "signals",
+      // The second discovered card, in its own group — the card order follows the
+      // registry, and a kit module registers after every compiled-in one.
+      "boards",
     ]);
   });
 
@@ -221,6 +226,9 @@ describe("moduleSettingsCards", () => {
       "recorder",
       "calculator",
       "signals",
+      // The second discovered card, whose one control is the level a new game
+      // opens at.
+      "boards",
     ]);
     expect(cards.map((card) => card.title)).toEqual([
       s().sectionTitle.dashboard,
@@ -244,6 +252,7 @@ describe("moduleSettingsCards", () => {
       kitManifest("recorder")?.copy?.name[activeLocale()] ?? "",
       kitManifest("calculator")?.copy?.name[activeLocale()] ?? "",
       kitManifest("signals")?.copy?.name[activeLocale()] ?? "",
+      kitManifest("boards")?.copy?.name[activeLocale()] ?? "",
     ]);
   });
 

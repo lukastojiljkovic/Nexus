@@ -118,6 +118,18 @@ export const MLIN_DRAW_PLIES = 60;
  * 15-16-17, 6-11-15 and 8-12-17; and the four arms are 9-10-11, 12-13-14,
  * 1-4-7 and 16-19-22. Point 0 is the top-left corner and point 23 the
  * bottom-right.
+ *
+ * **The table is exactly the union of those sixteen lines' consecutive pairs,
+ * and four entries used to carry one edge more.** Points 18 and 21 (the middle
+ * and the outer square's bottom-left corners) and 20 and 23 (their bottom-right
+ * ones) were each listed as neighbours of the other, which no line of the drawn
+ * board joins: a piece at an outer corner can walk to the two points beside it
+ * on its own square's edges and to nothing else, and the asymmetry said so on its
+ * own — the top-left corner 0 has two neighbours while the bottom-left 21 had
+ * three. Stage 2 found it while drawing the board (both corners agreed on the
+ * picture and disagreed with the rules), and
+ * `games/boards/protocol.test.ts`'s lattice case is the regression test: it fails
+ * on the four entries above and passes on the sixteen lines.
  */
 export const MLIN_NEIGHBOURS: readonly (readonly number[])[] = [
   [1, 9],
@@ -138,12 +150,12 @@ export const MLIN_NEIGHBOURS: readonly (readonly number[])[] = [
   [11, 16],
   [15, 17, 19],
   [12, 16],
-  [10, 19, 21],
+  [10, 19],
   [16, 18, 20, 22],
-  [13, 19, 23],
-  [9, 18, 22],
+  [13, 19],
+  [9, 22],
   [19, 21, 23],
-  [14, 20, 22],
+  [14, 22],
 ];
 
 /** The board's sixteen mills, each as the three points of one line. */

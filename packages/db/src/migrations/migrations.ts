@@ -94,6 +94,7 @@ import { migration085 } from "./085-miniapps.js";
 // appears in exactly three places — this import, the list entry below, and the
 // file name.
 import { migration090 } from "./090-puzzles.js";
+import { migration091 } from "./091-boards.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -190,6 +191,12 @@ export const MIGRATIONS: readonly Migration[] = [
   migration086,
   migration085,
   migration090,
+  // 91 — the BOARD GAMES module (stage 2 of the boards run): the game in
+  // progress, the record against the computer and the module's one preference.
+  // The gap between 082 and 091 is the reserved block sibling runs hold on this
+  // branch; the maintainer renumbers at merge, which is why the number appears in
+  // exactly three places — the import above, this entry, and the file name.
+  migration091,
 ];
 
 /**

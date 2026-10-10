@@ -229,6 +229,8 @@ describe("resolveModuleSelection", () => {
       signals: true,
       // The second discovered module (ADR-090), decided the same way.
       miniapps: true,
+      // And the second discovered module, on for the same reason.
+      boards: true,
       pro: false,
       // The second discovered module, in registry order after Tajmeri.
       library: true,
@@ -294,6 +296,7 @@ describe("moduleFlagWrites", () => {
       // And the second discovered module after it, off in Osnovno: PRD 31 keeps
       // the entertainment section out of the questionnaire.
       { moduleId: "arcade", enabled: false },
+      { moduleId: "boards", enabled: true },
     ]);
   });
 

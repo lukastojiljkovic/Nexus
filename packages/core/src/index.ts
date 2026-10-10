@@ -2764,3 +2764,39 @@ export type {
 } from "./reader/search.js";
 
 export { resolvePackPath } from "./reader/paths.js";
+
+// --- GAMES: the BOARD GAMES module's turn protocol (stage 2, migration 091) ---
+//
+// The six board engines are exported above as namespaces; this is the layer over
+// them that says what a GAME is — which seat counts it is played with, how many
+// levels it offers, what its opening is, how a die is rolled and replayed, and how
+// one event is written down. `@nexus/db`'s `BoardsStore` and the module's own page
+// both read it, so a saved game is folded back through the same rules the page
+// plays by.
+export {
+  BOARDS_GAMES,
+  MLIN_LAYOUT,
+  backgammonSiteName,
+  boardEngine,
+  describeBoardEvent,
+  draughtsSquareName,
+  fourColumnName,
+  isBoardSeatKind,
+  isBoardsGame,
+  mlinPointName,
+  moveEvent,
+  normalizeBoardState,
+  replayBoard,
+  reversiCellName,
+  rollEvent,
+  turnSeat,
+} from "./games/boards/protocol.js";
+export type {
+  BoardChoice,
+  BoardEngine,
+  BoardEvent,
+  BoardEventLabel,
+  BoardOutcome,
+  BoardSeatKind,
+  BoardsGame,
+} from "./games/boards/protocol.js";
