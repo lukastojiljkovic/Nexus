@@ -194,7 +194,17 @@ export type IconName =
   // one of that module's four tools. Drawn here rather than in the module
   // because the drawing lives with the other drawings; the module brings the
   // name (`renderer/icon.ts`).
-  | "signal";
+  | "signal"
+  // The ASSISTANT module's mark (ADR-106): a speech bubble with a spark inside
+  // it. Appended at the end, on the CALCULATOR glyph's own rule - every kit
+  // module run adds one glyph here, and a list that grows at its end merges
+  // mechanically where a re-sorted one does not.
+  //
+  // A bubble because this module's whole surface is a conversation, and a spark
+  // because the thing inside it answers from what it read rather than from a
+  // script: every other shape in the set says "a note", "a file" or "a search",
+  // and none of them says "something that talks back".
+  | "assistant";
 
 const SHAPES: Record<IconName, ReactNode> = {
   // Three panes, uneven on purpose: a board someone arranged, not a 2×2 grid.
@@ -994,6 +1004,15 @@ const SHAPES: Record<IconName, ReactNode> = {
       <path d="M6 9.5A8.5 8.5 0 0 1 14.5 18" />
       <path d="M6 5.5A12.5 12.5 0 0 1 18.5 18" />
       <path d="M6 18h0" />
+    </>
+  ),
+  // A speech bubble with a four-pointed spark in it. The bubble is drawn with a
+  // tail on the lower left, so the shape reads as speech at 16px without a
+  // second glyph beside it.
+  assistant: (
+    <>
+      <path d="M4 6.4A2.4 2.4 0 0 1 6.4 4h11.2A2.4 2.4 0 0 1 20 6.4v8.2a2.4 2.4 0 0 1-2.4 2.4h-6.9l-4.3 3.3a.6.6 0 0 1-.97-.47V17A2.4 2.4 0 0 1 4 14.6z" />
+      <path d="M12 6.9l1.3 2.9 2.9 1.3-2.9 1.3-1.3 2.9-1.3-2.9-2.9-1.3 2.9-1.3z" />
     </>
   ),
 };

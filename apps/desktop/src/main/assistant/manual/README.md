@@ -40,7 +40,7 @@ the manual is only useful if the reader can find the button it names.
 
 Modules: `dashboard`, `tasks`, `calendar`, `notes`, `files`, `study`, `priv`,
 `finance`, `habits`, `fitness`, `focus`, `tools`, `canvas`, `electronics`, `pro`,
-`timers`.
+`timers`, `assistant`.
 
 Shell: `search`, `onboarding`, `accounts`, `lock`, `shortcuts`.
 

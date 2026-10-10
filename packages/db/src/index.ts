@@ -1417,3 +1417,39 @@ export type {
   LabOffGridDevice,
   LabSample,
 } from "./lab/labStore.js";
+
+// --- ASSISTANT (migration 091, ADR-106) -------------------------------------
+//
+// The assistant's conversations: the threads a person had with the local model,
+// their messages, the citations each reply drew on and the tool calls it asked
+// for. Deliberately NOT in `RESTORE_WIPE_TABLES`: a kit module replaces its own
+// rows through `ModuleContext.importData` (ADR-090 section 6), and that list is
+// held equal to `@nexus/sync`'s collection map by `sync/collectionGuard.test.ts`,
+// which a module may not edit. The module's own `importData` is what empties the
+// three tables; `imex/restoreStore.test.ts` names them in the exemption list.
+export {
+  ASSISTANT_EXPORT_VERSION,
+  ASSISTANT_TIERS,
+  AssistantNotFoundError,
+  AssistantValidationError,
+  ConversationStore,
+  MAX_CONVERSATION_TITLE_LENGTH,
+  MAX_CONVERSATIONS,
+  MAX_MESSAGE_CHARS,
+  MAX_MESSAGE_CITATIONS,
+  MAX_MESSAGE_JSON_CHARS,
+  MAX_MESSAGE_TOOL_CALLS,
+  MAX_MESSAGES_PER_CONVERSATION,
+  emptyAssistantExport,
+  parseAssistantExport,
+} from "./assistant/conversationStore.js";
+export type {
+  AssistantConversation,
+  AssistantExport,
+  AssistantMessage,
+  AssistantMessageInput,
+  AssistantRole,
+  AssistantSettings,
+  ExportedAssistantConversation,
+  ExportedAssistantMessage,
+} from "./assistant/conversationStore.js";

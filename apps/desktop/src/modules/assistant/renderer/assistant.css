@@ -1,0 +1,166 @@
+/* ASISTENT (ADR-106). Tokens exclusively — raw colour values are forbidden
+   outside @nexus/tokens, and this stylesheet is checked by the same gates the
+   shell's own are (`check:colours`, `check:tokens`, `check:layers`).
+ *
+ * THIS FILE IS IMPORTED BY THE MODULE'S PAGE, not by `app.css`: the shell's
+ * stylesheet is part of the startup chunk, so a rule for a page nobody has
+ * opened would be paid for on every launch. Vite turns this import into a chunk
+ * of its own, loaded with the page — the same shape the module's JavaScript has.
+ *
+ * Class prefix `asst__`, for the reason the shell's split states: a rule belongs
+ * to the module whose prefix it carries.
+ */
+
+.asst {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+  padding: var(--nx-space-4);
+}
+
+/* The rail is a fixed-width column and the thread takes the room. At the 900px
+   window minimum the two still fit: `--nx-layout-col-min` is the floor the
+   shell states for a column nothing may squeeze below. */
+.asst__grid {
+  display: grid;
+  grid-template-columns: minmax(0, var(--nx-layout-col-min)) minmax(0, 1fr);
+  gap: var(--nx-space-4);
+  align-items: start;
+}
+
+.asst__rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+
+.asst__row-active {
+  background: var(--nx-surface-alt);
+}
+
+.asst__rename {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-2) 0;
+}
+
+.asst__main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+  min-width: 0;
+}
+
+.asst__thread {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+}
+
+/* A message is a block of prose, and the reader's measure is the token the
+   shell states for one — a chat bubble that ran the full width of a maximised
+   window would be a line nobody can follow. */
+.asst__msg {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  max-width: var(--nx-layout-prose);
+}
+
+.asst__msg-user .asst__text {
+  color: var(--nx-text-muted);
+}
+
+.asst__text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Tool activity is an aside, not a message: quieter ink, no box, one line each. */
+.asst__tools {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  padding-inline-start: var(--nx-space-3);
+  border-inline-start: 1px solid var(--nx-border-subtle);
+}
+
+.asst__citations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: center;
+}
+
+.asst__composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+
+.asst__workflows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+
+.asst__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: center;
+}
+
+.asst__error {
+  color: var(--nx-danger);
+}
+
+/* The models pane: three cards, stacked, each with its own subject. */
+.asst__models {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+}
+
+.asst__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+
+.asst__facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+
+.asst__picks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+
+.asst__pick-name {
+  font-weight: var(--nx-font-weight-medium);
+}
+
+.asst__download {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: center;
+}
+
+.asst__notice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  align-items: flex-start;
+}
+
+.asst__search {
+  display: flex;
+  gap: var(--nx-space-2);
+  align-items: end;
+}

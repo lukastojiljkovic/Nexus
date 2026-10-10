@@ -129,6 +129,9 @@ describe("createModuleRegistry", () => {
       "wiki",
       // `order: 230`, after the reference library.
       "translator",
+      // The ASSISTANT (ADR-106), `order: 240`: the last member of Knowledge, and
+      // the last discovered module that declares `knowledge`.
+      "assistant",
       // `order: 300`.
       "scanner",
       // The maker's file viewers, `order: 310`.
@@ -274,6 +277,10 @@ describe("createModuleRegistry", () => {
       // is not a second reading of the utility belt.
       LAB: ["lab"],
       LANG: ["translator"],
+      // The ASSISTANT (ADR-106) takes its own prefix: it is not a second reading
+      // of any section above - it is a helper that knows the app and the user's
+      // own material, which no PRD entry names.
+      ASST: ["assistant"],
     });
   });
 
@@ -349,6 +356,9 @@ describe("createModuleRegistry", () => {
       "wiki",
       // The translator, `order: 230` (ADR-090).
       "translator",
+      // And the ASSISTANT (ADR-106) closes the group: `order: 240`, the last of
+      // the reference-and-helper kits that sit in Knowledge.
+      "assistant",
     ]);
     expect(grouped.get("life")?.map((manifest) => manifest.id)).toEqual([
       "priv",
@@ -494,6 +504,10 @@ describe("createModuleRegistry", () => {
       // so there is nothing here to opt into either.
       "wiki",
       "translator",
+      // The assistant (ADR-106) writes nothing until somebody asks it something,
+      // and its page is where a person learns where models come from - so it is
+      // on by default like every module but the two above.
+      "assistant",
       // ON by default too. The scanner needs a language pack before it can
       // read, and the page says so where the reading happens instead of hiding
       // the module from everybody who has not installed one.
@@ -716,6 +730,10 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
       // The translator's two controls, declared as `{ sr, en }` pairs in its own
       // manifest and drawn by its own body.
       "translator",
+      // The assistant's three: the default tier, the web-search consent and the
+      // knowledge index's own statement of fact. Declared in its own manifest
+      // (`shared/manifest.ts`) and drawn by its own body.
+      "assistant",
       // The second: one `fact` row, because the module stores nothing to set.
       "workshop",
       // And the puzzles, whose one preference is whether sudoku conflicts are

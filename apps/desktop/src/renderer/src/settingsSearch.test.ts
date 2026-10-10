@@ -451,6 +451,12 @@ describe("buildSettingsIndex", () => {
       // The second DISCOVERED card's two controls (ADR-090).
       "translator:direction",
       "translator:recent",
+      // And the assistant's three (ADR-106), declared as pairs in its own
+      // manifest: the default tier, the web-search consent and the knowledge
+      // index's statement of fact.
+      "assistant:tier",
+      "assistant:web-search",
+      "assistant:knowledge",
       // The second DISCOVERED card, whose one control is a `fact`: the list of
       // paths this machine opened. It is indexable and has nothing to set.
       "workshop:recent-files",

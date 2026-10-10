@@ -255,8 +255,8 @@ describe("the vocabulary the tree declares", () => {
 
   it("counts sixteen compiled-in modules plus the discovered ones", () => {
     const vocabulary = knownVocabulary();
-    // 16 + 23 kit modules with a manifest (`modules/*/manifest.ts`).
-    expect(vocabulary.moduleIds.size).toBe(39);
+    // 16 + 24 kit modules with a manifest (`modules/*/manifest.ts`).
+    expect(vocabulary.moduleIds.size).toBe(40);
     expect(vocabulary.moduleIds.has("timers")).toBe(true);
     expect(vocabulary.settingsCategories.size).toBe(8);
   });

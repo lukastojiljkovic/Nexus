@@ -35,8 +35,8 @@ import {
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 90 (the assistant's knowledge base), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(90);
+  it("is at version 91 (the assistant's conversations), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(91);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
