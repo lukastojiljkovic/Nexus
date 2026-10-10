@@ -28,9 +28,10 @@
 //
 //   2. **Serbian copy lives in Serbian tables.** Outside the sources listed in
 //      {@link SERBIAN_SOURCES} — the copy tables, the demo scene, the generated
-//      artefacts' Serbian lines, and the data tables the brief calls out — a
-//      string literal containing a Serbian letter is a finding. This is the rule
-//      that catches the component nobody gave a table to.
+//      artefacts' Serbian lines, and the data tables the brief calls out — and
+//      outside a bilingual record's own `sr:` half, a string literal containing
+//      a Serbian letter is a finding. This is the rule that catches the
+//      component nobody gave a table to.
 //
 // WHAT IT CANNOT SEE, and each is why its rule is worded the way it is. A
 // Serbian string WITHOUT a diacritic outside a table is rule 2's blind spot —
@@ -172,6 +173,18 @@ export const SERBIAN_SOURCES = [
   {
     match: /^packages\/db\/src\/migrations\/[^/]+\.ts$/,
     reason: "a migration's SQL, which is a template literal — its `--` comments are literal text to a parser and are shown to nobody (`check:quotes` skips the same directory, for the same reason)",
+  },
+  {
+    match: /^apps\/desktop\/src\/modules\/[^/]+\/renderer\/copy\.sr\.ts$/,
+    reason: "a kit module's own Serbian table, with the `copy.en.ts` rule 1 reads beside it",
+  },
+  {
+    match: /^packages\/core\/src\/miniapps\/typing\.ts$/,
+    reason: "the Serbian Latin keyboard the typing tutor drills — `š`, `đ`, `č`, `ć` and `ž` are keys of its layout and its lessons, not copy",
+  },
+  {
+    match: /^packages\/core\/src\/cookbook\/parse\.ts$/,
+    reason: "the Serbian measure words and taste phrases the ingredient parser RECOGNISES in a pasted recipe — a vocabulary read from input, never shown",
   },
 ];
 
@@ -363,10 +376,14 @@ const lineOf = (sourceFile, node) =>
  * consumer ever sees, and it is exactly the shape this gate was written for.
  * Comments are not read at all, because the compiler does not give them to a
  * visitor and because a comment is shown to nobody.
+ *
+ * `skip` prunes a subtree before its literals are read: rule 2 passes
+ * {@link isSerbianHalf}.
  */
-export function literalsOf(sourceFile) {
+export function literalsOf(sourceFile, skip = () => false) {
   const out = [];
   const visit = (node) => {
+    if (skip(node)) return;
     if (
       ts.isStringLiteral(node) ||
       ts.isNoSubstitutionTemplateLiteral(node) ||
@@ -397,6 +414,26 @@ function isEnglishPropertyName(name) {
     return name.text === "en" || (name.text.length > 2 && name.text.endsWith("En"));
   }
   return false;
+}
+
+const isPropertyNamed = (name, text) =>
+  (ts.isIdentifier(name) || ts.isStringLiteral(name)) && name.text === text;
+
+/**
+ * True for the `sr:` half of a bilingual record, `{ sr: …, en: … }` — the shape
+ * the module kit's `ModuleText` gives every manifest name and notification
+ * heading. That half is a Serbian table one entry long whose `en:` twin rule 1
+ * reads, so rule 2 has nothing to say about it. A lone `sr:` with no `en:`
+ * beside it is not that record, and is still judged.
+ */
+function isSerbianHalf(node) {
+  if (!ts.isPropertyAssignment(node) || !isPropertyNamed(node.name, "sr")) return false;
+  return (
+    ts.isObjectLiteralExpression(node.parent) &&
+    node.parent.properties.some(
+      (property) => ts.isPropertyAssignment(property) && isPropertyNamed(property.name, "en"),
+    )
+  );
 }
 
 /** True for a variable that IS an English table: `EN`, `EN_…`, `…_EN`. */
@@ -598,7 +635,7 @@ const isJudgedSerbianSource = (relPath) =>
 export function serbianFindings(relPath, source) {
   if (isTestFile(relPath) || isEnglishTable(relPath) || isSerbianSource(relPath)) return [];
   const findings = [];
-  for (const literal of literalsOf(parse(relPath, source))) {
+  for (const literal of literalsOf(parse(relPath, source), isSerbianHalf)) {
     if (
       SERBIAN_LITERAL_ALLOWLIST.some(
         (entry) => entry.file === relPath && literal.text.includes(entry.contains),

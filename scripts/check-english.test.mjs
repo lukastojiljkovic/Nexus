@@ -146,6 +146,18 @@ describe("rule 2 — Serbian copy lives in Serbian tables", () => {
     expect(serbianFindings("apps/desktop/src/main/demo/tasks.ts", source)).toEqual([]);
     expect(serbianFindings("apps/desktop/src/renderer/src/x.test.ts", source)).toEqual([]);
     expect(serbianFindings("packages/core/src/electronics/catalogue/sensors.ts", source)).toEqual([]);
+    expect(serbianFindings("apps/desktop/src/modules/timers/renderer/copy.sr.ts", source)).toEqual([]);
+  });
+
+  /** The module kit's `ModuleText` is this record; its `en:` half is rule 1's. */
+  it("reads past a bilingual record's `sr:` half, and only with an `en:` beside it", () => {
+    const record = 'const FINISHED = { sr: "Odbrojavanje je završeno", en: "Countdown finished" };';
+    expect(serbianFindings(COMPONENT, record)).toEqual([]);
+    expect(serbianFindings(COMPONENT, 'const T = { sr: "Odbrojavanje je završeno" };')).toHaveLength(1);
+    // The record's other fields are still judged.
+    expect(
+      serbianFindings(COMPONENT, 'const T = { sr: "Sačuvaj", en: "Save", hint: "Sačuvaj" };'),
+    ).toHaveLength(1);
   });
 
   /** An English table's Serbian is rule 1's finding; reporting it twice is one defect, two lines. */
