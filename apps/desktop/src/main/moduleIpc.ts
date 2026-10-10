@@ -39,6 +39,7 @@ import type Database from "better-sqlite3-multiple-ciphers";
 import type { ExportModuleData, ModuleText } from "@nexus/core";
 import type { ModuleContract, ModuleOps } from "../shared/moduleApi.js";
 import { mainLocale } from "./locale.js";
+import type { ModuleToolsAccess } from "./moduleTools.js";
 import {
   asBoolean,
   asBoundedInteger,
@@ -113,6 +114,17 @@ export interface ModuleCall {
    * install, remove or write anything.
    */
   packs(): ModulePacksAccess;
+  /**
+   * The installed TOOL packs (ADR-094): the one way a module finds a program a
+   * pack carries and starts it, in MAIN, for itself.
+   *
+   * On the call as well as on the context, and narrow on purpose: a module lists
+   * what is installed, reads the licence and source it has to show, and opens a
+   * session on one pack. It cannot install, remove or verify anything, no pack id
+   * crosses the bridge, and nothing a renderer sends ever reaches an argument
+   * list — `main/moduleTools.ts` states the whole of that argument.
+   */
+  tools(): ModuleToolsAccess;
   /**
    * The blob store's attach path, on a handler's own call object: a handler is
    * where a module records the row, so a handler is what has to trigger the
@@ -285,6 +297,8 @@ export interface ModuleContext<Id extends string, Ops extends ModuleOps> {
    * it arms something at session start, not only inside a handler.
    */
   packs(): ModulePacksAccess;
+  /** The installed tool packs (see `ModuleCall.tools`). On the context because a module may need one outside a handler. */
+  tools(): ModuleToolsAccess;
   /**
    * Saves a main-authored HTML document as a PDF, where the user says
    * (`ModulePlatform.savePdf`). Answers the path written, or `null` when the
@@ -371,6 +385,14 @@ export interface ModulePlatform {
    * user's machine.
    */
   packs?: ModulePacksAccess;
+  /**
+   * The installed tool packs a module may run (ADR-094), or absent in a process
+   * that has none (a test's fake platform). A module that asks through
+   * `ctx.tools()` when the platform carries none is refused by name rather than
+   * answered with "nothing is installed": the two are different facts, and only
+   * one of them is about the user's machine.
+   */
+  tools?: ModuleToolsAccess;
   now(): number;
   /**
    * Renders a main-authored HTML document to a PDF and saves it where the USER
@@ -501,6 +523,7 @@ export class ModuleHost implements ModuleHostSurface {
       releaseBlob: (sha256) => requireBlobs(this.platform).releaseBlob(sha256),
       armUntil: (atMs, run) => this.armUntil(atMs, run),
       packs: () => requirePacks(this.platform),
+      tools: () => requireTools(this.platform),
       savePdf: (request) => {
         const print = this.platform.savePdf;
         if (print === undefined) {
@@ -710,6 +733,7 @@ export class ModuleHost implements ModuleHostSurface {
       as: MODULE_VALIDATORS,
       profileDb: (profileId, open) => open(this.platform.database(), profileId),
       packs: () => requirePacks(this.platform),
+      tools: () => requireTools(this.platform),
       attachFiles: (maxBytes, record) => requireBlobs(this.platform).attachFiles(maxBytes, record),
       releaseBlob: (sha256) => requireBlobs(this.platform).releaseBlob(sha256),
       // Bound once per call rather than read from the platform at the call
@@ -746,4 +770,23 @@ function requirePacks(platform: ModulePlatform): ModulePacksAccess {
     );
   }
   return packs;
+}
+
+/**
+ * The tool-pack access a module asked for, or the refusal that names the missing
+ * half.
+ *
+ * Thrown rather than answered with an empty list, for `requirePacks`'s reason:
+ * "this process supplied no tool access" and "no tool pack is installed" would
+ * otherwise be one green screen, and the first is a wiring mistake only
+ * `index.ts` can fix.
+ */
+function requireTools(platform: ModulePlatform): ModuleToolsAccess {
+  const tools = platform.tools;
+  if (tools === undefined) {
+    throw new Error(
+      "This process supplied no tool-pack access to its modules, so no module can run an installed tool pack.",
+    );
+  }
+  return tools;
 }

@@ -85,6 +85,8 @@ export const sr = {
     colorWhite: "Belim",
     colorBlack: "Crnim",
     level: "Nivo",
+    levelWithPack: "Stockfish",
+    levelNeedsPack: "uz paket",
     clock: "Sat",
     clockNone: "Bez sata",
     clockCustom: "Po meri",
@@ -150,6 +152,15 @@ export const sr = {
     mutate: "Izmena nije sačuvana.",
     fen: "To nije FEN pozicija.",
     clock: "Sat ide od 1 do 120 minuta, a dodatak od 0 do 300 sekundi.",
+  },
+  pack: {
+    credit: "Paket igra nivoe",
+    source: "izvorni kod",
+    needed:
+      "Nivoi 6–8 igraju najjače uz Stockfish paket — zaseban program otvorenog koda " +
+      "(GPL-3.0-or-later), koji se uvozi u Podešavanjima, na kartici Paketi.",
+    unavailable: "Paket trenutno ne može da odigra potez, pa igra ugrađeni računar.",
+    score: "procena",
   },
   common: {
     cancel: "Otkaži",

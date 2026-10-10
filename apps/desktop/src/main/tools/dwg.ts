@@ -57,12 +57,47 @@ export type DwgRefusal =
 
 export class DwgError extends Error {
   readonly code: DwgRefusal;
+  /**
+   * The converter's own exit code, or `null` when it never exited on its own
+   * (a deadline, a cancel, a program this module had to kill).
+   */
+  readonly exitCode: number | null;
+  /**
+   * The FIRST line the converter wrote to its error output — its own words, kept
+   * as data so a caller can put them in front of a user without a stack trace and
+   * without parsing the sentence this error carries.
+   */
+  readonly reason: string | null;
 
-  constructor(code: DwgRefusal, message: string) {
+  constructor(
+    code: DwgRefusal,
+    message: string,
+    detail: { readonly exitCode?: number | null; readonly reason?: string | null } = {},
+  ) {
     super(message);
     this.name = "DwgError";
     this.code = code;
+    this.exitCode = detail.exitCode ?? null;
+    this.reason = detail.reason ?? null;
   }
+}
+
+/**
+ * The converter's first line of diagnostics: stderr's if it wrote any, stdout's
+ * otherwise.
+ *
+ * One line, because a decoder's failure is announced on its first line and the
+ * rest is a transcript; stderr first, because that is where a program says what
+ * went wrong while stdout carries its progress. `dwg2dxf` writes its version
+ * banner and its "Reading…" line to stdout and its `READ ERROR 0x…` to stderr,
+ * and the second is the one a person can act on.
+ */
+function firstLine(text: string): string | null {
+  for (const line of text.split("\n")) {
+    const trimmed = line.trim();
+    if (trimmed !== "") return trimmed;
+  }
+  return null;
 }
 
 export interface DwgConversion {
@@ -140,18 +175,25 @@ export async function convertDwgToDxf(input: DwgConversionInput): Promise<DwgCon
   await rm(staged, { force: true }).catch(() => undefined);
 
   const log = `${result.stdout.toString("utf8")}${result.stderr.toString("utf8")}`.trim();
+  // Kept beside the sentence rather than inside it: the first line of the
+  // converter's own diagnostics is what a caller shows a user, and the message
+  // above is what a log shows a maintainer.
+  const reason =
+    firstLine(result.stderr.toString("utf8")) ?? firstLine(result.stdout.toString("utf8"));
   if (result.stopped !== null || result.spawnError !== null) {
     throw new DwgError(
       "conversion-stopped",
       `The converter ${result.stopped === null ? "could not be started" : `was stopped (${result.stopped})`}${
         log === "" ? "" : `: ${log}`
       }`,
+      { exitCode: result.code, reason },
     );
   }
   if (result.code !== 0) {
     throw new DwgError(
       "conversion-failed",
       `dwg2dxf exited with code ${String(result.code)}${log === "" ? "" : `: ${log}`}`,
+      { exitCode: result.code, reason },
     );
   }
 
@@ -164,12 +206,14 @@ export async function convertDwgToDxf(input: DwgConversionInput): Promise<DwgCon
     throw new DwgError(
       "conversion-failed",
       `The converter produced no DXF${log === "" ? "" : `: ${log}`}`,
+      { exitCode: result.code, reason },
     );
   }
   if (size > DWG_LIMITS.outputBytes) {
     throw new DwgError(
       "output-too-large",
       `The converted drawing is ${String(size)} bytes; this reader accepts at most ${String(DWG_LIMITS.outputBytes)}.`,
+      { exitCode: result.code, reason },
     );
   }
 

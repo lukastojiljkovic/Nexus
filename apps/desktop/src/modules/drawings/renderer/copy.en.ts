@@ -63,8 +63,18 @@ export const en: typeof sr = {
     hideAll: "Hide all",
   },
   dwg: {
-    body: "DWG needs the LibreDWG pack - a separate tool that converts DWG to DXF.",
+    body: "DWG needs the LibreDWG pack - a separate open-source tool (GPL-3.0-or-later) that converts DWG to DXF.",
     catalogue: "The pack is installed in Settings, on the Packs card.",
+    converted: "The DWG was converted by the pack",
+    source: "source code",
+    exit: "exit",
+  },
+  dwgFailures: {
+    "conversion-failed": "LibreDWG did not convert this drawing",
+    "conversion-stopped": "The conversion was stopped before it finished",
+    "too-large": "The converted drawing is larger than 32 MB",
+    "not-a-tool": "The DWG pack cannot be started",
+    io: "The file could not be read",
   },
   print: {
     button: "Print to PDF",

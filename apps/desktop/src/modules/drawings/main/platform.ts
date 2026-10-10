@@ -23,14 +23,26 @@ import type { DrawingKind } from "./open.js";
  * `undefined is not a function` on the first click.
  */
 
-/** What `pickAndRead` answers: the file's bytes and kind, a refusal, or a cancelled dialog. */
-export type ReadDrawing =
+/**
+ * What `pickFile` answers: the file the user chose, a refusal, or a cancelled
+ * dialog.
+ *
+ * **A PATH, and it stays in main.** The renderer never sees it: `register.ts`
+ * reads the file it names (bounded) or hands it to the pack's converter and puts
+ * only the drawing and the file's own NAME on the wire. That is the whole point
+ * of putting the picker in main — a renderer cannot ask this module to read a
+ * file it did not choose — and it is why the picker and the read are two steps
+ * here: a `.dwg` is not read into memory at all, because the pack's converter
+ * reads it once, out of the file the user picked.
+ */
+export type PickDrawing =
   | {
-      readonly status: "chosen";
+      readonly status: "picked";
       /** The file's own name, as the dialog reported it. */
       readonly name: string;
       readonly kind: DrawingKind;
-      readonly bytes: Uint8Array;
+      /** Where the user's file is. Main's own value, and it never reaches the renderer. */
+      readonly path: string;
     }
   | { readonly status: "cancelled" }
   | { readonly status: "refused"; readonly code: DrawingRefusalCode };
@@ -44,11 +56,10 @@ export type PrintView =
 /** The Electron-shaped half of this module, as `register.ts` sees it. */
 export interface DrawingsPlatform {
   /**
-   * Opens the native picker and reads what was chosen, bounded by
-   * `MAX_DRAWING_BYTES` before the bytes are in memory. Never throws for a file
+   * Opens the native picker and answers what was chosen. Never throws for a file
    * it cannot use: a refusal is an answer.
    */
-  pickAndRead(): Promise<ReadDrawing>;
+  pickFile(): Promise<PickDrawing>;
   /**
    * Prints the CURRENT WINDOW to a PDF the user names, through a save dialog.
    * What is on the sheet is the renderer's business: the page puts the app into

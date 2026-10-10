@@ -6,7 +6,13 @@ import { DxfViewer, type LayerInfo } from "dxf-viewer";
 import { Color, Vector3 } from "three";
 import { declaredText } from "../../../renderer/src/moduleKit/moduleSurface.js";
 import { numberFormat } from "../../../renderer/src/intl.js";
-import type { DrawingRefusalCode, DrawingsOpenResult } from "../shared/ipc.js";
+import { openExternalLink } from "../../../renderer/src/links.js";
+import type {
+  DrawingConversionFailure,
+  DrawingRefusalCode,
+  DrawingsOpenResult,
+  DrawingToolView,
+} from "../shared/ipc.js";
 import { manifest } from "../shared/manifest.js";
 import { copy } from "./copy.js";
 import { textFontBytes } from "./font.js";
@@ -104,6 +110,12 @@ type Phase = keyof typeof copy.phases;
 type Problem =
   | { readonly kind: "refusal"; readonly code: DrawingRefusalCode }
   | { readonly kind: "dwg" }
+  /**
+   * The pack ran and did not produce a drawing. The code, the converter's exit
+   * code and the first line of its diagnostics are all the page shows — the
+   * copy owns the sentence, the converter owns the words in it.
+   */
+  | { readonly kind: "conversion"; readonly failure: DrawingConversionFailure }
   | { readonly kind: "error"; readonly key: "openFailed" | "parseFailed" | "timedOut" };
 
 /** What the last print left behind. */
@@ -114,6 +126,32 @@ type PrintNote =
 
 /** Which pick the toolbar has armed, if any. */
 type PickMode = "none" | "measure" | "zoom";
+
+/**
+ * What a failed conversion says, in the language being read.
+ *
+ * The copy table owns the sentence for each code, and the CONVERTER owns the two
+ * facts appended to two of them: its exit code and the first line of its own
+ * diagnostics (ADR-094 — a DWG decoder is C reading somebody else's file, and
+ * „dwg2dxf exited with code 1: READ ERROR 0x1“ is what a person can act on). A
+ * stack trace is what this must never be, which is why the wire carries those two
+ * values rather than a message.
+ *
+ * The exit code and the line are appended only for the two codes whose failure
+ * IS the converter's (`conversion-failed`, `conversion-stopped`): for the other
+ * three the values are this application's own statement about itself, in its own
+ * language for a log, and a page showing them would be quoting a maintainer at a
+ * user.
+ */
+function conversionProblemText(failure: DrawingConversionFailure): string {
+  const sentence = copy.dwgFailures[failure.code];
+  const fromConverter =
+    failure.code === "conversion-failed" || failure.code === "conversion-stopped";
+  if (!fromConverter) return sentence;
+  const exit = failure.exitCode === null ? "" : `${copy.dwg.exit} ${numberFormat().format(failure.exitCode)}`;
+  const detail = [exit, failure.reason ?? ""].filter((part) => part !== "").join(": ");
+  return detail === "" ? sentence : `${sentence} (${detail})`;
+}
 
 export default function DrawingsPage() {
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -137,6 +175,12 @@ export default function DrawingsPage() {
   const [mode, setMode] = useState<PickMode>("none");
   const [picks, setPicks] = useState<readonly Point[]>([]);
   const [cursor, setCursor] = useState<Point | null>(null);
+  /**
+   * The pack that converted the drawing on screen, or `null` when this module
+   * read the file itself. ADR-094 §5 requires the licence and the source wherever
+   * the converter is named, and this line is what names it.
+   */
+  const [credit, setCredit] = useState<DrawingToolView | null>(null);
 
   const showPhase = useCallback((next: Phase | null): void => {
     if (shownPhase.current === next) return;
@@ -265,6 +309,7 @@ export default function DrawingsPage() {
     busyRef.current = true;
     setProblem(null);
     setPrintNote(null);
+    setCredit(null);
     try {
       let result: DrawingsOpenResult;
       try {
@@ -279,10 +324,15 @@ export default function DrawingsPage() {
         setProblem({ kind: "dwg" });
         return;
       }
+      if (result.outcome === "conversion-failed") {
+        setProblem({ kind: "conversion", failure: result.failure });
+        return;
+      }
       if (result.outcome === "refused") {
         setProblem({ kind: "refusal", code: result.code });
         return;
       }
+      setCredit(result.tool);
       await load(result.name, result.bytes);
     } finally {
       busyRef.current = false;
@@ -446,9 +496,11 @@ export default function DrawingsPage() {
       ? null
       : problem.kind === "dwg"
         ? `${copy.dwg.body} ${copy.dwg.catalogue}`
-        : problem.kind === "refusal"
-          ? copy.refusals[problem.code]
-          : copy.errors[problem.key];
+        : problem.kind === "conversion"
+          ? conversionProblemText(problem.failure)
+          : problem.kind === "refusal"
+            ? copy.refusals[problem.code]
+            : copy.errors[problem.key];
 
   return (
     <div className="drawings">
@@ -476,6 +528,19 @@ export default function DrawingsPage() {
       {problemText !== null && (
         <p className="drawings__problem" role="alert">
           {problemText}
+        </p>
+      )}
+      {credit !== null && (
+        <p className="nx-hint">
+          {copy.dwg.converted} {declaredText(credit.title)} {credit.version} ·{" "}
+          {credit.licence.spdx} · {credit.licence.attribution} ·{" "}
+          <button
+            type="button"
+            className="drawings__link"
+            onClick={() => openExternalLink(credit.source.url)}
+          >
+            {copy.dwg.source}
+          </button>
         </p>
       )}
       {printNote !== null && (

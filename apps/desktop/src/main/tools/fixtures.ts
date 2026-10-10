@@ -16,7 +16,7 @@
  * is made once under `%TEMP%` and then linked rather than copied per fixture.
  */
 
-import { createHash } from "node:crypto";
+import { createHash, type KeyObject } from "node:crypto";
 import {
   copyFileSync,
   existsSync,
@@ -33,6 +33,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { parsePackManifest, type PackManifest, type ToolProtocol } from "../packs/manifest.js";
+import { writePack } from "../packs/fixtures.js";
+import { packVersionDir } from "../packs/registry.js";
 
 /** The name the fixture's entry gets inside the pack folder: a real executable, as a pack's is. */
 export const FIXTURE_ENTRY = "engine.exe";
@@ -126,7 +128,14 @@ let fixtureBinary: string | null = null;
  * it is outside the repository, and a machine may remove it at any time (the
  * next run makes it again).
  */
-function fixtureExecutable(): string {
+/**
+ * EXPORTED for the tests outside this folder that need a pack entry a machine
+ * will really start: the module kit's tool capability (`main/moduleTools.ts`)
+ * builds an INSTALLED, signed pack folder, and its entry has to be this same
+ * file — the copy exists once, so linking to it is what keeps a second suite
+ * from paying for the first spawn of a fresh path again.
+ */
+export function fixtureExecutable(): string {
   if (fixtureBinary === null) {
     const dir = join(tmpdir(), "nexus-tool-fixture-bin");
     const path = join(dir, "engine.exe");
@@ -232,4 +241,72 @@ export function toolPackFixture(
       : {}),
   });
   return { root, dir, manifest, entryPath };
+}
+
+/** One pack installed the way the app installs one, as the module kit's tool capability reads it. */
+export interface InstalledToolPack {
+  /** The `<userData>` the capability is pointed at: the registry reads `packs/` under it. */
+  readonly userData: string;
+  /** The release key the pack was signed with, as the capability is told to verify against. */
+  readonly publicKeyPem: string;
+  /** `<userData>/packs/<id>/<version>` — the folder a session's entry is resolved under. */
+  readonly dir: string;
+  /** The entry's absolute path, for a test that replaces its bytes after install. */
+  readonly entryPath: string;
+}
+
+/**
+ * A `tool` pack INSTALLED under `userData`, signed with a throwaway key.
+ *
+ * `toolPackFixture` above builds a folder the runner can be handed directly; this
+ * builds the folder the REGISTRY finds, which is what a module's capability goes
+ * through: `<userData>/packs/<id>/<version>/` with the content, `pack.json` and
+ * `pack.json.sig`, and a manifest whose kind and `tool` record the real parser
+ * accepted. The entry is a hard link to the shared copy of this Node, and the
+ * program's fixed `args` are how a fixture script is handed to it — exactly the
+ * shape a real pack has.
+ */
+export function installedToolPack(input: {
+  readonly userData: string;
+  /** The throwaway pair this pack is signed with — one per test, reused across versions of one id. */
+  readonly key: { readonly publicKeyPem: string; readonly privateKey: KeyObject };
+  readonly id: string;
+  readonly version: string;
+  readonly protocol: ToolProtocol;
+  /** The manifest's own fixed argument list, which reaches the program before anything a caller appends. */
+  readonly args: readonly string[];
+}): InstalledToolPack {
+  const dir = packVersionDir(input.userData, input.id, input.version);
+  mkdirSync(dir, { recursive: true });
+  const entryPath = join(dir, FIXTURE_ENTRY);
+  try {
+    // A LINK to the shared copy, not to `process.execPath`: a link across volumes
+    // is refused by the OS, and `fixtureExecutable` explains why one copy exists.
+    linkSync(fixtureExecutable(), entryPath);
+  } catch {
+    copyFileSync(fixtureExecutable(), entryPath);
+  }
+  const facts = nodeEntryFacts();
+  writePack({
+    dir,
+    key: input.key.privateKey,
+    manifest: {
+      format: 1,
+      id: input.id,
+      version: input.version,
+      kind: "tool",
+      title: { sr: "Probni alat", en: "Fixture tool" },
+      description: { sr: "Alat za testove.", en: "A tool for tests." },
+      files: [{ path: FIXTURE_ENTRY, size: facts.size, sha256: facts.sha256 }],
+      licence: {
+        spdx: "GPL-3.0-or-later",
+        attribution: "The fixture's own authors",
+        url: "https://www.gnu.org/licenses/gpl-3.0.html",
+      },
+      source: { name: "Nexus tests", url: "https://example.org/fixture" },
+      minAppVersion: "1.0.0",
+      tool: { entry: FIXTURE_ENTRY, protocol: input.protocol, args: [...input.args] },
+    },
+  });
+  return { userData: input.userData, publicKeyPem: input.key.publicKeyPem, dir, entryPath };
 }

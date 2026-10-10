@@ -19,7 +19,13 @@ import { dirname, join } from "node:path";
 import { packSignedBytes } from "./verify.js";
 
 /** A throwaway Ed25519 pair. `publicKeyPem` is what the install path is handed in tests. */
-export function makeKey(): { readonly publicKeyPem: string; readonly privateKey: KeyObject } {
+export interface PackKey {
+  readonly publicKeyPem: string;
+  readonly privateKey: KeyObject;
+}
+
+/** A throwaway Ed25519 pair. `publicKeyPem` is what the install path is handed in tests. */
+export function makeKey(): PackKey {
   const pair = generateKeyPairSync("ed25519");
   return {
     publicKeyPem: pair.publicKey.export({ type: "spki", format: "pem" }).toString(),

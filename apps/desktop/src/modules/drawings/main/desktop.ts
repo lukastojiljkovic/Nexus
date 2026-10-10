@@ -1,30 +1,30 @@
 import { writeFile } from "node:fs/promises";
 import { basename } from "node:path";
 import { dialog, type BrowserWindow, type OpenDialogOptions, type SaveDialogOptions } from "electron";
-import { readFileBounded } from "../../../main/boundedRead.js";
 import { mainLocale } from "../../../main/locale.js";
-import { drawingKindOf, MAX_DRAWING_BYTES } from "./open.js";
+import { drawingKindOf } from "./open.js";
 import {
   provideDrawingsPlatform,
   type DrawingsPlatform,
+  type PickDrawing,
   type PrintView,
-  type ReadDrawing,
 } from "./platform.js";
 
 /**
- * The Electron half of DRAWINGS: the native picker, the bounded read and the
- * window's own `printToPDF`.
+ * The Electron half of DRAWINGS: the native picker and the window's own
+ * `printToPDF`.
  *
  * **This is the only file in the module that imports `electron`,** and it is not
  * reachable from `register.ts` - `main/index.ts` imports it and installs it into
  * the platform slot once, at startup. So the kit's rules stay testable and this
  * file holds exactly the things a test could not run anyway.
  *
- * **The path never leaves this file.** Both dialogs are opened here, the size
- * cap is applied by `readFileBounded` before any bytes are read into memory, and
- * what crosses the wire back to the renderer is the file's own NAME rather than
- * where it was. That is the whole point of putting the picker in main: a
- * renderer cannot ask this module to read a file it did not choose.
+ * **The path reaches main and stops there.** Both dialogs are opened here, and a
+ * chosen file's path is handed to `register.ts` — which reads it, bounded, or
+ * gives it to the pack's converter — and never to the renderer, which receives
+ * the drawing and the file's own NAME rather than where it was. That is the whole
+ * point of putting the picker in main: a renderer cannot ask this module to read
+ * a file it did not choose.
  */
 
 /**
@@ -51,14 +51,20 @@ function text(pair: { readonly sr: string; readonly en: string }): string {
 }
 
 /**
- * Reads the file a person picked, capped before the bytes exist.
+ * Opens the native picker and answers the file a person chose.
  *
- * The three refusals `readFileBounded` distinguishes are mapped onto the wire's
- * own codes rather than collapsed: "a folder was picked" and "that file cannot
- * be opened" are different sentences on the page, and the reader of either one
- * wants to know which happened.
+ * **Only the DIALOG is here.** What happens to the path afterwards is
+ * `register.ts`'s: a `.dxf` is read there, bounded by the module's own cap before
+ * the bytes exist (`main/boundedRead.ts`), and a `.dwg` is handed to the pack's
+ * converter, which reads it once from this very file. Neither the cap nor the
+ * conversion depends on Electron, so neither belongs in the one file of this
+ * module that cannot be tested.
+ *
+ * The kind is decided from the name BEFORE anything is opened, so a file the
+ * dialog's filter hid but which the user typed anyway is refused by name rather
+ * than read.
  */
-async function pickAndRead(window: () => BrowserWindow | null): Promise<ReadDrawing> {
+async function pickFile(window: () => BrowserWindow | null): Promise<PickDrawing> {
   const options: OpenDialogOptions = {
     properties: ["openFile"],
     title: text(COPY.openTitle),
@@ -82,16 +88,7 @@ async function pickAndRead(window: () => BrowserWindow | null): Promise<ReadDraw
   const name = basename(path);
   const kind = drawingKindOf(name);
   if (kind === null) return { status: "refused", code: "unknown-format" };
-
-  const read = await readFileBounded(path, MAX_DRAWING_BYTES);
-  if (read.status === "too-large") return { status: "refused", code: "too-large" };
-  if (read.status === "not-a-file") return { status: "refused", code: "not-a-file" };
-  if (read.status === "unreadable") return { status: "refused", code: "unreadable" };
-  if (read.size === 0) return { status: "refused", code: "empty" };
-
-  // `Buffer` IS a `Uint8Array`, so the bytes cross the wire as the same view of
-  // the same memory rather than through a copy or a base64 round trip.
-  return { status: "chosen", name, kind, bytes: read.bytes };
+  return { status: "picked", name, kind, path };
 }
 
 /**
@@ -150,7 +147,7 @@ async function printView(window: () => BrowserWindow | null): Promise<PrintView>
  */
 export function installDrawingsPlatform(window: () => BrowserWindow | null): void {
   const platform: DrawingsPlatform = {
-    pickAndRead: () => pickAndRead(window),
+    pickFile: () => pickFile(window),
     printView: () => printView(window),
   };
   provideDrawingsPlatform(platform);

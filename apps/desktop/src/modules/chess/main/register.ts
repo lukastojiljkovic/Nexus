@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3-multiple-ciphers";
+import { isValidFen } from "@nexus/core";
 import {
   ChessNotFoundError,
   ChessStore,
@@ -7,19 +8,23 @@ import {
   MAX_CHESS_RESUME_MOVES,
 } from "@nexus/db";
 import type { ResumableGame } from "@nexus/db";
-import type { ModuleHostSurface, ModuleValidators } from "../../../main/moduleIpc.js";
+import type { ModuleCall, ModuleHostSurface, ModuleValidators } from "../../../main/moduleIpc.js";
+import type { ModuleToolsAccess } from "../../../main/moduleTools.js";
 import {
   contract,
   type ChessGameDetailView,
   type ChessGameView,
   type ChessLevelStatsView,
   type ChessOpponent,
+  type ChessPackView,
   type ChessResult,
   type ChessResumeView,
   type ChessSide,
   type ChessView,
 } from "../shared/ipc.js";
+import { createStockfishSessions, type StockfishSessions } from "./engine.js";
 import { applyChessExport, buildChessExport, parseChessExport } from "./imex.js";
+import { PACK_CATALOGUE_ENTRY, PACK_FIRST_LEVEL, STOCKFISH_PACK_ID } from "./stockfish.js";
 
 /**
  * CHESS in the main process (ADR-090): its handlers and its archive section.
@@ -61,8 +66,46 @@ interface StoreBearer {
   profileDb<T>(profileId: string, open: (db: Database.Database, profileId: string) => T): T;
 }
 
+/**
+ * The installed engine pack, as the wire declares it, or `null`.
+ *
+ * The licence and the source travel with it because ADR-094 §5 requires the app
+ * to show them wherever it names the program, and the pack's manifest is the only
+ * place they are stated: this module never invents an attribution, and a pack
+ * that shipped a different one shows a different one.
+ */
+function packViewOf(bearer: { tools(): ModuleToolsAccess }): ChessPackView | null {
+  const pack = bearer.tools().pack(STOCKFISH_PACK_ID);
+  if (pack === null) return null;
+  return {
+    id: pack.id,
+    version: pack.version,
+    title: pack.title,
+    licence: pack.licence,
+    source: pack.source,
+    fromLevel: PACK_FIRST_LEVEL,
+    catalogue: PACK_CATALOGUE_ENTRY,
+  };
+}
+
 export function register(host: ModuleHostSurface): void {
   const ctx = host.adopt(contract);
+
+  /**
+   * The pack's engine sessions, built on the first search and kept for the life
+   * of the process.
+   *
+   * `index.ts` builds the platform's tool access ONCE and hands the same object
+   * to every call, so capturing it here is capturing the app's own access rather
+   * than a call's; the manager holds processes, which belong to the process and
+   * not to a request.
+   */
+  let sessions: StockfishSessions | null = null;
+
+  function sessionsFor(call: ModuleCall): StockfishSessions {
+    sessions ??= createStockfishSessions({ tools: call.tools() });
+    return sessions;
+  }
 
   function chessStore(bearer: StoreBearer, profileId: string): ChessStore {
     return bearer.profileDb(profileId, (db, id) => new ChessStore(db, id));
@@ -115,8 +158,8 @@ export function register(host: ModuleHostSurface): void {
     };
   }
 
-  function viewOf(bearer: StoreBearer, profileId: string): ChessView {
-    const chess = chessStore(bearer, profileId);
+  function viewOf(call: ModuleCall, profileId: string): ChessView {
+    const chess = chessStore(call, profileId);
     const stats: ChessLevelStatsView[] = chess.listLevelStats().map((entry) => ({
       level: entry.level,
       played: entry.played,
@@ -129,6 +172,11 @@ export function register(host: ModuleHostSurface): void {
       resume: resumeOf(chess.getResume()),
       games: chess.listGames().map(gameOf),
       stats,
+      // Read on every view rather than cached: a pack is installed or removed
+      // while the page is open (the Packs card is one Settings click away), and a
+      // cached answer would leave the level picker describing a machine that no
+      // longer exists.
+      pack: packViewOf(call),
     };
   }
 
@@ -211,6 +259,33 @@ export function register(host: ModuleHostSurface): void {
     return viewOf(call, profileId);
   });
 
+  // --- The engine pack (ADR-094) --------------------------------------------
+
+  ctx.handle("engineMove", async (payload, call) => {
+    const raw = call.as.asRecord(payload);
+    return await sessionsFor(call).move({
+      // The page's own game key, validated as an id because it is a string the
+      // renderer chose and it names a session in MAIN.
+      game: call.as.asId(raw["game"], "game"),
+      fen: asFen(call, raw["fen"]),
+      moves: asMoveList(call, raw["moves"]),
+      // Bounded at the level the pack plays rather than at the ladder's first:
+      // the weak levels are the module's own engine's to play (`./stockfish.ts`
+      // argues why), so a caller asking the PACK for one is refused rather than
+      // handed a much stronger opponent than the level it named.
+      level: call.as.asBoundedInteger(raw["level"], "level", PACK_FIRST_LEVEL, MAX_CHESS_LEVEL),
+    });
+  });
+
+  ctx.handle("engineClose", async (payload, call) => {
+    const raw = call.as.asRecord(payload);
+    const game = call.as.asId(raw["game"], "game");
+    // A close that arrives before any search is an ordinary „nothing to stop“
+    // rather than a bug: the page closes the game it just left, and a game whose
+    // engine never started has no session to end.
+    return { closed: sessions === null ? false : await sessions.close(game) };
+  });
+
   // --- The archive (ADR-090 §imex) -----------------------------------------
 
   ctx.exportData((session) => {
@@ -232,6 +307,18 @@ export function register(host: ModuleHostSurface): void {
         applyChessExport(chessStore(session, profileId), payload);
       }
     },
+  });
+
+  /**
+   * A lock, a profile switch or a quit ends every session. The page closes its
+   * own game (`engineClose`) when it leaves, and a page that never got the chance
+   * must not leave a 100 MB engine running against a locked profile: `sessionEnd`
+   * is the kit's own moment for that, and it is the one that always happens.
+   */
+  ctx.onSessionEnd(() => {
+    void sessions?.closeAll().catch((error: unknown) => {
+      console.error("Nexus: a chess engine session could not be closed:", error);
+    });
   });
 }
 
@@ -276,6 +363,25 @@ function asEnum<T extends string>(
 function asLevel(call: As, value: unknown): number | null {
   if (value === null || value === undefined) return null;
   return call.as.asBoundedInteger(value, "level", 1, MAX_CHESS_LEVEL);
+}
+
+/**
+ * A position, as a FEN this build can read — the check a search's own payload
+ * needs and `setResume` gets from the store.
+ *
+ * The page sends `game.chess.fen()`, so a payload that fails here is a bug or a
+ * hostile renderer, and the check is not decoration: the text travels into a LINE
+ * protocol (`position fen <text> moves …`), where a newline would be a second
+ * command. `isValidFen` refuses one, and `main/tools/uci.ts` refuses a line break
+ * again on the way out, because the last place before somebody else's program is
+ * the place a rule has to hold.
+ */
+function asFen(call: As, value: unknown): string {
+  const fen = call.as.asNonEmptyString(value, "fen");
+  if (!isValidFen(fen)) {
+    throw new Error('Invalid IPC payload: "fen" is not a position this build can read.');
+  }
+  return fen;
 }
 
 /** A `base+increment` clock, or null. The SHAPE is the store's rule; the bound is what the wire owes it. */

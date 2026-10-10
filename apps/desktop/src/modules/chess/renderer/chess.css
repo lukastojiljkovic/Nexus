@@ -320,3 +320,31 @@
   display: flex;
   flex-direction: column;
 }
+
+/* The engine pack's credit, under the level picker that names it (ADR-094):
+   a column of hints, because a licence, an attribution and a source are three
+   facts and each wants its own line at this width. */
+.chess__pack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+
+/* The source address. A button rather than an anchor because the renderer may
+   not navigate itself (SEC-EL-03): opening an address is a call into main, which
+   is the only place that decides whether one may leave this process. Dressed as
+   the shell's own `.packs__link` is, so there is one idea of what a link looks
+   like in this app. */
+.chess__link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.chess__link:hover {
+  color: var(--nx-text);
+}
