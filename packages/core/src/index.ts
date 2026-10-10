@@ -2718,3 +2718,36 @@ export {
 export type { BricksInput, BricksState } from "./games/bricks/bricks.js";
 export type * from "./assistant/contract.js";
 export type * from "./sky/contract.js";
+
+// --- Workshop: the PDF and image tools' pure halves (ADR-090 kit module) -----
+//
+// The page-selection grammar, the rotation and page-order arithmetic, the
+// resize maths and the small EXIF reader, all of them pure so the worker that
+// uses them stays a thin adapter and every value has a test. The tools' own
+// copy is the renderer's (`modules/workshop/renderer/…`), which is why nothing
+// here carries a sentence.
+export { PAGE_RANGE_MAX_LENGTH, PAGE_RANGE_MAX_PAGES, parsePageRanges } from "./workshop/pdf/ranges.js";
+export type { PageRangeRefusal, PageRangeResult } from "./workshop/pdf/ranges.js";
+export {
+  moveOrderEntry,
+  normalizeRotation,
+  PAGE_NUMBER_FORMATS,
+  PAGE_NUMBER_POSITIONS,
+  pageNumberText,
+  pageOrder,
+  QUARTER_TURN_DEGREES,
+  removeOrderEntry,
+} from "./workshop/pdf/pageOps.js";
+export type { PageNumberFormat, PageNumberPosition } from "./workshop/pdf/pageOps.js";
+export {
+  fitWithinBox,
+  parseScaleNumber,
+  RESIZE_BOX_MAX_PX,
+  RESIZE_BOX_MIN_PX,
+  RESIZE_PERCENT_MAX,
+  RESIZE_PERCENT_MIN,
+  scaleByPercent,
+} from "./workshop/images/resize.js";
+export type { ImageSize } from "./workshop/images/resize.js";
+export { NO_EXIF_SUMMARY, readExifSummary } from "./workshop/images/exif.js";
+export type { ImageExifSummary } from "./workshop/images/exif.js";
