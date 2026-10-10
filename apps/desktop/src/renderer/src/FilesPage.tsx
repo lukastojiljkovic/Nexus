@@ -18,6 +18,7 @@ import { NotePopover } from "./notePopover.js";
 import { SEARCH_DEBOUNCE_MS, formatContextDate } from "./searchShared.js";
 import { strings } from "./strings.js";
 import { moduleName } from "./moduleName.js";
+import { ModuleSettingsGear } from "./moduleSettingsGear.js";
 
 /**
  * Datoteke (DOC) — one place for every file in the profile.
@@ -457,25 +458,28 @@ export function FilesPage({ profileId, onOpenOwner }: FilesPageProps) {
         // that lost its button.
         subtitle={s.caption}
         actions={
-          <div className="doc__view" role="group" aria-label={s.viewLabel}>
-            {FILE_VIEWS.map((option) => (
-              <Button
-                key={option}
-                size="sm"
-                // The segmented idiom, not a filled primary. This toggle was
-                // the app's ONE outlier: it said „selected" with the same
-                // treatment the product uses for „press this", and it did so
-                // in a header that also holds real filter chips saying the
-                // same thing typographically. Two idioms, one page
-                // (STATUS §5 C item 15).
-                className="nx-segmented__option doc__chip"
-                aria-pressed={view === option}
-                onClick={() => changeView(option)}
-              >
-                {s.views[option]}
-              </Button>
-            ))}
-          </div>
+          <>
+            <div className="doc__view" role="group" aria-label={s.viewLabel}>
+              {FILE_VIEWS.map((option) => (
+                <Button
+                  key={option}
+                  size="sm"
+                  // The segmented idiom, not a filled primary. This toggle was
+                  // the app's ONE outlier: it said „selected" with the same
+                  // treatment the product uses for „press this", and it did so
+                  // in a header that also holds real filter chips saying the
+                  // same thing typographically. Two idioms, one page
+                  // (STATUS §5 C item 15).
+                  className="nx-segmented__option doc__chip"
+                  aria-pressed={view === option}
+                  onClick={() => changeView(option)}
+                >
+                  {s.views[option]}
+                </Button>
+              ))}
+            </div>
+            <ModuleSettingsGear moduleId="files" />
+          </>
         }
       />
 

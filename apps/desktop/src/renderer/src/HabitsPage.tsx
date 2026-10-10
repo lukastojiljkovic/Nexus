@@ -56,6 +56,7 @@ import { readStoredDefaultReminder } from "./habitPrefs.js";
 import { strings } from "./strings.js";
 import { readStoredWeekStart, toWeekStart } from "./weekStart.js";
 import { moduleName } from "./moduleName.js";
+import { ModuleSettingsGear } from "./moduleSettingsGear.js";
 
 /**
  * Navike (HABIT slices b and c) — the module's page. Slice a shipped the storage
@@ -1054,7 +1055,11 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
     // thousand pixels apart has stopped being a row. The wall inside it is
     // measured against whatever that cap leaves and fills it exactly.
     <div className="hab nx-measure">
-      <PageHeader title={moduleName("habits")} sigil="habits" />
+      <PageHeader
+        title={moduleName("habits")}
+        sigil="habits"
+        actions={<ModuleSettingsGear moduleId="habits" />}
+      />
       {pendingUndoId !== null && (
         <div className="hab__undo" role="status">
           <span className="hab__undo-text">{s.all.deletedNotice}</span>

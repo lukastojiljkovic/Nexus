@@ -19,6 +19,7 @@ import { filterTools, type SearchableTool } from "./toolSearch.js";
 import { TOOL_SURFACES } from "./toolSurfaces.js";
 import { countUnit, fill, strings } from "./strings.js";
 import { moduleName } from "./moduleName.js";
+import { ModuleSettingsGear } from "./moduleSettingsGear.js";
 import { readRecentTools, rememberRecentTool } from "./toolPrefs.js";
 import { ToolRiskNotice, ToolRiskProvider } from "./toolRisk.js";
 
@@ -325,15 +326,22 @@ export function ToolsPage({ drawer, enabledModules, packs, packEditor }: ToolsPa
               }),
             })}
         sigil={sigil}
-        {...(packEditor === undefined
-          ? {}
-          : {
-              actions: (
-                <Button size="sm" onClick={() => setPickingPacks(true)}>
-                  {strings.pro.picker.open}
-                </Button>
-              ),
-            })}
+        // ONE PAGE, TWO DRAWERS, and only one of them is a module with a
+        // settings card: „Alatke" publishes one and „Stručne alatke" publishes
+        // none. So the gear is rendered unconditionally and the registry's own
+        // answer (`ModuleSettingsGear` reads `manifest.settings`) is what
+        // decides — the professional drawer gets no gear because it has no card
+        // to open, not because this file remembered not to draw one.
+        actions={
+          <>
+            {packEditor !== undefined && (
+              <Button size="sm" onClick={() => setPickingPacks(true)}>
+                {strings.pro.picker.open}
+              </Button>
+            )}
+            <ModuleSettingsGear moduleId={moduleId} />
+          </>
+        }
       />
       {/* The module is on and the drawer is empty, because every tool in it
           belongs to a toolkit and this profile has none. Reachable — somebody

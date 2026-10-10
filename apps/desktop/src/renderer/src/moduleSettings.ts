@@ -50,6 +50,22 @@ export function moduleSettingsDeclarations(registry: ModuleRegistry): ModuleSett
     );
 }
 
+/**
+ * The same modules, as a SET of ids — what a module page asks before it offers
+ * the gear that opens its own card.
+ *
+ * A set rather than a lookup per press because the question is asked once per
+ * header render and answered against the same registry every time: the gear is
+ * a fact about the manifest (`settings`), so a module that declares none has no
+ * card to open and no button, and nothing at the call site can forget that.
+ * Flags are deliberately not consulted, on `moduleSettingsDeclarations`' own
+ * rule: the gear is on the module's OWN page, which a switched-off module does
+ * not have.
+ */
+export function moduleSettingsCardIds(registry: ModuleRegistry): ReadonlySet<string> {
+  return new Set(moduleSettingsDeclarations(registry).map((declaration) => declaration.moduleId));
+}
+
 /** A card the settings page draws for one module: its section id, its resolved title, and the declaration behind both. */
 export interface ModuleSettingsCard extends ModuleSettingsDeclaration {
   /** The card's Serbian title, resolved from `panel.titleKey`. */

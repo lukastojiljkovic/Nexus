@@ -29,6 +29,7 @@ import { FocusDiscardDialog } from "./FocusDiscardDialog.js";
 import { FocusLanes } from "./FocusLanes.js";
 import { countUnit, strings } from "./strings.js";
 import { moduleName } from "./moduleName.js";
+import { ModuleSettingsGear } from "./moduleSettingsGear.js";
 
 /**
  * Fokus (UTIL slice b) — the page of the ONE focus timer. Slice a shipped the
@@ -565,7 +566,11 @@ export function FocusPage({ profileId, enabledModules }: FocusPageProps) {
     // `.nx-measure`: everything under the timer panel is rows, and a row spread
     // across 1360px is two columns pretending to be one.
     <div className="foc nx-measure">
-      <PageHeader title={moduleName("focus")} sigil="focus" />
+      <PageHeader
+        title={moduleName("focus")}
+        sigil="focus"
+        actions={<ModuleSettingsGear moduleId="focus" />}
+      />
       {pendingUndoId !== null && (
         <div className="foc__undo" role="status">
           <span className="foc__undo-text">{s.history.deletedNotice}</span>

@@ -230,6 +230,24 @@ export interface SettingsLocation {
   readonly sub: string | null;
 }
 
+/**
+ * Where a module page's gear lands (see `moduleSettingsGear.tsx`): that
+ * module's CARD, which SET-015 keeps two levels deep — its category, then the
+ * card as that category's sub-page. For a module both halves are already known:
+ * `categoryOf` files every id this table does not recognise under „Moduli", and
+ * a module's card IS its section id, so no module has to be named here and a
+ * module added to the registry needs no edit.
+ *
+ * The card rather than the category alone, deliberately: a module's card is a
+ * row of the „Podešavanja modula" list — `visibleSections` shows the cards a
+ * category owns at rest and no sub-page — so opening „Moduli" and stopping
+ * there would leave the reader one click short of what they pressed the gear
+ * for.
+ */
+export function moduleSettingsLocation(moduleId: string): SettingsLocation {
+  return { category: categoryOf(moduleId), sub: moduleId };
+}
+
 export interface SettingsVisibility {
   /** Cards to keep visible; every other card stays mounted but gets `set__section--hidden`. */
   readonly cards: ReadonlySet<string>;

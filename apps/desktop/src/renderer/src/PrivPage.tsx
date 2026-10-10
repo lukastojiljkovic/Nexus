@@ -20,6 +20,7 @@ import { PrivNoteEditor } from "./PrivNoteEditor.js";
 import { TypedConfirmDialog } from "./TypedConfirmDialog.js";
 import { strings } from "./strings.js";
 import { moduleName } from "./moduleName.js";
+import { ModuleSettingsGear } from "./moduleSettingsGear.js";
 import { PRIV_LOCKED_EVENT } from "./privEvents.js";
 
 /**
@@ -727,6 +728,7 @@ function PrivSection({ profileId, onStatusChange, onRecheck }: PrivSectionProps)
             <Button size="sm" onClick={() => void lock()}>
               {s.lockNow}
             </Button>
+            <ModuleSettingsGear moduleId="priv" />
           </>
         }
       />

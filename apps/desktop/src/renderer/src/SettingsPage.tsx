@@ -163,11 +163,13 @@ import { UpdateAbout } from "./UpdateAbout.js";
 import {
   SETTINGS_CATEGORIES,
   categoryOf,
+  moduleSettingsLocation,
   subPageListById,
   visibleSections,
   type CategoryId,
   type SettingsLocation,
 } from "./settingsCategories.js";
+import { scrollRevealedIntoView, useRevealedRow } from "./reveal.js";
 
 const THEME_OPTIONS: ThemePreference[] = ["system", "dan", "noc"];
 
@@ -5051,6 +5053,15 @@ export interface SettingsPageProps {
   onShowShortcuts: () => void;
   /** ADR-065 §5: reopens the onboarding questionnaire over this profile. App owns the flow — it is the same screen the first run draws, not a dialog of this page's. */
   onRerunOnboarding: () => void;
+  /**
+   * The module card a module page's gear asked for (`moduleSettingsGear.tsx`),
+   * or null for an ordinary visit. Read ONCE, by the mount that the gear caused:
+   * this page is keyed by the active profile and reached as a different element
+   * from every module page, so a press always mounts a fresh one.
+   */
+  target: string | null;
+  /** Reports that `target` was applied, so the shell clears it and a later visit is an ordinary one. */
+  onTargetHandled: () => void;
 }
 
 /**
@@ -5106,6 +5117,8 @@ export function SettingsPage({
   globalShortcutTaken,
   onShowShortcuts,
   onRerunOnboarding,
+  target,
+  onTargetHandled,
 }: SettingsPageProps) {
   // The accent is per-profile (ADR-058 §3), and its default depends on the
   // profile's KIND (bordo for business, decision #11). Reading it lazily in a
@@ -5249,12 +5262,21 @@ export function SettingsPage({
   const a = strings.settings.appearance;
   const s = strings.settings;
 
-  // SET-015: where the page is. A category, a sub-page inside it, or — with
-  // both null — the narrow layout's root list. Restored from the last visit in
-  // this session, and defaulting to nothing at all, which the wide layout
-  // resolves to its first category below.
-  const [location, setLocation] = useState<SettingsLocation>(
-    () => lastSettingsLocation ?? { category: null, sub: null },
+  /**
+   * SET-015: where the page is. A category, a sub-page inside it, or — with
+   * both null — the narrow layout's root list. Restored from the last visit in
+   * this session, and defaulting to nothing at all, which the wide layout
+   * resolves to its first category below.
+   *
+   * A gear press (`target`) wins over the restored location, and it is settled
+   * HERE rather than in an effect: the destination is known before the page
+   * draws, so the card is in the same commit as the header and the reveal below
+   * has something to scroll to. The effect below is the other half.
+   */
+  const [location, setLocation] = useState<SettingsLocation>(() =>
+    target !== null
+      ? moduleSettingsLocation(target)
+      : (lastSettingsLocation ?? { category: null, sub: null }),
   );
   // The rail's roving tab stop: one item carries `tabIndex={0}` at a time, and
   // it follows the current category so Tab always lands where the reader is.
@@ -5269,6 +5291,18 @@ export function SettingsPage({
   // A navigation waiting for the render it belongs to; see the effect below.
   const pendingNavigation = useRef<SettingsLocation | null>(null);
   const [navTick, setNavTick] = useState(0);
+  /**
+   * The gear's landing mark, on `reveal.ts`'s one mechanism: the same class the
+   * global search drops on the row it found, and the same timer that takes it
+   * away. `reveal` is stable, which is what lets the effect below name it.
+   */
+  const { revealedId, reveal } = useRevealedRow();
+  /**
+   * The target THIS mount was caused by. Read once because the shell clears the
+   * prop as soon as the page reports it handled (`onTargetHandled`), and a later
+   * render — a keystroke in the filter, a resize — must not replay it.
+   */
+  const deepLink = useRef(target);
 
   // SET-015: what the location — or the query — makes visible. Every other card
   // stays MOUNTED and takes `set__section--hidden`, exactly as the SET-014
@@ -5393,6 +5427,28 @@ export function SettingsPage({
     if (scroller !== null) scroller.scrollTop = 0;
     paneHeadingRef.current?.focus();
   }, [navTick, searching]);
+
+  /**
+   * A module page's gear, arriving: the new page names itself to a screen
+   * reader the way `navigate` makes it, and the card the reader asked for is
+   * scrolled to and marked briefly — on `reveal.ts`'s mechanism, the one the
+   * global search already uses, rather than a second highlight of this page's
+   * own.
+   *
+   * The LOCATION is not set here: the initializer above already resolved it, so
+   * the card exists in this very commit. Both dependencies are stable, and the
+   * target is read from the ref, so this runs exactly once per mount — and the
+   * shell clears the prop on the way out, which is what keeps a later, ordinary
+   * visit from replaying the jump.
+   */
+  useLayoutEffect(() => {
+    const sectionId = deepLink.current;
+    if (sectionId === null) return;
+    paneHeadingRef.current?.focus();
+    reveal(sectionId);
+    scrollRevealedIntoView(sectionDomId(sectionId));
+    onTargetHandled();
+  }, [reveal, onTargetHandled]);
 
   return (
     <div className="set" ref={rootRef}>
@@ -5918,7 +5974,12 @@ export function SettingsPage({
                 key={card.moduleId}
                 id={sectionDomId(card.moduleId)}
                 title={card.title}
-                className={sectionClass(visibility.cards.has(card.moduleId))}
+                // The gear's landing mark rides the card's own class list, so
+                // the accent ring is drawn by `.nx-revealed` — the shared
+                // "you found it" rule — rather than by anything added here.
+                className={`${sectionClass(visibility.cards.has(card.moduleId))}${
+                  revealedId === card.moduleId ? " nx-revealed" : ""
+                }`}
               >
                 {/* The reset count is a remount key: a cleared preference is
                     re-read by the body's own initializers, so the page never

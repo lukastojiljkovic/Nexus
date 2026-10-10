@@ -5722,6 +5722,29 @@ export const en = {
      */
     searchResultCountOne: "1 result",
     searchResultCountMany: "{n} results",
+    /**
+     * The gear a module page wears beside its title (`moduleSettingsGear.tsx`):
+     * the accessible name of the button that opens Settings directly at that
+     * module's card. One entry per module that publishes a card — see the
+     * Serbian table for why this is a phrase per module rather than a template
+     * over the module's name.
+     */
+    moduleSettingsButton: {
+      dashboard: "Settings for Dashboard",
+      tasks: "Settings for Tasks",
+      calendar: "Settings for Calendar",
+      notes: "Settings for Notes",
+      priv: "Settings for Private notes",
+      files: "Settings for Files",
+      study: "Settings for Study",
+      finance: "Settings for Finance",
+      habits: "Settings for Habits",
+      fitness: "Settings for Fitness",
+      focus: "Settings for Focus",
+      tools: "Settings for Tools",
+    },
+    /** The same name for a module whose phrase this table does not carry — see the Serbian table. */
+    moduleSettingsButtonFallback: "Settings: {name}",
     /** Section-card titles, in the order they appear on the page. */
     sectionTitle: {
       profile: "Profile",

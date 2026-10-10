@@ -57,6 +57,7 @@ import { NotePopover } from "./notePopover.js";
 import { countUnit, strings } from "./strings.js";
 import { TypedConfirmDialog } from "./TypedConfirmDialog.js";
 import { moduleName } from "./moduleName.js";
+import { ModuleSettingsGear } from "./moduleSettingsGear.js";
 
 /**
  * Finansije (FIN) — the ledger's page. Slice a shipped the data layer and the
@@ -1893,23 +1894,26 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
         title={moduleName("finance")}
         sigil="finance"
         actions={
-          <div className="fin__segmented" role="group" aria-label={s.pages.label}>
-            {FIN_PAGES.map((option) => (
-              <Button
-                key={option}
-                size="sm"
-                className="nx-segmented__option"
-                aria-pressed={page === option}
-                onClick={() => setPage(option)}
-              >
-                {option === "ledger"
-                  ? s.pages.ledger
-                  : option === "report"
-                    ? s.pages.report
-                    : s.pages.subscriptions}
-              </Button>
-            ))}
-          </div>
+          <>
+            <div className="fin__segmented" role="group" aria-label={s.pages.label}>
+              {FIN_PAGES.map((option) => (
+                <Button
+                  key={option}
+                  size="sm"
+                  className="nx-segmented__option"
+                  aria-pressed={page === option}
+                  onClick={() => setPage(option)}
+                >
+                  {option === "ledger"
+                    ? s.pages.ledger
+                    : option === "report"
+                      ? s.pages.report
+                      : s.pages.subscriptions}
+                </Button>
+              ))}
+            </div>
+            <ModuleSettingsGear moduleId="finance" />
+          </>
         }
       />
 

@@ -38,6 +38,7 @@ import { DASHBOARD_WIDGETS, type DashboardWidgetBodyProps } from "./dashboardWid
 import { localTodayKey } from "./examDates.js";
 import { formatDashboardDate } from "./dateLabels.js";
 import { moduleIconName } from "./moduleIcon.js";
+import { ModuleSettingsGear } from "./moduleSettingsGear.js";
 import { NotePopover } from "./notePopover.js";
 import { lookup, strings } from "./strings.js";
 import { useFocusTrap } from "./useFocusTrap.js";
@@ -1372,6 +1373,7 @@ export function DashboardPage({
                 {s.edit.enter}
               </Button>
             )}
+            <ModuleSettingsGear moduleId="dashboard" />
           </>
         }
       />

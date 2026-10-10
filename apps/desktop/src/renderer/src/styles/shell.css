@@ -237,6 +237,23 @@ body {
 .app__menu-section {
   padding: var(--nx-space-2) var(--nx-space-2) var(--nx-space-1);
 }
+/* The app menu's rows, and ONLY its rows: the build line at the foot is a
+   sibling of this box rather than a child of it, so a window too short to show
+   the whole menu scrolls the commands and leaves the line that names the build
+   where it is.
+
+   `min-height: 0` is what lets it shrink: a flex item's automatic minimum size
+   is content-based, so without it this box would push the foot out of the panel
+   instead of taking the scrollbar. The panel's own `overflow-y` is inherited
+   from `.note__menu-panel` and never fires here — the rows fit or this box
+   scrolls them. */
+.app__menu-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-height: 0;
+  overflow-y: auto;
+}
 /* Three columns: glyph, name, and the chord or reading. The name is the only
    one that flexes, so the chords line up down the right whatever the labels
    do — the whole reason a menu can be scanned rather than read. */
@@ -283,6 +300,8 @@ body {
 /* The build, stated rather than offered: this is the only place in the app
    that names a version, and it is a fact, not a command. */
 .app__menu-foot {
+  /* Never the thing that shrinks: the rows above take the scrollbar first. */
+  flex: none;
   margin: var(--nx-space-1) 0 0;
   padding: var(--nx-space-2) var(--nx-space-2) var(--nx-space-1);
   border-top: 1px solid var(--nx-border-subtle);
@@ -1267,4 +1286,47 @@ body {
   word-break: break-word;
   max-height: 320px;
   overflow-y: auto;
+}
+
+/* The module page's settings button (moduleSettingsGear.tsx) -------------
+   One module page's way into its own card in Podešavanja, where SET-015 keeps
+   it two levels deep. It is an ICON-ONLY button, and the app draws those by
+   hand rather than through `Button` — see `.note__menu-trigger` and
+   `.app__titlebar-button` — so this rule is the control: the size, the ink and
+   the focus ring are stated ONCE here and every page inherits them, which is
+   what keeps the gear identical on all twelve module pages.
+
+   `min-height` rather than a lone `height`: 30px is the floor every `.nx-button`
+   in the product already takes, so the gear lines up with the default-size
+   buttons beside it instead of introducing a third height into the header's
+   actions row. The pointer floor is not in question either: 30px clears the
+   24px every sweep measures a target against.
+
+   The focus ring is `Button`'s own declaration, copied rather than approximated:
+   `2px solid var(--nx-accent)` at `outline-offset: 2px`. A ring that differed by
+   a pixel between the primary button beside it and this one would read as two
+   components that happen to sit together. */
+.app__page-gear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  min-height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--nx-radius-md);
+  background: transparent;
+  color: var(--nx-text-muted);
+  cursor: pointer;
+  transition:
+    background var(--nx-motion-fast) var(--nx-motion-ease),
+    color var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.app__page-gear:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+.app__page-gear:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
 }

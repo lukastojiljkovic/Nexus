@@ -41,6 +41,14 @@ export interface NotePopoverProps {
   align?: "start" | "end";
   /** Extra class on the panel, for a menu whose rows are richer than a name and a tick. */
   panelClassName?: string;
+  /**
+   * The panel's preferred ceiling, forwarded to `useAnchoredPosition`. Omitted
+   * everywhere but the app menu, which passes `UNBOUNDED_PANEL_HEIGHT`: a menu
+   * whose rows are all commands has no reason to be capped at a row menu's
+   * scroll window, while every other caller here is a note-scoped popover for
+   * which `PANEL_MAX_HEIGHT` is the right one.
+   */
+  preferredMaxHeight?: number;
 }
 
 /** The panel's real `role="menuitem"` children, read fresh every time — content is arbitrary, caller-supplied JSX, so nothing else tracks its shape. Module-level (not a closure) so effects that call it need not name it as a dependency: it has none of its own beyond the element handed in. */
@@ -79,6 +87,7 @@ export function NotePopover({
   menu = true,
   align = "end",
   panelClassName,
+  preferredMaxHeight,
 }: NotePopoverProps) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -94,6 +103,10 @@ export function NotePopover({
     trigger: triggerRef,
     align,
     onClose: () => setOpen(false),
+    // Spread rather than passed as `undefined`: `exactOptionalPropertyTypes` is
+    // on, so an absent field and a present-and-undefined one are different
+    // types, and the hook's own default is what a caller who said nothing gets.
+    ...(preferredMaxHeight === undefined ? {} : { preferredMaxHeight }),
   });
 
   // Focus moves onto the first item the instant the menu opens — the WAI-ARIA
