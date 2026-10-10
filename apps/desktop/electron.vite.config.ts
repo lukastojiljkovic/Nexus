@@ -4,6 +4,7 @@ import { join, posix, relative, sep } from "node:path";
 import { defineConfig, externalizeDepsPlugin } from "electron-vite";
 import react from "@vitejs/plugin-react";
 import type { Plugin } from "vite";
+import { ocrAssets } from "./scripts/ocr-assets.mjs";
 
 // Workspace packages are consumed as TypeScript source, so they must be BUNDLED
 // into the main/preload output rather than externalized and require()d at
@@ -255,7 +256,7 @@ export default defineConfig({
         ].join("; "),
       },
     },
-    plugins: [react(), rendererHardening(), excalidrawFonts()],
+    plugins: [react(), rendererHardening(), excalidrawFonts(), ocrAssets()],
     /**
      * MINIFIED, which electron-vite's renderer default is not (`minify: false`,
      * beside the Chromium target it picks). Measured 2026-09-26: the startup

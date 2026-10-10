@@ -87,6 +87,11 @@ export const ESSENTIALS_MODULE_PRESET: Readonly<Record<string, boolean>> = {
   // Šah, decided the same way and for the same reason: a board writes nothing
   // until somebody plays a game, so there is nothing here to opt into.
   chess: true,
+  // The scanner, the kit's second module, is decided the same way. It does need
+  // a language pack before it can read anything, and that is not a reason to
+  // ship it off: the page says which pack is missing and where it is installed,
+  // so the module is on and only RECOGNITION waits for the pack.
+  scanner: true,
   pro: false,
   // The second module built on the kit (ADR-090), decided here like every other
   // selectable one: a library that had to be switched on first would be hiding

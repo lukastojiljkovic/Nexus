@@ -89,6 +89,10 @@ export type IconName =
   // name a shelf of five by one game on it. A stick says "something to play"
   // without choosing which.
   | "arcade"
+  // The scanner's mark (module `scanner`): the frame a picture is put inside
+  // and the line it is read along. The set already had a photograph (`image`)
+  // and a look (`eye`), and neither says "something is reading this page".
+  | "scan"
   // Objects the modules actually name.
   | "star"
   | "starFilled"
@@ -580,6 +584,19 @@ const SHAPES: Record<IconName, ReactNode> = {
       <circle cx="12" cy="6.6" r="2.8" />
       <path d="M12 9.4v5.2" />
       <rect x="3.6" y="14.6" width="16.8" height="5.4" rx="2" />
+    </>
+  ),
+  // Four corner brackets around the reading line, rather than a closed
+  // rectangle: a closed one with a line through it is the `image` frame with
+  // something laid across it, while brackets say "a region is being taken" on
+  // their own - which is what a scanner does to the picture.
+  scan: (
+    <>
+      <path d="M3.6 8.6v-3a2 2 0 0 1 2-2h3" />
+      <path d="M15.4 3.6h3a2 2 0 0 1 2 2v3" />
+      <path d="M20.4 15.4v3a2 2 0 0 1-2 2h-3" />
+      <path d="M8.6 20.4h-3a2 2 0 0 1-2-2v-3" />
+      <path d="M6.4 12h11.2" />
     </>
   ),
 

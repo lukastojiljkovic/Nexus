@@ -142,6 +142,9 @@ describe("createModuleRegistry", () => {
       "chess",
       // The second kit module (ADR-099), ordered after it by `order` 210.
       "maps",
+      // The second discovered module, after it by `order` (300). Registered in
+      // the same way, and written here for the same reason.
+      "scanner",
     ]);
   });
 
@@ -351,6 +354,10 @@ describe("createModuleRegistry", () => {
       "signals",
       // The second discovered module (ADR-090), in the group it declares.
       "miniapps",
+      // The scanner sits in „make" rather than in a group of its own: it MAKES
+      // something (a note, from a picture), which is the whole of what this
+      // group is for.
+      "scanner",
     ]);
     // â€žKultura" is its own group (ADR-093), and the first module to fill it.
     expect(grouped.get("culture")?.map((manifest) => manifest.id)).toEqual(["culture"]);
@@ -442,6 +449,10 @@ describe("createModuleRegistry", () => {
       // A map writes nothing either - its pack is installed data and its pins
       // are the user's own - so it is on like every module but the two above.
       "maps",
+      // ON by default too. The scanner needs a language pack before it can
+      // read, and the page says so where the reading happens instead of hiding
+      // the module from everybody who has not installed one.
+      "scanner",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");

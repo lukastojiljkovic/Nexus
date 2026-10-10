@@ -233,6 +233,9 @@ describe("resolveModuleSelection", () => {
       boards: true,
       // ...and the second, whose board writes nothing until a game is played.
       chess: true,
+      // And the second, last because a kit module registers after every
+      // compiled-in one and the discovered ones order themselves.
+      scanner: true,
       pro: false,
       // The second discovered module, in registry order after Tajmeri.
       library: true,
@@ -302,6 +305,7 @@ describe("moduleFlagWrites", () => {
       // The discovered modules keep their own order among themselves: „Šah" is
       // `order: 350` and the timers are `order: 100`, so the board comes last.
       { moduleId: "chess", enabled: true },
+      { moduleId: "scanner", enabled: true },
     ]);
   });
 

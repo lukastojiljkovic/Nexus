@@ -27,6 +27,10 @@ import type { IpcMainInvokeEvent, OpenDialogOptions, Session } from "electron";
 // and only when the user has chosen „Offline + update checks". See the SEC-EL-07
 // section near the bottom of this file.
 import { readFileBounded } from "./boundedRead.js";
+// The scanner's camera rule, consulted by the two session permission handlers
+// near the bottom of this file. Why a rule about who may ask is its own file
+// rather than a line here: `scannerMedia.ts`'s own header.
+import { allows as allowsScannerMedia, appMediaOrigins } from "./scannerMedia.js";
 import {
   activeNetworkMode,
   devServerOrigin,
@@ -14315,19 +14319,32 @@ app.whenReady().then(async () => {
   // document, its main frame, and only while the recorder's page has asked for
   // a device. The SIGNALS module's tuner and sound meter add the microphone
   // (`modules/signals/main/permission.ts`: `media`, audio only, main frame only,
-  // this app's own page only). A request is allowed when ONE module's rule
-  // allows it; every other permission name still reaches `callback(false)`.
+  // this app's own page only), and the SCANNER the camera
+  // (`main/scannerMedia.ts`: `media`, video only, this app's own origin only).
+  // A request is allowed when ONE module's rule allows it; every other
+  // permission name still reaches `callback(false)`.
   const devOrigin = devServerOrigin(process.env);
-  session.defaultSession.setPermissionRequestHandler((_contents, permission, callback, details) => {
+  const mediaOrigins = appMediaOrigins(process.env);
+  session.defaultSession.setPermissionRequestHandler((contents, permission, callback, details) => {
     callback(
       recorderAllowsRequest(permission, details, devOrigin, Date.now()) ||
-        signalsAllowsMicrophone(permission, details.requestingUrl, details, devOrigin),
+        signalsAllowsMicrophone(permission, details.requestingUrl, details, devOrigin) ||
+        allowsScannerMedia(permission, contents.getURL(), details, mediaOrigins),
     );
   });
   session.defaultSession.setPermissionCheckHandler(
-    (_contents, permission, requestingOrigin, details) =>
+    (contents, permission, requestingOrigin, details) =>
       recorderAllowsCheck(permission, requestingOrigin, details, devOrigin, Date.now()) ||
-      signalsAllowsMicrophone(permission, requestingOrigin, details, devOrigin),
+      signalsAllowsMicrophone(permission, requestingOrigin, details, devOrigin) ||
+      allowsScannerMedia(
+        permission,
+        // Chromium names the frame's origin for a check ("file://" for the
+        // packaged page), and `webContents` can be null when nothing owns the
+        // check - a check with no origin at all is refused by the rule.
+        requestingOrigin === "" ? (contents?.getURL() ?? null) : requestingOrigin,
+        details,
+        mediaOrigins,
+      ),
   );
 
   // SEC-NET: the three runtime layers of the cloud-off boundary. The fourth

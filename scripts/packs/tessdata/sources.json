@@ -1,0 +1,56 @@
+{
+  "pack": "tessdata-fast",
+  "fetched": "2026-10-10",
+  "version": "2026.10.0",
+  "licence": {
+    "spdx": "Apache-2.0",
+    "url": "https://github.com/tesseract-ocr/tessdata_fast/blob/main/LICENSE",
+    "attribution": "traineddata models from tesseract-ocr/tessdata_fast, the Tesseract OCR project"
+  },
+  "evidence": [
+    {
+      "url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main/LICENSE",
+      "sentence": "Apache License\nVersion 2.0, January 2004\nhttp://www.apache.org/licenses/",
+      "checked": "2026-10-10"
+    },
+    {
+      "url": "https://api.github.com/repos/tesseract-ocr/tessdata_fast",
+      "sentence": "\"spdx_id\": \"Apache-2.0\"",
+      "checked": "2026-10-10"
+    }
+  ],
+  "sources": [
+    {
+      "name": "eng.traineddata",
+      "language": "eng",
+      "url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main/eng.traineddata",
+      "sha256": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2",
+      "bytes": 4113088,
+      "gzipBytes": 1962155
+    },
+    {
+      "name": "srp.traineddata",
+      "language": "srp",
+      "url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main/srp.traineddata",
+      "sha256": "aa41ae3d9cc705e60d398ab38a5c3cc8b772c0d420c7d4f0859beb13d0e321b6",
+      "bytes": 2149931,
+      "gzipBytes": 925594
+    },
+    {
+      "name": "srp_latn.traineddata",
+      "language": "srp_latn",
+      "url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main/srp_latn.traineddata",
+      "sha256": "54b2e001bd8a336bdffc249c1487b8b7cb712f0a031f2551930ba050ebefa2a0",
+      "bytes": 3281787,
+      "gzipBytes": 1765704
+    },
+    {
+      "name": "LICENSE",
+      "language": null,
+      "url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main/LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "bytes": 11358,
+      "gzipBytes": null
+    }
+  ]
+}
