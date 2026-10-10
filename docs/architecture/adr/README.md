@@ -115,3 +115,4 @@ directory is the decision log behind it.
 | [095](095-assistant.md) | The assistant: eight parts, one contract, nothing off this machine | Accepted | 2026-10-10 |
 | [096](096-assistant-model-runtime.md) | The assistant's model runtime: llama.cpp in a utility process, the curated catalogue, and how a model is chosen | Accepted | 2026-10-10 |
 | [104](104-assistant-knowledge.md) | The assistant's knowledge base (local RAG) | Accepted | 2026-10-10 |
+| [105](105-voice.md) | The assistant's voice: Whisper in a worker, and the Serbian voice that does not exist | Accepted | 2026-10-10 |
