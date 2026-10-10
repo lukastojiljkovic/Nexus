@@ -12,7 +12,7 @@ import {
 } from "@nexus/ui";
 
 import type { ModulePageProps } from "../../../shared/moduleApi.js";
-import { declaredText } from "../../../renderer/src/moduleKit/moduleSurface.js";
+import { declaredText, ExternalLink } from "../../../renderer/src/moduleKit/moduleSurface.js";
 // `fill` is the shell's own `{name}` interpolator: a FUNCTION, imported rather
 // than re-implemented, and not a table read — so nothing here freezes a language
 // and `check:string-capture` has nothing to say about it.
@@ -29,6 +29,7 @@ import {
 } from "../shared/ipc.js";
 import { copy } from "./copy.js";
 import { entryText, sourceLine } from "./format.js";
+import { SentenceTranslator } from "./sentences/SentenceTranslator.js";
 import {
   clearRecent,
   persistRecent,
@@ -46,10 +47,9 @@ import "./translator.css";
  *
  * **Two tabs, and the second one is a seam.** „Reči" is this module: the
  * search, the recent list and the phrasebook. „Rečenice" belongs to the run
- * that translates sentences, and until its component is wired in at merge time
- * the tab states what it needs — a placeholder that says so out loud rather than
- * a tab that is quietly absent, because the pack it needs is a thing the reader
- * can install.
+ * that translates sentences: `sentences/SentenceTranslator.tsx` owns everything
+ * under that folder — its own copy table, its own engine client, its own worker
+ * — and this page renders it and hands it the installed packs.
  *
  * **Nothing here computes a lookup.** The search runs in MAIN
  * (`main/register.ts` → `main/pack.ts`), over an index held in memory and read
@@ -69,7 +69,7 @@ import "./translator.css";
 const RESULT_LIMIT = 20;
 const DEBOUNCE_MS = 150;
 
-/** The page's two tabs. `sentences` is the seam the sentence-translation run fills in. */
+/** The page's two tabs: this module's word search, and the sentence translator's surface. */
 type TranslatorTab = "words" | "sentences";
 
 export default function TranslatorPage({ profileId }: ModulePageProps) {
@@ -228,15 +228,15 @@ export default function TranslatorPage({ profileId }: ModulePageProps) {
         </div>
       ) : (
         <div role="tabpanel" aria-label={copy.sentences.title}>
-          {/* TODO(sentences): the sentence-translation run exports
-              `SentenceTranslator` from `./sentences/SentenceTranslator.tsx`.
-              Replace this placeholder with it at merge time; the tab, its
-              label and this seam are already here, so nothing else on this page
-              has to move. */}
-          <Card title={copy.sentences.title}>
-            <p className="translator__placeholder">{copy.sentences.needsPack}</p>
-            <p className="nx-hint">{copy.sentences.hint}</p>
-          </Card>
+          {/* The sentence surface, with its pack list taken from THIS module's
+              ops rather than from the shell's `packsList`: a kit module reaches
+              the machine through its own contract, and the two are the same read
+              (`packs` answers what the registry has installed). */}
+          <SentenceTranslator
+            loadPacks={() =>
+              window.nexus.modules.translator.packs({}).then((view) => view.packs)
+            }
+          />
         </div>
       )}
     </div>
@@ -380,10 +380,11 @@ function EntryRow({ entry }: { entry: TranslatorEntryView }) {
       )}
       <p className="translator__source">
         <span className="translator__label">{copy.entry.source}: </span>
-        {/* TODO(external-links): this is where the entry's Wiktionary page would
-            be opened, once main has a vetted `shell.openExternal` wrapper. The
-            address is selectable and copyable until then. */}
-        <span className="translator__url">{sourceLine(entry.url)}</span>
+        {/* The entry's own page, opened in the user's browser through the kit's
+            one door (ADR-107). The label is the host and the path rather than
+            the whole address, and a refusal leaves the address as selectable
+            text — `ExternalLink` does both. */}
+        <ExternalLink href={entry.url}>{sourceLine(entry.url)}</ExternalLink>
         <Button size="sm" variant="quiet" onClick={() => void write("url", entry.url)}>
           {copy.entry.copyUrl}
         </Button>

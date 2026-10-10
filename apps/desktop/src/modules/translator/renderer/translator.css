@@ -112,13 +112,6 @@
   gap: var(--nx-space-2);
 }
 
-/* Selectable, because the address IS the attribution and main has no external
-   link wrapper yet — see the page's `TODO(external-links)`. */
-.translator__url {
-  user-select: text;
-  color: var(--nx-text-muted);
-}
-
 .translator__entry-actions {
   display: flex;
   align-items: center;
@@ -145,11 +138,6 @@
   white-space: pre-line;
   color: var(--nx-text-muted);
   user-select: text;
-}
-
-.translator__placeholder {
-  margin-block: 0 var(--nx-space-2);
-  color: var(--nx-text);
 }
 
 .translator__error {

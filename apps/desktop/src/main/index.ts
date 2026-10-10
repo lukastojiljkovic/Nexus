@@ -13136,8 +13136,10 @@ function createWindow(): BrowserWindow {
       });
   });
 
-  // SEC-EL-03: deny every attempt to open a new window. The shell has no external
-  // links yet; a vetted shell.openExternal wrapper lands with the first one.
+  // SEC-EL-03: deny every attempt to open a new window. Windows stay denied even
+  // now that the app has external links: an address goes out through the ONE
+  // channel (`external:open` -> `main/external.ts`, ADR-107), which is a rule
+  // this process applies, never a window the renderer opened for itself.
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
 
   // SEC-EL-03: lock navigation to the app's own document; block anything else.

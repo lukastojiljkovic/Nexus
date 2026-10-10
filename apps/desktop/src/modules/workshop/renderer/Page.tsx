@@ -17,7 +17,6 @@ import type { ModulePageProps } from "../../../shared/moduleApi.js";
 import { declaredText } from "../../../renderer/src/moduleKit/moduleSurface.js";
 import { manifest } from "../shared/manifest.js";
 import {
-  WORKSHOP_TARGETS,
   type WorkshopBoardLayer,
   type WorkshopFileProblem,
   type WorkshopRefusedFile,
@@ -25,6 +24,8 @@ import {
   type WorkshopTarget,
 } from "../shared/ipc.js";
 import { copy } from "./copy.js";
+import { ImageTools } from "./images/ImageTools.js";
+import { PdfTools } from "./pdf/PdfTools.js";
 import {
   boundsText,
   countText,
@@ -38,17 +39,26 @@ import { activeTheme, layerColour, viewerColours, withLayerColour } from "./pale
 import { forgetRecentFiles, readRecentFiles, rememberRecentFile, type RecentFile } from "./recentFiles.js";
 import { buildModelScene, buildToolpathScene, type ToolpathScene } from "./scenes.js";
 import { Viewport3D, type SceneApi, type ViewportHandle } from "./Viewport3D.js";
+import { isViewer, viewLabel, WORKSHOP_VIEWS, type WorkshopView } from "./views.js";
 import { createParseClient, type ParseClient } from "./workerClient.js";
 import "./workshop.css";
 
 /**
- * RADIONICA (ADR-090) - the three viewers, one page.
+ * RADIONICA (ADR-090) - the three viewers and the two tool sets, one page.
  *
  * **Why one page rather than three.** A maker arrives with a file, not with a
  * module: the person who opens a bracket's STL to check its bounds is the person
  * who opens the G-code of the same part a minute later, and the switcher keeps
  * one of each loaded while the other is looked at. Three pages would be three
  * rail entries that say the same word, and three of everything else.
+ *
+ * **Why the PDF and image tools are views of it.** They are the same errand one
+ * step further on: the file that arrives from a machine or a fabricator is
+ * sometimes a document that has to be merged, split or written back out, and a
+ * fourth and fifth rail entry would be two more pages that say "workshop". The
+ * tool sets bring their own words and their own stylesheet
+ * (`pdf/`, `images/`), so what this page adds is the segment and the file API
+ * the two components take as a prop.
  *
  * **What happens where.** Main opens the dialog and reads the file - the
  * capability and the caps. The PARSE worker reads the model and the toolpath,
@@ -80,7 +90,7 @@ interface ToolpathState {
 type BoardLayer = WorkshopBoardLayer & { readonly id: string };
 
 export default function WorkshopPage({ profileId }: ModulePageProps) {
-  const [target, setTarget] = useState<WorkshopTarget>("model");
+  const [view, setView] = useState<WorkshopView>("model");
   const [model, setModel] = useState<ModelState | null>(null);
   const [toolpath, setToolpath] = useState<ToolpathState | null>(null);
   const [board, setBoard] = useState<readonly BoardLayer[]>([]);
@@ -243,6 +253,15 @@ export default function WorkshopPage({ profileId }: ModulePageProps) {
     </Button>
   );
 
+  /**
+   * The file API the two tool sets take as a prop: the module's own contract,
+   * the same object every other call on this page goes through. The tools never
+   * reach `window` themselves, so a tool set can be mounted by another surface
+   * without knowing where its ops come from.
+   */
+  const files = window.nexus.modules.workshop;
+  const viewer = isViewer(view) ? view : null;
+
   return (
     <div className="workshop">
       <PageHeader
@@ -252,26 +271,28 @@ export default function WorkshopPage({ profileId }: ModulePageProps) {
       />
 
       <div className="workshop__switcher" role="group" aria-label={copy.page.subtitle}>
-        {WORKSHOP_TARGETS.map((which) => (
+        {WORKSHOP_VIEWS.map((which) => (
           <Button
             key={which}
             size="sm"
             className="nx-segmented__option"
-            aria-pressed={target === which}
-            onClick={() => setTarget(which)}
+            aria-pressed={view === which}
+            onClick={() => setView(which)}
           >
-            {copy.targets[which]}
+            {viewLabel(which)}
           </Button>
         ))}
       </div>
 
-      {error !== null && (
+      {viewer !== null && error !== null && (
         <p className="workshop__error" role="alert">
           {error}
         </p>
       )}
-      {problem !== null && <p className="workshop__error">{copy.problems[problem]}</p>}
-      {refused.length > 0 && (
+      {viewer !== null && problem !== null && (
+        <p className="workshop__error">{copy.problems[problem]}</p>
+      )}
+      {viewer !== null && refused.length > 0 && (
         <ul className="workshop__refused">
           {refused.map((entry, index) => (
             <li key={`${entry.name}-${entry.problem}-${index}`}>
@@ -281,7 +302,7 @@ export default function WorkshopPage({ profileId }: ModulePageProps) {
         </ul>
       )}
 
-      {target === "model" && (
+      {view === "model" && (
         <ModelSection
           model={model}
           colours={colours}
@@ -291,7 +312,7 @@ export default function WorkshopPage({ profileId }: ModulePageProps) {
           openButton={openButton("model")}
         />
       )}
-      {target === "toolpath" && (
+      {view === "toolpath" && (
         <ToolpathSection
           toolpath={toolpath}
           colours={colours}
@@ -301,7 +322,7 @@ export default function WorkshopPage({ profileId }: ModulePageProps) {
           openButton={openButton("toolpath")}
         />
       )}
-      {target === "board" && (
+      {view === "board" && (
         <BoardSection
           layers={board}
           theme={theme}
@@ -313,46 +334,54 @@ export default function WorkshopPage({ profileId }: ModulePageProps) {
         />
       )}
 
-      <Card className="workshop__card" title={copy.recent.title}>
-        <p className="nx-hint">{copy.recent.caption}</p>
-        {recent.length === 0 ? (
-          <p className="nx-hint">{copy.recent.empty}</p>
-        ) : (
-          <div className="workshop__list">
-            {recent.map((entry) => (
-              <ListRow
-                key={entry.path}
-                trailing={
-                  <Button
-                    size="sm"
-                    disabled={busy}
-                    onClick={() => void reopen(entry.target, entry.path)}
-                  >
-                    {copy.open.again}
-                  </Button>
-                }
-              >
-                <span className="workshop__recent-name">{entry.name}</span>
-                <span className="workshop__recent-path">{pathParts(entry.path).directory}</span>
-                <Chip>{copy.targets[entry.target]}</Chip>
-              </ListRow>
-            ))}
+      {/* The two tool sets: their own components, their own words, the same file
+          API — the module's contract rather than a shell-wide one, so a tool
+          set reads and writes files exactly as the viewers do. */}
+      {view === "pdf" && <PdfTools files={files} />}
+      {view === "images" && <ImageTools files={files} />}
+
+      {viewer !== null && (
+        <Card className="workshop__card" title={copy.recent.title}>
+          <p className="nx-hint">{copy.recent.caption}</p>
+          {recent.length === 0 ? (
+            <p className="nx-hint">{copy.recent.empty}</p>
+          ) : (
+            <div className="workshop__list">
+              {recent.map((entry) => (
+                <ListRow
+                  key={entry.path}
+                  trailing={
+                    <Button
+                      size="sm"
+                      disabled={busy}
+                      onClick={() => void reopen(entry.target, entry.path)}
+                    >
+                      {copy.open.again}
+                    </Button>
+                  }
+                >
+                  <span className="workshop__recent-name">{entry.name}</span>
+                  <span className="workshop__recent-path">{pathParts(entry.path).directory}</span>
+                  <Chip>{copy.targets[entry.target]}</Chip>
+                </ListRow>
+              ))}
+            </div>
+          )}
+          <div className="workshop__actions">
+            <Button
+              size="sm"
+              variant="quiet"
+              disabled={recent.length === 0}
+              onClick={() => {
+                forgetRecentFiles(profileId);
+                setRecent([]);
+              }}
+            >
+              {copy.recent.forget}
+            </Button>
           </div>
-        )}
-        <div className="workshop__actions">
-          <Button
-            size="sm"
-            variant="quiet"
-            disabled={recent.length === 0}
-            onClick={() => {
-              forgetRecentFiles(profileId);
-              setRecent([]);
-            }}
-          >
-            {copy.recent.forget}
-          </Button>
-        </div>
-      </Card>
+        </Card>
+      )}
     </div>
   );
 }

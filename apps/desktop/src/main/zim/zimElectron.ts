@@ -1,5 +1,6 @@
-import { protocol, shell, type Session, type WebContents } from "electron";
+import { protocol, type Session, type WebContents } from "electron";
 
+import { openDocumentExternalUrl } from "../external.js";
 import { handleFrameNavigation } from "./external.js";
 import { parseZimRequest, zimResponseHeaders, type ZimServer } from "./protocol.js";
 import { ZIM_SCHEME } from "./scheme.js";
@@ -87,10 +88,14 @@ export function installZimProtocol(server: ZimServer): void {
  * and `external.ts` decides — inside the ZIM stays, `http(s)` goes to the user's
  * browser, everything else is dropped.
  *
- * `openInBrowser` is `shell.openExternal`, called with a URL that has already
- * been reduced to an `http(s)` one by the rule above. That is the same hand-off
+ * `openInBrowser` is the app's one external-link door
+ * (`openDocumentExternalUrl`), called with a URL that has already been reduced
+ * to an `http(s)` one by the rule above. That is the same hand-off
  * `update/electron.ts` makes to the same loader, and the same argument applies:
  * the loader is the user's own browser rather than this process's network stack.
+ * The rule is checked twice on purpose — once to decide whether the frame loads
+ * or is cancelled, and once at the door, where the whole app's links are
+ * checked.
  */
 export function installExternalLinkRule(contents: WebContents): void {
   contents.on("will-frame-navigate", (details) => {
@@ -101,7 +106,7 @@ export function installExternalLinkRule(contents: WebContents): void {
       {
         preventDefault: () => details.preventDefault(),
         openInBrowser: (url) => {
-          void shell.openExternal(url);
+          void openDocumentExternalUrl(url);
         },
       },
     );

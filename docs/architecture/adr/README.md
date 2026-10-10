@@ -117,3 +117,4 @@ directory is the decision log behind it.
 | [103](103-pack-catalogue-and-credits.md) | The pack catalogue, the download screen and the credits | Accepted; amends ADR-091 §2 (format 1 gains an optional `notice`), uses ADR-092 §3 | 2026-10-10 |
 | [104](104-assistant-knowledge.md) | The assistant's knowledge base (local RAG) | Accepted | 2026-10-10 |
 | [105](105-voice.md) | The assistant's voice: Whisper in a worker, and the Serbian voice that does not exist | Accepted | 2026-10-10 |
+| [107](107-external-links.md) | One door for external links: two named variants, and the kit's `ExternalLink` | Accepted; uses ADR-103 §7, amends ADR-103 for the document variant | 2026-10-10 |

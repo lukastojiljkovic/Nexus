@@ -16,6 +16,11 @@ export const en: typeof sr = {
     toolpath: "G-code",
     board: "Gerber",
   },
+  /** The two tool sets, as the switcher's own segments read them. */
+  views: {
+    pdf: "PDF",
+    images: "Images",
+  },
   open: {
     model: "Open an STL",
     toolpath: "Open G-code",

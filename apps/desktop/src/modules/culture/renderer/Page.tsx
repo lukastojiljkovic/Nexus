@@ -21,7 +21,7 @@ import {
   type VisitKind,
 } from "@nexus/core";
 import type { ModulePageProps } from "../../../shared/moduleApi.js";
-import { declaredText } from "../../../renderer/src/moduleKit/moduleSurface.js";
+import { declaredText, ExternalLink } from "../../../renderer/src/moduleKit/moduleSurface.js";
 import { collator, dateTimeFormat } from "../../../renderer/src/intl.js";
 import { manifest } from "../shared/manifest.js";
 import type {
@@ -985,13 +985,14 @@ function PlanRow({
           <Chip>{copy.kinds[plan.kind]}</Chip>
           {plan.visitId !== null && <Chip variant="data">{copy.programme.becameVisit}</Chip>}
           {plan.link !== null && (
-            // `target="_blank"` opens in the OS browser: this app has no tab to
-            // put a web page in, and an in-app frame would be a second browser
-            // nobody asked for. The address was checked in main, so only
-            // http(s) can be here.
-            <a className="culture__link" href={plan.link} target="_blank" rel="noreferrer">
+            // The kit's one door (ADR-107) rather than an `<a>`: an anchor is a
+            // navigation this window refuses (SEC-EL-03), so it used to draw a
+            // link that did nothing. The rule that decides whether an address
+            // may leave this machine lives in main, and a refusal leaves the
+            // address selectable instead of pretending to be a control.
+            <ExternalLink href={plan.link}>
               {copy.programme.openLink}
-            </a>
+            </ExternalLink>
           )}
           <Button
             size="sm"

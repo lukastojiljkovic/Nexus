@@ -32,6 +32,17 @@ export { declaredText } from "./labels.js";
 export type { SettingsPanelProps } from "../moduleSettingsPanels.js";
 export type { DashboardWidgetBodyProps, DashboardWidgetRenderer } from "../dashboardWidgets.js";
 
+// --- The one way OUT of this process a module may ask for (ADR-107) ----------
+//
+// The renderer cannot navigate itself and cannot open a window (SEC-EL-03), so
+// every external address in a kit module goes through the app's one channel,
+// which is where the rule lives. `ExternalLink` is the control for the ordinary
+// case; `openExternal` is for a caller that draws its own, and it answers
+// whether main opened the address or refused it. A module never reaches
+// `window.nexus.openExternal` itself: one door, and this is it.
+export { ExternalLink, type ExternalLinkProps } from "./ExternalLink.js";
+export { openExternal } from "../links.js";
+
 // --- What a module needs to DRAW a value (ADR-090) ---------------------------
 //
 // The app has exactly one function that turns minor units into money, and a

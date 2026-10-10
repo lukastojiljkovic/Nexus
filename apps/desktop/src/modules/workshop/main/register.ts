@@ -16,6 +16,7 @@ import {
   type WorkshopResult,
   type WorkshopTarget,
 } from "../shared/ipc.js";
+import { registerWorkshopFiles } from "./files.js";
 import { convertLayer } from "./gerber.js";
 
 /**
@@ -47,6 +48,14 @@ import { convertLayer } from "./gerber.js";
  * **A file that cannot be read is a sentence beside the viewer, not a failure of
  * the pick.** One bad layer among seven good ones must not cost the seven: every
  * refusal is per file, with a code the page words in the reader's language.
+ *
+ * **The tool sets' three file ops are registered from here too**, at the end of
+ * this file: their handlers live in `files.ts` (which opens the dialogs and does
+ * the writes) and they are declared in the module's own contract, so the module
+ * answers on five channels and main refuses anything else. `files.ts` imports
+ * `electron`, which the kit's tests do not have — the split `electronPicker`
+ * above is on the other side of is why only the DIALOG usage is deferred there,
+ * and why that module's own handlers never run under a test.
  */
 
 /** Opens the native dialog and answers the paths the user chose, or `null` for a cancelled one. */
@@ -186,6 +195,13 @@ export function register(host: ModuleHostSurface, picker: WorkshopPicker = elect
     }
     return await openPaths(target, [path]);
   });
+
+  // The PDF and image tools' three channels. They are NOT registered from
+  // `registerWorkshopFiles` being handed anything of this file's: the whole
+  // handler, its payload validation and its dialog are that module's, and this
+  // call is the one line that puts them on the wire — which is what the kit's
+  // shape wants, since `ctx` satisfies `WorkshopFileHost` by construction.
+  registerWorkshopFiles(ctx);
 }
 
 /**

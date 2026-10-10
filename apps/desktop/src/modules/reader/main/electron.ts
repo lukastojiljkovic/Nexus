@@ -1,5 +1,6 @@
-import { app, shell } from "electron";
+import { app } from "electron";
 
+import { openDocumentExternalUrl } from "../../../main/external.js";
 import { RELEASE_PUBLIC_KEY_PEM } from "../../../main/update/releaseKey.js";
 import { configureReaderEnvironment } from "./env.js";
 import { printReaderPdf } from "./print.js";
@@ -13,12 +14,15 @@ import { printReaderPdf } from "./print.js";
  * several runs share. Everything the call needs it reads itself: `userData` at
  * call time (so the harness sandbox, which is set before `ready`, is the
  * directory packs are read from), the release key from the one constant the
- * updater already trusts, and `shell.openExternal` for a pack's source line.
+ * updater already trusts, and the app's external-link door for a pack's source
+ * line.
  *
- * `shell.openExternal` is reached through the app's own rule rather than directly:
- * the URL is validated in `register.ts` (http/https only) before this function is
- * called at all, so this is the vetted wrapper `index.ts` said would land with the
- * first external link the product actually has.
+ * **A pack's source line is a DOCUMENT's link, so it takes the document variant
+ * (ADR-107).** The address is the pack's own, printed on the page the reader has
+ * open — the same category a ZIM's links are in — and a pack published years ago
+ * may have written it as `http:`. The scheme is still checked where the OS is
+ * reached: `register.ts` refuses anything that is not `http(s)`, and the door
+ * refuses everything the rule refuses.
  */
 export function installReaderEnvironment(): void {
   configureReaderEnvironment({
@@ -27,8 +31,7 @@ export function installReaderEnvironment(): void {
     print: printReaderPdf,
     openExternal: async (url) => {
       try {
-        await shell.openExternal(url);
-        return true;
+        return await openDocumentExternalUrl(url);
       } catch (error) {
         console.error(
           `Nexus: the Reader could not open a pack's source - ${

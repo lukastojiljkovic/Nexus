@@ -62,8 +62,6 @@ export const sr = {
   },
   sentences: {
     title: "Rečenice",
-    needsPack: "Prevođenje rečenica zahteva paket za prevođenje.",
-    hint: "Kada paket za prevođenje rečenica bude instaliran, ovde se prevode cele rečenice.",
   },
   notInstalled: {
     title: "Rečnik još nije instaliran",

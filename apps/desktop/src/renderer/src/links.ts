@@ -11,6 +11,17 @@
  * A refusal answers `false` rather than throwing, so a link that will not open
  * is nothing more than a link that will not open.
  */
+export function openExternal(url: string): Promise<boolean> {
+  return window.nexus.openExternal(url);
+}
+
+/**
+ * The same call for a surface that has nothing to do with the answer.
+ *
+ * The credits rows are the case: the address is either opened or it is not, and
+ * a row with no further use for the boolean should not have to write a `catch`
+ * to say so.
+ */
 export function openExternalLink(url: string): void {
-  void window.nexus.openExternal(url).catch(() => undefined);
+  void openExternal(url).catch(() => undefined);
 }

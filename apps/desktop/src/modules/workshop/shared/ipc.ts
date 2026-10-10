@@ -1,16 +1,22 @@
 import type { GerberRole } from "@nexus/core";
 import { defineModuleContract, type ModuleApiOf } from "../../../shared/moduleApi.js";
+import { WORKSHOP_FILE_OPS, type WorkshopFileOps } from "./workshopFiles.js";
 
 /**
- * WORKSHOP's contract: the two channels it answers on, the payload each takes,
- * and the API its page calls - declared once, in its own folder (ADR-090).
+ * WORKSHOP's contract: the channels it answers on, the payload each takes, and
+ * the API its page calls - declared once, in its own folder (ADR-090).
  *
- * **Two ops, because there is exactly one thing this module asks main for.**
- * Every file a viewer draws arrives through the native dialog, which only main
- * may open, and the bytes only main may read: `open` is that request. `reopen`
- * is the same request for a path the user already picked once in this run of the
- * app, so the recently-opened list on the page is worth keeping rather than
- * being a list of files the page can name but not show.
+ * **Two ops for the viewers, because there is exactly one thing they ask main
+ * for.** Every file a viewer draws arrives through the native dialog, which only
+ * main may open, and the bytes only main may read: `open` is that request.
+ * `reopen` is the same request for a path the user already picked once in this
+ * run of the app, so the recently-opened list on the page is worth keeping
+ * rather than being a list of files the page can name but not show.
+ *
+ * **And three more for the tool sets**, folded in from
+ * `./workshopFiles.js`: the same dialog-and-read shape, but for files the tool
+ * sets process in a renderer worker and write back out through main. One
+ * contract, because the preload bridge keys its namespaces by contract id.
  *
  * **Why `reopen` takes a path at all, when the renderer is untrusted.** It is
  * refused unless main itself handed that exact path out through a dialog in THIS
@@ -121,16 +127,26 @@ interface ReopenPayload {
 type WorkshopOps = {
   open: { request: OpenPayload; response: WorkshopResult };
   reopen: { request: ReopenPayload; response: WorkshopResult };
-};
+} & WorkshopFileOps;
+
+/**
+ * Every op this module declares, in one list: the two viewers', then the three
+ * file operations the PDF and image tools call.
+ *
+ * The file ops arrive as a FRAGMENT (`shared/workshopFiles.ts`) rather than as
+ * five names spelled here, and that is the seam the two runs that built this
+ * module agreed on: the tool sets own their half of the contract, and this line
+ * folds it in so the module still has exactly ONE contract — the preload keys
+ * its namespaces by contract id, and a second contract called `workshop` would
+ * overwrite this one in that map.
+ */
+const WORKSHOP_OPS = ["open", "reopen", ...WORKSHOP_FILE_OPS] as const;
 
 /** This module's renderer API: one method per op, named after the op. */
 export type WorkshopApi = ModuleApiOf<WorkshopOps>;
 
 /** The contract the preload builds the bridge from and main refuses foreign ops against. */
-export const contract = defineModuleContract<"workshop", WorkshopOps>("workshop", [
-  "open",
-  "reopen",
-]);
+export const contract = defineModuleContract<"workshop", WorkshopOps>("workshop", WORKSHOP_OPS);
 
 /**
  * The type-level half: this module's API joins `NexusApi.modules` from here, so

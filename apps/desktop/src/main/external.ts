@@ -1,6 +1,6 @@
 /**
- * THE EXTERNAL-LINK RULE (ADR-103): the one way a renderer may cause an address
- * to leave this process.
+ * THE EXTERNAL-LINK RULE (ADR-103, ADR-107): the one door between this app and
+ * the operating system's browser.
  *
  * A content pack carries its own licence and its own source, and a credits
  * screen is worthless if the addresses there cannot be opened. Opening one means
@@ -11,6 +11,11 @@
  * when it turned down `openExternal(url)` for the renderer, and the reason this
  * rule exists rather than a channel that forwards whatever it is given.
  *
+ * **NOTHING ELSE IN THIS APP CALLS `shell.openExternal`** (ADR-107). The update
+ * feature's release page, a link inside a ZIM page and a Reader pack's source
+ * line all arrive here, and `external.test.ts` walks `src/main` and fails the day
+ * a second call site appears.
+ *
  * WHAT IT ALLOWS, and nothing else: an `https` address, without credentials, of
  * a bounded length. What it deliberately does NOT do is allowlist hosts. The
  * addresses on the credits screen are third-party licences and third-party
@@ -20,6 +25,15 @@
  * SCHEME: an https address opens in the user's browser, which is a document
  * viewer, while a `file:` or a custom scheme opens a program. The rest of the
  * address travels unchanged, as the pack's publisher wrote it.
+ *
+ * **THE SECOND VARIANT, and the whole of its reason.** `http:` is allowed for a
+ * link INSIDE A DOCUMENT THE USER OPENED — a ZIM pack's own links, most of which
+ * an old encyclopedia wrote as `http:` — and for nothing else. Refusing them
+ * would break the one feature an offline encyclopedia exists for, while the
+ * app's own addresses are https and stay https. Which variant applies is a fact
+ * about the CALLER (the ZIM module knows which frame a navigation fired in), so
+ * the renderer never gets a channel that could claim the weaker rule for an
+ * address of its own choosing.
  *
  * THE LOADER IS THE USER'S BROWSER, never this process's network stack: nothing
  * here fetches anything, and `scripts/check-egress.mjs` carries an exemption for
@@ -37,14 +51,17 @@ import { shell } from "electron";
 const MAX_EXTERNAL_URL_LENGTH = 2048;
 
 /**
- * Whether an address may be handed to the operating system.
+ * Whether an address may be handed to the operating system, under one list of
+ * schemes.
  *
- * A pure function, so the rule is testable without Electron and readable in one
- * place. Unparseable, `http:`, a non-https scheme, an address carrying a
- * username or a password, and an over-long string all answer `false`: the caller
- * then does nothing rather than opening something it cannot vouch for.
+ * The one place the shared half of the rule lives, so the two variants below
+ * cannot drift about credentials, length or an empty host. A pure function, so
+ * the rule is testable without Electron. Unparseable, a scheme outside
+ * `schemes`, an address carrying a username or a password, and an over-long
+ * string all answer `false`: the caller then does nothing rather than opening
+ * something it cannot vouch for.
  */
-export function allowsExternalUrl(url: string): boolean {
+function allowsUnderSchemes(url: string, schemes: readonly string[]): boolean {
   if (url.length === 0 || url.length > MAX_EXTERNAL_URL_LENGTH) return false;
   let parsed: URL;
   try {
@@ -52,11 +69,32 @@ export function allowsExternalUrl(url: string): boolean {
   } catch {
     return false;
   }
-  if (parsed.protocol !== "https:") return false;
+  if (!schemes.includes(parsed.protocol)) return false;
   // `https://user:pass@host/` reads as a host to a person and is not one; the
   // browser is the only party that would tell the difference.
   if (parsed.username !== "" || parsed.password !== "") return false;
   return parsed.hostname !== "";
+}
+
+/**
+ * Whether an address the APP owns may be handed to the operating system:
+ * `https` and nothing else, which is ADR-103's rule unchanged.
+ */
+export function allowsExternalUrl(url: string): boolean {
+  return allowsUnderSchemes(url, ["https:"]);
+}
+
+/**
+ * Whether a link inside a document the user opened may be handed to the
+ * operating system: `https`, or the `http` most of an old encyclopedia's own
+ * links are written in.
+ *
+ * The weaker scheme is the DOCUMENT's and never the app's: `openExternalUrl` is
+ * what every address this product chose goes through, and a renderer cannot
+ * reach this function at all.
+ */
+export function allowsDocumentExternalUrl(url: string): boolean {
+  return allowsUnderSchemes(url, ["https:", "http:"]);
 }
 
 /**
@@ -68,6 +106,20 @@ export function allowsExternalUrl(url: string): boolean {
  */
 export async function openExternalUrl(url: string): Promise<boolean> {
   if (!allowsExternalUrl(url)) return false;
+  await shell.openExternal(url);
+  return true;
+}
+
+/**
+ * The same hand-off for a link inside a document the user opened, under that
+ * variant's scheme rule.
+ *
+ * A refusal answers `false` here too: the caller is a frame navigation, and a
+ * page whose link does nothing is the correct outcome for everything the
+ * document is not allowed to make this app follow.
+ */
+export async function openDocumentExternalUrl(url: string): Promise<boolean> {
+  if (!allowsDocumentExternalUrl(url)) return false;
   await shell.openExternal(url);
   return true;
 }

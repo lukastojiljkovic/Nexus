@@ -49,18 +49,6 @@ export interface ModuleLauncherProps {
   onClose: () => void;
 }
 
-/**
- * The two lines a tile draws, from the copy the Settings gallery already uses —
- * a module has ONE name and ONE sentence everywhere (`moduleName.ts` says the
- * same about the name), and the launcher is the fourth surface to draw them.
- */
-function tileCopy(moduleId: string): { name: string; description: string } {
-  return {
-    name: lookup(strings.modules, moduleId) ?? moduleId,
-    description: lookup(strings.settings.moduleDescriptions, moduleId) ?? "",
-  };
-}
-
 export function ModuleLauncherDialog({
   registry,
   enabledModules,
@@ -86,7 +74,10 @@ export function ModuleLauncherDialog({
   // read from the live table, which is rewritten in place when the language
   // changes (`strings.ts`), so a memo keyed on the registry would keep the old
   // language's descriptions. Sixteen tiles are cheap.
-  const groups = launcherGroups(registry, enabledModules, tileCopy, moduleVisibility);
+  // The two lines come from `launcherGroups`'s own default (`launcherTileCopy`),
+  // which is the one resolver every other surface draws a module's name and
+  // sentence through, kit modules included.
+  const groups = launcherGroups(registry, enabledModules, undefined, moduleVisibility);
   const visible = filterLauncherGroups(groups, query);
   const ids = launcherTileIds(visible);
   // Out-of-range answers nothing rather than clamping: the list shrinks as the

@@ -211,8 +211,9 @@ page's text.
 Every article ends with one, as the layout requires: for the Serbian pack the
 page's own `Извор` citation followed by the page URL, for the English pack the
 book, its translator and the ebook's landing page. The URL is plain text, not a
-link: there is no vetted `shell.openExternal` wrapper in main yet, and the
-builder carries one `TODO(external-links)` where the line is written.
+link: it is the attribution a reader copies rather than a control, and the pages
+that draw a link do it through the app's one door (ADR-107) — the builder writes
+text, which is what a document holds.
 
 ## Tests and fixtures
 
