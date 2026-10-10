@@ -98,6 +98,9 @@ describe("createModuleRegistry", () => {
       // here rather than derived because this test IS the declaration — what the
       // registry holds is what the app shows.
       "timers",
+      // The second discovered module (CALC, migration 079), after „Tajmeri" on
+      // its own `order` of 190.
+      "calculator",
     ]);
   });
 
@@ -159,6 +162,10 @@ describe("createModuleRegistry", () => {
       // twice rather than a bin for anything tool-shaped.
       ELEC: ["electronics"],
       PRO: ["pro"],
+      // CALC is its own PRD entry, like ELEC and PRO: the calculator is a
+      // calculator rather than a second reading of „Utility Belt", so it does not
+      // join the UTIL sharing above.
+      CALC: ["calculator"],
     });
   });
 
@@ -212,6 +219,8 @@ describe("createModuleRegistry", () => {
       "canvas",
       "electronics",
       "pro",
+      // And the discovered module that declares this group (CALC).
+      "calculator",
     ]);
     // The shell group is the two rows nothing may switch off, and the sidebar is
     // the one caller that splits it: its first member heads the rail, the rest
@@ -254,6 +263,9 @@ describe("createModuleRegistry", () => {
       // ON by default, like every module but PRIV and PRO: a timer writes
       // nothing until somebody starts one, so there is nothing to opt into.
       "timers",
+      // The same for the calculator: a bench that writes nothing until an
+      // expression is committed.
+      "calculator",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");
@@ -440,6 +452,9 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
       // The first DISCOVERED card (ADR-090): declared in the module's own
       // manifest and drawn by its own body, with no line in this file's map.
       "timers",
+      // The second, on the same terms: `calc_settings` holds the two rows and the
+      // module's own `renderer/Settings.tsx` draws them.
+      "calculator",
     ]);
   });
 

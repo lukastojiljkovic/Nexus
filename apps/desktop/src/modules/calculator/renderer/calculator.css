@@ -1,0 +1,188 @@
+/* KALKULATOR (ADR-090). Tokens exclusively - raw colour values are forbidden
+   outside @nexus/tokens, and this stylesheet is checked by the same gates the
+   shell's own are (`check:colours`, `check:tokens`, `check:layers`).
+ *
+ * THIS FILE IS IMPORTED BY THE MODULE'S PAGE, not by `app.css`, and that is the
+ * whole point of the kit stated in CSS: the shell's stylesheet is part of the
+ * startup chunk, so a rule for a page nobody has opened would be paid for on
+ * every launch. Vite turns this import into a chunk of its own, loaded with the
+ * page - the same shape the module's JavaScript has.
+ *
+ * Class prefix `calculator__`, for the reason the shell's split states: a rule
+ * belongs to the module whose prefix it carries.
+ */
+
+.calculator {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-5);
+  padding: var(--nx-space-5);
+}
+
+.calculator__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+
+/* The two mode switches, above the line: they say how the line will be READ, so
+   they sit where the reading starts. They wrap rather than squeeze at 900px,
+   because six buttons in one row stop being a group long before they stop
+   fitting. */
+.calculator__modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-3);
+}
+
+.calculator__mode {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-1);
+}
+
+/* The line is a calculator's input, so it is set in the mono face: an expression
+   is read character by character, and a proportional `1` beside a `l` is the one
+   place in this app where that matters. */
+.calculator__line .nx-textfield__input {
+  font-family: var(--nx-font-family-mono);
+}
+
+.calculator__answer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  /* One line's height at rest, so the card does not jump as the answer arrives. */
+  min-block-size: 1.75rem;
+}
+
+/* The value is the page's one piece of display type: tabular figures so a result
+   being recomputed as the user types does not shuffle sideways, and `anywhere`
+   because a matrix is a legitimately long answer that must wrap rather than push
+   the page sideways. */
+.calculator__value {
+  font-family: var(--nx-font-family-mono);
+  font-size: var(--nx-font-size-h1);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  color: var(--nx-text);
+  overflow-wrap: anywhere;
+}
+
+.calculator__bases {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+}
+
+.calculator__failure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+
+.calculator__error {
+  color: var(--nx-danger);
+}
+
+/* The caret block: the line again, with a caret under the character the parser
+   stopped at. Preformatted and scrollable rather than wrapped - a caret under a
+   WRAPPED line points at the wrong character, which is worse than a scrollbar on
+   a block that is 900 characters long once in a lifetime. */
+.calculator__caret {
+  font-family: var(--nx-font-family-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--nx-text-muted);
+  white-space: pre;
+  overflow-x: auto;
+  margin: 0;
+}
+
+/* A history reference the history could not answer, and the position a refusal
+   points at: both are numbers the reader compares with something on screen, so
+   both take tabular figures. */
+.calculator__ref {
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.calculator__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: center;
+}
+
+.calculator__keypad {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+
+/* Five keys to a row, each taking an equal share and none of them shorter than
+   the 24px pointer floor - the floor is stated in `rem` because the key's own
+   label is what sets its height. */
+.calculator__keypad-row {
+  display: flex;
+  gap: var(--nx-space-2);
+}
+
+.calculator__key {
+  flex: 1 1 0;
+  min-inline-size: 2.75rem;
+}
+
+/* The history's own filter. Narrower than the card so it reads as a field beside
+   a list rather than as the list's title. */
+.calculator__search {
+  max-inline-size: 22rem;
+}
+
+.calculator__list {
+  display: flex;
+  flex-direction: column;
+}
+
+/* A row is read in three columns - what was typed, what it answered, when - and
+   all three can be long, so each wraps rather than pushing its neighbours. */
+.calculator__row-expression {
+  font-family: var(--nx-font-family-mono);
+  margin-inline-end: var(--nx-space-3);
+  overflow-wrap: anywhere;
+}
+
+.calculator__row-result {
+  font-family: var(--nx-font-family-mono);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.calculator__row-when {
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+  margin-inline-start: var(--nx-space-3);
+}
+
+.calculator__row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: center;
+}
+
+.calculator__widget {
+  display: flex;
+  flex-direction: column;
+}
+
+.calculator__widget-expression {
+  font-family: var(--nx-font-family-mono);
+  margin-inline-end: var(--nx-space-3);
+  overflow-wrap: anywhere;
+}
+
+.calculator__widget-value {
+  font-family: var(--nx-font-family-mono);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}

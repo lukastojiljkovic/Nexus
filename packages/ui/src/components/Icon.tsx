@@ -130,7 +130,14 @@ export type IconName =
   // title bar is the last place in a product to be original about meaning.
   | "windowMinimize"
   | "windowMaximize"
-  | "windowRestore";
+  | "windowRestore"
+  // The CALCULATOR module's mark (ADR-090). It is APPENDED rather than filed
+  // with the navigation marks above, and that is this wave's rule rather than a
+  // taste: every kit module run adds one glyph to this file, and a list that
+  // grows at its end merges mechanically where a list that is re-sorted does
+  // not. `Icon`'s own order is declaration order, so a later pass can move this
+  // line up beside the other module marks with nothing else to change.
+  | "calculator";
 
 const SHAPES: Record<IconName, ReactNode> = {
   // Three panes, uneven on purpose: a board someone arranged, not a 2×2 grid.
@@ -794,6 +801,25 @@ const SHAPES: Record<IconName, ReactNode> = {
     </>
   ),
   moon: <path d="M20 14.4A8.6 8.6 0 0 1 9.6 4a8.4 8.4 0 1 0 10.4 10.4z" />,
+  /**
+   * A calculator: a body, a display line, six keys and a wide one. Drawn from
+   * the same vocabulary as the keyboard beside it (a rect, dots made of
+   * zero-length subpaths, and a single line for a wide key), because the two
+   * describe the same object one step apart.
+   */
+  calculator: (
+    <>
+      <rect x="5.6" y="3.4" width="12.8" height="17.2" rx="2.2" />
+      <path d="M8.4 7.4h7.2" />
+      <path d="M9.4 11.8h0" />
+      <path d="M12 11.8h0" />
+      <path d="M14.6 11.8h0" />
+      <path d="M9.4 15.4h0" />
+      <path d="M12 15.4h0" />
+      <path d="M14.6 15.4h0" />
+      <path d="M9.4 18.2h5.2" />
+    </>
+  ),
 };
 
 /**

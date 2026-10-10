@@ -1,11 +1,14 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import {
+  CALCULATOR_ANGLE_MODES,
+  CALCULATOR_PRECISIONS,
+  MAX_CALCULATOR_VALUE_LENGTH,
   MAX_EXPRESSION_LENGTH,
   emptyCalculatorSession,
   parseCalculatorSession,
   serializeCalculatorSession,
 } from "@nexus/core";
-import type { CalculatorSession } from "@nexus/core";
+import type { CalculatorAngleMode, CalculatorPrecision, CalculatorSession } from "@nexus/core";
 import { CalcHistoryNotFoundError, CalculatorValidationError } from "../errors.js";
 import { isDateTime } from "../finance/money.js";
 import { uuidv7 } from "../ids.js";
@@ -56,14 +59,46 @@ export const MAX_CALC_HISTORY_IMPORT_ENTRIES = 10_000;
 /** The version `exportData` writes and `importData` is willing to read. An unknown version is refused whole. */
 export const CALCULATOR_EXPORT_VERSION = 1;
 
+/**
+ * The module's two preferences (migration 079's `calc_settings`).
+ *
+ * Both are CLOSED sets the engine owns - `deg`/`rad`/`grad` and
+ * `float`/`bignumber` - so this type is core's own unions rather than a third
+ * spelling of them, and the migration's CHECKs state the same values in SQL.
+ */
+export interface CalculatorSettings {
+  readonly angleMode: CalculatorAngleMode;
+  readonly precision: CalculatorPrecision;
+}
+
+/**
+ * What a profile that has never changed one of them answers, and it is the
+ * ENGINE's own default in both cases (`engine.ts`: DEG, „because that is what a
+ * school calculator opens on"; the float mode is what a calculator shows a price
+ * in). A row's ABSENCE means this - never a written row that could drift from
+ * the engine - which is the same rule `emptyCalculatorSession` follows for a
+ * profile with no session.
+ */
+export const DEFAULT_CALCULATOR_SETTINGS: CalculatorSettings = {
+  angleMode: "deg",
+  precision: "float",
+};
+
 /** One line of the history: what was typed, what it showed, and what the user did with it. */
 export interface CalcHistoryEntry {
   id: string;
   profileId: string;
   /** The expression exactly as it was typed, outer whitespace aside. */
   expression: string;
-  /** The display string the engine produced for it — the reader's form, not the stored value. */
+  /** The display string the engine produced for it — the reader's form, which is not a text that can be re-parsed. */
   result: string;
+  /**
+   * The same result in mathjs's own lexical form, which is the form that can be
+   * substituted into a new expression. Migration 079's header argues the pair:
+   * `result` is read, `value` is re-parsed, and a page that had only the first
+   * could not tell a Serbian decimal comma from a group separator.
+   */
+  value: string;
   /** Protected from the cap. An unpinned entry is evicted by age; a pinned one is only ever removed by name. */
   pinned: boolean;
   createdAt: string;
@@ -73,12 +108,14 @@ export interface CalcHistoryEntry {
 export interface AddCalcHistoryInput {
   expression: string;
   result: string;
+  value: string;
 }
 
 /** One history row as an archive carries it. The id is deliberately not here — see `exportData`. */
 export interface CalcHistoryExportEntry {
   expression: string;
   result: string;
+  value: string;
   pinned: boolean;
   createdAt: string;
   updatedAt: string;
@@ -90,6 +127,8 @@ export interface CalculatorExport {
   /** Oldest first, which is the order it was lived in and the order a replay reads it in. */
   history: readonly CalcHistoryExportEntry[];
   session: CalculatorSession;
+  /** The profile's two preferences, or the engine's defaults when it never set one. */
+  settings: CalculatorSettings;
 }
 
 interface HistoryRow {
@@ -97,6 +136,7 @@ interface HistoryRow {
   profile_id: string;
   expression: string;
   result: string;
+  value: string;
   pinned: number;
   created_at: string;
   updated_at: string;
@@ -106,19 +146,25 @@ interface SessionRow {
   session: string;
 }
 
-const COLUMNS = "id, profile_id, expression, result, pinned, created_at, updated_at";
+interface SettingsRow {
+  angle_mode: string;
+  number_mode: string;
+}
+
+const COLUMNS = "id, profile_id, expression, result, value, pinned, created_at, updated_at";
 
 /**
- * The calculator's history and saved session for one profile (migration 079),
- * over prepared, parameterized statements (SEC-API-03; every value is bound,
- * never interpolated). Constructed one per profile and reused, like every other
- * store here; every statement is scoped by `profile_id`.
+ * The calculator's history, saved session and two preferences for one profile
+ * (migration 079), over prepared, parameterized statements (SEC-API-03; every
+ * value is bound, never interpolated). Constructed one per profile and reused,
+ * like every other store here; every statement is scoped by `profile_id`.
  *
  * **Nothing here evaluates anything.** The engine lives in `@nexus/core` and
  * this store never sees a value it computed: an entry is a string the user
- * typed and a string that was shown, and the session is core's own JSON with its
- * shape re-validated on the way in and on the way out (`parseCalculatorSession`)
- * — which is what keeps `@nexus/db` free of mathjs.
+ * typed, and the result in BOTH forms — what the reader was shown and the
+ * engine's own lexical text, which is what a `#3` reuse substitutes. The session
+ * is core's own JSON, re-validated on the way in and on the way out
+ * (`parseCalculatorSession`) — which is what keeps `@nexus/db` free of mathjs.
  *
  * **The history is a LOG, and a log line is deleted, not hidden.** There is no
  * `deleted_at` here, deliberately, and the rest of the codebase is the reason
@@ -153,6 +199,9 @@ export class CalculatorStore {
   private readonly selectSession: Database.Statement;
   private readonly upsertSession: Database.Statement;
   private readonly deleteSession: Database.Statement;
+  private readonly selectSettings: Database.Statement;
+  private readonly upsertSettings: Database.Statement;
+  private readonly deleteSettings: Database.Statement;
 
   constructor(
     private readonly db: DatabaseHandle,
@@ -176,8 +225,8 @@ export class CalculatorStore {
     );
     this.insertHistory = db.prepare(
       `INSERT INTO calc_history
-         (id, profile_id, expression, result, pinned, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+         (id, profile_id, expression, result, value, pinned, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     // "Keep the newest N unpinned of THIS profile" — the subquery repeats the
     // profile scope, so a busy profile can never evict another's rows.
@@ -209,6 +258,18 @@ export class CalculatorStore {
          updated_at = excluded.updated_at`,
     );
     this.deleteSession = db.prepare(`DELETE FROM calc_sessions WHERE profile_id = ?`);
+    this.selectSettings = db.prepare(
+      `SELECT angle_mode, number_mode FROM calc_settings WHERE profile_id = ?`,
+    );
+    this.upsertSettings = db.prepare(
+      `INSERT INTO calc_settings (profile_id, angle_mode, number_mode, updated_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT (profile_id) DO UPDATE SET
+         angle_mode = excluded.angle_mode,
+         number_mode = excluded.number_mode,
+         updated_at = excluded.updated_at`,
+    );
+    this.deleteSettings = db.prepare(`DELETE FROM calc_settings WHERE profile_id = ?`);
   }
 
   /**
@@ -231,11 +292,12 @@ export class CalculatorStore {
   addEntry(input: AddCalcHistoryInput, now: string): CalcHistoryEntry {
     const expression = validateExpression(input.expression);
     const result = validateResult(input.result);
+    const value = validateValue(input.value);
     const validNow = validateNow(now);
     const id = uuidv7();
 
     this.db.transaction((): void => {
-      this.insertHistory.run(id, this.profileId, expression, result, 0, validNow, validNow);
+      this.insertHistory.run(id, this.profileId, expression, result, value, 0, validNow, validNow);
       this.evictUnpinned.run(this.profileId, this.profileId, CALC_HISTORY_UNPINNED_LIMIT);
     })();
 
@@ -244,6 +306,7 @@ export class CalculatorStore {
       profileId: this.profileId,
       expression,
       result,
+      value,
       pinned: false,
       createdAt: validNow,
       updatedAt: validNow,
@@ -324,6 +387,33 @@ export class CalculatorStore {
   }
 
   /**
+   * This profile's two preferences, or the engine's defaults when it never set
+   * one. A row's absence IS the default rather than a third state - the
+   * `getSession` arrangement one method up - so a profile that has never touched
+   * the page answers exactly what `createCalculatorEngine` does with no argument.
+   */
+  settings(): CalculatorSettings {
+    const row = this.selectSettings.get(this.profileId) as SettingsRow | undefined;
+    if (row === undefined) return DEFAULT_CALCULATOR_SETTINGS;
+    // A column holding something else is corruption rather than a preference:
+    // the table's CHECKs make it unreachable, and answering the default silently
+    // would hide a schema that had drifted from this file.
+    return validateSettings({ angleMode: row.angle_mode, precision: row.number_mode });
+  }
+
+  /** Writes both preferences, validated, and answers what it wrote. */
+  saveSettings(settings: CalculatorSettings, now: string): CalculatorSettings {
+    const valid = validateSettings(settings);
+    this.upsertSettings.run(this.profileId, valid.angleMode, valid.precision, validateNow(now));
+    return valid;
+  }
+
+  /** Forgets the preferences, so the next `settings` answers the engine's defaults. */
+  clearSettings(): void {
+    this.deleteSettings.run(this.profileId);
+  }
+
+  /**
    * The profile's whole calculator content, as the versioned plain value stage 2
    * puts in the archive.
    *
@@ -340,11 +430,13 @@ export class CalculatorStore {
       history: rows.map((row) => ({
         expression: row.expression,
         result: row.result,
+        value: row.value,
         pinned: row.pinned === 1,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       })),
       session: this.getSession(),
+      settings: this.settings(),
     };
   }
 
@@ -364,7 +456,10 @@ export class CalculatorStore {
    * main stamps the clock and the renderer never does. It is the SESSION row's
    * `updated_at` alone — the history's own timestamps come from the archive,
    * because they are when the user typed the expressions rather than when this
-   * file was written.
+   * file was written. The settings row is written like any other, defaults
+   * included: a restore states the profile's whole calculator state, so an
+   * archive that carries no preference leaves the profile on the engine's
+   * defaults rather than on whatever it happened to hold.
    */
   importData(value: unknown, now: string): void {
     const validNow = validateNow(now);
@@ -373,12 +468,14 @@ export class CalculatorStore {
     this.db.transaction((): void => {
       this.deleteAll.run(this.profileId);
       this.deleteSession.run(this.profileId);
+      this.deleteSettings.run(this.profileId);
       for (const entry of parsed.history) {
         this.insertHistory.run(
           uuidv7(),
           this.profileId,
           entry.expression,
           entry.result,
+          entry.value,
           entry.pinned ? 1 : 0,
           entry.createdAt,
           entry.updatedAt,
@@ -386,6 +483,12 @@ export class CalculatorStore {
       }
       this.evictUnpinned.run(this.profileId, this.profileId, CALC_HISTORY_UNPINNED_LIMIT);
       this.upsertSession.run(this.profileId, serializeCalculatorSession(parsed.session), validNow);
+      this.upsertSettings.run(
+        this.profileId,
+        parsed.settings.angleMode,
+        parsed.settings.precision,
+        validNow,
+      );
     })();
   }
 }
@@ -396,6 +499,7 @@ function toEntry(row: HistoryRow): CalcHistoryEntry {
     profileId: row.profile_id,
     expression: row.expression,
     result: row.result,
+    value: row.value,
     pinned: row.pinned === 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -426,6 +530,7 @@ function parseExport(value: unknown): CalculatorExport {
     version: CALCULATOR_EXPORT_VERSION,
     history: history.map(parseExportEntry),
     session: validateSession(record["session"]),
+    settings: validateSettings(record["settings"]),
   };
 }
 
@@ -440,6 +545,7 @@ function parseExportEntry(value: unknown): CalcHistoryExportEntry {
   return {
     expression: validateExpression(record["expression"]),
     result: validateResult(record["result"]),
+    value: validateValue(record["value"]),
     pinned: record["pinned"],
     createdAt: validateTimestamp(record["createdAt"], "createdAt"),
     updatedAt: validateTimestamp(record["updatedAt"], "updatedAt"),
@@ -459,6 +565,42 @@ function validateSession(value: unknown): CalculatorSession {
     );
   }
   return session;
+}
+
+/**
+ * The two preferences, each narrowed to the set the ENGINE names.
+ *
+ * The unions are core's own (`CALCULATOR_ANGLE_MODES`, `CALCULATOR_PRECISIONS`),
+ * which is what makes this the second statement of the same closed set rather
+ * than a second closed set: the migration's CHECKs are the first, and SQL cannot
+ * read a TypeScript union.
+ */
+function validateSettings(value: unknown): CalculatorSettings {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new CalculatorValidationError("Calculator settings must be an object.");
+  }
+  const record = value as Record<string, unknown>;
+  const angleMode = record["angleMode"];
+  const precision = record["precision"];
+  if (!isAngleMode(angleMode)) {
+    throw new CalculatorValidationError(
+      `"angleMode" must be one of ${CALCULATOR_ANGLE_MODES.join(", ")}.`,
+    );
+  }
+  if (!isPrecision(precision)) {
+    throw new CalculatorValidationError(
+      `"precision" must be one of ${CALCULATOR_PRECISIONS.join(", ")}.`,
+    );
+  }
+  return { angleMode, precision };
+}
+
+function isAngleMode(value: unknown): value is CalculatorAngleMode {
+  return typeof value === "string" && (CALCULATOR_ANGLE_MODES as readonly string[]).includes(value);
+}
+
+function isPrecision(value: unknown): value is CalculatorPrecision {
+  return typeof value === "string" && (CALCULATOR_PRECISIONS as readonly string[]).includes(value);
 }
 
 function validateExpression(value: unknown): string {
@@ -490,6 +632,32 @@ function validateResult(value: unknown): string {
   if (text.length > MAX_CALC_HISTORY_RESULT_LENGTH) {
     throw new CalculatorValidationError(
       `"result" must be at most ${MAX_CALC_HISTORY_RESULT_LENGTH} characters.`,
+    );
+  }
+  return text;
+}
+
+/**
+ * The result in the engine's own lexical form, held to the engine's own bound.
+ *
+ * `MAX_CALCULATOR_VALUE_LENGTH` is core's (`session.ts`), not a number of this
+ * package's: a history value and a session value are the same kind of text, and
+ * the engine refuses to hold one it produced that exceeded that bound
+ * (`renderValue`). A store with a narrower cap would therefore reject its own
+ * output, and one with a wider cap would hold a text the engine will not read
+ * back.
+ */
+function validateValue(value: unknown): string {
+  if (typeof value !== "string") {
+    throw new CalculatorValidationError(`"value" must be a string.`);
+  }
+  const text = value.trim();
+  if (text.length === 0) {
+    throw new CalculatorValidationError("A history entry must carry the value it computed.");
+  }
+  if (text.length > MAX_CALCULATOR_VALUE_LENGTH) {
+    throw new CalculatorValidationError(
+      `"value" must be at most ${MAX_CALCULATOR_VALUE_LENGTH} characters.`,
     );
   }
   return text;

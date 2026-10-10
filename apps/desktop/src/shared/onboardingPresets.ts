@@ -46,6 +46,10 @@ export const ESSENTIALS_MODULE_PRESET: Readonly<Record<string, boolean>> = {
   // selectable one: nothing about a timer asks to be opted into, so „Osnovno"
   // turns it on exactly as the manifest's own `defaultEnabled` says.
   timers: true,
+  // And the calculator (CALC, migration 079), on the same terms and for the same
+  // reason: it is a bench rather than a subject, and it writes nothing at all
+  // until somebody types an expression into it.
+  calculator: true,
   pro: false,
 };
 

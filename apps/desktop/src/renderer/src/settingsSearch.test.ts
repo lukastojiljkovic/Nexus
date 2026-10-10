@@ -396,6 +396,10 @@ describe("buildSettingsIndex", () => {
       // one. Its label is its own `{ sr, en }` pair, so the assertion above about
       // `strings` paths does not apply to it.
       "timers:sound-on-end",
+      // The second DISCOVERED card's two controls (CALC), last for the same
+      // reason its section is.
+      "calculator:angle-mode",
+      "calculator:number-mode",
     ]);
   });
 

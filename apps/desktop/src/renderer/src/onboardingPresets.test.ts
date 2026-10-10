@@ -216,6 +216,9 @@ describe("resolveModuleSelection", () => {
       // The first discovered module (ADR-090): the questionnaire decides it like
       // any other selectable module, from its own manifest default.
       timers: true,
+      // The calculator joined the kit after „Tajmeri" (order 190), so it is
+      // decided here in the same way and drawn after it.
+      calculator: true,
       pro: false,
     });
   });
@@ -255,6 +258,7 @@ describe("moduleFlagWrites", () => {
       // And the first DISCOVERED module last, because a kit module registers
       // after every compiled-in one (ADR-090).
       { moduleId: "timers", enabled: true },
+      { moduleId: "calculator", enabled: true },
     ]);
   });
 
