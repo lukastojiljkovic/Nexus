@@ -134,6 +134,8 @@ describe("moduleSettingsDeclarations", () => {
       "signals",
       // The translator's two controls, `order: 230`.
       "translator",
+      // The assistant's three, `order: 240`.
+      "assistant",
       // The workshop's one `fact` row, `order: 310`.
       "workshop",
       // And the puzzles, `order: 330`, before the board games at 340.
@@ -188,6 +190,7 @@ describe("moduleSettingsCardIds", () => {
       // The second discovered card, in its own group — the card order follows the
       // registry, and a kit module registers after every compiled-in one.
       "translator",
+      "assistant",
       "workshop",
       "puzzles",
       "boards",
@@ -244,6 +247,9 @@ describe("moduleSettingsCards", () => {
       "signals",
       // The translator's two controls.
       "translator",
+      // And the assistant's three, on the same terms: declared in its own
+      // manifest, drawn by its own body.
+      "assistant",
       // The workshop's one `fact` row.
       "workshop",
       // And the puzzles, whose one control is whether sudoku conflicts are
@@ -278,6 +284,7 @@ describe("moduleSettingsCards", () => {
       kitManifest("calculator")?.copy?.name[activeLocale()] ?? "",
       kitManifest("signals")?.copy?.name[activeLocale()] ?? "",
       kitManifest("translator")?.copy?.name[activeLocale()] ?? "",
+      kitManifest("assistant")?.copy?.name[activeLocale()] ?? "",
       kitManifest("workshop")?.copy?.name[activeLocale()] ?? "",
       kitManifest("puzzles")?.copy?.name[activeLocale()] ?? "",
       kitManifest("boards")?.copy?.name[activeLocale()] ?? "",

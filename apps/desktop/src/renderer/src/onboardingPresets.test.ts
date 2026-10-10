@@ -240,6 +240,9 @@ describe("resolveModuleSelection", () => {
       // whole decision.
       workshop: true,
       translator: true,
+      // The assistant (ADR-106), decided here like every other selectable
+      // module: it writes nothing until somebody asks it something.
+      assistant: true,
       pro: false,
       // The second discovered module, in registry order after Tajmeri.
       library: true,
@@ -322,6 +325,7 @@ describe("moduleFlagWrites", () => {
       { moduleId: "miniapps", enabled: true },
       { moduleId: "wiki", enabled: true },
       { moduleId: "translator", enabled: true },
+      { moduleId: "assistant", enabled: true },
       { moduleId: "scanner", enabled: true },
       { moduleId: "workshop", enabled: true },
       // The arcade is off in Osnovno: PRD 31 keeps the entertainment section

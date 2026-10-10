@@ -120,3 +120,4 @@ directory is the decision log behind it.
 | [108](108-kit-blobs.md) | Module attachments travel in the archive and count in the blob store | Accepted; extends ADR-090 §5 | 2026-10-10 |
 | [107](107-external-links.md) | One door for external links: two named variants, and the kit's `ExternalLink` | Accepted; uses ADR-103 §7, amends ADR-103 for the document variant | 2026-10-10 |
 | [109](109-astronomy.md) | The astronomy corner, assembled: four views, one clock, one place | Accepted | 2026-10-10 |
+| [106](106-assistant-module.md) | The assistant module: the kit's first stateful, networked, streaming surface | Accepted | 2026-10-10 |

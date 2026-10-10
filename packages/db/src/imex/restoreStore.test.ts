@@ -1914,6 +1914,21 @@ describe("RestoreStore", () => {
       "knowledge_fts_config",
       "knowledge_vectors",
       "knowledge_cursors",
+      //  - the ASSISTANT's three tables (migration 091, ADR-106): a kit module's
+      //    tables are deliberately NOT in `RESTORE_WIPE_TABLES`, on the TIMERS
+      //    entry's exact reasoning above - that list is DERIVED into
+      //    `@nexus/sync`'s collection map, which `collectionGuard.test.ts` holds
+      //    equal to it, and a module built on the kit may not edit `@nexus/sync`.
+      //    So the module REPLACES ITS OWN ROWS instead, inside the same restore,
+      //    through `ModuleContext.importData` (`modules/assistant/main/register.ts`
+      //    calls `ConversationStore.importData`, which empties all three when the
+      //    archive names no assistant section). Conversations are the user's own
+      //    words, so unlike the knowledge index above they ARE content: an
+      //    archive that names no assistant section leaves a profile with no
+      //    threads and the shipped tier, exactly as a pre-1.43 archive does.
+      "assistant_conversations",
+      "assistant_messages",
+      "assistant_settings",
     ]);
 
     const wipeTables = new Set<string>(RESTORE_WIPE_TABLES);

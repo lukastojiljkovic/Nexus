@@ -100,6 +100,12 @@ export const ESSENTIALS_MODULE_PRESET: Readonly<Record<string, boolean>> = {
   // The second module built on the kit (ADR-090): a dictionary has nothing to
   // opt into either, so „Osnovno" turns it on as its manifest says.
   translator: true,
+  // The ASSISTANT (ADR-106), decided here like every other selectable module.
+  // Nothing about it asks to be opted into: it writes nothing until somebody
+  // asks it something, it reaches no network on its own, and its page opens on
+  // the setup screen when no model is installed - which is where the person
+  // learns where models come from.
+  assistant: true,
   pro: false,
   // The second module built on the kit (ADR-090), decided here like every other
   // selectable one: a library that had to be switched on first would be hiding

@@ -945,6 +945,35 @@ export function App() {
   const clearSettingsTarget = useCallback(() => setSettingsTarget(null), []);
 
   /**
+   * THE KIT'S ONE CROSS-MODULE JUMP (ADR-106). A kit module is handed its
+   * `profileId` and nothing else (ADR-090), so a module whose page names a place
+   * in the app — the assistant's citations do — asks the shell for it on the
+   * window, under the name `modules/assistant/renderer/location.ts` spells. The
+   * request rides here rather than through main because which page is shown is
+   * THIS component's state, and main has no business knowing which page is on
+   * screen.
+   *
+   * The mapping is deliberately shallow and deliberately the shell's own: the
+   * module is shown, and a `settings` name that matches a module publishing a
+   * card opens that card. An `item` travels with the request for a shell that
+   * learns to reveal one; this listener does not invent an intent per module.
+   */
+  useEffect(() => {
+    const handler = (event: Event): void => {
+      const detail = (event as CustomEvent<{ module?: unknown; settings?: unknown }>).detail;
+      const moduleId = detail?.module;
+      if (typeof moduleId !== "string" || moduleId === "") return;
+      setActiveId(moduleId);
+      const settings = detail?.settings;
+      if (typeof settings === "string" && moduleSettingsCardIds(registry).has(settings)) {
+        setSettingsTarget(settings);
+      }
+    };
+    window.addEventListener("nexus:open-location", handler);
+    return () => window.removeEventListener("nexus:open-location", handler);
+  }, []);
+
+  /**
    * What every module page's header reads: which modules publish a card, and
    * how to open one. `registry` is compiled-in data built once at module scope,
    * so this is built once too.

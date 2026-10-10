@@ -577,6 +577,18 @@ import { attachFilesForModule, releaseBlobForModule } from "./moduleAttachments.
 // that owns `app`, the window and the data key, and handed to the module.
 import { configureCookbook } from "../modules/cookbook/main/register.js";
 import { createCookbookHost } from "../modules/cookbook/main/host.js";
+// The ASSISTANT module's main-process seam (ADR-106): the model runtime, the one
+// Electron-shaped secret cipher its web service keeps a Brave key through, and
+// the `.gguf` picker. All three are things only THIS file holds, and they are
+// handed over in the one `configureAssistant` call below - the module never
+// imports `electron`, `app` or an account directory (ADR-090 section 3).
+import { configureAssistant } from "../modules/assistant/main/services.js";
+import {
+  importDialogFilterName,
+  importDialogTitle,
+} from "../modules/assistant/main/dialogCopy.js";
+import { createModelHost } from "./assistant/runtime/index.js";
+import { createSafeStorageCipher } from "./assistant/web/electron.js";
 import {
   allowsCheck as recorderAllowsCheck,
   allowsRequest as recorderAllowsRequest,
@@ -1639,6 +1651,47 @@ configureCookbook({
     blobKeys: requireBlobKeys,
     refCount: (profileId, sha256) => blobRefCount(profileId, sha256),
   }),
+});
+
+/**
+ * What the ASSISTANT module is handed once, at launch (ADR-106).
+ *
+ * Every member is a fact about THIS file, and each is a closure rather than a
+ * value where the thing behind it moves with the selected account (ADR-044) or
+ * with the launch's network mode. The module composes its own services per
+ * profile from these - the model runtime, the knowledge index, the tools, the
+ * web tools and the conversation store - and drops them whole when the session
+ * ends, so a model loaded for one profile does not follow a user to another.
+ *
+ * `pickGgufFile` is the one native dialog this module needs, and it is opened
+ * HERE for the reason every other dialog in this app is: a path may only ever be
+ * named by a person choosing it in a dialog main itself opened.
+ */
+configureAssistant({
+  userData: () => userDataDir(),
+  releasePublicKeyPem: () => RELEASE_PUBLIC_KEY_PEM,
+  networkMode: () => activeNetworkMode(runningNetworkMode, readNetworkMode(userDataDir())),
+  // The default parameter builds the app's own wiring (the utility process and
+  // the dedicated session) - which imports Electron, and is therefore handed in
+  // rather than imported by the module.
+  createModelHost: () => createModelHost(),
+  secretCipher: createSafeStorageCipher(),
+  pickGgufFile: async () => {
+    const options: OpenDialogOptions = {
+      properties: ["openFile"],
+      title: importDialogTitle(),
+      filters: [{ name: importDialogFilterName(), extensions: ["gguf"] }],
+    };
+    const { canceled, filePaths } = mainWindow
+      ? await dialog.showOpenDialog(mainWindow, options)
+      : await dialog.showOpenDialog(options);
+    return canceled ? null : (filePaths[0] ?? null);
+  },
+  profileDb: (profileId, open) => open(requireDb().raw, profileId),
+  now: () => Date.now(),
+  search: (profileId, query, limit) => runSearchQuery(profileId, query, limit),
+  packs: { list: () => packs().list() },
+  modules: moduleRegistry,
 });
 
 /**
