@@ -124,6 +124,8 @@ describe("createModuleRegistry", () => {
       // The second discovered module (CALC, migration 079), after „Tajmeri" on
       // its own `order` of 190.
       "calculator",
+      // And the second, on the same terms (order 200).
+      "signals",
     ]);
   });
 
@@ -218,6 +220,11 @@ describe("createModuleRegistry", () => {
       // calculator rather than a second reading of „Utility Belt", so it does not
       // join the UTIL sharing above.
       CALC: ["calculator"],
+      // „Signali" takes a prefix of its own rather than borrowing UTIL: the
+      // sharing above is one PRD section implemented three times, and Morse,
+      // the ASCII table, the tuner and the sound meter are one instrument panel
+      // that is not any of those three.
+      SIG: ["signals"],
     });
   });
 
@@ -293,6 +300,9 @@ describe("createModuleRegistry", () => {
       "pro",
       // And the discovered module that declares this group (CALC).
       "calculator",
+      // The second discovered module: an instrument panel is something built,
+      // which is what „make" is for (ADR-093).
+      "signals",
     ]);
     // â€žKultura" is its own group (ADR-093), and the first module to fill it.
     expect(grouped.get("culture")?.map((manifest) => manifest.id)).toEqual(["culture"]);
@@ -365,6 +375,9 @@ describe("createModuleRegistry", () => {
       // The same for the calculator: a bench that writes nothing until an
       // expression is committed.
       "calculator",
+      // And the signals module, whose four tools open the microphone only when
+      // one of them is started.
+      "signals",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");
@@ -564,6 +577,7 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
       // The second, on the same terms: `calc_settings` holds the two rows and the
       // module's own `renderer/Settings.tsx` draws them.
       "calculator",
+      "signals",
     ]);
   });
 

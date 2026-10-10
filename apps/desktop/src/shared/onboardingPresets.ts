@@ -68,6 +68,10 @@ export const ESSENTIALS_MODULE_PRESET: Readonly<Record<string, boolean>> = {
   // reason: it is a bench rather than a subject, and it writes nothing at all
   // until somebody types an expression into it.
   calculator: true,
+  // And the SIGNALS module, on the same terms: its page draws four instruments
+  // and opens the microphone only when one of them is started, so there is
+  // nothing about it to opt into either.
+  signals: true,
   pro: false,
   // The second module built on the kit (ADR-090), decided here like every other
   // selectable one: a library that had to be switched on first would be hiding

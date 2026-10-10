@@ -839,6 +839,7 @@ import { seedDemoCanvas } from "./demo/canvas.js";
 import { createDemoContext } from "./demo/context.js";
 import type { DemoAttachmentIo } from "./demo/attachments.js";
 import { duplicateStems, missingCoverage, runShots } from "./shots/index.js";
+import { allows as signalsAllowsMicrophone } from "../modules/signals/main/permission.js";
 
 /**
  * Reads a harness flag off the command line — and answers false for every one
@@ -14227,30 +14228,32 @@ app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
 
   // The one rung of the Electron hardening set that had neither code nor a
-  // stated reason. Nexus asks the web platform for almost nothing —
-  // notifications are raised by `Notification` in MAIN, not by the renderer's
-  // Notification API, and there is no geolocation, MIDI or clipboard-read path
-  // anywhere in the product — so both handlers deny by default rather than
-  // switching on a permission name: a list that started empty is a list
-  // somebody eventually adds to, and a flat refusal is a decision.
-  //
-  // `media` is the ONE exception, and it is not made here: the recorder's own
-  // rule decides it (`modules/recorder/main/mediaAccess.ts`) — this app's own
-  // document, its main frame, and only while the recorder's page has asked for
-  // a device. Every other permission name still reaches `callback(false)`.
-  session.defaultSession.setPermissionRequestHandler((_contents, permission, callback, details) => {
-    callback(recorderAllowsRequest(permission, details, devServerOrigin(process.env), Date.now()));
-  });
-  session.defaultSession.setPermissionCheckHandler(
-    (_contents, permission, requestingOrigin, details) =>
-      recorderAllowsCheck(
-        permission,
-        requestingOrigin,
-        details,
-        devServerOrigin(process.env),
-        Date.now(),
-      ),
-  );
+  // stated reason. Nexus asks the web platform for almost nothing —
+  // notifications are raised by `Notification` in MAIN, not by the renderer's
+  // Notification API, and there is no geolocation, MIDI or clipboard-read path
+  // anywhere in the product — so both handlers deny by default rather than
+  // switching on a permission name: a list that started empty is a list
+  // somebody eventually adds to, and a flat refusal is a decision.
+  //
+  // `media` is the ONE exception, and it is not made here: the recorder's own
+  // rule decides it (`modules/recorder/main/mediaAccess.ts`) — this app's own
+  // document, its main frame, and only while the recorder's page has asked for
+  // a device. The SIGNALS module's tuner and sound meter add the microphone
+  // (`modules/signals/main/permission.ts`: `media`, audio only, main frame only,
+  // this app's own page only). A request is allowed when ONE module's rule
+  // allows it; every other permission name still reaches `callback(false)`.
+  const devOrigin = devServerOrigin(process.env);
+  session.defaultSession.setPermissionRequestHandler((_contents, permission, callback, details) => {
+    callback(
+      recorderAllowsRequest(permission, details, devOrigin, Date.now()) ||
+        signalsAllowsMicrophone(permission, details.requestingUrl, details, devOrigin),
+    );
+  });
+  session.defaultSession.setPermissionCheckHandler(
+    (_contents, permission, requestingOrigin, details) =>
+      recorderAllowsCheck(permission, requestingOrigin, details, devOrigin, Date.now()) ||
+      signalsAllowsMicrophone(permission, requestingOrigin, details, devOrigin),
+  );
 
   // SEC-NET: the three runtime layers of the cloud-off boundary. The fourth
   // (`host-resolver-rules`) went on at module scope; `net/offline.ts` carries

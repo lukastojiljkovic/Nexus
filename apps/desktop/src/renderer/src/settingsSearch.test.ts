@@ -440,6 +440,11 @@ describe("buildSettingsIndex", () => {
       // reason its section is.
       "calculator:angle-mode",
       "calculator:number-mode",
+      // SIGNALS' three, declared as pairs too: the two Morse preferences and the
+      // tuner's reference.
+      "signals:morse-speed",
+      "signals:morse-pitch",
+      "signals:tuner-a4",
     ]);
   });
 

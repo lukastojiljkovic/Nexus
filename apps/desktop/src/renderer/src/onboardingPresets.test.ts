@@ -226,6 +226,7 @@ describe("resolveModuleSelection", () => {
       // The calculator joined the kit after „Tajmeri" (order 190), so it is
       // decided here in the same way and drawn after it.
       calculator: true,
+      signals: true,
       pro: false,
       // The second discovered module, in registry order after Tajmeri.
       library: true,
@@ -282,6 +283,7 @@ describe("moduleFlagWrites", () => {
       // karta" is 180.
       { moduleId: "emergency", enabled: true },
       { moduleId: "calculator", enabled: true },
+      { moduleId: "signals", enabled: true },
     ]);
   });
 
