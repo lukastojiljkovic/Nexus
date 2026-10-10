@@ -75,6 +75,11 @@ export const ESSENTIALS_MODULE_PRESET: Readonly<Record<string, boolean>> = {
   // The second kit module (ADR-090): a drawer of small tools, which asks to be
   // opted into no more than a timer does.
   miniapps: true,
+  // The arcade is decided here like every other selectable module, and its
+  // answer is `false`: PRD 31 hides the entertainment section by default and
+  // never suggests it during onboarding, so a profile that never asks for it
+  // never sees it. The gallery is where it is switched on.
+  arcade: false,
   pro: false,
   // The second module built on the kit (ADR-090), decided here like every other
   // selectable one: a library that had to be switched on first would be hiding

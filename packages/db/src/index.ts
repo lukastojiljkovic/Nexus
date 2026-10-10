@@ -1081,6 +1081,9 @@ export {
   MAX_ARCADE_SCORE,
   MAX_ARCADE_TIME_MS,
   MAX_ARCADE_VARIANT_LENGTH,
+  // The kit's pure half of the archive: `ModuleImport.parse` runs it at the
+  // preview, where `importData` may not write yet. See its own doc.
+  parseArcadeExport,
 } from "./games/arcade/arcadeStore.js";
 export type {
   ArcadeExport,

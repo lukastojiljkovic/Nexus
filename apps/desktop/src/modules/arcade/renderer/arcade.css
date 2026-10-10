@@ -1,0 +1,223 @@
+/* ARKADA (ADR-090). Tokens exclusively - raw colour values are forbidden outside
+   @nexus/tokens, and this stylesheet is checked by the same gates the shell's own
+   are (`check:colours`, `check:tokens`, `check:layers`, `check:tiers`, `check:rows`).
+ *
+ * THIS FILE IS IMPORTED BY THE MODULE'S PAGE, not by `app.css`, and that is the
+ * kit's rule stated in CSS: the shell's stylesheet is part of the startup chunk,
+ * so a rule for a page nobody has opened would be paid for on every launch. Vite
+ * turns this import into a chunk of its own, loaded with the page.
+ *
+ * Class prefix `arcade__`, for the reason the shell's split states: a rule belongs
+ * to the module whose prefix it carries.
+ */
+
+.arcade {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-5);
+  padding: var(--nx-space-5);
+}
+
+.arcade__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+
+.arcade__error {
+  color: var(--nx-danger);
+}
+
+/* The shelf: five choices on one line where there is room, two or three where
+   there is not, and never a horizontal scrollbar - every item wraps inside the
+   row rather than pushing the page wider than the window. */
+.arcade__shelf {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+}
+
+/* A shelf item is three lines of text in a button, so the button has to lay out
+   as a column and say so. `min-width` is what keeps the five of them from
+   collapsing into a word each at a narrow width. */
+.arcade__shelf-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nx-space-1);
+  min-width: 8rem;
+  text-align: left;
+}
+
+.arcade__shelf-name {
+  font-weight: var(--nx-font-weight-semibold);
+}
+
+/* The figure is the item's subject, so it is set in the app's own numerals: a
+   column of digits that must not wobble as a score grows. */
+.arcade__shelf-figure {
+  font-family: var(--nx-font-family-mono);
+  font-size: var(--nx-font-size-title);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--nx-font-leading-tight);
+  color: var(--nx-text);
+}
+
+.arcade__rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.arcade__board-name {
+  display: block;
+}
+
+.arcade__board-facts {
+  display: block;
+}
+
+/* The trailing figure of a board row: read with the eye, so it is mono and
+   tabular and never wraps mid-number. */
+.arcade__board-headline {
+  font-family: var(--nx-font-family-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--nx-text);
+  white-space: nowrap;
+}
+
+.arcade__game {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  padding: var(--nx-space-4);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+  box-shadow: var(--nx-elevation-raised);
+}
+
+.arcade__status-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: center;
+  min-height: 1.75rem;
+}
+
+/* A count that just moved is highlighted for one flash, and the highlight is a
+   flag the page raises - see `useFlash`. The product-wide reduced-motion rule
+   collapses the transition with every other one. */
+.arcade__chip--hit {
+  background: var(--nx-accent-soft);
+  transition: background var(--nx-motion-base) var(--nx-motion-ease);
+}
+
+.arcade__board-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-4);
+  align-items: flex-start;
+}
+
+/* The board and its veil share one box, which is what lets the veil cover
+   exactly the board and nothing else on the page. */
+.arcade__board-slot {
+  position: relative;
+  display: inline-flex;
+}
+
+.arcade__canvas {
+  display: block;
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  background: var(--nx-surface-sunken);
+  touch-action: none;
+}
+
+/* The board is the page's one focusable picture, so it wears the app's focus
+   ring: a player who tabbed here has to be able to see where they are. */
+.arcade__canvas:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+
+.arcade__veil {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--nx-space-3);
+  padding: var(--nx-space-4);
+  text-align: center;
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+}
+
+.arcade__veil-title {
+  font-size: var(--nx-font-size-title);
+  font-weight: var(--nx-font-weight-semibold);
+  line-height: var(--nx-font-leading-tight);
+  color: var(--nx-text);
+}
+
+.arcade__slots {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+
+.arcade__slot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+
+.arcade__queue {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-1);
+}
+
+.arcade__slot-canvas {
+  display: block;
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-sm);
+  background: var(--nx-surface-sunken);
+}
+
+.arcade__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: center;
+}
+
+/* A mixed row - a stacked field, another one, and a bare button - so its controls
+   are aligned at their BOTTOM edge rather than centred: `end` is what puts the
+   input and the button a player touches on one line (the rule `check:rows` is). */
+.arcade__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-3);
+  align-items: end;
+}
+
+.arcade__custom {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-3);
+}
+
+.arcade__custom-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+
+/* The custom board's three number boxes stay small: they hold two digits. */
+.arcade__custom .nx-textfield {
+  width: 5.5rem;
+}
