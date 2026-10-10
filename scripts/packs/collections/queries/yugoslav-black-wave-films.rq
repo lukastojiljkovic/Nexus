@@ -1,0 +1,14 @@
+# collection: yugoslav-black-wave-films   kind: film   (Yugoslavia / Serbia / Croatia)
+# Objective criterion: P57 "director" in {Dusan Makavejev Q357316, Zivojin Pavlovic Q1282300,
+# Aleksandar Petrovic Q938466} - the three best-documented Yugoslav Black Wave directors.
+SELECT ?item ?en ?sr (MIN(?y) AS ?year) (GROUP_CONCAT(DISTINCT ?cr; separator="; ") AS ?creators) WHERE {
+  VALUES ?director { wd:Q357316 wd:Q1282300 wd:Q938466 }
+  ?item wdt:P57 ?director ;
+        wdt:P31/wdt:P279* wd:Q11424 .
+  OPTIONAL { ?item rdfs:label ?en . FILTER(lang(?en) = "en") }
+  OPTIONAL { ?item rdfs:label ?sr . FILTER(lang(?sr) = "sr") }
+  OPTIONAL { ?item wdt:P577 ?d . BIND(YEAR(?d) AS ?y) }
+  OPTIONAL { ?item wdt:P57 ?a . ?a rdfs:label ?cr . FILTER(lang(?cr) = "en") }
+}
+GROUP BY ?item ?en ?sr
+ORDER BY ?year ?item

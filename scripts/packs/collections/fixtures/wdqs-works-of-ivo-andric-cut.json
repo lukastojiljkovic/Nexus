@@ -1,0 +1,165 @@
+{
+  "head": {
+    "vars": [
+      "item",
+      "en",
+      "sr",
+      "year",
+      "creators"
+    ]
+  },
+  "results": {
+    "bindings": [
+      {
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q124001582"
+        },
+        "sr": {
+          "xml:lang": "sr",
+          "type": "literal",
+          "value": "Bajron u Sintri"
+        },
+        "creators": {
+          "type": "literal",
+          "value": "Ivo Andrić"
+        }
+      },
+      {
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q61119599"
+        },
+        "sr": {
+          "xml:lang": "sr",
+          "type": "literal",
+          "value": "Mara milosnica"
+        },
+        "creators": {
+          "type": "literal",
+          "value": "Ivo Andrić"
+        }
+      },
+      {
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q25468693"
+        },
+        "sr": {
+          "xml:lang": "sr",
+          "type": "literal",
+          "value": "Most na Žepi"
+        },
+        "creators": {
+          "type": "literal",
+          "value": "Ivo Andrić"
+        },
+        "en": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Most na Žepi"
+        },
+        "year": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "1925"
+        }
+      },
+      {
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q1247865"
+        },
+        "sr": {
+          "xml:lang": "sr",
+          "type": "literal",
+          "value": "Na Drini ćuprija"
+        },
+        "creators": {
+          "type": "literal",
+          "value": "Ivo Andrić"
+        },
+        "en": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "The Bridge on the Drina"
+        },
+        "year": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "1945"
+        }
+      },
+      {
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q13408045"
+        },
+        "sr": {
+          "xml:lang": "sr",
+          "type": "literal",
+          "value": "Gospođica"
+        },
+        "creators": {
+          "type": "literal",
+          "value": "Ivo Andrić"
+        },
+        "en": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "The Woman from Sarajevo"
+        },
+        "year": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "1945"
+        }
+      },
+      {
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q57610191"
+        },
+        "sr": {
+          "xml:lang": "sr",
+          "type": "literal",
+          "value": "Letovanje na jugu"
+        },
+        "creators": {
+          "type": "literal",
+          "value": "Ivo Andrić"
+        },
+        "year": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "1959"
+        }
+      },
+      {
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q61133860"
+        },
+        "sr": {
+          "xml:lang": "sr",
+          "type": "literal",
+          "value": "Anikina vremena"
+        },
+        "creators": {
+          "type": "literal",
+          "value": "Ivo Andrić"
+        },
+        "en": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Legends of Anika"
+        },
+        "year": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "2012"
+        }
+      }
+    ]
+  }
+}

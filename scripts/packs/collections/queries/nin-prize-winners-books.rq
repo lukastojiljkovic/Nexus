@@ -1,0 +1,15 @@
+# collection: nin-prize-winners-books   kind: book   (Serbia)
+# Objective criterion: P50 "author" -> an author who received the NIN Prize (Q944048).
+# Wikidata models the NIN Prize on the author, not on the book (see _diag-nin.rq),
+# so the collection is "novels by NIN Prize winners" rather than "winning novels".
+SELECT ?item ?en ?sr (MIN(?y) AS ?year) (GROUP_CONCAT(DISTINCT ?cr; separator="; ") AS ?creators) WHERE {
+  ?item wdt:P50 ?author ;
+        wdt:P31/wdt:P279* wd:Q7725634 .
+  ?author wdt:P166 wd:Q944048 .
+  OPTIONAL { ?item rdfs:label ?en . FILTER(lang(?en) = "en") }
+  OPTIONAL { ?item rdfs:label ?sr . FILTER(lang(?sr) = "sr") }
+  OPTIONAL { ?item wdt:P577 ?d . BIND(YEAR(?d) AS ?y) }
+  OPTIONAL { ?item wdt:P50 ?a . ?a rdfs:label ?cr . FILTER(lang(?cr) = "en") }
+}
+GROUP BY ?item ?en ?sr
+ORDER BY ?year ?item
