@@ -186,6 +186,10 @@ export const SERBIAN_SOURCES = [
     match: /^packages\/core\/src\/cookbook\/parse\.ts$/,
     reason: "the Serbian measure words and taste phrases the ingredient parser RECOGNISES in a pasted recipe — a vocabulary read from input, never shown",
   },
+  {
+    match: /^apps\/desktop\/src\/main\/assistant\/manual\/sr\/[^/]+\.md$/,
+    reason: "the assistant's manual written in Serbian, one file per page, with the `en/` half beside it — prose the knowledge base quotes, not a table the compiler checks. The walk reads `.ts`/`.tsx` today, so this entry records the folder's standing: it is Serbian copy by design, and if the manual is ever read as source it is exempt here rather than added later by whoever trips over it.",
+  },
 ];
 
 /**

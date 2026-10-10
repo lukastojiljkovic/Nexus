@@ -53,7 +53,8 @@
     "check:runner": "node scripts/check-runner.mjs",
     "check:reachable": "node scripts/check-reachable.mjs",
     "db:reset": "supabase db reset",
-    "db:test": "supabase db reset && supabase test db"
+    "db:test": "supabase db reset && supabase test db",
+    "check:manual": "node scripts/check-manual.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

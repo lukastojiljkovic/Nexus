@@ -348,6 +348,12 @@ jobs:
       # tables that are meant to hold it.
       - run: pnpm check:english
 
+      # The assistant's manual. A page in one language and not the other, a
+      # `location` naming a module no manifest declares, or a `related` id no
+      # page carries is invisible in the files themselves and reaches the user
+      # as the assistant offering to open something that does not exist.
+      - run: pnpm check:manual
+
       - run: pnpm build
 
       - run: pnpm typecheck
