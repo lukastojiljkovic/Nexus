@@ -137,6 +137,9 @@ describe("createModuleRegistry", () => {
       // The second DISCOVERED module, ordered after the first by its own
       // `order` (ADR-090): a board game is the `play` group's first member.
       "boards",
+      // The second discovered module, at `order: 350` — so it sorts above the
+      // timers at 100 and below anything a later run gives a higher number.
+      "chess",
     ]);
   });
 
@@ -244,6 +247,11 @@ describe("createModuleRegistry", () => {
       // The board games module: a board game is its own subject rather than a
       // second reading of anything above, so it takes a prefix of its own.
       BOARD: ["boards"],
+      // PRD 31 („Entertainment & Boosters", `docs/prd/31-entertainment.md`) is
+      // the second deliberate sharing, and the same shape as UTIL: one PRD entry
+      // whose games are built as separate modules, so „Šah" names FUN and the
+      // next game to arrive names it too.
+      FUN: ["chess"],
     });
   });
 
@@ -338,6 +346,10 @@ describe("createModuleRegistry", () => {
     ]);
     // â€žKultura" is its own group (ADR-093), and the first module to fill it.
     expect(grouped.get("culture")?.map((manifest) => manifest.id)).toEqual(["culture"]);
+    // „Igra" is the group the games arrive in (ADR-093), and Šah is its first
+    // member: a board is what somebody does for fun, which is what the group is
+    // for rather than a second drawer of tools.
+    expect(grouped.get("play")?.map((manifest) => manifest.id)).toEqual(["chess"]);
     // The shell group is the two rows nothing may switch off, and the sidebar is
     // the one caller that splits it: its first member heads the rail, the rest
     // close it (`navPrefs.sidebarGroups`).
@@ -417,6 +429,8 @@ describe("createModuleRegistry", () => {
       // And the second discovered module, ON by default for its own version of
       // that reason: a board game writes nothing until somebody plays one.
       "boards",
+      // ...and the same for a board: no game exists until somebody starts one.
+      "chess",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");

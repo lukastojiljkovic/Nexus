@@ -223,6 +223,7 @@ describe("sidebarGroups", () => {
       "make",
       // „Igre" joined the rail with its first module: the board games page.
       "play",
+      "play",
     ]);
   });
 

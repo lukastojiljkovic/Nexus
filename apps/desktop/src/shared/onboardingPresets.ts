@@ -84,6 +84,9 @@ export const ESSENTIALS_MODULE_PRESET: Readonly<Record<string, boolean>> = {
   // complete screen the moment it is on, and it writes nothing until somebody
   // plays one — so „Osnovno" decides it `true`, exactly as its manifest says.
   boards: true,
+  // Šah, decided the same way and for the same reason: a board writes nothing
+  // until somebody plays a game, so there is nothing here to opt into.
+  chess: true,
   pro: false,
   // The second module built on the kit (ADR-090), decided here like every other
   // selectable one: a library that had to be switched on first would be hiding

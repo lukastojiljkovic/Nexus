@@ -76,6 +76,8 @@ describe("launcherGroups", () => {
     // â€žKultura" is a group of its own, with the one module in it.
     expect(groups()[3]?.tiles.map((tile) => tile.id)).toEqual(["culture"]);
     expect(groups().at(-1)?.tiles.map((tile) => tile.id)).toEqual(["boards"]);
+    // The games are a group of their own (ADR-093), and Šah is its first tile.
+    expect(groups()[4]?.tiles.map((tile) => tile.id)).toEqual(["chess"]);
   });
 
   /**

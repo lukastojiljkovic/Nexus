@@ -509,7 +509,7 @@ export class ChessStore {
    * idempotent: importing the same archive twice leaves the same content.
    */
   importData(value: unknown): void {
-    const archive = readArchive(value);
+    const archive = readChessArchive(value);
     try {
       this.db.transaction(() => {
         this.deleteGames.run(this.profileId);
@@ -766,8 +766,17 @@ function validateEnum<T extends string>(value: unknown, field: string, allowed: 
  * Ids are bounded and unique within the archive: `MAX_ID_LENGTH` is the same
  * ceiling the rest of this product puts on an identifier, and two games with one
  * id would collide on the primary key halfway through the write.
+ *
+ * **Exported, and that is the module kit's requirement rather than a widening of
+ * this store's surface.** Stage 2 registers an archive section whose `parse` has
+ * to read a whole payload and throw on anything it will not take, BEFORE anything
+ * is written (`ModuleImport.parse`, ADR-090 §imex) — so the module needs the
+ * reader, and the alternative is a second implementation of „what a chess archive
+ * is" in the module's own folder, which is the drift this file exists to prevent.
+ * `importData` runs the same function a second time on apply, so a payload this
+ * reader accepted and the store then refuses is not a state that can be reached.
  */
-function readArchive(value: unknown): ChessArchive {
+export function readChessArchive(value: unknown): ChessArchive {
   const record = asRecord(value, "archive");
   if (record["version"] !== 1) {
     throw new ChessValidationError(

@@ -231,6 +231,8 @@ describe("resolveModuleSelection", () => {
       miniapps: true,
       // And the second discovered module, on for the same reason.
       boards: true,
+      // ...and the second, whose board writes nothing until a game is played.
+      chess: true,
       pro: false,
       // The second discovered module, in registry order after Tajmeri.
       library: true,
@@ -297,6 +299,9 @@ describe("moduleFlagWrites", () => {
       // the entertainment section out of the questionnaire.
       { moduleId: "arcade", enabled: false },
       { moduleId: "boards", enabled: true },
+      // The discovered modules keep their own order among themselves: „Šah" is
+      // `order: 350` and the timers are `order: 100`, so the board comes last.
+      { moduleId: "chess", enabled: true },
     ]);
   });
 
