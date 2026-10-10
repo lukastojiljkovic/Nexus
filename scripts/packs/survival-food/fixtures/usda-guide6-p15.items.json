@@ -1,0 +1,752 @@
+{
+ "source": "https://nchfp.uga.edu/papers/guide/GUIDE06_HomeCan_rev0715.pdf",
+ "page": 15,
+ "pageHeight": 792,
+ "pageWidth": 612,
+ "items": [
+  {
+   "id": "15:52",
+   "text": "Process Time at Altitudes of",
+   "x": 236.91,
+   "y": 791.77,
+   "width": 108.28,
+   "height": 8.7
+  },
+  {
+   "id": "15:59",
+   "text": "1,001–",
+   "x": 289.83,
+   "y": 777.66,
+   "width": 26.61,
+   "height": 8.7
+  },
+  {
+   "id": "15:61",
+   "text": "Above",
+   "x": 342.74,
+   "y": 777.66,
+   "width": 24.67,
+   "height": 8.7
+  },
+  {
+   "id": "15:53",
+   "text": "Style",
+   "x": 125.67,
+   "y": 777.65,
+   "width": 19.34,
+   "height": 8.7
+  },
+  {
+   "id": "15:57",
+   "text": "0–",
+   "x": 236.91,
+   "y": 777.65,
+   "width": 9.68,
+   "height": 8.7
+  },
+  {
+   "id": "15:55",
+   "text": "Jar",
+   "x": 184,
+   "y": 777.65,
+   "width": 12.09,
+   "height": 8.7
+  },
+  {
+   "id": "15:60",
+   "text": "6,000 ft",
+   "x": 289.83,
+   "y": 767.54,
+   "width": 29.02,
+   "height": 8.7
+  },
+  {
+   "id": "15:58",
+   "text": "1,000 ft",
+   "x": 236.91,
+   "y": 767.54,
+   "width": 29.02,
+   "height": 8.7
+  },
+  {
+   "id": "15:62",
+   "text": "6,000 ft",
+   "x": 342.74,
+   "y": 767.54,
+   "width": 29.02,
+   "height": 8.7
+  },
+  {
+   "id": "15:54",
+   "text": "of Pack",
+   "x": 125.67,
+   "y": 767.54,
+   "width": 29.01,
+   "height": 8.7
+  },
+  {
+   "id": "15:56",
+   "text": "Size",
+   "x": 184,
+   "y": 767.54,
+   "width": 16.92,
+   "height": 8.7
+  },
+  {
+   "id": "15:63",
+   "text": "Raw",
+   "x": 125.67,
+   "y": 755.08,
+   "width": 17.4,
+   "height": 8.7
+  },
+  {
+   "id": "15:64",
+   "text": " ",
+   "x": 143.08,
+   "y": 755.08,
+   "width": 4.7,
+   "height": 0
+  },
+  {
+   "id": "15:65",
+   "text": "Pints",
+   "x": 184,
+   "y": 755.08,
+   "width": 19.34,
+   "height": 8.7
+  },
+  {
+   "id": "15:66",
+   "text": " ",
+   "x": 203.34,
+   "y": 755.08,
+   "width": 3.86,
+   "height": 0
+  },
+  {
+   "id": "15:67",
+   "text": "5 min",
+   "x": 236.91,
+   "y": 755.08,
+   "width": 21.28,
+   "height": 8.7
+  },
+  {
+   "id": "15:68",
+   "text": " ",
+   "x": 258.19,
+   "y": 755.08,
+   "width": 3.64,
+   "height": 0
+  },
+  {
+   "id": "15:69",
+   "text": "10",
+   "x": 289.83,
+   "y": 755.08,
+   "width": 9.68,
+   "height": 8.7
+  },
+  {
+   "id": "15:70",
+   "text": " ",
+   "x": 299.5,
+   "y": 755.08,
+   "width": 4.97,
+   "height": 0
+  },
+  {
+   "id": "15:71",
+   "text": "15",
+   "x": 342.74,
+   "y": 755.08,
+   "width": 9.68,
+   "height": 8.7
+  },
+  {
+   "id": "15:4",
+   "text": "Yield:",
+   "x": 81,
+   "y": 729.38,
+   "width": 28.92,
+   "height": 11.5
+  },
+  {
+   "id": "15:5",
+   "text": " ",
+   "x": 109.92,
+   "y": 729.38,
+   "width": 0.41,
+   "height": 0
+  },
+  {
+   "id": "15:6",
+   "text": "About 5 to 6 half-pints",
+   "x": 114.68,
+   "y": 729.38,
+   "width": 107.06,
+   "height": 11.5
+  },
+  {
+   "id": "15:7",
+   "text": "Procedure:",
+   "x": 81,
+   "y": 701.78,
+   "width": 55.56,
+   "height": 11.5
+  },
+  {
+   "id": "15:8",
+   "text": " ",
+   "x": 136.56,
+   "y": 701.78,
+   "width": 0.39,
+   "height": 0
+  },
+  {
+   "id": "15:9",
+   "text": "Wash and snap off ends of fresh beans. Cut or snap into 1- to 2-inch pieces. Blanch",
+   "x": 141.02,
+   "y": 701.78,
+   "width": 390.31,
+   "height": 11.5
+  },
+  {
+   "id": "15:10",
+   "text": "3 minutes and cool immediately. Rinse kidney beans with tap water and drain again. Prepare and",
+   "x": 81,
+   "y": 687.98,
+   "width": 460.87,
+   "height": 11.5
+  },
+  {
+   "id": "15:11",
+   "text": "measure all other vegetables. Combine vinegar, lemon juice, sugar, and water and bring to a boil.",
+   "x": 81,
+   "y": 674.18,
+   "width": 461.04,
+   "height": 11.5
+  },
+  {
+   "id": "15:12",
+   "text": "Remove from heat. Add oil and salt and mix well. Add beans, onions, celery, and green pepper to",
+   "x": 81,
+   "y": 660.38,
+   "width": 459.39,
+   "height": 11.5
+  },
+  {
+   "id": "15:72",
+   "text": "Pickled Three Bean Salad",
+   "x": 125.67,
+   "y": 657.01,
+   "width": 135.94,
+   "height": 11.76
+  },
+  {
+   "id": "15:13",
+   "text": "solution and bring to a simmer. Marinate 12 to 14 hours in refrigerator, then heat entire mixture",
+   "x": 81,
+   "y": 646.58,
+   "width": 453.82,
+   "height": 11.5
+  },
+  {
+   "id": "15:14",
+   "text": "to a boil. Fill hot jars with solids. Add hot liquid, leaving 1/2-inch headspace. Remove air bubbles",
+   "x": 81,
+   "y": 632.78,
+   "width": 459.82,
+   "height": 11.5
+  },
+  {
+   "id": "15:15",
+   "text": "and adjust headspace if needed. Wipe rims of jars with a dampened clean paper towel.",
+   "x": 81,
+   "y": 618.98,
+   "width": 411.98,
+   "height": 11.5
+  },
+  {
+   "id": "15:16",
+   "text": " ",
+   "x": 492.98,
+   "y": 618.98,
+   "width": 0.64,
+   "height": 0
+  },
+  {
+   "id": "15:17",
+   "text": "Adjust",
+   "x": 500.29,
+   "y": 618.98,
+   "width": 30.88,
+   "height": 11.5
+  },
+  {
+   "id": "15:18",
+   "text": "lids and process.",
+   "x": 81,
+   "y": 605.17,
+   "width": 78.44,
+   "height": 11.5
+  },
+  {
+   "id": "15:73",
+   "text": "Recommended process time for Pickled Three-Bean Salad in a boiling-water canner",
+   "x": 125.67,
+   "y": 568.35,
+   "width": 323.94,
+   "height": 8.7
+  },
+  {
+   "id": "15:74",
+   "text": "Process Time at Altitudes of",
+   "x": 237.15,
+   "y": 547.65,
+   "width": 108.28,
+   "height": 8.7
+  },
+  {
+   "id": "15:81",
+   "text": "1,001–",
+   "x": 290.06,
+   "y": 534.48,
+   "width": 26.61,
+   "height": 8.7
+  },
+  {
+   "id": "15:83",
+   "text": "Above",
+   "x": 342.98,
+   "y": 534.48,
+   "width": 24.67,
+   "height": 8.7
+  },
+  {
+   "id": "15:75",
+   "text": "Style",
+   "x": 125.67,
+   "y": 534.48,
+   "width": 19.34,
+   "height": 8.7
+  },
+  {
+   "id": "15:77",
+   "text": "Jar",
+   "x": 184.23,
+   "y": 534.48,
+   "width": 12.09,
+   "height": 8.7
+  },
+  {
+   "id": "15:79",
+   "text": "0–",
+   "x": 237.15,
+   "y": 534.48,
+   "width": 9.68,
+   "height": 8.7
+  },
+  {
+   "id": "15:76",
+   "text": "of Pack",
+   "x": 125.67,
+   "y": 524.14,
+   "width": 29.01,
+   "height": 8.7
+  },
+  {
+   "id": "15:78",
+   "text": "Size",
+   "x": 184.23,
+   "y": 524.14,
+   "width": 16.92,
+   "height": 8.7
+  },
+  {
+   "id": "15:80",
+   "text": "1,000 ft",
+   "x": 237.15,
+   "y": 524.14,
+   "width": 29.02,
+   "height": 8.7
+  },
+  {
+   "id": "15:82",
+   "text": "6,000 ft",
+   "x": 290.06,
+   "y": 524.14,
+   "width": 29.02,
+   "height": 8.7
+  },
+  {
+   "id": "15:84",
+   "text": "6,000 ft",
+   "x": 342.98,
+   "y": 524.14,
+   "width": 29.02,
+   "height": 8.7
+  },
+  {
+   "id": "15:85",
+   "text": "Hot",
+   "x": 125.67,
+   "y": 510.5,
+   "width": 13.54,
+   "height": 8.7
+  },
+  {
+   "id": "15:86",
+   "text": " ",
+   "x": 139.21,
+   "y": 510.5,
+   "width": 5.17,
+   "height": 0
+  },
+  {
+   "id": "15:87",
+   "text": "Half-pints",
+   "x": 184.23,
+   "y": 510.5,
+   "width": 36.75,
+   "height": 8.7
+  },
+  {
+   "id": "15:89",
+   "text": "15 min",
+   "x": 237.15,
+   "y": 510.5,
+   "width": 26.11,
+   "height": 8.7
+  },
+  {
+   "id": "15:90",
+   "text": " ",
+   "x": 263.26,
+   "y": 510.5,
+   "width": 3.08,
+   "height": 0
+  },
+  {
+   "id": "15:91",
+   "text": "20",
+   "x": 290.06,
+   "y": 510.5,
+   "width": 9.68,
+   "height": 8.7
+  },
+  {
+   "id": "15:92",
+   "text": " ",
+   "x": 299.74,
+   "y": 510.5,
+   "width": 4.97,
+   "height": 0
+  },
+  {
+   "id": "15:93",
+   "text": "25",
+   "x": 342.98,
+   "y": 510.5,
+   "width": 9.68,
+   "height": 8.7
+  },
+  {
+   "id": "15:88",
+   "text": "or Pints",
+   "x": 184.23,
+   "y": 500.15,
+   "width": 29.5,
+   "height": 8.7
+  },
+  {
+   "id": "15:19",
+   "text": "PICKLED BEETS",
+   "x": 81,
+   "y": 458.78,
+   "width": 84.99,
+   "height": 13
+  },
+  {
+   "id": "15:20",
+   "text": "7 lbs of 2- to 2-1/2-inch diameter beets",
+   "x": 81,
+   "y": 438.98,
+   "width": 172.74,
+   "height": 11.5
+  },
+  {
+   "id": "15:21",
+   "text": "4 cups vinegar (5%)",
+   "x": 81,
+   "y": 425.18,
+   "width": 89.16,
+   "height": 11.5
+  },
+  {
+   "id": "15:22",
+   "text": "1-1/2 tsp canning or pickling salt",
+   "x": 81,
+   "y": 411.38,
+   "width": 146.83,
+   "height": 11.5
+  },
+  {
+   "id": "15:2",
+   "text": "6",
+   "x": 571,
+   "y": 405.65,
+   "width": 12.21,
+   "height": 22
+  },
+  {
+   "id": "15:23",
+   "text": "2 cups sugar",
+   "x": 81,
+   "y": 397.58,
+   "width": 57.06,
+   "height": 11.5
+  },
+  {
+   "id": "15:24",
+   "text": "2 cups water",
+   "x": 81,
+   "y": 383.78,
+   "width": 57.44,
+   "height": 11.5
+  },
+  {
+   "id": "15:1",
+   "text": "Fermented Foods and Pickled Vegetables",
+   "x": 572.75,
+   "y": 377.65,
+   "width": 212.6,
+   "height": 12
+  },
+  {
+   "id": "15:25",
+   "text": "2 cinnamon sticks",
+   "x": 81,
+   "y": 369.98,
+   "width": 81.98,
+   "height": 11.5
+  },
+  {
+   "id": "15:26",
+   "text": "12 whole cloves",
+   "x": 81,
+   "y": 356.18,
+   "width": 71.68,
+   "height": 11.5
+  },
+  {
+   "id": "15:27",
+   "text": "4 to 6 onions (2- to 2-1/2-inch diameter), if desired",
+   "x": 81,
+   "y": 342.38,
+   "width": 224.6,
+   "height": 11.5
+  },
+  {
+   "id": "15:28",
+   "text": "Yield:",
+   "x": 81,
+   "y": 314.77,
+   "width": 28.92,
+   "height": 11.5
+  },
+  {
+   "id": "15:29",
+   "text": " ",
+   "x": 109.92,
+   "y": 314.77,
+   "width": 0.41,
+   "height": 0
+  },
+  {
+   "id": "15:30",
+   "text": "About 8 pints",
+   "x": 114.68,
+   "y": 314.77,
+   "width": 64.71,
+   "height": 11.5
+  },
+  {
+   "id": "15:31",
+   "text": "Procedure:",
+   "x": 81,
+   "y": 287.18,
+   "width": 55.56,
+   "height": 11.5
+  },
+  {
+   "id": "15:32",
+   "text": " ",
+   "x": 136.56,
+   "y": 287.18,
+   "width": 0.38,
+   "height": 0
+  },
+  {
+   "id": "15:33",
+   "text": "Trim off beet tops, leaving 1 inch of stem and roots to prevent bleeding of color.",
+   "x": 140.96,
+   "y": 287.18,
+   "width": 379.7,
+   "height": 11.5
+  },
+  {
+   "id": "15:34",
+   "text": "Wash thoroughly. Sort for size. Cover similar sizes together with boiling water and cook until",
+   "x": 81,
+   "y": 273.38,
+   "width": 438.2,
+   "height": 11.5
+  },
+  {
+   "id": "15:35",
+   "text": "tender (about 25 to 30 minutes).",
+   "x": 81,
+   "y": 259.58,
+   "width": 154.24,
+   "height": 11.5
+  },
+  {
+   "id": "15:36",
+   "text": " ",
+   "x": 235.24,
+   "y": 259.58,
+   "width": 0.21,
+   "height": 0
+  },
+  {
+   "id": "15:37",
+   "text": "Caution: Drain and discard liquid.",
+   "x": 237.67,
+   "y": 259.58,
+   "width": 170.64,
+   "height": 11.5
+  },
+  {
+   "id": "15:38",
+   "text": " ",
+   "x": 408.31,
+   "y": 259.58,
+   "width": 0.21,
+   "height": 0
+  },
+  {
+   "id": "15:39",
+   "text": "Cool beets. Trim off roots",
+   "x": 410.75,
+   "y": 259.58,
+   "width": 118.78,
+   "height": 11.5
+  },
+  {
+   "id": "15:40",
+   "text": "and stems and slip off skins. Slice into 1/4-inch slices. Peel and thinly slice onions. Combine",
+   "x": 81,
+   "y": 245.78,
+   "width": 428.95,
+   "height": 11.5
+  },
+  {
+   "id": "15:41",
+   "text": "vinegar, salt, sugar, and fresh water. Put spices in cheesecloth bag and add to vinegar mixture.",
+   "x": 81,
+   "y": 231.98,
+   "width": 446.08,
+   "height": 11.5
+  },
+  {
+   "id": "15:42",
+   "text": "Bring to a boil. Add beets and onions. Simmer 5 minutes. Remove spice bag. Fill hot jars with beets",
+   "x": 81,
+   "y": 218.18,
+   "width": 468,
+   "height": 11.5
+  },
+  {
+   "id": "15:43",
+   "text": "and onions, leaving 1/2-inch headspace. Add hot vinegar solution, allowing 1/2-inch headspace.",
+   "x": 81,
+   "y": 204.38,
+   "width": 453.64,
+   "height": 11.5
+  },
+  {
+   "id": "15:44",
+   "text": "Remove air bubbles and adjust headspace if needed. Wipe rims of jars with a dampened clean",
+   "x": 81,
+   "y": 190.58,
+   "width": 447.19,
+   "height": 11.5
+  },
+  {
+   "id": "15:45",
+   "text": "paper towel.",
+   "x": 81,
+   "y": 176.78,
+   "width": 59.65,
+   "height": 11.5
+  },
+  {
+   "id": "15:46",
+   "text": " ",
+   "x": 140.65,
+   "y": 176.78,
+   "width": 0.64,
+   "height": 0
+  },
+  {
+   "id": "15:47",
+   "text": "Adjust lids and process.",
+   "x": 147.96,
+   "y": 176.78,
+   "width": 111.76,
+   "height": 11.5
+  },
+  {
+   "id": "15:48",
+   "text": "Variation:",
+   "x": 81,
+   "y": 149.18,
+   "width": 50.14,
+   "height": 11.5
+  },
+  {
+   "id": "15:49",
+   "text": " ",
+   "x": 131.14,
+   "y": 149.18,
+   "width": 0.42,
+   "height": 0
+  },
+  {
+   "id": "15:50",
+   "text": "For pickled whole baby beets, follow above directions but use beets that are 1-to",
+   "x": 136.02,
+   "y": 149.18,
+   "width": 384.7,
+   "height": 11.5
+  },
+  {
+   "id": "15:51",
+   "text": "1-1/2 inches in diameter. Pack whole; do not slice. Onions may be omitted.",
+   "x": 81,
+   "y": 135.38,
+   "width": 351.39,
+   "height": 11.5
+  },
+  {
+   "id": "15:3",
+   "text": "6-15",
+   "x": 572.97,
+   "y": 28.99,
+   "width": 23.08,
+   "height": 12
+  }
+ ]
+}

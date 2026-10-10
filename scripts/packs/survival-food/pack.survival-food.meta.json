@@ -1,0 +1,24 @@
+{
+  "format": 1,
+  "id": "survival-food",
+  "version": "2026.10.10",
+  "kind": "content",
+  "title": {
+    "sr": "Hrana: čuvanje i priprema bez struje",
+    "en": "Food: preserving and cooking without power"
+  },
+  "description": {
+    "sr": "Vodič USDA za konzervisanje, bezbednost hrane pri nestanku struje, botulizam, trovanje ugljen-monoksidom i istorijski terenski kuvari — izvorni tekstovi javnog domena i radova američke vlade.",
+    "en": "The USDA Complete Guide to Home Canning, food safety in a power outage, botulism, carbon monoxide and the public-domain field-cooking manuals — the sources' own text, unmodified."
+  },
+  "licence": {
+    "spdx": "LicenseRef-Public-Domain-US-Government",
+    "attribution": "Compilation of United States Government works and public-domain works, shipped unmodified. USDA Complete Guide to Home Canning, Revised 2015 (AIB No. 539), USDA Food Safety and Inspection Service, US Centers for Disease Control and Prevention, FoodSafety.gov, Ready.gov/FEMA, and US War Department field manuals digitized by the Internet Archive. CDC material is used with attribution, with its substantive content unchanged, and without any implication of CDC, ATSDR, HHS or US Government endorsement.",
+    "url": "https://www.cdc.gov/other/agencymaterials.html"
+  },
+  "source": {
+    "name": "USDA, FSIS, CDC, FoodSafety.gov, Ready.gov/FEMA, Internet Archive",
+    "url": "https://nchfp.uga.edu/papers/guide/"
+  },
+  "minAppVersion": "1.6.0"
+}
