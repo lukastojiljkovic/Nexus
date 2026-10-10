@@ -1849,6 +1849,16 @@ describe("RestoreStore", () => {
       // module replaces its own row from its own `importData` inside the same
       // restore. One row per profile, holding the whole kept document.
       "miniapps_state",
+      //  - puzzles_saves / puzzles_stats / puzzles_settings (migration 090): the
+      //    PUZZLES module's three tables, on the TIMERS entry's exact terms one
+      //    screen up — a kit module's tables are deliberately NOT in
+      //    `RESTORE_WIPE_TABLES`, because that list is derived into
+      //    `@nexus/sync`'s collection map, and the kit's rule is the opposite
+      //    one: the module REPLACES ITS OWN ROWS through `importData` inside the
+      //    same restore transaction.
+      "puzzles_saves",
+      "puzzles_stats",
+      "puzzles_settings",
     ]);
 
     const wipeTables = new Set<string>(RESTORE_WIPE_TABLES);

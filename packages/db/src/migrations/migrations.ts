@@ -88,6 +88,12 @@ import { migration081 } from "./081-card-games.js";
 import { migration082 } from "./082-chess.js";
 import { migration086 } from "./086-reader.js";
 import { migration085 } from "./085-miniapps.js";
+// 090 — the PUZZLES module. The numbers between this one and 082 are reserved
+// by sibling runs in flight on the same branch, so the list has a GAP here in
+// this worktree: the maintainer renumbers at merge, which is why the number
+// appears in exactly three places — this import, the list entry below, and the
+// file name.
+import { migration090 } from "./090-puzzles.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -183,6 +189,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration082,
   migration086,
   migration085,
+  migration090,
 ];
 
 /**
