@@ -60,6 +60,10 @@ export const ESSENTIALS_MODULE_PRESET: Readonly<Record<string, boolean>> = {
   // selectable one: a library that had to be switched on first would be hiding
   // the shelf a person came for, so it follows its manifest's `defaultEnabled`.
   library: true,
+  // The second kit module, decided here for the same reason: a pantry writes
+  // nothing until the user records a first item, so there is nothing to opt into
+  // and „Osnovno" turns it on exactly as its manifest says.
+  pantry: true,
 };
 
 /**

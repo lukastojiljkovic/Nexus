@@ -1,7 +1,9 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import {
   MAX_ID_LENGTH,
+  MAX_PANTRY_NAME_LENGTH,
   MAX_PANTRY_QUANTITY,
+  isPantryUnit,
   isRank,
   rankAfter,
   validatePantryChange,
@@ -157,6 +159,55 @@ export interface PantryExport {
   log: PantryExportLogEntry[];
 }
 
+/**
+ * The window "expires soon" ships with, and the answer a profile with no
+ * settings row gives. A week is the period a household actually plans a meal
+ * around, and it is the one number here written down once.
+ */
+export const DEFAULT_PANTRY_EXPIRY_WINDOW_DAYS = 7;
+
+/** The longest window the settings row accepts: `MAX_PANTRY_USE_WITHIN_DAYS`' own bound, mirrored by migration 075's CHECK. */
+export const MAX_PANTRY_EXPIRY_WINDOW_DAYS = 3_650;
+
+/**
+ * One line of the shopping list the USER wrote.
+ *
+ * The other half of that list is derived on every read (`@nexus/core`'s
+ * `shoppingList`): "below its minimum" is a fact about today's shelf, and a
+ * stored copy of it would be wrong the moment somebody buys the thing. What
+ * cannot be derived is what the user typed in himself, so this is that, and
+ * nothing else.
+ */
+export interface PantryShoppingLine {
+  id: string;
+  profileId: string;
+  name: string;
+  quantity: number;
+  unit: PantryUnit;
+  /**
+   * The stock row ticking this line off restocks, or `null` for a line that is
+   * only a reminder. The item is a LIVE row of this profile when the line is
+   * written; the link survives the item's soft delete, because a line whose item
+   * is gone is still something to buy.
+   */
+  itemId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AddPantryShoppingLineInput {
+  name: string;
+  quantity: number;
+  unit: PantryUnit;
+  itemId?: string | null;
+}
+
+/** The module's one stored preference. */
+export interface PantrySettings {
+  /** How many days ahead "expires soon" reaches. */
+  expiryWindowDays: number;
+}
+
 interface LocationRow {
   id: string;
   profile_id: string;
@@ -192,6 +243,17 @@ interface LogRow {
   changed_at: string;
   delta: number;
   reason: string;
+}
+
+interface ShoppingRow {
+  id: string;
+  profile_id: string;
+  name: string;
+  quantity: number;
+  unit: string;
+  item_id: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 const LOCATION_COLUMNS = "id, profile_id, name, rank, created_at, updated_at";
@@ -276,6 +338,15 @@ export class PantryStore {
   private readonly findLocationOwner: Database.Statement;
   private readonly findItemOwner: Database.Statement;
   private readonly findLogOwner: Database.Statement;
+  private readonly selectShoppingLines: Database.Statement;
+  private readonly selectShoppingLineById: Database.Statement;
+  private readonly insertShoppingLine: Database.Statement;
+  private readonly deleteShoppingLine: Database.Statement;
+  private readonly deleteShoppingLinesForProfile: Database.Statement;
+  private readonly isLiveItem: Database.Statement;
+  private readonly selectSettings: Database.Statement;
+  private readonly upsertSettings: Database.Statement;
+  private readonly deleteSettings: Database.Statement;
 
   constructor(
     private readonly db: DatabaseHandle,
@@ -388,6 +459,46 @@ export class PantryStore {
     this.deleteLocationsForProfile = db.prepare(
       `DELETE FROM pantry_locations WHERE profile_id = ?`,
     );
+    // The shopping list: this profile's own lines, and the one question the
+    // restock asks about them -- "is the item this line names still live".
+    this.selectShoppingLines = db.prepare(
+      `SELECT id, profile_id, name, quantity, unit, item_id, created_at, updated_at
+         FROM pantry_shopping
+        WHERE profile_id = ?`,
+    );
+    this.selectShoppingLineById = db.prepare(
+      `SELECT id, profile_id, name, quantity, unit, item_id, created_at, updated_at
+         FROM pantry_shopping
+        WHERE id = ? AND profile_id = ?`,
+    );
+    this.insertShoppingLine = db.prepare(
+      `INSERT INTO pantry_shopping
+         (id, profile_id, name, quantity, unit, item_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+    this.deleteShoppingLine = db.prepare(
+      `DELETE FROM pantry_shopping WHERE id = ? AND profile_id = ?`,
+    );
+    this.deleteShoppingLinesForProfile = db.prepare(
+      `DELETE FROM pantry_shopping WHERE profile_id = ?`,
+    );
+    // Deliberately NOT filtered on `archived_at`: an archived item is still a
+    // row a line may restock -- "ne pitaj me više za ovo" is about the shopping
+    // list, never about the shelf (migration 055's rule, one module over).
+    this.isLiveItem = db.prepare(
+      `SELECT 1 AS live FROM pantry_items
+        WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
+    );
+    this.selectSettings = db.prepare(
+      `SELECT expiry_window_days, updated_at FROM pantry_settings WHERE profile_id = ?`,
+    );
+    this.upsertSettings = db.prepare(
+      `INSERT INTO pantry_settings (profile_id, expiry_window_days, updated_at)
+       VALUES (?, ?, ?)
+       ON CONFLICT (profile_id) DO UPDATE SET expiry_window_days = excluded.expiry_window_days,
+                                              updated_at = excluded.updated_at`,
+    );
+    this.deleteSettings = db.prepare(`DELETE FROM pantry_settings WHERE profile_id = ?`);
     // „Does this id already exist, and under whom“ — the three reads behind
     // `refuseForeign`, and the whole of the cross-profile guard's work. The log
     // carries no `profile_id` of its own, so its owner comes through its item.
@@ -646,6 +757,148 @@ export class PantryStore {
     }
   }
 
+  // --- The hand-written shopping list ---------------------------------------
+
+  /**
+   * This profile's hand-written lines, sr-Latn alphabetical -- the order the
+   * shopping list is read in, and the same collator the pantry list uses.
+   */
+  listShoppingLines(): PantryShoppingLine[] {
+    const rows = this.selectShoppingLines.all(this.profileId) as ShoppingRow[];
+    return rows
+      .map(toShoppingLine)
+      .sort(
+        (left, right) =>
+          ITEM_COLLATOR.compare(left.name, right.name) || left.id.localeCompare(right.id),
+      );
+  }
+
+  /**
+   * Adds one line the user wrote himself.
+   *
+   * An `itemId` that names anything is checked HERE rather than at the wire, on
+   * `requireLocation`'s exact terms: it must be a live item of THIS profile, and
+   * a line pointing at somebody else's row would be a restock that lands in the
+   * wrong pantry.
+   */
+  addShoppingLine(input: AddPantryShoppingLineInput, now: string): PantryShoppingLine {
+    const validNow = validateNow(now);
+    const fields = resolveShoppingLine(input);
+    if (fields.itemId !== null) this.requireItem(fields.itemId);
+
+    const id = uuidv7();
+    this.insertShoppingLine.run(
+      id, this.profileId, fields.name, fields.quantity, fields.unit, fields.itemId,
+      validNow, validNow,
+    );
+    return {
+      id,
+      profileId: this.profileId,
+      ...fields,
+      createdAt: validNow,
+      updatedAt: validNow,
+    };
+  }
+
+  /**
+   * Ticks one line off: the line goes, and -- when it names a stock item that is
+   * still there -- the quantity it asked for comes back into stock in the SAME
+   * transaction, recorded as a `bought` move so the log says where the number
+   * came from.
+   *
+   * **Why this is one method rather than two calls from the module.** Half of
+   * this pair is a shopping list that has an item on it and a shelf that does
+   * not, or the reverse; `changeQuantity`'s own reasoning, one level up. Both
+   * statements are inside one better-sqlite3 transaction, and the nested one
+   * `changeQuantity` opens is a savepoint.
+   *
+   * **A line whose item is gone is still ticked.** A tick is a statement about
+   * the list, and refusing it because the pantry changed underneath would leave
+   * the user unable to get a line off their own list. So the restock is skipped
+   * and nothing else is.
+   */
+  tickShoppingLine(id: string, now: string): void {
+    const validNow = validateNow(now);
+    const line = this.shoppingLineRow(id);
+    this.db.transaction(() => {
+      this.deleteShoppingLine.run(id, this.profileId);
+      if (line.itemId === null) return;
+      if (this.isLiveItem.get(line.itemId, this.profileId) === undefined) return;
+      this.changeQuantity(line.itemId, line.quantity, "bought", validNow);
+    })();
+  }
+
+  /** Drops one hand-written line without restocking anything -- "ne treba mi više". */
+  removeShoppingLine(id: string): void {
+    const { changes } = this.deleteShoppingLine.run(id, this.profileId);
+    if (changes === 0) {
+      throw new PantryNotFoundError(`No shopping line "${id}" in this profile.`);
+    }
+  }
+
+  /**
+   * Replaces every hand-written line with the ones an archive carried, in one
+   * transaction and whole (ADR-090 imex). Ids are MINTED rather than restored,
+   * on `TimersStore.replaceFromArchive`'s terms: a line's id is this database's
+   * own key and no other profile holds it, so the archive carries what the user
+   * typed and the keys are made here.
+   *
+   * The `itemId` links are NOT resolved here: they name rows the archive
+   * carried, the module's own `parse` has already checked that (a link to an
+   * item the archive does not carry is refused there), and `importData` has
+   * written those items by the time the module applies this half.
+   */
+  replaceShoppingFromArchive(
+    lines: readonly AddPantryShoppingLineInput[],
+    now: string,
+  ): void {
+    const stamp = validateNow(now);
+    const rows = lines.map((line) => resolveShoppingLine(line));
+    this.db.transaction(() => {
+      this.deleteShoppingLinesForProfile.run(this.profileId);
+      for (const row of rows) {
+        this.insertShoppingLine.run(
+          uuidv7(), this.profileId, row.name, row.quantity, row.unit, row.itemId,
+          stamp, stamp,
+        );
+      }
+    })();
+  }
+
+  // --- The module's one preference ------------------------------------------
+
+  /**
+   * How many days ahead "expires soon" reaches, and with it the window main's
+   * reminder uses. Absent means the shipped default, which is written down once,
+   * in `DEFAULT_PANTRY_EXPIRY_WINDOW_DAYS` -- a module that restated the number
+   * would be a second copy of it (`TimersStore.settings`' arrangement).
+   */
+  settings(): PantrySettings {
+    const row = this.selectSettings.get(this.profileId) as
+      | { expiry_window_days: number }
+      | undefined;
+    return {
+      expiryWindowDays:
+        row === undefined ? DEFAULT_PANTRY_EXPIRY_WINDOW_DAYS : row.expiry_window_days,
+    };
+  }
+
+  /**
+   * Writes the module's one preference. `null` DELETES the row rather than
+   * writing a value: that is what an archive carrying no preference means, and
+   * the profile then answers the default again, which is the one place it is
+   * written down.
+   */
+  setExpiryWindow(days: number | null, now: string): PantrySettings {
+    const stamp = validateNow(now);
+    if (days === null) {
+      this.deleteSettings.run(this.profileId);
+      return this.settings();
+    }
+    this.upsertSettings.run(this.profileId, validateExpiryWindow(days), stamp);
+    return this.settings();
+  }
+
   /**
    * EVERY change of this profile's live items, oldest first. An item's own
    * history is a filter over it, and the waste report is `@nexus/core`'s
@@ -774,6 +1027,13 @@ export class PantryStore {
     return row;
   }
 
+  /** The row of one hand-written shopping line, or a throw. */
+  private shoppingLineRow(id: string): PantryShoppingLine {
+    const row = this.selectShoppingLineById.get(id, this.profileId) as ShoppingRow | undefined;
+    if (!row) throw new PantryNotFoundError(`No shopping line "${id}" in this profile.`);
+    return toShoppingLine(row);
+  }
+
   /**
    * A row id is unique across the whole DATABASE rather than per profile, so an
    * archive naming an id this file already holds under another profile cannot be
@@ -836,6 +1096,19 @@ function toLogEntry(row: LogRow): PantryLogEntry {
     changedAt: row.changed_at,
     delta: row.delta,
     reason: toReason(row.reason),
+  };
+}
+
+function toShoppingLine(row: ShoppingRow): PantryShoppingLine {
+  return {
+    id: row.id,
+    profileId: row.profile_id,
+    name: row.name,
+    quantity: row.quantity,
+    unit: row.unit as PantryUnit,
+    itemId: row.item_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -1023,7 +1296,13 @@ function readExportLogEntry(value: unknown, index: number): PantryExportLogEntry
  * reference is refused as the dangling reference it is rather than as a
  * foreign-key error from inside the transaction.
  */
-function parsePantryExport(value: unknown): PantryExport {
+/**
+ * The whole value, or a throw. Exported because the module's own archive reader
+ * (`main/imex.ts`) has to read this half of its payload at the PREVIEW, before
+ * anything is written, and a second parser up there would be a second definition
+ * of what a valid pantry export is.
+ */
+export function parsePantryExport(value: unknown): PantryExport {
   if (!isRecord(value)) throw new PantryValidationError("A pantry export must be an object.");
   const keys = Object.keys(value);
   const expected = ["version", "locations", "items", "log"];
@@ -1126,4 +1405,81 @@ function validateNow(value: string): string {
     throw new PantryValidationError(`"now" must be an ISO-8601 date-time.`);
   }
   return value;
+}
+
+/**
+ * Validates one hand-written shopping line and returns the CANONICAL form:
+ * the name trimmed, an absent item link as `null`.
+ *
+ * The bounds are the schema's own (migration 075), so a value that could never
+ * be stored is refused here with a sentence rather than by the CHECK. The unit
+ * is `@nexus/core`'s list and the name is `MAX_PANTRY_NAME_LENGTH` -- the same
+ * number the item's own name uses, because it is the same kind of thing.
+ *
+ * `itemId` is checked for SHAPE only; whether it names a live row is the
+ * caller's question, because an archive's links resolve against the archive
+ * while a form's resolve against this profile.
+ */
+function resolveShoppingLine(input: unknown): {
+  name: string;
+  quantity: number;
+  unit: PantryUnit;
+  itemId: string | null;
+} {
+  const raw: Record<string, unknown> = isRecord(input) ? input : {};
+  const subject = "Pantry shopping line";
+
+  const rawName = raw["name"];
+  const name = typeof rawName === "string" ? rawName.trim() : "";
+  if (name.length === 0 || name.length > MAX_PANTRY_NAME_LENGTH) {
+    throw new PantryValidationError(
+      `${subject} is invalid: "name" (${typeof rawName === "string" ? "range" : "shape"}).`,
+    );
+  }
+
+  const quantity = raw["quantity"];
+  if (
+    typeof quantity !== "number" ||
+    !Number.isFinite(quantity) ||
+    quantity <= 0 ||
+    quantity > MAX_PANTRY_QUANTITY
+  ) {
+    throw new PantryValidationError(
+      `${subject} is invalid: "quantity" (${typeof quantity === "number" ? "range" : "shape"}).`,
+    );
+  }
+
+  const unit = raw["unit"];
+  if (!isPantryUnit(unit)) {
+    throw new PantryValidationError(
+      `${subject} is invalid: "unit" (${typeof unit === "string" ? "unit" : "shape"}).`,
+    );
+  }
+
+  const itemId = raw["itemId"] ?? null;
+  if (
+    itemId !== null &&
+    (typeof itemId !== "string" ||
+      itemId !== itemId.trim() ||
+      itemId.length === 0 ||
+      itemId.length > MAX_ID_LENGTH)
+  ) {
+    throw new PantryValidationError(`${subject} is invalid: "itemId" (shape).`);
+  }
+
+  return { name, quantity, unit, itemId: itemId as string | null };
+}
+
+/** The window's own bound, mirrored from migration 075's CHECK so a bad number is a sentence rather than a constraint failure. */
+function validateExpiryWindow(days: number): number {
+  if (
+    !Number.isSafeInteger(days) ||
+    days < 1 ||
+    days > MAX_PANTRY_EXPIRY_WINDOW_DAYS
+  ) {
+    throw new PantryValidationError(
+      `An expiry window must be a whole number of days in 1..${MAX_PANTRY_EXPIRY_WINDOW_DAYS}.`,
+    );
+  }
+  return days;
 }

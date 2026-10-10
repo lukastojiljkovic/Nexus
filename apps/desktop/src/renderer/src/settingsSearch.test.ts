@@ -428,6 +428,7 @@ describe("buildSettingsIndex", () => {
       "timers:sound-on-end",
       // And the second discovered card's one control, for the same reason.
       "culture:prompt-past-plans",
+      "pantry:expiry-window",
     ]);
   });
 

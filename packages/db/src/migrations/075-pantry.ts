@@ -77,6 +77,35 @@ import type { Migration } from "./migrations.js";
  * the only order the log is ever read in. There is deliberately no index on
  * `changed_at` alone: nothing asks for „every change on a day“ without already
  * asking for the profile's items, which the log read reaches through `item_id`.
+ *
+ * **Stage 2 added two tables IN PLACE, and it also settled the wipe question
+ * the note above left open.** 075 is unreleased, so a second migration for one
+ * module would be a second file describing one change. `pantry_shopping` holds
+ * the hand-added half of the shopping list: the other half is DERIVED on every
+ * read ("below its minimum" is a fact about today's shelf, and a stored copy of
+ * it would be wrong the moment somebody buys the thing), so the table holds
+ * only what the user typed in himself. Its nullable `item_id` points back at
+ * stock, because ticking a line that names an item is done BY restocking that
+ * row, while a line that names none is simply ticked off. `pantry_settings`
+ * holds the module's one preference, one row per profile: how many days ahead
+ * "expires soon" reaches. It is a PROFILE row and not a device one, for
+ * `timers_settings`' reason exactly -- MAIN fires the module's reminder and
+ * reads this number while no page is open -- so it belongs in the profile and
+ * travels in the profile's own archive.
+ *
+ * **Stage 2 does NOT put these tables on `RESTORE_WIPE_TABLES`, which
+ * supersedes the "Stage 2 owes the wipe entry" line above.** This module is
+ * built on the kit (ADR-090), and the kit's answer is the opposite one: that
+ * list is DERIVED into `@nexus/sync`'s collection map, which
+ * `collectionGuard.test.ts` holds it equal to, and a module built on the kit may
+ * not edit `@nexus/sync` -- its whole point is that a new module edits no shared
+ * file. The kit's rule is the other one, stated in `ModuleContext.importData`: a
+ * module REPLACES ITS OWN ROWS, inside the same restore, and `main/restore.ts`
+ * calls `restoreModuleData` immediately after the replace has rewritten every
+ * wiped table. So all five pantry tables are documented-exempt in
+ * `restoreStore.test.ts`'s T3 ledger, exactly as the three TIMERS tables are,
+ * and `collectionGuard.test.ts` is not touched. The one direction this must
+ * never move in is a wipe with nothing to refill it.
  */
 export const migration075: Migration = {
   version: 75,
@@ -159,6 +188,40 @@ export const migration075: Migration = {
 
       -- One item's changes, oldest first — the only way the log is read.
       CREATE INDEX pantry_log_item ON pantry_log (item_id, changed_at, id);
+
+      -- The hand-added half of the shopping list; see the file doc.
+      CREATE TABLE pantry_shopping (
+        id         TEXT PRIMARY KEY,
+        profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+        name       TEXT NOT NULL CHECK (length(name) > 0 AND length(name) <= 80),
+        -- Strictly above zero: a line asking for nothing is not a line, and the
+        -- derived half never produces one either (its "needed" is positive).
+        quantity   REAL NOT NULL CHECK (quantity > 0 AND quantity <= 1000000),
+        unit       TEXT NOT NULL CHECK (unit IN ('pcs', 'g', 'kg', 'ml', 'l', 'pack')),
+        -- The stock row ticking this line off restocks, or NULL for a line that
+        -- is only a reminder. SET NULL and not CASCADE: removing the item must
+        -- never remove the reason the user was going to buy it.
+        item_id    TEXT REFERENCES pantry_items(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      -- The only shopping-list read there is: this profile's lines, by name.
+      CREATE INDEX pantry_shopping_profile ON pantry_shopping (profile_id, name, id);
+
+      -- The module's one preference, one row per profile, absent until set.
+      CREATE TABLE pantry_settings (
+        profile_id         TEXT PRIMARY KEY REFERENCES profiles(id) ON DELETE CASCADE,
+        -- typeof(x) = 'integer' rather than INTEGER affinity, the FIN lesson
+        -- migration 051 records: a REAL would sit in this column happily and
+        -- every later read would be a float. 3650 is the longest window
+        -- MAX_PANTRY_USE_WITHIN_DAYS lets an item carry, and past a decade a
+        -- number is a typo rather than a shelf life.
+        expiry_window_days INTEGER NOT NULL
+                             CHECK (typeof(expiry_window_days) = 'integer'
+                                    AND expiry_window_days BETWEEN 1 AND 3650),
+        updated_at         TEXT NOT NULL
+      );
     `);
   },
 };

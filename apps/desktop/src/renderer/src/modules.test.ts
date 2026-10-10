@@ -110,6 +110,8 @@ describe("createModuleRegistry", () => {
       // The second discovered module (ADR-090), and the first in the life
       // group: a service book for a car somebody owns.
       "car",
+      // The second DISCOVERED module, after TIMERS' `order: 100`.
+      "pantry",
     ]);
   });
 
@@ -170,6 +172,10 @@ describe("createModuleRegistry", () => {
       // than against a web page. Written down here rather than shared with UTIL,
       // for the reason the comment above gives.
       READ: ["reader"],
+      // „Ostava" takes its own, on „Tabla"'s terms exactly: PANT is its own PRD
+      // entry, and the UTIL sharing above is one section implemented twice rather
+      // than a bin for anything shelf-shaped.
+      PANT: ["pantry"],
       CANV: ["canvas"],
       // „Elektronika" takes its own for „Tabla"'s reason exactly: ELEC is its
       // own PRD entry, and the UTIL sharing above is one section implemented
@@ -237,6 +243,9 @@ describe("createModuleRegistry", () => {
       // The discovered life module (ADR-090 / ADR-093): a car is a subject
       // somebody HAS, which is what the group means.
       "car",
+      // The second discovered module, in the group it declares: a pantry is an
+      // AREA of a life, which is what „Život" holds (ADR-093).
+      "pantry",
     ]);
     // The culture group's first member, and the group ADR-093 named before
     // anything was in it.
@@ -302,6 +311,9 @@ describe("createModuleRegistry", () => {
       // The discovered life module, on for the same reason one group over: it
       // writes nothing until somebody adds a vehicle.
       "car",
+      // The same for the pantry: nothing is written until a first item is
+      // recorded.
+      "pantry",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");
@@ -492,6 +504,8 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
       // The discovered card: the two thresholds, declared in the module's own
       // manifest and drawn by its own body.
       "car",
+      // The second, on the same terms.
+      "pantry",
     ]);
   });
 
@@ -618,6 +632,10 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
     // podrazumevano": there is no default to go back to, and a reset would be a
     // write about somebody's own data.
     expect(storages("fitness")).toEqual(new Set(["profile"]));
+    // OSTAVA's one control is the window „ističe uskoro" reaches, and MAIN reads
+    // it while firing the module's own reminder with no page open at all — so it
+    // is a row about the profile's shelves and travels in the profile's archive.
+    expect(storages("pantry")).toEqual(new Set(["profile"]));
   });
 });
 

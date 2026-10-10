@@ -218,6 +218,7 @@ describe("resolveModuleSelection", () => {
       timers: true,
       reader: true,
       culture: true,
+      pantry: true,
       pro: false,
       // The second discovered module, in registry order after Tajmeri.
       library: true,
@@ -265,6 +266,8 @@ describe("moduleFlagWrites", () => {
       // module registers after every compiled-in one, ordered by `order`.
       { moduleId: "library", enabled: true },
       { moduleId: "culture", enabled: true },
+      // ...and the second, in the order the registry holds them.
+      { moduleId: "pantry", enabled: true },
     ]);
   });
 

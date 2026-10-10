@@ -126,6 +126,7 @@ describe("moduleSettingsDeclarations", () => {
       // registers after every compiled-in one.
       "timers",
       "culture",
+      "pantry",
     ]);
   });
 
@@ -164,6 +165,7 @@ describe("moduleSettingsCardIds", () => {
       "tools",
       "timers",
       "culture",
+      "pantry",
     ]);
   });
 
@@ -206,6 +208,7 @@ describe("moduleSettingsCards", () => {
       "tools",
       "timers",
       "culture",
+      "pantry",
     ]);
     expect(cards.map((card) => card.title)).toEqual([
       s().sectionTitle.dashboard,
@@ -224,6 +227,7 @@ describe("moduleSettingsCards", () => {
       // than a path into the shell's table.
       kitManifest("timers")?.copy?.name[activeLocale()] ?? "",
       kitManifest("culture")?.copy?.name[activeLocale()] ?? "",
+      kitManifest("pantry")?.copy?.name[activeLocale()] ?? "",
     ]);
   });
 
