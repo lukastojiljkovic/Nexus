@@ -113,3 +113,4 @@ directory is the decision log behind it.
 | [099](099-offline-map.md) | The offline map: a pack, a region, and no network | Accepted (depends on ADR-090, ADR-091, ADR-093) | 2026-10-10 |
 | [098](098-zim-offline-library.md) | An offline library, through our own ZIM reader (module `wiki`, migration 088) | Accepted; amends ADR-092 | 2026-10-10 |
 | [095](095-assistant.md) | The assistant: eight parts, one contract, nothing off this machine | Accepted | 2026-10-10 |
+| [096](096-assistant-model-runtime.md) | The assistant's model runtime: llama.cpp in a utility process, the curated catalogue, and how a model is chosen | Accepted | 2026-10-10 |

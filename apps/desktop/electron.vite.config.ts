@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, posix, relative, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import { defineConfig, externalizeDepsPlugin } from "electron-vite";
 import react from "@vitejs/plugin-react";
 import type { Plugin } from "vite";
@@ -197,6 +198,25 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin({ exclude: NEXUS_WORKSPACE })],
     build: {
       rollupOptions: {
+        /**
+         * TWO ENTRIES, and the second one is the assistant's inference process
+         * (ADR-096). llama.cpp blocks the thread it runs on for as long as a
+         * conversation lasts, so it runs in an Electron `utilityProcess`, and a
+         * utility process is forked from a FILE: this is that file, and nothing
+         * else in the app reaches it.
+         *
+         * Naming both entries is what keeps the first one where it has always
+         * been — `out/main/index.js` is `package.json`'s `main`, and the key of
+         * an entry in this object is the name rollup writes. The keys are
+         * therefore load-bearing, and `electron.ts` looks the second one up by
+         * exactly this name (`WORKER_BUNDLE`).
+         */
+        input: {
+          index: fileURLToPath(new URL("./src/main/index.ts", import.meta.url)),
+          "assistant-model-host": fileURLToPath(
+            new URL("./src/main/assistant/runtime/worker.ts", import.meta.url),
+          ),
+        },
         // The SQLite native addon cannot be bundled; it stays external and is
         // require()d at runtime, from the prebuild its own loader picks for
         // this platform.
