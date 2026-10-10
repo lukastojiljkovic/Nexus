@@ -536,6 +536,9 @@ import {
   asString,
 } from "./ipcValidators.js";
 import { createModuleHost } from "./moduleHost.js";
+// The kit's one PDF capability (ADR-090's `ModulePlatform.savePdf`), which is
+// Electron-shaped and therefore lives beside the window rather than in a module.
+import { saveCardPdf } from "./cardPdf.js";
 import {
   deliverSecurityNotices,
   runCheckNow,
@@ -1391,6 +1394,10 @@ const moduleHost = createModuleHost({
     return () => clearTimeout(handle);
   },
   now: () => Date.now(),
+  // The fifth capability, and the only one that gives a module a file: it prints
+  // a document MAIN built and asks the USER where to put it (`cardPdf.ts`). A
+  // module never sees the path, the dialog or the window.
+  savePdf: saveCardPdf,
 });
 /** The `userData` directory itself — the registry's home, and the root every account directory hangs off. */
 function userDataDir(): string {

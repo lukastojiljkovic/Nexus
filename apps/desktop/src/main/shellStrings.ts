@@ -53,6 +53,7 @@ export interface ShellStrings {
   defaultAccountLabel: string;
   noteCopySuffix: string;
   backupProfileSlugFallback: string;
+  cardPdfFilterName: string;
 }
 
 const SR: ShellStrings = {
@@ -135,6 +136,8 @@ const SR: ShellStrings = {
    * sanitizes to nothing (`backup.ts`'s `backupProfileSlug`, SET-011).
    */
   backupProfileSlugFallback: "profil",
+  /** Save-dialog filter for the emergency card's PDF (`cardPdf.ts`, the EMERGENCY module). */
+  cardPdfFilterName: "Hitna karta (PDF)",
 };
 
 const EN: ShellStrings = {
@@ -155,6 +158,7 @@ const EN: ShellStrings = {
   defaultAccountLabel: "My account",
   noteCopySuffix: " (copy)",
   backupProfileSlugFallback: "profile",
+  cardPdfFilterName: "Emergency card (PDF)",
 };
 
 const SHELL_STRINGS: Record<MainLocale, ShellStrings> = { sr: SR, en: EN };

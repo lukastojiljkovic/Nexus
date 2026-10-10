@@ -1002,6 +1002,7 @@ export type {
 export {
   EMERGENCY_EXPORT_VERSION,
   EmergencyCardStore,
+  parseEmergencyCardExport,
 } from "./emergency/emergencyCardStore.js";
 export type {
   AddEmergencyContactInput,

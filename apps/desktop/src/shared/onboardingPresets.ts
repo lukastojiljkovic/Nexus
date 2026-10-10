@@ -46,6 +46,9 @@ export const ESSENTIALS_MODULE_PRESET: Readonly<Record<string, boolean>> = {
   // selectable one: nothing about a timer asks to be opted into, so „Osnovno"
   // turns it on exactly as the manifest's own `defaultEnabled` says.
   timers: true,
+  // And the second, on the same terms: a card that is empty until somebody fills
+  // it in is a card nobody needs to be asked about.
+  emergency: true,
   pro: false,
 };
 

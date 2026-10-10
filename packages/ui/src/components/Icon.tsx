@@ -130,7 +130,13 @@ export type IconName =
   // title bar is the last place in a product to be original about meaning.
   | "windowMinimize"
   | "windowMaximize"
-  | "windowRestore";
+  | "windowRestore"
+  // The module marks that arrived AFTER the set's own list, appended here rather
+  // than slotted into a group above: several runs add one glyph each on the same
+  // day, and a line at the end is the edit that merges mechanically. `medkit` is
+  // the emergency card's - a first-aid case, which is what a card read by a
+  // stranger in a hurry is, and which none of the shapes above is.
+  | "medkit";
 
 const SHAPES: Record<IconName, ReactNode> = {
   // Three panes, uneven on purpose: a board someone arranged, not a 2×2 grid.
@@ -794,6 +800,16 @@ const SHAPES: Record<IconName, ReactNode> = {
     </>
   ),
   moon: <path d="M20 14.4A8.6 8.6 0 0 1 9.6 4a8.4 8.4 0 1 0 10.4 10.4z" />,
+  // A first-aid case: a handle, a lid and the cross. Drawn to the set's own
+  // rules (24×24 box, content inside 3…21, stroke only, one weight, round caps).
+  medkit: (
+    <>
+      <rect x="3" y="7.4" width="18" height="12.6" rx="2" />
+      <path d="M8.8 7.4V5.8a1.6 1.6 0 0 1 1.6-1.6h3.2a1.6 1.6 0 0 1 1.6 1.6v1.6" />
+      <path d="M12 10.6v6.2" />
+      <path d="M8.9 13.7h6.2" />
+    </>
+  ),
 };
 
 /**

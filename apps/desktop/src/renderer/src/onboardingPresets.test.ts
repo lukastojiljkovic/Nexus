@@ -216,6 +216,7 @@ describe("resolveModuleSelection", () => {
       // The first discovered module (ADR-090): the questionnaire decides it like
       // any other selectable module, from its own manifest default.
       timers: true,
+      emergency: true,
       pro: false,
     });
   });
@@ -255,6 +256,9 @@ describe("moduleFlagWrites", () => {
       // And the first DISCOVERED module last, because a kit module registers
       // after every compiled-in one (ADR-090).
       { moduleId: "timers", enabled: true },
+      // The discovered modules follow in `order`: „Tajmeri" is 100, „Hitna
+      // karta" is 180.
+      { moduleId: "emergency", enabled: true },
     ]);
   });
 
