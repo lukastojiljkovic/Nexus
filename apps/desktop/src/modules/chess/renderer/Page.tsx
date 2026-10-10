@@ -29,11 +29,15 @@ import {
 import type { ModulePageProps } from "../../../shared/moduleApi.js";
 import { ConfirmDialog } from "../../../renderer/src/ConfirmDialog.js";
 import { dateTimeFormat, numberFormat } from "../../../renderer/src/intl.js";
+import { openExternalLink } from "../../../renderer/src/links.js";
 import { declaredText } from "../../../renderer/src/moduleKit/moduleSurface.js";
+import { PACK_FIRST_LEVEL } from "../shared/levels.js";
 import { manifest } from "../shared/manifest.js";
 import type {
+  ChessEnginePlayed,
   ChessGameView,
   ChessOpponent,
+  ChessPackView,
   ChessResult,
   ChessResumeView,
   ChessSide,
@@ -65,7 +69,7 @@ import {
   type ClockState,
   type TimeControl,
 } from "./clock.js";
-import { openBuiltInEngine, type ChessEngine, type EngineInfo } from "./engine.js";
+import { openBuiltInEngine, type ChessEngine } from "./engine.js";
 import { copy } from "./copy.js";
 import "./chess.css";
 
@@ -131,6 +135,23 @@ interface Outcome {
   readonly text: string;
 }
 
+/**
+ * The engine's last report, as the board draws it.
+ *
+ * `score` is set by ONE of the two engines: the built-in engine's reports carry
+ * `null` here, and a pack's search carries the centipawn score Stockfish stated,
+ * so the score is drawn exactly when the pack played the move and the credit line
+ * under the level picker is what names whose number it is. `depth` and `nodes`
+ * are drawn whenever they are there, which is what the module's own engine has
+ * always shown.
+ */
+interface EngineReport {
+  readonly depth: number | null;
+  readonly nodes: number | null;
+  /** Centipawns, or `null` for a report that carried none (or carried a mate). */
+  readonly score: number | null;
+}
+
 /** The two sides, as this page walks them. */
 const SIDES: readonly ChessSide[] = ["w", "b"];
 
@@ -145,7 +166,7 @@ export default function ChessPage({ profileId }: ModulePageProps) {
   const [cursor, setCursor] = useState("e1");
   const [clock, setClock] = useState<ClockState | null>(null);
   const [thinking, setThinking] = useState(false);
-  const [engineInfo, setEngineInfo] = useState<EngineInfo | null>(null);
+  const [engineInfo, setEngineInfo] = useState<EngineReport | null>(null);
   const [engineReady, setEngineReady] = useState(false);
   const [degraded, setDegraded] = useState(false);
   const [confirm, setConfirm] = useState<"newGame" | "resign" | null>(null);
@@ -199,7 +220,9 @@ export default function ChessPage({ profileId }: ModulePageProps) {
       }
       engineRef.current = engine;
       setDegraded(engine.degraded);
-      engine.onInfo(setEngineInfo);
+      // The built-in engine's report, with no score: the score line belongs to
+      // the pack's searches (see `EngineReport`).
+      engine.onInfo((info) => setEngineInfo({ depth: info.depth, nodes: info.nodes, score: null }));
       engine.onBestMove((move) => {
         setThinking(false);
         if (move === null) {
@@ -221,10 +244,100 @@ export default function ChessPage({ profileId }: ModulePageProps) {
     game === null || game.opponent !== "engine" ? null : game.playedColor === "w" ? "b" : "w";
 
   /**
+   * The installed engine pack, or `null` (ADR-094), read off the one view every
+   * mutation answers with.
+   */
+  const pack: ChessPackView | null = view?.pack ?? null;
+
+  /**
+   * One search through the installed pack, or `null` when the pack could not play
+   * it at all.
+   *
+   * `null` is not an error to show: a pack that was removed between the view that
+   * drew the picker and this move — or an engine that failed to start — is
+   * answered by the module's own engine, which is the product without the pack.
+   * The caller says so in the notice line, so a level that played weaker than the
+   * user picked is a fact they are told rather than one they have to guess.
+   *
+   * `move: null` is different: the engine answered for a position with no move in
+   * it, which the board already draws as a finished game.
+   */
+  async function requestPackMove(current: LiveGame): Promise<ChessEnginePlayed | null> {
+    try {
+      const answer = await window.nexus.modules.chess.engineMove({
+        game: String(current.id),
+        fen: current.chess.fen(),
+        moves: [...current.moves],
+        level: current.level ?? 1,
+      });
+      return answer.outcome === "refused" ? null : answer;
+    } catch (failure) {
+      console.error("Nexus: the chess engine pack could not be searched:", failure);
+      return null;
+    }
+  }
+
+  /**
+   * Ends a game's engine session, quietly.
+   *
+   * A close that fails is worth a line in the console and nothing on screen: the
+   * session may already be gone (the profile locked), and main closes whatever is
+   * left at the session end and at the app quit.
+   */
+  async function closePackSession(key: string): Promise<void> {
+    try {
+      await window.nexus.modules.chess.engineClose({ game: key });
+    } catch (failure) {
+      console.error("Nexus: the chess engine session could not be closed:", failure);
+    }
+  }
+
+  /**
+   * ONE session per game, and it ends with the game.
+   *
+   * This is the whole lifetime rule, in two effects: the key of the game whose
+   * session is open is remembered, and the session is ended when that key CHANGES
+   * (a new game, an archive row opened), when the game is over, and when the page
+   * unmounts. A session that outlived its game would be an engine thinking about
+   * a board nobody is looking at, which is the cost ADR-094's runner exists to
+   * make bounded but which this module can simply avoid.
+   */
+  const packSession = useRef<string | null>(null);
+
+  useEffect(() => {
+    const key = game === null ? null : String(game.id);
+    const previous = packSession.current;
+    if (previous !== null && previous !== key) void closePackSession(previous);
+    packSession.current = key;
+  }, [game?.id]);
+
+  useEffect(() => {
+    if (!over || packSession.current === null) return;
+    const key = packSession.current;
+    // Cleared BEFORE the call: a second render while the close is in flight must
+    // not close the same game twice.
+    packSession.current = null;
+    void closePackSession(key);
+  }, [over]);
+
+  useEffect(
+    () => () => {
+      const key = packSession.current;
+      packSession.current = null;
+      if (key !== null) void closePackSession(key);
+    },
+    [],
+  );
+
+  /**
    * The engine's turn. The effect is the whole of „who moves next": the board's
    * own turn, the game's own opponent, and nothing else - so a move that arrives
    * while the user is reviewing an earlier position starts no search, and a game
    * that is over starts none either.
+   *
+   * The pack plays the levels it is for, and the module's own engine plays the
+   * rest — including the levels the pack covers, when the pack answered that it
+   * cannot play at all (`requestPackMove`'s `null`).
    */
   useEffect(() => {
     const engine = engineRef.current;
@@ -243,9 +356,42 @@ export default function ChessPage({ profileId }: ModulePageProps) {
     }
     setThinking(true);
     setEngineInfo(null);
-    engine.setPosition(game.chess.fen(), game.moves, game.seed);
-    engine.go({ level: game.level ?? 1 });
-  }, [engineReady, game, status, engineSide, thinking, over]);
+
+    const startBuiltIn = (): void => {
+      engine.setPosition(game.chess.fen(), game.moves, game.seed);
+      engine.go({ level: game.level ?? 1 });
+    };
+
+    const level = game.level;
+    if (pack === null || level === null || level < pack.fromLevel) {
+      startBuiltIn();
+      return;
+    }
+
+    let live = true;
+    void requestPackMove(game).then((answer) => {
+      // The effect was cleaned up — a second search started, or the game changed —
+      // so this answer belongs to nobody. `live` is the same guard the built-in
+      // engine gets from its request id.
+      if (!live) return;
+      if (answer === null) {
+        setNotice(copy.pack.unavailable);
+        startBuiltIn();
+        return;
+      }
+      setThinking(false);
+      if (answer.outcome === "none") {
+        // The engine has no move for this position: the board's own status is
+        // already saying why (a mate or a stalemate), so nothing is added to it.
+        return;
+      }
+      setEngineInfo({ depth: answer.depth, nodes: answer.nodes, score: answer.score });
+      playMove(answer.move);
+    });
+    return () => {
+      live = false;
+    };
+  }, [engineReady, game, status, engineSide, thinking, over, pack]);
 
   // --- The clocks -----------------------------------------------------------
 
@@ -802,10 +948,7 @@ export default function ChessPage({ profileId }: ModulePageProps) {
                     {thinking && <p className="nx-hint">{copy.board.thinking}</p>}
                     {degraded && <p className="nx-hint">{copy.board.degraded}</p>}
                     {engineInfo !== null && !thinking && (
-                      <p className="nx-hint">
-                        {copy.board.depth} {numberFormat().format(engineInfo.depth)} ·{" "}
-                        {numberFormat().format(engineInfo.nodes)} {copy.board.nodes}
-                      </p>
+                      <p className="nx-hint">{engineReportText(engineInfo)}</p>
                     )}
                     {engineMoveText(game, status) !== null && (
                       <p className="nx-hint">
@@ -978,9 +1121,42 @@ export default function ChessPage({ profileId }: ModulePageProps) {
                   {CHESS_LEVELS.map((each) => (
                     <option key={each.level} value={String(each.level)}>
                       {copy.setup.level} {numberFormat().format(each.level)}
+                      {pack !== null && each.level >= pack.fromLevel
+                        ? ` · ${copy.setup.levelWithPack}`
+                        : pack === null && each.level >= PACK_FIRST_LEVEL
+                          ? ` · ${copy.setup.levelNeedsPack}`
+                          : ""}
                     </option>
                   ))}
                 </Select>
+              )}
+              {/*
+                The engine is NAMED by this picker, so this is where ADR-094
+                requires the pack's licence and source — and, when there is no
+                pack, where a person is told what installing one would add and
+                which Settings card installs it.
+              */}
+              {opponent === "engine" && pack === null && (
+                <p className="nx-hint nx-hint--prose chess__pack">{copy.pack.needed}</p>
+              )}
+              {opponent === "engine" && pack !== null && (
+                <div className="chess__pack">
+                  <p className="nx-hint">
+                    {copy.pack.credit} {numberFormat().format(pack.fromLevel)}–
+                    {numberFormat().format(CHESS_LEVELS.length)}: {declaredText(pack.title)}{" "}
+                    {pack.version}
+                  </p>
+                  <p className="nx-hint">
+                    {pack.licence.spdx} · {pack.licence.attribution} ·{" "}
+                    <button
+                      type="button"
+                      className="chess__link"
+                      onClick={() => openExternalLink(pack.source.url)}
+                    >
+                      {copy.pack.source}
+                    </button>
+                  </p>
+                </div>
               )}
               <Select
                 label={copy.setup.clock}
@@ -1344,6 +1520,46 @@ function resultText(result: ChessResult): string {
   if (result === "black") return copy.board.resultBlack;
   if (result === "draw") return copy.board.draw;
   return copy.board.resultUnfinished;
+}
+
+/**
+ * The engine's last numbers, as the one line under the board — and only the parts
+ * the engine actually reported.
+ *
+ * A missing field is not a zero: an engine that stated a move and no depth has
+ * told the user nothing about depth, and `0` would be a claim it never made. The
+ * score appears only for a report carrying one, which is the pack's searches (see
+ * `EngineReport`).
+ */
+function engineReportText(report: EngineReport): string {
+  const parts: string[] = [];
+  if (report.depth !== null) {
+    parts.push(`${copy.board.depth} ${numberFormat().format(report.depth)}`);
+  }
+  if (report.nodes !== null) {
+    parts.push(`${numberFormat().format(report.nodes)} ${copy.board.nodes}`);
+  }
+  if (report.score !== null) parts.push(`${copy.pack.score} ${formatScore(report.score)}`);
+  return parts.join(" · ");
+}
+
+/**
+ * A centipawn score as a signed pawn count: `+0,34` reads as an advantage and
+ * `0,34` does not say whose.
+ *
+ * The magnitude is formatted with the active locale's own decimal separator and
+ * two places — a hundredth of a pawn is the finest thing an engine's score says —
+ * and the sign is printed separately so a value the formatter would render as
+ * `-0,00` cannot appear.
+ */
+function formatScore(centipawns: number): string {
+  const pawns = centipawns / 100;
+  const sign = pawns > 0 ? "+" : pawns < 0 ? "-" : "";
+  const magnitude = numberFormat({
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Math.abs(pawns));
+  return `${sign}${magnitude}`;
 }
 
 /** The line above the board: whose turn it is, or how the game ended. */

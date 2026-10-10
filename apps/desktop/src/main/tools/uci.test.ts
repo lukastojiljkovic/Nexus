@@ -174,6 +174,18 @@ describe("the commands the client sends", () => {
     );
   });
 
+  it("refuses a position or a move carrying a line break, which would be a second command", () => {
+    // The one value on this path that is not the app's own: a position off a
+    // board. A `\n` inside it would end the command and start another.
+    expect(() => positionCommand({ fen: "startpos\ngo infinite" })).toThrow(UciError);
+    expect(() => positionCommand({ fen: "startpos", moves: ["e2e4\nquit"] })).toThrow(UciError);
+    try {
+      positionCommand({ fen: "startpos\nquit" });
+    } catch (error) {
+      expect(error).toMatchObject({ code: "protocol" });
+    }
+  });
+
   it("reads a bestmove line with and without a ponder move", () => {
     expect(parseBestmove("bestmove e2e4 ponder d7d5")).toEqual({ move: "e2e4", ponder: "d7d5" });
     expect(parseBestmove("bestmove e2e4")).toEqual({ move: "e2e4", ponder: null });

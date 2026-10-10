@@ -584,6 +584,12 @@ import {
 // The kit's one PDF capability (ADR-090's `ModulePlatform.savePdf`), which is
 // Electron-shaped and therefore lives beside the window rather than in a module.
 import { saveCardPdf } from "./cardPdf.js";
+// The kit's tool-pack capability (ADR-094): installed tool packs, and the one
+// place a module can open a session on one. The rules live in `./moduleTools.ts`;
+// this file supplies the two facts only it holds — where the packs are, and the
+// release key their manifests verify against — and `killAllToolSessions` below.
+import { createModuleTools } from "./moduleTools.js";
+import { killAllToolSessions } from "./tools/run.js";
 import { installDrawingsPlatform } from "../modules/drawings/main/desktop.js";
 import {
   deliverSecurityNotices,
@@ -1584,10 +1590,15 @@ const moduleHost = createModuleHost({
   // install nor a file the pack's signed manifest does not list, and the
   // renderer never sees either value.
   packs: { userData: userDataDir, publicKeyPem: RELEASE_PUBLIC_KEY_PEM },
+  // The kit's tool packs (ADR-094), over the same two values `packs` takes: a
+  // module finds an installed pack by id, reads the licence and the source it has
+  // to show, and opens a session on one — and nothing a renderer sends ever
+  // reaches an argument list (`./moduleTools.ts` states the whole of that).
+  tools: createModuleTools({ userData: userDataDir, publicKeyPem: RELEASE_PUBLIC_KEY_PEM }),
   now: () => Date.now(),
-  // The fifth capability, and the only one that gives a module a file: it prints
-  // a document MAIN built and asks the USER where to put it (`cardPdf.ts`). A
-  // module never sees the path, the dialog or the window.
+  // The capability that gives a module a file: it prints a document MAIN built
+  // and asks the USER where to put it (`cardPdf.ts`). A module never sees the
+  // path, the dialog or the window.
   savePdf: saveCardPdf,
 });
 
@@ -14679,6 +14690,12 @@ app.on("will-quit", () => {
   elecRunnerIpc?.dispose();
   stopNotificationScheduler();
   moduleHost.sessionEnd();
+  // ADR-094 §3, and the reason this line belongs next to `sessionEnd`: a tool
+  // process that outlives the window that started it has no owner and no cancel,
+  // and its own minute-long limit is far too long to be the only thing standing
+  // between a quit and a stray program. `sessionEnd` closes what a module holds;
+  // this kills whatever any session started.
+  killAllToolSessions();
   zimHostInstance?.closeAll(); // ADR-098, `shutdown`'s reason
   cancelIdleCompactions(); // same reasoning as `performLock` — about to close `db`
   clearRestoreState(); // likewise: decrypted archive bytes and a plaintext undo snapshot must not outlive the session

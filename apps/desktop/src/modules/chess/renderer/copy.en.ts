@@ -80,6 +80,8 @@ export const en: typeof sr = {
     colorWhite: "White",
     colorBlack: "Black",
     level: "Level",
+    levelWithPack: "Stockfish",
+    levelNeedsPack: "with the pack",
     clock: "Clock",
     clockNone: "No clock",
     clockCustom: "Custom",
@@ -145,6 +147,15 @@ export const en: typeof sr = {
     mutate: "The change was not saved.",
     fen: "That is not a FEN position.",
     clock: "A clock runs from 1 to 120 minutes, and the increment from 0 to 300 seconds.",
+  },
+  pack: {
+    credit: "The pack plays levels",
+    source: "source code",
+    needed:
+      "Levels 6–8 play strongest with the Stockfish pack — a separate open-source " +
+      "program (GPL-3.0-or-later), installed from Settings, on the Packs card.",
+    unavailable: "The pack cannot play a move right now, so the built-in engine plays.",
+    score: "score",
   },
   common: {
     cancel: "Cancel",

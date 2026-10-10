@@ -84,6 +84,11 @@ describe("converting a DWG", () => {
       expect(error).toBeInstanceOf(DwgError);
       expect(error).toMatchObject({ code: "conversion-failed" });
       expect((error as DwgError).message).toContain("READ ERROR 0x1");
+      // The two facts a page shows a user, as DATA rather than as a sentence to
+      // parse: the converter's exit code and the first line of its diagnostics.
+      // The fake writes its error to stderr, exactly as the real tool does.
+      expect((error as DwgError).exitCode).toBe(1);
+      expect((error as DwgError).reason).toBe("READ ERROR 0x1");
     } finally {
       rmSync(dirname(broken), { recursive: true, force: true });
     }

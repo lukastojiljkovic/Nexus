@@ -58,8 +58,18 @@ export const sr = {
     hideAll: "Sakrij sve",
   },
   dwg: {
-    body: "DWG se otvara uz LibreDWG paket - zaseban alat koji DWG prevodi u DXF.",
+    body: "DWG se otvara uz LibreDWG paket - zaseban alat otvorenog koda (GPL-3.0-or-later) koji DWG prevodi u DXF.",
     catalogue: "Paket se uvozi u Podešavanjima, na kartici Paketi.",
+    converted: "DWG je preveo paket",
+    source: "izvorni kod",
+    exit: "izlaz",
+  },
+  dwgFailures: {
+    "conversion-failed": "LibreDWG nije preveo ovaj crtež",
+    "conversion-stopped": "Prevođenje je prekinuto pre nego što je završilo",
+    "too-large": "Prevedeni crtež je veći od 32 MB",
+    "not-a-tool": "Paket za DWG ne može da se pokrene",
+    io: "Datoteka nije mogla da se pročita",
   },
   print: {
     button: "Štampaj u PDF",

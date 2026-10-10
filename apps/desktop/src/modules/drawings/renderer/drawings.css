@@ -38,6 +38,24 @@
   overflow-wrap: anywhere;
 }
 
+/* The pack's credit line, under the toolbar that names the converter (ADR-094).
+   `.drawings__link` is the same idea as the shell's `.packs__link`: opening an
+   address is a call into main, so the control is a button dressed as a link
+   rather than an anchor the renderer would navigate itself with (SEC-EL-03). */
+.drawings__link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.drawings__link:hover {
+  color: var(--nx-text);
+}
+
 .drawings__group {
   display: flex;
   align-items: center;

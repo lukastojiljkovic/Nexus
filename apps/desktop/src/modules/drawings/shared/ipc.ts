@@ -37,7 +37,39 @@ export type DrawingRefusalCode =
  * `needs-pack` carries the pack's id and the catalogue pointer as DATA rather
  * than as a sentence, so the same refusal can be shown by the page today and by
  * a future pack-install surface without either of them owning the words.
+ *
+ * `conversion-failed` carries the CONVERTER's own exit code and first diagnostic
+ * line (ADR-094's `tools/dwg.ts` keeps both as data), because a DWG decoder is C
+ * reading somebody else's file and the useful answer is what the program said —
+ * never a stack trace. The sentence around those two values lives in the page's
+ * copy, in both languages.
  */
+export type DrawingToolView = {
+  readonly id: string;
+  readonly version: string;
+  readonly title: { readonly sr: string; readonly en: string };
+  readonly licence: {
+    readonly spdx: string;
+    readonly attribution: string;
+    readonly url: string;
+  };
+  readonly source: { readonly name: string; readonly url: string };
+};
+
+/** Why the pack did not produce a drawing, in the converter's own terms. */
+export type DrawingConversionFailure = {
+  readonly code:
+    | "conversion-failed"
+    | "conversion-stopped"
+    | "too-large"
+    | "not-a-tool"
+    | "io";
+  /** The converter's exit code, or null when it was killed rather than exited. */
+  readonly exitCode: number | null;
+  /** The first line the converter wrote to its error output, or null when it said nothing. */
+  readonly reason: string | null;
+};
+
 export type DrawingsOpenResult =
   | {
       readonly outcome: "drawing";
@@ -45,9 +77,22 @@ export type DrawingsOpenResult =
       readonly name: string;
       /** The DXF text, exactly as it is on disk. */
       readonly bytes: Uint8Array;
+      /**
+       * The pack that converted a DWG, when one did, or `null` for a DXF this
+       * module opened itself: ADR-094 §5 requires the licence and the source to
+       * be shown wherever the converter is named, and the page names it on the
+       * drawing it shows.
+       */
+      readonly tool: DrawingToolView | null;
     }
   | { readonly outcome: "cancelled" }
   | { readonly outcome: "needs-pack"; readonly pack: string; readonly catalogue: string }
+  | {
+      readonly outcome: "conversion-failed";
+      /** The file's own name, so the page's sentence can name what was not converted. */
+      readonly name: string;
+      readonly failure: DrawingConversionFailure;
+    }
   | { readonly outcome: "refused"; readonly code: DrawingRefusalCode };
 
 /** What `print` answers. `saved` names the file the user chose, for the confirmation line under the button. */

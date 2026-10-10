@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, uuidv7, type NexusDatabase } from "@nexus/db";
 import { ModuleHost, type ModulePlatform } from "../../../main/moduleIpc.js";
+import { ModuleToolError, type ModuleToolPack, type ModuleToolsAccess } from "../../../main/moduleTools.js";
 import { register } from "./register.js";
 
 /**
@@ -39,6 +40,8 @@ const FOOLS_MATE_FEN = "rnb1kbnr/pppp1ppp/4p3/8/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq 
 let dir: string;
 let db: NexusDatabase;
 let clock = Date.parse(NOW);
+/** The tool access the harness is built with: a machine with no pack installed, unless a case says otherwise. */
+let tools: ModuleToolsAccess;
 
 interface Harness {
   readonly host: ModuleHost;
@@ -53,6 +56,7 @@ function harness(): Harness {
     notify: () => undefined,
     schedule: () => () => undefined,
     now: () => clock,
+    tools,
   };
   const host = new ModuleHost(platform);
   register(host);
@@ -94,18 +98,70 @@ interface ChessView {
   resume: { moves: string[]; fen: string; timeControl: string | null } | null;
   games: { id: string; result: string; pgn?: string; level: number | null }[];
   stats: { level: number; played: number; won: number; drawn: number; lost: number }[];
+  pack: {
+    id: string;
+    version: string;
+    fromLevel: number;
+    catalogue: string;
+    licence: { spdx: string };
+    source: { name: string };
+  } | null;
 }
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "nexus-chess-module-"));
   db = openDatabase({ path: join(dir, "chess.db") });
   clock = Date.parse(NOW);
+  tools = noTools();
 });
 
 afterEach(() => {
   db.close();
   rmSync(dir, { recursive: true, force: true });
 });
+
+/**
+ * The tool access of a machine with nothing installed — which is the product
+ * this module has always been: every level played by its own engine.
+ */
+function noTools(): ModuleToolsAccess {
+  return {
+    installed: () => [],
+    pack: () => null,
+    // The capability's own refusal for an id nothing is installed under, which is
+    // the code the module maps onto „this level needs a pack“.
+    session: () => Promise.reject(new ModuleToolError("unknown-pack", "No tool pack is installed.")),
+  };
+}
+
+/** The Stockfish pack, as its own manifest describes it, for the cases that need one installed. */
+const STOCKFISH: ModuleToolPack = {
+  id: "stockfish",
+  version: "19.0.0",
+  title: { sr: "Stockfish 19", en: "Stockfish 19" },
+  protocol: "uci",
+  entry: "engine/stockfish-windows-x86-64-universal.exe",
+  args: [],
+  licence: {
+    spdx: "GPL-3.0-or-later",
+    attribution: "The Stockfish developers (see AUTHORS in the pack)",
+    url: "https://www.gnu.org/licenses/gpl-3.0.html",
+  },
+  source: {
+    name: "Stockfish",
+    url: "https://github.com/official-stockfish/Stockfish/releases/tag/sf_19",
+  },
+};
+
+function stockfishInstalled(): ModuleToolsAccess {
+  return {
+    installed: () => [STOCKFISH],
+    pack: (id) => (id === STOCKFISH.id ? STOCKFISH : null),
+    // No case in this file starts a process: the session is where the engine
+    // would be, and `engine.test.ts` is where a real one is driven.
+    session: () => Promise.reject(new Error("this case never starts an engine")),
+  };
+}
 
 describe("the chess handler surface", () => {
   it("registers exactly the ops its contract declares", () => {
@@ -117,6 +173,8 @@ describe("the chess handler surface", () => {
       "chess:deleteGame",
       "chess:setResume",
       "chess:clearResume",
+      "chess:engineMove",
+      "chess:engineClose",
     ]);
   });
 
@@ -130,6 +188,27 @@ describe("the chess handler surface", () => {
     expect(view.stats).toHaveLength(8);
     expect(view.stats.map((entry) => entry.level)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
     for (const entry of view.stats) expect(entry.played).toBe(0);
+    // No pack installed: the view says so rather than describing a machine that
+    // does not exist, and the page then marks the levels that would need one.
+    expect(view.pack).toBeNull();
+  });
+
+  it("carries the installed engine pack, licence and source included, when one is there", async () => {
+    tools = stockfishInstalled();
+    const { host } = harness();
+    const profileId = createProfile();
+    const view = await call<ChessView>(host, "chess:list", { profileId });
+    // The five facts ADR-094 §5 requires wherever the engine is named, plus the
+    // two the page acts on: which level the pack takes over, and where a user
+    // installs one.
+    expect(view.pack).toMatchObject({
+      id: "stockfish",
+      version: "19.0.0",
+      fromLevel: 6,
+      catalogue: "settings:packs",
+      licence: { spdx: "GPL-3.0-or-later" },
+      source: { name: "Stockfish" },
+    });
   });
 
   it("saves a game, moves the ladder record, and reads the PGN back on demand", async () => {
@@ -190,6 +269,57 @@ describe("the chess handler surface", () => {
 
     const cleared = await call<ChessView>(host, "chess:clearResume", { profileId });
     expect(cleared.resume).toBeNull();
+  });
+
+  it("answers a search the pack cannot play with `no-pack`, without starting anything", async () => {
+    const { host } = harness();
+    const game = "1";
+    await expect(
+      call(host, "chess:engineMove", {
+        game,
+        fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        moves: ["e2e4"],
+        level: 8,
+      }),
+    ).resolves.toEqual({ outcome: "refused", code: "no-pack" });
+    // A close for a game whose engine never started is an ordinary answer: the
+    // page closes the game it just left, whether or not one was opened.
+    await expect(call(host, "chess:engineClose", { game })).resolves.toEqual({ closed: false });
+  });
+
+  it("refuses a search payload the engine would have been handed as text", async () => {
+    const { host } = harness();
+    const base = {
+      game: "1",
+      fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+      moves: [] as string[],
+      level: 8,
+    };
+    // The FEN and the moves travel into a LINE protocol, so the wire is where
+    // they stop being free text: a value carrying a newline would be a second
+    // command, and a level outside the ladder is a level no engine has.
+    await expect(call(host, "chess:engineMove", { ...base, fen: "startpos\ngo infinite" })).rejects.toThrow(
+      /"fen" is not a position/,
+    );
+    await expect(call(host, "chess:engineMove", { ...base, fen: "" })).rejects.toThrow(
+      /"fen" must be a non-empty string/,
+    );
+    await expect(call(host, "chess:engineMove", { ...base, moves: ["e2e4\n"] })).rejects.toThrow(
+      /is not a move/,
+    );
+    await expect(call(host, "chess:engineMove", { ...base, level: 9 })).rejects.toThrow(
+      /"level" must be a whole number between 6 and 8/,
+    );
+    // A level the pack does not play is not a level to hand the pack: the module's
+    // own engine plays the weak half of the ladder, and a caller that asked the
+    // pack for one would be given a far stronger opponent than it named.
+    await expect(call(host, "chess:engineMove", { ...base, level: 5 })).rejects.toThrow(
+      /"level" must be a whole number between 6 and 8/,
+    );
+    await expect(call(host, "chess:engineMove", { ...base, game: " 1 " })).rejects.toThrow(
+      /"game" is not a well-formed id/,
+    );
+    await expect(call(host, "chess:engineClose", { game: "" })).rejects.toThrow(/"game"/);
   });
 });
 

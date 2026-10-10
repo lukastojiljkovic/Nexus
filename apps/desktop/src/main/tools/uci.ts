@@ -273,8 +273,21 @@ export function goCommand(limits: UciSearchLimits): string {
   return `${tokens.join(" ")}\n`;
 }
 
-/** What `position` sends: `position startpos moves …` or `position fen … moves …`. */
+/**
+ * What `position` sends: `position startpos moves …` or `position fen … moves …`.
+ *
+ * **Refused on a line break, because this is where a value becomes a command.**
+ * The FEN and the moves come from the app — a position off a board, a move list a
+ * page read back from the store — but UCI is a LINE protocol, so a value
+ * containing `\n` would arrive as two commands, the second one chosen by whoever
+ * wrote the first. `setOption` refuses the same thing for the same reason, and
+ * here it matters more: `position` is the command a searching engine is *sent*,
+ * where a `setoption` is one it is configured with.
+ */
 export function positionCommand(position: UciPosition): string {
+  if (/[\r\n]/.test(position.fen) || (position.moves ?? []).some((move) => /[\r\n]/.test(move))) {
+    throw new UciError("protocol", "A UCI position may not contain a line break.");
+  }
   const head = position.fen === "startpos" ? "position startpos" : `position fen ${position.fen}`;
   const moves = position.moves ?? [];
   return moves.length === 0 ? `${head}\n` : `${head} moves ${moves.join(" ")}\n`;
