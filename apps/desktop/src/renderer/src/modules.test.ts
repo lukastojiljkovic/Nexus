@@ -98,6 +98,9 @@ describe("createModuleRegistry", () => {
       // here rather than derived because this test IS the declaration — what the
       // registry holds is what the app shows.
       "timers",
+      // The second discovered module, at `order: 350` — so it sorts above the
+      // timers at 100 and below anything a later run gives a higher number.
+      "chess",
     ]);
   });
 
@@ -159,6 +162,11 @@ describe("createModuleRegistry", () => {
       // twice rather than a bin for anything tool-shaped.
       ELEC: ["electronics"],
       PRO: ["pro"],
+      // PRD 31 („Entertainment & Boosters", `docs/prd/31-entertainment.md`) is
+      // the second deliberate sharing, and the same shape as UTIL: one PRD entry
+      // whose games are built as separate modules, so „Šah" names FUN and the
+      // next game to arrive names it too.
+      FUN: ["chess"],
     });
   });
 
@@ -188,7 +196,7 @@ describe("createModuleRegistry", () => {
    */
   it("groups the modules by navigation group in canonical order, empty groups omitted", () => {
     const grouped = createModuleRegistry().byGroup();
-    expect([...grouped.keys()]).toEqual(["plan", "knowledge", "life", "make", "shell"]);
+    expect([...grouped.keys()]).toEqual(["plan", "knowledge", "life", "make", "play", "shell"]);
     expect(grouped.get("plan")?.map((manifest) => manifest.id)).toEqual([
       "tasks",
       "calendar",
@@ -213,14 +221,17 @@ describe("createModuleRegistry", () => {
       "electronics",
       "pro",
     ]);
+    // „Igra" is the group the games arrive in (ADR-093), and Šah is its first
+    // member: a board is what somebody does for fun, which is what the group is
+    // for rather than a second drawer of tools.
+    expect(grouped.get("play")?.map((manifest) => manifest.id)).toEqual(["chess"]);
     // The shell group is the two rows nothing may switch off, and the sidebar is
     // the one caller that splits it: its first member heads the rail, the rest
     // close it (`navPrefs.sidebarGroups`).
     expect(grouped.get("shell")?.map((manifest) => manifest.id)).toEqual([...LOCKED_MODULE_IDS]);
-    // Culture and Play have no module yet, so they draw nothing rather than an
-    // empty heading.
+    // Culture has no module yet, so it draws nothing rather than an empty
+    // heading; Play has one, and is asserted above.
     expect(grouped.has("culture")).toBe(false);
-    expect(grouped.has("play")).toBe(false);
   });
   it("is constructed per call, never a shared singleton (ADR-008)", () => {
     const first = createModuleRegistry();
@@ -254,6 +265,8 @@ describe("createModuleRegistry", () => {
       // ON by default, like every module but PRIV and PRO: a timer writes
       // nothing until somebody starts one, so there is nothing to opt into.
       "timers",
+      // ...and the same for a board: no game exists until somebody starts one.
+      "chess",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");

@@ -1113,6 +1113,9 @@ export {
   MAX_CHESS_LEVEL,
   MAX_CHESS_PGN_LENGTH,
   MAX_CHESS_RESUME_MOVES,
+  // The archive reader, whole — what stage 2's `imex.parse` runs so that the
+  // preview refuses a payload the store would refuse, before anything is written.
+  readChessArchive,
 } from "./games/chess/chessStore.js";
 export type {
   ChessArchive,

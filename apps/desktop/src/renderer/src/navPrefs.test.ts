@@ -220,6 +220,7 @@ describe("sidebarGroups", () => {
       "knowledge",
       "life",
       "make",
+      "play",
     ]);
   });
 

@@ -46,6 +46,9 @@ export const ESSENTIALS_MODULE_PRESET: Readonly<Record<string, boolean>> = {
   // selectable one: nothing about a timer asks to be opted into, so „Osnovno"
   // turns it on exactly as the manifest's own `defaultEnabled` says.
   timers: true,
+  // Šah, decided the same way and for the same reason: a board writes nothing
+  // until somebody plays a game, so there is nothing here to opt into.
+  chess: true,
   pro: false,
 };
 

@@ -1,0 +1,322 @@
+/* SAH (ADR-090). Tokens exclusively - raw colour values are forbidden outside
+   @nexus/tokens, and this stylesheet is checked by the same gates the shell's
+   own are (`check:colours`, `check:tokens`, `check:layers`, `check:css`).
+ *
+ * THIS FILE IS IMPORTED BY THE MODULE'S PAGE, not by `app.css`, so the rules for
+ * a page nobody has opened cost nothing on a launch that never opens it.
+ *
+ * Class prefix `chess__`, for the reason the shell's split states: a rule belongs
+ * to the module whose prefix it carries.
+ */
+
+.chess {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-5);
+  padding: var(--nx-space-5);
+}
+
+.chess__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+
+/* The board and the column beside it: side by side while there is room, stacked
+   when there is not. `flex-start` rather than `stretch`, so the side column takes
+   its own height instead of the board's. */
+.chess__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-5);
+  align-items: flex-start;
+}
+
+.chess__side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  flex: 1 1 var(--nx-layout-col-min);
+  min-width: var(--nx-layout-col-min);
+}
+
+/* The board is a square, and its size is the width it is given. The 1px gap with
+   the hairline showing through is the grid: drawn by the layout rather than by
+   64 borders, so no square carries two of them. */
+.chess__board {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: min(24rem, 100%);
+  aspect-ratio: 1 / 1;
+  flex: none;
+  background: var(--nx-border-subtle);
+  border: 1px solid var(--nx-border-strong);
+  border-radius: var(--nx-radius-md);
+  overflow: hidden;
+}
+
+.chess__rank {
+  display: flex;
+  flex: 1 1 0;
+  gap: 1px;
+  min-height: 0;
+}
+
+.chess__square {
+  position: relative;
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  font: inherit;
+  color: var(--nx-text);
+  background: var(--nx-surface);
+  cursor: pointer;
+}
+
+.chess__square--dark {
+  background: var(--nx-surface-sunken);
+}
+
+/* The destination of the last move, the square a piece was picked up on, and the
+   king in check: three states, three rings, and each is a shape rather than a
+   colour alone - the picked square also carries the soft accent fill. */
+.chess__square--last {
+  box-shadow: inset 0 0 0 2px var(--nx-accent);
+}
+
+.chess__square--picked {
+  background: var(--nx-accent-soft);
+  box-shadow: inset 0 0 0 2px var(--nx-accent-strong);
+}
+
+.chess__square--check {
+  background: var(--nx-danger-soft);
+  box-shadow: inset 0 0 0 2px var(--nx-danger);
+}
+
+.chess__square:focus-visible {
+  outline: 2px solid var(--nx-accent-strong);
+  outline-offset: -2px;
+}
+
+/* The pieces are the two halves of Unicode's chess block - hollow and solid - so
+   the two sides differ in SHAPE, and both are drawn in the theme's ink: a dark
+   theme keeps the game's own convention instead of inverting it. */
+.chess__piece {
+  font-size: 2rem;
+  line-height: 1;
+  user-select: none;
+}
+
+/* A legal destination: a dot for a quiet move, a ring for a capture - the same
+   distinction a player makes with their eyes, drawn instead of coloured. */
+.chess__target {
+  position: absolute;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: var(--nx-radius-round);
+  background: var(--nx-accent);
+}
+
+.chess__target--capture {
+  width: 1.6rem;
+  height: 1.6rem;
+  border: 2px solid var(--nx-accent);
+  background: none;
+}
+
+.chess__clocks {
+  display: flex;
+  gap: var(--nx-space-3);
+  flex-wrap: wrap;
+}
+
+.chess__clock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  min-width: 7rem;
+  padding: var(--nx-space-2) var(--nx-space-3);
+  border: 1px solid var(--nx-border-subtle);
+  border-radius: var(--nx-radius-md);
+}
+
+.chess__clock--live {
+  border-color: var(--nx-accent);
+  background: var(--nx-accent-soft);
+}
+
+.chess__clock-name {
+  font-size: var(--nx-font-size-label);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-subtle);
+}
+
+.chess__clock-time {
+  font-family: var(--nx-font-family-mono);
+  font-size: var(--nx-font-size-title);
+  font-variant-numeric: tabular-nums;
+}
+
+.chess__turn {
+  font-size: var(--nx-font-size-title);
+}
+
+/* The position as text. A block that declares its own family has said out loud
+   that it is not the explanation tier, and this is a FEN - a line to copy. */
+.chess__fen {
+  font-family: var(--nx-font-family-mono);
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.chess__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: center;
+}
+
+.chess__offer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: center;
+}
+
+.chess__promotion {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: center;
+  padding: var(--nx-space-2);
+  border: 1px solid var(--nx-accent);
+  border-radius: var(--nx-radius-md);
+  background: var(--nx-accent-soft);
+}
+
+.chess__promotion-title {
+  font-size: var(--nx-font-size-body-sm);
+}
+
+.chess__moves {
+  display: flex;
+  flex-direction: column;
+  max-height: 16rem;
+  overflow-y: auto;
+}
+
+.chess__move-row {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  min-height: 1.75rem;
+}
+
+.chess__move-number {
+  min-width: 2.5rem;
+  color: var(--nx-text-subtle);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.chess__move {
+  min-width: 4.5rem;
+  padding: 0 var(--nx-space-2);
+  border: 1px solid transparent;
+  border-radius: var(--nx-radius-sm);
+  font: inherit;
+  color: var(--nx-text);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chess__move--current {
+  border-color: var(--nx-accent);
+  background: var(--nx-accent-soft);
+  font-weight: var(--nx-font-weight-medium);
+}
+
+.chess__move-empty {
+  min-width: 4.5rem;
+}
+
+.chess__form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-3);
+  align-items: end;
+}
+
+.chess__number {
+  width: 6rem;
+}
+
+.chess__fen-field {
+  flex: 1 1 var(--nx-layout-field-min);
+}
+
+.chess__list {
+  display: flex;
+  flex-direction: column;
+}
+
+.chess__row-label {
+  margin-inline-end: var(--nx-space-3);
+}
+
+.chess__row-meta {
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+  margin-inline-end: var(--nx-space-3);
+}
+
+.chess__row-actions {
+  display: flex;
+  gap: var(--nx-space-2);
+  align-items: center;
+}
+
+.chess__resume {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: center;
+  padding: var(--nx-space-2) 0;
+  border-bottom: 1px solid var(--nx-border-subtle);
+}
+
+.chess__stats {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+
+.chess__stat {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  font-size: var(--nx-font-size-body-sm);
+}
+
+.chess__stat-level {
+  color: var(--nx-text-subtle);
+}
+
+.chess__error {
+  color: var(--nx-danger);
+}
+
+/* The dashboard card's body: one row today, a column for whatever follows it. */
+.chess__widget {
+  display: flex;
+  flex-direction: column;
+}

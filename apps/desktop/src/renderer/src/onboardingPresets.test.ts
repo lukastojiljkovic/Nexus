@@ -216,6 +216,8 @@ describe("resolveModuleSelection", () => {
       // The first discovered module (ADR-090): the questionnaire decides it like
       // any other selectable module, from its own manifest default.
       timers: true,
+      // ...and the second, whose board writes nothing until a game is played.
+      chess: true,
       pro: false,
     });
   });
@@ -255,6 +257,9 @@ describe("moduleFlagWrites", () => {
       // And the first DISCOVERED module last, because a kit module registers
       // after every compiled-in one (ADR-090).
       { moduleId: "timers", enabled: true },
+      // The discovered modules keep their own order among themselves: „Šah" is
+      // `order: 350` and the timers are `order: 100`, so the board comes last.
+      { moduleId: "chess", enabled: true },
     ]);
   });
 
