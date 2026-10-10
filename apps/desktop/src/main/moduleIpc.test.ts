@@ -59,6 +59,12 @@ function harness(): Harness {
     // Handed straight through to `call.profileDb`'s opener and to the archive
     // section's transaction, so both run against a real connection.
     database: () => db.raw,
+    // The kit's attach path needs a window, blob keys and a dialog, none of
+    // which exist under Vitest — so this double answers a cancelled pick and a
+    // no-op release. What the path DOES is not this file's subject: it is
+    // `moduleAttachments.ts`, exercised by the CAR module's own register test.
+    attachFiles: async () => ({ canceled: true }),
+    releaseBlob: async () => undefined,
     notify: (copy) => toasts.push(copy),
     schedule: (atMs, run) => {
       const entry = { atMs, run, cancelled: false };

@@ -1625,20 +1625,18 @@ describe("RestoreStore", () => {
     //    cascade from `profiles` like every other content table, which the
     //    cascade audit in `profileStore.test.ts` proves table by table, photos
     //    and playlist items included.
-    //  - CAR's seven tables (migration 074): the module arrived in two stages,
-    //    and this is the boundary between them. Stage 1 built the store and the
-    //    logic and deliberately left `RESTORE_WIPE_TABLES` ALONE, because a wipe
-    //    without a refill is how a restore DESTROYS data: the wipe empties a
-    //    table and the archive that was just read is what fills it again — and
-    //    no archive carries a CAR table yet, since the module has no kit entry
-    //    to export it through. Adding them to the wipe list would therefore
-    //    delete a user's whole car history on the first restore. They join that
-    //    list in stage 2, in the same pass as the archive's own half, which is
-    //    also the pass that must add them to `@nexus/sync`'s collection map:
-    //    `collectionGuard.test.ts` holds the map and the wipe list EQUAL, so a
-    //    table cannot be in one without the other. Until then this entry is the
-    //    decision the rule asks for, and the reason is that the module has no
-    //    archive yet.
+    //  - CAR's seven tables (migration 074) and its `car_settings` row: stage 2
+    //    landed the module on the KIT, which settles this the way it settled
+    //    TIMERS rather than the way the stage-1 note predicted. The module's
+    //    archive arm is its own (`modules/car/main/imex.ts`), and `RestoreStore`
+    //    never writes a car table: `main/restore.ts` calls `restoreModuleData`
+    //    immediately after the replace, every adopted module replaces its own
+    //    rows there in ONE transaction, and one the archive does not name is
+    //    handed `undefined` and resets what it owns — the car's seven tables and
+    //    its preference row with them. So no CAR table is in
+    //    `RESTORE_WIPE_TABLES`, and that is not a hole: it is the kit's own
+    //    rule, stated in `ModuleContext.importData`, and the wipe list stays tied
+    //    to `@nexus/sync`'s collection map, which sync's hold freezes.
     //  - pantry_locations / pantry_items / pantry_log (migration 075): CONTENT,
     //    and deliberately not wiped YET rather than never. Sync is on hold
     //    permanently, and a table joins this list only by joining `@nexus/sync`'s
@@ -1805,6 +1803,14 @@ describe("RestoreStore", () => {
       "reader_bookmarks",
       "reader_settings",
       "reader_acknowledged",
+      // CAR's preference row (migration 074's `car_settings`, added with the
+      // module's stage 2). It is allowlisted for the SAME structural reason the
+      // kit module above is, and it is the one CAR table that would otherwise
+      // have nothing to restore it from in `RESTORE_WIPE_TABLES`: a kit module's
+      // rows are replaced by the module's own `importData`, and its settings row
+      // is written by the module's own archive arm (`modules/car/main/imex.ts`)
+      // in the same transaction.
+      "car_settings",
     ]);
 
     const wipeTables = new Set<string>(RESTORE_WIPE_TABLES);

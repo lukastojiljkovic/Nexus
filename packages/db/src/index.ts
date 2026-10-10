@@ -837,9 +837,12 @@ export type {
  */
 export {
   CarStore,
+  DEFAULT_DUE_SOON_DAYS,
+  DEFAULT_DUE_SOON_DISTANCE,
   MAX_FAULT_FIX_NOTES_LENGTH,
   MAX_FAULT_SYMPTOM_LENGTH,
   MAX_FUEL_QUANTITY,
+  MAX_DUE_SOON_DAYS,
   MAX_INTERVAL_KM,
   MAX_INTERVAL_MONTHS,
   MAX_ODOMETER_READING,
@@ -857,6 +860,7 @@ export type {
   AddOdometerReadingInput,
   AddServiceAttachmentInput,
   CarExport,
+  CarSettings,
   CreateFaultInput,
   CreateFuelEntryInput,
   CreateServiceInput,

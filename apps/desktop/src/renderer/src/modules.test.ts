@@ -107,6 +107,9 @@ describe("createModuleRegistry", () => {
       // The second DISCOVERED module: `order: 120` sorts it after `timers`
       // (100), and a tie would be broken by id.
       "culture",
+      // The second discovered module (ADR-090), and the first in the life
+      // group: a service book for a car somebody owns.
+      "car",
     ]);
   });
 
@@ -179,6 +182,9 @@ describe("createModuleRegistry", () => {
       // CULTURE's own PRD entry, so it takes its own prefix rather than joining
       // one of the groups above.
       CULT: ["culture"],
+      // „Automobil" (ADR-093) takes its own prefix: PRD 22 is its own entry,
+      // not a second reading of another module's subject.
+      CAR: ["car"],
     });
   });
 
@@ -228,6 +234,9 @@ describe("createModuleRegistry", () => {
       "priv",
       "finance",
       "fitness",
+      // The discovered life module (ADR-090 / ADR-093): a car is a subject
+      // somebody HAS, which is what the group means.
+      "car",
     ]);
     // The culture group's first member, and the group ADR-093 named before
     // anything was in it.
@@ -290,6 +299,9 @@ describe("createModuleRegistry", () => {
       // And the same is true of the culture corner: it writes nothing until a
       // visit, a plan or a file is added.
       "culture",
+      // The discovered life module, on for the same reason one group over: it
+      // writes nothing until somebody adds a vehicle.
+      "car",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");
@@ -477,6 +489,9 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
       // manifest and drawn by its own body, with no line in this file's map.
       "timers",
       "culture",
+      // The discovered card: the two thresholds, declared in the module's own
+      // manifest and drawn by its own body.
+      "car",
     ]);
   });
 

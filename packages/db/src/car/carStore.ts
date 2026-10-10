@@ -58,6 +58,22 @@ export const MAX_FUEL_QUANTITY = 500;
 /** The wire/store cap on one receipt's byte size (SEC-FILE-02). `MAX_TASK_ATTACHMENT_BYTES`' own value, copied rather than reinvented: it is the same blob store on the other side. */
 export const MAX_SERVICE_ATTACHMENT_BYTES = 52_428_800; // 50 MB
 
+/**
+ * What "due soon" means before the owner says otherwise: a month, or five
+ * hundred of the vehicle's own distance units.
+ *
+ * `DueThresholds` is passed in rather than fixed because the two belong to the
+ * owner's appetite, and these are the values a profile that has never opened the
+ * settings card answers -- a service interval's own order of magnitude, so the
+ * module is useful on the first run and still says nothing on the owner's
+ * behalf once they change it.
+ */
+export const DEFAULT_DUE_SOON_DAYS = 30;
+export const DEFAULT_DUE_SOON_DISTANCE = 500;
+
+/** The ceiling on a "due soon" window, in days. Migration 074's `car_settings` says why a year. */
+export const MAX_DUE_SOON_DAYS = 365;
+
 const MAX_FILE_NAME_LENGTH = 255;
 const MAX_MIME_LENGTH = 100;
 const MIME_PATTERN = /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/;
@@ -306,6 +322,19 @@ export interface CarExport {
   readonly faults: readonly Fault[];
 }
 
+/**
+ * The module's one preference, as the settings card and `whatIsDue` read it:
+ * the two thresholds "due soon" is judged against.
+ *
+ * Not part of `CarExport`, deliberately -- that value is the store's CONTENT,
+ * and this is what the module serialises beside it (the module's own
+ * `main/imex.ts` carries both in one archive payload).
+ */
+export interface CarSettings {
+  readonly dueSoonDays: number;
+  readonly dueSoonDistance: number;
+}
+
 interface VehicleRow {
   id: string;
   profile_id: string;
@@ -391,6 +420,14 @@ interface FaultRow {
   fix_notes: string | null;
   service_id: string | null;
   created_at: string;
+  updated_at: string;
+}
+
+/** The module's one preference row (migration 074's `car_settings`, added with stage 2). */
+interface SettingsRow {
+  profile_id: string;
+  due_soon_days: number;
+  due_soon_distance: number;
   updated_at: string;
 }
 
@@ -523,6 +560,10 @@ export class CarStore {
   private readonly writeFault: Database.Statement;
   private readonly markFaultDeleted: Database.Statement;
   private readonly markFaultRestored: Database.Statement;
+
+  private readonly selectSettings: Database.Statement;
+  private readonly upsertSettings: Database.Statement;
+  private readonly deleteSettings: Database.Statement;
 
   private readonly exportStatements: Readonly<Record<"vehicles" | "readings" | "services" | "serviceAttachments" | "intervals" | "fuel" | "faults", Database.Statement>>;
   private readonly wipe: readonly Database.Statement[];
@@ -790,6 +831,22 @@ export class CarStore {
     // Children first, parents last, and never leaning on `ON DELETE CASCADE`
     // (`restoreStore.ts`'s rule). Every statement is scoped through `vehicles`,
     // which is where the profile lives.
+    this.selectSettings = db.prepare(
+      `SELECT profile_id, due_soon_days, due_soon_distance, updated_at
+         FROM car_settings WHERE profile_id = ?`,
+    );
+    // One row per profile, corrected in place -- `timers_settings`'
+    // arrangement, so the two thresholds can never be read half-updated.
+    this.upsertSettings = db.prepare(
+      `INSERT INTO car_settings (profile_id, due_soon_days, due_soon_distance, updated_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT (profile_id)
+         DO UPDATE SET due_soon_days = excluded.due_soon_days,
+                       due_soon_distance = excluded.due_soon_distance,
+                       updated_at = excluded.updated_at`,
+    );
+    this.deleteSettings = db.prepare("DELETE FROM car_settings WHERE profile_id = ?");
+
     this.wipe = CAR_TABLES.map((table) => db.prepare(wipeSqlFor(table)));
   }
 
@@ -1377,6 +1434,59 @@ export class CarStore {
     }
   }
 
+  // --- Settings -------------------------------------------------------------
+
+  /**
+   * The module's one preference: what `whatIsDue` should call "soon".
+   *
+   * Read from the profile's own row when there is one and from the module's
+   * shipped defaults when there is not -- `TimersStore.settings()`'s
+   * arrangement, and for its reason: a profile that never opened the settings
+   * card answers the same values as one that saved them, so nothing has to
+   * write a row to make the module work.
+   *
+   * These are the OWNER's appetite, exactly as `DueThresholds` says, which is
+   * why they are stored at all rather than fixed in `@nexus/core`: "soon" is a
+   * judgement about somebody's car and their plans for the month, and the module
+   * has no business holding an opinion about it.
+   */
+  settings(): CarSettings {
+    const row = this.selectSettings.get(this.profileId) as SettingsRow | undefined;
+    return {
+      dueSoonDays: row?.due_soon_days ?? DEFAULT_DUE_SOON_DAYS,
+      dueSoonDistance: row?.due_soon_distance ?? DEFAULT_DUE_SOON_DISTANCE,
+    };
+  }
+
+  /** Writes both thresholds and answers the row as it now stands. */
+  setDueThresholds(input: CarSettings, now: string): CarSettings {
+    const validNow = validateNow(now);
+    const dueSoonDays = validateThreshold(input.dueSoonDays, "dueSoonDays", MAX_DUE_SOON_DAYS);
+    const dueSoonDistance = validateThreshold(
+      input.dueSoonDistance,
+      "dueSoonDistance",
+      MAX_INTERVAL_KM,
+    );
+    this.upsertSettings.run(this.profileId, dueSoonDays, dueSoonDistance, validNow);
+    return this.settings();
+  }
+
+  /**
+   * Drops the preference row, so this profile answers the shipped defaults
+   * again.
+   *
+   * A restore that carries no CAR section has to leave the profile with the
+   * module's defaults rather than with whatever the previous profile's owner
+   * had chosen -- `TimersStore.replaceFromArchive`'s `null` arm, spelled as its
+   * own method because this store's `importData` replaces CONTENT and this is
+   * not content: an archive carries the thresholds beside the rows (see
+   * `main/imex.ts` in the module), and the two halves are applied by the two
+   * methods that own them.
+   */
+  resetSettings(): void {
+    this.deleteSettings.run(this.profileId);
+  }
+
   /**
    * This profile's whole car history as one versioned plain JSON value, ready to
    * be sealed into a profile archive. See `CarExport` for what is left out and
@@ -1843,6 +1953,14 @@ function validateNow(value: string): string {
 function validateDay(value: string, field: string): string {
   if (!isBareDate(value)) {
     throw new CarValidationError(`"${field}" must be a real calendar day (YYYY-MM-DD).`);
+  }
+  return value;
+}
+
+/** One "due soon" threshold: a whole number the column's own CHECK accepts, refused by name before SQLite sees it. */
+function validateThreshold(value: number, field: string, max: number): number {
+  if (!Number.isInteger(value) || value < 1 || value > max) {
+    throw new CarValidationError(`"${field}" must be a whole number between 1 and ${max}.`);
   }
   return value;
 }
