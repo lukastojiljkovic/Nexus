@@ -236,6 +236,9 @@ describe("resolveModuleSelection", () => {
       // And the second, last because a kit module registers after every
       // compiled-in one and the discovered ones order themselves.
       scanner: true,
+      // And the second: a viewer stores nothing, so its manifest default is the
+      // whole decision.
+      workshop: true,
       pro: false,
       // The second discovered module, in registry order after Tajmeri.
       library: true,
@@ -306,6 +309,7 @@ describe("moduleFlagWrites", () => {
       // `order: 350` and the timers are `order: 100`, so the board comes last.
       { moduleId: "chess", enabled: true },
       { moduleId: "scanner", enabled: true },
+      { moduleId: "workshop", enabled: true },
     ]);
   });
 

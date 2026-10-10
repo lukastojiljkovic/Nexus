@@ -145,6 +145,8 @@ describe("createModuleRegistry", () => {
       // The second discovered module, after it by `order` (300). Registered in
       // the same way, and written here for the same reason.
       "scanner",
+      // The maker's file viewers, ordered by their manifest's `order` (310).
+      "workshop",
     ]);
   });
 
@@ -217,6 +219,9 @@ describe("createModuleRegistry", () => {
       // ARE that PRD's purpose line. It borrows no other module's prefix.
       HLTH: ["emergency"],
       CANV: ["canvas"],
+      // The workshop viewers, whose prefix is their own PRD entry rather than a
+      // second reading of somebody else's section.
+      WS: ["workshop"],
       // „Elektronika" takes its own for „Tabla"'s reason exactly: ELEC is its
       // own PRD entry, and the UTIL sharing above is one section implemented
       // twice rather than a bin for anything tool-shaped.
@@ -358,6 +363,8 @@ describe("createModuleRegistry", () => {
       // something (a note, from a picture), which is the whole of what this
       // group is for.
       "scanner",
+      // The second discovered module, in the group it declares.
+      "workshop",
     ]);
     // â€žKultura" is its own group (ADR-093), and the first module to fill it.
     expect(grouped.get("culture")?.map((manifest) => manifest.id)).toEqual(["culture"]);
@@ -453,6 +460,8 @@ describe("createModuleRegistry", () => {
       // read, and the page says so where the reading happens instead of hiding
       // the module from everybody who has not installed one.
       "scanner",
+      // And the viewers ON the same terms: they store nothing at all.
+      "workshop",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");
@@ -655,6 +664,8 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
       "signals",
       // The second, whose one preference is the level a new game opens at.
       "boards",
+      // The second: one `fact` row, because the module stores nothing to set.
+      "workshop",
     ]);
   });
 

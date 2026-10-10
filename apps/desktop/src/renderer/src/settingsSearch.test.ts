@@ -446,6 +446,9 @@ describe("buildSettingsIndex", () => {
       "signals:morse-pitch",
       "signals:tuner-a4",
       "boards:default-level",
+      // The second DISCOVERED card, whose one control is a `fact`: the list of
+      // paths this machine opened. It is indexable and has nothing to set.
+      "workshop:recent-files",
     ]);
   });
 

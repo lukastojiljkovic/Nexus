@@ -92,6 +92,11 @@ export const ESSENTIALS_MODULE_PRESET: Readonly<Record<string, boolean>> = {
   // ship it off: the page says which pack is missing and where it is installed,
   // so the module is on and only RECOGNITION waits for the pack.
   scanner: true,
+  // The maker's file viewers, decided here like every other selectable module: a
+  // viewer stores nothing and its page is complete the moment it is on, so the
+  // survey's own default turns it on exactly as the manifest's `defaultEnabled`
+  // says.
+  workshop: true,
   pro: false,
   // The second module built on the kit (ADR-090), decided here like every other
   // selectable one: a library that had to be switched on first would be hiding
