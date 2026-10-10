@@ -90,6 +90,8 @@ samp {
   .nx-textarea__input,
   .nx-select__control,
   .nx-stat-band,
+  .nx-dialog__panel,
+  .nx-toast,
   .nx-hairline {
     border-width: 0.5px;
   }
@@ -1110,7 +1112,8 @@ samp {
   gap: var(--nx-space-2);
 }
 .nx-textfield__label,
-.nx-textarea__label {
+.nx-textarea__label,
+.nx-field__label {
   font-size: var(--nx-font-size-label);
   color: var(--nx-text-muted);
   font-weight: var(--nx-font-weight-medium);
@@ -2013,5 +2016,364 @@ samp {
   }
   .nx-horizon {
     background-image: none;
+  }
+}
+
+/* --- The shared page patterns (2026-10-10) -------------------------------
+   Six patterns the twenty new module pages are written against, stated once
+   because the pages that preceded them each had their own copy: a header with
+   its primary and secondary actions, an empty state, a list beside a detail,
+   a form field, a dialog and an undo bar.
+
+   One block at the end of the file on purpose. Four other passes are editing
+   this stylesheet at the same time, and a block appended after the last rule
+   is a block that merges mechanically; the alternative is a dozen insertions
+   into the middle of a file everyone else is holding. The base `PageHeader`
+   rules stay where they are, up with the rest of the header — what follows
+   only adds to them. */
+
+/* --- PageHeader: filters, and the actions that fold ------------------- */
+/* The title block takes the header's own floor.
+   `--nx-page-header-sigil-size` is stated once, in the header rule above, and
+   this is its third use — the height, the column the actions keep clear of the
+   mark, and now this. It matters only when a page brings a `filters` row: that
+   row wraps onto a line of its own, and without a floored first line it would
+   start 38px into the mark rather than below it, putting a row of opaque chips
+   across a mark whose whole rule is that nothing is drawn over it. */
+.nx-page-header__text {
+  min-height: var(--nx-page-header-sigil-size);
+}
+/* The page's filter row: its own line, always. `flex-basis: 100%` is what
+   wraps it out of the title's line rather than competing with the actions for
+   the space beside the title — a filter row and a page switcher on one line
+   are two different jobs asked to share one gesture. */
+.nx-page-header__filters {
+  flex: 1 0 100%;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  min-width: 0;
+}
+/* The secondary cluster and its trigger. Above 900px the trigger draws nothing
+   and the cluster is an ordinary row of controls; the media query below turns
+   it into the overflow. */
+.nx-page-header__more {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+.nx-page-header__more-trigger.nx-button {
+  display: none;
+}
+.nx-page-header__secondary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+}
+
+/* The collapse, at the window minimum this app enforces (900px, in the window
+   options) — so this is not a breakpoint nobody reaches, it is the narrowest
+   window anybody CAN have. The title and its actions keep their places; the
+   filter row stacks instead of scrolling sideways, and the secondary controls
+   leave the line for the overflow. */
+@media (max-width: 900px) {
+  .nx-page-header,
+  .nx-page-header__actions {
+    align-items: flex-start;
+  }
+  .nx-page-header__more-trigger.nx-button {
+    display: inline-flex;
+  }
+  .nx-page-header__secondary {
+    position: absolute;
+    top: calc(100% + var(--nx-space-1));
+    right: 0;
+    z-index: var(--nx-layer-menu);
+    display: none;
+    flex-direction: column;
+    align-items: stretch;
+    flex-wrap: nowrap;
+    min-width: var(--nx-layout-field-min);
+    padding: var(--nx-space-2);
+    background: var(--nx-surface);
+    border: 1px solid var(--nx-border);
+    border-radius: var(--nx-radius-md);
+    box-shadow: var(--nx-elevation-overlay);
+  }
+  .nx-page-header__secondary--open {
+    display: flex;
+  }
+  .nx-page-header__filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* --- Field / FieldError / FormLayout --------------------------------- */
+/* The wrapper owns the arrangement and the floor, and nothing else: the label
+   and the box are the primitive's, whose label rule is stated once, up with
+   `TextField`. */
+.nx-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  /* The token, not a number: a field that cannot hold a value is not a field,
+     and this is the one place the product states how narrow that is. */
+  min-width: var(--nx-layout-field-min);
+}
+/* The required mark, inserted after the name the PRIMITIVE drew rather than
+   written as markup by the field: the name belongs to `TextField`, `Select`
+   and `TextArea`, and an insertion point is what keeps the word and its mark
+   from being two pieces free to drift apart.
+
+   The asterisk is a SHAPE, and `aria-required` on the control is what
+   announces the requirement — so nothing here adds a character a screen reader
+   has to read out. The accent ink is the product's "this is the part that
+   matters" colour rather than a status colour: a required field is not a field
+   in error. */
+.nx-field--required .nx-textfield__label::after,
+.nx-field--required .nx-textarea__label::after,
+.nx-field--required .nx-select__label::after {
+  content: "*";
+  margin-left: 3px;
+  color: var(--nx-accent);
+}
+/* One line of help, under the control it explains. `.nx-hint` states the ink,
+   the size and the measure; nothing here restates them. */
+/* The refusal, under the help line. Danger ink plus the warning glyph: colour
+   never carries the state alone. */
+.nx-field__error {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nx-space-1);
+  margin: 0;
+  max-width: var(--nx-layout-prose);
+  font-size: var(--nx-font-size-body-sm);
+  line-height: var(--nx-font-leading-snug);
+  color: var(--nx-danger);
+}
+.nx-field__error-mark {
+  flex: none;
+  line-height: 0;
+  padding-top: 3px;
+}
+/* And the control itself, so the refusal is on the box the value went into and
+   not only in the line under it. */
+.nx-field--invalid .nx-textfield__input,
+.nx-field--invalid .nx-textarea__input,
+.nx-field--invalid .nx-select__control {
+  border-color: var(--nx-danger);
+}
+
+/* The form frame: one heading, one column, one row of answers. A page that
+   gives its form a card passes its own class and keeps it — this owns the
+   inside of the frame. */
+.nx-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  align-self: stretch;
+}
+.nx-form__title {
+  margin: 0;
+  font-size: var(--nx-font-size-body);
+  font-weight: var(--nx-font-weight-semibold);
+  line-height: var(--nx-font-leading-tight);
+  color: var(--nx-text);
+}
+.nx-form__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+}
+
+/* --- Toast (the one undo bar) ---------------------------------------- */
+/* Values taken from the four bars it replaces (`.hab__undo`, `.fin__undo`,
+   `.foc__undo`, `.tasks__undo`), which were one arrangement written four times.
+   It reads as a quiet strip rather than as a panel: the act it offers to undo
+   has already happened, and a bar that shouted about it would be louder than
+   the page it is standing on. */
+.nx-toast {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-2) var(--nx-space-3);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+}
+.nx-toast__mark {
+  flex: none;
+  line-height: 0;
+  color: var(--nx-success);
+}
+.nx-toast--error .nx-toast__mark {
+  color: var(--nx-danger);
+}
+.nx-toast__text {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+}
+.nx-toast__dismiss.nx-button {
+  flex: none;
+  padding: 2px 6px;
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.nx-toast__dismiss.nx-button:hover {
+  background: var(--nx-surface);
+  color: var(--nx-text);
+}
+
+/* --- ConfirmDialog --------------------------------------------------- */
+/* The house dialog recipe, which the renderer carries under three class
+   prefixes (`recur-dialog__`, `tasks__dialog-`, `ntf__appetite-`) and which is
+   stated once here for the dialogs that come from this package. The values are
+   those recipes' values, so a dialog drawn by this component beside one the
+   renderer draws is one dialog with two owners rather than two dialogs. */
+.nx-dialog__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--nx-layer-dialog);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--nx-space-6);
+}
+.nx-dialog__backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--nx-bg);
+  opacity: 0.75;
+}
+.nx-dialog__panel {
+  position: relative;
+  width: min(420px, 92vw);
+  max-height: 92vh;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  padding: var(--nx-space-5);
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+  box-shadow: var(--nx-elevation-overlay);
+}
+.nx-dialog__title {
+  margin: 0;
+  font-size: var(--nx-font-size-title);
+  line-height: var(--nx-font-leading-tight);
+  font-weight: var(--nx-font-weight-semibold);
+  color: var(--nx-text);
+}
+/* Which record the question is about — full-strength text between the title
+   and the muted question, so the name is the one thing read before the
+   choices. */
+.nx-dialog__name {
+  margin: 0;
+  font-size: var(--nx-font-size-body);
+  color: var(--nx-text);
+  overflow-wrap: anywhere;
+}
+.nx-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--nx-space-2);
+}
+/* The quiet way out carries the same recessive treatment as any quiet button,
+   because it is the answer that changes nothing — not because it is a cancel. */
+.nx-dialog__cancel.nx-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--nx-text-muted);
+}
+.nx-dialog__cancel.nx-button:hover {
+  background: transparent;
+  color: var(--nx-text);
+}
+
+/* --- ListDetail ------------------------------------------------------ */
+/* Two panes, and under 1100px one pane at a time. 1100 is not a round number
+   chosen for looks: the rail token is 280px and a detail less than
+   `--nx-layout-col-min` 260px wide is not readable, so below about 1100px the
+   pair has to become a stack — see the media query below. `min-height: 0` on
+   both panes because both scroll: without it a flex child refuses to shrink
+   and the pane grows the page instead of scrolling itself. */
+.nx-listdetail {
+  display: grid;
+  grid-template-columns: var(--nx-layout-rail-wide) minmax(0, 1fr);
+  gap: var(--nx-space-4);
+  align-items: stretch;
+  min-height: 0;
+}
+.nx-listdetail__list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+/* A row is an `option`, so it is focusable and it is NOT a button: the
+   selection is typographic — accent ink and a medium weight, per the No-Glow
+   Rule — and what repeats it is position, because the pane beside it is
+   showing exactly that row. */
+.nx-listdetail__row {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  min-height: 36px;
+  padding: 6px var(--nx-space-2);
+  border-radius: var(--nx-radius-sm);
+  color: var(--nx-text);
+  font-size: var(--nx-font-size-body-sm);
+  cursor: pointer;
+}
+.nx-listdetail__row:hover {
+  background: var(--nx-surface-alt);
+}
+.nx-listdetail__row:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: -2px;
+}
+.nx-listdetail__row--selected {
+  color: var(--nx-accent);
+  font-weight: var(--nx-font-weight-medium);
+}
+.nx-listdetail__detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+.nx-listdetail__back.nx-button {
+  display: none;
+  align-self: flex-start;
+}
+@media (max-width: 1100px) {
+  .nx-listdetail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .nx-listdetail__back.nx-button {
+    display: inline-flex;
+  }
+  /* The detail IS the view: the list is not shrunk, it is not there, and the
+     only way back is the one control that says so. */
+  .nx-listdetail--open .nx-listdetail__list {
+    display: none;
+  }
+  .nx-listdetail:not(.nx-listdetail--open) .nx-listdetail__detail {
+    display: none;
   }
 }

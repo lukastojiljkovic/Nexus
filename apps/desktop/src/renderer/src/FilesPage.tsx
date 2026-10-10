@@ -444,45 +444,19 @@ export function FilesPage({ profileId, onOpenOwner }: FilesPageProps) {
     setQuery("");
   }
 
-  return (
-    // `.nx-measure`: this is a rows surface, and at 1600px a file's name and its
-    // date were a thousand pixels apart — two columns with nothing between them
-    // rather than one row.
-    <section className="doc nx-measure">
-      <PageHeader
-        title={moduleName("files")}
-        sigil="files"
-        // „Sve datoteke priložene uz beleške, zadatke i predmete." is what this
-        // page IS, so it belongs under the title rather than beside the view
-        // switcher — a sentence sitting in a row of buttons reads as a control
-        // that lost its button.
-        subtitle={s.caption}
-        actions={
-          <>
-            <div className="doc__view" role="group" aria-label={s.viewLabel}>
-              {FILE_VIEWS.map((option) => (
-                <Button
-                  key={option}
-                  size="sm"
-                  // The segmented idiom, not a filled primary. This toggle was
-                  // the app's ONE outlier: it said „selected" with the same
-                  // treatment the product uses for „press this", and it did so
-                  // in a header that also holds real filter chips saying the
-                  // same thing typographically. Two idioms, one page
-                  // (STATUS §5 C item 15).
-                  className="nx-segmented__option doc__chip"
-                  aria-pressed={view === option}
-                  onClick={() => changeView(option)}
-                >
-                  {s.views[option]}
-                </Button>
-              ))}
-            </div>
-            <ModuleSettingsGear moduleId="files" />
-          </>
-        }
-      />
-
+  /**
+   * The page's filter row: the query, the owner chips and the family chips.
+   *
+   * It is handed to the header's own `filters` slot rather than drawn in the
+   * body, because it narrows what the PAGE is showing — so it belongs to the
+   * page's opening, and the 900px collapse stated on the header then folds it
+   * with the title instead of on a rule of its own.
+   */
+  function renderFilters() {
+    return (
+      // `doc__filters` keeps the page's own inner arrangement — the query on
+      // its own line, then one chip group per line — and the header's slot
+      // supplies the place in the page opening and the 900px collapse.
       <div className="doc__filters">
         {/* The primitive, not a hand-written `<input>` wearing its class — and
             the difference is one of ownership rather than of pixels: a caller's
@@ -540,6 +514,48 @@ export function FilesPage({ profileId, onOpenOwner }: FilesPageProps) {
           ))}
         </div>
       </div>
+    );
+  }
+
+  return (
+    // `.nx-measure`: this is a rows surface, and at 1600px a file's name and its
+    // date were a thousand pixels apart — two columns with nothing between them
+    // rather than one row.
+    <section className="doc nx-measure">
+      <PageHeader
+        title={moduleName("files")}
+        sigil="files"
+        // „Sve datoteke priložene uz beleške, zadatke i predmete." is what this
+        // page IS, so it belongs under the title rather than beside the view
+        // switcher — a sentence sitting in a row of buttons reads as a control
+        // that lost its button.
+        subtitle={s.caption}
+        actions={
+          <>
+            <div className="doc__view" role="group" aria-label={s.viewLabel}>
+              {FILE_VIEWS.map((option) => (
+                <Button
+                  key={option}
+                  size="sm"
+                  // The segmented idiom, not a filled primary. This toggle was
+                  // the app's ONE outlier: it said „selected" with the same
+                  // treatment the product uses for „press this", and it did so
+                  // in a header that also holds real filter chips saying the
+                  // same thing typographically. Two idioms, one page
+                  // (STATUS §5 C item 15).
+                  className="nx-segmented__option doc__chip"
+                  aria-pressed={view === option}
+                  onClick={() => changeView(option)}
+                >
+                  {s.views[option]}
+                </Button>
+              ))}
+            </div>
+            <ModuleSettingsGear moduleId="files" />
+          </>
+        }
+        filters={renderFilters()}
+      />
 
       {actionFailed && (
         <p className="doc__action-error" role="status">

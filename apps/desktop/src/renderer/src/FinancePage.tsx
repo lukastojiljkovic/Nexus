@@ -13,6 +13,7 @@ import {
   Select,
   StatBand,
   TextField,
+    Toast,
 } from "@nexus/ui";
 import { applyFilters, isValidDayKey, monthKeyOf, shiftMonthKey } from "@nexus/core";
 import type { CardsViewConfig, CollectionSchema, FilterSpec } from "@nexus/core";
@@ -2084,27 +2085,22 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
           {/* Above all three halves: an account can be deleted from the rail,
               which is on screen whichever half is. */}
           {pendingUndo !== null && (
-            <div className="fin__undo" role="status">
-              <span className="fin__undo-text">
-                {pendingUndo.kind === "transaction"
+            // The shared undo bar, not this page's own copy of it: the same
+            // three moves as before (the notice for whichever half was deleted,
+            // the offer, the quiet way to drop it) with the markup, the live
+            // region and the "no timer on an offer" rule coming from `Toast`.
+            <Toast
+              message={
+                pendingUndo.kind === "transaction"
                   ? s.ledger.deletedNotice
                   : pendingUndo.kind === "subscription"
                     ? s.subscriptions.deletedNotice
-                    : s.accounts.deletedNotice}
-              </span>
-              <Button size="sm" onClick={() => void undoDelete()}>
-                {s.undo}
-              </Button>
-              <Button
-                size="sm"
-                variant="quiet"
-                aria-label={s.dismiss}
-                title={s.dismiss}
-                onClick={() => setPendingUndo(null)}
-              >
-                <Icon name="close" size={14} />
-              </Button>
-            </div>
+                    : s.accounts.deletedNotice
+              }
+              undo={{ label: s.undo, onUndo: () => void undoDelete() }}
+              dismissLabel={s.dismiss}
+              onDismiss={() => setPendingUndo(null)}
+            />
           )}
 
           {page === "subscriptions" ? (
