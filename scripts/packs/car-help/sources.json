@@ -1,0 +1,201 @@
+{
+  "pack": "car-help",
+  "layout": 1,
+  "fetched": "2026-10-10",
+  "note": "Every source this pack is built from, with the SHA-256 of the bytes the build pins, as the pinned field says: article is a page article element, metadata-fields is the Internet Archive metadata fields this pack cites, file is the file itself. It pins those parts because a Wayback envelope and an items item_last_updated both moved between two fetches of an otherwise unchanged document (measured), and a pin over a moving part refuses a source that has not changed. bytes and sha256 are always about the pinned bytes. A source without licence evidence is not used: licenceUrl names the page that STATES the licence and licenceQuote is the sentence on it, quoted verbatim; evidence quotes what identifies the work, and in says where that quote is found - document is the source own bytes, cross-reference is another source listed here. scanUrl is where a human opens the page image a correction was read off.",
+  "sources": [
+    {
+      "id": "us-code-105",
+      "kind": "reference",
+      "title": "17 U.S.C. 105, United States Code (2023 edition)",
+      "credit": "United States Code, title 17, section 105",
+      "url": "https://www.govinfo.gov/content/pkg/USCODE-2023-title17/html/USCODE-2023-title17-chap1-sec105.htm",
+      "file": "https://www.govinfo.gov/content/pkg/USCODE-2023-title17/html/USCODE-2023-title17-chap1-sec105.htm",
+      "cacheFile": "us-code-105.html",
+      "bytes": 17016,
+      "sha256": "d6a40d40a34d6fc8409318de58f0aa860fb37e3a9454221b26853c45bea18855",
+      "licence": "Public domain: a United States statute, which carries no copyright",
+      "licenceUrl": "https://www.govinfo.gov/content/pkg/USCODE-2023-title17/html/USCODE-2023-title17-chap1-sec105.htm",
+      "licenceQuote": "Copyright protection under this title is not available for any work of the United States Government, but the United States Government is not precluded from receiving and holding copyrights transferred to it by assignment, bequest, or otherwise.",
+      "evidence": [
+        {
+          "in": "document",
+          "section": "section 105(a)",
+          "quote": "Copyright protection under this title is not available for any work of the United States Government, but the United States Government is not precluded from receiving and holding copyrights transferred to it by assignment, bequest, or otherwise."
+        }
+      ],
+      "pinned": "file"
+    },
+    {
+      "id": "nhtsa-tires",
+      "kind": "html",
+      "title": "NHTSA, \"Tires\" (TireWise consumer page), snapshot 2024-12-31",
+      "credit": "NHTSA, \"Tires\" (TireWise), U.S. Department of Transportation",
+      "url": "https://web.archive.org/web/20241231185603/https://www.nhtsa.gov/vehicle-safety/tires",
+      "file": "https://web.archive.org/web/20241231185603/https://www.nhtsa.gov/vehicle-safety/tires",
+      "cacheFile": "nhtsa-tires.html",
+      "region": "article",
+      "skipClasses": [
+        "share-and-language",
+        "topic-page-lang",
+        "page-topic--menu",
+        "page-topic--overview-campaign",
+        "page-topic--subnav",
+        "carousel"
+      ],
+      "bytes": 197554,
+      "sha256": "20d7d2a3800a3261053dde35bd01096d3231bf977ac979dba2218ff27d867c7e",
+      "licence": "Public domain: a work of the United States Government (NHTSA is part of the U.S. Department of Transportation), which carries no copyright in the United States under 17 U.S.C. 105(a)",
+      "licenceUrl": "https://www.govinfo.gov/content/pkg/USCODE-2023-title17/html/USCODE-2023-title17-chap1-sec105.htm",
+      "licenceQuote": "Copyright protection under this title is not available for any work of the United States Government, but the United States Government is not precluded from receiving and holding copyrights transferred to it by assignment, bequest, or otherwise.",
+      "evidence": [
+        {
+          "in": "document",
+          "section": "Overview",
+          "quote": "National Highway Traffic Safety Administration and the Department of Transportation want to make sure you have the tools to avoid being in vehicle crashes."
+        },
+        {
+          "in": "document",
+          "section": "footer",
+          "quote": "National Highway Traffic Safety Administration 1200 New Jersey Avenue, SE Washington, D.C. 20590"
+        }
+      ],
+      "pinned": "article"
+    },
+    {
+      "id": "ready-car",
+      "kind": "html",
+      "title": "Ready.gov, \"Car Safety\", snapshot 2024-12-31",
+      "credit": "Ready.gov, \"Car Safety\", FEMA, U.S. Department of Homeland Security",
+      "url": "https://web.archive.org/web/20241231024949/https://www.ready.gov/car",
+      "file": "https://web.archive.org/web/20241231024949/https://www.ready.gov/car",
+      "cacheFile": "ready-car.html",
+      "region": "article",
+      "skipClasses": [
+        "share",
+        "menu",
+        "carousel",
+        "visually-hidden"
+      ],
+      "bytes": 3692,
+      "sha256": "133a1924d972f6d2d9ea4918ed16631a637e5922f2fe350837909dc9192d320b",
+      "licence": "Public domain: a work of the United States Government (FEMA, U.S. Department of Homeland Security), which carries no copyright in the United States under 17 U.S.C. 105(a)",
+      "licenceUrl": "https://www.govinfo.gov/content/pkg/USCODE-2023-title17/html/USCODE-2023-title17-chap1-sec105.htm",
+      "licenceQuote": "Copyright protection under this title is not available for any work of the United States Government, but the United States Government is not precluded from receiving and holding copyrights transferred to it by assignment, bequest, or otherwise.",
+      "evidence": [
+        {
+          "in": "document",
+          "section": "banner",
+          "quote": "An official website of the United States government"
+        },
+        {
+          "in": "document",
+          "section": "footer",
+          "quote": "An official website of the U.S. Department of Homeland Security"
+        }
+      ],
+      "pinned": "article"
+    },
+    {
+      "id": "fm-21-305",
+      "kind": "ocr",
+      "title": "FM 21-305 / AFMAN 24-306, \"Manual for the Wheeled Vehicle Driver\", August 1993",
+      "credit": "FM 21-305 / AFMAN 24-306, \"Manual for the Wheeled Vehicle Driver\" (U.S. Army, 1993)",
+      "url": "https://archive.org/download/fm-21-305-manual-for-the-wheeled-vehicle-driver-1993/FM%2021-305%20Manual%20For%20The%20Wheeled%20Vehicle%20Driver%20%201993_djvu.xml",
+      "file": "https://archive.org/download/fm-21-305-manual-for-the-wheeled-vehicle-driver-1993/FM%2021-305%20Manual%20For%20The%20Wheeled%20Vehicle%20Driver%20%201993_djvu.xml",
+      "cacheFile": "fm-21-305.xml",
+      "vocabulary": [
+        "FM 21-305/AFMAN 24-306"
+      ],
+      "pages": [
+        "11-5",
+        "13-3",
+        "17-4",
+        "21-4"
+      ],
+      "bytes": 7549800,
+      "sha256": "5afec3e099b2db6498daf34296ed25366fa6616c82049999b03bcb774ca35981",
+      "licence": "Public domain: a work of the United States Government (U.S. Army / U.S. Air Force), which carries no copyright in the United States under 17 U.S.C. 105(a); the Internet Archive item is also marked \"Public Domain Mark 1.0\"",
+      "licenceUrl": "https://archive.org/metadata/fm-21-305-manual-for-the-wheeled-vehicle-driver-1993",
+      "licenceQuote": "\"licenseurl\":\"https://creativecommons.org/publicdomain/mark/1.0/\"",
+      "evidence": [
+        {
+          "in": "cross-reference",
+          "source": "fm-21-305-metadata",
+          "section": "creator",
+          "quote": "\"creator\":\"United States, Department Of The Army\""
+        },
+        {
+          "in": "document",
+          "section": "title page",
+          "quote": "MANUAL FOR THE WHEELED VEHICLE DRIVER HEADQUARTERS DEPARTMENT OF THE ARMY DEPARTMENT OF THE AIR FORCE"
+        },
+        {
+          "in": "document",
+          "section": "title page",
+          "quote": "DISTRIBUTION RESTRICTION: Approved for public release; distribution is unlimited."
+        }
+      ],
+      "scanUrl": "https://archive.org/download/fm-21-305-manual-for-the-wheeled-vehicle-driver-1993/page/n<leaf>.jpg",
+      "pinned": "file"
+    },
+    {
+      "id": "fm-21-305-metadata",
+      "kind": "metadata",
+      "title": "Internet Archive item metadata, FM 21-305 (1993)",
+      "credit": "Internet Archive item metadata for FM 21-305",
+      "url": "https://archive.org/metadata/fm-21-305-manual-for-the-wheeled-vehicle-driver-1993",
+      "file": "https://archive.org/metadata/fm-21-305-manual-for-the-wheeled-vehicle-driver-1993",
+      "cacheFile": "fm-21-305-metadata.json",
+      "bytes": 265,
+      "sha256": "97a7cc6140556975ff325422505dc603035838da35ba4520c909bc7d2c93f69b",
+      "licence": "Public domain: a work of the United States Government, which carries no copyright in the United States under 17 U.S.C. 105(a)",
+      "licenceUrl": "https://www.govinfo.gov/content/pkg/USCODE-2023-title17/html/USCODE-2023-title17-chap1-sec105.htm",
+      "licenceQuote": "Copyright protection under this title is not available for any work of the United States Government, but the United States Government is not precluded from receiving and holding copyrights transferred to it by assignment, bequest, or otherwise.",
+      "evidence": [
+        {
+          "in": "document",
+          "section": "metadata.licenseurl",
+          "quote": "\"licenseurl\":\"https://creativecommons.org/publicdomain/mark/1.0/\""
+        }
+      ],
+      "pinned": "metadata-fields"
+    },
+    {
+      "id": "tm-9-8000",
+      "kind": "ocr",
+      "title": "TM 9-8000, \"Principles of Automotive Vehicles\", 25 October 1985 (with Change 1, 1988)",
+      "credit": "TM 9-8000, \"Principles of Automotive Vehicles\" (U.S. Army, 1985)",
+      "url": "https://archive.org/download/tm-9-8000-principles-of-automotive-vehicles-1985/TM9-8000_Principles_of_automotive_vehicles_1985_djvu.xml",
+      "file": "https://archive.org/download/tm-9-8000-principles-of-automotive-vehicles-1985/TM9-8000_Principles_of_automotive_vehicles_1985_djvu.xml",
+      "cacheFile": "tm-9-8000.xml",
+      "vocabulary": [
+        "TM 9-8000"
+      ],
+      "pages": [
+        "9-1",
+        "17-8",
+        "17-10"
+      ],
+      "bytes": 20311948,
+      "sha256": "9567077ccefb32a02d7c19078bfc16fadd4c8f5cad6fe03dbafc0de4a069642e",
+      "licence": "Public domain: a work of the United States Government (Headquarters, Department of the Army), which carries no copyright in the United States under 17 U.S.C. 105(a). The Internet Archive item carries no licence field of its own.",
+      "licenceUrl": "https://www.govinfo.gov/content/pkg/USCODE-2023-title17/html/USCODE-2023-title17-chap1-sec105.htm",
+      "licenceQuote": "Copyright protection under this title is not available for any work of the United States Government, but the United States Government is not precluded from receiving and holding copyrights transferred to it by assignment, bequest, or otherwise.",
+      "evidence": [
+        {
+          "in": "document",
+          "section": "cover",
+          "quote": "TECHNICAL MANUAL PRINCIPLES OF AUTOMOTIVE VEHICLES DEPARTMENT OF THE ARMY 25 OCTOBER 1985"
+        },
+        {
+          "in": "document",
+          "section": "page 9-1",
+          "quote": "CHAPTER 9 ENGINE COOLING SYSTEMS"
+        }
+      ],
+      "scanUrl": "https://archive.org/download/tm-9-8000-principles-of-automotive-vehicles-1985/page/n<leaf>.jpg",
+      "pinned": "file"
+    }
+  ]
+}
