@@ -271,6 +271,29 @@ jobs:
       # spawning.
       - run: pnpm check:runner
 
+      # Every field of every `NexusApi` parameter shape — and of the types their
+      # own properties carry — must be set by a call site in the renderer. This
+      # is the class `NewDocumentFields.reminderOffsets` was an instance of: the
+      # field was declared, accepted by main, validated by the store and asserted
+      # by `documentStore.test.ts`, while the form sent neither wire — so a
+      # document's warning ladder was unreachable by any user and nothing in the
+      # tree could see it. The type system is content (never mentioning a field
+      # is a well-typed program), the linter sees no unused property, and the
+      # sweep photographs the form it is missing from. `check:pro-flags` asks the
+      # same question one layer up, in the professional drawer.
+      #
+      # It reports fourteen fields today, each with its reason in the gate's
+      # allowlist: eight of them are marked `TODO(reachable)` — four a screen
+      # does fill through a shape the walk cannot follow (the renderer's own
+      # mirrored `Chord`), four that no screen fills and somebody still has to
+      # decide on — and the rest are fields no screen is meant to set (main's own
+      # write, the exchange paths, a value the store resolves itself). It is
+      # registered here with that accounting in place rather than kept out of the
+      # workflow, because a gate that runs nowhere is a rule nobody is applying —
+      # and an allowlist entry that stops matching a finding fails it, so the
+      # list cannot rot.
+      - run: pnpm check:reachable
+
       # Reads the migration SQL as text and needs no database, so it belongs
       # with the other static gates. It catches „the new table's migration
       # forgot a line"; the `database` job below catches „the line is there and
