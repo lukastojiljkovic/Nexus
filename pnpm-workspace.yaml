@@ -23,6 +23,17 @@ allowBuilds:
   electron: true
   electron-winstaller: true
   esbuild: true
+  # DENIED: none of these four builds anything the app needs on Windows.
+  # node-llama-cpp's postinstall only checks for a prebuilt binary and falls back
+  # to compiling llama.cpp; the prebuilt ones arrive as its optional
+  # `@node-llama-cpp/win-x64*` packages. onnxruntime-node's downloads CUDA
+  # binaries on Linux x64 only, and its Windows binaries ship in the package.
+  # protobufjs's checks its dependants' version ranges, and tesseract.js's is a
+  # donation message.
+  node-llama-cpp: false
+  onnxruntime-node: false
+  protobufjs: false
+  tesseract.js: false
 
 # Transitive advisories the dependency that pulls them in cannot fix for us —
 # the direct dependency is already at its latest release and still resolves a
