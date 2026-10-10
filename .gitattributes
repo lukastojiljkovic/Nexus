@@ -40,3 +40,12 @@ apps/desktop/scripts/render-notices.mjs text eol=lf
 # A CRLF checkout made the dictionary's golden NOTICE.txt 7 bytes longer on
 # Windows than on CI. Binary fixtures stay binary: `text=auto` still decides.
 scripts/packs/**/fixtures/** eol=lf
+
+# The recorded UCI transcripts the chess module's tests read line by line. Each
+# one is the engine's own stdout with `\r\n` normalised to LF - the fixture's
+# README states that, because the assertions spell the engine's lines without a
+# carriage return - and a CRLF checkout put `"uciok\r"` and
+# `"id name Stockfish 19\r"` where the test asks for `"uciok"` and
+# `"id name Stockfish 19"`, so on Windows every one of those assertions failed
+# and on CI none did. The pack-builders rule above, one module over.
+apps/desktop/src/modules/chess/main/fixtures/** eol=lf

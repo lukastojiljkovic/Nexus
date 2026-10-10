@@ -129,8 +129,9 @@ describe("createModuleRegistry", () => {
       "wiki",
       // `order: 230`, after the reference library.
       "translator",
-      // The ASSISTANT (ADR-106), `order: 240`: the last member of Knowledge, and
-      // the last discovered module that declares `knowledge`.
+      // The ASSISTANT (ADR-106), `order: 240`: the last of Knowledge's
+      // reference-and-helper kits by `order`, ahead of the astronomy corner at
+      // 400.
       "assistant",
       // `order: 300`.
       "scanner",
@@ -364,14 +365,15 @@ describe("createModuleRegistry", () => {
       "wiki",
       // The translator, `order: 230` (ADR-090).
       "translator",
-      // The astronomy corner (ADR-109), `order: 400`: what is overhead is
-      // material somebody consults, which is ADR-093's own reading of this
-      // group — the same reading that put the reference library and the map in
-      // it.
-      "astronomy",
-      // And the ASSISTANT (ADR-106) closes the group: `order: 240`, the last of
-      // the reference-and-helper kits that sit in Knowledge.
+      // The ASSISTANT (ADR-106), `order: 240`: the last of the
+      // reference-and-helper kits that sit in Knowledge, one step past handling
+      // what somebody wrote down.
       "assistant",
+      // And the astronomy corner (ADR-109), `order: 400`, after every discovered
+      // module this build registers: what is overhead is material somebody
+      // consults, which is ADR-093's own reading of this group - the same
+      // reading that put the reference library and the map in it.
+      "astronomy",
     ]);
     expect(grouped.get("life")?.map((manifest) => manifest.id)).toEqual([
       "priv",

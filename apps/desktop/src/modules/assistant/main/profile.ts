@@ -9,12 +9,15 @@ import type {
   ModelTier,
   Tool,
   ToolRegistry,
+  VoiceService,
   WebService,
 } from "@nexus/core";
 import { ConversationStore, type AssistantSettings } from "@nexus/db";
 import { createKnowledgeService } from "../../../main/assistant/knowledge/index.js";
 import type { KnowledgeIndex } from "../../../main/assistant/knowledge/types.js";
 import { createToolRegistry } from "../../../main/assistant/tools/index.js";
+import { createVoiceService } from "../../../main/assistant/voice/index.js";
+import type { VoiceHost } from "../../../main/assistant/voice/host.js";
 import { createWebService } from "../../../main/assistant/web/index.js";
 import {
   modeAllowsWebSearch,
@@ -28,6 +31,7 @@ import { createDnsResolver, createHttpsTransport } from "../../../main/assistant
 import type { TimerHost } from "../../../main/assistant/tools/timers.js";
 import type { AssistantDownloadView } from "../shared/ipc.js";
 import type { AssistantServices } from "./services.js";
+import { readVoicePacks } from "./voicePacks.js";
 
 /**
  * THE ASSISTANT'S SERVICES FOR ONE PROFILE, built once and torn down whole.
@@ -83,6 +87,8 @@ export class AssistantProfile {
   private host: ModelHost | null = null;
   private knowledge: KnowledgeIndex | null = null;
   private toolRegistry: ToolRegistry | null = null;
+  private voice: VoiceService | null = null;
+  private voiceHost: VoiceHost | null = null;
   private web: WebService | null = null;
   private embedderCache: Embedder | null | undefined;
   private download: DownloadJob | null = null;
@@ -163,6 +169,30 @@ export class AssistantProfile {
       secrets: createWebSecrets(userData, this.services.secretCipher),
     });
     return this.web;
+  }
+
+  /**
+   * The profile's voice service (ADR-105), built on first use.
+   *
+   * **Why the pack list is a function and the host is a factory.** The service
+   * reads the installed packs on EVERY request, so a voice the user installs
+   * while the chat page is open is used on their next sentence; the worker host
+   * starts nothing until something is asked for, which is what keeps a page that
+   * never speaks from paying for a process. Both are built here rather than in
+   * `index.ts` for the module kit's own reason: this module never imports
+   * Electron, so the utility-process half arrives as a factory (`services.ts`).
+   */
+  voiceService(): VoiceService {
+    if (this.voice !== null) return this.voice;
+    this.voiceHost ??= this.services.createVoiceHost();
+    const host = this.voiceHost;
+    const userData = this.services.userData();
+    const publicKeyPem = this.services.releasePublicKeyPem();
+    this.voice = createVoiceService({
+      packs: async () => readVoicePacks(userData, publicKeyPem),
+      host,
+    });
+    return this.voice;
   }
 
   // --- Models ----------------------------------------------------------------
@@ -387,6 +417,20 @@ export class AssistantProfile {
     this.catalogueCache = null;
     this.lastSearch = null;
     this.offered.clear();
+    // The voice worker is a SECOND process: it is stopped even when no model
+    // was ever loaded, because "nothing to unload" and "a worker sitting idle"
+    // are the same thing to the operating system and only one of them is this
+    // app's to keep.
+    const voiceHost = this.voiceHost;
+    this.voice = null;
+    this.voiceHost = null;
+    if (voiceHost !== null) {
+      try {
+        await voiceHost.dispose();
+      } catch (error) {
+        console.error("Nexus: the assistant's voice worker did not shut down cleanly:", error);
+      }
+    }
     if (host === null) return;
     try {
       await host.unloadAll();

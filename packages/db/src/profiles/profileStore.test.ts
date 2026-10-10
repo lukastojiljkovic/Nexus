@@ -3,10 +3,12 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  CarStore,
   CultureStore,
   DashboardSetStore,
   DashboardSettingsStore,
   EventStore,
+  LibraryStore,
   MAX_PROFILE_NAME_LENGTH,
   NexusDatabase,
   NoteAttachmentStore,
@@ -16,6 +18,8 @@ import {
   ProfileNotFoundError,
   ProfileStore,
   ProfileValidationError,
+  RecipeStore,
+  RecorderStore,
   SearchHistoryStore,
   SqliteFlagStore,
   SubjectAttachmentStore,
@@ -34,6 +38,16 @@ const HASH = "a".repeat(64);
 const OTHER_HASH = "b".repeat(64);
 /** Culture's own hash, distinct from the two the other modules use, so the union's answer names all three. */
 const TRACK_HASH = "c".repeat(64);
+/**
+ * The four hashes the kit modules' own tables name (ADR-108): a library cover,
+ * a recipe photo, a car receipt and a recording. Each is distinct, so a union
+ * arm that stopped reading one of those tables shows up as a MISSING value
+ * rather than as an answer that merely looks plausible.
+ */
+const COVER_HASH = "1".repeat(64);
+const PHOTO_HASH = "2".repeat(64);
+const RECEIPT_HASH = "3".repeat(64);
+const RECORDING_HASH = "4".repeat(64);
 
 function createProfile(
   name: string,
@@ -470,7 +484,7 @@ describe("ProfileStore.delete", () => {
 });
 
 describe("ProfileStore.blobHashes", () => {
-  it("unions every hash the profile's rows name across all seven blob-naming tables", () => {
+  it("unions every hash the profile's rows name across every blob-naming table", () => {
     const profileId = new ProfileStore(db.raw).create("business", "Firma", NOW).id;
     new TaskListStore(db.raw, profileId).ensureInbox(NOW);
     const task = new TaskStore(db.raw, profileId).create({ title: "Zadatak" });
@@ -515,8 +529,75 @@ describe("ProfileStore.blobHashes", () => {
       NOW,
     );
 
+    // And the four the kit modules' own tables name (ADR-108), through the
+    // stores that write them rather than by hand: a library cover, a recipe
+    // photo, a car receipt and a recording. Deleting the profile cascades every
+    // one of those rows away, so their bytes are orphaned by the same delete -
+    // this list is the only thing that knows to collect them.
+    const library = new LibraryStore(db.raw, profileId);
+    const item = library.createItem({ kind: "book", title: "Knjiga" }, NOW);
+    library.setCover(
+      item.id,
+      { fileName: "korica.jpg", mime: "image/jpeg", sizeBytes: 4, sha256: COVER_HASH },
+      NOW,
+    );
+    new RecipeStore(db.raw, profileId).create(
+      {
+        title: "Sarma",
+        course: "main",
+        servings: 4,
+        ingredients: [],
+        steps: [{ text: "Kuvati." }],
+        source: "own",
+        photo: { fileName: "jelo.jpg", mime: "image/jpeg", sizeBytes: 4, sha256: PHOTO_HASH },
+      },
+      NOW,
+    );
+    const cars = new CarStore(db.raw, profileId);
+    const vehicle = cars.createVehicle(
+      {
+        name: "Pasat",
+        make: "Volkswagen",
+        model: "Passat",
+        year: 2015,
+        fuelType: "diesel",
+        distanceUnit: "km",
+      },
+      NOW,
+    );
+    const service = cars.createService(
+      vehicle.id,
+      { date: "2026-05-01", category: "oil", description: "Mali servis" },
+      NOW,
+    );
+    cars.addServiceAttachment(
+      service.id,
+      { fileName: "racun.pdf", mime: "application/pdf", sizeBytes: 4, sha256: RECEIPT_HASH },
+      NOW,
+    );
+    new RecorderStore(db.raw, profileId).create(
+      {
+        kind: "audio",
+        mime: "audio/webm;codecs=opus",
+        durationMs: 1_000,
+        sizeBytes: 4,
+        sha256: RECORDING_HASH,
+      },
+      NOW,
+    );
+
     expect(store.blobHashes(profileId).sort()).toEqual(
-      [HASH, OTHER_HASH, TRACK_HASH, backgroundHash, pictureHash].sort(),
+      [
+        HASH,
+        OTHER_HASH,
+        TRACK_HASH,
+        COVER_HASH,
+        PHOTO_HASH,
+        RECEIPT_HASH,
+        RECORDING_HASH,
+        backgroundHash,
+        pictureHash,
+      ].sort(),
     );
   });
 

@@ -24,8 +24,15 @@ import {
   type AssistantMessageInput,
 } from "@nexus/db";
 import { noRecommendation } from "../../../main/assistant/runtime/recommend.js";
+import { VOICE_SAMPLE_RATE, resamplePcm } from "../../../main/assistant/voice/resample.js";
+import { MAX_SPEECH_CHARS } from "../../../main/assistant/voice/sentences.js";
+import { decodeWav, encodeWav } from "../../../main/assistant/voice/wav.js";
+import { VoiceUnavailableError } from "../../../main/assistant/voice/index.js";
+import { speaksLanguage } from "../../../main/assistant/voice/packs.js";
 import { mainLocale } from "../../../main/locale.js";
 import type { ModuleCall, ModuleHostSurface, ModuleSession } from "../../../main/moduleIpc.js";
+import { armAssistantMic, disarmAssistantMic } from "./micAccess.js";
+import { readVoicePacks } from "./voicePacks.js";
 import {
   contract,
   type AssistantInstalledView,
@@ -35,8 +42,12 @@ import {
   type AssistantRecommendationView,
   type AssistantSettingsView,
   type AssistantSetupView,
+  type AssistantSpeechLanguage,
+  type AssistantSpeechView,
   type AssistantThreadView,
+  type AssistantTranscriptView,
   type AssistantView,
+  type AssistantVoiceView,
 } from "../shared/ipc.js";
 import { applyAssistantData, exportAssistantData } from "./imex.js";
 import { AssistantProfile } from "./profile.js";
@@ -653,6 +664,99 @@ export function register(host: ModuleHostSurface): void {
     return await knowledgeView(profile);
   });
 
+  // --- Voice (ADR-105) -------------------------------------------------------
+
+  /** Every installed voice pack, as the page and the service both read it. */
+  function voicePacks() {
+    return readVoicePacks(services().userData(), services().releasePublicKeyPem());
+  }
+
+  function voiceView(): AssistantVoiceView {
+    const packs = voicePacks();
+    const languages = (kind: "stt" | "tts"): AssistantSpeechLanguage[] => [
+      ...new Set(
+        packs
+          .filter((pack) => pack.descriptor.kind === kind)
+          .flatMap((pack) => pack.descriptor.languages),
+      ),
+    ];
+    return {
+      speechLanguages: languages("stt"),
+      voiceLanguages: languages("tts"),
+      packs: packs.map((pack) => ({
+        id: pack.id,
+        version: pack.version,
+        kind: pack.descriptor.kind,
+        languages: [...pack.descriptor.languages],
+      })),
+    };
+  }
+
+  /**
+   * Arms the microphone window the session's `media` rule consults
+   * (`main/micAccess.ts`). The page calls this immediately before
+   * `getUserMedia`, and nothing else may: the whole reason the rule is stateful
+   * is that a permission request says which device, never which page.
+   */
+  ctx.handle("capture", (payload, call): null => {
+    const profileId = call.as.asId(payload.profileId, "profileId");
+    // The profile is opened so that an unknown one is refused by name, exactly
+    // as every other handler refuses it - arming for a profile that does not
+    // exist would be a grant nobody asked for.
+    profileFor(call, profileId);
+    armAssistantMic(services().now());
+    return null;
+  });
+
+  ctx.handle("voice", (payload, call): AssistantVoiceView => {
+    call.as.asId(payload.profileId, "profileId");
+    return voiceView();
+  });
+
+  ctx.handle("transcribe", async (payload, call): Promise<AssistantTranscriptView> => {
+    const profileId = call.as.asId(payload.profileId, "profileId");
+    const language = speechLanguageOf(call, payload.language);
+    // The renderer's own capture, as a WAV: the same shape the recorder's bytes
+    // travel in, and the format check is `decodeWav`'s (`wav.ts`), so a container
+    // this build cannot read is refused by name instead of transcribed as noise.
+    const bytes = audioBytes(payload.bytes);
+    const profile = profileFor(call, profileId);
+    const stt = await profile.voiceService().speechToText();
+    if (stt === null) {
+      throw new VoiceUnavailableError(
+        "pack-missing",
+        "no installed speech model transcribes anything yet.",
+      );
+    }
+    const audio = decodeWav(bytes);
+    const pcm =
+      audio.sampleRate === VOICE_SAMPLE_RATE
+        ? audio.pcm
+        : resamplePcm(audio.pcm, audio.sampleRate, VOICE_SAMPLE_RATE);
+    const text = await stt.transcribe(pcm, VOICE_SAMPLE_RATE, language, new AbortController().signal);
+    return { text };
+  });
+
+  ctx.handle("speak", async (payload, call): Promise<AssistantSpeechView> => {
+    const profileId = call.as.asId(payload.profileId, "profileId");
+    const language = speechLanguageOf(call, payload.language);
+    const text = call.as.asCappedChars(
+      call.as.asNonEmptyString(payload.text, "text"),
+      "text",
+      MAX_SPEECH_CHARS,
+    );
+    const profile = profileFor(call, profileId);
+    const tts = await profile.voiceService().textToSpeech();
+    if (tts === null || !speaksLanguage(voicePacks(), language)) {
+      // A Serbian answer with only an English voice installed is a REFUSAL and
+      // never a fallback (ADR-105 section 3): the page says which voice to
+      // install rather than reading Serbian in English phonemes.
+      throw new VoiceUnavailableError("pack-missing", `no installed voice speaks "${language}".`);
+    }
+    const spoken = await tts.speak(text, language, new AbortController().signal);
+    return { bytes: encodeWav(spoken.pcm, spoken.sampleRate), sampleRate: spoken.sampleRate };
+  });
+
   // --- The archive (ADR-090 section 5) ---------------------------------------
 
   ctx.exportData((session: ModuleSession) => exportAssistantData(session));
@@ -669,6 +773,9 @@ export function register(host: ModuleHostSurface): void {
 
   ctx.onSessionEnd(() => {
     for (const profileId of [...profiles.keys()]) registry.closeProfile(profileId);
+    // The microphone window closes with the session: a lock or a profile switch
+    // must not leave a grant standing for whoever comes next (ADR-105).
+    disarmAssistantMic();
     for (const turn of [...turns.values()]) {
       refusePending(turn);
       turn.controller.abort();
@@ -716,4 +823,34 @@ function tierOf(call: { as: ModuleCall["as"] }, value: unknown): ModelTier {
     );
   }
   return tier as ModelTier;
+}
+
+/** The language a voice request is in, off the wire. The app's own two, and nothing else. */
+function speechLanguageOf(
+  call: { as: ModuleCall["as"] },
+  value: unknown,
+): AssistantSpeechLanguage {
+  const language = call.as.asString(value, "language");
+  if (language !== "sr" && language !== "en") {
+    throw new Error('Invalid IPC payload: "language" must be "sr" or "en".');
+  }
+  return language;
+}
+
+/**
+ * The capture bytes off the wire.
+ *
+ * `Uint8Array` and no other container, the recorder's own rule: Electron
+ * structured-clones the renderer's array across the bridge, and anything else
+ * that arrives here (a plain object claiming to be bytes, a number, a string)
+ * is a payload that never came from this app's capture path.
+ */
+function audioBytes(value: unknown): Uint8Array {
+  if (!(value instanceof Uint8Array)) {
+    throw new Error('Invalid IPC payload: "bytes" must be a Uint8Array.');
+  }
+  if (value.byteLength === 0) {
+    throw new Error('Invalid IPC payload: "bytes" must not be empty.');
+  }
+  return value;
 }

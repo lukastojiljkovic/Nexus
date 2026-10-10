@@ -11,10 +11,16 @@ import {
 } from "@nexus/core";
 import { NexusDatabase, TaskListStore, openDatabase, uuidv7 } from "@nexus/db";
 import { ModuleHost, type ModulePlatform } from "../../../main/moduleIpc.js";
+import type { VoiceHost } from "../../../main/assistant/voice/host.js";
+import type { VoiceReply, VoiceRequest } from "../../../main/assistant/voice/protocol.js";
+import { decodeWav, encodeWav } from "../../../main/assistant/voice/wav.js";
+import { baseManifest, entry, makeKey, writePack } from "../../../main/packs/fixtures.js";
+import { packVersionDir } from "../../../main/packs/registry.js";
 import type { SearchResult } from "../../../shared/ipc.js";
 import type { AssistantTurnEventEntry } from "../shared/ipc.js";
 import { TurnBusyError } from "./turns.js";
 import { register } from "./register.js";
+import { assistantMicArmedAt } from "./micAccess.js";
 import { setAssistantServicesForTest, type AssistantServices } from "./services.js";
 
 /**
@@ -42,6 +48,9 @@ import { setAssistantServicesForTest, type AssistantServices } from "./services.
 
 const TRUSTED = { trusted: true };
 const NOW = Date.parse("2026-06-01T08:00:00.000Z");
+
+/** The throwaway Ed25519 pair this file's signed voice packs are verified with. Never the release key. */
+const packKey = makeKey();
 
 /** The one catalogue entry this machine has, and the model every turn loads. */
 const ENTRY: ModelEntry = {
@@ -72,8 +81,44 @@ let db: NexusDatabase;
 let profileId: string;
 let unloads = 0;
 let loadError: Error | null = null;
+/** The voice worker, as this module sees it: one canned reply per request kind. */
+let voiceRequests: VoiceRequest[] = [];
+let voiceDisposals = 0;
+let voiceTranscript = "Zdravo iz mikrofona.";
 /** The transcript the next `loadChat` answers with. */
 let script: Parameters<typeof createScriptedModel>[0] = [];
+
+/**
+ * The worker's host, faked at the seam `services.ts` hands over.
+ *
+ * The real one forks a `utilityProcess`, so a test can only reach the module's
+ * own half: what is asserted below is that the module ASKS for the right thing
+ * (a load before a transcribe, the caption's own language, a WAV on the way in)
+ * and turns the worker's answer into the view the page reads.
+ */
+function fakeVoiceHost(): VoiceHost {
+  return {
+    async run(request: VoiceRequest): Promise<VoiceReply> {
+      voiceRequests.push(request);
+      if (request.type === "load") return { id: request.id, type: "ready" };
+      if (request.type === "transcribe") {
+        return { id: request.id, type: "transcript", text: voiceTranscript };
+      }
+      if (request.type === "speak") {
+        return {
+          id: request.id,
+          type: "audio",
+          pcm: new Float32Array([0.25, -0.25]),
+          sampleRate: 16_000,
+        };
+      }
+      return { id: request.id, type: "disposed" };
+    },
+    async dispose(): Promise<void> {
+      voiceDisposals += 1;
+    },
+  };
+}
 
 function fakeHost(): ModelHost {
   const pick: readonly ModelRecommendation[] = [
@@ -102,7 +147,18 @@ function fakeHost(): ModelHost {
     async remove(): Promise<void> {},
     async loadChat() {
       if (loadError !== null) throw loadError;
-      return createScriptedModel(script, { id: ENTRY.id, title: ENTRY.title });
+      // The window the app itself loads: a chat model is asked for
+      // `CHAT_CONTEXT_TOKENS` (8_192). The fake's own default is 4_096, and the
+      // tool registry the merged build offers needs more room than that - its
+      // system prompt measures 10_958 characters, 4_566 estimated tokens in
+      // Serbian, for the 37 tools it declares - so at 4_096 (ceiling 3_072)
+      // every turn ended `context-full` before the model was asked anything,
+      // and the tests below passed or failed for a reason none of them named.
+      return createScriptedModel(script, {
+        id: ENTRY.id,
+        title: ENTRY.title,
+        contextTokens: ENTRY.contextTokens,
+      });
     },
     async loadEmbedder() {
       throw new Error("this machine has no embedding model");
@@ -116,9 +172,10 @@ function fakeHost(): ModelHost {
 function services(): AssistantServices {
   return {
     userData: () => dir,
-    releasePublicKeyPem: () => "test-key",
+    releasePublicKeyPem: () => packKey.publicKeyPem,
     networkMode: () => "offline",
     createModelHost: fakeHost,
+    createVoiceHost: fakeVoiceHost,
     secretCipher: {
       available: () => false,
       encrypt: () => "",
@@ -165,6 +222,9 @@ beforeEach(() => {
   new TaskListStore(db.raw, profileId).ensureInbox(new Date(NOW).toISOString());
   unloads = 0;
   loadError = null;
+  voiceRequests = [];
+  voiceDisposals = 0;
+  voiceTranscript = "Zdravo iz mikrofona.";
   script = [];
 });
 
@@ -200,6 +260,42 @@ async function pollUntil(
 }
 
 describe("the assistant module through the kit", () => {
+  /**
+   * A signed voice pack, in the folder the pack installer writes one to.
+   *
+   * Written through `packs/fixtures.ts` rather than by hand so the signature is
+   * real: `readVoicePacks` reads the registry, which verifies every manifest
+   * against the key `services()` hands over, so a fixture that skipped the
+   * signature would prove the opposite of what this test is for.
+   */
+  function installVoicePack(input: {
+    readonly id: string;
+    readonly kind: "stt" | "tts";
+    readonly languages: readonly string[];
+  }): void {
+    const descriptor =
+      JSON.stringify({
+        format: 1,
+        kind: input.kind,
+        engine: input.kind === "stt" ? "whisper" : "vits",
+        languages: input.languages,
+        sampleRate: 16_000,
+        upstream: { repo: "test/voice", revision: "main" },
+      }) + "\n";
+    const weights = "not really a model\n";
+    const version = "1.0.0";
+    writePack({
+      dir: packVersionDir(dir, input.id, version),
+      key: packKey.privateKey,
+      manifest: baseManifest([entry("voice.json", descriptor), entry("model.onnx", weights)], {
+        id: input.id,
+        version,
+        kind: "model",
+      }),
+      contents: { "voice.json": descriptor, "model.onnx": weights },
+    });
+  }
+
   it("validates every payload before anything is written", async () => {
     const host = harness();
     await expect(
@@ -274,6 +370,110 @@ describe("the assistant module through the kit", () => {
       enabled: true,
     })) as { webSearch: { enabled: boolean; modeAllows: boolean } };
     expect(after.webSearch).toEqual({ enabled: true, modeAllows: false, mode: "offline" });
+  });
+
+  it("says which voice packs are installed, and arms the microphone when the page asks", async () => {
+    const host = harness();
+    // Nothing installed is the ordinary state of a fresh profile: two empty
+    // lists and no pack to name, rather than an error.
+    expect(await host.dispatch("assistant:voice", TRUSTED, { profileId })).toEqual({
+      speechLanguages: [],
+      voiceLanguages: [],
+      packs: [],
+    });
+    expect(assistantMicArmedAt(NOW)).toBe(false);
+    await host.dispatch("assistant:capture", TRUSTED, { profileId });
+    // Armed for the window the session's permission rule consults, and only then.
+    expect(assistantMicArmedAt(NOW)).toBe(true);
+    expect(assistantMicArmedAt(NOW + 60_000)).toBe(false);
+  });
+
+  it("transcribes a captured utterance through the worker, and speaks a sentence back", async () => {
+    const host = harness();
+    installVoicePack({ id: "voice-sr", kind: "stt", languages: ["sr", "en"] });
+    installVoicePack({ id: "speaks-sr", kind: "tts", languages: ["sr"] });
+    const view = (await host.dispatch("assistant:voice", TRUSTED, { profileId })) as {
+      speechLanguages: string[];
+      voiceLanguages: string[];
+      packs: { id: string; kind: string }[];
+    };
+    expect(view.speechLanguages).toEqual(["sr", "en"]);
+    expect(view.voiceLanguages).toEqual(["sr"]);
+    // The order is the registry's own - the packs directory read in name order -
+    // so what this pins is WHICH packs are listed, not the order they arrive in.
+    expect(view.packs.map((pack) => `${pack.id}:${pack.kind}`).sort()).toEqual([
+      "speaks-sr:tts",
+      "voice-sr:stt",
+    ]);
+
+    // A WAV the renderer could have captured, at 8 kHz: main resamples it to the
+    // 16 kHz every voice model is defined at, and the worker is handed the WAV
+    // decoded - so the assertion below is about the rate, not about the bytes.
+    const captured = encodeWav(new Float32Array(800).fill(0.1), 8_000);
+    const answered = (await host.dispatch("assistant:transcribe", TRUSTED, {
+      profileId,
+      language: "sr",
+      bytes: captured,
+    })) as { text: string };
+    expect(answered.text).toBe("Zdravo iz mikrofona.");
+    const transcribe = voiceRequests.find((request) => request.type === "transcribe");
+    expect(transcribe?.sampleRate).toBe(16_000);
+    expect(transcribe && "language" in transcribe ? transcribe.language : null).toBe("sr");
+
+    const spoken = (await host.dispatch("assistant:speak", TRUSTED, {
+      profileId,
+      language: "sr",
+      text: "Helikopter dolazi u zoru.",
+    })) as { bytes: Uint8Array; sampleRate: number };
+    expect(spoken.sampleRate).toBe(16_000);
+    // What comes back is a WAV the page can play: decoding it again is the
+    // cheapest proof that the bytes are a file and not an array of numbers.
+    const decoded = decodeWav(spoken.bytes);
+    expect([...decoded.pcm.slice(0, 2)]).toEqual([0.25, -0.25]);
+  });
+
+  it("refuses both halves of the voice with no pack installed, and refuses Serbian speech without a Serbian voice", async () => {
+    const host = harness();
+    await expect(
+      host.dispatch("assistant:transcribe", TRUSTED, {
+        profileId,
+        language: "sr",
+        bytes: encodeWav(new Float32Array(160), 16_000),
+      }),
+    ).rejects.toThrow(/speech model/);
+    await expect(
+      host.dispatch("assistant:speak", TRUSTED, {
+        profileId,
+        language: "sr",
+        text: "Zdravo.",
+      }),
+    ).rejects.toThrow(/voice speaks/);
+
+    // An English voice and a Serbian answer is the refusal ADR-105 section 3
+    // exists for: the English voice never reads Serbian, so nothing is spoken.
+    installVoicePack({ id: "voice-en", kind: "tts", languages: ["en"] });
+    await expect(
+      host.dispatch("assistant:speak", TRUSTED, { profileId, language: "sr", text: "Zdravo." }),
+    ).rejects.toThrow(/voice speaks/);
+    expect(voiceRequests.some((request) => request.type === "speak")).toBe(false);
+    // The English voice does speak English, which is what makes the refusal
+    // above a rule rather than a missing branch.
+    await host.dispatch("assistant:speak", TRUSTED, { profileId, language: "en", text: "Hello." });
+    expect(voiceRequests.some((request) => request.type === "speak")).toBe(true);
+  });
+
+  it("stops the voice worker when the session ends", async () => {
+    const host = harness();
+    installVoicePack({ id: "voice-sr", kind: "stt", languages: ["sr"] });
+    await host.dispatch("assistant:transcribe", TRUSTED, {
+      profileId,
+      language: "sr",
+      bytes: encodeWav(new Float32Array(160), 16_000),
+    });
+    expect(voiceDisposals).toBe(0);
+    host.sessionEnd();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(voiceDisposals).toBe(1);
   });
 
   it("runs one real turn: a write tool asks first, and the answer is saved", async () => {

@@ -588,11 +588,19 @@ import {
   importDialogTitle,
 } from "../modules/assistant/main/dialogCopy.js";
 import { createModelHost } from "./assistant/runtime/index.js";
+import { createVoiceHost } from "./assistant/voice/host.js";
+import { VOICE_WORKER_ENTRY } from "./assistant/voice/workerEntry.js";
 import { createSafeStorageCipher } from "./assistant/web/electron.js";
 import {
   allowsCheck as recorderAllowsCheck,
   allowsRequest as recorderAllowsRequest,
 } from "../modules/recorder/main/mediaAccess.js";
+// The ASSISTANT's microphone (ADR-105): `media`, audio only, main frame, this
+// app's own document, and only while the assistant's own page has asked to talk.
+import {
+  allowsCheck as assistantAllowsMic,
+  allowsRequest as assistantAllowsMicRequest,
+} from "../modules/assistant/main/micAccess.js";
 // The kit's one PDF capability (ADR-090's `ModulePlatform.savePdf`), which is
 // Electron-shaped and therefore lives beside the window rather than in a module.
 import { saveCardPdf } from "./cardPdf.js";
@@ -1675,6 +1683,10 @@ configureAssistant({
   // the dedicated session) - which imports Electron, and is therefore handed in
   // rather than imported by the module.
   createModelHost: () => createModelHost(),
+  // The voice worker (ADR-105 section 4), on the same terms: `utilityProcess`
+  // is Electron's, so the factory is handed over and the module never imports
+  // it. Nothing is forked until the first request.
+  createVoiceHost: () => createVoiceHost(VOICE_WORKER_ENTRY),
   secretCipher: createSafeStorageCipher(),
   pickGgufFile: async () => {
     const options: OpenDialogOptions = {
@@ -14372,6 +14384,7 @@ app.whenReady().then(async () => {
   session.defaultSession.setPermissionRequestHandler((contents, permission, callback, details) => {
     callback(
       recorderAllowsRequest(permission, details, devOrigin, Date.now()) ||
+        assistantAllowsMicRequest(permission, details, devOrigin, Date.now()) ||
         signalsAllowsMicrophone(permission, details.requestingUrl, details, devOrigin) ||
         allowsScannerMedia(permission, contents.getURL(), details, mediaOrigins) ||
         labAllowsSerial(permission, labAppOrigin(contents.getURL(), process.env), details),
@@ -14380,6 +14393,7 @@ app.whenReady().then(async () => {
   session.defaultSession.setPermissionCheckHandler(
     (contents, permission, requestingOrigin, details) =>
       recorderAllowsCheck(permission, requestingOrigin, details, devOrigin, Date.now()) ||
+      assistantAllowsMic(permission, requestingOrigin, details, devOrigin, Date.now()) ||
       signalsAllowsMicrophone(permission, requestingOrigin, details, devOrigin) ||
       allowsScannerMedia(
         permission,

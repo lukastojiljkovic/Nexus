@@ -185,20 +185,23 @@ carry files for.
 * **A module with blobs and no `importData` is still refused** as an
   un-restorable section at the preview, which is what it was before: the hook
   cannot restore rows nothing knows how to write.
-* **The delete-side list is unchanged, and a whole-profile delete still leaks a
-  module's files.** `profiles:delete` asks `ProfileStore.blobHashes` which
-  hashes a profile's rows name, and that query is a hand-written union of its
+* **The delete-side list is a hand-written union, and it now reads these five
+  modules too.** *(Closed on 2026-10-10 by the integration run.)*
+  `profiles:delete` asks `ProfileStore.blobHashes` which hashes a profile's rows
+  name, and that query cannot be built from this hook — the hook is on main's
+  `ModuleContext` and the query is in `@nexus/db` — so it was a union of its
   own: the built-in five (note, task and subject attachments, the dashboard
-  background, the profile picture) plus culture's two. It cannot be built from
-  this hook — the hook is on main's `ModuleContext` and the query is in
-  `@nexus/db` — so deleting a profile reclaims a culture ticket but leaves a
-  recipe photo, a receipt, a recording and a cover on disk. That is a LEAK, not
-  the loss this decision removes: a hash the list never names is never handed to
-  the collector at all. Every other GC path — a module's own row deleted, an
-  undo, a restore's overwrite — goes through `blobRefCount` and reclaims them
-  correctly. Closing it means handing the profile's module hashes to that walk
-  in `profiles:delete`, which is a change to that function's arrangement rather
-  than to the kit.
+  background, the profile picture) plus culture's two. Deleting a profile
+  therefore reclaimed a culture ticket and left a recipe photo, a receipt, a
+  recording and a cover on disk — a LEAK, not the loss this decision removes:
+  a hash the list never names is never handed to the collector at all. Every
+  other GC path (a module's own row deleted, an undo, a restore's overwrite)
+  went through `blobRefCount` and reclaimed them correctly. The query now carries
+  four more arms — `library_item_covers` through `library_items`,
+  `cookbook_recipes.photo_sha256`, `service_attachments` through `vehicles`, and
+  `recordings` — because the two halves have to name the same tables: the
+  delete cascades the rows away, so this list is the last chance to say the bytes
+  are orphans.
 
 ## 7. Alternatives rejected
 

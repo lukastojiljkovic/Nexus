@@ -88,6 +88,48 @@ export interface AssistantKnowledgeView {
   readonly embedderId: string | null;
 }
 
+/**
+ * The language the assistant speaks, restated for the wire for `AssistantNetworkMode`'s
+ * reason: no file under `shared/` may reach main's own copy of it. It is the
+ * app's two locales, because the assistant's speech follows the app's language.
+ */
+export type AssistantSpeechLanguage = "sr" | "en";
+
+/** One installed voice pack, as the page names it in the notice and in the setup line. */
+export interface AssistantVoicePackView {
+  readonly id: string;
+  readonly version: string;
+  /** `stt` hears, `tts` speaks - the descriptor's own two kinds (ADR-105 section 5). */
+  readonly kind: "stt" | "tts";
+  readonly languages: readonly AssistantSpeechLanguage[];
+}
+
+/**
+ * What the machine can hear and say.
+ *
+ * The two language lists are the QUESTION the page asks - "can I talk to it in
+ * Serbian, and can it answer out loud" - and the pack list is the evidence it
+ * names when the answer is no. A language is never approximated (ADR-105
+ * section 5), so the page must be able to say which pack to install rather than
+ * offering a button that will refuse.
+ */
+export interface AssistantVoiceView {
+  readonly speechLanguages: readonly AssistantSpeechLanguage[];
+  readonly voiceLanguages: readonly AssistantSpeechLanguage[];
+  readonly packs: readonly AssistantVoicePackView[];
+}
+
+/** What one transcription answered. */
+export interface AssistantTranscriptView {
+  readonly text: string;
+}
+
+/** One synthesized sentence: a WAV the page plays, and its rate. */
+export interface AssistantSpeechView {
+  readonly bytes: Uint8Array;
+  readonly sampleRate: number;
+}
+
 /** Everything one read of the list answers with. */
 export interface AssistantView {
   readonly conversations: readonly AssistantConversationView[];
@@ -234,6 +276,35 @@ interface SetWebSearchPayload {
   enabled: boolean;
 }
 
+/** Arms the microphone window just before the page captures (ADR-105, `main/micAccess.ts`). */
+interface CapturePayload {
+  profileId: string;
+}
+
+/**
+ * One utterance, as the page captured it.
+ *
+ * `bytes` is a WAV the renderer encoded from its own recording - the same shape
+ * the recorder's own capture travels in - and `sampleRate` is the rate the
+ * capture device ran at is written INTO it, so there is no second copy of that
+ * number on the wire to disagree with the file. Main resamples to the 16 kHz
+ * every voice model in this build is defined at, which is the one place that
+ * arithmetic lives.
+ */
+interface TranscribePayload {
+  profileId: string;
+  /** The language the user is speaking, which is the app's own. Never approximated. */
+  language: AssistantSpeechLanguage;
+  bytes: Uint8Array;
+}
+
+/** One sentence to speak, decided by the page as the answer streams (ADR-105 section 6). */
+interface SpeakPayload {
+  profileId: string;
+  language: AssistantSpeechLanguage;
+  text: string;
+}
+
 /** One turn's answer to `send`: the id the page polls by. */
 export interface AssistantTurnStartView {
   readonly turnId: string;
@@ -278,6 +349,10 @@ type AssistantOps = {
   setDefaultTier: { request: SetTierPayload; response: AssistantSetupView };
   setWebSearch: { request: SetWebSearchPayload; response: AssistantSettingsView };
   reindexKnowledge: { request: ProfilePayload; response: AssistantKnowledgeView };
+  voice: { request: ProfilePayload; response: AssistantVoiceView };
+  capture: { request: CapturePayload; response: null };
+  transcribe: { request: TranscribePayload; response: AssistantTranscriptView };
+  speak: { request: SpeakPayload; response: AssistantSpeechView };
 };
 
 /** This module's renderer API: one method per op, named after the op. */
@@ -307,6 +382,10 @@ export const contract = defineModuleContract<"assistant", AssistantOps>("assista
   "setDefaultTier",
   "setWebSearch",
   "reindexKnowledge",
+  "voice",
+  "capture",
+  "transcribe",
+  "speak",
 ]);
 
 declare module "../../../shared/moduleApi.js" {

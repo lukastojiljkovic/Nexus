@@ -451,17 +451,27 @@ function VisitRow({
       {visit.notes !== "" && <span className="culture__row-notes">{visit.notes}</span>}
       <span className="culture__row-meta culture__photos">
         {visit.photos.length === 0 ? copy.visits.noPhotos : copy.visits.photos}
-        {visit.photos.map((photo) => (
-          <a
-            key={photo.id}
-            className="culture__photo-link"
-            href={`nx-blob://${photo.sha256}`}
-            target="_blank"
-            rel="noreferrer"
-          >
-            {photo.fileName}
-          </a>
-        ))}
+        {visit.photos.map((photo) =>
+          // A photo is DRAWN, not linked. The main window opens no new window
+          // and does not navigate away from its own document, so the
+          // `<a href="nx-blob:..." target="_blank">` this replaced was a control
+          // that could not work; what `nx-blob:` does serve is a subresource
+          // load, which is how a picture gets onto the page. The picker's other
+          // accepted type, a PDF, keeps its file name: nothing on this surface
+          // draws one, and a link to it would be the same dead control again.
+          photo.mime.startsWith("image/") ? (
+            <img
+              key={photo.id}
+              className="culture__photo"
+              src={`nx-blob://${photo.sha256}`}
+              alt={photo.fileName}
+            />
+          ) : (
+            <span key={photo.id} className="culture__photo-file">
+              {photo.fileName}
+            </span>
+          ),
+        )}
         <Button size="sm" variant="quiet" onClick={() => fileRef.current?.click()}>
           {copy.visits.attach}
         </Button>

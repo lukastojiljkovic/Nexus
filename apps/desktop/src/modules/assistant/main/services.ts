@@ -4,6 +4,7 @@ import type { ModuleLookup } from "../../../main/assistant/tools/app.js";
 import type { PacksLookup } from "../../../main/assistant/tools/packs.js";
 import type { ProfileDb } from "../../../main/assistant/tools/support.js";
 import type { SecretCipher } from "../../../main/assistant/web/secrets.js";
+import type { VoiceHost } from "../../../main/assistant/voice/host.js";
 import type { AssistantNetworkMode } from "../shared/ipc.js";
 
 /**
@@ -40,6 +41,13 @@ export interface AssistantServices {
   networkMode(): AssistantNetworkMode;
   /** Builds the model runtime; `index.ts`'s own `createModelHost` (ADR-096). */
   createModelHost(): ModelHost;
+  /**
+   * Builds the voice worker's host (ADR-105 section 4), on `createModelHost`'s
+   * terms: the Electron-shaped half calls `utilityProcess`, so `index.ts` -
+   * which already imports Electron - passes the factory and this module never
+   * imports it. Nothing is started until the first request.
+   */
+  createVoiceHost(): VoiceHost;
   /** The device-bound cipher the Brave key is stored through (`safeStorage` in main). */
   readonly secretCipher: SecretCipher;
   /** Opens main's native `.gguf` picker and answers the chosen path, or `null` when the user cancelled. */

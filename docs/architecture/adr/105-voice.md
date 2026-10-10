@@ -159,6 +159,64 @@ than on the whole answer, and the module must be able to show that it is
 speaking rather than waiting — a spinner over silence is the failure mode of
 every slow TTS.
 
+### Addendum, 2026-10-10: the Piper route, re-checked link by link
+
+Luka decided on 10 October that a GPL program MAY ship as a separate `tool` pack
+(ADR-094: an unmodified upstream build, in its own signed folder, source
+linked) and that a pack may carry a non-commercial source. Section 3's refusal
+was therefore re-checked against the upstream APIs and the files themselves,
+and what follows is measured, not read.
+
+* **The engine Piper develops now is GPL-3.0 and publishes no Windows build.**
+  `https://api.github.com/repos/OHF-Voice/piper1-gpl` answers
+  `license.spdx_id: "GPL-3.0"` and `archived: false`; its newest
+  release (`https://api.github.com/repos/OHF-Voice/piper1-gpl/releases`, `v1.8.0`,
+  2026-09-04) attaches only Python wheels, among them
+  `piper_tts-1.8.0-cp39-abi3-win_amd64.whl`, 34 119 688 bytes. A wheel is not an
+  unmodified Windows build of a program: it needs a Python interpreter and pip,
+  and neither is something a `tool` pack may be.
+* **The archived MIT build IS an unmodified upstream Windows build, and it
+  carries espeak-ng's data.** `https://api.github.com/repos/rhasspy/piper` answers
+  `license.spdx_id: "MIT"` with `archived: true`, and its last release
+  `2023.11.14-2` attaches `piper_windows_amd64.zip` — **22 477 236 bytes,
+  SHA-256
+  `f3c58906402b24f3a96d92145f58acba6d86c9b5db896d207f78dc80811efcea`**
+  — from
+  `https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_windows_amd64.zip`,
+  fetched and hashed on 2026-10-10. The archive holds 363 entries: `piper/piper.exe`,
+  `piper/espeak-ng.dll`, `piper/piper_phonemize.dll`, the ONNX runtime, and 356
+  files under `piper/espeak-ng-data/` — among them `sr_dict` and
+  `lang/zls/sr`, which is the Serbian dictionary the phonemizer needs. That
+  zip is the GPL program espeak-ng, which ADR-094 allows as a SEPARATE tool
+  pack and never inside the app.
+* **The voice is Serbian, and its own config is what says so.**
+  `rhasspy/piper-voices` — `sr/sr_RS/serbski_institut/medium`: its
+  [MODEL_CARD](https://huggingface.co/rhasspy/piper-voices/raw/main/sr/sr_RS/serbski_institut/medium/MODEL_CARD)
+  gives `Language: sr_RS (Serbian, Serbia)`, 2 speakers and 22 050 Hz, and names
+  the dataset `https://github.com/marytts/serbski-institut-dsb-data` under
+  [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/); the model's own
+  `.onnx.json` declares `language.family: "sr"`, `name_english: "Serbian"`,
+  `phoneme_type: "espeak"` and `espeak.voice: "sr"`. The FOLDER name proves
+  nothing by itself — this config does — and the non-commercial dataset licence is
+  the kind of source a pack may now carry.
+
+Two consequences for the voice service come straight off those files rather
+than from an assumption: the voice emits **22 050 Hz**, where every VITS voice in
+this build is 16 000 Hz, so its `voice.json` declares `sampleRate: 22050` and the
+service resamples on the way out; and the engine is driven as a PROGRAM —
+something like `piper.exe --model <voice>.onnx --output_file <wav>` with the text on
+stdin, reading text and writing a WAV file inside the folder the pack names —
+which is ADR-094's own `stdio` protocol.
+
+**So the route holds, and what it needs is one focused piece of work**: a `tool`
+pack builder under `scripts/packs/piper/` in `scripts/packs/stockfish/`'s shape,
+pinning the zip above with its licence and source; a `voice` pack entry for
+sr_RS-serbski_institut-medium with its attribution; and the voice service's third
+engine, which speaks Serbian through the tool when both packs are installed.
+It is NOT built here: this addendum is what the integration run had evidence
+for, and the builder is a whole pack of its own (the download, the manifest,
+the voice entry, a fake-runner test and the tool invocation) rather than a
+line in somebody else's module.
 ## 4. Where it runs: a `utilityProcess`, never main
 
 **The models run in an Electron `utilityProcess`,** and main only ever holds a

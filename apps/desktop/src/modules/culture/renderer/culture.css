@@ -113,8 +113,21 @@
   align-items: center;
 }
 
-.culture__photo-link {
-  color: var(--nx-accent-strong);
+/* The ticket's own picture, drawn where the list row can hold it: the same
+   bound the cookbook puts on a recipe photo, so a camera-sized file cannot make
+   one row as tall as the screen. */
+.culture__photo {
+  display: block;
+  max-width: 8rem;
+  max-height: 8rem;
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+}
+
+/* A ticket's PDF keeps its name: nothing on this surface draws one, and a link
+   to it would be a control that does nothing. */
+.culture__photo-file {
+  color: var(--nx-text-muted);
 }
 
 /* The `type="file"` input is a real control the page draws itself - the OS owns
