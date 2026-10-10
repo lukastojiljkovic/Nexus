@@ -1,6 +1,12 @@
-import type { ModuleRegistry } from "@nexus/core";
+import type { ModuleGroup, ModuleManifest, ModuleRegistry } from "@nexus/core";
 
 import { LOCKED_MODULE_IDS } from "../../shared/modules.js";
+import {
+  DEFAULT_SHELL_VISIBILITY,
+  orderedGroupKeys,
+  orderedGroupMembers,
+  type ShellVisibility,
+} from "../../shared/moduleVisibility.js";
 
 /**
  * The sidebar's own state: which modules this profile keeps at the top of it
@@ -222,7 +228,8 @@ export function toggleCollapsedGroups(collapsed: readonly string[], key: string)
  * visible rows and left the shortcuts pointing at the old ones.
  *
  * The order is: the shell's first row („Kontrolna tabla"), the „Za tebe" block
- * when anything is pinned, the six feature groups in `MODULE_GROUPS` order, and
+ * when anything is pinned, the groups in the DEVICE's stored order (ADR-101 —
+ * which is `MODULE_GROUPS` order for a device that has never reordered one), and
  * the shell's remaining rows („Podešavanja") last. The shell group is the two
  * rows a user cannot switch off (ADR-093): it is not drawn as a heading, and it
  * is SPLIT rather than drawn in one place, because the home surface heads the
@@ -238,10 +245,15 @@ export function sidebarGroups(
   registry: ModuleRegistry,
   enabled: ReadonlySet<string>,
   pinned: readonly string[],
+  visibility: ShellVisibility = DEFAULT_SHELL_VISIBILITY,
 ): NavGroup[] {
   const groups = registry.byGroup();
   const known = new Set<string>();
   for (const members of groups.values()) for (const m of members) known.add(m.id);
+
+  /** One group's members in the device's stored order, with the registry's own order behind it. */
+  const membersOf = (group: ModuleGroup): ModuleManifest[] =>
+    orderedGroupMembers(groups.get(group) ?? [], visibility, group);
 
   const promoted: string[] = [];
   for (const moduleId of pinned) {
@@ -251,8 +263,8 @@ export function sidebarGroups(
     if (enabled.has(moduleId)) promoted.push(moduleId);
   }
 
-  /** The shell's own rows, in registration order — the head is its first member. */
-  const shell = (groups.get("shell") ?? [])
+  /** The shell's own rows, in the device's stored order — the head is its first member. */
+  const shell = membersOf("shell")
     .map((manifest) => manifest.id)
     .filter((id) => enabled.has(id));
 
@@ -260,9 +272,9 @@ export function sidebarGroups(
   const [head, ...tail] = shell;
   if (head !== undefined) blocks.push({ key: null, moduleIds: [head] });
   if (promoted.length > 0) blocks.push({ key: PINNED_GROUP_KEY, moduleIds: promoted });
-  for (const [group, members] of groups) {
+  for (const group of orderedGroupKeys(registry, visibility)) {
     if (group === "shell") continue;
-    const moduleIds = members
+    const moduleIds = membersOf(group)
       .map((manifest) => manifest.id)
       .filter((id) => enabled.has(id) && !promoted.includes(id));
     if (moduleIds.length > 0) blocks.push({ key: group, moduleIds });

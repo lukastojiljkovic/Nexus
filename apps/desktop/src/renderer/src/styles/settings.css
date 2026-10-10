@@ -1095,6 +1095,54 @@
   font-size: var(--nx-font-size-body-sm);
 }
 
+/* ADR-101: THE „PRIKAZ" CARD.
+   ------------------------------------------------------------------------
+   It is the module gallery, grown: a heading per group and one row per module,
+   both drawn with the classes above (`.set__module-group`, `.set__module-row`,
+   `.set__module-info`, `.set__module-name`), so the list still reads as the
+   card it grew out of rather than as a second kind of list.
+
+   What is new is the trailing cluster: a grip, the two move buttons, and — on
+   a module's row — the switch. It is one cluster in both places, so a group
+   heading and a module row arrange the same way and the eye learns one column.
+
+   The grip is the MOUSE's half of the arrangement and the two buttons are the
+   KEYBOARD's (`aria-hidden` on the grip, because it is not a control: nothing
+   about dragging is reachable by Tab, and a button-shaped handle that cannot
+   be pressed would be a lie). */
+.set__visibility {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+.set__visibility-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-5);
+}
+.set__visibility-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+.set__visibility-grip {
+  display: inline-flex;
+  align-items: center;
+  color: var(--nx-text-subtle);
+  cursor: grab;
+}
+.set__visibility-grip:active {
+  cursor: grabbing;
+}
+/* No horizontal padding: three of these sit in one row and a padded button
+   would push the switch away from the row's line. The 24px pointer floor is
+   the primitive's (`Button size="sm"`), so only the width is stated here. */
+.set__visibility-move {
+  padding-left: 0;
+  padding-right: 0;
+}
+
 /* SET-014: THE SEARCH HIT — and it is the last rule in the file on purpose.
    ------------------------------------------------------------------------
    A hit is typographic: accent text plus weight, exactly like

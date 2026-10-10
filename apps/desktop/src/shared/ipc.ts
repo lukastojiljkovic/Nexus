@@ -1047,6 +1047,15 @@ export const IpcChannel = {
   packsChanged: "packs:changed",
   packsProgress: "packs:progress",
   appInfo: "app:info",
+  // The device's module arrangement (ADR-101). Device-level, like `network:*`
+  // and `cloud.json` before them: ONE setting for the whole app, not one per
+  // profile, because the rail, the launcher, the dashboard, the palette and the
+  // notification scheduler all have to agree about which modules this machine
+  // shows. `visibility:get` answers before any page is drawn; `visibility:set`
+  // records a whole arrangement (a switch, a move or a reset), validated in main
+  // against the live registry and written atomically.
+  visibilityGet: "visibility:get",
+  visibilitySet: "visibility:set",
 } as const;
 
 export type IpcChannel = (typeof IpcChannel)[keyof typeof IpcChannel];
@@ -1249,9 +1258,20 @@ export interface Profile {
 }
 
 /**
- * Per-profile module enable/disable overrides, keyed by module id. Structurally
- * identical to `@nexus/core`'s `FlagState`; redeclared here so the wire contract
- * stays self-contained and the renderer never imports Node/DB code.
+ * What ONE profile has on, keyed by module id and by `pack:<id>`.
+ *
+ * Two kinds of key and two different owners, which ADR-101 made explicit: a
+ * `pack:` key is this profile's own row (a toolbox is an answer about the
+ * person, and the profile next door has its own), while a MODULE id is answered
+ * from the DEVICE's arrangement — one setting for the whole app, so `flags:get`
+ * lays it over the profile's rows and `flags:set` on a module id writes that
+ * file rather than a row. The questionnaire, its manual override and the
+ * profile plan read and write this map exactly as they always did; what changed
+ * is where a module's answer is stored.
+ *
+ * Structurally identical to `@nexus/core`'s `FlagState`; redeclared here so the
+ * wire contract stays self-contained and the renderer never imports Node/DB
+ * code.
  */
 export type FlagState = Record<string, boolean>;
 
@@ -10515,4 +10535,41 @@ export interface NexusApi {
   /** Subscribes to copy and verify progress. Returns an unsubscribe function. */
   onPacksProgress(listener: (progress: PackProgress) => void): () => void;
   appInfo(): Promise<AppInfo>;
+  /**
+   * The device's module arrangement (ADR-101) — read once when the shell mounts,
+   * because every rail, tile and card that offers a module is drawn from it.
+   */
+  getModuleVisibility(): Promise<ModuleVisibility>;
+  /**
+   * Records an arrangement and answers with what was actually stored: main
+   * validates the payload, normalizes it against the registry (the two locked
+   * modules can never be hidden, and an entry that merely restates a manifest is
+   * dropped) and writes the file. Called by the four gestures the „Prikaz" card
+   * offers, never by a render on its own.
+   */
+  setModuleVisibility(visibility: ModuleVisibility): Promise<ModuleVisibility>;
+}
+
+/**
+ * The device's module arrangement as it crosses the wire (ADR-101).
+ *
+ * Field-for-field identical to `shared/moduleVisibility.ts`'s `ShellVisibility`,
+ * redeclared here for `FlagState`'s reason: the wire contract stays
+ * self-contained, the renderer never imports main-process code, and
+ * `moduleVisibility.test.ts` pins the two shapes as assignable to each other in
+ * both directions so they cannot drift.
+ *
+ * `hidden` is the list the brief names — the modules the user switched off.
+ * `shown` is its other direction, and it carries the one thing a list of
+ * hidden ids cannot: an opt-in module (`defaultEnabled: false`, like „Privatno
+ * beleške") that somebody switched ON, which is what the migration produces and
+ * what the „Prikaz" card writes. `groupOrder` and `moduleOrder` are overrides
+ * — empty means „the order the registry declares".
+ */
+export interface ModuleVisibility {
+  readonly version: number;
+  readonly hidden: readonly string[];
+  readonly shown: readonly string[];
+  readonly groupOrder: readonly string[];
+  readonly moduleOrder: Readonly<Record<string, readonly string[]>>;
 }

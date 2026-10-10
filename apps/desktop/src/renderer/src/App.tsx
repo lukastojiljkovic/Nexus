@@ -14,7 +14,6 @@ import {
   formatChord,
   matchesChord,
   moduleNavPosition,
-  resolveEnabled,
 } from "@nexus/core";
 import type { CanvasRef, ToolDrawer } from "@nexus/core";
 import { Button, EmptyState, Icon, NavItem, StarField } from "@nexus/ui";
@@ -102,6 +101,16 @@ import { UpdateNotice } from "./UpdateNotice.js";
 import { publishNetworkMode, useNetworkMode } from "./updates.js";
 import { buildSearchCommands } from "./searchCommands.js";
 import { createModuleRegistry } from "../../shared/modules.js";
+import {
+  DEFAULT_SHELL_VISIBILITY,
+  // Aliased: this file already names the RAIL's flattened order
+  // `visibleModuleIds` (the Alt+N walk below), and the two are deliberately
+  // different orders — the rail's is the arrangement, this one is registration
+  // order, which is what the palette's commands have always been built in.
+  visibleModuleIds as visibleModuleIdsForCommands,
+  visibleModuleSet,
+  type ShellVisibility,
+} from "../../shared/moduleVisibility.js";
 import { DRAWER_MODULES } from "./toolCatalogue.js";
 import { hasModulePage } from "./moduleKit/pages.js";
 import { KitModulePage } from "./moduleKit/ModulePage.js";
@@ -261,6 +270,19 @@ export function App() {
   // Per-profile module overrides (SET-007). Empty until loaded — every v0
   // module defaults enabled, so the pre-load render matches the common case.
   const [flags, setFlags] = useState<FlagState>({});
+  /**
+   * The DEVICE's module arrangement (ADR-101): which modules this machine shows,
+   * and the order of the groups and of the modules inside them. ONE setting for
+   * the whole app rather than one per profile, read with the rest of the
+   * unlocked data and written by the „Prikaz" card in Podešavanja.
+   *
+   * Held here because every surface that offers a module is drawn from it — the
+   * rail, the launcher, the dashboard's picker and its placed widgets, the
+   * palette's list of places to open and the settings filter — and one state is
+   * what makes them one answer. `flags` stays for the toolkit packs, which are
+   * still a per-profile answer; it is no longer read for modules.
+   */
+  const [visibility, setVisibility] = useState<ShellVisibility>(DEFAULT_SHELL_VISIBILITY);
   const [failed, setFailed] = useState(false);
   const [activeId, setActiveId] = useState("dashboard");
   // Pending page-level intent (021-e): reveal or create, tagged with the
@@ -371,9 +393,14 @@ export function App() {
 
   /** Loads everything that requires an open database. Only ever called once `auth:status` (or an unlock/create/recover result) has confirmed `state === "unlocked"`. */
   async function loadUnlockedData(): Promise<void> {
-    const [nextInfo, nextProfiles] = await Promise.all([
+    const [nextInfo, nextProfiles, nextVisibility] = await Promise.all([
       window.nexus.appInfo(),
       window.nexus.listProfiles(),
+      // ADR-101: the device's arrangement, read with the rest of the unlocked
+      // data. Main has already run the one-time union of the per-profile module
+      // switches by the time this is answered, so the shell's first draw is the
+      // arrangement the user will keep.
+      window.nexus.getModuleVisibility(),
     ]);
     // ADR-058 §1: the last-active device pref, validated against the live list
     // — a stale id falls back to the personal profile. Persisted back so the
@@ -391,6 +418,7 @@ export function App() {
     setProfiles(nextProfiles);
     setActiveProfileId(active?.id ?? null);
     setFlags(nextFlags);
+    setVisibility(nextVisibility);
     if (active) {
       persistActiveProfile(active.id);
       applyProfileAccent(active.id, active.kind);
@@ -567,14 +595,23 @@ export function App() {
   }, [activeProfileId, navEpoch]);
 
   /**
+   * The modules this DEVICE shows (ADR-101), as the one set every surface below
+   * is filtered through: the rail, the launcher, the dashboard and its picker,
+   * the palette's „Idi na" commands, the settings filter and the route guard.
+   * It is built by `visibleModuleSet` — the ONE predicate — so two surfaces
+   * cannot disagree about which modules this machine shows.
+   */
+  const visibleIds = useMemo(() => visibleModuleSet(registry, visibility), [visibility]);
+
+  /**
    * The sidebar, as the blocks it draws (ADR-093): the shell's first row, the
    * pinned „Za tebe" shortlist the plan or the user's own pin toggles chose,
-   * then the six navigation groups with those modules taken out of them, then
-   * the shell's remaining rows.
+   * then the navigation groups in the device's stored order with those modules
+   * taken out of them, then the shell's remaining rows.
    */
   const navGroups = useMemo(
-    () => sidebarGroups(registry, new Set(resolveEnabled(registry, flags)), pinnedModules),
-    [flags, pinnedModules],
+    () => sidebarGroups(registry, visibleIds, pinnedModules, visibility),
+    [visibleIds, pinnedModules, visibility],
   );
 
   /**
@@ -653,9 +690,9 @@ export function App() {
    * reason `sidebarGroups` exists: this used to be its own pass over
    * the registry's own grouping that happened to agree with the render, and a
    * pinned block would have renumbered the visible rows while leaving the
-   * shortcuts pointing at the old ones. (Deliberately NOT `resolveEnabled`:
-   * that returns registration order, and the two are only accidentally equal
-   * for today's module set.)
+   * shortcuts pointing at the old ones. (Deliberately NOT
+   * `visibleModuleIdsForCommands`: that answers registration order, and the two
+   * are equal only for a device that has never reordered anything — ADR-101.)
    */
   const visibleModuleIds = useMemo(
     () => navGroups.flatMap((group) => group.moduleIds),
@@ -839,14 +876,14 @@ export function App() {
   // so it is never in the enabled set and must not be guarded out of.
   useEffect(() => {
     if (activeId === SEARCH_PAGE_ID) return;
-    if (!new Set(resolveEnabled(registry, flags)).has(activeId)) {
+    if (!visibleIds.has(activeId)) {
       setActiveId("dashboard");
       // A pending intent aimed at a now-disabled module has no page left to
       // consume it and call onIntentHandled — clear it here instead, or it
       // would sit pending forever.
       setPending((current) => (current?.module === activeId ? null : current));
     }
-  }, [activeId, flags]);
+  }, [activeId, visibleIds]);
 
   function changePreference(next: ThemePreference): void {
     persistThemePreference(next);
@@ -1278,31 +1315,35 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authStatus?.state, activeProfile, shortcuts, visibleModuleIds, activeId, closePalette]);
 
-  // Rebuilt whenever the enabled-module set can change (flags), the active
+  // Rebuilt whenever the VISIBLE-module set can change (the device's
+  // arrangement, ADR-101), the active
   // profile changes, or `theme` changes — the last one matters because
   // `toggleTheme` reads `theme` directly from its own render's closure
   // (`changePreference(theme === "noc" ? "dan" : "noc")`), so leaving it out
   // of this list would let the "Promeni temu" command run against a stale
   // theme once toggled from anywhere else (e.g. the topbar button) without
-  // `flags`/`profiles` also changing. `resolveEnabled` itself is a cheap
-  // array filter, so recomputing it here rather than threading the
-  // render-time `enabledIds` set into a hook (which sits after several
+  // `profiles` also changing. `visibleModuleIdsForCommands` is a cheap array
+  // filter over the registry, so building the list here rather than threading
+  // the render-time `visibleIds` set into a hook (which sits after several
   // conditional returns below) is the simpler option.
   const searchCommands = useMemo(
     () =>
       buildSearchCommands({
         profileId: activeProfile?.id ?? "",
-        enabledModuleIds: resolveEnabled(registry, flags),
+        // The palette's own list answers REGISTRATION order
+        // (`visibleModuleIdsForCommands` says why), while the Alt+N chords
+        // below read the rail's order.
+        enabledModuleIds: visibleModuleIdsForCommands(registry, visibility),
         moduleName,
         // The Alt+N binding for a module, or null past the ninth.
         //
         // It has to be computed HERE and cannot be worked out inside the
         // palette, because the two orders differ: the commands are built from
-        // `resolveEnabled`, which is REGISTRATION order, while Alt+N reaches
-        // the Nth row of the SIDEBAR, which is category order
-        // (`visibleModuleIds`). They are equal for today's module set purely by
-        // accident, and a palette that printed a chord derived from the wrong
-        // one would be teaching a shortcut that does something else.
+        // `visibleModuleIdsForCommands`, which is REGISTRATION order, while
+        // Alt+N reaches the Nth row of the SIDEBAR, which is the device's own
+        // arrangement (ADR-101). They are equal for a device that has never
+        // reordered anything, and a palette that printed a chord derived from
+        // the wrong one would be teaching a shortcut that does something else.
         //
         // Formatted through `formatChord`, the way every other chord in the
         // shell is (ADR-040), so „Alt+3" here is spelled exactly as the
@@ -1332,10 +1373,9 @@ export function App() {
         onRebuildComplete: setSearchStatus,
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [flags, profiles, activeProfileId, theme],
+    [visibility, profiles, activeProfileId, theme],
   );
 
-  const enabledIds = new Set(resolveEnabled(registry, flags));
   // The profession toolkits, out of the same flag state and beside the modules
   // for the same reason: one reader, one answer to „what does this profile
   // have". A pack row is absent until somebody answers for it, and absent means
@@ -1347,7 +1387,7 @@ export function App() {
   // is deliberately NOT a `ModuleManifest` and never appears in the Settings
   // module gallery.
   const effectiveId =
-    enabledIds.has(activeId) || activeId === SEARCH_PAGE_ID ? activeId : "dashboard";
+    visibleIds.has(activeId) || activeId === SEARCH_PAGE_ID ? activeId : "dashboard";
   /**
    * The page the main pane DRAWS, which trails `effectiveId` by as long as the
    * next page's chunk takes to arrive (`routes.tsx`).
@@ -1451,6 +1491,16 @@ export function App() {
             // reach and is still being offered.
             setProfiles(demoProfile === null ? renamed : [...renamed, demoProfile]);
             setFlags(nextFlags);
+            // ADR-101: the questionnaire's module screen writes the DEVICE's
+            // arrangement now (main routes a module id there, `flags:set`), so
+            // the rail, the launcher and every page need the new arrangement
+            // and not only the new flag map.
+            void window.nexus
+              .getModuleVisibility()
+              .then(setVisibility)
+              .catch((error: unknown) => {
+                console.error("Nexus: failed to reload the module arrangement:", error);
+              });
             // The questionnaire has just written the pinned modules for this
             // profile (ADR-086); the bump is what redraws the sidebar without
             // a reload.
@@ -1931,7 +1981,7 @@ export function App() {
                   profileId={activeProfile.id}
                   profileName={activeProfile.name}
                   registry={registry}
-                  enabledModules={enabledIds}
+                  enabledModules={visibleIds}
                   onOpenModule={setActiveId}
                   onOpenNote={openNote}
                 />
@@ -2009,7 +2059,7 @@ export function App() {
                 <FocusPage
                   key={activeProfile.id}
                   profileId={activeProfile.id}
-                  enabledModules={enabledIds}
+                  enabledModules={visibleIds}
                 />
               ) : shownId === "tools" && activeProfile ? (
                 // `enabledModules` on „Fokus"'s reasoning, for a different purpose:
@@ -2027,7 +2077,7 @@ export function App() {
                   key={activeProfile.id}
                   drawer="utilities"
                   profileId={activeProfile.id}
-                  enabledModules={enabledIds}
+                  enabledModules={visibleIds}
                   packs={enabledPackIds}
                   intent={pending?.module === "tools" ? pending.intent : null}
                   onIntentHandled={clearIntent}
@@ -2049,7 +2099,7 @@ export function App() {
                   key={activeProfile.id}
                   drawer="professional"
                   profileId={activeProfile.id}
-                  enabledModules={enabledIds}
+                  enabledModules={visibleIds}
                   packs={enabledPackIds}
                   intent={pending?.module === "pro" ? pending.intent : null}
                   onIntentHandled={clearIntent}
@@ -2130,6 +2180,8 @@ export function App() {
                   onRerunOnboarding={() => setRerunOnboarding(true)}
                   target={settingsTarget}
                   onTargetHandled={clearSettingsTarget}
+                  moduleVisibility={visibility}
+                  onModuleVisibilityChanged={setVisibility}
                 />
               ) : activeProfile !== undefined && hasModulePage(shownId) ? (
                 // The kit's ONE generic path (ADR-090): the shown id is a
@@ -2182,13 +2234,15 @@ export function App() {
       )}
 
       {/* ADR-093 §4. Every enabled module by group, one overlay, opened from
-          the foot of the rail. `enabledIds` below is the SAME resolved set the
-          rail is filtered through, so a module switched off in Settings leaves
-          both surfaces in one write. */}
+          the foot of the rail. `visibleIds` below is the SAME set the rail is
+          filtered through (ADR-101), and the arrangement behind it is the same
+          one, so hiding or moving a module in Settings leaves both surfaces in
+          one write. */}
       {launcherOpen && activeProfile && (
         <ModuleLauncherDialog
           registry={registry}
-          enabledModules={enabledIds}
+          enabledModules={visibleIds}
+          moduleVisibility={visibility}
           pinned={pinnedModules}
           onOpen={(moduleId) => {
             setLauncherOpen(false);

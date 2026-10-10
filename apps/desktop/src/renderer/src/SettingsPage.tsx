@@ -81,7 +81,6 @@ import type {
   Subject,
   TaskList,
 } from "../../shared/ipc.js";
-import { LOCKED_MODULE_IDS } from "../../shared/modules.js";
 import { SYNC_ON_HOLD } from "../../shared/syncHold.js";
 import { authErrorMessage, passcodeMeetsPolicy, RecoveryKitPanel } from "./AuthGate.js";
 import { ALL_NOTIFICATION_SOURCES, NOTIFICATION_PRESETS } from "./notificationFormat.js";
@@ -100,6 +99,8 @@ import { Kbd } from "./ShortcutsDialog.js";
 import { clearStoredAccent, persistAccent, readStoredAccent } from "./accent.js";
 import { ProfileAvatar } from "./profileAvatar.js";
 import { ProPackList } from "./ProPacks.js";
+import { ModuleVisibilityCard } from "./ModuleVisibilityCard.js";
+import { visibleModuleSet, type ShellVisibility } from "../../shared/moduleVisibility.js";
 import { resolveModuleSelection } from "../../shared/onboardingPresets.js";
 import { heardTrades, planReasonLines } from "./profilePlanCopy.js";
 import { clearStoredSignals, readStoredSignals } from "./signalPrefs.js";
@@ -127,7 +128,6 @@ import {
   foldSettingsQuery,
   labelClass,
   matchSettings,
-  moduleEntryId,
   sectionClass,
   shortcutEntryId,
 } from "./settingsSearch.js";
@@ -156,7 +156,7 @@ import {
   reportLocaleToMain,
 } from "./localePrefs.js";
 import { useFocusTrap } from "./useFocusTrap.js";
-import { moduleDescription, moduleName } from "./moduleName.js";
+import { moduleName } from "./moduleName.js";
 import { formatArchiveInstant } from "./timeFormat.js";
 import { SyncSection } from "./SyncSettings.js";
 import { NetworkSettings } from "./NetworkSettings.js";
@@ -5064,6 +5064,14 @@ export interface SettingsPageProps {
   target: string | null;
   /** Reports that `target` was applied, so the shell clears it and a later visit is an ordinary one. */
   onTargetHandled: () => void;
+  /**
+   * The DEVICE's module arrangement (ADR-101) — which modules this machine
+   * shows and in what order. Owned by the shell, exactly as the theme and the
+   * shortcut overrides are: the „Prikaz" card below reads it, writes it through
+   * `onModuleVisibilityChanged`, and every other surface in the app follows.
+   */
+  moduleVisibility: ShellVisibility;
+  onModuleVisibilityChanged: (next: ShellVisibility) => void;
 }
 
 /**
@@ -5121,6 +5129,8 @@ export function SettingsPage({
   onRerunOnboarding,
   target,
   onTargetHandled,
+  moduleVisibility,
+  onModuleVisibilityChanged,
 }: SettingsPageProps) {
   // The accent is per-profile (ADR-058 §3), and its default depends on the
   // profile's KIND (bordo for business, decision #11). Reading it lazily in a
@@ -5147,7 +5157,6 @@ export function SettingsPage({
   // SET-014: the raw query. Empty means "render everything exactly as before" —
   // the filter is additive, it never becomes the page's normal state.
   const [query, setQuery] = useState("");
-  const [modulesError, setModulesError] = useState<string | null>(null);
   const [notificationSources, setNotificationSources] = useState<NotificationSource[] | null>(null);
   const [presetError, setPresetError] = useState<string | null>(null);
   // Bumped after a preset write. Both the effect below (this page's own
@@ -5169,17 +5178,6 @@ export function SettingsPage({
       active = false;
     };
   }, [profileId, refreshToken]);
-
-  async function toggleModule(moduleId: string, enabled: boolean): Promise<void> {
-    setModulesError(null);
-    try {
-      await window.nexus.setFlag(profileId, moduleId, enabled);
-      onFlagsChanged(await window.nexus.getFlags(profileId));
-    } catch (error) {
-      setModulesError(strings.settings.modulesToggleError);
-      console.error("Nexus: failed to update module flag:", error);
-    }
-  }
 
   async function applyPreset(sources: NotificationSource[]): Promise<void> {
     setPresetError(null);
@@ -5244,10 +5242,23 @@ export function SettingsPage({
       ? NOTIFICATION_PRESETS.find((preset) => sameSourceSet(preset.sources, notificationSources))
       : undefined;
 
+  /**
+   * The modules this DEVICE shows (ADR-101), built by the one predicate every
+   * consumer filters through. It gates the module cards and the filter index, and
+   * the arrangement behind it orders the „Prikaz" card's own list.
+   */
+  const visibleModules = useMemo(
+    () => visibleModuleSet(registry, moduleVisibility),
+    [registry, moduleVisibility],
+  );
+
   // SET-014: the searchable index is a function of the registry alone, so it is
   // built once per registry rather than on every keystroke; the match itself is
   // a dozen string comparisons and needs no memo of its own.
-  const searchIndex = useMemo(() => buildSettingsIndex(registry), [registry]);
+  const searchIndex = useMemo(
+    () => buildSettingsIndex(registry, visibleModules),
+    [registry, visibleModules],
+  );
   const terms = foldSettingsQuery(query);
   const { sections, hits } = matchSettings(searchIndex, terms);
   // A query is „active" exactly when it folded to at least one term: an empty
@@ -5256,7 +5267,10 @@ export function SettingsPage({
   const searching = terms.length > 0;
   // The module cards this build draws, in registry order and gated by SET-007's
   // flags — the page composes them, it does not know them.
-  const moduleCards = useMemo(() => moduleSettingsCards(registry, flags), [registry, flags]);
+  const moduleCards = useMemo(
+    () => moduleSettingsCards(registry, visibleModules),
+    [registry, visibleModules],
+  );
   // Held in state only so that changing it re-renders THIS page — the copy
   // table itself is one object rewritten in place, so nothing else on screen
   // needs to be told (`strings.ts`).
@@ -5853,50 +5867,18 @@ export function SettingsPage({
             title={strings.settings.sectionTitle.modules}
             className={sectionClass(visibility.cards.has("modules"))}
           >
-            {/* Grouped by the NAVIGATION groups (ADR-093), not by a second
-                taxonomy of this page's own: the gallery and the rail list the
-                same modules, and a module that reads as „Planiranje" in the rail
-                and „Životni centri" here would be two answers to one question. */}
-            {[...registry.byGroup()].map(([group, members]) => (
-              <div key={group} className="set__module-group">
-                <h3 className="nx-eyebrow set__module-group-title">
-                  {lookup(strings.app.navGroups, group) ?? group}
-                </h3>
-                <div className="set__module-list">
-                  {members.map((manifest) => {
-                    const locked = LOCKED_MODULE_IDS.has(manifest.id);
-                    const enabled = flags[manifest.id] ?? manifest.defaultEnabled;
-                    return (
-                      <div className="set__module-row" key={manifest.id}>
-                        <div className="set__module-info">
-                          <span
-                            className={labelClass(
-                              "set__module-name",
-                              hits.has(moduleEntryId(manifest.id)),
-                            )}
-                          >
-                            {moduleName(manifest.id)}
-                          </span>
-                          <span className="nx-hint">
-                            {moduleDescription(manifest.id)}
-                          </span>
-                        </div>
-                        {locked ? (
-                          <Chip>{strings.settings.modulesAlwaysOn}</Chip>
-                        ) : (
-                          <Checkbox
-                            checked={enabled}
-                            aria-label={moduleName(manifest.id)}
-                            onChange={(event) => void toggleModule(manifest.id, event.target.checked)}
-                          />
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-            {modulesError != null && <p className="set__error">{modulesError}</p>}
+            {/* „Prikaz" (ADR-101) IS the gallery, grown rather than replaced:
+                the same list of every module by group, in the navigation groups
+                (ADR-093) rather than a second taxonomy of this page's own, but
+                drawn from the DEVICE's arrangement instead of this profile's
+                flags — the switches, the drag/keyboard order and the reset of
+                the order are one card, and the rail reads the same arrangement. */}
+            <ModuleVisibilityCard
+              registry={registry}
+              moduleVisibility={moduleVisibility}
+              onModuleVisibilityChanged={onModuleVisibilityChanged}
+              hits={hits}
+            />
           </Card>
 
           {/* The picker, inline rather than behind the drawer's dialog: this is the

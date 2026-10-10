@@ -969,6 +969,13 @@ const api: NexusApi = {
     ipcRenderer.on(IpcChannel.packsProgress, handler);
     return () => ipcRenderer.removeListener(IpcChannel.packsProgress, handler);
   },
+  // The device's module arrangement (ADR-101). `set` carries a whole
+  // arrangement rather than an operation, so a gesture that moves a group and
+  // one that switches a module off land the same way; main validates it against
+  // the live registry before it writes a byte.
+  getModuleVisibility: () => ipcRenderer.invoke(IpcChannel.visibilityGet),
+  setModuleVisibility: (visibility) =>
+    ipcRenderer.invoke(IpcChannel.visibilitySet, visibility),
 };
 
 contextBridge.exposeInMainWorld("nexus", Object.freeze(api));

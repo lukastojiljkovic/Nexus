@@ -3,6 +3,11 @@ import { describe, expect, it } from "vitest";
 
 import { createModuleRegistry, kitManifest } from "../../shared/modules.js";
 import {
+  DEFAULT_SHELL_VISIBILITY,
+  visibleModuleSet,
+  type ShellVisibility,
+} from "../../shared/moduleVisibility.js";
+import {
   isDeviceOnlyPanel,
   moduleSettingsCardIds,
   moduleSettingsCards,
@@ -20,13 +25,29 @@ import { activeLocale, strings } from "./strings.js";
  * card and search entries with no edit to the page and no edit to the index —
  * which is the whole claim the refactor makes, stated as a test rather than as
  * a comment. Everything above it pins the composition rules the page relies on
- * (registry order, the flag gate, which cards may offer a reset).
+ * (registry order, the visibility gate, which cards may offer a reset).
  */
 
 // A function, not a module-scope alias, so a language switch is reflected in
 // tests reading `s()` too — see check-string-capture.mjs.
 function s(): typeof strings.settings {
   return strings.settings;
+}
+
+/**
+ * The device's visible set for an arrangement (ADR-101), built through the ONE
+ * predicate. `hidden` and `shown` are the two lists the file holds, so a case
+ * states what the user DID - "switched Beleške off", "switched Privatno on" -
+ * rather than the derived set, which would make the assertion a second copy of
+ * the code under test.
+ */
+function visible(
+  registry: ModuleRegistry,
+  hidden: readonly string[] = [],
+  shown: readonly string[] = [],
+): ReadonlySet<string> {
+  const arrangement: ShellVisibility = { ...DEFAULT_SHELL_VISIBILITY, hidden, shown };
+  return visibleModuleSet(registry, arrangement);
 }
 
 /** A module this build does not have, declared exactly as a real one would be. */
@@ -166,7 +187,8 @@ describe("moduleSettingsCardIds", () => {
 
 describe("moduleSettingsCards", () => {
   it("draws every enabled module's card in registry order, titled by its declaration", () => {
-    const cards = moduleSettingsCards(createModuleRegistry(), {});
+    const registry = createModuleRegistry();
+    const cards = moduleSettingsCards(registry, visible(registry));
     // PRIV ships disabled (ADR-057), so it is absent until the gallery turns it on.
     expect(cards.map((card) => card.moduleId)).toEqual([
       "dashboard",
@@ -201,22 +223,29 @@ describe("moduleSettingsCards", () => {
     ]);
   });
 
-  it("draws NOTHING for a module the profile switched off, and draws one it switched on", () => {
+  it("draws NOTHING for a module this device hides, and draws one it switched on", () => {
     const registry = createModuleRegistry();
     expect(
-      moduleSettingsCards(registry, { notes: false }).map((card) => card.moduleId),
+      moduleSettingsCards(registry, visible(registry, ["notes"])).map((card) => card.moduleId),
     ).not.toContain("notes");
-    expect(moduleSettingsCards(registry, { priv: true }).map((card) => card.moduleId)).toContain(
-      "priv",
-    );
+    expect(
+      moduleSettingsCards(registry, visible(registry, [], ["priv"])).map((card) => card.moduleId),
+    ).toContain("priv");
   });
 
-  it("keeps a disabled module's card OUT of the page but IN the filter index", () => {
+  it("keeps a hidden module's card out of the page AND out of the filter index", () => {
     const registry = createModuleRegistry();
-    const index = buildSettingsIndex(registry);
-    expect(moduleSettingsCards(registry, {}).map((card) => card.moduleId)).not.toContain("priv");
-    expect(index.sections.map((section) => section.id)).toContain("priv");
-    expect(index.entries.some((entry) => entry.section === "priv")).toBe(true);
+    const enabled = visible(registry, ["notes"]);
+    const index = buildSettingsIndex(registry, enabled);
+    expect(moduleSettingsCards(registry, enabled).map((card) => card.moduleId)).not.toContain(
+      "notes",
+    );
+    expect(index.sections.map((section) => section.id)).not.toContain("notes");
+    expect(index.entries.some((entry) => entry.section === "notes")).toBe(false);
+    // The card that switches it back on is a section of its own, and it is
+    // reachable by the words somebody hunting for a module switch types.
+    expect(index.sections.map((section) => section.id)).toContain("modules");
+    expect(index.entries.some((entry) => entry.id === "modules-display")).toBe(true);
   });
 });
 
@@ -277,28 +306,28 @@ describe("a module this build has never heard of", () => {
    * what „a declaration plus its own component“ has to mean to be worth having.
    */
   it("gets a card, last because it registered last, titled by its own declaration", () => {
-    const cards = moduleSettingsCards(registry, {});
+    const cards = moduleSettingsCards(registry, visible(registry));
     const fake = cards.at(-1);
     expect(fake?.moduleId).toBe("fake");
     expect(fake?.title).toBe(s().sectionTitle.privacy);
     expect(fake?.panel).toBe(FAKE_PANEL);
   });
 
-  it("obeys the same flag gate as every other module", () => {
-    expect(moduleSettingsCards(registry, { fake: false }).map((card) => card.moduleId)).not.toContain(
-      "fake",
-    );
+  it("obeys the same visibility gate as every other module", () => {
+    expect(
+      moduleSettingsCards(registry, visible(registry, ["fake"])).map((card) => card.moduleId),
+    ).not.toContain("fake");
   });
 
   it("gets a section of its own in the filter index", () => {
-    const index = buildSettingsIndex(registry);
+    const index = buildSettingsIndex(registry, visible(registry));
     expect(index.sections.find((section) => section.id === "fake")?.title).toBe(
       s().sectionTitle.privacy,
     );
   });
 
   it("gets one entry per declared control, labelled and keyworded from the declaration", () => {
-    const entries = buildSettingsIndex(registry).entries.filter(
+    const entries = buildSettingsIndex(registry, visible(registry)).entries.filter(
       (entry) => entry.section === "fake",
     );
     expect(entries.map((entry) => entry.id)).toEqual(["fake:mode", "fake:amount"]);
@@ -310,7 +339,10 @@ describe("a module this build has never heard of", () => {
   });
 
   it("is findable by its keyword, and its card survives the filter", () => {
-    const result = matchSettings(buildSettingsIndex(registry), foldSettingsQuery("izmisljeno"));
+    const result = matchSettings(
+      buildSettingsIndex(registry, visible(registry)),
+      foldSettingsQuery("izmisljeno"),
+    );
     expect(result.hits.has("fake:mode")).toBe(true);
     expect(result.sections.has("fake")).toBe(true);
   });

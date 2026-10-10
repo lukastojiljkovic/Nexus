@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { createModuleRegistry } from "../../shared/modules.js";
+import { DEFAULT_SHELL_VISIBILITY, visibleModuleSet } from "../../shared/moduleVisibility.js";
 import {
   SYNC_HELD_SETTINGS_CARD_IDS,
   SYNC_ON_HOLD,
@@ -48,7 +49,9 @@ function s(): typeof strings.settings {
 }
 
 const REGISTRY = createModuleRegistry();
-const INDEX = buildSettingsIndex(REGISTRY);
+/** The device's visible set for an arrangement nothing has touched (ADR-101) — the app as it ships. */
+const VISIBLE = visibleModuleSet(REGISTRY, DEFAULT_SHELL_VISIBILITY);
+const INDEX = buildSettingsIndex(REGISTRY, VISIBLE);
 const SUB_PAGE_IDS = Object.values(SETTINGS_SUB_PAGE_LISTS).flatMap((list) =>
   list.subPages.map((subPage) => subPage.id),
 );
@@ -297,7 +300,7 @@ describe("moduleSettingsLocation", () => {
   it("is the same place the „Podešavanja modula“ row opens, so one card has one destination", () => {
     // The list row calls `navigate({ category: "modules", sub: card.moduleId })`;
     // the gear composes the same pair from the module id alone.
-    for (const card of moduleSettingsCards(REGISTRY, {})) {
+    for (const card of moduleSettingsCards(REGISTRY, VISIBLE)) {
       expect(moduleSettingsLocation(card.moduleId)).toEqual({
         category: "modules",
         sub: card.moduleId,
@@ -360,13 +363,23 @@ describe("visibleSections", () => {
     expect(visibility.groups).toEqual([]);
   });
 
-  it("still reaches a switched-off module's card by search — the flag gates the page, not the filter", () => {
-    // PRIV ships disabled: its card is not drawn and its row is not in the
-    // module list, but the index keeps it and visibility resolves it under
-    // „Moduli" all the same.
-    expect(moduleSettingsCards(REGISTRY, {}).map((card) => card.moduleId)).not.toContain("priv");
-    expect(INDEX.sections.map((section) => section.id)).toContain("priv");
-    expect(INDEX.entries.some((entry) => entry.section === "priv")).toBe(true);
+  it("takes a HIDDEN module out of the filter as well as off the page (ADR-101)", () => {
+    // PRIV ships off, so the shipped arrangement hides it: its card is not
+    // drawn, and its section and its controls are not indexed either — a hit
+    // that resolved to a card the page does not draw is a filter pointing at
+    // nothing. Where the reader goes instead is the „Prikaz" card, which lists
+    // every module by name and carries the switch that brings this one back.
+    expect(moduleSettingsCards(REGISTRY, VISIBLE).map((card) => card.moduleId)).not.toContain(
+      "priv",
+    );
+    expect(INDEX.sections.map((section) => section.id)).not.toContain("priv");
+    expect(INDEX.entries.some((entry) => entry.section === "priv")).toBe(false);
+    // The card that CAN reach it: „Prikaz" is a section of this page, and its
+    // entry answers to the words somebody hunting for a module switch types.
+    expect(INDEX.sections.map((section) => section.id)).toContain("modules");
+    expect(INDEX.entries.some((entry) => entry.id === "modules-display")).toBe(true);
+    // And `visibleSections` still resolves a section it is HANDED, whatever the
+    // index decided: it answers about a location, not about membership.
     const visibility = visibleSections(AT_REST, { sections: new Set(["priv"]), hits: new Set() });
     expect(visibility.cards.has("priv")).toBe(true);
     expect(visibility.groups).toEqual(["modules"]);

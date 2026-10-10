@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import type { ModuleRegistry } from "@nexus/core";
 import { Button, Icon, TextField } from "@nexus/ui";
 
+import type { ShellVisibility } from "../../shared/moduleVisibility.js";
 import { moduleIconName } from "./moduleIcon.js";
 import { MAX_PINNED_MODULES } from "./navPrefs.js";
 import {
@@ -39,6 +40,8 @@ export interface ModuleLauncherProps {
   registry: ModuleRegistry;
   /** The enabled module ids — the SAME set the rail is filtered through, so the two surfaces cannot disagree. */
   enabledModules: ReadonlySet<string>;
+  /** The device's arrangement (ADR-101), so the tiles are grouped and ordered exactly as the rail is. */
+  moduleVisibility: ShellVisibility;
   /** This profile's pins, so a tile can say whether it is already at the top. */
   pinned: readonly string[];
   onOpen: (moduleId: string) => void;
@@ -61,6 +64,7 @@ function tileCopy(moduleId: string): { name: string; description: string } {
 export function ModuleLauncherDialog({
   registry,
   enabledModules,
+  moduleVisibility,
   pinned,
   onOpen,
   onTogglePin,
@@ -82,7 +86,7 @@ export function ModuleLauncherDialog({
   // read from the live table, which is rewritten in place when the language
   // changes (`strings.ts`), so a memo keyed on the registry would keep the old
   // language's descriptions. Sixteen tiles are cheap.
-  const groups = launcherGroups(registry, enabledModules, tileCopy);
+  const groups = launcherGroups(registry, enabledModules, tileCopy, moduleVisibility);
   const visible = filterLauncherGroups(groups, query);
   const ids = launcherTileIds(visible);
   // Out-of-range answers nothing rather than clamping: the list shrinks as the
