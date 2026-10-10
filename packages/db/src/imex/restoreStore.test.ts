@@ -1780,6 +1780,28 @@ describe("RestoreStore", () => {
       "chess_games",
       "chess_resume",
       "chess_level_stats",
+      //  - the assistant's knowledge tables (migration 093 / ADR-104) and the
+      //    shadow of its FTS5 index: NOT in `RESTORE_WIPE_TABLES`, and this is
+      //    classification rather than deferral. Nothing here is content - every
+      //    row is derived from the user's own records, the app manual, installed
+      //    packs and the wiki reader, and `KnowledgeService.reindex` rebuilds the
+      //    whole thing from those sources. A restore REPLACES the records, so a
+      //    restored profile's index is stale until the next pass prunes against
+      //    the new `search_entries` and re-reads what changed, which is exactly
+      //    the direction that must not need a migration: a stale index row is a
+      //    cache miss and can never be a resurrection, because a passage is only
+      //    ever returned with a citation the source still answers for. It is
+      //    also on no sync collection map: an index over content is rebuilt from
+      //    whatever arrives, and shipping one across a wire would be sending
+      //    derived data to a device that can derive it.
+      "knowledge_chunks",
+      "knowledge_fts",
+      "knowledge_fts_data",
+      "knowledge_fts_idx",
+      "knowledge_fts_docsize",
+      "knowledge_fts_config",
+      "knowledge_vectors",
+      "knowledge_cursors",
     ]);
 
     const wipeTables = new Set<string>(RESTORE_WIPE_TABLES);
