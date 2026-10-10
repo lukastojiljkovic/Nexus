@@ -1127,3 +1127,49 @@ export type {
   SavedGame,
   SetResumeInput,
 } from "./games/chess/chessStore.js";
+
+// --- PUZZLES (migration 090) -------------------------------------------------
+//
+// THREE tables and one store, and the module owns them rather than sharing the
+// games' two, for the reason migration 090's header gives: the arcade's row is a
+// running total per game and the cards' is a seed plus a move list, and a puzzle
+// in progress is a grid or an arrangement — neither shape.
+//
+// Its two error classes live beside it rather than in `errors.ts`, on the TIMERS
+// module's terms: `errors.ts` is the package's shared vocabulary with a doc
+// comment per class, and a module built on the kit adds nothing there.
+export {
+  MAX_PUZZLE_ELAPSED_SECONDS,
+  MAX_PUZZLE_HINTS,
+  MAX_PUZZLE_SEED,
+  MAX_PUZZLE_SHUFFLES,
+  MAX_PUZZLE_STATE_BYTES,
+  PUZZLE_IDS,
+  PUZZLE_VARIANTS,
+  PuzzlesStore,
+  PuzzlesValidationError,
+  readElapsed,
+  readExpression,
+  readPuzzleId,
+  readPuzzleState,
+  readSaveExport,
+  readSeed,
+  readSettings,
+  readStatsExport,
+  readVariant,
+} from "./puzzles/puzzlesStore.js";
+export type {
+  BrojState,
+  FinishPuzzleInput,
+  MahjongState,
+  NonogramState,
+  PuzzleId,
+  PuzzlesSettings,
+  PuzzlesStats,
+  PuzzlesStatsExport,
+  PuzzleSave,
+  PuzzleSaveExport,
+  PuzzleState,
+  SavePuzzleInput,
+  SudokuState,
+} from "./puzzles/puzzlesStore.js";

@@ -1780,6 +1780,16 @@ describe("RestoreStore", () => {
       "chess_games",
       "chess_resume",
       "chess_level_stats",
+      //  - puzzles_saves / puzzles_stats / puzzles_settings (migration 090): the
+      //    PUZZLES module's three tables, on the TIMERS entry's exact terms one
+      //    screen up — a kit module's tables are deliberately NOT in
+      //    `RESTORE_WIPE_TABLES`, because that list is derived into
+      //    `@nexus/sync`'s collection map, and the kit's rule is the opposite
+      //    one: the module REPLACES ITS OWN ROWS through `importData` inside the
+      //    same restore transaction.
+      "puzzles_saves",
+      "puzzles_stats",
+      "puzzles_settings",
     ]);
 
     const wipeTables = new Set<string>(RESTORE_WIPE_TABLES);
