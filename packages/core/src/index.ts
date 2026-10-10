@@ -2718,3 +2718,5 @@ export {
 export type { BricksInput, BricksState } from "./games/bricks/bricks.js";
 export type * from "./assistant/contract.js";
 export type * from "./sky/contract.js";
+export { orbitalPeriodDays, orbitPath, solarSystemAt } from "./sky/planets.js";
+export { dayNightAt, TERMINATOR_ANGULAR_RADIUS_DEG, TWILIGHT_ANGULAR_RADII_DEG } from "./sky/earthView.js";
