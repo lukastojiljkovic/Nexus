@@ -1,23 +1,42 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import {
   CARD_GAMES,
+  CARD_GAME_SCORE_DIRECTION,
   CARD_GAME_VARIANTS,
   isCardGameId,
   isCardGameVariant,
   isCardSeed,
   isFreeCellDeal,
   replayFreeCell,
+  replayGolf,
+  replayHearts,
   replayKlondike,
+  replayPyramid,
+  replaySpades,
   replaySpider,
+  replayTablic,
+  replayTriPeaks,
   type CardGameId,
   type CardGameVariant,
   type FreeCellVariant,
   type FreeCellMove,
   type GameLogEntry,
+  type GolfMove,
+  type GolfVariant,
+  type HeartsMove,
+  type HeartsVariant,
   type KlondikeMove,
   type KlondikeVariant,
+  type PyramidMove,
+  type PyramidVariant,
+  type SpadesMove,
+  type SpadesVariant,
   type SpiderMove,
   type SpiderVariant,
+  type TablicMove,
+  type TablicVariant,
+  type TriPeaksMove,
+  type TriPeaksVariant,
 } from "@nexus/core";
 import { CardGameValidationError } from "../../errors.js";
 import { isDateTime } from "../../finance/money.js";
@@ -26,19 +45,25 @@ type DatabaseHandle = Database.Database;
 
 /**
  * The ceiling on one saved game's move list. A Klondike game is a few hundred
- * moves and a Spider game with heavy undo use is still under a thousand, so this
- * is four times the worst real one; what it stops is an untrusted caller parking
- * a megabyte of JSON in a column every read then parses.
+ * moves and a Spider game with heavy undo use is still under a thousand; a game
+ * against the computer logs EVERY seat's move and runs to several deals, which is
+ * why the ceiling is twice what it was before those games joined. What it stops is
+ * an untrusted caller parking a megabyte of JSON in a column every read then
+ * parses.
  */
-export const MAX_CARD_GAME_MOVES = 4_000;
+export const MAX_CARD_GAME_MOVES = 8_000;
 
 /**
  * And the ceiling on that list's TEXT. The count alone does not bound the size —
  * one entry can be arbitrarily long — and the text is what the column carries.
  * Measured in characters of the JSON, which for a move list is bytes: every
  * character a move can contain is ASCII (a suit name, a column index, a count).
+ * A game against the computer is what moved this from a quarter of a megabyte: a
+ * Hearts log is five hundred moves of a card each, a Tablić log carries a capture
+ * list beside every card, and a game runs to several deals — so the ceiling is the
+ * measured worst case with room to spare, not a number chosen for its own sake.
  */
-export const MAX_CARD_GAME_MOVES_BYTES = 262_144;
+export const MAX_CARD_GAME_MOVES_BYTES = 1_048_576;
 
 /**
  * Play time, in whole seconds, and a ceiling of twenty-four hours. A single
@@ -100,9 +125,11 @@ export interface CardGameProgressInput {
 
 /**
  * A saved game read back, as a union the caller can switch on — which is what
- * makes resume a one-line call into the engine (`replayKlondike`, `replayFreeCell`
- * or `replaySpider`) rather than a cast. Each branch carries the moves in its own
- * game's vocabulary because the store validated them with that game's engine.
+ * makes resume a one-line call into the engine (`replayKlondike`, `replaySpider`,
+ * `replayTablic` and the six beside them) rather than a cast. Each branch carries
+ * the moves in its own game's vocabulary because the store validated them with
+ * that game's engine, and the branch is exactly the `CARD_GAMES` entry: a game
+ * added to the vocabulary without a branch here does not compile.
  */
 export type CardGameProgress =
   | {
@@ -128,6 +155,60 @@ export type CardGameProgress =
       readonly variant: SpiderVariant;
       readonly seed: number;
       readonly moves: readonly GameLogEntry<SpiderMove>[];
+      readonly elapsedSeconds: number;
+      readonly score: number;
+      readonly updatedAt: string;
+    }
+  | {
+      readonly game: "pyramid";
+      readonly variant: PyramidVariant;
+      readonly seed: number;
+      readonly moves: readonly GameLogEntry<PyramidMove>[];
+      readonly elapsedSeconds: number;
+      readonly score: number;
+      readonly updatedAt: string;
+    }
+  | {
+      readonly game: "tripeaks";
+      readonly variant: TriPeaksVariant;
+      readonly seed: number;
+      readonly moves: readonly GameLogEntry<TriPeaksMove>[];
+      readonly elapsedSeconds: number;
+      readonly score: number;
+      readonly updatedAt: string;
+    }
+  | {
+      readonly game: "golf";
+      readonly variant: GolfVariant;
+      readonly seed: number;
+      readonly moves: readonly GameLogEntry<GolfMove>[];
+      readonly elapsedSeconds: number;
+      readonly score: number;
+      readonly updatedAt: string;
+    }
+  | {
+      readonly game: "hearts";
+      readonly variant: HeartsVariant;
+      readonly seed: number;
+      readonly moves: readonly GameLogEntry<HeartsMove>[];
+      readonly elapsedSeconds: number;
+      readonly score: number;
+      readonly updatedAt: string;
+    }
+  | {
+      readonly game: "spades";
+      readonly variant: SpadesVariant;
+      readonly seed: number;
+      readonly moves: readonly GameLogEntry<SpadesMove>[];
+      readonly elapsedSeconds: number;
+      readonly score: number;
+      readonly updatedAt: string;
+    }
+  | {
+      readonly game: "tablic";
+      readonly variant: TablicVariant;
+      readonly seed: number;
+      readonly moves: readonly GameLogEntry<TablicMove>[];
       readonly elapsedSeconds: number;
       readonly score: number;
       readonly updatedAt: string;
@@ -191,8 +272,8 @@ const FALLBACK_TIMESTAMP = "1970-01-01T00:00:00.000Z";
  *
  * **The store's validation is the ENGINE's validation.** Lengths, enums, ranges
  * and required fields are checked here, and then the whole move list is handed to
- * `replayKlondike`/`replayFreeCell`/`replaySpider`, which folds it from its own
- * seed and refuses anything the rules would not have allowed. That is what makes
+ * that game's own `replayX`, which folds it from its seed and refuses anything the
+ * rules would not have allowed. That is what makes
  * „stage 2 may pass untrusted input straight in" true rather than hopeful: a
  * forged move list, a seed outside the deal range and a truncated log all come
  * back as `CardGameValidationError`, from the same engine the UI's own moves go
@@ -305,6 +386,15 @@ export class CardGameStore {
    * bests and the streaks move only when it was won. A loss ends the current
    * streak — the longest is never lowered, because a record of what somebody did
    * is not something a later loss can take away.
+   *
+   * **„Best" is the best in the game's OWN direction.** Klondike, FreeCell,
+   * Spider, Pyramid, TriPeaks, Spades and Tablić count up, so a higher score beats
+   * a lower one; Hearts counts penalty points and Golf counts the cards left in
+   * the tableau, so for those two a LOWER score is the better result and the store
+   * keeps the smallest. The direction is `CARD_GAME_SCORE_DIRECTION`, stated once
+   * in `@nexus/core` where both the engines and this store read it, because a
+   * store that compared two directions with one operator would keep the wrong half
+   * of its own records.
    */
   recordResult(input: CardGameResultInput, now: string): CardGameStats {
     const validNow = validateNow(now);
@@ -322,10 +412,12 @@ export class CardGameStore {
       input.won && (current.bestTimeMs === null || elapsedMs < current.bestTimeMs)
         ? elapsedMs
         : current.bestTimeMs;
-    const bestScore =
-      input.won && (current.bestScore === null || score > current.bestScore)
-        ? score
-        : current.bestScore;
+    const beatsBest =
+      current.bestScore === null ||
+      (CARD_GAME_SCORE_DIRECTION[game] === "higher"
+        ? score > current.bestScore
+        : score < current.bestScore);
+    const bestScore = input.won && beatsBest ? score : current.bestScore;
 
     this.upsertStats.run(
       this.profileId,
@@ -541,6 +633,66 @@ export class CardGameStore {
           score: parsed.score,
           updatedAt: parsed.updatedAt,
         };
+      case "pyramid":
+        return {
+          game: "pyramid",
+          variant: parsed.variant as PyramidVariant,
+          seed: parsed.seed,
+          moves: parsed.moves as readonly GameLogEntry<PyramidMove>[],
+          elapsedSeconds: parsed.elapsedSeconds,
+          score: parsed.score,
+          updatedAt: parsed.updatedAt,
+        };
+      case "tripeaks":
+        return {
+          game: "tripeaks",
+          variant: parsed.variant as TriPeaksVariant,
+          seed: parsed.seed,
+          moves: parsed.moves as readonly GameLogEntry<TriPeaksMove>[],
+          elapsedSeconds: parsed.elapsedSeconds,
+          score: parsed.score,
+          updatedAt: parsed.updatedAt,
+        };
+      case "golf":
+        return {
+          game: "golf",
+          variant: parsed.variant as GolfVariant,
+          seed: parsed.seed,
+          moves: parsed.moves as readonly GameLogEntry<GolfMove>[],
+          elapsedSeconds: parsed.elapsedSeconds,
+          score: parsed.score,
+          updatedAt: parsed.updatedAt,
+        };
+      case "hearts":
+        return {
+          game: "hearts",
+          variant: parsed.variant as HeartsVariant,
+          seed: parsed.seed,
+          moves: parsed.moves as readonly GameLogEntry<HeartsMove>[],
+          elapsedSeconds: parsed.elapsedSeconds,
+          score: parsed.score,
+          updatedAt: parsed.updatedAt,
+        };
+      case "spades":
+        return {
+          game: "spades",
+          variant: parsed.variant as SpadesVariant,
+          seed: parsed.seed,
+          moves: parsed.moves as readonly GameLogEntry<SpadesMove>[],
+          elapsedSeconds: parsed.elapsedSeconds,
+          score: parsed.score,
+          updatedAt: parsed.updatedAt,
+        };
+      case "tablic":
+        return {
+          game: "tablic",
+          variant: parsed.variant as TablicVariant,
+          seed: parsed.seed,
+          moves: parsed.moves as readonly GameLogEntry<TablicMove>[],
+          elapsedSeconds: parsed.elapsedSeconds,
+          score: parsed.score,
+          updatedAt: parsed.updatedAt,
+        };
     }
   }
 }
@@ -655,6 +807,36 @@ function validateMoves(
       const replayed = replaySpider(variant as SpiderVariant, seed, moves);
       if (!replayed.ok) throw new CardGameValidationError(replayed.refusal.detail);
       return { moves, score: replayed.state.score, text };
+    }
+    case "pyramid": {
+      const replayed = replayPyramid(variant as PyramidVariant, seed, moves);
+      if (!replayed.ok) throw new CardGameValidationError(replayed.refusal.detail);
+      return { moves, score: replayed.state.score, text };
+    }
+    case "tripeaks": {
+      const replayed = replayTriPeaks(variant as TriPeaksVariant, seed, moves);
+      if (!replayed.ok) throw new CardGameValidationError(replayed.refusal.detail);
+      return { moves, score: replayed.state.score, text };
+    }
+    case "golf": {
+      const replayed = replayGolf(variant as GolfVariant, seed, moves);
+      if (!replayed.ok) throw new CardGameValidationError(replayed.refusal.detail);
+      return { moves, score: replayed.state.score, text };
+    }
+    case "hearts": {
+      const replayed = replayHearts(variant as HeartsVariant, seed, moves);
+      if (!replayed.ok) throw new CardGameValidationError(replayed.refusal.detail);
+      return { moves, score: replayed.state.board.scores[0] ?? 0, text };
+    }
+    case "spades": {
+      const replayed = replaySpades(variant as SpadesVariant, seed, moves);
+      if (!replayed.ok) throw new CardGameValidationError(replayed.refusal.detail);
+      return { moves, score: replayed.state.board.scores[0] ?? 0, text };
+    }
+    case "tablic": {
+      const replayed = replayTablic(variant as TablicVariant, seed, moves);
+      if (!replayed.ok) throw new CardGameValidationError(replayed.refusal.detail);
+      return { moves, score: replayed.state.board.scores[0] ?? 0, text };
     }
   }
 }

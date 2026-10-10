@@ -87,6 +87,22 @@ export function rankBelow(rank: Rank): Rank | null {
   return rank === 1 ? null : ((rank - 1) as Rank);
 }
 
+/**
+ * How strong a card is within its suit, for the trick-taking games: the Ace is
+ * the highest card and the Two the lowest.
+ *
+ * **This exists because rank is arithmetic and strength is not.** The Ace is rank
+ * 1 so that `rankBelow(1)` is the Ace's own sentence and Klondike's descending
+ * runs can subtract, which makes „the highest card of the suit led" the wrong
+ * question to ask of `rank` — a King is 13 and an Ace is 1, and comparing those
+ * two numbers backwards is exactly the defect this function makes impossible.
+ * Ranks 2..13 already count the right way round, so the only card that moves is
+ * the Ace, from the bottom number to the top of the order.
+ */
+export function rankStrength(rank: Rank): number {
+  return rank === 1 ? 14 : rank;
+}
+
 /** The published fixture form of one card: `AC`, `TD`, `KS`. */
 export function cardCode(card: Card): string {
   return RANK_CODES[card.rank] + SUIT_CODES[card.suit];

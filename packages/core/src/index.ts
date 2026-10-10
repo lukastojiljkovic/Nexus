@@ -2001,6 +2001,7 @@ export {
   colourOf,
   deckOf,
   isCard,
+  rankStrength,
   RANKS,
   rankBelow,
   sameCard,
@@ -2022,12 +2023,15 @@ export type { GameLogEntry, GameUndoEntry } from "./games/cards/log.js";
 export {
   CARD_GAMES,
   CARD_GAME_VARIANTS,
+  CARD_GAME_SCORE_DIRECTION,
+  CARD_OPPONENT_LEVELS,
   CardGameError,
   FREE_CELL_MAX_DEAL,
   FREE_CELL_MIN_DEAL,
   IllegalMoveError,
   isCardGameId,
   isCardGameVariant,
+  isCardOpponentLevel,
   isCardSeed,
   isFreeCellDeal,
   MAX_CARD_SEED,
@@ -2037,10 +2041,18 @@ export type {
   CardGameRefusal,
   CardGameRefusalCode,
   CardGameReplay,
+  CardGameScoreDirection,
   CardGameVariant,
+  CardOpponentLevel,
   FreeCellVariant,
+  GolfVariant,
+  HeartsVariant,
   KlondikeVariant,
+  PyramidVariant,
+  SpadesVariant,
   SpiderVariant,
+  TablicVariant,
+  TriPeaksVariant,
 } from "./games/cards/game.js";
 export {
   applyKlondike,
@@ -2123,6 +2135,197 @@ export type {
   SpiderReplay,
   SpiderState,
 } from "./games/cards/spider.js";
+
+// --- GAMES / CARDS, the solitaires added beside the three ------------------
+//
+// Pyramid, TriPeaks and Golf: the same shape as the engines above — a seeded
+// deal, a move log, a score folded from the position and nothing else — and two
+// of them carry a bounded solver for „winnable from here?" (`solveSolitaire`,
+// exported once for both). The one shared piece is the deal derivation the games
+// against the computer need: one seed, many deals, and no stream kept between
+// them.
+export { SOLVER_NODE_BOUND, solveSolitaire } from "./games/cards/solver.js";
+export type { SolitaireSolver, SolverAnswer, SolverVerdict } from "./games/cards/solver.js";
+export { dealRandom } from "./games/cards/deal.js";
+export {
+  applyGolf,
+  canUndoGolf,
+  dealGolf,
+  golfMoves,
+  golfSolve,
+  GOLF_COLUMNS,
+  GOLF_DEPTH,
+  GOLF_STOCK_CARDS,
+  GOLF_TABLEAU_CARDS,
+  hasGolfMoves,
+  isGolfEntry,
+  isGolfMove,
+  isGolfMoveLegal,
+  isGolfWon,
+  replayGolf,
+  undoGolf,
+} from "./games/cards/golf.js";
+export type { GolfBoard, GolfMove, GolfReplay, GolfState } from "./games/cards/golf.js";
+export {
+  applyPyramid,
+  canUndoPyramid,
+  dealPyramid,
+  hasPyramidMoves,
+  isPyramidEntry,
+  isPyramidMove,
+  isPyramidMoveLegal,
+  isPyramidWon,
+  pyramidMoves,
+  pyramidSolve,
+  PYRAMID_CARDS,
+  PYRAMID_ROWS,
+  PYRAMID_SOLVER_BOUND,
+  PYRAMID_STOCK_CARDS,
+  replayPyramid,
+  undoPyramid,
+} from "./games/cards/pyramid.js";
+export type {
+  PyramidBoard,
+  PyramidMove,
+  PyramidReplay,
+  PyramidSlot,
+  PyramidState,
+} from "./games/cards/pyramid.js";
+export {
+  applyTriPeaks,
+  canUndoTriPeaks,
+  dealTriPeaks,
+  hasTriPeaksMoves,
+  isTriPeaksEntry,
+  isTriPeaksMove,
+  isTriPeaksMoveLegal,
+  isTriPeaksWon,
+  replayTriPeaks,
+  TRIPEAKS_STOCK,
+  TRIPEAKS_TABLEAU,
+  triPeaksMoves,
+  undoTriPeaks,
+} from "./games/cards/tripeaks.js";
+export type {
+  TriPeaksBoard,
+  TriPeaksMove,
+  TriPeaksReplay,
+  TriPeaksState,
+} from "./games/cards/tripeaks.js";
+
+// --- GAMES / CARDS, the games against the computer -------------------------
+//
+// Hearts, Spades and Tablić: four seats or two, hidden cards, several deals to a
+// game, and a level ladder the opponents play at. Each engine exposes the rules
+// the way the solitaires do (`deal`, `moves`, `apply`, `replay`, a `*ToAct` and a
+// win test) plus `*ChooseMove`, which reads the level's configuration and only
+// ever returns a move the engine's own enumeration offered.
+export {
+  applyHearts,
+  canUndoHearts,
+  dealHearts,
+  hasHeartsMoves,
+  HEARTS_HAND,
+  HEARTS_LEVELS,
+  HEARTS_MOON,
+  HEARTS_PASS_CYCLE,
+  HEARTS_SEATS,
+  HEARTS_TARGET,
+  heartsChooseMove,
+  heartsDealPoints,
+  heartsLevel,
+  heartsMoves,
+  heartsToAct,
+  isHeartsEntry,
+  isHeartsMove,
+  isHeartsMoveLegal,
+  isHeartsWon,
+  replayHearts,
+  undoHearts,
+} from "./games/cards/hearts.js";
+export type {
+  HeartsBoard,
+  HeartsChooserOptions,
+  HeartsLevel,
+  HeartsMove,
+  HeartsPassDirection,
+  HeartsReplay,
+  HeartsState,
+  HeartsTrickCard,
+} from "./games/cards/hearts.js";
+export {
+  applySpades,
+  canUndoSpades,
+  dealSpades,
+  hasSpadesMoves,
+  isSpadesEntry,
+  isSpadesMove,
+  isSpadesMoveLegal,
+  isSpadesWon,
+  replaySpades,
+  SPADES_BAG_PENALTY,
+  SPADES_BAGS_PER_PENALTY,
+  SPADES_HAND,
+  SPADES_LEVELS,
+  SPADES_LOSS,
+  SPADES_NIL_BONUS,
+  SPADES_SEATS,
+  SPADES_TARGET,
+  SPADES_TRICKS,
+  spadesChooseMove,
+  spadesContract,
+  spadesLevel,
+  spadesMoves,
+  spadesPartnerOf,
+  spadesPartnershipTricks,
+  spadesToAct,
+  undoSpades,
+} from "./games/cards/spades.js";
+export type {
+  SpadesBoard,
+  SpadesChooserOptions,
+  SpadesLevel,
+  SpadesMove,
+  SpadesReplay,
+  SpadesState,
+  SpadesTrickCard,
+} from "./games/cards/spades.js";
+export {
+  applyTablic,
+  canUndoTablic,
+  dealTablic,
+  hasTablicMoves,
+  isTablicEntry,
+  isTablicMove,
+  isTablicMoveLegal,
+  isTablicWon,
+  legalCaptures,
+  replayTablic,
+  TABLIC_CARD_POINTS,
+  TABLIC_HAND,
+  TABLIC_LEVELS,
+  TABLIC_MOST_CARDS_POINTS,
+  TABLIC_TALON,
+  TABLIC_TARGET,
+  tablicCardPoints,
+  tablicChooseMove,
+  tablicLevel,
+  tablicMoves,
+  tablicMostCardsPoints,
+  tablicSeats,
+  tablicSideOf,
+  tablicToAct,
+  tablicValue,
+  undoTablic,
+} from "./games/cards/tablic.js";
+export type {
+  TablicBoard,
+  TablicChooserOptions,
+  TablicLevel,
+  TablicMove,
+  TablicReplay,
+  TablicState,
+} from "./games/cards/tablic.js";
 
 // --- GAMES / CHESS (stage 1) -------------------------------------------------
 //

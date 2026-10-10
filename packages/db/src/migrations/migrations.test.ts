@@ -9782,11 +9782,19 @@ describe("migration 081 — the card-game tables", () => {
     raw.close();
   });
 
-  it("refuses a game outside the three and a variant outside 1..32", () => {
+  it("refuses a game outside the nine and a variant outside 1..32", () => {
     const raw = open("cardgame-vocabulary.db");
-    // The game column names the three games the engines deal, exactly as
+    // The game column names the nine games the engines deal, exactly as
     // `arcade_scores` names its two.
     expect(() => insertStat(raw, withField(1, "poker"))).toThrow(/CHECK/);
+    // Every game of the nine lands, including the six the second stage added to
+    // this CHECK before the migration ever shipped.
+    for (const game of ["pyramid", "tripeaks", "golf", "hearts", "spades", "tablic"]) {
+      insertStat(raw, withField(1, game));
+    }
+    expect(
+      raw.prepare("SELECT COUNT(*) AS n FROM cardgame_stats WHERE game <> 'klondike'").get(),
+    ).toEqual({ n: 6 });
     // The variant's SHAPE is bounded; its vocabulary is the store's, against
     // `@nexus/core`'s `CARD_GAME_VARIANTS`.
     expect(() => insertStat(raw, withField(2, ""))).toThrow(/CHECK/);
@@ -9798,7 +9806,9 @@ describe("migration 081 — the card-game tables", () => {
     insertStat(raw, withField(2, "d".repeat(32)));
     // And a row that stays inside the bounds is taken, zeros included.
     insertStat(raw, ["p1", "spider", "suits2", 0, 0, null, 0, 0, 0, T]);
-    expect(raw.prepare("SELECT COUNT(*) AS n FROM cardgame_stats").get()).toEqual({ n: 3 });
+    // Six rows for the six games above, the one whose best score has no floor, the
+    // one with a 32-character variant and the Spider row: nine rows, nine games.
+    expect(raw.prepare("SELECT COUNT(*) AS n FROM cardgame_stats").get()).toEqual({ n: 9 });
     raw.close();
   });
 
