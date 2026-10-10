@@ -2718,3 +2718,53 @@ export {
 export type { BricksInput, BricksState } from "./games/bricks/bricks.js";
 export type * from "./assistant/contract.js";
 export type * from "./sky/contract.js";
+
+// --- SKY: the star map (the astronomy corner, part 4) ------------------------
+//
+// The catalogue `sky/starCatalogue.ts` ships (V/50 to magnitude 6.0, with the
+// IAU's names and the 88 constellations in three languages) and the geometry
+// that turns a J2000 direction into a place in somebody's sky: precession
+// (Meeus ch. 21), nutation (ch. 22), annual aberration (ch. 23) and the
+// rotation to the horizon (ch. 13, shared with the Sun and the Moon), plus the
+// stereographic projection and its inverse that the star map's canvas draws
+// through. `sky/stars.ts` is the header that explains the order of those steps
+// and what the module deliberately does not do (no proper motion, no figures).
+//
+// `skyFrame` is the shape a renderer wants: the sidereal time, the Julian days
+// and the Sun's longitude, computed ONCE per place and instant, so a loop over
+// 5,080 stars does not recompute the Earth's rotation per star.
+export {
+  HORIZON_RADIUS,
+  NAKED_EYE_MAGNITUDE_LIMIT,
+  SKY_SEARCH_LIMIT,
+  STAR_COUNT,
+  ZENITH,
+  allStars,
+  apparentDirection,
+  constellationAnchor,
+  constellationById,
+  constellations,
+  foldSkyText,
+  horizontalOf,
+  precessEquatorial,
+  precessionAngles,
+  projectStereographic,
+  searchSky,
+  skyFrame,
+  skyPlace,
+  starDirection,
+  starPlacement,
+  starSky,
+  starsBrighterThan,
+  unprojectStereographic,
+} from "./sky/stars.js";
+export type {
+  EquatorialDirection,
+  HorizontalDirection,
+  PlanePoint,
+  PrecessionAngles,
+  SkyFrame,
+  SkyLabelLocale,
+  SkySearchMatch,
+  StarPlacement,
+} from "./sky/stars.js";

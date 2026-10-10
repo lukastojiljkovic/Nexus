@@ -186,6 +186,10 @@ export const SERBIAN_SOURCES = [
     match: /^packages\/core\/src\/cookbook\/parse\.ts$/,
     reason: "the Serbian measure words and taste phrases the ingredient parser RECOGNISES in a pasted recipe — a vocabulary read from input, never shown",
   },
+  {
+    match: /^apps\/desktop\/src\/modules\/[^/]+\/renderer\/[^/]+\/copy\.sr\.ts$/,
+    reason: "a kit module's own Serbian table one folder DEEPER than `renderer/copy.sr.ts` — the star map's, whose component lives under `renderer/stars/` so the module's page can be assembled around it; the `copy.en.ts` rule 1 reads sits beside it",
+  },
 ];
 
 /**
