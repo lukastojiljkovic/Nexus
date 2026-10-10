@@ -124,6 +124,10 @@ export type IconName =
   | "external"
   | "sun"
   | "moon"
+  // The pantry: a lidded jar, because the thing the module is about is what is
+  // IN the house. Deliberately not the module row's own vocabulary (`archive`
+  // above is already a box, and a second one would mean the wrong thing).
+  | "pantry"
   // The drawn window frame. Deliberately the OS's own vocabulary rather than
   // an invention: a rule, a square and a square-behind-a-square are what every
   // desktop has meant by minimise / maximise / restore for thirty years, and a
@@ -794,6 +798,15 @@ const SHAPES: Record<IconName, ReactNode> = {
     </>
   ),
   moon: <path d="M20 14.4A8.6 8.6 0 0 1 9.6 4a8.4 8.4 0 1 0 10.4 10.4z" />,
+  pantry: (
+    <>
+      <path d="M8.6 4.6h6.8" />
+      <path d="M9.8 4.6v2.6" />
+      <path d="M14.2 4.6v2.6" />
+      <path d="M7.4 9.8a2.6 2.6 0 0 1 2.6-2.6h4a2.6 2.6 0 0 1 2.6 2.6v7.8a2.4 2.4 0 0 1-2.4 2.4H9.8a2.4 2.4 0 0 1-2.4-2.4z" />
+      <path d="M9.8 14.6h4.4" />
+    </>
+  ),
 };
 
 /**

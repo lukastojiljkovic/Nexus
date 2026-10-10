@@ -887,11 +887,15 @@ export type {
 // the version check is why an older build refuses a newer file outright instead
 // of importing half of it.
 export {
+  DEFAULT_PANTRY_EXPIRY_WINDOW_DAYS,
   MAX_PANTRY_EXPORT_ROWS,
+  MAX_PANTRY_EXPIRY_WINDOW_DAYS,
   PANTRY_EXPORT_VERSION,
   PantryStore,
+  parsePantryExport,
 } from "./pantry/pantryStore.js";
 export type {
+  AddPantryShoppingLineInput,
   CreatePantryItemInput,
   CreatePantryLocationInput,
   PantryExport,
@@ -901,6 +905,8 @@ export type {
   PantryItem,
   PantryLocation,
   PantryLogEntry,
+  PantrySettings,
+  PantryShoppingLine,
   UpdatePantryItemFields,
 } from "./pantry/pantryStore.js";
 

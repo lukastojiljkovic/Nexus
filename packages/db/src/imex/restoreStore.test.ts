@@ -1751,6 +1751,18 @@ describe("RestoreStore", () => {
       "pantry_locations",
       "pantry_items",
       "pantry_log",
+      // Stage 2's two additions to migration 075, exempt on the KIT's terms
+      // rather than the sequencing one above: the hand-written half of the
+      // shopping list, and the module's single preference (the window
+      // „ističe uskoro" reaches). A kit module's tables are deliberately NOT in
+      // `RESTORE_WIPE_TABLES` — that list is derived into `@nexus/sync`'s
+      // collection map, which `collectionGuard.test.ts` holds it equal to, and a
+      // module built on the kit may not edit `@nexus/sync`. So this module
+      // REPLACES ITS OWN ROWS instead, inside the same restore, through
+      // `ModuleContext.importData` (`main/restore.ts` calls `restoreModuleData`
+      // immediately after the replace), exactly as the three TIMERS tables do.
+      "pantry_shopping",
+      "pantry_settings",
       "cookbook_recipes",
       "cookbook_ingredients",
       "cookbook_steps",

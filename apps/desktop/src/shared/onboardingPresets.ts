@@ -47,6 +47,10 @@ export const ESSENTIALS_MODULE_PRESET: Readonly<Record<string, boolean>> = {
   // turns it on exactly as the manifest's own `defaultEnabled` says.
   timers: true,
   pro: false,
+  // The second kit module, decided here for the same reason: a pantry writes
+  // nothing until the user records a first item, so there is nothing to opt into
+  // and „Osnovno" turns it on exactly as its manifest says.
+  pantry: true,
 };
 
 /**

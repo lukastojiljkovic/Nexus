@@ -98,6 +98,8 @@ describe("createModuleRegistry", () => {
       // here rather than derived because this test IS the declaration — what the
       // registry holds is what the app shows.
       "timers",
+      // The second DISCOVERED module, after TIMERS' `order: 100`.
+      "pantry",
     ]);
   });
 
@@ -153,6 +155,10 @@ describe("createModuleRegistry", () => {
       // entry, not a second reading of PRD 29 („Utility Belt"), so it takes
       // its own prefix below rather than borrowing this one.
       UTIL: ["focus", "tools", "timers"],
+      // „Ostava" takes its own, on „Tabla"'s terms exactly: PANT is its own PRD
+      // entry, and the UTIL sharing above is one section implemented twice rather
+      // than a bin for anything shelf-shaped.
+      PANT: ["pantry"],
       CANV: ["canvas"],
       // „Elektronika" takes its own for „Tabla"'s reason exactly: ELEC is its
       // own PRD entry, and the UTIL sharing above is one section implemented
@@ -206,6 +212,9 @@ describe("createModuleRegistry", () => {
       "priv",
       "finance",
       "fitness",
+      // The second discovered module, in the group it declares: a pantry is an
+      // AREA of a life, which is what „Život" holds (ADR-093).
+      "pantry",
     ]);
     expect(grouped.get("make")?.map((manifest) => manifest.id)).toEqual([
       "tools",
@@ -254,6 +263,9 @@ describe("createModuleRegistry", () => {
       // ON by default, like every module but PRIV and PRO: a timer writes
       // nothing until somebody starts one, so there is nothing to opt into.
       "timers",
+      // The same for the pantry: nothing is written until a first item is
+      // recorded.
+      "pantry",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");
@@ -440,6 +452,8 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
       // The first DISCOVERED card (ADR-090): declared in the module's own
       // manifest and drawn by its own body, with no line in this file's map.
       "timers",
+      // The second, on the same terms.
+      "pantry",
     ]);
   });
 
@@ -566,6 +580,10 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
     // podrazumevano": there is no default to go back to, and a reset would be a
     // write about somebody's own data.
     expect(storages("fitness")).toEqual(new Set(["profile"]));
+    // OSTAVA's one control is the window „ističe uskoro" reaches, and MAIN reads
+    // it while firing the module's own reminder with no page open at all — so it
+    // is a row about the profile's shelves and travels in the profile's archive.
+    expect(storages("pantry")).toEqual(new Set(["profile"]));
   });
 });
 

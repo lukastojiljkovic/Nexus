@@ -216,6 +216,7 @@ describe("resolveModuleSelection", () => {
       // The first discovered module (ADR-090): the questionnaire decides it like
       // any other selectable module, from its own manifest default.
       timers: true,
+      pantry: true,
       pro: false,
     });
   });
@@ -255,6 +256,8 @@ describe("moduleFlagWrites", () => {
       // And the first DISCOVERED module last, because a kit module registers
       // after every compiled-in one (ADR-090).
       { moduleId: "timers", enabled: true },
+      // ...and the second, in the order the registry holds them.
+      { moduleId: "pantry", enabled: true },
     ]);
   });
 
