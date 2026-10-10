@@ -1,0 +1,6 @@
+A cut of https://metmuseum.github.io/ (fetched 2026-10-10). The Met publishes its
+Open Access statement on its own API documentation page, which is why that page
+is the licence evidence rather than the collection website's Open Access page:
+the website answers automated requests with HTTP 429.
+
+The Metropolitan Museum of Art provides select datasets of information on more than 470,000 artworks in its Collection for unrestricted commercial and noncommercial use. To the extent possible under law, The Metropolitan Museum of Art has waived all copyright and related or neighboring rights to this dataset using the Creative Commons Zero license. This work is published from the United States of America.

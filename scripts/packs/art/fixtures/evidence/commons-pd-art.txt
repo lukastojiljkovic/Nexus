@@ -1,0 +1,4 @@
+A cut of https://commons.wikimedia.org/wiki/Template:PD-Art (fetched 2026-10-10),
+the rendered text of the template page.
+
+https://creativecommons.org/publicdomain/mark/1.0/ PDM Creative Commons Public Domain Mark 1.0 false false The official position taken by the Wikimedia Foundation is that " faithful reproductions of two-dimensional public domain works of art are public domain ". This photographic reproduction is therefore also considered to be in the public domain in the United States.

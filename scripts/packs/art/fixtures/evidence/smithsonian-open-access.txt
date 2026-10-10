@@ -1,0 +1,9 @@
+A cut of https://registry.opendata.aws/smithsonian-open-access/ (fetched
+2026-10-10). The Smithsonian's own Open Access page answers automated requests
+with a JavaScript challenge, so the licence is read from the registry entry that
+the Smithsonian maintains for the same dataset.
+
+License
+CC0
+
+On February 25th, 2020, the Smithsonian released over 2.8 million CC0 interdisciplinary 2-D and 3-D images, related metadata, and additionally, research data from researches across the Smithsonian.
