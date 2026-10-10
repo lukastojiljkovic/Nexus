@@ -1,0 +1,314 @@
+{
+  "scenarios": [
+    {
+      "id": "long-context-passcode-sr",
+      "title": "Dugačak razgovor, kratak odgovor sa izvorom",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Napravi mi plan za učenje za ovu nedelju." },
+        {
+          "role": "assistant",
+          "content": "Podeliću ti nedelju na blokove: dva dana za ponavljanje kartica, jedan dan za zadatke iz Analize 1 i jedan za pisanje rada. Ostavi petak slobodan."
+        },
+        { "role": "user", "content": "Koliko dugo da učim bez pauze?" },
+        {
+          "role": "assistant",
+          "content": "Blok od 25 minuta i pauza od 5 je dobra osnova; posle četiri bloka uzmi dužu pauzu. Tajmer za fokus ti meri blok."
+        },
+        { "role": "user", "content": "Podseti me šta sam juče uneo u troškove." },
+        {
+          "role": "assistant",
+          "content": "Juče su uneta dva troška: udžbenik i karta za prevoz. Oba su u dinarima, a kategorija je Studije."
+        },
+        { "role": "user", "content": "Hoću da vodim evidenciju o čitanju, gde da je stavim?" },
+        {
+          "role": "assistant",
+          "content": "Najbolje u beleške, sa jednim naslovom za svaku knjigu, ili u navike ako ti je cilj da čitaš svaki dan."
+        },
+        { "role": "user", "content": "Isključi mi zvuk za tajmer." },
+        {
+          "role": "assistant",
+          "content": "Zvuk se isključuje u modulu Tajmeri, na kartici sa podešavanjima modula."
+        },
+        { "role": "user", "content": "Kako da napravim rezervnu kopiju pre nego što menjam telefon?" },
+        {
+          "role": "assistant",
+          "content": "Pokreni izvoz iz Podešavanja, sa kartice Podaci; arhiva sadrži sve profile, pa je prebaci na novi uređaj i uvezi je tamo."
+        },
+        { "role": "user", "content": "Dobro. A gde se menja šifra za otključavanje?" }
+      ],
+      "tools": [
+        { "name": "knowledge.search", "effect": "read" },
+        { "name": "app.open", "effect": "navigate" }
+      ],
+      "knowledge": [
+        {
+          "citation": {
+            "kind": "app-manual",
+            "id": "manual-security",
+            "title": "Bezbednost i šifra",
+            "locator": "Podešavanja › Bezbednost"
+          },
+          "text": "Šifra za otključavanje menja se u modulu Podešavanja, na kartici Bezbednost.",
+          "score": 0.93
+        }
+      ],
+      "modelContextTokens": 512,
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "knowledge.search" }],
+        "cites": ["manual-security"],
+        "answerContains": ["Bezbednost"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "knowledge.search", "arguments": { "query": "gde se menja šifra" } }] },
+        {
+          "text": "Šifru menjaš u Podešavanjima, na kartici Bezbednost. Prethodni razgovor ne menja odgovor: ista kartica važi i za šifru za Privatno, koja ima svoje polje."
+        }
+      ]
+    },
+    {
+      "id": "tool-error-tasks-sr",
+      "title": "Greška alata iz koje se odgovor izvlači",
+      "locale": "sr",
+      "conversation": [{ "role": "user", "content": "Koliko zadataka imam danas?" }],
+      "tools": [
+        { "name": "tasks.list", "effect": "read", "fail": "the task store is locked" },
+        {
+          "name": "tasks.create",
+          "effect": "write",
+          "summary": { "sr": "Dodaću zadatak.", "en": "I will add a task." }
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 3,
+      "expect": {
+        "toolsCalled": [{ "name": "tasks.list" }],
+        "toolsNotCalled": ["tasks.create"],
+        "answerContains": ["zaključana"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "tasks.list", "arguments": { "filter": "danas" } }] },
+        {
+          "text": "Ne mogu da pročitam zadatke: baza je zaključana, pa alat nije vratio listu. Otvori profil i pitaj me ponovo, ili pogledaj modul Zadaci direktno."
+        }
+      ]
+    },
+    {
+      "id": "step-budget-multi-search-sr",
+      "title": "Dva pronalaženja u jednom potezu, u okviru budžeta",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Uporedi kako se pravi podsetnik i kako se zakazuje događaj." }
+      ],
+      "tools": [
+        { "name": "knowledge.search", "effect": "read" },
+        {
+          "name": "tasks.create",
+          "effect": "write",
+          "summary": { "sr": "Dodaću zadatak.", "en": "I will add a task." }
+        }
+      ],
+      "knowledge": [
+        {
+          "citation": {
+            "kind": "app-manual",
+            "id": "manual-reminders",
+            "title": "Podsetnici",
+            "locator": "Priručnik › Podsetnici"
+          },
+          "text": "Podsetnik se pravi uz zadatak ili događaj i vezan je za vreme.",
+          "score": 0.88
+        },
+        {
+          "citation": {
+            "kind": "app-manual",
+            "id": "manual-events",
+            "title": "Događaji",
+            "locator": "Priručnik › Kalendar"
+          },
+          "text": "Događaj se zakazuje u kalendaru i ima početak i kraj; podsetnik na događaj je odvojen i ne menja vreme događaja.",
+          "score": 0.9
+        }
+      ],
+      "confirmations": [],
+      "maxSteps": 3,
+      "expect": {
+        "toolsCalled": [{ "name": "knowledge.search" }],
+        "toolsNotCalled": ["tasks.create"],
+        "cites": ["manual-reminders", "manual-events"],
+        "answerContains": ["podsetnik"],
+        "language": "sr",
+        "maxSteps": 3
+      },
+      "script": [
+        { "toolCalls": [{ "name": "knowledge.search", "arguments": { "query": "podsetnik" } }] },
+        { "toolCalls": [{ "name": "knowledge.search", "arguments": { "query": "događaj kalendar" } }] },
+        {
+          "text": "Podsetnik se pravi uz zadatak ili događaj i vezan je za vreme, a događaj se zakazuje u kalendaru i ima početak i kraj. Podsetnik na događaj je odvojen i ne menja vreme događaja."
+        }
+      ]
+    },
+    {
+      "id": "long-context-passcode-en",
+      "title": "A long conversation, one short sourced answer",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "Make me a study plan for this week." },
+        {
+          "role": "assistant",
+          "content": "I will split the week into blocks: two days for review cards, one for the Analysis 1 problem set, and one for writing. Keep Friday free."
+        },
+        { "role": "user", "content": "How long should I study without a break?" },
+        {
+          "role": "assistant",
+          "content": "A twenty-five minute block with a five minute break is a good base; after four blocks take a longer one. The focus timer counts the block for you."
+        },
+        { "role": "user", "content": "Remind me what I entered into expenses yesterday." },
+        {
+          "role": "assistant",
+          "content": "Two expenses were entered yesterday: a textbook and a travel card. Both are in dinars and the category is Study."
+        },
+        { "role": "user", "content": "I want to keep track of my reading. Where should that go?" },
+        {
+          "role": "assistant",
+          "content": "Notes work best, with one heading per book, or Habits if the goal is to read every day."
+        },
+        { "role": "user", "content": "Turn the timer sound off for me." },
+        {
+          "role": "assistant",
+          "content": "The sound is switched off in the Timers module, on the module's settings card."
+        },
+        { "role": "user", "content": "How do I make a backup before I change phones?" },
+        {
+          "role": "assistant",
+          "content": "Run the export from Settings, on the Data card; the archive holds every profile, so move it to the new device and import it there."
+        },
+        { "role": "user", "content": "Fine. And where is the unlock passcode changed?" }
+      ],
+      "tools": [
+        { "name": "knowledge.search", "effect": "read" },
+        { "name": "app.open", "effect": "navigate" }
+      ],
+      "knowledge": [
+        {
+          "citation": {
+            "kind": "app-manual",
+            "id": "manual-security",
+            "title": "Security and the passcode",
+            "locator": "Settings › Security"
+          },
+          "text": "The unlock passcode is changed in Settings, on the Security card.",
+          "score": 0.93
+        }
+      ],
+      "modelContextTokens": 512,
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "knowledge.search" }],
+        "cites": ["manual-security"],
+        "answerContains": ["Security"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "knowledge.search", "arguments": { "query": "where is the passcode changed" } }] },
+        {
+          "text": "The passcode is changed in Settings, on the Security card. The earlier conversation does not change the answer, and the private passcode is on the same card in a field of its own."
+        }
+      ]
+    },
+    {
+      "id": "tool-error-tasks-en",
+      "title": "An answer recovered from a tool error",
+      "locale": "en",
+      "conversation": [{ "role": "user", "content": "How many tasks do I have today?" }],
+      "tools": [
+        { "name": "tasks.list", "effect": "read", "fail": "the task store is locked" },
+        {
+          "name": "tasks.create",
+          "effect": "write",
+          "summary": { "sr": "Dodaću zadatak.", "en": "I will add a task." }
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 3,
+      "expect": {
+        "toolsCalled": [{ "name": "tasks.list" }],
+        "toolsNotCalled": ["tasks.create"],
+        "answerContains": ["locked"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "tasks.list", "arguments": { "filter": "today" } }] },
+        {
+          "text": "I cannot read your tasks: the store is locked, so the tool returned no list. Unlock the profile and ask me again, or open the Tasks module directly."
+        }
+      ]
+    },
+    {
+      "id": "step-budget-multi-search-en",
+      "title": "Two searches in one turn, inside the budget",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "Compare how a reminder is made with how an event is scheduled." }
+      ],
+      "tools": [
+        { "name": "knowledge.search", "effect": "read" },
+        {
+          "name": "tasks.create",
+          "effect": "write",
+          "summary": { "sr": "Dodaću zadatak.", "en": "I will add a task." }
+        }
+      ],
+      "knowledge": [
+        {
+          "citation": {
+            "kind": "app-manual",
+            "id": "manual-reminders",
+            "title": "Reminders",
+            "locator": "Manual › Reminders"
+          },
+          "text": "A reminder is made on a task or an event and is tied to a time.",
+          "score": 0.88
+        },
+        {
+          "citation": {
+            "kind": "app-manual",
+            "id": "manual-events",
+            "title": "Events",
+            "locator": "Manual › Calendar"
+          },
+          "text": "An event is scheduled in the calendar and has a start and an end; a reminder on an event is separate and does not change when the event happens.",
+          "score": 0.9
+        }
+      ],
+      "confirmations": [],
+      "maxSteps": 3,
+      "expect": {
+        "toolsCalled": [{ "name": "knowledge.search" }],
+        "toolsNotCalled": ["tasks.create"],
+        "cites": ["manual-reminders", "manual-events"],
+        "answerContains": ["reminder"],
+        "language": "en",
+        "maxSteps": 3
+      },
+      "script": [
+        { "toolCalls": [{ "name": "knowledge.search", "arguments": { "query": "reminder" } }] },
+        { "toolCalls": [{ "name": "knowledge.search", "arguments": { "query": "event calendar" } }] },
+        {
+          "text": "A reminder is made on a task or an event and is tied to a time, while an event is scheduled in the calendar and has a start and an end. A reminder on an event is separate and does not change when the event happens."
+        }
+      ]
+    }
+  ]
+}
