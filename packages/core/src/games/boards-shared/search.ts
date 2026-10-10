@@ -4,7 +4,7 @@
  * One negamax with alpha-beta, iterative deepening and a HARD node budget, so
  * that a move can never take long: the budget is counted as each node is
  * entered, the search aborts when it is reached, and what comes back is the
- * best move of the deepest COMPLETED depth â€” never half of a deeper one. That
+ * best move of the deepest COMPLETED depth — never half of a deeper one. That
  * is the whole reason `bestMove` can be handed to a worker and be relied on.
  *
  * A game supplies four functions and nothing else: its moves, its transition,
@@ -13,14 +13,14 @@
  * score for a finished game; each game documents its scale below.
  *
  * The caller's `random` shuffles the ROOT moves once per call. Alpha-beta's
- * value does not depend on move order â€” only which of two equally valued moves
- * gets reported does â€” so the shuffle adds variety between games without making
+ * value does not depend on move order — only which of two equally valued moves
+ * gets reported does — so the shuffle adds variety between games without making
  * the result a coin flip, and the same seed still replays the same choice. The
  * search never reads `Math.random`.
  */
 
-import type { Rng } from "./rng.js";
-import { shuffled } from "./rng.js";
+import type { SeededRandom } from "../random.js";
+import { shuffled } from "../random.js";
 
 /** The function set a game hands to `search`. */
 export interface SearchGame<S, M> {
@@ -77,7 +77,7 @@ export function search<S, M>(
   game: SearchGame<S, M>,
   state: S,
   limits: SearchLimits,
-  random?: Rng,
+  random?: SeededRandom,
 ): Choice<M> {
   const budget = Math.max(1, Math.floor(limits.nodeBudget));
   const maxDepth = Math.max(1, Math.floor(limits.depth));
@@ -87,7 +87,7 @@ export function search<S, M>(
     const moves = game.orderMoves
       ? game.orderMoves(state, game.legalMoves(state)).slice()
       : game.legalMoves(state).slice();
-    return random === undefined ? moves : shuffled(random, moves);
+    return random === undefined ? moves : shuffled(moves, random);
   };
 
   if (game.isTerminal(state)) {

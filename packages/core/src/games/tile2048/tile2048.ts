@@ -29,8 +29,8 @@
  * move that changed nothing keeps no record, because it was not a move.
  */
 
-import type { PuzzleRandom } from "../puzzles-shared/random.js";
-import { createPuzzleRandom, randomBelow } from "../puzzles-shared/random.js";
+import type { SeededRandom } from "../random.js";
+import { createSeededRandom, randomBelow } from "../random.js";
 
 /** The boards this engine builds. */
 export type Tile2048Size = 4 | 5 | 6;
@@ -76,7 +76,7 @@ export interface Tile2048Setup {
  * times out of ten, a 4 the rest. Kept in one function so the probability is
  * stated once and can be measured rather than assumed.
  */
-export function nextTileValue(random: PuzzleRandom): 2 | 4 {
+export function nextTileValue(random: SeededRandom): 2 | 4 {
   return random.next() < 0.9 ? 2 : 4;
 }
 
@@ -154,7 +154,7 @@ export function createTile2048(seed: number, size: Tile2048Size = 4): Tile2048St
   if (!TILE_2048_SIZES.includes(size)) {
     throw new RangeError(`createTile2048: this engine builds 4x4, 5x5 and 6x6 boards, got ${size}`);
   }
-  const random = createPuzzleRandom(seed);
+  const random = createSeededRandom(seed);
   const cells = new Array<number>(size * size).fill(0);
   placeRandomTile(cells, random);
   placeRandomTile(cells, random);
@@ -172,7 +172,7 @@ export function createTile2048(seed: number, size: Tile2048Size = 4): Tile2048St
 }
 
 /** Put a fresh tile on a random empty cell; the caller has already checked there is one. */
-function placeRandomTile(cells: number[], random: PuzzleRandom): void {
+function placeRandomTile(cells: number[], random: SeededRandom): void {
   const empty: number[] = [];
   for (let index = 0; index < cells.length; index += 1) {
     if (cells[index] === 0) empty.push(index);
@@ -267,7 +267,7 @@ export function moveTile2048(state: Tile2048State, move: Tile2048Move): Tile2048
   const slid = slide(state.cells, state.size, move);
   if (!slid.moved) return state;
 
-  const random = createPuzzleRandom(state.rngState);
+  const random = createSeededRandom(state.rngState);
   const cells = slid.cells;
   placeRandomTile(cells, random);
   const won = state.won || cells.some((value) => value >= TILE_2048_WIN);

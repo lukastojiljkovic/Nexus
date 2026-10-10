@@ -28,8 +28,8 @@
 
 import { InvalidStateError } from "../boards-shared/errors.js";
 import type { Player } from "../boards-shared/outcome.js";
-import type { Rng } from "../boards-shared/rng.js";
-import { rollDice, shuffled } from "../boards-shared/rng.js";
+import type { SeededRandom } from "../random.js";
+import { rollDice, shuffled } from "../random.js";
 import type { Choice } from "../boards-shared/search.js";
 
 export const BACKGAMMON_POINTS = 24;
@@ -381,7 +381,7 @@ function playsFor(turn: Turn, player: Player, dice: readonly number[]): Backgamm
  * The dice for the side to move. Refuses when it already has dice — the caller
  * rolls once per turn — and a double is stored as the four plays it is worth.
  */
-export function rollFor(state: BackgammonState, rng: Rng): BackgammonState {
+export function rollFor(state: BackgammonState, rng: SeededRandom): BackgammonState {
   if (state.dice.length > 0) throw new InvalidStateError("already-rolled");
   if (result(state).status === "win") throw new InvalidStateError("over");
   const [first, second] = rollDice(rng, 2, 6) as [number, number];
@@ -611,7 +611,7 @@ function levelLimit(level: number): BackgammonLevel {
 export function bestMove(
   state: BackgammonState,
   level: number,
-  rng: Rng,
+  rng: SeededRandom,
 ): Choice<BackgammonMove> {
   if (result(state).status === "win") {
     return { move: null, score: 0, depth: 0, nodes: 0, cut: false };
@@ -619,7 +619,7 @@ export function bestMove(
   if (state.dice.length === 0) throw new InvalidStateError("must-roll");
   const limits = levelLimit(level);
   const budget: Budget = { nodes: 0, limit: limits.nodeBudget };
-  const moves = shuffled(rng, legalMoves(state));
+  const moves = shuffled(legalMoves(state), rng);
   if (moves.length === 0) return { move: null, score: 0, depth: 0, nodes: 0, cut: false };
   const player = state.toMove;
   const scored = moves.map((move) => ({

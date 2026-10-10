@@ -9722,9 +9722,9 @@ describe("migration 081 — the card-game tables", () => {
   }
 
   const STAT_COLUMNS =
-    "profile_id, game, variant, played, won, best_time_seconds, best_score," +
+    "profile_id, game, variant, played, won, best_time_ms, best_score," +
     " current_streak, longest_streak, updated_at";
-  const STAT_ROW: readonly unknown[] = ["p1", "klondike", "draw1", 3, 2, 95, 480, 1, 2, T];
+  const STAT_ROW: readonly unknown[] = ["p1", "klondike", "draw1", 3, 2, 95_000, 480, 1, 2, T];
 
   const insertStat = (raw: Database.Database, row: readonly unknown[]): void => {
     raw
@@ -9782,12 +9782,32 @@ describe("migration 081 — the card-game tables", () => {
     raw.close();
   });
 
+  it("refuses a game outside the three and a variant outside 1..32", () => {
+    const raw = open("cardgame-vocabulary.db");
+    // The game column names the three games the engines deal, exactly as
+    // `arcade_scores` names its two.
+    expect(() => insertStat(raw, withField(1, "poker"))).toThrow(/CHECK/);
+    // The variant's SHAPE is bounded; its vocabulary is the store's, against
+    // `@nexus/core`'s `CARD_GAME_VARIANTS`.
+    expect(() => insertStat(raw, withField(2, ""))).toThrow(/CHECK/);
+    expect(() => insertStat(raw, withField(2, "d".repeat(33)))).toThrow(/CHECK/);
+    // A best score has no floor: Spider's published score starts at 500 and
+    // loses a point a move, so a long win can end below zero.
+    insertStat(raw, withField(6, -1));
+    // The 32nd character is inside the bound and lands.
+    insertStat(raw, withField(2, "d".repeat(32)));
+    // And a row that stays inside the bounds is taken, zeros included.
+    insertStat(raw, ["p1", "spider", "suits2", 0, 0, null, 0, 0, 0, T]);
+    expect(raw.prepare("SELECT COUNT(*) AS n FROM cardgame_stats").get()).toEqual({ n: 3 });
+    raw.close();
+  });
+
   it("accepts a zero-win row with no bests, which is what a fresh profile has", () => {
     const raw = open("cardgame-fresh.db");
     insertStat(raw, ["p1", "spider", "suits2", 0, 0, null, null, 0, 0, T]);
     expect(
-      raw.prepare("SELECT best_score, best_time_seconds FROM cardgame_stats").get(),
-    ).toEqual({ best_score: null, best_time_seconds: null });
+      raw.prepare("SELECT best_score, best_time_ms FROM cardgame_stats").get(),
+    ).toEqual({ best_score: null, best_time_ms: null });
     raw.close();
   });
 

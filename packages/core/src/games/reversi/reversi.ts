@@ -12,7 +12,7 @@
  * depends on it.
  *
  * Pure: no I/O, no clock, no `Math.random`. Nothing here depends on time, and
- * `bestMove` takes the caller's seeded `Rng` for its equal-move tie-break.
+ * `bestMove` takes the caller's seeded `SeededRandom` for its equal-move tie-break.
  *
  * The state is the board and whose turn it is. Nothing else is needed, because
  * everything else about the position is derived: the legal placements, the
@@ -25,7 +25,7 @@
 import { InvalidStateError } from "../boards-shared/errors.js";
 import { IN_PROGRESS, draw, win } from "../boards-shared/outcome.js";
 import type { Outcome, Player } from "../boards-shared/outcome.js";
-import type { Rng } from "../boards-shared/rng.js";
+import type { SeededRandom } from "../random.js";
 import { search } from "../boards-shared/search.js";
 import type { Choice, SearchGame, SearchLimits } from "../boards-shared/search.js";
 
@@ -380,7 +380,7 @@ function levelLimits(level: number): ReversiLevel {
  * returned `Choice.move` is always legal (or `null` on a finished game), and
  * `Choice.nodes` never exceeds the level's budget.
  */
-export function bestMove(state: ReversiState, level: number, rng: Rng): Choice<ReversiMove> {
+export function bestMove(state: ReversiState, level: number, rng: SeededRandom): Choice<ReversiMove> {
   return search(GAME, state, levelLimits(level), rng);
 }
 

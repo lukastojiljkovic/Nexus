@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { InvalidStateError } from "../boards-shared/errors.js";
-import { createRng } from "../boards-shared/rng.js";
+import { createSeededRandom } from "../random.js";
 import {
   BACKGAMMON_CHECKERS,
   BACKGAMMON_LEVELS,
@@ -72,8 +72,8 @@ describe("the opening", () => {
     const state = initialState();
     expect(() => legalMoves(state)).not.toThrow();
     expect(legalMoves(state)).toHaveLength(0);
-    expect(() => bestMove(state, 3, createRng(1))).toThrowError(InvalidStateError);
-    const rolled = rollFor(state, createRng(0x5eed));
+    expect(() => bestMove(state, 3, createSeededRandom(1))).toThrowError(InvalidStateError);
+    const rolled = rollFor(state, createSeededRandom(0x5eed));
     expect(rolled.dice.length === 4 || rolled.dice.length === 2).toBe(true);
     for (const die of rolled.dice) expect(die).toBeGreaterThanOrEqual(1);
     // A double is stored as the four plays it is worth.
@@ -82,8 +82,8 @@ describe("the opening", () => {
     } else {
       expect(rolled.dice).toHaveLength(2);
     }
-    expect(rollFor(state, createRng(0x5eed)).dice).toEqual(rolled.dice);
-    expect(() => rollFor(rolled, createRng(1))).toThrowError(InvalidStateError);
+    expect(rollFor(state, createSeededRandom(0x5eed)).dice).toEqual(rolled.dice);
+    expect(() => rollFor(rolled, createSeededRandom(1))).toThrowError(InvalidStateError);
     expect(legalMoves(rolled).length).toBeGreaterThan(0);
   });
 });
@@ -307,13 +307,13 @@ describe("the cube", () => {
 
 describe("the computer", () => {
   it("returns a legal turn at level 3 on a hundred rolled positions", () => {
-    const random = createRng(0x5eed);
+    const random = createSeededRandom(0x5eed);
     let checked = 0;
     // A hundred positions: a thousand searches at level 3 kept this file busy for 170 s
     // on the CI runners, and every level-3 answer is drawn from `legalMoves` either way.
     for (let sample = 0; sample < 100; sample += 1) {
       let state = initialState();
-      const turns = Math.floor(random() * 30);
+      const turns = Math.floor(random.next() * 30);
       for (let turn = 0; turn < turns; turn += 1) {
         if (result(state).status === "win") break;
         state = rollFor(state, random);
@@ -322,12 +322,12 @@ describe("the computer", () => {
           state = endTurn(state);
           continue;
         }
-        state = applyMove(state, moves[Math.floor(random() * moves.length)] as BackgammonMove);
+        state = applyMove(state, moves[Math.floor(random.next() * moves.length)] as BackgammonMove);
       }
       if (result(state).status === "win") continue;
       state = rollFor(state, random);
       const moves = legalMoves(state);
-      const choice = bestMove(state, 3, createRng(sample));
+      const choice = bestMove(state, 3, createSeededRandom(sample));
       expect(choice.nodes).toBeLessThanOrEqual(BACKGAMMON_LEVELS[2]!.nodeBudget);
       if (moves.length === 0) {
         expect(choice.move).toBeNull();
@@ -341,7 +341,7 @@ describe("the computer", () => {
   }, 300_000);
 
   it("stays inside every level's budget", () => {
-    const random = createRng(0xbeef);
+    const random = createSeededRandom(0xbeef);
     let checked = 0;
     for (let sample = 0; sample < 200; sample += 1) {
       let state = initialState();
@@ -352,13 +352,13 @@ describe("the computer", () => {
         state =
           moves.length === 0
             ? endTurn(state)
-            : applyMove(state, moves[Math.floor(random() * moves.length)] as BackgammonMove);
+            : applyMove(state, moves[Math.floor(random.next() * moves.length)] as BackgammonMove);
       }
       if (result(state).status === "win") continue;
       if (state.dice.length === 0) state = rollFor(state, random);
       checked += 1;
       const level = 1 + (sample % 3);
-      const choice = bestMove(state, level, createRng(sample));
+      const choice = bestMove(state, level, createSeededRandom(sample));
       expect(choice.nodes).toBeLessThanOrEqual(BACKGAMMON_LEVELS[level - 1]!.nodeBudget);
       const moves = legalMoves(state);
       if (moves.length === 0) expect(choice.move).toBeNull();
@@ -372,7 +372,7 @@ describe("the saved game", () => {
   it("round-trips through JSON", () => {
     const state = rollFor(
       position({ points: backgammonOpening().points, cube: 4, cubeOwner: 1, cubeEnabled: true }),
-      createRng(7),
+      createSeededRandom(7),
     );
     expect(fromJSON(toJSON(state))).toEqual(state);
     expect(fromJSON(JSON.parse(JSON.stringify(toJSON(state))) as unknown)).toEqual(state);

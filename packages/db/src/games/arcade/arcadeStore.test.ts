@@ -91,12 +91,13 @@ describe("record — Minesweeper", () => {
     expect(row).toMatchObject({
       game: "minesweeper",
       variant: "beginner",
-      plays: 1,
-      wins: 1,
+      played: 1,
+      won: 1,
       bestTimeMs: 41_500,
       bestScore: null,
       bestLines: null,
-      streak: 1,
+      currentStreak: 1,
+      longestStreak: 1,
       lastPlayedAt: NOW,
       createdAt: NOW,
       updatedAt: NOW,
@@ -111,10 +112,11 @@ describe("record — Minesweeper", () => {
     scores.record(lost(), LATER);
 
     expect(scores.get("minesweeper", "beginner")).toMatchObject({
-      plays: 2,
-      wins: 1,
+      played: 2,
+      won: 1,
       bestTimeMs: 41_500,
-      streak: 0,
+      currentStreak: 0,
+      longestStreak: 1,
       lastPlayedAt: LATER,
       createdAt: NOW,
       updatedAt: LATER,
@@ -130,9 +132,42 @@ describe("record — Minesweeper", () => {
     scores.record(won(39_000), LATER);
     expect(scores.get("minesweeper", "beginner")).toMatchObject({
       bestTimeMs: 39_000,
-      plays: 3,
-      wins: 3,
-      streak: 3,
+      played: 3,
+      won: 3,
+      currentStreak: 3,
+      longestStreak: 3,
+    });
+  });
+
+  it("lifts the longest streak only when the current one passes it", () => {
+    const scores = store();
+    scores.record(won(41_500), NOW);
+    scores.record(won(39_000), LATER);
+    expect(scores.get("minesweeper", "beginner")).toMatchObject({
+      currentStreak: 2,
+      longestStreak: 2,
+    });
+
+    // A loss ends the current run and leaves the record where it was.
+    scores.record(lost(), LATER);
+    expect(scores.get("minesweeper", "beginner")).toMatchObject({
+      currentStreak: 0,
+      longestStreak: 2,
+    });
+
+    // Two wins fall one short of the record, so the longest does not move.
+    scores.record(won(45_000), LATER);
+    scores.record(won(44_000), LATER);
+    expect(scores.get("minesweeper", "beginner")).toMatchObject({
+      currentStreak: 2,
+      longestStreak: 2,
+    });
+
+    // The third one passes it.
+    scores.record(won(43_000), LATER);
+    expect(scores.get("minesweeper", "beginner")).toMatchObject({
+      currentStreak: 3,
+      longestStreak: 3,
     });
   });
 
@@ -154,10 +189,11 @@ describe("record — Minesweeper", () => {
       "expert",
     ]);
     expect(scores.get("minesweeper", "custom:9x10x10")).toMatchObject({
-      plays: 1,
-      wins: 0,
+      played: 1,
+      won: 0,
       bestTimeMs: null,
-      streak: 0,
+      currentStreak: 0,
+      longestStreak: 0,
     });
   });
 });
@@ -167,9 +203,10 @@ describe("record — Blocks", () => {
     const scores = store();
     scores.record(blocks(1200, 12), NOW);
     expect(scores.get("blocks", "standard")).toMatchObject({
-      plays: 1,
-      wins: 0,
-      streak: 0,
+      played: 1,
+      won: 0,
+      currentStreak: 0,
+      longestStreak: 0,
       bestTimeMs: null,
       bestScore: 1200,
       bestLines: 12,
@@ -178,7 +215,7 @@ describe("record — Blocks", () => {
     scores.record(blocks(800, 30), LATER);
     // A worse score with more lines moves one number and not the other.
     expect(scores.get("blocks", "standard")).toMatchObject({
-      plays: 2,
+      played: 2,
       bestScore: 1200,
       bestLines: 30,
       updatedAt: LATER,
@@ -228,27 +265,45 @@ describe("the store's own gates", () => {
 
     scores.record(won(41_500), NOW);
     expect(() => scores.record(won(1000), "")).toThrow(ArcadeValidationError);
-    expect(scores.get("minesweeper", "beginner")).toMatchObject({ plays: 1, bestTimeMs: 41_500 });
+    expect(scores.get("minesweeper", "beginner")).toMatchObject({ played: 1, bestTimeMs: 41_500 });
   });
 
   it("refuses a row that mixes the two games' columns, in the schema as well as the store", () => {
     const profileId = createProfile();
     const insert = db.raw.prepare(
       `INSERT INTO arcade_scores
-         (id, profile_id, game, variant, plays, wins, best_time_ms, best_score, best_lines,
-          streak, last_played_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, profile_id, game, variant, played, won, best_time_ms, best_score, best_lines,
+          current_streak, longest_streak, last_played_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
-    const row = [uuidv7(), profileId, "blocks", "standard", 1, 1, null, 10, 1, 1, NOW, NOW, NOW];
+    // A Blocks row that claims a win: the schema refuses it.
+    const row = [
+      uuidv7(), profileId, "blocks", "standard", 1, 1, null, 10, 1, 1, 1, NOW, NOW, NOW,
+    ];
     expect(() => insert.run(...row)).toThrow(/CHECK/);
 
-    // A Minesweeper row with a score on it, and one whose streak outruns its wins.
+    // A Minesweeper row with a score on it.
     expect(() =>
-      insert.run(uuidv7(), profileId, "minesweeper", "beginner", 1, 1, 1000, 5, null, 1, NOW, NOW, NOW),
+      insert.run(
+        uuidv7(), profileId, "minesweeper", "beginner", 1, 1, 1000, 5, null, 1, 1, NOW, NOW, NOW,
+      ),
+    ).toThrow(/CHECK/);
+    // A current streak longer than the record, and one longer than the wins.
+    expect(() =>
+      insert.run(
+        uuidv7(), profileId, "minesweeper", "beginner", 3, 3, 1000, null, null, 2, 1, NOW, NOW, NOW,
+      ),
     ).toThrow(/CHECK/);
     expect(() =>
-      insert.run(uuidv7(), profileId, "minesweeper", "beginner", 1, 0, null, null, null, 1, NOW, NOW, NOW),
+      insert.run(
+        uuidv7(), profileId, "minesweeper", "beginner", 1, 0, 1000, null, null, 1, 1, NOW, NOW, NOW,
+      ),
     ).toThrow(/CHECK/);
+    // And a row that is what the game actually produces lands.
+    insert.run(
+      uuidv7(), profileId, "minesweeper", "beginner", 2, 1, 1000, null, null, 1, 1, NOW, NOW, NOW,
+    );
+    expect(db.raw.prepare("SELECT COUNT(*) AS n FROM arcade_scores").get()).toEqual({ n: 1 });
   });
 });
 
@@ -343,7 +398,7 @@ describe("export and import", () => {
     expect(() =>
       scores.importData({
         version: 1,
-        scores: [good, { ...good, id: uuidv7(), plays: 1.5 }],
+        scores: [good, { ...good, id: uuidv7(), played: 1.5 }],
       }),
     ).toThrow(ArcadeValidationError);
 

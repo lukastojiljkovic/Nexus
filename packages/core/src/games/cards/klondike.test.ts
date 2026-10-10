@@ -124,10 +124,12 @@ describe("the Klondike deal", () => {
    * A REGRESSION PIN, not an independent oracle: this is the table this engine
    * deals for seed 1, written out so that a change to the shuffle's constants, to
    * the deck's order or to the deal's own order cannot pass unnoticed. The
-   * shuffle itself is pinned against a hand calculation (`shuffle.test.ts`) and
+   * shuffle itself is pinned against a hand calculation (`random.test.ts`) and
    * FreeCell's deal against layouts #1 and #617 published on Rosetta Code;
    * Klondike has no published layout to check against, which is exactly why this
-   * one is here.
+   * one is here. It was re-derived when the deal moved off `cards/shuffle.ts`'s
+   * xorshift and onto the shared mulberry32 source, and re-derived again only if
+   * that source changes.
    */
   it("pins the table seed 1 deals", () => {
     const state = dealKlondike("draw1", 1);
@@ -137,19 +139,19 @@ describe("the Klondike deal", () => {
         .join(" "),
     );
     expect(layout).toEqual([
-      "TC",
-      "-KC JS",
-      "-5H -QS AS",
-      "-7D -8D -AC 9H",
-      "-7S -2D -KS -4C 3D",
-      "-QD -8H -JC -QH -4D JH",
-      "-TH -AD -8S -5C -9D -TD 2H",
+      "7C",
+      "-QC 6S",
+      "-3H -JS 8S",
+      "-KH -JD -2H 8D",
+      "-9S -6H -JC -9H 3S",
+      "-AS -KD -9D -3C -4H 2C",
+      "-7S -QD -TH -8H -2S -6D 5C",
     ]);
     // The stock is stored with its TOP last, so the next card turned over is the
-    // last entry — 7C — and the first card dealt is the first entry.
+    // last entry — 4C — and the first card dealt is the first entry.
     expect(state.board.stock.map(cardCode)).toEqual([
-      "6D", "5S", "3S", "TS", "5D", "6H", "6C", "4S", "JD", "3H", "QC", "3C",
-      "AH", "6S", "9S", "7H", "2C", "4H", "KD", "8C", "KH", "9C", "2S", "7C",
+      "9C", "AC", "7H", "KC", "QH", "4D", "8C", "KS", "5H", "JH", "5S", "6C",
+      "2D", "4S", "3D", "TS", "5D", "AH", "QS", "7D", "TD", "TC", "AD", "4C",
     ]);
   });
 

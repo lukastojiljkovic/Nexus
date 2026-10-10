@@ -39,13 +39,13 @@
  * piece being taken from the two halves of one move; no rule changes.
  *
  * Pure: no I/O, no clock, no `Math.random`. `bestMove` takes the caller's
- * seeded `Rng` for its equal-move tie-break.
+ * seeded `SeededRandom` for its equal-move tie-break.
  */
 
 import { InvalidStateError } from "../boards-shared/errors.js";
 import { IN_PROGRESS, draw, win } from "../boards-shared/outcome.js";
 import type { Outcome, Player } from "../boards-shared/outcome.js";
-import type { Rng } from "../boards-shared/rng.js";
+import type { SeededRandom } from "../random.js";
 import { search } from "../boards-shared/search.js";
 import type { Choice, SearchGame, SearchLimits } from "../boards-shared/search.js";
 
@@ -476,7 +476,7 @@ function levelLimits(level: number): MlinLevel {
  * returned `Choice.move` is always legal (or `null` on a finished game), and
  * `Choice.nodes` never exceeds the level's budget.
  */
-export function bestMove(state: MlinState, level: number, rng: Rng): Choice<MlinMove> {
+export function bestMove(state: MlinState, level: number, rng: SeededRandom): Choice<MlinMove> {
   return search(GAME, state, levelLimits(level), rng);
 }
 

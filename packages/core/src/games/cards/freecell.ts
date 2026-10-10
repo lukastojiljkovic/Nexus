@@ -12,7 +12,7 @@
  * is a BIASED shuffle by modern standards — the modulus is not uniform — and it
  * is reproduced exactly anyway, because „game #1" is a layout players know by
  * name and a faithful-looking deal would be a different game under the same
- * number. The general shuffle (`shuffle.ts`) is the unbiased one and is used by
+ * number. The general shuffle (`games/random.ts`) is the unbiased one and is used by
  * Klondike and Spider, which have no published deals to be faithful to.
  *
  * The deal numbers are the classic 1…32 000. Microsoft's later 1 000 000 numbering

@@ -43,8 +43,8 @@
  * failed from. Nothing about it knows which order the deal was built in.
  */
 
-import type { PuzzleRandom } from "../puzzles-shared/random.js";
-import { createPuzzleRandom, shuffled } from "../puzzles-shared/random.js";
+import type { SeededRandom } from "../random.js";
+import { createSeededRandom, shuffled } from "../random.js";
 
 /** A tile's place: quarter-tile coordinates and the layer it sits on. */
 export interface MahjongSlot {
@@ -278,7 +278,7 @@ export interface MahjongGame {
  * node count does.
  */
 const ZOBRIST: readonly { readonly lo: number; readonly hi: number }[] = (() => {
-  const random = createPuzzleRandom(0x5eed);
+  const random = createSeededRandom(0x5eed);
   return Array.from({ length: 512 }, () => ({
     lo: Math.floor(random.next() * 4294967296) >>> 0,
     hi: Math.floor(random.next() * 4294967296) >>> 0,
@@ -411,7 +411,7 @@ function removalOrder(board: MahjongBoard, budget: number): readonly (readonly [
  * that order. Deterministic for a seed.
  */
 export function createMahjongDeal(seed: number, board: MahjongBoard = TURTLE): MahjongDeal {
-  const random = createPuzzleRandom(seed);
+  const random = createSeededRandom(seed);
   const { faces, witness } = dealFrom(board, random);
   return { faces, witness, seed };
 }
@@ -419,7 +419,7 @@ export function createMahjongDeal(seed: number, board: MahjongBoard = TURTLE): M
 /** Deal the faces out along a removal order, which is what makes the deal winnable. */
 function dealFrom(
   board: MahjongBoard,
-  random: PuzzleRandom,
+  random: SeededRandom,
 ): { faces: string[]; witness: readonly (readonly [number, number])[] } {
   const witness = removalOrder(board, MAHJONG_CONSTRUCTION_NODE_BUDGET);
   const pairs = shuffled(facePairs(), random);
@@ -439,7 +439,7 @@ function dealFrom(
 
 /** A game on top of a deal, or on top of a board a test built by hand. */
 export function createMahjongGame(seed: number, board: MahjongBoard = TURTLE): MahjongGame {
-  const random = createPuzzleRandom(seed);
+  const random = createSeededRandom(seed);
   const { faces } = dealFrom(board, random);
   return {
     board,
@@ -476,7 +476,7 @@ export function mahjongGameFrom(setup: {
     remaining: setup.remaining ? [...setup.remaining] : new Array<boolean>(setup.slots.length).fill(true),
     moves: [],
     seed: setup.seed ?? 0,
-    rngState: createPuzzleRandom(setup.seed ?? 0).state,
+    rngState: createSeededRandom(setup.seed ?? 0).state,
     shuffles: 0,
   };
 }
@@ -551,7 +551,7 @@ export function mahjongUndo(game: MahjongGame): MahjongGame | null {
  * rescued by any arrangement of faces, and this says so rather than looping.
  */
 export function mahjongShuffle(game: MahjongGame, seed?: number): MahjongGame {
-  const random = createPuzzleRandom(seed ?? game.rngState + 1);
+  const random = createSeededRandom(seed ?? game.rngState + 1);
   const remaining = [...game.remaining];
   const result = searchPeel(game.board, remaining, MAHJONG_CONSTRUCTION_NODE_BUDGET, () => true);
   if (!result.solved) {

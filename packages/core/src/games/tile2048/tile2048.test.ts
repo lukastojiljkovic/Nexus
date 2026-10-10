@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createPuzzleRandom } from "../puzzles-shared/random.js";
+import { createSeededRandom } from "../random.js";
 import {
   TILE_2048_WIN,
   canMoveTile2048,
@@ -51,7 +51,7 @@ describe("mergeLine", () => {
 
 describe("nextTileValue", () => {
   it("draws a 2 nine times in ten over a hundred thousand spawns", () => {
-    const random = createPuzzleRandom(20261009);
+    const random = createSeededRandom(20261009);
     let fours = 0;
     const draws = 100_000;
     for (let i = 0; i < draws; i += 1) if (nextTileValue(random) === 4) fours += 1;
@@ -65,7 +65,7 @@ describe("nextTileValue", () => {
   });
 
   it("only ever returns 2 or 4", () => {
-    const random = createPuzzleRandom(7);
+    const random = createSeededRandom(7);
     for (let i = 0; i < 1_000; i += 1) expect([2, 4]).toContain(nextTileValue(random));
   });
 });

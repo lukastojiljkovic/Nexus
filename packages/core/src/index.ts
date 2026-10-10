@@ -1905,10 +1905,13 @@ export type { CalculatorFunctionDefinition, CalculatorSession } from "./calculat
 //
 // Two engines, both pure, both playable from an input log: a seeded source is
 // handed in, every clock reading is handed in, and the whole game is a VALUE on
-// the way out. `games/random.ts` carries the argument for the source, and each
-// engine's own header carries its rules — including why the falling-blocks game
-// is called Blocks and drawn by us rather than by the trademarked game's look.
-export { createSeededRandom, randomBelow, shuffled } from "./games/random.js";
+// the way out. `games/random.ts` carries the argument for the source, and it is
+// the ONE source every game area draws from — the two dice helpers are exported
+// beside it, because they live with the stream they roll from rather than with
+// any one game. Each engine's own header carries its rules, including why the
+// falling-blocks game is called Blocks and drawn by us rather than by the
+// trademarked game's look.
+export { createSeededRandom, randomBelow, rollDie, rollDice, shuffled } from "./games/random.js";
 export type { SeededRandom } from "./games/random.js";
 
 export {
@@ -2005,8 +2008,6 @@ export {
   SUITS,
 } from "./games/cards/card.js";
 export type { Card, CardColour, Rank, Suit } from "./games/cards/card.js";
-export { shuffle } from "./games/cards/shuffle.js";
-export type { RandomSource } from "./games/cards/shuffle.js";
 export { autoplaySafe, autoplaySafeCards } from "./games/cards/autoplay.js";
 export {
   isGameLogEntry,
@@ -2319,8 +2320,9 @@ export type { AWeightingFilter, Biquad, FrameLevel } from "./signals/soundLevel.
 // explains its rules and cites them, and stage 2 reaches one game at a time.
 //
 // The shared pieces are exported directly, because they are what makes the six
-// one shape: `Rng` and `createRng` (no engine reads `Math.random`, so a saved
-// game replays its dice), `InvalidStateError` (what `applyMove` and `fromJSON`
+// one shape: the seeded source (`SeededRandom`/`createSeededRandom`, exported
+// once from `games/random.ts` — no engine reads `Math.random`, so a saved game
+// replays its dice), `InvalidStateError` (what `applyMove` and `fromJSON`
 // refuse an untrusted move or saved game with, and which carries a machine token
 // rather than copy), `Outcome` with its `win` and `draw` for the games that end
 // in a win or a draw, and `search` with its `SearchGame`/`SearchLimits`/`Choice`
@@ -2335,8 +2337,6 @@ export * as backgammon from "./games/backgammon/backgammon.js";
 export * as fourInARow from "./games/four-in-a-row/fourInARow.js";
 export * as ludo from "./games/ludo/ludo.js";
 
-export { createRng, rollDie, rollDice } from "./games/boards-shared/rng.js";
-export type { Rng } from "./games/boards-shared/rng.js";
 export { InvalidStateError } from "./games/boards-shared/errors.js";
 export { IN_PROGRESS, draw, win } from "./games/boards-shared/outcome.js";
 export type { Outcome, Player } from "./games/boards-shared/outcome.js";
@@ -2352,12 +2352,9 @@ export type { Choice, SearchGame, SearchLimits as BoardSearchLimits } from "./ga
 // a whole game and a report that carries its seed is a reproduction.
 //
 // `step` is the name both arcade engines use for their one entry point, so the
-// two are exported under the game they belong to. `puzzles-shared/random.ts` is
-// the seeded source they draw from; its shuffle and its bounded draw stay
-// internal, because a caller that needs one has taken on the rule that decides
-// what a draw means.
-export { createPuzzleRandom } from "./games/puzzles-shared/random.js";
-export type { PuzzleRandom } from "./games/puzzles-shared/random.js";
+// two are exported under the game they belong to. Their seeded source is
+// `games/random.ts`, exported once for the whole games area up under the arcade
+// block; there is no puzzle-specific generator any more.
 
 export {
   SUDOKU_UNITS,
