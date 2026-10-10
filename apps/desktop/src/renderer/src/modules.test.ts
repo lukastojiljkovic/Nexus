@@ -121,6 +121,9 @@ describe("createModuleRegistry", () => {
       // The second discovered module, after „Tajmeri" because its manifest says
       // `order: 180` and „Tajmeri" says 100.
       "emergency",
+      // The second discovered module (CALC, migration 079), after „Tajmeri" on
+      // its own `order` of 190.
+      "calculator",
     ]);
   });
 
@@ -211,6 +214,10 @@ describe("createModuleRegistry", () => {
       // section's: a prefix is traceability to ONE PRD entry, and the brief
       // names none for a voice and camera diary (see the module's manifest).
       REC: ["recorder"],
+      // CALC is its own PRD entry, like ELEC and PRO: the calculator is a
+      // calculator rather than a second reading of „Utility Belt", so it does not
+      // join the UTIL sharing above.
+      CALC: ["calculator"],
     });
   });
 
@@ -284,6 +291,8 @@ describe("createModuleRegistry", () => {
       "canvas",
       "electronics",
       "pro",
+      // And the discovered module that declares this group (CALC).
+      "calculator",
     ]);
     // â€žKultura" is its own group (ADR-093), and the first module to fill it.
     expect(grouped.get("culture")?.map((manifest) => manifest.id)).toEqual(["culture"]);
@@ -353,6 +362,9 @@ describe("createModuleRegistry", () => {
       // module whose whole purpose is to be readable in an emergency cannot be
       // something the user has to switch on first.
       "emergency",
+      // The same for the calculator: a bench that writes nothing until an
+      // expression is committed.
+      "calculator",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");
@@ -549,6 +561,9 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
       // And the second discovered card, on the same terms: declared in the
       // recorder's own manifest, drawn by its own body.
       "recorder",
+      // The second, on the same terms: `calc_settings` holds the two rows and the
+      // module's own `renderer/Settings.tsx` draws them.
+      "calculator",
     ]);
   });
 

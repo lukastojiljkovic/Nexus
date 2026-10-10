@@ -129,6 +129,7 @@ describe("moduleSettingsDeclarations", () => {
       "pantry",
       "cookbook",
       "recorder",
+      "calculator",
     ]);
   });
 
@@ -170,6 +171,7 @@ describe("moduleSettingsCardIds", () => {
       "pantry",
       "cookbook",
       "recorder",
+      "calculator",
     ]);
   });
 
@@ -215,6 +217,7 @@ describe("moduleSettingsCards", () => {
       "pantry",
       "cookbook",
       "recorder",
+      "calculator",
     ]);
     expect(cards.map((card) => card.title)).toEqual([
       s().sectionTitle.dashboard,
@@ -236,6 +239,7 @@ describe("moduleSettingsCards", () => {
       kitManifest("pantry")?.copy?.name[activeLocale()] ?? "",
       kitManifest("cookbook")?.copy?.name[activeLocale()] ?? "",
       kitManifest("recorder")?.copy?.name[activeLocale()] ?? "",
+      kitManifest("calculator")?.copy?.name[activeLocale()] ?? "",
     ]);
   });
 

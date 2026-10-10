@@ -43,3 +43,20 @@ export type { DashboardWidgetBodyProps, DashboardWidgetRenderer } from "../dashb
 export { dateTimeFormat, numberFormat } from "../intl.js";
 export { formatMoney, formatMoneyPlain } from "../money.js";
 export { ConfirmDialog, type ConfirmDialogProps } from "../ConfirmDialog.js";
+/**
+ * The renderer's one door to `Intl` (`intl.ts`'s own header: every date, number
+ * and collation the interface draws goes through it, so no call site spells a
+ * locale tag of its own). A module that draws a ROW WITH A DATE in it needs this
+ * and nothing else from that file - the calculator's history is the first such
+ * surface, and the function is a factory rather than a value so it follows a
+ * runtime language switch.
+ */
+export { dateTimeFormat } from "../intl.js";
+/**
+ * The house confirmation dialog (`ConfirmDialog`), for a kit module that removes
+ * something the user made. It is the same component every compiled-in page's
+ * destructive action goes through - without it, a module would either hand-roll a
+ * second dialog (a control that drifts from the app's own) or skip the
+ * confirmation on the one action that needs one.
+ */
+export { ConfirmDialog, type ConfirmDialogProps } from "../ConfirmDialog.js";

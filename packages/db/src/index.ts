@@ -1034,9 +1034,10 @@ export type {
 
 // --- CALC (the calculator's history and session, migration 079) --------------
 //
-// One store over two tables, and neither of them holds an evaluated value: an
-// entry is the expression that was typed and the string that was displayed, and
-// the session is `@nexus/core`'s own JSON re-validated through
+// One store over two tables, and neither of them evaluates anything: an entry is
+// the expression that was typed and the result in BOTH forms (what was shown,
+// and the engine's own lexical text, which is what a `#3` reuse substitutes),
+// and the session is `@nexus/core`'s own JSON re-validated through
 // `parseCalculatorSession` on the way in and on the way out. That is what keeps
 // mathjs out of this package.
 //
@@ -1047,6 +1048,7 @@ export {
   CALCULATOR_EXPORT_VERSION,
   CALC_HISTORY_UNPINNED_LIMIT,
   CalculatorStore,
+  DEFAULT_CALCULATOR_SETTINGS,
   MAX_CALC_HISTORY_IMPORT_ENTRIES,
   MAX_CALC_HISTORY_READ,
   MAX_CALC_HISTORY_RESULT_LENGTH,
@@ -1056,6 +1058,7 @@ export type {
   CalcHistoryEntry,
   CalcHistoryExportEntry,
   CalculatorExport,
+  CalculatorSettings,
 } from "./calculator/calculatorStore.js";
 
 // --- GAMES (the arcade's scores, migration 080) ------------------------------

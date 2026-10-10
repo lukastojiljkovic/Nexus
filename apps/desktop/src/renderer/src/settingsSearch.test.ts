@@ -436,6 +436,10 @@ describe("buildSettingsIndex", () => {
       // same place: it declares its own `{ sr, en }` pair rather than a
       // `strings` path.
       "recorder:countdown",
+      // The second DISCOVERED card's two controls (CALC), last for the same
+      // reason its section is.
+      "calculator:angle-mode",
+      "calculator:number-mode",
     ]);
   });
 

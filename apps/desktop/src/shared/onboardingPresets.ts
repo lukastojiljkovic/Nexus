@@ -64,6 +64,10 @@ export const ESSENTIALS_MODULE_PRESET: Readonly<Record<string, boolean>> = {
   // And the second, on the same terms: a card that is empty until somebody fills
   // it in is a card nobody needs to be asked about.
   emergency: true,
+  // And the calculator (CALC, migration 079), on the same terms and for the same
+  // reason: it is a bench rather than a subject, and it writes nothing at all
+  // until somebody types an expression into it.
+  calculator: true,
   pro: false,
   // The second module built on the kit (ADR-090), decided here like every other
   // selectable one: a library that had to be switched on first would be hiding
