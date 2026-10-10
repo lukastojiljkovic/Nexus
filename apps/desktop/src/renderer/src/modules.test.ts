@@ -98,6 +98,9 @@ describe("createModuleRegistry", () => {
       // here rather than derived because this test IS the declaration — what the
       // registry holds is what the app shows.
       "timers",
+      // The second discovered module, and the second line of the same kind: the
+      // LAB declares `order: 330`, so it registers after `timers` and its 100.
+      "lab",
     ]);
   });
 
@@ -159,6 +162,9 @@ describe("createModuleRegistry", () => {
       // twice rather than a bin for anything tool-shaped.
       ELEC: ["electronics"],
       PRO: ["pro"],
+      // The LAB takes its own prefix for the reason above: an instrument drawer
+      // is not a second reading of the utility belt.
+      LAB: ["lab"],
     });
   });
 
@@ -212,6 +218,8 @@ describe("createModuleRegistry", () => {
       "canvas",
       "electronics",
       "pro",
+      // The LAB declares `make`, after the professional drawer (ADR-093).
+      "lab",
     ]);
     // The shell group is the two rows nothing may switch off, and the sidebar is
     // the one caller that splits it: its first member heads the rail, the rest
@@ -254,6 +262,9 @@ describe("createModuleRegistry", () => {
       // ON by default, like every module but PRIV and PRO: a timer writes
       // nothing until somebody starts one, so there is nothing to opt into.
       "timers",
+      // ON by default too: the LAB writes nothing until a log is created, and
+      // the microphone and the serial port are each opened by a click.
+      "lab",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");

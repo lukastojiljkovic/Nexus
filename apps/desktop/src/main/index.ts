@@ -27,6 +27,15 @@ import type { IpcMainInvokeEvent, OpenDialogOptions, Session } from "electron";
 // and only when the user has chosen „Offline + update checks". See the SEC-EL-07
 // section near the bottom of this file.
 import { readFileBounded } from "./boundedRead.js";
+// The LAB module's two Electron-shaped facts: the serial port picker, and the
+// save dialog its two file ops write through. The module's own `register.ts` is
+// electron-free so it stays testable, which is why the wiring is one call here
+// rather than an import inside the module (`modules/lab/main/electron.ts`).
+import { installLabElectron } from "../modules/lab/main/electron.js";
+import {
+  allows as labAllowsSerial,
+  appOrigin as labAppOrigin,
+} from "../modules/lab/main/serialPermission.js";
 import {
   activeNetworkMode,
   devServerOrigin,
@@ -13773,10 +13782,23 @@ app.whenReady().then(async () => {
   // path anywhere in the product. So both handlers deny unconditionally rather
   // than switching on a permission name: an allowlist with no entries is a
   // list somebody eventually adds to, and a flat refusal is a decision.
-  session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => {
-    callback(false);
+  //
+  // THE ONE EXCEPTION, and it is one module's: the LAB page opens a serial port,
+  // which needs the `serial` permission from the app's OWN origin and nothing
+  // else. The rule is a pure function in the module that owns it
+  // (`modules/lab/main/serialPermission.ts`), so the handler below is the call
+  // and not a condition — which is what lets several modules share this session
+  // without rewriting each other's logic.
+  session.defaultSession.setPermissionRequestHandler((contents, permission, callback, details) => {
+    callback(labAllowsSerial(permission, labAppOrigin(contents.getURL(), process.env), details));
   });
-  session.defaultSession.setPermissionCheckHandler(() => false);
+  session.defaultSession.setPermissionCheckHandler((_contents, permission, origin, details) =>
+    labAllowsSerial(permission, labAppOrigin(origin, process.env), details),
+  );
+  // The LAB's session wiring: the serial port picker (a dialog listing the
+  // ports, because a device on somebody's desk is never opened without a click)
+  // and the save dialog its file ops use. It touches no permission handler.
+  installLabElectron(session.defaultSession);
 
   // SEC-NET: the three runtime layers of the cloud-off boundary. The fourth
   // (`host-resolver-rules`) went on at module scope; `net/offline.ts` carries

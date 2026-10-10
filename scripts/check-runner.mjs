@@ -296,6 +296,22 @@ export const ALLOWLIST = new Map([
     ["child-process"],
   ],
   [
+    // THE LAB's battery report — the third file allowed to reach
+    // `node:child_process`, and the same shape as the two above rather than a
+    // widening of them: the program is `argv[0]` of the table in
+    // `packages/core/src/lab/powercfg.ts` (`batteryReportArgv`), the argument
+    // list is fixed apart from one path this file builds under the OS temp
+    // folder, `shell` is false, and the process is killed at a time limit.
+    //
+    // `shell`, the exec family and `spawn-literal` are exempted for nobody, and
+    // this entry names `child-process` alone: the spawn call takes `argv[0]` as
+    // its program and never a string, which is what keeps the closed table
+    // load-bearing. `toolchain-name` is not exempted here either, and it costs
+    // nothing — `powercfg` is not one of those five words.
+    "apps/desktop/src/modules/lab/main/batteryReport.ts",
+    ["child-process"],
+  ],
+  [
     // A runner is not testable without a process to start, and this one is not
     // testable without the WORDS: it asserts the argv a Docker profile produces,
     // so `docker`, `--network`, the image reference and the profile id are the
