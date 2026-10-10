@@ -590,6 +590,7 @@ const TOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "tools.name.duzina",
     category: "conversion",
     riskClass: "none",
+    taskGroups: ["measure"],
     keywords: ["duzina", "rastojanje", "metar", "kilometar", "milja", "inc", "stopa", "jard"],
   },
   {
@@ -597,6 +598,7 @@ const TOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "tools.name.masa",
     category: "conversion",
     riskClass: "none",
+    taskGroups: ["measure"],
     keywords: ["masa", "tezina", "gram", "kilogram", "tona", "funta", "unca"],
   },
   {
@@ -604,6 +606,7 @@ const TOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "tools.name.zapremina",
     category: "conversion",
     riskClass: "none",
+    taskGroups: ["measure"],
     keywords: ["zapremina", "litar", "mililitar", "galon", "kubni", "decilitar"],
   },
   {
@@ -611,6 +614,7 @@ const TOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "tools.name.temperatura",
     category: "conversion",
     riskClass: "none",
+    taskGroups: ["measure"],
     keywords: ["temperatura", "celzijus", "farenhajt", "kelvin", "stepen"],
   },
   {
@@ -618,6 +622,7 @@ const TOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "tools.name.povrsina",
     category: "conversion",
     riskClass: "none",
+    taskGroups: ["measure"],
     keywords: ["povrsina", "kvadratni", "hektar", "ar", "aker", "plac"],
   },
   {
@@ -625,6 +630,7 @@ const TOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "tools.name.brzina",
     category: "conversion",
     riskClass: "none",
+    taskGroups: ["measure"],
     keywords: ["brzina", "cvor", "milja na sat", "kilometar na sat"],
   },
   {
@@ -632,6 +638,7 @@ const TOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "tools.name.podaci",
     category: "conversion",
     riskClass: "none",
+    taskGroups: ["measure", "data"],
     keywords: ["podaci", "bajt", "bit", "kilobajt", "megabajt", "gigabajt", "terabajt", "disk", "memorija"],
   },
   {
@@ -639,6 +646,7 @@ const TOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "tools.name.procenat",
     category: "calculation",
     riskClass: "none",
+    taskGroups: ["money", "measure"],
     keywords: ["procenat", "posto", "popust", "povecanje", "smanjenje", "promena"],
   },
   {
@@ -649,6 +657,7 @@ const TOOLS_TOOLS: ToolRegistration[] = [
     // puts on an invoice, so the drawer says out loud that this is arithmetic
     // and not tax advice, and echoes the rate that produced it.
     riskClass: "financial",
+    taskGroups: ["money"],
     keywords: ["pdv", "porez", "osnovica", "racun", "faktura", "stopa"],
   },
   {
@@ -659,6 +668,7 @@ const TOOLS_TOOLS: ToolRegistration[] = [
     // rate, the fees and the insurance are not in it, and somebody comparing
     // two loans on this number alone is comparing the wrong thing.
     riskClass: "financial",
+    taskGroups: ["money"],
     keywords: ["kredit", "rata", "anuitet", "kamata", "zajam", "pozajmica", "nks"],
   },
   {
@@ -666,6 +676,7 @@ const TOOLS_TOOLS: ToolRegistration[] = [
     titleKey: "tools.name.jedinicna-cena",
     category: "calculation",
     riskClass: "none",
+    taskGroups: ["money"],
     keywords: ["cena", "pakovanje", "jeftinije", "poredjenje", "kilogram", "litar"],
   },
 ];
@@ -725,6 +736,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.number-base",
     category: "numbers",
     riskClass: "none",
+    taskGroups: ["data"],
     packs: ["softver", "inzenjering"],
     keywords: [
       "base", "bigint", "bin", "binarno", "broj", "brojni sistemi", "cifre", "convert",
@@ -738,6 +750,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.integer-inspector",
     category: "numbers",
     riskClass: "none",
+    taskGroups: ["data"],
     packs: ["softver", "inzenjering"],
     keywords: [
       "bajt", "bajtovi", "big endian", "binarno", "celobrojno", "ceo broj", "dvojni komplement",
@@ -752,6 +765,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.bitwise",
     category: "numbers",
     riskClass: "none",
+    taskGroups: ["data"],
     packs: ["softver", "inzenjering"],
     keywords: [
       "and", "bit", "bitovi", "bitske operacije", "bitwise", "clz", "ctz", "mask", "maska", "nand",
@@ -765,6 +779,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.data-unit",
     category: "numbers",
     riskClass: "none",
+    taskGroups: ["data", "measure"],
     packs: ["softver"],
     keywords: [
       "bajt", "bajtovi", "bit", "bitovi", "bytes", "data", "disk", "gb", "gib", "gigabajt",
@@ -778,6 +793,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.float-convert",
     category: "numbers",
     riskClass: "none",
+    taskGroups: ["data"],
     packs: ["softver", "inzenjering"],
     keywords: [
       "beskonacno", "bf16", "bfloat", "bitovi", "denormal", "double", "e4m3", "e5m2", "e8m0",
@@ -792,6 +808,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.mx-block",
     category: "numbers",
     riskClass: "none",
+    taskGroups: ["data"],
     packs: ["softver"],
     keywords: [
       "bita po vrednosti", "bits per value", "block", "blok", "deljeni eksponent", "e8m0",
@@ -806,6 +823,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.riscv",
     category: "riscv",
     riskClass: "none",
+    taskGroups: ["data"],
     packs: ["softver"],
     keywords: [
       "abi", "addi", "asembler", "assembler", "branch", "compressed", "csr", "decode",
@@ -822,6 +840,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.base64",
     category: "encoding",
     riskClass: "none",
+    taskGroups: ["data"],
     packs: ["softver"],
     keywords: [
       "b64", "bajtovi", "base64", "bytes", "decode", "dekodiranje", "dopuna", "encode",
@@ -834,6 +853,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.url-encode",
     category: "encoding",
     riskClass: "none",
+    taskGroups: ["data"],
     packs: ["softver"],
     keywords: [
       "dekodiranje", "encodeuri", "encodeuricomponent", "escape", "form", "forma", "kodiranje",
@@ -846,6 +866,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.url-parse",
     category: "encoding",
     riskClass: "none",
+    taskGroups: ["data"],
     packs: ["softver"],
     keywords: [
       "delovi", "domen", "fragment", "host", "idn", "parametri", "parse", "port", "punycode",
@@ -858,6 +879,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.ascii-binary-hex",
     category: "encoding",
     riskClass: "none",
+    taskGroups: ["data"],
     packs: ["softver"],
     keywords: [
       "ascii", "bajtovi", "binarno", "binary", "bytes", "decimalno", "heks", "heksadekadno", "hex",
@@ -870,6 +892,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.unicode-inspector",
     category: "encoding",
     riskClass: "none",
+    taskGroups: ["data", "text"],
     packs: ["softver", "tekst"],
     keywords: [
       "codepoint", "emoji", "grafema", "inspector", "inspektor", "kategorija", "kodna", "nfc",
@@ -882,6 +905,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.html-entities",
     category: "encoding",
     riskClass: "none",
+    taskGroups: ["data", "text"],
     packs: ["softver"],
     keywords: [
       "amp", "dekodiranje", "entiteti", "entities", "escape", "html", "kodiranje", "markap",
@@ -894,6 +918,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.hexdump",
     category: "encoding",
     riskClass: "none",
+    taskGroups: ["data"],
     packs: ["softver"],
     keywords: [
       "ascii", "bajtovi", "bytes", "dump", "heks", "hex", "hexdump", "ispis", "offset", "ofset",
@@ -907,6 +932,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.json-editor",
     category: "data",
     riskClass: "none",
+    taskGroups: ["data"],
     packs: ["softver"],
     keywords: [
       "beautify", "format", "formatiranje", "indent", "json", "jsonpath", "keys", "kljucevi",
@@ -920,6 +946,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.yaml-editor",
     category: "data",
     riskClass: "none",
+    taskGroups: ["data"],
     packs: ["softver"],
     keywords: [
       "alias", "anchor", "block", "blok", "citaj", "documents", "dokument", "flow", "indent",
@@ -933,6 +960,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.xml-editor",
     category: "data",
     riskClass: "none",
+    taskGroups: ["data"],
     packs: ["softver"],
     keywords: [
       "atribut", "cdata", "entitet", "format", "formatiranje", "html", "indent", "ispravnost",
@@ -946,6 +974,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.data-format",
     category: "data",
     riskClass: "none",
+    taskGroups: ["data"],
     packs: ["softver"],
     keywords: [
       "convert", "csv", "delimiter", "format", "header", "izvoz", "json", "konvertuj",
@@ -959,6 +988,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.json-to-types",
     category: "data",
     riskClass: "none",
+    taskGroups: ["data"],
     packs: ["softver"],
     keywords: [
       "deklaracije", "dto", "generator", "interface", "json", "model", "schema", "sema", "tip",
@@ -971,6 +1001,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.uuid",
     category: "data",
     riskClass: "none",
+    taskGroups: ["data"],
     packs: ["softver"],
     keywords: [
       "generator", "guid", "id", "identifikator", "kljuc", "nasumican", "random", "ulid", "uuid",
@@ -984,6 +1015,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.diff",
     category: "text",
     riskClass: "none",
+    taskGroups: ["text", "data"],
     packs: ["softver", "tekst"],
     keywords: [
       "compare", "diff", "myers", "patch", "poredjenje", "promene", "razlika", "razlike", "tekst",
@@ -996,6 +1028,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.markdown-table",
     category: "text",
     riskClass: "none",
+    taskGroups: ["text", "data"],
     packs: ["softver"],
     keywords: [
       "align", "csv", "gfm", "grid", "kolone", "markdown", "md", "poravnanje", "redovi", "tabela",
@@ -1008,6 +1041,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.lorem",
     category: "text",
     riskClass: "none",
+    taskGroups: ["text"],
     packs: ["softver"],
     keywords: [
       "dummy", "filler", "generator", "ipsum", "lorem", "maketa", "pasusi", "placeholder",
@@ -1020,6 +1054,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.slug",
     category: "text",
     riskClass: "none",
+    taskGroups: ["text", "data"],
     packs: ["softver", "tekst"],
     keywords: [
       "cirilica", "djordje", "latinica", "link", "naslov", "permalink", "putanja", "seo", "slug",
@@ -1032,6 +1067,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.case-convert",
     category: "text",
     riskClass: "none",
+    taskGroups: ["text", "data"],
     packs: ["softver"],
     keywords: [
       "camelcase", "case", "identifikator", "kebab", "konverzija", "naziv", "oblik", "pascalcase",
@@ -1044,6 +1080,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.line-tools",
     category: "text",
     riskClass: "none",
+    taskGroups: ["text", "data"],
     packs: ["softver", "tekst"],
     keywords: [
       "dedupe", "duplikati", "izmesaj", "lines", "linije", "numerisi", "prefiks", "prelom",
@@ -1056,6 +1093,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.regex",
     category: "text",
     riskClass: "none",
+    taskGroups: ["data", "text"],
     packs: ["softver"],
     keywords: [
       "flags", "groups", "grupe", "match", "pattern", "poklapanja", "regex", "regularni izrazi",
@@ -1069,6 +1107,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.color-convert",
     category: "design",
     riskClass: "none",
+    taskGroups: ["design", "data"],
     packs: ["softver", "dizajn"],
     keywords: [
       "boja", "boje", "color", "colour", "convert", "css", "hex", "hsl", "hwb", "konverzija",
@@ -1081,6 +1120,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.color-palette",
     category: "design",
     riskClass: "none",
+    taskGroups: ["design"],
     packs: ["softver", "dizajn"],
     keywords: [
       "analogna", "boje", "harmonija", "harmony", "komplementarna", "monohromatska", "nijanse",
@@ -1093,6 +1133,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.gradient",
     category: "design",
     riskClass: "none",
+    taskGroups: ["design"],
     packs: ["softver", "dizajn"],
     keywords: [
       "conic", "css", "gradient", "gradijent", "interpolacija", "konusni", "linear", "linearni",
@@ -1106,6 +1147,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.cubic-bezier",
     category: "design",
     riskClass: "none",
+    taskGroups: ["design", "data"],
     packs: ["softver", "dizajn"],
     keywords: [
       "animacija", "animation", "bezier", "bezije", "bezijeova", "css", "cubic", "curve", "ease",
@@ -1118,6 +1160,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.contrast",
     category: "design",
     riskClass: "none",
+    taskGroups: ["design"],
     packs: ["softver", "dizajn"],
     keywords: [
       "a11y", "aa", "aaa", "accessibility", "apca", "citljivost", "contrast", "kontrast", "lc",
@@ -1130,6 +1173,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.color-mixer",
     category: "design",
     riskClass: "none",
+    taskGroups: ["design"],
     packs: ["softver", "dizajn"],
     keywords: [
       "alfa", "alpha", "blend", "boje", "composite", "kompozit", "linear", "mesalica", "mesanje",
@@ -1143,6 +1187,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.token-gen",
     category: "crypto",
     riskClass: "none",
+    taskGroups: ["data"],
     packs: ["softver"],
     keywords: [
       "alfanumericki", "api", "base58", "base64", "base64url", "entropija", "entropy", "generator",
@@ -1155,6 +1200,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.password-gen",
     category: "crypto",
     riskClass: "none",
+    taskGroups: ["data"],
     packs: ["softver"],
     keywords: [
       "cifre", "entropija", "entropy", "fraza", "generator", "jaka lozinka", "lozinka", "lozinke",
@@ -1167,6 +1213,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.jwt",
     category: "crypto",
     riskClass: "none",
+    taskGroups: ["data"],
     packs: ["softver"],
     keywords: [
       "bearer", "claims", "es256", "exp", "hmac", "hs256", "iat", "json web token", "jwk", "jwt",
@@ -1179,6 +1226,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.hashing",
     category: "crypto",
     riskClass: "none",
+    taskGroups: ["data"],
     packs: ["softver"],
     keywords: [
       "base64", "checksum", "digest", "hash", "hes", "hesiranje", "hex", "hmac", "md5", "otisak",
@@ -1191,6 +1239,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.aes",
     category: "crypto",
     riskClass: "none",
+    taskGroups: ["data"],
     packs: ["softver"],
     keywords: [
       "aes", "cbc", "decrypt", "desifrovanje", "encrypt", "envelope", "gcm", "iv", "key", "kljuc",
@@ -1203,6 +1252,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.rsa-keygen",
     category: "crypto",
     riskClass: "none",
+    taskGroups: ["data"],
     packs: ["softver"],
     keywords: [
       "2048", "4096", "generisanje", "javni", "key", "keygen", "keypair", "kljuc", "kljucevi",
@@ -1215,6 +1265,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.rsa-crypt",
     category: "crypto",
     riskClass: "none",
+    taskGroups: ["data"],
     packs: ["softver"],
     keywords: [
       "asimetricno", "decrypt", "desifrovanje", "encrypt", "javni kljuc", "kriptovanje", "oaep",
@@ -1227,6 +1278,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.signature",
     category: "crypto",
     riskClass: "none",
+    taskGroups: ["data"],
     packs: ["softver"],
     keywords: [
       "ecdsa", "eliptic", "kljuc", "p256", "p384", "pem", "pkcs1", "potpis", "potpisivanje",
@@ -1240,6 +1292,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.http-status",
     category: "system",
     riskClass: "none",
+    taskGroups: ["data"],
     packs: ["softver"],
     keywords: [
       "404", "500", "cloudflare", "error", "greska", "http", "iana", "kod", "kodovi", "odgovor",
@@ -1252,6 +1305,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.path-convert",
     category: "system",
     riskClass: "none",
+    taskGroups: ["data"],
     packs: ["softver"],
     keywords: [
       "disk", "escape", "file url", "linux", "mnt", "navodnici", "path", "putanja", "putanje",
@@ -1264,6 +1318,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.cidr",
     category: "system",
     riskClass: "none",
+    taskGroups: ["data"],
     packs: ["softver"],
     keywords: [
       "broadcast", "cidr", "ip", "ipv4", "ipv6", "maska", "mreza", "netmask", "opseg", "podmreza",
@@ -1276,6 +1331,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.semver",
     category: "system",
     riskClass: "none",
+    taskGroups: ["data"],
     packs: ["softver"],
     keywords: [
       "caret", "compare", "npm", "opseg", "prerelease", "range", "semver", "sortiraj", "tilde",
@@ -1288,6 +1344,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.qr",
     category: "system",
     riskClass: "none",
+    taskGroups: ["data", "design"],
     packs: ["softver", "biznis", "event"],
     keywords: [
       "barcode", "barkod", "email", "generator", "geo", "kod", "kontakt", "koordinate", "link",
@@ -1303,6 +1360,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.datetime",
     category: "time",
     riskClass: "none",
+    taskGroups: ["dates", "data"],
     packs: ["softver"],
     keywords: [
       "convert", "dan u godini", "datum", "day of year", "dotnet", "dst", "duration", "epoch",
@@ -1319,6 +1377,7 @@ const PRO_DEV_TOOLS: ToolRegistration[] = [
     blurbKey: "devtools.blurb.cron",
     category: "time",
     riskClass: "none",
+    taskGroups: ["dates", "data"],
     packs: ["softver"],
     keywords: [
       "cron", "crontab", "daily", "dan u mesecu", "dan u nedelji", "dst", "expression", "fields",
@@ -1366,6 +1425,7 @@ const PRO_GRADNJA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.angle-units",
     category: "conversion",
     riskClass: "none",
+    taskGroups: ["build", "measure"],
     packs: ["gradnja", "inzenjering"],
     keywords: [
       "angle", "decimalnih", "direkcioni", "gona", "jedinica", "krug", "mila", "minuta",
@@ -1379,6 +1439,7 @@ const PRO_GRADNJA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.bar-spacing",
     category: "geometry",
     riskClass: "life-safety",
+    taskGroups: ["build", "measure"],
     packs: ["gradnja", "inzenjering", "agro", "zanat", "event"],
     keywords: [
       "bar", "deli", "duzina", "duzinu", "jednake", "jednaki", "komada", "kraja", "maksimum",
@@ -1392,6 +1453,7 @@ const PRO_GRADNJA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.beam-check",
     category: "structure",
     riskClass: "life-safety",
+    taskGroups: ["build"],
     packs: ["gradnja", "inzenjering", "zanat"],
     keywords: [
       "beam", "cetiri", "check", "elasticnosti", "granicni", "greda", "inercije", "konzola",
@@ -1406,6 +1468,7 @@ const PRO_GRADNJA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.concrete-takeoff",
     category: "materials",
     riskClass: "none",
+    taskGroups: ["build"],
     packs: ["gradnja", "zanat"],
     keywords: [
       "armature", "betona", "concrete", "dimenzije", "elementa", "gredu", "gustina", "kolicina",
@@ -1420,6 +1483,7 @@ const PRO_GRADNJA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.drawing-scale",
     category: "conversion",
     riskClass: "none",
+    taskGroups: ["build", "measure"],
     sourceKey: "pro.sources.iso-216-iso-5455",
     packs: ["gradnja", "inzenjering", "dizajn", "nekretnine"],
     keywords: [
@@ -1434,6 +1498,7 @@ const PRO_GRADNJA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.earthwork-prismoidal",
     category: "materials",
     riskClass: "none",
+    taskGroups: ["build"],
     packs: ["gradnja", "inzenjering"],
     keywords: [
       "earthwork", "formuli", "iskopa", "metodi", "nasipa", "poprecnih", "povrsina", "preseka",
@@ -1447,6 +1512,7 @@ const PRO_GRADNJA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.level-run",
     category: "calculation",
     riskClass: "none",
+    taskGroups: ["build", "measure"],
     packs: ["gradnja", "inzenjering"],
     keywords: [
       "aritmeticku", "duzina", "kontrolu", "kota", "kote", "level", "nezatvaranje", "nivelira",
@@ -1460,6 +1526,7 @@ const PRO_GRADNJA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.rebar-weight",
     category: "materials",
     riskClass: "none",
+    taskGroups: ["build"],
     sourceKey: "pro.sources.steel-nominal-density",
     packs: ["gradnja", "inzenjering", "zanat"],
     keywords: [
@@ -1473,6 +1540,7 @@ const PRO_GRADNJA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.roof-pitch",
     category: "geometry",
     riskClass: "none",
+    taskGroups: ["build"],
     packs: ["gradnja", "zanat"],
     keywords: [
       "duzinu", "grbine", "grbinu", "horizontalne", "horizontalni", "krak", "krova", "krovne",
@@ -1487,6 +1555,7 @@ const PRO_GRADNJA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.room-surfaces",
     category: "geometry",
     riskClass: "none",
+    taskGroups: ["build", "measure"],
     packs: ["gradnja", "nekretnine", "zanat"],
     keywords: [
       "dubina", "duzina", "izdasnost", "kolicinu", "materijala", "mera", "neto", "odbijanje",
@@ -1501,6 +1570,7 @@ const PRO_GRADNJA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.slope-grade",
     category: "geometry",
     riskClass: "none",
+    taskGroups: ["build", "measure"],
     packs: ["gradnja", "inzenjering", "transport", "agro", "zanat"],
     keywords: [
       "duzina", "duzine", "grade", "horizontalna", "kosa", "nagib", "nagiba", "odnosu", "pad",
@@ -1514,6 +1584,7 @@ const PRO_GRADNJA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.square-check",
     category: "geometry",
     riskClass: "none",
+    taskGroups: ["build"],
     packs: ["gradnja", "zanat", "event"],
     keywords: [
       "check", "dijagonala", "dijagonale", "izmerena", "izmerene", "milimetrima", "odstupanje",
@@ -1526,6 +1597,7 @@ const PRO_GRADNJA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.stair-geometry",
     category: "geometry",
     riskClass: "life-safety",
+    taskGroups: ["build"],
     packs: ["gradnja", "zanat"],
     keywords: [
       "blondel", "broj stepenika", "gazenje", "gazista", "gaziste", "going", "hod", "krak",
@@ -1539,6 +1611,7 @@ const PRO_GRADNJA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.survey-bearing-distance",
     category: "geometry",
     riskClass: "none",
+    taskGroups: ["build", "measure"],
     packs: ["gradnja", "inzenjering"],
     keywords: [
       "bearing", "direkcioni", "distance", "duzina", "duzine", "duzinu", "geodetski",
@@ -1552,6 +1625,7 @@ const PRO_GRADNJA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.tile-count",
     category: "materials",
     riskClass: "none",
+    taskGroups: ["build"],
     packs: ["gradnja", "zanat"],
     keywords: [
       "count", "format", "formata", "komada", "kutija", "kutiji", "kvadratu", "plocica",
@@ -1564,6 +1638,7 @@ const PRO_GRADNJA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.trench-volume",
     category: "materials",
     riskClass: "none",
+    taskGroups: ["build"],
     packs: ["gradnja", "inzenjering", "agro", "zanat"],
     keywords: [
       "cevi", "debljina", "dna", "dubina", "dubine", "duzina", "horizontalno", "iskop",
@@ -1578,6 +1653,7 @@ const PRO_GRADNJA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.wall-u-value",
     category: "calculation",
     riskClass: "none",
+    taskGroups: ["build"],
     packs: ["gradnja", "inzenjering"],
     keywords: [
       "dodiru", "krova", "nevetrenog", "otpor", "otpore", "prelaza", "rse", "rsi", "sabira",
@@ -1594,6 +1670,7 @@ const PRO_INZENJERING_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.awg-to-mm2",
     category: "electrical",
     riskClass: "life-safety",
+    taskGroups: ["build", "measure"],
     sourceKey: "pro.sources.astm-b258-18-iec-60028-1925-iec-60889-1987",
     packs: ["inzenjering", "muzika"],
     keywords: [
@@ -1607,6 +1684,7 @@ const PRO_INZENJERING_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.battery-bank-runtime",
     category: "electrical",
     riskClass: "life-safety",
+    taskGroups: ["build"],
     packs: ["inzenjering", "foto", "transport"],
     keywords: [
       "autonomija", "bank", "baterija", "battery", "dod", "energiju", "iskoristivi",
@@ -1620,6 +1698,7 @@ const PRO_INZENJERING_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.belt-and-gear-drive",
     category: "geometry",
     riskClass: "life-safety",
+    taskGroups: ["build"],
     packs: ["inzenjering", "agro", "zanat"],
     keywords: [
       "and", "belt", "brzinu", "drive", "duzinu", "gear", "izlazni", "kais", "kaisa", "obrtaja",
@@ -1633,6 +1712,7 @@ const PRO_INZENJERING_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.cable-cross-section",
     category: "electrical",
     riskClass: "life-safety",
+    taskGroups: ["build"],
     sourceKey: "pro.sources.iec-60028-1925-iec-60889-1987",
     packs: ["gradnja", "inzenjering"],
     keywords: [
@@ -1647,6 +1727,7 @@ const PRO_INZENJERING_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.induction-motor-rating",
     category: "electrical",
     riskClass: "life-safety",
+    taskGroups: ["build"],
     packs: ["inzenjering"],
     keywords: [
       "asinhroni", "brzinu", "cos", "induction", "klizanje", "moment", "motor", "natpisne",
@@ -1660,6 +1741,7 @@ const PRO_INZENJERING_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.junction-temperature",
     category: "calculation",
     riskClass: "none",
+    taskGroups: ["build"],
     packs: ["inzenjering"],
     keywords: [
       "ambijenta", "dozvoljenu", "hladnjaka", "junction", "lanca", "max", "obrnuto", "otpor",
@@ -1673,6 +1755,7 @@ const PRO_INZENJERING_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.metric-thread-strength",
     category: "structure",
     riskClass: "life-safety",
+    taskGroups: ["build"],
     sourceKey: "pro.sources.iso-68-1-1998-iso-898-1-2013",
     packs: ["gradnja", "inzenjering", "zanat"],
     keywords: [
@@ -1687,6 +1770,7 @@ const PRO_INZENJERING_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.ohms-law-power",
     category: "electrical",
     riskClass: "life-safety",
+    taskGroups: ["build"],
     packs: ["inzenjering"],
     keywords: [
       "cetiri", "law", "ohms", "omov", "par", "power", "preostale", "snaga", "velicine", "zakon"
@@ -1698,6 +1782,7 @@ const PRO_INZENJERING_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.pipe-flow-velocity",
     category: "calculation",
     riskClass: "none",
+    taskGroups: ["build"],
     packs: ["gradnja", "inzenjering", "agro"],
     keywords: [
       "brzinu", "cev", "cevi", "flow", "maseni", "pipe", "povezuje", "poznata", "precnik",
@@ -1710,6 +1795,7 @@ const PRO_INZENJERING_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.power-factor-correction",
     category: "electrical",
     riskClass: "life-safety",
+    taskGroups: ["build"],
     packs: ["inzenjering"],
     keywords: [
       "baterije", "ciljani", "correction", "cos", "factor", "faktor", "kapacitivnost",
@@ -1723,6 +1809,7 @@ const PRO_INZENJERING_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.pressure-and-piston-force",
     category: "conversion",
     riskClass: "life-safety",
+    taskGroups: ["build", "measure"],
     packs: ["inzenjering", "transport", "agro", "zanat"],
     keywords: [
       "and", "apsolutnog", "atm", "bar", "cilindra", "force", "jedinica", "kgf", "klipa",
@@ -1737,6 +1824,7 @@ const PRO_INZENJERING_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.resistor-colour-code",
     category: "conversion",
     riskClass: "none",
+    taskGroups: ["build"],
     sourceKey: "pro.sources.iec-60062-2016-iec-60063-2015",
     packs: ["inzenjering"],
     keywords: [
@@ -1751,6 +1839,7 @@ const PRO_INZENJERING_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.rlc-impedance",
     category: "electrical",
     riskClass: "life-safety",
+    taskGroups: ["build"],
     packs: ["inzenjering", "muzika"],
     keywords: [
       "fazni", "frekvenciji", "frekvenciju", "granicnu", "impedance", "impedansa", "impedansu",
@@ -1763,6 +1852,7 @@ const PRO_INZENJERING_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.section-modulus",
     category: "structure",
     riskClass: "life-safety",
+    taskGroups: ["build"],
     packs: ["gradnja", "inzenjering", "zanat"],
     keywords: [
       "cev", "dop", "inercije", "karakteristike", "krug", "modulus", "momente", "oblik",
@@ -1776,6 +1866,7 @@ const PRO_INZENJERING_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.series-parallel-network",
     category: "electrical",
     riskClass: "life-safety",
+    taskGroups: ["build"],
     packs: ["inzenjering", "muzika"],
     keywords: [
       "delilac", "elementa", "elementu", "kalemove", "kondenzatore", "naponski", "network",
@@ -1789,6 +1880,7 @@ const PRO_INZENJERING_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.three-phase-power",
     category: "electrical",
     riskClass: "life-safety",
+    taskGroups: ["build"],
     packs: ["gradnja", "inzenjering"],
     keywords: [
       "aktivnu", "cos", "faktora", "jednofaznoj", "linijsku", "mrezi", "phase", "povezuje",
@@ -1802,6 +1894,7 @@ const PRO_INZENJERING_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.torque-speed-power",
     category: "calculation",
     riskClass: "life-safety",
+    taskGroups: ["build"],
     packs: ["inzenjering", "transport", "agro", "zanat"],
     keywords: [
       "kgf", "lbf", "moment", "obrtaja", "obrtni", "par", "povezuje", "power", "snaga", "snagu",
@@ -1817,6 +1910,7 @@ const PRO_DIZAJN_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.aspect-ratio-fit",
     category: "geometry",
     riskClass: "none",
+    taskGroups: ["design", "measure"],
     packs: ["softver", "dizajn", "foto", "event"],
     keywords: [
       "aspect", "celobrojni", "dimenzije", "fit", "mode", "odnos", "odnosno", "okvir", "okvira",
@@ -1831,6 +1925,7 @@ const PRO_DIZAJN_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.baseline-rhythm",
     category: "design",
     riskClass: "none",
+    taskGroups: ["design", "text"],
     packs: ["softver", "dizajn", "tekst"],
     keywords: [
       "baseline", "columnheight", "fontsize", "gridunit", "kolonu", "lineheight",
@@ -1844,6 +1939,7 @@ const PRO_DIZAJN_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.book-spine",
     category: "geometry",
     riskClass: "none",
+    taskGroups: ["design", "text"],
     packs: ["dizajn", "tekst"],
     keywords: [
       "book", "brojem", "bulk", "covercaliper", "coverheight", "coverwidth", "debljina",
@@ -1858,6 +1954,7 @@ const PRO_DIZAJN_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.column-grid",
     category: "design",
     riskClass: "none",
+    taskGroups: ["design"],
     packs: ["softver", "dizajn"],
     keywords: [
       "column", "columns", "containerwidth", "grid", "gutter", "jedne", "kolona", "kolone",
@@ -1871,6 +1968,7 @@ const PRO_DIZAJN_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.copyfitting",
     category: "text",
     riskClass: "none",
+    taskGroups: ["design", "text"],
     packs: ["dizajn", "prosveta", "tekst"],
     keywords: [
       "averagecharacterwidth", "charactercount", "charactersperline", "columnheight",
@@ -1886,6 +1984,7 @@ const PRO_DIZAJN_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.css-typographic-units",
     category: "conversion",
     riskClass: "none",
+    taskGroups: ["design", "measure"],
     sourceKey: "pro.sources.css-units-and-android-dp",
     packs: ["softver", "dizajn", "tekst"],
     keywords: [
@@ -1900,6 +1999,7 @@ const PRO_DIZAJN_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.delta-e",
     category: "design",
     riskClass: "none",
+    taskGroups: ["design"],
     sourceKey: "pro.sources.cie-colour-difference",
     packs: ["dizajn", "foto"],
     keywords: [
@@ -1914,6 +2014,7 @@ const PRO_DIZAJN_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.ean-barcode",
     category: "data",
     riskClass: "none",
+    taskGroups: ["design", "data"],
     sourceKey: "pro.sources.iso-iec-15420-ean-upc",
     packs: ["dizajn", "biznis", "transport"],
     keywords: [
@@ -1927,6 +2028,7 @@ const PRO_DIZAJN_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.font-metrics-trim",
     category: "design",
     riskClass: "none",
+    taskGroups: ["design"],
     packs: ["softver", "dizajn"],
     keywords: [
       "ascender", "ascendera", "capheight", "descender", "descendera", "font", "fonta",
@@ -1941,6 +2043,7 @@ const PRO_DIZAJN_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.iso-paper-sizes",
     category: "geometry",
     riskClass: "none",
+    taskGroups: ["design", "measure"],
     sourceKey: "pro.sources.iso-216-paper-series",
     packs: ["dizajn", "prosveta", "tekst"],
     keywords: [
@@ -1956,6 +2059,7 @@ const PRO_DIZAJN_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.modular-type-scale",
     category: "design",
     riskClass: "none",
+    taskGroups: ["design", "text"],
     packs: ["softver", "dizajn", "tekst"],
     keywords: [
       "basesize", "baseunit", "dobijen", "izabranim", "jedinicama", "mnozenjem", "modular",
@@ -1970,6 +2074,7 @@ const PRO_DIZAJN_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.paper-weight",
     category: "materials",
     riskClass: "none",
+    taskGroups: ["design", "measure"],
     packs: ["dizajn", "tekst", "transport"],
     keywords: [
       "ceo", "gramatura", "gramaturi", "grammage", "izmerenog", "masa", "measuredmass", "paper",
@@ -1983,6 +2088,7 @@ const PRO_DIZAJN_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.print-resolution",
     category: "conversion",
     riskClass: "none",
+    taskGroups: ["design", "measure"],
     packs: ["dizajn", "foto", "tekst", "zanat", "event"],
     keywords: [
       "bitsperchannel", "bleed", "channels", "direction", "heightpx", "milimetara",
@@ -1997,6 +2103,7 @@ const PRO_DIZAJN_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.roll-yield",
     category: "materials",
     riskClass: "none",
+    taskGroups: ["design", "measure"],
     packs: ["dizajn", "zanat", "event"],
     keywords: [
       "allowrotation", "duznih", "gutter", "iskoristivost", "isplati", "komad", "komada",
@@ -2011,6 +2118,7 @@ const PRO_DIZAJN_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.saddle-stitch-imposition",
     category: "geometry",
     riskClass: "none",
+    taskGroups: ["design"],
     packs: ["dizajn", "tekst", "event"],
     keywords: [
       "idu", "imposition", "klamovane", "knjizice", "kod", "ostaje", "pagecount", "praznih",
@@ -2024,6 +2132,7 @@ const PRO_DIZAJN_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.sheet-imposition",
     category: "geometry",
     riskClass: "none",
+    taskGroups: ["design"],
     packs: ["gradnja", "dizajn", "zanat", "event"],
     keywords: [
       "allowrotation", "gutter", "imposition", "komada", "marginama", "marginbottom",
@@ -2041,6 +2150,7 @@ const PRO_FOTO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.angle-of-view",
     category: "geometry",
     riskClass: "none",
+    taskGroups: ["design", "measure"],
     packs: ["inzenjering", "foto", "zanat"],
     keywords: [
       "angle", "daljinu", "dijagonali", "dimenzije", "distance", "focal", "height", "kadar",
@@ -2054,6 +2164,7 @@ const PRO_FOTO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.crop-factor",
     category: "conversion",
     riskClass: "none",
+    taskGroups: ["design", "measure"],
     sourceKey: "pro.sources.iso-1007-135-format",
     packs: ["foto"],
     keywords: [
@@ -2068,6 +2179,7 @@ const PRO_FOTO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.depth-of-field",
     category: "geometry",
     riskClass: "none",
+    taskGroups: ["design"],
     packs: ["foto"],
     keywords: [
       "blendu", "blizu", "circle", "coc", "confusion", "daljinu", "dalju", "depth", "diagonal",
@@ -2081,6 +2193,7 @@ const PRO_FOTO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.diffraction-limit",
     category: "calculation",
     riskClass: "none",
+    taskGroups: ["design"],
     packs: ["foto"],
     keywords: [
       "blendu", "count", "diffraction", "difrakcija", "disk", "diska", "dostigne", "erijevog",
@@ -2094,6 +2207,7 @@ const PRO_FOTO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.exposure-equivalent",
     category: "calculation",
     riskClass: "none",
+    taskGroups: ["design"],
     packs: ["foto"],
     keywords: [
       "blendama", "blende", "ekspozicija", "ekspoziciju", "ekvivalentna", "equivalent",
@@ -2107,6 +2221,7 @@ const PRO_FOTO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.flash-guide-number",
     category: "calculation",
     riskClass: "none",
+    taskGroups: ["design"],
     packs: ["foto"],
     keywords: [
       "blendu", "blica", "broja", "distance", "flash", "guide", "iso", "number", "osvetljenja",
@@ -2120,6 +2235,7 @@ const PRO_FOTO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.frame-rate-conform",
     category: "time",
     riskClass: "none",
+    taskGroups: ["design"],
     sourceKey: "pro.sources.ntsc-1000-1001-rates",
     packs: ["foto", "muzika"],
     keywords: [
@@ -2135,6 +2251,7 @@ const PRO_FOTO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.illuminance-to-aperture",
     category: "conversion",
     riskClass: "none",
+    taskGroups: ["design", "measure"],
     sourceKey: "pro.sources.international-foot-1959",
     packs: ["gradnja", "inzenjering", "foto", "event"],
     keywords: [
@@ -2149,6 +2266,7 @@ const PRO_FOTO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.mired-shift",
     category: "conversion",
     riskClass: "none",
+    taskGroups: ["design"],
     packs: ["foto", "event"],
     keywords: [
       "apply", "boje", "colour", "dobija", "korekcija", "korekcije", "mired", "miredima",
@@ -2161,6 +2279,7 @@ const PRO_FOTO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.motion-blur",
     category: "calculation",
     riskClass: "none",
+    taskGroups: ["design"],
     packs: ["foto"],
     keywords: [
       "acceptable", "blur", "broja", "count", "distance", "ekspozicije", "focal", "horizontal",
@@ -2175,6 +2294,7 @@ const PRO_FOTO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.nd-filter-exposure",
     category: "calculation",
     riskClass: "none",
+    taskGroups: ["design"],
     packs: ["foto"],
     keywords: [
       "additional", "base", "blendi", "density", "ekspozicije", "exactly", "exposure", "factor",
@@ -2188,6 +2308,7 @@ const PRO_FOTO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.pq-nits",
     category: "conversion",
     riskClass: "none",
+    taskGroups: ["design"],
     sourceKey: "pro.sources.smpte-st-2084-pq",
     packs: ["softver", "foto"],
     keywords: [
@@ -2202,6 +2323,7 @@ const PRO_FOTO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.raster-image-size",
     category: "media",
     riskClass: "none",
+    taskGroups: ["design", "measure"],
     packs: ["softver", "dizajn", "foto"],
     keywords: [
       "available", "average", "bit", "bita", "broja", "capacity", "channel", "channels",
@@ -2216,6 +2338,7 @@ const PRO_FOTO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.smpte-timecode",
     category: "time",
     riskClass: "none",
+    taskGroups: ["design"],
     sourceKey: "pro.sources.smpte-st-12-1-timecode",
     packs: ["foto", "muzika", "tekst", "event"],
     keywords: [
@@ -2229,6 +2352,7 @@ const PRO_FOTO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.timelapse-planner",
     category: "time",
     riskClass: "none",
+    taskGroups: ["design"],
     sourceKey: "pro.sources.smpte-broadcast-frame-rates",
     packs: ["gradnja", "foto", "event"],
     keywords: [
@@ -2244,6 +2368,7 @@ const PRO_FOTO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.video-bitrate-storage",
     category: "media",
     riskClass: "none",
+    taskGroups: ["design", "measure"],
     packs: ["softver", "foto", "muzika", "event"],
     keywords: [
       "audio", "bitrate", "bitrejt", "capacity", "card", "cards", "copies", "disk", "duration",
@@ -2260,6 +2385,7 @@ const PRO_MUZIKA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.audio-level-reference",
     category: "conversion",
     riskClass: "none",
+    taskGroups: ["design", "measure"],
     packs: ["inzenjering", "muzika", "zanat", "event"],
     keywords: [
       "audio", "dbm", "dbu", "dbv", "efektivnog", "for", "impedance", "level", "linijskog",
@@ -2273,6 +2399,7 @@ const PRO_MUZIKA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.bar-duration",
     category: "time",
     riskClass: "none",
+    taskGroups: ["design"],
     packs: ["muzika"],
     keywords: [
       "bar", "bars", "denominator", "duration", "number", "numerator", "obrnuto", "signature",
@@ -2285,6 +2412,7 @@ const PRO_MUZIKA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.bpm-delay-times",
     category: "time",
     riskClass: "none",
+    taskGroups: ["design"],
     packs: ["muzika"],
     keywords: [
       "bpm", "delay", "frekvenciju", "lfo", "milisekundama", "modifier", "note", "notnu",
@@ -2298,6 +2426,7 @@ const PRO_MUZIKA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.cents-ratio",
     category: "conversion",
     riskClass: "none",
+    taskGroups: ["design", "measure"],
     packs: ["muzika", "prosveta"],
     keywords: [
       "cente", "centi", "cents", "frekvencija", "frekvencije", "frekvenciju", "frequency",
@@ -2310,6 +2439,7 @@ const PRO_MUZIKA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.compressor-curve",
     category: "media",
     riskClass: "none",
+    taskGroups: ["design"],
     packs: ["muzika"],
     keywords: [
       "compressor", "curve", "desava", "gain", "izlazni", "knee", "koleno", "kompresora",
@@ -2323,6 +2453,7 @@ const PRO_MUZIKA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.decibel-ratio",
     category: "conversion",
     riskClass: "none",
+    taskGroups: ["design", "measure"],
     packs: ["gradnja", "inzenjering", "muzika"],
     keywords: [
       "amplitudu", "decibel", "decibele", "decibeli", "decibelima", "decibels", "levels",
@@ -2336,6 +2467,7 @@ const PRO_MUZIKA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.note-frequency",
     category: "conversion",
     riskClass: "none",
+    taskGroups: ["design", "measure"],
     sourceKey: "pro.sources.iso-16-1975",
     packs: ["muzika", "prosveta"],
     keywords: [
@@ -2350,6 +2482,7 @@ const PRO_MUZIKA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.pcm-file-size",
     category: "media",
     riskClass: "none",
+    taskGroups: ["design", "measure"],
     sourceKey: "pro.sources.riff-wave-1991",
     packs: ["softver", "foto", "muzika"],
     keywords: [
@@ -2365,6 +2498,7 @@ const PRO_MUZIKA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.reverb-time",
     category: "calculation",
     riskClass: "none",
+    taskGroups: ["design"],
     packs: ["gradnja", "inzenjering", "muzika", "event"],
     keywords: [
       "absorption", "air", "alpha", "apsorpcije", "area", "coefficient", "eyringovoj",
@@ -2379,6 +2513,7 @@ const PRO_MUZIKA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.room-modes",
     category: "calculation",
     riskClass: "none",
+    taskGroups: ["design"],
     packs: ["gradnja", "inzenjering", "dizajn", "muzika"],
     keywords: [
       "air", "aksijalne", "axis", "dimenzija", "frequency", "gomilaju", "height", "jednacini",
@@ -2393,6 +2528,7 @@ const PRO_MUZIKA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.sample-buffer-latency",
     category: "media",
     riskClass: "none",
+    taskGroups: ["design"],
     packs: ["softver", "muzika"],
     keywords: [
       "bafera", "baferi", "buffer", "converter", "count", "driver", "duration", "extra",
@@ -2406,6 +2542,7 @@ const PRO_MUZIKA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.scale-chord-speller",
     category: "data",
     riskClass: "none",
+    taskGroups: ["design", "study"],
     packs: ["muzika", "prosveta"],
     keywords: [
       "accidental", "akorda", "akordi", "brojem", "chord", "intervalima", "ispisuje", "note",
@@ -2419,6 +2556,7 @@ const PRO_MUZIKA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.sound-wavelength",
     category: "calculation",
     riskClass: "none",
+    taskGroups: ["design", "measure"],
     packs: ["gradnja", "inzenjering", "muzika"],
     keywords: [
       "air", "brzinu", "cetvrtinu", "distance", "duzina", "duzinu", "frekvenciju", "frequency",
@@ -2432,6 +2570,7 @@ const PRO_MUZIKA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.speaker-load",
     category: "electrical",
     riskClass: "life-safety",
+    taskGroups: ["design"],
     packs: ["inzenjering", "muzika", "zanat", "event"],
     keywords: [
       "amplifier", "assignment", "cabinet", "delivered", "dobija", "each", "for", "group",
@@ -2446,6 +2585,7 @@ const PRO_MUZIKA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.spl-distance",
     category: "calculation",
     riskClass: "life-safety",
+    taskGroups: ["design", "measure"],
     packs: ["gradnja", "inzenjering", "muzika", "event"],
     keywords: [
       "applied", "difference", "distance", "for", "gubi", "half", "kutije", "level", "limit",
@@ -2460,6 +2600,7 @@ const PRO_MUZIKA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.transposition",
     category: "conversion",
     riskClass: "none",
+    taskGroups: ["design", "study"],
     packs: ["muzika", "prosveta"],
     keywords: [
       "akordske", "chord", "direction", "instrumenata", "instrument", "interval", "key",
@@ -2474,6 +2615,7 @@ const PRO_MUZIKA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.varispeed-repitch",
     category: "media",
     riskClass: "none",
+    taskGroups: ["design"],
     packs: ["muzika"],
     keywords: [
       "brzina", "brzine", "centima", "dobijeni", "dobijeno", "frekvenciji", "jednoj", "length",
@@ -2491,6 +2633,7 @@ const PRO_PROSVETA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.average-to-target",
     category: "calculation",
     riskClass: "none",
+    taskGroups: ["study"],
     packs: ["prosveta"],
     keywords: [
       "average", "cilj", "cilja", "ciljni", "dodatne", "dostigao", "izdrzi", "jos", "ocena",
@@ -2503,6 +2646,7 @@ const PRO_PROSVETA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.child-age",
     category: "time",
     riskClass: "none",
+    taskGroups: ["study", "dates"],
     packs: ["prosveta", "trening", "pravo"],
     keywords: [
       "age", "child", "dan", "dana", "danima", "datum", "deteta", "godina", "godinama",
@@ -2516,6 +2660,7 @@ const PRO_PROSVETA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.combinatorics",
     category: "calculation",
     riskClass: "none",
+    taskGroups: ["study"],
     packs: ["softver", "prosveta"],
     keywords: [
       "aritmetici", "brojevi", "celobrojnoj", "combinatorics", "faktorijel", "kombinacije",
@@ -2529,6 +2674,7 @@ const PRO_PROSVETA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.fractions-decimals",
     category: "calculation",
     riskClass: "none",
+    taskGroups: ["study"],
     packs: ["prosveta", "kuhinja", "zanat"],
     keywords: [
       "aritmetici", "celobrojnoj", "decimale", "decimalni", "decimals", "decimalu", "deli",
@@ -2543,6 +2689,7 @@ const PRO_PROSVETA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.grade-scale-points",
     category: "calculation",
     riskClass: "none",
+    taskGroups: ["study"],
     packs: ["prosveta"],
     keywords: [
       "bodova", "bodovanja", "bodovi", "bodovna", "grade", "korak", "maksimalan", "maksimumom",
@@ -2556,6 +2703,7 @@ const PRO_PROSVETA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.grade-statistics",
     category: "data",
     riskClass: "none",
+    taskGroups: ["study", "data"],
     packs: ["prosveta", "trening", "biznis", "agro"],
     keywords: [
       "bodova", "devijaciju", "grade", "kvartile", "medijanu", "modu", "niz", "ocena", "prag",
@@ -2569,6 +2717,7 @@ const PRO_PROSVETA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.guessing-correction",
     category: "calculation",
     riskClass: "none",
+    taskGroups: ["study"],
     packs: ["prosveta"],
     keywords: [
       "bodova", "cist", "correction", "doneo", "doprinos", "guessing", "izborom", "korekcija",
@@ -2583,6 +2732,7 @@ const PRO_PROSVETA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.item-analysis",
     category: "data",
     riskClass: "none",
+    taskGroups: ["study", "data"],
     packs: ["prosveta"],
     keywords: [
       "analiza", "analysis", "bolje", "boljoj", "diskriminacije", "grupe", "grupi", "indeks",
@@ -2597,6 +2747,7 @@ const PRO_PROSVETA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.lesson-count-period",
     category: "time",
     riskClass: "none",
+    taskGroups: ["study", "dates"],
     sourceKey: "pro.sources.iso-8601-2019-weekday",
     packs: ["prosveta", "trening", "biznis", "event"],
     keywords: [
@@ -2612,6 +2763,7 @@ const PRO_PROSVETA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.lesson-timeline",
     category: "time",
     riskClass: "none",
+    taskGroups: ["study", "dates"],
     packs: ["muzika", "prosveta", "trening", "event"],
     keywords: [
       "aktivnosti", "casa", "lesson", "minutu", "pocetka", "pojedinih", "pokazuje", "pravi",
@@ -2625,6 +2777,7 @@ const PRO_PROSVETA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.split-into-groups",
     category: "calculation",
     riskClass: "none",
+    taskGroups: ["study"],
     packs: ["prosveta", "trening", "event"],
     keywords: [
       "brojem", "deli", "groups", "grupa", "grupe", "into", "moguce", "najravnomernije",
@@ -2637,6 +2790,7 @@ const PRO_PROSVETA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.standard-score",
     category: "data",
     riskClass: "none",
+    taskGroups: ["study", "data"],
     sourceKey: "pro.sources.mccall-t-score-1922",
     packs: ["prosveta", "trening"],
     keywords: [
@@ -2651,6 +2805,7 @@ const PRO_PROSVETA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.test-printing",
     category: "materials",
     riskClass: "financial",
+    taskGroups: ["study", "measure"],
     packs: ["dizajn", "prosveta", "biznis", "event"],
     keywords: [
       "cena", "ceni", "dvostrano", "iznos", "lista", "listova", "listu", "ostaje", "otvara",
@@ -2664,6 +2819,7 @@ const PRO_PROSVETA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.topic-hour-allocation",
     category: "calculation",
     riskClass: "none",
+    taskGroups: ["study"],
     packs: ["prosveta", "racunovodstvo", "biznis", "event"],
     keywords: [
       "allocation", "brojevima", "casova", "celim", "fond", "hour", "nastavne", "raspodela",
@@ -2676,6 +2832,7 @@ const PRO_PROSVETA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.weighted-grade",
     category: "calculation",
     riskClass: "none",
+    taskGroups: ["study"],
     packs: ["prosveta", "event"],
     keywords: [
       "bodova", "ciljni", "grade", "imaju", "komponenta", "komponente", "komponenti",
@@ -2693,6 +2850,7 @@ const PRO_TEKST_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.bracket-balance",
     category: "text",
     riskClass: "none",
+    taskGroups: ["text"],
     sourceKey: "pro.sources.unicode-16-code-charts",
     packs: ["softver", "tekst", "pravo"],
     keywords: [
@@ -2706,6 +2864,7 @@ const PRO_TEKST_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.glossary-check",
     category: "text",
     riskClass: "none",
+    taskGroups: ["text"],
     packs: ["tekst", "pravo"],
     keywords: [
       "celu", "check", "glossary", "mala", "nalepis", "original", "originala", "pojavio",
@@ -2719,6 +2878,7 @@ const PRO_TEKST_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.hidden-characters",
     category: "text",
     riskClass: "none",
+    taskGroups: ["text", "data"],
     sourceKey: "pro.sources.unicode-16-code-charts",
     packs: ["softver", "dizajn", "tekst", "racunovodstvo"],
     keywords: [
@@ -2733,6 +2893,7 @@ const PRO_TEKST_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.isbn-issn-check",
     category: "data",
     riskClass: "none",
+    taskGroups: ["text", "data"],
     sourceKey: "pro.sources.isbn-issn-ismn-ean-check-digits",
     packs: ["muzika", "prosveta", "tekst", "biznis"],
     keywords: [
@@ -2746,6 +2907,7 @@ const PRO_TEKST_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.mojibake-repair",
     category: "conversion",
     riskClass: "none",
+    taskGroups: ["text", "data"],
     sourceKey: "pro.sources.whatwg-encoding-standard",
     packs: ["softver", "tekst", "racunovodstvo"],
     keywords: [
@@ -2760,6 +2922,7 @@ const PRO_TEKST_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.number-check",
     category: "text",
     riskClass: "financial",
+    taskGroups: ["text"],
     packs: ["tekst", "pravo", "racunovodstvo"],
     keywords: [
       "brojeva", "brojeve", "check", "javlja", "nedostaje", "number", "original", "originalu",
@@ -2772,6 +2935,7 @@ const PRO_TEKST_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.number-to-serbian-words",
     category: "conversion",
     riskClass: "financial",
+    taskGroups: ["text", "money"],
     sourceKey: "pro.sources.serbian-numerals-orthography",
     packs: ["tekst", "pravo", "racunovodstvo", "biznis", "nekretnine"],
     keywords: [
@@ -2785,6 +2949,7 @@ const PRO_TEKST_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.reading-time",
     category: "time",
     riskClass: "none",
+    taskGroups: ["text"],
     packs: ["prosveta", "tekst", "event"],
     keywords: [
       "citanja", "citanje", "naglas", "pasus", "pasusa", "pauza", "reading", "svakog", "tekst",
@@ -2797,6 +2962,7 @@ const PRO_TEKST_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.sentence-length",
     category: "text",
     riskClass: "none",
+    taskGroups: ["text", "study"],
     sourceKey: "pro.sources.unicode-16-code-charts",
     packs: ["prosveta", "tekst"],
     keywords: [
@@ -2810,6 +2976,7 @@ const PRO_TEKST_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.serbian-transliteration",
     category: "text",
     riskClass: "none",
+    taskGroups: ["text"],
     sourceKey: "pro.sources.iso-9-1995-serbian",
     packs: ["dizajn", "prosveta", "tekst", "pravo"],
     keywords: [
@@ -2823,6 +2990,7 @@ const PRO_TEKST_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.subtitle-audit",
     category: "time",
     riskClass: "none",
+    taskGroups: ["text", "design"],
     packs: ["foto", "tekst"],
     keywords: [
       "audit", "bloka", "bloku", "duzina", "granice", "izmerenu", "meri", "najduze", "najkrace",
@@ -2837,6 +3005,7 @@ const PRO_TEKST_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.subtitle-retime",
     category: "time",
     riskClass: "none",
+    taskGroups: ["text", "design"],
     sourceKey: "pro.sources.smpte-st-12-1-2014",
     packs: ["foto", "tekst", "event"],
     keywords: [
@@ -2851,6 +3020,7 @@ const PRO_TEKST_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.translation-volume",
     category: "text",
     riskClass: "financial",
+    taskGroups: ["text"],
     packs: ["tekst"],
     keywords: [
       "broji", "cena", "cenom", "jedinica", "jedinici", "mnozi", "nalepljenom", "naplate",
@@ -2864,6 +3034,7 @@ const PRO_TEKST_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.typography-cleanup",
     category: "text",
     riskClass: "none",
+    taskGroups: ["text", "design"],
     sourceKey: "pro.sources.unicode-16-code-charts",
     packs: ["dizajn", "prosveta", "tekst"],
     keywords: [
@@ -2878,6 +3049,7 @@ const PRO_TEKST_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.unwrap-paragraphs",
     category: "text",
     riskClass: "none",
+    taskGroups: ["text"],
     sourceKey: "pro.sources.unicode-16-code-charts",
     packs: ["prosveta", "tekst", "pravo"],
     keywords: [
@@ -2893,6 +3065,7 @@ const PRO_TEKST_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.word-frequency",
     category: "text",
     riskClass: "none",
+    taskGroups: ["text", "data"],
     packs: ["prosveta", "tekst"],
     keywords: [
       "broji", "duzina", "fraza", "frequency", "mala", "najmanja", "najmanji", "pojavljivanja",
@@ -2909,6 +3082,7 @@ const PRO_TRENING_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.barbell-plate-loading",
     category: "calculation",
     riskClass: "none",
+    taskGroups: ["measure"],
     packs: ["trening"],
     keywords: [
       "barbell", "diskova", "diskove", "diskovi", "ispisuje", "jedne", "loading", "masa",
@@ -2923,6 +3097,7 @@ const PRO_TRENING_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.body-fat-target-mass",
     category: "body",
     riskClass: "wellness",
+    taskGroups: ["measure"],
     packs: ["trening"],
     keywords: [
       "body", "ciljni", "cista", "cistu", "fat", "imalo", "ista", "izmerenog", "kilograma",
@@ -2936,6 +3111,7 @@ const PRO_TRENING_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.body-indices",
     category: "body",
     riskClass: "wellness",
+    taskGroups: ["measure"],
     packs: ["trening"],
     keywords: [
       "bmi", "body", "ijedne", "indeks", "indeksi", "indices", "kategorije", "kuk", "kukova",
@@ -2949,6 +3125,7 @@ const PRO_TRENING_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.cadence-stride-length",
     category: "calculation",
     riskClass: "none",
+    taskGroups: ["measure"],
     packs: ["trening"],
     keywords: [
       "brzina", "brzinu", "cadence", "duzina", "duzinu", "kadenca", "kadencu", "kilometar",
@@ -2961,6 +3138,7 @@ const PRO_TRENING_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.erg-split-watts",
     category: "conversion",
     riskClass: "none",
+    taskGroups: ["measure"],
     sourceKey: "pro.sources.concept2-pace-watts",
     packs: ["trening"],
     keywords: [
@@ -2974,6 +3152,7 @@ const PRO_TRENING_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.heart-rate-zones-karvonen",
     category: "body",
     riskClass: "wellness",
+    taskGroups: ["measure"],
     packs: ["trening"],
     keywords: [
       "ciljni", "heart", "izmereni", "izmerenog", "karvonen", "karvonenu", "maksimalni",
@@ -2987,6 +3166,7 @@ const PRO_TRENING_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.interval-session-timing",
     category: "time",
     riskClass: "wellness",
+    taskGroups: ["dates"],
     packs: ["trening"],
     keywords: [
       "broja", "interval", "intervalni", "odmor", "odmora", "odnos", "odnosa", "ponavljanja",
@@ -3000,6 +3180,7 @@ const PRO_TRENING_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.jump-height-flight-time",
     category: "calculation",
     riskClass: "none",
+    taskGroups: ["measure"],
     packs: ["trening"],
     keywords: [
       "flight", "gravitacija", "height", "indeks", "jump", "kontakta", "leta", "nazad",
@@ -3013,6 +3194,7 @@ const PRO_TRENING_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.limb-symmetry-index",
     category: "body",
     riskClass: "wellness",
+    taskGroups: ["measure"],
     packs: ["trening"],
     keywords: [
       "ciljni", "dostigne", "ispitivanoj", "limb", "odnos", "posto", "procentima", "razlika",
@@ -3026,6 +3208,7 @@ const PRO_TRENING_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.one-rep-max-table",
     category: "calculation",
     riskClass: "wellness",
+    taskGroups: ["measure"],
     sourceKey: "pro.sources.one-rep-max-formulas",
     packs: ["trening"],
     keywords: [
@@ -3040,6 +3223,7 @@ const PRO_TRENING_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.running-pace-splits",
     category: "calculation",
     riskClass: "wellness",
+    taskGroups: ["measure"],
     packs: ["trening"],
     keywords: [
       "distanca", "distance", "kilometru", "korak", "medjuvremena", "metara", "milji", "pace",
@@ -3053,6 +3237,7 @@ const PRO_TRENING_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.set-tempo-tut",
     category: "time",
     riskClass: "wellness",
+    taskGroups: ["dates"],
     packs: ["trening"],
     keywords: [
       "bloka", "broja", "cetiri", "dole", "ekscentricna", "faza", "gore", "koncentricna", "npr",
@@ -3066,6 +3251,7 @@ const PRO_TRENING_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.split-times-fatigue",
     category: "calculation",
     riskClass: "none",
+    taskGroups: ["dates", "measure"],
     packs: ["trening"],
     keywords: [
       "fatigue", "indeks", "izmerenih", "medijanu", "najbolje", "najslabije", "pada",
@@ -3079,6 +3265,7 @@ const PRO_TRENING_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.sweat-rate-hydration",
     category: "body",
     riskClass: "wellness",
+    taskGroups: ["measure"],
     packs: ["trening"],
     keywords: [
       "gubitak", "hydration", "izgubljene", "izmereni", "izmokreno", "masa", "mase",
@@ -3093,6 +3280,7 @@ const PRO_TRENING_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.training-volume-load",
     category: "calculation",
     riskClass: "wellness",
+    taskGroups: ["measure"],
     packs: ["trening"],
     keywords: [
       "1rm", "intenzitet", "kilogrami", "load", "opterecenje", "ponavljanja", "ponavljanju",
@@ -3106,6 +3294,7 @@ const PRO_TRENING_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.weight-class-cut",
     category: "body",
     riskClass: "wellness",
+    taskGroups: ["measure"],
     packs: ["trening"],
     keywords: [
       "class", "cut", "dana", "danu", "deli", "granica", "granice", "kategorije", "kilograma",
@@ -3122,6 +3311,7 @@ const PRO_KUHINJA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.backwards-timeline",
     category: "time",
     riskClass: "none",
+    taskGroups: ["dates"],
     packs: ["gradnja", "kuhinja", "biznis", "transport", "event"],
     keywords: [
       "backwards", "ceo", "datum", "koraci", "korak", "osa", "pocinje", "pocne", "posao",
@@ -3135,6 +3325,7 @@ const PRO_KUHINJA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.bakers-percentage",
     category: "materials",
     riskClass: "none",
+    taskGroups: ["measure"],
     packs: ["kuhinja"],
     keywords: [
       "bakers", "bakerski", "brasna", "ciljanu", "ciljna", "gubitak", "komada", "masa", "masu",
@@ -3148,6 +3339,7 @@ const PRO_KUHINJA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.brine-salt",
     category: "materials",
     riskClass: "food-safety",
+    taskGroups: ["measure"],
     packs: ["kuhinja", "agro"],
     keywords: [
       "brine", "ciljni", "masa", "mesa", "osnova", "osnove", "povrca", "procenat", "racunanja",
@@ -3161,6 +3353,7 @@ const PRO_KUHINJA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.coffee-extraction",
     category: "calculation",
     riskClass: "none",
+    taskGroups: ["measure"],
     packs: ["kuhinja"],
     keywords: [
       "ciljni", "coffee", "doza", "doze", "dozi", "ekstrakcija", "ekstrakcije", "extraction",
@@ -3174,6 +3367,7 @@ const PRO_KUHINJA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.dough-water-temp",
     category: "calculation",
     riskClass: "none",
+    taskGroups: ["measure"],
     packs: ["kuhinja"],
     keywords: [
       "bojleru", "brasna", "dough", "faktor", "imalo", "izmerena", "izmerene", "izvlaci",
@@ -3188,6 +3382,7 @@ const PRO_KUHINJA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.ice-cream-overrun",
     category: "calculation",
     riskClass: "none",
+    taskGroups: ["measure"],
     packs: ["kuhinja"],
     keywords: [
       "ciljni", "cream", "gotovim", "gustina", "ice", "masa", "mase", "naduv", "napunjene",
@@ -3201,6 +3396,7 @@ const PRO_KUHINJA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.lamination-layers",
     category: "geometry",
     riskClass: "none",
+    taskGroups: ["measure"],
     packs: ["kuhinja", "zanat"],
     keywords: [
       "debljina", "debljini", "debljinu", "duzina", "jednog", "laminacije", "lamination",
@@ -3214,6 +3410,7 @@ const PRO_KUHINJA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.levain-hydration",
     category: "materials",
     riskClass: "none",
+    taskGroups: ["measure"],
     packs: ["kuhinja"],
     keywords: [
       "brasna", "brasno", "celo", "ciljna", "dodati", "gotovom", "hidratacija", "hidrataciju",
@@ -3228,6 +3425,7 @@ const PRO_KUHINJA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.nutrition-per-portion",
     category: "conversion",
     riskClass: "wellness",
+    taskGroups: ["measure"],
     packs: ["trening", "kuhinja"],
     keywords: [
       "dnevni", "energija", "hranljive", "hranljivih", "kilodzule", "kilokalorije", "masa",
@@ -3241,6 +3439,7 @@ const PRO_KUHINJA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.pan-area-volume",
     category: "geometry",
     riskClass: "none",
+    taskGroups: ["measure"],
     packs: ["kuhinja", "agro", "zanat"],
     keywords: [
       "area", "cetvrtastih", "ciljna", "dimenzije", "kalupa", "kalupi", "kalupu", "kolicine",
@@ -3255,6 +3454,7 @@ const PRO_KUHINJA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.plate-cost",
     category: "finance",
     riskClass: "financial",
+    taskGroups: ["money"],
     packs: ["kuhinja", "racunovodstvo", "biznis", "zanat"],
     keywords: [
       "cenu", "ciljni", "cost", "costa", "dodatni", "food", "jednog", "jela", "kalkulacija",
@@ -3268,6 +3468,7 @@ const PRO_KUHINJA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.portions-from-pack",
     category: "materials",
     riskClass: "financial",
+    taskGroups: ["measure"],
     packs: ["kuhinja", "biznis", "agro", "zanat", "event"],
     keywords: [
       "cena", "cenom", "from", "gubitak", "jedinica", "kilogramu", "kolicina", "litru",
@@ -3280,6 +3481,7 @@ const PRO_KUHINJA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.ratio-split",
     category: "materials",
     riskClass: "none",
+    taskGroups: ["measure"],
     packs: ["gradnja", "kuhinja", "agro", "zanat"],
     keywords: [
       "celini", "deli", "delova", "delove", "jedinica", "jednak", "kolicina", "kolicinu",
@@ -3293,6 +3495,7 @@ const PRO_KUHINJA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.recipe-scale",
     category: "materials",
     riskClass: "none",
+    taskGroups: ["measure"],
     packs: ["kuhinja"],
     keywords: [
       "ceo", "ciljanu", "ciljna", "ciljni", "citanje", "faktor", "korak", "masa", "masu",
@@ -3306,6 +3509,7 @@ const PRO_KUHINJA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.solution-concentration",
     category: "calculation",
     riskClass: "life-safety",
+    taskGroups: ["measure"],
     packs: ["inzenjering", "foto", "kuhinja", "agro", "zanat"],
     keywords: [
       "bilans", "cetiri", "ciljane", "ciljna", "cistog", "concentration", "dodavanje",
@@ -3320,6 +3524,7 @@ const PRO_KUHINJA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.us-customary-kitchen-units",
     category: "conversion",
     riskClass: "none",
+    taskGroups: ["measure"],
     sourceKey: "pro.sources.us-imperial-unit-definitions",
     packs: ["inzenjering", "kuhinja", "zanat"],
     keywords: [
@@ -3335,6 +3540,7 @@ const PRO_KUHINJA_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.yield-trim-cook",
     category: "materials",
     riskClass: "financial",
+    taskGroups: ["measure"],
     packs: ["kuhinja", "agro"],
     keywords: [
       "bruto", "cena", "cenu", "ciscenja", "cook", "kalo", "kilogramu", "kupiti", "kuvano",
@@ -3351,6 +3557,7 @@ const PRO_PRAVO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.anuitet-otplatni-plan",
     category: "finance",
     riskClass: "financial",
+    taskGroups: ["money"],
     packs: ["pravo", "racunovodstvo", "biznis", "nekretnine", "transport"],
     keywords: [
       "anuitet", "brojrata", "deli", "dug", "glavnica", "glavnicu", "godisnjastopa",
@@ -3364,6 +3571,7 @@ const PRO_PRAVO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.iznos-slovima",
     category: "conversion",
     riskClass: "financial",
+    taskGroups: ["money", "text"],
     sourceKey: "pro.sources.serbian-numerals",
     packs: ["pravo", "racunovodstvo", "biznis", "nekretnine", "transport"],
     keywords: [
@@ -3378,6 +3586,7 @@ const PRO_PRAVO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.jmbg-provera",
     category: "data",
     riskClass: "none",
+    taskGroups: ["data"],
     sourceKey: "pro.sources.jmbg-check-digit",
     packs: ["prosveta", "pravo", "racunovodstvo", "biznis"],
     keywords: [
@@ -3391,6 +3600,7 @@ const PRO_PRAVO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.katastarska-povrsina",
     category: "conversion",
     riskClass: "none",
+    taskGroups: ["measure"],
     packs: ["gradnja", "inzenjering", "pravo", "nekretnine", "agro"],
     keywords: [
       "ari", "hektara", "kakav", "katastarska", "kvadratnih", "kvadratnimetri", "listu",
@@ -3404,6 +3614,7 @@ const PRO_PRAVO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.kazna-i-pritvor",
     category: "time",
     riskClass: "legal-procedure",
+    taskGroups: ["dates"],
     packs: ["pravo"],
     keywords: [
       "dani", "datuma", "datumpocetka", "deozaproveru", "istice", "kalendarski", "kazna",
@@ -3418,6 +3629,7 @@ const PRO_PRAVO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.nominalna-efektivna-stopa",
     category: "finance",
     riskClass: "financial",
+    taskGroups: ["money"],
     packs: ["pravo", "racunovodstvo", "biznis", "nekretnine"],
     keywords: [
       "brojobracunagodisnje", "efektivna", "godisnja", "godisnje", "nominalna", "obracuna",
@@ -3430,6 +3642,7 @@ const PRO_PRAVO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.obracun-kamate",
     category: "finance",
     riskClass: "financial",
+    taskGroups: ["money"],
     packs: ["pravo", "racunovodstvo", "biznis", "nekretnine", "agro"],
     keywords: [
       "dana", "datumdo", "datumod", "glavnica", "glavnicu", "kamata", "kamate",
@@ -3443,6 +3656,7 @@ const PRO_PRAVO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.podela-iznosa",
     category: "finance",
     riskClass: "financial",
+    taskGroups: ["money"],
     packs: ["pravo", "racunovodstvo", "biznis", "nekretnine", "event"],
     keywords: [
       "celini", "deli", "delova", "izgubljene", "iznos", "iznosa", "jednak", "lica",
@@ -3456,6 +3670,7 @@ const PRO_PRAVO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.racun-iban-provera",
     category: "data",
     riskClass: "financial",
+    taskGroups: ["money", "data"],
     sourceKey: "pro.sources.iso-7064-13616",
     packs: ["pravo", "racunovodstvo", "biznis", "nekretnine", "transport"],
     keywords: [
@@ -3469,6 +3684,7 @@ const PRO_PRAVO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.radni-dani",
     category: "time",
     riskClass: "legal-procedure",
+    taskGroups: ["dates"],
     packs: ["gradnja", "prosveta", "pravo", "racunovodstvo", "biznis", "transport", "event"],
     keywords: [
       "dana", "dani", "datuma", "dodatuma", "kalendarskih", "neradnidani",
@@ -3482,6 +3698,7 @@ const PRO_PRAVO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.rok-poslednji-dan",
     category: "time",
     riskClass: "legal-procedure",
+    taskGroups: ["dates"],
     packs: ["gradnja", "pravo", "racunovodstvo", "biznis", "nekretnine"],
     keywords: [
       "dan", "dana", "datuma", "duzina", "duzine", "jedinica", "neradnidani",
@@ -3495,6 +3712,7 @@ const PRO_PRAVO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.strane-teksta",
     category: "text",
     riskClass: "financial",
+    taskGroups: ["text", "money"],
     sourceKey: "pro.sources.unicode-white-space",
     packs: ["prosveta", "tekst", "pravo", "biznis"],
     keywords: [
@@ -3509,6 +3727,7 @@ const PRO_PRAVO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.suvlasnicki-udeli",
     category: "calculation",
     riskClass: "financial",
+    taskGroups: ["money"],
     packs: ["gradnja", "pravo", "nekretnine", "agro"],
     keywords: [
       "celinu", "ciljniimenilac", "delovi", "idealni", "imeniocu", "kvadrata", "suvlasnicki",
@@ -3521,6 +3740,7 @@ const PRO_PRAVO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.troskovi-srazmerno-uspehu",
     category: "finance",
     riskClass: "financial",
+    taskGroups: ["money"],
     packs: ["pravo"],
     keywords: [
       "iznosa", "odnos", "odnosu", "srazmerni", "srazmerno", "strana", "svojih", "tom",
@@ -3534,6 +3754,7 @@ const PRO_PRAVO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.ugovorna-kazna",
     category: "finance",
     riskClass: "financial",
+    taskGroups: ["money"],
     packs: ["gradnja", "inzenjering", "pravo", "biznis", "transport", "event"],
     keywords: [
       "dana", "danadocnje", "dane", "dnevnastopa", "dnevnoj", "docnje", "dostize", "kazna",
@@ -3547,6 +3768,7 @@ const PRO_PRAVO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.zbir-perioda",
     category: "time",
     riskClass: "legal-procedure",
+    taskGroups: ["dates"],
     packs: ["prosveta", "pravo", "racunovodstvo", "biznis"],
     keywords: [
       "dana", "dane", "godine", "konvencijarazlaganja", "mesece", "niz", "perioda", "periodi",
@@ -3562,6 +3784,7 @@ const PRO_RACUNOVODSTVO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.allocation-remainder",
     category: "finance",
     riskClass: "financial",
+    taskGroups: ["money"],
     packs: ["gradnja", "racunovodstvo", "biznis", "nekretnine", "transport", "event"],
     keywords: [
       "allocation", "celini", "decimala", "deli", "delova", "izgubi", "iznos", "jednak",
@@ -3575,6 +3798,7 @@ const PRO_RACUNOVODSTVO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.amount-in-words",
     category: "text",
     riskClass: "financial",
+    taskGroups: ["money", "text"],
     sourceKey: "pro.sources.sr-numerals-pravopis-2010",
     packs: ["pravo", "racunovodstvo", "biznis", "nekretnine", "transport", "zanat"],
     keywords: [
@@ -3589,6 +3813,7 @@ const PRO_RACUNOVODSTVO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.bank-account-iban",
     category: "data",
     riskClass: "financial",
+    taskGroups: ["money", "data"],
     sourceKey: "pro.sources.iso-13616-iban",
     packs: ["softver", "pravo", "racunovodstvo", "biznis"],
     keywords: [
@@ -3602,6 +3827,7 @@ const PRO_RACUNOVODSTVO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.benford-first-digit",
     category: "data",
     riskClass: "none",
+    taskGroups: ["data"],
     packs: ["pravo", "racunovodstvo", "biznis"],
     keywords: [
       "benford", "benfordov", "benfordovom", "cifara", "cifre", "cifri", "decimalni", "digit",
@@ -3615,6 +3841,7 @@ const PRO_RACUNOVODSTVO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.breakeven-cvp",
     category: "finance",
     riskClass: "financial",
+    taskGroups: ["money"],
     packs: ["kuhinja", "racunovodstvo", "biznis", "zanat", "event"],
     keywords: [
       "breakeven", "cena", "ciljna", "ciljnu", "cvp", "dobit", "fiksne", "fiksni", "gubitka",
@@ -3629,6 +3856,7 @@ const PRO_RACUNOVODSTVO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.check-digits-id",
     category: "data",
     riskClass: "financial",
+    taskGroups: ["data"],
     sourceKey: "pro.sources.iso-7064-jmbg",
     packs: ["pravo", "racunovodstvo", "biznis"],
     keywords: [
@@ -3642,6 +3870,7 @@ const PRO_RACUNOVODSTVO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.depreciation-schedule",
     category: "finance",
     riskClass: "financial",
+    taskGroups: ["money"],
     packs: ["gradnja", "racunovodstvo", "biznis", "transport", "agro", "zanat"],
     keywords: [
       "aktiviranja", "amortizacija", "amortizacije", "datum", "degresije", "degresivnom",
@@ -3657,6 +3886,7 @@ const PRO_RACUNOVODSTVO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.financial-ratios",
     category: "finance",
     riskClass: "financial",
+    taskGroups: ["money"],
     sourceKey: "pro.sources.isda-2006-daycount",
     packs: ["racunovodstvo", "biznis"],
     keywords: [
@@ -3675,6 +3905,7 @@ const PRO_RACUNOVODSTVO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.fx-difference",
     category: "finance",
     riskClass: "financial",
+    taskGroups: ["money"],
     packs: ["racunovodstvo", "biznis", "nekretnine", "transport"],
     keywords: [
       "dan", "decimala", "devizni", "difference", "iznos", "iznosa", "izvodi", "kurs", "kursa",
@@ -3688,6 +3919,7 @@ const PRO_RACUNOVODSTVO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.gross-up",
     category: "finance",
     riskClass: "financial",
+    taskGroups: ["money"],
     packs: ["dizajn", "foto", "tekst", "pravo", "racunovodstvo", "biznis"],
     keywords: [
       "bruto", "doprinosa", "gross", "isplatioca", "iznos", "iznosa", "izvodi", "jednacinu",
@@ -3701,6 +3933,7 @@ const PRO_RACUNOVODSTVO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.interest-periods",
     category: "finance",
     riskClass: "financial",
+    taskGroups: ["money"],
     sourceKey: "pro.sources.isda-2006-daycount",
     packs: ["pravo", "racunovodstvo", "biznis", "nekretnine"],
     keywords: [
@@ -3716,6 +3949,7 @@ const PRO_RACUNOVODSTVO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.inventory-costing",
     category: "finance",
     riskClass: "financial",
+    taskGroups: ["money"],
     packs: ["gradnja", "kuhinja", "racunovodstvo", "biznis", "agro", "zanat"],
     keywords: [
       "ceni", "costing", "decimala", "fifo", "inventory", "izlaza", "liste", "metod", "metodi",
@@ -3729,6 +3963,7 @@ const PRO_RACUNOVODSTVO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.loan-schedule",
     category: "finance",
     riskClass: "financial",
+    taskGroups: ["money"],
     packs: ["racunovodstvo", "biznis", "nekretnine"],
     keywords: [
       "anuitetski", "decimala", "glavnicom", "glavnicu", "godisnja", "godisnje", "iznos",
@@ -3743,6 +3978,7 @@ const PRO_RACUNOVODSTVO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.rate-conversion",
     category: "finance",
     riskClass: "financial",
+    taskGroups: ["money"],
     packs: ["racunovodstvo", "biznis", "nekretnine"],
     keywords: [
       "ciljni", "conversion", "efektivna", "efektivne", "godisnje", "kamatnu", "konformne",
@@ -3757,6 +3993,7 @@ const PRO_RACUNOVODSTVO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.rebate-chain",
     category: "finance",
     riskClass: "financial",
+    taskGroups: ["money"],
     packs: ["racunovodstvo", "biznis", "nekretnine"],
     keywords: [
       "cena", "ceni", "cenu", "chain", "efektivni", "lancani", "marza", "nabavke", "nabavna",
@@ -3770,6 +4007,7 @@ const PRO_RACUNOVODSTVO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.trial-balance-check",
     category: "finance",
     riskClass: "financial",
+    taskGroups: ["money"],
     packs: ["racunovodstvo", "biznis"],
     keywords: [
       "aritmeticki", "balance", "check", "dale", "decimala", "dugovna", "dugovnu", "greske",
@@ -3783,6 +4021,7 @@ const PRO_RACUNOVODSTVO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.tvm-solver",
     category: "finance",
     riskClass: "financial",
+    taskGroups: ["money"],
     packs: ["racunovodstvo", "biznis", "nekretnine"],
     keywords: [
       "buduca", "cetiri", "novca", "perioda", "periodicna", "petu", "placanja", "pmt",
@@ -3799,6 +4038,7 @@ const PRO_BIZNIS_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.billable-hours",
     category: "time",
     riskClass: "financial",
+    taskGroups: ["money"],
     packs: ["dizajn", "foto", "tekst", "pravo", "biznis", "zanat"],
     keywords: [
       "billable", "hours", "interval", "liste", "mnozi", "obracun", "pravilo", "sabira", "sati",
@@ -3811,6 +4051,7 @@ const PRO_BIZNIS_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.break-even",
     category: "finance",
     riskClass: "financial",
+    taskGroups: ["money"],
     packs: ["kuhinja", "racunovodstvo", "biznis", "agro", "zanat", "event"],
     keywords: [
       "break", "cena", "dobit", "even", "fiksne", "fiksni", "komada", "komadu", "period",
@@ -3824,6 +4065,7 @@ const PRO_BIZNIS_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.chained-discount",
     category: "finance",
     riskClass: "financial",
+    taskGroups: ["money"],
     packs: ["gradnja", "racunovodstvo", "biznis", "zanat"],
     keywords: [
       "cena", "cenu", "chained", "dao", "discount", "doplata", "istu", "kaskadni", "niz",
@@ -3836,6 +4078,7 @@ const PRO_BIZNIS_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.deposit-instalments",
     category: "finance",
     riskClass: "financial",
+    taskGroups: ["money"],
     packs: ["gradnja", "racunovodstvo", "biznis", "nekretnine", "event"],
     keywords: [
       "avans", "datum", "datumima", "deli", "deposit", "instalments", "jedinica", "jednake",
@@ -3849,6 +4092,7 @@ const PRO_BIZNIS_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.hourly-rate-target",
     category: "finance",
     riskClass: "financial",
+    taskGroups: ["money"],
     packs: ["dizajn", "foto", "tekst", "biznis", "zanat"],
     keywords: [
       "broja", "cena", "cenu", "dana", "danu", "godisnja", "godisnje", "godisnji", "hourly",
@@ -3863,6 +4107,7 @@ const PRO_BIZNIS_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.iban-check",
     category: "data",
     riskClass: "financial",
+    taskGroups: ["money", "data"],
     sourceKey: "pro.sources.iso-13616-1-2020",
     packs: ["racunovodstvo", "biznis", "nekretnine", "transport"],
     keywords: [
@@ -3876,6 +4121,7 @@ const PRO_BIZNIS_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.margin-markup",
     category: "finance",
     riskClass: "financial",
+    taskGroups: ["money"],
     packs: ["gradnja", "kuhinja", "racunovodstvo", "biznis", "agro", "zanat", "event"],
     keywords: [
       "cena", "cenu", "margin", "markup", "marza", "marze", "marzu", "min", "nabavna",
@@ -3888,6 +4134,7 @@ const PRO_BIZNIS_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.payment-due-date",
     category: "time",
     riskClass: "legal-procedure",
+    taskGroups: ["money", "dates"],
     packs: ["pravo", "racunovodstvo", "biznis", "nekretnine", "transport"],
     keywords: [
       "dan", "dana", "dani", "date", "datum", "datuma", "dospeca", "due", "izdavanja",
@@ -3901,6 +4148,7 @@ const PRO_BIZNIS_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.payment-reference-97",
     category: "data",
     riskClass: "financial",
+    taskGroups: ["money", "data"],
     sourceKey: "pro.sources.iso-iec-7064-2003",
     packs: ["prosveta", "pravo", "racunovodstvo", "biznis", "nekretnine", "zanat"],
     keywords: [
@@ -3913,6 +4161,7 @@ const PRO_BIZNIS_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.share-allocation",
     category: "finance",
     riskClass: "financial",
+    taskGroups: ["money"],
     packs: ["pravo", "racunovodstvo", "biznis", "nekretnine", "event"],
     keywords: [
       "allocation", "celini", "deli", "delova", "iznos", "jedinica", "jednak", "najmanja",
@@ -3925,6 +4174,7 @@ const PRO_BIZNIS_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.simple-interest-days",
     category: "finance",
     riskClass: "financial",
+    taskGroups: ["money", "dates"],
     sourceKey: "pro.sources.isda-2006-day-count",
     packs: ["pravo", "racunovodstvo", "biznis", "nekretnine"],
     keywords: [
@@ -3939,6 +4189,7 @@ const PRO_BIZNIS_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.tax-id-check",
     category: "data",
     riskClass: "financial",
+    taskGroups: ["data", "money"],
     sourceKey: "pro.sources.iso-iec-7064-2003",
     packs: ["pravo", "racunovodstvo", "biznis"],
     keywords: [
@@ -3952,6 +4203,7 @@ const PRO_BIZNIS_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.tiered-commission",
     category: "finance",
     riskClass: "financial",
+    taskGroups: ["money"],
     packs: ["racunovodstvo", "biznis", "nekretnine", "transport"],
     keywords: [
       "ceo", "commission", "iznos", "jednom", "marginalno", "najmanja", "najveca", "osnovica",
@@ -3968,6 +4220,7 @@ const PRO_NEKRETNINE_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.cashflow-npv-irr",
     category: "finance",
     riskClass: "financial",
+    taskGroups: ["money"],
     packs: ["racunovodstvo", "biznis", "nekretnine", "transport", "agro"],
     keywords: [
       "cashflow", "diskontna", "internu", "irr", "neto", "niza", "novcani", "npv", "odliva",
@@ -3981,6 +4234,7 @@ const PRO_NEKRETNINE_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.cost-allocation",
     category: "finance",
     riskClass: "financial",
+    taskGroups: ["money"],
     packs: ["pravo", "racunovodstvo", "biznis", "nekretnine", "event"],
     keywords: [
       "allocation", "celinu", "ciji", "cost", "deli", "delove", "delovi", "iznos", "kljuc",
@@ -3995,6 +4249,7 @@ const PRO_NEKRETNINE_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.late-payment-interest",
     category: "finance",
     riskClass: "financial",
+    taskGroups: ["money", "dates"],
     packs: ["pravo", "racunovodstvo", "biznis", "nekretnine", "transport"],
     keywords: [
       "datum", "docnju", "dospeca", "duga", "godine", "godisnja", "godisnjoj", "interest",
@@ -4008,6 +4263,7 @@ const PRO_NEKRETNINE_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.lease-term-dates",
     category: "time",
     riskClass: "legal-procedure",
+    taskGroups: ["dates"],
     packs: ["pravo", "racunovodstvo", "biznis", "nekretnine", "transport", "event"],
     keywords: [
       "dan", "dates", "datum", "datuma", "datume", "dospeca", "isteka", "lease", "mesecu",
@@ -4021,6 +4277,7 @@ const PRO_NEKRETNINE_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.loan-amortization",
     category: "finance",
     riskClass: "financial",
+    taskGroups: ["money"],
     packs: ["racunovodstvo", "biznis", "nekretnine", "transport", "agro"],
     keywords: [
       "amortization", "anuitetnog", "duga", "efekat", "godisnja", "iznos", "kamatna", "kredita",
@@ -4034,6 +4291,7 @@ const PRO_NEKRETNINE_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.ownership-shares",
     category: "calculation",
     riskClass: "legal-procedure",
+    taskGroups: ["money"],
     packs: ["pravo", "racunovodstvo", "nekretnine", "agro"],
     keywords: [
       "brojilac", "imenilac", "kvadrate", "nazad", "obrnuti", "ownership", "povrsina",
@@ -4047,6 +4305,7 @@ const PRO_NEKRETNINE_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.parcel-polygon-area",
     category: "geometry",
     riskClass: "none",
+    taskGroups: ["measure"],
     packs: ["gradnja", "inzenjering", "nekretnine", "agro"],
     keywords: [
       "area", "drzavna", "formulom", "gausovom", "koordinata", "koordinate", "metarskom",
@@ -4060,6 +4319,7 @@ const PRO_NEKRETNINE_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.plot-density-index",
     category: "calculation",
     riskClass: "legal-procedure",
+    taskGroups: ["measure", "build"],
     packs: ["gradnja", "inzenjering", "nekretnine"],
     keywords: [
       "brgp", "bruto", "density", "gradjevinska", "indeks", "indeksu", "izgradjenosti",
@@ -4073,6 +4333,7 @@ const PRO_NEKRETNINE_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.pro-rata-days",
     category: "finance",
     riskClass: "financial",
+    taskGroups: ["money", "dates"],
     sourceKey: "pro.sources.isda-2006-30e-360",
     packs: ["pravo", "racunovodstvo", "biznis", "nekretnine", "event"],
     keywords: [
@@ -4087,6 +4348,7 @@ const PRO_NEKRETNINE_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.rent-escalation",
     category: "finance",
     riskClass: "financial",
+    taskGroups: ["money"],
     packs: ["pravo", "racunovodstvo", "biznis", "nekretnine", "event"],
     keywords: [
       "diskontna", "escalation", "indeks", "indeksacija", "iznos", "period", "perioda",
@@ -4100,6 +4362,7 @@ const PRO_NEKRETNINE_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.rent-gross-net",
     category: "finance",
     riskClass: "financial",
+    taskGroups: ["money"],
     packs: ["pravo", "racunovodstvo", "biznis", "nekretnine"],
     keywords: [
       "bruto", "gross", "iznos", "nazad", "net", "neto", "normiranih", "ostaje", "preracunava",
@@ -4113,6 +4376,7 @@ const PRO_NEKRETNINE_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.rental-yield",
     category: "finance",
     riskClass: "financial",
+    taskGroups: ["money"],
     packs: ["racunovodstvo", "biznis", "nekretnine", "transport", "agro"],
     keywords: [
       "bruto", "cena", "cene", "godisnji", "kapitalizaciona", "mesecna", "mesecni",
@@ -4127,6 +4391,7 @@ const PRO_NEKRETNINE_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.room-quad-area",
     category: "geometry",
     riskClass: "none",
+    taskGroups: ["measure", "build"],
     packs: ["gradnja", "inzenjering", "dizajn", "nekretnine", "zanat"],
     keywords: [
       "area", "cetiri", "dijagonala", "dijagonale", "izmerene", "jedne", "povrsina", "povrsinu",
@@ -4140,6 +4405,7 @@ const PRO_NEKRETNINE_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.wall-ceiling-area",
     category: "materials",
     riskClass: "none",
+    taskGroups: ["measure", "build"],
     packs: ["gradnja", "dizajn", "nekretnine", "zanat"],
     keywords: [
       "area", "ceiling", "duzina", "izdasnost", "izdasnosti", "kolicinu", "komada",
@@ -4154,6 +4420,7 @@ const PRO_NEKRETNINE_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.weighted-area",
     category: "geometry",
     riskClass: "financial",
+    taskGroups: ["measure"],
     packs: ["gradnja", "pravo", "nekretnine"],
     keywords: [
       "area", "cena", "cenu", "delova", "duzina", "koeficijent", "koeficijentima", "kvadraturu",
@@ -4170,6 +4437,7 @@ const PRO_TRANSPORT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.axle-load-distribution",
     category: "structure",
     riskClass: "life-safety",
+    taskGroups: ["build", "measure"],
     packs: ["transport"],
     keywords: [
       "axle", "ciljno", "distribution", "granica", "grupa", "grupe", "kraljicnog", "load",
@@ -4185,6 +4453,7 @@ const PRO_TRANSPORT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.cargo-centre-of-gravity",
     category: "structure",
     riskClass: "life-safety",
+    taskGroups: ["build", "measure"],
     packs: ["transport"],
     keywords: [
       "cargo", "centre", "dimenzije", "duzini", "gravity", "komada", "masa", "masom", "moment",
@@ -4200,6 +4469,7 @@ const PRO_TRANSPORT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.chargeable-weight",
     category: "calculation",
     riskClass: "financial",
+    taskGroups: ["measure"],
     packs: ["transport"],
     keywords: [
       "celu", "cena", "chargeable", "delilac", "deliocu", "dimenzija", "fakturise", "kilogramu",
@@ -4215,6 +4485,7 @@ const PRO_TRANSPORT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.cost-per-km-transport",
     category: "finance",
     riskClass: "financial",
+    taskGroups: ["money"],
     packs: ["transport"],
     keywords: [
       "adblue", "cena", "cenu", "ciljna", "cost", "dana", "dizela", "fiksni", "fiksnih",
@@ -4231,6 +4502,7 @@ const PRO_TRANSPORT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.driving-hours-planner",
     category: "time",
     riskClass: "life-safety",
+    taskGroups: ["dates"],
     packs: ["transport"],
     keywords: [
       "blokove", "brzina", "deljenje", "dnevna", "dnevne", "dnevnog", "driving", "granica",
@@ -4246,6 +4518,7 @@ const PRO_TRANSPORT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.eta-with-breaks",
     category: "time",
     riskClass: "none",
+    taskGroups: ["dates"],
     packs: ["transport"],
     keywords: [
       "breaks", "brzina", "brzine", "brzinu", "cekanje", "ciljno", "ciljnog", "datum",
@@ -4260,6 +4533,7 @@ const PRO_TRANSPORT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.fuel-consumption-cost",
     category: "calculation",
     riskClass: "none",
+    taskGroups: ["money"],
     packs: ["transport"],
     keywords: [
       "cena", "cenu", "consumption", "cost", "fuel", "goriva", "gorivo", "kilometraze",
@@ -4274,6 +4548,7 @@ const PRO_TRANSPORT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.gear-ratio-road-speed",
     category: "calculation",
     riskClass: "none",
+    taskGroups: ["build", "measure"],
     packs: ["transport"],
     keywords: [
       "brzina", "brzinom", "gear", "gume", "kojima", "kotrljajni", "menja", "menjaca", "mosta",
@@ -4288,6 +4563,7 @@ const PRO_TRANSPORT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.gvw-payload",
     category: "structure",
     riskClass: "life-safety",
+    taskGroups: ["build", "measure"],
     sourceKey: "pro.sources.fuel-fluid-densities",
     packs: ["transport"],
     keywords: [
@@ -4304,6 +4580,7 @@ const PRO_TRANSPORT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.load-lashing-force",
     category: "structure",
     riskClass: "life-safety",
+    taskGroups: ["build"],
     packs: ["transport"],
     keywords: [
       "drugu", "etikete", "faktor", "force", "horizontalni", "koeficijenata", "koeficijent",
@@ -4318,6 +4595,7 @@ const PRO_TRANSPORT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.loading-space-utilisation",
     category: "geometry",
     riskClass: "none",
+    taskGroups: ["measure"],
     packs: ["transport"],
     keywords: [
       "duzina", "iskoriscenje", "loading", "metar", "metre", "osnovici", "podnu", "posiljke",
@@ -4332,6 +4610,7 @@ const PRO_TRANSPORT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.pallet-load-plan",
     category: "geometry",
     riskClass: "none",
+    taskGroups: ["measure"],
     sourceKey: "pro.sources.pallet-footprints",
     packs: ["transport"],
     keywords: [
@@ -4347,6 +4626,7 @@ const PRO_TRANSPORT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.reefer-fuel-consumption",
     category: "calculation",
     riskClass: "none",
+    taskGroups: ["money"],
     packs: ["transport"],
     keywords: [
       "agregata", "cena", "cenu", "consumption", "fuel", "goriva", "gorivo", "hladnjace",
@@ -4361,6 +4641,7 @@ const PRO_TRANSPORT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.service-interval-km-hours",
     category: "time",
     riskClass: "none",
+    taskGroups: ["dates", "measure"],
     packs: ["transport"],
     keywords: [
       "danasnji", "datum", "datuma", "dnevno", "hours", "interval", "istice", "kilometara",
@@ -4375,6 +4656,7 @@ const PRO_TRANSPORT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.speedometer-tyre-deviation",
     category: "conversion",
     riskClass: "none",
+    taskGroups: ["measure"],
     packs: ["transport"],
     keywords: [
       "brzina", "brzinomera", "brzinomeru", "brzinu", "deviation", "dimenzije", "faktor",
@@ -4389,6 +4671,7 @@ const PRO_TRANSPORT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.tank-volume-by-level",
     category: "geometry",
     riskClass: "none",
+    taskGroups: ["measure"],
     sourceKey: "pro.sources.fuel-fluid-densities",
     packs: ["transport"],
     keywords: [
@@ -4404,6 +4687,7 @@ const PRO_TRANSPORT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.trip-cost-quote",
     category: "finance",
     riskClass: "financial",
+    taskGroups: ["money"],
     packs: ["transport"],
     keywords: [
       "cekanja", "cekanje", "cena", "cenu", "cost", "dana", "dnevnica", "dnevnice", "istovaru",
@@ -4422,6 +4706,7 @@ const PRO_AGRO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.bale-count-storage",
     category: "materials",
     riskClass: "none",
+    taskGroups: ["measure"],
     packs: ["agro"],
     keywords: [
       "bala", "bale", "baliranju", "count", "dimenzije", "duzina", "geometriji", "gubitak",
@@ -4437,6 +4722,7 @@ const PRO_AGRO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.bee-syrup-mix",
     category: "materials",
     riskClass: "none",
+    taskGroups: ["measure"],
     packs: ["agro"],
     keywords: [
       "bee", "gustina", "izabranom", "kolicina", "kolicinu", "koncentracija", "kosnica",
@@ -4450,6 +4736,7 @@ const PRO_AGRO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.cadastral-area-units",
     category: "conversion",
     riskClass: "none",
+    taskGroups: ["measure"],
     sourceKey: "pro.sources.austrian-metrication-1871",
     packs: ["gradnja", "pravo", "nekretnine", "agro"],
     keywords: [
@@ -4463,6 +4750,7 @@ const PRO_AGRO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.fertiliser-nutrient-blend",
     category: "materials",
     riskClass: "life-safety",
+    taskGroups: ["measure"],
     packs: ["agro"],
     keywords: [
       "azota", "blend", "ciljana", "ciljanih", "djubriva", "djubrivo", "donosi", "dopunsko",
@@ -4478,6 +4766,7 @@ const PRO_AGRO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.grain-moisture-shrink",
     category: "materials",
     riskClass: "financial",
+    taskGroups: ["measure"],
     packs: ["agro"],
     keywords: [
       "bruto", "cena", "ciljana", "grain", "izaslo", "izmerena", "izmerene", "kalo",
@@ -4492,6 +4781,7 @@ const PRO_AGRO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.growing-degree-days",
     category: "calculation",
     riskClass: "none",
+    taskGroups: ["measure"],
     packs: ["agro"],
     keywords: [
       "bazna", "bazne", "ciljana", "days", "degree", "dnevne", "dostize", "gornja", "granica",
@@ -4505,6 +4795,7 @@ const PRO_AGRO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.honey-mass-moisture",
     category: "materials",
     riskClass: "financial",
+    taskGroups: ["measure"],
     packs: ["agro"],
     keywords: [
       "bruto", "cena", "ciljana", "deklarisana", "gustina", "gustine", "honey", "izmerene",
@@ -4520,6 +4811,7 @@ const PRO_AGRO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.irrigation-depth-volume",
     category: "materials",
     riskClass: "none",
+    taskGroups: ["measure"],
     packs: ["agro"],
     keywords: [
       "biljci", "depth", "dnevno", "efikasnost", "hektaru", "intenzitet", "irrigation",
@@ -4535,6 +4827,7 @@ const PRO_AGRO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.livestock-ration-dm",
     category: "materials",
     riskClass: "none",
+    taskGroups: ["measure"],
     packs: ["agro"],
     keywords: [
       "dana", "dnevnu", "grla", "grlu", "gubitak", "hraniva", "jaslama", "kilograme",
@@ -4549,6 +4842,7 @@ const PRO_AGRO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.machine-field-capacity",
     category: "calculation",
     riskClass: "none",
+    taskGroups: ["measure"],
     packs: ["agro"],
     keywords: [
       "brzina", "brzine", "capacity", "celu", "cena", "dnevno", "duzina", "goriva", "hektare",
@@ -4564,6 +4858,7 @@ const PRO_AGRO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.orchard-trellis-layout",
     category: "materials",
     riskClass: "none",
+    taskGroups: ["measure", "build"],
     packs: ["agro"],
     keywords: [
       "dimenzija", "dodatak", "duzina", "duzinu", "kraju", "layout", "masu", "medje", "naslon",
@@ -4578,6 +4873,7 @@ const PRO_AGRO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.plant-spacing-density",
     category: "geometry",
     riskClass: "none",
+    taskGroups: ["measure"],
     packs: ["agro"],
     keywords: [
       "biljaka", "bocne", "density", "duzina", "hektaru", "kraju", "medje", "obrnuto",
@@ -4592,6 +4888,7 @@ const PRO_AGRO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.polygon-area",
     category: "geometry",
     riskClass: "none",
+    taskGroups: ["measure"],
     packs: ["gradnja", "inzenjering", "nekretnine", "agro"],
     keywords: [
       "area", "jedinica", "kolona", "koordinata", "obilaska", "obim", "parcele", "poligona",
@@ -4605,6 +4902,7 @@ const PRO_AGRO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.seeding-rate",
     category: "materials",
     riskClass: "none",
+    taskGroups: ["measure"],
     packs: ["agro"],
     keywords: [
       "biljaka", "celu", "cistoca", "cistoci", "gubitak", "hektaru", "izmerenoj", "kilograma",
@@ -4619,6 +4917,7 @@ const PRO_AGRO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.sprayer-calibration",
     category: "materials",
     riskClass: "life-safety",
+    taskGroups: ["measure"],
     packs: ["agro"],
     keywords: [
       "brzina", "brzine", "calibration", "ciljana", "dizne", "dizni", "gredi", "hektaru",
@@ -4634,6 +4933,7 @@ const PRO_AGRO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.tank-mix-dose",
     category: "materials",
     riskClass: "life-safety",
+    taskGroups: ["measure"],
     packs: ["agro"],
     keywords: [
       "dose", "doza", "doze", "dozu", "hektara", "jedinica", "kolicine", "male", "mix", "norma",
@@ -4647,6 +4947,7 @@ const PRO_AGRO_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.yield-estimate-samples",
     category: "materials",
     riskClass: "none",
+    taskGroups: ["measure"],
     packs: ["agro"],
     keywords: [
       "biljaka", "biljci", "brojanja", "estimate", "hektaru", "klasova", "klasu", "klipova",
@@ -4665,6 +4966,7 @@ const PRO_ZANAT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.fabric-yardage-repeat",
     category: "materials",
     riskClass: "none",
+    taskGroups: ["build", "measure"],
     packs: ["zanat"],
     keywords: [
       "dodatak", "duznih", "fabric", "horizontalni", "ivici", "komada", "komade", "metara",
@@ -4678,6 +4980,7 @@ const PRO_ZANAT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.glass-pane-weight",
     category: "materials",
     riskClass: "life-safety",
+    taskGroups: ["build", "measure"],
     packs: ["zanat"],
     keywords: [
       "debljina", "debljine", "dimenzija", "dimenzije", "folije", "glass", "gustina", "izo",
@@ -4692,6 +4995,7 @@ const PRO_ZANAT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.iso-286-fits",
     category: "geometry",
     riskClass: "none",
+    taskGroups: ["build", "measure"],
     sourceKey: "pro.sources.iso-286-1-2010",
     packs: ["zanat"],
     keywords: [
@@ -4706,6 +5010,7 @@ const PRO_ZANAT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.linear-cutting-stock",
     category: "materials",
     riskClass: "none",
+    taskGroups: ["build", "measure"],
     packs: ["zanat"],
     keywords: [
       "cutting", "cuva", "duzina", "duzine", "idu", "kerf", "komada", "komadi", "kraju",
@@ -4719,6 +5024,7 @@ const PRO_ZANAT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.mitre-angles",
     category: "geometry",
     riskClass: "none",
+    taskGroups: ["build", "measure"],
     packs: ["zanat"],
     keywords: [
       "angle", "angles", "duzina", "gerung", "komada", "lajsne", "lista", "mitre", "nagib",
@@ -4732,6 +5038,7 @@ const PRO_ZANAT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.mortar-mix-quantity",
     category: "materials",
     riskClass: "none",
+    taskGroups: ["build"],
     packs: ["zanat"],
     keywords: [
       "agregat", "agregata", "brojem", "debljina", "debljine", "faktor", "gotove", "gustina",
@@ -4747,6 +5054,7 @@ const PRO_ZANAT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.panel-cutting-yield",
     category: "materials",
     riskClass: "none",
+    taskGroups: ["build", "measure"],
     packs: ["zanat"],
     keywords: [
       "cutting", "format", "formata", "ivica", "ivice", "jedne", "kerf", "komada", "obavezan",
@@ -4760,6 +5068,7 @@ const PRO_ZANAT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.sheet-metal-bend",
     category: "geometry",
     riskClass: "none",
+    taskGroups: ["build", "measure"],
     packs: ["zanat"],
     keywords: [
       "bend", "debljina", "duzina", "faktor", "faktora", "izmerena", "izmerenog", "krakova",
@@ -4774,6 +5083,7 @@ const PRO_ZANAT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.shelf-deflection",
     category: "structure",
     riskClass: "life-safety",
+    taskGroups: ["build"],
     packs: ["zanat"],
     keywords: [
       "debljina", "deflection", "elasticnosti", "granica", "granicom", "koncentrisana", "modul",
@@ -4788,6 +5098,7 @@ const PRO_ZANAT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.shelf-spacing",
     category: "geometry",
     riskClass: "none",
+    taskGroups: ["build", "measure"],
     sourceKey: "pro.sources.cabinet-hole-raster-system-32",
     packs: ["zanat"],
     keywords: [
@@ -4803,6 +5114,7 @@ const PRO_ZANAT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.tap-drill-size",
     category: "geometry",
     riskClass: "none",
+    taskGroups: ["build", "measure"],
     sourceKey: "pro.sources.iso-metric-thread-261-273-68",
     packs: ["zanat"],
     keywords: [
@@ -4817,6 +5129,7 @@ const PRO_ZANAT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.timber-volume",
     category: "materials",
     riskClass: "none",
+    taskGroups: ["build", "measure"],
     packs: ["zanat"],
     keywords: [
       "datoj", "debljem", "debljina", "drveta", "duzina", "gradje", "gustina", "gustini",
@@ -4832,6 +5145,7 @@ const PRO_ZANAT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.wallpaper-rolls",
     category: "materials",
     riskClass: "none",
+    taskGroups: ["build", "measure"],
     packs: ["zanat"],
     keywords: [
       "dole", "duzina", "duzinu", "gore", "jedne", "korak", "lepe", "lepljenja", "obim",
@@ -4847,6 +5161,7 @@ const PRO_ZANAT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.weld-consumable",
     category: "materials",
     riskClass: "none",
+    taskGroups: ["build"],
     packs: ["zanat"],
     keywords: [
       "brojem", "consumable", "debljina", "dodatnog", "duzina", "duzine", "duzinom",
@@ -4863,6 +5178,7 @@ const PRO_ZANAT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.wood-moisture-movement",
     category: "materials",
     riskClass: "none",
+    taskGroups: ["build", "measure"],
     sourceKey: "pro.sources.usda-wood-handbook-2021",
     packs: ["zanat"],
     keywords: [
@@ -4882,6 +5198,7 @@ const PRO_EVENT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.beam-spot-diameter",
     category: "geometry",
     riskClass: "none",
+    taskGroups: ["design", "measure"],
     packs: ["event"],
     keywords: [
       "beam", "centru", "diameter", "duzina", "horizontalno", "jacina", "jacine", "kosi",
@@ -4897,6 +5214,7 @@ const PRO_EVENT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.budget-per-guest",
     category: "finance",
     riskClass: "financial",
+    taskGroups: ["money"],
     packs: ["event"],
     keywords: [
       "budget", "budzet", "cena", "cenu", "fiksne", "gostiju", "gostu", "guest", "karte",
@@ -4910,6 +5228,7 @@ const PRO_EVENT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.catering-per-guest",
     category: "materials",
     riskClass: "none",
+    taskGroups: ["measure", "money"],
     packs: ["event"],
     keywords: [
       "catering", "gostiju", "gostu", "guest", "hrana", "kolicine", "kolicinu", "pakovanja",
@@ -4923,6 +5242,7 @@ const PRO_EVENT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.generator-sizing",
     category: "electrical",
     riskClass: "life-safety",
+    taskGroups: ["build"],
     packs: ["event"],
     keywords: [
       "agregata", "faktor", "faktorom", "generator", "goriva", "istovremenoscu", "motora",
@@ -4938,6 +5258,7 @@ const PRO_EVENT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.ice-and-chilling",
     category: "materials",
     riskClass: "food-safety",
+    taskGroups: ["measure"],
     packs: ["event"],
     keywords: [
       "ambalaze", "and", "chilling", "ciljna", "ciljnu", "dotok", "drzanja", "ice", "istopi",
@@ -4952,6 +5273,7 @@ const PRO_EVENT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.led-wall-pitch-viewing",
     category: "media",
     riskClass: "life-safety",
+    taskGroups: ["design", "measure"],
     packs: ["event"],
     keywords: [
       "broja", "daljinu", "dimenziju", "faktor", "kapacitet", "korak", "koraka", "led",
@@ -4967,6 +5289,7 @@ const PRO_EVENT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.parking-cloakroom",
     category: "calculation",
     riskClass: "none",
+    taskGroups: ["measure"],
     packs: ["event"],
     keywords: [
       "autobusom", "autobusu", "automobilom", "automobilu", "broja", "brzina", "cloakroom",
@@ -4983,6 +5306,7 @@ const PRO_EVENT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.projector-throw-screen",
     category: "media",
     riskClass: "none",
+    taskGroups: ["design", "measure"],
     packs: ["event"],
     keywords: [
       "ambijentalna", "ambijentalnom", "dijagonalu", "fluks", "gain", "gledalaca", "kontrast",
@@ -4998,6 +5322,7 @@ const PRO_EVENT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.rigging-sling-angle-force",
     category: "structure",
     riskClass: "life-safety",
+    taskGroups: ["build"],
     packs: ["event"],
     keywords: [
       "alternativno", "angle", "dinamicki", "faktor", "force", "granica", "horizontalno",
@@ -5013,6 +5338,7 @@ const PRO_EVENT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.run-of-show",
     category: "time",
     riskClass: "none",
+    taskGroups: ["dates"],
     packs: ["event"],
     keywords: [
       "dogadjaja", "dogovoru", "kraj", "krajnji", "objektom", "pocetka", "pokazuje", "pravi",
@@ -5027,6 +5353,7 @@ const PRO_EVENT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.seating-tables",
     category: "geometry",
     riskClass: "none",
+    taskGroups: ["measure"],
     packs: ["event"],
     keywords: [
       "broja", "celima", "duzina", "gostiju", "gostu", "koliku", "mere", "ploce", "povrsina",
@@ -5041,6 +5368,7 @@ const PRO_EVENT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.stage-deck-layout",
     category: "structure",
     riskClass: "life-safety",
+    taskGroups: ["build", "measure"],
     packs: ["event"],
     keywords: [
       "bina", "bine", "bini", "deck", "dubina", "duzina", "granica", "gustina", "layout",
@@ -5056,6 +5384,7 @@ const PRO_EVENT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.tent-bay-layout",
     category: "geometry",
     riskClass: "none",
+    taskGroups: ["measure"],
     packs: ["event"],
     keywords: [
       "bay", "duzina", "duzinu", "gabarit", "krova", "layout", "modul", "modula", "nagib",
@@ -5070,6 +5399,7 @@ const PRO_EVENT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.three-phase-load-balance",
     category: "electrical",
     riskClass: "life-safety",
+    taskGroups: ["build"],
     packs: ["event"],
     keywords: [
       "balance", "balans", "faza", "fazama", "faze", "fazi", "fazni", "linijski", "load",
@@ -5084,6 +5414,7 @@ const PRO_EVENT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.truss-hoist-reactions",
     category: "structure",
     riskClass: "life-safety",
+    taskGroups: ["build"],
     packs: ["event"],
     keywords: [
       "duzina", "hoist", "kraja", "moguce", "motora", "nosivost", "obesenu", "opterecenje",
@@ -5098,6 +5429,7 @@ const PRO_EVENT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.venue-occupancy-area",
     category: "geometry",
     riskClass: "life-safety",
+    taskGroups: ["measure"],
     packs: ["event"],
     keywords: [
       "area", "bruto", "dokumentacije", "gostiju", "gustinu", "kapacitet", "lica", "neto",
@@ -5112,6 +5444,7 @@ const PRO_EVENT_TOOLS: ToolRegistration[] = [
     blurbKey: "pro.blurb.voltage-drop",
     category: "electrical",
     riskClass: "life-safety",
+    taskGroups: ["build"],
     sourceKey: "pro.sources.iec-60228-60287-conductor-constants",
     packs: ["gradnja", "inzenjering", "transport", "event"],
     keywords: [

@@ -478,7 +478,11 @@ describe("the live tree", () => {
     expect(row("onboarding.week.shapes.posao.name")?.read, "inside an indexed subtree").toBe(
       "indexed",
     );
-    expect(row("tools.title")?.read, "handed to the drawer's chrome thunk").toBe("handed");
+    // `pro.title`, not `tools.title`: the tool finder names the everyday
+    // drawer's title outright (its label for a tool with no toolkit), so that
+    // leaf is `named` now, and only the professional one is still read through
+    // the thunk alone.
+    expect(row("pro.title")?.read, "handed to the drawer's chrome thunk").toBe("handed");
     // The clause with no witness here, asserted as the measurement it is: if
     // `Object.keys` over a subtree ever appears, this line fails and says so.
     expect(count("enumerated"), "no enumeration of a copy subtree in this tree").toBe(0);

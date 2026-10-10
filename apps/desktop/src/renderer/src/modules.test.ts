@@ -4,6 +4,7 @@ import {
   TOOL_DRAWERS,
   TOOL_PACKS,
   TOOL_RISK_CLASSES,
+  TOOL_TASK_GROUPS,
   UNIT_KINDS,
   foldSearchText,
   parseWidgetConfig,
@@ -899,6 +900,27 @@ describe("the tools the registry publishes (PRD 29 UTIL, PRD 30 PRO)", () => {
       expect(TOOL_CATEGORIES, tool.id).toContain(tool.category);
       // A category with no Serbian label would render its raw id in the rail.
       expect(typeof strings.tools.category[tool.category], tool.id).toBe("string");
+    }
+  });
+
+  /**
+   * Every tool is filed where somebody can find it by NEED (C10a), which is a
+   * third axis beside the pack and the category: `taskGroups` answers „what did
+   * you come here to do", and a tool under none of them can only be reached by
+   * somebody who already knew its toolkit.
+   *
+   * The requirement makes an empty list unrepresentable, and the compiler cannot
+   * state the other half: that the ids are real, that two is the cap, and that a
+   * tool filed under five of eight headings has told the reader nothing about
+   * where to look.
+   */
+  it("files every tool under one or two of the eight task groups", () => {
+    for (const tool of declared) {
+      expect(tool.taskGroups.length, tool.id).toBeGreaterThan(0);
+      expect(tool.taskGroups.length, tool.id).toBeLessThanOrEqual(2);
+      for (const group of tool.taskGroups) {
+        expect(TOOL_TASK_GROUPS, `${tool.id}:${group}`).toContain(group);
+      }
     }
   });
 

@@ -13,7 +13,7 @@
  * is how a second locale gets checked for completeness by the compiler instead
  * of by hand.
  */
-import type { SmartListId } from "@nexus/core";
+import type { SmartListId, ToolTaskGroup } from "@nexus/core";
 import { devtoolsSr } from "./strings/devtools.js";
 import { electronicsSr } from "./strings/electronics.js";
 import { proSr } from "./strings/pro.js";
@@ -4513,6 +4513,46 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
   devtools: devtoolsSr,
   /* „Stručne alatke" — the drawer that hosts every pack, see `strings/pro.ts`. */
   pro: proSr,
+  /**
+   * The tool finder — one search across every tool in BOTH drawers, drawn at the
+   * head of „Alatke“ and „Stručne alatke“ alike.
+   *
+   * A group of its own rather than keys under `tools`, because it belongs to
+   * neither drawer: the same component stands in both rooms and searches the
+   * whole catalogue at once, so hanging its copy under one drawer's group would
+   * have the other drawer's page reading it by name.
+   *
+   * `groups` is the eight `TOOL_TASK_GROUPS`, and one map serves both drawers on
+   * `tools.category`'s exact reasoning — a second map is how a group ends up
+   * labelled in one place and rendered as a raw id in the other.
+   */
+  toolFinder: {
+    searchLabel: "Pretraži sve alatke",
+    searchPlaceholder: "Nađi alatku po imenu, pojmu ili struci…",
+    groupsLabel: "Grupe po potrebi",
+    /** Section headings over an empty box. „Omiljene“ first is the whole point of starring. */
+    favourites: "Omiljene",
+    recent: "Nedavno",
+    allTools: "Sve alatke",
+    /** Nothing matched. Says what happened, and does not scold — `tools.noMatches`' tone. */
+    noMatches: "Nijedna alatka ne odgovara.",
+    clearSearch: "Poništi pretragu",
+    /** The star's two states, as the accessible name of one button. */
+    starAdd: "Dodaj u omiljene",
+    starRemove: "Ukloni iz omiljenih",
+    /** The keyboard line under the list, `search.hint`'s shape and the same keys. */
+    hint: "↑↓ kretanje · Enter otvori · Esc poništi",
+    groups: {
+      money: "Novac i fakture",
+      dates: "Datumi i rokovi",
+      measure: "Mere i pretvaranje",
+      text: "Tekst i dokumenti",
+      design: "Dizajn i mediji",
+      build: "Izgradnja i popravka",
+      data: "Podaci i kod",
+      study: "Učenje i nastava",
+    } satisfies Record<ToolTaskGroup, string>,
+  },
   /* „Elektronika" — the workbench, see `strings/electronics.ts`. */
   electronics: electronicsSr,
   fitness: {

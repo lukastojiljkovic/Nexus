@@ -4506,6 +4506,34 @@ export const en = {
   devtools: devtoolsEn,
   /* „Stručne alatke" — the drawer that hosts every pack, see `strings/pro.ts`. */
   pro: proEn,
+  /**
+   * The tool finder — one search across every tool in BOTH drawers. See
+   * `strings.sr.ts` for why this is a group of its own rather than keys under
+   * `tools`, and for why the eight task groups live in one map.
+   */
+  toolFinder: {
+    searchLabel: "Search all tools",
+    searchPlaceholder: "Find a tool by name, idea or trade…",
+    groupsLabel: "Groups by need",
+    favourites: "Favourites",
+    recent: "Recent",
+    allTools: "All tools",
+    noMatches: "No tool matches.",
+    clearSearch: "Clear search",
+    starAdd: "Add to favourites",
+    starRemove: "Remove from favourites",
+    hint: "↑↓ move · Enter open · Esc clear",
+    groups: {
+      money: "Money and invoices",
+      dates: "Dates and deadlines",
+      measure: "Measure and convert",
+      text: "Text and documents",
+      design: "Design and media",
+      build: "Build and repair",
+      data: "Data and code",
+      study: "Study and teaching",
+    },
+  },
   /* „Elektronika" — the workbench, see `strings/electronics.ts`. */
   electronics: electronicsEn,
   fitness: {
