@@ -489,19 +489,19 @@ body {
   gap: var(--nx-space-5);
 }
 
-/* Sidebar category groups — subtle separator between categories (DASH-008,
-   decision #11); a hairline on the border token, nothing louder. */
+/* Sidebar groups (ADR-093) — the spacing between them is the separator, and a
+   hairline on the border token would be a second one saying the same thing. */
 .app__nav-group {
   display: flex;
   flex-direction: column;
   gap: var(--nx-space-1);
 }
-/* The category name IS the separator. A hairline above the group as well would
-   be saying the same thing twice, which is how a rail starts to look busy. */
+/* A group's name IS the separator. A hairline above the group as well would be
+   saying the same thing twice, which is how a rail starts to look busy. */
 .app__nav-group + .app__nav-group {
   margin-top: var(--nx-space-3);
 }
-/* `text-faint`, not `text-muted`. These five words repeat down the whole rail
+/* `text-faint`, not `text-muted`. These six words repeat down the whole rail
    and name nothing a person is looking for — they are the rail's structure, not
    its content. At the secondary tier they were competing with the module names
    directly beneath them. */
@@ -514,6 +514,115 @@ body {
   letter-spacing: var(--nx-font-tracking-label);
   text-transform: uppercase;
   color: var(--nx-text-faint);
+}
+/* The heading is a BUTTON since ADR-093 §2 — it folds its group — and the whole
+   rule above belongs to the button through `font`/`inherit`: retyping the tier
+   here is what `check:tiers` exists to catch, and a group name that changed size
+   the day it became clickable would be the same defect drawn.
+
+   `min-height: 24px` is new and is the pointer floor, not a taste: the label
+   used to be a strip of 13px text with 3px under it, and a CONTROL that size is
+   what the sweep reports as `small-target` on every frame of every page. The
+   <h2> keeps the margin and the padding; this is the part a pointer touches.
+   `padding-inline` is on the h2 rather than repeated here so the two agree by
+   construction. */
+.app__nav-group-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-1);
+  width: 100%;
+  min-height: 24px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+/* The caret follows the heading's own faint ink, and only appears at full
+   strength under the pointer — the same restraint as the module icons: it says
+   which way the fold goes, and never becomes the thing you read. */
+.app__nav-group-caret {
+  flex: none;
+  color: var(--nx-text-faint);
+}
+.app__nav-group-toggle:hover .app__nav-group-caret {
+  color: var(--nx-text-muted);
+}
+/* The rows of one group, folded away with `hidden` when the heading is closed.
+   `hidden` and not a class that sets `display: none`, because the audit and the
+   focus trap both ask an element whether it is really on screen, and the
+   attribute is the one thing they both read. */
+.app__nav-group-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+/* `[hidden]` has to be restated, and this rule is load-bearing rather than
+   defensive: the UA sheet's `[hidden] { display: none }` is an AUTHOR-stylesheet
+   decision's inferior, so the `display: flex` above silently un-hides the
+   attribute — a folded group whose rows are all still there, which is exactly
+   what folding is not. The comment above says which mechanism every other
+   instrument reads; this is the line that makes it true. */
+.app__nav-group-rows[hidden] {
+  display: none;
+}
+
+/* One module row and its pin toggle. The row is the same 28px rail row it has
+   always been; the toggle sits BESIDE it rather than inside it, because a button
+   inside an anchor is not a thing HTML has, and a nested one would swallow the
+   row's own click.
+
+   The toggle is invisible until the row is hovered or focused, and that is the
+   design rather than a shortcut: at 35 modules an always-drawn pin glyph would
+   be a second column of furniture down the rail, competing with the names. It is
+   revealed by `:focus-within` as well as `:hover`, so the keyboard reaches it,
+   and the launcher's tile carries the same toggle in plain sight for anybody who
+   never hovers. */
+.app__nav-row {
+  display: flex;
+  align-items: center;
+}
+.app__nav-row > .nx-nav-item {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.app__nav-pin {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--nx-radius-sm);
+  background: none;
+  color: var(--nx-text-faint);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.app__nav-row:hover .app__nav-pin,
+.app__nav-row:focus-within .app__nav-pin,
+.app__nav-pin--on {
+  opacity: 1;
+}
+.app__nav-pin:hover:not(:disabled) {
+  color: var(--nx-text);
+}
+/* A pinned row says so at rest — the pin is also the state, and a state that
+   only appeared under the pointer would be a state nobody sees. */
+.app__nav-pin--on {
+  color: var(--nx-accent);
+}
+.app__nav-pin:disabled {
+  cursor: default;
 }
 
 /* The profile avatar (SET-001). One circle, two diameters — `md` above the
@@ -1329,4 +1438,122 @@ body {
 .app__page-gear:focus-visible {
   outline: 2px solid var(--nx-accent);
   outline-offset: 2px;
+}
+
+/* „Svi moduli" (ADR-093 §4) — the house dialog recipe worn wider, because its
+   body is a catalogue rather than a question. The panel, the backdrop and the
+   title are `recur-dialog__*` outright (see `recurrence.css`); nothing about the
+   overlay, the focus landing or the way out is redeclared here. */
+.launcher__panel.recur-dialog__panel {
+  width: min(760px, 94vw);
+  max-height: min(680px, 88vh);
+}
+.launcher__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+  overflow-y: auto;
+  /* Without this the flex item refuses to shrink below its content and the
+     panel grows past its own max-height instead of the catalogue scrolling —
+     the shortcut sheet's note, and the same trap. */
+  min-height: 0;
+  /* The scroll edge needs breathing room, or a clipped tile reads as the end. */
+  padding-right: var(--nx-space-1);
+}
+.launcher__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+/* The heading is the gallery's own tier (`nx-eyebrow`), not a retyped one: the
+   launcher's sections and the Settings gallery's are the same six words. */
+.launcher__group-title {
+  margin: 0;
+}
+/* `auto-fill` rather than a fixed count: the panel is 760px on a desktop window
+   and 94vw at 900×600, and a two-column grid there is what keeps the tiles
+   readable instead of squeezing a description into 90px. */
+.launcher__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(216px, 1fr));
+  gap: var(--nx-space-2);
+}
+.launcher__tile {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  background: var(--nx-surface-alt);
+}
+/* The keyboard's highlight, and it is the same drawing a drop target gets —
+   accent border over a soft accent fill, the two things the design direction
+   allows and no glow: the arrow keys and the pointer must point at the SAME
+   tile, so the two states cannot be two designs. */
+.launcher__tile--active {
+  border-color: var(--nx-accent);
+  background: var(--nx-accent-soft);
+}
+.launcher__open {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  /* Room for the pin at the top-right: the name must not run under it. */
+  padding: var(--nx-space-3) 32px var(--nx-space-3) var(--nx-space-3);
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  color: var(--nx-text);
+  cursor: pointer;
+}
+.launcher__name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  font-weight: var(--nx-font-weight-semibold);
+  min-width: 0;
+}
+.launcher__name .nx-icon {
+  flex: none;
+  color: var(--nx-text-muted);
+}
+.launcher__description {
+  /* Two lines at most: a tile is a name and a reason to open it, and a
+     description that wrapped to five lines would make the grid a page of prose. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  margin: 0;
+}
+.launcher__pin {
+  position: absolute;
+  top: var(--nx-space-1);
+  right: var(--nx-space-1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--nx-radius-sm);
+  background: none;
+  color: var(--nx-text-faint);
+  cursor: pointer;
+}
+.launcher__pin:hover:not(:disabled) {
+  color: var(--nx-text);
+}
+.launcher__pin--on {
+  color: var(--nx-accent);
+}
+.launcher__pin:disabled {
+  cursor: default;
+  /* Fainter than the reveal at rest, so a pin at the cap reads as unavailable
+     rather than as one that would work — the `title` says which and why. */
+  opacity: 0.5;
 }

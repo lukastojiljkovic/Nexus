@@ -5853,10 +5853,14 @@ export function SettingsPage({
             title={strings.settings.sectionTitle.modules}
             className={sectionClass(visibility.cards.has("modules"))}
           >
-            {[...registry.byCategory()].map(([category, members]) => (
-              <div key={category} className="set__module-group">
+            {/* Grouped by the NAVIGATION groups (ADR-093), not by a second
+                taxonomy of this page's own: the gallery and the rail list the
+                same modules, and a module that reads as „Planiranje" in the rail
+                and „Životni centri" here would be two answers to one question. */}
+            {[...registry.byGroup()].map(([group, members]) => (
+              <div key={group} className="set__module-group">
                 <h3 className="nx-eyebrow set__module-group-title">
-                  {strings.settings.moduleCategories[category] ?? category}
+                  {lookup(strings.app.navGroups, group) ?? group}
                 </h3>
                 <div className="set__module-list">
                   {members.map((manifest) => {

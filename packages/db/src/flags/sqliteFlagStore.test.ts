@@ -59,7 +59,7 @@ describe("SqliteFlagStore", () => {
     ): ModuleManifest => ({
       id,
       prefix,
-      category: "Core experience",
+      group: "plan",
       defaultEnabled,
     });
 

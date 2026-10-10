@@ -1,5 +1,5 @@
 import {
-  MODULE_CATEGORIES,
+  MODULE_GROUPS,
   TOOL_CATEGORIES,
   TOOL_DRAWERS,
   TOOL_PACKS,
@@ -130,9 +130,9 @@ describe("createModuleRegistry", () => {
     });
   });
 
-  it("only uses canonical categories, and every registered module except PRIV and PRO is on by default", () => {
+  it("gives every registered module a canonical group, and leaves only PRIV and PRO off by default", () => {
     for (const manifest of createModuleRegistry().all()) {
-      expect(MODULE_CATEGORIES, manifest.id).toContain(manifest.category);
+      expect(MODULE_GROUPS, manifest.id).toContain(manifest.group);
       // Founder decision 2026-07-12: only BUILT modules are registered, so an
       // entry that shipped disabled would be an entry that leads nowhere.
       // Two deliberate exceptions, both built AND registered and both OFF
@@ -147,52 +147,47 @@ describe("createModuleRegistry", () => {
     }
   });
 
-  it("groups the sidebar by category in canonical order, empty categories omitted", () => {
-    const grouped = createModuleRegistry().byCategory();
-    expect([...grouped.keys()]).toEqual([
-      "Core experience",
-      "Content & knowledge",
-      "Life hubs",
-      "Professional & utilities",
-    ]);
-    expect(grouped.get("Core experience")?.map((manifest) => manifest.id)).toEqual([
-      "dashboard",
+  /**
+   * Where every module sits (ADR-093), asserted ID BY ID rather than by group
+   * size. The interesting half of this rule is which group each module CHOSE:
+   * Učenje is Knowledge and not Life, Privatno is Life and not Knowledge, and
+   * Fokus is Plan rather than the tool drawer the old category put it in — three
+   * modules moved, and a size check would have allowed any of them.
+   */
+  it("groups the modules by navigation group in canonical order, empty groups omitted", () => {
+    const grouped = createModuleRegistry().byGroup();
+    expect([...grouped.keys()]).toEqual(["plan", "knowledge", "life", "make", "shell"]);
+    expect(grouped.get("plan")?.map((manifest) => manifest.id)).toEqual([
       "tasks",
       "calendar",
-      "settings",
-    ]);
-    expect(grouped.get("Content & knowledge")?.map((manifest) => manifest.id)).toEqual([
-      "notes",
-      "priv",
-      "files",
-    ]);
-    // „Ishrana" joins the three subjects somebody HAS rather than the tools
-    // they use on them: what you eat is an area of a life in the plainest sense
-    // the group has.
-    expect(grouped.get("Life hubs")?.map((manifest) => manifest.id)).toEqual([
-      "study",
-      "finance",
       "habits",
+      "focus",
+    ]);
+    expect(grouped.get("knowledge")?.map((manifest) => manifest.id)).toEqual([
+      "notes",
+      "files",
+      "study",
+    ]);
+    expect(grouped.get("life")?.map((manifest) => manifest.id)).toEqual([
+      "priv",
+      "finance",
       "fitness",
     ]);
-    // „Fokus" is the first module in „Profesionalno i alati", and the category
-    // is the honest one: „Životni centri" holds three subjects somebody HAS,
-    // while a Pomodoro timer is a TOOL you use on whichever of them you are at.
-    // Four modules now: „Fokus" a timer you run, „Alatke" a drawer you open,
-    // „Tabla" a surface you draw on, „Stručne alatke" a second, pack-gated
-    // drawer — separate entries because they are separate errands. „Fokus" and
-    // „Alatke" share the UTIL prefix (one PRD section implemented twice);
-    // „Tabla" and „Stručne alatke" each take their own, because each is its
-    // own PRD entry (CANV, PRO).
-    expect(grouped.get("Professional & utilities")?.map((manifest) => manifest.id)).toEqual([
-      "focus",
+    expect(grouped.get("make")?.map((manifest) => manifest.id)).toEqual([
       "tools",
       "canvas",
       "electronics",
       "pro",
     ]);
+    // The shell group is the two rows nothing may switch off, and the sidebar is
+    // the one caller that splits it: its first member heads the rail, the rest
+    // close it (`navPrefs.sidebarGroups`).
+    expect(grouped.get("shell")?.map((manifest) => manifest.id)).toEqual([...LOCKED_MODULE_IDS]);
+    // Culture and Play have no module yet, so they draw nothing rather than an
+    // empty heading.
+    expect(grouped.has("culture")).toBe(false);
+    expect(grouped.has("play")).toBe(false);
   });
-
   it("is constructed per call, never a shared singleton (ADR-008)", () => {
     const first = createModuleRegistry();
     const second = createModuleRegistry();

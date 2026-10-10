@@ -1,8 +1,8 @@
 import type { WidgetContract } from "../contracts/widgets.js";
 import type { SearchKind } from "../search/searchQuery.js";
 import {
-  MODULE_CATEGORIES,
-  type ModuleCategory,
+  MODULE_GROUPS,
+  type ModuleGroup,
   type ModuleManifest,
 } from "./manifest.js";
 
@@ -122,16 +122,23 @@ export class ModuleRegistry {
   }
 
   /**
-   * Manifests grouped by category, keyed in canonical category order with empty
-   * categories omitted; members keep registration order. Drives the sidebar
-   * category separators (DASH-008).
+   * Manifests grouped by navigation group, keyed in `MODULE_GROUPS` order with
+   * empty groups omitted; members keep registration order. Drives the sidebar's
+   * blocks, the launcher's sections, the Settings module gallery and the
+   * onboarding chooser (ADR-093).
+   *
+   * `shell` is INCLUDED when it has members, rather than filtered out here: the
+   * three galleries above draw it as an ordinary heading, and the sidebar is the
+   * one caller that splits it into the rail's two heading-less ends. Deciding
+   * that here would put a sidebar rule in a registry that knows nothing about a
+   * sidebar.
    */
-  byCategory(): Map<ModuleCategory, ModuleManifest[]> {
-    const grouped = new Map<ModuleCategory, ModuleManifest[]>();
-    for (const category of MODULE_CATEGORIES) {
-      const members = this.order.filter((m) => m.category === category);
+  byGroup(): Map<ModuleGroup, ModuleManifest[]> {
+    const grouped = new Map<ModuleGroup, ModuleManifest[]>();
+    for (const group of MODULE_GROUPS) {
+      const members = this.order.filter((m) => m.group === group);
       if (members.length > 0) {
-        grouped.set(category, members);
+        grouped.set(group, members);
       }
     }
     return grouped;

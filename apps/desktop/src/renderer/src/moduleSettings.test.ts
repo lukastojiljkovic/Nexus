@@ -57,7 +57,7 @@ const FAKE_PANEL: SettingsPanel = {
 const FAKE_MODULE: ModuleManifest = {
   id: "fake",
   prefix: "FAKE",
-  category: "Growth & platform",
+  group: "plan",
   defaultEnabled: true,
   settings: FAKE_PANEL,
 };

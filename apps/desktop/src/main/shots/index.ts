@@ -866,6 +866,21 @@ const SCENE_PLAN: readonly ShotScene[] = [
   },
   { id: "search", module: "dashboard", prepare: OPEN_SEARCH_PAGE(), fanout: null },
   {
+    // „Svi moduli": the overlay the rail's own row opens, with a search field
+    // over a grid of every enabled module by group. It is the one surface of
+    // ADR-093 the rest of this list cannot reach — the group headings and the
+    // pins are drawn on every module scene there is, and this is not.
+    //
+    // The cleanup CLOSES it, and that is not tidiness: it is modal, it traps
+    // focus, and a scene that left it open would type the next scene's text
+    // into its search field.
+    id: "launcher",
+    module: "dashboard",
+    prepare: OPEN_MODULE_LAUNCHER(),
+    fanout: null,
+    cleanup: CLICK_THEN(".launcher__panel .recur-dialog__cancel"),
+  },
+  {
     // The page as it opens: „Profil i sigurnost", the category the two-column
     // layout defaults to and the one a reader lands on from the sidebar.
     id: "settings",
@@ -2376,10 +2391,24 @@ function WRITE_PROBE(text: string): string {
  */
 function OPEN_SEARCH_PAGE(): string {
   return `(() => {
-    const rows = Array.from(document.querySelectorAll(".app__sidebar-foot .nx-nav-item"));
-    const row = rows[0];
+    const row = document.querySelector("[data-nx-search-page]");
     if (row) row.click();
     return true;
+  })()`;
+}
+
+/**
+ * „Svi moduli" (ADR-093 §4) — the launcher, and the one surface of that change
+ * nothing else photographs: it is an overlay, it exists only while it is open,
+ * and its whole subject is the GRID. At 900×600 a list of thirty-five modules is
+ * a scroll region, and this is the answer to that.
+ */
+function OPEN_MODULE_LAUNCHER(): string {
+  return `(() => {
+    const row = document.querySelector("[data-nx-launcher]");
+    if (!row) return "none: no launcher row in the rail";
+    row.click();
+    return "launcher";
   })()`;
 }
 

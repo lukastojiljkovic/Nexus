@@ -6833,9 +6833,11 @@ const FITNESS_SETTINGS: SettingsPanel = {
  *
  * The manifests themselves:
  * identity plus the contract slots each module actually fills — `widgets` from
- * ADR-045 onward, the rest as each lands. Categories mirror the PRD 00 registry;
- * registration order follows the PRD numbering, and the sidebar groups them by
- * `MODULE_CATEGORIES` order with separators (DASH-008, decision #11).
+ * ADR-045 onward, the rest as each lands. Registration order follows the PRD
+ * numbering, and every surface that groups these — the sidebar, the launcher,
+ * the Settings gallery and the onboarding chooser — draws them by `group` in
+ * `MODULE_GROUPS` order (ADR-093). A prefix still points at its PRD entry; the
+ * group says who the module is for.
  *
  * Only *built* modules are registered (founder decision 2026-07-12): an
  * unbuilt module must not appear anywhere — not in the sidebar, not in the
@@ -6857,14 +6859,14 @@ const V0_MODULES: ModuleManifest[] = [
   {
     id: "dashboard",
     prefix: "DASH",
-    category: "Core experience",
+    group: "shell",
     defaultEnabled: true,
     settings: DASHBOARD_SETTINGS,
   },
   {
     id: "tasks",
     prefix: "TASK",
-    category: "Core experience",
+    group: "plan",
     defaultEnabled: true,
     widgets: TASKS_WIDGETS,
     settings: TASKS_SETTINGS,
@@ -6873,7 +6875,7 @@ const V0_MODULES: ModuleManifest[] = [
   {
     id: "calendar",
     prefix: "CAL",
-    category: "Core experience",
+    group: "plan",
     defaultEnabled: true,
     widgets: CALENDAR_WIDGETS,
     settings: CALENDAR_SETTINGS,
@@ -6884,11 +6886,11 @@ const V0_MODULES: ModuleManifest[] = [
   // SET itself publishes no settings card: the page it renders IS the surface,
   // and a „Podešavanja" card inside Podešavanja would be a mirror facing a
   // mirror. The shell's cards are the ones it hand-composes.
-  { id: "settings", prefix: "SET", category: "Core experience", defaultEnabled: true },
+  { id: "settings", prefix: "SET", group: "shell", defaultEnabled: true },
   {
     id: "notes",
     prefix: "NOTE",
-    category: "Content & knowledge",
+    group: "knowledge",
     defaultEnabled: true,
     widgets: NOTES_WIDGETS,
     settings: NOTES_SETTINGS,
@@ -6912,7 +6914,7 @@ const V0_MODULES: ModuleManifest[] = [
   {
     id: "priv",
     prefix: "PRIV",
-    category: "Content & knowledge",
+    group: "life",
     defaultEnabled: false,
     settings: PRIV_SETTINGS,
   },
@@ -6944,7 +6946,7 @@ const V0_MODULES: ModuleManifest[] = [
   {
     id: "files",
     prefix: "DOC",
-    category: "Content & knowledge",
+    group: "knowledge",
     defaultEnabled: true,
     widgets: FILES_WIDGETS,
     settings: FILES_SETTINGS,
@@ -6952,7 +6954,7 @@ const V0_MODULES: ModuleManifest[] = [
   {
     id: "study",
     prefix: "STUDY",
-    category: "Life hubs",
+    group: "knowledge",
     defaultEnabled: true,
     widgets: STUDY_WIDGETS,
     settings: STUDY_SETTINGS,
@@ -6972,14 +6974,15 @@ const V0_MODULES: ModuleManifest[] = [
   {
     id: "finance",
     prefix: "FIN",
-    category: "Life hubs",
+    group: "life",
     defaultEnabled: true,
     widgets: FINANCE_WIDGETS,
     settings: FINANCE_SETTINGS,
   },
-  // Navike (HABIT slice b, migration 055). „Life hubs" beside Učenje and
-  // Finansije: those three are areas of a life rather than tools for handling
-  // content, and a habit tracker is the plainest example of the category.
+  // Navike (HABIT slice b, migration 055). „Planiranje" beside Zadaci, Kalendar
+  // and Fokus (ADR-093): a habit is something a day asks for, so it belongs with
+  // the three other modules that shape one rather than with a subject somebody
+  // studies.
   // ON by default, like every built module except PRIV — nothing about keeping
   // habits asks to be opted into, and the module writes nothing until the user
   // creates one.
@@ -6997,16 +7000,15 @@ const V0_MODULES: ModuleManifest[] = [
   {
     id: "habits",
     prefix: "HABIT",
-    category: "Life hubs",
+    group: "plan",
     defaultEnabled: true,
     widgets: HABITS_WIDGETS,
     settings: HABITS_SETTINGS,
   },
-  // Ishrana (FIT slice b, migration 058). „Life hubs" beside Učenje, Finansije
-  // and Navike, and the category is the honest one: what somebody eats is an
-  // AREA of their life, in the plainest sense the group has — not a tool you
-  // use on one („Profesionalno i alati", where Fokus sits) and not content to
-  // handle („Sadržaj i znanje").
+  // Ishrana (FIT slice b, migration 058). „Život" beside Privatno and Finansije
+  // (ADR-093), and the group is the honest one: what somebody eats is an AREA of
+  // their life, in the plainest sense — not a tool you use on one („Stvaranje")
+  // and not content to handle („Znanje").
   //
   // ON by default, like every built module except PRIV: the module writes
   // nothing at all until the user logs a first meal, and a life-management app
@@ -7022,22 +7024,17 @@ const V0_MODULES: ModuleManifest[] = [
   {
     id: "fitness",
     prefix: "FIT",
-    category: "Life hubs",
+    group: "life",
     defaultEnabled: true,
     widgets: FITNESS_WIDGETS,
     settings: FITNESS_SETTINGS,
   },
-  // Fokus (UTIL slice b, ADR-077). The first module in „Profesionalno i alati",
-  // and the category is the honest one: this is a TOOL rather than an area of a
-  // life. „Životni centri" holds Učenje, Finansije and Navike — three subjects
-  // somebody has — while a Pomodoro timer is a thing you use on whichever of
-  // them you happen to be at.
-  //
-  // (The brief for this slice named the category „Utility & tools". That string
-  // is not in `MODULE_CATEGORIES`, whose five values mirror the PRD 00 registry;
-  // the value that means it is „Professional & utilities", already labelled
-  // „Profesionalno i alati" in Serbian. Registered there rather than widening a
-  // canonical list to add a synonym.)
+  // Fokus (UTIL slice b, ADR-077). „Planiranje", with Zadaci, Kalendar and
+  // Navike (ADR-093), and the group says what the module is FOR: a Pomodoro
+  // phase is twenty-five minutes of a day you already planned. ADR-008's
+  // categories had it under „Professional & utilities", on the argument that a
+  // timer is a TOOL rather than an area of a life — true of a sixteen-module
+  // rail, and not of one where the tool group is where you MAKE things.
   //
   // ON by default, like every built module except PRIV: nothing about a timer
   // asks to be opted into, and the module writes nothing until a phase is
@@ -7051,14 +7048,16 @@ const V0_MODULES: ModuleManifest[] = [
   {
     id: "focus",
     prefix: "UTIL",
-    category: "Professional & utilities",
+    group: "plan",
     defaultEnabled: true,
     widgets: FOCUS_WIDGETS,
     settings: FOCUS_SETTINGS,
   },
   // Alatke (UTIL slice c) — the tool drawer, and the utilities HOST the
   // `ToolRegistration` contract was reserved for („resolved when the UTIL tool
-  // host lands"). Second module in „Profesionalno i alati", beside „Fokus".
+  // host lands"). First module in „Stvaranje" (ADR-093), where the converters
+  // and calculators sit; „Fokus" moved to „Planiranje" and is deliberately NOT
+  // beside it any more — the two share a PRD section, not an errand.
   //
   // **It SHARES the UTIL prefix with „Fokus", on purpose.** A prefix is
   // traceability to a PRD entry, and PRD 29 („Utility Belt") is one entry that
@@ -7083,18 +7082,17 @@ const V0_MODULES: ModuleManifest[] = [
   {
     id: "tools",
     prefix: "UTIL",
-    category: "Professional & utilities",
+    group: "make",
     defaultEnabled: true,
     settings: TOOLS_SETTINGS,
     tools: TOOLS_TOOLS,
   },
-  // Tabla (CANV slice a, migration 059) — the infinite canvas. Third module in
-  // „Profesionalno i alati", beside „Fokus" and „Alatke", and the category is
-  // the honest one on their exact terms: „Životni centri" holds subjects
-  // somebody HAS, while a whiteboard is a TOOL you use on whichever of them you
-  // are at. It gets its own prefix rather than joining UTIL, because CANV is its
-  // own PRD entry — the sharing UTIL does is one PRD section implemented twice,
-  // not a bin for anything tool-shaped.
+  // Tabla (CANV slice a, migration 059) — the infinite canvas. Second module in
+  // „Stvaranje", beside „Alatke" (ADR-093), and the group is the honest one on
+  // the old category's exact terms: „Život" holds subjects somebody HAS, while a
+  // whiteboard is a surface you MAKE something on. It gets its own prefix rather
+  // than joining UTIL, because CANV is its own PRD entry — the sharing UTIL does
+  // is one PRD section implemented twice, not a bin for anything tool-shaped.
   //
   // ON by default, like every built module except PRIV.
   //
@@ -7122,18 +7120,18 @@ const V0_MODULES: ModuleManifest[] = [
   {
     id: "canvas",
     prefix: "CANV",
-    category: "Professional & utilities",
+    group: "make",
     defaultEnabled: true,
     widgets: CANVAS_WIDGETS,
   },
   // Elektronika (ELEC slice E1, migration 067) — the breadboard: a catalogue of
   // 153 components, a canvas to place them on and wires between their pins.
-  // Fourth module in „Profesionalno i alati", after „Tabla" and before „Stručne
-  // alatke", and the category is the honest one on „Tabla"'s exact terms:
-  // „Životni centri" holds subjects somebody HAS, while a breadboard is an
-  // INSTRUMENT you use on whichever of them you are at. Its own prefix rather
-  // than joining UTIL, for „Tabla"'s reason: the sharing UTIL does is one PRD
-  // section implemented twice, not a bin for anything tool-shaped.
+  // Third module in „Stvaranje", after „Tabla" and before „Stručne alatke"
+  // (ADR-093), and the group is the honest one on „Tabla"'s exact terms: „Život"
+  // holds subjects somebody HAS, while a breadboard is an INSTRUMENT you make
+  // something on. Its own prefix rather than joining UTIL, for „Tabla"'s reason:
+  // the sharing UTIL does is one PRD section implemented twice, not a bin for
+  // anything tool-shaped.
   //
   // ON by default, like every built module except PRIV and „Stručne alatke" —
   // and the two exceptions are what settle it rather than what invite a third.
@@ -7171,7 +7169,7 @@ const V0_MODULES: ModuleManifest[] = [
   {
     id: "electronics",
     prefix: "ELEC",
-    category: "Professional & utilities",
+    group: "make",
     defaultEnabled: true,
     widgets: ELEC_WIDGETS,
     searchIndexers: [{ kind: "circuit" }],
@@ -7185,15 +7183,15 @@ const V0_MODULES: ModuleManifest[] = [
   // full stop, not „the developer one" — whatever a geodeta's or a lekar's pack
   // adds next lands in this same module and needs nothing from it.
   //
-  // FOURTH module in „Profesionalno i alati", and it takes its OWN prefix,
-  // `PRO` (PRD 30, „Profession Toolkits"), rather than joining „Fokus" and
-  // „Alatke" under `UTIL`. The sharing argument on „Alatke"'s comment — one PRD
-  // section implemented twice — does not apply here: PRD 30 is its own entry,
-  // not a second reading of PRD 29, so this module gets its own prefix rather
-  // than borrowing one. `modules.test.ts`'s explicit prefix→ids map still
-  // states the `UTIL` sharing that DOES remain (`focus`, `tools`) on purpose,
-  // so any other duplicate — this one included, had it kept `UTIL` — still
-  // fails.
+  // Fourth module in „Stvaranje", after „Tabla" and „Elektronika" (ADR-093),
+  // and it takes its OWN prefix, `PRO` (PRD 30, „Profession Toolkits"), rather
+  // than joining „Alatke" (or „Fokus", which left the group) under `UTIL`. The
+  // sharing argument on „Alatke"'s comment — one PRD section implemented twice —
+  // does not apply here: PRD 30 is its own entry, not a second reading of PRD
+  // 29, so this module gets its own prefix rather than borrowing one.
+  // `modules.test.ts`'s explicit prefix→ids map still states the `UTIL` sharing
+  // that DOES remain (`focus`, `tools`) on purpose, so any other duplicate —
+  // this one included, had it kept `UTIL` — still fails.
   //
   // OFF by default, and the only built module besides PRIV that is — but the
   // reason is stronger now than „a non-programmer should not see a RISC-V
@@ -7224,7 +7222,7 @@ const V0_MODULES: ModuleManifest[] = [
   {
     id: "pro",
     prefix: "PRO",
-    category: "Professional & utilities",
+    group: "make",
     defaultEnabled: false,
     widgets: PRO_WIDGETS,
     tools: PRO_TOOLS,

@@ -103,3 +103,4 @@ directory is the decision log behind it.
 | [089](089-network-mode-and-update-check.md) | A network mode and an opt-in update check | Accepted | 2026-10-07 |
 | [091](091-content-packs.md) | Content packs: a signed folder, verified with the release key | Accepted | 2026-10-09 |
 | [092](092-downloads-network-mode.md) | The third network mode, „downloads", and the download service | Accepted; amends ADR-089 | 2026-10-09 |
+| [093](093-navigation-groups.md) | Navigation groups, the pinned shortlist and the launcher | Accepted; supersedes ADR-008 decision #11, amends ADR-086 §4 | 2026-10-09 |

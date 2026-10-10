@@ -297,7 +297,7 @@ describe("buildSettingsIndex", () => {
 
   it("covers every registered module, in the gallery's own grouping order", () => {
     const registry = createModuleRegistry();
-    const expected = [...registry.byCategory()].flatMap(([, members]) =>
+    const expected = [...registry.byGroup()].flatMap(([, members]) =>
       members.map((manifest) => moduleEntryId(manifest.id)),
     );
     const actual = buildSettingsIndex(registry)

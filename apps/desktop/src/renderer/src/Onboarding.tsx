@@ -1010,10 +1010,14 @@ export function Onboarding({
                 „Uvek uključeno“ chip in both. */}
             <h2 className="onb__module-group-title">{s.modulesTitle}</h2>
             <div className="onb__modules">
-              {[...registry.byCategory()].map(([category, members]) => (
-                <div key={category} className="onb__module-group">
+              {/* The same groups the rail and the launcher draw (ADR-093): the
+                  chips are grouped so the person recognises the shape their app
+                  is about to have, and a heading only this screen uses would be
+                  a taxonomy they never meet again. */}
+              {[...registry.byGroup()].map(([group, members]) => (
+                <div key={group} className="onb__module-group">
                   <h3 className="onb__module-group-title">
-                    {strings.settings.moduleCategories[category] ?? category}
+                    {lookup(strings.app.navGroups, group) ?? group}
                   </h3>
                   <div className="onb__module-list">
                     {members.map((manifest) => {

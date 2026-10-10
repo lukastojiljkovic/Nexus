@@ -1,7 +1,7 @@
 export { MAX_ID_LENGTH } from "./ids.js";
 
-export { MODULE_CATEGORIES } from "./modules/manifest.js";
-export type { ModuleCategory, ModuleManifest } from "./modules/manifest.js";
+export { MODULE_GROUPS } from "./modules/manifest.js";
+export type { ModuleGroup, ModuleManifest } from "./modules/manifest.js";
 export { ModuleRegistry } from "./modules/registry.js";
 
 export { resolveEnabled } from "./flags/flags.js";
