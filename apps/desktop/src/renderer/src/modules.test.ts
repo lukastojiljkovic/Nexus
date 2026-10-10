@@ -98,6 +98,9 @@ describe("createModuleRegistry", () => {
       // here rather than derived because this test IS the declaration — what the
       // registry holds is what the app shows.
       "timers",
+      // The second discovered module, after it by `order` (300). Registered in
+      // the same way, and written here for the same reason.
+      "scanner",
     ]);
   });
 
@@ -152,7 +155,10 @@ describe("createModuleRegistry", () => {
       // alatke" does NOT join it: PRD 30 („Profession Toolkits") is its own
       // entry, not a second reading of PRD 29 („Utility Belt"), so it takes
       // its own prefix below rather than borrowing this one.
-      UTIL: ["focus", "tools", "timers"],
+      // The scanner is a fourth surface of the same PRD entry: PRD 29 §10 names
+      // the OCR tool as a future extension of the belt, so it borrows the
+      // prefix rather than inventing a PRD entry of its own.
+      UTIL: ["focus", "tools", "timers", "scanner"],
       CANV: ["canvas"],
       // „Elektronika" takes its own for „Tabla"'s reason exactly: ELEC is its
       // own PRD entry, and the UTIL sharing above is one section implemented
@@ -212,6 +218,10 @@ describe("createModuleRegistry", () => {
       "canvas",
       "electronics",
       "pro",
+      // The scanner sits in „make" rather than in a group of its own: it MAKES
+      // something (a note, from a picture), which is the whole of what this
+      // group is for.
+      "scanner",
     ]);
     // The shell group is the two rows nothing may switch off, and the sidebar is
     // the one caller that splits it: its first member heads the rail, the rest
@@ -254,6 +264,10 @@ describe("createModuleRegistry", () => {
       // ON by default, like every module but PRIV and PRO: a timer writes
       // nothing until somebody starts one, so there is nothing to opt into.
       "timers",
+      // ON by default too. The scanner needs a language pack before it can
+      // read, and the page says so where the reading happens instead of hiding
+      // the module from everybody who has not installed one.
+      "scanner",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");

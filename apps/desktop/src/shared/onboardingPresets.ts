@@ -46,6 +46,11 @@ export const ESSENTIALS_MODULE_PRESET: Readonly<Record<string, boolean>> = {
   // selectable one: nothing about a timer asks to be opted into, so „Osnovno"
   // turns it on exactly as the manifest's own `defaultEnabled` says.
   timers: true,
+  // The scanner, the kit's second module, is decided the same way. It does need
+  // a language pack before it can read anything, and that is not a reason to
+  // ship it off: the page says which pack is missing and where it is installed,
+  // so the module is on and only RECOGNITION waits for the pack.
+  scanner: true,
   pro: false,
 };
 

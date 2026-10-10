@@ -84,6 +84,10 @@ export type IconName =
   // had to be a shape of its own — and an hourglass says what a countdown is
   // (time running out of a fixed amount) rather than what time it is.
   | "timer"
+  // The scanner's mark (module `scanner`): the frame a picture is put inside
+  // and the line it is read along. The set already had a photograph (`image`)
+  // and a look (`eye`), and neither says "something is reading this page".
+  | "scan"
   // Objects the modules actually name.
   | "star"
   | "starFilled"
@@ -521,6 +525,19 @@ const SHAPES: Record<IconName, ReactNode> = {
       <path d="M6.8 20.6h10.4" />
       <path d="M7.6 3.4c0 4.2 8.8 4.2 8.8 8.6s-8.8 4.4-8.8 8.6" />
       <path d="M16.4 3.4c0 4.2-8.8 4.2-8.8 8.6s8.8 4.4 8.8 8.6" />
+    </>
+  ),
+  // Four corner brackets around the reading line, rather than a closed
+  // rectangle: a closed one with a line through it is the `image` frame with
+  // something laid across it, while brackets say "a region is being taken" on
+  // their own - which is what a scanner does to the picture.
+  scan: (
+    <>
+      <path d="M3.6 8.6v-3a2 2 0 0 1 2-2h3" />
+      <path d="M15.4 3.6h3a2 2 0 0 1 2 2v3" />
+      <path d="M20.4 15.4v3a2 2 0 0 1-2 2h-3" />
+      <path d="M8.6 20.4h-3a2 2 0 0 1-2-2v-3" />
+      <path d="M6.4 12h11.2" />
     </>
   ),
 

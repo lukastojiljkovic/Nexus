@@ -27,6 +27,10 @@ import type { IpcMainInvokeEvent, OpenDialogOptions, Session } from "electron";
 // and only when the user has chosen „Offline + update checks". See the SEC-EL-07
 // section near the bottom of this file.
 import { readFileBounded } from "./boundedRead.js";
+// The scanner's camera rule, consulted by the two session permission handlers
+// near the bottom of this file. Why a rule about who may ask is its own file
+// rather than a line here: `scannerMedia.ts`'s own header.
+import { allows as allowsScannerMedia, appMediaOrigins } from "./scannerMedia.js";
 import {
   activeNetworkMode,
   devServerOrigin,
@@ -13767,16 +13771,36 @@ app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
 
   // The one rung of the Electron hardening set that had neither code nor a
-  // stated reason. Nexus asks the web platform for nothing — notifications are
-  // raised by `Notification` in MAIN, not by the renderer's Notification API,
-  // and there is no camera, microphone, geolocation, MIDI or clipboard-read
-  // path anywhere in the product. So both handlers deny unconditionally rather
-  // than switching on a permission name: an allowlist with no entries is a
-  // list somebody eventually adds to, and a flat refusal is a decision.
-  session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => {
+  // stated reason. Nexus asks the web platform for almost nothing —
+  // notifications are raised by `Notification` in MAIN, not by the renderer's
+  // Notification API, and there is no geolocation, MIDI or clipboard-read path
+  // anywhere in the product. Both handlers therefore deny by DEFAULT rather
+  // than switching on a permission name: an allowlist that admits first and
+  // asks later is a list somebody eventually adds to.
+  //
+  // The one named exception is the scanner module's camera.
+  // Its rule is a pure function in a file of its own — `main/scannerMedia.ts`,
+  // tested there — so the two callbacks below hold no policy: `media`, this
+  // app's own origin only, and video only. Every other permission name, and
+  // every other origin, still reaches `callback(false)`.
+  session.defaultSession.setPermissionRequestHandler((contents, permission, callback, details) => {
+    if (allowsScannerMedia(permission, contents.getURL(), details, appMediaOrigins(process.env))) {
+      callback(true);
+      return;
+    }
     callback(false);
   });
-  session.defaultSession.setPermissionCheckHandler(() => false);
+  session.defaultSession.setPermissionCheckHandler((contents, permission, requestingOrigin, details) =>
+    allowsScannerMedia(
+      permission,
+      // Chromium names the frame's origin for a check ("file://" for the
+      // packaged page), and `webContents` can be null when nothing owns the
+      // check - a check with no origin at all is refused by the rule.
+      requestingOrigin === "" ? (contents?.getURL() ?? null) : requestingOrigin,
+      details,
+      appMediaOrigins(process.env),
+    ),
+  );
 
   // SEC-NET: the three runtime layers of the cloud-off boundary. The fourth
   // (`host-resolver-rules`) went on at module scope; `net/offline.ts` carries
