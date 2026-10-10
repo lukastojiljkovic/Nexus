@@ -5993,6 +5993,29 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         "60": "Posle 1 sata",
         "0": "Nikad",
       } satisfies Record<string, string>,
+      askPasscodeTitle: "Traži pristupni kod",
+      askPasscodeHint:
+        "Nexus traži pristupni kod kada se pokrene, osim ako je od poslednjeg otključavanja prošlo manje od izabranog vremena. Zaključavanje aplikacije briše zapamćeni ključ, pa sledeće pokretanje ponovo traži kod.",
+      /** UNLOCK_SETTINGS members as option labels, keyed by the member itself. */
+      askPasscodeOptions: {
+        "every-time": "Svaki put kad se Nexus pokrene",
+        "1h": "Posle 1 sata",
+        "8h": "Posle 8 sati",
+        "1d": "Posle 1 dana",
+        "7d": "Posle 7 dana",
+        never: "Nikad",
+      } satisfies Record<string, string>,
+      askPasscodeWarning:
+        "Svako ko može da koristi ovaj Windows nalog može da otvori Nexus bez pristupnog koda u tom periodu.",
+      askPasscodePasscodeLabel: "Pristupni kod",
+      askPasscodeSaved: "Podešavanje je sačuvano.",
+      /** Keyed by UnlockSettingUnavailableReason, read through `lookup` so the table keeps literal keys. */
+      askPasscodeUnavailable: {
+        keystore:
+          "Ovaj računar trenutno ne može bezbedno da čuva ključ, pa Nexus uvek traži pristupni kod.",
+        "plaintext-backend":
+          "Na ovom sistemu ključ bi se čuvao kao običan tekst, pa Nexus uvek traži pristupni kod.",
+      } satisfies Record<string, string>,
     },
     /** Theme-preference option labels; Dan/Noć reuse `strings.app.themeDan/themeNoc`. */
     appearance: {

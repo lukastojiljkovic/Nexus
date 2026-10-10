@@ -121,3 +121,4 @@ directory is the decision log behind it.
 | [107](107-external-links.md) | One door for external links: two named variants, and the kit's `ExternalLink` | Accepted; uses ADR-103 §7, amends ADR-103 for the document variant | 2026-10-10 |
 | [109](109-astronomy.md) | The astronomy corner, assembled: four views, one clock, one place | Accepted | 2026-10-10 |
 | [106](106-assistant-module.md) | The assistant module: the kit's first stateful, networked, streaming surface | Accepted | 2026-10-10 |
+| [110](110-remembered-unlock.md) | „Traži pristupni kod": how often the app asks for the passcode | Accepted | 2026-10-10 |

@@ -80,9 +80,16 @@ checked on 2026-10-10 and none of them can ship:
   `Xenova/mms-tts-srp` answer HTTP 401, and the official supported-language table
   (`https://dl.fbaipublicfiles.com/mms/tts/all-tts-languages.html`) has no `srp`,
   `hrv`, `bos`, `hbs` or `cnr` row at all.
-- **Piper's engine is GPL-3.0** (`OHF-Voice/piper1-gpl`), and the phonemizer it
-  needs, `espeak-ng`, is GPL-3.0 too — and this app ships no GPL program. The
-  older MIT `rhasspy/piper` is archived and still needs `espeak-ng`.
+- **Piper's one voice filed under `sr` is not Serbian.** `sr/sr_RS/serbski_institut/medium`
+  is trained on `https://github.com/marytts/serbski-institut-dsb-data`, whose own
+  README says it is **Lower Sorbian** voice data (`dsb` is Lower Sorbian's ISO 639
+  code; Upper Sorbian is `hsb`), recorded at the Sorbian Institute in Bautzen.
+  The model card's `Language: sr_RS (Serbian, Serbia)` line and the folder name
+  describe the folder, not the recordings. Piper's engine
+  (`OHF-Voice/piper1-gpl`) is GPL-3.0 and the phonemizer it needs, `espeak-ng`,
+  is GPL-3.0 too; ADR-105's addendum records that a GPL program MAY ship as a
+  separate `tool` pack (ADR-094), which settles the licence question for a
+  program and settles nothing about a voice that is not Serbian.
 - **The Serbian VITS fine-tunes on the Hub declare no licence**, and a source
   with no licence statement is a source that cannot be used.
 

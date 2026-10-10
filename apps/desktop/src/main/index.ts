@@ -17,6 +17,7 @@ import {
   Menu,
   Notification,
   protocol,
+  safeStorage,
   session,
 } from "electron";
 import type { IpcMainInvokeEvent, OpenDialogOptions, Session } from "electron";
@@ -476,6 +477,15 @@ import {
 } from "./auth.js";
 import { createEditorFlush } from "./editorFlush.js";
 import {
+  asUnlockSetting,
+  forgetRememberedKey,
+  readUnlockPolicy,
+  rememberingProblem,
+  storeUnlockPolicy,
+  takeRememberedKey,
+  type RememberedUnlockDeps,
+} from "./rememberedUnlock.js";
+import {
   privAddAttachment,
   privCaptureAndLock,
   privCapturePendingVersions,
@@ -701,6 +711,7 @@ import {
   type DashboardSetsState,
   type DashboardSettings,
   type DashboardWidgetInstance,
+  DEFAULT_UNLOCK_SETTING,
   type DashboardWidgetSize,
   DOC_MIME_FAMILIES,
   DOC_TEXT_PREVIEW_MAX_BYTES,
@@ -841,7 +852,11 @@ import {
   type TaskAttachmentsAddResult,
   type TaskListsSnapshot,
   type TopicMoveDirection,
+  type UnlockPolicy,
+  type UnlockPolicyResult,
+  type UnlockSetting,
   type UpdateStateView,
+  settingNeedsPasscode,
   WINDOW_VIEW_COMMANDS,
   type WindowState,
   type WindowViewCommand,
@@ -6822,6 +6837,11 @@ function performLock(): void {
   db = null;
   unlockedDataKeyHex = null;
   blobKeys = null;
+  // ADR-110 §3: a lock the user asked for is also the user saying „ask me
+  // again". This is the ONE function every lock passes through, so the rule
+  // cannot be forgotten at a new call site, and the setting itself survives it
+  // — the next passcode unlock writes a fresh wrap under the same policy.
+  if (activeAccountId !== null) forgetRememberedKey(activeAccountDir());
   // `openExternally` must hand the OS a real plaintext file to open with its
   // default app, so its temp copies are an unavoidable plaintext residue
   // living outside both blob stores. What IS controllable is that they never
@@ -6960,6 +6980,135 @@ function handleAuthRenameAccount(accountId: string, label: string): AuthStatus {
 }
 
 /**
+ * The remembered unlock's whole environment (ADR-110): the OS keystore, this
+ * platform, and the clock. One literal, built per call — `rememberedUnlock.ts`
+ * imports no `electron` precisely so that every branch of the feature runs under
+ * Vitest, and this is the only place the two meet.
+ */
+function rememberedUnlockDeps(): RememberedUnlockDeps {
+  return { keystore: safeStorage, platform: process.platform, now: () => new Date() };
+}
+
+/**
+ * What the „Traži pristupni kod" row reads: the stored choice, plus whether this
+ * OS session can honour it at all. `reason` is computed here rather than stored
+ * because it is a fact about the MACHINE — the same account on the same disk
+ * answers differently under a different Windows session, and a stored reason
+ * would be yesterday's.
+ */
+function currentUnlockPolicy(): UnlockPolicy {
+  const deps = rememberedUnlockDeps();
+  const reason = rememberingProblem(deps);
+  if (activeAccountId === null) {
+    return { setting: DEFAULT_UNLOCK_SETTING, available: reason === null, reason };
+  }
+  return readUnlockPolicy(deps, activeAccountDir());
+}
+
+/**
+ * Opens the session from a REMEMBERED key, if this account has one that is still
+ * fresh (ADR-110). Runs once, from startup, after the IPC handlers are
+ * registered and before the window exists — so the renderer's first
+ * `auth:status` reports the session a user would have got by typing the
+ * passcode, instead of a locked account it would have to re-open.
+ *
+ * Everything that can go wrong here ends at the passcode prompt rather than in a
+ * refused launch. `takeRememberedKey` has already deleted and answered `null`
+ * for a wrap that has expired, one this Windows account cannot decrypt, and one
+ * whose plaintext is not a 256-bit key. The case left over is a remembered key
+ * that does not open THIS database — a `nexus.db` restored from a backup taken
+ * under an older key — and that is deliberately non-fatal: the wrap is forgotten
+ * and the passcode path, which can say something to the user, runs.
+ */
+async function adoptRememberedUnlock(): Promise<void> {
+  if (activeAccountId === null) return;
+  const dir = activeAccountDir();
+  const dataKeyHex = takeRememberedKey(rememberedUnlockDeps(), dir);
+  if (dataKeyHex === null) return;
+  try {
+    openEncrypted(dataKeyHex);
+  } catch (error) {
+    forgetRememberedKey(dir);
+    console.error(
+      "The remembered unlock did not open this database and has been forgotten: " +
+        (error instanceof Error ? error.message : String(error)),
+    );
+    return;
+  }
+  await adoptUnlockedKey(dataKeyHex);
+  startUnlockedServices();
+}
+
+/**
+ * Stores the „Traži pristupni kod" choice (ADR-110).
+ *
+ * The ORDER is the design, and every step of it is load-bearing:
+ *
+ * 1. This machine has to be able to honour a remembered wrap at all. The row is
+ *    drawn disabled for the two cases `rememberingProblem` names, but the
+ *    renderer is untrusted, so the refusal is enforced here too.
+ * 2. Anything weaker than „every time" needs the passcode ONCE MORE, verified
+ *    against the live session through `verifyPasscode` — the same call the
+ *    profile-switch gate uses, on the unlock's own throttle counter, because a
+ *    guess is a guess wherever it is typed. Re-selecting the value already
+ *    stored is not a change and asks for nothing.
+ * 3. Only then is the setting written — and the same proof is what produces the
+ *    first wrap, so a user who chooses „after 1 day" does not then have to lock
+ *    and unlock before it means anything.
+ */
+async function handleAuthSetUnlockPolicy(
+  setting: UnlockSetting,
+  passcode: string | undefined,
+): Promise<UnlockPolicyResult> {
+  if (activeAccountId === null) return { ok: false, reason: "notInitialized" };
+  const dir = activeAccountDir();
+  const deps = rememberedUnlockDeps();
+  if (rememberingProblem(deps) !== null) return { ok: false, reason: "keystoreUnavailable" };
+
+  try {
+    const current = readUnlockPolicy(deps, dir).setting;
+    const changes = setting !== current;
+    let dataKeyHex: string | null = null;
+    if (changes && settingNeedsPasscode(setting)) {
+      // An absent passcode is treated as a wrong one rather than refused
+      // separately: the only caller that can omit it is a renderer that ignored
+      // the form, and a missing field must not become a route to a weaker
+      // setting. The failed attempt it folds into the guard is the same cost a
+      // guess pays everywhere else in this file.
+      const clearedThrottle = await verifyPasscode(
+        dir,
+        passcode ?? "",
+        requireUnlockedDataKeyHex(),
+      );
+      if (clearedThrottle !== null) {
+        // NTF-007, exactly as the two unlock paths record it: this success just
+        // wiped the only evidence that the throttle ever tripped.
+        recordSecurityNotice({
+          kind: "unlock-throttle",
+          at: new Date().toISOString(),
+          ...clearedThrottle,
+        });
+        flushSecurityNotices();
+      }
+      dataKeyHex = requireUnlockedDataKeyHex();
+    }
+
+    const stored = storeUnlockPolicy(deps, dir, setting, dataKeyHex);
+    if (!stored) return { ok: false, reason: "keystoreUnavailable" };
+    return { ok: true, policy: readUnlockPolicy(deps, dir) };
+  } catch (error) {
+    if (!(error instanceof AuthError)) throw error;
+    if (error.reason === "throttled") {
+      // Recomputed rather than guessed: the throttle check that raised this left
+      // the guard untouched, so re-reading it here is exact, not stale — the
+      // same note `authResultFromError` carries.
+      return { ok: false, reason: error.reason, lockedForMs: readStatus(dir).lockedForMs };
+    }
+    return { ok: false, reason: error.reason };
+  }
+}
+
+/**
  * Deletes an account outright (ADR-048). The picker only offers this while
  * locked, but the renderer is untrusted, so deleting the SELECTED account is
  * handled properly rather than assumed away: it is `performLock()` first — the
@@ -7015,6 +7164,15 @@ async function handleAuthUnlock(passcode: string): Promise<AuthResult> {
         ...clearedThrottle,
       });
     }
+    // ADR-110: this is the moment the passcode was proved, so it is also the
+    // moment the remembered unlock may (re)start its clock. Rewritten rather
+    // than appended to, so exactly one key is ever remembered, for the interval
+    // the user chose.
+    if (activeAccountId !== null) {
+      const deps = rememberedUnlockDeps();
+      const dir = activeAccountDir();
+      storeUnlockPolicy(deps, dir, readUnlockPolicy(deps, dir).setting, dataKeyHex);
+    }
     flushSecurityNotices(); // whatever piled up while nothing was open
     return { ok: true };
   } catch (error) {
@@ -7045,6 +7203,11 @@ async function handleAuthRecover(recoveryCode: string, newPasscode: string): Pro
         ...clearedThrottle,
       });
     }
+    // ADR-110 §3: the Recovery Kit proved possession of the DATA KEY, not of the
+    // passcode — so it is a reason to forget a remembered wrap rather than to
+    // write one. A user who came through recovery has to type the passcode once
+    // more before the app remembers anything again.
+    forgetRememberedKey(activeAccountDir());
     flushSecurityNotices();
     return { ok: true };
   } catch (error) {
@@ -7063,6 +7226,13 @@ async function handleAuthChangePasscode(currentPasscode: string, nextPasscode: s
       recordSecurityNotice({ kind: "unlock-throttle", at, ...clearedThrottle });
     }
     recordSecurityNotice({ kind: "passcode-changed", at });
+    // ADR-110 §3: the passcode the remembered wrap was written under is gone.
+    // The wrap still opens this database — it is the DATA KEY inside it — so
+    // keeping it would leave the old passcode's convenience standing next to a
+    // new passcode the user has not yet used, which is exactly the state this
+    // feature's own promise („anyone at this Windows account can open it") would
+    // then be doing silently.
+    forgetRememberedKey(activeAccountDir());
     return { ok: true };
   } catch (error) {
     return authResultFromError(error, activeAccountDir());
@@ -7816,6 +7986,28 @@ function registerIpc(): void {
     await capturePrivBeforeSessionTeardown();
     performLock();
   });
+
+  ipcMain.handle(IpcChannel.authUnlockPolicy, (event): UnlockPolicy => {
+    assertTrustedSender(event);
+    return currentUnlockPolicy();
+  });
+
+  ipcMain.handle(
+    IpcChannel.authSetUnlockPolicy,
+    (event, payload): Promise<UnlockPolicyResult> => {
+      assertTrustedSender(event);
+      const body = asRecord(payload);
+      const setting = asUnlockSetting(body.setting, "setting");
+      // The passcode is OPTIONAL on the wire and required by the handler for
+      // anything weaker than the default. A validator that demanded it here
+      // would refuse the „every time" direction, which needs no passcode at
+      // all — so the structural check is „a string, if it is there", and
+      // `handleAuthSetUnlockPolicy` is the authority on when it must be.
+      const passcode =
+        body.passcode === undefined ? undefined : asPasscode(body.passcode, "passcode");
+      return handleAuthSetUnlockPolicy(setting, passcode);
+    },
+  );
 
   ipcMain.handle(IpcChannel.profilesList, (event): Profile[] => {
     assertTrustedSender(event);
@@ -14541,6 +14733,13 @@ app.whenReady().then(async () => {
     // succeeds (via `openEncrypted`), so every data channel's `requireDb()`
     // genuinely has nothing to hand back until the passcode is verified.
     registerIpc();
+
+    // ADR-110, the one exception to the sentence above, and deliberately AFTER
+    // the handlers are registered: a remembered unlock opens the database with
+    // no passcode typed, and doing it here means every channel exists before the
+    // session does — the renderer's first `auth:status` reads the finished state
+    // instead of racing this line for it.
+    await adoptRememberedUnlock();
 
     // ADR-014 / ADR-041: `blobMimeForHash` is the union over every table that
     // names a hash — an attachment row on either module, or a dashboard

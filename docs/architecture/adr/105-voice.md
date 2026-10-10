@@ -122,14 +122,15 @@ and two of them are refused on it:
   app. The older `rhasspy/piper` is MIT but **archived** (the API's
   `archived: true`, last push 2025-08-26) and it still phonemizes through
   `espeak-ng`, whose licence the API reports as **GPL-3.0** as well: the MIT
-  wrapper is not the program that runs. The Serbian Piper voice itself
+  wrapper is not the program that runs. The Piper voice filed under `sr`
   (`rhasspy/piper-voices` → `sr/sr_RS/serbski_institut/medium`, whose
   `MODEL_CARD` gives the dataset as
-  `https://creativecommons.org/licenses/by-nc-sa/4.0/`) is trained on espeak
-  phonemes (`phoneme_type: "espeak"`, `espeak.voice: "sr"` in its own
+  `https://creativecommons.org/licenses/by-nc-sa/4.0/` — and which the addendum
+  below shows is trained on **Lower Sorbian**, not Serbian, data) is trained on
+  espeak phonemes (`phoneme_type: "espeak"`, `espeak.voice: "sr"` in its own
   `.onnx.json`), so even though CC BY-NC-SA would be allowed for a pack, the
-  code that turns Serbian text into the phoneme ids it wants is the GPL program
-  this app may not ship.
+  code that turns text into the phoneme ids it wants is the GPL program this app
+  may not ship.
 - **`punosevacm/srpski-vits-finetuned-*` has no licence.** The three Serbian
   VITS fine-tunes on the Hub carry no `license` field at all, and the pack rules
   require evidence for every source. A well-meant upload with no licence
@@ -159,7 +160,7 @@ than on the whole answer, and the module must be able to show that it is
 speaking rather than waiting — a spinner over silence is the failure mode of
 every slow TTS.
 
-### Addendum, 2026-10-10: the Piper route, re-checked link by link
+### Addendum, 2026-10-10: the Piper route, re-checked link by link, and the name corrected below
 
 Luka decided on 10 October that a GPL program MAY ship as a separate `tool` pack
 (ADR-094: an unmodified upstream build, in its own signed folder, source
@@ -189,34 +190,55 @@ and what follows is measured, not read.
   `lang/zls/sr`, which is the Serbian dictionary the phonemizer needs. That
   zip is the GPL program espeak-ng, which ADR-094 allows as a SEPARATE tool
   pack and never inside the app.
-* **The voice is Serbian, and its own config is what says so.**
-  `rhasspy/piper-voices` — `sr/sr_RS/serbski_institut/medium`: its
+* **The folder says Serbia; the DATA is Lower Sorbian, and the dataset's own
+  README is what says so.** `rhasspy/piper-voices` —
+  `sr/sr_RS/serbski_institut/medium`: its
   [MODEL_CARD](https://huggingface.co/rhasspy/piper-voices/raw/main/sr/sr_RS/serbski_institut/medium/MODEL_CARD)
-  gives `Language: sr_RS (Serbian, Serbia)`, 2 speakers and 22 050 Hz, and names
-  the dataset `https://github.com/marytts/serbski-institut-dsb-data` under
-  [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/); the model's own
-  `.onnx.json` declares `language.family: "sr"`, `name_english: "Serbian"`,
-  `phoneme_type: "espeak"` and `espeak.voice: "sr"`. The FOLDER name proves
-  nothing by itself — this config does — and the non-commercial dataset licence is
-  the kind of source a pack may now carry.
+  gives `Language: sr_RS (Serbian, Serbia)`, 2 speakers and 22 050 Hz, names the
+  dataset `https://github.com/marytts/serbski-institut-dsb-data` under
+  [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) — and
+  adds, one line lower, „Finetuned from U.S. English lessac voice (medium
+  quality)". The model's own `.onnx.json` declares `phoneme_type: "espeak"`,
+  `espeak.voice: "sr"` and `audio.sample_rate: 22050` (fetched 2026-10-10).
+  **Read the dataset, not the card and not the folder.** The dataset
+  repository's own [README](https://github.com/marytts/serbski-institut-dsb-data)
+  — also fetched 2026-10-10 — opens „Lower Sorbian voice data for MaryTTS" and
+  describes a „Lower Sorbian speech database for TTS voices in MaryTTS, recorded
+  in 2022 at the Sorbian Institute" (`https://www.serbski-institut.de/`); its
+  copyright line names the Sorbian Institute. **`dsb` is the ISO 639 code of
+  Lower Sorbian** (Upper Sorbian is `hsb`), a West Slavic language of Lusatia in
+  Germany, and the Sorbian Institute is in Bautzen — not in Serbia and not
+  related to `sr`. So the weights are a fine-tune of an English voice on Lower
+  Sorbian speech, labelled `sr_RS` by the pipeline that published them.
+  (CORRECTION, 2026-10-10: an earlier version of this addendum read the same card
+  and concluded „the voice is Serbian, and its own config is what says so". A
+  card's language line is a claim about a folder; the dataset's README is
+  evidence about the recordings, and it says Lower Sorbian.)
 
-Two consequences for the voice service come straight off those files rather
-than from an assumption: the voice emits **22 050 Hz**, where every VITS voice in
-this build is 16 000 Hz, so its `voice.json` declares `sampleRate: 22050` and the
-service resamples on the way out; and the engine is driven as a PROGRAM —
-something like `piper.exe --model <voice>.onnx --output_file <wav>` with the text on
-stdin, reading text and writing a WAV file inside the folder the pack names —
+Two facts come straight off those files rather than from an assumption, and
+neither of them rescues the route: the voice emits **22 050 Hz**, where every VITS
+voice in this build is 16 000 Hz; and the engine is driven as a PROGRAM —
+something like `piper.exe --model <voice>.onnx --output_file <wav>` with the text
+on stdin, reading text and writing a WAV file inside the folder the pack names —
 which is ADR-094's own `stdio` protocol.
 
-**So the route holds, and what it needs is one focused piece of work**: a `tool`
-pack builder under `scripts/packs/piper/` in `scripts/packs/stockfish/`'s shape,
-pinning the zip above with its licence and source; a `voice` pack entry for
-sr_RS-serbski_institut-medium with its attribution; and the voice service's third
-engine, which speaks Serbian through the tool when both packs are installed.
-It is NOT built here: this addendum is what the integration run had evidence
-for, and the builder is a whole pack of its own (the download, the manifest,
-the voice entry, a fake-runner test and the tool invocation) rather than a
-line in somebody else's module.
+**So the route does NOT hold for Serbian, and §3's refusal stands.** A Piper
+voice trained on Lower Sorbian speech is not a Serbian voice: a Serbian sentence
+sent to it is not read in Serbian, however the card labels the folder and however
+`espeak.voice: "sr"` reads. **No Serbian offline voice with a licence this app
+may ship is known as of 2026-10-10**, and nothing §3 measured has changed: the
+VITS path is built, tested and proven, `mms-tts-eng` remains the only voice this
+repository can build, `textToSpeech().speak(text, "sr")` still refuses with
+`pack-missing`, and the day a Serbian voice appears with a shippable licence it
+is one entry in `scripts/packs/voice/sources.json` and one run of the builder.
+
+The `tool` pack mechanism this addendum re-checked is a separate finding and
+stands on its own: `rhasspy/piper`'s archived MIT Windows zip IS a shippable
+`tool` pack under ADR-094 (espeak-ng's data included), and it is NOT built here.
+It buys nothing for Serbian until a Serbian Piper voice exists, and when one
+does it is the same one focused piece of work this section named: a builder under
+`scripts/packs/piper/`, a `voice` pack entry with its attribution, and the voice
+service's third engine.
 ## 4. Where it runs: a `utilityProcess`, never main
 
 **The models run in an Electron `utilityProcess`,** and main only ever holds a
@@ -353,8 +375,9 @@ arithmetic:
 - **A renderer worker.** §4: no filesystem, and the renderer's network is dead
   on purpose.
 - **`espeak-ng` through a `tool` pack.** It would be legal to ship espeak-ng as
-  a separate `tool` pack of an unmodified upstream build, and Piper's Serbian
-  voice would then run — but it would run as an external program over a
+  a separate `tool` pack of an unmodified upstream build, and the Lower Sorbian
+  Piper voice (see the addendum) would then run — but it would run as an
+  external program over a
   phoneme-per-word pipe, in a feature that must work with no network, on a pack
   nobody has built, for one language. The complexity is not worth one voice,
   and the VITS path already works for every language that has a checkpoint.

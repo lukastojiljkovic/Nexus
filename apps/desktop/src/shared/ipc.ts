@@ -97,6 +97,13 @@ export const IpcChannel = {
   authCreateAdditional: "auth:create-additional",
   authRenameAccount: "auth:rename-account",
   authDeleteAccount: "auth:delete-account",
+  // ADR-110: how often the app asks for the passcode. Its own pair rather than
+  // fields on `auth:status`, because reading the setting is a Settings-card
+  // question and changing it is a passcode-verified action — and because
+  // `auth:status` is the first message of every launch, which must not grow a
+  // second reading of the account directory for a surface nobody has opened.
+  authUnlockPolicy: "auth:unlock-policy",
+  authSetUnlockPolicy: "auth:set-unlock-policy",
   profilesList: "profiles:list",
   profilesCreate: "profiles:create",
   // The demo profile, offered once at first run and never again — a second
@@ -1187,6 +1194,90 @@ export interface AuthStatus {
  */
 export type AuthResult =
   | { ok: true; recoveryCode?: string }
+  | { ok: false; reason: AuthErrorReason; lockedForMs?: number };
+
+/**
+ * How often the app asks for the passcode (ADR-110, Luka 2026-10-10).
+ *
+ * `"every-time"` is the default and the only value the app shipped before this
+ * existed. Every other member is a deliberate weakening, and its meaning is
+ * exact: after a successful passcode unlock the data key may live in the OS
+ * keystore for that long, so a launch inside the window opens without the
+ * prompt. `"never"` has no expiry at all, which is why it is a member of its own
+ * rather than a very large number.
+ *
+ * The union is the WIRE vocabulary, so it is declared here and in one place:
+ * main validates every payload against it, and the renderer keys its option
+ * labels by it, which is what makes a seventh setting a compile error on both
+ * sides rather than a value the UI cannot draw.
+ */
+export const UNLOCK_SETTINGS = ["every-time", "1h", "8h", "1d", "7d", "never"] as const;
+
+export type UnlockSetting = (typeof UNLOCK_SETTINGS)[number];
+
+/** The default, and the value `readStatus`-time absence of the policy file means. */
+export const DEFAULT_UNLOCK_SETTING: UnlockSetting = "every-time";
+
+/**
+ * Whether choosing `setting` has to be proved with the passcode (ADR-110 §1).
+ *
+ * The rule is the brief's, taken literally: anything weaker than the DEFAULT
+ * asks once more, and the default is „every time". The TARGET decides, not the
+ * direction of the change — moving from „never" to „after 1 hour" is a
+ * weaker-than-default state being entered, and it is asked for. Going back to
+ * „every time" needs nothing, which is also the case where a passcode would
+ * prove nothing: that act only tightens the machine.
+ *
+ * Declared here because BOTH sides ask it: main decides whether to verify, and
+ * the Settings row decides whether to draw the passcode field — and a second
+ * statement of the rule is exactly how those two come to disagree.
+ */
+export function settingNeedsPasscode(setting: UnlockSetting): boolean {
+  return setting !== DEFAULT_UNLOCK_SETTING;
+}
+
+/**
+ * Minutes each setting remembers the data key for; `null` means "with no
+ * expiry" and `0` means "not at all". The minutes are here, beside the union,
+ * so that „after 1 hour" is written down once — main's expiry arithmetic and the
+ * copy the user reads can then never disagree about what a member means.
+ */
+export const UNLOCK_SETTING_MINUTES: Record<UnlockSetting, number | null> = {
+  "every-time": 0,
+  "1h": 60,
+  "8h": 8 * 60,
+  "1d": 24 * 60,
+  "7d": 7 * 24 * 60,
+  never: null,
+};
+
+/**
+ * Why the setting cannot be honoured on this machine (ADR-110 §3). `"keystore"`
+ * is `safeStorage.isEncryptionAvailable() === false`; `"plaintext-backend"` is
+ * Linux's `basic_text` backend, where `safeStorage` answers that encryption IS
+ * available and then encrypts with a hard-coded key — so the wrap would be a
+ * file anyone can read, which is worse than no wrap at all because it looks
+ * protected. The renderer names the reason beside the disabled row.
+ */
+export type UnlockSettingUnavailableReason = "keystore" | "plaintext-backend";
+
+/** The setting as the Settings card reads it: the value, and whether this machine can honour it. */
+export interface UnlockPolicy {
+  setting: UnlockSetting;
+  available: boolean;
+  /** Non-null exactly when `available` is false. */
+  reason: UnlockSettingUnavailableReason | null;
+}
+
+/**
+ * `auth:set-unlock-policy`'s outcome. It answers with the STORED policy rather
+ * than a bare `ok`, so the card never has to re-read what main just wrote, and
+ * with an `AuthErrorReason` because that is what the renderer already maps to
+ * copy (`wrongPasscode`, `throttled`, `keystoreUnavailable`) — the refusal is
+ * the same refusal as an unlock's, on purpose.
+ */
+export type UnlockPolicyResult =
+  | { ok: true; policy: UnlockPolicy }
   | { ok: false; reason: AuthErrorReason; lockedForMs?: number };
 
 /** `label` names the account on the lock screen and is stored in plaintext (see `AccountSummary`); creation is refused outright once any account exists. */
@@ -9154,6 +9245,16 @@ export interface NexusApi {
   changePasscode(currentPasscode: string, nextPasscode: string): Promise<AuthResult>;
   /** Issues a fresh Recovery Kit code, invalidating the old one. Unlocked session only. */
   regenerateRecoveryCode(): Promise<AuthResult>;
+  /** ADR-110: how often the app asks for the passcode, and whether this machine can honour that at all. */
+  getUnlockPolicy(): Promise<UnlockPolicy>;
+  /**
+   * Stores the setting (ADR-110). Anything other than „every time" is weaker
+   * than the default, so it is accepted only with `passcode`, verified against
+   * the live session on the unlock's own throttle counter — and that proof is
+   * also the moment the data key is first wrapped. Going back to „every time"
+   * needs no passcode: a stronger setting is never a privilege.
+   */
+  setUnlockPolicy(setting: UnlockSetting, passcode?: string): Promise<UnlockPolicyResult>;
   /** Closes the database and drops the data key from memory. */
   lock(): Promise<void>;
   listProfiles(): Promise<Profile[]>;

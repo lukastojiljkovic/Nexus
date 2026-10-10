@@ -40,6 +40,9 @@ const api: NexusApi = {
   changePasscode: (currentPasscode, nextPasscode) =>
     ipcRenderer.invoke(IpcChannel.authChangePasscode, { currentPasscode, nextPasscode }),
   regenerateRecoveryCode: () => ipcRenderer.invoke(IpcChannel.authRegenerateRecovery),
+  getUnlockPolicy: () => ipcRenderer.invoke(IpcChannel.authUnlockPolicy),
+  setUnlockPolicy: (setting, passcode) =>
+    ipcRenderer.invoke(IpcChannel.authSetUnlockPolicy, { setting, passcode }),
   lock: () => ipcRenderer.invoke(IpcChannel.authLock),
   listProfiles: () => ipcRenderer.invoke(IpcChannel.profilesList),
   createProfile: (kind, name) =>

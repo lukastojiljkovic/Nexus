@@ -117,6 +117,10 @@ const SKELETON = [
   ...PACKAGES.map((dir) => `${dir}/package.json`),
   "apps/desktop/electron.vite.config.ts",
   GATE,
+  // The gate's own notice-reading half, which it imports: a scratch tree that
+  // held the entry point and not this file fails at IMPORT, before it can ask
+  // anything about the notices it was built to compare.
+  "apps/desktop/scripts/package-notice.mjs",
 ];
 
 /** Every `node_modules` of the real tree that the scratch tree links back to. */

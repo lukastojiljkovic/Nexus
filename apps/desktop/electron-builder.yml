@@ -126,6 +126,46 @@ files:
   - "!node_modules/node-llama-cpp/llama/gitRelease.bundle"
   - "!node_modules/@node-llama-cpp/*/bins/**/*"
   - "node_modules/@node-llama-cpp/${os}-${arch}*/bins/**/*"
+  # The voice worker's natives (ADR-105), brought in by @huggingface/transformers.
+  # Same shape again, and this time both of them are required FROM MODULE SCOPE,
+  # so neither can be left behind: the worker bundle electron-vite emits
+  # (`out/main/worker-*.js`) begins with `require("@huggingface/transformers")`,
+  # which resolves to the package's `node`+`require` entry
+  # `dist/transformers.node.cjs` — and that file calls
+  # `requireFromHere("onnxruntime-node")` and `require("sharp")` at module scope,
+  # before any `pipeline()` call. Measured on 2026-10-10, bytes summed over each
+  # package's files in `node_modules`:
+  #
+  #   onnxruntime-node 1.30.0, whole package        301.1 MB
+  #     bin/napi-v6/win32/x64                        67.1 MB   KEPT
+  #     bin/napi-v6/win32/arm64                      72.7 MB   DROPPED
+  #     bin/napi-v6/linux/x64                        46.2 MB   DROPPED
+  #     bin/napi-v6/linux/arm64                      25.5 MB   DROPPED
+  #     bin/napi-v6/darwin/arm64                     89.4 MB   DROPPED
+  #   sharp 0.35.5 (dist, src, LICENSE)               1.0 MB   KEPT
+  #   @img/sharp-win32-x64 0.35.5                    19.8 MB   KEPT
+  #   @img/colour 1.1.0                              0.07 MB   KEPT
+  #
+  # DROPPING THE OTHER PLATFORMS SAVES 234.0 MB and costs nothing: onnxruntime-node
+  # is ONE package that carries all five trees, which is also why the exclusion is
+  # needed here and was not for the two blocks above. Its discriminator is the same
+  # one — `${platform}`/`${arch}` are electron-builder's macros for the TARGET, so
+  # one list is correct on both hosts — and the shape is not cosmetic:
+  # `onnxruntime-node/dist/binding.js` builds its path as
+  # `../bin/napi-v6/${platform}/${arch}/onnxruntime_binding.node` from
+  # `process.platform`/`process.arch`, so those directories must survive verbatim.
+  #
+  # sharp is the one place the re-include names TWO packages, and that is Linux's
+  # doing: on Windows both libvips DLLs (19.0 MB of the 19.8) sit inside
+  # `@img/sharp-win32-x64/lib`, while on Linux the library is a separate
+  # `@img/sharp-libvips-linux-x64`. `sharp/dist/sharp.cjs` tries its own
+  # `src/build/Release` first (absent by design — `npmRebuild: false` and nothing
+  # builds it) and then `@img/sharp-${platform}-${arch}/sharp.node`.
+  - "!node_modules/onnxruntime-node/bin/napi-v6/*/*/**/*"
+  - "node_modules/onnxruntime-node/bin/napi-v6/${platform}/${arch}/**/*"
+  - "!node_modules/@img/sharp-*/**/*"
+  - "node_modules/@img/sharp-${platform}-${arch}/**/*"
+  - "node_modules/@img/sharp-libvips-${platform}-${arch}/**/*"
 
 asarUnpack:
   - node_modules/better-sqlite3-multiple-ciphers/**/*
@@ -136,6 +176,15 @@ asarUnpack:
   # (`llama.ts` explains why a `require` of it cannot work at all).
   - node_modules/node-llama-cpp/**/*
   - node_modules/@node-llama-cpp/**/*
+  # And the voice worker's, for the reasons above: a `.node` file cannot be
+  # loaded from inside the asar, and onnxruntime-node's loader builds its path
+  # from `process.platform`/`process.arch` at require time, so the directory
+  # layout under `bin/napi-v6/` has to survive verbatim. Whole packages, exactly
+  # as the two above — and `@img/**` covers the libvips files that live inside
+  # the sharp platform package on Windows and in their own package on Linux.
+  - node_modules/onnxruntime-node/**/*
+  - node_modules/sharp/**/*
+  - node_modules/@img/**/*
 
 npmRebuild: false
 

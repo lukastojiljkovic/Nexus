@@ -141,6 +141,15 @@ function shellEntries(): readonly ShellSettingsSearchEntry[] {
       keywords: ["zakljucavanje", "neaktivnost", "privatnost"],
     },
     {
+      id: "security-ask-passcode",
+      section: "security",
+      label: s.security.askPasscodeTitle,
+      // „pokretanje" is what the setting is about and what the row's own copy
+      // names, and „pin"/„sifra" are what a user who came looking for the
+      // passcode types — the same words the passcode row above carries.
+      keywords: ["pokretanje", "pristupni kod", "pin", "sifra", "cekaj"],
+    },
+    {
       id: "appearance-language",
       section: "appearance",
       // „jezik" is what a Serbian speaker types; „language" and „srpski" are

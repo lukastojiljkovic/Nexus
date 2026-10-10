@@ -38,9 +38,12 @@ import {
   BACKUP_CADENCES,
   BACKUP_KEEP_LAST_CHOICES,
   CSV_IMPORT_COLUMN_ROLES,
+  DEFAULT_UNLOCK_SETTING,
   LLM_IMPORT_KINDS,
   LLM_IMPORT_MAX_ANSWER_LENGTH,
   LLM_PROMPT_LANGUAGES,
+  UNLOCK_SETTINGS,
+  settingNeedsPasscode,
 } from "../../shared/ipc.js";
 import type {
   ApkgImportPreview,
@@ -80,6 +83,8 @@ import type {
   RestoreProblem,
   Subject,
   TaskList,
+  UnlockPolicy,
+  UnlockSetting,
 } from "../../shared/ipc.js";
 import { SYNC_ON_HOLD } from "../../shared/syncHold.js";
 import { authErrorMessage, passcodeMeetsPolicy, RecoveryKitPanel } from "./AuthGate.js";
@@ -4575,7 +4580,137 @@ function SecuritySection({ autoLockMinutes, onAutoLockChange, hits }: SecuritySe
         </Select>
         <p className="nx-hint">{s.autoLockHint}</p>
       </div>
+
+      <AskPasscodeRow hits={hits} />
     </>
+  );
+}
+
+/**
+ * „Traži pristupni kod" (ADR-110): how often the passcode is asked for.
+ *
+ * Reads its own state rather than taking it as a prop, because the choice is
+ * ACCOUNT-level and main owns it — the row above it is a per-profile
+ * `localStorage` preference, while this one lives in a file beside the key
+ * chain that main reads before the window exists, and only main can say whether
+ * this OS session can honour it at all. Nothing here is optimistic: a weaker
+ * choice is stored only after main has verified the passcode, and the row then
+ * shows what main actually stored.
+ */
+function AskPasscodeRow({ hits }: { hits: ReadonlySet<string> }) {
+  const s = strings.settings.security;
+  const [policy, setPolicy] = useState<UnlockPolicy | null>(null);
+  const [draft, setDraft] = useState<UnlockSetting>(DEFAULT_UNLOCK_SETTING);
+  const [passcode, setPasscode] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<SecurityMessage | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    window.nexus
+      .getUnlockPolicy()
+      .then((next) => {
+        if (!live) return;
+        setPolicy(next);
+        setDraft(next.setting);
+      })
+      .catch((error: unknown) => {
+        console.error("Nexus: failed to read the passcode policy:", error);
+        if (live) setMessage({ text: strings.auth.error.generic, failed: true });
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  /**
+   * Stores `next`, with the proof when main will want one. Whether it wants one
+   * is `settingNeedsPasscode` — the SAME function main decides with, so the
+   * field the user is shown and the field main insists on are one condition
+   * rather than two that agree today.
+   */
+  async function store(next: UnlockSetting, proof: string | undefined): Promise<void> {
+    setSaving(true);
+    setMessage(null);
+    try {
+      const result = await window.nexus.setUnlockPolicy(next, proof);
+      if (result.ok) {
+        setPolicy(result.policy);
+        setDraft(result.policy.setting);
+        setPasscode("");
+        setMessage({ text: s.askPasscodeSaved, failed: false });
+      } else {
+        setMessage({ text: authErrorMessage(result.reason), failed: true });
+      }
+    } catch (error) {
+      setMessage({ text: strings.auth.error.generic, failed: true });
+      console.error("Nexus: failed to store the passcode policy:", error);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const available = policy?.available ?? false;
+  const reason = policy?.reason ?? null;
+  const needsProof = policy !== null && draft !== policy.setting && settingNeedsPasscode(draft);
+
+  function choose(next: UnlockSetting): void {
+    setMessage(null);
+    setDraft(next);
+    // Going back to the default is the one choice that only TIGHTENS the
+    // machine, so it is the one applied on the click itself; every weaker choice
+    // waits for the passcode field that appears below it.
+    if (!settingNeedsPasscode(next)) void store(next, undefined);
+  }
+
+  return (
+    <div className={hits.has("security-ask-passcode") ? "set__field set__hit-field" : "set__field"}>
+      <Select
+        label={s.askPasscodeTitle}
+        layout="inline"
+        className="set__select"
+        value={draft}
+        disabled={!available}
+        onChange={(event) => choose(event.target.value as UnlockSetting)}
+      >
+        {UNLOCK_SETTINGS.map((setting) => (
+          <option key={setting} value={setting}>
+            {lookup(s.askPasscodeOptions, setting) ?? setting}
+          </option>
+        ))}
+      </Select>
+      <p className="nx-hint">{s.askPasscodeHint}</p>
+      {!available && reason !== null && (
+        <p className="nx-hint">{lookup(s.askPasscodeUnavailable, reason) ?? ""}</p>
+      )}
+      {needsProof && (
+        <>
+          <p className="nx-hint">{s.askPasscodeWarning}</p>
+          <form
+            className="set__security-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (saving) return;
+              void store(draft, passcode);
+            }}
+          >
+            <TextField
+              type="password"
+              label={s.askPasscodePasscodeLabel}
+              value={passcode}
+              required
+              onChange={(event) => setPasscode(event.target.value)}
+            />
+            <Button type="submit" size="sm" variant="primary" disabled={saving}>
+              {s.save}
+            </Button>
+          </form>
+        </>
+      )}
+      {message != null && (
+        <p className={message.failed ? "set__error" : "nx-hint"}>{message.text}</p>
+      )}
+    </div>
   );
 }
 

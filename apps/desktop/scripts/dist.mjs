@@ -19,10 +19,13 @@
 // build/gentoo/README.md).
 
 import { spawnSync } from "node:child_process";
+import { readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 
 import { assertSinglePrebuild } from "./packaged-binary.mjs";
+import { platformNoticeEntriesHere } from "./platform-notices.mjs";
+import { DEFAULT_DATA_FILE, renderNotices } from "./render-notices.mjs";
 
 const require = createRequire(import.meta.url);
 
@@ -73,6 +76,7 @@ run(process.execPath, [
 ]);
 
 assertPackagedBinary();
+writeTargetNotices();
 
 /**
  * Reads back what was actually packaged — `packaged-binary.mjs` owns the rule
@@ -91,4 +95,46 @@ function assertPackagedBinary() {
     console.error(`\n${error.message}`);
     process.exit(1);
   }
+}
+
+/**
+ * The third-party notices for the installer this run just built, written beside
+ * it as `release/THIRD-PARTY-NOTICES.md` (`directories.output` in
+ * `electron-builder.yml`).
+ *
+ * WHY THE COMMITTED NOTICES ARE NOT ENOUGH. `licences.json` — what the app's own
+ * Licence screen shows — is generated once and committed, so it must read the
+ * same on the Linux CI runner and in a Windows checkout, and the generator
+ * therefore leaves out every PLATFORM package (`isPlatformBuild`: `os` or `cpu`
+ * is declared, so the package installs only on the machine that can run it).
+ * Those are exactly the natives this installer carries most of:
+ * `@img/sharp-win32-x64`, 19 812 379 B measured on 2026-10-10 and most of it the
+ * two libvips DLLs, plus the `@node-llama-cpp/win-x64*` binaries. An installer
+ * that ships them without their notices has not discharged their licences, and
+ * the CI-rendered `release-docs/THIRD-PARTY-NOTICES.md` is built on a Linux
+ * runner that has never seen them.
+ *
+ * WHY HERE, AND NOT IN THE GENERATOR. This script runs on the machine it
+ * packages for — the header says why an installer is built by a platform that
+ * can run it — so the platform builds in this tree are the ones electron-builder
+ * just copied in, and `platform-notices.mjs` reads their notices off disk with
+ * the same code the committed file is built from. Nothing is invented and
+ * nothing is listed by hand.
+ *
+ * It throws rather than warns when pnpm's licence list cannot be read: a
+ * document that silently omits a package the installer carries is the defect
+ * this function exists to remove.
+ */
+function writeTargetNotices() {
+  const data = JSON.parse(readFileSync(DEFAULT_DATA_FILE, "utf8"));
+  const platform = platformNoticeEntriesHere();
+  const document = renderNotices({ packages: [...data.packages, ...platform], fonts: data.fonts });
+  const outFile = join("release", "THIRD-PARTY-NOTICES.md");
+  writeFileSync(outFile, document);
+  const names = platform.map((entry) => `${entry.name}@${entry.version}`).join(", ");
+  console.log(
+    `Packaging notices: ${outFile} carries ${data.packages.length + platform.length} packages` +
+      `, ${platform.length} of them platform builds this installer ships` +
+      (names === "" ? "." : ` (${names}).`),
+  );
 }

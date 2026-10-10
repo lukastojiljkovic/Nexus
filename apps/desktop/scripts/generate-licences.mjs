@@ -51,12 +51,20 @@
 // stripped, and nothing observes the clock, the platform or the filesystem's
 // directory order.
 
-import { spawnSync } from "node:child_process";
-import { readFileSync, readdirSync, statSync, mkdirSync, writeFileSync } from "node:fs";
+import { readFileSync, readdirSync, mkdirSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname, join, relative, sep } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { brotliDecompressSync } from "node:zlib";
+
+import {
+  byId,
+  normalise,
+  packageEntry,
+  pnpmLicences,
+  productionEntries,
+  within,
+} from "./package-notice.mjs";
 
 const require = createRequire(import.meta.url);
 const SCRIPTS_DIR = dirname(fileURLToPath(import.meta.url));
@@ -64,142 +72,22 @@ const APP_ROOT = join(SCRIPTS_DIR, "..");
 const REPO_ROOT = join(APP_ROOT, "..", "..");
 const OUTPUT = join(APP_ROOT, "src", "renderer", "src", "data", "licences.json");
 
-/** LF, no BOM, no trailing blank — the shape every notice is stored in. */
-function normalise(text) {
-  return text.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").trimEnd();
-}
-
-/**
- * A provenance string is always relative to the PACKAGE it names, never to the
- * repository: pnpm's store directory carries a peer-dependency hash that moves
- * between installs, and an entry's own name and version already say which
- * package the path is inside.
- */
-function within(packageDir, absolutePath) {
-  return relative(packageDir, absolutePath).split(sep).join("/");
-}
-
 // --- 1. the npm packages ------------------------------------------------------
 
 /**
- * pnpm's own entry point, when the process that launched this one is pnpm.
+ * Every production package that reaches a user, one entry each, read off disk.
  *
- * `npm_execpath` names the package manager that STARTED this process, and it is
- * not a synonym for pnpm. Under `pnpm test` it is pnpm's `.cjs` entry, which
- * `process.execPath` executes directly — no `.cmd` and no `shell: true`, which
- * is what keeps the call identical on Windows and CI. Under `npx vitest` it is
- * npm's `cli.js`, and the call below then runs `npm licenses list --prod --json
- * --filter @nexus/desktop`: npm has no `--filter`, so it exits 1, and the
- * message that comes out accuses pnpm of a failure npm caused. Measured, not
- * reasoned — the whole scripts suite is red under `npx vitest` and green under
- * `pnpm test`, from this one branch.
- *
- * `dnpm` and `pnpmx` would pass the test below, and that is deliberate: the
- * question is which package manager is running, and a name check that demanded
- * an exact string would be a list to keep. What it must not do is accept npm.
+ * The platform builds (`@img/sharp-win32-x64`, `@node-llama-cpp/win-x64`, …) are
+ * deliberately NOT here: each of them declares `os` or `cpu` and is installed
+ * only on the machine that can run it, so listing one would make the Linux CI
+ * tree and a Windows checkout disagree and `check:licences` red on one of them.
+ * What the installer of a given target ships of them is credited by the
+ * packaging step instead — `platform-notices.mjs`, called from `dist.mjs` — and
+ * both halves read their notices through `package-notice.mjs`, so there is one
+ * answer to „what is this package's notice" and not two.
  */
-function pnpmEntry() {
-  const execpath = process.env.npm_execpath;
-  return execpath !== undefined && /pnpm/i.test(execpath) ? execpath : null;
-}
-
-/**
- * `pnpm licenses list --prod --json`, run through Node rather than a shell
- * whenever the launcher is pnpm (see `pnpmEntry` above), and through the `pnpm`
- * binary otherwise.
- */
-function pnpmLicences() {
-  const viaNode = pnpmEntry();
-  const options = { cwd: REPO_ROOT, encoding: "utf8", maxBuffer: 256 * 1024 * 1024 };
-  const args = ["licenses", "list", "--prod", "--json", "--filter", "@nexus/desktop..."];
-  const result = viaNode
-    ? spawnSync(process.execPath, [viaNode, ...args], options)
-    : spawnSync("pnpm", args, { ...options, shell: process.platform === "win32" });
-  if (result.status !== 0) {
-    throw new Error(`pnpm licenses failed (${result.status}):\n${result.stderr ?? ""}`);
-  }
-  return JSON.parse(normalise(result.stdout));
-}
-
-/**
- * A package's own licence files, in name order. Concatenated rather than
- * picked from, because a dual-licensed package ships LICENSE-MIT *and*
- * LICENSE-APACHE and reproducing one of them would be reproducing half a notice.
- */
-const LICENCE_FILE = /^(licen[cs]es?|copying|unlicen[cs]e|notice)([-_.][a-z0-9]+)?(\.(md|txt|markdown|rst))?$/i;
-
-function licenceFiles(packageDir) {
-  return readdirSync(packageDir)
-    .filter((entry) => LICENCE_FILE.test(entry))
-    .filter((entry) => statSync(join(packageDir, entry)).isFile())
-    .sort();
-}
-
-/** Whether an `os` / `cpu` list (with npm's `!name` exclusions) admits `value`; an absent list admits all. */
-function admits(list, value) {
-  if (list === undefined) return true;
-  const values = Array.isArray(list) ? list : [list];
-  if (values.includes(`!${value}`)) return false;
-  return values.includes(value) || values.every((entry) => entry.startsWith("!"));
-}
-
-/**
- * Whether the package installs on only SOME of the machines that run this file:
- * the Linux CI that checks it and the Windows desktop that builds the installer,
- * both x64. Such a package is in one tree and not the other, so listing it
- * would make the generator disagree with itself across machines.
- */
-function isPlatformBuild(packageDir) {
-  const { os, cpu } = JSON.parse(readFileSync(join(packageDir, "package.json"), "utf8"));
-  return !(admits(os, "linux") && admits(os, "win32") && admits(cpu, "x64"));
-}
-
-/** One entry per package: what it is, what it declares, and the text we can prove. */
-function packageEntry(packageDir, declaredLicence) {
-  const manifest = JSON.parse(readFileSync(join(packageDir, "package.json"), "utf8"));
-  const files = licenceFiles(packageDir);
-  const notice = files
-    .map((file) => normalise(readFileSync(join(packageDir, file), "utf8")))
-    .filter((text) => text.length > 0)
-    .join("\n\n");
-  return {
-    id: `npm:${manifest.name}@${manifest.version}`,
-    name: manifest.name,
-    version: manifest.version,
-    licence: declaredLicence === "Unknown" ? "UNKNOWN" : declaredLicence,
-    notice,
-    // `declared-only` is an ADMITTED GAP, never a guess: the package states an
-    // id in its own manifest but ships no copy of the licence, so the id is
-    // reproduced and the text is not invented.
-    status: notice.length > 0 ? "file" : declaredLicence === "Unknown" ? "unknown" : "declared-only",
-    source:
-      notice.length > 0
-        ? files.join(", ")
-        : `package.json ("license": ${JSON.stringify(declaredLicence)}) — the package ships no licence file`,
-  };
-}
-
 function npmEntries() {
-  const byId = new Map();
-  for (const [declaredLicence, packages] of Object.entries(pnpmLicences())) {
-    for (const pkg of packages) {
-      // Type-only and our own — see the scoping rule at the top of this file.
-      if (pkg.name.startsWith("@types/") || pkg.name.startsWith("@nexus/")) continue;
-      for (const packageDir of pkg.paths) {
-        // A platform build (`@img/sharp-win32-x64`, `@node-llama-cpp/linux-x64`)
-        // declares `os` or `cpu` and is installed only where it runs, so it is a
-        // different list on Windows than on the Linux CI that checks this file;
-        // the generator would never agree with itself across machines. What the
-        // Windows installer ships of them is credited by its packaging step.
-        if (isPlatformBuild(packageDir)) continue;
-        const entry = packageEntry(packageDir, declaredLicence);
-        // pnpm lists one path per peer-dependency variant, so the same
-        // name@version arrives more than once; the directories are copies.
-        if (!byId.has(entry.id)) byId.set(entry.id, entry);
-      }
-    }
-  }
-  return [...byId.values()];
+  return productionEntries(pnpmLicences(), { platformBuilds: "skip" });
 }
 
 /** The Electron runtime — a devDependency that nevertheless lands in the installer. */
@@ -435,7 +323,6 @@ function fontEntries() {
 
 // --- 3. emit ------------------------------------------------------------------
 
-const byId = (a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 const payload = {
   packages: [...npmEntries(), electronEntry()].sort(byId),
   fonts: fontEntries().sort(byId),

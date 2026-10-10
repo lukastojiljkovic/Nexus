@@ -5959,6 +5959,29 @@ export const en = {
         "60": "After 1 hour",
         "0": "Never",
       } satisfies Record<string, string>,
+      askPasscodeTitle: "Ask for the passcode",
+      askPasscodeHint:
+        "Nexus asks for the passcode when it starts, unless less than the chosen time has passed since the last unlock. Locking the app forgets the remembered key, so the next launch asks for the passcode again.",
+      /** UNLOCK_SETTINGS members as option labels, keyed by the member itself. */
+      askPasscodeOptions: {
+        "every-time": "Every time Nexus starts",
+        "1h": "After 1 hour",
+        "8h": "After 8 hours",
+        "1d": "After 1 day",
+        "7d": "After 7 days",
+        never: "Never",
+      } satisfies Record<string, string>,
+      askPasscodeWarning:
+        "Anyone who can use this Windows account can open Nexus without the passcode for that long.",
+      askPasscodePasscodeLabel: "Passcode",
+      askPasscodeSaved: "The setting was saved.",
+      /** Keyed by UnlockSettingUnavailableReason, read through `lookup` so the table keeps literal keys. */
+      askPasscodeUnavailable: {
+        keystore:
+          "This computer cannot keep a key safely at the moment, so Nexus always asks for the passcode.",
+        "plaintext-backend":
+          "On this system the key would be stored as plain text, so Nexus always asks for the passcode.",
+      } satisfies Record<string, string>,
     },
     /** Theme-preference option labels; Dan/Noć reuse `strings.app.themeDan/themeNoc`. */
     appearance: {
