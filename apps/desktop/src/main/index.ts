@@ -41,6 +41,10 @@ import {
   writeNetworkMode,
 } from "./net/offline.js";
 import { createUpdateHttp, openReleasePage } from "./update/electron.js";
+import { createDownloadHttp } from "./download/electron.js";
+import { createDownloadService, freeSpaceBytes } from "./download/service.js";
+import { createZimHost, setZimHost, type ZimHost } from "./zim/host.js";
+import { createZimHttp, installExternalLinkRule, installZimProtocol } from "./zim/zimElectron.js";
 import { launchInstaller } from "./update/launch.js";
 import { RELEASE_PUBLIC_KEY_PEM } from "./update/releaseKey.js";
 import { createUpdateService, type UpdateService } from "./update/service.js";
@@ -870,6 +874,12 @@ protocol.registerSchemesAsPrivileged([
   // The private section's read protocol (PRIV v1 / ADR-057): same privileges,
   // entirely different gate — it serves ONLY while a section is unlocked.
   { scheme: "priv-blob", privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
+  // The offline library's read protocol (ADR-098): ZIM entries, one library per
+  // host, served by `main/zim/zimElectron.ts` from a file on this machine.
+  // `standard` is what gives the URL a host and a path at all (the library id
+  // and the entry), and `stream` is what lets a large image be answered without
+  // being held whole.
+  { scheme: "nx-zim", privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
 ]);
 
 // Stable product name so userData resolves to a clean, branded directory
@@ -5486,6 +5496,61 @@ function requireUpdateSession(): Session {
     throw new Error("Nexus update: the update session has not been created yet.");
   }
   return updateSessionFor;
+}
+
+// --- The ZIM service (ADR-098) ------------------------------------------------
+//
+// ONE service per launch, on `updateService`'s terms above: it owns every open
+// reader, the library index and the download bookkeeping, and it is the one
+// thing both the wiki module's handlers (`modules/wiki/main/register.ts`) and
+// the `nx-zim://` protocol handler consult — so „which file is
+// `wikipedia-sr-mini`" has one answer in this process.
+//
+// The DOWNLOAD service is built here because this feature is its first caller
+// (ADR-092 §4 says so in as many words). Its progress sink is deliberately
+// unused: `zim/host.ts` reads the staging file's size instead, which is the same
+// number read from the one place that cannot get ahead of the write. Its host
+// rule is the same `isSessionRequestAllowed` the session itself enforces, read
+// with the mode this LAUNCH came up under rather than the stored one.
+let zimHostInstance: ZimHost | null = null;
+
+function zimService(): ZimHost {
+  if (zimHostInstance !== null) return zimHostInstance;
+  const mode = (): ReturnType<typeof activeNetworkMode> =>
+    activeNetworkMode(runningNetworkMode, readNetworkMode(userDataDir()));
+  const allowed = (url: string): boolean => isSessionRequestAllowed(mode(), url);
+  zimHostInstance = createZimHost({
+    userData: userDataDir(),
+    mode,
+    isAllowedUrl: allowed,
+    http: createZimHttp(requireUpdateSession()),
+    downloads: createDownloadService({
+      userData: userDataDir(),
+      mode,
+      isAllowedUrl: allowed,
+      http: createDownloadHttp(requireUpdateSession()),
+      freeSpaceBytes,
+      onProgress: () => undefined,
+    }),
+    freeSpaceBytes,
+    // The dialog is main's, and that is the whole security shape of importing a
+    // file: the only way a path is ever named is that a person picked it in a
+    // native dialog this process opened (`packsIpc`'s arrangement).
+    pickZimFile: async () => {
+      const options: OpenDialogOptions = {
+        properties: ["openFile"],
+        title: shellStrings().zimDialogTitle,
+        filters: [{ name: shellStrings().zimFilterName, extensions: ["zim"] }],
+      };
+      const { canceled, filePaths } = mainWindow
+        ? await dialog.showOpenDialog(mainWindow, options)
+        : await dialog.showOpenDialog(options);
+      return canceled ? null : (filePaths[0] ?? null);
+    },
+    now: () => Date.now(),
+  });
+  setZimHost(zimHostInstance);
+  return zimHostInstance;
 }
 
 /**
@@ -12601,6 +12666,12 @@ function createWindow(): BrowserWindow {
     if (url !== win.webContents.getURL()) event.preventDefault();
   });
 
+  // ADR-098: a link inside a ZIM page is not the shell's business — the frame
+  // it was clicked in is, and `zim/external.ts` owns the rule (inside the ZIM
+  // stays inside, `http(s)` goes to the user's browser, everything else is
+  // dropped).
+  installExternalLinkRule(win.webContents);
+
   const devServerUrl = process.env.ELECTRON_RENDERER_URL;
   if (devServerUrl) {
     void win.loadURL(devServerUrl);
@@ -13725,6 +13796,10 @@ async function runDemoSeed(): Promise<void> {
 function shutdown(code: number): void {
   stopNotificationScheduler();
   moduleHost.sessionEnd();
+  // ADR-098: the ZIM readers hold file descriptors on library files — third
+  // party content rather than profile data, but a handle left open across a
+  // shutdown is still a handle nobody will close.
+  zimHostInstance?.closeAll();
   cancelIdleCompactions(); // same reasoning as `performLock` — about to close `db`
   try {
     db?.close();
@@ -13872,6 +13947,13 @@ app.whenReady().then(async () => {
     callback({ cancel: !isSessionRequestAllowed(runningNetworkMode, details.url) });
   });
   await updateSessionFor.setProxy({ mode: "direct" });
+
+  // ADR-098: the offline library's scheme handler, installed once, before any
+  // window exists — a page that loaded first could ask for an `nx-zim://` entry
+  // and be told nothing at all, which is what an unregistered scheme answers.
+  // Building the service here also means every `wiki:` handler already has one
+  // (they reach it through `zimHost()`).
+  installZimProtocol(zimService());
 
   try {
     // ADR-044, and strictly before anything answers the renderer: bring the
@@ -14108,6 +14190,7 @@ app.on("will-quit", () => {
   elecRunnerIpc?.dispose();
   stopNotificationScheduler();
   moduleHost.sessionEnd();
+  zimHostInstance?.closeAll(); // ADR-098, `shutdown`'s reason
   cancelIdleCompactions(); // same reasoning as `performLock` — about to close `db`
   clearRestoreState(); // likewise: decrypted archive bytes and a plaintext undo snapshot must not outlive the session
   try {

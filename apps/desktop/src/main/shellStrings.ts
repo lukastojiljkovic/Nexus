@@ -50,6 +50,8 @@ export interface ShellStrings {
   imageFilterName: string;
   packDialogTitle: string;
   packDialogButton: string;
+  zimDialogTitle: string;
+  zimFilterName: string;
   defaultAccountLabel: string;
   noteCopySuffix: string;
   backupProfileSlugFallback: string;
@@ -123,6 +125,14 @@ const SR: ShellStrings = {
   packDialogTitle: "Izaberi fasciklu paketa",
   packDialogButton: "Izaberi ovu fasciklu",
   /**
+   * The ZIM file picker (ADR-098). A pack is a FOLDER and a ZIM is one FILE, so
+   * the two dialogs say which of the two is being chosen rather than sharing the
+   * pack's words — a title that said „fasciklu" over a file picker would be the
+   * wrong promise.
+   */
+  zimDialogTitle: "Izaberi ZIM datoteku",
+  zimFilterName: "ZIM datoteke",
+  /**
    * The label given to an account nobody named (`accounts.ts`'s
    * `defaultAccountLabel`, ADR-044 section 3) - renameable from the picker, so
    * a generic name costs the user one rename and never costs them their data.
@@ -152,6 +162,8 @@ const EN: ShellStrings = {
   imageFilterName: "Image",
   packDialogTitle: "Choose a pack folder",
   packDialogButton: "Choose this folder",
+  zimDialogTitle: "Choose a ZIM file",
+  zimFilterName: "ZIM files",
   defaultAccountLabel: "My account",
   noteCopySuffix: " (copy)",
   backupProfileSlugFallback: "profile",

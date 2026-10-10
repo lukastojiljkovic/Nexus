@@ -67,6 +67,12 @@ const LOCAL_SCHEMES: readonly string[] = [
   // `protocol.handle`. They never leave the process.
   "nx-blob:",
   "priv-blob:",
+  // The offline library's read scheme (ADR-098): ZIM entries, served from a file
+  // on this machine by `protocol.handle` in `main/zim/zimElectron.ts`. Nothing
+  // about it leaves the process either — it is the sandboxed frame's only
+  // possible source, which is what lets a pack's HTML be rendered with every
+  // other origin blocked by its own CSP.
+  "nx-zim:",
 ];
 
 /**
@@ -413,6 +419,35 @@ export const DOWNLOAD_HOSTS: readonly string[] = [
   "api.github.com",
   "github.com",
   "release-assets.githubusercontent.com",
+  // --- Kiwix, for the offline library (ADR-098) ---------------------------
+  //
+  // Three hosts, each checked with a real request on 2026-10-10, and each the
+  // host of something this app actually asks for:
+  //
+  //   - `opds.library.kiwix.org`    the catalogue (OPDS 1.2 / Atom), answered 200
+  //     with `application/atom+xml;profile=opds-catalog`
+  //   - `lb.download.kiwix.org`     a pack's `.zim.meta4` (Metalink 4, RFC 5854),
+  //     answered 200; the SAME host 302-redirects a `.zim` to a mirror, and this
+  //     app never follows that hop — it reads the mirror list out of the
+  //     Metalink and picks a host from THIS list
+  //   - `mirror.download.kiwix.org` the Kiwix project's own mirror, answered 200
+  //     with `content-length: 2029773550` and `accept-ranges: bytes` for the
+  //     Serbian Wikipedia mini pack
+  //
+  // WHAT IS DELIBERATELY ABSENT, and why the list can be this short: the
+  // catalogue's other mirrors are not stable names. A real `.meta4` for
+  // `gutenberg_sr_all_2026-01` ranked `mirror.accum.se`, `ftp.nluug.nl` and
+  // `mirror.download.kiwix.org`, and the research run measured the same pack's
+  // redirect chain ending on two different hosts in the same week. A pinned list
+  // cannot name them, so `catalog.ts`'s `pickMirror` walks the file's OWN
+  // priority order and takes the first host this list admits — which is the
+  // project's mirror, on purpose: it is the one name that belongs to Kiwix
+  // rather than to whichever volunteer is fastest this afternoon, and a download
+  // that cannot reach it fails with a sentence rather than by following a
+  // redirect out of the allowlist (ADR-092, rule 2).
+  "opds.library.kiwix.org",
+  "lb.download.kiwix.org",
+  "mirror.download.kiwix.org",
 ];
 
 /** The bare-host-name shape both lists are allowed to contain: labels, dots, no wildcard, no port, no scheme. */

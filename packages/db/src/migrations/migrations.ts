@@ -86,6 +86,7 @@ import { migration080 } from "./080-arcade-scores.js";
 // exactly three places — this import, the list entry below, and the file name.
 import { migration081 } from "./081-card-games.js";
 import { migration082 } from "./082-chess.js";
+import { migration088 } from "./088-wiki.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -179,6 +180,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration080,
   migration081,
   migration082,
+  migration088,
 ];
 
 /**
