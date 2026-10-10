@@ -150,6 +150,9 @@ describe("createModuleRegistry", () => {
       // The second discovered module, ordered after TIMERS by its own
       // `ModuleManifest.order`.
       "drawings",
+      // The second discovered module, and the second line of the same kind: the
+      // LAB declares `order: 330`, so it registers after `timers` and its 100.
+      "lab",
     ]);
   });
 
@@ -271,6 +274,9 @@ describe("createModuleRegistry", () => {
       // Opening an AutoCAD drawing is its own subject rather than a second
       // reading of another prefix, so DRAW is this module's own entry.
       DRAW: ["drawings"],
+      // The LAB takes its own prefix for the reason above: an instrument drawer
+      // is not a second reading of the utility belt.
+      LAB: ["lab"],
     });
   });
 
@@ -373,6 +379,8 @@ describe("createModuleRegistry", () => {
       "workshop",
       // The second discovered module, in the group it declares (ADR-090).
       "drawings",
+      // The LAB declares `make`, after the professional drawer (ADR-093).
+      "lab",
     ]);
     // â€žKultura" is its own group (ADR-093), and the first module to fill it.
     expect(grouped.get("culture")?.map((manifest) => manifest.id)).toEqual(["culture"]);
@@ -473,6 +481,9 @@ describe("createModuleRegistry", () => {
       // The drawings viewer stores nothing at all - it reads a file and prints
       // one - so there is nothing about it to opt into either.
       "drawings",
+      // ON by default too: the LAB writes nothing until a log is created, and
+      // the microphone and the serial port are each opened by a click.
+      "lab",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");

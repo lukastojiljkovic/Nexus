@@ -1870,6 +1870,19 @@ describe("RestoreStore", () => {
       //    what this machine once read.
       "wiki_history",
       "wiki_bookmarks",
+      //  - the LAB module's three tables (migration 089, ADR-090's kit): the
+      //    same structural exemption Timers' three have, and for the same
+      //    reason. `RESTORE_WIPE_TABLES` is DERIVED into `@nexus/sync`'s
+      //    collection map, which `collectionGuard.test.ts` holds equal to it,
+      //    and a kit module may not edit `@nexus/sync` — so a module replaces
+      //    its OWN rows inside the same restore, through
+      //    `ModuleContext.importData` (`main/restore.ts` calls
+      //    `restoreModuleData` right after the wipes). An archive that names no
+      //    Lab section therefore leaves a profile with no logs and no budget,
+      //    exactly as an archive written before this module did.
+      "lab_logs",
+      "lab_samples",
+      "lab_offgrid",
     ]);
 
     const wipeTables = new Set<string>(RESTORE_WIPE_TABLES);

@@ -31,6 +31,15 @@ import { readFileBounded } from "./boundedRead.js";
 // near the bottom of this file. Why a rule about who may ask is its own file
 // rather than a line here: `scannerMedia.ts`'s own header.
 import { allows as allowsScannerMedia, appMediaOrigins } from "./scannerMedia.js";
+// The LAB module's two Electron-shaped facts: the serial port picker, and the
+// save dialog its two file ops write through. The module's own `register.ts` is
+// electron-free so it stays testable, which is why the wiring is one call here
+// rather than an import inside the module (`modules/lab/main/electron.ts`).
+import { installLabElectron } from "../modules/lab/main/electron.js";
+import {
+  allows as labAllowsSerial,
+  appOrigin as labAppOrigin,
+} from "../modules/lab/main/serialPermission.js";
 import {
   activeNetworkMode,
   devServerOrigin,
@@ -14334,15 +14343,18 @@ app.whenReady().then(async () => {
   // (`modules/signals/main/permission.ts`: `media`, audio only, main frame only,
   // this app's own page only), and the SCANNER the camera
   // (`main/scannerMedia.ts`: `media`, video only, this app's own origin only).
-  // A request is allowed when ONE module's rule allows it; every other
-  // permission name still reaches `callback(false)`.
+  // The LAB opens a serial port (`modules/lab/main/serialPermission.ts`:
+  // `serial`, this app's own origin only). A request is allowed when ONE
+  // module's rule allows it; every other permission name still reaches
+  // `callback(false)`.
   const devOrigin = devServerOrigin(process.env);
   const mediaOrigins = appMediaOrigins(process.env);
   session.defaultSession.setPermissionRequestHandler((contents, permission, callback, details) => {
     callback(
       recorderAllowsRequest(permission, details, devOrigin, Date.now()) ||
         signalsAllowsMicrophone(permission, details.requestingUrl, details, devOrigin) ||
-        allowsScannerMedia(permission, contents.getURL(), details, mediaOrigins),
+        allowsScannerMedia(permission, contents.getURL(), details, mediaOrigins) ||
+        labAllowsSerial(permission, labAppOrigin(contents.getURL(), process.env), details),
     );
   });
   session.defaultSession.setPermissionCheckHandler(
@@ -14357,8 +14369,13 @@ app.whenReady().then(async () => {
         requestingOrigin === "" ? (contents?.getURL() ?? null) : requestingOrigin,
         details,
         mediaOrigins,
-      ),
+      ) ||
+      labAllowsSerial(permission, labAppOrigin(requestingOrigin, process.env), details),
   );
+  // The LAB's session wiring: the serial port picker (a dialog listing the
+  // ports, because a device on somebody's desk is never opened without a click)
+  // and the save dialog its file ops use. It touches no permission handler.
+  installLabElectron(session.defaultSession);
 
   // SEC-NET: the three runtime layers of the cloud-off boundary. The fourth
   // (`host-resolver-rules`) went on at module scope; `net/offline.ts` carries

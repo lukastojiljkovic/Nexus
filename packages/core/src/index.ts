@@ -2980,3 +2980,85 @@ export {
 export type { ImageSize } from "./workshop/images/resize.js";
 export { NO_EXIF_SUMMARY, readExifSummary } from "./workshop/images/exif.js";
 export type { ImageExifSummary } from "./workshop/images/exif.js";
+
+// --- LAB (the hardware drawer: serial, battery, sound, light) --------------
+//
+// The module's own arithmetic, assembled from files that each answer one
+// question — which is why they are separate modules rather than one `lab.ts`:
+// a sentence parser, a line assembler, a report reader, a waveform, a
+// spreadsheet and a command line have nothing in common except the page that
+// shows them.
+//
+// `powercfg.ts` is `@nexus/core`'s SECOND command table (the first is
+// `electronics/runner.ts`), and it is here rather than beside the spawn for the
+// reason that file gives: a program name written where the process is started
+// is a command line assembled rather than selected (DEV-007).
+export {
+  mergeNmeaFix,
+  nmeaChecksum,
+  parseNmeaSentence,
+} from "./lab/nmea.js";
+export type {
+  NmeaFix,
+  NmeaParseResult,
+  NmeaProblem,
+  NmeaReading,
+} from "./lab/nmea.js";
+
+export { BAUD_RATES, LINE_ENDINGS, splitSerialChunk, toHexView } from "./lab/serialLines.js";
+export type { LineEnding, SplitChunk } from "./lab/serialLines.js";
+
+export {
+  MAX_SENSOR_COLUMNS,
+  MAX_SENSOR_NAME_LENGTH,
+  formatSensorCsv,
+  formatSensorValue,
+  sensorColumnName,
+  parseSensorHeader,
+  parseSensorLine,
+} from "./lab/sensorLines.js";
+export type { SensorCsvRow } from "./lab/sensorLines.js";
+
+export { batteryHealth, parseBatteryReport } from "./lab/batteryReport.js";
+export type { BatteryInfo, BatteryReport, BatteryUsageEntry } from "./lab/batteryReport.js";
+
+export {
+  MAX_FREQUENCY_HZ,
+  MAX_SAMPLE_RATE,
+  MAX_WAVE_FRAMES,
+  MIN_FREQUENCY_HZ,
+  MIN_SAMPLE_RATE,
+  PINK_FILTER,
+  WAVE_KINDS,
+  newPinkState,
+  pinkStep,
+  renderWave,
+  sampleWave,
+  sweepFrequency,
+} from "./lab/waveform.js";
+export type {
+  PhaseWaveKind,
+  PinkState,
+  RenderedWave,
+  WaveKind,
+  WaveRequest,
+} from "./lab/waveform.js";
+
+export {
+  daysOfPower,
+  deviceWhPerDay,
+  requiredCapacityWh,
+  requiredPanelWatts,
+  usableWh,
+  whPerDay,
+} from "./lab/offgrid.js";
+export type { OffGridDevice } from "./lab/offgrid.js";
+
+export { lampOnAt } from "./lab/lamps.js";
+
+export {
+  BATTERY_REPORT_FLAGS,
+  BATTERY_REPORT_FORMAT,
+  POWERCFG_PROGRAM,
+  batteryReportArgv,
+} from "./lab/powercfg.js";

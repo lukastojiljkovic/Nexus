@@ -179,6 +179,10 @@ export const SERBIAN_SOURCES = [
     reason: "a kit module's own Serbian table, with the `copy.en.ts` rule 1 reads beside it",
   },
   {
+    match: /^apps\/desktop\/src\/modules\/[^/]+\/main\/dialogCopy\.ts$/,
+    reason: "a kit module's NATIVE-dialog copy, which main composes before any renderer exists — the `{ sr, en }` pairs sit in one file for the same reason `main/shellStrings.ts` keeps its two languages together, and `mainLocale()` picks one",
+  },
+  {
     match: /^packages\/core\/src\/miniapps\/typing\.ts$/,
     reason: "the Serbian Latin keyboard the typing tutor drills — `š`, `đ`, `č`, `ć` and `ž` are keys of its layout and its lessons, not copy",
   },

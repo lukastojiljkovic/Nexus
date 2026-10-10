@@ -31,6 +31,12 @@ export type IconName =
   | "fitness"
   | "canvas"
   | "electronics"
+  // The Lab's own mark, and the reason it is a THIRD instrument glyph rather
+  // than a reused one: `electronics` is a chip (the module that places parts)
+  // and `tools` is a ruler (the drawer that measures), while this module is what
+  // READS a signal — so the shape is a square wave on a baseline, which is what
+  // a generator produces and a scope draws.
+  | "lab"
   | "tools"
   | "pro"
   // The drawing viewer's mark, and the only one drawn as an INSTRUMENT rather
@@ -291,6 +297,16 @@ const SHAPES: Record<IconName, ReactNode> = {
       <path d="M17 12h3" />
       <path d="M17 15h3" />
       <path d="M9.5 8.5h0" />
+    </>
+  ),
+  // A square wave on its own baseline: two full periods, drawn as straight
+  // segments and nothing else. It is the one shape in this set that says
+  // „a signal somebody is generating or reading" rather than „a thing somebody
+  // owns", which is what the Lab is.
+  lab: (
+    <>
+      <path d="M3.4 14h3V8h4.6v6h4.6V8h5" />
+      <path d="M3.4 19.4h17.2" />
     </>
   ),
   // A ruler: UTIL is converters and calculators, so it measures.

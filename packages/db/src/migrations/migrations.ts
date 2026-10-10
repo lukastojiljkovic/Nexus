@@ -101,6 +101,12 @@ import { migration091 } from "./091-boards.js";
 // this import, the list entry below, and the file name.
 import { migration087 } from "./087-maps.js";
 import { migration088 } from "./088-wiki.js";
+// 089 — the LAB module's tables. The numbers between this one and 082 are
+// reserved by sibling runs in flight on the same branch, so the list has a GAP
+// here in this worktree: the maintainer renumbers at merge, which is why the
+// number appears in exactly three places — this import, the list entry below,
+// and the file name.
+import { migration089 } from "./089-lab.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -205,6 +211,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration091,
   migration087,
   migration088,
+  migration089,
 ];
 
 /**

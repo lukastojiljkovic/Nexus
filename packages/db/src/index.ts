@@ -1379,3 +1379,41 @@ export type {
   WikiHistoryEntry,
   WikiPlaceInput,
 } from "./wiki/wikiStore.js";
+
+// --- LAB (migration 089, ADR-090's kit) -------------------------------------
+//
+// THREE tables and one store: a named sensor log, the readings inside it, and
+// the profile's off-grid budget. The readings reach a profile only through their
+// log, so every sample statement here resolves that log first
+// (migration 089's `recording_markers` arrangement) — and the off-grid row is a
+// single row per profile because a budget is computed from the whole list.
+//
+// Its error classes live beside it rather than in `errors.ts`, on
+// `TimersStore`'s terms: a module built on the kit adds nothing to the package's
+// shared vocabulary, and both extend the same `DatabaseError`.
+//
+// Deliberately NOT in `RESTORE_WIPE_TABLES`: a kit module replaces its own rows
+// through `ModuleContext.importData` (`docs`-free: the reason is in `LabStore.
+// replaceFromArchive` and in the module's `main/register.ts`), and that list is
+// held equal to `@nexus/sync`'s collection map, which a module may not edit.
+export {
+  LAB_EXPORT_VERSION,
+  LabNotFoundError,
+  LabStore,
+  LabValidationError,
+  MAX_LAB_APPEND_BATCH,
+  MAX_LAB_BATTERY_WH,
+  MAX_LAB_DEVICES,
+  MAX_LAB_DEVICE_NAME_LENGTH,
+  MAX_LAB_DEVICE_WATTS,
+  MAX_LAB_LOGS,
+  MAX_LAB_LOG_NAME_LENGTH,
+  MAX_LAB_SAMPLES,
+  MAX_LAB_SAMPLES_READ,
+} from "./lab/labStore.js";
+export type {
+  LabLog,
+  LabOffGrid,
+  LabOffGridDevice,
+  LabSample,
+} from "./lab/labStore.js";
