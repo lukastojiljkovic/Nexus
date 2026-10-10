@@ -79,21 +79,25 @@ describe("loadPlanetTextures", () => {
 
     expect(calls.map((call) => call.url)).toEqual([
       "pack://planet-textures/images/earth-day.webp",
+      "pack://planet-textures/images/earth-night.webp",
       "pack://planet-textures/images/saturn-day.webp",
       "pack://planet-textures/images/saturn-rings.webp",
     ]);
     expect(loaded.earth?.day).not.toBeNull();
+    expect(loaded.earth?.night).not.toBeNull();
     expect(loaded.earth?.rings).toBeNull();
     expect(loaded.saturn?.rings).not.toBeNull();
-    expect(resources.size).toBe(3);
+    expect(resources.size).toBe(4);
     expect(resources.has(loaded.earth?.day as THREE.Texture)).toBe(true);
+    expect(resources.has(loaded.earth?.night as THREE.Texture)).toBe(true);
     expect(resources.has(loaded.saturn?.rings as THREE.Texture)).toBe(true);
   });
 
-  it("does not fetch Earth's night map, which nothing draws yet", () => {
+  it("fetches Earth's night map, which the terminator now draws", () => {
     const { port, calls } = stubPort();
-    loadPlanetTextures(LAYOUT, port, new SceneResources(), () => undefined, () => undefined);
-    expect(calls.some((call) => call.url.includes("night"))).toBe(false);
+    const loaded = loadPlanetTextures(LAYOUT, port, new SceneResources(), () => undefined, () => undefined);
+    expect(calls.some((call) => call.url.includes("earth-night"))).toBe(true);
+    expect(loaded.earth?.night).not.toBeNull();
   });
 
   it("ignores a body this contract does not know", () => {
@@ -120,11 +124,12 @@ describe("loadPlanetTextures", () => {
     for (const call of calls) call.onReady();
     expect(loaded).toEqual([
       ["earth", "day"],
+      ["earth", "night"],
       ["saturn", "day"],
       ["saturn", "rings"],
     ]);
     expect(failed).toEqual([]);
-    const rings = calls[2];
+    const rings = calls[3];
     if (rings === undefined) throw new Error("the ring image was not requested");
     rings.onFailed();
     expect(failed).toEqual([["saturn", "rings"]]);

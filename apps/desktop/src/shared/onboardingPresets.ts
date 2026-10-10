@@ -128,6 +128,11 @@ export const ESSENTIALS_MODULE_PRESET: Readonly<Record<string, boolean>> = {
   // And the puzzles, on the same terms: a board stores nothing until a game is
   // started, so nothing about it asks to be opted into either.
   puzzles: true,
+  // The astronomy corner, decided here like every other selectable module: it
+  // stores nothing at all (its place is a device preference and its textures are
+  // an optional pack), so there is nothing here to opt into and „Osnovno" turns
+  // it on exactly as the manifest's `defaultEnabled` says.
+  astronomy: true,
 };
 
 /**

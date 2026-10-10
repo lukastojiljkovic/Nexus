@@ -109,6 +109,66 @@ function vectorLength(vector: Vector3): number {
 }
 
 /**
+ * Which bodies are satellites, and of what.
+ *
+ * ONE entry, and it is the contract's own `OrbitPath.parent` relation rather
+ * than a second one: the Moon is the only body in `contract.ts` whose orbit is
+ * another body's. Stated once here so `placeBodies` (which places the dot) and
+ * the scene (which draws the line) reach the same rule through the same name,
+ * which is what makes the two agree rather than merely look alike.
+ */
+export const SATELLITES: readonly { readonly id: BodyId; readonly parent: BodyId }[] = [
+  { id: "moon", parent: "earth" },
+];
+
+/**
+ * How far a satellite's offset from its parent is stretched, in scene units.
+ *
+ * In readable mode this is the distance that clears both enlarged spheres: the
+ * two drawn radii plus {@link SATELLITE_CLEARANCE_UNITS}. The number is the
+ * GAP, not the length, because the offset itself is normalised to it.
+ *
+ * In true scale the layout needs no clearance — the linear map already keeps
+ * the Moon outside the Earth — and the answer is the gap the readable layout
+ * would have kept, which `satelliteOffsetUnits` ignores on that branch. It is
+ * answered rather than thrown on because the two callers that ask it hold a
+ * snapshot and a scale, not a mode.
+ */
+export function satelliteClearanceUnits(
+  parent: BodyState,
+  satellite: BodyState,
+  scale: SolarScale,
+): number {
+  return bodyRadiusUnits(parent, scale) + bodyRadiusUnits(satellite, scale) + SATELLITE_CLEARANCE_UNITS;
+}
+
+/**
+ * One satellite's offset from its parent, in scene units — the ONE transform
+ * the dot and the drawn orbit line both use.
+ *
+ * True scale multiplies, because the layout's distance map is linear there.
+ * Readable scale normalises the offset and scales it to the clearance, so the
+ * direction from the parent survives exactly and the length is the same for
+ * every point of the orbit.
+ *
+ * A zero offset has no direction to be pushed along; staying at the parent is
+ * the only answer that does not invent one.
+ */
+export function satelliteOffsetUnits(
+  offsetAu: Vector3,
+  clearanceUnits: number,
+  scale: SolarScale,
+): Vector3 {
+  const length = vectorLength(offsetAu);
+  if (scale === "true") {
+    return [offsetAu[0] * TRUE_UNITS_PER_AU, offsetAu[1] * TRUE_UNITS_PER_AU, offsetAu[2] * TRUE_UNITS_PER_AU];
+  }
+  if (length === 0) return [0, 0, 0];
+  const factor = clearanceUnits / length;
+  return [offsetAu[0] * factor, offsetAu[1] * factor, offsetAu[2] * factor];
+}
+
+/**
  * One position in scene units, in the layout's own measure.
  *
  * The direction is exact in both layouts: the point is scaled by a factor that
@@ -152,28 +212,29 @@ export function placeBodies(
 ): ReadonlyMap<BodyId, Vector3> {
   const placed = new Map<BodyId, Vector3>();
   for (const body of snapshot.bodies) placed.set(body.id, scenePosition(body.position, scale));
-  if (scale === "true") return placed;
 
-  const earth = snapshot.bodies.find((body) => body.id === "earth");
-  const moon = snapshot.bodies.find((body) => body.id === "moon");
-  if (earth === undefined || moon === undefined) return placed;
-  const earthAt = placed.get("earth");
-  const moonAt = placed.get("moon");
-  if (earthAt === undefined || moonAt === undefined) return placed;
-
-  const offset: Vector3 = [moonAt[0] - earthAt[0], moonAt[1] - earthAt[1], moonAt[2] - earthAt[2]];
-  const separation = vectorLength(offset);
-  const clearance =
-    bodyRadiusUnits(earth, scale) + bodyRadiusUnits(moon, scale) + SATELLITE_CLEARANCE_UNITS;
-  // A placeholder that happens to sit exactly on its parent has no direction to
-  // be pushed along; leaving it alone is the only answer that does not invent one.
-  if (separation === 0 || separation >= clearance) return placed;
-
-  const lift = clearance / separation;
-  placed.set("moon", [
-    earthAt[0] + offset[0] * lift,
-    earthAt[1] + offset[1] * lift,
-    earthAt[2] + offset[2] * lift,
-  ]);
+  // Every satellite is placed from its parent's mapped position plus the
+  // STRETCHED OFFSET, in both layouts: in true scale that is exactly the
+  // radial map, and in readable mode it is the rule the doc comment above
+  // describes. Taking the offset from the raw heliocentric positions (rather
+  // than from the two mapped ones) is what makes the transform a function of
+  // the offset alone, which is what the drawn orbit line relies on.
+  for (const { id, parent } of SATELLITES) {
+    const parentBody = snapshot.bodies.find((body) => body.id === parent);
+    const satellite = snapshot.bodies.find((body) => body.id === id);
+    const parentAt = placed.get(parent);
+    if (parentBody === undefined || satellite === undefined || parentAt === undefined) continue;
+    const offset: Vector3 = [
+      satellite.position[0] - parentBody.position[0],
+      satellite.position[1] - parentBody.position[1],
+      satellite.position[2] - parentBody.position[2],
+    ];
+    const units = satelliteOffsetUnits(
+      offset,
+      satelliteClearanceUnits(parentBody, satellite, scale),
+      scale,
+    );
+    placed.set(id, [parentAt[0] + units[0], parentAt[1] + units[1], parentAt[2] + units[2]]);
+  }
   return placed;
 }

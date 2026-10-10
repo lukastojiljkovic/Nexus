@@ -27,6 +27,15 @@ export interface SolarPalette {
   readonly sun: string;
   /** A body with no texture — a neutral tone, never a missing-colour black. */
   readonly body: string;
+  /**
+   * The tint the pack's night-lights map is drawn at on the Earth's dark side.
+   *
+   * The map is a photograph of city lights: nearly black with bright pixels, so
+   * this multiplies rather than replaces and the lights come out the accent's
+   * warm gold in both themes instead of a photographic white that would read as
+   * a second light source.
+   */
+  readonly nightLights: string;
   /** An unselected orbit line. */
   readonly orbit: string;
   /** The orbit of the selected body. */
@@ -44,6 +53,7 @@ export function solarPalette(theme: ThemeName): SolarPalette {
   return {
     sun: tokens.accentStrong,
     body: tokens.textSubtle,
+    nightLights: tokens.accentStrong,
     orbit: tokens.textFaint,
     orbitSelected: tokens.accent,
     rings: tokens.textMuted,

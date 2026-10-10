@@ -262,6 +262,10 @@ describe("resolveModuleSelection", () => {
       puzzles: true,
       // And the car service book, which writes nothing until a vehicle is added.
       car: true,
+      // The astronomy corner, decided here like every other selectable module
+      // and last in registry order: it stores nothing at all, so its manifest
+      // default is the whole decision.
+      astronomy: true,
     });
   });
 
@@ -328,6 +332,7 @@ describe("moduleFlagWrites", () => {
       { moduleId: "puzzles", enabled: true },
       { moduleId: "boards", enabled: true },
       { moduleId: "chess", enabled: true },
+      { moduleId: "astronomy", enabled: true },
     ]);
   });
 

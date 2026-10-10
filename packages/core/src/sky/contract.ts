@@ -49,6 +49,20 @@ export interface SolarSystemSnapshot {
 export interface OrbitPath {
   readonly id: BodyId;
   readonly points: readonly Vector3[];
+  /**
+   * The body these points are offsets FROM, for a satellite.
+   *
+   * A planet's points are heliocentric, like every position in this contract.
+   * The Moon's are not, and cannot usefully be: the engine has no orbital
+   * elements for it (it is the Earth's satellite, not a planet), and its
+   * heliocentric path over one lunar month is an arc of the Earth's orbit with
+   * small wiggles rather than a closed loop. So a path that names a `parent`
+   * carries geocentric offsets, and a view draws it around the parent it names —
+   * which is also what lets the drawn dot and the drawn line use one transform
+   * (see the module's `scale.ts`). Absent means heliocentric, as every planet's
+   * path is.
+   */
+  readonly parent?: BodyId;
 }
 
 export interface LatLon {
