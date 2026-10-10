@@ -90,9 +90,52 @@ files:
   # the unpacked output afterwards and refuses to leave one behind.
   - "!node_modules/better-sqlite3-multiple-ciphers/prebuilds/*"
   - "node_modules/better-sqlite3-multiple-ciphers/prebuilds/${platform}-${arch}.node"
+  # node-llama-cpp, the assistant's inference engine (ADR-096). Same shape as the
+  # SQLite block above and for the same reason: everything out, then exactly what
+  # this platform can load back in. Measured on 2026-10-10, bytes summed over
+  # each package's files:
+  #
+  #   node-llama-cpp (JS, templates, llama sources)  4.2 MB
+  #   node-llama-cpp/llama/gitRelease.bundle        33.6 MB   DROPPED
+  #   @node-llama-cpp/win-arm64                     10.5 MB   DROPPED
+  #   @node-llama-cpp/win-x64                       29.3 MB
+  #   @node-llama-cpp/win-x64-vulkan                70.9 MB
+  #   @node-llama-cpp/win-x64-cuda                 167.9 MB
+  #   @node-llama-cpp/win-x64-cuda-ext             350.9 MB
+  #                                                 623.2 MB ADDED
+  #
+  # `gitRelease.bundle` is dropped for the SQLite amalgamation's reason: it is a
+  # git bundle of the llama.cpp release tree, shipped so the package CAN be built
+  # from source, and this app never builds it — `getLlama` is called with
+  # `build: "never"` and `skipDownload: true` (`assistant/runtime/llama.ts`), so a
+  # machine with no working prebuilt binary gets a clear refusal rather than a
+  # compiler, a download, or a network request. The REST of `llama/` stays, and
+  # that is not tidiness: `dist/bindings/utils/binariesGithubRelease.js` reads
+  # `llama/binariesGithubRelease.json` in a module-scope top-level await, so
+  # dropping the directory would make `import("node-llama-cpp")` throw before a
+  # single token is generated.
+  #
+  # The CUDA pair is KEPT, and that is a choice worth naming rather than a
+  # default: 518.8 MB of the 622.9 MB this adds serves a backend that requires the
+  # user to have installed CUDA Toolkit 13.1+ (`docs/guide/CUDA.md` at v3.22.1),
+  # and that FAILED its own load test on the machine this was built on —
+  # `getLlamaGpuTypes("supported")` answers `["vulkan", false]` there. It is kept
+  # because upstream ships exactly `${os}-${arch}*` and a user who has the toolkit
+  # would otherwise have no way to get CUDA acceleration at all; dropping the two
+  # lines is the one-line change if the installer's size wins.
+  - "!node_modules/node-llama-cpp/llama/gitRelease.bundle"
+  - "!node_modules/@node-llama-cpp/*/bins/**/*"
+  - "node_modules/@node-llama-cpp/${os}-${arch}*/bins/**/*"
 
 asarUnpack:
   - node_modules/better-sqlite3-multiple-ciphers/**/*
+  # The llama.cpp binaries, and the WHOLE package rather than its `bins/` alone.
+  # Node cannot load a native addon from inside an asar, and the worker loads
+  # `node-llama-cpp` itself by an absolute path into `app.asar.unpacked` — which
+  # is also what keeps an ESM-only package out of the asar's path resolution
+  # (`llama.ts` explains why a `require` of it cannot work at all).
+  - node_modules/node-llama-cpp/**/*
+  - node_modules/@node-llama-cpp/**/*
 
 npmRebuild: false
 
