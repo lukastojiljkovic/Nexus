@@ -4,18 +4,28 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
+  activeNetworkMode,
+  allowedHostsFor,
+  DOWNLOAD_HOSTS,
   cloudRequiresRestart,
   cloudSwitchIsUnset,
   cloudSwitchPath,
   devServerOrigin,
+  isBareHostName,
+  isHttpsHostAllowed,
   isRequestAllowed,
+  isSessionRequestAllowed,
+  modeAllowsDownloads,
+  modeAllowsUpdates,
   networkChoiceRecorded,
   networkModePath,
   networkModeRequiresRestart,
   readCloudSwitch,
+  readNetworkChoice,
   readNetworkMode,
   resolverRules,
   shouldBlockResolver,
+  type NetworkMode,
   UPDATE_HOSTS,
   updatesActive,
   writeCloudSwitch,
@@ -104,13 +114,16 @@ describe("the request allowlist", () => {
     expect(isRequestAllowed("http://localhost:5174/x", [], origin)).toBe(false);
   });
 
-  it("cancels the update hosts for the renderer in BOTH modes", () => {
+  it("cancels the allowlisted hosts for the renderer in EVERY mode", () => {
     // ADR-089's whole shape, as one assertion: the renderer's rule takes no
-    // network mode, because the mode never widens it. The three hosts the
-    // UPDATE session is allowed to reach are cancelled by the renderer's rule
-    // exactly as they were in 1.4.0 — only `ses.fetch` on the dedicated session
-    // can use them, and this function is what the `defaultSession` installs.
-    for (const host of UPDATE_HOSTS) {
+    // network mode, because the mode never widens it — and ADR-092's third mode
+    // does not change that, which is the whole of „offline only stays exactly
+    // as strong as it is". The hosts the dedicated session may reach — the
+    // update list AND the download list, which contains it — are cancelled by
+    // the renderer's rule exactly as they were in 1.4.0; only `ses.fetch` on
+    // that session can use them, and this function is what the `defaultSession`
+    // installs.
+    for (const host of [...UPDATE_HOSTS, ...DOWNLOAD_HOSTS]) {
       expect(isRequestAllowed(`https://${host}/x`, [], null), host).toBe(false);
       expect(isRequestAllowed(`https://${host}/x`, [], "http://localhost:5173")).toBe(false);
     }
@@ -173,7 +186,7 @@ describe("the device-level switch", () => {
   });
 });
 
-describe("the network mode (ADR-089)", () => {
+describe("the network mode (ADR-089, ADR-092)", () => {
   it("is offline, and unrecorded, before anything has been written", () => {
     // Both halves of the first-run rule: the boundary is the strong one, and
     // the choice screen has not been answered. An upgrading user hits this
@@ -184,13 +197,18 @@ describe("the network mode (ADR-089)", () => {
     expect(resolverRules(userData)).toBe("MAP * ~NOTFOUND");
   });
 
-  it("round-trips both modes", () => {
+  it("round-trips every mode", () => {
     writeNetworkMode(userData, "updates");
     expect(readNetworkMode(userData)).toBe("updates");
     expect(networkChoiceRecorded(userData)).toBe(true);
 
     writeNetworkMode(userData, "offline");
     expect(readNetworkMode(userData)).toBe("offline");
+    expect(networkChoiceRecorded(userData)).toBe(true);
+
+    writeNetworkMode(userData, "downloads");
+    expect(readNetworkMode(userData)).toBe("downloads");
+    expect(readNetworkChoice(userData)).toBe("downloads");
     expect(networkChoiceRecorded(userData)).toBe(true);
   });
 
@@ -257,6 +275,13 @@ describe("the network mode (ADR-089)", () => {
     expect(networkModeRequiresRestart("updates", "offline")).toBe(true);
     expect(networkModeRequiresRestart("offline", "offline")).toBe(false);
     expect(networkModeRequiresRestart("updates", "updates")).toBe(false);
+    // The third mode is fixed at launch for the same reason the second is —
+    // `host-resolver-rules` is a command-line switch — so both directions need
+    // a restart here too, and a no-op change is still not a change.
+    expect(networkModeRequiresRestart("updates", "downloads")).toBe(true);
+    expect(networkModeRequiresRestart("downloads", "updates")).toBe(true);
+    expect(networkModeRequiresRestart("downloads", "offline")).toBe(true);
+    expect(networkModeRequiresRestart("downloads", "downloads")).toBe(false);
   });
 
   it("lets updates reach the network only when launch and stored choice agree", () => {
@@ -278,5 +303,165 @@ describe("the network mode (ADR-089)", () => {
     expect(readNetworkMode(userData)).toBe("offline");
     expect(networkChoiceRecorded(userData)).toBe(false);
     expect(existsSync(networkModePath(userData))).toBe(false);
+  });
+
+  it("parses the third mode, and still fails closed on a mode it has never heard of", () => {
+    // The version did NOT move when the third mode arrived, because that number
+    // describes the file's shape rather than its vocabulary — which is exactly
+    // what ADR-089 said it was for. And the third row is the one that keeps this
+    // honest the other way: a file a LATER build wrote (version 2, whatever its
+    // mode) is a dialect this build must not guess at, so it falls through to
+    // offline and „no valid choice recorded" like any corrupt file.
+    for (const contents of [
+      '{"version":1,"mode":"cloud"}',
+      '{"version":1,"mode":"Downloads"}',
+      '{"version":1,"mode":"downloads "}',
+      '{"version":2,"mode":"downloads"}',
+    ]) {
+      writeFileSync(networkModePath(userData), contents, "utf8");
+      expect(readNetworkMode(userData), `contents: ${contents}`).toBe("offline");
+      expect(networkChoiceRecorded(userData), `contents: ${contents}`).toBe(false);
+    }
+  });
+
+  it("names the mode a launch may ACT on, and no mode at all while a restart is owed", () => {
+    expect(activeNetworkMode("offline", "offline")).toBe("offline");
+    expect(activeNetworkMode("updates", "updates")).toBe("updates");
+    expect(activeNetworkMode("downloads", "downloads")).toBe("downloads");
+    // Every disagreement is a stored change, and a stored change is a restart
+    // owed: until it happens the launch keeps the boundary it started with, and
+    // the answer that can never be too wide is „offline". Switching DOWN to
+    // offline is therefore immediate, and switching up waits — the same
+    // asymmetry ADR-089 chose for the update check.
+    const disagreements: readonly (readonly [NetworkMode, NetworkMode])[] = [
+      ["updates", "offline"],
+      ["offline", "updates"],
+      ["downloads", "offline"],
+      ["offline", "downloads"],
+      ["downloads", "updates"],
+      ["updates", "downloads"],
+    ];
+    for (const [running, stored] of disagreements) {
+      expect(activeNetworkMode(running, stored), `${running}/${stored}`).toBe("offline");
+    }
+  });
+
+  it("keeps the update check in the widest mode, and gives it to no other mode", () => {
+    // ADR-092's superset order, as the two predicates every guard reads.
+    expect(modeAllowsUpdates("offline")).toBe(false);
+    expect(modeAllowsUpdates("updates")).toBe(true);
+    expect(modeAllowsUpdates("downloads")).toBe(true);
+    expect(modeAllowsDownloads("offline")).toBe(false);
+    expect(modeAllowsDownloads("updates")).toBe(false);
+    expect(modeAllowsDownloads("downloads")).toBe(true);
+
+    expect(updatesActive("downloads", "downloads")).toBe(true);
+    expect(updatesActive("downloads", "updates")).toBe(false);
+    expect(updatesActive("downloads", "offline")).toBe(false);
+  });
+});
+
+describe("the two host lists", () => {
+  it("holds bare host names and nothing else, which is what keeps https-only structural", () => {
+    // The whole of the list's own rule, over BOTH lists so a host added to
+    // either is held to it: a scheme, a port, a path or a `*` fails this, and
+    // the https requirement is not stated here because it cannot be — a bare
+    // host name has no scheme, so the scheme rule lives in
+    // `isHttpsHostAllowed` below, which is the only thing that reads a list.
+    for (const host of [...UPDATE_HOSTS, ...DOWNLOAD_HOSTS]) {
+      expect(isBareHostName(host), host).toBe(true);
+    }
+    for (const notAHost of [
+      "https://api.github.com",
+      "api.github.com:443",
+      "*.github.com",
+      "github.com/releases",
+      "GitHub.com",
+      "",
+    ]) {
+      expect(isBareHostName(notAHost), notAHost).toBe(false);
+    }
+  });
+
+  it("makes the download list a superset of the update list, so the wider mode cannot cost the narrower one its exception", () => {
+    // The invariant that makes „add a host with one line" safe. `"downloads"`
+    // contains `"updates"`, so every host the update check is allowed must be in
+    // the download list as well — otherwise a user who moved UP to downloads
+    // would silently lose the update check they already had.
+    for (const host of UPDATE_HOSTS) {
+      expect(DOWNLOAD_HOSTS, host).toContain(host);
+    }
+  });
+});
+
+describe("the dedicated session's host rule (ADR-089, ADR-092)", () => {
+  it("admits https requests to exactly the hosts the launch's mode names", () => {
+    for (const host of UPDATE_HOSTS) {
+      expect(isSessionRequestAllowed("updates", `https://${host}/some/path?q=1`), host).toBe(true);
+      // The superset order, not a coincidence: the same host is admitted in the
+      // wider mode, which is what lets one session serve both.
+      expect(isSessionRequestAllowed("downloads", `https://${host}/some/path?q=1`), host).toBe(true);
+    }
+    for (const host of DOWNLOAD_HOSTS) {
+      expect(isSessionRequestAllowed("downloads", `https://${host}/x`), host).toBe(true);
+    }
+    // The session rule is about HOSTS; the repository is pinned one layer up,
+    // by `release.ts`'s asset-URL prefix. A github.com path outside this
+    // repository is admitted here and refused there, which is the split that
+    // keeps the resolver's EXCLUDE list and the session's list identical.
+    expect(isSessionRequestAllowed("updates", "https://github.com/other/repo/x")).toBe(true);
+  });
+
+  it("refuses every host the launch's mode does not name, including lookalikes", () => {
+    for (const url of [
+      "https://example.com/",
+      "https://evil-api.github.com/",
+      "https://api.github.com.evil.tld/",
+      "https://github.com.evil.tld/",
+      "https://raw.githubusercontent.com/",
+      "https://objects.githubusercontent.com/",
+    ]) {
+      expect(isSessionRequestAllowed("updates", url), url).toBe(false);
+      expect(isSessionRequestAllowed("downloads", url), url).toBe(false);
+    }
+  });
+
+  it("refuses anything that is not https, including an upgraded-looking port", () => {
+    for (const url of [
+      "http://api.github.com/",
+      "http://github.com/lukastojiljkovic/Nexus/releases/download/x",
+      "ws://github.com/",
+      "https://api.github.com:8443/",
+      // No scheme, an unparseable URL, and a bare word.
+      "api.github.com",
+      "http://[",
+      "",
+    ]) {
+      expect(isSessionRequestAllowed("updates", url), url).toBe(false);
+      expect(isSessionRequestAllowed("downloads", url), url).toBe(false);
+      expect(isHttpsHostAllowed(url, DOWNLOAD_HOSTS), url).toBe(false);
+    }
+  });
+
+  it("reaches nothing at all in offline mode, the hosts it allows elsewhere included", () => {
+    // The assertion behind „offline only stays exactly as strong as it is": the
+    // dedicated session is not merely unused in offline mode, it is dead — its
+    // rule refuses the two other modes' own hosts.
+    expect(allowedHostsFor("offline")).toBeNull();
+    for (const host of [...UPDATE_HOSTS, ...DOWNLOAD_HOSTS]) {
+      expect(isSessionRequestAllowed("offline", `https://${host}/x`), host).toBe(false);
+    }
+  });
+
+  it("admits the wider list only in the wider mode", () => {
+    // Vacuously true today, because the download list IS the update list — and
+    // that is the point: the day a content host is appended (ADR-092 says
+    // Kiwix's will be), this test is what proves the one-line change admitted
+    // it in `"downloads"` without admitting it in `"updates"`.
+    const addedByDownloads = DOWNLOAD_HOSTS.filter((host) => !UPDATE_HOSTS.includes(host));
+    for (const host of addedByDownloads) {
+      expect(isSessionRequestAllowed("downloads", `https://${host}/x`), host).toBe(true);
+      expect(isSessionRequestAllowed("updates", `https://${host}/x`), host).toBe(false);
+    }
   });
 });

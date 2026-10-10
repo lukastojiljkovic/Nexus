@@ -212,26 +212,34 @@ export function cloudSwitchIsUnset(userData: string): boolean {
   return !existsSync(cloudSwitchPath(userData));
 }
 
-// ── The network mode (ADR-089) ────────────────────────────────────────────
+// ── The network mode (ADR-089, ADR-092) ──────────────────────────────────
 //
 // A SECOND device-level switch, beside cloud.json, and a narrower one: it does
 // not decide whether Nexus may reach a server — cloud does that, and there is
-// no server yet — it decides whether Nexus may reach GitHub to check for and
-// download a new version of ITSELF. The product's default is `"offline"`,
-// which is byte-for-byte the 1.4.0 boundary: the resolver maps every name to
-// NOTFOUND and no session is given a host to talk to.
+// no server yet — it decides which of three things Nexus may reach ON ITS OWN:
+// nothing (`"offline"`, the product's default and byte-for-byte the 1.4.0
+// boundary), GitHub, to check for and download a new version of ITSELF
+// (`"updates"`), or that plus a download the user starts from a compiled-in
+// host list (`"downloads"`, ADR-092).
+//
+// THE THREE MODES ARE ORDERED, AND EACH IS A SUPERSET OF THE ONE BEFORE. That
+// is what makes the choice explainable in one sentence to a user, and it is why
+// the third mode cost the update check nothing: everything `"updates"` allows,
+// `"downloads"` allows too. It is also why a fourth mode, if one ever arrives,
+// will not have to re-decide the three that exist.
 //
 // It is NOT a boolean, and `version` is not decoration. The file is a small
-// forward-compatible record (`{"version":1,"mode":"offline"|"updates"}`) so a
-// later release can add a `"cloud"` mode — or any third value — by teaching
-// this parser about it, without a migration pass over every device. The
-// parser is fail-closed on EVERY kind of doubt, exactly as `readCloudSwitch`
-// is: a missing file, an unreadable one, malformed JSON, a version this build
-// does not understand, a mode that is not literally one of the two — each
-// answers `"offline"`.
+// forward-compatible record whose mode is one of `"offline"`, `"updates"` and
+// `"downloads"`, so a later release can add a mode by teaching this parser
+// about it, without a migration pass over every device — which is how the third
+// one arrived, with the version UNCHANGED, because that number describes the
+// file's SHAPE and the shape did not move. The parser is fail-closed on EVERY
+// kind of doubt, exactly as `readCloudSwitch` is: a missing file, an unreadable
+// one, malformed JSON, a version this build does not understand, a mode that is
+// not literally one of the three — each answers `"offline"`.
 
 /** Which network mode this device is in. `"offline"` is the default and the fail-closed answer. */
-export type NetworkMode = "offline" | "updates";
+export type NetworkMode = "offline" | "updates" | "downloads";
 
 /** The one version this build writes and understands. A future version is a future parser. */
 const NETWORK_MODE_VERSION = 1;
@@ -272,6 +280,7 @@ export function readNetworkChoice(userData: string): NetworkMode | null {
   if (record.version !== NETWORK_MODE_VERSION) return null;
   if (record.mode === "offline") return "offline";
   if (record.mode === "updates") return "updates";
+  if (record.mode === "downloads") return "downloads";
   return null;
 }
 
@@ -329,9 +338,39 @@ export function networkModeRequiresRestart(from: NetworkMode, to: NetworkMode): 
   return from !== to;
 }
 
-/** Updates may reach the network only when this launch came up in "updates" AND the stored choice is still "updates". */
+/**
+ * The mode this launch may ACT on: the one it came up under, and only for as
+ * long as the stored choice still names it.
+ *
+ * A stored change is a restart owed, not a live change — the resolver block and
+ * the session's rule were both built at launch — so between the moment the user
+ * saves a different mode and the moment they restart, the honest answer to
+ * "which mode is running" is NONE. That is why a disagreement answers
+ * `"offline"` rather than either side of it: it is the one mode that can never
+ * be too wide, and the user's own choice takes effect the moment the process
+ * comes back up in it.
+ */
+export function activeNetworkMode(running: NetworkMode, stored: NetworkMode): NetworkMode {
+  return running === stored ? running : "offline";
+}
+
+/**
+ * The update check may reach the network in `"updates"` and in `"downloads"`,
+ * because the modes are a superset chain — the third mode does not take the
+ * update check away, it adds downloads to it.
+ */
+export function modeAllowsUpdates(mode: NetworkMode): boolean {
+  return mode === "updates" || mode === "downloads";
+}
+
+/** Updates may reach the network only while the launch and the stored choice agree on a mode that allows them. */
 export function updatesActive(running: NetworkMode, stored: NetworkMode): boolean {
-  return running === "updates" && stored === "updates";
+  return modeAllowsUpdates(activeNetworkMode(running, stored));
+}
+
+/** Downloads may reach the network in `"downloads"` alone — the widest mode, and the only one that adds to `"updates"`. */
+export function modeAllowsDownloads(mode: NetworkMode): boolean {
+  return mode === "downloads";
 }
 
 /**
@@ -354,18 +393,110 @@ export const UPDATE_HOSTS: readonly string[] = [
 ];
 
 /**
+ * The hosts a DOWNLOAD may reach, matched exactly as the update hosts are.
+ *
+ * A compiled-in constant, never fetched and never widened at runtime: the whole
+ * point of the mode is that the set of reachable names is a fact about the
+ * binary rather than about a manifest that arrived over the wire. For now it is
+ * exactly the three update hosts — a download is the release asset's sibling
+ * case, and the content hosts (Kiwix's, and whatever a later run researches and
+ * pins) are appended here when they exist.
+ *
+ * ADDING A HOST IS ONE LINE BELOW, and the test beside this module holds the
+ * two invariants that make that line safe: every entry is a bare host name —
+ * https-only, no scheme, no port, no wildcard, no slash — and `UPDATE_HOSTS` is
+ * a subset of this list, because `"downloads"` is a superset of `"updates"` and
+ * a list that had drifted narrower would take the update check away from a user
+ * who chose the wider mode.
+ */
+export const DOWNLOAD_HOSTS: readonly string[] = [
+  "api.github.com",
+  "github.com",
+  "release-assets.githubusercontent.com",
+];
+
+/** The bare-host-name shape both lists are allowed to contain: labels, dots, no wildcard, no port, no scheme. */
+const HOST_NAME_PATTERN = /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/;
+
+/** True when `host` is a bare lower-case host name and nothing else. Exported for the list test. */
+export function isBareHostName(host: string): boolean {
+  return HOST_NAME_PATTERN.test(host);
+}
+
+/**
+ * The one URL rule every host list is read through: **https only, and the host
+ * matched EXACTLY**.
+ *
+ * `parsed.host` includes a port, so `api.github.com:8443` is refused, and an
+ * equality test refuses `evil-api.github.com` and `api.github.com.evil.tld` as
+ * well — the two shapes an `endsWith` would wave through. There is no wildcard
+ * and no subdomain rule. Extracted here rather than written twice: the update
+ * list and the download list are the same rule over two constants, and two
+ * copies of it would be two places for the next mode to get it wrong.
+ */
+export function isHttpsHostAllowed(url: string, hosts: readonly string[]): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    // Unparseable is a destination this code cannot vouch for, not a harmless
+    // one — the same rule the renderer's allowlist above applies.
+    return false;
+  }
+  if (parsed.protocol !== "https:") return false;
+  return hosts.includes(parsed.host);
+}
+
+/**
+ * The hosts a launch that came up in `mode` may reach, or `null` when it may
+ * reach none at all.
+ *
+ * This is where the superset order is made real: `"offline"` reaches nothing,
+ * `"updates"` the update hosts, `"downloads"` the download list — which
+ * contains the update hosts, so the wider mode never costs the narrower one its
+ * exception.
+ */
+export function allowedHostsFor(mode: NetworkMode): readonly string[] | null {
+  if (mode === "offline") return null;
+  return modeAllowsDownloads(mode) ? DOWNLOAD_HOSTS : UPDATE_HOSTS;
+}
+
+/**
+ * The dedicated network session's ONE rule, as a pure function of the launch
+ * mode and the URL it is about to request.
+ *
+ * Everything that reaches the network outside the renderer's own session goes
+ * through this: the update check's three hosts, and every hop of a download's
+ * redirect chain. In `"offline"` it answers `false` for every URL, which is
+ * what keeps the dedicated session as dead as the renderer's in the mode that
+ * promises no connection at all rather than merely unused.
+ *
+ * The mode is the one the process CAME UP UNDER, never the stored file: this
+ * rule is installed once, at launch, beside the resolver block it has to agree
+ * with (see `networkModeRequiresRestart`).
+ */
+export function isSessionRequestAllowed(mode: NetworkMode, url: string): boolean {
+  const hosts = allowedHostsFor(mode);
+  return hosts !== null && isHttpsHostAllowed(url, hosts);
+}
+
+/**
  * The value for Chromium's `host-resolver-rules`, or `null` when no block
  * should be installed at all (cloud on).
  *
  * `"MAP * ~NOTFOUND"` is unchanged, byte for byte, in offline mode — that is
- * the 1.4.0 boundary and this change may not widen it. In updates mode the
- * same mapping carries one `EXCLUDE` per pinned host, which is the smallest
- * edit that lets the dedicated update session resolve those three names and
- * nothing else. Cloud on keeps its own untouched behaviour: the resolver block
- * is not installed at all, so sync can reach its Supabase origins.
+ * the 1.4.0 boundary and this change may not widen it. In the two modes that
+ * allow a connection the same mapping carries one `EXCLUDE` per host that
+ * mode's allowlist holds — the smallest edit that lets the dedicated session
+ * resolve those names and nothing else, and the reason the resolver and the
+ * session cannot drift into admitting different names: both read the same
+ * constant (`allowedHostsFor`). Cloud on keeps its own untouched behaviour: the
+ * resolver block is not installed at all, so sync can reach its Supabase
+ * origins.
  */
 export function resolverRules(userData: string): string | null {
   if (!shouldBlockResolver(userData)) return null;
-  if (readNetworkMode(userData) !== "updates") return "MAP * ~NOTFOUND";
-  return `MAP * ~NOTFOUND, ${UPDATE_HOSTS.map((host) => `EXCLUDE ${host}`).join(", ")}`;
+  const hosts = allowedHostsFor(readNetworkMode(userData));
+  if (hosts === null) return "MAP * ~NOTFOUND";
+  return `MAP * ~NOTFOUND, ${hosts.map((host) => `EXCLUDE ${host}`).join(", ")}`;
 }

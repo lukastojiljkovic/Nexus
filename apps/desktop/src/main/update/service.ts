@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
-import type { NetworkMode } from "../net/offline.js";
+import { modeAllowsUpdates, type NetworkMode } from "../net/offline.js";
 import type { UpdateProblem, UpdatePhase, UpdateStateView } from "../../shared/ipc.js";
 import { checksumFor, parseSha256Sums } from "./checksums.js";
 import {
@@ -58,6 +58,11 @@ export interface UpdateServiceDeps {
   readonly currentVersion: string;
   readonly platform: NodeJS.Platform;
   readonly userData: string;
+  /**
+   * The mode this launch may act on. `"downloads"` (ADR-092) allows the check
+   * too, because the modes are a superset chain, so every guard below asks
+   * `modeAllowsUpdates` rather than comparing against `"updates"`.
+   */
   readonly mode: () => NetworkMode;
   readonly http: UpdateHttp;
   readonly publicKeyPem: string;
@@ -186,7 +191,7 @@ export function createUpdateService(deps: UpdateServiceDeps): UpdateService {
   }
 
   async function runCheck(source: CheckSource): Promise<UpdateStateView> {
-    if (deps.mode() !== "updates") {
+    if (!modeAllowsUpdates(deps.mode())) {
       // Unreachable through the UI — the button is hidden and the startup check
       // is gated — but answered the same way either way: no request.
       return conclude(source, "unexpected", "idle");
@@ -240,7 +245,7 @@ export function createUpdateService(deps: UpdateServiceDeps): UpdateService {
     const release = pendingRelease;
     const offer = pending;
     if (
-      deps.mode() !== "updates" ||
+      !modeAllowsUpdates(deps.mode()) ||
       release === null ||
       offer === null ||
       offer.installer === null
@@ -334,7 +339,7 @@ export function createUpdateService(deps: UpdateServiceDeps): UpdateService {
     view,
     async autoCheckIfDue(): Promise<void> {
       try {
-        if (deps.mode() !== "updates") return;
+        if (!modeAllowsUpdates(deps.mode())) return;
         if (!isAutomaticCheckDue(lastCheckedAt, deps.now())) return;
         await runCheck("auto");
       } catch {

@@ -220,11 +220,14 @@ export const en = {
     updatesTitle: "Offline + update checks",
     updatesBody:
       "Nexus contacts GitHub only, and only to check for and download a new version of itself. Your notes and data never leave this computer; GitHub sees your IP address, as any website does.",
+    downloadsTitle: "Offline + update checks + downloads",
+    downloadsBody:
+      "Everything “Offline + update checks” allows, plus downloads you start yourself. Nothing is downloaded on its own — a download happens only when you start one, only from the addresses built into the app, and what arrives is checked before Nexus uses it.",
     chooseConfirm: "Continue",
     chooseHint:
       "If you close the window without choosing, Nexus stays in “Offline only” and asks again on the next start.",
     cardIntro:
-      "The mode is for the whole computer. “Offline only” opens no connection; “Offline + update checks” allows only checking for and downloading a new version of Nexus.",
+      "The mode is for the whole computer, and each mode allows everything the one before it does. “Offline only” opens no connection; “Offline + update checks” additionally checks for and downloads a new version of Nexus; “Offline + update checks + downloads” additionally downloads what you start yourself.",
     save: "Save the choice",
     saved: "The choice is saved.",
     restartNote: "The change takes effect the next time Nexus starts.",

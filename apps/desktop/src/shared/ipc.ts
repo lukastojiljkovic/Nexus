@@ -8675,12 +8675,18 @@ export type SyncAdoptView =
   | { outcome: "refused"; reason: SyncAdoptProblem };
 
 /**
- * The network mode (ADR-089), redeclared here rather than imported from
- * `main/net/offline.ts`: this contract may not depend on the main process, and
- * the two-member union is small enough that a drift would be a compile error at
- * every comparison. The spelling order is the choice screen's.
+ * The network mode (ADR-089, ADR-092), redeclared here rather than imported
+ * from `main/net/offline.ts`: this contract may not depend on the main process.
+ *
+ * Written as a VALUE with the type derived from it, which is the one form that
+ * cannot drift: main's IPC validator walks `NETWORK_MODES` and every comparison
+ * against `NetworkMode` typechecks, so a mode added here reaches both or
+ * neither. The order is the choice screen's, and it is also the meaning — each
+ * mode is a superset of the one before it.
  */
-export type NetworkMode = "offline" | "updates";
+export const NETWORK_MODES = ["offline", "updates", "downloads"] as const;
+
+export type NetworkMode = (typeof NETWORK_MODES)[number];
 
 /**
  * What the choice screen and the „Mreža i ažuriranja" card read.
@@ -8696,8 +8702,9 @@ export interface NetworkModeView {
   runningMode: NetworkMode;
   /**
    * Whether the updater may reach the network right now: the launch came up in
-   * „updates" AND the stored choice is still „updates". False the moment the
-   * user switches to offline, whatever a renderer believes.
+   * a mode that allows update checks — „updates", or „downloads", which
+   * contains it — AND the stored choice still names that same mode. False the
+   * moment the user switches to offline, whatever a renderer believes.
    */
   updatesActive: boolean;
   /** True when the stored choice differs from the running one: a restart is owed. */
