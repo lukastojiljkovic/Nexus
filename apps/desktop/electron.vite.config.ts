@@ -40,9 +40,13 @@ function rendererHardening(): Plugin {
     "default-src 'self'",
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: nx-blob: priv-blob:", // ADR-014 inline previews; ADR-057 private attachments (unlocked-only)
+    // ADR-014 inline previews; ADR-057 private attachments (unlocked-only);
+    // ADR-100 a content pack's own images, and `connect-src` for the same
+    // scheme because a map reads its tiles through `fetch`, not through an
+    // `<img>` - see `main/packs/protocol.ts`.
+    "img-src 'self' data: nx-blob: priv-blob: nx-pack:",
     "font-src 'self' data:",
-    "connect-src 'self'",
+    "connect-src 'self' nx-pack:",
     "object-src 'none'",
     "base-uri 'none'",
     "form-action 'none'",
@@ -230,12 +234,12 @@ export default defineConfig({
           // the dev origin. No 'unsafe-eval' — Vite dev is native ESM.
           "script-src 'self' 'unsafe-inline'",
           "style-src 'self' 'unsafe-inline'",
-          "img-src 'self' data: blob: nx-blob: priv-blob:",
+          "img-src 'self' data: blob: nx-blob: priv-blob: nx-pack:",
           // THE LINE THIS BLOCK EXISTS FOR.
           "font-src 'self' data:",
           // The HMR socket, and nothing else. Not `ws:` — that would admit any
           // host on the network.
-          "connect-src 'self' ws://localhost:* ws://127.0.0.1:*",
+          "connect-src 'self' ws://localhost:* ws://127.0.0.1:* nx-pack:",
           "object-src 'none'",
           "base-uri 'none'",
           "form-action 'none'",

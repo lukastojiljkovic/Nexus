@@ -2718,3 +2718,49 @@ export {
 export type { BricksInput, BricksState } from "./games/bricks/bricks.js";
 export type * from "./assistant/contract.js";
 export type * from "./sky/contract.js";
+
+// --- READER (ADR-100) --------------------------------------------------------
+//
+// The three pure pieces the Reader module and its page share: the Markdown
+// subset a content pack's articles are written in (with the two refusals that
+// keep untrusted pack text out of the renderer), the table of contents a pack's
+// paths already describe, and the search over a pack's articles. They live here
+// rather than in the module's folder because BOTH processes use them: main
+// builds the search index and the printed document, and the page renders the
+// blocks and highlights what a query matched.
+export {
+  ReaderMarkdownError,
+  isAllowedTarget,
+  isExternalTarget,
+  parseReaderMarkdown,
+  readerPlainText,
+  readerTitleOf,
+  textOfBlock,
+  textOfInline,
+} from "./reader/markdown.js";
+export type {
+  ReaderBlock,
+  ReaderInline,
+  ReaderMarkdownRefusal,
+  ReaderTableCell,
+} from "./reader/markdown.js";
+
+export {
+  articlesForScope,
+  buildReaderToc,
+  neighbouringArticles,
+  readerDisplayName,
+  readerReadingOrder,
+} from "./reader/toc.js";
+export type { ReaderArticleEntry, ReaderTocNode } from "./reader/toc.js";
+
+export { makeSearchable, readerQueryTerms, searchReaderIndex } from "./reader/search.js";
+export type {
+  ReaderIndexedArticle,
+  ReaderSearchHit,
+  ReaderSearchOutcome,
+  ReaderSearchableArticle,
+  ReaderSearchablePack,
+} from "./reader/search.js";
+
+export { resolvePackPath } from "./reader/paths.js";

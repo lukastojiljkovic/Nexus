@@ -98,6 +98,8 @@ describe("createModuleRegistry", () => {
       // here rather than derived because this test IS the declaration — what the
       // registry holds is what the app shows.
       "timers",
+      // The second DISCOVERED module (ADR-100), after Timers on its own `order`.
+      "reader",
     ]);
   });
 
@@ -153,6 +155,11 @@ describe("createModuleRegistry", () => {
       // entry, not a second reading of PRD 29 („Utility Belt"), so it takes
       // its own prefix below rather than borrowing this one.
       UTIL: ["focus", "tools", "timers"],
+      // PRD 26 (Read Later & Bookmarks) is the section the Reader implements: its
+      // bookmark half, against the content packs installed on this machine rather
+      // than against a web page. Written down here rather than shared with UTIL,
+      // for the reason the comment above gives.
+      READ: ["reader"],
       CANV: ["canvas"],
       // „Elektronika" takes its own for „Tabla"'s reason exactly: ELEC is its
       // own PRD entry, and the UTIL sharing above is one section implemented
@@ -201,6 +208,8 @@ describe("createModuleRegistry", () => {
       "notes",
       "files",
       "study",
+      // The second discovered module, in the group it declares (ADR-100).
+      "reader",
     ]);
     expect(grouped.get("life")?.map((manifest) => manifest.id)).toEqual([
       "priv",
@@ -254,6 +263,9 @@ describe("createModuleRegistry", () => {
       // ON by default, like every module but PRIV and PRO: a timer writes
       // nothing until somebody starts one, so there is nothing to opt into.
       "timers",
+      // And the Reader on the same terms (ADR-100): a shelf with no packs on it
+      // writes nothing, and it is where the person learns where packs come from.
+      "reader",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");

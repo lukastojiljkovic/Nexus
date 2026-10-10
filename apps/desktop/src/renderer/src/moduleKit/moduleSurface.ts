@@ -21,6 +21,10 @@
 export { settingsEntryId } from "../moduleSettings.js";
 export { labelClass } from "../settingsSearch.js";
 export { activeLocale } from "../strings.js";
+// The house's one door to `Intl` (a memoised factory per locale and options), so
+// a module that writes a size, a date or a number follows the language being
+// read without spelling a tag of its own.
+export { numberFormat, dateTimeFormat, collator } from "../intl.js";
 export { declaredText } from "./labels.js";
 export type { SettingsPanelProps } from "../moduleSettingsPanels.js";
 export type { DashboardWidgetBodyProps, DashboardWidgetRenderer } from "../dashboardWidgets.js";

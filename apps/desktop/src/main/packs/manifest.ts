@@ -34,6 +34,17 @@ export const PACK_FORMAT = 1;
 export const PACK_KINDS = ["zim", "map", "dataset", "model", "content"] as const;
 export type PackKind = (typeof PACK_KINDS)[number];
 
+/**
+ * The one notice a pack's manifest may carry, and the only value this build
+ * reads: `"safety"` says the content is reference material whose reader must be
+ * told it is not a substitute for professional help (ADR-100). It is OPTIONAL
+ * and it is a closed set: a future notice is a value this build does not know,
+ * and a notice it does not know is one it must not silently ignore - a pack
+ * carrying one is REFUSED rather than installed with its warning dropped.
+ */
+export const PACK_NOTICES = ["safety"] as const;
+export type PackNotice = (typeof PACK_NOTICES)[number];
+
 /** One string per language, both required: the copy is Serbian and English, always. */
 export interface PackText {
   readonly sr: string;
@@ -62,6 +73,8 @@ export interface PackManifest {
   readonly id: string;
   readonly version: string;
   readonly kind: PackKind;
+  /** Present when the pack carries a notice its reader must be shown. */
+  readonly notice?: PackNotice;
   readonly title: PackText;
   readonly description: PackText;
   readonly files: readonly PackFileEntry[];
@@ -80,6 +93,7 @@ const MANIFEST_KEYS: readonly string[] = [
   "id",
   "version",
   "kind",
+  "notice",
   "title",
   "description",
   "files",
@@ -189,6 +203,22 @@ function asKind(value: unknown): PackKind {
   return value as PackKind;
 }
 
+/**
+ * The optional `notice`. Absent is the ordinary case and answers `undefined`;
+ * present but not one of {@link PACK_NOTICES} is refused, because the direction
+ * a warning may be lost in is the dangerous one.
+ */
+function asNotice(value: unknown): PackNotice | undefined {
+  if (value === undefined) return undefined;
+  if (!(PACK_NOTICES as readonly unknown[]).includes(value)) {
+    // `manifest-unreadable` rather than a code of its own: from the user's side
+    // this is the same event as an unknown field - the manifest says something
+    // this build cannot read - and it already has a sentence in both languages.
+    throw new PackError("manifest-unreadable", `"notice" must be one of ${PACK_NOTICES.join(", ")}.`);
+  }
+  return value as PackNotice;
+}
+
 function asFileEntry(value: unknown, index: number): PackFileEntry {
   const where = `"files[${String(index)}]"`;
   const record = asObject(value, where);
@@ -288,11 +318,13 @@ export function parsePackManifest(value: unknown): PackManifest {
     throw new PackError("format-unknown", `pack.json: this build reads format ${String(PACK_FORMAT)} only.`);
   }
 
+  const notice = asNotice(record["notice"]);
   return {
     format: PACK_FORMAT,
     id: asPackId(record["id"]),
     version: asVersion(record["version"], "version-invalid", '"version"'),
     kind: asKind(record["kind"]),
+    ...(notice === undefined ? {} : { notice }),
     title: asCappedCopy(record["title"], "title-invalid", '"title"', PACK_LIMITS.titleChars),
     description: asCappedCopy(
       record["description"],

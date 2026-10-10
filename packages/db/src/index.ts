@@ -1127,3 +1127,32 @@ export type {
   SavedGame,
   SetResumeInput,
 } from "./games/chess/chessStore.js";
+
+// --- READER (migration 086, ADR-100) -----------------------------------------
+//
+// The reading positions, the bookmarks and their notes, the reading size, and
+// the safety notices a profile has accepted - one store, four tables, and not a
+// byte of a pack's own content: a pack belongs to no profile (ADR-091 Â§5), and
+// what this module stores is what the person WROTE while reading it.
+//
+// Deliberately NOT in `RESTORE_WIPE_TABLES`: a kit module replaces its own rows
+// inside one restore (`ModuleContext.importData`), and that list is held equal to
+// `@nexus/sync`'s collection map by `sync/collectionGuard.test.ts`, which a
+// module may not edit. The four names are documented in
+// `imex/restoreStore.test.ts` beside the timers module's, with the same reason.
+export {
+  MAX_READER_ARTICLE_PATH_LENGTH,
+  MAX_READER_NOTE_LENGTH,
+  MAX_READER_PACK_ID_LENGTH,
+  READER_DEFAULT_TEXT_SIZE,
+  READER_TEXT_SIZES,
+  ReaderStore,
+  ReaderValidationError,
+} from "./reader/readerStore.js";
+export type {
+  ReaderArchiveInput,
+  ReaderBookmark,
+  ReaderPosition,
+  ReaderSettings,
+  ReaderTextSize,
+} from "./reader/readerStore.js";

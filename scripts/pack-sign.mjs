@@ -59,6 +59,16 @@ const META_KEYS = [
   "minAppVersion",
 ];
 
+/**
+ * The keys the metadata MAY carry, written into the manifest only when they are
+ * there. `notice` is the one today: a pack whose content is reference material
+ * says so with `"safety"` (ADR-100), and a pack that says nothing carries no
+ * field at all rather than a null the app's parser would have to accept. Optional
+ * rather than required, deliberately - requiring it would mean every pack signed
+ * after this line gained a field it does not mean.
+ */
+const OPTIONAL_META_KEYS = ["notice"];
+
 /** The two names inside a pack that are not content, and therefore not listed. */
 const RESERVED_FILES = new Set([MANIFEST_FILE, SIGNATURE_FILE]);
 
@@ -116,6 +126,9 @@ export function buildManifest(meta, files) {
   for (const key of META_KEYS) {
     manifest[key] = key === "format" ? FORMAT : meta[key];
   }
+  for (const key of OPTIONAL_META_KEYS) {
+    if (Object.hasOwn(meta, key)) manifest[key] = meta[key];
+  }
   manifest.files = files;
   return manifest;
 }
@@ -140,7 +153,9 @@ export function checkMeta(meta) {
     if (!Object.hasOwn(meta, key)) throw new Error(`pack-sign: --meta is missing "${key}".`);
   }
   for (const key of Object.keys(meta)) {
-    if (!META_KEYS.includes(key)) throw new Error(`pack-sign: --meta has an unknown field "${key}".`);
+    if (!META_KEYS.includes(key) && !OPTIONAL_META_KEYS.includes(key)) {
+      throw new Error(`pack-sign: --meta has an unknown field "${key}".`);
+    }
   }
   if (meta.format !== FORMAT) {
     throw new Error(`pack-sign: "format" must be ${String(FORMAT)}.`);

@@ -46,6 +46,12 @@ export const ESSENTIALS_MODULE_PRESET: Readonly<Record<string, boolean>> = {
   // selectable one: nothing about a timer asks to be opted into, so „Osnovno"
   // turns it on exactly as the manifest's own `defaultEnabled` says.
   timers: true,
+  // The Reader (ADR-100) is decided here like every other selectable module:
+  // nothing about a shelf of installed packs asks to be opted into, so „Osnovno"
+  // turns it on exactly as the manifest's own `defaultEnabled` says. A profile
+  // with no packs installed sees its empty state, which is the page telling the
+  // person where packs come from.
+  reader: true,
   pro: false,
 };
 

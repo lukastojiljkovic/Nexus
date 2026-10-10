@@ -1780,6 +1780,19 @@ describe("RestoreStore", () => {
       "chess_games",
       "chess_resume",
       "chess_level_stats",
+      //  - the READER module's four tables (migration 086, ADR-100): a KIT
+      //    module's tables are deliberately not in `RESTORE_WIPE_TABLES`, and
+      //    the reason is the structural one the timers entry above gives - a
+      //    module built on the kit replaces its own rows inside the restore
+      //    (`ModuleContext.importData`), because that list is derived into
+      //    `@nexus/sync`'s collection map and a module may not edit sync. So a
+      //    restore that names no Reader section leaves a profile with no
+      //    positions, no bookmarks and no reading size, which is exactly what a
+      //    fresh profile answers.
+      "reader_positions",
+      "reader_bookmarks",
+      "reader_settings",
+      "reader_acknowledged",
     ]);
 
     const wipeTables = new Set<string>(RESTORE_WIPE_TABLES);
