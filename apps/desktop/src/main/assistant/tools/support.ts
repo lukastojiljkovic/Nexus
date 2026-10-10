@@ -82,6 +82,22 @@ function cacheKey(locale: AssistantLocale, options: Intl.DateTimeFormatOptions):
 const dateFormats = new Map<string, Intl.DateTimeFormat>();
 const numberFormats = new Map<string, Intl.NumberFormat>();
 
+/**
+ * The repository's one Serbian sort: `sr-Latn` first, because plain `"sr"`
+ * resolves to the Cyrillic tailoring, which sorts the Latin š, č, ć, ž and đ by
+ * the wrong rules (`CLAUDE.md` states the rule; `intl.ts` is the renderer's copy
+ * of it).
+ *
+ * Built once and shared: a collator is expensive to construct and every list
+ * this folder sorts is a list of names.
+ */
+const COLLATOR = new Intl.Collator(["sr-Latn", "sr"]);
+
+/** The collator every name-ordered tool result sorts with. */
+export function collator(): Intl.Collator {
+  return COLLATOR;
+}
+
 function dateTimeFormat(
   locale: AssistantLocale,
   options: Intl.DateTimeFormatOptions,
@@ -162,6 +178,28 @@ export function formatClock(locale: AssistantLocale, atMs: number): string {
 }
 
 /**
+ * A wall-clock time in ANOTHER zone — what the mini apps' world clock exists to
+ * answer („koliko je tamo sada").
+ *
+ * `null` rather than the `RangeError` `Intl` throws for a zone it does not know:
+ * the id comes out of a stored document, and a caller that prints the id alone
+ * is a better answer than one that cannot say anything at all.
+ */
+export function formatClockIn(
+  locale: AssistantLocale,
+  atMs: number,
+  timeZone: string,
+): string | null {
+  try {
+    return dateTimeFormat(locale, { hour: "2-digit", minute: "2-digit", timeZone }).format(
+      new Date(atMs),
+    );
+  } catch {
+    return null;
+  }
+}
+
+/**
  * A duration as a person says it: „10 min", „1 min 30 s", „45 s".
  *
  * Minutes and seconds only — this app's timers are bounded by
@@ -190,9 +228,67 @@ export function formatBytes(locale: AssistantLocale, bytes: number): string {
   }).format(bytes / 1_000_000);
 }
 
+/**
+ * A plain number the way the locale writes one — „38,5" / "38.5".
+ *
+ * Three fraction digits, which is what a quantity somebody typed into a form
+ * may carry: half a litre is 0,5 and a kilo of something is 1,25, while a
+ * longer tail of digits is a float's own noise rather than a reading.
+ */
+export function formatNumber(locale: AssistantLocale, value: number): string {
+  return numberFormat(locale, { maximumFractionDigits: 3 }).format(value);
+}
+
+/**
+ * A coordinate the way a list of points has to be read: a FIXED number of
+ * decimals and no grouping, so „44,81234" and „19,12345" line up in a column.
+ *
+ * Five decimals is about a metre on the ground; more is a float's tail rather
+ * than a place. Grouping is off because a thousands separator inside a
+ * coordinate is a number nobody could paste anywhere.
+ */
+export function formatCoordinate(locale: AssistantLocale, value: number): string {
+  const digits = 5;
+  return numberFormat(locale, {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+    useGrouping: false,
+  }).format(value);
+}
+
+/**
+ * A fraction as the Lab's own battery card writes one — „50,0 %" / "50.0%".
+ *
+ * The card's `formatPercent` (the renderer's `reading.ts`) fixes one fraction
+ * digit, and this repeats that choice rather than picking its own: a depth of
+ * discharge or a battery level is a whole-percent reading, and a second number
+ * of digits here would make a tool answer and the card disagree about the same
+ * figure.
+ */
+export function formatPercent(locale: AssistantLocale, fraction: number): string {
+  return numberFormat(locale, {
+    style: "percent",
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(fraction);
+}
+
 /** The locale's half of a constant bilingual fragment. */
 export function text(locale: AssistantLocale, copy: AssistantText): string {
   return copy[locale];
+}
+
+/**
+ * A value inside quotation marks, in the reader's own pair.
+ *
+ * A phrase record usually carries the marks in its own copy („Napravi belešku
+ * „x""), but a line assembled in code cannot: Serbian closes with a low-high
+ * pair („…") and English with a high-high one ("…"), and an English answer
+ * carrying Serbian marks is a sentence somebody pasted from the wrong language.
+ * One function, so the decision lives in one place.
+ */
+export function quote(locale: AssistantLocale, value: string): string {
+  return locale === "sr" ? `\u201e${value}\u201c` : `\u201c${value}\u201d`;
 }
 
 /**

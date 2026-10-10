@@ -142,6 +142,28 @@ export function asCount(value: unknown, field: string, min: number, max: number)
   return asBoundedInteger(value, field, min, max);
 }
 
+/**
+ * A number inside a range, fractions included — for the quantities a person
+ * really writes down (half a kilo, 1,5 litres). The store's own CHECK is the
+ * same interval, so a value this refuses is one the store would refuse too.
+ */
+export function asNumber(value: unknown, field: string, min: number, max: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < min || value > max) {
+    throw new Error(`"${field}" must be a number between ${String(min)} and ${String(max)}.`);
+  }
+  return value;
+}
+
+/** The same reader for a field the model may leave out entirely. */
+export function asOptionalNumber(
+  value: unknown,
+  field: string,
+  min: number,
+  max: number,
+): number | undefined {
+  return value === undefined ? undefined : asNumber(value, field, min, max);
+}
+
 /** The same reader for a field the model may leave out entirely. */
 export function asOptionalCount(
   value: unknown,
@@ -150,5 +172,36 @@ export function asOptionalCount(
   max: number,
 ): number | undefined {
   return value === undefined ? undefined : asCount(value, field, min, max);
+}
+
+/**
+ * A short list of short strings — the shape several stores take for creators,
+ * tags and the like — bounded in BOTH directions, because a model can send a
+ * thousand entries as easily as one and every store behind this caps the count
+ * and the length itself.
+ */
+export function asTextList(
+  value: unknown,
+  field: string,
+  maxItems: number,
+  maxChars: number,
+): string[] {
+  if (!Array.isArray(value)) {
+    throw new Error(`"${field}" must be a list of strings.`);
+  }
+  if (value.length > maxItems) {
+    throw new Error(`"${field}" may hold at most ${String(maxItems)} entries.`);
+  }
+  return value.map((entry) => asText(entry, field, maxChars));
+}
+
+/** The same reader for a list the model may leave out entirely. */
+export function asOptionalTextList(
+  value: unknown,
+  field: string,
+  maxItems: number,
+  maxChars: number,
+): string[] | undefined {
+  return value === undefined ? undefined : asTextList(value, field, maxItems, maxChars);
 }
 

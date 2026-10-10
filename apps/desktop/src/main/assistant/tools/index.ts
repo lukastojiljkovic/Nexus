@@ -31,18 +31,42 @@
  * wave adds its own file here and one line to `appTools`'s neighbours below —
  * the registry is a flat list of areas, and a name that collides with another's
  * is refused rather than shadowed.
+ *
+ * **The wave-1 kit modules joined in wave 2**, one file each: `library.ts`,
+ * `culture.ts`, `car.ts`, `pantry.ts`, `cookbook.ts`, `recorder.ts`,
+ * `calculator.ts`, `reader.ts`, `wiki.ts`, `maps.ts`, `lab.ts` and
+ * `miniapps.ts`. A module with nothing of the user's own to read or write has no
+ * file here on purpose, and the merge report lists which and why: the games are
+ * reachable through `app.open` and a tool that answered with a score would be
+ * the page's own table restated worse; `signals.ts`, `workshop.ts` and
+ * `drawings.ts` own no table at all (a meter, a file on disk, a drawing on
+ * disk); the scanner's one write path is `NoteStore`, which `notes.ts` already
+ * covers; and the translator's dictionary is a signed content pack read through
+ * its own module's main half, which this registry is not handed a seam to.
  */
 
 import type { Tool, ToolRegistry, WebService } from "@nexus/core";
 import type { SearchResult } from "../../../shared/ipc.js";
 import { appTools, type ModuleLookup } from "./app.js";
+import { calculatorTools } from "./calculator.js";
 import { calendarTools } from "./calendar.js";
+import { carTools } from "./car.js";
+import { cookbookTools } from "./cookbook.js";
+import { cultureTools } from "./culture.js";
 import { emergencyTools } from "./emergency.js";
 import { habitTools } from "./habits.js";
+import { labTools } from "./lab.js";
+import { libraryTools } from "./library.js";
+import { mapsTools } from "./maps.js";
+import { miniappsTools } from "./miniapps.js";
 import { noteTools } from "./notes.js";
 import { packTools, type PacksLookup } from "./packs.js";
+import { pantryTools } from "./pantry.js";
+import { readerTools } from "./reader.js";
+import { recorderTools } from "./recorder.js";
 import { taskTools } from "./tasks.js";
 import { timerTools, type TimerHost } from "./timers.js";
+import { wikiTools } from "./wiki.js";
 import type { ProfileDb } from "./support.js";
 
 export type { ModuleLookup } from "./app.js";
@@ -94,6 +118,21 @@ export function createToolRegistry(deps: ToolDeps): ToolRegistry {
     ...timerTools({ timers: deps.timers }),
     ...packTools({ packs: deps.packs }),
     ...emergencyTools({ profileDb: deps.profileDb }),
+    // The wave-1 kit modules, in the order their manifests sort: library,
+    // culture, car, pantry, cookbook, recorder, calculator, reader, wiki, maps,
+    // lab, miniapps.
+    ...libraryTools({ profileDb: deps.profileDb, now: deps.now }),
+    ...cultureTools({ profileDb: deps.profileDb, now: deps.now }),
+    ...carTools({ profileDb: deps.profileDb, now: deps.now }),
+    ...pantryTools({ profileDb: deps.profileDb, now: deps.now }),
+    ...cookbookTools({ profileDb: deps.profileDb }),
+    ...recorderTools({ profileDb: deps.profileDb }),
+    ...calculatorTools({ profileDb: deps.profileDb }),
+    ...readerTools({ profileDb: deps.profileDb, packs: deps.packs }),
+    ...wikiTools({ profileDb: deps.profileDb }),
+    ...mapsTools({ profileDb: deps.profileDb }),
+    ...labTools({ profileDb: deps.profileDb }),
+    ...miniappsTools({ profileDb: deps.profileDb, now: deps.now }),
   ];
 
   return {

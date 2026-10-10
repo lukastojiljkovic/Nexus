@@ -176,3 +176,51 @@ describe("app.search", () => {
     );
   });
 });
+
+describe("app.open and the wave-1 kit modules", () => {
+  /**
+   * The ids wave 1 added, each a folder with a manifest. They are in the
+   * registry by being a folder, which is the kit's whole point — so this test
+   * does not add a list to the app: it states the ids the run that built them is
+   * responsible for, and fails if one of them stops being openable.
+   *
+   * A module's own SUB-VIEW („Na polici", „Program") is not addressable here:
+   * `AppLocation` names a module and an item, and a kit page is handed a profile
+   * id alone (`shared/moduleApi.ts`), so a view would be a target no surface
+   * keeps. Opening the module is what reaches its views, and that is what is
+   * pinned.
+   */
+  const WAVE1 = [
+    "library",
+    "culture",
+    "car",
+    "pantry",
+    "cookbook",
+    "recorder",
+    "calculator",
+    "signals",
+    "miniapps",
+    "arcade",
+    "puzzles",
+    "boards",
+    "chess",
+    "reader",
+    "maps",
+    "wiki",
+    "scanner",
+    "workshop",
+    "drawings",
+    "lab",
+    "translator",
+  ];
+
+  it("opens every one of them, with no item and no settings card", async () => {
+    const registry = createModuleRegistry();
+    const tools = appTools({ modules: registry, search: recorderFor([]).search });
+    for (const id of WAVE1) {
+      expect(registry.get(id), id).toBeDefined();
+      const result = await toolNamed(tools, "app.open").run({ module: id }, context());
+      expect(result.navigateTo, id).toEqual({ module: id });
+    }
+  });
+});

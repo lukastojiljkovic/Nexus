@@ -1,0 +1,751 @@
+{
+  "scenarios": [
+    {
+      "id": "wave2-pantry-expiring-sr",
+      "title": "Šta ističe ove nedelje u ostavi",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Šta mi ističe ove nedelje u ostavi?" }
+      ],
+      "tools": [
+        { "name": "pantry.expiring", "effect": "read", "content": "Ističe (1):\nU narednih 7 dana.\n- Mleko: 1 l, u „Frižider“, ističe za 2 dana" },
+        {
+          "name": "pantry.add",
+          "effect": "write",
+          "summary": { "sr": "Dodaj „Mleko“ u ostavu, 1 l", "en": "Add “Mleko” to the pantry, 1 l" },
+          "content": "Dodato u ostavu: „Mleko“."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "pantry.expiring", "args": { "days": { "eq": 7 } } }
+        ],
+        "toolsNotCalled": ["pantry.add"],
+        "answerContains": ["Mleko"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            { "name": "pantry.expiring", "arguments": { "days": 7 } }
+          ]
+        },
+        {
+          "text": "U ostavi ti ističe mleko: litar u frižideru, rok je za dva dana. Ništa drugo ne ističe u narednih nedelju dana."
+        }
+      ]
+    },
+    {
+      "id": "wave2-cookbook-search-en",
+      "title": "A recipe with what is in the fridge",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "What can I make with the flour I have?" }
+      ],
+      "tools": [
+        { "name": "cookbook.search", "effect": "read", "content": "Recipes (1):\n- Pogača (Baking, servings: 8, 50 min, ingredients: 2, ingredient “Brašno”)" },
+        { "name": "cookbook.recipe", "effect": "read" },
+        {
+          "name": "pantry.add",
+          "effect": "write",
+          "summary": { "sr": "Dodaj „Brašno“ u ostavu, 1 kg", "en": "Add “Brašno” to the pantry, 1 kg" },
+          "content": "Added to the pantry: Brašno."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 3,
+      "expect": {
+        "toolsCalled": [
+          { "name": "cookbook.search", "args": { "query": { "contains": "flour" } } }
+        ],
+        "toolsNotCalled": ["pantry.add"],
+        "answerContains": ["Pogača"],
+        "language": "en",
+        "maxSteps": 3
+      },
+      "script": [
+        {
+          "toolCalls": [
+            { "name": "cookbook.search", "arguments": { "query": "flour" } }
+          ]
+        },
+        {
+          "toolCalls": [
+            { "name": "cookbook.recipe", "arguments": { "recipe": "Pogača" } }
+          ]
+        },
+        {
+          "text": "One recipe of yours uses flour: Pogača, eight servings, about fifty minutes. Its own ingredients are yeast and half a kilo of flour, so there is nothing else to buy."
+        }
+      ]
+    },
+    {
+      "id": "wave2-pantry-add-confirmed-en",
+      "title": "A pantry item is added once the user confirms",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "I bought two litres of milk today, it expires on the twelfth. Put it in the fridge." }
+      ],
+      "tools": [
+        {
+          "name": "pantry.add",
+          "effect": "write",
+          "summary": { "sr": "Dodaj „Mleko“ u ostavu, 2 l", "en": "Add “Mleko” to the pantry, 2 l" },
+          "content": "Added to the pantry: “Mleko”.",
+          "navigateTo": { "module": "pantry" }
+        },
+        { "name": "pantry.expiring", "effect": "read" }
+      ],
+      "knowledge": [],
+      "confirmations": [true],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "pantry.add",
+            "args": {
+              "name": { "eq": "Mleko" },
+              "quantity": { "eq": 2 },
+              "expiry": { "eq": "2026-10-12" },
+              "location": { "matches": "fridge|frižider" }
+            }
+          }
+        ],
+        "toolsNotCalled": ["pantry.expiring"],
+        "answerContains": ["Mleko"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "pantry.add",
+              "arguments": {
+                "name": "Mleko",
+                "quantity": 2,
+                "unit": "l",
+                "expiry": "2026-10-12",
+                "location": "Frižider"
+              }
+            }
+          ]
+        },
+        {
+          "text": "Written down: two litres of Mleko in the Frižider, expiring on the twelfth. The pantry page is open and it is on the expiry list."
+        }
+      ]
+    },
+    {
+      "id": "wave2-library-add-declined-sr",
+      "title": "Naslov nije dodat kada je korisnik odbio",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Zapamti da želim da čitam Na Drini ćuprija." }
+      ],
+      "tools": [
+        {
+          "name": "library.add",
+          "effect": "write",
+          "summary": { "sr": "Dodaj „Na Drini ćuprija“ u biblioteku (Knjiga)", "en": "Add “Na Drini ćuprija” to the library (Book)" },
+          "content": "Dodato u biblioteku: „Na Drini ćuprija“."
+        },
+        { "name": "library.shelf", "effect": "read" }
+      ],
+      "knowledge": [],
+      "confirmations": [false],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "library.add" }],
+        "toolsNotCalled": ["library.shelf"],
+        "answerContains": ["nisam dodao"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "library.add",
+              "arguments": { "title": "Na Drini ćuprija", "kind": "book" }
+            }
+          ]
+        },
+        {
+          "text": "U redu, nisam dodao naslov — ništa u biblioteci nije promenjeno. Ako se predomisliš, mogu da ga upišem na listu želja."
+        }
+      ]
+    },
+    {
+      "id": "wave2-car-fill-confirmed-sr",
+      "title": "Točenje se upisuje posle potvrde",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Sipao sam 38,5 litara dizela u Pasata, pun rezervoar." }
+      ],
+      "tools": [
+        {
+          "name": "car.fill",
+          "effect": "write",
+          "summary": { "sr": "Zabeleži 38,5 l za vozilo „Pasat“", "en": "Log 38.5 l for “Pasat”" },
+          "content": "Zabeleženo gorivo za „Pasat“: 38,5 l, 10. oktobar 2026.",
+          "navigateTo": { "module": "car" }
+        },
+        { "name": "car.due", "effect": "read" }
+      ],
+      "knowledge": [],
+      "confirmations": [true],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "car.fill",
+            "args": {
+              "vehicle": { "eq": "Pasat" },
+              "quantity": { "eq": 38.5 },
+              "fullTank": { "eq": true }
+            }
+          }
+        ],
+        "toolsNotCalled": ["car.due"],
+        "answerContains": ["Pasat"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "car.fill",
+              "arguments": {
+                "vehicle": "Pasat",
+                "quantity": 38.5,
+                "fullTank": true
+              }
+            }
+          ]
+        },
+        {
+          "text": "Upisano je točenje u servisnu knjigu: 38,5 litara dizela za Pasata, sa punim rezervoarom. Potrošnja se meri od punog do punog rezervoara, pa ovo točenje ulazi u merenje."
+        }
+      ]
+    },
+    {
+      "id": "wave2-car-due-en",
+      "title": "What the service book says is due",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "When is my car's next service due?" }
+      ],
+      "tools": [
+        { "name": "car.due", "effect": "read", "content": "Pasat:\n- Oil: Overdue, 9 days overdue, 1 October 2026" },
+        {
+          "name": "car.fill",
+          "effect": "write",
+          "summary": { "sr": "Zabeleži 40 l za vozilo „Pasat“", "en": "Log 40 l for “Pasat”" },
+          "content": "Fuel logged for “Pasat”."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "car.due" }],
+        "toolsNotCalled": ["car.fill"],
+        "answerContains": ["Oil"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "car.due", "arguments": {} }] },
+        {
+          "text": "Your Pasat is overdue for its Oil service: the interval ran out on 1 October 2026, nine days ago. Nothing else in the service book is coming due."
+        }
+      ]
+    },
+    {
+      "id": "wave2-navigation-maps-sr",
+      "title": "Otvori Mape i nađi tačku",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Gde mogu da vidim tačke koje sam obeležio na karti?" }
+      ],
+      "tools": [
+        { "name": "maps.pins", "effect": "read", "content": "Tačke (1):\n- Kuća (44,81234, 20,43210) — kapija sa leve strane" },
+        {
+          "name": "app.open",
+          "effect": "navigate",
+          "navigateTo": { "module": "maps" }
+        },
+        {
+          "name": "notes.create",
+          "effect": "write",
+          "summary": { "sr": "Napravi belešku.", "en": "I will create a note." },
+          "content": "Note created."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 3,
+      "expect": {
+        "toolsCalled": [
+          { "name": "maps.pins" },
+          { "name": "app.open", "args": { "module": { "eq": "maps" } } }
+        ],
+        "toolsNotCalled": ["notes.create"],
+        "answerContains": ["Kuća"],
+        "language": "sr",
+        "maxSteps": 3
+      },
+      "script": [
+        { "toolCalls": [{ "name": "maps.pins", "arguments": {} }] },
+        { "toolCalls": [{ "name": "app.open", "arguments": { "module": "maps" } }] },
+        {
+          "text": "Tačke su u modulu Mape, u spisku tačaka. Tamo stoji jedna tačka, „Kuća“, sa koordinatama 44,81234 i 20,43210 i beleškom o kapiji. Otvorio sam ti Mape."
+        }
+      ]
+    },
+    {
+      "id": "wave2-navigation-reader-en",
+      "title": "Where the user stopped reading",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "Where did I stop reading, and take me there." }
+      ],
+      "tools": [
+        {
+          "name": "reader.progress",
+          "effect": "read",
+          "content": "Continue reading (1):\n- Mapa Srbije: clanci/uvod.md (last read 10 October 2026)\nThere are no bookmarks."
+        },
+        {
+          "name": "app.open",
+          "effect": "navigate",
+          "navigateTo": { "module": "reader" }
+        },
+        { "name": "knowledge.search", "effect": "read" }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 3,
+      "expect": {
+        "toolsCalled": [
+          { "name": "reader.progress" },
+          { "name": "app.open", "args": { "module": { "eq": "reader" } } }
+        ],
+        "toolsNotCalled": ["knowledge.search"],
+        "answerContains": ["clanci/uvod.md"],
+        "language": "en",
+        "maxSteps": 3
+      },
+      "script": [
+        { "toolCalls": [{ "name": "reader.progress", "arguments": {} }] },
+        { "toolCalls": [{ "name": "app.open", "arguments": { "module": "reader" } }] },
+        {
+          "text": "You stopped in the book Mapa Srbije, at clanci/uvod.md, read last on 10 October 2026. I have opened the Reader, and there are no bookmarks."
+        }
+      ]
+    },
+    {
+      "id": "wave2-culture-plan-confirmed-sr",
+      "title": "Plan kulture se zapisuje posle potvrde",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Idem u operu „Karmen“ u Narodnom pozorištu 20. oktobra u 19:30." }
+      ],
+      "tools": [
+        {
+          "name": "culture.plan",
+          "effect": "write",
+          "summary": { "sr": "Zapiši plan „Karmen“ (Opera) za 20. oktobar 2026", "en": "Write the plan “Karmen” (Opera) for 20 October 2026" },
+          "content": "Plan je zapisan: „Karmen“ (plan-1).",
+          "navigateTo": { "module": "culture" }
+        },
+        { "name": "culture.programme", "effect": "read" }
+      ],
+      "knowledge": [],
+      "confirmations": [true],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "culture.plan",
+            "args": {
+              "title": { "eq": "Karmen" },
+              "kind": { "eq": "opera" },
+              "date": { "eq": "2026-10-20" }
+            }
+          }
+        ],
+        "toolsNotCalled": ["culture.programme"],
+        "answerContains": ["Karmen"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "culture.plan",
+              "arguments": {
+                "title": "Karmen",
+                "kind": "opera",
+                "venue": "Narodno pozorište",
+                "date": "2026-10-20",
+                "startTime": "19:30"
+              }
+            }
+          ]
+        },
+        {
+          "text": "Zapisan je plan: opera Karmen, Narodno pozorište, 20. oktobar u 19:30. Nalazi se u programu kulture, pod tim datumom."
+        }
+      ]
+    },
+    {
+      "id": "wave2-culture-programme-en",
+      "title": "What is on the culture programme",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "What am I going to see next?" }
+      ],
+      "tools": [
+        {
+          "name": "culture.programme",
+          "effect": "read",
+          "content": "Ahead (1):\n- 20 October 2026, 19:30: Opera “Karmen”, Narodno pozorište"
+        },
+        {
+          "name": "culture.plan",
+          "effect": "write",
+          "summary": { "sr": "Zapiši plan „Karmen“ (Opera)", "en": "Write the plan “Karmen” (Opera)" },
+          "content": "The plan is written: “Karmen”."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "culture.programme", "args": { "when": { "eq": "ahead" } } }
+        ],
+        "toolsNotCalled": ["culture.plan"],
+        "answerContains": ["Karmen"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "culture.programme", "arguments": { "when": "ahead" } }] },
+        {
+          "text": "The next thing on your programme is the opera Karmen, at the Narodno pozorište on 20 October at 19:30. Nothing else is ahead of you."
+        }
+      ]
+    },
+    {
+      "id": "wave2-recorder-day-sr",
+      "title": "Snimci od jednog dana",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Šta sam snimio juče?" }
+      ],
+      "tools": [
+        {
+          "name": "recorder.list",
+          "effect": "read",
+          "content": "Snimci (1):\n- Ideja za vikend — 9. oktobar 2026, 18:20 (zvuk, 1 min 12 s)"
+        },
+        {
+          "name": "notes.create",
+          "effect": "write",
+          "summary": { "sr": "Napravi belešku „Snimci“.", "en": "Create the note “Recordings”." },
+          "content": "Beleška je napravljena."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "recorder.list", "args": { "day": { "eq": "2026-10-09" } } }
+        ],
+        "toolsNotCalled": ["notes.create"],
+        "answerContains": ["Ideja za vikend"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "recorder.list", "arguments": { "day": "2026-10-09" } }] },
+        {
+          "text": "Juče je snimljen jedan snimak: „Ideja za vikend“, zvuk od minut i dvanaest sekundi, u 18:20."
+        }
+      ]
+    },
+    {
+      "id": "wave2-calculator-history-en",
+      "title": "An earlier result from the calculator",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "What did I work out earlier about the tile count?" }
+      ],
+      "tools": [
+        {
+          "name": "calculator.history",
+          "effect": "read",
+          "content": "Recent results (1):\n- 3.2*4.5 = 14.4"
+        },
+        {
+          "name": "notes.create",
+          "effect": "write",
+          "summary": { "sr": "Napravi belešku.", "en": "Create a note." },
+          "content": "Note created."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "calculator.history", "args": { "query": { "contains": "3.2" } } }
+        ],
+        "toolsNotCalled": ["notes.create"],
+        "answerContains": ["14.4"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "calculator.history", "arguments": { "query": "3.2" } }] },
+        {
+          "text": "The calculator's history has 3.2 × 4.5, which came out as 14.4. That is the entry about the tile count."
+        }
+      ]
+    },
+    {
+      "id": "wave2-wiki-recent-sr",
+      "title": "Šta je skoro čitano iz referenci",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Šta sam skoro čitao u referencama? Otvori mi to." }
+      ],
+      "tools": [
+        {
+          "name": "wiki.recent",
+          "effect": "read",
+          "content": "Skorije čitano (1):\n- Tesla — /zim/wikipedia_sr.zim/A/Tesla (čitano 9. oktobar 2026)\nNišta nije obeleženo."
+        },
+        {
+          "name": "app.open",
+          "effect": "navigate",
+          "navigateTo": { "module": "wiki" }
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 3,
+      "expect": {
+        "toolsCalled": [
+          { "name": "wiki.recent" },
+          { "name": "app.open", "args": { "module": { "eq": "wiki" } } }
+        ],
+        "answerContains": ["Tesla"],
+        "language": "sr",
+        "maxSteps": 3
+      },
+      "script": [
+        { "toolCalls": [{ "name": "wiki.recent", "arguments": {} }] },
+        { "toolCalls": [{ "name": "app.open", "arguments": { "module": "wiki" } }] },
+        {
+          "text": "Poslednje si čitao članak „Tesla“ iz Vikipedije, 9. oktobra. Ništa nije obeleženo, a Reference su ti otvorene."
+        }
+      ]
+    },
+    {
+      "id": "wave2-library-shelf-en",
+      "title": "What is in progress on the shelf",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "What am I reading at the moment?" }
+      ],
+      "tools": [
+        {
+          "name": "library.shelf",
+          "effect": "read",
+          "content": "On the shelf (1):\n- Na Drini ćuprija (Book, In progress, 1945, Ivo Andrić, 120/300 p.)"
+        },
+        {
+          "name": "library.add",
+          "effect": "write",
+          "summary": { "sr": "Dodaj „Na Drini ćuprija“ u biblioteku (Knjiga)", "en": "Add “Na Drini ćuprija” to the library (Book)" },
+          "content": "Added to the library: “Na Drini ćuprija”."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "library.shelf", "args": { "status": { "eq": "in-progress" } } }
+        ],
+        "toolsNotCalled": ["library.add"],
+        "answerContains": ["Na Drini"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "library.shelf", "arguments": { "status": "in-progress" } }] },
+        {
+          "text": "You are reading Na Drini ćuprija: Ivo Andrić, 1945, and you are at page 120 of 300."
+        }
+      ]
+    },
+    {
+      "id": "wave2-lab-readings-sr",
+      "title": "Poslednje očitavanje senzora",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Šta je senzor poslednje izmerio?" }
+      ],
+      "tools": [
+        {
+          "name": "lab.readings",
+          "effect": "read",
+          "content": "Senzori — poslednja očitavanja (1):\n- 10. oktobar 2026, 09:05: temp 22, vlaga 45"
+        },
+        { "name": "lab.logs", "effect": "read" }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "lab.readings" }],
+        "toolsNotCalled": ["lab.logs"],
+        "answerContains": ["22", "vlag"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "lab.readings", "arguments": {} }] },
+        {
+          "text": "U dnevniku „Senzori“ poslednje očitavanje je od 10. oktobra u 09:05: temperatura 22 i vlaga 45."
+        }
+      ]
+    },
+    {
+      "id": "wave2-lab-logs-en",
+      "title": "The logs and the off-grid budget, and a way to them",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "What have I been measuring, and take me to the Lab." }
+      ],
+      "tools": [
+        {
+          "name": "lab.logs",
+          "effect": "read",
+          "content": "Sensor logs (1):\n- Senzori (columns: temp, vlaga, readings: 12, newest: 10 October 2026, 09:05)\nOff grid — the daily budget:\n- devices: 2\n- consumption a day: 520 Wh\n- battery: 1,000 Wh, depth of discharge 50.0%\n- lasts: 1 day"
+        },
+        {
+          "name": "app.open",
+          "effect": "navigate",
+          "navigateTo": { "module": "lab" }
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 3,
+      "expect": {
+        "toolsCalled": [
+          { "name": "lab.logs" },
+          { "name": "app.open", "args": { "module": { "eq": "lab" } } }
+        ],
+        "answerContains": ["Senzori"],
+        "language": "en",
+        "maxSteps": 3
+      },
+      "script": [
+        { "toolCalls": [{ "name": "lab.logs", "arguments": {} }] },
+        { "toolCalls": [{ "name": "app.open", "arguments": { "module": "lab" } }] },
+        {
+          "text": "You have one sensor log, Senzori, with twelve readings and the newest from 10 October. Off grid, two devices draw 520 Wh a day and the 1,000 Wh battery lasts about a day. The Lab is open."
+        }
+      ]
+    },
+    {
+      "id": "wave2-miniapps-kept-sr",
+      "title": "Ko vodi na semaforu",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Ko vodi na semaforu u mini aplikacijama?" }
+      ],
+      "tools": [
+        {
+          "name": "miniapps.kept",
+          "effect": "read",
+          "content": "Mini aplikacije — šta pamte:\n- Semafor: Ana (ukupno 12, mesto 1); Marko (ukupno 8, mesto 2) — kola: 2"
+        },
+        { "name": "app.search", "effect": "read" }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "miniapps.kept" }],
+        "toolsNotCalled": ["app.search"],
+        "answerContains": ["Ana"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "miniapps.kept", "arguments": {} }] },
+        {
+          "text": "Na semaforu vodi Ana sa dvanaest poena, ispred Marka koji ima osam. Odigrana su dva kola."
+        }
+      ]
+    },
+    {
+      "id": "wave2-car-fill-declined-en",
+      "title": "A fill is not logged when the user declines",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "Log forty litres for the Golf, a full tank." }
+      ],
+      "tools": [
+        {
+          "name": "car.fill",
+          "effect": "write",
+          "summary": { "sr": "Zabeleži 40 l za vozilo „Golf“", "en": "Log 40 l for “Golf”" },
+          "content": "Fuel logged for “Golf”: 40 l."
+        },
+        { "name": "car.due", "effect": "read" }
+      ],
+      "knowledge": [],
+      "confirmations": [false],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "car.fill", "args": { "quantity": { "eq": 40 }, "fullTank": { "eq": true } } }
+        ],
+        "toolsNotCalled": ["car.due"],
+        "answerContains": ["did not log"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "car.fill",
+              "arguments": { "vehicle": "Golf", "quantity": 40, "fullTank": true }
+            }
+          ]
+        },
+        {
+          "text": "Understood — I did not log the fill, so the service book is unchanged. Tell me if you want it written down after all."
+        }
+      ]
+    }
+  ]
+}
