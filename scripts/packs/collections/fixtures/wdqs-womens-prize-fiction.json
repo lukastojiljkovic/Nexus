@@ -1,0 +1,190 @@
+{
+  "head": {
+    "vars": [
+      "item",
+      "en",
+      "sr",
+      "year",
+      "creators"
+    ]
+  },
+  "results": {
+    "bindings": [
+      {
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q1472202"
+        },
+        "en": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "The House Gun"
+        },
+        "year": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "1997"
+        },
+        "creators": {
+          "type": "literal",
+          "value": "Nadine Gordimer"
+        }
+      },
+      {
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q3235393"
+        },
+        "en": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Half of a Yellow Sun"
+        },
+        "year": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "2006"
+        },
+        "creators": {
+          "type": "literal",
+          "value": "Chimamanda Ngozi Adichie"
+        },
+        "sr": {
+          "xml:lang": "sr",
+          "type": "literal",
+          "value": "Пола жутог сунца"
+        }
+      },
+      {
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q21189971"
+        },
+        "en": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "The Song of Achilles"
+        },
+        "year": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "2011"
+        },
+        "creators": {
+          "type": "literal",
+          "value": "Madeline Miller"
+        },
+        "sr": {
+          "xml:lang": "sr",
+          "type": "literal",
+          "value": "Ахилов пев"
+        }
+      },
+      {
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q95189997"
+        },
+        "en": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "The Glorious Heresies"
+        },
+        "year": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "2015"
+        },
+        "creators": {
+          "type": "literal",
+          "value": "Lisa McInerney"
+        }
+      },
+      {
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q99434216"
+        },
+        "en": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Piranesi"
+        },
+        "year": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "2020"
+        },
+        "creators": {
+          "type": "literal",
+          "value": "Susanna Clarke"
+        },
+        "sr": {
+          "xml:lang": "sr",
+          "type": "literal",
+          "value": "Пиранези (роман)"
+        }
+      },
+      {
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q113468597"
+        },
+        "en": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "The Book of Form and Emptiness"
+        },
+        "year": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "2021"
+        },
+        "creators": {
+          "type": "literal",
+          "value": "Ruth Ozeki"
+        }
+      },
+      {
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q115526836"
+        },
+        "en": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Demon Copperhead"
+        },
+        "year": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "2022"
+        },
+        "creators": {
+          "type": "literal",
+          "value": "Barbara Kingsolver"
+        }
+      },
+      {
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q132638069"
+        },
+        "en": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "The Persians"
+        },
+        "year": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "2025"
+        },
+        "creators": {
+          "type": "literal",
+          "value": "Sanam Mahloudji"
+        }
+      }
+    ]
+  }
+}

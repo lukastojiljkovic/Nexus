@@ -1,0 +1,16 @@
+# collection: isidora-sekulic-books   kind: book   (Serbia)
+# Objective criterion: P50 "author" -> a person awarded the Isidora Sekulic
+# Award (Q6594532). Wikidata records that award on the author, not on the book
+# (verified with _diag-direct-counts.rq: 13 direct P166 links, all to humans),
+# so the collection is "works by Isidora Sekulic Award winners".
+SELECT ?item ?en ?sr (MIN(?y) AS ?year) (GROUP_CONCAT(DISTINCT ?cr; separator="; ") AS ?creators) WHERE {
+  ?item wdt:P50 ?author ;
+        wdt:P31/wdt:P279* wd:Q7725634 .
+  ?author wdt:P166 wd:Q6594532 .
+  OPTIONAL { ?item rdfs:label ?en . FILTER(lang(?en) = "en") }
+  OPTIONAL { ?item rdfs:label ?sr . FILTER(lang(?sr) = "sr") }
+  OPTIONAL { ?item wdt:P577 ?d . BIND(YEAR(?d) AS ?y) }
+  OPTIONAL { ?item wdt:P50 ?a . ?a rdfs:label ?cr . FILTER(lang(?cr) = "en") }
+}
+GROUP BY ?item ?en ?sr
+ORDER BY ?year ?item
