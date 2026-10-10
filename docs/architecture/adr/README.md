@@ -116,3 +116,4 @@ directory is the decision log behind it.
 | [096](096-assistant-model-runtime.md) | The assistant's model runtime: llama.cpp in a utility process, the curated catalogue, and how a model is chosen | Accepted | 2026-10-10 |
 | [104](104-assistant-knowledge.md) | The assistant's knowledge base (local RAG) | Accepted | 2026-10-10 |
 | [105](105-voice.md) | The assistant's voice: Whisper in a worker, and the Serbian voice that does not exist | Accepted | 2026-10-10 |
+| [097](097-assistant-web-search.md) | Opt-in web search for the assistant: a consent beside the network mode, and the second sanctioned egress path | Accepted; amends ADR-092 §2 for one path | 2026-10-10 |
