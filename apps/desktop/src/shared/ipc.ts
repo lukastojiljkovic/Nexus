@@ -8776,7 +8776,7 @@ export interface NetworkModeView {
 export interface UpdateOffer {
   readonly version: string;
   readonly notes: string;
-  /** False on Linux (open the release page) and on a release whose installer is missing or mistyped. */
+  /** False on Linux (open the release page), on a release whose installer is missing or mistyped, and in a portable build, which never installs (ADR-102). */
   readonly canInstall: boolean;
 }
 
@@ -8795,11 +8795,20 @@ export type UpdateProblem =
   | "unexpected"
   | "asset"
   | "signature"
-  | "hash";
+  | "hash"
+  | "portable";
 
 /** Everything the renderer is told about the update check. No key, no token, no asset URL. */
 export interface UpdateStateView {
   readonly mode: NetworkMode;
+  /**
+   * True when this launch runs from a portable build (ADR-102) — the marker
+   * file beside the executable. The check, the notice and the release-page link
+   * all work exactly as they do on an installed build; `offer.canInstall` is
+   * false, and the About card says why instead of offering a button main would
+   * refuse.
+   */
+  readonly portable: boolean;
   readonly phase: UpdatePhase;
   readonly offer: UpdateOffer | null;
   readonly problem: UpdateProblem | null;

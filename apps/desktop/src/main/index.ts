@@ -41,6 +41,7 @@ import {
   updatesActive,
   writeNetworkMode,
 } from "./net/offline.js";
+import { applyPortableMode, PORTABLE_MARKER_FILE } from "./portable.js";
 import { createUpdateHttp, openReleasePage } from "./update/electron.js";
 import { createDownloadHttp } from "./download/electron.js";
 import { openExternalUrl } from "./external.js";
@@ -909,6 +910,51 @@ protocol.registerSchemesAsPrivileged([
 // (%APPDATA%\Nexus) rather than the scoped package name. Set before any
 // getPath("userData") call.
 app.setName("Nexus");
+
+// ADR-102: the portable build — a stick that keeps everything in `NexusData`
+// beside `Nexus.exe`, and nothing on the computer it is running on. The marker
+// file's presence is the whole switch (`main/portable.ts` decides, and that
+// decision is a pure function with its own tests).
+//
+// HERE, and at module scope: `userData` and `sessionData` do not follow a
+// redirect applied after `ready`, which is the lesson the sandbox below paid
+// for. It comes after `app.setName` and BEFORE that sandbox, so a harness run
+// over a portable tree nests its throwaway directory inside the stick rather
+// than the other way round.
+//
+// A read-only stick is a REFUSAL, not a fallback. A marker asks for the stick;
+// writing the user's accounts into the host's `%APPDATA%` instead would break
+// exactly the promise the marker makes, and there is nothing to be salvaged
+// from a folder that will not take a byte. `showErrorBox` is documented as safe
+// before `ready` — the one reason any message can be shown this early — and the
+// language comes from the OS, because the renderer that would report the stored
+// one does not exist yet.
+const portable = applyPortableMode({
+  exeDir: dirname(app.getPath("exe")),
+  setPath: (name, directory) => app.setPath(name, directory),
+});
+/** Whether this launch keeps everything beside the executable (ADR-102). Read by `updateService()`. */
+const isPortableLaunch = portable.portable;
+if (!portable.portable && portable.reason === "unwritable") {
+  setMainLocale(app.getSystemLocale().toLowerCase().startsWith("sr") ? "sr" : "en");
+  dialog.showErrorBox(
+    shellStrings().portableRefusedTitle,
+    `${shellStrings().portableRefusedBody}\n\n${portable.detail ?? ""}`,
+  );
+  // `process.exit`, not `app.exit`, for the sandbox refusal's reason below:
+  // nothing is running yet to be closed, and no window was ever opened.
+  process.exit(1);
+}
+if (!portable.portable && portable.reason === "unreadable") {
+  // Said out loud, and then the launch goes on: a marker this process may not
+  // read is not a decision it may take, and an install that refused to start
+  // over one unreadable file would be a worse answer than using the usual
+  // folder and naming the file.
+  process.stderr.write(
+    `Nexus: ${PORTABLE_MARKER_FILE} could not be read — ${portable.detail ?? "unknown error"}\n` +
+      "  This launch will keep its data in the usual per-user folder.\n",
+  );
+}
 
 // The harness sandbox: never the developer's real `%APPDATA%\Nexus`, but a
 // nested, disposable directory, one per harness. Wiped up front (Electron only
@@ -5518,6 +5564,10 @@ function updateService(): UpdateService {
     currentVersion: app.getVersion(),
     platform: process.platform,
     userData: userDataDir(),
+    // ADR-102: a portable build checks and reports, and installs nothing —
+    // there is no installer on the stick, and writing one onto whatever
+    // computer is running it would break the marker's promise.
+    portable: isPortableLaunch,
     // The mode this launch may ACT on, not the stored one: a stored change is a
     // restart owed, and until then the updater behaves as if the mode were
     // offline. „downloads" arrives here as itself, and the service admits the

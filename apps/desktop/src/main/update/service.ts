@@ -59,6 +59,15 @@ export interface UpdateServiceDeps {
   readonly platform: NodeJS.Platform;
   readonly userData: string;
   /**
+   * Whether this launch is a portable build (ADR-102). Such a build CHECKS and
+   * reports like any other — the network mode decides that, not this — and
+   * installs nothing: the stick carries no installer, and writing one onto
+   * whatever computer it happens to be plugged into is the one thing the marker
+   * file promises not to do. The offer still names the version and the release
+   * page, so the user can fetch it by hand.
+   */
+  readonly portable: boolean;
+  /**
    * The mode this launch may act on. `"downloads"` (ADR-092) allows the check
    * too, because the modes are a superset chain, so every guard below asks
    * `modeAllowsUpdates` rather than comparing against `"updates"`.
@@ -139,13 +148,14 @@ export function createUpdateService(deps: UpdateServiceDeps): UpdateService {
     return {
       version: pending.version,
       notes: pending.notes,
-      canInstall: pending.installer !== null,
+      canInstall: pending.installer !== null && !deps.portable,
     };
   }
 
   function view(): UpdateStateView {
     return {
       mode: deps.mode(),
+      portable: deps.portable,
       phase,
       offer: offerForWire(),
       problem,
@@ -242,6 +252,11 @@ export function createUpdateService(deps: UpdateServiceDeps): UpdateService {
   }
 
   async function install(): Promise<UpdateStateView> {
+    // ADR-102: the last step does not exist in a portable build. Unreachable
+    // through the UI — `canInstall` above is what hides the button — and
+    // answered the same way either way: nothing is fetched, nothing is started.
+    if (deps.portable) return fail("portable");
+
     const release = pendingRelease;
     const offer = pending;
     if (
