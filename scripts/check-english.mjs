@@ -206,6 +206,10 @@ export const SERBIAN_SOURCES = [
     match: /^apps\/desktop\/src\/modules\/translator\/renderer\/sentences\/copy\.sr\.ts$/,
     reason: "the sentence translator's own Serbian table — a sub-surface of a kit module (ADR-090), one folder deeper than `renderer/copy.sr.ts`, with its `copy.en.ts` rule 1 reads beside it",
   },
+  {
+    match: /^apps\/desktop\/src\/main\/assistant\/manual\/sr\/[^/]+\.md$/,
+    reason: "the assistant's manual written in Serbian, one file per page, with the `en/` half beside it — prose the knowledge base quotes, not a table the compiler checks. The walk reads `.ts`/`.tsx` today, so this entry records the folder's standing: it is Serbian copy by design, and if the manual is ever read as source it is exempt here rather than added later by whoever trips over it.",
+  },
 ];
 
 /**
