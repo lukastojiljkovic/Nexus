@@ -1,0 +1,160 @@
+{
+  "pack": "recipes-world",
+  "fetched": "2026-10-10",
+  "note": "Every source this pack is built from, with the SHA-256 of the exact bytes the build hashed. A source without licence evidence is not used. Quotes are verbatim, with runs of whitespace collapsed because every one of these pages wraps its text in markup.",
+  "sources": [
+    {
+      "name": "Wikibooks Cookbook, Category:Recipes (3,796 pages, Cookbook namespace)",
+      "api": "https://en.wikibooks.org/w/api.php",
+      "url": "https://en.wikibooks.org/w/api.php?action=query&list=categorymembers&cmtitle=Category%3ARecipes&cmnamespace=102",
+      "cacheFile": "en-pages.json",
+      "bytes": 8831552,
+      "sha256": "9d4c49cd6d8c6fbbc4e4f2627d7107f228d559b96b6f8b4a4d238776b5742f35",
+      "pages": 3796,
+      "licence": "CC BY-SA 4.0 (dual-licensed with the GNU Free Documentation License; this pack takes the CC BY-SA 4.0 half only)",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "note": "Each record's `source.url` is the URL of its own page, whose history lists its authors; that is the attribution the Wikimedia Terms of Use ask for.",
+      "evidence": [
+        {
+          "url": "https://en.wikibooks.org/w/api.php?action=query&meta=siteinfo&siprop=rightsinfo&format=json",
+          "section": "the wiki's own rights information",
+          "sentence": "\"rightsinfo\":{\"url\":\"https://creativecommons.org/licenses/by-sa/4.0/deed.en\",\"text\":\"Creative Commons Attribution-Share Alike 4.0\"}"
+        },
+        {
+          "url": "https://en.wikibooks.org/w/index.php?title=Wikibooks:Copyrights&action=raw",
+          "section": "Wikibooks:Copyrights",
+          "sentence": "Permission is granted to copy, distribute and/or modify Wikibooks' text under the terms of the Creative Commons Attribution-ShareAlike 4.0 International License and, unless otherwise noted, the GNU Free Documentation License, unversioned, with no invariant sections, front-cover texts, or back-cover texts."
+        },
+        {
+          "url": "https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use",
+          "section": "section 7, Reuse of text, Attribution",
+          "sentence": "When you contribute text, you agree to be attributed in any of the following fashions: Through hyperlink (where possible) or URL to the article to which you contributed (since each article has a history page that lists all contributors, authors and editors);"
+        }
+      ]
+    },
+    {
+      "name": "Serbian Wikibooks, the seven Kuvar: pages",
+      "api": "https://sr.wikibooks.org/w/api.php",
+      "url": "https://sr.wikibooks.org/w/api.php?action=query&list=allpages&apprefix=Kuvar%3A&apnamespace=0",
+      "cacheFile": "sr-pages.json",
+      "bytes": 5028,
+      "sha256": "f0b124584bc8493ecf30a6ac9e809255fc4722a20f9dbcc432e607c7f98ccec3",
+      "pages": 7,
+      "licence": "CC BY-SA 4.0 (dual-licensed with the GNU Free Documentation License; this pack takes the CC BY-SA 4.0 half only)",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "evidence": [
+        {
+          "url": "https://sr.wikibooks.org/w/api.php?action=query&meta=siteinfo&siprop=rightsinfo&format=json",
+          "section": "the wiki's own rights information",
+          "sentence": "\"rightsinfo\":{\"url\":\"https://creativecommons.org/licenses/by-sa/4.0/deed.sr\",\"text\":\"Creative Commons Attribution-Share Alike 4.0\"}"
+        },
+        {
+          "url": "https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use",
+          "section": "section 7, Reuse of text, Attribution",
+          "sentence": "When you contribute text, you agree to be attributed in any of the following fashions: Through hyperlink (where possible) or URL to the article to which you contributed (since each article has a history page that lists all contributors, authors and editors);"
+        }
+      ]
+    },
+    {
+      "name": "The Book of Household Management (Mrs Beeton), Project Gutenberg ebook #10136",
+      "url": "https://www.gutenberg.org/cache/epub/10136/pg10136.txt",
+      "landingPage": "https://www.gutenberg.org/ebooks/10136",
+      "cacheFile": "pg10136.txt",
+      "bytes": 3115955,
+      "sha256": "8a546e25e6cda0294b70fde4c6735f69460f75db9e586958f9eb87a688722e61",
+      "licence": "Public domain in the United States, and out of copyright in the EU (the author died in 1865)",
+      "evidence": [
+        {
+          "url": "https://www.gutenberg.org/policy/permission.html",
+          "section": "Permission How-To",
+          "sentence": "The vast majority of Project Gutenberg eBooks are in the public domain in the US. This means that nobody can grant, or withhold, permission to do with this item as you please."
+        },
+        {
+          "url": "https://www.gutenberg.org/policy/license.html",
+          "section": "the licence's own instructions for a reuser",
+          "sentence": "If you strip the Project Gutenberg license and all references to Project Gutenberg from the text, you are left with a text unrestricted by U.S. intellectual property law."
+        },
+        {
+          "url": "https://www.gutenberg.org/cache/epub/feeds/pg_catalog.csv",
+          "section": "the catalogue row for #10136, which states the author's life years",
+          "sentence": "10136,Text,2003-11-01,The Book of Household Management,en,\"Beeton, Mrs. (Isabella Mary), 1836-1865\",\"Home economics; Cooking, English\",TX,"
+        }
+      ]
+    },
+    {
+      "name": "The Boston Cooking-School Cook Book (Fannie Merritt Farmer), Project Gutenberg ebook #65061",
+      "url": "https://www.gutenberg.org/cache/epub/65061/pg65061.txt",
+      "landingPage": "https://www.gutenberg.org/ebooks/65061",
+      "cacheFile": "pg65061.txt",
+      "bytes": 1398961,
+      "sha256": "d2718031e98e4f4bc2237353a47ad7e2885aadec01a0b19a057f563ad3c6bbe1",
+      "licence": "Public domain in the United States, and out of copyright in the EU (the author died in 1915)",
+      "evidence": [
+        {
+          "url": "https://www.gutenberg.org/policy/permission.html",
+          "section": "Permission How-To",
+          "sentence": "The vast majority of Project Gutenberg eBooks are in the public domain in the US. This means that nobody can grant, or withhold, permission to do with this item as you please."
+        },
+        {
+          "url": "https://www.gutenberg.org/policy/license.html",
+          "section": "the licence's own instructions for a reuser",
+          "sentence": "If you strip the Project Gutenberg license and all references to Project Gutenberg from the text, you are left with a text unrestricted by U.S. intellectual property law."
+        },
+        {
+          "url": "https://www.gutenberg.org/cache/epub/feeds/pg_catalog.csv",
+          "section": "the catalogue row for #65061, which states the author's life years",
+          "sentence": "65061,Text,2021-04-11,The Boston cooking-school cook book,en,\"Farmer, Fannie Merritt, 1857-1915\",\"Cooking; Cooking, American\",TX,"
+        }
+      ]
+    }
+  ],
+  "licenceEvidenceFetched": [
+    {
+      "url": "https://en.wikibooks.org/w/api.php?action=query&meta=siteinfo&siprop=rightsinfo&format=json",
+      "bytes": 162,
+      "sha256": "8a7345e12679082632295a2c2889b16f3c288f0fbc71082bc0fdf5929a518bb7"
+    },
+    {
+      "url": "https://sr.wikibooks.org/w/api.php?action=query&meta=siteinfo&siprop=rightsinfo&format=json",
+      "bytes": 162,
+      "sha256": "f45a9b4f7cf8a11ffb7545ca6b434df222990475ec14a202984ba864fa7cdea2"
+    },
+    {
+      "url": "https://en.wikibooks.org/w/index.php?title=Wikibooks:Copyrights&action=raw",
+      "bytes": 10475,
+      "sha256": "95447e1048fcc0094d2e96f1b796b8cc65a595a6fbcd385430a97dc2631b6b40"
+    },
+    {
+      "url": "https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use",
+      "bytes": 152810,
+      "sha256": "86663b33b0833e1f73689cb97a4be3e769dc0c9700c65fa378483a2e875a1bda"
+    },
+    {
+      "url": "https://www.gutenberg.org/policy/license.html",
+      "bytes": 32478,
+      "sha256": "8a5137aecb0911dc0700e4ff636834326f6eade4beb997229269658a5ccd82f7"
+    },
+    {
+      "url": "https://www.gutenberg.org/policy/permission.html",
+      "bytes": 18907,
+      "sha256": "c6df9d5913daf11aab5638744adaae02e2af0b27135a614e02f66260b2fcd8a7"
+    },
+    {
+      "url": "https://www.gutenberg.org/cache/epub/feeds/pg_catalog.csv",
+      "bytes": 21245518,
+      "sha256": "25882f0e4d06d759369f8ff0676376b5f79fcc41ba5b8373037975026cf62580"
+    },
+    {
+      "url": "https://en.wikibooks.org/w/api.php?action=query&list=categorymembers&cmtitle=Category%3ARecipes&cmnamespace=102",
+      "cacheFile": "en-category-pages.json",
+      "bytes": 133970,
+      "sha256": "d7fe58b2cec7f2c535bfd5bf747f7a9d4dae87419e88bbc3783609eed8d540f8"
+    },
+    {
+      "url": "https://en.wikibooks.org/w/api.php (the Recipes by origin / meal or course / diet subtree walk)",
+      "cacheFile": "en-category-kinds.json",
+      "bytes": 8133,
+      "sha256": "55ba3cffc341c7f3f46104c03e60fb95d91f5f2cfe6f5099aa4e6f30e24b17a5"
+    }
+  ]
+}

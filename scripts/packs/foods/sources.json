@@ -1,0 +1,60 @@
+{
+  "pack": "foods-usda",
+  "fetched": "2026-10-10",
+  "note": "Every source this pack is built from, with the SHA-256 of the exact bytes the build hashed. A source without licence evidence is not used. Quotes are verbatim, with runs of whitespace collapsed because both pages wrap their text in markup.",
+  "sources": [
+    {
+      "name": "USDA FoodData Central, Foundation Foods, April 2026 (CSV)",
+      "url": "https://fdc.nal.usda.gov/fdc-datasets/FoodData_Central_foundation_food_csv_2026-04-30.zip",
+      "cacheFile": "foundation_food.zip",
+      "bytes": 3825741,
+      "sha256": "70457ee9d9342f43bda2010318c85f04210c689fdeb9cd2da4c513b0e8dbc655",
+      "dataType": "foundation_food",
+      "licence": "CC0 1.0 Universal (SPDX: CC0-1.0)",
+      "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "evidence": {
+        "url": "https://fdc.nal.usda.gov/api-guide.html",
+        "section": "Licensing",
+        "sentence": "USDA FoodData Central data are in the public domain and they are not copyrighted. They are published under CC0 1.0 Universal (CC0 1.0) No permission is needed for their use, but we request that users list FoodData Central as the source of the data",
+        "sha256": "938aa9d6a04fa6071a1e82bef110fc51d7730a094d7d26bfbbb9f6c62040322b"
+      }
+    },
+    {
+      "name": "USDA FoodData Central, SR Legacy, April 2018 (CSV, final release)",
+      "url": "https://fdc.nal.usda.gov/fdc-datasets/FoodData_Central_sr_legacy_food_csv_2018-04.zip",
+      "cacheFile": "sr_legacy_food.zip",
+      "bytes": 6074592,
+      "sha256": "b80817294b8850530aaedf2e515c02593b1824f763a0ff356e5c2081643e6fd0",
+      "dataType": "sr_legacy_food",
+      "licence": "CC0 1.0 Universal (SPDX: CC0-1.0)",
+      "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "evidence": {
+        "url": "https://fdc.nal.usda.gov/api-guide.html",
+        "section": "Licensing",
+        "sentence": "USDA FoodData Central data are in the public domain and they are not copyrighted. They are published under CC0 1.0 Universal (CC0 1.0) No permission is needed for their use, but we request that users list FoodData Central as the source of the data",
+        "sha256": "938aa9d6a04fa6071a1e82bef110fc51d7730a094d7d26bfbbb9f6c62040322b"
+      }
+    },
+    {
+      "name": "Regulation (EU) No 1169/2011, Annex I, point 11 — the salt conversion used for every saltG value",
+      "url": "https://www.legislation.gov.uk/eur/2011/1169/annex/I",
+      "kind": "reference",
+      "bytes": 40194,
+      "sha256": "df42e9d0f550b03c7499f4d66b39a5eebc6c401850b4e407358628e17f48571a",
+      "licence": "Open Government Licence v3.0 (SPDX: OGL-UK-3.0); the EUR-Lex text carried here is reused under Commission Decision 2011/833/EU",
+      "licenceUrl": "https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3",
+      "evidence": [
+        {
+          "url": "https://www.legislation.gov.uk/eur/2011/1169/annex/I",
+          "section": "Annex I, point 11",
+          "sentence": "\u2018salt\u2019 means the salt equivalent content calculated using the formula: salt = sodium \u00d7 2,5;"
+        },
+        {
+          "url": "https://www.legislation.gov.uk/eur/2011/1169/annex/I",
+          "section": "page footer",
+          "sentence": "All content is available under the Open Government Licence v3.0 except where otherwise stated. This site additionally contains content derived from EUR-Lex, reused under the terms of the Commission Decision 2011/833/EU on the reuse of documents from the EU institutions."
+        }
+      ]
+    }
+  ]
+}
