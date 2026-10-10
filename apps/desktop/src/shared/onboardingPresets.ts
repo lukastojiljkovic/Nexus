@@ -46,6 +46,11 @@ export const ESSENTIALS_MODULE_PRESET: Readonly<Record<string, boolean>> = {
   // selectable one: nothing about a timer asks to be opted into, so „Osnovno"
   // turns it on exactly as the manifest's own `defaultEnabled` says.
   timers: true,
+  // The arcade is decided here like every other selectable module, and its
+  // answer is `false`: PRD 31 hides the entertainment section by default and
+  // never suggests it during onboarding, so a profile that never asks for it
+  // never sees it. The gallery is where it is switched on.
+  arcade: false,
   pro: false,
 };
 

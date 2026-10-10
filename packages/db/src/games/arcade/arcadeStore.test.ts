@@ -83,6 +83,24 @@ function blocks(score: number, lines: number): ArcadeResult {
   return { game: "blocks", variant: "standard", score, lines };
 }
 
+/**
+ * The three games stage 2 of the module added, one helper each so a test reads
+ * as the game it records. Their variants are the boards the ENGINE has: one
+ * board for Snake and Bricks (`standard`), and 2048's own size, because the
+ * engine builds three of them - the store's own "the variant is the board" rule.
+ */
+function snake(score: number, eaten: number): ArcadeResult {
+  return { game: "snake", variant: "standard", score, eaten };
+}
+
+function bricks(score: number, levels: number): ArcadeResult {
+  return { game: "bricks", variant: "standard", score, levels };
+}
+
+function tile2048(score: number, moves: number, won = false): ArcadeResult {
+  return { game: "tile2048", variant: "4x4", score, moves, won };
+}
+
 describe("record — Minesweeper", () => {
   it("counts a first win, and stamps the row with the clock it was given", () => {
     const scores = store();
@@ -234,6 +252,88 @@ describe("record — Blocks", () => {
   });
 });
 
+describe("record - the games stage 2 added", () => {
+  it("raises a score game's own two numbers and never a win", () => {
+    const scores = store();
+    scores.record(snake(120, 12), NOW);
+    expect(scores.get("snake", "standard")).toMatchObject({
+      played: 1,
+      won: 0,
+      bestTimeMs: null,
+      bestScore: 120,
+      bestLines: 12,
+      currentStreak: 0,
+      longestStreak: 0,
+    });
+
+    // A worse score with more food moves one number and not the other, which is
+    // the same direction rule the Blocks test above pins: higher is better, and
+    // only for the column that improved.
+    scores.record(snake(80, 30), LATER);
+    expect(scores.get("snake", "standard")).toMatchObject({
+      played: 2,
+      bestScore: 120,
+      bestLines: 30,
+      updatedAt: LATER,
+    });
+
+    scores.record(bricks(1500, 3), NOW);
+    scores.record(bricks(900, 5), LATER);
+    expect(scores.get("bricks", "standard")).toMatchObject({
+      played: 2,
+      won: 0,
+      bestScore: 1500,
+      bestLines: 5,
+    });
+  });
+
+  it("counts 2048 by the win inside it: reaching the tile raises the streak, a game without it ends it", () => {
+    const scores = store();
+    scores.record(tile2048(2000, 120, true), NOW);
+    expect(scores.get("tile2048", "4x4")).toMatchObject({
+      played: 1,
+      won: 1,
+      bestTimeMs: null,
+      bestScore: 2000,
+      bestLines: 120,
+      currentStreak: 1,
+      longestStreak: 1,
+    });
+
+    // 800 points and no winning tile: a play, and the end of the run.
+    scores.record(tile2048(800, 60), LATER);
+    expect(scores.get("tile2048", "4x4")).toMatchObject({
+      played: 2,
+      won: 1,
+      bestScore: 2000,
+      bestLines: 120,
+      currentStreak: 0,
+      longestStreak: 1,
+    });
+
+    scores.record(tile2048(3000, 200, true), LATER);
+    expect(scores.get("tile2048", "4x4")).toMatchObject({
+      played: 3,
+      won: 2,
+      bestScore: 3000,
+      bestLines: 200,
+      currentStreak: 1,
+      longestStreak: 1,
+    });
+  });
+
+  it("keeps one row per 2048 board, because a score over two board sizes means nothing", () => {
+    const scores = store();
+    scores.record(tile2048(100, 10), NOW);
+    scores.record({ game: "tile2048", variant: "5x5", score: 200, moves: 20, won: false }, NOW);
+
+    expect(scores.list().map((row) => `${row.game}/${row.variant}`)).toEqual([
+      "tile2048/4x4",
+      "tile2048/5x5",
+    ]);
+  });
+});
+
 describe("the store's own gates", () => {
   it.each([
     ["an unknown game", { game: "chess", variant: "standard", score: 1, lines: 0 }],
@@ -250,6 +350,14 @@ describe("the store's own gates", () => {
     ["a time past the bound", { game: "minesweeper", variant: "beginner", won: true, timeMs: 604_800_001 }],
     ["a win with no time to record", { game: "minesweeper", variant: "beginner", won: true, timeMs: null }],
     ["a win flag that is not a boolean", { game: "minesweeper", variant: "beginner", won: "yes", timeMs: 1 }],
+    // The three games stage 2 added: each one's own second count is bounded and
+    // whole, and 2048's win flag is a boolean like Minesweeper's.
+    ["a fractional food count", { game: "snake", variant: "standard", score: 1, eaten: 1.5 }],
+    ["a negative food count", { game: "snake", variant: "standard", score: 1, eaten: -1 }],
+    ["a fractional level count", { game: "bricks", variant: "standard", score: 1, levels: 0.5 }],
+    ["a move count past the bound", { game: "tile2048", variant: "4x4", score: 1, moves: 100_001, won: false }],
+    ["a 2048 win flag that is not a boolean", { game: "tile2048", variant: "4x4", score: 1, moves: 1, won: "yes" }],
+    ["a food count sent as a line count", { game: "snake", variant: "standard", score: 1, lines: 3 }],
   ])("refuses %s", (_label, result) => {
     const scores = store();
     // The cast is the point of the test: these are the shapes an untrusted caller
@@ -268,7 +376,7 @@ describe("the store's own gates", () => {
     expect(scores.get("minesweeper", "beginner")).toMatchObject({ played: 1, bestTimeMs: 41_500 });
   });
 
-  it("refuses a row that mixes the two games' columns, in the schema as well as the store", () => {
+  it("refuses a row that mixes two games' columns, in the schema as well as the store", () => {
     const profileId = createProfile();
     const insert = db.raw.prepare(
       `INSERT INTO arcade_scores
@@ -304,6 +412,48 @@ describe("the store's own gates", () => {
       uuidv7(), profileId, "minesweeper", "beginner", 2, 1, 1000, null, null, 1, 1, NOW, NOW, NOW,
     );
     expect(db.raw.prepare("SELECT COUNT(*) AS n FROM arcade_scores").get()).toEqual({ n: 1 });
+  });
+
+  /**
+   * The same rules for the games stage 2 added, written as raw inserts because
+   * the SCHEMA is what is being asked: the store is not in the way here, and a
+   * row a store would never write is exactly the case these CHECKs exist for.
+   */
+  it("refuses a game the list does not name, and the wrong columns for the games it does", () => {
+    const profileId = createProfile();
+    const insert = db.raw.prepare(
+      `INSERT INTO arcade_scores
+         (id, profile_id, game, variant, played, won, best_time_ms, best_score, best_lines,
+          current_streak, longest_streak, last_played_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+    // A fifth game is not one this table knows: the list is a CHECK.
+    expect(() =>
+      insert.run(uuidv7(), profileId, "solitaire", "standard", 1, 0, null, 10, 1, 0, 0, NOW, NOW, NOW),
+    ).toThrow(/CHECK/);
+
+    // A winless game with a win on it, one with a time, and one that is missing
+    // its own count: each is a row the fold could never produce.
+    expect(() =>
+      insert.run(uuidv7(), profileId, "snake", "standard", 1, 1, null, 10, 4, 1, 1, NOW, NOW, NOW),
+    ).toThrow(/CHECK/);
+    expect(() =>
+      insert.run(uuidv7(), profileId, "bricks", "standard", 1, 0, 1000, 10, 4, 0, 0, NOW, NOW, NOW),
+    ).toThrow(/CHECK/);
+    expect(() =>
+      insert.run(uuidv7(), profileId, "snake", "standard", 1, 0, null, 10, null, 0, 0, NOW, NOW, NOW),
+    ).toThrow(/CHECK/);
+
+    // 2048 is the one new game that may win, and it still may not carry a time.
+    expect(() =>
+      insert.run(uuidv7(), profileId, "tile2048", "4x4", 2, 1, 2000, 10, 20, 1, 1, NOW, NOW, NOW),
+    ).toThrow(/CHECK/);
+
+    // And the rows each game actually produces land.
+    insert.run(uuidv7(), profileId, "snake", "standard", 2, 0, null, 120, 30, 0, 0, NOW, NOW, NOW);
+    insert.run(uuidv7(), profileId, "bricks", "standard", 1, 0, null, 1500, 3, 0, 0, NOW, NOW, NOW);
+    insert.run(uuidv7(), profileId, "tile2048", "4x4", 2, 1, null, 2000, 120, 1, 1, NOW, NOW, NOW);
+    expect(db.raw.prepare("SELECT COUNT(*) AS n FROM arcade_scores").get()).toEqual({ n: 3 });
   });
 });
 
@@ -420,6 +570,67 @@ describe("export and import", () => {
     const scores = store();
     played(scores);
     scores.importData({ version: 1, scores: [] });
+
+    expect(scores.list()).toEqual([]);
+  });
+
+  it("round-trips the games stage 2 added, with each one's own numbers", () => {
+    const source = store();
+    source.record(snake(120, 30), NOW);
+    source.record(bricks(1500, 3), LATER);
+    source.record(tile2048(2000, 120, true), LATER);
+    const exported = source.exportData();
+
+    const target = new ArcadeScoreStore(freshDb.raw, createFreshProfile("C"));
+    target.importData(exported);
+
+    expect(target.exportData()).toEqual(exported);
+    expect(target.list().map((row) => `${row.game}/${row.variant}`)).toEqual([
+      "bricks/standard",
+      "snake/standard",
+      "tile2048/4x4",
+    ]);
+    // The 2048 row's win survives the archive, streak and all.
+    expect(target.get("tile2048", "4x4")).toMatchObject({
+      played: 1,
+      won: 1,
+      bestScore: 2000,
+      bestLines: 120,
+      currentStreak: 1,
+      longestStreak: 1,
+    });
+  });
+
+  it("refuses an archive that hands one of the new games another game's numbers", () => {
+    const source = store();
+    source.record(snake(120, 30), NOW);
+    source.record(tile2048(2000, 120, true), NOW);
+    const exported = source.exportData();
+    const snakeRow = exported.scores.find((score) => score.game === "snake") as
+      ArcadeExport["scores"][number];
+    const tileRow = exported.scores.find((score) => score.game === "tile2048") as
+      ArcadeExport["scores"][number];
+
+    const scores = store();
+    // A winless game claiming a win, and one claiming a time.
+    expect(() =>
+      scores.importData({ version: 1, scores: [{ ...snakeRow, won: 1 }] }),
+    ).toThrow(ArcadeValidationError);
+    expect(() =>
+      scores.importData({ version: 1, scores: [{ ...snakeRow, bestTimeMs: 1000 }] }),
+    ).toThrow(ArcadeValidationError);
+    // A 2048 row with no count, and one with a time it never had.
+    expect(() =>
+      scores.importData({ version: 1, scores: [{ ...tileRow, bestLines: null }] }),
+    ).toThrow(ArcadeValidationError);
+    expect(() =>
+      scores.importData({ version: 1, scores: [{ ...tileRow, bestTimeMs: 1000 }] }),
+    ).toThrow(ArcadeValidationError);
+    // A streak longer than the wins it was drawn from, which is the coupled rule
+    // the schema states and this reader restates.
+    expect(() =>
+      scores.importData({ version: 1, scores: [{ ...tileRow, currentStreak: 2 }] }),
+    ).toThrow(ArcadeValidationError);
 
     expect(scores.list()).toEqual([]);
   });

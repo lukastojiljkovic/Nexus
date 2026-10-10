@@ -32,6 +32,16 @@ type DatabaseHandle = Database.Database;
  * measured against and only ever rises — a later loss cannot take away what
  * somebody did.
  *
+ * **The five games measure five different things, and the fold is the same
+ * shape for all of them.** Stage 2 added Snake, Bricks and 2048 (the same day,
+ * in place - see `ARCADE_GAMES`): the three score games raise `bestScore` and
+ * their own second count, 2048 raises its streak when the winning tile appears,
+ * and the two rules that were here already - a best only ever improving in its
+ * game's own direction, and a win recorded only for a game that has one - carry
+ * every arm of the union without a branch per game. The direction is what the
+ * caller cannot get wrong: a time is lowered, a score is raised, and a count is
+ * raised, and this file is where that is decided rather than a screen.
+ *
  * **`exportData`/`importData` are the archive's door, and the import REPLACES.**
  * The export is a versioned plain value — `{ version: 1, scores: [...] }` — and it
  * deliberately carries no `profileId`: a profile archive belongs to the profile it
@@ -47,9 +57,28 @@ type DatabaseHandle = Database.Database;
  * renderer never does.
  */
 
-/** The two games this table holds. A third game gets a migration and a word here, because the schema's CHECKs are written per game. */
-export const ARCADE_GAMES = ["minesweeper", "blocks"] as const;
+/**
+ * The games this table holds, in the order the shelf shows them.
+ *
+ * Extended IN PLACE on 2026-10-10, with migration 080's own CHECK, before either
+ * ever shipped: stage 2 of the module added Snake, Bricks and 2048 to the two
+ * games stage 1 counted, and the migration header argues why an unreleased
+ * migration is edited rather than followed by a second one whose whole content
+ * is three words.
+ */
+export const ARCADE_GAMES = ["minesweeper", "blocks", "snake", "bricks", "tile2048"] as const;
 export type ArcadeGame = (typeof ARCADE_GAMES)[number];
+
+/**
+ * The games that have no win to count, in one list for the store's own rules.
+ *
+ * Three of them rather than a `game IN (...)` spelled at each site: the fold,
+ * the import's validation and the schema all have to agree that these three
+ * never win, and a list with a name is the only shape that can be pointed at.
+ * 2048 is deliberately NOT here - the engine sets `won` the moment the tile
+ * appears - and neither is Minesweeper.
+ */
+const WINLESS_GAMES: readonly ArcadeGame[] = ["blocks", "snake", "bricks"];
 
 /**
  * What a variant key may look like: lower-case alphanumeric words joined by
@@ -83,18 +112,18 @@ export interface ArcadeScore {
   id: string;
   profileId: string;
   game: ArcadeGame;
-  /** The board this row counts: a Minesweeper preset or `custom:CxRxM`, and Blocks' own one board. */
+  /** The board this row counts: a Minesweeper preset or `custom:CxRxM`, a 2048 board's `4x4`, or the one board Blocks, Snake and Bricks each have, which is `standard`. */
   variant: string;
   /** Finished games. */
   played: number;
   won: number;
   /** The fastest WON Minesweeper game in milliseconds, or null — never a loss's time. */
   bestTimeMs: number | null;
-  /** The best Blocks score; always null for Minesweeper. */
+  /** The best score the game ever reached; always null for Minesweeper, which has no score. */
   bestScore: number | null;
-  /** The most lines ever cleared in one Blocks game; always null for Minesweeper. */
+  /** The best of the game's own second count in one game: lines for Blocks, food for Snake, levels for Bricks, moves for 2048. Always null for Minesweeper. */
   bestLines: number | null;
-  /** The current run of consecutive wins. A loss ends it; Blocks never starts one. */
+  /** The current run of consecutive wins. A loss ends it; the three winless games never start one. */
   currentStreak: number;
   /** The longest run of consecutive wins ever recorded; only ever rises. */
   longestStreak: number;
@@ -104,11 +133,11 @@ export interface ArcadeScore {
 }
 
 /**
- * One finished game, in the two shapes the two games actually have.
+ * One finished game, in the shape its own game has.
  *
- * The union is the point: a Minesweeper result carries a win flag and, for a win,
- * a time — and nothing else — while a Blocks result carries a score and a line
- * count and has no win to claim. One flat shape would let a caller hand Blocks a
+ * The union is the point: every arm carries exactly the fields its game measures
+ * and no others, which is what keeps the store from having to interpret a
+ * number. Three of the five cannot win at all, so a caller still cannot hand Blocks a
  * „won" and make this store the only thing between that and a nonsensical row.
  */
 export type ArcadeResult =
@@ -124,6 +153,29 @@ export type ArcadeResult =
       variant: string;
       score: number;
       lines: number;
+    }
+  | {
+      game: "snake";
+      variant: string;
+      score: number;
+      /** Food eaten: how far past its opening four cells the snake grew. */
+      eaten: number;
+    }
+  | {
+      game: "bricks";
+      variant: string;
+      score: number;
+      /** Levels whose wall was cleared before the three lives ran out. */
+      levels: number;
+    }
+  | {
+      game: "tile2048";
+      variant: string;
+      score: number;
+      /** Moves that changed the board; a direction that moves nothing is not one. */
+      moves: number;
+      /** True once 2048 appeared, whether or not the player carried on afterwards. */
+      won: boolean;
     };
 
 /** One row as the archive carries it: everything but the profile, which the restore supplies. */
@@ -250,6 +302,31 @@ function nullableCount(value: unknown, field: string, min: number, max: number):
   return validateCount(value, field, min, max);
 }
 
+/**
+ * A score game's own second count, read from the field its game names it by.
+ *
+ * One field per game rather than one shared name: the ROW keeps one column, and
+ * the WIRE keeps each game's own words - Blocks counts lines, Snake food,
+ * Bricks levels, 2048 moves - so a caller that read `result.eaten` on a Blocks
+ * result is a compile error rather than a silent zero. The bound is
+ * `MAX_ARCADE_LINES` for all four, because all four are one game's tally of a
+ * hundred thousand of a thing nobody counts past.
+ */
+function countOf(result: ArcadeResult): number | null {
+  switch (result.game) {
+    case "blocks":
+      return validateCount(result.lines, "lines", 0, MAX_ARCADE_LINES);
+    case "snake":
+      return validateCount(result.eaten, "eaten", 0, MAX_ARCADE_LINES);
+    case "bricks":
+      return validateCount(result.levels, "levels", 0, MAX_ARCADE_LINES);
+    case "tile2048":
+      return validateCount(result.moves, "moves", 0, MAX_ARCADE_LINES);
+    case "minesweeper":
+      return null;
+  }
+}
+
 function validateStamp(value: unknown, field: string): string {
   if (typeof value !== "string" || !isDateTime(value)) {
     throw new ArcadeValidationError(`"${field}" must be an ISO-8601 date-time.`);
@@ -339,7 +416,15 @@ export class ArcadeScoreStore {
       }
     } else {
       score = validateCount(result.score, "score", 0, MAX_ARCADE_SCORE);
-      lines = validateCount(result.lines, "lines", 0, MAX_ARCADE_LINES);
+      lines = countOf(result);
+      // 2048 alone among the score games can win, and its `won` is the engine's
+      // own: the tile appeared, whether or not the player carried on.
+      if (result.game === "tile2048") {
+        if (typeof result.won !== "boolean") {
+          throw new ArcadeValidationError(`"won" must be true or false.`);
+        }
+        won = result.won;
+      }
     }
 
     const fold = this.db.transaction((): void => {
@@ -355,7 +440,9 @@ export class ArcadeScoreStore {
         game,
         variant,
         (existing?.played ?? 0) + 1,
-        game === "minesweeper" ? (existing?.won ?? 0) + (won ? 1 : 0) : 0,
+        // General because it can be: the three winless games always arrive with
+        // `won` false, so their column stays where the schema requires it.
+        (existing?.won ?? 0) + (won ? 1 : 0),
         faster ? timeMs : (existing?.best_time_ms ?? null),
         score === null ? null : Math.max(score, existing?.best_score ?? 0),
         lines === null ? null : Math.max(lines, existing?.best_lines ?? 0),
@@ -506,8 +593,15 @@ export class ArcadeScoreStore {
  * rather than a raw constraint failure, and the two ways one archive can
  * contradict itself — the same board twice, or the same row id twice — are
  * refused as well, because neither has a meaning a writer could repair.
+ *
+ * EXPORTED, and that is the module kit's requirement rather than this store's
+ * convenience: `ModuleImport.parse` has to run the WHOLE read at the preview,
+ * before anybody confirms a restore, and it has to write nothing. The module's
+ * `main/imex.ts` hands this function straight to the kit and `importData`
+ * revalidates through it, so a payload the preview accepted cannot be refused
+ * later by a different rule living in the same file.
  */
-function parseArcadeExport(value: unknown): ArcadeExportScore[] {
+export function parseArcadeExport(value: unknown): ArcadeExportScore[] {
   if (!isRecord(value)) {
     throw new ArcadeValidationError(`An arcade export must be an object carrying a "version".`);
   }
@@ -560,11 +654,11 @@ function parseArcadeExport(value: unknown): ArcadeExportScore[] {
 
     if (game === "minesweeper" && (bestScore !== null || bestLines !== null)) {
       throw new ArcadeValidationError(
-        `A Minesweeper row carries no score and no line count; ${id} carries one.`,
+        `A Minesweeper row carries no score and no count; ${id} carries one.`,
       );
     }
     if (
-      game === "blocks" &&
+      WINLESS_GAMES.includes(game) &&
       (won !== 0 ||
         currentStreak !== 0 ||
         longestStreak !== 0 ||
@@ -573,7 +667,15 @@ function parseArcadeExport(value: unknown): ArcadeExportScore[] {
         bestLines === null)
     ) {
       throw new ArcadeValidationError(
-        `A Blocks row never wins, has no time, and always carries a score and a line count; ${id} does not.`,
+        `A ${game} row never wins, has no time, and always carries a score and a count; ${id} does not.`,
+      );
+    }
+    if (
+      game === "tile2048" &&
+      (bestTimeMs !== null || bestScore === null || bestLines === null)
+    ) {
+      throw new ArcadeValidationError(
+        `A 2048 row has no time and always carries a score and a move count; ${id} does not.`,
       );
     }
 

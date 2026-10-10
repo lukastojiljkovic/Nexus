@@ -217,6 +217,9 @@ describe("resolveModuleSelection", () => {
       // any other selectable module, from its own manifest default.
       timers: true,
       pro: false,
+      // And the arcade (ADR-090, PRD 31): selectable, and off in „Osnovno"
+      // because the entertainment section is never suggested on the way in.
+      arcade: false,
     });
   });
 
@@ -255,6 +258,9 @@ describe("moduleFlagWrites", () => {
       // And the first DISCOVERED module last, because a kit module registers
       // after every compiled-in one (ADR-090).
       { moduleId: "timers", enabled: true },
+      // And the second discovered module after it, off in Osnovno: PRD 31 keeps
+      // the entertainment section out of the questionnaire.
+      { moduleId: "arcade", enabled: false },
     ]);
   });
 

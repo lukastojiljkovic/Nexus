@@ -98,6 +98,11 @@ describe("createModuleRegistry", () => {
       // here rather than derived because this test IS the declaration — what the
       // registry holds is what the app shows.
       "timers",
+      // The second DISCOVERED module (ADR-090), ordered by its own manifest
+      // after `timers`: 320 against 100. It is the first module in the „Igra"
+      // group, which existed in `MODULE_GROUPS` from ADR-093 with no member
+      // until now.
+      "arcade",
     ]);
   });
 
@@ -158,11 +163,27 @@ describe("createModuleRegistry", () => {
       // own PRD entry, and the UTIL sharing above is one section implemented
       // twice rather than a bin for anything tool-shaped.
       ELEC: ["electronics"],
+      // PRD 31 (Entertainment & Boosters) is the arcade's own entry, and the
+      // other game modules of this wave (cards, chess, boards, puzzles) take it
+      // too: one PRD section implemented as separate surfaces with separate
+      // toggles, exactly as UTIL is. Each one writes its own line here.
+      FUN: ["arcade"],
       PRO: ["pro"],
     });
   });
 
-  it("gives every registered module a canonical group, and leaves only PRIV and PRO off by default", () => {
+  /**
+   * The modules that ship OFF, by name. PRIV and PRO are the two the compiled-in
+   * set brought (ADR-057, and the professional drawer that is empty until a pack
+   * is granted); `arcade` is the first from this wave, and the rest of the game
+   * modules will join it - PRD 31 ships the entertainment section hidden and
+   * never suggests it during onboarding. A set rather than a chain of `!==` is
+   * what lets each of them add one LINE here instead of rewriting one
+   * expression, which is the same reason the prefix map below is a map.
+   */
+  const OFF_BY_DEFAULT: ReadonlySet<string> = new Set(["priv", "pro", "arcade"]);
+
+  it("gives every registered module a canonical group, and leaves only the opt-in modules off by default", () => {
     for (const manifest of createModuleRegistry().all()) {
       expect(MODULE_GROUPS, manifest.id).toContain(manifest.group);
       // Founder decision 2026-07-12: only BUILT modules are registered, so an
@@ -174,7 +195,7 @@ describe("createModuleRegistry", () => {
       // answered no questions on the way in would open it onto an empty page
       // — the opening questionnaire's pack picker is what turns it on.
       expect(manifest.defaultEnabled, manifest.id).toBe(
-        manifest.id !== "priv" && manifest.id !== "pro",
+        !OFF_BY_DEFAULT.has(manifest.id),
       );
     }
   });
@@ -188,7 +209,7 @@ describe("createModuleRegistry", () => {
    */
   it("groups the modules by navigation group in canonical order, empty groups omitted", () => {
     const grouped = createModuleRegistry().byGroup();
-    expect([...grouped.keys()]).toEqual(["plan", "knowledge", "life", "make", "shell"]);
+    expect([...grouped.keys()]).toEqual(["plan", "knowledge", "life", "make", "play", "shell"]);
     expect(grouped.get("plan")?.map((manifest) => manifest.id)).toEqual([
       "tasks",
       "calendar",
@@ -219,8 +240,10 @@ describe("createModuleRegistry", () => {
     expect(grouped.get("shell")?.map((manifest) => manifest.id)).toEqual([...LOCKED_MODULE_IDS]);
     // Culture and Play have no module yet, so they draw nothing rather than an
     // empty heading.
+    // Play has one member now - the arcade, which PRD 31 hides by default - and
+    // Culture still has none, so its heading is the one that draws nothing.
+    expect(grouped.get("play")?.map((manifest) => manifest.id)).toEqual(["arcade"]);
     expect(grouped.has("culture")).toBe(false);
-    expect(grouped.has("play")).toBe(false);
   });
   it("is constructed per call, never a shared singleton (ADR-008)", () => {
     const first = createModuleRegistry();

@@ -1663,10 +1663,13 @@ describe("RestoreStore", () => {
     //    them today would delete every recording on restore. Stage 2 wires
     //    `RecorderStore.exportData`/`importData` into the archive and moves
     //    these two names into `RESTORE_WIPE_TABLES`.
-    //  - arcade_scores (migration 080): the same sequencing. A profile's
-    //    scores are its own and go into the archive with stage 2, which wires
-    //    `ArcadeStore.exportData`/`importData` in and moves this name into
-    //    `RESTORE_WIPE_TABLES`; until then a wipe would lose them on restore.
+    //  - arcade_scores (migration 080): WIRED UP by stage 2, and its name STAYS
+    //    here rather than moving into `RESTORE_WIPE_TABLES` - because the module
+    //    is built on the kit. `ArcadeScoreStore.exportData`/`importData` are the
+    //    archive's door, and the store replaces the profile's own rows inside
+    //    the same restore (ADR-090 section 6): that list is DERIVED into
+    //    `@nexus/sync`'s collection map, which a kit module may not edit. The
+    //    TIMERS entry below says the same thing for its three tables.
     //  - chess_games / chess_resume / chess_level_stats (migration 082): the
     //    same sequencing as the arcade. Stage 2 wires `ChessStore.exportData`/
     //    `importData` into the archive and moves these three names into

@@ -84,6 +84,11 @@ export type IconName =
   // had to be a shape of its own — and an hourglass says what a countdown is
   // (time running out of a fixed amount) rather than what time it is.
   | "timer"
+  // The arcade module's mark, and a joystick on purpose: five games share one
+  // page, so a glyph for any ONE of them (a mine, a falling piece, a tile) would
+  // name a shelf of five by one game on it. A stick says "something to play"
+  // without choosing which.
+  | "arcade"
   // Objects the modules actually name.
   | "star"
   | "starFilled"
@@ -521,6 +526,16 @@ const SHAPES: Record<IconName, ReactNode> = {
       <path d="M6.8 20.6h10.4" />
       <path d="M7.6 3.4c0 4.2 8.8 4.2 8.8 8.6s-8.8 4.4-8.8 8.6" />
       <path d="M16.4 3.4c0 4.2-8.8 4.2-8.8 8.6s8.8 4.4 8.8 8.6" />
+    </>
+  ),
+  // A stick, a ball and a base: the arcade's own vocabulary at 16px, and the
+  // three shapes the set is built from. The ball sits on the stick rather than
+  // beside it, so the glyph reads upright at the rail's size.
+  arcade: (
+    <>
+      <circle cx="12" cy="6.6" r="2.8" />
+      <path d="M12 9.4v5.2" />
+      <rect x="3.6" y="14.6" width="16.8" height="5.4" rx="2" />
     </>
   ),
 
